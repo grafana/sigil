@@ -3,7 +3,7 @@ experimental = true
 
 [tools]
 node = "22"
-go = "1.25.6"
+go = "1.25.7"
 "go:github.com/magefile/mage" = "v1.15.0"
 "go:github.com/air-verse/air" = "v1.62.0"
 
