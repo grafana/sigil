@@ -31,11 +31,19 @@ This is the canonical navigation map for repository documentation.
 - Product specs: [`product-specs/index.md`](product-specs/index.md)
 - Execution plans:
   - Active: `exec-plans/active/`
+  - Phase 2 umbrella coordinator: `exec-plans/active/2026-02-12-phase-2-delivery.md`
+  - Phase 2 parallel tracks:
+    - `exec-plans/active/2026-02-12-phase-2-sdk-parity-python.md`
+    - `exec-plans/active/2026-02-12-phase-2-sdk-parity-typescript-javascript.md`
+    - `exec-plans/active/2026-02-12-phase-2-tenant-boundary.md`
+    - `exec-plans/active/2026-02-12-phase-2-query-proxy.md`
+    - `exec-plans/active/2026-02-12-phase-2-hybrid-storage.md`
   - Completed: `exec-plans/completed/`
   - Tech debt tracker: [`exec-plans/tech-debt-tracker.md`](exec-plans/tech-debt-tracker.md)
 - Generated docs: [`generated/db-schema.md`](generated/db-schema.md)
 - External references: [`references/index.md`](references/index.md)
   - Generation ingest contract: [`references/generation-ingest-contract.md`](references/generation-ingest-contract.md)
+  - Grafana response shapes: [`references/grafana-query-response-shapes.md`](references/grafana-query-response-shapes.md)
 
 ## Redundancy Rule
 

@@ -14,3 +14,4 @@ External ecosystem notes and comparative references used for architecture and im
 
 - [`competitive-benchmark.md`](competitive-benchmark.md)
 - [`generation-ingest-contract.md`](generation-ingest-contract.md)
+- [`grafana-query-response-shapes.md`](grafana-query-response-shapes.md)

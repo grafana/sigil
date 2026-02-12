@@ -10,45 +10,102 @@ audience: both
 
 ## System Boundaries
 
-- `apps/plugin`: plugin UI and backend proxy for Sigil query APIs.
-- `api`: OTEL trace ingest, generation ingest (custom API), and query APIs.
-- `sdks/*`: manual post-LLM instrumentation helpers.
-- Tempo: trace storage backend.
-- MySQL: metadata/query backing store (incremental rollout).
-- MinIO: optional object backend profile.
+- `apps/plugin`: Grafana plugin UI and backend proxy for Sigil APIs.
+- `api`: OTLP trace ingest, generation ingest, and query APIs.
+- `sdks/*`: post-LLM instrumentation SDKs (Go, Python, TypeScript/JavaScript).
+- Tempo: trace storage and TraceQL execution backend.
+- MySQL: hot metadata/index store plus hot generation payload store.
+- Object storage: long-term compacted generation payload storage.
+  - implementation standard: Thanos `objstore` Go package (`github.com/thanos-io/objstore`).
+
+## Phase 2 Target State
+
+Phase 2 defines production contracts for SDK parity, query envelopes, tenant boundaries, and hybrid storage/query behavior. Some runtime paths remain placeholders today; this file defines the implementation target.
 
 ## Ingest Model (Generation-First)
 
-- Trace pipeline:
-  - SDK exports traces via OTLP (`grpc` or `http`) using built-in SDK trace config.
-  - API exposes OTLP gRPC (`:4317`) and OTLP HTTP traces (`/v1/traces`) and forwards to Tempo.
-- Generation pipeline:
-  - SDK exports normalized generations to Sigil custom ingest.
-  - Primary transport is gRPC with HTTP parity.
-  - HTTP and gRPC transports both call the same internal generation exporter path.
-  - Export is buffered/batched asynchronously in SDK; `Shutdown(ctx)` is required to flush.
+### Trace pipeline
 
-## Data Flow
+- SDKs export traces via OTLP (`grpc` or `http`) using SDK trace configuration.
+- API exposes OTLP gRPC (`:4317`) and OTLP HTTP traces (`/v1/traces`) and forwards to Tempo.
 
-1. App code wraps provider calls via Sigil SDK.
-2. SDK records normalized generation payload at `End()`.
-3. SDK enqueues generation into bounded async queue and exports in batches.
-4. API generation ingest validates each item and persists accepted payloads.
-5. SDK emits traces to OTLP ingest.
-6. API forwards OTLP traces to Tempo.
-7. Plugin queries Sigil query APIs for conversation/completion/trace views.
+### Generation pipeline
+
+- SDKs export normalized generations to Sigil custom ingest.
+- Primary transport is gRPC with HTTP parity.
+- HTTP and gRPC ingest paths call one shared export service path.
+- Export in SDKs is buffered, batched, and asynchronous.
+- `shutdown` is required to flush pending generations and trace provider state.
+
+## Query Model
+
+- Tempo is the primary backend for trace search and TraceQL-based metrics workflows.
+- Sigil query services hydrate generation and conversation payloads/metadata from Sigil storage.
+- Query access from the plugin frontend is plugin-proxy-only.
+
+### Query access path
+
+1. Frontend sends query request to plugin backend resource endpoint.
+2. Plugin backend applies tenant header behavior and forwards to Sigil API query endpoint.
+3. Sigil API queries Tempo first and performs storage hydration/fan-out reads as needed.
+4. Sigil API returns Grafana-compatible query envelope and frames.
+
+## Tenant/Auth Model
+
+- Tenant header: `X-Scope-OrgID`.
+- Auth model is lightweight tenant header extraction/enforcement.
+- OSS mode supports `auth enabled/disabled` behavior:
+  - enabled: tenant header required on protected endpoints
+  - disabled: fake tenant context is injected for local/dev
+- Tenant handling uses dskit utilities (`user`, `tenant`, `middleware`).
+- Enforcement scope is uniform for query + generation ingest + OTLP ingest (HTTP and gRPC).
+- Health endpoints are exempt.
+
+## Storage Model
+
+### Hot store (MySQL)
+
+MySQL is not only an ingest log. It stores:
+
+- generation metadata and indexes used by application queries
+- conversation metadata
+- hot payload rows used for recent reads and overlap resolution
+- compaction state and bookkeeping
+
+### Cold store (object storage)
+
+- compacted, compressed generation payload segments
+- long-term retained payload history
+- implemented via Thanos `objstore` interfaces and clients
+
+### Read policy (fixed)
+
+Query reads fan out to hot and cold stores, union results, and dedupe by `generation_id`.
+
+- overlap conflict policy: prefer hot MySQL row
 
 ## API Contracts
 
+### Ingest
+
 - OTLP gRPC traces: `:4317` (`opentelemetry.proto.collector.trace.v1.TraceService/Export`)
 - OTLP HTTP traces: `POST /v1/traces`
-- Generation ingest gRPC service: `sigil.v1.GenerationIngestService.ExportGenerations`
+- Generation ingest gRPC: `sigil.v1.GenerationIngestService.ExportGenerations`
 - Generation ingest HTTP parity: `POST /api/v1/generations:export`
-- Query API:
-  - `GET /api/v1/conversations`
-  - `GET /api/v1/conversations/{conversation_id}`
-  - `GET /api/v1/completions`
-  - `GET /api/v1/traces/{trace_id}`
+
+### Query
+
+- Sigil API query endpoint: `POST /api/v1/query`
+- Plugin resource proxy endpoint: `POST /api/plugins/grafana-sigil-app/resources/query`
+
+## Query Response Contract
+
+- Envelope: Grafana datasource `QueryDataResponse` shape (`results.<refId>.frames`).
+- Metrics frames: Grafana-compatible metric data frames for graph/table usage.
+- Trace detail frames: Grafana/Tempo-compatible trace frame shape (`preferredVisualisationType: trace`).
+- Trace search frames: Tempo/Grafana-compatible table frame shape (trace id, start time, service, name, duration, nested spans when present).
+
+See `docs/references/grafana-query-response-shapes.md`.
 
 ## Generation Contract
 
@@ -65,19 +122,29 @@ audience: both
 
 ## SDK Runtime Contracts
 
-- `rec.Err()` reports local validation/enqueue failures only.
-- Background export failures are retried with backoff and emitted via logs.
-- `Client.Shutdown(ctx)` flushes generation batches and trace provider.
-- `Client.Flush(ctx)` is available for explicit manual flush points.
-
-## Removed Runtime Paths
-
-- Records REST endpoints are removed from active runtime.
-- Records-first artifact externalization is no longer the primary ingest path.
+- OTel-first mental model: Sigil extends familiar instrumentation flow with AI-specific normalized generation semantics.
+- Core APIs are explicit client/recorder lifecycle APIs.
+- Provider wrappers are convenience sugar, documented wrapper-first in provider modules.
+- Provider parity target for Go/Python/TS: OpenAI, Anthropic, Gemini.
+- Raw provider artifacts are default OFF, explicit opt-in only.
+- `rec.Err()` surfaces local validation/enqueue failures only.
+- Background export failures are retried and logged.
 
 ## Service Responsibilities
 
-- `apps/plugin`: UI and backend proxy handlers.
-- `api/internal/ingest`: OTLP HTTP trace ingest and Tempo forwarding.
-- `api/internal/generations`: generation ingest validation + persistence abstraction.
-- `api/internal/query`: read/query surfaces for plugin.
+- `apps/plugin`: UI routes and backend proxy handlers for Sigil query contracts.
+- `api/internal/ingest`: OTLP ingest handling and Tempo forwarding.
+- `api/internal/generations`: generation ingest validation and persistence coordination.
+- `api/internal/query`: Tempo-first query orchestration plus storage hydration and fan-out reads.
+- `api/internal/storage/mysql`: hot metadata/index/payload access.
+- `api/internal/storage/object`: compacted payload access.
+  - implementation should wrap Thanos `objstore` primitives.
+
+## Evolution Path
+
+Sigil defines an ingestion-log abstraction with pluggable backends.
+
+- Phase 2 backend: MySQL
+- Future candidates: Kafka, WarpStream
+
+This prevents tight coupling of ingest semantics to one concrete log implementation.
