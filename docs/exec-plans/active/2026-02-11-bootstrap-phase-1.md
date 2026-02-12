@@ -24,7 +24,7 @@ Replace placeholder behavior with end-to-end ingest, query, and plugin flows.
 Detailed implementation contracts and phase sequencing are defined in:
 
 - `docs/exec-plans/active/2026-02-12-phase-2-delivery.md`
-- `docs/exec-plans/active/2026-02-12-phase-2-sdk-parity-python.md`
+- `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-python.md`
 - `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-typescript-javascript.md`
 - `docs/exec-plans/active/2026-02-12-phase-2-tenant-boundary.md`
 - `docs/exec-plans/active/2026-02-12-phase-2-query-proxy.md`

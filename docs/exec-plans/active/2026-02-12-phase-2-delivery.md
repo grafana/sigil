@@ -19,17 +19,18 @@ Coordinate decision-complete Phase 2 delivery across parallel workstreams:
 
 ## Current Execution Priority
 
-Current sequencing for active implementation is SDK-first.
+SDK parity tracks are completed. Current sequencing for active implementation is:
 
-1. Python SDK parity against Go + completed TypeScript/JavaScript contracts.
-2. Query proxy/envelope and tenant boundary delivery.
-3. Hybrid storage/query behavior.
+1. Query proxy/envelope and tenant boundary delivery.
+2. Hybrid storage/query behavior.
+3. Cross-track consistency checks and tech debt capture.
 
-Parallel planning remains allowed, but non-SDK implementation should not outrun SDK core contract finalization.
+Completed SDK parity workstreams are tracked in:
 
-TypeScript/JavaScript SDK parity completion is tracked in:
-
+- `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-python.md`
 - `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-typescript-javascript.md`
+
+Parallel planning remains allowed.
 
 ## Scope
 
@@ -39,8 +40,6 @@ TypeScript/JavaScript SDK parity completion is tracked in:
 
 ## Parallel Workstream Plans
 
-- SDK parity (Python):
-  - `docs/exec-plans/active/2026-02-12-phase-2-sdk-parity-python.md`
 - Tenant boundary:
   - `docs/exec-plans/active/2026-02-12-phase-2-tenant-boundary.md`
 - Query proxy and envelope:
@@ -50,6 +49,8 @@ TypeScript/JavaScript SDK parity completion is tracked in:
 
 Completed workstream plans:
 
+- SDK parity (Python):
+  - `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-python.md`
 - SDK parity (TypeScript/JavaScript):
   - `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-typescript-javascript.md`
 
@@ -69,10 +70,9 @@ Completed workstream plans:
 ## Dependency Order
 
 1. Contracts and docs baseline
-2. Python SDK parity alignment
-3. Query proxy/envelope and tenant boundary tracks
-4. Hybrid storage/query behavior track
-5. Tech debt capture and future path checkpoints
+2. Query proxy/envelope and tenant boundary tracks
+3. Hybrid storage/query behavior track
+4. Tech debt capture and future path checkpoints
 
 ## Risks
 

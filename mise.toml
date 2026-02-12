@@ -174,8 +174,52 @@ run = "GOWORK=off go test ./..."
 description = "Run TypeScript/JavaScript SDK runtime tests"
 run = "pnpm --filter @grafana/sigil-sdk-js run test:ci"
 
+[tasks."test:py:sdk-core"]
+description = "Run Python SDK core parity tests"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+python3 -m venv .venv-py-sdk-core
+. .venv-py-sdk-core/bin/activate
+python -m pip install -q -e './sdks/python[dev]'
+python -m pytest sdks/python/tests
+"""
+
+[tasks."test:py:sdk-openai"]
+description = "Run Python OpenAI provider helper tests"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+python3 -m venv .venv-py-sdk-openai
+. .venv-py-sdk-openai/bin/activate
+python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-providers/openai[dev]'
+python -m pytest sdks/python-providers/openai/tests
+"""
+
+[tasks."test:py:sdk-anthropic"]
+description = "Run Python Anthropic provider helper tests"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+python3 -m venv .venv-py-sdk-anthropic
+. .venv-py-sdk-anthropic/bin/activate
+python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-providers/anthropic[dev]'
+python -m pytest sdks/python-providers/anthropic/tests
+"""
+
+[tasks."test:py:sdk-gemini"]
+description = "Run Python Gemini provider helper tests"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+python3 -m venv .venv-py-sdk-gemini
+. .venv-py-sdk-gemini/bin/activate
+python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-providers/gemini[dev]'
+python -m pytest sdks/python-providers/gemini/tests
+"""
+
 [tasks."test:sdk:all"]
-description = "Run all SDK checks (Go SDK tests + TypeScript SDK tests and typecheck)"
+description = "Run all SDK checks (Go, TypeScript/JavaScript, and Python SDK suites)"
 depends = [
   "test:go:sdk-core",
   "test:go:sdk-anthropic",
@@ -183,6 +227,10 @@ depends = [
   "test:go:sdk-gemini",
   "test:ts:sdk-js",
   "typecheck:ts:sdk-js",
+  "test:py:sdk-core",
+  "test:py:sdk-openai",
+  "test:py:sdk-anthropic",
+  "test:py:sdk-gemini",
 ]
 
 [tasks."test:go:all-modules"]

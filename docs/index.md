@@ -34,14 +34,14 @@ This is the canonical navigation map for repository documentation.
   - JS/TS SDK README: `../sdks/js/README.md`
 - Execution plans:
   - Active: `exec-plans/active/`
-  - Current implementation priority: Python SDK parity first (TypeScript/JavaScript SDK parity completed)
+  - Current implementation priority: query proxy + tenant boundary, then hybrid storage/query behavior (SDK parity completed for Python and TypeScript/JavaScript)
   - Phase 2 umbrella coordinator: `exec-plans/active/2026-02-12-phase-2-delivery.md`
   - Phase 2 parallel tracks:
-    - `exec-plans/active/2026-02-12-phase-2-sdk-parity-python.md`
     - `exec-plans/active/2026-02-12-phase-2-tenant-boundary.md`
     - `exec-plans/active/2026-02-12-phase-2-query-proxy.md`
     - `exec-plans/active/2026-02-12-phase-2-hybrid-storage.md`
   - Completed: `exec-plans/completed/`
+    - `exec-plans/completed/2026-02-12-phase-2-sdk-parity-python.md`
     - `exec-plans/completed/2026-02-12-phase-2-sdk-parity-typescript-javascript.md`
   - Tech debt tracker: [`exec-plans/tech-debt-tracker.md`](exec-plans/tech-debt-tracker.md)
 - Generated docs: [`generated/db-schema.md`](generated/db-schema.md)

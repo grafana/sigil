@@ -24,14 +24,15 @@ Phase 2 defines production contracts for SDK parity, query envelopes, tenant bou
 
 ### Execution priority
 
-Active implementation sequencing is SDK-first:
+SDK parity tracks are completed. Active implementation sequencing is:
 
-1. Python SDK parity
-2. query proxy + tenant boundary
-3. hybrid storage/query behavior
+1. query proxy + tenant boundary
+2. hybrid storage/query behavior
+3. cross-track consistency and tech debt capture
 
-TypeScript/JavaScript SDK parity is completed and tracked in:
+SDK parity completion is tracked in:
 
+- `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-python.md`
 - `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-typescript-javascript.md`
 
 ## Ingest Model (Generation-First)
@@ -140,6 +141,7 @@ See `docs/references/grafana-query-response-shapes.md`.
 - Core APIs are explicit client/recorder lifecycle APIs.
 - Provider wrappers are convenience sugar, documented wrapper-first in provider modules.
 - Provider parity target for Go/Python/TS: OpenAI, Anthropic, Gemini.
+- Python SDK runtime lives in `sdks/python` with provider wrapper packages in `sdks/python-providers/*`.
 - Raw provider artifacts are default OFF, explicit opt-in only.
 - SDK validation enforces message role/part compatibility and artifact payload-or-record-id constraints.
 - Empty tool names return a no-op tool recorder (instrumentation safety behavior).

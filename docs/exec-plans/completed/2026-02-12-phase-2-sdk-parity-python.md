@@ -1,6 +1,6 @@
 ---
 owner: sigil-core
-status: active
+status: completed
 last_reviewed: 2026-02-12
 source_of_truth: true
 audience: both
@@ -11,6 +11,10 @@ audience: both
 ## Goal
 
 Deliver production-ready Python SDK parity with Go using an OpenTelemetry-like mental model and stable lifecycle contracts.
+
+## Completion
+
+Completed on 2026-02-12.
 
 ## Scope
 
@@ -24,12 +28,13 @@ Deliver production-ready Python SDK parity with Go using an OpenTelemetry-like m
 
 ## Current Runtime Status
 
-- Python SDK remains scaffold-level (`sdks/python`) and parity implementation is still pending.
-- Transport/runtime/provider parity is not complete yet and remains in active execution scope.
+- Python SDK core runtime is implemented in `sdks/python`.
+- Provider wrapper packages are implemented in `sdks/python-providers/openai`, `sdks/python-providers/anthropic`, and `sdks/python-providers/gemini`.
+- Parity suites for lifecycle, validation, generation transport, trace transport, and provider mapping are implemented and runnable locally.
 
 ## Tasks
 
-- [ ] Define Python core explicit APIs and lifecycle semantics:
+- [x] Define Python core explicit APIs and lifecycle semantics:
   - `start_generation`
   - `start_streaming_generation`
   - `start_tool_execution`
@@ -38,11 +43,11 @@ Deliver production-ready Python SDK parity with Go using an OpenTelemetry-like m
   - `end`
   - `flush`
   - `shutdown`
-- [ ] Keep provider docs wrapper-first while retaining explicit-flow examples.
-- [ ] Lock provider parity target to OpenAI, Anthropic, Gemini.
-- [ ] Keep raw provider artifacts default OFF with explicit debug opt-in only.
-- [ ] Add/update local `mise` tasks for Python parity checks.
-- [ ] Document required local test scenarios:
+- [x] Keep provider docs wrapper-first while retaining explicit-flow examples.
+- [x] Lock provider parity target to OpenAI, Anthropic, Gemini.
+- [x] Keep raw provider artifacts default OFF with explicit debug opt-in only.
+- [x] Add/update local `mise` tasks for Python parity checks.
+- [x] Document required local test scenarios:
   - SDK parity tests (validation, lifecycle, retry/backoff, flush/shutdown).
   - SDK transport tests (generation export HTTP/gRPC roundtrip, OTLP trace transport checks).
   - Provider mapper tests (OpenAI/Anthropic/Gemini sync + stream payload correctness).

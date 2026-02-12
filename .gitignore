@@ -14,6 +14,7 @@ dist/
 coverage/
 .storybook-static/
 *.tsbuildinfo
+sdks/js/.test-dist/
 
 # plugin and go artifacts
 apps/plugin/dist/
@@ -26,6 +27,16 @@ api/sigil-api
 .env
 .env.*
 !*.example
+.venv/
+.venv*/
+.venv-*/
+
+# python artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
 
 # e2e outputs
 /test-results/
