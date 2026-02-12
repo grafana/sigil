@@ -60,6 +60,27 @@ mise run doctor:go
 
 If it reports a mismatch, apply the fix it prints (`go env -w GOTOOLCHAIN=go1.25.6+auto`) and restart your editor.
 
+## Quality Checks (Local + CI)
+
+Run the same quality gate used in GitHub Actions:
+
+```bash
+mise run deps
+mise run ci
+```
+
+`mise run ci` runs:
+
+- `format:check` (Go `gofmt` + plugin Prettier check)
+- `lint` (Go + plugin lint)
+- `typecheck` (plugin + JS SDK)
+
+For full local validation including tests:
+
+```bash
+mise run check
+```
+
 ## Current Scope
 
 This repository is in bootstrap phase: contracts, folder structure, and dev stack are set up, while implementation logic remains intentionally minimal.

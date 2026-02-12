@@ -98,6 +98,39 @@ done < <(find . -name go.mod -not -path './node_modules/*' -exec dirname {} \\; 
 description = "Apply TypeScript lint fixes and formatting"
 run = "pnpm --filter @grafana/sigil-plugin run lint:fix"
 
+[tasks."format:check"]
+description = "Check Go and TypeScript formatting without modifying files"
+depends = ["format:check:go", "format:check:ts"]
+
+[tasks."format:check:go"]
+description = "Verify Go files are formatted with gofmt"
+depends = ["doctor:go"]
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+unformatted=""
+while IFS= read -r go_file; do
+  file_output="$(gofmt -l "${go_file}")"
+  if [[ -n "${file_output}" ]]; then
+    unformatted+="${file_output}"$'\\n'
+  fi
+done < <(find . -name '*.go' -not -path './node_modules/*' | sort)
+
+if [[ -n "${unformatted}" ]]; then
+  cat <<EOF
+The following Go files are not formatted:
+${unformatted}
+
+Run: mise run format:go
+EOF
+  exit 1
+fi
+"""
+
+[tasks."format:check:ts"]
+description = "Verify TypeScript plugin files are formatted with Prettier"
+run = "pnpm --filter @grafana/sigil-plugin exec prettier --check ."
+
 [tasks.lint]
 description = "Run Go and TypeScript linting"
 depends = ["lint:go", "lint:ts"]
@@ -252,3 +285,7 @@ done < <(find ./sdks -name go.mod -exec dirname {} \\; | sort)
 [tasks.check]
 description = "Run lint, typecheck and tests"
 depends = ["lint", "typecheck", "test"]
+
+[tasks.ci]
+description = "Run CI quality checks"
+depends = ["format:check", "lint", "typecheck"]

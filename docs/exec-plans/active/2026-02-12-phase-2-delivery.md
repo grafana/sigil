@@ -48,7 +48,7 @@ Coordinate decision-complete Phase 2 delivery across parallel workstreams:
   - `docs/design-docs/2026-02-12-phase-2-hybrid-storage.md`
 - [ ] Keep navigation indexes synchronized (`docs/index.md`, `docs/design-docs/index.md`, references indexes when contracts move).
 - [ ] Ensure local test scenario coverage remains explicitly documented across all workstreams.
-- [ ] Keep deferred CI and ingestion-log evolution items tracked in `docs/exec-plans/tech-debt-tracker.md`.
+- [ ] Keep CI scope boundaries (quality gates live, test/e2e expansion deferred) and ingestion-log evolution tracked in `docs/exec-plans/tech-debt-tracker.md`.
 
 ## Dependency Order
 
@@ -61,7 +61,7 @@ Coordinate decision-complete Phase 2 delivery across parallel workstreams:
 
 - Cross-surface contract drift between plugin, API, and SDKs.
 - Dual-store read correctness issues if fan-out and dedupe are not enforced consistently.
-- Deferred CI increases regressions risk despite local test mandates.
+- CI currently enforces format/lint/typecheck only; test/e2e regressions can still escape until CI expansion lands.
 - Tenant header propagation gaps can break isolation guarantees.
 
 ## Exit Criteria
@@ -76,7 +76,7 @@ Coordinate decision-complete Phase 2 delivery across parallel workstreams:
 
 ## Out of Scope
 
-- CI pipeline rollout in this phase.
+- CI expansion to full test/e2e pipeline coverage in this phase.
 - Replacing Tempo for trace storage/metrics derivation.
 - Full identity/authz platform beyond tenant header enforcement.
 
@@ -85,7 +85,7 @@ Coordinate decision-complete Phase 2 delivery across parallel workstreams:
 - `mise` is the only command/task system in this phase.
 - Core SDK docs are explicit API first; provider docs are wrapper-first.
 - Query transport is REST-only for this phase.
-- CI is not mandatory in this phase and remains tracked debt.
+- Baseline CI quality gate is mandatory (`mise run ci` on pull requests and `main` pushes); test/e2e CI expansion remains tracked debt.
 - Cost remains provider-reported only in this phase.
 - Model cards use external source plus static fallback, but query/frame compatibility is higher priority.
 - Modified docs must keep `last_reviewed` updated and indexes synchronized.

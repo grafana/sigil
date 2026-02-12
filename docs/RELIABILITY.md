@@ -66,7 +66,8 @@ Current status:
 
 ## Deferred Reliability Work
 
-- CI enforcement remains deferred in this phase and tracked in tech debt.
+- Baseline CI enforcement exists for formatting, linting, and type checks (`mise run ci`).
+- CI expansion for automated test/e2e enforcement remains tracked in tech debt.
 - benchmark and payload-size guardrails remain tracked until implemented.
 
 ## Update Cadence

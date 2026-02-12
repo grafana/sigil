@@ -6,9 +6,7 @@ export default function SettingsPage() {
     <Stack direction="column" gap={2}>
       <h2>Settings</h2>
       <Alert severity="info" title="Sigil bootstrap placeholder">
-        <Text>
-          Configuration UI is scaffolded. Service URL and ingestion settings will be managed from this page.
-        </Text>
+        <Text>Configuration UI is scaffolded. Service URL and ingestion settings will be managed from this page.</Text>
       </Alert>
     </Stack>
   );
