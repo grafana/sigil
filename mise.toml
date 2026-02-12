@@ -120,7 +120,15 @@ run = "pnpm --filter @grafana/sigil-plugin run lint"
 
 [tasks.typecheck]
 description = "Run TypeScript type checks"
+depends = ["typecheck:ts:plugin", "typecheck:ts:sdk-js"]
+
+[tasks."typecheck:ts:plugin"]
+description = "Type-check plugin TypeScript code"
 run = "pnpm --filter @grafana/sigil-plugin run typecheck"
+
+[tasks."typecheck:ts:sdk-js"]
+description = "Type-check TypeScript/JavaScript SDK code"
+run = "pnpm --filter @grafana/sigil-sdk-js run typecheck"
 
 [tasks.test]
 description = "Run plugin, API, and Go SDK tests"
@@ -135,6 +143,7 @@ mise run test:go:sdk-core
 mise run test:go:sdk-anthropic
 mise run test:go:sdk-openai
 mise run test:go:sdk-gemini
+mise run test:ts:sdk-js
 """
 
 [tasks."test:go:sdk-core"]
@@ -160,6 +169,21 @@ description = "Run Gemini provider helper tests as standalone module"
 dir = "sdks/go-providers/gemini"
 depends = ["doctor:go"]
 run = "GOWORK=off go test ./..."
+
+[tasks."test:ts:sdk-js"]
+description = "Run TypeScript/JavaScript SDK runtime tests"
+run = "pnpm --filter @grafana/sigil-sdk-js run test:ci"
+
+[tasks."test:sdk:all"]
+description = "Run all SDK checks (Go SDK tests + TypeScript SDK tests and typecheck)"
+depends = [
+  "test:go:sdk-core",
+  "test:go:sdk-anthropic",
+  "test:go:sdk-openai",
+  "test:go:sdk-gemini",
+  "test:ts:sdk-js",
+  "typecheck:ts:sdk-js",
+]
 
 [tasks."test:go:all-modules"]
 description = "Run go test across Go SDK modules"

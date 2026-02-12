@@ -17,6 +17,17 @@ Coordinate decision-complete Phase 2 delivery across parallel workstreams:
 - lightweight Loki-style tenant enforcement
 - hot+cold generation storage with fan-out query semantics
 
+## Current Execution Priority
+
+Current sequencing for active implementation is SDK-first.
+
+1. TypeScript/JavaScript SDK foundation (core lifecycle APIs, transport semantics, local tests, `mise` tasks).
+2. Python SDK parity against Go + TypeScript/JavaScript contracts.
+3. Query proxy/envelope and tenant boundary delivery.
+4. Hybrid storage/query behavior.
+
+Parallel planning remains allowed, but non-SDK implementation should not outrun SDK core contract finalization.
+
 ## Scope
 
 - Track-level execution coordination and dependency ordering.
@@ -52,10 +63,11 @@ Coordinate decision-complete Phase 2 delivery across parallel workstreams:
 ## Dependency Order
 
 1. Contracts and docs baseline
-2. SDK parity tracks (Python and TypeScript/JavaScript)
-3. Query proxy/envelope and tenant boundary tracks
-4. Hybrid storage/query behavior track
-5. Tech debt capture and future path checkpoints
+2. TypeScript/JavaScript SDK foundation and parity contract lock
+3. Python SDK parity alignment
+4. Query proxy/envelope and tenant boundary tracks
+5. Hybrid storage/query behavior track
+6. Tech debt capture and future path checkpoints
 
 ## Risks
 

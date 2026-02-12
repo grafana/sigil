@@ -27,6 +27,10 @@ Phase 2 delivery is split into parallel design workstreams while preserving thes
 - `docs/design-docs/2026-02-12-phase-2-query-proxy.md`
 - `docs/design-docs/2026-02-12-phase-2-hybrid-storage.md`
 
+## Implementation Priority
+
+Execution is SDK-first. TypeScript/JavaScript SDK foundation work is the first delivery track, then Python parity, then query/tenant/storage delivery tracks.
+
 ## Goals
 
 - Define a decision-complete implementation contract for Python and TypeScript/JavaScript SDK parity.

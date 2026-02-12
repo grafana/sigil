@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-11
+last_reviewed: 2026-02-12
 source_of_truth: true
 audience: agents
 ---
@@ -23,3 +23,4 @@ Execution plan paths are cataloged in `docs/index.md`.
 - Review active plans and tech debt tracker at least once per sprint.
 - Update `last_reviewed` in modified docs during pull requests.
 - Keep `AGENTS.md` Docs Map synchronized with any docs move or rename.
+- Keep Phase 2 implementation order aligned with SDK-first execution (TypeScript/JavaScript foundation before non-SDK tracks).

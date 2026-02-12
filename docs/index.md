@@ -29,8 +29,12 @@ This is the canonical navigation map for repository documentation.
 
 - Design docs: [`design-docs/index.md`](design-docs/index.md)
 - Product specs: [`product-specs/index.md`](product-specs/index.md)
+- SDK docs:
+  - JS/TS SDK docs index: `../sdks/js/docs/index.md`
+  - JS/TS SDK README: `../sdks/js/README.md`
 - Execution plans:
   - Active: `exec-plans/active/`
+  - Current implementation priority: TypeScript/JavaScript SDK foundation first
   - Phase 2 umbrella coordinator: `exec-plans/active/2026-02-12-phase-2-delivery.md`
   - Phase 2 parallel tracks:
     - `exec-plans/active/2026-02-12-phase-2-sdk-parity-python.md`

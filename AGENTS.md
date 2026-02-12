@@ -40,6 +40,7 @@
 - Keep KISS and DRY.
 - Build small focused components.
 - Always use explicit types for props, state, and API contracts.
+- For SDK/public packages, split implementation into focused modules (types/client/transport/providers); avoid monolithic single-file runtime implementations.
 - Keep plugin code under `apps/plugin/src`.
 - Use `getBackendSrv().fetch()` for plugin-to-backend calls.
 
@@ -65,10 +66,21 @@
 - Generation ingest reference: `docs/references/generation-ingest-contract.md`
 - Benchmark + OTEL references: `docs/references/competitive-benchmark.md`
 
+## Documentation Governance
+
+- Keep architecture, project priorities, and cross-project context in `ARCHITECTURE.md` and `docs/` only.
+- Do not store priority/project context in code comments, random root markdown files, or package-level READMEs.
+- If architecture or contracts change, update `ARCHITECTURE.md` in the same change.
+- If work is in design, create or update a design doc in `docs/design-docs/` and an active plan in `docs/exec-plans/active/`.
+- When design or execution is completed, update status and move the exec plan to `docs/exec-plans/completed/`.
+
 ## When To Update Docs
 
 | Repo Area | Update Triggers | Required Docs |
 | --- | --- | --- |
+| any | architecture shape, system boundaries, or project priority changes | `ARCHITECTURE.md` and relevant `docs/*` pages |
+| any | new design started or design direction changed | relevant file in `docs/design-docs/` and matching file in `docs/exec-plans/active/` |
+| any | execution completed | move plan to `docs/exec-plans/completed/` and update linked design/spec status |
 | `apps/plugin` | query/proxy contract changes, UI behavior or data model changes | `ARCHITECTURE.md`, `docs/FRONTEND.md`, relevant plan/spec doc |
 | `api` | ingest/query endpoint changes, proto changes, validation/storage behavior changes | `ARCHITECTURE.md`, `docs/references/generation-ingest-contract.md`, relevant exec plan |
 | `sdks/*` | config/lifecycle changes, generation schema changes, provider wrapper behavior changes | `ARCHITECTURE.md`, `sdks/go/README.md`, relevant plan/reference docs |
