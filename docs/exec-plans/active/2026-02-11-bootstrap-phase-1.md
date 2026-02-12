@@ -35,7 +35,7 @@ This bootstrap plan stays as the umbrella phase marker while Phase 2 contains de
 ## Tasks
 
 - [ ] Replace query placeholders with Tempo-first query + storage hydration behavior.
-- [x] Close Records-first externalization path in favor of Generation-first ingest (`docs/exec-plans/active/2026-02-12-generation-first-ingest.md`).
+- [x] Close Records-first externalization path in favor of Generation-first ingest (`docs/exec-plans/completed/2026-02-12-generation-first-ingest.md`).
 - [ ] Add plugin pages with real conversations/generations/traces drilldown tables.
 - [ ] Add plugin backend resource proxy for query access.
 - [ ] Add tenant/auth boundaries for API and plugin proxy paths.

@@ -8,6 +8,20 @@ audience: both
 
 # Phase 2 Delivery Umbrella: SDK Parity, Tenant Boundaries, Query Proxy, and Hybrid Storage
 
+**This doc is the Phase 2 coordinator** — it sequences workstreams, tracks dependencies, and links to the actual implementation plans. Do not execute from this file; use the linked workstream plans below for concrete tasks.
+
+## Status at a Glance
+
+| Track | Plan | Status |
+|-------|------|--------|
+| SDK parity (Python) | `exec-plans/completed/2026-02-12-phase-2-sdk-parity-python.md` | Done |
+| SDK parity (TypeScript/JavaScript) | `exec-plans/completed/2026-02-12-phase-2-sdk-parity-typescript-javascript.md` | Done |
+| Tenant boundary | `exec-plans/active/2026-02-12-phase-2-tenant-boundary.md` | Active |
+| Query proxy and envelope | `exec-plans/active/2026-02-12-phase-2-query-proxy.md` | Active |
+| Hybrid storage and query | `exec-plans/active/2026-02-12-phase-2-hybrid-storage.md` | Active |
+
+Execution order: (1) tenant boundary + query proxy, then (2) hybrid storage, then (3) cross-track consistency and tech debt capture. Parallel planning remains allowed within that order.
+
 ## Goal
 
 Coordinate decision-complete Phase 2 delivery across parallel workstreams:
@@ -17,42 +31,11 @@ Coordinate decision-complete Phase 2 delivery across parallel workstreams:
 - lightweight Loki-style tenant enforcement
 - hot+cold generation storage with fan-out query semantics
 
-## Current Execution Priority
-
-SDK parity tracks are completed. Current sequencing for active implementation is:
-
-1. Query proxy/envelope and tenant boundary delivery.
-2. Hybrid storage/query behavior.
-3. Cross-track consistency checks and tech debt capture.
-
-Completed SDK parity workstreams are tracked in:
-
-- `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-python.md`
-- `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-typescript-javascript.md`
-
-Parallel planning remains allowed.
-
 ## Scope
 
 - Track-level execution coordination and dependency ordering.
 - Cross-track consistency checks for contracts, docs, and indexes.
 - Local test requirements and command contracts (`mise` only).
-
-## Parallel Workstream Plans
-
-- Tenant boundary:
-  - `docs/exec-plans/active/2026-02-12-phase-2-tenant-boundary.md`
-- Query proxy and envelope:
-  - `docs/exec-plans/active/2026-02-12-phase-2-query-proxy.md`
-- Hybrid storage and query behavior:
-  - `docs/exec-plans/active/2026-02-12-phase-2-hybrid-storage.md`
-
-Completed workstream plans:
-
-- SDK parity (Python):
-  - `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-python.md`
-- SDK parity (TypeScript/JavaScript):
-  - `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-typescript-javascript.md`
 
 ## Coordination Tasks
 
