@@ -2,12 +2,15 @@ package config
 
 import (
 	"os"
+	"strings"
 )
 
 type Config struct {
 	HTTPAddr            string
 	OTLPGRPCAddr        string
 	OTLPHTTPAddr        string
+	AuthEnabled         bool
+	FakeTenantID        string
 	TempoOTLPEndpoint   string
 	StorageBackend      string
 	MySQLDSN            string
@@ -20,6 +23,8 @@ func FromEnv() Config {
 		HTTPAddr:            getEnv("SIGIL_HTTP_ADDR", ":8080"),
 		OTLPGRPCAddr:        getEnv("SIGIL_OTLP_GRPC_ADDR", ":4317"),
 		OTLPHTTPAddr:        getEnv("SIGIL_OTLP_HTTP_ADDR", ":4318"),
+		AuthEnabled:         getEnvBool("SIGIL_AUTH_ENABLED", true),
+		FakeTenantID:        getEnv("SIGIL_FAKE_TENANT_ID", "fake"),
 		TempoOTLPEndpoint:   getEnv("SIGIL_TEMPO_OTLP_ENDPOINT", "tempo:4317"),
 		StorageBackend:      getEnv("SIGIL_STORAGE_BACKEND", "mysql"),
 		MySQLDSN:            getEnv("SIGIL_MYSQL_DSN", "sigil:sigil@tcp(mysql:3306)/sigil?parseTime=true"),
@@ -33,4 +38,19 @@ func getEnv(key string, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func getEnvBool(key string, defaultValue bool) bool {
+	value, ok := os.LookupEnv(key)
+	if !ok || strings.TrimSpace(value) == "" {
+		return defaultValue
+	}
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return defaultValue
+	}
 }

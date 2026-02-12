@@ -23,8 +23,12 @@ func NewService(tempoClient *tempo.Client) *Service {
 	}
 }
 
-func RegisterHTTPRoutes(mux *http.ServeMux, service *Service) {
-	mux.HandleFunc("/v1/traces", service.HandleOTLPHTTP)
+func RegisterHTTPRoutes(mux *http.ServeMux, service *Service, protectedMiddleware func(http.Handler) http.Handler) {
+	if protectedMiddleware == nil {
+		protectedMiddleware = func(next http.Handler) http.Handler { return next }
+	}
+
+	mux.Handle("/v1/traces", protectedMiddleware(http.HandlerFunc(service.HandleOTLPHTTP)))
 	mux.HandleFunc("/healthz", service.HandleHealth)
 }
 

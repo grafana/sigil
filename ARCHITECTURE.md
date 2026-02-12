@@ -24,9 +24,9 @@ Phase 2 defines production contracts for SDK parity, query envelopes, tenant bou
 
 ### Execution priority
 
-SDK parity tracks are completed. Active implementation sequencing is:
+SDK parity and tenant-boundary tracks are completed. Active implementation sequencing is:
 
-1. query proxy + tenant boundary
+1. query proxy
 2. hybrid storage/query behavior
 3. cross-track consistency and tech debt capture
 
@@ -34,6 +34,10 @@ SDK parity completion is tracked in:
 
 - `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-python.md`
 - `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-typescript-javascript.md`
+
+Tenant boundary completion is tracked in:
+
+- `docs/exec-plans/completed/2026-02-12-phase-2-tenant-boundary.md`
 
 ## Ingest Model (Generation-First)
 
@@ -49,6 +53,15 @@ SDK parity completion is tracked in:
 - HTTP and gRPC ingest paths call one shared export service path.
 - Export in SDKs is buffered, batched, and asynchronous.
 - `shutdown` is required to flush pending generations and trace provider state.
+
+### Deployment topology guidance
+
+- Generation path can be direct to Sigil generation ingest (`/api/v1/generations:export` or `GenerationIngestService.ExportGenerations`) using tenant auth mode.
+- Trace path can target OTEL Collector/Alloy (`/v1/traces` or `:4317`) with separate auth configuration.
+- Enterprise proxy pattern:
+  - client sends bearer token
+  - proxy authenticates bearer and translates to upstream `X-Scope-OrgID`
+  - Sigil API enforces tenant header and does not validate bearer tokens in this phase
 
 ## Query Model
 
@@ -68,11 +81,18 @@ SDK parity completion is tracked in:
 - Tenant header: `X-Scope-OrgID`.
 - Auth model is lightweight tenant header extraction/enforcement.
 - OSS mode supports `auth enabled/disabled` behavior:
-  - enabled: tenant header required on protected endpoints
+  - enabled: protected endpoints require tenant context
   - disabled: fake tenant context is injected for local/dev
+- Runtime flags:
+  - `SIGIL_AUTH_ENABLED` (default `true`)
+  - `SIGIL_FAKE_TENANT_ID` (default `fake`)
 - Tenant handling uses dskit utilities (`user`, `tenant`, `middleware`).
 - Enforcement scope is uniform for query + generation ingest + OTLP ingest (HTTP and gRPC).
+- Missing tenant behavior in auth-enabled mode:
+  - HTTP protected endpoints: `401 Unauthorized`
+  - gRPC protected methods: `Unauthenticated`
 - Health endpoints are exempt.
+- Bearer token authentication/validation is not performed by Sigil API in this phase.
 
 ## Storage Model
 
@@ -147,6 +167,12 @@ See `docs/references/grafana-query-response-shapes.md`.
 - Empty tool names return a no-op tool recorder (instrumentation safety behavior).
 - `rec.Err()` surfaces local validation/enqueue failures only.
 - Background export failures are retried and logged.
+- Trace and generation auth are configured independently per export:
+  - modes: `none`, `tenant`, `bearer`
+  - `tenant` mode injects `X-Scope-OrgID`
+  - `bearer` mode injects `Authorization: Bearer <token>`
+- Auth config validation is strict and fail-fast during config resolution/client init.
+- Explicit transport headers have precedence over injected auth headers for `Authorization` and `X-Scope-OrgID`.
 
 ## Service Responsibilities
 

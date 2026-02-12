@@ -9,13 +9,17 @@ import (
 	"github.com/grafana/sigil/api/internal/query"
 )
 
-func RegisterRoutes(mux *http.ServeMux, querySvc *query.Service, generationsSvc *generations.Service) {
+func RegisterRoutes(mux *http.ServeMux, querySvc *query.Service, generationsSvc *generations.Service, protectedMiddleware func(http.Handler) http.Handler) {
+	if protectedMiddleware == nil {
+		protectedMiddleware = func(next http.Handler) http.Handler { return next }
+	}
+
 	mux.HandleFunc("/healthz", health)
-	mux.HandleFunc("/api/v1/generations:export", generations.NewHTTPHandler(generationsSvc))
-	mux.HandleFunc("/api/v1/conversations", listConversations(querySvc))
-	mux.HandleFunc("/api/v1/conversations/", getConversation(querySvc))
-	mux.HandleFunc("/api/v1/completions", listCompletions(querySvc))
-	mux.HandleFunc("/api/v1/traces/", getTrace(querySvc))
+	mux.Handle("/api/v1/generations:export", protectedMiddleware(http.HandlerFunc(generations.NewHTTPHandler(generationsSvc))))
+	mux.Handle("/api/v1/conversations", protectedMiddleware(http.HandlerFunc(listConversations(querySvc))))
+	mux.Handle("/api/v1/conversations/", protectedMiddleware(http.HandlerFunc(getConversation(querySvc))))
+	mux.Handle("/api/v1/completions", protectedMiddleware(http.HandlerFunc(listCompletions(querySvc))))
+	mux.Handle("/api/v1/traces/", protectedMiddleware(http.HandlerFunc(getTrace(querySvc))))
 }
 
 func health(w http.ResponseWriter, _ *http.Request) {

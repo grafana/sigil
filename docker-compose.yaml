@@ -73,6 +73,8 @@ services:
       SIGIL_HTTP_ADDR: :8080
       SIGIL_OTLP_GRPC_ADDR: :4317
       SIGIL_OTLP_HTTP_ADDR: :4318
+      SIGIL_AUTH_ENABLED: false
+      SIGIL_FAKE_TENANT_ID: fake
       SIGIL_TEMPO_OTLP_ENDPOINT: tempo:4317
       SIGIL_STORAGE_BACKEND: mysql
       SIGIL_MYSQL_DSN: sigil:sigil@tcp(mysql:3306)/sigil?parseTime=true

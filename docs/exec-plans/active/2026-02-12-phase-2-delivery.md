@@ -16,11 +16,11 @@ audience: both
 |-------|------|--------|
 | SDK parity (Python) | `exec-plans/completed/2026-02-12-phase-2-sdk-parity-python.md` | Done |
 | SDK parity (TypeScript/JavaScript) | `exec-plans/completed/2026-02-12-phase-2-sdk-parity-typescript-javascript.md` | Done |
-| Tenant boundary | `exec-plans/active/2026-02-12-phase-2-tenant-boundary.md` | Active |
+| Tenant boundary | `exec-plans/completed/2026-02-12-phase-2-tenant-boundary.md` | Done |
 | Query proxy and envelope | `exec-plans/active/2026-02-12-phase-2-query-proxy.md` | Active |
 | Hybrid storage and query | `exec-plans/active/2026-02-12-phase-2-hybrid-storage.md` | Active |
 
-Execution order: (1) tenant boundary + query proxy, then (2) hybrid storage, then (3) cross-track consistency and tech debt capture. Parallel planning remains allowed within that order.
+Execution order: (1) query proxy, then (2) hybrid storage, then (3) cross-track consistency and tech debt capture. Parallel planning remains allowed within that order.
 
 ## Goal
 

@@ -20,6 +20,7 @@ import (
 	"github.com/grafana/sigil/api/internal/storage/mysql"
 	"github.com/grafana/sigil/api/internal/storage/object"
 	"github.com/grafana/sigil/api/internal/tempo"
+	"github.com/grafana/sigil/api/internal/tenantauth"
 	collecttracev1 "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
@@ -38,22 +39,30 @@ func main() {
 	tempoClient := tempo.NewClient(cfg.TempoOTLPEndpoint)
 	ingestSvc := ingest.NewService(tempoClient)
 	ingestGRPC := ingest.NewGRPCServer(ingestSvc)
+	tenantAuthCfg := tenantauth.Config{
+		Enabled:      cfg.AuthEnabled,
+		FakeTenantID: cfg.FakeTenantID,
+	}
+	protectedHTTP := tenantauth.HTTPMiddleware(tenantAuthCfg)
 
 	apiMux := http.NewServeMux()
-	server.RegisterRoutes(apiMux, querySvc, generationsSvc)
+	server.RegisterRoutes(apiMux, querySvc, generationsSvc, protectedHTTP)
 	apiServer := &http.Server{
 		Addr:    cfg.HTTPAddr,
 		Handler: apiMux,
 	}
 
 	otlpHTTPMux := http.NewServeMux()
-	ingest.RegisterHTTPRoutes(otlpHTTPMux, ingestSvc)
+	ingest.RegisterHTTPRoutes(otlpHTTPMux, ingestSvc, protectedHTTP)
 	otlpHTTPServer := &http.Server{
 		Addr:    cfg.OTLPHTTPAddr,
 		Handler: otlpHTTPMux,
 	}
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(tenantauth.UnaryServerInterceptor(tenantAuthCfg)),
+		grpc.StreamInterceptor(tenantauth.StreamServerInterceptor(tenantAuthCfg)),
+	)
 	collecttracev1.RegisterTraceServiceServer(grpcServer, ingestGRPC)
 	sigilv1.RegisterGenerationIngestServiceServer(grpcServer, generationsGRPC)
 	grpcListener, err := net.Listen("tcp", cfg.OTLPGRPCAddr)

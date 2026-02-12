@@ -9,12 +9,13 @@ import (
 	sigilv1 "github.com/grafana/sigil/api/internal/gen/sigil/v1"
 	"github.com/grafana/sigil/api/internal/generations"
 	"github.com/grafana/sigil/api/internal/query"
+	"github.com/grafana/sigil/api/internal/tenantauth"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func TestExportGenerationsHTTPParity(t *testing.T) {
 	mux := http.NewServeMux()
-	RegisterRoutes(mux, query.NewService(), generations.NewService(generations.NewMemoryStore()))
+	RegisterRoutes(mux, query.NewService(), generations.NewService(generations.NewMemoryStore()), nil)
 
 	request := &sigilv1.ExportGenerationsRequest{Generations: []*sigilv1.Generation{
 		{
@@ -53,7 +54,7 @@ func TestExportGenerationsHTTPParity(t *testing.T) {
 
 func TestExportGenerationsHTTPRejectsInvalid(t *testing.T) {
 	mux := http.NewServeMux()
-	RegisterRoutes(mux, query.NewService(), generations.NewService(generations.NewMemoryStore()))
+	RegisterRoutes(mux, query.NewService(), generations.NewService(generations.NewMemoryStore()), nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/generations:export", bytes.NewBufferString(`{"generations":[{"id":"gen-http-invalid","mode":"GENERATION_MODE_SYNC","model":{"name":"gpt-5"}}]}`))
 	resp := httptest.NewRecorder()
@@ -80,7 +81,7 @@ func TestExportGenerationsHTTPRejectsInvalid(t *testing.T) {
 
 func TestRecordsEndpointsAreRemoved(t *testing.T) {
 	mux := http.NewServeMux()
-	RegisterRoutes(mux, query.NewService(), generations.NewService(generations.NewMemoryStore()))
+	RegisterRoutes(mux, query.NewService(), generations.NewService(generations.NewMemoryStore()), nil)
 
 	for _, path := range []string{"/api/v1/records", "/api/v1/records/rec-1"} {
 		req := httptest.NewRequest(http.MethodPost, path, bytes.NewBufferString(`{}`))
@@ -90,5 +91,39 @@ func TestRecordsEndpointsAreRemoved(t *testing.T) {
 		if resp.Code != http.StatusNotFound {
 			t.Fatalf("expected 404 for %s, got %d", path, resp.Code)
 		}
+	}
+}
+
+func TestProtectedRoutesRequireTenantHeaderWhenAuthEnabled(t *testing.T) {
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: true, FakeTenantID: "fake"})
+	RegisterRoutes(mux, query.NewService(), generations.NewService(generations.NewMemoryStore()), protected)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversations", nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", resp.Code)
+	}
+
+	authorizedReq := httptest.NewRequest(http.MethodGet, "/api/v1/conversations", nil)
+	authorizedReq.Header.Set("X-Scope-OrgID", "tenant-a")
+	authorizedResp := httptest.NewRecorder()
+	mux.ServeHTTP(authorizedResp, authorizedReq)
+	if authorizedResp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", authorizedResp.Code)
+	}
+}
+
+func TestHealthRouteIsExemptFromTenantHeader(t *testing.T) {
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: true, FakeTenantID: "fake"})
+	RegisterRoutes(mux, query.NewService(), generations.NewService(generations.NewMemoryStore()), protected)
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.Code)
 	}
 }
