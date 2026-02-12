@@ -11,10 +11,10 @@ Prompt-as-spell metaphor: you cast a sigil, then observe what happened.
 ## Bootstrap Architecture
 
 - Grafana app plugin (`/apps/plugin`) for conversations, completions, traces, and settings.
-- Go service (`/api`) for ingest and query:
+- Go service (`/sigil`) for ingest and query:
   - OTLP gRPC `:4317`
   - OTLP HTTP `:4318/v1/traces`
-  - Records API and query API on `:8080`
+  - Generation ingest and query APIs on `:8080`
 - Tempo (docker compose) as trace storage.
 - MySQL as default metadata and record-reference storage.
 - Optional MinIO profile for object storage-backed payloads.
@@ -23,7 +23,7 @@ Prompt-as-spell metaphor: you cast a sigil, then observe what happened.
 ## Repository Layout
 
 - `/apps/plugin`: Grafana app plugin and backend proxy layer.
-- `/api`: Sigil ingest/query service skeleton.
+- `/sigil`: Sigil ingest/query service skeleton.
 - `/sdks/go`: Go SDK bootstrap.
 - `/sdks/python`: Python SDK skeleton.
 - `/sdks/js`: JS SDK skeleton.
@@ -59,6 +59,27 @@ mise run doctor:go
 ```
 
 If it reports a mismatch, apply the fix it prints (`go env -w GOTOOLCHAIN=go1.25.6+auto`) and restart your editor.
+
+## Quality Checks (Local + CI)
+
+Run the same quality gate used in GitHub Actions:
+
+```bash
+mise run deps
+mise run ci
+```
+
+`mise run ci` runs:
+
+- `format:check` (Go `gofmt` + plugin Prettier check)
+- `lint` (Go + plugin lint)
+- `typecheck` (plugin + JS SDK)
+
+For full local validation including tests:
+
+```bash
+mise run check
+```
 
 ## Current Scope
 

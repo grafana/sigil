@@ -62,11 +62,12 @@ Current status:
 
 - Go OTLP ingest integration coverage exists for gRPC ingest path.
 - Python and TypeScript/JavaScript OTLP ingest integration coverage is still missing.
-- Tempo forwarding integration coverage is still missing.
+- Tempo forwarding integration coverage now exists for HTTP and gRPC ingest paths.
 
 ## Deferred Reliability Work
 
-- CI enforcement remains deferred in this phase and tracked in tech debt.
+- Baseline CI enforcement exists for formatting, linting, and type checks (`mise run ci`).
+- CI expansion for automated test/e2e enforcement remains tracked in tech debt.
 - benchmark and payload-size guardrails remain tracked until implemented.
 
 ## Update Cadence

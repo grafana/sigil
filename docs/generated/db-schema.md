@@ -12,10 +12,10 @@ This file is reserved for generated schema documentation.
 
 ## Generation Source
 
-- Primary source: MySQL storage contracts and migrations in `api/internal/storage/mysql`.
+- Primary source: MySQL storage contracts and migrations in `sigil/internal/storage/mysql`.
 - Current state: placeholder because migrations/schema generation pipeline is not implemented yet.
 
 ## Cadence
 
-- Regenerate after every schema or migration change in `api`.
+- Regenerate after every schema or migration change in `sigil`.
 - Review and update this file before merging schema-affecting pull requests.

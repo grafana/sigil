@@ -5,7 +5,7 @@ experimental = true
 GOTOOLCHAIN = "go1.25.6+auto"
 
 [tools]
-node = "22"
+node = "24"
 go = "1.25.7"
 "go:github.com/magefile/mage" = "v1.15.0"
 "go:github.com/air-verse/air" = "v1.64.5"
@@ -57,12 +57,12 @@ dir = "apps/plugin"
 run = "pnpm run dev"
 
 [tasks."dev:api"]
-description = "Run Sigil API with air"
-dir = "api"
+description = "Run Sigil service with air"
+dir = "sigil"
 run = "air -c .air.toml"
 
 [tasks.up]
-description = "Start local stack (grafana, plugin, api, tempo, mysql)"
+description = "Start local stack (grafana, plugin, sigil, tempo, mysql)"
 run = "docker compose --profile core up --build"
 
 [tasks."up:object"]
@@ -98,6 +98,39 @@ done < <(find . -name go.mod -not -path './node_modules/*' -exec dirname {} \\; 
 description = "Apply TypeScript lint fixes and formatting"
 run = "pnpm --filter @grafana/sigil-plugin run lint:fix"
 
+[tasks."format:check"]
+description = "Check Go and TypeScript formatting without modifying files"
+depends = ["format:check:go", "format:check:ts"]
+
+[tasks."format:check:go"]
+description = "Verify Go files are formatted with gofmt"
+depends = ["doctor:go"]
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+unformatted=""
+while IFS= read -r go_file; do
+  file_output="$(gofmt -l "${go_file}")"
+  if [[ -n "${file_output}" ]]; then
+    unformatted+="${file_output}"$'\\n'
+  fi
+done < <(find . -name '*.go' -not -path './node_modules/*' | sort)
+
+if [[ -n "${unformatted}" ]]; then
+  cat <<EOF
+The following Go files are not formatted:
+${unformatted}
+
+Run: mise run format:go
+EOF
+  exit 1
+fi
+"""
+
+[tasks."format:check:ts"]
+description = "Verify TypeScript plugin files are formatted with Prettier"
+run = "pnpm --filter @grafana/sigil-plugin exec prettier --check ."
+
 [tasks.lint]
 description = "Run Go and TypeScript linting"
 depends = ["lint:go", "lint:ts"]
@@ -109,6 +142,10 @@ run = """
 #!/usr/bin/env bash
 set -euo pipefail
 while IFS= read -r moddir; do
+  if [[ -z "$(cd "${moddir}" && GOWORK=off go list ./... 2>/dev/null || true)" ]]; then
+    echo "==> skip golangci-lint ${moddir} (no Go packages)"
+    continue
+  fi
   echo "==> golangci-lint ${moddir}"
   (cd "${moddir}" && GOWORK=off golangci-lint run ./...)
 done < <(find . -name go.mod -not -path './node_modules/*' -exec dirname {} \\; | sort)
@@ -131,13 +168,13 @@ description = "Type-check TypeScript/JavaScript SDK code"
 run = "pnpm --filter @grafana/sigil-sdk-js run typecheck"
 
 [tasks.test]
-description = "Run plugin, API, and Go SDK tests"
+description = "Run plugin, Sigil, and Go SDK tests"
 depends = ["doctor:go"]
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
 pnpm --filter @grafana/sigil-plugin run test:ci
-cd api && GOWORK=off go test ./...
+cd sigil && GOWORK=off go test ./...
 cd ../apps/plugin && GOWORK=off go test ./...
 mise run test:go:sdk-core
 mise run test:go:sdk-anthropic
@@ -248,3 +285,7 @@ done < <(find ./sdks -name go.mod -exec dirname {} \\; | sort)
 [tasks.check]
 description = "Run lint, typecheck and tests"
 depends = ["lint", "typecheck", "test"]
+
+[tasks.ci]
+description = "Run CI quality checks"
+depends = ["format:check", "lint", "typecheck"]

@@ -19,8 +19,8 @@ sdks/js/.test-dist/
 # plugin and go artifacts
 apps/plugin/dist/
 apps/plugin/pkg/
-api/tmp/
-api/sigil-api
+sigil/tmp/
+sigil/sigil
 *.db
 
 # docker and local env

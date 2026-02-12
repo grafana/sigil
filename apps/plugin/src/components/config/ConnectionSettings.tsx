@@ -11,7 +11,7 @@ type SigilJSONData = {
 export interface ConnectionSettingsProps extends PluginConfigPageProps<AppPluginMeta<SigilJSONData>> {}
 
 export default function ConnectionSettings({ plugin }: ConnectionSettingsProps) {
-  const [sigilApiUrl, setSigilApiUrl] = useState(plugin.meta.jsonData?.sigilApiUrl ?? 'http://api:8080');
+  const [sigilApiUrl, setSigilApiUrl] = useState(plugin.meta.jsonData?.sigilApiUrl ?? 'http://sigil:8080');
 
   const onSave = async () => {
     await updatePlugin(plugin.meta.id, {

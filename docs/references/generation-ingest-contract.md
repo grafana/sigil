@@ -10,8 +10,8 @@ audience: both
 
 ## Sources
 
-- Proto: `api/proto/sigil/v1/generation_ingest.proto`
-- API generated stubs: `api/internal/gen/sigil/v1/`
+- Proto: `sigil/proto/sigil/v1/generation_ingest.proto`
+- API generated stubs: `sigil/internal/gen/sigil/v1/`
 - SDK generated stubs: `sdks/go/sigil/internal/gen/sigil/v1/`
 
 ## Transports
@@ -24,6 +24,29 @@ audience: both
   - JSON schema mirrors protobuf request/response.
 - Implementation rule:
   - Both transport handlers call the same internal `Export` path to keep validation/persistence behavior identical.
+
+## Auth Boundary
+
+- Tenant header is `X-Scope-OrgID`.
+- Auth-enabled mode (`SIGIL_AUTH_ENABLED=true`, default):
+  - protected generation ingest endpoints require tenant context
+  - HTTP missing tenant: `401 Unauthorized`
+  - gRPC missing tenant metadata: `Unauthenticated`
+- Auth-disabled mode (`SIGIL_AUTH_ENABLED=false`):
+  - API injects `SIGIL_FAKE_TENANT_ID` (default `fake`) for local/dev workflows
+- Health endpoints are always unauthenticated.
+- Current phase does not perform bearer-token authentication in Sigil API.
+
+## Deployment Topologies
+
+- Direct generation-to-Sigil:
+  - SDK generation export uses `tenant` auth mode and sends `X-Scope-OrgID`.
+- Split path (generation direct, traces via collector/alloy):
+  - generation export and trace export auth are configured independently in SDKs.
+- Enterprise proxy pattern:
+  - SDK can send bearer auth
+  - proxy authenticates bearer and translates upstream to `X-Scope-OrgID`
+  - Sigil API enforces tenant header only.
 
 ## Request
 
@@ -64,6 +87,11 @@ audience: both
 - Use `StartGeneration` for non-stream calls and `StartStreamingGeneration` for streaming calls.
 - `rec.Err()` surfaces validation/enqueue failures only.
 - Call `Shutdown(ctx)` on application exit to flush queued generations.
+- SDK auth is per-export (`trace` vs `generation_export`) with strict modes:
+  - `none`
+  - `tenant` (requires tenant id)
+  - `bearer` (requires bearer token)
+- Explicit transport headers override SDK-injected `Authorization` and `X-Scope-OrgID`.
 
 ## Span Shape Emitted by Go SDK
 

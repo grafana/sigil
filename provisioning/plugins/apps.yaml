@@ -6,4 +6,4 @@ apps:
     org_name: 'Main Org.'
     disabled: false
     jsonData:
-      sigilApiUrl: http://api:8080
+      sigilApiUrl: http://sigil:8080

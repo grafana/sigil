@@ -5,4 +5,5 @@ use (
 	./sdks/go-providers/anthropic
 	./sdks/go-providers/gemini
 	./sdks/go-providers/openai
+	./sigil
 )

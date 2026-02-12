@@ -21,7 +21,7 @@ Ship Generation-first ingest with OTEL traces + custom generation export (gRPC p
 
 ## Tasks
 
-- [x] Add `api/proto/sigil/v1/generation_ingest.proto` and generate API/SDK stubs.
+- [x] Add `sigil/proto/sigil/v1/generation_ingest.proto` and generate API/SDK stubs.
 - [x] Add API generation ingest service and memory-backed store abstraction.
 - [x] Add gRPC handler: `GenerationIngestService.ExportGenerations`.
 - [x] Add HTTP parity endpoint: `POST /api/v1/generations:export`.
