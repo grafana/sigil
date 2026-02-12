@@ -22,6 +22,11 @@ Deliver production-ready Python SDK parity with Go using an OpenTelemetry-like m
 
 - `docs/design-docs/2026-02-12-phase-2-sdk-parity-python.md`
 
+## Current Runtime Status
+
+- Python SDK remains scaffold-level (`sdks/python`) and parity implementation is still pending.
+- Transport/runtime/provider parity is not complete yet and remains in active execution scope.
+
 ## Tasks
 
 - [ ] Define Python core explicit APIs and lifecycle semantics:

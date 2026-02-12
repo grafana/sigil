@@ -26,10 +26,13 @@ Phase 2 defines production contracts for SDK parity, query envelopes, tenant bou
 
 Active implementation sequencing is SDK-first:
 
-1. TypeScript/JavaScript SDK foundation
-2. Python SDK parity
-3. query proxy + tenant boundary
-4. hybrid storage/query behavior
+1. Python SDK parity
+2. query proxy + tenant boundary
+3. hybrid storage/query behavior
+
+TypeScript/JavaScript SDK parity is completed and tracked in:
+
+- `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-typescript-javascript.md`
 
 ## Ingest Model (Generation-First)
 

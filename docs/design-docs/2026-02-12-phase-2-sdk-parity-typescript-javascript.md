@@ -1,6 +1,6 @@
 ---
 owner: sigil-core
-status: active
+status: completed
 last_reviewed: 2026-02-12
 source_of_truth: true
 audience: both
@@ -12,16 +12,20 @@ audience: both
 
 This workstream isolates TypeScript/JavaScript SDK parity work from other Phase 2 tracks so implementation can proceed in parallel.
 
+Execution for this workstream is completed and tracked in:
+
+- `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-typescript-javascript.md`
+
 ## Implementation Sequence
 
-TypeScript/JavaScript SDK foundation is the first implementation track in Phase 2:
+TypeScript/JavaScript SDK foundation was the first implementation track in Phase 2:
 
 1. lock core TypeScript API surface and lifecycle semantics
 2. implement transport/runtime behavior (queue, retry/backoff, flush/shutdown)
 3. add provider wrappers (OpenAI/Anthropic/Gemini)
 4. complete test matrix and `mise` task coverage
 
-Query, tenant, and storage implementation can proceed in parallel planning, but should not outrun SDK core contract lock.
+This sequence is completed. Active implementation priority has moved to Python parity and non-SDK tracks.
 
 ## Positioning
 

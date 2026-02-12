@@ -57,3 +57,8 @@ Raw provider artifacts remain default OFF and are only included with explicit de
 ## Consequences
 
 - Python implementation can progress independently while preserving cross-language behavior parity.
+
+## Current Runtime Status
+
+- Python SDK is currently scaffold-level and does not yet provide Go/TypeScript parity runtime behavior.
+- Provider wrappers and transport/runtime parity checks remain part of active implementation.

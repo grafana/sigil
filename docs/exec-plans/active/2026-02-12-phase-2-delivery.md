@@ -21,12 +21,15 @@ Coordinate decision-complete Phase 2 delivery across parallel workstreams:
 
 Current sequencing for active implementation is SDK-first.
 
-1. TypeScript/JavaScript SDK foundation (core lifecycle APIs, transport semantics, local tests, `mise` tasks).
-2. Python SDK parity against Go + TypeScript/JavaScript contracts.
-3. Query proxy/envelope and tenant boundary delivery.
-4. Hybrid storage/query behavior.
+1. Python SDK parity against Go + completed TypeScript/JavaScript contracts.
+2. Query proxy/envelope and tenant boundary delivery.
+3. Hybrid storage/query behavior.
 
 Parallel planning remains allowed, but non-SDK implementation should not outrun SDK core contract finalization.
+
+TypeScript/JavaScript SDK parity completion is tracked in:
+
+- `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-typescript-javascript.md`
 
 ## Scope
 
@@ -38,14 +41,17 @@ Parallel planning remains allowed, but non-SDK implementation should not outrun 
 
 - SDK parity (Python):
   - `docs/exec-plans/active/2026-02-12-phase-2-sdk-parity-python.md`
-- SDK parity (TypeScript/JavaScript):
-  - `docs/exec-plans/active/2026-02-12-phase-2-sdk-parity-typescript-javascript.md`
 - Tenant boundary:
   - `docs/exec-plans/active/2026-02-12-phase-2-tenant-boundary.md`
 - Query proxy and envelope:
   - `docs/exec-plans/active/2026-02-12-phase-2-query-proxy.md`
 - Hybrid storage and query behavior:
   - `docs/exec-plans/active/2026-02-12-phase-2-hybrid-storage.md`
+
+Completed workstream plans:
+
+- SDK parity (TypeScript/JavaScript):
+  - `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-typescript-javascript.md`
 
 ## Coordination Tasks
 
@@ -63,11 +69,10 @@ Parallel planning remains allowed, but non-SDK implementation should not outrun 
 ## Dependency Order
 
 1. Contracts and docs baseline
-2. TypeScript/JavaScript SDK foundation and parity contract lock
-3. Python SDK parity alignment
-4. Query proxy/envelope and tenant boundary tracks
-5. Hybrid storage/query behavior track
-6. Tech debt capture and future path checkpoints
+2. Python SDK parity alignment
+3. Query proxy/envelope and tenant boundary tracks
+4. Hybrid storage/query behavior track
+5. Tech debt capture and future path checkpoints
 
 ## Risks
 

@@ -29,7 +29,7 @@ Phase 2 delivery is split into parallel design workstreams while preserving thes
 
 ## Implementation Priority
 
-Execution is SDK-first. TypeScript/JavaScript SDK foundation work is the first delivery track, then Python parity, then query/tenant/storage delivery tracks.
+Execution remains SDK-first. TypeScript/JavaScript SDK parity is complete; active SDK priority is now Python parity, followed by query/tenant/storage delivery tracks.
 
 ## Goals
 
