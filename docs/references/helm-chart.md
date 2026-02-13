@@ -43,6 +43,7 @@ The chart maps values into Sigil runtime env vars from `sigil/internal/config/co
 - `SIGIL_OBJECT_STORE_ENDPOINT`
 - `SIGIL_OBJECT_STORE_BUCKET`
 - compactor settings (`SIGIL_COMPACTOR_*`)
+- model-card settings (`SIGIL_MODEL_CARDS_*`)
 
 ## Deployment Modes
 
@@ -61,6 +62,18 @@ Disable bundled dependencies and set external endpoints/credentials:
 - `sigil.tempo.grpcEndpoint`
 - `sigil.tempo.httpEndpoint`
 - `sigil.objectStore.endpoint`
+
+### Split mode with singleton catalog sync
+
+Optionally run API and catalog refresh as separate deployments while keeping the chart default backward-compatible:
+
+- API deployment:
+  - `sigil.target=server`
+  - `replicaCount > 1`
+- Singleton model-card sync deployment:
+  - `catalogSync.enabled=true`
+  - `catalogSync.replicaCount=1`
+  - `catalogSync.target=catalog-sync`
 
 ## Testing and Packaging
 

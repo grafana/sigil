@@ -189,9 +189,20 @@ See `docs/references/grafana-query-response-shapes.md`.
 - `sigil/internal/ingest/trace`: OTLP trace ingest handling and Tempo forwarding.
 - `sigil/internal/ingest/generation`: generation ingest validation and persistence coordination.
 - `sigil/internal/query`: Tempo-first query orchestration plus storage hydration and fan-out reads.
+- `sigil/internal/modelcards`: model-card catalog bootstrap, refresh, lease coordination, and API read semantics.
 - `sigil/internal/storage/mysql`: hot metadata/index/payload access.
 - `sigil/internal/storage/object`: compacted payload access.
   - implementation should wrap Thanos `objstore` primitives.
+
+### Runtime targets
+
+Runtime module targets include:
+
+- `all`
+- `server`
+- `querier`
+- `compactor`
+- `catalog-sync` (singleton model-card refresh loop; can run independently or as part of `all`)
 
 ## Evolution Path
 

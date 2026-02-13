@@ -87,6 +87,21 @@ helm upgrade --install sigil ./charts/sigil \
   --set sigil.objectStore.endpoint='https://object-store.example'
 ```
 
+### 2b) Split mode with dedicated singleton catalog sync
+
+This keeps API replicas focused on serving traffic and runs model-card refresh in a separate singleton deployment.
+
+```bash
+helm upgrade --install sigil ./charts/sigil \
+  --set image.repository=<your-image-repository> \
+  --set image.tag=<your-image-tag> \
+  --set sigil.target=server \
+  --set replicaCount=3 \
+  --set catalogSync.enabled=true \
+  --set catalogSync.replicaCount=1 \
+  --set catalogSync.target=catalog-sync
+```
+
 ### 3) Enable MinIO for object storage
 
 ```bash
@@ -105,12 +120,14 @@ Use `helm show values ./charts/sigil` for the full configuration surface.
 Important values:
 
 - `image.repository`, `image.tag`: Sigil API image
-- `sigil.target`: runtime target (`all|server|querier|compactor`)
+- `sigil.target`: runtime target (`all|server|querier|compactor|catalog-sync`)
 - `sigil.auth.enabled`, `sigil.auth.fakeTenantID`: tenant/auth behavior
 - `sigil.storage.backend`: storage backend (`mysql` or `memory`)
 - `sigil.storage.mysql.dsn`: required for external MySQL when `mysql.enabled=false`
 - `sigil.tempo.grpcEndpoint`, `sigil.tempo.httpEndpoint`: external Tempo endpoints
 - `sigil.objectStore.endpoint`, `sigil.objectStore.bucket`: object storage config
+- `sigil.modelCards.*`: model-card sync/freshness/bootstrap settings
+- `catalogSync.enabled`, `catalogSync.replicaCount`, `catalogSync.target`: optional dedicated singleton model-card sync deployment
 - `mysql.*`, `tempo.*`, `minio.*`: optional bundled dependency settings
 - `tests.enabled`: enable/disable Helm hook test pod
 

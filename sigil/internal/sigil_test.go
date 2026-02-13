@@ -39,7 +39,7 @@ func TestRuntimeAllTargetServesHealth(t *testing.T) {
 }
 
 func TestRuntimePlaceholderTargetsRemainHealthyUntilCanceled(t *testing.T) {
-	targets := []string{config.TargetQuerier, config.TargetCompactor}
+	targets := []string{config.TargetQuerier, config.TargetCompactor, config.TargetCatalogSync}
 
 	for _, target := range targets {
 		t.Run(target, func(t *testing.T) {

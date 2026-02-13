@@ -82,9 +82,10 @@ func (r *Runtime) registerModules() error {
 	r.moduleInit.RegisterModule(config.TargetServer, r.initServerModule)
 	r.moduleInit.RegisterModule(config.TargetQuerier, r.initQuerierModule)
 	r.moduleInit.RegisterModule(config.TargetCompactor, r.initCompactorModule)
+	r.moduleInit.RegisterModule(config.TargetCatalogSync, r.initCatalogSyncModule)
 	r.moduleInit.RegisterModule(config.TargetAll, nil)
 
-	return r.moduleInit.AddDependency(config.TargetAll, config.TargetServer, config.TargetQuerier, config.TargetCompactor)
+	return r.moduleInit.AddDependency(config.TargetAll, config.TargetServer, config.TargetQuerier, config.TargetCompactor, config.TargetCatalogSync)
 }
 
 func (r *Runtime) initServerModule() (services.Service, error) {
@@ -99,4 +100,8 @@ func (r *Runtime) initQuerierModule() (services.Service, error) {
 func (r *Runtime) initCompactorModule() (services.Service, error) {
 	blockStore := object.NewStore(r.cfg.ObjectStoreEndpoint, r.cfg.ObjectStoreBucket)
 	return newCompactorModule(blockStore), nil
+}
+
+func (r *Runtime) initCatalogSyncModule() (services.Service, error) {
+	return newCatalogSyncModule(r.cfg)
 }

@@ -133,6 +133,13 @@ Cons:
 
 Choose Option A now, keep Option D as secondary fallback input.
 
+### Runtime topology
+
+- Add runtime target `catalog-sync` dedicated to model-card refresh.
+- Keep chart/runtime defaults backward-compatible with `sigil.target=all`.
+- In `all`, model-card sync still runs, but only one writer is active per cluster through DB lease.
+- In split mode (`sigil.target=server` for API pods), run exactly one `catalog-sync` pod per cluster.
+
 ### Source priority
 
 1. OpenRouter live API
@@ -142,7 +149,7 @@ Choose Option A now, keep Option D as secondary fallback input.
 ### Refresh flow
 
 1. Scheduler triggers every `30m` (configurable).
-2. Acquire MySQL advisory lock (`model_cards_refresh`) to prevent concurrent refresh.
+2. Acquire refresh lease from `model_card_refresh_leases` (`scope_key=model-cards-refresh`, TTL default `2m`).
 3. Fetch primary source with timeout/retry.
 4. If primary fails, load static fallback JSON from disk.
 5. Normalize into canonical model-card struct.
@@ -155,7 +162,7 @@ Choose Option A now, keep Option D as secondary fallback input.
 - target freshness: <= `30m`
 - soft-stale threshold: `2h`
 - hard-stale threshold: `24h`
-- API always returns `freshness` metadata so UI can show staleness state
+- API always returns `freshness` metadata including `source_path` (`db_live`, `db_stale`, `snapshot_fallback`)
 
 ## Canonical model-card shape
 
@@ -270,6 +277,17 @@ Indexes:
 - `idx_source_started (source, started_at)`
 - `idx_status_started (status, started_at)`
 
+### `model_card_refresh_leases`
+
+- `scope_key VARCHAR(128) PRIMARY KEY`
+- `owner_id VARCHAR(255) NOT NULL`
+- `leased_at TIMESTAMP(6) NOT NULL`
+- `expires_at TIMESTAMP(6) NOT NULL`
+
+Indexes:
+
+- `idx_model_card_refresh_leases_expires_at (expires_at)`
+
 ## API design
 
 All endpoints follow existing Sigil style under `/api/v1/*`.
@@ -313,7 +331,8 @@ Response:
   "next_cursor": "eyJsYXN0X2lkIjoyMzQ1fQ==",
   "freshness": {
     "catalog_last_refreshed_at": "2026-02-12T23:30:00Z",
-    "stale": false
+    "stale": false,
+    "source_path": "db_live"
   }
 }
 ```
@@ -404,7 +423,8 @@ Refresh tooling should include:
 1. Land schema + read API behind feature flag.
 2. Land refresh tooling with OpenRouter source + static fallback.
 3. Enable scheduled refresh in non-prod, then prod.
-4. Add optional enrichment source(s) only after baseline stability.
+4. Add optional split deployment mode in Helm (`catalogSync.enabled=true`) for singleton refresh.
+5. Add optional enrichment source(s) only after baseline stability.
 
 ## References
 

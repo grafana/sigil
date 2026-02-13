@@ -14,3 +14,7 @@ Active contracts exposed by the service:
   - `GET /api/v1/conversations/{conversation_id}`
   - `GET /api/v1/completions`
   - `GET /api/v1/traces/{trace_id}`
+  - `GET /api/v1/model-cards`
+  - `GET /api/v1/model-cards:lookup`
+  - `GET /api/v1/model-cards:sources`
+  - `POST /api/v1/model-cards:refresh`

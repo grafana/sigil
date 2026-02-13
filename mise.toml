@@ -215,6 +215,13 @@ helm template sigil ./charts/sigil \
 
 helm template sigil ./charts/sigil \
   --set minio.enabled=true >/dev/null
+
+helm template sigil ./charts/sigil \
+  --set sigil.target=server \
+  --set replicaCount=3 \
+  --set catalogSync.enabled=true \
+  --set catalogSync.replicaCount=1 \
+  --set catalogSync.target=catalog-sync >/dev/null
 """
 
 [tasks."package:helm"]
@@ -225,6 +232,16 @@ set -euo pipefail
 mkdir -p dist/charts
 helm package ./charts/sigil --destination dist/charts
 """
+
+[tasks."model-cards:snapshot:update"]
+description = "Refresh model-card snapshot from OpenRouter and write canonical fallback JSON"
+depends = ["doctor:go"]
+run = "cd sigil && GOWORK=off go run ./cmd/modelcards-snapshot --mode update --output ./internal/modelcards/fallback/openrouter_models.v1.json"
+
+[tasks."model-cards:snapshot:check"]
+description = "Validate model-card fallback snapshot schema, checksum, and canonical formatting"
+depends = ["doctor:go"]
+run = "cd sigil && GOWORK=off go run ./cmd/modelcards-snapshot --mode check --output ./internal/modelcards/fallback/openrouter_models.v1.json"
 
 [tasks."test:go:sdk-core"]
 description = "Run Go SDK core tests as standalone module"

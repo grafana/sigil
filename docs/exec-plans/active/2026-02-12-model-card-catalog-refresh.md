@@ -28,52 +28,60 @@ Deliver an automated model-card catalog with external-source refresh, static fal
 
 ### Phase A: Schema and storage
 
-- [ ] Add MySQL migration for:
+- [x] Add MySQL migration for:
   - `model_cards`
   - `model_card_aliases`
   - `model_card_refresh_runs`
-- [ ] Add repository interfaces in `sigil/internal/modelcards`.
-- [ ] Implement MySQL repository methods for list/filter/lookup and refresh-run writes.
-- [ ] Add migration and repository tests.
+- [x] Add repository interfaces in `sigil/internal/modelcards`.
+- [x] Implement MySQL repository methods for list/filter/lookup and refresh-run writes.
+- [ ] Add dedicated repository tests for `ModelCardStore` (deferred; covered indirectly by service + HTTP tests).
 
 ### Phase B: Source adapters and refresh engine
 
-- [ ] Implement `openrouter` source adapter (`GET /api/v1/models`).
-- [ ] Implement static fallback loader (`sigil/internal/modelcards/fallback/openrouter_models.v1.json`).
-- [ ] Implement normalization + validation pipeline into canonical model-card contract.
-- [ ] Implement refresh coordinator with:
-  - MySQL advisory lock
+- [x] Implement `openrouter` source adapter (`GET /api/v1/models`).
+- [x] Implement static fallback loader (`sigil/internal/modelcards/fallback/openrouter_models.v1.json`).
+- [x] Implement normalization + validation pipeline into canonical model-card contract.
+- [x] Implement refresh coordinator with:
+  - MySQL lease table (`model_card_refresh_leases`)
   - retry + timeout
   - primary->fallback failover
   - stale marking with grace window
-- [ ] Record refresh runs in `model_card_refresh_runs`.
-- [ ] Add unit tests for success, fallback, and failure paths.
+- [x] Record refresh runs in `model_card_refresh_runs`.
+- [x] Add unit tests for success, fallback, and failure paths.
 
 ### Phase C: API surface
 
-- [ ] Add route `GET /api/v1/model-cards`.
-- [ ] Add route `GET /api/v1/model-cards:lookup`.
-- [ ] Add route `GET /api/v1/model-cards:sources`.
-- [ ] Add protected route `POST /api/v1/model-cards:refresh`.
-- [ ] Add input validation and pagination guards.
-- [ ] Add HTTP handler tests for filtering, sorting, pagination, and lookup errors.
+- [x] Add route `GET /api/v1/model-cards`.
+- [x] Add route `GET /api/v1/model-cards:lookup`.
+- [x] Add route `GET /api/v1/model-cards:sources`.
+- [x] Add protected route `POST /api/v1/model-cards:refresh`.
+- [x] Add input validation and pagination guards.
+- [x] Add HTTP handler tests for filtering, sorting, pagination, and lookup errors.
 
 ### Phase D: Tooling and observability
 
-- [ ] Add refresh command target (for example via `mise` task) for manual runs.
-- [ ] Add snapshot update command for fallback JSON regeneration.
+- [x] Add refresh/snapshot command targets via `mise` tasks for manual runs.
+- [x] Add snapshot update/check commands for fallback JSON regeneration.
 - [ ] Add metrics:
   - refresh duration
   - success/failure counters
   - catalog age
   - row count
-- [ ] Add logs for source selection and fallback usage.
+- [ ] Add logs for source selection and fallback usage (partial; error paths logged).
 
-### Phase E: Rollout and docs
+### Phase E: Runtime targets and Helm
 
-- [ ] Wire scheduler interval/config in runtime config.
-- [ ] Enable in dev compose and verify end-to-end behavior.
-- [ ] Update docs index entries and design status as implementation lands.
+- [x] Add runtime target `catalog-sync` in config/runtime module wiring.
+- [x] Ensure `all` target includes model-card sync behavior with lease guard.
+- [x] Add Helm `catalogSync.enabled` optional deployment template.
+- [x] Keep Helm default mode backward-compatible (`sigil.target=all`).
+- [x] Add Helm render tests for split mode (`sigil.target=server` + `catalogSync.enabled=true` + singleton replica).
+
+### Phase F: Rollout and docs
+
+- [x] Wire scheduler interval/config in runtime config.
+- [x] Enable in dev compose and verify end-to-end behavior.
+- [x] Update docs index entries and design status as implementation lands.
 - [ ] Capture deferred items in `docs/exec-plans/tech-debt-tracker.md` if needed.
 
 ## Risks
