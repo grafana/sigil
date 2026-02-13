@@ -6,7 +6,7 @@ GOTOOLCHAIN = "go1.25.6+auto"
 
 [tools]
 node = "24"
-go = "1.25.7"
+go = "1.26.0"
 java = "temurin-17"
 helm = "3.19.0"
 dotnet = "8.0.418"
