@@ -4,13 +4,15 @@ import "time"
 
 type GenerationModel struct {
 	ID               uint64     `gorm:"primaryKey;autoIncrement"`
-	TenantID         string     `gorm:"size:128;not null;uniqueIndex:ux_generations_tenant_generation,priority:1;index:idx_generations_tenant_conversation_created,priority:1;index:idx_generations_tenant_compacted_created,priority:1"`
+	TenantID         string     `gorm:"size:128;not null;uniqueIndex:ux_generations_tenant_generation,priority:1;index:idx_generations_tenant_conversation_created,priority:1;index:idx_generations_tenant_compacted_claimed_created,priority:1"`
 	GenerationID     string     `gorm:"size:255;not null;uniqueIndex:ux_generations_tenant_generation,priority:2"`
 	ConversationID   *string    `gorm:"size:255;index:idx_generations_tenant_conversation_created,priority:2"`
-	CreatedAt        time.Time  `gorm:"type:datetime(6);not null;index:idx_generations_tenant_conversation_created,priority:3;index:idx_generations_tenant_compacted_created,priority:3"`
+	CreatedAt        time.Time  `gorm:"type:datetime(6);not null;index:idx_generations_tenant_conversation_created,priority:3;index:idx_generations_tenant_compacted_claimed_created,priority:4"`
 	Payload          []byte     `gorm:"type:mediumblob;not null"`
 	PayloadSizeBytes int        `gorm:"not null"`
-	Compacted        bool       `gorm:"not null;default:false;index:idx_generations_tenant_compacted_created,priority:2"`
+	Compacted        bool       `gorm:"not null;default:false;index:idx_generations_tenant_compacted_claimed_created,priority:2"`
+	ClaimedBy        *string    `gorm:"size:255;index:idx_generations_tenant_compacted_claimed_created,priority:3"`
+	ClaimedAt        *time.Time `gorm:"type:datetime(6)"`
 	CompactedAt      *time.Time `gorm:"type:datetime(6)"`
 }
 
@@ -52,6 +54,7 @@ func (CompactionBlockModel) TableName() string {
 
 type CompactorLeaseModel struct {
 	TenantID  string    `gorm:"size:128;primaryKey"`
+	ShardID   int       `gorm:"primaryKey"`
 	OwnerID   string    `gorm:"size:255;not null"`
 	LeasedAt  time.Time `gorm:"type:datetime(6);not null"`
 	ExpiresAt time.Time `gorm:"type:datetime(6);not null"`

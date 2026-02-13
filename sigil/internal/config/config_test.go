@@ -1,6 +1,8 @@
 package config
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestFromEnvDefaultsTargetToAll(t *testing.T) {
 	t.Setenv("SIGIL_TARGET", "")
@@ -72,6 +74,55 @@ func TestValidateRejectsInvalidCompactorConfig(t *testing.T) {
 
 	if err := cfg.Validate(); err == nil {
 		t.Fatalf("expected validation error for invalid compactor config")
+	}
+}
+
+func TestFromEnvCompactorScalingDefaults(t *testing.T) {
+	t.Setenv("SIGIL_COMPACTOR_SHARD_COUNT", "")
+	t.Setenv("SIGIL_COMPACTOR_SHARD_WINDOW_SECONDS", "")
+	t.Setenv("SIGIL_COMPACTOR_WORKERS", "")
+	t.Setenv("SIGIL_COMPACTOR_CYCLE_BUDGET", "")
+	t.Setenv("SIGIL_COMPACTOR_CLAIM_TTL", "")
+	t.Setenv("SIGIL_COMPACTOR_TARGET_BLOCK_BYTES", "")
+
+	cfg := FromEnv()
+	if cfg.CompactorConfig.ShardCount != DefaultCompactorShardCount {
+		t.Fatalf("expected shard count default 8, got %d", cfg.CompactorConfig.ShardCount)
+	}
+	if cfg.CompactorConfig.ShardWindowSeconds != DefaultCompactorShardWindowSeconds {
+		t.Fatalf("expected shard window default 60, got %d", cfg.CompactorConfig.ShardWindowSeconds)
+	}
+	if cfg.CompactorConfig.Workers != DefaultCompactorWorkers {
+		t.Fatalf("expected workers default 4, got %d", cfg.CompactorConfig.Workers)
+	}
+	if cfg.CompactorConfig.CycleBudget != DefaultCompactorCycleBudget {
+		t.Fatalf("expected cycle budget default 30s, got %s", cfg.CompactorConfig.CycleBudget)
+	}
+	if cfg.CompactorConfig.ClaimTTL != DefaultCompactorClaimTTL {
+		t.Fatalf("expected claim ttl default 5m, got %s", cfg.CompactorConfig.ClaimTTL)
+	}
+	if cfg.CompactorConfig.TargetBlockBytes != DefaultCompactorTargetBlockBytes {
+		t.Fatalf("expected target block bytes default 64MiB, got %d", cfg.CompactorConfig.TargetBlockBytes)
+	}
+}
+
+func TestValidateRejectsInvalidCompactorScalingConfig(t *testing.T) {
+	cfg := FromEnv()
+	cfg.CompactorConfig.ShardCount = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for shard count")
+	}
+
+	cfg = FromEnv()
+	cfg.CompactorConfig.Workers = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for workers")
+	}
+
+	cfg = FromEnv()
+	cfg.CompactorConfig.ClaimTTL = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for claim ttl")
 	}
 }
 

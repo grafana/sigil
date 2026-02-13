@@ -108,6 +108,12 @@ sigil:
     retention: 1h
     batchSize: 1000
     leaseTTL: 30s
+    shardCount: 8
+    shardWindowSeconds: 60
+    workers: 4
+    cycleBudget: 30s
+    claimTTL: 5m
+    targetBlockBytes: 67108864
   modelCards:
     syncInterval: 30m
     leaseTTL: 2m

@@ -32,7 +32,7 @@ func newCompactorModule(
 	ownerID string,
 	discoverer compactorstorage.TenantDiscoverer,
 	leaser compactorstorage.TenantLeaser,
-	claimer compactorstorage.TransactionalClaimer,
+	claimer compactorstorage.Claimer,
 	truncator compactorstorage.Truncator,
 	blockWriter storage.BlockWriter,
 	metadataStore storage.BlockMetadataStore,

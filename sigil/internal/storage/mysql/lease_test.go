@@ -2,11 +2,11 @@ package mysql
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
+	"github.com/grafana/sigil/sigil/internal/storage"
 )
 
 func TestAcquireLeaseLifecycle(t *testing.T) {
@@ -18,11 +18,12 @@ func TestAcquireLeaseLifecycle(t *testing.T) {
 	}
 
 	const (
-		tenant = "tenant-lease"
-		ttl    = 30 * time.Second
+		tenant  = "tenant-lease"
+		shardID = 3
+		ttl     = 30 * time.Second
 	)
 
-	firstHeld, firstOwner, _, err := store.AcquireLease(context.Background(), tenant, "owner-a", ttl)
+	firstHeld, firstOwner, _, err := store.AcquireLease(context.Background(), tenant, shardID, "owner-a", ttl)
 	if err != nil {
 		t.Fatalf("acquire lease first: %v", err)
 	}
@@ -30,7 +31,7 @@ func TestAcquireLeaseLifecycle(t *testing.T) {
 		t.Fatalf("expected owner-a lease held, got held=%v owner=%q", firstHeld, firstOwner)
 	}
 
-	renewedHeld, renewedOwner, _, err := store.AcquireLease(context.Background(), tenant, "owner-a", ttl)
+	renewedHeld, renewedOwner, _, err := store.RenewLease(context.Background(), tenant, shardID, "owner-a", ttl)
 	if err != nil {
 		t.Fatalf("renew lease: %v", err)
 	}
@@ -38,7 +39,7 @@ func TestAcquireLeaseLifecycle(t *testing.T) {
 		t.Fatalf("expected owner-a renew to succeed, got held=%v owner=%q", renewedHeld, renewedOwner)
 	}
 
-	deniedHeld, deniedOwner, _, err := store.AcquireLease(context.Background(), tenant, "owner-b", ttl)
+	deniedHeld, deniedOwner, _, err := store.AcquireLease(context.Background(), tenant, shardID, "owner-b", ttl)
 	if err != nil {
 		t.Fatalf("competing lease acquire: %v", err)
 	}
@@ -47,12 +48,12 @@ func TestAcquireLeaseLifecycle(t *testing.T) {
 	}
 
 	if err := store.DB().Model(&CompactorLeaseModel{}).
-		Where("tenant_id = ?", tenant).
+		Where("tenant_id = ? AND shard_id = ?", tenant, shardID).
 		Update("expires_at", time.Now().UTC().Add(-time.Second)).Error; err != nil {
 		t.Fatalf("expire lease: %v", err)
 	}
 
-	stolenHeld, stolenOwner, _, err := store.AcquireLease(context.Background(), tenant, "owner-b", ttl)
+	stolenHeld, stolenOwner, _, err := store.AcquireLease(context.Background(), tenant, shardID, "owner-b", ttl)
 	if err != nil {
 		t.Fatalf("steal expired lease: %v", err)
 	}
@@ -61,7 +62,7 @@ func TestAcquireLeaseLifecycle(t *testing.T) {
 	}
 }
 
-func TestListTenantsForCompactionAndTruncation(t *testing.T) {
+func TestListShardsForCompactionAndTruncation(t *testing.T) {
 	store, cleanup := newTestWALStore(t)
 	defer cleanup()
 
@@ -72,17 +73,21 @@ func TestListTenantsForCompactionAndTruncation(t *testing.T) {
 	base := time.Date(2026, 2, 12, 18, 0, 0, 0, time.UTC)
 	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{
 		testGeneration("gen-tenant-a-1", "conv-a", base),
+		testGeneration("gen-tenant-a-2", "conv-a", base.Add(10*time.Second)),
 	}))
 	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-b", []*sigilv1.Generation{
 		testGeneration("gen-tenant-b-1", "conv-b", base),
 	}))
 
-	compactionTenants, err := store.ListTenantsForCompaction(context.Background(), base.Add(time.Hour), 10)
+	compactionShards, err := store.ListShardsForCompaction(context.Background(), 60, 2, 10)
 	if err != nil {
-		t.Fatalf("list tenants for compaction: %v", err)
+		t.Fatalf("list shards for compaction: %v", err)
 	}
-	if len(compactionTenants) != 2 || compactionTenants[0] != "tenant-a" || compactionTenants[1] != "tenant-b" {
-		t.Fatalf("unexpected compaction tenants: %#v", compactionTenants)
+	if len(compactionShards) == 0 {
+		t.Fatalf("expected at least one compaction shard")
+	}
+	if compactionShards[0].TenantID != "tenant-a" || compactionShards[0].Backlog < 2 {
+		t.Fatalf("expected tenant-a shard first with backlog >=2, got %#v", compactionShards[0])
 	}
 
 	if err := store.DB().Model(&GenerationModel{}).
@@ -94,16 +99,57 @@ func TestListTenantsForCompactionAndTruncation(t *testing.T) {
 		t.Fatalf("set compaction state: %v", err)
 	}
 
-	truncationTenants, err := store.ListTenantsForTruncation(context.Background(), time.Now().UTC().Add(-time.Hour), 10)
+	truncationShards, err := store.ListShardsForTruncation(context.Background(), 60, 2, time.Now().UTC().Add(-time.Hour), 10)
 	if err != nil {
-		t.Fatalf("list tenants for truncation: %v", err)
+		t.Fatalf("list shards for truncation: %v", err)
 	}
-	if len(truncationTenants) != 1 || truncationTenants[0] != "tenant-a" {
-		t.Fatalf("unexpected truncation tenants: %#v", truncationTenants)
+	if len(truncationShards) == 0 {
+		t.Fatalf("expected at least one truncation shard")
+	}
+	if truncationShards[0].TenantID != "tenant-a" {
+		t.Fatalf("expected tenant-a truncation shard, got %#v", truncationShards[0])
 	}
 }
 
-func TestWithClaimedUncompactedCommitsOnlyOnCallbackSuccess(t *testing.T) {
+func TestListShardsForCompactionExcludesFutureRows(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	now := time.Now().UTC()
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-ready", []*sigilv1.Generation{
+		testGeneration("gen-ready-1", "conv-ready", now.Add(-time.Minute)),
+	}))
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-future", []*sigilv1.Generation{
+		testGeneration("gen-future-1", "conv-future", now.Add(30*time.Minute)),
+	}))
+
+	shards, err := store.ListShardsForCompaction(context.Background(), 60, 4, 10)
+	if err != nil {
+		t.Fatalf("list shards for compaction: %v", err)
+	}
+	if len(shards) == 0 {
+		t.Fatalf("expected at least one compaction shard")
+	}
+
+	foundReady := false
+	for _, shard := range shards {
+		if shard.TenantID == "tenant-future" {
+			t.Fatalf("future-dated tenant should not be discoverable for compaction: %#v", shard)
+		}
+		if shard.TenantID == "tenant-ready" {
+			foundReady = true
+		}
+	}
+	if !foundReady {
+		t.Fatalf("expected ready tenant shard in discovery set: %#v", shards)
+	}
+}
+
+func TestClaimLoadFinalizeAndStaleRecovery(t *testing.T) {
 	store, cleanup := newTestWALStore(t)
 	defer cleanup()
 
@@ -118,19 +164,25 @@ func TestWithClaimedUncompactedCommitsOnlyOnCallbackSuccess(t *testing.T) {
 		testGeneration("gen-claim-3", "conv-claim", base.Add(2*time.Minute)),
 	}))
 
-	claimed, err := store.WithClaimedUncompacted(context.Background(), "tenant-a", base.Add(10*time.Minute), 2,
-		func(_ context.Context, generations []*sigilv1.Generation) error {
-			if len(generations) != 2 {
-				t.Fatalf("expected 2 claimed generations, got %d", len(generations))
-			}
-			return nil
-		},
-	)
+	pred := storage.ShardPredicate{ShardWindowSeconds: 60, ShardCount: 1, ShardID: 0}
+	claimed, err := store.ClaimBatch(context.Background(), "tenant-a", "owner-a", pred, base.Add(10*time.Minute), 2)
 	if err != nil {
-		t.Fatalf("with claimed uncompacted success: %v", err)
+		t.Fatalf("claim batch: %v", err)
 	}
 	if claimed != 2 {
 		t.Fatalf("expected 2 claimed rows, got %d", claimed)
+	}
+
+	generations, ids, err := store.LoadClaimed(context.Background(), "tenant-a", "owner-a", pred, 10)
+	if err != nil {
+		t.Fatalf("load claimed: %v", err)
+	}
+	if len(generations) != 2 || len(ids) != 2 {
+		t.Fatalf("expected 2 loaded claimed rows, got generations=%d ids=%d", len(generations), len(ids))
+	}
+
+	if err := store.FinalizeClaimed(context.Background(), "tenant-a", "owner-a", ids); err != nil {
+		t.Fatalf("finalize claimed: %v", err)
 	}
 
 	var compactedCount int64
@@ -143,26 +195,35 @@ func TestWithClaimedUncompactedCommitsOnlyOnCallbackSuccess(t *testing.T) {
 		t.Fatalf("expected 2 compacted rows, got %d", compactedCount)
 	}
 
-	expectedErr := errors.New("upload failed")
-	_, err = store.WithClaimedUncompacted(context.Background(), "tenant-a", base.Add(10*time.Minute), 2,
-		func(_ context.Context, generations []*sigilv1.Generation) error {
-			if len(generations) != 1 {
-				t.Fatalf("expected 1 claimed generation, got %d", len(generations))
-			}
-			return expectedErr
-		},
-	)
-	if !errors.Is(err, expectedErr) {
-		t.Fatalf("expected callback error %v, got %v", expectedErr, err)
+	claimed, err = store.ClaimBatch(context.Background(), "tenant-a", "owner-b", pred, base.Add(10*time.Minute), 2)
+	if err != nil {
+		t.Fatalf("claim remaining row: %v", err)
+	}
+	if claimed != 1 {
+		t.Fatalf("expected 1 claimed remaining row, got %d", claimed)
 	}
 
-	var remainingUncompacted int64
 	if err := store.DB().Model(&GenerationModel{}).
-		Where("tenant_id = ? AND compacted = ?", "tenant-a", false).
-		Count(&remainingUncompacted).Error; err != nil {
-		t.Fatalf("count uncompacted rows: %v", err)
+		Where("tenant_id = ? AND claimed_by = ?", "tenant-a", "owner-b").
+		Update("claimed_at", time.Now().UTC().Add(-10*time.Minute)).Error; err != nil {
+		t.Fatalf("age claim timestamp: %v", err)
 	}
-	if remainingUncompacted != 1 {
-		t.Fatalf("expected 1 uncompacted row after callback failure, got %d", remainingUncompacted)
+
+	recovered, err := store.ReleaseStaleClaims(context.Background(), 5*time.Minute)
+	if err != nil {
+		t.Fatalf("release stale claims: %v", err)
+	}
+	if recovered < 1 {
+		t.Fatalf("expected stale claim recovery >= 1, got %d", recovered)
+	}
+
+	var remainingClaimed int64
+	if err := store.DB().Model(&GenerationModel{}).
+		Where("tenant_id = ? AND claimed_by IS NOT NULL", "tenant-a").
+		Count(&remainingClaimed).Error; err != nil {
+		t.Fatalf("count remaining claimed rows: %v", err)
+	}
+	if remainingClaimed != 0 {
+		t.Fatalf("expected no claimed rows after stale claim recovery, got %d", remainingClaimed)
 	}
 }

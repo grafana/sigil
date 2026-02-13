@@ -67,22 +67,23 @@ func TestWALCompactionAndTruncation(t *testing.T) {
 		testGeneration("gen-compact-3", "conv-compact", base.Add(4*time.Minute)),
 	}))
 
-	claimed, err := store.WithClaimedUncompacted(context.Background(), "tenant-a", base.Add(10*time.Minute), 2,
-		func(_ context.Context, generations []*sigilv1.Generation) error {
-			if len(generations) != 2 {
-				t.Fatalf("expected 2 claimed rows, got %d", len(generations))
-			}
-			return nil
-		},
-	)
+	pred := storage.ShardPredicate{ShardWindowSeconds: 60, ShardCount: 1, ShardID: 0}
+	claimed, err := store.ClaimBatch(context.Background(), "tenant-a", "owner-a", pred, base.Add(10*time.Minute), 2)
 	if err != nil {
 		t.Fatalf("claim uncompacted: %v", err)
 	}
 	if claimed != 2 {
 		t.Fatalf("expected 2 claimed rows, got %d", claimed)
 	}
+	_, ids, err := store.LoadClaimed(context.Background(), "tenant-a", "owner-a", pred, 2)
+	if err != nil {
+		t.Fatalf("load claimed rows: %v", err)
+	}
+	if err := store.FinalizeClaimed(context.Background(), "tenant-a", "owner-a", ids); err != nil {
+		t.Fatalf("finalize claimed rows: %v", err)
+	}
 
-	deletedRows, err := store.TruncateCompacted(context.Background(), "tenant-a", time.Now().UTC().Add(time.Hour), 1)
+	deletedRows, err := store.TruncateCompacted(context.Background(), "tenant-a", pred, time.Now().UTC().Add(time.Hour), 1)
 	if err != nil {
 		t.Fatalf("truncate compacted: %v", err)
 	}

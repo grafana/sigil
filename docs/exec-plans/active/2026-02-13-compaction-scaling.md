@@ -39,71 +39,71 @@ Deliver sub-tenant sharded compaction so that a single hot tenant can scale acro
 
 ### Phase A: Schema migration and claim refactor
 
-- [ ] Add `claimed_by VARCHAR(255) NULL` and `claimed_at TIMESTAMP(6) NULL` columns to `generations` table.
-- [ ] Add composite index `(tenant_id, compacted, claimed_by, created_at)` to `generations`.
-- [ ] Add `shard_id INT NOT NULL DEFAULT 0` to `compactor_leases` primary key (`tenant_id, shard_id`).
-- [ ] Update GORM models (`GenerationModel`, `CompactorLeaseModel`) with new fields.
-- [ ] Implement auto-migration for schema changes.
-- [ ] Define `Claimer` interface with `ClaimBatch`, `LoadClaimed`, `FinalizeClaimed` methods.
-- [ ] Implement MySQL `Claimer` using UPDATE-based claim flow (no `FOR UPDATE SKIP LOCKED`).
-- [ ] Implement stale claim recovery sweep method.
-- [ ] Add unit tests for claim/load/finalize round-trip correctness.
-- [ ] Add unit tests for stale claim recovery.
-- [ ] Verify backward compatibility: `claimed_by IS NULL` for all existing rows.
+- [x] Add `claimed_by VARCHAR(255) NULL` and `claimed_at TIMESTAMP(6) NULL` columns to `generations` table.
+- [x] Add composite index `(tenant_id, compacted, claimed_by, created_at)` to `generations`.
+- [x] Add `shard_id INT NOT NULL DEFAULT 0` to `compactor_leases` primary key (`tenant_id, shard_id`).
+- [x] Update GORM models (`GenerationModel`, `CompactorLeaseModel`) with new fields.
+- [x] Implement auto-migration for schema changes.
+- [x] Define `Claimer` interface with `ClaimBatch`, `LoadClaimed`, `FinalizeClaimed` methods.
+- [x] Implement MySQL `Claimer` using UPDATE-based claim flow (no `FOR UPDATE SKIP LOCKED`).
+- [x] Implement stale claim recovery sweep method.
+- [x] Add unit tests for claim/load/finalize round-trip correctness.
+- [x] Add unit tests for stale claim recovery.
+- [x] Replace backward-compat path with hard cutover migration reset for compaction lease/claim state.
 
 ### Phase B: Shard-based leasing and discovery
 
-- [ ] Define `ShardPredicate` type and shard assignment function (`FLOOR(UNIX_TIMESTAMP(created_at) / window) % count`).
-- [ ] Update `TenantLeaser` interface to accept `shardID` parameter.
-- [ ] Implement shard-aware `AcquireLease` and `RenewLease` in MySQL lease store.
-- [ ] Update `TenantDiscoverer` interface to `ListShardsForCompaction` / `ListShardsForTruncation`.
-- [ ] Implement backlog-aware discovery query returning `TenantShard` results ordered by backlog size.
-- [ ] Add configuration: `SIGIL_COMPACTOR_SHARD_COUNT`, `SIGIL_COMPACTOR_SHARD_WINDOW_SECONDS`.
-- [ ] Add unit tests for shard predicate correctness (rows map to expected shards).
-- [ ] Add unit tests for backlog-aware discovery ordering.
-- [ ] Add unit tests for shard lease acquisition/renewal/expiry.
+- [x] Define `ShardPredicate` type and shard assignment function (`FLOOR(UNIX_TIMESTAMP(created_at) / window) % count`).
+- [x] Update `TenantLeaser` interface to accept `shardID` parameter.
+- [x] Implement shard-aware `AcquireLease` and `RenewLease` in MySQL lease store.
+- [x] Update `TenantDiscoverer` interface to `ListShardsForCompaction` / `ListShardsForTruncation`.
+- [x] Implement backlog-aware discovery query returning `TenantShard` results ordered by backlog size.
+- [x] Add configuration: `SIGIL_COMPACTOR_SHARD_COUNT`, `SIGIL_COMPACTOR_SHARD_WINDOW_SECONDS`.
+- [x] Add unit tests for shard predicate correctness (rows map to expected shards).
+- [x] Add unit tests for backlog-aware discovery ordering.
+- [x] Add unit tests for shard lease acquisition/renewal/expiry.
 
 ### Phase C: Worker pool and drain loop
 
-- [ ] Refactor `compactor.Service` to manage a pool of N worker goroutines.
-- [ ] Each worker: pick highest-backlog shard -> acquire lease -> drain loop -> move to next shard.
-- [ ] Implement multi-batch drain loop with configurable time budget (`SIGIL_COMPACTOR_CYCLE_BUDGET`).
-- [ ] Implement lease heartbeat renewal at `LeaseTTL / 2` intervals during drain.
-- [ ] Implement graceful shutdown: workers finish current batch then exit.
-- [ ] Add stale claim sweep as a periodic background task (interval = `claim_ttl / 2`).
-- [ ] Add configuration: `SIGIL_COMPACTOR_WORKERS`, `SIGIL_COMPACTOR_CYCLE_BUDGET`, `SIGIL_COMPACTOR_CLAIM_TTL`.
-- [ ] Add unit tests for worker pool lifecycle (start, drain, shutdown).
-- [ ] Add unit tests for lease renewal during multi-batch processing.
-- [ ] Add unit tests for budget exhaustion behavior.
+- [x] Refactor `compactor.Service` to manage a pool of N worker goroutines.
+- [x] Each worker: pick highest-backlog shard -> acquire lease -> drain loop -> move to next shard.
+- [x] Implement multi-batch drain loop with configurable time budget (`SIGIL_COMPACTOR_CYCLE_BUDGET`).
+- [x] Implement lease heartbeat renewal at `LeaseTTL / 2` intervals during drain.
+- [x] Implement graceful shutdown: workers finish current batch then exit.
+- [x] Add stale claim sweep as a periodic background task (interval = `claim_ttl / 2`).
+- [x] Add configuration: `SIGIL_COMPACTOR_WORKERS`, `SIGIL_COMPACTOR_CYCLE_BUDGET`, `SIGIL_COMPACTOR_CLAIM_TTL`.
+- [x] Add unit tests for worker pool lifecycle (start, drain, shutdown).
+- [x] Add unit tests for lease renewal during multi-batch processing.
+- [x] Add unit tests for budget exhaustion behavior.
 
 ### Phase D: Shard-aware truncation and block size
 
-- [ ] Update truncation query with shard predicate.
-- [ ] Workers truncate their shard after compaction drain.
-- [ ] Implement block size target accumulation: accumulate claimed rows until `target_block_bytes` reached or batch exhausted.
-- [ ] Add configuration: `SIGIL_COMPACTOR_TARGET_BLOCK_BYTES`.
-- [ ] Add unit tests for shard-isolated truncation.
-- [ ] Add unit tests for block size accumulation behavior.
+- [x] Update truncation query with shard predicate.
+- [x] Workers truncate their shard after compaction drain.
+- [x] Implement block size target accumulation: accumulate claimed rows until `target_block_bytes` reached or batch exhausted.
+- [x] Add configuration: `SIGIL_COMPACTOR_TARGET_BLOCK_BYTES`.
+- [x] Add unit tests for shard-isolated truncation.
+- [x] Add unit tests for block size accumulation behavior.
 
 ### Phase E: Integration tests, benchmarks, and instrumentation
 
-- [ ] Add/update Prometheus metrics: `claim_batch_total`, `claim_stale_recovered_total`, `worker_active`, `shard_backlog`, `drain_duration_seconds`, `lease_held` with shard label.
-- [ ] Add integration test: multiple compactor instances compacting same tenant with `shard_count > 1`.
-- [ ] Add integration test: crash recovery (kill compactor mid-claim, verify stale sweep).
-- [ ] Add integration test: full lifecycle write -> sharded compact -> sharded truncate -> fan-out read.
-- [ ] Add `BenchmarkClaimBatch` comparing new claim vs old `WithClaimedUncompacted`.
-- [ ] Add `BenchmarkParallelCompaction` with N workers on one hot tenant.
-- [ ] Add `BenchmarkBacklogDiscovery` with skewed tenant backlogs.
+- [x] Add/update Prometheus metrics: `claim_batch_total`, `claim_stale_recovered_total`, `worker_active`, `shard_backlog`, `drain_duration_seconds`, `lease_held` with shard label.
+- [x] Add integration test: multiple compactor instances compacting same tenant with `shard_count > 1`.
+- [x] Add integration test: crash recovery (kill compactor mid-claim, verify stale sweep).
+- [x] Add integration test: full lifecycle write -> sharded compact -> sharded truncate -> fan-out read.
+- [x] Add `BenchmarkClaimBatch` for durable claim path throughput.
+- [x] Add `BenchmarkParallelCompaction` with N workers on one hot tenant.
+- [x] Add `BenchmarkBacklogDiscovery` with skewed tenant backlogs.
 - [ ] Capture benchmark baselines.
 
 ### Phase F: Documentation and cleanup
 
-- [ ] Update `ARCHITECTURE.md` compactor topology, transaction flow, and scaling characteristics to reflect new design.
-- [ ] Update `docs/exec-plans/tech-debt-tracker.md`: mark compaction debt items as addressed.
-- [ ] Add level-2 block compaction (small block merging) as new tech debt item.
-- [ ] Update `docs/generated/db-schema.md` with schema changes.
-- [ ] Remove deprecated `TransactionalClaimer` interface and `WithClaimedUncompacted` implementation after migration.
-- [ ] Update this plan checkboxes as each phase lands.
+- [x] Update `ARCHITECTURE.md` compactor topology, transaction flow, and scaling characteristics to reflect new design.
+- [x] Update `docs/exec-plans/tech-debt-tracker.md`: mark compaction debt items as addressed.
+- [x] Add level-2 block compaction (small block merging) as new tech debt item.
+- [x] Update `docs/generated/db-schema.md` with schema changes.
+- [x] Remove deprecated `TransactionalClaimer` interface and `WithClaimedUncompacted` implementation after migration.
+- [x] Update this plan checkboxes as each phase lands.
 
 ## Risks
 
@@ -116,15 +116,14 @@ Deliver sub-tenant sharded compaction so that a single hot tenant can scale acro
 
 Rollout:
 
-1. Ship schema changes behind backward-compatible defaults (`shard_count=1`, `workers=1`).
-2. Enable new compactor behavior only after migrations and tests are green.
-3. Ramp shard/worker settings gradually while monitoring compactor throughput, claim recovery, and block counts.
+1. Apply hard-cutover migration (includes `compactor_leases` reset and claim state cleanup).
+2. Deploy new compactor binary with shard/worker defaults enabled.
+3. Monitor compactor throughput, claim recovery, and block counts during alpha rollout.
 
 Rollback:
 
-1. Return runtime config to safe defaults (`shard_count=1`, `workers=1`) to recover legacy behavior.
-2. Disable new claim/shard scheduling paths while retaining additive schema columns.
-3. If needed, redeploy previous compactor binary version after confirming schema compatibility.
+1. Redeploy previous binary only if schema compatibility is confirmed for your environment.
+2. If full rollback is needed, clear compactor lease/claim state and replay compaction cycles.
 
 ## Exit criteria
 
@@ -132,7 +131,7 @@ Rollback:
 - Lock hold duration is reduced to single UPDATE statement scope (no transaction-held locks during I/O).
 - Backlog-aware scheduling prioritizes hot tenant/shard pairs.
 - All new behavior is covered by unit, integration, and benchmark tests.
-- Default configuration (`shard_count=1`, `workers=1`) reproduces current behavior exactly.
+- Default configuration uses scale-first alpha values (`shard_count=8`, `workers=4`).
 - Documentation is updated to reflect the new compaction model.
 
 ## Out of scope

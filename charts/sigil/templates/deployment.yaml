@@ -135,6 +135,18 @@ spec:
               value: {{ .Values.sigil.compactor.batchSize | quote }}
             - name: SIGIL_COMPACTOR_LEASE_TTL
               value: {{ .Values.sigil.compactor.leaseTTL | quote }}
+            - name: SIGIL_COMPACTOR_SHARD_COUNT
+              value: {{ .Values.sigil.compactor.shardCount | quote }}
+            - name: SIGIL_COMPACTOR_SHARD_WINDOW_SECONDS
+              value: {{ .Values.sigil.compactor.shardWindowSeconds | quote }}
+            - name: SIGIL_COMPACTOR_WORKERS
+              value: {{ .Values.sigil.compactor.workers | quote }}
+            - name: SIGIL_COMPACTOR_CYCLE_BUDGET
+              value: {{ .Values.sigil.compactor.cycleBudget | quote }}
+            - name: SIGIL_COMPACTOR_CLAIM_TTL
+              value: {{ .Values.sigil.compactor.claimTTL | quote }}
+            - name: SIGIL_COMPACTOR_TARGET_BLOCK_BYTES
+              value: {{ .Values.sigil.compactor.targetBlockBytes | quote }}
             - name: SIGIL_MODEL_CARDS_SYNC_INTERVAL
               value: {{ .Values.sigil.modelCards.syncInterval | quote }}
             - name: SIGIL_MODEL_CARDS_LEASE_TTL

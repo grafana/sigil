@@ -1,6 +1,6 @@
 ---
 owner: sigil-core
-status: active
+status: completed
 last_reviewed: 2026-02-13
 source_of_truth: true
 audience: both
@@ -10,10 +10,10 @@ audience: both
 
 ## Implementation status (2026-02-13)
 
-- This document defines a target design; the full shard-based scaling model is not merged to `main` yet.
-- Current `main` behavior remains tenant-level leasing plus transactional `FOR UPDATE SKIP LOCKED` claims.
-- Partial safety improvement merged: compaction retry idempotency guard for `upload succeeded + metadata inserted + finalize failed` retries (duplicate metadata is treated as idempotent on retry).
-- Close related tech-debt items only after full implementation code and tests merge to `main`.
+- Shard-based compaction scaling is implemented.
+- Tenant-level transactional claim flow (`FOR UPDATE SKIP LOCKED`) is removed.
+- Runtime now uses schema-based durable claims (`claimed_by`, `claimed_at`), shard-keyed leases (`tenant_id`, `shard_id`), backlog-aware shard discovery, worker-pool drain loops, lease renewal, and stale-claim sweeps.
+- Compaction retry idempotency guard for duplicate block metadata remains in place.
 
 ## Problem statement
 
@@ -29,54 +29,13 @@ Net effect: many-tenant workloads scale horizontally with more compactor replica
 
 ## Current state
 
-Compaction phases 0 through C are implemented and tested:
+Compaction scaling implementation is active and tested:
 
-- `sigil/internal/storage/compactor/service.go`: compact loop + truncate loop
-- `sigil/internal/storage/compactor/leaser.go`: `TenantDiscoverer`, `TenantLeaser`, `TransactionalClaimer`, `Truncator` interfaces
-- `sigil/internal/storage/mysql/lease.go`: `AcquireLease`, `ListTenantsForCompaction`, `ListTenantsForTruncation`
-- `sigil/internal/storage/mysql/compaction_tx.go`: `WithClaimedUncompacted` (long-transaction claim)
-- `sigil/internal/storage/mysql/compaction.go`: `TruncateCompacted`
-
-The current compaction transaction flow:
-
-```mermaid
-sequenceDiagram
-    participant C as Compactor
-    participant DB as MySQL
-    participant O as Object Storage
-    C->>DB: ListTenantsForCompaction(now, limit)
-    C->>DB: AcquireLease(tenant, owner_id, ttl)
-    alt Lease held
-        C->>DB: BEGIN
-        C->>DB: SELECT ... FOR UPDATE SKIP LOCKED (limit=batch)
-        DB-->>C: claimed generations
-        C->>O: Upload block data + index objects
-        C->>DB: INSERT compaction_blocks
-        C->>DB: UPDATE generations SET compacted=true
-        C->>DB: COMMIT
-    else Lease denied
-        C-->>C: Skip tenant this cycle
-    end
-```
-
-Current distributed topology:
-
-```mermaid
-flowchart TB
-    subgraph replicas["Compactor Replicas"]
-        A["Compactor A"]
-        B["Compactor B"]
-        C["Compactor C"]
-    end
-    A --> L["MySQL: compactor_leases\n(one row per tenant)"]
-    B --> L
-    C --> L
-    L --> O["Single active owner per tenant"]
-    O --> X["Tx: SELECT ... FOR UPDATE SKIP LOCKED"]
-    X --> G["MySQL: generations"]
-    O --> M["MySQL: compaction_blocks"]
-    O --> S["Object Storage"]
-```
+- `sigil/internal/storage/compactor/service.go`: worker-pool compact + truncate loops, lease renewal, stale-claim sweep
+- `sigil/internal/storage/compactor/leaser.go`: shard-aware `TenantDiscoverer`, `TenantLeaser`, `Claimer`, `Truncator` interfaces
+- `sigil/internal/storage/mysql/lease.go`: shard backlog discovery + shard lease acquire/renew
+- `sigil/internal/storage/mysql/compaction_tx.go`: `ClaimBatch`, `LoadClaimed`, `FinalizeClaimed`, `ReleaseStaleClaims`
+- `sigil/internal/storage/mysql/compaction.go`: shard-aware truncation
 
 ## Proposed design
 

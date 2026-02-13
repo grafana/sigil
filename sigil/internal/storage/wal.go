@@ -17,5 +17,5 @@ type WALReader interface {
 }
 
 type WALTruncator interface {
-	TruncateCompacted(ctx context.Context, tenantID string, olderThan time.Time, limit int) (int64, error)
+	TruncateCompacted(ctx context.Context, tenantID string, shard ShardPredicate, olderThan time.Time, limit int) (int64, error)
 }

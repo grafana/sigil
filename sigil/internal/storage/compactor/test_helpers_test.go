@@ -83,11 +83,17 @@ func newTestService(
 	}
 	return &Service{
 		cfg: config.CompactorConfig{
-			CompactInterval:  time.Minute,
-			TruncateInterval: time.Minute,
-			Retention:        time.Hour,
-			BatchSize:        1000,
-			LeaseTTL:         30 * time.Second,
+			CompactInterval:    time.Minute,
+			TruncateInterval:   time.Minute,
+			Retention:          time.Hour,
+			BatchSize:          1000,
+			LeaseTTL:           30 * time.Second,
+			ShardCount:         1,
+			ShardWindowSeconds: 60,
+			Workers:            1,
+			CycleBudget:        30 * time.Second,
+			ClaimTTL:           5 * time.Minute,
+			TargetBlockBytes:   64 * 1024 * 1024,
 		},
 		logger:        log.NewNopLogger(),
 		ownerID:       ownerID,

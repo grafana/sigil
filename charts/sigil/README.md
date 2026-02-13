@@ -163,6 +163,7 @@ Important values:
 - `sigil.objectStore.s3.*`: S3/MinIO endpoint + auth (`accessKey`, `secretKey`, `useAWSSDKAuth`, `region`, `insecure`)
 - `sigil.objectStore.gcs.*`: GCS bucket/service account/grpc toggle
 - `sigil.objectStore.azure.*`: Azure container/account/auth/endpoint/create-container toggle
+- `sigil.compactor.*`: compactor schedule/lease/shard/worker/claim/block-size tuning
 - `sigil.modelCards.*`: model-card sync/freshness/bootstrap settings
 - `catalogSync.enabled`, `catalogSync.replicaCount`, `catalogSync.target`: optional dedicated singleton model-card sync deployment
 - `mysql.*`, `tempo.*`, `minio.*`: optional bundled dependency settings

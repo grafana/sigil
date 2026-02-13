@@ -197,11 +197,17 @@ func TestRunCompactCycleIdempotencyGuardAllowsRetryAfterFinalizeFailure(t *testi
 	metadataStore := &duplicateAwareMetadataStore{blocks: map[string]storage.BlockMeta{}}
 	service := &Service{
 		cfg: config.CompactorConfig{
-			CompactInterval:  time.Minute,
-			TruncateInterval: time.Minute,
-			Retention:        time.Hour,
-			BatchSize:        1000,
-			LeaseTTL:         30 * time.Second,
+			CompactInterval:    time.Minute,
+			TruncateInterval:   time.Minute,
+			Retention:          time.Hour,
+			BatchSize:          1000,
+			LeaseTTL:           30 * time.Second,
+			ShardCount:         1,
+			ShardWindowSeconds: 60,
+			Workers:            1,
+			CycleBudget:        30 * time.Second,
+			ClaimTTL:           5 * time.Minute,
+			TargetBlockBytes:   64 * 1024 * 1024,
 		},
 		logger:        log.NewNopLogger(),
 		ownerID:       "owner-a",
@@ -236,52 +242,159 @@ func TestRunCompactCycleIdempotencyGuardAllowsRetryAfterFinalizeFailure(t *testi
 	}
 }
 
+func TestRunCompactCycleDrainsAlreadyClaimedRowsWhenNoNewClaims(t *testing.T) {
+	base := time.Date(2026, 2, 12, 20, 0, 0, 0, time.UTC)
+	claimedGenerations := []*sigilv1.Generation{
+		testGeneration("gen-preclaimed-1", "conv-preclaimed", base),
+	}
+
+	claimer := &preclaimedRowsClaimer{generations: claimedGenerations}
+	blockWriter := &countingBlockWriter{}
+	metadataStore := &duplicateAwareMetadataStore{blocks: map[string]storage.BlockMeta{}}
+	service := &Service{
+		cfg: config.CompactorConfig{
+			CompactInterval:    time.Minute,
+			TruncateInterval:   time.Minute,
+			Retention:          time.Hour,
+			BatchSize:          1000,
+			LeaseTTL:           30 * time.Second,
+			ShardCount:         1,
+			ShardWindowSeconds: 60,
+			Workers:            1,
+			CycleBudget:        30 * time.Second,
+			ClaimTTL:           5 * time.Minute,
+			TargetBlockBytes:   64 * 1024 * 1024,
+		},
+		logger:        log.NewNopLogger(),
+		ownerID:       "owner-a",
+		discoverer:    fixedTenantDiscoverer{tenantID: "tenant-preclaimed"},
+		leaser:        alwaysHeldLeaser{},
+		claimer:       claimer,
+		truncator:     noopTruncator{},
+		blockWriter:   blockWriter,
+		metadataStore: metadataStore,
+	}
+
+	service.runCompactCycle(context.Background())
+
+	if claimer.claimCalls == 0 {
+		t.Fatalf("expected claim attempt")
+	}
+	if claimer.loadCalls == 0 {
+		t.Fatalf("expected pre-claimed rows to be loaded even with zero new claims")
+	}
+	if claimer.finalizeCalls != 1 {
+		t.Fatalf("expected finalize to run once for pre-claimed rows, got %d", claimer.finalizeCalls)
+	}
+	if blockWriter.writes != 1 {
+		t.Fatalf("expected one block upload for pre-claimed rows, got %d", blockWriter.writes)
+	}
+	if metadataStore.inserts != 1 {
+		t.Fatalf("expected one metadata insert for pre-claimed rows, got %d", metadataStore.inserts)
+	}
+}
+
 type fixedTenantDiscoverer struct {
 	tenantID string
 }
 
-func (d fixedTenantDiscoverer) ListTenantsForCompaction(_ context.Context, _ time.Time, _ int) ([]string, error) {
-	return []string{d.tenantID}, nil
+func (d fixedTenantDiscoverer) ListShardsForCompaction(_ context.Context, _ int, _ int, _ int) ([]storage.TenantShard, error) {
+	return []storage.TenantShard{{TenantID: d.tenantID, ShardID: 0, Backlog: 1}}, nil
 }
 
-func (d fixedTenantDiscoverer) ListTenantsForTruncation(_ context.Context, _ time.Time, _ int) ([]string, error) {
+func (d fixedTenantDiscoverer) ListShardsForTruncation(_ context.Context, _ int, _ int, _ time.Time, _ int) ([]storage.TenantShard, error) {
 	return nil, nil
 }
 
 type alwaysHeldLeaser struct{}
 
-func (alwaysHeldLeaser) AcquireLease(_ context.Context, _ string, ownerID string, ttl time.Duration) (bool, string, time.Time, error) {
+func (alwaysHeldLeaser) AcquireLease(_ context.Context, _ string, _ int, ownerID string, ttl time.Duration) (bool, string, time.Time, error) {
+	return true, ownerID, time.Now().UTC().Add(ttl), nil
+}
+
+func (alwaysHeldLeaser) RenewLease(_ context.Context, _ string, _ int, ownerID string, ttl time.Duration) (bool, string, time.Time, error) {
 	return true, ownerID, time.Now().UTC().Add(ttl), nil
 }
 
 type noopTruncator struct{}
 
-func (noopTruncator) TruncateCompacted(_ context.Context, _ string, _ time.Time, _ int) (int64, error) {
+func (noopTruncator) TruncateCompacted(_ context.Context, _ string, _ storage.ShardPredicate, _ time.Time, _ int) (int64, error) {
 	return 0, nil
 }
 
 type finalizeFailsOnceClaimer struct {
 	generations       []*sigilv1.Generation
+	ids               []uint64
 	calls             int
 	finalizeSucceeded bool
 }
 
-func (c *finalizeFailsOnceClaimer) WithClaimedUncompacted(
-	ctx context.Context,
-	_ string,
-	_ time.Time,
-	_ int,
-	fn func(context.Context, []*sigilv1.Generation) error,
-) (int, error) {
+func (c *finalizeFailsOnceClaimer) ClaimBatch(_ context.Context, _ string, _ string, _ storage.ShardPredicate, _ time.Time, _ int) (int, error) {
 	c.calls++
-	if err := fn(ctx, c.generations); err != nil {
-		return 0, err
+	if c.calls <= 2 {
+		return len(c.generations), nil
 	}
+	return 0, nil
+}
+
+func (c *finalizeFailsOnceClaimer) LoadClaimed(_ context.Context, _ string, _ string, _ storage.ShardPredicate, _ int) ([]*sigilv1.Generation, []uint64, error) {
+	if len(c.ids) == 0 {
+		c.ids = make([]uint64, len(c.generations))
+		for i := range c.ids {
+			c.ids[i] = uint64(i + 1)
+		}
+	}
+	return c.generations, c.ids, nil
+}
+
+func (c *finalizeFailsOnceClaimer) FinalizeClaimed(_ context.Context, _ string, _ string, _ []uint64) error {
 	if c.calls == 1 {
-		return 0, errors.New("finalize failed")
+		return errors.New("finalize failed")
 	}
 	c.finalizeSucceeded = true
-	return len(c.generations), nil
+	return nil
+}
+
+func (c *finalizeFailsOnceClaimer) ReleaseStaleClaims(_ context.Context, _ time.Duration) (int64, error) {
+	return 0, nil
+}
+
+type preclaimedRowsClaimer struct {
+	generations   []*sigilv1.Generation
+	ids           []uint64
+	claimCalls    int
+	loadCalls     int
+	finalizeCalls int
+	drained       bool
+}
+
+func (c *preclaimedRowsClaimer) ClaimBatch(_ context.Context, _ string, _ string, _ storage.ShardPredicate, _ time.Time, _ int) (int, error) {
+	c.claimCalls++
+	return 0, nil
+}
+
+func (c *preclaimedRowsClaimer) LoadClaimed(_ context.Context, _ string, _ string, _ storage.ShardPredicate, _ int) ([]*sigilv1.Generation, []uint64, error) {
+	c.loadCalls++
+	if c.drained {
+		return []*sigilv1.Generation{}, []uint64{}, nil
+	}
+	if len(c.ids) == 0 {
+		c.ids = make([]uint64, len(c.generations))
+		for i := range c.ids {
+			c.ids[i] = uint64(i + 1)
+		}
+	}
+	return c.generations, c.ids, nil
+}
+
+func (c *preclaimedRowsClaimer) FinalizeClaimed(_ context.Context, _ string, _ string, _ []uint64) error {
+	c.finalizeCalls++
+	c.drained = true
+	return nil
+}
+
+func (c *preclaimedRowsClaimer) ReleaseStaleClaims(_ context.Context, _ time.Duration) (int64, error) {
+	return 0, nil
 }
 
 type countingBlockWriter struct {

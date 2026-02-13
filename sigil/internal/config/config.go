@@ -16,6 +16,20 @@ const (
 	TargetCatalogSync = "catalog-sync"
 )
 
+const (
+	DefaultCompactorCompactInterval    = time.Minute
+	DefaultCompactorTruncateInterval   = 5 * time.Minute
+	DefaultCompactorRetention          = time.Hour
+	DefaultCompactorBatchSize          = 1000
+	DefaultCompactorLeaseTTL           = 30 * time.Second
+	DefaultCompactorShardCount         = 8
+	DefaultCompactorShardWindowSeconds = 60
+	DefaultCompactorWorkers            = 4
+	DefaultCompactorCycleBudget        = 30 * time.Second
+	DefaultCompactorClaimTTL           = 5 * time.Minute
+	DefaultCompactorTargetBlockBytes   = 64 * 1024 * 1024
+)
+
 type Config struct {
 	HTTPAddr              string
 	OTLPGRPCAddr          string
@@ -65,11 +79,17 @@ type ObjectStoreAzureConfig struct {
 }
 
 type CompactorConfig struct {
-	CompactInterval  time.Duration
-	TruncateInterval time.Duration
-	Retention        time.Duration
-	BatchSize        int
-	LeaseTTL         time.Duration
+	CompactInterval    time.Duration
+	TruncateInterval   time.Duration
+	Retention          time.Duration
+	BatchSize          int
+	LeaseTTL           time.Duration
+	ShardCount         int
+	ShardWindowSeconds int
+	Workers            int
+	CycleBudget        time.Duration
+	ClaimTTL           time.Duration
+	TargetBlockBytes   int64
 }
 
 type ModelCardsConfig struct {
@@ -127,11 +147,17 @@ func FromEnv() Config {
 			},
 		},
 		CompactorConfig: CompactorConfig{
-			CompactInterval:  getEnvDuration("SIGIL_COMPACTOR_COMPACT_INTERVAL", time.Minute),
-			TruncateInterval: getEnvDuration("SIGIL_COMPACTOR_TRUNCATE_INTERVAL", 5*time.Minute),
-			Retention:        getEnvDuration("SIGIL_COMPACTOR_RETENTION", time.Hour),
-			BatchSize:        getEnvInt("SIGIL_COMPACTOR_BATCH_SIZE", 1000),
-			LeaseTTL:         getEnvDuration("SIGIL_COMPACTOR_LEASE_TTL", 30*time.Second),
+			CompactInterval:    getEnvDuration("SIGIL_COMPACTOR_COMPACT_INTERVAL", DefaultCompactorCompactInterval),
+			TruncateInterval:   getEnvDuration("SIGIL_COMPACTOR_TRUNCATE_INTERVAL", DefaultCompactorTruncateInterval),
+			Retention:          getEnvDuration("SIGIL_COMPACTOR_RETENTION", DefaultCompactorRetention),
+			BatchSize:          getEnvInt("SIGIL_COMPACTOR_BATCH_SIZE", DefaultCompactorBatchSize),
+			LeaseTTL:           getEnvDuration("SIGIL_COMPACTOR_LEASE_TTL", DefaultCompactorLeaseTTL),
+			ShardCount:         getEnvInt("SIGIL_COMPACTOR_SHARD_COUNT", DefaultCompactorShardCount),
+			ShardWindowSeconds: getEnvInt("SIGIL_COMPACTOR_SHARD_WINDOW_SECONDS", DefaultCompactorShardWindowSeconds),
+			Workers:            getEnvInt("SIGIL_COMPACTOR_WORKERS", DefaultCompactorWorkers),
+			CycleBudget:        getEnvDuration("SIGIL_COMPACTOR_CYCLE_BUDGET", DefaultCompactorCycleBudget),
+			ClaimTTL:           getEnvDuration("SIGIL_COMPACTOR_CLAIM_TTL", DefaultCompactorClaimTTL),
+			TargetBlockBytes:   getEnvInt64("SIGIL_COMPACTOR_TARGET_BLOCK_BYTES", DefaultCompactorTargetBlockBytes),
 		},
 		ModelCardsConfig: ModelCardsConfig{
 			SyncInterval:  getEnvDuration("SIGIL_MODEL_CARDS_SYNC_INTERVAL", 30*time.Minute),
@@ -169,6 +195,24 @@ func (c Config) Validate() error {
 	}
 	if c.CompactorConfig.LeaseTTL <= 0 {
 		return fmt.Errorf("SIGIL_COMPACTOR_LEASE_TTL must be > 0")
+	}
+	if c.CompactorConfig.ShardCount <= 0 {
+		return fmt.Errorf("SIGIL_COMPACTOR_SHARD_COUNT must be > 0")
+	}
+	if c.CompactorConfig.ShardWindowSeconds <= 0 {
+		return fmt.Errorf("SIGIL_COMPACTOR_SHARD_WINDOW_SECONDS must be > 0")
+	}
+	if c.CompactorConfig.Workers <= 0 {
+		return fmt.Errorf("SIGIL_COMPACTOR_WORKERS must be > 0")
+	}
+	if c.CompactorConfig.CycleBudget <= 0 {
+		return fmt.Errorf("SIGIL_COMPACTOR_CYCLE_BUDGET must be > 0")
+	}
+	if c.CompactorConfig.ClaimTTL <= 0 {
+		return fmt.Errorf("SIGIL_COMPACTOR_CLAIM_TTL must be > 0")
+	}
+	if c.CompactorConfig.TargetBlockBytes <= 0 {
+		return fmt.Errorf("SIGIL_COMPACTOR_TARGET_BLOCK_BYTES must be > 0")
 	}
 	if c.ModelCardsConfig.SyncInterval <= 0 {
 		return fmt.Errorf("SIGIL_MODEL_CARDS_SYNC_INTERVAL must be > 0")
@@ -287,6 +331,20 @@ func getEnvInt(key string, defaultValue int) int {
 	}
 
 	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		return 0
+	}
+
+	return parsed
+}
+
+func getEnvInt64(key string, defaultValue int64) int64 {
+	value, ok := os.LookupEnv(key)
+	if !ok || strings.TrimSpace(value) == "" {
+		return defaultValue
+	}
+
+	parsed, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
 	if err != nil {
 		return 0
 	}

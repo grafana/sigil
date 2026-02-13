@@ -42,6 +42,48 @@ func TestAutoMigrateCreatesSchema(t *testing.T) {
 	}
 }
 
+func TestAutoMigrateDoesNotResetClaimsOnSubsequentRuns(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate first run: %v", err)
+	}
+
+	base := time.Date(2026, 2, 12, 18, 0, 0, 0, time.UTC)
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-migrate", []*sigilv1.Generation{
+		testGeneration("gen-migrate-1", "conv-migrate", base),
+	}))
+
+	claimedBy := "owner-before-restart"
+	claimedAt := time.Now().UTC()
+	if err := store.DB().Model(&GenerationModel{}).
+		Where("tenant_id = ? AND generation_id = ?", "tenant-migrate", "gen-migrate-1").
+		Updates(map[string]any{
+			"claimed_by": claimedBy,
+			"claimed_at": claimedAt,
+		}).Error; err != nil {
+		t.Fatalf("seed claimed row: %v", err)
+	}
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate second run: %v", err)
+	}
+
+	var row GenerationModel
+	if err := store.DB().
+		Where("tenant_id = ? AND generation_id = ?", "tenant-migrate", "gen-migrate-1").
+		First(&row).Error; err != nil {
+		t.Fatalf("load generation row: %v", err)
+	}
+	if row.ClaimedBy == nil || *row.ClaimedBy != claimedBy {
+		t.Fatalf("expected claimed_by=%q to be preserved, got %#v", claimedBy, row.ClaimedBy)
+	}
+	if row.ClaimedAt == nil {
+		t.Fatalf("expected claimed_at to be preserved")
+	}
+}
+
 func TestSaveBatchStoresPayloadAndProjection(t *testing.T) {
 	store, cleanup := newTestWALStore(t)
 	defer cleanup()

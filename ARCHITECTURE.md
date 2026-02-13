@@ -208,14 +208,12 @@ flowchart LR
     I -.->|"Phase D target: trace query"| D
 ```
 
-### Distributed compactor topology (target; not merged)
+### Distributed compactor topology
 
 Status (2026-02-13):
 
-- Implemented on `main`: tenant-level leases (`compactor_leases` keyed by `tenant_id`) and transactional `FOR UPDATE SKIP LOCKED` claim flow.
-- Planned in active execution plan: shard-level leases, schema-based claims, and worker-pool drain loops.
-
-The diagram below is the target topology from `docs/design-docs/2026-02-13-compaction-scaling.md`; it is not yet the runtime behavior on `main`.
+- Implemented on `main`: shard-level leases (`compactor_leases` keyed by `(tenant_id, shard_id)`), schema-based claims (`claimed_by`/`claimed_at`), backlog-aware shard discovery, and worker-pool drain loops.
+- Compactor claim lifecycle is now `ClaimBatch -> LoadClaimed -> Build/Upload -> InsertBlock -> FinalizeClaimed`.
 
 ```mermaid
 flowchart TB
@@ -244,14 +242,12 @@ flowchart TB
     G --> M["MySQL: compaction_blocks"]
 ```
 
-### Compaction flow (target; not merged)
+### Compaction flow
 
 Status (2026-02-13):
 
-- Implemented on `main`: one transaction spans claim, block build, object upload, metadata insert, and compact-mark update.
-- Planned in active execution plan: schema-based claim/load/finalize with short claim/finalize updates and out-of-transaction object I/O.
-
-The sequence below documents the target flow, not current `main`.
+- Implemented on `main`: schema-based claim/load/finalize with short claim/finalize updates and out-of-transaction object I/O.
+- Workers renew shard leases while draining and run shard-aware truncation after compaction passes.
 
 ```mermaid
 sequenceDiagram
@@ -288,18 +284,11 @@ sequenceDiagram
 
 Current behavior on `main`:
 
-- Compaction scales across tenants by running multiple compactor instances.
-- Per tenant, work is serialized by a single lease key (`tenant_id`) in `compactor_leases`.
-- Claim path is transactional `FOR UPDATE SKIP LOCKED`; lock duration includes object store upload time.
-- Compact loop performs at most one claim batch per tenant per compact tick.
-
-Target behavior (tracked, not merged):
-
 - Compaction scales across tenants and within a single tenant via time-range sharding.
 - Each tenant is split into N shards (`SIGIL_COMPACTOR_SHARD_COUNT`) that can be processed in parallel.
 - Claims use schema-based durable state (`claimed_by`/`claimed_at`) with short claim/finalize updates.
 - Workers run multi-batch shard drain loops with backlog-aware scheduling and lease renewal.
-- Stale claim recovery sweeps release orphaned claims after `claim_ttl`.
+- Stale claim recovery sweeps release orphaned claims after `SIGIL_COMPACTOR_CLAIM_TTL`.
 - Truncation is shard-aware.
 
 References:

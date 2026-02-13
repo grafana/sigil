@@ -31,8 +31,8 @@ Status rule:
 - [x] Add benchmark and payload-size guardrail tests.
 - [x] Expand SDK end-to-end examples for Python and TypeScript/JavaScript.
 - [ ] Define retention and pruning policies for hot MySQL payloads vs compacted object storage.
-- [ ] Replace long-transaction `SKIP LOCKED` compaction claims with schema-based durable claim state to reduce lock windows and improve recovery semantics. Tracked in `docs/design-docs/2026-02-13-compaction-scaling.md` and `docs/exec-plans/active/2026-02-13-compaction-scaling.md`; mark addressed only after code + tests merge.
-- [ ] Improve single-large-tenant compaction throughput (multi-batch per cycle, shard/partition strategy, and/or parallelized claim workers under one tenant lease). Tracked in `docs/design-docs/2026-02-13-compaction-scaling.md` and `docs/exec-plans/active/2026-02-13-compaction-scaling.md`; mark addressed only after code + tests merge.
+- [x] Replace long-transaction `SKIP LOCKED` compaction claims with schema-based durable claim state to reduce lock windows and improve recovery semantics. Implemented with `claimed_by`/`claimed_at` claim lifecycle and shard workers.
+- [x] Improve single-large-tenant compaction throughput (multi-batch per cycle, shard/partition strategy, and/or parallelized claim workers under one tenant lease). Implemented via shard-aware leases, backlog discovery, and worker-pool draining.
 - [ ] Implement level-2 block compaction (merging small blocks into larger ones) to reduce read amplification from parallel shard compaction.
 - [ ] Reduce protobuf allocation churn in generation write/compaction paths by evaluating message/object reuse, buffer pooling, and marshal/unmarshal hot-path optimization.
 - [x] Define ingestion-log abstraction interface and implementation migration plan.

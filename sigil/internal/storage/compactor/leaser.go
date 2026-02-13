@@ -5,27 +5,39 @@ import (
 	"time"
 
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
+	"github.com/grafana/sigil/sigil/internal/storage"
 )
 
 type TenantDiscoverer interface {
-	ListTenantsForCompaction(ctx context.Context, olderThan time.Time, limit int) ([]string, error)
-	ListTenantsForTruncation(ctx context.Context, olderThan time.Time, limit int) ([]string, error)
+	ListShardsForCompaction(ctx context.Context, shardWindowSeconds int, shardCount int, limit int) ([]storage.TenantShard, error)
+	ListShardsForTruncation(ctx context.Context, shardWindowSeconds int, shardCount int, olderThan time.Time, limit int) ([]storage.TenantShard, error)
 }
 
 type TenantLeaser interface {
-	AcquireLease(ctx context.Context, tenantID, ownerID string, ttl time.Duration) (held bool, currentOwnerID string, expiresAt time.Time, err error)
+	AcquireLease(ctx context.Context, tenantID string, shardID int, ownerID string, ttl time.Duration) (held bool, currentOwnerID string, expiresAt time.Time, err error)
+	RenewLease(ctx context.Context, tenantID string, shardID int, ownerID string, ttl time.Duration) (held bool, currentOwnerID string, expiresAt time.Time, err error)
 }
 
-type TransactionalClaimer interface {
-	WithClaimedUncompacted(
+type Claimer interface {
+	ClaimBatch(
 		ctx context.Context,
 		tenantID string,
+		ownerID string,
+		shard storage.ShardPredicate,
 		olderThan time.Time,
 		limit int,
-		fn func(context.Context, []*sigilv1.Generation) error,
 	) (int, error)
+	LoadClaimed(
+		ctx context.Context,
+		tenantID string,
+		ownerID string,
+		shard storage.ShardPredicate,
+		limit int,
+	) ([]*sigilv1.Generation, []uint64, error)
+	FinalizeClaimed(ctx context.Context, tenantID string, ownerID string, ids []uint64) error
+	ReleaseStaleClaims(ctx context.Context, claimTTL time.Duration) (int64, error)
 }
 
 type Truncator interface {
-	TruncateCompacted(ctx context.Context, tenantID string, olderThan time.Time, limit int) (int64, error)
+	TruncateCompacted(ctx context.Context, tenantID string, shard storage.ShardPredicate, olderThan time.Time, limit int) (int64, error)
 }

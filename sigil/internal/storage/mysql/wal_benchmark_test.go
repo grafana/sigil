@@ -7,6 +7,7 @@ import (
 	"time"
 
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
+	"github.com/grafana/sigil/sigil/internal/storage"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
@@ -67,6 +68,89 @@ func BenchmarkWALStoreSaveBatch100(b *testing.B) {
 	}
 }
 
+func BenchmarkClaimBatch(b *testing.B) {
+	store, cleanup := newBenchmarkWALStore(b)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		b.Fatalf("auto migrate: %v", err)
+	}
+
+	const totalRows = 5000
+	base := time.Date(2026, 2, 12, 13, 0, 0, 0, time.UTC)
+	batch := make([]*sigilv1.Generation, 0, totalRows)
+	for i := 0; i < totalRows; i++ {
+		batch = append(batch, testGeneration(
+			fmt.Sprintf("bench-claim-%d", i),
+			"conv-bench-claim",
+			base.Add(time.Duration(i)*time.Millisecond),
+		))
+	}
+	errs := store.SaveBatch(context.Background(), "tenant-bench-claim", batch)
+	for i, err := range errs {
+		if err != nil {
+			b.Fatalf("seed save batch failed at index %d: %v", i, err)
+		}
+	}
+
+	pred := storage.ShardPredicate{ShardWindowSeconds: 60, ShardCount: 1, ShardID: 0}
+	olderThan := time.Now().UTC().Add(time.Hour)
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		ownerID := fmt.Sprintf("bench-owner-%d", i)
+		if _, err := store.ClaimBatch(context.Background(), "tenant-bench-claim", ownerID, pred, olderThan, 200); err != nil {
+			b.Fatalf("claim batch failed at iteration %d: %v", i, err)
+		}
+		if err := clearClaimsByOwnerForBench(context.Background(), store, "tenant-bench-claim", ownerID); err != nil {
+			b.Fatalf("clear claims failed at iteration %d: %v", i, err)
+		}
+	}
+}
+
+func BenchmarkBacklogDiscovery(b *testing.B) {
+	store, cleanup := newBenchmarkWALStore(b)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		b.Fatalf("auto migrate: %v", err)
+	}
+
+	base := time.Date(2026, 2, 12, 14, 0, 0, 0, time.UTC)
+	for tenant := 0; tenant < 25; tenant++ {
+		tenantID := fmt.Sprintf("tenant-bench-%02d", tenant)
+		rows := 50
+		if tenant == 0 {
+			rows = 2000
+		}
+		batch := make([]*sigilv1.Generation, 0, rows)
+		for i := 0; i < rows; i++ {
+			batch = append(batch, testGeneration(
+				fmt.Sprintf("bench-discovery-%d-%d", tenant, i),
+				fmt.Sprintf("conv-bench-%d", tenant),
+				base.Add(time.Duration(i)*time.Second),
+			))
+		}
+		errs := store.SaveBatch(context.Background(), tenantID, batch)
+		for i, err := range errs {
+			if err != nil {
+				b.Fatalf("seed discovery batch failed for tenant %s index %d: %v", tenantID, i, err)
+			}
+		}
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		shards, err := store.ListShardsForCompaction(context.Background(), 60, 8, 200)
+		if err != nil {
+			b.Fatalf("list shards failed at iteration %d: %v", i, err)
+		}
+		if len(shards) == 0 {
+			b.Fatalf("expected non-empty shard discovery at iteration %d", i)
+		}
+	}
+}
+
 func newBenchmarkWALStore(b *testing.B) (*WALStore, func()) {
 	b.Helper()
 
@@ -121,4 +205,15 @@ func newBenchmarkWALStore(b *testing.B) (*WALStore, func()) {
 	cleanup()
 	b.Skipf("skip mysql benchmark (database not ready): %v", err)
 	return nil, func() {}
+}
+
+func clearClaimsByOwnerForBench(ctx context.Context, store *WALStore, tenantID string, ownerID string) error {
+	return store.DB().WithContext(ctx).
+		Model(&GenerationModel{}).
+		Where("tenant_id = ? AND claimed_by = ?", tenantID, ownerID).
+		Where("compacted = FALSE").
+		Updates(map[string]any{
+			"claimed_by": nil,
+			"claimed_at": nil,
+		}).Error
 }
