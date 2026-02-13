@@ -307,6 +307,21 @@ References:
 
 ### Query
 
+Current bootstrap endpoints on `main`:
+
+- Sigil API query endpoints:
+  - `GET /api/v1/conversations`
+  - `GET /api/v1/conversations/{conversation_id}`
+  - `GET /api/v1/completions`
+  - `GET /api/v1/traces/{trace_id}`
+- Plugin resource proxy endpoints:
+  - `GET /api/plugins/grafana-sigil-app/resources/query/conversations`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/completions`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/traces/{trace_id}`
+
+Phase 2 target contract (tracked in `docs/exec-plans/active/2026-02-12-phase-2-query-proxy.md`):
+
 - Sigil API query endpoint: `POST /api/v1/query`
 - Plugin resource proxy endpoint: `POST /api/plugins/grafana-sigil-app/resources/query`
 

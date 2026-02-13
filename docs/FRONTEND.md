@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-12
+last_reviewed: 2026-02-13
 source_of_truth: true
 audience: contributors
 ---
@@ -18,6 +18,21 @@ Purpose: define plugin UI architecture, proxy boundaries, and frame-compatibilit
 - Use `getBackendSrv().fetch()` for plugin-to-backend calls.
 
 ## Proxy Contract
+
+Current bootstrap contract on `main`:
+
+- Frontend query entrypoints:
+  - `GET /api/plugins/grafana-sigil-app/resources/query/conversations`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/completions`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/traces/{trace_id}`
+- Plugin backend forwards to Sigil API query endpoints:
+  - `GET /api/v1/conversations`
+  - `GET /api/v1/conversations/{conversation_id}`
+  - `GET /api/v1/completions`
+  - `GET /api/v1/traces/{trace_id}`
+
+Phase 2 target contract (tracked in `docs/exec-plans/active/2026-02-12-phase-2-query-proxy.md`):
 
 - Frontend query entrypoint:
   - `POST /api/plugins/grafana-sigil-app/resources/query`

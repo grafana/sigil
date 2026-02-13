@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-12
+last_reviewed: 2026-02-13
 source_of_truth: true
 audience: contributors
 ---
@@ -94,6 +94,21 @@ Contract notes:
 ## Plugin Proxy Contract
 
 All query traffic from Sigil frontend routes through plugin backend resources.
+
+Current bootstrap endpoints on `main`:
+
+- plugin frontend endpoints:
+  - `GET /api/plugins/grafana-sigil-app/resources/query/conversations`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/completions`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/traces/{trace_id}`
+- plugin backend forwards to Sigil API:
+  - `GET /api/v1/conversations`
+  - `GET /api/v1/conversations/{conversation_id}`
+  - `GET /api/v1/completions`
+  - `GET /api/v1/traces/{trace_id}`
+
+Phase 2 target contract:
 
 - plugin frontend endpoint:
   - `POST /api/plugins/grafana-sigil-app/resources/query`
