@@ -7,6 +7,7 @@ GOTOOLCHAIN = "go1.25.6+auto"
 [tools]
 node = "24"
 go = "1.25.7"
+java = "temurin-17"
 helm = "3.19.0"
 "go:github.com/magefile/mage" = "v1.15.0"
 "go:github.com/air-verse/air" = "v1.64.5"
@@ -175,6 +176,7 @@ run = "pnpm --filter @grafana/sigil-plugin run typecheck"
 
 [tasks."typecheck:ts:sdk-js"]
 description = "Type-check TypeScript/JavaScript SDK code"
+depends = ["deps"]
 run = "pnpm --filter @grafana/sigil-sdk-js run typecheck"
 
 [tasks.test]
@@ -268,6 +270,7 @@ run = "GOWORK=off go test ./..."
 
 [tasks."test:ts:sdk-js"]
 description = "Run TypeScript/JavaScript SDK runtime tests"
+depends = ["deps"]
 run = "pnpm --filter @grafana/sigil-sdk-js run test:ci"
 
 [tasks."test:py:sdk-core"]
@@ -314,8 +317,38 @@ python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-providers/gem
 python -m pytest sdks/python-providers/gemini/tests
 """
 
+[tasks."test:java:sdk-core"]
+description = "Run Java SDK core tests"
+dir = "sdks/java"
+run = "./gradlew --no-daemon :core:test"
+
+[tasks."test:java:sdk-openai"]
+description = "Run Java OpenAI provider adapter tests"
+dir = "sdks/java"
+run = "./gradlew --no-daemon :providers:openai:test"
+
+[tasks."test:java:sdk-anthropic"]
+description = "Run Java Anthropic provider adapter tests"
+dir = "sdks/java"
+run = "./gradlew --no-daemon :providers:anthropic:test"
+
+[tasks."test:java:sdk-gemini"]
+description = "Run Java Gemini provider adapter tests"
+dir = "sdks/java"
+run = "./gradlew --no-daemon :providers:gemini:test"
+
+[tasks."test:java:sdk-all"]
+description = "Run all Java SDK tests"
+dir = "sdks/java"
+run = "./gradlew --no-daemon :core:test :providers:openai:test :providers:anthropic:test :providers:gemini:test"
+
+[tasks."benchmark:java:sdk"]
+description = "Run Java SDK JMH benchmarks"
+dir = "sdks/java"
+run = "./gradlew --no-daemon :benchmarks:jmh"
+
 [tasks."test:sdk:all"]
-description = "Run all SDK checks (Go, TypeScript/JavaScript, and Python SDK suites)"
+description = "Run all SDK checks (Go, TypeScript/JavaScript, Python, and Java SDK suites)"
 depends = [
   "test:go:sdk-core",
   "test:go:sdk-anthropic",
@@ -327,6 +360,7 @@ depends = [
   "test:py:sdk-openai",
   "test:py:sdk-anthropic",
   "test:py:sdk-gemini",
+  "test:java:sdk-all",
 ]
 
 [tasks."test:go:all-modules"]
