@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-12
+last_reviewed: 2026-02-13
 source_of_truth: true
 audience: contributors
 ---
@@ -16,3 +16,4 @@ External ecosystem notes and comparative references used for architecture and im
 - [`generation-ingest-contract.md`](generation-ingest-contract.md)
 - [`grafana-query-response-shapes.md`](grafana-query-response-shapes.md)
 - [`helm-chart.md`](helm-chart.md)
+- [`model-cards-api.md`](model-cards-api.md)
