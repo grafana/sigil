@@ -194,7 +194,13 @@ run = """
 set -euo pipefail
 pnpm --filter @grafana/sigil-plugin run test:ci
 cd sigil && GOWORK=off go test ./...
-cd ../apps/plugin && GOWORK=off go test ./...
+cd ../apps/plugin
+if [[ -n "$(GOWORK=off go list ./... 2>/dev/null || true)" ]]; then
+  GOWORK=off go test ./...
+else
+  echo "==> skip go test ./apps/plugin (no Go packages)"
+fi
+cd ..
 mise run test:go:sdk-core
 mise run test:go:sdk-anthropic
 mise run test:go:sdk-openai
