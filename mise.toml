@@ -8,6 +8,7 @@ GOTOOLCHAIN = "go1.25.6+auto"
 node = "24"
 go = "1.25.7"
 helm = "3.19.0"
+dotnet = "8.0.418"
 "go:github.com/magefile/mage" = "v1.15.0"
 "go:github.com/air-verse/air" = "v1.64.5"
 "go:github.com/golangci/golangci-lint/v2/cmd/golangci-lint" = "v2.8.0"
@@ -86,7 +87,7 @@ run = "docker compose logs -f"
 [tasks.format]
 description = "Format Go and TypeScript code"
 alias = "fmt"
-depends = ["format:go", "format:ts"]
+depends = ["format:go", "format:ts", "format:cs"]
 
 [tasks."format:go"]
 description = "Format Go code in all modules"
@@ -137,9 +138,13 @@ fi
 description = "Verify TypeScript plugin files are formatted with Prettier"
 run = "pnpm --filter @grafana/sigil-plugin exec prettier --check ."
 
+[tasks."format:cs"]
+description = "Format .NET SDK code"
+run = "dotnet format sdks/dotnet/Sigil.DotNet.sln"
+
 [tasks.lint]
-description = "Run Go, TypeScript, and Helm linting"
-depends = ["lint:go", "lint:ts", "lint:helm"]
+description = "Run Go, TypeScript, Helm, and .NET linting"
+depends = ["lint:go", "lint:ts", "lint:helm", "lint:cs"]
 
 [tasks."lint:go"]
 description = "Lint Go code in all modules"
@@ -164,6 +169,10 @@ run = "pnpm --filter @grafana/sigil-plugin run lint"
 [tasks."lint:helm"]
 description = "Lint Sigil Helm chart"
 run = "helm lint ./charts/sigil"
+
+[tasks."lint:cs"]
+description = "Verify .NET SDK formatting and analyzer checks"
+run = "dotnet format sdks/dotnet/Sigil.DotNet.sln --verify-no-changes"
 
 [tasks.typecheck]
 description = "Run TypeScript type checks"
@@ -331,8 +340,28 @@ python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-providers/gem
 python -m pytest sdks/python-providers/gemini/tests
 """
 
+[tasks."test:cs:sdk-core"]
+description = "Run .NET SDK core runtime tests"
+dir = "sdks/dotnet"
+run = "dotnet test tests/Grafana.Sigil.Tests/Grafana.Sigil.Tests.csproj -c Release"
+
+[tasks."test:cs:sdk-openai"]
+description = "Run .NET OpenAI provider helper tests"
+dir = "sdks/dotnet"
+run = "dotnet test tests/Grafana.Sigil.OpenAI.Tests/Grafana.Sigil.OpenAI.Tests.csproj -c Release"
+
+[tasks."test:cs:sdk-anthropic"]
+description = "Run .NET Anthropic provider helper tests"
+dir = "sdks/dotnet"
+run = "dotnet test tests/Grafana.Sigil.Anthropic.Tests/Grafana.Sigil.Anthropic.Tests.csproj -c Release"
+
+[tasks."test:cs:sdk-gemini"]
+description = "Run .NET Gemini provider helper tests"
+dir = "sdks/dotnet"
+run = "dotnet test tests/Grafana.Sigil.Gemini.Tests/Grafana.Sigil.Gemini.Tests.csproj -c Release"
+
 [tasks."test:sdk:all"]
-description = "Run all SDK checks (Go, TypeScript/JavaScript, and Python SDK suites)"
+description = "Run all SDK checks (Go, TypeScript/JavaScript, Python, and .NET SDK suites)"
 depends = [
   "test:go:sdk-core",
   "test:go:sdk-anthropic",
@@ -344,6 +373,10 @@ depends = [
   "test:py:sdk-openai",
   "test:py:sdk-anthropic",
   "test:py:sdk-gemini",
+  "test:cs:sdk-core",
+  "test:cs:sdk-openai",
+  "test:cs:sdk-anthropic",
+  "test:cs:sdk-gemini",
 ]
 
 [tasks."test:go:all-modules"]
