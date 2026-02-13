@@ -12,7 +12,7 @@ audience: both
 
 - `apps/plugin`: Grafana plugin UI and backend proxy for Sigil APIs.
 - `sigil`: OTLP trace ingest, generation ingest, and query APIs.
-- `sdks/*`: post-LLM instrumentation SDKs (Go, Python, TypeScript/JavaScript, .NET/C#).
+- `sdks/*`: post-LLM instrumentation SDKs (Go, Python, TypeScript/JavaScript, Java, .NET/C#).
 - Tempo: trace storage and TraceQL execution backend.
 - MySQL: hot metadata/index store plus hot generation payload store.
 - Object storage: long-term compacted generation payload storage.
@@ -24,17 +24,19 @@ Phase 2 defines production contracts for SDK parity, query envelopes, tenant bou
 
 ### Execution priority
 
-SDK parity and tenant-boundary tracks are completed. Active implementation sequencing is:
+Tenant-boundary track is completed. Active implementation sequencing is:
 
-1. query proxy
-2. hybrid storage/query behavior
-3. cross-track consistency and tech debt capture
+1. Java SDK parity completion
+2. query proxy
+3. hybrid storage/query behavior
+4. cross-track consistency and tech debt capture
 
 SDK parity completion is tracked in:
 
 - `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-python.md`
 - `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-typescript-javascript.md`
 - `docs/exec-plans/completed/2026-02-13-phase-2-sdk-parity-dotnet-csharp.md`
+- `docs/exec-plans/active/2026-02-13-sdk-parity-java.md`
 
 Tenant boundary completion is tracked in:
 
@@ -304,7 +306,7 @@ See `docs/references/grafana-query-response-shapes.md`.
 - OTel-first mental model: Sigil extends familiar instrumentation flow with AI-specific normalized generation semantics.
 - Core APIs are explicit client/recorder lifecycle APIs.
 - Provider wrappers are convenience sugar, documented wrapper-first in provider modules.
-- Provider parity target for Go/Python/TS/.NET: OpenAI, Anthropic, Gemini.
+- Provider parity target for Go/Python/TS/Java/.NET: OpenAI, Anthropic, Gemini.
 - Python SDK runtime lives in `sdks/python` with provider wrapper packages in `sdks/python-providers/*`.
 - .NET SDK runtime lives in `sdks/dotnet` with split provider packages under `sdks/dotnet/src/Grafana.Sigil.*`.
 - Raw provider artifacts are default OFF, explicit opt-in only.

@@ -24,7 +24,7 @@ It combines OpenTelemetry traces with normalized LLM generation data, so you can
   - AWS S3
   - Google Cloud Storage
   - Azure Blob Storage
-- SDKs (`/sdks`) with Go started first, Python/JS scaffolds present.
+- SDKs (`/sdks`) for Go, Python, TypeScript/JavaScript, and Java.
 
 ## Why Sigil
 
@@ -32,7 +32,7 @@ It combines OpenTelemetry traces with normalized LLM generation data, so you can
 - **OpenTelemetry-native**: ingest traces via OTLP gRPC or OTLP HTTP.
 - **Generation-first ingest**: export normalized generation payloads across providers.
 - **Grafana-native experience**: query and explore from the Sigil app plugin.
-- **SDK support**: Go, Python, and TypeScript/JavaScript SDKs with provider helpers.
+- **SDK support**: Go, Python, TypeScript/JavaScript, and Java SDKs with provider helpers.
 
 ## Architecture At A Glance
 
@@ -149,12 +149,14 @@ await client.shutdown();
 - Go core SDK: [`sdks/go/README.md`](sdks/go/README.md)
 - Python core SDK: [`sdks/python/README.md`](sdks/python/README.md)
 - TypeScript/JavaScript SDK: [`sdks/js/README.md`](sdks/js/README.md)
+- Java SDK: [`sdks/java/README.md`](sdks/java/README.md)
 
 Provider helper docs:
 
 - Go providers: OpenAI ([`sdks/go-providers/openai/README.md`](sdks/go-providers/openai/README.md)), Anthropic ([`sdks/go-providers/anthropic/README.md`](sdks/go-providers/anthropic/README.md)), Gemini ([`sdks/go-providers/gemini/README.md`](sdks/go-providers/gemini/README.md))
 - Python providers: OpenAI ([`sdks/python-providers/openai/README.md`](sdks/python-providers/openai/README.md)), Anthropic ([`sdks/python-providers/anthropic/README.md`](sdks/python-providers/anthropic/README.md)), Gemini ([`sdks/python-providers/gemini/README.md`](sdks/python-providers/gemini/README.md))
 - TypeScript/JavaScript providers: OpenAI ([`sdks/js/docs/providers/openai.md`](sdks/js/docs/providers/openai.md)), Anthropic ([`sdks/js/docs/providers/anthropic.md`](sdks/js/docs/providers/anthropic.md)), Gemini ([`sdks/js/docs/providers/gemini.md`](sdks/js/docs/providers/gemini.md))
+- Java providers: OpenAI ([`sdks/java/providers/openai/README.md`](sdks/java/providers/openai/README.md)), Anthropic ([`sdks/java/providers/anthropic/README.md`](sdks/java/providers/anthropic/README.md)), Gemini ([`sdks/java/providers/gemini/README.md`](sdks/java/providers/gemini/README.md))
 
 ## Documentation
 
