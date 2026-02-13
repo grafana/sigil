@@ -118,6 +118,37 @@ services:
       minio:
         condition: service_started
 
+  sdk-traffic:
+    profiles: ['core']
+    build:
+      context: .
+      dockerfile: .config/Dockerfile.sdk-traffic
+    working_dir: /app/sigil
+    command: bash .config/devex/sdk-traffic/run-all.sh
+    environment:
+      SIGIL_TRAFFIC_INTERVAL_MS: "2000"
+      SIGIL_TRAFFIC_STREAM_PERCENT: "30"
+      SIGIL_TRAFFIC_CONVERSATIONS: "3"
+      SIGIL_TRAFFIC_ROTATE_TURNS: "24"
+      SIGIL_TRAFFIC_CUSTOM_PROVIDER: mistral
+      SIGIL_TRAFFIC_GEN_HTTP_ENDPOINT: http://sigil:8080/api/v1/generations:export
+      SIGIL_TRAFFIC_GEN_GRPC_ENDPOINT: sigil:4317
+      SIGIL_TRAFFIC_TRACE_HTTP_ENDPOINT: http://sigil:4318/v1/traces
+      SIGIL_TRAFFIC_TRACE_GRPC_ENDPOINT: sigil:4317
+    volumes:
+      - ./:/app/sigil
+      - sigil-go-cache:/opt/go-cache
+      - sigil-pnpm-store:/opt/pnpm-store
+      - sigil-node-modules:/app/sigil/node_modules/
+      - sigil-pip-cache:/opt/pip-cache
+      - sigil-gradle-cache:/opt/gradle-cache
+      - sigil-nuget-cache:/opt/nuget-cache
+    depends_on:
+      plugin-precache:
+        condition: service_completed_successfully
+      sigil:
+        condition: service_started
+
   mysql:
     profiles: ['core']
     image: mysql:9.6@sha256:db32c8ec843c042a728efb0ac7aa814d6f010eaac8923e20ae0a849d09c5baf8
@@ -165,6 +196,9 @@ volumes:
   sigil-pnpm-store:
   sigil-node-modules:
   sigil-plugin-dist:
+  sigil-pip-cache:
+  sigil-gradle-cache:
+  sigil-nuget-cache:
   sigil-data-mysql:
   sigil-data-tempo:
   sigil-data-minio:

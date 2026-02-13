@@ -398,6 +398,15 @@ Runtime module targets include:
 - `compactor`
 - `catalog-sync` (singleton model-card refresh loop; can run independently or as part of `all`)
 
+## Local Runtime (Compose Core)
+
+The default local stack started by `mise run up` (`docker compose --profile core up --build`) now includes a synthetic SDK traffic service:
+
+- `sdk-traffic`: one always-on compose service that runs Go/JS/Python/Java/.NET emitters in one container.
+- The emitter continuously sends fake threaded agent conversations through all provider wrapper paths (`openai`, `anthropic`, `gemini`) plus a core custom provider path (`mistral`) for ingest/devex validation.
+- Traffic uses mixed `SYNC`/`STREAM` modes, provider/language tags, and per-turn metadata to keep shapes distinguishable in local debugging.
+- Raw provider artifacts stay default OFF; this path is intended for synthetic ingest load and contract-shape visibility only.
+
 ## Evolution Path
 
 Sigil defines an ingestion-log abstraction with pluggable backends.

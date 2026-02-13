@@ -1,0 +1,36 @@
+FROM node:24-bookworm@sha256:00e9195ebd49985a6da8921f419978d85dfe354589755192dc090425ce4da2f7
+
+ENV PATH=$PATH:/usr/local/go/bin
+ENV GOCACHE=/opt/go-cache/build
+ENV GOMODCACHE=/opt/go-cache/mod
+ENV GOFLAGS=-buildvcs=false
+ENV NUGET_PACKAGES=/opt/nuget-cache
+ENV DOTNET_CLI_HOME=/tmp/dotnet
+ENV DOTNET_ROOT=/usr/share/dotnet
+ENV DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
+ENV PIP_CACHE_DIR=/opt/pip-cache
+ENV GRADLE_USER_HOME=/opt/gradle-cache
+
+COPY --from=golang:1.25-bookworm /usr/local/go/ /usr/local/go/
+COPY --from=mcr.microsoft.com/dotnet/sdk:8.0-bookworm-slim /usr/share/dotnet/ /usr/share/dotnet/
+COPY --from=mcr.microsoft.com/dotnet/sdk:8.0-bookworm-slim /usr/bin/dotnet /usr/bin/dotnet
+
+RUN apt-get update \
+  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-venv \
+    openjdk-17-jdk \
+    ca-certificates \
+    curl \
+    bash \
+    git \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN corepack enable \
+  && pnpm config set store-dir /opt/pnpm-store
+
+WORKDIR /app/sigil
+
+CMD ["bash", ".config/devex/sdk-traffic/run-all.sh"]

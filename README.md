@@ -25,6 +25,7 @@ It combines OpenTelemetry traces with normalized LLM generation data, so you can
   - Google Cloud Storage
   - Azure Blob Storage
 - SDKs (`/sdks`) for Go, Python, TypeScript/JavaScript, and Java.
+- `sdk-traffic` core compose service that continuously emits synthetic SDK traffic across Go/JS/Python/Java/.NET provider and custom paths for local devex validation.
 
 ## Why Sigil
 
@@ -75,7 +76,7 @@ mise run deps
 mise run up
 ```
 
-This starts Grafana, the Sigil app plugin, the Sigil API service, Tempo, MySQL, and MinIO.
+This starts Grafana, the Sigil app plugin, the Sigil API service, Tempo, MySQL, MinIO, and the `sdk-traffic` synthetic SDK traffic emitter.
 
 ### 4. Open the Sigil app
 
