@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-12
+last_reviewed: 2026-02-13
 source_of_truth: true
 audience: agents
 ---
@@ -13,10 +13,12 @@ This folder stores durable engineering decisions for Sigil.
 ## Documents
 
 - [`core-beliefs.md`](core-beliefs.md)
+- [`2026-02-13-sdk-parity-java.md`](2026-02-13-sdk-parity-java.md)
 - [`2026-02-12-model-card-catalog-refresh.md`](2026-02-12-model-card-catalog-refresh.md)
 - [`2026-02-12-phase-2-otel-sdk-query-storage.md`](2026-02-12-phase-2-otel-sdk-query-storage.md)
 - [`2026-02-12-phase-2-sdk-parity-python.md`](2026-02-12-phase-2-sdk-parity-python.md) (completed)
 - [`2026-02-12-phase-2-sdk-parity-typescript-javascript.md`](2026-02-12-phase-2-sdk-parity-typescript-javascript.md) (completed)
+- [`2026-02-13-phase-2-sdk-parity-dotnet-csharp.md`](2026-02-13-phase-2-sdk-parity-dotnet-csharp.md) (completed)
 - [`2026-02-12-phase-2-tenant-boundary.md`](2026-02-12-phase-2-tenant-boundary.md) (completed)
 - [`2026-02-12-phase-2-query-proxy.md`](2026-02-12-phase-2-query-proxy.md)
 - [`2026-02-12-phase-2-hybrid-storage.md`](2026-02-12-phase-2-hybrid-storage.md)

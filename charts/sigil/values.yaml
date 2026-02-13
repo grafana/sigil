@@ -108,6 +108,13 @@ sigil:
     retention: 1h
     batchSize: 1000
     leaseTTL: 30s
+  modelCards:
+    syncInterval: 30m
+    leaseTTL: 2m
+    sourceTimeout: 15s
+    staleSoft: 2h
+    staleHard: 24h
+    bootstrapMode: snapshot-first
   extraEnv: []
   extraEnvFrom: []
 
@@ -115,6 +122,19 @@ command: []
 args: []
 extraVolumeMounts: []
 extraVolumes: []
+
+catalogSync:
+  enabled: false
+  replicaCount: 1
+  target: catalog-sync
+  podAnnotations: {}
+  podLabels: {}
+  resources: {}
+  extraEnv: []
+  extraEnvFrom: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
 
 mysql:
   enabled: true

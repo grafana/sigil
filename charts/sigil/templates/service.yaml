@@ -24,4 +24,4 @@ spec:
       targetPort: otlp-http
       protocol: TCP
   selector:
-    {{- include "sigil.selectorLabels" . | nindent 4 }}
+    {{- include "sigil.apiSelectorLabels" . | nindent 4 }}

@@ -41,8 +41,8 @@ func TestRuntimeAllTargetFailsWithoutCompactorDependencies(t *testing.T) {
 	}
 }
 
-func TestRuntimeQuerierTargetRemainsHealthyUntilCanceled(t *testing.T) {
-	targets := []string{config.TargetQuerier}
+func TestRuntimePlaceholderTargetsRemainHealthyUntilCanceled(t *testing.T) {
+	targets := []string{config.TargetQuerier, config.TargetCatalogSync}
 
 	for _, target := range targets {
 		t.Run(target, func(t *testing.T) {
@@ -56,6 +56,26 @@ func TestRuntimeQuerierTargetRemainsHealthyUntilCanceled(t *testing.T) {
 				t.Fatalf("runtime returned error: %v", err)
 			}
 		})
+	}
+}
+
+func TestRuntimeModelCardServiceIsSingleton(t *testing.T) {
+	cfg := testRuntimeConfig(t, config.TargetAll)
+	runtime, err := NewRuntime(cfg, log.NewNopLogger())
+	if err != nil {
+		t.Fatalf("create runtime: %v", err)
+	}
+
+	first, err := runtime.getModelCardService(context.Background(), true)
+	if err != nil {
+		t.Fatalf("build first model-card service: %v", err)
+	}
+	second, err := runtime.getModelCardService(context.Background(), true)
+	if err != nil {
+		t.Fatalf("build second model-card service: %v", err)
+	}
+	if first != second {
+		t.Fatalf("expected shared model-card service instance")
 	}
 }
 

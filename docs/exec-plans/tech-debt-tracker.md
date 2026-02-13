@@ -28,7 +28,7 @@ Status rule:
 - [x] Add Go OTLP ingest integration coverage (gRPC ingest path baseline exists).
 - [x] Add Python and TypeScript/JavaScript OTLP ingest integration coverage.
 - [x] Add integration tests for ingest forwarding to Tempo.
-- [ ] Add benchmark and payload-size guardrail tests.
+- [x] Add benchmark and payload-size guardrail tests.
 - [x] Expand SDK end-to-end examples for Python and TypeScript/JavaScript.
 - [ ] Define retention and pruning policies for hot MySQL payloads vs compacted object storage.
 - [ ] Replace long-transaction `SKIP LOCKED` compaction claims with schema-based durable claim state to reduce lock windows and improve recovery semantics. Tracked in `docs/design-docs/2026-02-13-compaction-scaling.md` and `docs/exec-plans/active/2026-02-13-compaction-scaling.md`; mark addressed only after code + tests merge.
@@ -44,7 +44,7 @@ Status rule:
 
 - CI currently enforces format/lint/typecheck only; test and e2e regressions remain local-only until CI expansion lands.
 - Delay on ingestion-log abstraction can increase MySQL-specific coupling.
-- Deferred benchmark work can hide scale bottlenecks until later phases.
+- Benchmark baselines exist for SDK hot paths; regression thresholds still need CI policy wiring.
 
 ## Exit Criteria
 

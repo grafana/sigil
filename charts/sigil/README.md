@@ -91,6 +91,27 @@ helm upgrade --install sigil ./charts/sigil \
   --set sigil.objectStore.s3.endpoint='https://s3.example'
 ```
 
+### 2b) Split mode with dedicated singleton catalog sync
+
+This keeps API replicas focused on serving traffic and runs model-card refresh in a separate singleton deployment.
+
+```bash
+helm upgrade --install sigil ./charts/sigil \
+  --set image.repository=<your-image-repository> \
+  --set image.tag=<your-image-tag> \
+  --set sigil.target=server \
+  --set replicaCount=3 \
+  --set catalogSync.enabled=true \
+  --set catalogSync.replicaCount=1 \
+  --set catalogSync.target=catalog-sync
+```
+
+Note:
+
+- Model-card cache is in-memory per process.
+- A dedicated `catalog-sync` pod does not propagate model-card data to separate API pods.
+- If you want each API pod to keep a fresh in-memory catalog, keep `sigil.target=server` and let each pod refresh independently.
+
 ### 3) Disable MinIO (external object storage)
 
 ```bash
@@ -133,7 +154,7 @@ Use `helm show values ./charts/sigil` for the full configuration surface.
 Important values:
 
 - `image.repository`, `image.tag`: Sigil API image
-- `sigil.target`: runtime target (`all|server|querier|compactor`)
+- `sigil.target`: runtime target (`all|server|querier|compactor|catalog-sync`)
 - `sigil.auth.enabled`, `sigil.auth.fakeTenantID`: tenant/auth behavior
 - `sigil.storage.backend`: storage backend (`mysql` or `memory`)
 - `sigil.storage.mysql.dsn`: required for external MySQL when `mysql.enabled=false`
@@ -142,6 +163,8 @@ Important values:
 - `sigil.objectStore.s3.*`: S3/MinIO endpoint + auth (`accessKey`, `secretKey`, `useAWSSDKAuth`, `region`, `insecure`)
 - `sigil.objectStore.gcs.*`: GCS bucket/service account/grpc toggle
 - `sigil.objectStore.azure.*`: Azure container/account/auth/endpoint/create-container toggle
+- `sigil.modelCards.*`: model-card sync/freshness/bootstrap settings
+- `catalogSync.enabled`, `catalogSync.replicaCount`, `catalogSync.target`: optional dedicated singleton model-card sync deployment
 - `mysql.*`, `tempo.*`, `minio.*`: optional bundled dependency settings
 - `tests.enabled`: enable/disable Helm hook test pod
 

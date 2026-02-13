@@ -16,6 +16,7 @@ import (
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
 	traceingest "github.com/grafana/sigil/sigil/internal/ingest/trace"
+	"github.com/grafana/sigil/sigil/internal/modelcards"
 	"github.com/grafana/sigil/sigil/internal/query"
 	"github.com/grafana/sigil/sigil/internal/server"
 	"github.com/grafana/sigil/sigil/internal/storage/mysql"
@@ -29,6 +30,9 @@ type serverModule struct {
 	cfg    config.Config
 	logger log.Logger
 
+	modelCardSvc     *modelcards.Service
+	runModelCardSync bool
+
 	apiServer      *http.Server
 	otlpHTTPServer *http.Server
 	grpcServer     *grpc.Server
@@ -38,11 +42,13 @@ type serverModule struct {
 	runErr chan error
 }
 
-func newServerModule(cfg config.Config, logger log.Logger) services.Service {
+func newServerModule(cfg config.Config, logger log.Logger, modelCardSvc *modelcards.Service, runModelCardSync bool) services.Service {
 	module := &serverModule{
-		cfg:    cfg,
-		logger: logger,
-		runErr: make(chan error, 3),
+		cfg:              cfg,
+		logger:           logger,
+		modelCardSvc:     modelCardSvc,
+		runModelCardSync: runModelCardSync,
+		runErr:           make(chan error, 3),
 	}
 	return services.NewBasicService(module.start, module.run, module.stop).WithName(config.TargetServer)
 }
@@ -56,6 +62,9 @@ func (m *serverModule) start(ctx context.Context) error {
 	generationSvc := generationingest.NewService(generationStore)
 	generationGRPC := generationingest.NewGRPCServer(generationSvc)
 	querySvc := query.NewService()
+	if m.modelCardSvc == nil {
+		return errors.New("model-card service is required")
+	}
 	m.tempoClient = tempo.NewClient(m.cfg.TempoOTLPGRPCEndpoint, m.cfg.TempoOTLPHTTPEndpoint)
 	traceSvc := traceingest.NewService(m.tempoClient)
 	traceGRPC := traceingest.NewGRPCServer(traceSvc)
@@ -66,7 +75,7 @@ func (m *serverModule) start(ctx context.Context) error {
 	protectedHTTP := tenantauth.HTTPMiddleware(tenantAuthCfg)
 
 	apiMux := http.NewServeMux()
-	server.RegisterRoutes(apiMux, querySvc, generationSvc, protectedHTTP)
+	server.RegisterRoutes(apiMux, querySvc, generationSvc, m.modelCardSvc, protectedHTTP)
 	m.apiServer = &http.Server{
 		Addr:    m.cfg.HTTPAddr,
 		Handler: apiMux,
@@ -99,6 +108,14 @@ func (m *serverModule) start(ctx context.Context) error {
 }
 
 func (m *serverModule) run(ctx context.Context) error {
+	if m.runModelCardSync && m.modelCardSvc != nil {
+		go func() {
+			if err := m.modelCardSvc.RunSyncLoop(ctx); err != nil {
+				m.pushRunError(err)
+			}
+		}()
+	}
+
 	select {
 	case <-ctx.Done():
 		return nil

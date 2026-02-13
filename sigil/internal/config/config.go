@@ -9,10 +9,11 @@ import (
 )
 
 const (
-	TargetAll       = "all"
-	TargetServer    = "server"
-	TargetQuerier   = "querier"
-	TargetCompactor = "compactor"
+	TargetAll         = "all"
+	TargetServer      = "server"
+	TargetQuerier     = "querier"
+	TargetCompactor   = "compactor"
+	TargetCatalogSync = "catalog-sync"
 )
 
 type Config struct {
@@ -28,6 +29,7 @@ type Config struct {
 	MySQLDSN              string
 	ObjectStore           ObjectStoreConfig
 	CompactorConfig       CompactorConfig
+	ModelCardsConfig      ModelCardsConfig
 }
 
 type ObjectStoreConfig struct {
@@ -68,6 +70,15 @@ type CompactorConfig struct {
 	Retention        time.Duration
 	BatchSize        int
 	LeaseTTL         time.Duration
+}
+
+type ModelCardsConfig struct {
+	SyncInterval  time.Duration
+	LeaseTTL      time.Duration
+	SourceTimeout time.Duration
+	StaleSoft     time.Duration
+	StaleHard     time.Duration
+	BootstrapMode string
 }
 
 func FromEnv() Config {
@@ -122,6 +133,14 @@ func FromEnv() Config {
 			BatchSize:        getEnvInt("SIGIL_COMPACTOR_BATCH_SIZE", 1000),
 			LeaseTTL:         getEnvDuration("SIGIL_COMPACTOR_LEASE_TTL", 30*time.Second),
 		},
+		ModelCardsConfig: ModelCardsConfig{
+			SyncInterval:  getEnvDuration("SIGIL_MODEL_CARDS_SYNC_INTERVAL", 30*time.Minute),
+			LeaseTTL:      getEnvDuration("SIGIL_MODEL_CARDS_LEASE_TTL", 2*time.Minute),
+			SourceTimeout: getEnvDuration("SIGIL_MODEL_CARDS_SOURCE_TIMEOUT", 15*time.Second),
+			StaleSoft:     getEnvDuration("SIGIL_MODEL_CARDS_STALE_SOFT", 2*time.Hour),
+			StaleHard:     getEnvDuration("SIGIL_MODEL_CARDS_STALE_HARD", 24*time.Hour),
+			BootstrapMode: strings.ToLower(strings.TrimSpace(getEnv("SIGIL_MODEL_CARDS_BOOTSTRAP_MODE", "snapshot-first"))),
+		},
 	}
 }
 
@@ -131,7 +150,7 @@ func (c *Config) SetTarget(target string) {
 
 func (c Config) Validate() error {
 	switch c.Target {
-	case TargetAll, TargetServer, TargetQuerier, TargetCompactor:
+	case TargetAll, TargetServer, TargetQuerier, TargetCompactor, TargetCatalogSync:
 	default:
 		return fmt.Errorf("invalid target %q", c.Target)
 	}
@@ -151,6 +170,27 @@ func (c Config) Validate() error {
 	if c.CompactorConfig.LeaseTTL <= 0 {
 		return fmt.Errorf("SIGIL_COMPACTOR_LEASE_TTL must be > 0")
 	}
+	if c.ModelCardsConfig.SyncInterval <= 0 {
+		return fmt.Errorf("SIGIL_MODEL_CARDS_SYNC_INTERVAL must be > 0")
+	}
+	if c.ModelCardsConfig.LeaseTTL <= 0 {
+		return fmt.Errorf("SIGIL_MODEL_CARDS_LEASE_TTL must be > 0")
+	}
+	if c.ModelCardsConfig.SourceTimeout <= 0 {
+		return fmt.Errorf("SIGIL_MODEL_CARDS_SOURCE_TIMEOUT must be > 0")
+	}
+	if c.ModelCardsConfig.StaleSoft <= 0 {
+		return fmt.Errorf("SIGIL_MODEL_CARDS_STALE_SOFT must be > 0")
+	}
+	if c.ModelCardsConfig.StaleHard <= 0 {
+		return fmt.Errorf("SIGIL_MODEL_CARDS_STALE_HARD must be > 0")
+	}
+	switch c.ModelCardsConfig.BootstrapMode {
+	case "snapshot-first", "db-only":
+	default:
+		return fmt.Errorf("SIGIL_MODEL_CARDS_BOOTSTRAP_MODE must be one of snapshot-first|db-only")
+	}
+
 	if err := c.ObjectStore.Validate(); err != nil {
 		return err
 	}

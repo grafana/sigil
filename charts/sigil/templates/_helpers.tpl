@@ -38,6 +38,18 @@ app.kubernetes.io/name: {{ include "sigil.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
+{{/* API selector labels */}}
+{{- define "sigil.apiSelectorLabels" -}}
+{{ include "sigil.selectorLabels" . }}
+app.kubernetes.io/component: api
+{{- end -}}
+
+{{/* Catalog sync selector labels */}}
+{{- define "sigil.catalogSyncSelectorLabels" -}}
+{{ include "sigil.selectorLabels" . }}
+app.kubernetes.io/component: catalog-sync
+{{- end -}}
+
 {{/* Service account name */}}
 {{- define "sigil.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create -}}

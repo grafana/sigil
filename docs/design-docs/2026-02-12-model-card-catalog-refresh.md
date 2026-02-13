@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-12
+last_reviewed: 2026-02-13
 source_of_truth: true
 audience: both
 ---
@@ -16,7 +16,7 @@ Requirements:
 
 - automatically refresh from an external source
 - support static fallback when external fetch fails
-- store catalog in MySQL
+- keep catalog in process memory
 - expose a stable API for plugin/backend consumers
 
 ## External findings (validated 2026-02-12)
@@ -133,29 +133,33 @@ Cons:
 
 Choose Option A now, keep Option D as secondary fallback input.
 
+### Runtime topology
+
+- Model-card catalog is an in-memory cache initialized from embedded snapshot JSON.
+- `target=all` shares one model-card service instance between API routes and refresh loop.
+- `target=server` runs the refresh loop inside the server module (per pod memory cache).
+- `target=catalog-sync` remains available for refresh-only workloads, but does not share state across pods.
+
 ### Source priority
 
 1. OpenRouter live API
 2. Last known good static snapshot (repo)
-3. Existing MySQL state (serve stale-but-annotated data instead of failing hard)
 
 ### Refresh flow
 
 1. Scheduler triggers every `30m` (configurable).
-2. Acquire MySQL advisory lock (`model_cards_refresh`) to prevent concurrent refresh.
-3. Fetch primary source with timeout/retry.
-4. If primary fails, load static fallback JSON from disk.
-5. Normalize into canonical model-card struct.
-6. Upsert rows into MySQL.
-7. Mark unseen rows as stale only after a grace window (avoid accidental mass-delete).
-8. Record refresh run metrics and status.
+2. Fetch primary source with timeout/retry.
+3. If primary fails, use embedded fallback snapshot.
+4. Normalize into canonical model-card struct.
+5. Upsert into in-memory cache.
+6. Record refresh run status in memory.
 
 ### Freshness policy
 
 - target freshness: <= `30m`
 - soft-stale threshold: `2h`
 - hard-stale threshold: `24h`
-- API always returns `freshness` metadata so UI can show staleness state
+- API always returns `freshness` metadata including `source_path` (`memory_live`, `memory_stale`, `snapshot_fallback`)
 
 ## Canonical model-card shape
 
@@ -195,80 +199,11 @@ Choose Option A now, keep Option D as secondary fallback input.
 }
 ```
 
-## MySQL schema
+## Storage model
 
-### `model_cards`
-
-- `id BIGINT AUTO_INCREMENT PRIMARY KEY`
-- `model_key VARCHAR(255) NOT NULL` (for example `openrouter:openai/gpt-5`)
-- `source VARCHAR(32) NOT NULL`
-- `source_model_id VARCHAR(255) NOT NULL`
-- `canonical_slug VARCHAR(255) NULL`
-- `name VARCHAR(255) NOT NULL`
-- `provider VARCHAR(128) NULL`
-- `description TEXT NULL`
-- `context_length INT NULL`
-- `modality VARCHAR(64) NULL`
-- `input_modalities JSON NULL`
-- `output_modalities JSON NULL`
-- `supported_parameters JSON NULL`
-- `tokenizer VARCHAR(128) NULL`
-- `prompt_price_usd_per_token DECIMAL(20,12) NULL`
-- `completion_price_usd_per_token DECIMAL(20,12) NULL`
-- `request_price_usd DECIMAL(20,12) NULL`
-- `image_price_usd DECIMAL(20,12) NULL`
-- `web_search_price_usd DECIMAL(20,12) NULL`
-- `input_cache_read_price_usd_per_token DECIMAL(20,12) NULL`
-- `input_cache_write_price_usd_per_token DECIMAL(20,12) NULL`
-- `is_free BOOLEAN NOT NULL DEFAULT FALSE`
-- `top_provider JSON NULL`
-- `expires_at DATE NULL`
-- `first_seen_at TIMESTAMP(6) NOT NULL`
-- `last_seen_at TIMESTAMP(6) NOT NULL`
-- `deprecated_at TIMESTAMP(6) NULL`
-- `raw_payload JSON NOT NULL`
-- `refreshed_at TIMESTAMP(6) NOT NULL`
-- `created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)`
-- `updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)`
-
-Indexes:
-
-- unique: `uq_model_key (model_key)`
-- lookup: `idx_source_model (source, source_model_id)`
-- filtering: `idx_provider (provider)`, `idx_is_free (is_free)`, `idx_prompt_price (prompt_price_usd_per_token)`
-- freshness: `idx_last_seen (last_seen_at)`
-
-### `model_card_aliases`
-
-- `id BIGINT AUTO_INCREMENT PRIMARY KEY`
-- `model_key VARCHAR(255) NOT NULL`
-- `alias_source VARCHAR(32) NOT NULL`
-- `alias_value VARCHAR(255) NOT NULL`
-- `created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)`
-
-Indexes:
-
-- unique: `uq_alias (alias_source, alias_value)`
-- lookup: `idx_alias_model_key (model_key)`
-
-### `model_card_refresh_runs`
-
-- `id BIGINT AUTO_INCREMENT PRIMARY KEY`
-- `source VARCHAR(32) NOT NULL`
-- `run_mode ENUM('primary', 'fallback') NOT NULL`
-- `status ENUM('success', 'partial', 'failed') NOT NULL`
-- `started_at TIMESTAMP(6) NOT NULL`
-- `finished_at TIMESTAMP(6) NOT NULL`
-- `fetched_count INT NOT NULL DEFAULT 0`
-- `upserted_count INT NOT NULL DEFAULT 0`
-- `stale_marked_count INT NOT NULL DEFAULT 0`
-- `error_summary TEXT NULL`
-- `details JSON NULL`
-
-Indexes:
-
-- `idx_source_started (source, started_at)`
-- `idx_status_started (status, started_at)`
+- The model-card catalog is stored in process memory (`modelcards.MemoryStore`).
+- The embedded fallback snapshot is compiled into the binary with `go:embed`.
+- No MySQL schema is required for model-card refresh/read paths.
 
 ## API design
 
@@ -285,6 +220,7 @@ Query params:
 - `min_context_length` (int)
 - `max_prompt_price_usd_per_token` (decimal string)
 - `max_completion_price_usd_per_token` (decimal string)
+- `regex` (RE2 expression against `model_key`, `source_model_id`, `name`, `provider`, `canonical_slug`)
 - `sort` (`name|provider|prompt_price|context_length|last_seen_at`)
 - `order` (`asc|desc`)
 - `limit` (default `50`, max `200`)
@@ -313,7 +249,8 @@ Response:
   "next_cursor": "eyJsYXN0X2lkIjoyMzQ1fQ==",
   "freshness": {
     "catalog_last_refreshed_at": "2026-02-12T23:30:00Z",
-    "stale": false
+    "stale": false,
+    "source_path": "memory_live"
   }
 }
 ```
@@ -404,7 +341,8 @@ Refresh tooling should include:
 1. Land schema + read API behind feature flag.
 2. Land refresh tooling with OpenRouter source + static fallback.
 3. Enable scheduled refresh in non-prod, then prod.
-4. Add optional enrichment source(s) only after baseline stability.
+4. Add optional split deployment mode in Helm (`catalogSync.enabled=true`) for singleton refresh.
+5. Add optional enrichment source(s) only after baseline stability.
 
 ## References
 

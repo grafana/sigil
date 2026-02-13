@@ -91,6 +91,12 @@ services:
       SIGIL_COMPACTOR_RETENTION: 1h
       SIGIL_COMPACTOR_BATCH_SIZE: 1000
       SIGIL_COMPACTOR_LEASE_TTL: 30s
+      SIGIL_MODEL_CARDS_SYNC_INTERVAL: 30m
+      SIGIL_MODEL_CARDS_LEASE_TTL: 2m
+      SIGIL_MODEL_CARDS_SOURCE_TIMEOUT: 15s
+      SIGIL_MODEL_CARDS_STALE_SOFT: 2h
+      SIGIL_MODEL_CARDS_STALE_HARD: 24h
+      SIGIL_MODEL_CARDS_BOOTSTRAP_MODE: snapshot-first
     volumes:
       - ./sigil:/app/sigil
       - sigil-go-cache:/opt/go-cache

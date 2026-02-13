@@ -9,7 +9,7 @@
     "test:ci": "jest --passWithNoTests --maxWorkers 4",
     "typecheck": "tsc --noEmit",
     "lint": "eslint --cache .",
-    "lint:fix": "pnpm run lint -- --fix && prettier --write --list-different .",
+    "lint:fix": "eslint --cache . --fix && prettier --write --list-different .",
     "e2e": "playwright test",
     "sign": "pnpm dlx @grafana/sign-plugin@latest",
     "storybook": "storybook dev -p 6006",

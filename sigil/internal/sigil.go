@@ -11,6 +11,7 @@ import (
 	"github.com/grafana/dskit/modules"
 	"github.com/grafana/dskit/services"
 	"github.com/grafana/sigil/sigil/internal/config"
+	"github.com/grafana/sigil/sigil/internal/modelcards"
 	"github.com/grafana/sigil/sigil/internal/storage/mysql"
 	"github.com/grafana/sigil/sigil/internal/storage/object"
 )
@@ -19,6 +20,7 @@ type Runtime struct {
 	cfg        config.Config
 	logger     log.Logger
 	moduleInit *modules.Manager
+	modelCards *modelcards.Service
 }
 
 func NewRuntime(cfg config.Config, logger log.Logger) (*Runtime, error) {
@@ -85,13 +87,19 @@ func (r *Runtime) registerModules() error {
 	r.moduleInit.RegisterModule(config.TargetServer, r.initServerModule)
 	r.moduleInit.RegisterModule(config.TargetQuerier, r.initQuerierModule)
 	r.moduleInit.RegisterModule(config.TargetCompactor, r.initCompactorModule)
+	r.moduleInit.RegisterModule(config.TargetCatalogSync, r.initCatalogSyncModule)
 	r.moduleInit.RegisterModule(config.TargetAll, nil)
 
-	return r.moduleInit.AddDependency(config.TargetAll, config.TargetServer, config.TargetQuerier, config.TargetCompactor)
+	return r.moduleInit.AddDependency(config.TargetAll, config.TargetServer, config.TargetQuerier, config.TargetCompactor, config.TargetCatalogSync)
 }
 
 func (r *Runtime) initServerModule() (services.Service, error) {
-	return newServerModule(r.cfg, r.logger), nil
+	modelCardSvc, err := r.getModelCardService(context.Background(), true)
+	if err != nil {
+		return nil, err
+	}
+	runModelCardSync := r.cfg.Target == config.TargetServer
+	return newServerModule(r.cfg, r.logger, modelCardSvc, runModelCardSync), nil
 }
 
 func (r *Runtime) initQuerierModule() (services.Service, error) {
@@ -177,4 +185,24 @@ func newBlockStorePlaceholder(cfg config.ObjectStoreConfig) *object.Store {
 	default:
 		return object.NewStore(cfg.S3.Endpoint, cfg.Bucket)
 	}
+}
+
+func (r *Runtime) initCatalogSyncModule() (services.Service, error) {
+	modelCardSvc, err := r.getModelCardService(context.Background(), true)
+	if err != nil {
+		return nil, err
+	}
+	return newCatalogSyncModule(r.cfg, modelCardSvc)
+}
+
+func (r *Runtime) getModelCardService(ctx context.Context, enableLiveSource bool) (*modelcards.Service, error) {
+	if r.modelCards != nil {
+		return r.modelCards, nil
+	}
+	svc, err := buildModelCardService(ctx, r.cfg, enableLiveSource)
+	if err != nil {
+		return nil, err
+	}
+	r.modelCards = svc
+	return svc, nil
 }

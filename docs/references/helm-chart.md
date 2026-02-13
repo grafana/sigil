@@ -58,6 +58,7 @@ The chart maps values into Sigil runtime env vars from `sigil/internal/config/co
 - `SIGIL_OBJECT_STORE_AZURE_ENDPOINT`
 - `SIGIL_OBJECT_STORE_AZURE_CREATE_CONTAINER`
 - compactor settings (`SIGIL_COMPACTOR_*`)
+- model-card settings (`SIGIL_MODEL_CARDS_*`)
 
 ## Deployment Modes
 
@@ -78,6 +79,24 @@ Disable bundled dependencies and set external endpoints/credentials:
 - `sigil.objectStore.backend`
 - `sigil.objectStore.bucket`
 - provider-specific values under `sigil.objectStore.s3.*`, `sigil.objectStore.gcs.*`, or `sigil.objectStore.azure.*`
+
+### Split mode with singleton catalog sync
+
+Optionally run API and catalog refresh as separate deployments while keeping the chart default backward-compatible:
+
+- API deployment:
+  - `sigil.target=server`
+  - `replicaCount > 1`
+- Singleton model-card sync deployment:
+  - `catalogSync.enabled=true`
+  - `catalogSync.replicaCount=1`
+  - `catalogSync.target=catalog-sync`
+
+Note:
+
+- Model-card cache is in-memory per process.
+- `catalog-sync` does not replicate catalog state into API pods.
+- If you want API pods to self-refresh in-memory cache, keep `sigil.target=server` and rely on each pod refresh loop.
 
 ## Testing and Packaging
 

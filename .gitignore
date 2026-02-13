@@ -23,6 +23,10 @@ sigil/tmp/
 sigil/sigil
 *.db
 
+# dotnet artifacts
+sdks/dotnet/**/bin/
+sdks/dotnet/**/obj/
+
 # docker and local env
 .env
 .env.*

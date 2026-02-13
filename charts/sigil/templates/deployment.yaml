@@ -8,11 +8,11 @@ spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "sigil.selectorLabels" . | nindent 6 }}
+      {{- include "sigil.apiSelectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "sigil.selectorLabels" . | nindent 8 }}
+        {{- include "sigil.apiSelectorLabels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -135,6 +135,18 @@ spec:
               value: {{ .Values.sigil.compactor.batchSize | quote }}
             - name: SIGIL_COMPACTOR_LEASE_TTL
               value: {{ .Values.sigil.compactor.leaseTTL | quote }}
+            - name: SIGIL_MODEL_CARDS_SYNC_INTERVAL
+              value: {{ .Values.sigil.modelCards.syncInterval | quote }}
+            - name: SIGIL_MODEL_CARDS_LEASE_TTL
+              value: {{ .Values.sigil.modelCards.leaseTTL | quote }}
+            - name: SIGIL_MODEL_CARDS_SOURCE_TIMEOUT
+              value: {{ .Values.sigil.modelCards.sourceTimeout | quote }}
+            - name: SIGIL_MODEL_CARDS_STALE_SOFT
+              value: {{ .Values.sigil.modelCards.staleSoft | quote }}
+            - name: SIGIL_MODEL_CARDS_STALE_HARD
+              value: {{ .Values.sigil.modelCards.staleHard | quote }}
+            - name: SIGIL_MODEL_CARDS_BOOTSTRAP_MODE
+              value: {{ .Values.sigil.modelCards.bootstrapMode | quote }}
             {{- with .Values.sigil.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

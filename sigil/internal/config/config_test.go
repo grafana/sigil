@@ -101,7 +101,7 @@ func TestValidateAcceptsGCSBackend(t *testing.T) {
 }
 
 func TestValidateAcceptsKnownTargets(t *testing.T) {
-	targets := []string{TargetAll, TargetServer, TargetQuerier, TargetCompactor}
+	targets := []string{TargetAll, TargetServer, TargetQuerier, TargetCompactor, TargetCatalogSync}
 
 	for _, target := range targets {
 		t.Run(target, func(t *testing.T) {
@@ -112,6 +112,24 @@ func TestValidateAcceptsKnownTargets(t *testing.T) {
 				t.Fatalf("expected target %q to validate, got %v", target, err)
 			}
 		})
+	}
+}
+
+func TestValidateRejectsInvalidModelCardsConfig(t *testing.T) {
+	cfg := FromEnv()
+	cfg.ModelCardsConfig.SyncInterval = 0
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for invalid model cards config")
+	}
+}
+
+func TestValidateRejectsInvalidModelCardsBootstrapMode(t *testing.T) {
+	cfg := FromEnv()
+	cfg.ModelCardsConfig.BootstrapMode = "invalid"
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for invalid model cards bootstrap mode")
 	}
 }
 
