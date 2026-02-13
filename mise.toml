@@ -401,23 +401,30 @@ run = "./gradlew --no-daemon :benchmarks:jmh"
 
 [tasks."test:sdk:all"]
 description = "Run all SDK checks (Go, TypeScript/JavaScript, Python, Java, and .NET SDK suites)"
-depends = [
-  "test:go:sdk-core",
-  "test:go:sdk-anthropic",
-  "test:go:sdk-openai",
-  "test:go:sdk-gemini",
-  "test:ts:sdk-js",
-  "typecheck:ts:sdk-js",
-  "test:py:sdk-core",
-  "test:py:sdk-openai",
-  "test:py:sdk-anthropic",
-  "test:py:sdk-gemini",
-  "test:cs:sdk-core",
-  "test:cs:sdk-openai",
-  "test:cs:sdk-anthropic",
-  "test:cs:sdk-gemini",
-  "test:java:sdk-all",
-]
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+mise run test:go:sdk-core
+mise run test:go:sdk-anthropic
+mise run test:go:sdk-openai
+mise run test:go:sdk-gemini
+
+mise run typecheck:ts:sdk-js
+mise run test:ts:sdk-js
+
+mise run test:py:sdk-core
+mise run test:py:sdk-openai
+mise run test:py:sdk-anthropic
+mise run test:py:sdk-gemini
+
+mise run test:cs:sdk-core
+mise run test:cs:sdk-openai
+mise run test:cs:sdk-anthropic
+mise run test:cs:sdk-gemini
+
+mise run test:java:sdk-all
+"""
 
 [tasks."test:go:all-modules"]
 description = "Run go test across Go SDK modules"
