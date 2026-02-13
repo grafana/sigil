@@ -1,4 +1,4 @@
-FROM node:22-bookworm
+FROM node:24-bookworm@sha256:00e9195ebd49985a6da8921f419978d85dfe354589755192dc090425ce4da2f7
 
 ENV GOPATH /opt/go
 ENV PATH $PATH:$GOPATH/bin:/usr/local/go/bin
