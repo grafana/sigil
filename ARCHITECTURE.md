@@ -363,6 +363,7 @@ See `docs/references/grafana-query-response-shapes.md`.
 - Core APIs are explicit client/recorder lifecycle APIs.
 - Provider wrappers are convenience sugar, documented wrapper-first in provider modules.
 - Provider parity target for Go/Python/TS/Java/.NET: OpenAI, Anthropic, Gemini.
+- OpenAI provider parity now includes strict official SDK-shaped support for both Chat Completions and Responses across Go/Python/TS/Java/.NET.
 - Python SDK runtime lives in `sdks/python` with provider wrapper packages in `sdks/python-providers/*`.
 - .NET SDK runtime lives in `sdks/dotnet` with split provider packages under `sdks/dotnet/src/Grafana.Sigil.*`.
 - Raw provider artifacts are default OFF, explicit opt-in only.

@@ -39,7 +39,9 @@ This is the canonical navigation map for repository documentation.
   - Go SDK README: `../sdks/go/README.md`
 - Execution plans:
   - Active: `exec-plans/active/`
-  - Current implementation priority: Java SDK parity completion, then query proxy, then hybrid storage/query behavior
+  - Current implementation priority: OpenAI strict SDK parity (chat + responses), then query proxy, then hybrid storage/query behavior
+  - OpenAI strict parity plan: `exec-plans/active/2026-02-13-openai-chat-responses-strict-parity.md`
+  - All-provider strict helper/mapper parity plan: `exec-plans/active/2026-02-13-all-providers-strict-helper-mapper-parity.md`
   - Java SDK parity plan: `exec-plans/active/2026-02-13-sdk-parity-java.md`
   - Phase 2 umbrella coordinator: `exec-plans/active/2026-02-12-phase-2-delivery.md`
   - Phase 2 parallel tracks:
