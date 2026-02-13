@@ -44,3 +44,6 @@ ci/
 .idea
 
 .eslintcache
+
+*storybook.log
+storybook-static

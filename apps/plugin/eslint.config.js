@@ -1,6 +1,7 @@
 const path = require('node:path');
 const { fixupConfigRules, includeIgnoreFile } = require('@eslint/compat');
 const grafanaConfig = require('@grafana/eslint-config/flat');
+const storybook = require('eslint-plugin-storybook');
 
 const tsconfigRootDir = __dirname;
 const gitignorePath = path.join(__dirname, '.gitignore');
@@ -30,4 +31,5 @@ module.exports = [
       'react-hooks/rules-of-hooks': 'off',
     },
   },
+  ...storybook.configs['flat/recommended'],
 ];

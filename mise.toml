@@ -62,6 +62,11 @@ description = "Run Sigil service with air"
 dir = "sigil"
 run = "air -c .air.toml"
 
+[tasks."dev:storybook"]
+description = "Run plugin Storybook"
+dir = "apps/plugin"
+run = "pnpm run storybook"
+
 [tasks.up]
 description = "Start local stack (grafana, plugin, sigil, tempo, mysql)"
 run = "docker compose --profile core up --build"

@@ -11,7 +11,9 @@
     "lint": "eslint --cache .",
     "lint:fix": "pnpm run lint -- --fix && prettier --write --list-different .",
     "e2e": "playwright test",
-    "sign": "pnpm dlx @grafana/sign-plugin@latest"
+    "sign": "pnpm dlx @grafana/sign-plugin@latest",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "author": "Grafana",
   "license": "AGPL-3.0-only",
@@ -62,7 +64,14 @@
     "webpack-cli": "^6.0.0",
     "webpack-livereload-plugin": "^3.0.2",
     "webpack-subresource-integrity": "^5.1.0",
-    "webpack-virtual-modules": "^0.6.2"
+    "webpack-virtual-modules": "^0.6.2",
+    "storybook": "^10.2.8",
+    "@storybook/react-webpack5": "^10.2.8",
+    "@storybook/addon-webpack5-compiler-swc": "^4.0.2",
+    "@storybook/addon-a11y": "^10.2.8",
+    "@storybook/addon-docs": "^10.2.8",
+    "@storybook/addon-onboarding": "^10.2.8",
+    "eslint-plugin-storybook": "^10.2.8"
   },
   "engines": {
     "node": ">=22"
