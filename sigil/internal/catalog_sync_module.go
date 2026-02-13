@@ -2,7 +2,7 @@ package sigil
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	"github.com/grafana/dskit/services"
 	"github.com/grafana/sigil/sigil/internal/config"
@@ -10,17 +10,14 @@ import (
 )
 
 type catalogSyncModule struct {
-	cfg config.Config
 	svc *modelcards.Service
 }
 
-func newCatalogSyncModule(cfg config.Config) (services.Service, error) {
-	svc, err := buildModelCardService(context.Background(), cfg, true)
-	if err != nil {
-		return nil, fmt.Errorf("build model card service for catalog sync: %w", err)
+func newCatalogSyncModule(_ config.Config, svc *modelcards.Service) (services.Service, error) {
+	if svc == nil {
+		return nil, errors.New("model-card service is required")
 	}
 	module := &catalogSyncModule{
-		cfg: cfg,
 		svc: svc,
 	}
 	return services.NewBasicService(module.start, module.run, module.stop).WithName(config.TargetCatalogSync), nil

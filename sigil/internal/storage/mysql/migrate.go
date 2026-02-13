@@ -14,10 +14,6 @@ func (s *WALStore) AutoMigrate(ctx context.Context) error {
 		&ConversationModel{},
 		&CompactionBlockModel{},
 		&CompactorLeaseModel{},
-		&ModelCardModel{},
-		&ModelCardAliasModel{},
-		&ModelCardRefreshRunModel{},
-		&ModelCardRefreshLeaseModel{},
 	)
 	status := "success"
 	if err != nil {

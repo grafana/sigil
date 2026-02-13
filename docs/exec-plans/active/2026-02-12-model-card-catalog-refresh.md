@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-12
+last_reviewed: 2026-02-13
 source_of_truth: true
 audience: both
 ---
@@ -10,13 +10,13 @@ audience: both
 
 ## Goal
 
-Deliver an automated model-card catalog with external-source refresh, static fallback, MySQL storage, and stable `/api/v1` read endpoints.
+Deliver an automated model-card catalog with external-source refresh, embedded static fallback, in-memory cache storage, and stable `/api/v1` read endpoints.
 
 ## Scope
 
 - source adapters and normalization layer
 - scheduled refresh with fallback
-- MySQL schema and migrations
+- in-memory cache wiring in runtime targets
 - model-card API handlers and tests
 - docs and operational metrics
 
@@ -26,15 +26,11 @@ Deliver an automated model-card catalog with external-source refresh, static fal
 
 ## Tasks
 
-### Phase A: Schema and storage
+### Phase A: Storage model
 
-- [x] Add MySQL migration for:
-  - `model_cards`
-  - `model_card_aliases`
-  - `model_card_refresh_runs`
 - [x] Add repository interfaces in `sigil/internal/modelcards`.
-- [x] Implement MySQL repository methods for list/filter/lookup and refresh-run writes.
-- [ ] Add dedicated repository tests for `ModelCardStore` (deferred; covered indirectly by service + HTTP tests).
+- [x] Implement in-memory repository for list/filter/lookup and refresh-run writes.
+- [x] Wire model-card service creation to memory-only store (independent of `SIGIL_STORAGE_BACKEND`).
 
 ### Phase B: Source adapters and refresh engine
 
@@ -42,11 +38,9 @@ Deliver an automated model-card catalog with external-source refresh, static fal
 - [x] Implement static fallback loader (`sigil/internal/modelcards/fallback/openrouter_models.v1.json`).
 - [x] Implement normalization + validation pipeline into canonical model-card contract.
 - [x] Implement refresh coordinator with:
-  - MySQL lease table (`model_card_refresh_leases`)
   - retry + timeout
   - primary->fallback failover
-  - stale marking with grace window
-- [x] Record refresh runs in `model_card_refresh_runs`.
+  - in-memory refresh-run tracking
 - [x] Add unit tests for success, fallback, and failure paths.
 
 ### Phase C: API surface
@@ -55,7 +49,7 @@ Deliver an automated model-card catalog with external-source refresh, static fal
 - [x] Add route `GET /api/v1/model-cards:lookup`.
 - [x] Add route `GET /api/v1/model-cards:sources`.
 - [x] Add protected route `POST /api/v1/model-cards:refresh`.
-- [x] Add input validation and pagination guards.
+- [x] Add input validation, pagination guards, and regex model search (`regex` query param).
 - [x] Add HTTP handler tests for filtering, sorting, pagination, and lookup errors.
 
 ### Phase D: Tooling and observability
@@ -72,7 +66,8 @@ Deliver an automated model-card catalog with external-source refresh, static fal
 ### Phase E: Runtime targets and Helm
 
 - [x] Add runtime target `catalog-sync` in config/runtime module wiring.
-- [x] Ensure `all` target includes model-card sync behavior with lease guard.
+- [x] Ensure `all` target shares a single in-process model-card service between API and refresh loop.
+- [x] Ensure `server` target runs its own model-card refresh loop (per-pod memory cache).
 - [x] Add Helm `catalogSync.enabled` optional deployment template.
 - [x] Keep Helm default mode backward-compatible (`sigil.target=all`).
 - [x] Add Helm render tests for split mode (`sigil.target=server` + `catalogSync.enabled=true` + singleton replica).

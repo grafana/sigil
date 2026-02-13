@@ -59,6 +59,26 @@ func TestRuntimePlaceholderTargetsRemainHealthyUntilCanceled(t *testing.T) {
 	}
 }
 
+func TestRuntimeModelCardServiceIsSingleton(t *testing.T) {
+	cfg := testRuntimeConfig(t, config.TargetAll)
+	runtime, err := NewRuntime(cfg, log.NewNopLogger())
+	if err != nil {
+		t.Fatalf("create runtime: %v", err)
+	}
+
+	first, err := runtime.getModelCardService(context.Background(), true)
+	if err != nil {
+		t.Fatalf("build first model-card service: %v", err)
+	}
+	second, err := runtime.getModelCardService(context.Background(), true)
+	if err != nil {
+		t.Fatalf("build second model-card service: %v", err)
+	}
+	if first != second {
+		t.Fatalf("expected shared model-card service instance")
+	}
+}
+
 func TestRuntimeCompactorTargetFailsWithoutMySQLBackend(t *testing.T) {
 	cfg := testRuntimeConfig(t, config.TargetCompactor)
 	_, done := runRuntime(t, cfg)

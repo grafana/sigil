@@ -1,6 +1,9 @@
 package modelcards
 
-import "time"
+import (
+	"regexp"
+	"time"
+)
 
 const (
 	SourceOpenRouter = "openrouter"
@@ -8,8 +11,8 @@ const (
 	BootstrapModeSnapshotFirst = "snapshot-first"
 	BootstrapModeDBOnly        = "db-only"
 
-	SourcePathDBLive           = "db_live"
-	SourcePathDBStale          = "db_stale"
+	SourcePathMemoryLive       = "memory_live"
+	SourcePathMemoryStale      = "memory_stale"
 	SourcePathSnapshotFallback = "snapshot_fallback"
 )
 
@@ -73,6 +76,7 @@ type ListParams struct {
 	MaxCompletionPriceUSDPerToken *float64
 	Sort                          string
 	Order                         string
+	Regex                         *regexp.Regexp
 	Limit                         int
 	Offset                        int
 }

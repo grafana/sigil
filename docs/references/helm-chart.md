@@ -92,6 +92,12 @@ Optionally run API and catalog refresh as separate deployments while keeping the
   - `catalogSync.replicaCount=1`
   - `catalogSync.target=catalog-sync`
 
+Note:
+
+- Model-card cache is in-memory per process.
+- `catalog-sync` does not replicate catalog state into API pods.
+- If you want API pods to self-refresh in-memory cache, keep `sigil.target=server` and rely on each pod refresh loop.
+
 ## Testing and Packaging
 
 `mise` tasks for chart workflows:

@@ -267,7 +267,7 @@ func (s *Service) readPath(ctx context.Context) (string, Freshness, error) {
 		if s.cfg.BootstrapMode == BootstrapModeSnapshotFirst && s.snapshot != nil {
 			return SourcePathSnapshotFallback, Freshness{Stale: true, SoftStale: true, HardStale: true}, nil
 		}
-		return SourcePathDBStale, Freshness{Stale: true, SoftStale: true, HardStale: true}, nil
+		return SourcePathMemoryStale, Freshness{Stale: true, SoftStale: true, HardStale: true}, nil
 	}
 
 	age := s.now().Sub(*latest)
@@ -282,9 +282,9 @@ func (s *Service) readPath(ctx context.Context) (string, Freshness, error) {
 		return SourcePathSnapshotFallback, freshness, nil
 	}
 	if freshness.Stale {
-		return SourcePathDBStale, freshness, nil
+		return SourcePathMemoryStale, freshness, nil
 	}
-	return SourcePathDBLive, freshness, nil
+	return SourcePathMemoryLive, freshness, nil
 }
 
 func EncodeCursor(offset int) string {

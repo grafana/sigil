@@ -106,6 +106,12 @@ helm upgrade --install sigil ./charts/sigil \
   --set catalogSync.target=catalog-sync
 ```
 
+Note:
+
+- Model-card cache is in-memory per process.
+- A dedicated `catalog-sync` pod does not propagate model-card data to separate API pods.
+- If you want each API pod to keep a fresh in-memory catalog, keep `sigil.target=server` and let each pod refresh independently.
+
 ### 3) Disable MinIO (external object storage)
 
 ```bash

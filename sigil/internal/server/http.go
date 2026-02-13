@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -232,6 +233,14 @@ func parseListParams(req *http.Request) (modelcards.ListParams, error) {
 		Order:    strings.TrimSpace(query.Get("order")),
 		Limit:    limit,
 		Offset:   offset,
+	}
+
+	if rawRegex := strings.TrimSpace(query.Get("regex")); rawRegex != "" {
+		compiled, err := regexp.Compile(rawRegex)
+		if err != nil {
+			return modelcards.ListParams{}, errors.New("invalid regex")
+		}
+		params.Regex = compiled
 	}
 
 	if rawFreeOnly := strings.TrimSpace(query.Get("free_only")); rawFreeOnly != "" {

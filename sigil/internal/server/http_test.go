@@ -165,6 +165,39 @@ func TestModelCardsListAndLookup(t *testing.T) {
 	}
 }
 
+func TestModelCardsListSupportsRegexFilter(t *testing.T) {
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	svc := newTestModelCardService(t)
+	RegisterRoutes(mux, query.NewService(), generationingest.NewService(generationingest.NewMemoryStore()), svc, protected)
+
+	regexReq := httptest.NewRequest(http.MethodGet, "/api/v1/model-cards?regex=^openrouter:test/model$", nil)
+	regexResp := httptest.NewRecorder()
+	mux.ServeHTTP(regexResp, regexReq)
+
+	if regexResp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", regexResp.Code)
+	}
+	if !strings.Contains(regexResp.Body.String(), `"model_key":"openrouter:test/model"`) {
+		t.Fatalf("expected regex-matched model key in response body=%s", regexResp.Body.String())
+	}
+}
+
+func TestModelCardsListRejectsInvalidRegex(t *testing.T) {
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	svc := newTestModelCardService(t)
+	RegisterRoutes(mux, query.NewService(), generationingest.NewService(generationingest.NewMemoryStore()), svc, protected)
+
+	regexReq := httptest.NewRequest(http.MethodGet, "/api/v1/model-cards?regex=[", nil)
+	regexResp := httptest.NewRecorder()
+	mux.ServeHTTP(regexResp, regexReq)
+
+	if regexResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", regexResp.Code)
+	}
+}
+
 func TestModelCardsRefreshEndpoint(t *testing.T) {
 	mux := http.NewServeMux()
 	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})

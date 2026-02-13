@@ -182,6 +182,16 @@ func (s *MemoryStore) ReleaseLease(_ context.Context, scopeKey string, ownerID s
 }
 
 func matchesFilter(card Card, params ListParams) bool {
+	if params.Regex != nil {
+		matched := params.Regex.MatchString(card.ModelKey) ||
+			params.Regex.MatchString(card.SourceModelID) ||
+			params.Regex.MatchString(card.Name) ||
+			params.Regex.MatchString(card.Provider) ||
+			params.Regex.MatchString(card.CanonicalSlug)
+		if !matched {
+			return false
+		}
+	}
 	if params.Source != "" && card.Source != params.Source {
 		return false
 	}
