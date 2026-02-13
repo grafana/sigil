@@ -6,7 +6,7 @@
 
 Sigil is an open-source AI observability project from Grafana.
 
-> Prompt-as-spell metaphor: you cast a sigil, then observe what happened.
+> It's actually useful AI o11y.
 
 It combines OpenTelemetry traces with normalized LLM generation data, so you can inspect conversations, completions, and traces in one place.
 
