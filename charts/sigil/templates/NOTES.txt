@@ -16,6 +16,12 @@ In-cluster MySQL is enabled at {{ include "sigil.mysql.fullname" . }}:{{ .Values
 {{- if .Values.tempo.enabled }}
 In-cluster Tempo is enabled at {{ include "sigil.tempo.fullname" . }}.
 {{- end }}
+{{- if .Values.alloy.enabled }}
+In-cluster Alloy is enabled at {{ include "sigil.alloy.fullname" . }}.
+{{- end }}
+{{- if .Values.prometheus.enabled }}
+In-cluster Prometheus is enabled at {{ include "sigil.prometheus.fullname" . }}.
+{{- end }}
 {{- if .Values.minio.enabled }}
 In-cluster MinIO is enabled at {{ include "sigil.minio.fullname" . }}.
 {{- end }}

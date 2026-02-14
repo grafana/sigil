@@ -132,7 +132,6 @@ const client = new SigilClient({
   trace: {
     protocol: "http",
     endpoint: "http://localhost:4318/v1/traces", // Alloy OTLP endpoint
-    auth: { mode: "none" },
   },
 });
 

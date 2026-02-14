@@ -1,0 +1,18 @@
+{{- if and .Values.prometheus.enabled .Values.prometheus.persistence.enabled (not .Values.prometheus.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "sigil.prometheus.fullname" . }}-data
+  labels:
+    {{- include "sigil.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+spec:
+  accessModes:
+    {{- toYaml .Values.prometheus.persistence.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.prometheus.persistence.size }}
+  {{- with .Values.prometheus.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+{{- end }}

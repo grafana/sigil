@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-13
+last_reviewed: 2026-02-14
 source_of_truth: true
 audience: contributors
 ---
@@ -15,8 +15,10 @@ This reference documents the Kubernetes Helm chart in `charts/sigil`.
 The chart deploys:
 
 - Sigil API service
+- optional bundled Alloy
 - optional bundled MySQL
 - optional bundled Tempo
+- optional bundled Prometheus
 - bundled MinIO (enabled by default)
 
 The chart does not deploy Grafana or the Sigil plugin.
@@ -32,12 +34,9 @@ The chart maps values into Sigil runtime env vars from `sigil/internal/config/co
 
 - `SIGIL_HTTP_ADDR`
 - `SIGIL_OTLP_GRPC_ADDR`
-- `SIGIL_OTLP_HTTP_ADDR`
 - `SIGIL_TARGET`
 - `SIGIL_AUTH_ENABLED`
 - `SIGIL_FAKE_TENANT_ID`
-- `SIGIL_TEMPO_OTLP_GRPC_ENDPOINT`
-- `SIGIL_TEMPO_OTLP_HTTP_ENDPOINT`
 - `SIGIL_STORAGE_BACKEND`
 - `SIGIL_MYSQL_DSN` (when backend is `mysql`)
 - `SIGIL_OBJECT_STORE_BACKEND`
@@ -74,18 +73,20 @@ The chart maps values into Sigil runtime env vars from `sigil/internal/config/co
 
 ### Bundled dependencies
 
-Default values run Sigil with in-cluster MySQL, Tempo, and MinIO.
+Default values run Sigil with in-cluster Alloy, Tempo, Prometheus, MySQL, and MinIO.
 
 ### External dependencies
 
 Disable bundled dependencies and set external endpoints/credentials:
 
 - `mysql.enabled=false`
+- `alloy.enabled=false`
 - `tempo.enabled=false`
+- `prometheus.enabled=false`
 - `minio.enabled=false`
 - `sigil.storage.mysql.dsn`
-- `sigil.tempo.grpcEndpoint`
-- `sigil.tempo.httpEndpoint`
+- `alloy.outputs.tempo.endpoint`
+- `alloy.outputs.prometheus.endpoint`
 - `sigil.objectStore.backend`
 - `sigil.objectStore.bucket`
 - provider-specific values under `sigil.objectStore.s3.*`, `sigil.objectStore.gcs.*`, or `sigil.objectStore.azure.*`
@@ -127,6 +128,7 @@ helm test <release> -n <namespace>
 For production use:
 
 - use managed MySQL and Tempo where possible
+- use managed collector + Tempo + Prometheus where possible
 - use external object storage for compacted payloads
 - override dependency defaults and credentials via values/secrets
 - pin `image.tag` to immutable build versions

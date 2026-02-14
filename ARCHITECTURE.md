@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-13
+last_reviewed: 2026-02-14
 source_of_truth: true
 audience: both
 ---
@@ -28,17 +28,19 @@ Phase 2 defines production contracts for SDK parity, query envelopes, tenant bou
 
 Tenant-boundary track is completed. Active implementation sequencing is:
 
-1. Java SDK parity completion
-2. query proxy
-3. hybrid storage/query behavior
-4. cross-track consistency and tech debt capture
+1. query proxy
+2. hybrid storage/query behavior
+3. compaction scaling and cross-track consistency / tech debt capture
 
 SDK parity completion is tracked in:
 
 - `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-python.md`
 - `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-typescript-javascript.md`
 - `docs/exec-plans/completed/2026-02-13-phase-2-sdk-parity-dotnet-csharp.md`
-- `docs/exec-plans/active/2026-02-13-sdk-parity-java.md`
+- `docs/exec-plans/completed/2026-02-13-sdk-parity-java.md`
+- `docs/exec-plans/completed/2026-02-13-openai-chat-responses-strict-parity.md`
+- `docs/exec-plans/completed/2026-02-13-all-providers-strict-helper-mapper-parity.md`
+- `docs/exec-plans/completed/2026-02-13-sdk-metrics-and-telemetry-pipeline.md`
 
 Tenant boundary completion is tracked in:
 

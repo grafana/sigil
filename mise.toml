@@ -70,7 +70,7 @@ dir = "apps/plugin"
 run = "pnpm run storybook"
 
 [tasks.up]
-description = "Start local stack (grafana, plugin, sigil, tempo, mysql, minio)"
+description = "Start local stack (grafana, plugin, sigil, alloy, tempo, prometheus, mysql, minio)"
 run = "docker compose --profile core up --build"
 
 [tasks."up:object"]
@@ -223,11 +223,11 @@ helm template sigil ./charts/sigil >/dev/null
 
 helm template sigil ./charts/sigil \
   --set mysql.enabled=false \
+  --set alloy.enabled=false \
   --set tempo.enabled=false \
+  --set prometheus.enabled=false \
   --set minio.enabled=false \
   --set sigil.storage.mysql.dsn='sigil:sigil@tcp(mysql.example:3306)/sigil?parseTime=true' \
-  --set sigil.tempo.grpcEndpoint='tempo.example:4317' \
-  --set sigil.tempo.httpEndpoint='tempo.example:4318' \
   --set sigil.objectStore.backend='s3' \
   --set sigil.objectStore.bucket='sigil' \
   --set sigil.objectStore.s3.endpoint='https://object-store.example' >/dev/null

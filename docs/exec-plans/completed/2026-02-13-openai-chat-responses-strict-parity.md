@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
-status: active
-last_reviewed: 2026-02-13
+status: completed
+last_reviewed: 2026-02-14
 source_of_truth: true
 audience: both
 ---
@@ -22,14 +22,14 @@ Chat Completions and Responses, with one atomic breaking change.
 
 ## Tasks
 
-- [ ] Update docs and architecture references for strict OpenAI parity.
-- [ ] JS: strict namespaces for chat/responses + tests/docs.
-- [ ] Python: strict chat/responses modules + tests/docs.
-- [ ] Go: strict chat/responses wrappers + mappers + tests/docs.
-- [ ] Java: strict chat/responses wrappers + mappers + tests/docs.
-- [ ] .NET: strict chat/responses recorder + mapper + tests/docs.
-- [ ] Devex emitters: emit both openai chat and openai responses shapes.
-- [ ] Run SDK parity validation suites.
+- [x] Update docs and architecture references for strict OpenAI parity.
+- [x] JS: strict namespaces for chat/responses + tests/docs.
+- [x] Python: strict chat/responses modules + tests/docs.
+- [x] Go: strict chat/responses wrappers + mappers + tests/docs.
+- [x] Java: strict chat/responses wrappers + mappers + tests/docs.
+- [x] .NET: strict chat/responses recorder + mapper + tests/docs.
+- [x] Devex emitters: emit both openai chat and openai responses shapes.
+- [x] Run SDK parity validation suites.
 
 ## Validation Commands
 
@@ -39,4 +39,3 @@ Chat Completions and Responses, with one atomic breaking change.
 - `mise run test:java:sdk-openai`
 - `mise run test:cs:sdk-openai`
 - `mise run test:sdk:all`
-

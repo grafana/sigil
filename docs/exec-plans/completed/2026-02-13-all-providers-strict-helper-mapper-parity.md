@@ -1,12 +1,16 @@
 ---
 owner: sigil-core
-status: active
-last_reviewed: 2026-02-13
+status: completed
+last_reviewed: 2026-02-14
 source_of_truth: true
 audience: both
 ---
 
 # Execution Plan: All Providers Strict Helper + Mapper Parity (All SDKs)
+
+## Implementation Status (2026-02-14)
+
+Completed. Strict wrapper + strict mapper parity landed for OpenAI, Anthropic, and Gemini across JS, Python, Go, Java, and .NET. Legacy bridge/request-wrapper DTO surfaces were removed from public helper APIs. A final provider-field verification pass aligned Anthropic/Gemini metadata extensions (`server_tool_use`, Gemini thinking/tool-use-prompt fields) across all SDKs.
 
 ## Goal
 

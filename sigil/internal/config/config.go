@@ -31,19 +31,16 @@ const (
 )
 
 type Config struct {
-	HTTPAddr              string
-	OTLPGRPCAddr          string
-	OTLPHTTPAddr          string
-	Target                string
-	AuthEnabled           bool
-	FakeTenantID          string
-	TempoOTLPGRPCEndpoint string
-	TempoOTLPHTTPEndpoint string
-	StorageBackend        string
-	MySQLDSN              string
-	ObjectStore           ObjectStoreConfig
-	CompactorConfig       CompactorConfig
-	ModelCardsConfig      ModelCardsConfig
+	HTTPAddr         string
+	OTLPGRPCAddr     string
+	Target           string
+	AuthEnabled      bool
+	FakeTenantID     string
+	StorageBackend   string
+	MySQLDSN         string
+	ObjectStore      ObjectStoreConfig
+	CompactorConfig  CompactorConfig
+	ModelCardsConfig ModelCardsConfig
 }
 
 type ObjectStoreConfig struct {
@@ -111,16 +108,13 @@ func FromEnv() Config {
 	}
 
 	return Config{
-		HTTPAddr:              getEnv("SIGIL_HTTP_ADDR", ":8080"),
-		OTLPGRPCAddr:          getEnv("SIGIL_OTLP_GRPC_ADDR", ":4317"),
-		OTLPHTTPAddr:          getEnv("SIGIL_OTLP_HTTP_ADDR", ":4318"),
-		Target:                strings.ToLower(strings.TrimSpace(getEnv("SIGIL_TARGET", TargetAll))),
-		AuthEnabled:           getEnvBool("SIGIL_AUTH_ENABLED", true),
-		FakeTenantID:          getEnv("SIGIL_FAKE_TENANT_ID", "fake"),
-		TempoOTLPGRPCEndpoint: getEnv("SIGIL_TEMPO_OTLP_GRPC_ENDPOINT", "tempo:4317"),
-		TempoOTLPHTTPEndpoint: getEnv("SIGIL_TEMPO_OTLP_HTTP_ENDPOINT", "tempo:4318"),
-		StorageBackend:        getEnv("SIGIL_STORAGE_BACKEND", "mysql"),
-		MySQLDSN:              getEnv("SIGIL_MYSQL_DSN", "sigil:sigil@tcp(mysql:3306)/sigil?parseTime=true"),
+		HTTPAddr:       getEnv("SIGIL_HTTP_ADDR", ":8080"),
+		OTLPGRPCAddr:   getEnv("SIGIL_OTLP_GRPC_ADDR", ":4317"),
+		Target:         strings.ToLower(strings.TrimSpace(getEnv("SIGIL_TARGET", TargetAll))),
+		AuthEnabled:    getEnvBool("SIGIL_AUTH_ENABLED", true),
+		FakeTenantID:   getEnv("SIGIL_FAKE_TENANT_ID", "fake"),
+		StorageBackend: getEnv("SIGIL_STORAGE_BACKEND", "mysql"),
+		MySQLDSN:       getEnv("SIGIL_MYSQL_DSN", "sigil:sigil@tcp(mysql:3306)/sigil?parseTime=true"),
 		ObjectStore: ObjectStoreConfig{
 			Backend: strings.ToLower(strings.TrimSpace(getEnv("SIGIL_OBJECT_STORE_BACKEND", "s3"))),
 			Bucket:  getEnv("SIGIL_OBJECT_STORE_BUCKET", "sigil"),

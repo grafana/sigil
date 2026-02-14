@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
-status: active
-last_reviewed: 2026-02-13
+status: completed
+last_reviewed: 2026-02-14
 source_of_truth: true
 audience: both
 ---
@@ -23,7 +23,7 @@ Deliver Java SDK parity with Go/Python/TypeScript baselines for generation inges
 - [x] Add JMH benchmarks and benchmark README.
 - [x] Wire Java tasks into `mise.toml` and include Java in `test:sdk:all`.
 - [x] Update docs indexes, architecture references, and support list.
-- [ ] Add optional direct typed adapter facades for official SDK event object models.
+- [x] Add optional direct typed adapter facades for official SDK event object models.
 
 ## Validation Commands
 

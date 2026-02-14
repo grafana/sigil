@@ -1,0 +1,12 @@
+{{- if .Values.prometheus.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sigil.prometheus.fullname" . }}
+  labels:
+    {{- include "sigil.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+data:
+  prometheus.yaml: |
+{{ .Values.prometheus.config | nindent 4 }}
+{{- end }}

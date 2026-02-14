@@ -49,26 +49,17 @@ spec:
             - name: otlp-grpc
               containerPort: {{ .Values.service.ports.otlpGrpc }}
               protocol: TCP
-            - name: otlp-http
-              containerPort: {{ .Values.service.ports.otlpHttp }}
-              protocol: TCP
           env:
             - name: SIGIL_HTTP_ADDR
               value: ":{{ .Values.service.ports.http }}"
             - name: SIGIL_OTLP_GRPC_ADDR
               value: ":{{ .Values.service.ports.otlpGrpc }}"
-            - name: SIGIL_OTLP_HTTP_ADDR
-              value: ":{{ .Values.service.ports.otlpHttp }}"
             - name: SIGIL_TARGET
               value: {{ .Values.sigil.target | quote }}
             - name: SIGIL_AUTH_ENABLED
               value: {{ ternary "true" "false" .Values.sigil.auth.enabled | quote }}
             - name: SIGIL_FAKE_TENANT_ID
               value: {{ .Values.sigil.auth.fakeTenantID | quote }}
-            - name: SIGIL_TEMPO_OTLP_GRPC_ENDPOINT
-              value: {{ include "sigil.tempo.grpcEndpoint" . | quote }}
-            - name: SIGIL_TEMPO_OTLP_HTTP_ENDPOINT
-              value: {{ include "sigil.tempo.httpEndpoint" . | quote }}
             - name: SIGIL_STORAGE_BACKEND
               value: {{ .Values.sigil.storage.backend | quote }}
             {{- if eq (lower .Values.sigil.storage.backend) "mysql" }}

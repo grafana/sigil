@@ -73,5 +73,5 @@ All commands passed.
 ## Out of Scope (This Pass)
 
 - OpenAI Responses API support (moved to strict parity follow-up:
-  `docs/exec-plans/active/2026-02-13-openai-chat-responses-strict-parity.md`).
+  `docs/exec-plans/completed/2026-02-13-openai-chat-responses-strict-parity.md`).
 - CI rollout changes beyond local `mise` parity gating.

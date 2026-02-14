@@ -1,0 +1,57 @@
+{{- if .Values.alloy.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sigil.alloy.fullname" . }}
+  labels:
+    {{- include "sigil.labels" . | nindent 4 }}
+    app.kubernetes.io/component: alloy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "sigil.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: alloy
+  template:
+    metadata:
+      labels:
+        {{- include "sigil.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: alloy
+    spec:
+      serviceAccountName: {{ include "sigil.serviceAccountName" . }}
+      containers:
+        - name: alloy
+          image: "{{ .Values.alloy.image.repository }}:{{ .Values.alloy.image.tag }}"
+          imagePullPolicy: {{ .Values.alloy.image.pullPolicy }}
+          args:
+            - run
+            - /etc/alloy/config.river
+            - --server.http.listen-addr=0.0.0.0:{{ .Values.alloy.service.ports.http }}
+            - --storage.path=/var/lib/alloy/data
+          ports:
+            - name: otlp-grpc
+              containerPort: {{ .Values.alloy.service.ports.otlpGrpc }}
+              protocol: TCP
+            - name: otlp-http
+              containerPort: {{ .Values.alloy.service.ports.otlpHttp }}
+              protocol: TCP
+            - name: http
+              containerPort: {{ .Values.alloy.service.ports.http }}
+              protocol: TCP
+          {{- with .Values.alloy.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: alloy-config
+              mountPath: /etc/alloy/config.river
+              subPath: config.river
+            - name: alloy-data
+              mountPath: /var/lib/alloy/data
+      volumes:
+        - name: alloy-config
+          configMap:
+            name: {{ include "sigil.alloy.fullname" . }}
+        - name: alloy-data
+          emptyDir: {}
+{{- end }}

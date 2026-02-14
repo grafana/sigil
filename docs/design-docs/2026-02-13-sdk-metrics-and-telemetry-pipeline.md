@@ -1,17 +1,33 @@
 ---
 owner: sigil-core
-status: active
-last_reviewed: 2026-02-13
+status: completed
+last_reviewed: 2026-02-14
 source_of_truth: true
 audience: both
 ---
 
 # SDK Metrics and Telemetry Pipeline
 
-## Implementation status (2026-02-13)
+## Implementation status (2026-02-14)
 
-- This document defines a target design; no implementation has merged to `main` yet.
-- Current `main` behavior: Sigil proxies OTLP traces to Tempo; no SDK-emitted metrics; no Alloy bundled.
+- Completed and reflected in code/docs:
+  - all SDK runtimes emit the four OTel histograms (duration, token usage, TTFT, tool calls),
+  - Sigil OTLP trace ingest/Tempo forwarding path is removed,
+  - Alloy + Prometheus are bundled for local and charted deployments.
+- Delivery record: `docs/exec-plans/completed/2026-02-13-sdk-metrics-and-telemetry-pipeline.md`.
+
+## Provider usage verification snapshot (2026-02-14)
+
+The following provider usage fields were re-verified against official docs/SDK sources and mapped accordingly:
+
+- OpenAI: reasoning and cached token details remain available from usage detail objects.
+  - [OpenAI Responses API usage docs](https://platform.openai.com/docs/api-reference/responses/object)
+- Anthropic: `server_tool_use` usage counters are available (including `web_search_requests`, and SDK-model support for `web_fetch_requests`).
+  - [Anthropic streaming messages docs](https://docs.anthropic.com/en/docs/build-with-claude/streaming)
+  - [Anthropic Python API docs (`server_tool_use`)](https://raw.githubusercontent.com/anthropics/anthropic-sdk-python/main/api.md)
+- Gemini: `thoughtsTokenCount` and `toolUsePromptTokenCount` are available in usage metadata; thinking controls include budget/level in SDK config surfaces.
+  - [Gemini API token-count fields](https://ai.google.dev/gemini-api/docs/tokens)
+  - [Google GenAI JS reference (`ThinkingConfig`)](https://googleapis.github.io/js-genai/release_docs/classes/types.ThinkingConfig.html)
 
 ## Problem statement
 

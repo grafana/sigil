@@ -27,7 +27,6 @@ service:
   ports:
     http: 8080
     otlpGrpc: 4317
-    otlpHttp: 4318
 
 ingress:
   enabled: false
@@ -75,10 +74,6 @@ sigil:
       # Override DSN when using an external MySQL instance.
       # If left empty and mysql.enabled=true, the chart generates DSN from mysql.* values.
       dsn: ""
-  tempo:
-    # Override endpoints when using external Tempo.
-    grpcEndpoint: ""
-    httpEndpoint: ""
   objectStore:
     backend: s3
     bucket: sigil
@@ -217,6 +212,141 @@ tempo:
 
     overrides:
       defaults: {}
+
+alloy:
+  enabled: true
+  image:
+    repository: grafana/alloy
+    tag: "v1.8.3"
+    pullPolicy: IfNotPresent
+  service:
+    ports:
+      otlpGrpc: 4317
+      otlpHttp: 4318
+      http: 12345
+  resources: {}
+  auth:
+    enabled: false
+    tenantID: ""
+    bearerToken: ""
+  outputs:
+    tempo:
+      endpoint: ""
+      insecure: true
+    prometheus:
+      endpoint: ""
+      insecure: true
+  config: |
+    logging {
+      level = "info"
+    }
+
+    discovery.kubernetes "pods" {
+      role = "pod"
+    }
+
+    discovery.relabel "pods" {
+      targets = discovery.kubernetes.pods.targets
+
+      rule {
+        source_labels = ["__meta_kubernetes_namespace"]
+        target_label  = "k8s_namespace_name"
+      }
+
+      rule {
+        source_labels = ["__meta_kubernetes_pod_name"]
+        target_label  = "k8s_pod_name"
+      }
+
+      rule {
+        source_labels = ["__meta_kubernetes_pod_container_name"]
+        target_label  = "k8s_container_name"
+      }
+    }
+
+    otelcol.receiver.otlp "default" {
+      grpc {
+        endpoint = "0.0.0.0:4317"
+      }
+
+      http {
+        endpoint = "0.0.0.0:4318"
+      }
+
+      output {
+        traces  = [otelcol.processor.batch.default.input]
+        metrics = [otelcol.processor.batch.default.input]
+      }
+    }
+
+    otelcol.processor.batch "default" {
+      output {
+        traces  = [otelcol.exporter.otlp.tempo.input]
+        metrics = [otelcol.exporter.otlphttp.prometheus.input]
+      }
+    }
+
+    otelcol.exporter.otlp "tempo" {
+      client {
+        endpoint = "{{ include "sigil.alloy.tempoEndpoint" . }}"
+        tls {
+          insecure = {{ ternary "true" "false" .Values.alloy.outputs.tempo.insecure }}
+        }
+        {{- if .Values.alloy.auth.enabled }}
+        headers = {
+          "X-Scope-OrgID" = "{{ .Values.alloy.auth.tenantID }}"
+          {{- if .Values.alloy.auth.bearerToken }}
+          "Authorization" = "Bearer {{ .Values.alloy.auth.bearerToken }}"
+          {{- end }}
+        }
+        {{- end }}
+      }
+    }
+
+    otelcol.exporter.otlphttp "prometheus" {
+      client {
+        endpoint = "{{ include "sigil.alloy.prometheusEndpoint" . }}"
+        tls {
+          insecure = {{ ternary "true" "false" .Values.alloy.outputs.prometheus.insecure }}
+        }
+        {{- if .Values.alloy.auth.enabled }}
+        headers = {
+          "X-Scope-OrgID" = "{{ .Values.alloy.auth.tenantID }}"
+          {{- if .Values.alloy.auth.bearerToken }}
+          "Authorization" = "Bearer {{ .Values.alloy.auth.bearerToken }}"
+          {{- end }}
+        }
+        {{- end }}
+      }
+    }
+
+prometheus:
+  enabled: true
+  image:
+    repository: prom/prometheus
+    tag: "v2.55.1"
+    pullPolicy: IfNotPresent
+  service:
+    port: 9090
+  persistence:
+    enabled: true
+    existingClaim: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 8Gi
+    storageClass: ""
+  resources: {}
+  retention: 24h
+  config: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    scrape_configs:
+      - job_name: prometheus
+        static_configs:
+          - targets:
+              - localhost:9090
 
 minio:
   # Enabled by default so Helm installs work out of the box with object storage.

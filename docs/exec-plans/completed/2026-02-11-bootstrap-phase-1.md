@@ -1,12 +1,20 @@
 ---
 owner: sigil-core
-status: active
-last_reviewed: 2026-02-12
+status: superseded
+last_reviewed: 2026-02-14
 source_of_truth: true
 audience: agents
 ---
 
 # Bootstrap Phase 1
+
+## Status
+
+Superseded by the Phase 2 delivery coordinator and track-specific plans:
+
+- `docs/exec-plans/active/2026-02-12-phase-2-delivery.md`
+- `docs/exec-plans/active/2026-02-12-phase-2-query-proxy.md`
+- `docs/exec-plans/active/2026-02-12-phase-2-hybrid-storage.md`
 
 ## Goal
 
