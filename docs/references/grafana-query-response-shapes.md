@@ -100,11 +100,19 @@ Current bootstrap endpoints on `main`:
 - plugin frontend endpoints:
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/ratings`
+  - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/ratings`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`
+  - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`
   - `GET /api/plugins/grafana-sigil-app/resources/query/completions`
   - `GET /api/plugins/grafana-sigil-app/resources/query/traces/{trace_id}`
 - plugin backend forwards to Sigil API:
   - `GET /api/v1/conversations`
   - `GET /api/v1/conversations/{conversation_id}`
+  - `GET /api/v1/conversations/{conversation_id}/ratings`
+  - `POST /api/v1/conversations/{conversation_id}/ratings`
+  - `GET /api/v1/conversations/{conversation_id}/annotations`
+  - `POST /api/v1/conversations/{conversation_id}/annotations`
   - `GET /api/v1/completions`
   - `GET /api/v1/traces/{trace_id}`
 

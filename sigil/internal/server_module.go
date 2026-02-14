@@ -13,11 +13,13 @@ import (
 	"github.com/go-kit/log/level"
 	"github.com/grafana/dskit/services"
 	"github.com/grafana/sigil/sigil/internal/config"
+	"github.com/grafana/sigil/sigil/internal/feedback"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
 	"github.com/grafana/sigil/sigil/internal/modelcards"
 	"github.com/grafana/sigil/sigil/internal/query"
 	"github.com/grafana/sigil/sigil/internal/server"
+	"github.com/grafana/sigil/sigil/internal/storage"
 	"github.com/grafana/sigil/sigil/internal/storage/mysql"
 	"github.com/grafana/sigil/sigil/internal/tenantauth"
 	"google.golang.org/grpc"
@@ -56,7 +58,20 @@ func (m *serverModule) start(ctx context.Context) error {
 
 	generationSvc := generationingest.NewService(generationStore)
 	generationGRPC := generationingest.NewGRPCServer(generationSvc)
-	querySvc := query.NewService()
+	var feedbackStore feedback.Store
+	var feedbackSvc *feedback.Service
+	if m.cfg.ConversationRatingsEnabled || m.cfg.ConversationAnnotationsEnabled {
+		feedbackStore, err = m.buildFeedbackStore(generationStore)
+		if err != nil {
+			return err
+		}
+		feedbackSvc = feedback.NewService(feedbackStore)
+	}
+	var conversationStore storage.ConversationStore
+	if store, ok := generationStore.(storage.ConversationStore); ok {
+		conversationStore = store
+	}
+	querySvc := query.NewServiceWithStores(conversationStore, feedbackStore)
 	if m.modelCardSvc == nil {
 		return errors.New("model-card service is required")
 	}
@@ -67,7 +82,16 @@ func (m *serverModule) start(ctx context.Context) error {
 	protectedHTTP := tenantauth.HTTPMiddleware(tenantAuthCfg)
 
 	apiMux := http.NewServeMux()
-	server.RegisterRoutes(apiMux, querySvc, generationSvc, m.modelCardSvc, protectedHTTP)
+	server.RegisterRoutes(
+		apiMux,
+		querySvc,
+		generationSvc,
+		feedbackSvc,
+		m.cfg.ConversationRatingsEnabled,
+		m.cfg.ConversationAnnotationsEnabled,
+		m.modelCardSvc,
+		protectedHTTP,
+	)
 	m.apiServer = &http.Server{
 		Addr:    m.cfg.HTTPAddr,
 		Handler: apiMux,
@@ -165,4 +189,14 @@ func (m *serverModule) buildGenerationStore(ctx context.Context) (generationinge
 	default:
 		return nil, fmt.Errorf("unsupported storage backend %q", m.cfg.StorageBackend)
 	}
+}
+
+func (m *serverModule) buildFeedbackStore(generationStore generationingest.Store) (feedback.Store, error) {
+	if store, ok := generationStore.(feedback.Store); ok {
+		return store, nil
+	}
+	if strings.EqualFold(strings.TrimSpace(m.cfg.StorageBackend), "memory") {
+		return feedback.NewMemoryStore(), nil
+	}
+	return nil, fmt.Errorf("storage backend %q does not support feedback storage", m.cfg.StorageBackend)
 }

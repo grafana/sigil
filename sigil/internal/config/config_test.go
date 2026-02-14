@@ -13,6 +13,30 @@ func TestFromEnvDefaultsTargetToAll(t *testing.T) {
 	}
 }
 
+func TestFromEnvConversationFeedbackFlags(t *testing.T) {
+	t.Setenv("SIGIL_CONVERSATION_RATINGS_ENABLED", "")
+	t.Setenv("SIGIL_CONVERSATION_ANNOTATIONS_ENABLED", "")
+
+	cfg := FromEnv()
+	if !cfg.ConversationRatingsEnabled {
+		t.Fatalf("expected conversation ratings to be enabled by default")
+	}
+	if !cfg.ConversationAnnotationsEnabled {
+		t.Fatalf("expected conversation annotations to be enabled by default")
+	}
+
+	t.Setenv("SIGIL_CONVERSATION_RATINGS_ENABLED", "false")
+	t.Setenv("SIGIL_CONVERSATION_ANNOTATIONS_ENABLED", "off")
+
+	cfg = FromEnv()
+	if cfg.ConversationRatingsEnabled {
+		t.Fatalf("expected conversation ratings override to be false")
+	}
+	if cfg.ConversationAnnotationsEnabled {
+		t.Fatalf("expected conversation annotations override to be false")
+	}
+}
+
 func TestFromEnvDefaultsObjectStoreAuth(t *testing.T) {
 	t.Setenv("SIGIL_OBJECT_STORE_S3_AWS_SDK_AUTH", "")
 	t.Setenv("SIGIL_OBJECT_STORE_ACCESS_KEY", "")

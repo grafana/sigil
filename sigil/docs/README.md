@@ -9,6 +9,10 @@ Active contracts exposed by the service:
 - Query API:
   - `GET /api/v1/conversations`
   - `GET /api/v1/conversations/{conversation_id}`
+  - `POST /api/v1/conversations/{conversation_id}/ratings`
+  - `GET /api/v1/conversations/{conversation_id}/ratings`
+  - `POST /api/v1/conversations/{conversation_id}/annotations`
+  - `GET /api/v1/conversations/{conversation_id}/annotations`
   - `GET /api/v1/completions`
   - `GET /api/v1/traces/{trace_id}`
   - `GET /api/v1/model-cards`

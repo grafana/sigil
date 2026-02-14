@@ -328,11 +328,19 @@ Current bootstrap endpoints on `main`:
 - Sigil API query endpoints:
   - `GET /api/v1/conversations`
   - `GET /api/v1/conversations/{conversation_id}`
+  - `GET /api/v1/conversations/{conversation_id}/ratings`
+  - `POST /api/v1/conversations/{conversation_id}/ratings`
+  - `GET /api/v1/conversations/{conversation_id}/annotations`
+  - `POST /api/v1/conversations/{conversation_id}/annotations`
   - `GET /api/v1/completions`
   - `GET /api/v1/traces/{trace_id}`
 - Plugin resource proxy endpoints:
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/ratings`
+  - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/ratings`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`
+  - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`
   - `GET /api/plugins/grafana-sigil-app/resources/query/completions`
   - `GET /api/plugins/grafana-sigil-app/resources/query/traces/{trace_id}`
 
@@ -391,6 +399,7 @@ See `docs/references/grafana-query-response-shapes.md`.
   - modes: `none`, `tenant`, `bearer`
   - `tenant` mode injects `X-Scope-OrgID`
   - `bearer` mode injects `Authorization: Bearer <token>`
+- SDK conversation feedback helpers (ratings/annotations) use a dedicated Sigil API base endpoint config (default `http://localhost:8080`) and reuse generation auth headers.
 - Auth config validation is strict and fail-fast during config resolution/client init.
 - Explicit transport headers have precedence over injected auth headers for `Authorization` and `X-Scope-OrgID`.
 
