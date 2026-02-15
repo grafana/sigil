@@ -2,6 +2,7 @@ package anthropic
 
 import (
 	"errors"
+	"time"
 
 	asdk "github.com/anthropics/anthropic-sdk-go"
 	"github.com/grafana/sigil/sdks/go/sigil"
@@ -11,6 +12,7 @@ import (
 type StreamSummary struct {
 	Events       []asdk.BetaRawMessageStreamEventUnion
 	FinalMessage *asdk.BetaMessage
+	FirstChunkAt time.Time
 }
 
 // FromStream maps Anthropic streaming output to sigil.Generation.
@@ -28,6 +30,7 @@ func FromStream(req asdk.BetaMessageNewParams, summary StreamSummary, opts ...Op
 	}
 
 	options := applyOptions(opts)
+	maxTokens, temperature, topP, toolChoice, thinkingEnabled, thinkingBudget := mapRequestControls(req)
 
 	assistantParts := make([]sigil.Part, 0, len(summary.Events))
 	toolParts := make([]sigil.Part, 0, 1)
@@ -35,6 +38,7 @@ func FromStream(req asdk.BetaMessageNewParams, summary StreamSummary, opts ...Op
 	stopReason := ""
 	modelName := string(req.Model)
 	responseID := ""
+	serverToolUsage := asdk.BetaServerToolUsage{}
 
 	for _, event := range summary.Events {
 		switch event.Type {
@@ -64,11 +68,14 @@ func FromStream(req asdk.BetaMessageNewParams, summary StreamSummary, opts ...Op
 			assistantParts = append(assistantParts, part)
 		case "message_delta":
 			usage = mapDeltaUsage(event.Usage)
+			serverToolUsage = event.Usage.ServerToolUse
 			if event.Delta.StopReason != "" {
 				stopReason = string(event.Delta.StopReason)
 			}
 		}
 	}
+	metadata := mergeThinkingBudgetMetadata(options.metadata, thinkingBudget)
+	metadata = mergeServerToolUsageMetadata(metadata, serverToolUsage)
 
 	input := mapRequestMessages(req.Messages)
 	output := make([]sigil.Message, 0, 2)
@@ -109,21 +116,26 @@ func FromStream(req asdk.BetaMessageNewParams, summary StreamSummary, opts ...Op
 	}
 
 	generation := sigil.Generation{
-		ConversationID: options.conversationID,
-		AgentName:      options.agentName,
-		AgentVersion:   options.agentVersion,
-		Model:          sigil.ModelRef{Provider: options.providerName, Name: string(req.Model)},
-		ResponseID:     responseID,
-		ResponseModel:  modelName,
-		SystemPrompt:   mapSystemPrompt(req.System),
-		Input:          input,
-		Output:         output,
-		Tools:          mapTools(req.Tools),
-		Usage:          usage,
-		StopReason:     stopReason,
-		Tags:           cloneStringMap(options.tags),
-		Metadata:       cloneAnyMap(options.metadata),
-		Artifacts:      artifacts,
+		ConversationID:  options.conversationID,
+		AgentName:       options.agentName,
+		AgentVersion:    options.agentVersion,
+		Model:           sigil.ModelRef{Provider: options.providerName, Name: string(req.Model)},
+		ResponseID:      responseID,
+		ResponseModel:   modelName,
+		SystemPrompt:    mapSystemPrompt(req.System),
+		Input:           input,
+		Output:          output,
+		Tools:           mapTools(req.Tools),
+		MaxTokens:       maxTokens,
+		Temperature:     temperature,
+		TopP:            topP,
+		ToolChoice:      toolChoice,
+		ThinkingEnabled: thinkingEnabled,
+		Usage:           usage,
+		StopReason:      stopReason,
+		Tags:            cloneStringMap(options.tags),
+		Metadata:        metadata,
+		Artifacts:       artifacts,
 	}
 
 	if err := generation.Validate(); err != nil {

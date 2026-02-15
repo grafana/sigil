@@ -118,6 +118,52 @@ func (s *WALStore) ListConversations(ctx context.Context, tenantID string) ([]st
 	return out, nil
 }
 
+func (s *WALStore) ListConversationsWithFeedbackFilters(ctx context.Context, tenantID string, hasBadRating, hasAnnotations *bool) ([]storage.Conversation, error) {
+	start := time.Now()
+	if strings.TrimSpace(tenantID) == "" {
+		observeWALMetrics("list_conversations", "error", start, 0)
+		return nil, errors.New("tenant id is required")
+	}
+
+	query := s.db.WithContext(ctx).
+		Table("conversations AS c").
+		Select("c.*").
+		Where("c.tenant_id = ?", tenantID)
+
+	if hasBadRating != nil {
+		query = query.Joins("LEFT JOIN conversation_rating_summaries AS rs ON rs.tenant_id = c.tenant_id AND rs.conversation_id = c.conversation_id")
+		if *hasBadRating {
+			query = query.Where("COALESCE(rs.has_bad_rating, FALSE) = TRUE")
+		} else {
+			query = query.Where("COALESCE(rs.has_bad_rating, FALSE) = FALSE")
+		}
+	}
+
+	if hasAnnotations != nil {
+		query = query.Joins("LEFT JOIN conversation_annotation_summaries AS ann ON ann.tenant_id = c.tenant_id AND ann.conversation_id = c.conversation_id")
+		if *hasAnnotations {
+			query = query.Where("COALESCE(ann.annotation_count, 0) > 0")
+		} else {
+			query = query.Where("COALESCE(ann.annotation_count, 0) = 0")
+		}
+	}
+
+	var rows []ConversationModel
+	if err := query.
+		Order("c.updated_at DESC, c.id DESC").
+		Find(&rows).Error; err != nil {
+		observeWALMetrics("list_conversations", "error", start, 0)
+		return nil, fmt.Errorf("list conversations with feedback filters: %w", err)
+	}
+
+	out := make([]storage.Conversation, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, toConversation(row))
+	}
+	observeWALMetrics("list_conversations", "success", start, len(out))
+	return out, nil
+}
+
 func (s *WALStore) GetConversation(ctx context.Context, tenantID, conversationID string) (*storage.Conversation, error) {
 	start := time.Now()
 	if strings.TrimSpace(tenantID) == "" {

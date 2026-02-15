@@ -5,8 +5,8 @@ The .NET SDK follows the same generation-first contract and provider parity targ
 
 ## Packages
 
-- `Grafana.Sigil`: core runtime (`SigilClient`, generation/tool recorders, generation export, OTLP trace export)
-- `Grafana.Sigil.OpenAI`: OpenAI Chat Completions wrappers and mappers
+- `Grafana.Sigil`: core runtime (`SigilClient`, generation/tool recorders, generation export)
+- `Grafana.Sigil.OpenAI`: OpenAI Responses + Chat Completions wrappers and mappers
 - `Grafana.Sigil.Anthropic`: Anthropic Messages wrappers and mappers
 - `Grafana.Sigil.Gemini`: Gemini GenerateContent wrappers and mappers
 
@@ -30,21 +30,15 @@ dotnet add package Grafana.Sigil.OpenAI
 # or: Grafana.Sigil.Anthropic / Grafana.Sigil.Gemini
 ```
 
-## Quickstart (OpenAI wrapper)
+## Quickstart (OpenAI Responses wrapper)
 
 ```csharp
 using Grafana.Sigil;
 using Grafana.Sigil.OpenAI;
-using OpenAI.Chat;
+using OpenAI.Responses;
 
 var sigil = new SigilClient(new SigilClientConfig
 {
-    Trace = new TraceConfig
-    {
-        Protocol = TraceProtocol.Http,
-        Endpoint = "http://localhost:4318/v1/traces",
-        Auth = new AuthConfig { Mode = ExportAuthMode.None },
-    },
     GenerationExport = new GenerationExportConfig
     {
         Protocol = GenerationExportProtocol.Grpc,
@@ -58,24 +52,44 @@ var sigil = new SigilClient(new SigilClientConfig
         FlushInterval = TimeSpan.FromSeconds(1),
         QueueSize = 2000,
     },
+    Api = new ApiConfig
+    {
+        Endpoint = "http://localhost:8080",
+    },
 });
 
-var openAI = new ChatClient(
+// Configure OTel exporters (traces/metrics) separately in your application's OTel setup.
+using var tracerProvider = OpenTelemetry.Sdk.CreateTracerProviderBuilder()
+    .AddSource("github.com/grafana/sigil/sdks/dotnet")
+    .AddOtlpExporter()
+    .Build();
+
+using var meterProvider = OpenTelemetry.Sdk.CreateMeterProviderBuilder()
+    .AddMeter("github.com/grafana/sigil/sdks/dotnet")
+    .AddOtlpExporter()
+    .Build();
+
+var openAI = new OpenAIResponseClient(
     "gpt-5",
     Environment.GetEnvironmentVariable("OPENAI_API_KEY")!
 );
 
-var messages = new List<ChatMessage>
+var inputItems = new List<ResponseItem>
 {
-    new SystemChatMessage("You are concise."),
-    new UserChatMessage("Give me a short weather summary for Paris."),
+    ResponseItem.CreateUserMessageItem("Give me a short weather summary for Paris."),
 };
 
-var response = await OpenAIRecorder.ChatCompletionAsync(
+var requestOptions = new ResponseCreationOptions
+{
+    Instructions = "You are concise.",
+    MaxOutputTokenCount = 320,
+};
+
+var response = await OpenAIRecorder.CreateResponseAsync(
     sigil,
     openAI,
-    messages,
-    requestOptions: null,
+    inputItems,
+    requestOptions: requestOptions,
     options: new OpenAISigilOptions
     {
         ConversationId = "conv-9b2f",
@@ -103,6 +117,12 @@ Recorder behavior is explicit and idempotent:
 - `End()` is safe to call once in `finally`
 - recorder `Error` only reports local instrumentation/export-queue errors
 
+Generation export transport protocols:
+
+- `GenerationExportProtocol.Grpc`
+- `GenerationExportProtocol.Http`
+- `GenerationExportProtocol.None` (instrumentation-only; no generation transport)
+
 ## Context defaults
 
 `SigilContext` uses async-local scopes:
@@ -113,12 +133,59 @@ Recorder behavior is explicit and idempotent:
 
 These defaults are used when a start payload omits those fields.
 
+## Conversation Ratings
+
+Use the SDK helper to submit user-facing ratings:
+
+```csharp
+var result = await client.SubmitConversationRatingAsync(
+    "conv-123",
+    new SubmitConversationRatingRequest
+    {
+        RatingId = "rat-123",
+        Rating = ConversationRatingValue.Bad,
+        Comment = "Answer ignored user context",
+        Metadata = new Dictionary<string, object?>
+        {
+            ["channel"] = "assistant-ui",
+        },
+        Source = "sdk-dotnet",
+    },
+    CancellationToken.None
+);
+
+Console.WriteLine($"{result.Rating.Rating} hasBad={result.Summary.HasBadRating}");
+```
+
+`SubmitConversationRatingAsync(...)` sends requests to `SigilClientConfig.Api.Endpoint` (default `http://localhost:8080`) and uses the same generation-export auth headers (`tenant` or `bearer`) already configured on the SDK client.
+
 ## .NET best practices
 
 - Create one long-lived `SigilClient` per process (for example as a singleton in DI).
 - Always call `ShutdownAsync(...)` during process shutdown.
 - Keep provider request/response payloads normalized; enable raw artifacts only for debug sessions.
-- Use explicit auth config per export path (trace vs generation) instead of sharing ad-hoc headers.
+- Use explicit generation export auth config instead of sharing ad-hoc headers.
+
+## Instrumentation-only mode (no generation send)
+
+```csharp
+var sigil = new SigilClient(new SigilClientConfig
+{
+    GenerationExport = new GenerationExportConfig
+    {
+        Protocol = GenerationExportProtocol.None,
+    },
+});
+```
+
+## SDK metrics
+
+The SDK emits these OTel histograms through your configured OTel meter provider:
+
+- `gen_ai.client.operation.duration`
+- `gen_ai.client.token.usage`
+- `gen_ai.client.time_to_first_token`
+- `gen_ai.client.tool_calls_per_operation`
 
 ## Local tasks
 

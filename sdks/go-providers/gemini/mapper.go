@@ -10,29 +10,39 @@ import (
 	"github.com/grafana/sigil/sdks/go/sigil"
 )
 
-// GenerateContentRequest wraps Gemini generate-content arguments in one mapper input type.
-type GenerateContentRequest struct {
-	Model    string                       `json:"model"`
-	Contents []*genai.Content             `json:"contents,omitempty"`
-	Config   *genai.GenerateContentConfig `json:"config,omitempty"`
-}
+const thinkingBudgetMetadataKey = "sigil.gen_ai.request.thinking.budget_tokens"
+const thinkingLevelMetadataKey = "sigil.gen_ai.request.thinking.level"
+const usageToolUsePromptTokensMetadataKey = "sigil.gen_ai.usage.tool_use_prompt_tokens"
 
 // FromRequestResponse maps a Gemini request/response pair to sigil.Generation.
-func FromRequestResponse(req GenerateContentRequest, resp *genai.GenerateContentResponse, opts ...Option) (sigil.Generation, error) {
+func FromRequestResponse(
+	model string,
+	contents []*genai.Content,
+	config *genai.GenerateContentConfig,
+	resp *genai.GenerateContentResponse,
+	opts ...Option,
+) (sigil.Generation, error) {
 	if resp == nil {
 		return sigil.Generation{}, errors.New("response is required")
 	}
-	if strings.TrimSpace(req.Model) == "" {
+	if strings.TrimSpace(model) == "" {
 		return sigil.Generation{}, errors.New("request model is required")
 	}
 
 	options := applyOptions(opts)
-	input := mapContents(req.Contents)
+	input := mapContents(contents)
 	output, stopReason := mapCandidates(resp.Candidates)
+	maxTokens, temperature, topP, toolChoice, thinkingEnabled, thinkingBudget := mapRequestControls(config)
+	thinkingLevel := extractThinkingLevel(config)
 
 	artifacts := make([]sigil.Artifact, 0, 3)
 	if options.includeRequestArtifact {
-		artifact, err := sigil.NewJSONArtifact(sigil.ArtifactKindRequest, "gemini.generate_content.request", req)
+		requestPayload := map[string]any{
+			"model":    model,
+			"contents": contents,
+			"config":   config,
+		}
+		artifact, err := sigil.NewJSONArtifact(sigil.ArtifactKindRequest, "gemini.generate_content.request", requestPayload)
 		if err != nil {
 			return sigil.Generation{}, err
 		}
@@ -45,8 +55,8 @@ func FromRequestResponse(req GenerateContentRequest, resp *genai.GenerateContent
 		}
 		artifacts = append(artifacts, artifact)
 	}
-	if options.includeToolsArtifact && hasFunctionTools(req.Config) {
-		artifact, err := sigil.NewJSONArtifact(sigil.ArtifactKindTools, "gemini.generate_content.tools", req.Config.Tools)
+	if options.includeToolsArtifact && hasFunctionTools(config) {
+		artifact, err := sigil.NewJSONArtifact(sigil.ArtifactKindTools, "gemini.generate_content.tools", config.Tools)
 		if err != nil {
 			return sigil.Generation{}, err
 		}
@@ -60,23 +70,31 @@ func FromRequestResponse(req GenerateContentRequest, resp *genai.GenerateContent
 		}
 		metadata["model_version"] = resp.ModelVersion
 	}
+	metadata = mergeThinkingBudgetMetadata(metadata, thinkingBudget)
+	metadata = mergeThinkingLevelMetadata(metadata, thinkingLevel)
+	metadata = mergeGeminiUsageMetadata(metadata, resp.UsageMetadata)
 
 	generation := sigil.Generation{
-		ConversationID: options.conversationID,
-		AgentName:      options.agentName,
-		AgentVersion:   options.agentVersion,
-		Model:          sigil.ModelRef{Provider: options.providerName, Name: req.Model},
-		ResponseID:     resp.ResponseID,
-		ResponseModel:  resp.ModelVersion,
-		SystemPrompt:   extractSystemPrompt(req.Config),
-		Input:          input,
-		Output:         output,
-		Tools:          mapTools(req.Config),
-		Usage:          mapUsage(resp.UsageMetadata),
-		StopReason:     stopReason,
-		Tags:           cloneStringMap(options.tags),
-		Metadata:       metadata,
-		Artifacts:      artifacts,
+		ConversationID:  options.conversationID,
+		AgentName:       options.agentName,
+		AgentVersion:    options.agentVersion,
+		Model:           sigil.ModelRef{Provider: options.providerName, Name: model},
+		ResponseID:      resp.ResponseID,
+		ResponseModel:   resp.ModelVersion,
+		SystemPrompt:    extractSystemPrompt(config),
+		Input:           input,
+		Output:          output,
+		Tools:           mapTools(config),
+		MaxTokens:       maxTokens,
+		Temperature:     temperature,
+		TopP:            topP,
+		ToolChoice:      toolChoice,
+		ThinkingEnabled: thinkingEnabled,
+		Usage:           mapUsage(resp.UsageMetadata),
+		StopReason:      stopReason,
+		Tags:            cloneStringMap(options.tags),
+		Metadata:        metadata,
+		Artifacts:       artifacts,
 	}
 
 	if err := generation.Validate(); err != nil {
@@ -213,8 +231,10 @@ func mapUsage(usage *genai.GenerateContentResponseUsageMetadata) sigil.TokenUsag
 	}
 
 	totalTokens := int64(usage.TotalTokenCount)
+	toolUsePromptTokens := int64(usage.ToolUsePromptTokenCount)
+	reasoningTokens := int64(usage.ThoughtsTokenCount)
 	if totalTokens == 0 {
-		totalTokens = int64(usage.PromptTokenCount) + int64(usage.CandidatesTokenCount)
+		totalTokens = int64(usage.PromptTokenCount) + int64(usage.CandidatesTokenCount) + toolUsePromptTokens + reasoningTokens
 	}
 
 	return sigil.TokenUsage{
@@ -222,7 +242,7 @@ func mapUsage(usage *genai.GenerateContentResponseUsageMetadata) sigil.TokenUsag
 		OutputTokens:         int64(usage.CandidatesTokenCount),
 		TotalTokens:          totalTokens,
 		CacheReadInputTokens: int64(usage.CachedContentTokenCount),
-		ReasoningTokens:      int64(usage.ThoughtsTokenCount),
+		ReasoningTokens:      reasoningTokens,
 	}
 }
 
@@ -265,6 +285,51 @@ func hasFunctionTools(config *genai.GenerateContentConfig) bool {
 	return false
 }
 
+func mapRequestControls(config *genai.GenerateContentConfig) (*int64, *float64, *float64, *string, *bool, *int64) {
+	if config == nil {
+		return nil, nil, nil, nil, nil, nil
+	}
+
+	var maxTokens *int64
+	if config.MaxOutputTokens > 0 {
+		value := int64(config.MaxOutputTokens)
+		maxTokens = &value
+	}
+
+	var temperature *float64
+	if config.Temperature != nil {
+		value := float64(*config.Temperature)
+		temperature = &value
+	}
+
+	var topP *float64
+	if config.TopP != nil {
+		value := float64(*config.TopP)
+		topP = &value
+	}
+
+	var toolChoice *string
+	if config.ToolConfig != nil && config.ToolConfig.FunctionCallingConfig != nil {
+		mode := strings.ToLower(strings.TrimSpace(string(config.ToolConfig.FunctionCallingConfig.Mode)))
+		if mode != "" && mode != "mode_unspecified" {
+			toolChoice = &mode
+		}
+	}
+
+	var thinkingEnabled *bool
+	var thinkingBudget *int64
+	if config.ThinkingConfig != nil {
+		value := config.ThinkingConfig.IncludeThoughts
+		thinkingEnabled = &value
+		if config.ThinkingConfig.ThinkingBudget != nil {
+			budget := int64(*config.ThinkingConfig.ThinkingBudget)
+			thinkingBudget = &budget
+		}
+	}
+
+	return maxTokens, temperature, topP, toolChoice, thinkingEnabled, thinkingBudget
+}
+
 func marshalAny(value any) []byte {
 	if value == nil {
 		return nil
@@ -298,4 +363,62 @@ func cloneAnyMap(in map[string]any) map[string]any {
 		out[key] = value
 	}
 	return out
+}
+
+func mergeThinkingBudgetMetadata(metadata map[string]any, thinkingBudget *int64) map[string]any {
+	out := cloneAnyMap(metadata)
+	if thinkingBudget == nil {
+		return out
+	}
+	if out == nil {
+		out = map[string]any{}
+	}
+	out[thinkingBudgetMetadataKey] = *thinkingBudget
+	return out
+}
+
+func mergeThinkingLevelMetadata(metadata map[string]any, thinkingLevel *string) map[string]any {
+	out := cloneAnyMap(metadata)
+	if thinkingLevel == nil || strings.TrimSpace(*thinkingLevel) == "" {
+		return out
+	}
+	if out == nil {
+		out = map[string]any{}
+	}
+	out[thinkingLevelMetadataKey] = *thinkingLevel
+	return out
+}
+
+func mergeGeminiUsageMetadata(metadata map[string]any, usage *genai.GenerateContentResponseUsageMetadata) map[string]any {
+	out := cloneAnyMap(metadata)
+	if usage == nil || usage.ToolUsePromptTokenCount <= 0 {
+		return out
+	}
+	if out == nil {
+		out = map[string]any{}
+	}
+	out[usageToolUsePromptTokensMetadataKey] = int64(usage.ToolUsePromptTokenCount)
+	return out
+}
+
+func extractThinkingLevel(config *genai.GenerateContentConfig) *string {
+	if config == nil || config.ThinkingConfig == nil {
+		return nil
+	}
+	normalized := strings.TrimSpace(strings.ToLower(string(config.ThinkingConfig.ThinkingLevel)))
+	switch normalized {
+	case "", "thinking_level_unspecified":
+		return nil
+	case "thinking_level_low":
+		value := "low"
+		return &value
+	case "thinking_level_medium":
+		value := "medium"
+		return &value
+	case "thinking_level_high":
+		value := "high"
+		return &value
+	default:
+		return &normalized
+	}
 }

@@ -41,6 +41,22 @@ func TestEncodeDecodeBlockRoundTrip(t *testing.T) {
 		if generations[i].GetId() != expectedID {
 			t.Fatalf("unexpected generation id at %d: expected %q got %q", i, expectedID, generations[i].GetId())
 		}
+		if generations[i].MaxTokens == nil || *generations[i].MaxTokens != int64(128+i) {
+			t.Fatalf("unexpected max_tokens at %d", i)
+		}
+		if generations[i].Temperature == nil || *generations[i].Temperature != float64(i+1)/10.0 {
+			t.Fatalf("unexpected temperature at %d", i)
+		}
+		if generations[i].TopP == nil || *generations[i].TopP != float64(i+5)/10.0 {
+			t.Fatalf("unexpected top_p at %d", i)
+		}
+		if generations[i].ToolChoice == nil || *generations[i].ToolChoice != "auto" {
+			t.Fatalf("unexpected tool_choice at %d", i)
+		}
+		expectedThinking := i%2 == 0
+		if generations[i].ThinkingEnabled == nil || *generations[i].ThinkingEnabled != expectedThinking {
+			t.Fatalf("unexpected thinking_enabled at %d", i)
+		}
 	}
 }
 
@@ -75,12 +91,17 @@ func testBlock(t *testing.T, blockID string, count int) *storage.Block {
 		}
 
 		generation := &sigilv1.Generation{
-			Id:             generationID,
-			ConversationId: conversationID,
-			Mode:           sigilv1.GenerationMode_GENERATION_MODE_SYNC,
-			Model:          &sigilv1.ModelRef{Provider: "openai", Name: "gpt-5"},
-			StartedAt:      timestamppb.New(base.Add(time.Duration(i) * time.Minute)),
-			CompletedAt:    timestamppb.New(base.Add(time.Duration(i)*time.Minute + time.Second)),
+			Id:              generationID,
+			ConversationId:  conversationID,
+			Mode:            sigilv1.GenerationMode_GENERATION_MODE_SYNC,
+			Model:           &sigilv1.ModelRef{Provider: "openai", Name: "gpt-5"},
+			StartedAt:       timestamppb.New(base.Add(time.Duration(i) * time.Minute)),
+			CompletedAt:     timestamppb.New(base.Add(time.Duration(i)*time.Minute + time.Second)),
+			MaxTokens:       proto.Int64(int64(128 + i)),
+			Temperature:     proto.Float64(float64(i+1) / 10.0),
+			TopP:            proto.Float64(float64(i+5) / 10.0),
+			ToolChoice:      proto.String("auto"),
+			ThinkingEnabled: proto.Bool(i%2 == 0),
 		}
 		payload, err := proto.Marshal(generation)
 		if err != nil {

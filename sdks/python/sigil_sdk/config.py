@@ -8,6 +8,7 @@ import logging
 import time
 from typing import Callable, Optional
 
+from opentelemetry.metrics import Meter
 from opentelemetry.trace import Tracer
 
 from .exporters.base import GenerationExporter
@@ -24,17 +25,6 @@ class AuthConfig:
     mode: str = "none"
     tenant_id: str = ""
     bearer_token: str = ""
-
-
-@dataclass(slots=True)
-class TraceConfig:
-    """OTLP trace export configuration."""
-
-    protocol: str = "http"
-    endpoint: str = "http://localhost:4318/v1/traces"
-    headers: dict[str, str] = field(default_factory=dict)
-    auth: AuthConfig = field(default_factory=AuthConfig)
-    insecure: bool = True
 
 
 @dataclass(slots=True)
@@ -56,19 +46,26 @@ class GenerationExportConfig:
 
 
 @dataclass(slots=True)
+class ApiConfig:
+    """Sigil HTTP API settings used by non-ingest helper endpoints."""
+
+    endpoint: str = "http://localhost:8080"
+
+
+@dataclass(slots=True)
 class ClientConfig:
     """Top-level SDK runtime configuration."""
 
-    trace: TraceConfig = field(default_factory=TraceConfig)
     generation_export: GenerationExportConfig = field(default_factory=GenerationExportConfig)
+    api: ApiConfig = field(default_factory=ApiConfig)
     tracer: Optional[Tracer] = None
+    meter: Optional[Meter] = None
     logger: Optional[logging.Logger] = None
     now: Optional[Callable[[], datetime]] = None
     sleep: Optional[Callable[[float], None]] = None
     generation_exporter: Optional[GenerationExporter] = None
 
     # Convenience aliases for simpler caller config wiring.
-    trace_endpoint: str = ""
     generation_export_endpoint: str = ""
 
 
@@ -86,12 +83,11 @@ def resolve_config(config: Optional[ClientConfig]) -> ClientConfig:
     else:
         out = config
 
-    if out.trace_endpoint:
-        out.trace.endpoint = out.trace_endpoint
     if out.generation_export_endpoint:
         out.generation_export.endpoint = out.generation_export_endpoint
+    if out.api.endpoint.strip() == "":
+        out.api.endpoint = "http://localhost:8080"
 
-    out.trace.headers = _resolve_export_headers(out.trace.headers, out.trace.auth, "trace")
     out.generation_export.headers = _resolve_export_headers(
         out.generation_export.headers,
         out.generation_export.auth,

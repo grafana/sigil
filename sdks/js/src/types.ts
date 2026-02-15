@@ -1,9 +1,7 @@
-import type { Tracer } from '@opentelemetry/api';
+import type { Meter, Tracer } from '@opentelemetry/api';
 
-/** Supported OTLP trace export protocols. */
-export type TraceProtocol = 'grpc' | 'http';
 /** Supported generation export protocols. */
-export type GenerationExportProtocol = 'grpc' | 'http';
+export type GenerationExportProtocol = 'grpc' | 'http' | 'none';
 /** Generation execution mode. */
 export type GenerationMode = 'SYNC' | 'STREAM';
 /** Supported auth modes for transport exports. */
@@ -14,20 +12,6 @@ export interface ExportAuthConfig {
   mode: ExportAuthMode;
   tenantId?: string;
   bearerToken?: string;
-}
-
-/** Trace exporter configuration. */
-export interface TraceConfig {
-  /** OTLP protocol for trace export. */
-  protocol: TraceProtocol;
-  /** Trace endpoint. Examples: `http://localhost:4318/v1/traces`, `localhost:4317`. */
-  endpoint: string;
-  /** Optional transport headers/metadata. */
-  headers?: Record<string, string>;
-  /** Optional auth mode for trace transport. */
-  auth: ExportAuthConfig;
-  /** Force insecure transport when protocol allows it. */
-  insecure: boolean;
 }
 
 /** Generation exporter runtime configuration. */
@@ -58,6 +42,12 @@ export interface GenerationExportConfig {
   payloadMaxBytes: number;
 }
 
+/** Sigil HTTP API settings used by non-ingest helper endpoints. */
+export interface ApiConfig {
+  /** Sigil API base endpoint, for example `http://localhost:8080`. */
+  endpoint: string;
+}
+
 /** Optional logger hooks used by the SDK runtime. */
 export interface SigilLogger {
   debug?: (message: string, ...args: unknown[]) => void;
@@ -82,6 +72,50 @@ export interface ExportGenerationsResponse {
   results: ExportGenerationResult[];
 }
 
+/** Allowed conversation rating values. */
+export type ConversationRatingValue = 'CONVERSATION_RATING_VALUE_GOOD' | 'CONVERSATION_RATING_VALUE_BAD';
+
+/** SDK input for submitting a conversation rating. */
+export interface ConversationRatingInput {
+  ratingId: string;
+  rating: ConversationRatingValue;
+  comment?: string;
+  metadata?: Record<string, unknown>;
+  generationId?: string;
+  raterId?: string;
+  source?: string;
+}
+
+/** Conversation rating event returned by Sigil. */
+export interface ConversationRating {
+  ratingId: string;
+  conversationId: string;
+  generationId?: string;
+  rating: ConversationRatingValue;
+  comment?: string;
+  metadata?: Record<string, unknown>;
+  raterId?: string;
+  source?: string;
+  createdAt: string;
+}
+
+/** Aggregated rating summary returned by Sigil. */
+export interface ConversationRatingSummary {
+  totalCount: number;
+  goodCount: number;
+  badCount: number;
+  latestRating?: ConversationRatingValue;
+  latestRatedAt: string;
+  latestBadAt?: string;
+  hasBadRating: boolean;
+}
+
+/** Rating create response envelope returned by Sigil. */
+export interface SubmitConversationRatingResponse {
+  rating: ConversationRating;
+  summary: ConversationRatingSummary;
+}
+
 /** Pluggable generation exporter interface. */
 export interface GenerationExporter {
   exportGenerations(request: ExportGenerationsRequest): Promise<ExportGenerationsResponse>;
@@ -90,10 +124,11 @@ export interface GenerationExporter {
 
 /** Fully resolved SDK configuration. */
 export interface SigilSdkConfig {
-  trace: TraceConfig;
   generationExport: GenerationExportConfig;
+  api: ApiConfig;
   generationExporter?: GenerationExporter;
   tracer?: Tracer;
+  meter?: Meter;
   logger?: SigilLogger;
   now?: () => Date;
   sleep?: (durationMs: number) => Promise<void>;
@@ -101,10 +136,11 @@ export interface SigilSdkConfig {
 
 /** Partial SDK configuration passed by callers. */
 export interface SigilSdkConfigInput {
-  trace?: Partial<TraceConfig>;
   generationExport?: Partial<GenerationExportConfig>;
+  api?: Partial<ApiConfig>;
   generationExporter?: GenerationExporter;
   tracer?: Tracer;
+  meter?: Meter;
   logger?: SigilLogger;
   now?: () => Date;
   sleep?: (durationMs: number) => Promise<void>;
@@ -132,6 +168,7 @@ export interface TokenUsage {
   totalTokens?: number;
   cacheReadInputTokens?: number;
   cacheWriteInputTokens?: number;
+  cacheCreationInputTokens?: number;
   reasoningTokens?: number;
 }
 
@@ -195,6 +232,11 @@ export interface GenerationStart {
   operationName?: string;
   model: ModelRef;
   systemPrompt?: string;
+  maxTokens?: number;
+  temperature?: number;
+  topP?: number;
+  toolChoice?: string;
+  thinkingEnabled?: boolean;
   tools?: ToolDefinition[];
   tags?: Record<string, string>;
   metadata?: Record<string, unknown>;
@@ -209,6 +251,11 @@ export interface GenerationResult {
   operationName?: string;
   responseId?: string;
   responseModel?: string;
+  maxTokens?: number;
+  temperature?: number;
+  topP?: number;
+  toolChoice?: string;
+  thinkingEnabled?: boolean;
   input?: Message[];
   output?: Message[];
   tools?: ToolDefinition[];
@@ -234,6 +281,11 @@ export interface Generation {
   systemPrompt?: string;
   responseId?: string;
   responseModel?: string;
+  maxTokens?: number;
+  temperature?: number;
+  topP?: number;
+  toolChoice?: string;
+  thinkingEnabled?: boolean;
   input?: Message[];
   output?: Message[];
   tools?: ToolDefinition[];
@@ -288,6 +340,7 @@ export interface ToolExecution {
 export interface GenerationRecorder {
   setResult(result: GenerationResult): void;
   setCallError(error: unknown): void;
+  setFirstTokenAt(firstTokenAt: Date): void;
   end(): void;
   getError(): Error | undefined;
 }

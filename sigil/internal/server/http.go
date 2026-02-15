@@ -9,12 +9,38 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/grafana/dskit/tenant"
+	"github.com/grafana/sigil/sigil/internal/feedback"
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
 	"github.com/grafana/sigil/sigil/internal/modelcards"
 	"github.com/grafana/sigil/sigil/internal/query"
+	"github.com/grafana/sigil/sigil/internal/queryproxy"
 )
 
-func RegisterRoutes(mux *http.ServeMux, querySvc *query.Service, generationSvc *generationingest.Service, modelCardSvc *modelcards.Service, protectedMiddleware func(http.Handler) http.Handler) {
+func RegisterRoutes(
+	mux *http.ServeMux,
+	querySvc *query.Service,
+	generationSvc *generationingest.Service,
+	feedbackSvc *feedback.Service,
+	ratingsEnabled bool,
+	annotationsEnabled bool,
+	modelCardSvc *modelcards.Service,
+	protectedMiddleware func(http.Handler) http.Handler,
+) {
+	RegisterRoutesWithQueryProxy(mux, querySvc, generationSvc, feedbackSvc, ratingsEnabled, annotationsEnabled, modelCardSvc, protectedMiddleware, nil)
+}
+
+func RegisterRoutesWithQueryProxy(
+	mux *http.ServeMux,
+	querySvc *query.Service,
+	generationSvc *generationingest.Service,
+	feedbackSvc *feedback.Service,
+	ratingsEnabled bool,
+	annotationsEnabled bool,
+	modelCardSvc *modelcards.Service,
+	protectedMiddleware func(http.Handler) http.Handler,
+	queryProxy *queryproxy.Proxy,
+) {
 	if protectedMiddleware == nil {
 		protectedMiddleware = func(next http.Handler) http.Handler { return next }
 	}
@@ -22,9 +48,13 @@ func RegisterRoutes(mux *http.ServeMux, querySvc *query.Service, generationSvc *
 	mux.HandleFunc("/healthz", health)
 	mux.Handle("/api/v1/generations:export", protectedMiddleware(http.HandlerFunc(generationingest.NewHTTPHandler(generationSvc))))
 	mux.Handle("/api/v1/conversations", protectedMiddleware(http.HandlerFunc(listConversations(querySvc))))
-	mux.Handle("/api/v1/conversations/", protectedMiddleware(http.HandlerFunc(getConversation(querySvc))))
+	mux.Handle("/api/v1/conversations/", protectedMiddleware(http.HandlerFunc(conversationRoutes(querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled))))
 	mux.Handle("/api/v1/completions", protectedMiddleware(http.HandlerFunc(listCompletions(querySvc))))
 	mux.Handle("/api/v1/traces/", protectedMiddleware(http.HandlerFunc(getTrace(querySvc))))
+	if queryProxy != nil {
+		mux.Handle("/api/v1/proxy/prometheus/", protectedMiddleware(http.HandlerFunc(proxyPrometheus(queryProxy))))
+		mux.Handle("/api/v1/proxy/tempo/", protectedMiddleware(http.HandlerFunc(proxyTempo(queryProxy))))
+	}
 
 	if modelCardSvc != nil {
 		mux.Handle("/api/v1/model-cards", protectedMiddleware(http.HandlerFunc(listModelCards(modelCardSvc))))
@@ -44,23 +74,82 @@ func listConversations(querySvc *query.Service) http.HandlerFunc {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"items": querySvc.ListConversations()})
+
+		tenantID, err := tenant.TenantID(req.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		filter, err := parseConversationListFilter(req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		items, err := querySvc.ListConversationsForTenant(req.Context(), tenantID, filter)
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
 	}
 }
 
-func getConversation(querySvc *query.Service) http.HandlerFunc {
+func conversationRoutes(querySvc *query.Service, feedbackSvc *feedback.Service, ratingsEnabled bool, annotationsEnabled bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		if req.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		id, childPath, ok := parseConversationSubPath(req.URL.Path)
+		if !ok {
+			http.Error(w, "invalid conversation path", http.StatusBadRequest)
 			return
 		}
 
-		id := strings.TrimPrefix(req.URL.Path, "/api/v1/conversations/")
-		if id == "" || strings.Contains(id, "/") {
-			http.Error(w, "invalid conversation id", http.StatusBadRequest)
+		if childPath == "" {
+			if req.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+
+			tenantID, err := tenant.TenantID(req.Context())
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusUnauthorized)
+				return
+			}
+
+			item, found, err := querySvc.GetConversationForTenant(req.Context(), tenantID, id)
+			if err != nil {
+				http.Error(w, "internal server error", http.StatusInternalServerError)
+				return
+			}
+			if !found {
+				http.NotFound(w, req)
+				return
+			}
+			writeJSON(w, http.StatusOK, item)
 			return
 		}
-		writeJSON(w, http.StatusOK, querySvc.GetConversation(id))
+
+		if feedbackSvc == nil {
+			http.NotFound(w, req)
+			return
+		}
+
+		switch childPath {
+		case "ratings":
+			if !ratingsEnabled {
+				http.NotFound(w, req)
+				return
+			}
+			handleConversationRatings(w, req, feedbackSvc, id)
+		case "annotations":
+			if !annotationsEnabled {
+				http.NotFound(w, req)
+				return
+			}
+			handleConversationAnnotations(w, req, feedbackSvc, id)
+		default:
+			http.NotFound(w, req)
+		}
 	}
 }
 
@@ -88,6 +177,226 @@ func getTrace(querySvc *query.Service) http.HandlerFunc {
 		}
 		writeJSON(w, http.StatusOK, querySvc.GetTrace(id))
 	}
+}
+
+func proxyPrometheus(proxy *queryproxy.Proxy) http.HandlerFunc {
+	return proxyBackend(proxy, queryproxy.BackendPrometheus, "/api/v1/proxy/prometheus")
+}
+
+func proxyTempo(proxy *queryproxy.Proxy) http.HandlerFunc {
+	return proxyBackend(proxy, queryproxy.BackendTempo, "/api/v1/proxy/tempo")
+}
+
+func proxyBackend(proxy *queryproxy.Proxy, backend queryproxy.Backend, prefix string) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		downstreamPath := strings.TrimPrefix(req.URL.Path, prefix)
+		if downstreamPath == req.URL.Path || downstreamPath == "" {
+			http.NotFound(w, req)
+			return
+		}
+
+		err := proxy.Forward(w, req, backend, downstreamPath)
+		switch {
+		case err == nil:
+			return
+		case errors.Is(err, queryproxy.ErrPathNotAllowed):
+			http.NotFound(w, req)
+		case errors.Is(err, queryproxy.ErrMethodNotAllowed):
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		case errors.Is(err, queryproxy.ErrTenantRequired):
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+		case errors.Is(err, queryproxy.ErrUpstreamUnavailable):
+			http.Error(w, err.Error(), http.StatusBadGateway)
+		default:
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+		}
+	}
+}
+
+func handleConversationRatings(w http.ResponseWriter, req *http.Request, feedbackSvc *feedback.Service, conversationID string) {
+	tenantID, err := tenant.TenantID(req.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	switch req.Method {
+	case http.MethodPost:
+		var input feedback.CreateConversationRatingInput
+		if req.Body != nil {
+			decoder := json.NewDecoder(req.Body)
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&input); err != nil && !errors.Is(err, io.EOF) {
+				http.Error(w, "invalid request body", http.StatusBadRequest)
+				return
+			}
+		}
+
+		rating, summary, err := feedbackSvc.CreateRating(req.Context(), tenantID, conversationID, input)
+		if err != nil {
+			writeFeedbackError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"rating":  rating,
+			"summary": summary,
+		})
+	case http.MethodGet:
+		limit, cursor, ok := parsePaginationQuery(w, req)
+		if !ok {
+			return
+		}
+
+		items, nextCursor, err := feedbackSvc.ListRatings(req.Context(), tenantID, conversationID, limit, cursor)
+		if err != nil {
+			writeFeedbackError(w, err)
+			return
+		}
+		next := ""
+		if nextCursor > 0 {
+			next = strconv.FormatUint(nextCursor, 10)
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"items":       items,
+			"next_cursor": next,
+		})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func handleConversationAnnotations(w http.ResponseWriter, req *http.Request, feedbackSvc *feedback.Service, conversationID string) {
+	tenantID, err := tenant.TenantID(req.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	switch req.Method {
+	case http.MethodPost:
+		var input feedback.CreateConversationAnnotationInput
+		if req.Body != nil {
+			decoder := json.NewDecoder(req.Body)
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&input); err != nil && !errors.Is(err, io.EOF) {
+				http.Error(w, "invalid request body", http.StatusBadRequest)
+				return
+			}
+		}
+
+		operator := feedback.OperatorIdentity{
+			OperatorID:    strings.TrimSpace(req.Header.Get(feedback.HeaderOperatorID)),
+			OperatorLogin: strings.TrimSpace(req.Header.Get(feedback.HeaderOperatorLogin)),
+			OperatorName:  strings.TrimSpace(req.Header.Get(feedback.HeaderOperatorName)),
+		}
+
+		annotation, summary, err := feedbackSvc.CreateAnnotation(req.Context(), tenantID, conversationID, operator, input)
+		if err != nil {
+			writeFeedbackError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"annotation": annotation,
+			"summary":    summary,
+		})
+	case http.MethodGet:
+		limit, cursor, ok := parsePaginationQuery(w, req)
+		if !ok {
+			return
+		}
+
+		items, nextCursor, err := feedbackSvc.ListAnnotations(req.Context(), tenantID, conversationID, limit, cursor)
+		if err != nil {
+			writeFeedbackError(w, err)
+			return
+		}
+		next := ""
+		if nextCursor > 0 {
+			next = strconv.FormatUint(nextCursor, 10)
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"items":       items,
+			"next_cursor": next,
+		})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func writeFeedbackError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, feedback.ErrConflict):
+		http.Error(w, err.Error(), http.StatusConflict)
+	case feedback.IsValidationError(err):
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	default:
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}
+}
+
+func parseConversationSubPath(path string) (string, string, bool) {
+	trimmed := strings.TrimPrefix(path, "/api/v1/conversations/")
+	if trimmed == path || trimmed == "" {
+		return "", "", false
+	}
+	parts := strings.Split(trimmed, "/")
+	if len(parts) == 1 {
+		if parts[0] == "" {
+			return "", "", false
+		}
+		return parts[0], "", true
+	}
+	if len(parts) == 2 {
+		if parts[0] == "" || parts[1] == "" {
+			return "", "", false
+		}
+		return parts[0], parts[1], true
+	}
+	return "", "", false
+}
+
+func parsePaginationQuery(w http.ResponseWriter, req *http.Request) (int, uint64, bool) {
+	limit, err := feedback.NormalizeLimit(req.URL.Query().Get("limit"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return 0, 0, false
+	}
+	cursor, err := feedback.NormalizeCursor(req.URL.Query().Get("cursor"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return 0, 0, false
+	}
+	return limit, cursor, true
+}
+
+func parseConversationListFilter(req *http.Request) (query.ConversationListFilter, error) {
+	filter := query.ConversationListFilter{}
+
+	hasBadRating, err := parseOptionalBoolQuery(req, "has_bad_rating")
+	if err != nil {
+		return query.ConversationListFilter{}, errors.New("invalid has_bad_rating")
+	}
+	filter.HasBadRating = hasBadRating
+
+	hasAnnotations, err := parseOptionalBoolQuery(req, "has_annotations")
+	if err != nil {
+		return query.ConversationListFilter{}, errors.New("invalid has_annotations")
+	}
+	filter.HasAnnotations = hasAnnotations
+
+	return filter, nil
+}
+
+func parseOptionalBoolQuery(req *http.Request, key string) (*bool, error) {
+	raw := strings.TrimSpace(req.URL.Query().Get(key))
+	if raw == "" {
+		return nil, nil
+	}
+	parsed, err := strconv.ParseBool(raw)
+	if err != nil {
+		return nil, err
+	}
+	return &parsed, nil
 }
 
 func listModelCards(svc *modelcards.Service) http.HandlerFunc {

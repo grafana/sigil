@@ -1,0 +1,12 @@
+{{- if .Values.alloy.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sigil.alloy.fullname" . }}
+  labels:
+    {{- include "sigil.labels" . | nindent 4 }}
+    app.kubernetes.io/component: alloy
+data:
+  config.river: |
+{{ tpl .Values.alloy.config . | nindent 4 }}
+{{- end }}

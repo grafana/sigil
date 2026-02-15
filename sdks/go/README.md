@@ -20,6 +20,12 @@ Cross-language parity tracks are available for:
 - `ModelRef` bundles `provider + model`.
 - `AgentName` and `AgentVersion` are optional generation/tool identity fields.
 - `SystemPrompt` is separate from messages.
+- Request controls are optional first-class fields:
+  - `MaxTokens`
+  - `Temperature`
+  - `TopP`
+  - `ToolChoice`
+  - `ThinkingEnabled`
 - `Message` contains typed parts: `text`, `thinking`, `tool_call`, `tool_result`.
 - `TokenUsage` includes token/cache/reasoning fields.
 - Raw provider `Artifacts` are optional debug payloads.
@@ -33,6 +39,14 @@ Cross-language parity tracks are available for:
 - `rec.End()` is defer-safe and idempotent.
 - `rec.Err()` reports local validation/enqueue failures only.
 - Background export failures are retried and logged.
+- Generation spans emit request controls using GenAI keys where standardized:
+  - `gen_ai.request.max_tokens`
+  - `gen_ai.request.temperature`
+  - `gen_ai.request.top_p`
+  - `sigil.gen_ai.request.tool_choice`
+  - `sigil.gen_ai.request.thinking.enabled`
+  - `sigil.gen_ai.request.thinking.budget_tokens` (provider-specific)
+  - `gen_ai.response.finish_reasons` is emitted as a string array.
 - Context helpers are available for defaults:
   - `WithConversationID(ctx, id)`
   - `WithAgentName(ctx, name)`
@@ -43,15 +57,13 @@ Cross-language parity tracks are available for:
 ```go
 cfg := sigil.DefaultConfig()
 
-// Trace export (OTLP)
-cfg.Trace.Protocol = sigil.TraceProtocolHTTP // or sigil.TraceProtocolGRPC
-cfg.Trace.Endpoint = "http://localhost:4318/v1/traces" // grpc example: "localhost:4317"
-cfg.Trace.Auth = sigil.AuthConfig{
-	Mode: sigil.ExportAuthModeNone,
-}
+// Optional: inject tracer/meter explicitly.
+// If unset, the SDK uses otel.Tracer(...) and otel.Meter(...).
+// cfg.Tracer = myTracer
+// cfg.Meter = myMeter
 
 // Generation export (custom ingest)
-cfg.GenerationExport.Protocol = sigil.GenerationExportProtocolGRPC // default
+cfg.GenerationExport.Protocol = sigil.GenerationExportProtocolGRPC // default; or sigil.GenerationExportProtocolHTTP / sigil.GenerationExportProtocolNone
 cfg.GenerationExport.Endpoint = "localhost:4317"                  // HTTP parity: "http://localhost:8080/api/v1/generations:export"
 cfg.GenerationExport.Auth = sigil.AuthConfig{
 	Mode:     sigil.ExportAuthModeTenant,
@@ -64,15 +76,42 @@ cfg.GenerationExport.MaxRetries = 5
 cfg.GenerationExport.InitialBackoff = 100 * time.Millisecond
 cfg.GenerationExport.MaxBackoff = 5 * time.Second
 
+// Sigil API base used by helpers like SubmitConversationRating.
+cfg.API.Endpoint = "http://localhost:8080"
+
 client := sigil.NewClient(cfg)
 defer func() {
 	_ = client.Shutdown(context.Background())
 }()
 ```
 
-## Per-export auth modes
+Configure OTEL exporters (traces/metrics) in your application OTEL SDK setup.
 
-Auth is configured independently for trace and generation export.
+Quick OTEL setup pattern before creating the Sigil client:
+
+```go
+tp := sdktrace.NewTracerProvider()
+otel.SetTracerProvider(tp)
+
+mp := sdkmetric.NewMeterProvider()
+otel.SetMeterProvider(mp)
+```
+
+### Instrumentation-only mode (no generation send)
+
+Use `GenerationExportProtocolNone` to keep generation and tool instrumentation active while disabling generation transport:
+
+```go
+cfg := sigil.DefaultConfig()
+cfg.GenerationExport.Protocol = sigil.GenerationExportProtocolNone
+
+client := sigil.NewClient(cfg)
+defer func() { _ = client.Shutdown(context.Background()) }()
+```
+
+## Generation export auth modes
+
+Auth is configured for generation export.
 
 - `none`
 - `tenant` (requires `TenantID`, injects `X-Scope-OrgID`)
@@ -81,10 +120,6 @@ Auth is configured independently for trace and generation export.
 Invalid combinations fail fast during `NewClient(...)`.
 
 ```go
-cfg.Trace.Auth = sigil.AuthConfig{
-	Mode: sigil.ExportAuthModeNone, // traces may go to Alloy/Collector with no auth
-}
-
 cfg.GenerationExport.Auth = sigil.AuthConfig{
 	Mode:        sigil.ExportAuthModeBearer,
 	BearerToken: "token-from-secret-manager",
@@ -105,27 +140,51 @@ if genToken != "" {
 		BearerToken: genToken,
 	}
 }
-
-traceToken := strings.TrimSpace(os.Getenv("SIGIL_TRACE_BEARER_TOKEN"))
-if traceToken != "" {
-	cfg.Trace.Auth = sigil.AuthConfig{
-		Mode:        sigil.ExportAuthModeBearer,
-		BearerToken: traceToken,
-	}
-}
 ```
 
 Common topology:
 
 - Generations direct to Sigil: generation `tenant` mode.
-- Traces via OTEL Collector/Alloy: trace `none` or `bearer` mode.
+- Traces/metrics via OTEL Collector/Alloy: configure exporters in your app OTEL SDK setup.
 - Enterprise proxy: generation `bearer` mode to proxy; proxy authenticates and forwards tenant header upstream.
+
+## Conversation Ratings
+
+Use the SDK helper to submit user-facing ratings:
+
+```go
+rating, err := client.SubmitConversationRating(ctx, "conv-123", sigil.ConversationRatingInput{
+	RatingID: "rat-123",
+	Rating:   sigil.ConversationRatingValueBad,
+	Comment:  "Answer ignored user context",
+	Metadata: map[string]any{
+		"channel": "assistant-ui",
+	},
+	Source: "sdk-go",
+})
+if err != nil {
+	panic(err)
+}
+
+fmt.Printf("rating=%s has_bad=%v\n", rating.Rating.Rating, rating.Summary.HasBadRating)
+```
+
+`SubmitConversationRating` sends requests to `cfg.API.Endpoint` (default `http://localhost:8080`) and uses the same generation-export auth headers (`tenant` or `bearer`) that your client config already resolves.
 
 ## Lifecycle requirement
 
 - Always call `client.Shutdown(ctx)` before process exit.
-- `Shutdown` flushes pending generation batches and shuts down the trace provider.
+- `Shutdown` flushes pending generation batches and closes generation exporters.
 - Optional `client.Flush(ctx)` is available for explicit flush points.
+
+## SDK metrics
+
+The SDK emits four OTel histograms automatically through your configured OTel meter provider:
+
+- `gen_ai.client.operation.duration`
+- `gen_ai.client.token.usage`
+- `gen_ai.client.time_to_first_token`
+- `gen_ai.client.tool_calls_per_operation`
 
 ## Explicit flow example
 
@@ -175,7 +234,7 @@ Provider modules are documented wrapper-first for ergonomics and include explici
 
 Current Go provider helpers:
 
-- `sdks/go-providers/openai`
+- `sdks/go-providers/openai` (OpenAI Chat Completions + Responses wrappers and mappers)
 - `sdks/go-providers/anthropic`
 - `sdks/go-providers/gemini`
 

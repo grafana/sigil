@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import grpc
+from opentelemetry.sdk.trace import TracerProvider
 
 from sigil_sdk import (
     Artifact,
@@ -283,6 +284,11 @@ def _assert_generation_json_payload(generation: dict[str, Any]) -> None:
     assert generation["response_id"] == "resp-fixture"
     assert generation["response_model"] == "claude-sonnet-4-5-20260201"
     assert generation["system_prompt"] == "be concise"
+    assert _proto_json_int(generation["max_tokens"]) == 256
+    assert generation["temperature"] == 0.25
+    assert generation["top_p"] == 0.95
+    assert generation["tool_choice"] == "required"
+    assert generation["thinking_enabled"] is False
 
     input_messages = generation["input"]
     assert isinstance(input_messages, list) and len(input_messages) == 1
@@ -369,6 +375,11 @@ def _assert_generation_proto_payload(generation: sigil_pb2.Generation) -> None:
     assert generation.response_id == "resp-fixture"
     assert generation.response_model == "claude-sonnet-4-5-20260201"
     assert generation.system_prompt == "be concise"
+    assert generation.max_tokens == 256
+    assert generation.temperature == 0.25
+    assert generation.top_p == 0.95
+    assert generation.tool_choice == "required"
+    assert generation.thinking_enabled is False
 
     assert len(generation.input) == 1
     assert generation.input[0].role == sigil_pb2.MESSAGE_ROLE_USER
@@ -446,9 +457,11 @@ def _proto_json_int(value: Any) -> int:
 
 
 def _new_client(generation_export: GenerationExportConfig) -> Client:
+    trace_provider = TracerProvider()
     return Client(
         ClientConfig(
             generation_export=generation_export,
+            tracer=trace_provider.get_tracer("sigil-sdk-python-transport-test"),
         )
     )
 
@@ -466,6 +479,11 @@ def _payload_fixture() -> tuple[GenerationStart, Generation]:
         operation_name="streamText",
         model=ModelRef(provider="anthropic", name="claude-sonnet-4-5"),
         system_prompt="be concise",
+        max_tokens=512,
+        temperature=0.7,
+        top_p=0.9,
+        tool_choice="auto",
+        thinking_enabled=True,
         tools=[
             ToolDefinition(
                 name="weather",
@@ -490,6 +508,11 @@ def _payload_fixture() -> tuple[GenerationStart, Generation]:
         response_id="resp-fixture",
         response_model="claude-sonnet-4-5-20260201",
         system_prompt=start.system_prompt,
+        max_tokens=256,
+        temperature=0.25,
+        top_p=0.95,
+        tool_choice="required",
+        thinking_enabled=False,
         input=[
             Message(
                 role=MessageRole.USER,

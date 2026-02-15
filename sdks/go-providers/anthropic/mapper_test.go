@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	asdk "github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/packages/param"
 	"github.com/grafana/sigil/sdks/go/sigil"
 )
 
@@ -22,6 +23,10 @@ func TestFromRequestResponse(t *testing.T) {
 			OutputTokens:             42,
 			CacheReadInputTokens:     30,
 			CacheCreationInputTokens: 10,
+			ServerToolUse: asdk.BetaServerToolUsage{
+				WebSearchRequests: 2,
+				WebFetchRequests:  1,
+			},
 		},
 	}
 
@@ -67,6 +72,36 @@ func TestFromRequestResponse(t *testing.T) {
 	}
 	if generation.Usage.CacheCreationInputTokens != 10 {
 		t.Fatalf("expected cache creation tokens 10, got %d", generation.Usage.CacheCreationInputTokens)
+	}
+	if generation.MaxTokens == nil || *generation.MaxTokens != 512 {
+		t.Fatalf("expected max tokens 512, got %v", generation.MaxTokens)
+	}
+	if generation.Temperature == nil || *generation.Temperature != 0.3 {
+		t.Fatalf("expected temperature 0.3, got %v", generation.Temperature)
+	}
+	if generation.TopP == nil || *generation.TopP != 0.8 {
+		t.Fatalf("expected top_p 0.8, got %v", generation.TopP)
+	}
+	if generation.ToolChoice == nil || *generation.ToolChoice != `{"name":"weather","type":"tool"}` {
+		t.Fatalf("unexpected tool choice %v", generation.ToolChoice)
+	}
+	if generation.ThinkingEnabled == nil || !*generation.ThinkingEnabled {
+		t.Fatalf("expected thinking enabled true, got %v", generation.ThinkingEnabled)
+	}
+	if generation.Metadata == nil {
+		t.Fatalf("expected metadata map")
+	}
+	if generation.Metadata["sigil.gen_ai.request.thinking.budget_tokens"] != int64(1024) {
+		t.Fatalf("expected thinking budget metadata 1024, got %v", generation.Metadata["sigil.gen_ai.request.thinking.budget_tokens"])
+	}
+	if generation.Metadata["sigil.gen_ai.usage.server_tool_use.web_search_requests"] != int64(2) {
+		t.Fatalf("expected server tool web_search_requests=2, got %v", generation.Metadata["sigil.gen_ai.usage.server_tool_use.web_search_requests"])
+	}
+	if generation.Metadata["sigil.gen_ai.usage.server_tool_use.web_fetch_requests"] != int64(1) {
+		t.Fatalf("expected server tool web_fetch_requests=1, got %v", generation.Metadata["sigil.gen_ai.usage.server_tool_use.web_fetch_requests"])
+	}
+	if generation.Metadata["sigil.gen_ai.usage.server_tool_use.total_requests"] != int64(3) {
+		t.Fatalf("expected server tool total_requests=3, got %v", generation.Metadata["sigil.gen_ai.usage.server_tool_use.total_requests"])
 	}
 	if generation.Tags["tenant"] != "t-123" {
 		t.Fatalf("expected tenant tag")
@@ -130,6 +165,10 @@ func TestFromStream(t *testing.T) {
 					OutputTokens:             25,
 					CacheReadInputTokens:     8,
 					CacheCreationInputTokens: 4,
+					ServerToolUse: asdk.BetaServerToolUsage{
+						WebSearchRequests: 1,
+						WebFetchRequests:  2,
+					},
 				},
 			},
 		},
@@ -164,6 +203,36 @@ func TestFromStream(t *testing.T) {
 	}
 	if generation.Usage.TotalTokens != 105 {
 		t.Fatalf("expected total tokens 105, got %d", generation.Usage.TotalTokens)
+	}
+	if generation.MaxTokens == nil || *generation.MaxTokens != 512 {
+		t.Fatalf("expected max tokens 512, got %v", generation.MaxTokens)
+	}
+	if generation.Temperature == nil || *generation.Temperature != 0.3 {
+		t.Fatalf("expected temperature 0.3, got %v", generation.Temperature)
+	}
+	if generation.TopP == nil || *generation.TopP != 0.8 {
+		t.Fatalf("expected top_p 0.8, got %v", generation.TopP)
+	}
+	if generation.ToolChoice == nil || *generation.ToolChoice != `{"name":"weather","type":"tool"}` {
+		t.Fatalf("unexpected tool choice %v", generation.ToolChoice)
+	}
+	if generation.ThinkingEnabled == nil || !*generation.ThinkingEnabled {
+		t.Fatalf("expected thinking enabled true, got %v", generation.ThinkingEnabled)
+	}
+	if generation.Metadata == nil {
+		t.Fatalf("expected metadata map")
+	}
+	if generation.Metadata["sigil.gen_ai.request.thinking.budget_tokens"] != int64(1024) {
+		t.Fatalf("expected thinking budget metadata 1024, got %v", generation.Metadata["sigil.gen_ai.request.thinking.budget_tokens"])
+	}
+	if generation.Metadata["sigil.gen_ai.usage.server_tool_use.web_search_requests"] != int64(1) {
+		t.Fatalf("expected server tool web_search_requests=1, got %v", generation.Metadata["sigil.gen_ai.usage.server_tool_use.web_search_requests"])
+	}
+	if generation.Metadata["sigil.gen_ai.usage.server_tool_use.web_fetch_requests"] != int64(2) {
+		t.Fatalf("expected server tool web_fetch_requests=2, got %v", generation.Metadata["sigil.gen_ai.usage.server_tool_use.web_fetch_requests"])
+	}
+	if generation.Metadata["sigil.gen_ai.usage.server_tool_use.total_requests"] != int64(3) {
+		t.Fatalf("expected server tool total_requests=3, got %v", generation.Metadata["sigil.gen_ai.usage.server_tool_use.total_requests"])
 	}
 	if len(generation.Artifacts) != 0 {
 		t.Fatalf("expected 0 artifacts by default, got %d", len(generation.Artifacts))
@@ -230,6 +299,32 @@ func TestFromStreamWithRawArtifacts(t *testing.T) {
 	}
 }
 
+func TestFromRequestResponseMapsThinkingDisabled(t *testing.T) {
+	req := testRequest()
+	disabled := asdk.NewBetaThinkingConfigDisabledParam()
+	req.Thinking = asdk.BetaThinkingConfigParamUnion{
+		OfDisabled: &disabled,
+	}
+
+	resp := &asdk.BetaMessage{
+		ID:         "msg_1",
+		Model:      asdk.Model("claude-sonnet-4-5"),
+		StopReason: asdk.BetaStopReasonEndTurn,
+		Content: []asdk.BetaContentBlockUnion{
+			{Type: "text", Text: "done"},
+		},
+	}
+
+	generation, err := FromRequestResponse(req, resp)
+	if err != nil {
+		t.Fatalf("from request/response: %v", err)
+	}
+
+	if generation.ThinkingEnabled == nil || *generation.ThinkingEnabled {
+		t.Fatalf("expected thinking enabled false, got %v", generation.ThinkingEnabled)
+	}
+}
+
 func testRequest() asdk.BetaMessageNewParams {
 	toolResult := asdk.NewBetaToolResultBlock("toolu_1")
 	toolResult.OfToolResult.Content = []asdk.BetaToolResultBlockParamContentUnion{
@@ -242,8 +337,12 @@ func testRequest() asdk.BetaMessageNewParams {
 	}
 
 	return asdk.BetaMessageNewParams{
-		MaxTokens: 512,
-		Model:     asdk.Model("claude-sonnet-4-5"),
+		MaxTokens:   512,
+		Model:       asdk.Model("claude-sonnet-4-5"),
+		Temperature: param.NewOpt(0.3),
+		TopP:        param.NewOpt(0.8),
+		ToolChoice:  asdk.BetaToolChoiceParamOfTool("weather"),
+		Thinking:    asdk.BetaThinkingConfigParamOfEnabled(1024),
 		System: []asdk.BetaTextBlockParam{
 			{
 				Text: "Be precise.",

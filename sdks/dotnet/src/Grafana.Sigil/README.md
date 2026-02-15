@@ -1,6 +1,6 @@
 # Grafana.Sigil
 
-Core runtime for normalized generation export and OTLP tracing.
+Core runtime for normalized generation export and OpenTelemetry-aligned instrumentation.
 
 ## Install
 
@@ -15,15 +15,6 @@ using Grafana.Sigil;
 
 var client = new SigilClient(new SigilClientConfig
 {
-    Trace = new TraceConfig
-    {
-        Protocol = TraceProtocol.Http,
-        Endpoint = "http://localhost:4318/v1/traces",
-        Auth = new AuthConfig
-        {
-            Mode = ExportAuthMode.None,
-        },
-    },
     GenerationExport = new GenerationExportConfig
     {
         Protocol = GenerationExportProtocol.Grpc,
@@ -40,10 +31,52 @@ var client = new SigilClient(new SigilClientConfig
         InitialBackoff = TimeSpan.FromMilliseconds(100),
         MaxBackoff = TimeSpan.FromSeconds(5),
     },
+    Api = new ApiConfig
+    {
+        Endpoint = "http://localhost:8080",
+    },
 });
 ```
 
-Trace and generation export are configured independently, including protocol and auth mode.
+Configure OTEL exporters (traces/metrics) separately in your application's OTEL setup.
+
+Quick OTEL setup pattern before creating the Sigil client:
+
+```csharp
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
+
+using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+    .AddSource("github.com/grafana/sigil/sdks/dotnet")
+    .AddOtlpExporter()
+    .Build();
+
+using var meterProvider = Sdk.CreateMeterProviderBuilder()
+    .AddMeter("github.com/grafana/sigil/sdks/dotnet")
+    .AddOtlpExporter()
+    .Build();
+```
+
+Generation export auth is configured in `GenerationExport.Auth`.
+`Api.Endpoint` configures helper API calls such as `SubmitConversationRatingAsync(...)`.
+
+Generation export transport protocols:
+
+- `GenerationExportProtocol.Grpc`
+- `GenerationExportProtocol.Http`
+- `GenerationExportProtocol.None` (instrumentation-only; no generation transport)
+
+## Instrumentation-only mode (no generation send)
+
+```csharp
+var client = new SigilClient(new SigilClientConfig
+{
+    GenerationExport = new GenerationExportConfig
+    {
+        Protocol = GenerationExportProtocol.None,
+    },
+});
+```
 
 ## Manual generation instrumentation (sync)
 
@@ -229,6 +262,6 @@ Explicit transport headers take precedence over auth-derived headers (`Authoriza
 ## Lifecycle and performance guidance
 
 - Reuse one `SigilClient` for the process lifetime.
-- Call `ShutdownAsync(...)` on graceful shutdown to flush pending generation batches and trace state.
+- Call `ShutdownAsync(...)` on graceful shutdown to flush pending generation batches.
 - Use `FlushAsync(...)` before short-lived jobs exit if needed.
 - Keep raw artifacts disabled by default in production.

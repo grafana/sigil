@@ -41,6 +41,13 @@ class ArtifactKind(str, Enum):
     PROVIDER_EVENT = "provider_event"
 
 
+class ConversationRatingValue(str, Enum):
+    """Allowed conversation rating values."""
+
+    GOOD = "CONVERSATION_RATING_VALUE_GOOD"
+    BAD = "CONVERSATION_RATING_VALUE_BAD"
+
+
 @dataclass(slots=True)
 class ModelRef:
     """Provider/model identity."""
@@ -160,6 +167,11 @@ class GenerationStart:
     mode: Optional[GenerationMode] = None
     operation_name: str = ""
     system_prompt: str = ""
+    max_tokens: Optional[int] = None
+    temperature: Optional[float] = None
+    top_p: Optional[float] = None
+    tool_choice: Optional[str] = None
+    thinking_enabled: Optional[bool] = None
     tools: list[ToolDefinition] = field(default_factory=list)
     tags: dict[str, str] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -182,6 +194,11 @@ class Generation:
     response_id: str = ""
     response_model: str = ""
     system_prompt: str = ""
+    max_tokens: Optional[int] = None
+    temperature: Optional[float] = None
+    top_p: Optional[float] = None
+    tool_choice: Optional[str] = None
+    thinking_enabled: Optional[bool] = None
     input: list[Message] = field(default_factory=list)
     output: list[Message] = field(default_factory=list)
     tools: list[ToolDefinition] = field(default_factory=list)
@@ -240,6 +257,55 @@ class ExportGenerationsResponse:
     """Generation export response payload."""
 
     results: list[ExportGenerationResult]
+
+
+@dataclass(slots=True)
+class ConversationRatingInput:
+    """SDK input payload for submitting a conversation rating."""
+
+    rating_id: str
+    rating: ConversationRatingValue
+    comment: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
+    generation_id: str = ""
+    rater_id: str = ""
+    source: str = ""
+
+
+@dataclass(slots=True)
+class ConversationRating:
+    """Conversation rating event returned by Sigil."""
+
+    rating_id: str
+    conversation_id: str
+    rating: ConversationRatingValue
+    created_at: datetime
+    comment: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
+    generation_id: str = ""
+    rater_id: str = ""
+    source: str = ""
+
+
+@dataclass(slots=True)
+class ConversationRatingSummary:
+    """Aggregated conversation rating summary."""
+
+    total_count: int
+    good_count: int
+    bad_count: int
+    latest_rated_at: datetime
+    has_bad_rating: bool
+    latest_rating: ConversationRatingValue | None = None
+    latest_bad_at: datetime | None = None
+
+
+@dataclass(slots=True)
+class SubmitConversationRatingResponse:
+    """Conversation rating create response envelope."""
+
+    rating: ConversationRating
+    summary: ConversationRatingSummary
 
 
 def utc_now() -> datetime:

@@ -2,8 +2,10 @@
 
 This chart deploys the Sigil API and can optionally deploy local backing services used by Sigil:
 
+- Alloy (`alloy.enabled=true` by default)
 - MySQL (`mysql.enabled=true` by default)
 - Tempo (`tempo.enabled=true` by default)
+- Prometheus (`prometheus.enabled=true` by default)
 - MinIO (`minio.enabled=true` by default)
 
 The chart deploys the `sigil` service only. Grafana and the Sigil plugin are intentionally out of scope for this chart.
@@ -15,15 +17,16 @@ Always installed:
 - Sigil `Deployment`
 - Sigil `Service` with ports:
   - `http` (default `8080`)
-  - `otlp-grpc` (default `4317`)
-  - `otlp-http` (default `4318`)
+  - `otlp-grpc` (default `4317`, generation ingest gRPC contract)
 - Optional `Ingress`
 - Optional Helm test hook pod (`tests.enabled=true`)
 
 Optional components:
 
+- Alloy `Deployment` + `Service` + `ConfigMap`
 - MySQL `Deployment` + `Service` + optional `PersistentVolumeClaim`
 - Tempo `Deployment` + `Service` + `ConfigMap` + optional `PersistentVolumeClaim`
+- Prometheus `Deployment` + `Service` + `ConfigMap` + optional `PersistentVolumeClaim`
 - MinIO `Deployment` + `Service` + optional `PersistentVolumeClaim`
 
 ## Prerequisites
@@ -64,7 +67,7 @@ helm test sigil -n sigil
 
 ### 1) Self-contained (default)
 
-Default chart values deploy Sigil + MySQL + Tempo + MinIO in the same namespace.
+Default chart values deploy Sigil + Alloy + Tempo + Prometheus + MySQL + MinIO in the same namespace.
 
 ```bash
 helm upgrade --install sigil ./charts/sigil \
@@ -72,7 +75,7 @@ helm upgrade --install sigil ./charts/sigil \
   --set image.tag=<your-image-tag>
 ```
 
-### 2) External MySQL/Tempo/Object Storage
+### 2) External dependencies
 
 Disable bundled dependencies and point Sigil to your managed services:
 
@@ -81,11 +84,11 @@ helm upgrade --install sigil ./charts/sigil \
   --set image.repository=<your-image-repository> \
   --set image.tag=<your-image-tag> \
   --set mysql.enabled=false \
+  --set alloy.enabled=false \
   --set tempo.enabled=false \
+  --set prometheus.enabled=false \
   --set minio.enabled=false \
   --set sigil.storage.mysql.dsn='sigil:sigil@tcp(mysql.example:3306)/sigil?parseTime=true' \
-  --set sigil.tempo.grpcEndpoint='tempo.example:4317' \
-  --set sigil.tempo.httpEndpoint='tempo.example:4318' \
   --set sigil.objectStore.backend='s3' \
   --set sigil.objectStore.bucket='sigil' \
   --set sigil.objectStore.s3.endpoint='https://s3.example'
@@ -156,9 +159,12 @@ Important values:
 - `image.repository`, `image.tag`: Sigil API image
 - `sigil.target`: runtime target (`all|server|querier|compactor|catalog-sync`)
 - `sigil.auth.enabled`, `sigil.auth.fakeTenantID`: tenant/auth behavior
+- `sigil.queryProxy.prometheusBaseURL`, `sigil.queryProxy.tempoBaseURL`, `sigil.queryProxy.timeout`: downstream query-proxy settings for Prometheus/Mimir and Tempo pass-through routes
 - `sigil.storage.backend`: storage backend (`mysql` or `memory`)
 - `sigil.storage.mysql.dsn`: required for external MySQL when `mysql.enabled=false`
-- `sigil.tempo.grpcEndpoint`, `sigil.tempo.httpEndpoint`: external Tempo endpoints
+- `alloy.outputs.tempo.endpoint`: external Tempo OTLP gRPC endpoint for Alloy
+- `alloy.outputs.prometheus.endpoint`: external Prometheus OTLP endpoint for Alloy
+- `alloy.auth.*`: optional tenant/bearer header injection for Alloy exporters
 - `sigil.objectStore.backend`, `sigil.objectStore.bucket`: object store backend + shared bucket/container fallback
 - `sigil.objectStore.s3.*`: S3/MinIO endpoint + auth (`accessKey`, `secretKey`, `useAWSSDKAuth`, `region`, `insecure`)
 - `sigil.objectStore.gcs.*`: GCS bucket/service account/grpc toggle
@@ -166,7 +172,7 @@ Important values:
 - `sigil.compactor.*`: compactor schedule/lease/shard/worker/claim/block-size tuning
 - `sigil.modelCards.*`: model-card sync/freshness/bootstrap settings
 - `catalogSync.enabled`, `catalogSync.replicaCount`, `catalogSync.target`: optional dedicated singleton model-card sync deployment
-- `mysql.*`, `tempo.*`, `minio.*`: optional bundled dependency settings
+- `mysql.*`, `alloy.*`, `tempo.*`, `prometheus.*`, `minio.*`: optional bundled dependency settings
 - `tests.enabled`: enable/disable Helm hook test pod
 
 ## Testing and Linting
@@ -188,5 +194,5 @@ Repository-level `mise` tasks are provided:
 ## Operational Notes
 
 - The default chart image repository is a placeholder (`ghcr.io/grafana/sigil`); override it for real deployments.
-- The bundled MySQL/Tempo/MinIO workloads are aimed at simple deployments and development clusters.
+- The bundled Alloy/Tempo/Prometheus/MySQL/MinIO workloads are aimed at simple deployments and development clusters.
 - For production, use managed external services and override endpoints/credentials via values.

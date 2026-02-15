@@ -22,7 +22,7 @@ Execution is completed and tracked in:
 2. Provider wrappers are official SDK adapters (not DTO-only wrappers).
 3. `.NET` suites are gated in `mise run test:sdk:all`.
 4. Framework targets: core `net8.0` + `netstandard2.0`.
-5. OpenAI scope for this pass: Chat Completions only (Responses API deferred).
+5. OpenAI scope for this pass: Chat Completions delivered in this phase; Responses support tracked in the strict parity follow-up (`docs/design-docs/2026-02-13-openai-chat-responses-strict-parity.md`).
 6. Naming: `Grafana.Sigil.*` package IDs and namespaces.
 
 ## Runtime Contracts

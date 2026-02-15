@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-13
+last_reviewed: 2026-02-14
 source_of_truth: true
 audience: both
 ---
@@ -20,8 +20,9 @@ audience: both
 | Tenant boundary | `exec-plans/completed/2026-02-12-phase-2-tenant-boundary.md` | Done |
 | Query proxy and envelope | `exec-plans/active/2026-02-12-phase-2-query-proxy.md` | Active |
 | Hybrid storage and query | `exec-plans/active/2026-02-12-phase-2-hybrid-storage.md` | Active |
+| SDK metrics and telemetry pipeline | `exec-plans/completed/2026-02-13-sdk-metrics-and-telemetry-pipeline.md` | Done |
 
-Execution order: (1) query proxy, then (2) hybrid storage, then (3) cross-track consistency and tech debt capture. Parallel planning remains allowed within that order.
+Execution order: (1) query proxy, then (2) hybrid storage, then (3) compaction scaling + cross-track consistency and tech debt capture. Parallel planning remains allowed within that order.
 
 ## Goal
 

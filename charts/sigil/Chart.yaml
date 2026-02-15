@@ -1,6 +1,6 @@
 apiVersion: v2
 name: sigil
-description: Deploy the Sigil API with optional in-cluster MySQL, Tempo, and MinIO dependencies.
+description: Deploy Sigil API with optional in-cluster Alloy, Tempo, Prometheus, MySQL, and MinIO dependencies.
 type: application
 version: 0.1.0
 appVersion: "0.1.0"

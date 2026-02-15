@@ -28,6 +28,18 @@ func TestAutoMigrateCreatesSchema(t *testing.T) {
 	if !migrator.HasTable(&ConversationModel{}) {
 		t.Fatalf("expected conversations table")
 	}
+	if !migrator.HasTable(&ConversationRatingModel{}) {
+		t.Fatalf("expected conversation_ratings table")
+	}
+	if !migrator.HasTable(&ConversationRatingSummaryModel{}) {
+		t.Fatalf("expected conversation_rating_summaries table")
+	}
+	if !migrator.HasTable(&ConversationAnnotationModel{}) {
+		t.Fatalf("expected conversation_annotations table")
+	}
+	if !migrator.HasTable(&ConversationAnnotationSummaryModel{}) {
+		t.Fatalf("expected conversation_annotation_summaries table")
+	}
 	if !migrator.HasTable(&CompactionBlockModel{}) {
 		t.Fatalf("expected compaction_blocks table")
 	}
@@ -111,6 +123,26 @@ func TestSaveBatchStoresPayloadAndProjection(t *testing.T) {
 	}
 	if len(row.Payload) == 0 {
 		t.Fatalf("expected payload bytes")
+	}
+
+	var decoded sigilv1.Generation
+	if err := proto.Unmarshal(row.Payload, &decoded); err != nil {
+		t.Fatalf("unmarshal stored payload: %v", err)
+	}
+	if decoded.MaxTokens == nil || *decoded.MaxTokens != *generation.MaxTokens {
+		t.Fatalf("expected max_tokens %v, got %v", generation.MaxTokens, decoded.MaxTokens)
+	}
+	if decoded.Temperature == nil || *decoded.Temperature != *generation.Temperature {
+		t.Fatalf("expected temperature %v, got %v", generation.Temperature, decoded.Temperature)
+	}
+	if decoded.TopP == nil || *decoded.TopP != *generation.TopP {
+		t.Fatalf("expected top_p %v, got %v", generation.TopP, decoded.TopP)
+	}
+	if decoded.ToolChoice == nil || *decoded.ToolChoice != *generation.ToolChoice {
+		t.Fatalf("expected tool_choice %v, got %v", generation.ToolChoice, decoded.ToolChoice)
+	}
+	if decoded.ThinkingEnabled == nil || *decoded.ThinkingEnabled != *generation.ThinkingEnabled {
+		t.Fatalf("expected thinking_enabled %v, got %v", generation.ThinkingEnabled, decoded.ThinkingEnabled)
 	}
 
 	var conversation ConversationModel
@@ -239,11 +271,16 @@ func requireNoBatchErrors(t *testing.T, errs []error) {
 
 func testGeneration(id, conversationID string, completedAt time.Time) *sigilv1.Generation {
 	return &sigilv1.Generation{
-		Id:             id,
-		ConversationId: conversationID,
-		Mode:           sigilv1.GenerationMode_GENERATION_MODE_SYNC,
-		Model:          &sigilv1.ModelRef{Provider: "openai", Name: "gpt-5"},
-		StartedAt:      timestamppb.New(completedAt.Add(-time.Second)),
-		CompletedAt:    timestamppb.New(completedAt),
+		Id:              id,
+		ConversationId:  conversationID,
+		Mode:            sigilv1.GenerationMode_GENERATION_MODE_SYNC,
+		Model:           &sigilv1.ModelRef{Provider: "openai", Name: "gpt-5"},
+		StartedAt:       timestamppb.New(completedAt.Add(-time.Second)),
+		CompletedAt:     timestamppb.New(completedAt),
+		MaxTokens:       proto.Int64(1024),
+		Temperature:     proto.Float64(0.25),
+		TopP:            proto.Float64(0.9),
+		ToolChoice:      proto.String("required"),
+		ThinkingEnabled: proto.Bool(true),
 	}
 }
