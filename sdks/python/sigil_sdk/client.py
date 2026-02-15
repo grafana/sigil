@@ -6,26 +6,45 @@ import copy
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import json
+import re
 import secrets
 import threading
 from typing import Any, Optional
+from urllib import error as urllib_error
+from urllib import parse as urllib_parse
+from urllib import request as urllib_request
 
+from opentelemetry import metrics, trace
+from opentelemetry.metrics import Histogram, Meter
 from opentelemetry.trace import Span, SpanKind, Status, StatusCode
 
 from .config import ClientConfig, resolve_config
 from .context import agent_name_from_context, agent_version_from_context, conversation_id_from_context
-from .errors import ClientShutdownError, EnqueueError, QueueFullError, ValidationError
-from .exporters import GRPCGenerationExporter, HTTPGenerationExporter
+from .errors import (
+    ClientShutdownError,
+    EnqueueError,
+    QueueFullError,
+    RatingConflictError,
+    RatingTransportError,
+    ValidationError,
+)
+from .exporters import GRPCGenerationExporter, HTTPGenerationExporter, NoopGenerationExporter
 from .models import (
+    ConversationRating,
+    ConversationRatingInput,
+    ConversationRatingSummary,
+    ConversationRatingValue,
     ExportGenerationsRequest,
     Generation,
     GenerationMode,
     GenerationStart,
+    Message,
+    PartKind,
+    SubmitConversationRatingResponse,
     ToolExecutionEnd,
     ToolExecutionStart,
 )
 from .proto_mapping import generation_to_proto
-from .tracing import create_trace_runtime
 from .validation import validate_generation
 
 
@@ -34,6 +53,7 @@ _span_attr_conversation_id = "gen_ai.conversation.id"
 _span_attr_agent_name = "gen_ai.agent.name"
 _span_attr_agent_version = "gen_ai.agent.version"
 _span_attr_error_type = "error.type"
+_span_attr_error_category = "error.category"
 _span_attr_operation_name = "gen_ai.operation.name"
 _span_attr_provider_name = "gen_ai.provider.name"
 _span_attr_request_model = "gen_ai.request.model"
@@ -50,12 +70,36 @@ _span_attr_input_tokens = "gen_ai.usage.input_tokens"
 _span_attr_output_tokens = "gen_ai.usage.output_tokens"
 _span_attr_cache_read_tokens = "gen_ai.usage.cache_read_input_tokens"
 _span_attr_cache_write_tokens = "gen_ai.usage.cache_write_input_tokens"
+_span_attr_cache_creation_tokens = "gen_ai.usage.cache_creation_input_tokens"
+_span_attr_reasoning_tokens = "gen_ai.usage.reasoning_tokens"
 _span_attr_tool_name = "gen_ai.tool.name"
 _span_attr_tool_call_id = "gen_ai.tool.call.id"
 _span_attr_tool_type = "gen_ai.tool.type"
 _span_attr_tool_description = "gen_ai.tool.description"
 _span_attr_tool_call_arguments = "gen_ai.tool.call.arguments"
 _span_attr_tool_call_result = "gen_ai.tool.call.result"
+_max_rating_conversation_id_len = 255
+_max_rating_id_len = 128
+_max_rating_generation_id_len = 255
+_max_rating_actor_id_len = 255
+_max_rating_source_len = 64
+_max_rating_comment_bytes = 4096
+_max_rating_metadata_bytes = 16 * 1024
+
+_metric_operation_duration = "gen_ai.client.operation.duration"
+_metric_token_usage = "gen_ai.client.token.usage"
+_metric_ttft = "gen_ai.client.time_to_first_token"
+_metric_tool_calls_per_operation = "gen_ai.client.tool_calls_per_operation"
+_metric_attr_token_type = "gen_ai.token.type"
+_metric_token_type_input = "input"
+_metric_token_type_output = "output"
+_metric_token_type_cache_read = "cache_read"
+_metric_token_type_cache_write = "cache_write"
+_metric_token_type_cache_creation = "cache_creation"
+_metric_token_type_reasoning = "reasoning"
+
+_status_code_pattern = re.compile(r"\b([1-5][0-9][0-9])\b")
+_instrumentation_name = "github.com/grafana/sigil/sdks/python"
 
 
 class Client:
@@ -91,16 +135,22 @@ class Client:
                     headers=self._config.generation_export.headers,
                     insecure=self._config.generation_export.insecure,
                 )
+            elif protocol == "none":
+                self._generation_exporter = NoopGenerationExporter()
             else:
                 raise ValueError(f"unsupported generation export protocol {self._config.generation_export.protocol!r}")
 
-        if self._config.tracer is not None:
-            self._tracer = self._config.tracer
-            self._trace_runtime = None
-        else:
-            trace_runtime = create_trace_runtime(self._config.trace, self._log_warn)
-            self._tracer = trace_runtime.tracer
-            self._trace_runtime = trace_runtime
+        self._tracer = self._config.tracer if self._config.tracer is not None else trace.get_tracer(_instrumentation_name)
+        self._meter = self._config.meter if self._config.meter is not None else metrics.get_meter(_instrumentation_name)
+
+        self._operation_duration_histogram: Histogram = self._meter.create_histogram(
+            _metric_operation_duration, unit="s"
+        )
+        self._token_usage_histogram: Histogram = self._meter.create_histogram(_metric_token_usage, unit="token")
+        self._ttft_histogram: Histogram = self._meter.create_histogram(_metric_ttft, unit="s")
+        self._tool_calls_histogram: Histogram = self._meter.create_histogram(
+            _metric_tool_calls_per_operation, unit="count"
+        )
 
         self._timer_stop = threading.Event()
         self._timer_thread: Optional[threading.Thread] = None
@@ -157,6 +207,89 @@ class Client:
             include_content=seed.include_content,
         )
 
+    def submit_conversation_rating(
+        self,
+        conversation_id: str,
+        rating: ConversationRatingInput,
+    ) -> SubmitConversationRatingResponse:
+        """Submits a user-facing conversation rating through Sigil HTTP API."""
+
+        self._assert_open()
+
+        normalized_conversation_id = conversation_id.strip()
+        if normalized_conversation_id == "":
+            raise ValidationError("sigil conversation rating validation failed: conversation_id is required")
+        if len(normalized_conversation_id) > _max_rating_conversation_id_len:
+            raise ValidationError("sigil conversation rating validation failed: conversation_id is too long")
+
+        normalized_rating = _normalize_conversation_rating_input(rating)
+        endpoint = _conversation_rating_endpoint(
+            self._config.api.endpoint,
+            self._config.generation_export.insecure,
+            normalized_conversation_id,
+        )
+
+        payload = {
+            "rating_id": normalized_rating.rating_id,
+            "rating": normalized_rating.rating.value,
+        }
+        if normalized_rating.comment != "":
+            payload["comment"] = normalized_rating.comment
+        if normalized_rating.metadata:
+            payload["metadata"] = normalized_rating.metadata
+        if normalized_rating.generation_id != "":
+            payload["generation_id"] = normalized_rating.generation_id
+        if normalized_rating.rater_id != "":
+            payload["rater_id"] = normalized_rating.rater_id
+        if normalized_rating.source != "":
+            payload["source"] = normalized_rating.source
+
+        body = json.dumps(payload).encode("utf-8")
+        req = urllib_request.Request(
+            endpoint,
+            data=body,
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                **self._config.generation_export.headers,
+            },
+        )
+
+        raw: bytes
+        status: int
+        try:
+            with urllib_request.urlopen(req, timeout=10) as response:
+                status = response.getcode()
+                raw = response.read()
+        except urllib_error.HTTPError as exc:
+            raw_error = exc.read().decode("utf-8", errors="replace").strip()
+            if exc.code == 400:
+                raise ValidationError(
+                    f"sigil conversation rating validation failed: {_rating_error_text(raw_error, exc.code)}"
+                ) from exc
+            if exc.code == 409:
+                raise RatingConflictError(
+                    f"sigil conversation rating conflict: {_rating_error_text(raw_error, exc.code)}"
+                ) from exc
+            raise RatingTransportError(
+                f"sigil conversation rating transport failed: status {exc.code}: {_rating_error_text(raw_error, exc.code)}"
+            ) from exc
+        except Exception as exc:  # noqa: BLE001
+            raise RatingTransportError(f"sigil conversation rating transport failed: {exc}") from exc
+
+        if status < 200 or status >= 300:
+            decoded = raw.decode("utf-8", errors="replace").strip()
+            raise RatingTransportError(
+                f"sigil conversation rating transport failed: status {status}: {_rating_error_text(decoded, status)}"
+            )
+
+        try:
+            parsed = json.loads(raw.decode("utf-8"))
+        except Exception as exc:  # noqa: BLE001
+            raise RatingTransportError(f"sigil conversation rating transport failed: invalid JSON response: {exc}") from exc
+
+        return _parse_submit_conversation_rating_response(parsed)
+
     def flush(self) -> None:
         """Flushes all queued generations immediately."""
 
@@ -187,16 +320,6 @@ class Client:
                     shutdown_fn()
             except Exception as exc:  # noqa: BLE001
                 self._log_warn("sigil generation exporter shutdown failed", exc)
-
-            if self._trace_runtime is not None:
-                try:
-                    self._trace_runtime.flush()
-                except Exception as exc:  # noqa: BLE001
-                    self._log_warn("sigil trace provider flush on shutdown failed", exc)
-                try:
-                    self._trace_runtime.shutdown()
-                except Exception as exc:  # noqa: BLE001
-                    self._log_warn("sigil trace provider shutdown failed", exc)
 
             self._closed = True
 
@@ -341,6 +464,99 @@ class Client:
             return
         self._logger.warning("%s: %s", message, error)
 
+    def _record_generation_metrics(
+        self,
+        generation: Generation,
+        error_type: str,
+        error_category: str,
+        first_token_at: datetime | None,
+    ) -> None:
+        started_at = generation.started_at
+        completed_at = generation.completed_at
+        if started_at is None or completed_at is None:
+            return
+
+        duration_seconds = max((completed_at - started_at).total_seconds(), 0.0)
+        self._operation_duration_histogram.record(
+            duration_seconds,
+            attributes={
+                _span_attr_operation_name: generation.operation_name,
+                _span_attr_provider_name: generation.model.provider,
+                _span_attr_request_model: generation.model.name,
+                _span_attr_agent_name: generation.agent_name,
+                _span_attr_error_type: error_type,
+                _span_attr_error_category: error_category,
+            },
+        )
+
+        usage = generation.usage
+        self._record_token_usage(generation, _metric_token_type_input, usage.input_tokens)
+        self._record_token_usage(generation, _metric_token_type_output, usage.output_tokens)
+        self._record_token_usage(generation, _metric_token_type_cache_read, usage.cache_read_input_tokens)
+        self._record_token_usage(generation, _metric_token_type_cache_write, usage.cache_write_input_tokens)
+        self._record_token_usage(generation, _metric_token_type_cache_creation, usage.cache_creation_input_tokens)
+        self._record_token_usage(generation, _metric_token_type_reasoning, usage.reasoning_tokens)
+
+        self._tool_calls_histogram.record(
+            _count_tool_call_parts(generation.output),
+            attributes={
+                _span_attr_provider_name: generation.model.provider,
+                _span_attr_request_model: generation.model.name,
+                _span_attr_agent_name: generation.agent_name,
+            },
+        )
+
+        if generation.operation_name == _default_operation_name(GenerationMode.STREAM) and first_token_at is not None:
+            ttft_seconds = (first_token_at - started_at).total_seconds()
+            if ttft_seconds >= 0:
+                self._ttft_histogram.record(
+                    ttft_seconds,
+                    attributes={
+                        _span_attr_provider_name: generation.model.provider,
+                        _span_attr_request_model: generation.model.name,
+                        _span_attr_agent_name: generation.agent_name,
+                    },
+                )
+
+    def _record_token_usage(self, generation: Generation, token_type: str, value: int) -> None:
+        if value == 0:
+            return
+        self._token_usage_histogram.record(
+            value,
+            attributes={
+                _span_attr_provider_name: generation.model.provider,
+                _span_attr_request_model: generation.model.name,
+                _span_attr_agent_name: generation.agent_name,
+                _metric_attr_token_type: token_type,
+            },
+        )
+
+    def _record_tool_execution_metrics(
+        self,
+        seed: ToolExecutionStart,
+        started_at: datetime,
+        completed_at: datetime,
+        final_error: Exception | None,
+    ) -> None:
+        duration_seconds = max((completed_at - started_at).total_seconds(), 0.0)
+        error_type = ""
+        error_category = ""
+        if final_error is not None:
+            error_type = "tool_execution_error"
+            error_category = _error_category_from_exception(final_error, fallback_sdk=True)
+
+        self._operation_duration_histogram.record(
+            duration_seconds,
+            attributes={
+                _span_attr_operation_name: "execute_tool",
+                _span_attr_provider_name: "",
+                _span_attr_request_model: seed.tool_name,
+                _span_attr_agent_name: seed.agent_name,
+                _span_attr_error_type: error_type,
+                _span_attr_error_category: error_category,
+            },
+        )
+
 
 @dataclass(slots=True)
 class GenerationRecorder:
@@ -358,6 +574,7 @@ class GenerationRecorder:
     _result: Generation | None = None
     _last_generation: Generation | None = None
     _final_error: Exception | None = None
+    _first_token_at: datetime | None = None
 
     def __enter__(self) -> "GenerationRecorder":
         return self
@@ -389,6 +606,14 @@ class GenerationRecorder:
             if mapping_error is not None:
                 self._mapping_error = mapping_error
 
+    def set_first_token_at(self, first_token_at: datetime) -> None:
+        """Records when the first streaming token/chunk arrived."""
+
+        if first_token_at is None:
+            return
+        with self._lock:
+            self._first_token_at = _to_utc(first_token_at)
+
     def end(self) -> None:
         """Finalizes span and queues generation export. Safe to call multiple times."""
 
@@ -399,6 +624,7 @@ class GenerationRecorder:
             call_error = self._call_error
             mapping_error = self._mapping_error
             result = copy.deepcopy(self._result) if self._result is not None else Generation()
+            first_token_at = self._first_token_at
 
         completed_at = _to_utc(self.client._now())
         generation = self._normalize_generation(result, completed_at, call_error)
@@ -430,18 +656,30 @@ class GenerationRecorder:
         if local_error is not None:
             self.span.record_exception(local_error)
 
+        error_type = ""
+        error_category = ""
         if call_error is not None:
-            self.span.set_attribute(_span_attr_error_type, "provider_call_error")
+            error_type = "provider_call_error"
+            error_category = _error_category_from_exception(call_error, fallback_sdk=True)
+            self.span.set_attribute(_span_attr_error_type, error_type)
+            self.span.set_attribute(_span_attr_error_category, error_category)
             self.span.set_status(Status(StatusCode.ERROR, str(call_error)))
         elif mapping_error is not None:
-            self.span.set_attribute(_span_attr_error_type, "mapping_error")
+            error_type = "mapping_error"
+            error_category = "sdk_error"
+            self.span.set_attribute(_span_attr_error_type, error_type)
+            self.span.set_attribute(_span_attr_error_category, error_category)
             self.span.set_status(Status(StatusCode.ERROR, str(mapping_error)))
         elif local_error is not None:
             error_type = "validation_error" if isinstance(local_error, ValidationError) else "enqueue_error"
+            error_category = "sdk_error"
             self.span.set_attribute(_span_attr_error_type, error_type)
+            self.span.set_attribute(_span_attr_error_category, error_category)
             self.span.set_status(Status(StatusCode.ERROR, str(local_error)))
         else:
             self.span.set_status(Status(StatusCode.OK))
+
+        self.client._record_generation_metrics(generation, error_type, error_category, first_token_at)
 
         self.span.end(end_time=_datetime_to_ns(generation.completed_at or completed_at))
 
@@ -614,9 +852,12 @@ class ToolExecutionRecorder:
         if final_error is not None:
             self.span.record_exception(final_error)
             self.span.set_attribute(_span_attr_error_type, "tool_execution_error")
+            self.span.set_attribute(_span_attr_error_category, _error_category_from_exception(final_error, fallback_sdk=True))
             self.span.set_status(Status(StatusCode.ERROR, str(final_error)))
         else:
             self.span.set_status(Status(StatusCode.OK))
+
+        self.client._record_tool_execution_metrics(self.seed, self.started_at, completed_at, final_error)
 
         self.span.end(end_time=_datetime_to_ns(completed_at))
 
@@ -725,6 +966,10 @@ def _set_generation_span_attributes(span: Span, generation: Generation) -> None:
         span.set_attribute(_span_attr_cache_read_tokens, usage.cache_read_input_tokens)
     if usage.cache_write_input_tokens:
         span.set_attribute(_span_attr_cache_write_tokens, usage.cache_write_input_tokens)
+    if usage.cache_creation_input_tokens:
+        span.set_attribute(_span_attr_cache_creation_tokens, usage.cache_creation_input_tokens)
+    if usage.reasoning_tokens:
+        span.set_attribute(_span_attr_reasoning_tokens, usage.reasoning_tokens)
 
 
 def _set_tool_span_attributes(span: Span, start: ToolExecutionStart) -> None:
@@ -816,3 +1061,296 @@ def _serialize_tool_content(value: Any) -> str:
         except Exception:  # noqa: BLE001
             return json.dumps(trimmed)
     return json.dumps(value)
+
+def _count_tool_call_parts(messages: list[Message]) -> int:
+    total = 0
+    for message in messages:
+        for part in message.parts:
+            if part.kind == PartKind.TOOL_CALL:
+                total += 1
+    return total
+
+
+def _error_category_from_exception(error: Exception | str | None, fallback_sdk: bool) -> str:
+    if error is None:
+        return "sdk_error" if fallback_sdk else ""
+    if isinstance(error, str):
+        return _classify_error_category(_extract_status_code_from_message(error), error, fallback_sdk)
+
+    status_code = _extract_status_code_from_exception(error)
+    message = str(error)
+    if isinstance(error, TimeoutError):
+        return "timeout"
+    return _classify_error_category(status_code, message, fallback_sdk)
+
+
+def _classify_error_category(status_code: int | None, message: str, fallback_sdk: bool) -> str:
+    message_lower = message.lower()
+    if "timeout" in message_lower or "deadline exceeded" in message_lower:
+        return "timeout"
+    if status_code == 429:
+        return "rate_limit"
+    if status_code in (401, 403):
+        return "auth_error"
+    if status_code == 408:
+        return "timeout"
+    if status_code is not None and 500 <= status_code <= 599:
+        return "server_error"
+    if status_code is not None and 400 <= status_code <= 499:
+        return "client_error"
+    if fallback_sdk:
+        return "sdk_error"
+    return ""
+
+
+def _extract_status_code_from_exception(error: Exception) -> int | None:
+    for field in ("status", "status_code", "Status", "StatusCode"):
+        parsed = _as_status_code(getattr(error, field, None))
+        if parsed is not None:
+            return parsed
+
+    response = getattr(error, "response", None)
+    if response is not None:
+        for field in ("status", "status_code", "Status", "StatusCode"):
+            parsed = _as_status_code(getattr(response, field, None))
+            if parsed is not None:
+                return parsed
+
+    inner_error = getattr(error, "error", None)
+    if inner_error is not None:
+        for field in ("status", "status_code", "Status", "StatusCode"):
+            parsed = _as_status_code(getattr(inner_error, field, None))
+            if parsed is not None:
+                return parsed
+
+    return _extract_status_code_from_message(str(error))
+
+
+def _extract_status_code_from_message(message: str) -> int | None:
+    matches = _status_code_pattern.findall(message)
+    for match in matches:
+        parsed = _as_status_code(match)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _as_status_code(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        parsed = value
+    elif isinstance(value, str):
+        stripped = value.strip()
+        if stripped == "":
+            return None
+        try:
+            parsed = int(stripped)
+        except ValueError:
+            return None
+    else:
+        return None
+    if 100 <= parsed <= 599:
+        return parsed
+    return None
+
+
+def _normalize_conversation_rating_input(input_value: ConversationRatingInput) -> ConversationRatingInput:
+    rating_id = input_value.rating_id.strip()
+    if rating_id == "":
+        raise ValidationError("sigil conversation rating validation failed: rating_id is required")
+    if len(rating_id) > _max_rating_id_len:
+        raise ValidationError("sigil conversation rating validation failed: rating_id is too long")
+
+    rating_value = (
+        input_value.rating.value if isinstance(input_value.rating, ConversationRatingValue) else str(input_value.rating)
+    ).strip()
+    if rating_value not in {
+        ConversationRatingValue.GOOD.value,
+        ConversationRatingValue.BAD.value,
+    }:
+        raise ValidationError(
+            "sigil conversation rating validation failed: rating must be CONVERSATION_RATING_VALUE_GOOD or CONVERSATION_RATING_VALUE_BAD"
+        )
+
+    comment = input_value.comment.strip()
+    if len(comment.encode("utf-8")) > _max_rating_comment_bytes:
+        raise ValidationError("sigil conversation rating validation failed: comment is too long")
+
+    generation_id = input_value.generation_id.strip()
+    if len(generation_id) > _max_rating_generation_id_len:
+        raise ValidationError("sigil conversation rating validation failed: generation_id is too long")
+
+    rater_id = input_value.rater_id.strip()
+    if len(rater_id) > _max_rating_actor_id_len:
+        raise ValidationError("sigil conversation rating validation failed: rater_id is too long")
+
+    source = input_value.source.strip()
+    if len(source) > _max_rating_source_len:
+        raise ValidationError("sigil conversation rating validation failed: source is too long")
+
+    metadata = dict(input_value.metadata or {})
+    if metadata:
+        encoded = json.dumps(metadata)
+        if len(encoded.encode("utf-8")) > _max_rating_metadata_bytes:
+            raise ValidationError("sigil conversation rating validation failed: metadata is too large")
+
+    return ConversationRatingInput(
+        rating_id=rating_id,
+        rating=ConversationRatingValue(rating_value),
+        comment=comment,
+        metadata=metadata,
+        generation_id=generation_id,
+        rater_id=rater_id,
+        source=source,
+    )
+
+
+def _conversation_rating_endpoint(endpoint: str, insecure: bool, conversation_id: str) -> str:
+    base_url = _base_url_from_api_endpoint(endpoint, insecure)
+    return f"{base_url}/api/v1/conversations/{urllib_parse.quote(conversation_id, safe='')}/ratings"
+
+
+def _base_url_from_api_endpoint(endpoint: str, insecure: bool) -> str:
+    trimmed = endpoint.strip()
+    if trimmed == "":
+        raise RatingTransportError("sigil conversation rating transport failed: api endpoint is required")
+
+    if trimmed.startswith("http://") or trimmed.startswith("https://"):
+        parsed = urllib_parse.urlparse(trimmed)
+        if parsed.scheme == "" or parsed.netloc == "":
+            raise RatingTransportError("sigil conversation rating transport failed: api endpoint host is required")
+        return f"{parsed.scheme}://{parsed.netloc}"
+
+    without_scheme = trimmed[7:] if trimmed.startswith("grpc://") else trimmed
+    host = without_scheme.split("/", 1)[0].strip()
+    if host == "":
+        raise RatingTransportError("sigil conversation rating transport failed: api endpoint host is required")
+    scheme = "http" if insecure else "https"
+    return f"{scheme}://{host}"
+
+
+def _parse_submit_conversation_rating_response(payload: Any) -> SubmitConversationRatingResponse:
+    if not isinstance(payload, dict):
+        raise RatingTransportError("sigil conversation rating transport failed: invalid response payload")
+
+    rating_payload = payload.get("rating")
+    summary_payload = payload.get("summary")
+    if not isinstance(rating_payload, dict) or not isinstance(summary_payload, dict):
+        raise RatingTransportError("sigil conversation rating transport failed: invalid response payload")
+
+    return SubmitConversationRatingResponse(
+        rating=_parse_conversation_rating(rating_payload),
+        summary=_parse_conversation_rating_summary(summary_payload),
+    )
+
+
+def _parse_conversation_rating(payload: dict[str, Any]) -> ConversationRating:
+    rating_id = _require_string(payload, "rating_id")
+    conversation_id = _require_string(payload, "conversation_id")
+    try:
+        rating = ConversationRatingValue(_require_string(payload, "rating"))
+    except ValueError as exc:
+        raise RatingTransportError("sigil conversation rating transport failed: invalid rating payload") from exc
+    created_at = _parse_utc_timestamp(_require_string(payload, "created_at"))
+
+    metadata = payload.get("metadata", {})
+    if metadata is None:
+        metadata = {}
+    if not isinstance(metadata, dict):
+        raise RatingTransportError("sigil conversation rating transport failed: invalid rating payload")
+
+    generation_id = payload.get("generation_id", "")
+    rater_id = payload.get("rater_id", "")
+    source = payload.get("source", "")
+    comment = payload.get("comment", "")
+    if not isinstance(generation_id, str) or not isinstance(rater_id, str) or not isinstance(source, str) or not isinstance(comment, str):
+        raise RatingTransportError("sigil conversation rating transport failed: invalid rating payload")
+
+    return ConversationRating(
+        rating_id=rating_id,
+        conversation_id=conversation_id,
+        rating=rating,
+        created_at=created_at,
+        comment=comment,
+        metadata=metadata,
+        generation_id=generation_id,
+        rater_id=rater_id,
+        source=source,
+    )
+
+
+def _parse_conversation_rating_summary(payload: dict[str, Any]) -> ConversationRatingSummary:
+    total_count = _require_int(payload, "total_count")
+    good_count = _require_int(payload, "good_count")
+    bad_count = _require_int(payload, "bad_count")
+    latest_rated_at = _parse_utc_timestamp(_require_string(payload, "latest_rated_at"))
+    has_bad_rating = _require_bool(payload, "has_bad_rating")
+
+    latest_rating_raw = payload.get("latest_rating")
+    latest_rating: ConversationRatingValue | None = None
+    if latest_rating_raw is not None:
+        if not isinstance(latest_rating_raw, str) or latest_rating_raw.strip() == "":
+            raise RatingTransportError("sigil conversation rating transport failed: invalid rating summary payload")
+        try:
+            latest_rating = ConversationRatingValue(latest_rating_raw)
+        except ValueError as exc:
+            raise RatingTransportError(
+                "sigil conversation rating transport failed: invalid rating summary payload"
+            ) from exc
+
+    latest_bad_at_raw = payload.get("latest_bad_at")
+    latest_bad_at: datetime | None = None
+    if latest_bad_at_raw is not None:
+        if not isinstance(latest_bad_at_raw, str) or latest_bad_at_raw.strip() == "":
+            raise RatingTransportError("sigil conversation rating transport failed: invalid rating summary payload")
+        latest_bad_at = _parse_utc_timestamp(latest_bad_at_raw)
+
+    return ConversationRatingSummary(
+        total_count=total_count,
+        good_count=good_count,
+        bad_count=bad_count,
+        latest_rated_at=latest_rated_at,
+        has_bad_rating=has_bad_rating,
+        latest_rating=latest_rating,
+        latest_bad_at=latest_bad_at,
+    )
+
+
+def _parse_utc_timestamp(value: str) -> datetime:
+    normalized = value.strip()
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        return _to_utc(datetime.fromisoformat(normalized))
+    except ValueError as exc:
+        raise RatingTransportError(
+            "sigil conversation rating transport failed: invalid timestamp in response payload"
+        ) from exc
+
+
+def _require_string(payload: dict[str, Any], key: str) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or value.strip() == "":
+        raise RatingTransportError("sigil conversation rating transport failed: invalid response payload")
+    return value
+
+
+def _require_int(payload: dict[str, Any], key: str) -> int:
+    value = payload.get(key)
+    if not isinstance(value, int):
+        raise RatingTransportError("sigil conversation rating transport failed: invalid response payload")
+    return value
+
+
+def _require_bool(payload: dict[str, Any], key: str) -> bool:
+    value = payload.get(key)
+    if not isinstance(value, bool):
+        raise RatingTransportError("sigil conversation rating transport failed: invalid response payload")
+    return value
+
+
+def _rating_error_text(body: str, status: int) -> str:
+    if body != "":
+        return body
+    return f"HTTP {status}"

@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
-status: active
-last_reviewed: 2026-02-12
+status: completed
+last_reviewed: 2026-02-14
 source_of_truth: false
 audience: both
 ---

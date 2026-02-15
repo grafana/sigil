@@ -1,15 +1,10 @@
 namespace Grafana.Sigil;
 
-public enum TraceProtocol
-{
-    Grpc,
-    Http
-}
-
 public enum GenerationExportProtocol
 {
     Grpc,
-    Http
+    Http,
+    None
 }
 
 public enum ExportAuthMode
@@ -24,15 +19,6 @@ public sealed class AuthConfig
     public ExportAuthMode Mode { get; set; } = ExportAuthMode.None;
     public string TenantId { get; set; } = string.Empty;
     public string BearerToken { get; set; } = string.Empty;
-}
-
-public sealed class TraceConfig
-{
-    public TraceProtocol Protocol { get; set; } = TraceProtocol.Http;
-    public string Endpoint { get; set; } = "http://localhost:4318/v1/traces";
-    public Dictionary<string, string> Headers { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-    public AuthConfig Auth { get; set; } = new();
-    public bool Insecure { get; set; } = true;
 }
 
 public sealed class GenerationExportConfig
@@ -51,10 +37,15 @@ public sealed class GenerationExportConfig
     public int PayloadMaxBytes { get; set; } = 4 << 20;
 }
 
+public sealed class ApiConfig
+{
+    public string Endpoint { get; set; } = "http://localhost:8080";
+}
+
 public sealed class SigilClientConfig
 {
-    public TraceConfig Trace { get; set; } = new();
     public GenerationExportConfig GenerationExport { get; set; } = new();
+    public ApiConfig Api { get; set; } = new();
     public Action<string>? Logger { get; set; }
     public Func<DateTimeOffset>? UtcNow { get; set; }
     public Func<TimeSpan, CancellationToken, Task>? SleepAsync { get; set; }
@@ -85,12 +76,15 @@ internal static class ConfigResolver
             resolved.SleepAsync = static (delay, ct) => Task.Delay(delay, ct);
         }
 
-        resolved.Trace.Headers = ResolveHeadersWithAuth(resolved.Trace.Headers, resolved.Trace.Auth, "trace");
         resolved.GenerationExport.Headers = ResolveHeadersWithAuth(
             resolved.GenerationExport.Headers,
             resolved.GenerationExport.Auth,
             "generation"
         );
+        if (string.IsNullOrWhiteSpace(resolved.Api.Endpoint))
+        {
+            resolved.Api.Endpoint = "http://localhost:8080";
+        }
 
         if (resolved.GenerationExport.BatchSize <= 0)
         {

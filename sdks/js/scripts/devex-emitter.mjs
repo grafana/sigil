@@ -42,7 +42,6 @@ export function loadConfig() {
     rotateTurns: intFromEnv('SIGIL_TRAFFIC_ROTATE_TURNS', 24),
     customProvider: stringFromEnv('SIGIL_TRAFFIC_CUSTOM_PROVIDER', 'mistral'),
     genHttpEndpoint: stringFromEnv('SIGIL_TRAFFIC_GEN_HTTP_ENDPOINT', 'http://sigil:8080/api/v1/generations:export'),
-    traceHttpEndpoint: stringFromEnv('SIGIL_TRAFFIC_TRACE_HTTP_ENDPOINT', 'http://sigil:4318/v1/traces'),
     maxCycles: intFromEnv('SIGIL_TRAFFIC_MAX_CYCLES', 0),
   };
 }
@@ -51,10 +50,10 @@ export function sourceTagFor(source) {
   return source === 'mistral' ? 'core_custom' : 'provider_wrapper';
 }
 
-export function providerShapeFor(source) {
+export function providerShapeFor(source, turn = 0) {
   switch (source) {
     case 'openai':
-      return 'chat_completion';
+      return turn % 2 === 0 ? 'openai_chat_completions' : 'openai_responses';
     case 'anthropic':
       return 'messages';
     case 'gemini':
@@ -125,7 +124,7 @@ export function buildTagsAndMetadata(source, mode, turn, slot) {
       conversation_slot: slot,
       agent_persona: agentPersona,
       emitter: 'sdk-traffic',
-      provider_shape: providerShapeFor(source),
+      provider_shape: providerShapeFor(source, turn),
     },
   };
 }
@@ -133,27 +132,38 @@ export function buildTagsAndMetadata(source, mode, turn, slot) {
 async function emitOpenAISync(sdk, client, context) {
   const request = {
     model: 'gpt-5',
-    systemPrompt: 'Return compact project-planning bullets.',
+    max_completion_tokens: 320,
+    temperature: 0.2,
+    top_p: 0.9,
+    reasoning: { effort: 'medium', max_output_tokens: 768 },
     messages: [
+      { role: 'system', content: 'Return compact project-planning bullets.' },
       { role: 'user', content: `Draft release checkpoint plan #${context.turn}.` },
     ],
   };
 
-  await sdk.openai.chatCompletion(
+  await sdk.openai.chat.completions.create(
     client,
     request,
     async () => ({
       id: `js-openai-sync-${context.turn}`,
       model: 'gpt-5',
-      outputText: `Plan ${context.turn}: validate rollout, assign owner, publish timeline.`,
-      stopReason: 'stop',
+      object: 'chat.completion',
+      created: 0,
+      choices: [
+        {
+          index: 0,
+          finish_reason: 'stop',
+          message: {
+            role: 'assistant',
+            content: `Plan ${context.turn}: validate rollout, assign owner, publish timeline.`,
+          },
+        },
+      ],
       usage: {
-        inputTokens: 88 + (context.turn % 9),
-        outputTokens: 26 + (context.turn % 7),
-        totalTokens: 114 + (context.turn % 13),
-      },
-      raw: {
-        shape: 'openai.sync',
+        prompt_tokens: 88 + (context.turn % 9),
+        completion_tokens: 26 + (context.turn % 7),
+        total_tokens: 114 + (context.turn % 13),
       },
     }),
     {
@@ -169,31 +179,142 @@ async function emitOpenAISync(sdk, client, context) {
 async function emitOpenAIStream(sdk, client, context) {
   const request = {
     model: 'gpt-5',
-    systemPrompt: 'Stream incident status updates in short clauses.',
+    stream: true,
+    max_completion_tokens: 220,
+    reasoning: { effort: 'medium', max_output_tokens: 640 },
     messages: [
+      { role: 'system', content: 'Stream incident status updates in short clauses.' },
       { role: 'user', content: `Stream checkpoint status for ticket ${context.turn}.` },
     ],
   };
 
-  await sdk.openai.chatCompletionStream(
+  await sdk.openai.chat.completions.stream(
     client,
     request,
     async () => ({
-      outputText: `Ticket ${context.turn}: canary healthy; promote gate passed.`,
-      finalResponse: {
-        id: `js-openai-stream-${context.turn}`,
-        model: 'gpt-5',
-        outputText: `Ticket ${context.turn}: canary healthy; promote gate passed.`,
-        stopReason: 'stop',
-        usage: {
-          inputTokens: 51 + (context.turn % 5),
-          outputTokens: 17 + (context.turn % 4),
-          totalTokens: 68 + (context.turn % 7),
+      events: [
+        {
+          id: `js-openai-stream-${context.turn}`,
+          model: 'gpt-5',
+          created: 0,
+          object: 'chat.completion.chunk',
+          choices: [{ index: 0, delta: { content: 'Ticket update: canary healthy' } }],
         },
+        {
+          id: `js-openai-stream-${context.turn}`,
+          model: 'gpt-5',
+          created: 0,
+          object: 'chat.completion.chunk',
+          choices: [{ index: 0, delta: { content: '; promote gate passed.' }, finish_reason: 'stop' }],
+        },
+      ],
+    }),
+    {
+      conversationId: context.conversationId,
+      agentName: context.agentName,
+      agentVersion: context.agentVersion,
+      tags: context.tags,
+      metadata: context.metadata,
+    }
+  );
+}
+
+async function emitOpenAIResponsesSync(sdk, client, context) {
+  const request = {
+    model: 'gpt-5',
+    instructions: 'Return concise plan bullets with one action per line.',
+    input: [
+      {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: `Draft release checkpoint plan #${context.turn}.` }],
       },
-      chunks: [
-        { delta: 'Ticket update: canary healthy' },
-        { delta: '; promote gate passed.' },
+    ],
+    max_output_tokens: 320,
+    temperature: 0.2,
+    top_p: 0.9,
+    reasoning: { effort: 'medium', max_output_tokens: 768 },
+  };
+
+  await sdk.openai.responses.create(
+    client,
+    request,
+    async () => ({
+      id: `js-openai-responses-sync-${context.turn}`,
+      object: 'response',
+      model: 'gpt-5',
+      output: [
+        {
+          id: `js-openai-responses-sync-msg-${context.turn}`,
+          type: 'message',
+          role: 'assistant',
+          status: 'completed',
+          content: [
+            {
+              type: 'output_text',
+              text: `Plan ${context.turn}: validate rollout, assign owner, publish timeline.`,
+              annotations: [],
+            },
+          ],
+        },
+      ],
+      status: 'completed',
+      parallel_tool_calls: false,
+      temperature: 0.2,
+      top_p: 0.9,
+      tools: [],
+      created_at: 0,
+      incomplete_details: null,
+      metadata: {},
+      error: null,
+      usage: {
+        input_tokens: 88 + (context.turn % 9),
+        output_tokens: 26 + (context.turn % 7),
+        total_tokens: 114 + (context.turn % 13),
+        input_tokens_details: { cached_tokens: 3 },
+        output_tokens_details: { reasoning_tokens: 4 },
+      },
+    }),
+    {
+      conversationId: context.conversationId,
+      agentName: context.agentName,
+      agentVersion: context.agentVersion,
+      tags: context.tags,
+      metadata: context.metadata,
+    }
+  );
+}
+
+async function emitOpenAIResponsesStream(sdk, client, context) {
+  const request = {
+    model: 'gpt-5',
+    stream: true,
+    instructions: 'Stream concise incident status deltas.',
+    input: `Stream checkpoint status for ticket ${context.turn}.`,
+    max_output_tokens: 220,
+  };
+
+  await sdk.openai.responses.stream(
+    client,
+    request,
+    async () => ({
+      events: [
+        {
+          type: 'response.output_text.delta',
+          sequence_number: 1,
+          output_index: 0,
+          item_id: `js-openai-responses-stream-msg-${context.turn}`,
+          content_index: 0,
+          delta: 'Ticket update: canary healthy',
+        },
+        {
+          type: 'response.output_text.delta',
+          sequence_number: 2,
+          output_index: 0,
+          item_id: `js-openai-responses-stream-msg-${context.turn}`,
+          content_index: 0,
+          delta: '; promote gate passed.',
+        },
       ],
     }),
     {
@@ -209,28 +330,27 @@ async function emitOpenAIStream(sdk, client, context) {
 async function emitAnthropicSync(sdk, client, context) {
   const request = {
     model: 'claude-sonnet-4-5',
-    systemPrompt: 'Reason in two phases: diagnosis then recommendation.',
+    max_tokens: 384,
+    system: [{ type: 'text', text: 'Reason in two phases: diagnosis then recommendation.' }],
     messages: [
-      { role: 'user', content: `Summarize reliability drift set ${context.turn}.` },
+      { role: 'user', content: [{ type: 'text', text: `Summarize reliability drift set ${context.turn}.` }] },
     ],
   };
 
-  await sdk.anthropic.completion(
+  await sdk.anthropic.messages.create(
     client,
     request,
     async () => ({
       id: `js-anthropic-sync-${context.turn}`,
       model: 'claude-sonnet-4-5',
-      outputText: `Diagnosis ${context.turn}: latency drift in eu-west. Recommendation: rebalance workers.`,
-      stopReason: 'end_turn',
+      role: 'assistant',
+      content: [{ type: 'text', text: `Diagnosis ${context.turn}: latency drift in eu-west. Recommendation: rebalance workers.` }],
+      stop_reason: 'end_turn',
       usage: {
-        inputTokens: 73 + (context.turn % 8),
-        outputTokens: 31 + (context.turn % 5),
-        totalTokens: 104 + (context.turn % 11),
-        cacheReadInputTokens: 12,
-      },
-      raw: {
-        shape: 'anthropic.sync',
+        input_tokens: 73 + (context.turn % 8),
+        output_tokens: 31 + (context.turn % 5),
+        total_tokens: 104 + (context.turn % 11),
+        cache_read_input_tokens: 12,
       },
     }),
     {
@@ -246,13 +366,14 @@ async function emitAnthropicSync(sdk, client, context) {
 async function emitAnthropicStream(sdk, client, context) {
   const request = {
     model: 'claude-sonnet-4-5',
-    systemPrompt: 'Use concise streaming deltas for operational narration.',
+    max_tokens: 384,
+    system: [{ type: 'text', text: 'Use concise streaming deltas for operational narration.' }],
     messages: [
-      { role: 'user', content: `Stream mitigation deltas for change ${context.turn}.` },
+      { role: 'user', content: [{ type: 'text', text: `Stream mitigation deltas for change ${context.turn}.` }] },
     ],
   };
 
-  await sdk.anthropic.completionStream(
+  await sdk.anthropic.messages.stream(
     client,
     request,
     async () => ({
@@ -260,18 +381,18 @@ async function emitAnthropicStream(sdk, client, context) {
       finalResponse: {
         id: `js-anthropic-stream-${context.turn}`,
         model: 'claude-sonnet-4-5',
-        outputText: `Change ${context.turn}: rollback guard armed; verification complete.`,
-        stopReason: 'end_turn',
+        role: 'assistant',
+        content: [{ type: 'text', text: `Change ${context.turn}: rollback guard armed; verification complete.` }],
+        stop_reason: 'end_turn',
         usage: {
-          inputTokens: 46 + (context.turn % 6),
-          outputTokens: 18 + (context.turn % 4),
-          totalTokens: 64 + (context.turn % 8),
+          input_tokens: 46 + (context.turn % 6),
+          output_tokens: 18 + (context.turn % 4),
+          total_tokens: 64 + (context.turn % 8),
         },
       },
       events: [
-        { type: 'message_start' },
-        { type: 'delta', text: 'rollback guard armed' },
-        { type: 'message_delta', stop_reason: 'end_turn' },
+        { type: 'content_block_delta', delta: { type: 'text_delta', text: 'rollback guard armed' } },
+        { type: 'content_block_delta', delta: { type: 'text_delta', text: '; verification complete.' } },
       ],
     }),
     {
@@ -285,31 +406,50 @@ async function emitAnthropicStream(sdk, client, context) {
 }
 
 async function emitGeminiSync(sdk, client, context) {
-  const request = {
-    model: 'gemini-2.5-pro',
-    systemPrompt: 'Write release notes with explicit structured tool language.',
-    messages: [
-      { role: 'user', content: `Generate launch note ${context.turn} using function-style tone.` },
-      { role: 'tool', content: '{"tool":"release_metrics","status":"green"}', name: 'release_metrics' },
-    ],
+  const model = 'gemini-2.5-pro';
+  const contents = [
+    { role: 'user', parts: [{ text: `Generate launch note ${context.turn} using function-style tone.` }] },
+    {
+      role: 'user',
+      parts: [
+        {
+          functionResponse: {
+            id: 'release_metrics',
+            name: 'release_metrics',
+            response: { tool: 'release_metrics', status: 'green' },
+          },
+        },
+      ],
+    },
+  ];
+  const config = {
+    systemInstruction: { role: 'user', parts: [{ text: 'Write release notes with explicit structured tool language.' }] },
+    toolConfig: { functionCallingConfig: { mode: 'ANY' } },
+    thinkingConfig: { includeThoughts: true, thinkingBudget: 1536 },
   };
 
-  await sdk.gemini.completion(
+  await sdk.gemini.models.generateContent(
     client,
-    request,
+    model,
+    contents,
+    config,
     async () => ({
-      id: `js-gemini-sync-${context.turn}`,
-      model: 'gemini-2.5-pro-001',
-      outputText: `Launch ${context.turn}: all quality gates green; release metrics consistent.`,
-      stopReason: 'STOP',
-      usage: {
-        inputTokens: 62 + (context.turn % 7),
-        outputTokens: 20 + (context.turn % 5),
-        totalTokens: 82 + (context.turn % 9),
-        reasoningTokens: 6,
-      },
-      raw: {
-        shape: 'gemini.sync',
+      responseId: `js-gemini-sync-${context.turn}`,
+      modelVersion: 'gemini-2.5-pro-001',
+      candidates: [
+        {
+          finishReason: 'STOP',
+          content: {
+            role: 'model',
+            parts: [{ text: `Launch ${context.turn}: all quality gates green; release metrics consistent.` }],
+          },
+        },
+      ],
+      usageMetadata: {
+        promptTokenCount: 62 + (context.turn % 7),
+        candidatesTokenCount: 20 + (context.turn % 5),
+        totalTokenCount: 82 + (context.turn % 9),
+        thoughtsTokenCount: 6,
       },
     }),
     {
@@ -323,33 +463,51 @@ async function emitGeminiSync(sdk, client, context) {
 }
 
 async function emitGeminiStream(sdk, client, context) {
-  const request = {
-    model: 'gemini-2.5-pro',
-    systemPrompt: 'Emit stream checkpoints as staged migration updates.',
-    messages: [
-      { role: 'user', content: `Stream migration sequence ${context.turn} for canary rollout.` },
-    ],
+  const model = 'gemini-2.5-pro';
+  const contents = [
+    { role: 'user', parts: [{ text: `Stream migration sequence ${context.turn} for canary rollout.` }] },
+  ];
+  const config = {
+    systemInstruction: { role: 'user', parts: [{ text: 'Emit stream checkpoints as staged migration updates.' }] },
+    thinkingConfig: { includeThoughts: true, thinkingBudget: 1536 },
   };
 
-  await sdk.gemini.completionStream(
+  await sdk.gemini.models.generateContentStream(
     client,
-    request,
+    model,
+    contents,
+    config,
     async () => ({
       outputText: `Wave ${context.turn}: shard sync complete; traffic shift finalized.`,
       finalResponse: {
-        id: `js-gemini-stream-${context.turn}`,
-        model: 'gemini-2.5-pro-001',
-        outputText: `Wave ${context.turn}: shard sync complete; traffic shift finalized.`,
-        stopReason: 'STOP',
-        usage: {
-          inputTokens: 47 + (context.turn % 5),
-          outputTokens: 16 + (context.turn % 4),
-          totalTokens: 63 + (context.turn % 7),
+        responseId: `js-gemini-stream-${context.turn}`,
+        modelVersion: 'gemini-2.5-pro-001',
+        candidates: [
+          {
+            finishReason: 'STOP',
+            content: {
+              role: 'model',
+              parts: [{ text: `Wave ${context.turn}: shard sync complete; traffic shift finalized.` }],
+            },
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 47 + (context.turn % 5),
+          candidatesTokenCount: 16 + (context.turn % 4),
+          totalTokenCount: 63 + (context.turn % 7),
         },
       },
-      events: [
-        { response_id: `js-gemini-stream-${context.turn}`, delta: 'shard sync complete' },
-        { delta: '; traffic shift finalized.' },
+      responses: [
+        {
+          candidates: [
+            {
+              content: {
+                role: 'model',
+                parts: [{ text: `Wave ${context.turn}: shard sync complete; traffic shift finalized.` }],
+              },
+            },
+          ],
+        },
       ],
     }),
     {
@@ -428,8 +586,19 @@ async function emitCustomStream(client, cfg, context) {
 
 export async function emitSource(sdk, client, cfg, source, mode, context) {
   if (source === 'openai') {
+    const shape = providerShapeFor('openai', context.turn);
+    const useResponses = shape === 'openai_responses';
+
     if (mode === 'STREAM') {
+      if (useResponses) {
+        await emitOpenAIResponsesStream(sdk, client, context);
+        return;
+      }
       await emitOpenAIStream(sdk, client, context);
+      return;
+    }
+    if (useResponses) {
+      await emitOpenAIResponsesSync(sdk, client, context);
       return;
     }
     await emitOpenAISync(sdk, client, context);
@@ -467,12 +636,6 @@ export async function runEmitter(config = loadConfig()) {
     generationExport: {
       protocol: 'http',
       endpoint: config.genHttpEndpoint,
-      auth: { mode: 'none' },
-      insecure: true,
-    },
-    trace: {
-      protocol: 'http',
-      endpoint: config.traceHttpEndpoint,
       auth: { mode: 'none' },
       insecure: true,
     },

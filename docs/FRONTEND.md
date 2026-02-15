@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-13
+last_reviewed: 2026-02-14
 source_of_truth: true
 audience: contributors
 ---
@@ -24,13 +24,23 @@ Current bootstrap contract on `main`:
 - Frontend query entrypoints:
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/ratings`
+  - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/ratings`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`
+  - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`
   - `GET /api/plugins/grafana-sigil-app/resources/query/completions`
-  - `GET /api/plugins/grafana-sigil-app/resources/query/traces/{trace_id}`
+  - `/api/plugins/grafana-sigil-app/resources/query/proxy/prometheus/...`
+  - `/api/plugins/grafana-sigil-app/resources/query/proxy/tempo/...`
 - Plugin backend forwards to Sigil API query endpoints:
   - `GET /api/v1/conversations`
   - `GET /api/v1/conversations/{conversation_id}`
+  - `GET /api/v1/conversations/{conversation_id}/ratings`
+  - `POST /api/v1/conversations/{conversation_id}/ratings`
+  - `GET /api/v1/conversations/{conversation_id}/annotations`
+  - `POST /api/v1/conversations/{conversation_id}/annotations`
   - `GET /api/v1/completions`
-  - `GET /api/v1/traces/{trace_id}`
+  - `/api/v1/proxy/prometheus/...`
+  - `/api/v1/proxy/tempo/...`
 
 Phase 2 target contract (tracked in `docs/exec-plans/active/2026-02-12-phase-2-query-proxy.md`):
 
@@ -57,7 +67,10 @@ See `docs/references/grafana-query-response-shapes.md`.
 
 ## Page Responsibilities
 
-- Conversations: list/search conversations, open details, cross-link to generations and traces.
+- Conversations:
+  - list conversations with `rating_summary` and `annotation_summary`
+  - apply list filters `has_bad_rating` and `has_annotations`
+  - open details with ratings timeline, annotations timeline, and merged event timeline
 - Completions/Generations: list/search generations with model/agent/time/attribute filters.
 - Traces: trace search and trace detail drilldown with generation links.
 - Settings: connection and runtime preferences, including query/tenant validation visibility.

@@ -204,7 +204,6 @@ func testRuntimeConfig(t *testing.T, target string) config.Config {
 
 	cfg := config.FromEnv()
 	cfg.HTTPAddr = randomLocalAddr(t)
-	cfg.OTLPHTTPAddr = randomLocalAddr(t)
 	cfg.OTLPGRPCAddr = randomLocalAddr(t)
 	cfg.AuthEnabled = false
 	cfg.StorageBackend = "memory"

@@ -1,0 +1,27 @@
+{{- if .Values.alloy.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sigil.alloy.fullname" . }}
+  labels:
+    {{- include "sigil.labels" . | nindent 4 }}
+    app.kubernetes.io/component: alloy
+spec:
+  type: ClusterIP
+  ports:
+    - name: otlp-grpc
+      port: {{ .Values.alloy.service.ports.otlpGrpc }}
+      targetPort: otlp-grpc
+      protocol: TCP
+    - name: otlp-http
+      port: {{ .Values.alloy.service.ports.otlpHttp }}
+      targetPort: otlp-http
+      protocol: TCP
+    - name: http
+      port: {{ .Values.alloy.service.ports.http }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "sigil.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: alloy
+{{- end }}

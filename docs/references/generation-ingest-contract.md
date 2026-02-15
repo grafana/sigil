@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-13
+last_reviewed: 2026-02-15
 source_of_truth: true
 audience: both
 ---
@@ -42,7 +42,8 @@ audience: both
 - Direct generation-to-Sigil:
   - SDK generation export uses `tenant` auth mode and sends `X-Scope-OrgID`.
 - Split path (generation direct, traces via collector/alloy):
-  - generation export and trace export auth are configured independently in SDKs.
+  - generation export auth is configured in SDKs.
+  - trace export/auth is configured in the application's OTEL SDK setup.
 - Enterprise proxy pattern:
   - SDK can send bearer auth
   - proxy authenticates bearer and translates upstream to `X-Scope-OrgID`
@@ -79,7 +80,7 @@ audience: both
 - Keep two layers of tests:
   - API handler transport tests (direct HTTP/gRPC request roundtrip).
   - SDK transport tests (SDK -> HTTP/gRPC server roundtrip).
-- SDK tests must also cover OTLP trace export over HTTP and gRPC and assert key GenAI span attributes.
+- SDK tests must assert key GenAI span attributes and generation transport behavior.
 
 ## SDK Expectations
 
@@ -88,7 +89,7 @@ audience: both
 - Use `StartGeneration` for non-stream calls and `StartStreamingGeneration` for streaming calls.
 - `rec.Err()` surfaces validation/enqueue failures only.
 - Call `Shutdown(ctx)` on application exit to flush queued generations.
-- SDK auth is per-export (`trace` vs `generation_export`) with strict modes:
+- SDK generation-export auth uses strict modes:
   - `none`
   - `tenant` (requires tenant id)
   - `bearer` (requires bearer token)
@@ -125,8 +126,11 @@ audience: both
   - `gen_ai.usage.input_tokens`
   - `gen_ai.usage.output_tokens`
   - `gen_ai.usage.cache_read_input_tokens`
+  - `gen_ai.usage.cache_creation_input_tokens`
+  - `gen_ai.usage.reasoning_tokens`
   - `gen_ai.usage.cache_write_input_tokens`
   - `error.type` (`provider_call_error|mapping_error|validation_error|enqueue_error`)
+  - `error.category` (`rate_limit|server_error|auth_error|timeout|client_error|sdk_error`)
 
 ### Example generation span
 
@@ -155,10 +159,23 @@ audience: both
     ],
     "gen_ai.usage.input_tokens": 120,
     "gen_ai.usage.output_tokens": 42,
-    "gen_ai.usage.cache_read_input_tokens": 30
+    "gen_ai.usage.cache_read_input_tokens": 30,
+    "gen_ai.usage.cache_creation_input_tokens": 4,
+    "gen_ai.usage.reasoning_tokens": 9
   }
 }
 ```
+
+### Provider-specific metadata extensions
+
+The normalized payload keeps provider-only details in `metadata` with a stable Sigil prefix. Current extensions:
+
+- `sigil.gen_ai.request.thinking.budget_tokens`: provider thinking budget (request side).
+- `sigil.gen_ai.request.thinking.level`: provider thinking level when available (Gemini).
+- `sigil.gen_ai.usage.tool_use_prompt_tokens`: Gemini `toolUsePromptTokenCount`.
+- `sigil.gen_ai.usage.server_tool_use.web_search_requests`: Anthropic server-side web-search count.
+- `sigil.gen_ai.usage.server_tool_use.web_fetch_requests`: Anthropic server-side web-fetch count when provided.
+- `sigil.gen_ai.usage.server_tool_use.total_requests`: derived total from available server tool-use counters.
 
 ### Tool execution span attributes
 

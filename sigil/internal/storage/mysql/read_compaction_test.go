@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/grafana/sigil/sigil/internal/feedback"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	"github.com/grafana/sigil/sigil/internal/storage"
 )
@@ -206,5 +207,63 @@ func TestInsertBlockDuplicateReturnsErrBlockAlreadyExists(t *testing.T) {
 	err := store.InsertBlock(context.Background(), meta)
 	if !errors.Is(err, storage.ErrBlockAlreadyExists) {
 		t.Fatalf("expected ErrBlockAlreadyExists, got %v", err)
+	}
+}
+
+func TestListConversationsWithFeedbackFilters(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	base := time.Date(2026, 2, 12, 20, 0, 0, 0, time.UTC)
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{
+		testGeneration("gen-filter-1", "conv-filter-1", base),
+		testGeneration("gen-filter-2", "conv-filter-2", base.Add(time.Minute)),
+		testGeneration("gen-filter-3", "conv-filter-3", base.Add(2*time.Minute)),
+	}))
+
+	if _, _, err := store.CreateConversationRating(context.Background(), "tenant-a", "conv-filter-1", feedback.CreateConversationRatingInput{
+		RatingID: "rat-filter-1",
+		Rating:   feedback.RatingValueBad,
+	}); err != nil {
+		t.Fatalf("create bad rating: %v", err)
+	}
+	if _, _, err := store.CreateConversationAnnotation(context.Background(), "tenant-a", "conv-filter-2", feedback.OperatorIdentity{
+		OperatorID: "operator-1",
+	}, feedback.CreateConversationAnnotationInput{
+		AnnotationID:   "ann-filter-1",
+		AnnotationType: feedback.AnnotationTypeNote,
+	}); err != nil {
+		t.Fatalf("create annotation: %v", err)
+	}
+
+	trueValue := true
+	falseValue := false
+
+	hasBad, err := store.ListConversationsWithFeedbackFilters(context.Background(), "tenant-a", &trueValue, nil)
+	if err != nil {
+		t.Fatalf("list has_bad_rating=true: %v", err)
+	}
+	if len(hasBad) != 1 || hasBad[0].ConversationID != "conv-filter-1" {
+		t.Fatalf("unexpected has_bad_rating=true result: %#v", hasBad)
+	}
+
+	hasAnnotations, err := store.ListConversationsWithFeedbackFilters(context.Background(), "tenant-a", nil, &trueValue)
+	if err != nil {
+		t.Fatalf("list has_annotations=true: %v", err)
+	}
+	if len(hasAnnotations) != 1 || hasAnnotations[0].ConversationID != "conv-filter-2" {
+		t.Fatalf("unexpected has_annotations=true result: %#v", hasAnnotations)
+	}
+
+	noSignals, err := store.ListConversationsWithFeedbackFilters(context.Background(), "tenant-a", &falseValue, &falseValue)
+	if err != nil {
+		t.Fatalf("list has_bad_rating=false has_annotations=false: %v", err)
+	}
+	if len(noSignals) != 1 || noSignals[0].ConversationID != "conv-filter-3" {
+		t.Fatalf("unexpected no-signals filter result: %#v", noSignals)
 	}
 }

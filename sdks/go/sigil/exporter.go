@@ -12,10 +12,6 @@ import (
 	"time"
 
 	sigilv1 "github.com/grafana/sigil/sdks/go/sigil/internal/gen/sigil/v1"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -46,11 +42,23 @@ func newNoopGenerationExporter(err error) generationExporter {
 	return &noopGenerationExporter{err: err}
 }
 
-func (e *noopGenerationExporter) Export(_ context.Context, _ *sigilv1.ExportGenerationsRequest) (*sigilv1.ExportGenerationsResponse, error) {
+func (e *noopGenerationExporter) Export(_ context.Context, request *sigilv1.ExportGenerationsRequest) (*sigilv1.ExportGenerationsResponse, error) {
 	if e.err != nil {
 		return nil, e.err
 	}
-	return nil, errors.New("generation exporter unavailable")
+	if request == nil {
+		return &sigilv1.ExportGenerationsResponse{}, nil
+	}
+	response := &sigilv1.ExportGenerationsResponse{
+		Results: make([]*sigilv1.ExportGenerationResult, 0, len(request.GetGenerations())),
+	}
+	for _, generation := range request.GetGenerations() {
+		response.Results = append(response.Results, &sigilv1.ExportGenerationResult{
+			GenerationId: generation.GetId(),
+			Accepted:     true,
+		})
+	}
+	return response, nil
 }
 
 func (e *noopGenerationExporter) Shutdown(_ context.Context) error {
@@ -182,79 +190,11 @@ func newGenerationExporter(cfg GenerationExportConfig) (generationExporter, erro
 		return newGRPCGenerationExporter(cfg)
 	case GenerationExportProtocolHTTP:
 		return newHTTPGenerationExporter(cfg)
+	case GenerationExportProtocolNone:
+		return newNoopGenerationExporter(nil), nil
 	default:
 		return nil, fmt.Errorf("unsupported generation export protocol %q", cfg.Protocol)
 	}
-}
-
-func newTraceProvider(cfg TraceConfig) (trace.Tracer, *sdktrace.TracerProvider, error) {
-	switch cfg.Protocol {
-	case TraceProtocolGRPC:
-		endpoint, _, insecureEndpoint, err := splitEndpoint(cfg.Endpoint)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		opts := []otlptracegrpc.Option{otlptracegrpc.WithEndpoint(endpoint)}
-		if cfg.Insecure || insecureEndpoint {
-			opts = append(opts, otlptracegrpc.WithInsecure())
-		}
-		if len(cfg.Headers) > 0 {
-			opts = append(opts, otlptracegrpc.WithHeaders(cfg.Headers))
-		}
-
-		exporter, err := otlptracegrpc.New(context.Background(), opts...)
-		if err != nil {
-			return nil, nil, fmt.Errorf("init otlp grpc trace exporter: %w", err)
-		}
-
-		provider := sdktrace.NewTracerProvider(sdktrace.WithBatcher(exporter))
-		return provider.Tracer(instrumentationName), provider, nil
-	case TraceProtocolHTTP:
-		endpoint, path, insecureEndpoint, err := splitEndpoint(cfg.Endpoint)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		opts := []otlptracehttp.Option{otlptracehttp.WithEndpoint(endpoint)}
-		if path != "" {
-			opts = append(opts, otlptracehttp.WithURLPath(path))
-		}
-		if cfg.Insecure || insecureEndpoint {
-			opts = append(opts, otlptracehttp.WithInsecure())
-		}
-		if len(cfg.Headers) > 0 {
-			opts = append(opts, otlptracehttp.WithHeaders(cfg.Headers))
-		}
-
-		exporter, err := otlptracehttp.New(context.Background(), opts...)
-		if err != nil {
-			return nil, nil, fmt.Errorf("init otlp http trace exporter: %w", err)
-		}
-
-		provider := sdktrace.NewTracerProvider(sdktrace.WithBatcher(exporter))
-		return provider.Tracer(instrumentationName), provider, nil
-	default:
-		return nil, nil, fmt.Errorf("unsupported trace protocol %q", cfg.Protocol)
-	}
-}
-
-func mergeTraceConfig(base, override TraceConfig) TraceConfig {
-	out := base
-	if override.Protocol != "" {
-		out.Protocol = override.Protocol
-	}
-	if override.Endpoint != "" {
-		out.Endpoint = override.Endpoint
-	}
-	if override.Headers != nil {
-		out.Headers = cloneTags(override.Headers)
-	}
-	out.Auth = mergeAuthConfig(out.Auth, override.Auth)
-	if override.Insecure {
-		out.Insecure = true
-	}
-	return out
 }
 
 func mergeGenerationExportConfig(base, override GenerationExportConfig) GenerationExportConfig {
@@ -292,6 +232,14 @@ func mergeGenerationExportConfig(base, override GenerationExportConfig) Generati
 	}
 	if override.PayloadMaxBytes > 0 {
 		out.PayloadMaxBytes = override.PayloadMaxBytes
+	}
+	return out
+}
+
+func mergeAPIConfig(base, override APIConfig) APIConfig {
+	out := base
+	if override.Endpoint != "" {
+		out.Endpoint = override.Endpoint
 	}
 	return out
 }
@@ -578,11 +526,6 @@ func (c *Client) Shutdown(ctx context.Context) error {
 
 		if err := c.exporter.Shutdown(ctx); err != nil {
 			shutdownErr = errors.Join(shutdownErr, err)
-		}
-		if c.traceProvider != nil {
-			if err := c.traceProvider.Shutdown(ctx); err != nil {
-				shutdownErr = errors.Join(shutdownErr, err)
-			}
 		}
 	})
 

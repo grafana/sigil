@@ -19,9 +19,5 @@ spec:
       port: {{ .Values.service.ports.otlpGrpc }}
       targetPort: otlp-grpc
       protocol: TCP
-    - name: otlp-http
-      port: {{ .Values.service.ports.otlpHttp }}
-      targetPort: otlp-http
-      protocol: TCP
   selector:
     {{- include "sigil.apiSelectorLabels" . | nindent 4 }}

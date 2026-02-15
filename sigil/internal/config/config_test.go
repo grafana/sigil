@@ -13,6 +13,30 @@ func TestFromEnvDefaultsTargetToAll(t *testing.T) {
 	}
 }
 
+func TestFromEnvConversationFeedbackFlags(t *testing.T) {
+	t.Setenv("SIGIL_CONVERSATION_RATINGS_ENABLED", "")
+	t.Setenv("SIGIL_CONVERSATION_ANNOTATIONS_ENABLED", "")
+
+	cfg := FromEnv()
+	if !cfg.ConversationRatingsEnabled {
+		t.Fatalf("expected conversation ratings to be enabled by default")
+	}
+	if !cfg.ConversationAnnotationsEnabled {
+		t.Fatalf("expected conversation annotations to be enabled by default")
+	}
+
+	t.Setenv("SIGIL_CONVERSATION_RATINGS_ENABLED", "false")
+	t.Setenv("SIGIL_CONVERSATION_ANNOTATIONS_ENABLED", "off")
+
+	cfg = FromEnv()
+	if cfg.ConversationRatingsEnabled {
+		t.Fatalf("expected conversation ratings override to be false")
+	}
+	if cfg.ConversationAnnotationsEnabled {
+		t.Fatalf("expected conversation annotations override to be false")
+	}
+}
+
 func TestFromEnvDefaultsObjectStoreAuth(t *testing.T) {
 	t.Setenv("SIGIL_OBJECT_STORE_S3_AWS_SDK_AUTH", "")
 	t.Setenv("SIGIL_OBJECT_STORE_ACCESS_KEY", "")
@@ -106,6 +130,23 @@ func TestFromEnvCompactorScalingDefaults(t *testing.T) {
 	}
 }
 
+func TestFromEnvQueryProxyDefaults(t *testing.T) {
+	t.Setenv("SIGIL_QUERY_PROXY_PROMETHEUS_BASE_URL", "")
+	t.Setenv("SIGIL_QUERY_PROXY_TEMPO_BASE_URL", "")
+	t.Setenv("SIGIL_QUERY_PROXY_TIMEOUT", "")
+
+	cfg := FromEnv()
+	if cfg.QueryProxy.PrometheusBaseURL != "http://prometheus:9090" {
+		t.Fatalf("expected default prometheus proxy url, got %q", cfg.QueryProxy.PrometheusBaseURL)
+	}
+	if cfg.QueryProxy.TempoBaseURL != "http://tempo:3200" {
+		t.Fatalf("expected default tempo proxy url, got %q", cfg.QueryProxy.TempoBaseURL)
+	}
+	if cfg.QueryProxy.Timeout != DefaultQueryProxyTimeout {
+		t.Fatalf("expected default query proxy timeout %s, got %s", DefaultQueryProxyTimeout, cfg.QueryProxy.Timeout)
+	}
+}
+
 func TestValidateRejectsInvalidCompactorScalingConfig(t *testing.T) {
 	cfg := FromEnv()
 	cfg.CompactorConfig.ShardCount = 0
@@ -175,38 +216,31 @@ func TestValidateRejectsInvalidModelCardsConfig(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsInvalidQueryProxyConfig(t *testing.T) {
+	cfg := FromEnv()
+	cfg.QueryProxy.Timeout = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for invalid query proxy timeout")
+	}
+
+	cfg = FromEnv()
+	cfg.QueryProxy.PrometheusBaseURL = "://bad-url"
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for invalid prometheus query proxy url")
+	}
+
+	cfg = FromEnv()
+	cfg.QueryProxy.TempoBaseURL = "ftp://tempo:3200"
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for invalid tempo query proxy url scheme")
+	}
+}
+
 func TestValidateRejectsInvalidModelCardsBootstrapMode(t *testing.T) {
 	cfg := FromEnv()
 	cfg.ModelCardsConfig.BootstrapMode = "invalid"
 
 	if err := cfg.Validate(); err == nil {
 		t.Fatalf("expected validation error for invalid model cards bootstrap mode")
-	}
-}
-
-func TestFromEnvTempoEndpointDefaults(t *testing.T) {
-	t.Setenv("SIGIL_TEMPO_OTLP_GRPC_ENDPOINT", "")
-	t.Setenv("SIGIL_TEMPO_OTLP_HTTP_ENDPOINT", "")
-	t.Setenv("SIGIL_TEMPO_OTLP_ENDPOINT", "legacy:9999")
-
-	cfg := FromEnv()
-	if cfg.TempoOTLPGRPCEndpoint != "tempo:4317" {
-		t.Fatalf("expected default grpc endpoint tempo:4317, got %q", cfg.TempoOTLPGRPCEndpoint)
-	}
-	if cfg.TempoOTLPHTTPEndpoint != "tempo:4318" {
-		t.Fatalf("expected default http endpoint tempo:4318, got %q", cfg.TempoOTLPHTTPEndpoint)
-	}
-}
-
-func TestFromEnvTempoEndpointsOverride(t *testing.T) {
-	t.Setenv("SIGIL_TEMPO_OTLP_GRPC_ENDPOINT", "tempo-grpc:14317")
-	t.Setenv("SIGIL_TEMPO_OTLP_HTTP_ENDPOINT", "http://tempo-http:14318/v1/traces")
-
-	cfg := FromEnv()
-	if cfg.TempoOTLPGRPCEndpoint != "tempo-grpc:14317" {
-		t.Fatalf("expected grpc endpoint override, got %q", cfg.TempoOTLPGRPCEndpoint)
-	}
-	if cfg.TempoOTLPHTTPEndpoint != "http://tempo-http:14318/v1/traces" {
-		t.Fatalf("expected http endpoint override, got %q", cfg.TempoOTLPHTTPEndpoint)
 	}
 }

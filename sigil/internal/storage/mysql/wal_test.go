@@ -28,6 +28,18 @@ func TestAutoMigrateCreatesSchema(t *testing.T) {
 	if !migrator.HasTable(&ConversationModel{}) {
 		t.Fatalf("expected conversations table")
 	}
+	if !migrator.HasTable(&ConversationRatingModel{}) {
+		t.Fatalf("expected conversation_ratings table")
+	}
+	if !migrator.HasTable(&ConversationRatingSummaryModel{}) {
+		t.Fatalf("expected conversation_rating_summaries table")
+	}
+	if !migrator.HasTable(&ConversationAnnotationModel{}) {
+		t.Fatalf("expected conversation_annotations table")
+	}
+	if !migrator.HasTable(&ConversationAnnotationSummaryModel{}) {
+		t.Fatalf("expected conversation_annotation_summaries table")
+	}
 	if !migrator.HasTable(&CompactionBlockModel{}) {
 		t.Fatalf("expected compaction_blocks table")
 	}

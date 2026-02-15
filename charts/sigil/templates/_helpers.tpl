@@ -68,6 +68,14 @@ app.kubernetes.io/component: catalog-sync
 {{- printf "%s-tempo" (include "sigil.fullname" .) | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
+{{- define "sigil.alloy.fullname" -}}
+{{- printf "%s-alloy" (include "sigil.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{- define "sigil.prometheus.fullname" -}}
+{{- printf "%s-prometheus" (include "sigil.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
 {{- define "sigil.minio.fullname" -}}
 {{- printf "%s-minio" (include "sigil.fullname" .) | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
@@ -99,9 +107,9 @@ app.kubernetes.io/component: catalog-sync
 {{- end -}}
 {{- end -}}
 
-{{- define "sigil.tempo.grpcEndpoint" -}}
-{{- if .Values.sigil.tempo.grpcEndpoint -}}
-{{- .Values.sigil.tempo.grpcEndpoint -}}
+{{- define "sigil.alloy.tempoEndpoint" -}}
+{{- if .Values.alloy.outputs.tempo.endpoint -}}
+{{- .Values.alloy.outputs.tempo.endpoint -}}
 {{- else if .Values.tempo.enabled -}}
 {{- printf "%s:%v" (include "sigil.tempo.fullname" .) .Values.tempo.service.ports.grpc -}}
 {{- else -}}
@@ -109,13 +117,13 @@ tempo:4317
 {{- end -}}
 {{- end -}}
 
-{{- define "sigil.tempo.httpEndpoint" -}}
-{{- if .Values.sigil.tempo.httpEndpoint -}}
-{{- .Values.sigil.tempo.httpEndpoint -}}
-{{- else if .Values.tempo.enabled -}}
-{{- printf "%s:%v" (include "sigil.tempo.fullname" .) .Values.tempo.service.ports.http -}}
+{{- define "sigil.alloy.prometheusEndpoint" -}}
+{{- if .Values.alloy.outputs.prometheus.endpoint -}}
+{{- .Values.alloy.outputs.prometheus.endpoint -}}
+{{- else if .Values.prometheus.enabled -}}
+{{- printf "http://%s:%v/api/v1/otlp" (include "sigil.prometheus.fullname" .) .Values.prometheus.service.port -}}
 {{- else -}}
-tempo:4318
+http://prometheus:9090/api/v1/otlp
 {{- end -}}
 {{- end -}}
 

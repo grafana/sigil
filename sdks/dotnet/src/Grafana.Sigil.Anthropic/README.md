@@ -18,7 +18,24 @@ using Anthropic.Models.Messages;
 using Grafana.Sigil;
 using Grafana.Sigil.Anthropic;
 
-var sigil = new SigilClient(config);
+var sigilConfig = new SigilClientConfig
+{
+    GenerationExport = new GenerationExportConfig
+    {
+        Protocol = GenerationExportProtocol.Http,
+        Endpoint = "http://localhost:8080/api/v1/generations:export",
+        Auth = new AuthConfig
+        {
+            Mode = ExportAuthMode.Tenant,
+            TenantId = "dev-tenant",
+        },
+    },
+    Api = new ApiConfig
+    {
+        Endpoint = "http://localhost:8080",
+    },
+};
+var sigil = new SigilClient(sigilConfig);
 
 var anthropic = new AnthropicClient(new Anthropic.Core.ClientOptions
 {
@@ -110,3 +127,11 @@ var response = await AnthropicRecorder.MessageAsync(
 - Thinking blocks, tool-use blocks, and tool-result blocks map to typed Sigil parts.
 - Provider exceptions are captured as generation `CallError` and rethrown.
 - Call `SigilClient.ShutdownAsync(...)` during application shutdown to flush pending exports.
+
+## Provider metadata mapping
+
+In addition to normalized usage fields, Anthropic server-tool counters are mapped into Sigil metadata when present:
+
+- `sigil.gen_ai.usage.server_tool_use.web_search_requests`
+- `sigil.gen_ai.usage.server_tool_use.web_fetch_requests`
+- `sigil.gen_ai.usage.server_tool_use.total_requests`

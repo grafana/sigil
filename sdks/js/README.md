@@ -1,6 +1,6 @@
 # Grafana Sigil TypeScript/JavaScript SDK
 
-Sigil records normalized LLM generation and tool-execution telemetry with OpenTelemetry traces.
+Sigil records normalized LLM generation and tool-execution telemetry using your OpenTelemetry tracer/meter setup.
 
 ## Installation
 
@@ -19,10 +19,8 @@ const client = new SigilClient({
     endpoint: "http://localhost:8080/api/v1/generations:export",
     auth: { mode: "tenant", tenantId: "dev-tenant" },
   },
-  trace: {
-    protocol: "http",
-    endpoint: "http://localhost:4318/v1/traces",
-    auth: { mode: "none" },
+  api: {
+    endpoint: "http://localhost:8080",
   },
 });
 
@@ -40,6 +38,17 @@ await client.startGeneration(
 );
 
 await client.shutdown();
+```
+
+Configure OTEL exporters (traces/metrics) in your application OTEL SDK setup. You can optionally pass `tracer` and `meter` directly to `SigilClient`.
+
+Quick OTEL setup pattern before creating the Sigil client:
+
+```ts
+import { NodeSDK } from "@opentelemetry/sdk-node";
+
+const otel = new NodeSDK();
+await otel.start();
 ```
 
 ## Core API
@@ -94,16 +103,37 @@ await client.startToolExecution(
 ## Behavior
 
 - Generation modes are explicit: `SYNC` and `STREAM`.
-- Generation export supports HTTP and gRPC.
-- Trace export supports OTLP HTTP and OTLP gRPC.
+- Generation export supports HTTP, gRPC, and `none` (instrumentation-only).
+- Traces/metrics use `config.tracer`/`config.meter` when provided, otherwise OTEL globals.
 - Exports are asynchronous with bounded queueing and retry/backoff.
-- `flush()` drains queued generations; `shutdown()` flushes and closes exporters.
+- `flush()` drains queued generations; `shutdown()` flushes and closes generation exporters.
 - Empty tool names produce a no-op tool recorder.
 - Raw provider artifacts are opt-in (`rawArtifacts: true`).
 
-## Per-export auth modes
+## Instrumentation-only mode (no generation send)
 
-Auth is configured independently for `generationExport` and `trace`.
+Set `generationExport.protocol` to `"none"` to keep generation/tool instrumentation and spans while disabling generation transport.
+
+```ts
+const client = new SigilClient({
+  generationExport: {
+    protocol: "none",
+  },
+});
+```
+
+## SDK metrics
+
+The SDK emits these OTel histograms through your configured OTEL meter provider:
+
+- `gen_ai.client.operation.duration`
+- `gen_ai.client.token.usage`
+- `gen_ai.client.time_to_first_token`
+- `gen_ai.client.tool_calls_per_operation`
+
+## Generation export auth modes
+
+Auth is configured for `generationExport`.
 
 - `mode: "none"`
 - `mode: "tenant"` (requires `tenantId`, injects `X-Scope-OrgID`)
@@ -120,10 +150,8 @@ const client = new SigilClient({
     endpoint: "http://localhost:8080/api/v1/generations:export",
     auth: { mode: "tenant", tenantId: "prod-tenant" },
   },
-  trace: {
-    protocol: "grpc",
-    endpoint: "localhost:4317",
-    auth: { mode: "none" }, // traces through Collector/Alloy
+  api: {
+    endpoint: "http://localhost:8080",
   },
 });
 ```
@@ -134,7 +162,6 @@ The SDK does not auto-load env vars. Resolve env secrets in your app and map the
 
 ```ts
 const generationBearerToken = (process.env.SIGIL_GEN_BEARER_TOKEN ?? "").trim();
-const traceBearerToken = (process.env.SIGIL_TRACE_BEARER_TOKEN ?? "").trim();
 
 const client = new SigilClient({
   generationExport: {
@@ -145,13 +172,8 @@ const client = new SigilClient({
         ? { mode: "bearer", bearerToken: generationBearerToken }
         : { mode: "tenant", tenantId: "dev-tenant" },
   },
-  trace: {
-    protocol: "grpc",
-    endpoint: "localhost:4317",
-    auth:
-      traceBearerToken.length > 0
-        ? { mode: "bearer", bearerToken: traceBearerToken }
-        : { mode: "none" },
+  api: {
+    endpoint: "http://localhost:8080",
   },
 });
 ```
@@ -159,5 +181,23 @@ const client = new SigilClient({
 Common topology:
 
 - Generations direct to Sigil: generation `tenant` mode.
-- Traces via OTEL Collector/Alloy: trace `none` or `bearer` mode.
+- Traces/metrics via OTEL Collector/Alloy: configure exporters in your app OTEL SDK setup.
 - Enterprise proxy: generation `bearer` mode to proxy; proxy authenticates and forwards tenant header upstream.
+
+## Conversation Ratings
+
+Use the SDK helper to submit user-facing ratings:
+
+```ts
+const result = await client.submitConversationRating("conv-123", {
+  ratingId: "rat-123",
+  rating: "CONVERSATION_RATING_VALUE_BAD",
+  comment: "Answer ignored user context",
+  metadata: { channel: "assistant-ui" },
+  source: "sdk-js",
+});
+
+console.log(result.rating.rating, result.summary.hasBadRating);
+```
+
+`submitConversationRating` sends requests to `api.endpoint` (default `http://localhost:8080`) and uses the same generation-export auth headers (`tenant` or `bearer`) already configured on the SDK client.
