@@ -129,11 +129,9 @@ const client = new SigilClient({
     endpoint: "http://localhost:8080/api/v1/generations:export",
     auth: { mode: "tenant", tenantId: "dev-tenant" },
   },
-  trace: {
-    protocol: "http",
-    endpoint: "http://localhost:4318/v1/traces", // Alloy OTLP endpoint
-  },
 });
+
+// Configure OTEL exporters (traces/metrics) in your app OTEL setup.
 
 await client.startGeneration(
   {
@@ -156,6 +154,7 @@ await client.shutdown();
 - Python core SDK: [`sdks/python/README.md`](sdks/python/README.md)
 - TypeScript/JavaScript SDK: [`sdks/js/README.md`](sdks/js/README.md)
 - Java SDK: [`sdks/java/README.md`](sdks/java/README.md)
+- .NET SDK: [`sdks/dotnet/README.md`](sdks/dotnet/README.md)
 
 Provider helper docs:
 
@@ -163,6 +162,7 @@ Provider helper docs:
 - Python providers: OpenAI ([`sdks/python-providers/openai/README.md`](sdks/python-providers/openai/README.md)), Anthropic ([`sdks/python-providers/anthropic/README.md`](sdks/python-providers/anthropic/README.md)), Gemini ([`sdks/python-providers/gemini/README.md`](sdks/python-providers/gemini/README.md))
 - TypeScript/JavaScript providers: OpenAI ([`sdks/js/docs/providers/openai.md`](sdks/js/docs/providers/openai.md)), Anthropic ([`sdks/js/docs/providers/anthropic.md`](sdks/js/docs/providers/anthropic.md)), Gemini ([`sdks/js/docs/providers/gemini.md`](sdks/js/docs/providers/gemini.md))
 - Java providers: OpenAI ([`sdks/java/providers/openai/README.md`](sdks/java/providers/openai/README.md)), Anthropic ([`sdks/java/providers/anthropic/README.md`](sdks/java/providers/anthropic/README.md)), Gemini ([`sdks/java/providers/gemini/README.md`](sdks/java/providers/gemini/README.md))
+- .NET providers: OpenAI ([`sdks/dotnet/src/Grafana.Sigil.OpenAI/README.md`](sdks/dotnet/src/Grafana.Sigil.OpenAI/README.md)), Anthropic ([`sdks/dotnet/src/Grafana.Sigil.Anthropic/README.md`](sdks/dotnet/src/Grafana.Sigil.Anthropic/README.md)), Gemini ([`sdks/dotnet/src/Grafana.Sigil.Gemini/README.md`](sdks/dotnet/src/Grafana.Sigil.Gemini/README.md))
 
 ## Documentation
 
