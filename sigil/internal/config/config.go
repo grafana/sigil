@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -28,24 +29,32 @@ const (
 	DefaultCompactorCycleBudget        = 30 * time.Second
 	DefaultCompactorClaimTTL           = 5 * time.Minute
 	DefaultCompactorTargetBlockBytes   = 64 * 1024 * 1024
+	DefaultQueryProxyTimeout           = 30 * time.Second
 )
 
 type Config struct {
-	HTTPAddr              string
-	OTLPGRPCAddr          string
-	OTLPHTTPAddr          string
-	Target                string
-	AuthEnabled           bool
-	FakeTenantID          string
+	HTTPAddr                       string
+	OTLPGRPCAddr                   string
+	OTLPHTTPAddr                   string
+	Target                         string
+	AuthEnabled                    bool
+	FakeTenantID                   string
 	ConversationRatingsEnabled     bool
 	ConversationAnnotationsEnabled bool
-	TempoOTLPGRPCEndpoint string
-	TempoOTLPHTTPEndpoint string
-	StorageBackend        string
-	MySQLDSN              string
-	ObjectStore           ObjectStoreConfig
-	CompactorConfig       CompactorConfig
-	ModelCardsConfig      ModelCardsConfig
+	TempoOTLPGRPCEndpoint          string
+	TempoOTLPHTTPEndpoint          string
+	QueryProxy                     QueryProxyConfig
+	StorageBackend                 string
+	MySQLDSN                       string
+	ObjectStore                    ObjectStoreConfig
+	CompactorConfig                CompactorConfig
+	ModelCardsConfig               ModelCardsConfig
+}
+
+type QueryProxyConfig struct {
+	PrometheusBaseURL string
+	TempoBaseURL      string
+	Timeout           time.Duration
 }
 
 type ObjectStoreConfig struct {
@@ -113,18 +122,23 @@ func FromEnv() Config {
 	}
 
 	return Config{
-		HTTPAddr:              getEnv("SIGIL_HTTP_ADDR", ":8080"),
-		OTLPGRPCAddr:          getEnv("SIGIL_OTLP_GRPC_ADDR", ":4317"),
-		OTLPHTTPAddr:          getEnv("SIGIL_OTLP_HTTP_ADDR", ":4318"),
-		Target:                strings.ToLower(strings.TrimSpace(getEnv("SIGIL_TARGET", TargetAll))),
-		AuthEnabled:           getEnvBool("SIGIL_AUTH_ENABLED", true),
-		FakeTenantID:          getEnv("SIGIL_FAKE_TENANT_ID", "fake"),
+		HTTPAddr:                       getEnv("SIGIL_HTTP_ADDR", ":8080"),
+		OTLPGRPCAddr:                   getEnv("SIGIL_OTLP_GRPC_ADDR", ":4317"),
+		OTLPHTTPAddr:                   getEnv("SIGIL_OTLP_HTTP_ADDR", ":4318"),
+		Target:                         strings.ToLower(strings.TrimSpace(getEnv("SIGIL_TARGET", TargetAll))),
+		AuthEnabled:                    getEnvBool("SIGIL_AUTH_ENABLED", true),
+		FakeTenantID:                   getEnv("SIGIL_FAKE_TENANT_ID", "fake"),
 		ConversationRatingsEnabled:     getEnvBool("SIGIL_CONVERSATION_RATINGS_ENABLED", true),
 		ConversationAnnotationsEnabled: getEnvBool("SIGIL_CONVERSATION_ANNOTATIONS_ENABLED", true),
-		TempoOTLPGRPCEndpoint: getEnv("SIGIL_TEMPO_OTLP_GRPC_ENDPOINT", "tempo:4317"),
-		TempoOTLPHTTPEndpoint: getEnv("SIGIL_TEMPO_OTLP_HTTP_ENDPOINT", "tempo:4318"),
-		StorageBackend:        getEnv("SIGIL_STORAGE_BACKEND", "mysql"),
-		MySQLDSN:              getEnv("SIGIL_MYSQL_DSN", "sigil:sigil@tcp(mysql:3306)/sigil?parseTime=true"),
+		TempoOTLPGRPCEndpoint:          getEnv("SIGIL_TEMPO_OTLP_GRPC_ENDPOINT", "tempo:4317"),
+		TempoOTLPHTTPEndpoint:          getEnv("SIGIL_TEMPO_OTLP_HTTP_ENDPOINT", "tempo:4318"),
+		QueryProxy: QueryProxyConfig{
+			PrometheusBaseURL: getEnv("SIGIL_QUERY_PROXY_PROMETHEUS_BASE_URL", "http://prometheus:9090"),
+			TempoBaseURL:      getEnv("SIGIL_QUERY_PROXY_TEMPO_BASE_URL", "http://tempo:3200"),
+			Timeout:           getEnvDuration("SIGIL_QUERY_PROXY_TIMEOUT", DefaultQueryProxyTimeout),
+		},
+		StorageBackend: getEnv("SIGIL_STORAGE_BACKEND", "mysql"),
+		MySQLDSN:       getEnv("SIGIL_MYSQL_DSN", "sigil:sigil@tcp(mysql:3306)/sigil?parseTime=true"),
 		ObjectStore: ObjectStoreConfig{
 			Backend: strings.ToLower(strings.TrimSpace(getEnv("SIGIL_OBJECT_STORE_BACKEND", "s3"))),
 			Bucket:  getEnv("SIGIL_OBJECT_STORE_BUCKET", "sigil"),
@@ -217,6 +231,15 @@ func (c Config) Validate() error {
 	}
 	if c.CompactorConfig.TargetBlockBytes <= 0 {
 		return fmt.Errorf("SIGIL_COMPACTOR_TARGET_BLOCK_BYTES must be > 0")
+	}
+	if c.QueryProxy.Timeout <= 0 {
+		return fmt.Errorf("SIGIL_QUERY_PROXY_TIMEOUT must be > 0")
+	}
+	if err := validateHTTPBaseURL(c.QueryProxy.PrometheusBaseURL, "SIGIL_QUERY_PROXY_PROMETHEUS_BASE_URL"); err != nil {
+		return err
+	}
+	if err := validateHTTPBaseURL(c.QueryProxy.TempoBaseURL, "SIGIL_QUERY_PROXY_TEMPO_BASE_URL"); err != nil {
+		return err
 	}
 	if c.ModelCardsConfig.SyncInterval <= 0 {
 		return fmt.Errorf("SIGIL_MODEL_CARDS_SYNC_INTERVAL must be > 0")
@@ -354,4 +377,18 @@ func getEnvInt64(key string, defaultValue int64) int64 {
 	}
 
 	return parsed
+}
+
+func validateHTTPBaseURL(raw string, key string) error {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return fmt.Errorf("invalid %s: %w", key, err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("%s must use http or https scheme", key)
+	}
+	if parsed.Host == "" {
+		return fmt.Errorf("%s must include host", key)
+	}
+	return nil
 }

@@ -52,13 +52,36 @@ func (a *App) handleListCompletions(w http.ResponseWriter, req *http.Request) {
 	a.handleProxy(w, req, "/api/v1/completions", http.MethodGet)
 }
 
-func (a *App) handleGetTrace(w http.ResponseWriter, req *http.Request) {
-	id := strings.TrimPrefix(req.URL.Path, "/query/traces/")
-	if id == "" || strings.Contains(id, "/") {
-		http.Error(w, "invalid trace id", http.StatusBadRequest)
+func (a *App) handlePrometheusProxyRoutes(w http.ResponseWriter, req *http.Request) {
+	a.handleDownstreamProxy(w, req, "/query/proxy/prometheus/", "/api/v1/proxy/prometheus")
+}
+
+func (a *App) handleTempoProxyRoutes(w http.ResponseWriter, req *http.Request) {
+	a.handleDownstreamProxy(w, req, "/query/proxy/tempo/", "/api/v1/proxy/tempo")
+}
+
+func (a *App) handleDownstreamProxy(w http.ResponseWriter, req *http.Request, routePrefix string, upstreamPrefix string) {
+	downstreamPath, ok := downstreamProxyPath(req.URL.Path, routePrefix)
+	if !ok {
+		http.Error(w, "invalid proxy path", http.StatusBadRequest)
 		return
 	}
-	a.handleProxy(w, req, fmt.Sprintf("/api/v1/traces/%s", id), http.MethodGet)
+	a.handleProxy(w, req, upstreamPrefix+downstreamPath, req.Method)
+}
+
+func downstreamProxyPath(path string, routePrefix string) (string, bool) {
+	if !strings.HasPrefix(path, routePrefix) {
+		return "", false
+	}
+	downstream := strings.TrimSpace(strings.TrimPrefix(path, routePrefix))
+	if downstream == "" {
+		return "", false
+	}
+	downstream = "/" + strings.TrimPrefix(downstream, "/")
+	if downstream == "/" {
+		return "", false
+	}
+	return downstream, true
 }
 
 func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string, method string) {
@@ -144,5 +167,6 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/query/conversations", a.handleListConversations)
 	mux.HandleFunc("/query/conversations/", a.handleConversationRoutes)
 	mux.HandleFunc("/query/completions", a.handleListCompletions)
-	mux.HandleFunc("/query/traces/", a.handleGetTrace)
+	mux.HandleFunc("/query/proxy/prometheus/", a.handlePrometheusProxyRoutes)
+	mux.HandleFunc("/query/proxy/tempo/", a.handleTempoProxyRoutes)
 }

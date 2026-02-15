@@ -65,6 +65,7 @@ This is the canonical navigation map for repository documentation.
   - Grafana response shapes: [`references/grafana-query-response-shapes.md`](references/grafana-query-response-shapes.md)
   - Helm deployment chart: [`references/helm-chart.md`](references/helm-chart.md)
   - Model cards API shape: [`references/model-cards-api.md`](references/model-cards-api.md)
+  - Multi-tenancy guide: [`references/multi-tenancy.md`](references/multi-tenancy.md)
 
 ## Redundancy Rule
 

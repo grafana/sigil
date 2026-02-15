@@ -118,7 +118,9 @@ Chart docs and reference:
 - Chart usage: [`charts/sigil/README.md`](charts/sigil/README.md)
 - Helm reference: [`docs/references/helm-chart.md`](docs/references/helm-chart.md)
 
-## SDK Example (TypeScript/JavaScript)
+## SDK Quick Examples
+
+### TypeScript
 
 ```ts
 import { SigilClient } from "@grafana/sigil-sdk-js";
@@ -129,9 +131,35 @@ const client = new SigilClient({
     endpoint: "http://localhost:8080/api/v1/generations:export",
     auth: { mode: "tenant", tenantId: "dev-tenant" },
   },
-  trace: {
+});
+
+// Configure OTEL exporters (traces/metrics) in your app OTEL setup.
+
+await client.startGeneration(
+  {
+    conversationId: "conv-1",
+    model: { provider: "openai", name: "gpt-5" },
+  },
+  async (recorder) => {
+    recorder.setResult({
+      output: [{ role: "assistant", content: "Hello from Sigil" }],
+    });
+  }
+);
+
+await client.shutdown();
+```
+
+### JavaScript
+
+```js
+import { SigilClient } from "@grafana/sigil-sdk-js";
+
+const client = new SigilClient({
+  generationExport: {
     protocol: "http",
-    endpoint: "http://localhost:4318/v1/traces", // Alloy OTLP endpoint
+    endpoint: "http://localhost:8080/api/v1/generations:export",
+    auth: { mode: "tenant", tenantId: "dev-tenant" },
   },
 });
 
@@ -150,12 +178,60 @@ await client.startGeneration(
 await client.shutdown();
 ```
 
+### Go
+
+```go
+cfg := sigil.DefaultConfig()
+cfg.GenerationExport.Protocol = sigil.GenerationExportProtocolHTTP
+cfg.GenerationExport.Endpoint = "http://localhost:8080/api/v1/generations:export"
+cfg.GenerationExport.Auth = sigil.AuthConfig{
+	Mode:     sigil.ExportAuthModeTenant,
+	TenantID: "dev-tenant",
+}
+
+client := sigil.NewClient(cfg)
+defer func() { _ = client.Shutdown(context.Background()) }()
+
+ctx, rec := client.StartGeneration(context.Background(), sigil.GenerationStart{
+	ConversationID: "conv-1",
+	Model:          sigil.ModelRef{Provider: "openai", Name: "gpt-5"},
+})
+defer rec.End()
+
+rec.SetResult(sigil.Generation{
+	Output: []sigil.Message{sigil.AssistantTextMessage("Hello from Sigil")},
+}, nil)
+```
+
+### Python
+
+```python
+from sigil_sdk import Client, ClientConfig, GenerationStart, ModelRef, assistant_text_message
+
+client = Client(
+    ClientConfig(
+        generation_export_endpoint="http://localhost:8080/api/v1/generations:export",
+    )
+)
+
+with client.start_generation(
+    GenerationStart(
+        conversation_id="conv-1",
+        model=ModelRef(provider="openai", name="gpt-5"),
+    )
+) as rec:
+    rec.set_result(output=[assistant_text_message("Hello from Sigil")])
+
+client.shutdown()
+```
+
 ## SDKs We Support
 
 - Go core SDK: [`sdks/go/README.md`](sdks/go/README.md)
 - Python core SDK: [`sdks/python/README.md`](sdks/python/README.md)
 - TypeScript/JavaScript SDK: [`sdks/js/README.md`](sdks/js/README.md)
 - Java SDK: [`sdks/java/README.md`](sdks/java/README.md)
+- .NET SDK: [`sdks/dotnet/README.md`](sdks/dotnet/README.md)
 
 Provider helper docs:
 
@@ -163,6 +239,7 @@ Provider helper docs:
 - Python providers: OpenAI ([`sdks/python-providers/openai/README.md`](sdks/python-providers/openai/README.md)), Anthropic ([`sdks/python-providers/anthropic/README.md`](sdks/python-providers/anthropic/README.md)), Gemini ([`sdks/python-providers/gemini/README.md`](sdks/python-providers/gemini/README.md))
 - TypeScript/JavaScript providers: OpenAI ([`sdks/js/docs/providers/openai.md`](sdks/js/docs/providers/openai.md)), Anthropic ([`sdks/js/docs/providers/anthropic.md`](sdks/js/docs/providers/anthropic.md)), Gemini ([`sdks/js/docs/providers/gemini.md`](sdks/js/docs/providers/gemini.md))
 - Java providers: OpenAI ([`sdks/java/providers/openai/README.md`](sdks/java/providers/openai/README.md)), Anthropic ([`sdks/java/providers/anthropic/README.md`](sdks/java/providers/anthropic/README.md)), Gemini ([`sdks/java/providers/gemini/README.md`](sdks/java/providers/gemini/README.md))
+- .NET providers: OpenAI ([`sdks/dotnet/src/Grafana.Sigil.OpenAI/README.md`](sdks/dotnet/src/Grafana.Sigil.OpenAI/README.md)), Anthropic ([`sdks/dotnet/src/Grafana.Sigil.Anthropic/README.md`](sdks/dotnet/src/Grafana.Sigil.Anthropic/README.md)), Gemini ([`sdks/dotnet/src/Grafana.Sigil.Gemini/README.md`](sdks/dotnet/src/Grafana.Sigil.Gemini/README.md))
 
 ## Documentation
 

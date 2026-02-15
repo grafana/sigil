@@ -173,7 +173,9 @@ func NewService(store Store) *Service {
 func (s *Service) CreateRating(ctx context.Context, tenantID, conversationID string, input CreateConversationRatingInput) (*ConversationRating, *ConversationRatingSummary, error) {
 	start := time.Now()
 	status := "success"
-	defer observeFeedbackMetrics("rating", "create", status, start)
+	defer func() {
+		observeFeedbackMetrics("rating", "create", status, start)
+	}()
 
 	if s.store == nil {
 		status = "error"
@@ -195,7 +197,9 @@ func (s *Service) CreateRating(ctx context.Context, tenantID, conversationID str
 func (s *Service) ListRatings(ctx context.Context, tenantID, conversationID string, limit int, cursor uint64) ([]ConversationRating, uint64, error) {
 	start := time.Now()
 	status := "success"
-	defer observeFeedbackMetrics("rating", "list", status, start)
+	defer func() {
+		observeFeedbackMetrics("rating", "list", status, start)
+	}()
 
 	if s.store == nil {
 		status = "error"
@@ -222,7 +226,9 @@ func (s *Service) ListRatings(ctx context.Context, tenantID, conversationID stri
 func (s *Service) CreateAnnotation(ctx context.Context, tenantID, conversationID string, operator OperatorIdentity, input CreateConversationAnnotationInput) (*ConversationAnnotation, *ConversationAnnotationSummary, error) {
 	start := time.Now()
 	status := "success"
-	defer observeFeedbackMetrics("annotation", "create", status, start)
+	defer func() {
+		observeFeedbackMetrics("annotation", "create", status, start)
+	}()
 
 	if s.store == nil {
 		status = "error"
@@ -244,7 +250,9 @@ func (s *Service) CreateAnnotation(ctx context.Context, tenantID, conversationID
 func (s *Service) ListAnnotations(ctx context.Context, tenantID, conversationID string, limit int, cursor uint64) ([]ConversationAnnotation, uint64, error) {
 	start := time.Now()
 	status := "success"
-	defer observeFeedbackMetrics("annotation", "list", status, start)
+	defer func() {
+		observeFeedbackMetrics("annotation", "list", status, start)
+	}()
 
 	if s.store == nil {
 		status = "error"

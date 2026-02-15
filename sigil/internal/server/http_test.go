@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
 	"github.com/grafana/sigil/sigil/internal/modelcards"
 	"github.com/grafana/sigil/sigil/internal/query"
+	"github.com/grafana/sigil/sigil/internal/queryproxy"
 	"github.com/grafana/sigil/sigil/internal/storage"
 	"github.com/grafana/sigil/sigil/internal/tenantauth"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -482,6 +484,202 @@ func TestListConversationsReturnsEmptyItemsArray(t *testing.T) {
 	}
 	if !strings.Contains(resp.Body.String(), `"items":[]`) {
 		t.Fatalf("expected items to be encoded as empty array, body=%s", resp.Body.String())
+	}
+}
+
+func TestQueryProxyPassThroughAndTenantHeaderWhenAuthDisabled(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path != "/prom-prefix/api/v1/query_range" {
+			http.Error(w, "unexpected path", http.StatusBadRequest)
+			return
+		}
+		if req.URL.RawQuery != "query=up&step=15" {
+			http.Error(w, "unexpected query", http.StatusBadRequest)
+			return
+		}
+		if got := req.Header.Get("X-Scope-OrgID"); got != "fake" {
+			http.Error(w, "missing fake tenant header", http.StatusUnauthorized)
+			return
+		}
+		if got := req.Header.Get("Authorization"); got != "" {
+			http.Error(w, "authorization should not be forwarded", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("X-Upstream", "ok")
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"status":"success"}`))
+	}))
+	defer upstream.Close()
+
+	proxy, err := queryproxy.New(queryproxy.Config{
+		PrometheusBaseURL: upstream.URL + "/prom-prefix",
+		TempoBaseURL:      upstream.URL + "/tempo-prefix",
+		Timeout:           time.Second,
+	})
+	if err != nil {
+		t.Fatalf("new query proxy: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterRoutesWithQueryProxy(
+		mux,
+		query.NewService(),
+		generationingest.NewService(generationingest.NewMemoryStore()),
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		protected,
+		proxy,
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/prometheus/api/v1/query_range?query=up&step=15", nil)
+	req.Header.Set("Authorization", "Bearer token")
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusAccepted {
+		t.Fatalf("expected %d, got %d body=%s", http.StatusAccepted, resp.Code, resp.Body.String())
+	}
+	if body := strings.TrimSpace(resp.Body.String()); body != `{"status":"success"}` {
+		t.Fatalf("unexpected response body: %s", body)
+	}
+	if got := resp.Header().Get("X-Upstream"); got != "ok" {
+		t.Fatalf("expected X-Upstream header, got %q", got)
+	}
+}
+
+func TestQueryProxyRequiresTenantWhenAuthEnabled(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if got := req.Header.Get("X-Scope-OrgID"); got != "tenant-a" {
+			http.Error(w, "missing tenant header", http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer upstream.Close()
+
+	proxy, err := queryproxy.New(queryproxy.Config{
+		PrometheusBaseURL: upstream.URL,
+		TempoBaseURL:      upstream.URL,
+		Timeout:           time.Second,
+	})
+	if err != nil {
+		t.Fatalf("new query proxy: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: true, FakeTenantID: "fake"})
+	RegisterRoutesWithQueryProxy(
+		mux,
+		query.NewService(),
+		generationingest.NewService(generationingest.NewMemoryStore()),
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		protected,
+		proxy,
+	)
+
+	unauthorizedReq := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/prometheus/api/v1/query?query=up", nil)
+	unauthorizedResp := httptest.NewRecorder()
+	mux.ServeHTTP(unauthorizedResp, unauthorizedReq)
+	if unauthorizedResp.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without tenant header, got %d", unauthorizedResp.Code)
+	}
+
+	authorizedReq := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/prometheus/api/v1/query?query=up", nil)
+	authorizedReq.Header.Set("X-Scope-OrgID", "tenant-a")
+	authorizedResp := httptest.NewRecorder()
+	mux.ServeHTTP(authorizedResp, authorizedReq)
+	if authorizedResp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", authorizedResp.Code, authorizedResp.Body.String())
+	}
+}
+
+func TestQueryProxyRejectsDisallowedPathsAndMethods(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	proxy, err := queryproxy.New(queryproxy.Config{
+		PrometheusBaseURL: upstream.URL,
+		TempoBaseURL:      upstream.URL,
+		Timeout:           time.Second,
+	})
+	if err != nil {
+		t.Fatalf("new query proxy: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterRoutesWithQueryProxy(
+		mux,
+		query.NewService(),
+		generationingest.NewService(generationingest.NewMemoryStore()),
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		protected,
+		proxy,
+	)
+
+	notAllowedReq := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/prometheus/api/v1/alerts", nil)
+	notAllowedResp := httptest.NewRecorder()
+	mux.ServeHTTP(notAllowedResp, notAllowedReq)
+	if notAllowedResp.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for non-allowlisted path, got %d", notAllowedResp.Code)
+	}
+
+	badMethodReq := httptest.NewRequest(http.MethodPost, "/api/v1/proxy/tempo/api/search", nil)
+	badMethodResp := httptest.NewRecorder()
+	mux.ServeHTTP(badMethodResp, badMethodReq)
+	if badMethodResp.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405 for method mismatch, got %d", badMethodResp.Code)
+	}
+}
+
+func TestQueryProxyReturnsBadGatewayWhenUpstreamUnavailable(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+	_ = listener.Close()
+
+	proxy, err := queryproxy.New(queryproxy.Config{
+		PrometheusBaseURL: "http://" + addr,
+		TempoBaseURL:      "http://" + addr,
+		Timeout:           200 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("new query proxy: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterRoutesWithQueryProxy(
+		mux,
+		query.NewService(),
+		generationingest.NewService(generationingest.NewMemoryStore()),
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		protected,
+		proxy,
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/prometheus/api/v1/query?query=up", nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502 when upstream is unavailable, got %d body=%s", resp.Code, resp.Body.String())
 	}
 }
 

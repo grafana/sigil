@@ -18,6 +18,7 @@ import (
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
 	"github.com/grafana/sigil/sigil/internal/modelcards"
 	"github.com/grafana/sigil/sigil/internal/query"
+	"github.com/grafana/sigil/sigil/internal/queryproxy"
 	"github.com/grafana/sigil/sigil/internal/server"
 	"github.com/grafana/sigil/sigil/internal/storage"
 	"github.com/grafana/sigil/sigil/internal/storage/mysql"
@@ -80,9 +81,17 @@ func (m *serverModule) start(ctx context.Context) error {
 		FakeTenantID: m.cfg.FakeTenantID,
 	}
 	protectedHTTP := tenantauth.HTTPMiddleware(tenantAuthCfg)
+	queryProxy, err := queryproxy.New(queryproxy.Config{
+		PrometheusBaseURL: m.cfg.QueryProxy.PrometheusBaseURL,
+		TempoBaseURL:      m.cfg.QueryProxy.TempoBaseURL,
+		Timeout:           m.cfg.QueryProxy.Timeout,
+	})
+	if err != nil {
+		return fmt.Errorf("create query proxy: %w", err)
+	}
 
 	apiMux := http.NewServeMux()
-	server.RegisterRoutes(
+	server.RegisterRoutesWithQueryProxy(
 		apiMux,
 		querySvc,
 		generationSvc,
@@ -91,6 +100,7 @@ func (m *serverModule) start(ctx context.Context) error {
 		m.cfg.ConversationAnnotationsEnabled,
 		m.modelCardSvc,
 		protectedHTTP,
+		queryProxy,
 	)
 	m.apiServer = &http.Server{
 		Addr:    m.cfg.HTTPAddr,

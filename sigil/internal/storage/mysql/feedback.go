@@ -369,9 +369,10 @@ func upsertRatingSummary(tx *gorm.DB, tenantID, conversationID string, rating in
 	isGood := 0
 	isBad := 0
 	var latestBadAt *time.Time
-	if rating == ratingGoodInt {
+	switch rating {
+	case ratingGoodInt:
 		isGood = 1
-	} else if rating == ratingBadInt {
+	case ratingBadInt:
 		isBad = 1
 		latestBadAt = &createdAt
 	}

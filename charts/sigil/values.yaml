@@ -68,6 +68,10 @@ sigil:
   auth:
     enabled: true
     fakeTenantID: fake
+  queryProxy:
+    prometheusBaseURL: http://prometheus:9090
+    tempoBaseURL: http://tempo:3200
+    timeout: 30s
   storage:
     backend: mysql
     mysql:

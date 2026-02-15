@@ -105,7 +105,8 @@ Current bootstrap endpoints on `main`:
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`
   - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`
   - `GET /api/plugins/grafana-sigil-app/resources/query/completions`
-  - `GET /api/plugins/grafana-sigil-app/resources/query/traces/{trace_id}`
+  - `/api/plugins/grafana-sigil-app/resources/query/proxy/prometheus/...`
+  - `/api/plugins/grafana-sigil-app/resources/query/proxy/tempo/...`
 - plugin backend forwards to Sigil API:
   - `GET /api/v1/conversations`
   - `GET /api/v1/conversations/{conversation_id}`
@@ -114,7 +115,15 @@ Current bootstrap endpoints on `main`:
   - `GET /api/v1/conversations/{conversation_id}/annotations`
   - `POST /api/v1/conversations/{conversation_id}/annotations`
   - `GET /api/v1/completions`
-  - `GET /api/v1/traces/{trace_id}`
+  - `/api/v1/proxy/prometheus/...`
+  - `/api/v1/proxy/tempo/...`
+
+Sigil now also exposes backend query pass-through routes for downstream data sources:
+
+- `/api/v1/proxy/prometheus/...` (Prometheus/Mimir allowlisted query/read paths)
+- `/api/v1/proxy/tempo/...` (Tempo allowlisted search/trace/TraceQL-metrics paths)
+
+Plugin integration for these Sigil routes is now implemented through plugin resource proxy prefixes.
 
 Phase 2 target contract:
 

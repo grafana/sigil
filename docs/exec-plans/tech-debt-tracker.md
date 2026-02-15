@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-13
+last_reviewed: 2026-02-14
 source_of_truth: true
 audience: both
 ---
@@ -30,6 +30,7 @@ Status rule:
 - [x] Add integration tests for ingest forwarding to Tempo.
 - [x] Add benchmark and payload-size guardrail tests.
 - [x] Expand SDK end-to-end examples for Python and TypeScript/JavaScript.
+- [x] Wire plugin backend resource proxy routes to consume Sigil `/api/v1/proxy/prometheus/...` and `/api/v1/proxy/tempo/...` endpoints for end-to-end Grafana usage.
 - [ ] Define retention and pruning policies for hot MySQL payloads vs compacted object storage.
 - [x] Replace long-transaction `SKIP LOCKED` compaction claims with schema-based durable claim state to reduce lock windows and improve recovery semantics. Implemented with `claimed_by`/`claimed_at` claim lifecycle and shard workers.
 - [x] Improve single-large-tenant compaction throughput (multi-batch per cycle, shard/partition strategy, and/or parallelized claim workers under one tenant lease). Implemented via shard-aware leases, backlog discovery, and worker-pool draining.

@@ -37,6 +37,9 @@ The chart maps values into Sigil runtime env vars from `sigil/internal/config/co
 - `SIGIL_TARGET`
 - `SIGIL_AUTH_ENABLED`
 - `SIGIL_FAKE_TENANT_ID`
+- `SIGIL_QUERY_PROXY_PROMETHEUS_BASE_URL`
+- `SIGIL_QUERY_PROXY_TEMPO_BASE_URL`
+- `SIGIL_QUERY_PROXY_TIMEOUT`
 - `SIGIL_STORAGE_BACKEND`
 - `SIGIL_MYSQL_DSN` (when backend is `mysql`)
 - `SIGIL_OBJECT_STORE_BACKEND`
