@@ -31,6 +31,12 @@ public enum ArtifactKind
     ProviderEvent
 }
 
+public enum ConversationRatingValue
+{
+    Good,
+    Bad
+}
+
 public sealed class ModelRef
 {
     public string Provider { get; set; } = string.Empty;
@@ -203,6 +209,11 @@ public sealed class GenerationStart
     public string OperationName { get; set; } = string.Empty;
     public ModelRef Model { get; set; } = new();
     public string SystemPrompt { get; set; } = string.Empty;
+    public long? MaxTokens { get; set; }
+    public double? Temperature { get; set; }
+    public double? TopP { get; set; }
+    public string? ToolChoice { get; set; }
+    public bool? ThinkingEnabled { get; set; }
     public List<ToolDefinition> Tools { get; set; } = new();
     public Dictionary<string, string> Tags { get; set; } = new(StringComparer.Ordinal);
     public Dictionary<string, object?> Metadata { get; set; } = new(StringComparer.Ordinal);
@@ -223,6 +234,11 @@ public sealed class Generation
     public string ResponseId { get; set; } = string.Empty;
     public string ResponseModel { get; set; } = string.Empty;
     public string SystemPrompt { get; set; } = string.Empty;
+    public long? MaxTokens { get; set; }
+    public double? Temperature { get; set; }
+    public double? TopP { get; set; }
+    public string? ToolChoice { get; set; }
+    public bool? ThinkingEnabled { get; set; }
     public List<Message> Input { get; set; } = new();
     public List<Message> Output { get; set; } = new();
     public List<ToolDefinition> Tools { get; set; } = new();
@@ -271,4 +287,45 @@ public sealed class ExportGenerationsRequest
 public sealed class ExportGenerationsResponse
 {
     public List<ExportGenerationResult> Results { get; set; } = new();
+}
+
+public sealed class SubmitConversationRatingRequest
+{
+    public string RatingId { get; set; } = string.Empty;
+    public ConversationRatingValue Rating { get; set; } = ConversationRatingValue.Good;
+    public string Comment { get; set; } = string.Empty;
+    public Dictionary<string, object?> Metadata { get; set; } = new(StringComparer.Ordinal);
+    public string GenerationId { get; set; } = string.Empty;
+    public string RaterId { get; set; } = string.Empty;
+    public string Source { get; set; } = string.Empty;
+}
+
+public sealed class ConversationRating
+{
+    public string RatingId { get; set; } = string.Empty;
+    public string ConversationId { get; set; } = string.Empty;
+    public ConversationRatingValue Rating { get; set; } = ConversationRatingValue.Good;
+    public string Comment { get; set; } = string.Empty;
+    public Dictionary<string, object?> Metadata { get; set; } = new(StringComparer.Ordinal);
+    public string GenerationId { get; set; } = string.Empty;
+    public string RaterId { get; set; } = string.Empty;
+    public string Source { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAt { get; set; }
+}
+
+public sealed class ConversationRatingSummary
+{
+    public int TotalCount { get; set; }
+    public int GoodCount { get; set; }
+    public int BadCount { get; set; }
+    public ConversationRatingValue? LatestRating { get; set; }
+    public DateTimeOffset LatestRatedAt { get; set; }
+    public DateTimeOffset? LatestBadAt { get; set; }
+    public bool HasBadRating { get; set; }
+}
+
+public sealed class SubmitConversationRatingResponse
+{
+    public ConversationRating Rating { get; set; } = new();
+    public ConversationRatingSummary Summary { get; set; } = new();
 }

@@ -6,6 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -13,16 +16,18 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 )
 
 // Config controls Sigil client behavior.
 type Config struct {
-	Trace            TraceConfig
 	GenerationExport GenerationExportConfig
-	// Tracer is optional and mainly used for tests. If nil, the client builds one from Trace config.
+	API              APIConfig
+	// Tracer is optional and mainly used for tests. If nil, the client uses the global OpenTelemetry tracer.
 	Tracer trace.Tracer
+	// Meter is optional and mainly used for tests. If nil, the client uses the global OpenTelemetry meter.
+	Meter metric.Meter
 	// Logger receives async export failures. Defaults to log.Default().
 	Logger *log.Logger
 	// Now controls clock behavior (useful for tests).
@@ -33,13 +38,6 @@ type Config struct {
 	// testDisableWorker keeps queue synchronous for in-package tests.
 	testDisableWorker bool
 }
-
-type TraceProtocol string
-
-const (
-	TraceProtocolGRPC TraceProtocol = "grpc"
-	TraceProtocolHTTP TraceProtocol = "http"
-)
 
 type ExportAuthMode string
 
@@ -55,19 +53,12 @@ type AuthConfig struct {
 	BearerToken string
 }
 
-type TraceConfig struct {
-	Protocol TraceProtocol
-	Endpoint string
-	Headers  map[string]string
-	Auth     AuthConfig
-	Insecure bool
-}
-
 type GenerationExportProtocol string
 
 const (
 	GenerationExportProtocolGRPC GenerationExportProtocol = "grpc"
 	GenerationExportProtocolHTTP GenerationExportProtocol = "http"
+	GenerationExportProtocolNone GenerationExportProtocol = "none"
 )
 
 type GenerationExportConfig struct {
@@ -85,30 +76,57 @@ type GenerationExportConfig struct {
 	PayloadMaxBytes int
 }
 
+type APIConfig struct {
+	Endpoint string
+}
+
 const instrumentationName = "github.com/grafana/sigil/sdks/go/sigil"
 const (
-	spanAttrGenerationID      = "sigil.generation.id"
-	spanAttrConversationID    = "gen_ai.conversation.id"
-	spanAttrAgentName         = "gen_ai.agent.name"
-	spanAttrAgentVersion      = "gen_ai.agent.version"
-	spanAttrErrorType         = "error.type"
-	spanAttrOperationName     = "gen_ai.operation.name"
-	spanAttrProviderName      = "gen_ai.provider.name"
-	spanAttrRequestModel      = "gen_ai.request.model"
-	spanAttrResponseID        = "gen_ai.response.id"
-	spanAttrResponseModel     = "gen_ai.response.model"
-	spanAttrFinishReasons     = "gen_ai.response.finish_reasons"
-	spanAttrInputTokens       = "gen_ai.usage.input_tokens"
-	spanAttrOutputTokens      = "gen_ai.usage.output_tokens"
-	spanAttrCacheReadTokens   = "gen_ai.usage.cache_read_input_tokens"
-	spanAttrCacheWriteTokens  = "gen_ai.usage.cache_write_input_tokens"
-	spanAttrToolName          = "gen_ai.tool.name"
-	spanAttrToolCallID        = "gen_ai.tool.call.id"
-	spanAttrToolType          = "gen_ai.tool.type"
-	spanAttrToolDescription   = "gen_ai.tool.description"
-	spanAttrToolCallArguments = "gen_ai.tool.call.arguments"
-	spanAttrToolCallResult    = "gen_ai.tool.call.result"
+	spanAttrGenerationID           = "sigil.generation.id"
+	spanAttrConversationID         = "gen_ai.conversation.id"
+	spanAttrAgentName              = "gen_ai.agent.name"
+	spanAttrAgentVersion           = "gen_ai.agent.version"
+	spanAttrErrorType              = "error.type"
+	spanAttrErrorCategory          = "error.category"
+	spanAttrOperationName          = "gen_ai.operation.name"
+	spanAttrProviderName           = "gen_ai.provider.name"
+	spanAttrRequestModel           = "gen_ai.request.model"
+	spanAttrRequestMaxTokens       = "gen_ai.request.max_tokens"
+	spanAttrRequestTemperature     = "gen_ai.request.temperature"
+	spanAttrRequestTopP            = "gen_ai.request.top_p"
+	spanAttrRequestToolChoice      = "sigil.gen_ai.request.tool_choice"
+	spanAttrRequestThinkingEnabled = "sigil.gen_ai.request.thinking.enabled"
+	spanAttrRequestThinkingBudget  = "sigil.gen_ai.request.thinking.budget_tokens"
+	spanAttrResponseID             = "gen_ai.response.id"
+	spanAttrResponseModel          = "gen_ai.response.model"
+	spanAttrFinishReasons          = "gen_ai.response.finish_reasons"
+	spanAttrInputTokens            = "gen_ai.usage.input_tokens"
+	spanAttrOutputTokens           = "gen_ai.usage.output_tokens"
+	spanAttrCacheReadTokens        = "gen_ai.usage.cache_read_input_tokens"
+	spanAttrCacheWriteTokens       = "gen_ai.usage.cache_write_input_tokens"
+	spanAttrCacheCreationTokens    = "gen_ai.usage.cache_creation_input_tokens"
+	spanAttrReasoningTokens        = "gen_ai.usage.reasoning_tokens"
+	spanAttrToolName               = "gen_ai.tool.name"
+	spanAttrToolCallID             = "gen_ai.tool.call.id"
+	spanAttrToolType               = "gen_ai.tool.type"
+	spanAttrToolDescription        = "gen_ai.tool.description"
+	spanAttrToolCallArguments      = "gen_ai.tool.call.arguments"
+	spanAttrToolCallResult         = "gen_ai.tool.call.result"
+
+	metricOperationDuration      = "gen_ai.client.operation.duration"
+	metricTokenUsage             = "gen_ai.client.token.usage"
+	metricTimeToFirstToken       = "gen_ai.client.time_to_first_token"
+	metricToolCallsPerOperation  = "gen_ai.client.tool_calls_per_operation"
+	metricAttrTokenType          = "gen_ai.token.type"
+	metricTokenTypeInput         = "input"
+	metricTokenTypeOutput        = "output"
+	metricTokenTypeCacheRead     = "cache_read"
+	metricTokenTypeCacheWrite    = "cache_write"
+	metricTokenTypeCacheCreation = "cache_creation"
+	metricTokenTypeReasoning     = "reasoning"
 )
+
+var statusCodePattern = regexp.MustCompile(`\b([1-5][0-9][0-9])\b`)
 
 // Keep unexported aliases for backward-compatible fmt.Errorf wrapping.
 var (
@@ -119,14 +137,6 @@ var (
 // DefaultConfig returns a production-ready baseline configuration.
 func DefaultConfig() Config {
 	return Config{
-		Trace: TraceConfig{
-			Protocol: TraceProtocolHTTP,
-			Endpoint: "http://localhost:4318/v1/traces",
-			Auth: AuthConfig{
-				Mode: ExportAuthModeNone,
-			},
-			Insecure: true,
-		},
 		GenerationExport: GenerationExportConfig{
 			Protocol:        GenerationExportProtocolGRPC,
 			Endpoint:        "localhost:4317",
@@ -140,6 +150,9 @@ func DefaultConfig() Config {
 			MaxBackoff:      5 * time.Second,
 			PayloadMaxBytes: 4 << 20,
 		},
+		API: APIConfig{
+			Endpoint: "http://localhost:8080",
+		},
 		Tracer: nil,
 		Logger: log.Default(),
 		Now:    time.Now,
@@ -148,10 +161,11 @@ func DefaultConfig() Config {
 
 // Client records normalized generation data and GenAI spans.
 type Client struct {
-	config        Config
-	tracer        trace.Tracer
-	traceProvider *sdktrace.TracerProvider
-	exporter      generationExporter
+	config      Config
+	tracer      trace.Tracer
+	meter       metric.Meter
+	instruments telemetryInstruments
+	exporter    generationExporter
 
 	queue    chan queuedGeneration
 	flushReq chan chan error
@@ -192,6 +206,7 @@ type GenerationRecorder struct {
 	hasResult      bool
 	lastGeneration Generation
 	finalErr       error
+	firstTokenAt   time.Time
 }
 
 // ToolExecutionRecorder records and closes one in-flight execute_tool span.
@@ -213,19 +228,20 @@ type ToolExecutionRecorder struct {
 	finalErr  error
 }
 
+type telemetryInstruments struct {
+	operationDuration     metric.Float64Histogram
+	tokenUsage            metric.Int64Histogram
+	timeToFirstToken      metric.Float64Histogram
+	toolCallsPerOperation metric.Int64Histogram
+}
+
 // NewClient creates a Client, applying defaults for empty config values.
 func NewClient(config Config) *Client {
 	cfg := config
 	defaults := DefaultConfig()
 
-	cfg.Trace = mergeTraceConfig(defaults.Trace, cfg.Trace)
 	cfg.GenerationExport = mergeGenerationExportConfig(defaults.GenerationExport, cfg.GenerationExport)
-
-	traceHeaders, err := resolveHeadersWithAuth(cfg.Trace.Headers, cfg.Trace.Auth)
-	if err != nil {
-		panic(fmt.Sprintf("invalid trace auth config: %v", err))
-	}
-	cfg.Trace.Headers = traceHeaders
+	cfg.API = mergeAPIConfig(defaults.API, cfg.API)
 
 	generationHeaders, err := resolveHeadersWithAuth(cfg.GenerationExport.Headers, cfg.GenerationExport.Auth)
 	if err != nil {
@@ -249,14 +265,18 @@ func NewClient(config Config) *Client {
 	if cfg.Tracer != nil {
 		client.tracer = cfg.Tracer
 	} else {
-		tracer, provider, err := newTraceProvider(cfg.Trace)
-		if err != nil {
-			cfg.Logger.Printf("sigil trace exporter init failed: %v", err)
-			client.tracer = defaults.Tracer
-		} else {
-			client.tracer = tracer
-			client.traceProvider = provider
-		}
+		client.tracer = otel.Tracer(instrumentationName)
+	}
+	if cfg.Meter != nil {
+		client.meter = cfg.Meter
+	} else {
+		client.meter = otel.Meter(instrumentationName)
+	}
+	instruments, err := newTelemetryInstruments(client.meter)
+	if err != nil {
+		cfg.Logger.Printf("sigil metric instrument init failed: %v", err)
+	} else {
+		client.instruments = instruments
 	}
 
 	exporter := cfg.testGenerationExporter
@@ -337,22 +357,32 @@ func (c *Client) startGeneration(ctx context.Context, start GenerationStart, def
 	seed.StartedAt = startedAt
 
 	callCtx, span := c.startSpan(ctx, Generation{
-		ID:             seed.ID,
-		ConversationID: seed.ConversationID,
-		AgentName:      seed.AgentName,
-		AgentVersion:   seed.AgentVersion,
-		Mode:           seed.Mode,
-		OperationName:  seed.OperationName,
-		Model:          seed.Model,
+		ID:              seed.ID,
+		ConversationID:  seed.ConversationID,
+		AgentName:       seed.AgentName,
+		AgentVersion:    seed.AgentVersion,
+		Mode:            seed.Mode,
+		OperationName:   seed.OperationName,
+		Model:           seed.Model,
+		MaxTokens:       cloneInt64Ptr(seed.MaxTokens),
+		Temperature:     cloneFloat64Ptr(seed.Temperature),
+		TopP:            cloneFloat64Ptr(seed.TopP),
+		ToolChoice:      cloneStringPtr(seed.ToolChoice),
+		ThinkingEnabled: cloneBoolPtr(seed.ThinkingEnabled),
 	}, trace.SpanKindClient, startedAt)
 	span.SetAttributes(generationSpanAttributes(Generation{
-		ID:             seed.ID,
-		ConversationID: seed.ConversationID,
-		AgentName:      seed.AgentName,
-		AgentVersion:   seed.AgentVersion,
-		Mode:           seed.Mode,
-		OperationName:  seed.OperationName,
-		Model:          seed.Model,
+		ID:              seed.ID,
+		ConversationID:  seed.ConversationID,
+		AgentName:       seed.AgentName,
+		AgentVersion:    seed.AgentVersion,
+		Mode:            seed.Mode,
+		OperationName:   seed.OperationName,
+		Model:           seed.Model,
+		MaxTokens:       cloneInt64Ptr(seed.MaxTokens),
+		Temperature:     cloneFloat64Ptr(seed.Temperature),
+		TopP:            cloneFloat64Ptr(seed.TopP),
+		ToolChoice:      cloneStringPtr(seed.ToolChoice),
+		ThinkingEnabled: cloneBoolPtr(seed.ThinkingEnabled),
 	})...)
 
 	return callCtx, &GenerationRecorder{
@@ -431,6 +461,17 @@ func (r *GenerationRecorder) SetCallError(err error) {
 	r.mu.Unlock()
 }
 
+// SetFirstTokenAt records when the first streaming chunk was received.
+// It is safe to call on a nil recorder.
+func (r *GenerationRecorder) SetFirstTokenAt(firstTokenAt time.Time) {
+	if r == nil || firstTokenAt.IsZero() {
+		return
+	}
+	r.mu.Lock()
+	r.firstTokenAt = firstTokenAt.UTC()
+	r.mu.Unlock()
+}
+
 // SetResult stores the mapped generation and/or a mapping error.
 // It directly accepts the (Generation, error) return of provider mappers,
 // so calls like rec.SetResult(openai.FromRequestResponse(req, resp)) chain naturally.
@@ -469,6 +510,7 @@ func (r *GenerationRecorder) End() {
 	callErr := r.callErr
 	mapErr := r.mapErr
 	generation := r.generation
+	firstTokenAt := r.firstTokenAt
 	r.mu.Unlock()
 
 	// No-op recorder: no client/span means nothing to finalize.
@@ -500,8 +542,13 @@ func (r *GenerationRecorder) End() {
 		r.span.RecordError(enqueueErr)
 	}
 
-	if errorType := generationErrorType(callErr, mapErr, enqueueErr); errorType != "" {
+	errorType := generationErrorType(callErr, mapErr, enqueueErr)
+	errorCategory := generationErrorCategory(callErr, mapErr, enqueueErr)
+	if errorType != "" {
 		r.span.SetAttributes(attribute.String(spanAttrErrorType, errorType))
+		if errorCategory != "" {
+			r.span.SetAttributes(attribute.String(spanAttrErrorCategory, errorCategory))
+		}
 	}
 
 	switch {
@@ -514,6 +561,7 @@ func (r *GenerationRecorder) End() {
 	default:
 		r.span.SetStatus(codes.Ok, "")
 	}
+	r.client.recordGenerationMetrics(normalized, errorType, errorCategory, firstTokenAt)
 	r.span.End(trace.WithTimestamp(normalized.CompletedAt))
 
 	// rec.Err reports local validation/enqueue failures only.
@@ -623,10 +671,12 @@ func (r *ToolExecutionRecorder) End() {
 	if finalErr != nil {
 		r.span.RecordError(finalErr)
 		r.span.SetAttributes(attribute.String(spanAttrErrorType, "tool_execution_error"))
+		r.span.SetAttributes(attribute.String(spanAttrErrorCategory, toolErrorCategory(finalErr)))
 		r.span.SetStatus(codes.Error, finalErr.Error())
 	} else {
 		r.span.SetStatus(codes.Ok, "")
 	}
+	r.client.recordToolExecutionMetrics(r.seed, r.startedAt, completedAt, finalErr)
 	r.span.End(trace.WithTimestamp(completedAt))
 
 	r.mu.Lock()
@@ -690,6 +740,21 @@ func (r *GenerationRecorder) normalizeGeneration(raw Generation, completedAt tim
 	}
 	if len(g.Tools) == 0 {
 		g.Tools = cloneTools(r.seed.Tools)
+	}
+	if g.MaxTokens == nil {
+		g.MaxTokens = cloneInt64Ptr(r.seed.MaxTokens)
+	}
+	if g.Temperature == nil {
+		g.Temperature = cloneFloat64Ptr(r.seed.Temperature)
+	}
+	if g.TopP == nil {
+		g.TopP = cloneFloat64Ptr(r.seed.TopP)
+	}
+	if g.ToolChoice == nil {
+		g.ToolChoice = cloneStringPtr(r.seed.ToolChoice)
+	}
+	if g.ThinkingEnabled == nil {
+		g.ThinkingEnabled = cloneBoolPtr(r.seed.ThinkingEnabled)
 	}
 	g.Tags = mergeTags(r.seed.Tags, g.Tags)
 	g.Metadata = mergeMetadata(r.seed.Metadata, g.Metadata)
@@ -812,6 +877,26 @@ func generationSpanAttributes(g Generation) []attribute.KeyValue {
 	if responseModel := strings.TrimSpace(g.ResponseModel); responseModel != "" {
 		attrs = append(attrs, attribute.String(spanAttrResponseModel, responseModel))
 	}
+	if g.MaxTokens != nil {
+		attrs = append(attrs, attribute.Int64(spanAttrRequestMaxTokens, *g.MaxTokens))
+	}
+	if g.Temperature != nil {
+		attrs = append(attrs, attribute.Float64(spanAttrRequestTemperature, *g.Temperature))
+	}
+	if g.TopP != nil {
+		attrs = append(attrs, attribute.Float64(spanAttrRequestTopP, *g.TopP))
+	}
+	if g.ToolChoice != nil {
+		if toolChoice := strings.TrimSpace(*g.ToolChoice); toolChoice != "" {
+			attrs = append(attrs, attribute.String(spanAttrRequestToolChoice, toolChoice))
+		}
+	}
+	if g.ThinkingEnabled != nil {
+		attrs = append(attrs, attribute.Bool(spanAttrRequestThinkingEnabled, *g.ThinkingEnabled))
+	}
+	if thinkingBudget, ok := thinkingBudgetFromMetadata(g.Metadata); ok {
+		attrs = append(attrs, attribute.Int64(spanAttrRequestThinkingBudget, thinkingBudget))
+	}
 	if g.StopReason != "" {
 		attrs = append(attrs,
 			attribute.StringSlice(spanAttrFinishReasons, []string{g.StopReason}),
@@ -829,6 +914,12 @@ func generationSpanAttributes(g Generation) []attribute.KeyValue {
 	if g.Usage.CacheWriteInputTokens != 0 {
 		attrs = append(attrs, attribute.Int64(spanAttrCacheWriteTokens, g.Usage.CacheWriteInputTokens))
 	}
+	if g.Usage.CacheCreationInputTokens != 0 {
+		attrs = append(attrs, attribute.Int64(spanAttrCacheCreationTokens, g.Usage.CacheCreationInputTokens))
+	}
+	if g.Usage.ReasoningTokens != 0 {
+		attrs = append(attrs, attribute.Int64(spanAttrReasoningTokens, g.Usage.ReasoningTokens))
+	}
 
 	return attrs
 }
@@ -840,6 +931,78 @@ func operationName(g Generation) string {
 	}
 
 	return operation
+}
+
+func thinkingBudgetFromMetadata(metadata map[string]any) (int64, bool) {
+	if len(metadata) == 0 {
+		return 0, false
+	}
+
+	value, ok := metadata[spanAttrRequestThinkingBudget]
+	if !ok || value == nil {
+		return 0, false
+	}
+
+	coerced, ok := coerceInt64(value)
+	if !ok {
+		return 0, false
+	}
+
+	return coerced, true
+}
+
+func coerceInt64(value any) (int64, bool) {
+	switch typed := value.(type) {
+	case int:
+		return int64(typed), true
+	case int8:
+		return int64(typed), true
+	case int16:
+		return int64(typed), true
+	case int32:
+		return int64(typed), true
+	case int64:
+		return typed, true
+	case uint:
+		return int64(typed), true
+	case uint8:
+		return int64(typed), true
+	case uint16:
+		return int64(typed), true
+	case uint32:
+		return int64(typed), true
+	case uint64:
+		if typed > uint64(^uint64(0)>>1) {
+			return 0, false
+		}
+		return int64(typed), true
+	case float32:
+		asInt := int64(typed)
+		if float32(asInt) != typed {
+			return 0, false
+		}
+		return asInt, true
+	case float64:
+		asInt := int64(typed)
+		if float64(asInt) != typed {
+			return 0, false
+		}
+		return asInt, true
+	case string:
+		parsed, err := strconv.ParseInt(strings.TrimSpace(typed), 10, 64)
+		if err != nil {
+			return 0, false
+		}
+		return parsed, true
+	case json.Number:
+		parsed, err := typed.Int64()
+		if err != nil {
+			return 0, false
+		}
+		return parsed, true
+	default:
+		return 0, false
+	}
 }
 
 func generationErrorType(callErr, mapErr, enqueueErr error) string {
@@ -857,6 +1020,258 @@ func generationErrorType(callErr, mapErr, enqueueErr error) string {
 	default:
 		return ""
 	}
+}
+
+func generationErrorCategory(callErr, mapErr, enqueueErr error) string {
+	switch {
+	case callErr != nil:
+		return classifyErrorCategory(callErr, false)
+	case mapErr != nil:
+		return "sdk_error"
+	case enqueueErr != nil:
+		return "sdk_error"
+	default:
+		return ""
+	}
+}
+
+func toolErrorCategory(err error) string {
+	if err == nil {
+		return ""
+	}
+	return classifyErrorCategory(err, true)
+}
+
+func classifyErrorCategory(err error, fallbackSDK bool) string {
+	if err == nil {
+		return ""
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return "timeout"
+	}
+	statusCode := httpStatusCodeFromError(err)
+	switch {
+	case statusCode == 429:
+		return "rate_limit"
+	case statusCode == 401 || statusCode == 403:
+		return "auth_error"
+	case statusCode == 408:
+		return "timeout"
+	case statusCode >= 500 && statusCode <= 599:
+		return "server_error"
+	case statusCode >= 400 && statusCode <= 499:
+		return "client_error"
+	case fallbackSDK:
+		return "sdk_error"
+	default:
+		return "sdk_error"
+	}
+}
+
+func httpStatusCodeFromError(err error) int {
+	if err == nil {
+		return 0
+	}
+	type statusCoder interface {
+		StatusCode() int
+	}
+	var byMethod statusCoder
+	if errors.As(err, &byMethod) {
+		code := byMethod.StatusCode()
+		if code >= 100 && code <= 599 {
+			return code
+		}
+	}
+
+	value := reflectIntField(err, "StatusCode")
+	if value >= 100 && value <= 599 {
+		return value
+	}
+	value = reflectIntField(err, "Status")
+	if value >= 100 && value <= 599 {
+		return value
+	}
+
+	matches := statusCodePattern.FindAllString(err.Error(), -1)
+	for i := range matches {
+		parsed, parseErr := strconv.Atoi(matches[i])
+		if parseErr == nil && parsed >= 100 && parsed <= 599 {
+			return parsed
+		}
+	}
+	return 0
+}
+
+func reflectIntField(err error, field string) int {
+	value := reflect.ValueOf(err)
+	if !value.IsValid() {
+		return 0
+	}
+	for value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			return 0
+		}
+		value = value.Elem()
+	}
+	if value.Kind() != reflect.Struct {
+		return 0
+	}
+	member := value.FieldByName(field)
+	if !member.IsValid() {
+		return 0
+	}
+	switch member.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return int(member.Int())
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return int(member.Uint())
+	default:
+		return 0
+	}
+}
+
+func newTelemetryInstruments(meter metric.Meter) (telemetryInstruments, error) {
+	out := telemetryInstruments{}
+	var err error
+	out.operationDuration, err = meter.Float64Histogram(metricOperationDuration, metric.WithUnit("s"))
+	if err != nil {
+		return telemetryInstruments{}, err
+	}
+	out.tokenUsage, err = meter.Int64Histogram(metricTokenUsage, metric.WithUnit("token"))
+	if err != nil {
+		return telemetryInstruments{}, err
+	}
+	out.timeToFirstToken, err = meter.Float64Histogram(metricTimeToFirstToken, metric.WithUnit("s"))
+	if err != nil {
+		return telemetryInstruments{}, err
+	}
+	out.toolCallsPerOperation, err = meter.Int64Histogram(metricToolCallsPerOperation, metric.WithUnit("count"))
+	if err != nil {
+		return telemetryInstruments{}, err
+	}
+	return out, nil
+}
+
+func (c *Client) recordGenerationMetrics(generation Generation, errorType string, errorCategory string, firstTokenAt time.Time) {
+	if c == nil {
+		return
+	}
+	if c.instruments.operationDuration == nil || c.instruments.tokenUsage == nil ||
+		c.instruments.timeToFirstToken == nil || c.instruments.toolCallsPerOperation == nil {
+		return
+	}
+	if generation.CompletedAt.IsZero() || generation.StartedAt.IsZero() {
+		return
+	}
+	duration := generation.CompletedAt.Sub(generation.StartedAt).Seconds()
+	if duration < 0 {
+		duration = 0
+	}
+
+	durationAttrs := metric.WithAttributes(
+		attribute.String(spanAttrOperationName, operationName(generation)),
+		attribute.String(spanAttrProviderName, strings.TrimSpace(generation.Model.Provider)),
+		attribute.String(spanAttrRequestModel, strings.TrimSpace(generation.Model.Name)),
+		attribute.String(spanAttrAgentName, strings.TrimSpace(generation.AgentName)),
+		attribute.String(spanAttrErrorType, errorType),
+		attribute.String(spanAttrErrorCategory, errorCategory),
+	)
+	c.instruments.operationDuration.Record(context.Background(), duration, durationAttrs)
+
+	recordToken := func(tokenType string, value int64) {
+		if value == 0 {
+			return
+		}
+		c.instruments.tokenUsage.Record(
+			context.Background(),
+			value,
+			metric.WithAttributes(
+				attribute.String(spanAttrProviderName, strings.TrimSpace(generation.Model.Provider)),
+				attribute.String(spanAttrRequestModel, strings.TrimSpace(generation.Model.Name)),
+				attribute.String(spanAttrAgentName, strings.TrimSpace(generation.AgentName)),
+				attribute.String(metricAttrTokenType, tokenType),
+			),
+		)
+	}
+
+	recordToken(metricTokenTypeInput, generation.Usage.InputTokens)
+	recordToken(metricTokenTypeOutput, generation.Usage.OutputTokens)
+	recordToken(metricTokenTypeCacheRead, generation.Usage.CacheReadInputTokens)
+	recordToken(metricTokenTypeCacheWrite, generation.Usage.CacheWriteInputTokens)
+	recordToken(metricTokenTypeCacheCreation, generation.Usage.CacheCreationInputTokens)
+	recordToken(metricTokenTypeReasoning, generation.Usage.ReasoningTokens)
+
+	toolCalls := countToolCalls(generation.Output)
+	c.instruments.toolCallsPerOperation.Record(
+		context.Background(),
+		int64(toolCalls),
+		metric.WithAttributes(
+			attribute.String(spanAttrProviderName, strings.TrimSpace(generation.Model.Provider)),
+			attribute.String(spanAttrRequestModel, strings.TrimSpace(generation.Model.Name)),
+			attribute.String(spanAttrAgentName, strings.TrimSpace(generation.AgentName)),
+		),
+	)
+
+	if operationName(generation) == defaultOperationNameStream && !firstTokenAt.IsZero() {
+		ttft := firstTokenAt.Sub(generation.StartedAt).Seconds()
+		if ttft >= 0 {
+			c.instruments.timeToFirstToken.Record(
+				context.Background(),
+				ttft,
+				metric.WithAttributes(
+					attribute.String(spanAttrProviderName, strings.TrimSpace(generation.Model.Provider)),
+					attribute.String(spanAttrRequestModel, strings.TrimSpace(generation.Model.Name)),
+					attribute.String(spanAttrAgentName, strings.TrimSpace(generation.AgentName)),
+				),
+			)
+		}
+	}
+}
+
+func (c *Client) recordToolExecutionMetrics(seed ToolExecutionStart, startedAt time.Time, completedAt time.Time, finalErr error) {
+	if c == nil {
+		return
+	}
+	if c.instruments.operationDuration == nil {
+		return
+	}
+	if startedAt.IsZero() || completedAt.IsZero() {
+		return
+	}
+	duration := completedAt.Sub(startedAt).Seconds()
+	if duration < 0 {
+		duration = 0
+	}
+	errorType := ""
+	errorCategory := ""
+	if finalErr != nil {
+		errorType = "tool_execution_error"
+		errorCategory = toolErrorCategory(finalErr)
+	}
+	c.instruments.operationDuration.Record(
+		context.Background(),
+		duration,
+		metric.WithAttributes(
+			attribute.String(spanAttrOperationName, "execute_tool"),
+			attribute.String(spanAttrProviderName, ""),
+			attribute.String(spanAttrRequestModel, strings.TrimSpace(seed.ToolName)),
+			attribute.String(spanAttrAgentName, strings.TrimSpace(seed.AgentName)),
+			attribute.String(spanAttrErrorType, errorType),
+			attribute.String(spanAttrErrorCategory, errorCategory),
+		),
+	)
+}
+
+func countToolCalls(messages []Message) int {
+	total := 0
+	for i := range messages {
+		for j := range messages[i].Parts {
+			if messages[i].Parts[j].Kind == PartKindToolCall {
+				total++
+			}
+		}
+	}
+	return total
 }
 
 func toolSpanName(toolName string) string {

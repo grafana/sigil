@@ -12,6 +12,30 @@ public interface IGenerationExporter
     Task ShutdownAsync(CancellationToken cancellationToken);
 }
 
+internal sealed class NoopGenerationExporter : IGenerationExporter
+{
+    public Task<ExportGenerationsResponse> ExportGenerationsAsync(
+        ExportGenerationsRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(new ExportGenerationsResponse
+        {
+            Results = request.Generations.Select(generation => new ExportGenerationResult
+            {
+                GenerationId = generation.Id,
+                Accepted = true,
+            }).ToList(),
+        });
+    }
+
+    public Task ShutdownAsync(CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
+}
+
 internal sealed class HttpGenerationExporter : IGenerationExporter
 {
     private readonly HttpClient _httpClient;
@@ -48,7 +72,10 @@ internal sealed class HttpGenerationExporter : IGenerationExporter
             normalizedHeaders[pair.Key] = pair.Value;
         }
         _headers = normalizedHeaders;
-        _httpClient = new HttpClient
+        _httpClient = new HttpClient(new HttpClientHandler
+        {
+            UseCookies = false,
+        })
         {
             Timeout = TimeSpan.FromSeconds(10),
         };

@@ -204,7 +204,12 @@ func requestFromSeed(seed uint64) *sigilv1.ExportGenerationsRequest {
 			{Kind: sigilv1.ArtifactKind_ARTIFACT_KIND_REQUEST, Name: "req", ContentType: "application/json", Payload: []byte(`{"request":true}`), RecordId: "rec-" + randomASCII(rnd, 6), Uri: "sigil://artifact/" + randomASCII(rnd, 6)},
 			{Kind: sigilv1.ArtifactKind_ARTIFACT_KIND_PROVIDER_EVENT, Name: "evt", ContentType: "application/json", Payload: []byte(`{"event":true}`)},
 		},
-		CallError: "",
+		CallError:       "",
+		MaxTokens:       proto.Int64(int64(rnd.Intn(4096) + 1)),
+		Temperature:     proto.Float64(rnd.Float64()),
+		TopP:            proto.Float64(rnd.Float64()),
+		ToolChoice:      proto.String(randomASCII(rnd, 6)),
+		ThinkingEnabled: proto.Bool(seed%2 == 0),
 	}
 
 	request := &sigilv1.ExportGenerationsRequest{Generations: []*sigilv1.Generation{generation}}

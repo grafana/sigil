@@ -1,19 +1,24 @@
 import { defaultLogger, mergeConfig } from './config.js';
 import { createDefaultGenerationExporter } from './exporters/default.js';
-import { SpanKind, SpanStatusCode, type Span, type Tracer } from '@opentelemetry/api';
-import { createTraceRuntime, type TraceRuntime } from './tracing.js';
+import { metrics, SpanKind, SpanStatusCode, trace, type Histogram, type Meter, type Span, type Tracer } from '@opentelemetry/api';
 import type {
+  ConversationRating,
+  ConversationRatingInput,
+  ConversationRatingSummary,
+  ConversationRatingValue,
   Generation,
   GenerationExporter,
   GenerationMode,
   GenerationRecorder,
   GenerationResult,
+  Message,
   RecorderCallback,
   RecorderWithError,
   SigilDebugSnapshot,
   SigilLogger,
   SigilSdkConfig,
   SigilSdkConfigInput,
+  SubmitConversationRatingResponse,
   ToolExecution,
   ToolExecutionRecorder,
   ToolExecutionResult,
@@ -44,9 +49,16 @@ const spanAttrConversationID = 'gen_ai.conversation.id';
 const spanAttrAgentName = 'gen_ai.agent.name';
 const spanAttrAgentVersion = 'gen_ai.agent.version';
 const spanAttrErrorType = 'error.type';
+const spanAttrErrorCategory = 'error.category';
 const spanAttrOperationName = 'gen_ai.operation.name';
 const spanAttrProviderName = 'gen_ai.provider.name';
 const spanAttrRequestModel = 'gen_ai.request.model';
+const spanAttrRequestMaxTokens = 'gen_ai.request.max_tokens';
+const spanAttrRequestTemperature = 'gen_ai.request.temperature';
+const spanAttrRequestTopP = 'gen_ai.request.top_p';
+const spanAttrRequestToolChoice = 'sigil.gen_ai.request.tool_choice';
+const spanAttrRequestThinkingEnabled = 'sigil.gen_ai.request.thinking.enabled';
+const spanAttrRequestThinkingBudget = 'sigil.gen_ai.request.thinking.budget_tokens';
 const spanAttrResponseID = 'gen_ai.response.id';
 const spanAttrResponseModel = 'gen_ai.response.model';
 const spanAttrFinishReasons = 'gen_ai.response.finish_reasons';
@@ -54,12 +66,34 @@ const spanAttrInputTokens = 'gen_ai.usage.input_tokens';
 const spanAttrOutputTokens = 'gen_ai.usage.output_tokens';
 const spanAttrCacheReadTokens = 'gen_ai.usage.cache_read_input_tokens';
 const spanAttrCacheWriteTokens = 'gen_ai.usage.cache_write_input_tokens';
+const spanAttrCacheCreationTokens = 'gen_ai.usage.cache_creation_input_tokens';
+const spanAttrReasoningTokens = 'gen_ai.usage.reasoning_tokens';
 const spanAttrToolName = 'gen_ai.tool.name';
 const spanAttrToolCallID = 'gen_ai.tool.call.id';
 const spanAttrToolType = 'gen_ai.tool.type';
 const spanAttrToolDescription = 'gen_ai.tool.description';
 const spanAttrToolCallArguments = 'gen_ai.tool.call.arguments';
 const spanAttrToolCallResult = 'gen_ai.tool.call.result';
+const maxRatingConversationIdLen = 255;
+const maxRatingIdLen = 128;
+const maxRatingGenerationIdLen = 255;
+const maxRatingActorIdLen = 255;
+const maxRatingSourceLen = 64;
+const maxRatingCommentBytes = 4096;
+const maxRatingMetadataBytes = 16 * 1024;
+
+const metricOperationDuration = 'gen_ai.client.operation.duration';
+const metricTokenUsage = 'gen_ai.client.token.usage';
+const metricTimeToFirstToken = 'gen_ai.client.time_to_first_token';
+const metricToolCallsPerOperation = 'gen_ai.client.tool_calls_per_operation';
+const metricAttrTokenType = 'gen_ai.token.type';
+const metricTokenTypeInput = 'input';
+const metricTokenTypeOutput = 'output';
+const metricTokenTypeCacheRead = 'cache_read';
+const metricTokenTypeCacheWrite = 'cache_write';
+const metricTokenTypeCacheCreation = 'cache_creation';
+const metricTokenTypeReasoning = 'reasoning';
+const instrumentationName = 'github.com/grafana/sigil/sdks/js';
 
 export class SigilClient {
   private readonly config: SigilSdkConfig;
@@ -67,8 +101,12 @@ export class SigilClient {
   private readonly sleepFn: (durationMs: number) => Promise<void>;
   private readonly logger: SigilLogger;
   private readonly generationExporter: GenerationExporter;
-  private readonly traceRuntime: TraceRuntime;
   private readonly tracer: Tracer;
+  private readonly meter: Meter;
+  private readonly operationDurationHistogram: Histogram;
+  private readonly tokenUsageHistogram: Histogram;
+  private readonly ttftHistogram: Histogram;
+  private readonly toolCallsHistogram: Histogram;
   private readonly generations: Generation[] = [];
   private readonly toolExecutions: ToolExecution[] = [];
   private readonly pendingGenerations: Generation[] = [];
@@ -83,8 +121,7 @@ export class SigilClient {
   /**
    * Creates a Sigil SDK client.
    *
-   * `inputConfig` is merged with defaults. Both trace and generation exporters
-   * are initialized during construction.
+   * `inputConfig` is merged with defaults.
    */
   constructor(inputConfig: SigilSdkConfigInput = {}) {
     this.config = mergeConfig(inputConfig);
@@ -92,19 +129,12 @@ export class SigilClient {
     this.sleepFn = this.config.sleep ?? defaultSleep;
     this.logger = this.config.logger ?? defaultLogger;
     this.generationExporter = this.config.generationExporter ?? createDefaultGenerationExporter(this.config.generationExport);
-    if (this.config.tracer !== undefined) {
-      this.tracer = this.config.tracer;
-      this.traceRuntime = {
-        tracer: this.config.tracer,
-        async flush() {},
-        async shutdown() {},
-      };
-    } else {
-      this.traceRuntime = createTraceRuntime(this.config.trace, (message, error) => {
-        this.logWarn(message, error);
-      });
-      this.tracer = this.traceRuntime.tracer;
-    }
+    this.tracer = this.config.tracer ?? trace.getTracer(instrumentationName);
+    this.meter = this.config.meter ?? metrics.getMeter(instrumentationName);
+    this.operationDurationHistogram = this.meter.createHistogram(metricOperationDuration, { unit: 's' });
+    this.tokenUsageHistogram = this.meter.createHistogram(metricTokenUsage, { unit: 'token' });
+    this.ttftHistogram = this.meter.createHistogram(metricTimeToFirstToken, { unit: 's' });
+    this.toolCallsHistogram = this.meter.createHistogram(metricToolCallsPerOperation, { unit: 'count' });
 
     if (this.config.generationExport.flushIntervalMs > 0) {
       this.flushTimer = setInterval(() => {
@@ -175,13 +205,80 @@ export class SigilClient {
     return runWithRecorder(recorder, callback);
   }
 
+  /** Submits a user-facing conversation rating through Sigil HTTP API. */
+  async submitConversationRating(
+    conversationId: string,
+    input: ConversationRatingInput
+  ): Promise<SubmitConversationRatingResponse> {
+    this.assertOpen();
+
+    const normalizedConversationId = conversationId.trim();
+    if (normalizedConversationId.length === 0) {
+      throw new Error('sigil conversation rating validation failed: conversationId is required');
+    }
+    if (normalizedConversationId.length > maxRatingConversationIdLen) {
+      throw new Error('sigil conversation rating validation failed: conversationId is too long');
+    }
+
+    const normalizedInput = normalizeConversationRatingInput(input);
+    const endpoint = buildConversationRatingEndpoint(
+      this.config.api.endpoint,
+      this.config.generationExport.insecure,
+      normalizedConversationId
+    );
+    const requestBody = {
+      rating_id: normalizedInput.ratingId,
+      rating: normalizedInput.rating,
+      comment: normalizedInput.comment,
+      metadata: normalizedInput.metadata,
+      generation_id: normalizedInput.generationId,
+      rater_id: normalizedInput.raterId,
+      source: normalizedInput.source,
+    };
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...this.config.generationExport.headers,
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    const responseText = (await response.text()).trim();
+    if (response.status === 400) {
+      throw new Error(`sigil conversation rating validation failed: ${ratingErrorText(responseText, response.status)}`);
+    }
+    if (response.status === 409) {
+      throw new Error(`sigil conversation rating conflict: ${ratingErrorText(responseText, response.status)}`);
+    }
+    if (!response.ok) {
+      throw new Error(
+        `sigil conversation rating transport failed: status ${response.status}: ${ratingErrorText(responseText, response.status)}`
+      );
+    }
+
+    if (responseText.length === 0) {
+      throw new Error('sigil conversation rating transport failed: empty response payload');
+    }
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(responseText);
+    } catch (error) {
+      throw new Error(`sigil conversation rating transport failed: invalid JSON response: ${asError(error).message}`);
+    }
+
+    return parseSubmitConversationRatingResponse(payload);
+  }
+
   /** Forces immediate drain of queued generation exports. */
   async flush(): Promise<void> {
     this.assertOpen();
     await this.flushInternal();
   }
 
-  /** Flushes pending generations and shuts down generation + trace exporters. */
+  /** Flushes pending generations and shuts down the generation exporter. */
   async shutdown(): Promise<void> {
     if (this.shutdownPromise !== undefined) {
       await this.shutdownPromise;
@@ -201,18 +298,6 @@ export class SigilClient {
         await this.generationExporter.shutdown?.();
       } catch (error) {
         this.logWarn('sigil generation exporter shutdown failed', error);
-      }
-
-      try {
-        await this.traceRuntime.flush();
-      } catch (error) {
-        this.logWarn('sigil trace provider flush on shutdown failed', error);
-      }
-
-      try {
-        await this.traceRuntime.shutdown();
-      } catch (error) {
-        this.logWarn('sigil trace provider shutdown failed', error);
       }
 
       this.closed = true;
@@ -286,6 +371,12 @@ export class SigilClient {
       agentVersion: seed.agentVersion,
       operationName,
       model: seed.model,
+      maxTokens: seed.maxTokens,
+      temperature: seed.temperature,
+      topP: seed.topP,
+      toolChoice: seed.toolChoice,
+      thinkingEnabled: seed.thinkingEnabled,
+      metadata: seed.metadata,
     });
 
     return span;
@@ -316,7 +407,8 @@ export class SigilClient {
     generation: Generation,
     callError: string | undefined,
     validationError: Error | undefined,
-    enqueueError: Error | undefined
+    enqueueError: Error | undefined,
+    firstTokenAt: Date | undefined
   ): void {
     span.updateName(generationSpanName(generation.operationName, generation.model.name));
     setGenerationSpanAttributes(span, generation);
@@ -331,18 +423,31 @@ export class SigilClient {
       span.recordException(enqueueError);
     }
 
+    let errorType = '';
+    let errorCategory = '';
     if (callError !== undefined) {
-      span.setAttribute(spanAttrErrorType, 'provider_call_error');
+      errorType = 'provider_call_error';
+      errorCategory = errorCategoryFromError(callError, true);
+      span.setAttribute(spanAttrErrorType, errorType);
+      span.setAttribute(spanAttrErrorCategory, errorCategory);
       span.setStatus({ code: SpanStatusCode.ERROR, message: callError });
     } else if (validationError !== undefined) {
-      span.setAttribute(spanAttrErrorType, 'validation_error');
+      errorType = 'validation_error';
+      errorCategory = 'sdk_error';
+      span.setAttribute(spanAttrErrorType, errorType);
+      span.setAttribute(spanAttrErrorCategory, errorCategory);
       span.setStatus({ code: SpanStatusCode.ERROR, message: validationError.message });
     } else if (enqueueError !== undefined) {
-      span.setAttribute(spanAttrErrorType, 'enqueue_error');
+      errorType = 'enqueue_error';
+      errorCategory = 'sdk_error';
+      span.setAttribute(spanAttrErrorType, errorType);
+      span.setAttribute(spanAttrErrorCategory, errorCategory);
       span.setStatus({ code: SpanStatusCode.ERROR, message: enqueueError.message });
     } else {
       span.setStatus({ code: SpanStatusCode.OK });
     }
+
+    this.recordGenerationMetrics(generation, errorType, errorCategory, firstTokenAt);
 
     span.end(generation.completedAt);
   }
@@ -369,17 +474,95 @@ export class SigilClient {
     if (toolExecution.callError !== undefined) {
       span.recordException(new Error(toolExecution.callError));
       span.setAttribute(spanAttrErrorType, 'tool_execution_error');
+      span.setAttribute(spanAttrErrorCategory, errorCategoryFromError(toolExecution.callError, true));
       span.setStatus({ code: SpanStatusCode.ERROR, message: toolExecution.callError });
     } else if (localError !== undefined) {
       span.recordException(localError);
       span.setAttribute(spanAttrErrorType, 'tool_execution_error');
+      span.setAttribute(spanAttrErrorCategory, errorCategoryFromError(localError, true));
       span.setStatus({ code: SpanStatusCode.ERROR, message: localError.message });
     } else {
       span.setStatus({ code: SpanStatusCode.OK });
     }
 
+    this.recordToolExecutionMetrics(toolExecution, localError ?? (toolExecution.callError !== undefined ? new Error(toolExecution.callError) : undefined));
+
     span.end(toolExecution.completedAt);
     return localError;
+  }
+
+  private recordGenerationMetrics(
+    generation: Generation,
+    errorType: string,
+    errorCategory: string,
+    firstTokenAt: Date | undefined
+  ): void {
+    const startedMs = generation.startedAt.getTime();
+    const completedMs = generation.completedAt.getTime();
+    const durationSeconds = Math.max(0, (completedMs - startedMs) / 1_000);
+    this.operationDurationHistogram.record(durationSeconds, {
+      [spanAttrOperationName]: generation.operationName,
+      [spanAttrProviderName]: generation.model.provider,
+      [spanAttrRequestModel]: generation.model.name,
+      [spanAttrAgentName]: generation.agentName ?? '',
+      [spanAttrErrorType]: errorType,
+      [spanAttrErrorCategory]: errorCategory,
+    });
+
+    const usage = generation.usage;
+    if (usage !== undefined) {
+      this.recordTokenUsage(generation, metricTokenTypeInput, usage.inputTokens);
+      this.recordTokenUsage(generation, metricTokenTypeOutput, usage.outputTokens);
+      this.recordTokenUsage(generation, metricTokenTypeCacheRead, usage.cacheReadInputTokens);
+      this.recordTokenUsage(generation, metricTokenTypeCacheWrite, usage.cacheWriteInputTokens);
+      this.recordTokenUsage(generation, metricTokenTypeCacheCreation, usage.cacheCreationInputTokens);
+      this.recordTokenUsage(generation, metricTokenTypeReasoning, usage.reasoningTokens);
+    }
+
+    this.toolCallsHistogram.record(countToolCallParts(generation.output ?? []), {
+      [spanAttrProviderName]: generation.model.provider,
+      [spanAttrRequestModel]: generation.model.name,
+      [spanAttrAgentName]: generation.agentName ?? '',
+    });
+
+    if (generation.operationName === 'streamText' && firstTokenAt !== undefined) {
+      const ttftSeconds = (firstTokenAt.getTime() - startedMs) / 1_000;
+      if (ttftSeconds >= 0) {
+        this.ttftHistogram.record(ttftSeconds, {
+          [spanAttrProviderName]: generation.model.provider,
+          [spanAttrRequestModel]: generation.model.name,
+          [spanAttrAgentName]: generation.agentName ?? '',
+        });
+      }
+    }
+  }
+
+  private recordTokenUsage(generation: Generation, tokenType: string, value: number | undefined): void {
+    if (value === undefined || value === 0) {
+      return;
+    }
+    this.tokenUsageHistogram.record(value, {
+      [spanAttrProviderName]: generation.model.provider,
+      [spanAttrRequestModel]: generation.model.name,
+      [spanAttrAgentName]: generation.agentName ?? '',
+      [metricAttrTokenType]: tokenType,
+    });
+  }
+
+  private recordToolExecutionMetrics(toolExecution: ToolExecution, finalError: Error | undefined): void {
+    const startedMs = toolExecution.startedAt.getTime();
+    const completedMs = toolExecution.completedAt.getTime();
+    const durationSeconds = Math.max(0, (completedMs - startedMs) / 1_000);
+    const errorType = finalError === undefined ? '' : 'tool_execution_error';
+    const errorCategory = finalError === undefined ? '' : errorCategoryFromError(finalError, true);
+    this.operationDurationHistogram.record(durationSeconds, {
+      [spanAttrOperationName]: 'execute_tool',
+      [spanAttrProviderName]: '',
+      [spanAttrRequestModel]: toolExecution.toolName,
+      [spanAttrAgentName]: toolExecution.agentName ?? '',
+      [spanAttrErrorType]: errorType,
+      [spanAttrErrorCategory]: errorCategory,
+    });
   }
 
   private assertOpen(): void {
@@ -496,6 +679,7 @@ class GenerationRecorderImpl implements GenerationRecorder {
   private result?: GenerationResult;
   private callError?: string;
   private localError?: Error;
+  private firstTokenAt?: Date;
 
   constructor(
     private readonly client: SigilClient,
@@ -521,6 +705,16 @@ class GenerationRecorderImpl implements GenerationRecorder {
     this.callError = asError(error).message;
   }
 
+  setFirstTokenAt(firstTokenAt: Date): void {
+    if (this.ended) {
+      return;
+    }
+    if (!(firstTokenAt instanceof Date) || Number.isNaN(firstTokenAt.getTime())) {
+      return;
+    }
+    this.firstTokenAt = new Date(firstTokenAt);
+  }
+
   end(): void {
     if (this.ended) {
       return;
@@ -538,6 +732,11 @@ class GenerationRecorderImpl implements GenerationRecorder {
       systemPrompt: this.seed.systemPrompt,
       responseId: this.result?.responseId,
       responseModel: this.result?.responseModel,
+      maxTokens: this.result?.maxTokens ?? this.seed.maxTokens,
+      temperature: this.result?.temperature ?? this.seed.temperature,
+      topP: this.result?.topP ?? this.seed.topP,
+      toolChoice: this.result?.toolChoice ?? this.seed.toolChoice,
+      thinkingEnabled: this.result?.thinkingEnabled ?? this.seed.thinkingEnabled,
       input: this.result?.input?.map(cloneMessage),
       output: this.result?.output?.map(cloneMessage),
       tools: this.result?.tools?.map(cloneToolDefinition) ?? this.seed.tools?.map(cloneToolDefinition),
@@ -580,7 +779,14 @@ class GenerationRecorderImpl implements GenerationRecorder {
       }
     }
 
-    this.client.internalFinalizeGenerationSpan(this.span, generation, this.callError, validationError, enqueueError);
+    this.client.internalFinalizeGenerationSpan(
+      this.span,
+      generation,
+      this.callError,
+      validationError,
+      enqueueError,
+      this.firstTokenAt
+    );
   }
 
   getError(): Error | undefined {
@@ -714,6 +920,12 @@ function setGenerationSpanAttributes(
     agentVersion?: string;
     operationName: string;
     model: { provider: string; name: string };
+    maxTokens?: number;
+    temperature?: number;
+    topP?: number;
+    toolChoice?: string;
+    thinkingEnabled?: boolean;
+    metadata?: Record<string, unknown>;
     responseId?: string;
     responseModel?: string;
     stopReason?: string;
@@ -722,6 +934,8 @@ function setGenerationSpanAttributes(
       outputTokens?: number;
       cacheReadInputTokens?: number;
       cacheWriteInputTokens?: number;
+      cacheCreationInputTokens?: number;
+      reasoningTokens?: number;
     };
   }
 ): void {
@@ -744,6 +958,25 @@ function setGenerationSpanAttributes(
   }
   if (notEmpty(generation.model.name)) {
     span.setAttribute(spanAttrRequestModel, generation.model.name);
+  }
+  if (generation.maxTokens !== undefined) {
+    span.setAttribute(spanAttrRequestMaxTokens, generation.maxTokens);
+  }
+  if (generation.temperature !== undefined) {
+    span.setAttribute(spanAttrRequestTemperature, generation.temperature);
+  }
+  if (generation.topP !== undefined) {
+    span.setAttribute(spanAttrRequestTopP, generation.topP);
+  }
+  if (notEmpty(generation.toolChoice)) {
+    span.setAttribute(spanAttrRequestToolChoice, generation.toolChoice);
+  }
+  if (generation.thinkingEnabled !== undefined) {
+    span.setAttribute(spanAttrRequestThinkingEnabled, generation.thinkingEnabled);
+  }
+  const thinkingBudget = thinkingBudgetFromMetadata(generation.metadata);
+  if (thinkingBudget !== undefined) {
+    span.setAttribute(spanAttrRequestThinkingBudget, thinkingBudget);
   }
   if (notEmpty(generation.responseId)) {
     span.setAttribute(spanAttrResponseID, generation.responseId);
@@ -770,6 +1003,12 @@ function setGenerationSpanAttributes(
   }
   if ((usage.cacheWriteInputTokens ?? 0) !== 0) {
     span.setAttribute(spanAttrCacheWriteTokens, usage.cacheWriteInputTokens ?? 0);
+  }
+  if ((usage.cacheCreationInputTokens ?? 0) !== 0) {
+    span.setAttribute(spanAttrCacheCreationTokens, usage.cacheCreationInputTokens ?? 0);
+  }
+  if ((usage.reasoningTokens ?? 0) !== 0) {
+    span.setAttribute(spanAttrReasoningTokens, usage.reasoningTokens ?? 0);
   }
 }
 
@@ -838,6 +1077,284 @@ function serializeToolContent(value: unknown): { value?: string; error?: Error }
   } catch (error) {
     return { error: asError(error) };
   }
+}
+
+function normalizeConversationRatingInput(input: ConversationRatingInput): ConversationRatingInput {
+  const normalized: ConversationRatingInput = {
+    ratingId: input.ratingId.trim(),
+    rating: input.rating.trim() as ConversationRatingValue,
+    comment: input.comment?.trim(),
+    metadata: input.metadata,
+    generationId: input.generationId?.trim(),
+    raterId: input.raterId?.trim(),
+    source: input.source?.trim(),
+  };
+
+  if (normalized.ratingId.length === 0) {
+    throw new Error('sigil conversation rating validation failed: ratingId is required');
+  }
+  if (normalized.ratingId.length > maxRatingIdLen) {
+    throw new Error('sigil conversation rating validation failed: ratingId is too long');
+  }
+  if (
+    normalized.rating !== 'CONVERSATION_RATING_VALUE_GOOD' &&
+    normalized.rating !== 'CONVERSATION_RATING_VALUE_BAD'
+  ) {
+    throw new Error(
+      'sigil conversation rating validation failed: rating must be CONVERSATION_RATING_VALUE_GOOD or CONVERSATION_RATING_VALUE_BAD'
+    );
+  }
+  if (normalized.comment !== undefined && encodedSizeBytes(normalized.comment) > maxRatingCommentBytes) {
+    throw new Error('sigil conversation rating validation failed: comment is too long');
+  }
+  if (normalized.generationId !== undefined && normalized.generationId.length > maxRatingGenerationIdLen) {
+    throw new Error('sigil conversation rating validation failed: generationId is too long');
+  }
+  if (normalized.raterId !== undefined && normalized.raterId.length > maxRatingActorIdLen) {
+    throw new Error('sigil conversation rating validation failed: raterId is too long');
+  }
+  if (normalized.source !== undefined && normalized.source.length > maxRatingSourceLen) {
+    throw new Error('sigil conversation rating validation failed: source is too long');
+  }
+  if (normalized.metadata !== undefined && encodedSizeBytes(normalized.metadata) > maxRatingMetadataBytes) {
+    throw new Error('sigil conversation rating validation failed: metadata is too large');
+  }
+
+  return normalized;
+}
+
+function buildConversationRatingEndpoint(endpoint: string, insecure: boolean, conversationId: string): string {
+  const baseURL = baseURLFromAPIEndpoint(endpoint, insecure);
+  return `${baseURL}/api/v1/conversations/${encodeURIComponent(conversationId)}/ratings`;
+}
+
+function baseURLFromAPIEndpoint(endpoint: string, insecure: boolean): string {
+  const trimmed = endpoint.trim();
+  if (trimmed.length === 0) {
+    throw new Error('sigil conversation rating transport failed: api endpoint is required');
+  }
+
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    const parsed = new URL(trimmed);
+    return `${parsed.protocol}//${parsed.host}`;
+  }
+
+  const withoutScheme = trimmed.startsWith('grpc://') ? trimmed.slice('grpc://'.length) : trimmed;
+  const host = withoutScheme.split('/')[0]?.trim();
+  if (host === undefined || host.length === 0) {
+    throw new Error('sigil conversation rating transport failed: api endpoint host is required');
+  }
+  return `${insecure ? 'http' : 'https'}://${host}`;
+}
+
+function parseSubmitConversationRatingResponse(payload: unknown): SubmitConversationRatingResponse {
+  if (!isObject(payload)) {
+    throw new Error('sigil conversation rating transport failed: invalid response payload');
+  }
+  if (!isObject(payload.rating) || !isObject(payload.summary)) {
+    throw new Error('sigil conversation rating transport failed: invalid response payload');
+  }
+
+  const rating = mapConversationRating(payload.rating);
+  const summary = mapConversationRatingSummary(payload.summary);
+  return { rating, summary };
+}
+
+function mapConversationRating(payload: Record<string, unknown>): ConversationRating {
+  const ratingId = asString(payload.rating_id);
+  const conversationId = asString(payload.conversation_id);
+  const rating = asString(payload.rating) as ConversationRatingValue;
+  const createdAt = asString(payload.created_at);
+  if (ratingId === undefined || conversationId === undefined || rating === undefined || createdAt === undefined) {
+    throw new Error('sigil conversation rating transport failed: invalid rating payload');
+  }
+
+  return {
+    ratingId,
+    conversationId,
+    generationId: asString(payload.generation_id),
+    rating,
+    comment: asString(payload.comment),
+    metadata: asRecordUnknown(payload.metadata),
+    raterId: asString(payload.rater_id),
+    source: asString(payload.source),
+    createdAt,
+  };
+}
+
+function mapConversationRatingSummary(payload: Record<string, unknown>): ConversationRatingSummary {
+  const totalCount = asNumber(payload.total_count);
+  const goodCount = asNumber(payload.good_count);
+  const badCount = asNumber(payload.bad_count);
+  const latestRatedAt = asString(payload.latest_rated_at);
+  const hasBadRating = asBoolean(payload.has_bad_rating);
+  if (
+    totalCount === undefined ||
+    goodCount === undefined ||
+    badCount === undefined ||
+    latestRatedAt === undefined ||
+    hasBadRating === undefined
+  ) {
+    throw new Error('sigil conversation rating transport failed: invalid rating summary payload');
+  }
+
+  return {
+    totalCount,
+    goodCount,
+    badCount,
+    latestRating: asString(payload.latest_rating) as ConversationRatingValue | undefined,
+    latestRatedAt,
+    latestBadAt: asString(payload.latest_bad_at),
+    hasBadRating,
+  };
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function asNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function asBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
+}
+
+function asRecordUnknown(value: unknown): Record<string, unknown> | undefined {
+  return isObject(value) ? value : undefined;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function ratingErrorText(responseText: string, status: number): string {
+  if (responseText.length > 0) {
+    return responseText;
+  }
+  return `HTTP ${status}`;
+}
+
+function thinkingBudgetFromMetadata(metadata: Record<string, unknown> | undefined): number | undefined {
+  if (metadata === undefined) {
+    return undefined;
+  }
+  const raw = metadata[spanAttrRequestThinkingBudget];
+  if (raw === undefined || raw === null || typeof raw === 'boolean') {
+    return undefined;
+  }
+  if (typeof raw === 'number') {
+    if (!Number.isFinite(raw) || !Number.isInteger(raw)) {
+      return undefined;
+    }
+    return raw;
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (trimmed.length === 0) {
+      return undefined;
+    }
+    const parsed = Number.parseInt(trimmed, 10);
+    if (Number.isNaN(parsed)) {
+      return undefined;
+    }
+    return parsed;
+  }
+  return undefined;
+}
+
+function countToolCallParts(messages: Message[]): number {
+  let total = 0;
+  for (const message of messages) {
+    if (message.parts === undefined) {
+      continue;
+    }
+    for (const part of message.parts) {
+      if (part.type === 'tool_call') {
+        total += 1;
+      }
+    }
+  }
+  return total;
+}
+
+function errorCategoryFromError(error: unknown, fallbackSDK: boolean): string {
+  if (error === undefined || error === null) {
+    return fallbackSDK ? 'sdk_error' : '';
+  }
+  if (typeof error === 'string') {
+    return classifyErrorCategory(extractStatusCodeFromError(error), error, fallbackSDK);
+  }
+  const typed = error as Record<string, unknown>;
+  const statusCode = extractStatusCodeFromObject(typed) ?? extractStatusCodeFromError(asError(error).message);
+  const message = asError(error).message;
+  return classifyErrorCategory(statusCode, message, fallbackSDK);
+}
+
+function classifyErrorCategory(statusCode: number | undefined, message: string, fallbackSDK: boolean): string {
+  const lowerMessage = message.toLowerCase();
+  if (lowerMessage.includes('timeout') || lowerMessage.includes('deadline exceeded')) {
+    return 'timeout';
+  }
+  if (statusCode === 429) {
+    return 'rate_limit';
+  }
+  if (statusCode === 401 || statusCode === 403) {
+    return 'auth_error';
+  }
+  if (statusCode === 408) {
+    return 'timeout';
+  }
+  if (statusCode !== undefined && statusCode >= 500 && statusCode <= 599) {
+    return 'server_error';
+  }
+  if (statusCode !== undefined && statusCode >= 400 && statusCode <= 499) {
+    return 'client_error';
+  }
+  return fallbackSDK ? 'sdk_error' : '';
+}
+
+function extractStatusCodeFromObject(error: Record<string, unknown>): number | undefined {
+  const direct = asStatusCode(error.status) ?? asStatusCode(error.statusCode);
+  if (direct !== undefined) {
+    return direct;
+  }
+  if (isRecord(error.response)) {
+    return asStatusCode(error.response.status) ?? asStatusCode(error.response.statusCode);
+  }
+  if (isRecord(error.error)) {
+    return asStatusCode(error.error.status) ?? asStatusCode(error.error.statusCode);
+  }
+  return undefined;
+}
+
+function extractStatusCodeFromError(message: string): number | undefined {
+  const matches = message.match(/\b([1-5]\d\d)\b/g);
+  if (matches === null) {
+    return undefined;
+  }
+  for (const match of matches) {
+    const parsed = Number.parseInt(match, 10);
+    if (!Number.isNaN(parsed) && parsed >= 100 && parsed <= 599) {
+      return parsed;
+    }
+  }
+  return undefined;
+}
+
+function asStatusCode(value: unknown): number | undefined {
+  if (typeof value !== 'number') {
+    return undefined;
+  }
+  if (!Number.isInteger(value) || value < 100 || value > 599) {
+    return undefined;
+  }
+  return value;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isJSON(value: string): boolean {

@@ -34,6 +34,76 @@ func (ConversationModel) TableName() string {
 	return "conversations"
 }
 
+type ConversationRatingModel struct {
+	ID             uint64    `gorm:"primaryKey;autoIncrement"`
+	TenantID       string    `gorm:"size:128;not null;uniqueIndex:ux_conversation_ratings_tenant_rating,priority:1;index:idx_conversation_ratings_tenant_conv_created,priority:1;index:idx_conversation_ratings_tenant_conv_rating_created,priority:1;index:idx_conversation_ratings_tenant_rating_created,priority:1"`
+	RatingID       string    `gorm:"size:128;not null;uniqueIndex:ux_conversation_ratings_tenant_rating,priority:2"`
+	ConversationID string    `gorm:"size:255;not null;index:idx_conversation_ratings_tenant_conv_created,priority:2;index:idx_conversation_ratings_tenant_conv_rating_created,priority:2"`
+	GenerationID   *string   `gorm:"size:255"`
+	Rating         int       `gorm:"not null;index:idx_conversation_ratings_tenant_conv_rating_created,priority:3;index:idx_conversation_ratings_tenant_rating_created,priority:2"`
+	Comment        *string   `gorm:"type:text"`
+	MetadataJSON   string    `gorm:"type:json;not null"`
+	RaterID        *string   `gorm:"size:255"`
+	Source         *string   `gorm:"size:64"`
+	CreatedAt      time.Time `gorm:"type:datetime(6);not null;index:idx_conversation_ratings_tenant_conv_created,priority:3;index:idx_conversation_ratings_tenant_conv_rating_created,priority:4;index:idx_conversation_ratings_tenant_rating_created,priority:3"`
+	IngestedAt     time.Time `gorm:"type:datetime(6);not null;autoCreateTime"`
+}
+
+func (ConversationRatingModel) TableName() string {
+	return "conversation_ratings"
+}
+
+type ConversationRatingSummaryModel struct {
+	TenantID       string     `gorm:"size:128;primaryKey;index:idx_conversation_rating_summaries_tenant_has_bad,priority:1;index:idx_conversation_rating_summaries_tenant_latest,priority:1"`
+	ConversationID string     `gorm:"size:255;primaryKey"`
+	TotalCount     int        `gorm:"not null;default:0"`
+	GoodCount      int        `gorm:"not null;default:0"`
+	BadCount       int        `gorm:"not null;default:0"`
+	LatestRating   int        `gorm:"not null;default:0"`
+	LatestRatedAt  time.Time  `gorm:"type:datetime(6);not null;index:idx_conversation_rating_summaries_tenant_latest,priority:2"`
+	LatestBadAt    *time.Time `gorm:"type:datetime(6);index:idx_conversation_rating_summaries_tenant_has_bad,priority:3"`
+	HasBadRating   bool       `gorm:"not null;default:false;index:idx_conversation_rating_summaries_tenant_has_bad,priority:2"`
+	UpdatedAt      time.Time  `gorm:"type:datetime(6);not null;autoUpdateTime"`
+}
+
+func (ConversationRatingSummaryModel) TableName() string {
+	return "conversation_rating_summaries"
+}
+
+type ConversationAnnotationModel struct {
+	ID             uint64    `gorm:"primaryKey;autoIncrement"`
+	TenantID       string    `gorm:"size:128;not null;uniqueIndex:ux_conversation_annotations_tenant_annotation,priority:1;index:idx_conversation_annotations_tenant_conv_created,priority:1;index:idx_conversation_annotations_tenant_conv_type_created,priority:1"`
+	AnnotationID   string    `gorm:"size:128;not null;uniqueIndex:ux_conversation_annotations_tenant_annotation,priority:2"`
+	ConversationID string    `gorm:"size:255;not null;index:idx_conversation_annotations_tenant_conv_created,priority:2;index:idx_conversation_annotations_tenant_conv_type_created,priority:2"`
+	GenerationID   *string   `gorm:"size:255"`
+	AnnotationType string    `gorm:"size:32;not null;index:idx_conversation_annotations_tenant_conv_type_created,priority:3"`
+	Body           *string   `gorm:"type:text"`
+	TagsJSON       string    `gorm:"type:json;not null"`
+	MetadataJSON   string    `gorm:"type:json;not null"`
+	OperatorID     string    `gorm:"size:255;not null"`
+	OperatorLogin  *string   `gorm:"size:255"`
+	OperatorName   *string   `gorm:"size:255"`
+	CreatedAt      time.Time `gorm:"type:datetime(6);not null;index:idx_conversation_annotations_tenant_conv_created,priority:3;index:idx_conversation_annotations_tenant_conv_type_created,priority:4"`
+	IngestedAt     time.Time `gorm:"type:datetime(6);not null;autoCreateTime"`
+}
+
+func (ConversationAnnotationModel) TableName() string {
+	return "conversation_annotations"
+}
+
+type ConversationAnnotationSummaryModel struct {
+	TenantID             string    `gorm:"size:128;primaryKey;index:idx_conversation_annotation_summaries_tenant_latest,priority:1"`
+	ConversationID       string    `gorm:"size:255;primaryKey"`
+	AnnotationCount      int       `gorm:"not null;default:0"`
+	LatestAnnotationType *string   `gorm:"size:32"`
+	LatestAnnotatedAt    time.Time `gorm:"type:datetime(6);not null;index:idx_conversation_annotation_summaries_tenant_latest,priority:2"`
+	UpdatedAt            time.Time `gorm:"type:datetime(6);not null;autoUpdateTime"`
+}
+
+func (ConversationAnnotationSummaryModel) TableName() string {
+	return "conversation_annotation_summaries"
+}
+
 type CompactionBlockModel struct {
 	ID              uint64    `gorm:"primaryKey;autoIncrement"`
 	TenantID        string    `gorm:"size:128;not null;uniqueIndex:ux_compaction_blocks_tenant_block,priority:1;index:idx_compaction_blocks_tenant_time,priority:1"`

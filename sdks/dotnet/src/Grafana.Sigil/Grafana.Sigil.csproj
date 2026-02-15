@@ -5,7 +5,7 @@
     <RootNamespace>Grafana.Sigil</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageId>Grafana.Sigil</PackageId>
-    <Description>Grafana Sigil .NET SDK core runtime for normalized generation and OTLP trace export.</Description>
+    <Description>Grafana Sigil .NET SDK core runtime for normalized generation export and OTel-aligned instrumentation.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 

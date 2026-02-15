@@ -1,11 +1,18 @@
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
+using System.Globalization;
+using System.Reflection;
+using System.Net;
+using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 
 namespace Grafana.Sigil;
 
 public sealed class SigilClient : IAsyncDisposable
 {
+    internal const string InstrumentationName = "github.com/grafana/sigil/sdks/dotnet";
     internal const string DefaultOperationNameSync = "generateText";
     internal const string DefaultOperationNameStream = "streamText";
 
@@ -14,9 +21,16 @@ public sealed class SigilClient : IAsyncDisposable
     internal const string SpanAttrAgentName = "gen_ai.agent.name";
     internal const string SpanAttrAgentVersion = "gen_ai.agent.version";
     internal const string SpanAttrErrorType = "error.type";
+    internal const string SpanAttrErrorCategory = "error.category";
     internal const string SpanAttrOperationName = "gen_ai.operation.name";
     internal const string SpanAttrProviderName = "gen_ai.provider.name";
     internal const string SpanAttrRequestModel = "gen_ai.request.model";
+    internal const string SpanAttrRequestMaxTokens = "gen_ai.request.max_tokens";
+    internal const string SpanAttrRequestTemperature = "gen_ai.request.temperature";
+    internal const string SpanAttrRequestTopP = "gen_ai.request.top_p";
+    internal const string SpanAttrRequestToolChoice = "sigil.gen_ai.request.tool_choice";
+    internal const string SpanAttrRequestThinkingEnabled = "sigil.gen_ai.request.thinking.enabled";
+    internal const string SpanAttrRequestThinkingBudget = "sigil.gen_ai.request.thinking.budget_tokens";
     internal const string SpanAttrResponseId = "gen_ai.response.id";
     internal const string SpanAttrResponseModel = "gen_ai.response.model";
     internal const string SpanAttrFinishReasons = "gen_ai.response.finish_reasons";
@@ -24,17 +38,52 @@ public sealed class SigilClient : IAsyncDisposable
     internal const string SpanAttrOutputTokens = "gen_ai.usage.output_tokens";
     internal const string SpanAttrCacheReadTokens = "gen_ai.usage.cache_read_input_tokens";
     internal const string SpanAttrCacheWriteTokens = "gen_ai.usage.cache_write_input_tokens";
+    internal const string SpanAttrCacheCreationTokens = "gen_ai.usage.cache_creation_input_tokens";
+    internal const string SpanAttrReasoningTokens = "gen_ai.usage.reasoning_tokens";
     internal const string SpanAttrToolName = "gen_ai.tool.name";
     internal const string SpanAttrToolCallId = "gen_ai.tool.call.id";
     internal const string SpanAttrToolType = "gen_ai.tool.type";
     internal const string SpanAttrToolDescription = "gen_ai.tool.description";
     internal const string SpanAttrToolCallArguments = "gen_ai.tool.call.arguments";
     internal const string SpanAttrToolCallResult = "gen_ai.tool.call.result";
+    private const int MaxRatingConversationIdLen = 255;
+    private const int MaxRatingIdLen = 128;
+    private const int MaxRatingGenerationIdLen = 255;
+    private const int MaxRatingActorIdLen = 255;
+    private const int MaxRatingSourceLen = 64;
+    private const int MaxRatingCommentBytes = 4096;
+    private const int MaxRatingMetadataBytes = 16 * 1024;
+
+    internal const string MetricOperationDuration = "gen_ai.client.operation.duration";
+    internal const string MetricTokenUsage = "gen_ai.client.token.usage";
+    internal const string MetricTimeToFirstToken = "gen_ai.client.time_to_first_token";
+    internal const string MetricToolCallsPerOperation = "gen_ai.client.tool_calls_per_operation";
+    internal const string MetricAttrTokenType = "gen_ai.token.type";
+    internal const string MetricTokenTypeInput = "input";
+    internal const string MetricTokenTypeOutput = "output";
+    internal const string MetricTokenTypeCacheRead = "cache_read";
+    internal const string MetricTokenTypeCacheWrite = "cache_write";
+    internal const string MetricTokenTypeCacheCreation = "cache_creation";
+    internal const string MetricTokenTypeReasoning = "reasoning";
+
+    private static readonly Regex StatusCodeRegex = new(@"\b([1-5][0-9][0-9])\b", RegexOptions.Compiled);
 
     internal readonly SigilClientConfig _config;
     private readonly IGenerationExporter _generationExporter;
-    private readonly TraceRuntime _traceRuntime;
+    private readonly ActivitySource _activitySource;
+    private readonly Meter _meter;
+    private readonly Histogram<double> _operationDurationHistogram;
+    private readonly Histogram<double> _tokenUsageHistogram;
+    private readonly Histogram<double> _ttftHistogram;
+    private readonly Histogram<double> _toolCallsHistogram;
     private readonly Action<string> _log;
+    private readonly HttpClient _ratingHttpClient = new(new HttpClientHandler
+    {
+        UseCookies = false,
+    })
+    {
+        Timeout = TimeSpan.FromSeconds(10),
+    };
 
     private readonly object _pendingLock = new();
     private readonly List<Generation> _pending = new();
@@ -54,15 +103,29 @@ public sealed class SigilClient : IAsyncDisposable
         _log = _config.Logger!;
 
         _generationExporter = _config.GenerationExporter
-            ?? (_config.GenerationExport.Protocol == GenerationExportProtocol.Http
-                ? new HttpGenerationExporter(_config.GenerationExport.Endpoint, _config.GenerationExport.Headers)
-                : new GrpcGenerationExporter(
+            ?? _config.GenerationExport.Protocol switch
+            {
+                GenerationExportProtocol.Http => new HttpGenerationExporter(
+                    _config.GenerationExport.Endpoint,
+                    _config.GenerationExport.Headers
+                ),
+                GenerationExportProtocol.Grpc => new GrpcGenerationExporter(
                     _config.GenerationExport.Endpoint,
                     _config.GenerationExport.Insecure,
                     _config.GenerationExport.Headers
-                ));
+                ),
+                GenerationExportProtocol.None => new NoopGenerationExporter(),
+                _ => throw new InvalidOperationException(
+                    $"unsupported generation export protocol {_config.GenerationExport.Protocol}"
+                ),
+            };
 
-        _traceRuntime = TraceRuntime.Create(_config.Trace, _log);
+        _activitySource = new ActivitySource(InstrumentationName);
+        _meter = new Meter(InstrumentationName);
+        _operationDurationHistogram = _meter.CreateHistogram<double>(MetricOperationDuration, "s");
+        _tokenUsageHistogram = _meter.CreateHistogram<double>(MetricTokenUsage, "token");
+        _ttftHistogram = _meter.CreateHistogram<double>(MetricTimeToFirstToken, "s");
+        _toolCallsHistogram = _meter.CreateHistogram<double>(MetricToolCallsPerOperation, "count");
 
         _timerTask = Task.Run(RunFlushTimerAsync);
     }
@@ -107,7 +170,7 @@ public sealed class SigilClient : IAsyncDisposable
             ? InternalUtils.Utc(seed.StartedAt.Value)
             : _config.UtcNow!();
 
-        var activity = _traceRuntime.Source.StartActivity(
+        var activity = _activitySource.StartActivity(
             ToolSpanName(seed.ToolName),
             ActivityKind.Internal,
             default(ActivityContext),
@@ -122,6 +185,107 @@ public sealed class SigilClient : IAsyncDisposable
         }
 
         return new ToolExecutionRecorder(this, seed, seed.StartedAt!.Value, seed.IncludeContent, activity);
+    }
+
+    public async Task<SubmitConversationRatingResponse> SubmitConversationRatingAsync(
+        string conversationId,
+        SubmitConversationRatingRequest request,
+        CancellationToken cancellationToken = default
+    )
+    {
+        EnsureNotShutdown();
+
+        var normalizedConversationId = (conversationId ?? string.Empty).Trim();
+        if (normalizedConversationId.Length == 0)
+        {
+            throw new ValidationException("sigil conversation rating validation failed: conversationId is required");
+        }
+
+        if (normalizedConversationId.Length > MaxRatingConversationIdLen)
+        {
+            throw new ValidationException("sigil conversation rating validation failed: conversationId is too long");
+        }
+
+        var normalizedRequest = NormalizeConversationRatingRequest(request);
+        var endpoint = BuildConversationRatingEndpoint(
+            _config.Api.Endpoint,
+            _config.GenerationExport.Insecure,
+            normalizedConversationId
+        );
+
+        var payload = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["rating_id"] = normalizedRequest.RatingId,
+            ["rating"] = ToWireConversationRatingValue(normalizedRequest.Rating),
+        };
+        if (!string.IsNullOrWhiteSpace(normalizedRequest.Comment))
+        {
+            payload["comment"] = normalizedRequest.Comment;
+        }
+        if (normalizedRequest.Metadata.Count > 0)
+        {
+            payload["metadata"] = normalizedRequest.Metadata;
+        }
+        if (!string.IsNullOrWhiteSpace(normalizedRequest.GenerationId))
+        {
+            payload["generation_id"] = normalizedRequest.GenerationId;
+        }
+        if (!string.IsNullOrWhiteSpace(normalizedRequest.RaterId))
+        {
+            payload["rater_id"] = normalizedRequest.RaterId;
+        }
+        if (!string.IsNullOrWhiteSpace(normalizedRequest.Source))
+        {
+            payload["source"] = normalizedRequest.Source;
+        }
+
+        var body = JsonSerializer.Serialize(payload);
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json"),
+        };
+        foreach (var header in _config.GenerationExport.Headers)
+        {
+            httpRequest.Headers.TryAddWithoutValidation(header.Key, header.Value);
+        }
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _ratingHttpClient.SendAsync(httpRequest, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            throw new RatingTransportException("sigil conversation rating transport failed", ex);
+        }
+        using (response)
+        {
+            var responseBody = (await ReadResponseBodyAsync(response.Content, cancellationToken).ConfigureAwait(false)).Trim();
+            if (response.StatusCode == HttpStatusCode.BadRequest)
+            {
+                throw new ValidationException(
+                    $"sigil conversation rating validation failed: {RatingErrorText(responseBody, (int)response.StatusCode)}"
+                );
+            }
+            if (response.StatusCode == HttpStatusCode.Conflict)
+            {
+                throw new RatingConflictException(
+                    $"sigil conversation rating conflict: {RatingErrorText(responseBody, (int)response.StatusCode)}"
+                );
+            }
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new RatingTransportException(
+                    $"sigil conversation rating transport failed: status {(int)response.StatusCode}: {RatingErrorText(responseBody, (int)response.StatusCode)}"
+                );
+            }
+            if (string.IsNullOrWhiteSpace(responseBody))
+            {
+                throw new RatingTransportException("sigil conversation rating transport failed: empty response payload");
+            }
+
+            return ParseSubmitConversationRatingResponse(responseBody);
+        }
     }
 
     public async Task FlushAsync(CancellationToken cancellationToken = default)
@@ -171,16 +335,9 @@ public sealed class SigilClient : IAsyncDisposable
             _log($"sigil generation exporter shutdown failed: {ex}");
         }
 
-        try
-        {
-            _traceRuntime.Flush();
-        }
-        catch (Exception ex)
-        {
-            _log($"sigil trace flush failed: {ex}");
-        }
-
-        _traceRuntime.Dispose();
+        _activitySource.Dispose();
+        _meter.Dispose();
+        _ratingHttpClient.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -223,7 +380,7 @@ public sealed class SigilClient : IAsyncDisposable
             ? InternalUtils.Utc(seed.StartedAt.Value)
             : _config.UtcNow!();
 
-        var activity = _traceRuntime.Source.StartActivity(
+        var activity = _activitySource.StartActivity(
             GenerationSpanName(seed.OperationName, seed.Model.Name),
             ActivityKind.Client,
             default(ActivityContext),
@@ -243,6 +400,11 @@ public sealed class SigilClient : IAsyncDisposable
                 Mode = seed.Mode,
                 OperationName = seed.OperationName,
                 Model = InternalUtils.DeepClone(seed.Model),
+                MaxTokens = seed.MaxTokens,
+                Temperature = seed.Temperature,
+                TopP = seed.TopP,
+                ToolChoice = seed.ToolChoice,
+                ThinkingEnabled = seed.ThinkingEnabled,
             });
         }
 
@@ -424,6 +586,397 @@ public sealed class SigilClient : IAsyncDisposable
         }
     }
 
+    private static SubmitConversationRatingRequest NormalizeConversationRatingRequest(SubmitConversationRatingRequest request)
+    {
+        var input = request ?? new SubmitConversationRatingRequest();
+        var normalized = new SubmitConversationRatingRequest
+        {
+            RatingId = (input.RatingId ?? string.Empty).Trim(),
+            Rating = input.Rating,
+            Comment = (input.Comment ?? string.Empty).Trim(),
+            Metadata = input.Metadata != null
+                ? new Dictionary<string, object?>(input.Metadata, StringComparer.Ordinal)
+                : new Dictionary<string, object?>(StringComparer.Ordinal),
+            GenerationId = (input.GenerationId ?? string.Empty).Trim(),
+            RaterId = (input.RaterId ?? string.Empty).Trim(),
+            Source = (input.Source ?? string.Empty).Trim(),
+        };
+
+        if (normalized.RatingId.Length == 0)
+        {
+            throw new ValidationException("sigil conversation rating validation failed: ratingId is required");
+        }
+        if (normalized.RatingId.Length > MaxRatingIdLen)
+        {
+            throw new ValidationException("sigil conversation rating validation failed: ratingId is too long");
+        }
+        if (normalized.Rating != ConversationRatingValue.Good && normalized.Rating != ConversationRatingValue.Bad)
+        {
+            throw new ValidationException(
+                "sigil conversation rating validation failed: rating must be CONVERSATION_RATING_VALUE_GOOD or CONVERSATION_RATING_VALUE_BAD"
+            );
+        }
+        if (Encoding.UTF8.GetByteCount(normalized.Comment) > MaxRatingCommentBytes)
+        {
+            throw new ValidationException("sigil conversation rating validation failed: comment is too long");
+        }
+        if (normalized.GenerationId.Length > MaxRatingGenerationIdLen)
+        {
+            throw new ValidationException("sigil conversation rating validation failed: generationId is too long");
+        }
+        if (normalized.RaterId.Length > MaxRatingActorIdLen)
+        {
+            throw new ValidationException("sigil conversation rating validation failed: raterId is too long");
+        }
+        if (normalized.Source.Length > MaxRatingSourceLen)
+        {
+            throw new ValidationException("sigil conversation rating validation failed: source is too long");
+        }
+
+        if (normalized.Metadata.Count > 0)
+        {
+            byte[] metadataBytes;
+            try
+            {
+                metadataBytes = JsonSerializer.SerializeToUtf8Bytes(normalized.Metadata);
+            }
+            catch (Exception ex)
+            {
+                throw new ValidationException($"sigil conversation rating validation failed: metadata must be valid JSON ({ex.Message})");
+            }
+
+            if (metadataBytes.Length > MaxRatingMetadataBytes)
+            {
+                throw new ValidationException("sigil conversation rating validation failed: metadata is too large");
+            }
+        }
+
+        return normalized;
+    }
+
+    private static string BuildConversationRatingEndpoint(string apiEndpoint, bool insecure, string conversationId)
+    {
+        var baseUrl = BuildRatingBaseUrl(apiEndpoint, insecure);
+        return $"{baseUrl}/api/v1/conversations/{Uri.EscapeDataString(conversationId)}/ratings";
+    }
+
+    private static string BuildRatingBaseUrl(string apiEndpoint, bool insecure)
+    {
+        var trimmedEndpoint = (apiEndpoint ?? string.Empty).Trim();
+        if (trimmedEndpoint.Length == 0)
+        {
+            throw new RatingTransportException("sigil conversation rating transport failed: api endpoint is required");
+        }
+
+        if (trimmedEndpoint.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            || trimmedEndpoint.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!Uri.TryCreate(trimmedEndpoint, UriKind.Absolute, out var parsed) || string.IsNullOrWhiteSpace(parsed.Host))
+            {
+                throw new RatingTransportException(
+                    "sigil conversation rating transport failed: api endpoint host is required"
+                );
+            }
+
+            return $"{parsed.Scheme}://{parsed.Authority}";
+        }
+
+        var host = trimmedEndpoint;
+        if (host.StartsWith("grpc://", StringComparison.OrdinalIgnoreCase))
+        {
+            host = host.Substring("grpc://".Length);
+        }
+        var slashIndex = host.IndexOf('/');
+        if (slashIndex >= 0)
+        {
+            host = host.Substring(0, slashIndex);
+        }
+        host = host.Trim();
+        if (host.Length == 0)
+        {
+            throw new RatingTransportException(
+                "sigil conversation rating transport failed: api endpoint host is required"
+            );
+        }
+
+        var scheme = insecure ? "http" : "https";
+        return $"{scheme}://{host}";
+    }
+
+    private static SubmitConversationRatingResponse ParseSubmitConversationRatingResponse(string payload)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(payload);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                throw new RatingTransportException("sigil conversation rating transport failed: invalid response payload");
+            }
+
+            var ratingElement = GetRequiredProperty(document.RootElement, "rating");
+            var summaryElement = GetRequiredProperty(document.RootElement, "summary");
+
+            return new SubmitConversationRatingResponse
+            {
+                Rating = ParseConversationRating(ratingElement),
+                Summary = ParseConversationRatingSummary(summaryElement),
+            };
+        }
+        catch (RatingTransportException)
+        {
+            throw;
+        }
+        catch (JsonException ex)
+        {
+            throw new RatingTransportException("sigil conversation rating transport failed: invalid JSON response", ex);
+        }
+    }
+
+    private static ConversationRating ParseConversationRating(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            throw new RatingTransportException("sigil conversation rating transport failed: invalid rating payload");
+        }
+
+        var rating = new ConversationRating
+        {
+            RatingId = GetRequiredString(element, "rating_id"),
+            ConversationId = GetRequiredString(element, "conversation_id"),
+            Rating = ParseWireConversationRatingValue(GetRequiredString(element, "rating")),
+            CreatedAt = ParseRequiredTimestamp(element, "created_at"),
+        };
+
+        if (TryGetOptionalString(element, "comment", out var comment))
+        {
+            rating.Comment = comment;
+        }
+        if (TryGetProperty(element, "metadata", out var metadataElement))
+        {
+            rating.Metadata = metadataElement.ValueKind switch
+            {
+                JsonValueKind.Object => ParseMetadataObject(metadataElement),
+                JsonValueKind.Null => new Dictionary<string, object?>(StringComparer.Ordinal),
+                _ => throw new RatingTransportException("sigil conversation rating transport failed: invalid rating payload"),
+            };
+        }
+        if (TryGetOptionalString(element, "generation_id", out var generationId))
+        {
+            rating.GenerationId = generationId;
+        }
+        if (TryGetOptionalString(element, "rater_id", out var raterId))
+        {
+            rating.RaterId = raterId;
+        }
+        if (TryGetOptionalString(element, "source", out var source))
+        {
+            rating.Source = source;
+        }
+
+        return rating;
+    }
+
+    private static ConversationRatingSummary ParseConversationRatingSummary(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            throw new RatingTransportException("sigil conversation rating transport failed: invalid rating summary payload");
+        }
+
+        ConversationRatingValue? latestRating = null;
+        if (TryGetProperty(element, "latest_rating", out var latestRatingElement))
+        {
+            latestRating = latestRatingElement.ValueKind switch
+            {
+                JsonValueKind.String => ParseWireConversationRatingValue(latestRatingElement.GetString() ?? string.Empty),
+                JsonValueKind.Null => null,
+                _ => throw new RatingTransportException(
+                    "sigil conversation rating transport failed: invalid rating summary payload"
+                ),
+            };
+        }
+
+        DateTimeOffset? latestBadAt = null;
+        if (TryGetProperty(element, "latest_bad_at", out var latestBadAtElement))
+        {
+            latestBadAt = latestBadAtElement.ValueKind switch
+            {
+                JsonValueKind.String => ParseTimestamp(latestBadAtElement.GetString() ?? string.Empty),
+                JsonValueKind.Null => null,
+                _ => throw new RatingTransportException(
+                    "sigil conversation rating transport failed: invalid rating summary payload"
+                ),
+            };
+        }
+
+        return new ConversationRatingSummary
+        {
+            TotalCount = GetRequiredInt(element, "total_count"),
+            GoodCount = GetRequiredInt(element, "good_count"),
+            BadCount = GetRequiredInt(element, "bad_count"),
+            LatestRating = latestRating,
+            LatestRatedAt = ParseRequiredTimestamp(element, "latest_rated_at"),
+            LatestBadAt = latestBadAt,
+            HasBadRating = GetRequiredBool(element, "has_bad_rating"),
+        };
+    }
+
+    private static ConversationRatingValue ParseWireConversationRatingValue(string value)
+    {
+        return value switch
+        {
+            "CONVERSATION_RATING_VALUE_GOOD" => ConversationRatingValue.Good,
+            "CONVERSATION_RATING_VALUE_BAD" => ConversationRatingValue.Bad,
+            _ => throw new RatingTransportException("sigil conversation rating transport failed: invalid rating payload"),
+        };
+    }
+
+    private static string ToWireConversationRatingValue(ConversationRatingValue value)
+    {
+        return value switch
+        {
+            ConversationRatingValue.Good => "CONVERSATION_RATING_VALUE_GOOD",
+            ConversationRatingValue.Bad => "CONVERSATION_RATING_VALUE_BAD",
+            _ => throw new ValidationException(
+                "sigil conversation rating validation failed: rating must be CONVERSATION_RATING_VALUE_GOOD or CONVERSATION_RATING_VALUE_BAD"
+            ),
+        };
+    }
+
+    private static string RatingErrorText(string body, int statusCode)
+    {
+        var trimmed = (body ?? string.Empty).Trim();
+        if (trimmed.Length > 0)
+        {
+            return trimmed;
+        }
+
+        if (Enum.IsDefined(typeof(HttpStatusCode), statusCode))
+        {
+            return ((HttpStatusCode)statusCode).ToString();
+        }
+
+        return "status " + statusCode.ToString(CultureInfo.InvariantCulture);
+    }
+
+    private static JsonElement GetRequiredProperty(JsonElement element, string name)
+    {
+        if (!TryGetProperty(element, name, out var value))
+        {
+            throw new RatingTransportException("sigil conversation rating transport failed: invalid response payload");
+        }
+
+        return value;
+    }
+
+    private static bool TryGetProperty(JsonElement element, string name, out JsonElement value)
+    {
+        foreach (var property in element.EnumerateObject())
+        {
+            if (string.Equals(property.Name, name, StringComparison.Ordinal))
+            {
+                value = property.Value;
+                return true;
+            }
+        }
+
+        value = default;
+        return false;
+    }
+
+    private static string GetRequiredString(JsonElement element, string name)
+    {
+        if (!TryGetProperty(element, name, out var value) || value.ValueKind != JsonValueKind.String)
+        {
+            throw new RatingTransportException("sigil conversation rating transport failed: invalid response payload");
+        }
+
+        var text = (value.GetString() ?? string.Empty).Trim();
+        if (text.Length == 0)
+        {
+            throw new RatingTransportException("sigil conversation rating transport failed: invalid response payload");
+        }
+
+        return text;
+    }
+
+    private static bool TryGetOptionalString(JsonElement element, string name, out string value)
+    {
+        value = string.Empty;
+        if (!TryGetProperty(element, name, out var raw))
+        {
+            return false;
+        }
+
+        if (raw.ValueKind == JsonValueKind.Null)
+        {
+            return false;
+        }
+        if (raw.ValueKind != JsonValueKind.String)
+        {
+            throw new RatingTransportException("sigil conversation rating transport failed: invalid response payload");
+        }
+
+        value = (raw.GetString() ?? string.Empty).Trim();
+        return true;
+    }
+
+    private static int GetRequiredInt(JsonElement element, string name)
+    {
+        if (!TryGetProperty(element, name, out var value) || value.ValueKind != JsonValueKind.Number || !value.TryGetInt32(out var parsed))
+        {
+            throw new RatingTransportException("sigil conversation rating transport failed: invalid response payload");
+        }
+
+        return parsed;
+    }
+
+    private static bool GetRequiredBool(JsonElement element, string name)
+    {
+        if (!TryGetProperty(element, name, out var value)
+            || (value.ValueKind != JsonValueKind.True && value.ValueKind != JsonValueKind.False))
+        {
+            throw new RatingTransportException("sigil conversation rating transport failed: invalid response payload");
+        }
+
+        return value.GetBoolean();
+    }
+
+    private static DateTimeOffset ParseRequiredTimestamp(JsonElement element, string name)
+    {
+        if (!TryGetProperty(element, name, out var value) || value.ValueKind != JsonValueKind.String)
+        {
+            throw new RatingTransportException("sigil conversation rating transport failed: invalid response payload");
+        }
+
+        return ParseTimestamp(value.GetString() ?? string.Empty);
+    }
+
+    private static DateTimeOffset ParseTimestamp(string raw)
+    {
+        if (!DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var timestamp))
+        {
+            throw new RatingTransportException("sigil conversation rating transport failed: invalid timestamp in response payload");
+        }
+
+        return timestamp;
+    }
+
+    private static Dictionary<string, object?> ParseMetadataObject(JsonElement value)
+    {
+        try
+        {
+            var metadata = JsonSerializer.Deserialize<Dictionary<string, object?>>(value.GetRawText());
+            return metadata != null
+                ? new Dictionary<string, object?>(metadata, StringComparer.Ordinal)
+                : new Dictionary<string, object?>(StringComparer.Ordinal);
+        }
+        catch (Exception ex)
+        {
+            throw new RatingTransportException("sigil conversation rating transport failed: invalid rating payload", ex);
+        }
+    }
+
     internal static string DefaultOperationNameForMode(GenerationMode mode)
     {
         return mode == GenerationMode.Stream ? DefaultOperationNameStream : DefaultOperationNameSync;
@@ -475,6 +1028,35 @@ public sealed class SigilClient : IAsyncDisposable
             activity.SetTag(SpanAttrRequestModel, generation.Model.Name);
         }
 
+        if (generation.MaxTokens.HasValue)
+        {
+            activity.SetTag(SpanAttrRequestMaxTokens, generation.MaxTokens.Value);
+        }
+
+        if (generation.Temperature.HasValue)
+        {
+            activity.SetTag(SpanAttrRequestTemperature, generation.Temperature.Value);
+        }
+
+        if (generation.TopP.HasValue)
+        {
+            activity.SetTag(SpanAttrRequestTopP, generation.TopP.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(generation.ToolChoice))
+        {
+            activity.SetTag(SpanAttrRequestToolChoice, generation.ToolChoice);
+        }
+
+        if (generation.ThinkingEnabled.HasValue)
+        {
+            activity.SetTag(SpanAttrRequestThinkingEnabled, generation.ThinkingEnabled.Value);
+        }
+        if (TryGetThinkingBudgetFromMetadata(generation.Metadata, out var thinkingBudget))
+        {
+            activity.SetTag(SpanAttrRequestThinkingBudget, thinkingBudget);
+        }
+
         if (!string.IsNullOrWhiteSpace(generation.ResponseId))
         {
             activity.SetTag(SpanAttrResponseId, generation.ResponseId);
@@ -487,7 +1069,7 @@ public sealed class SigilClient : IAsyncDisposable
 
         if (!string.IsNullOrWhiteSpace(generation.StopReason))
         {
-            activity.SetTag(SpanAttrFinishReasons, "[\"" + generation.StopReason + "\"]");
+            activity.SetTag(SpanAttrFinishReasons, new[] { generation.StopReason });
         }
 
         if (generation.Usage.InputTokens != 0)
@@ -508,6 +1090,16 @@ public sealed class SigilClient : IAsyncDisposable
         if (generation.Usage.CacheWriteInputTokens != 0)
         {
             activity.SetTag(SpanAttrCacheWriteTokens, generation.Usage.CacheWriteInputTokens);
+        }
+
+        if (generation.Usage.CacheCreationInputTokens != 0)
+        {
+            activity.SetTag(SpanAttrCacheCreationTokens, generation.Usage.CacheCreationInputTokens);
+        }
+
+        if (generation.Usage.ReasoningTokens != 0)
+        {
+            activity.SetTag(SpanAttrReasoningTokens, generation.Usage.ReasoningTokens);
         }
     }
 
@@ -557,6 +1149,331 @@ public sealed class SigilClient : IAsyncDisposable
         return DefaultOperationNameForMode(generation.Mode ?? GenerationMode.Sync);
     }
 
+    internal void RecordGenerationMetrics(
+        Generation generation,
+        string errorType,
+        string errorCategory,
+        DateTimeOffset? firstTokenAt
+    )
+    {
+        if (!generation.StartedAt.HasValue || !generation.CompletedAt.HasValue)
+        {
+            return;
+        }
+
+        var startedAt = generation.StartedAt.Value;
+        var completedAt = generation.CompletedAt.Value;
+        var durationSeconds = Math.Max(0d, (completedAt - startedAt).TotalSeconds);
+
+        _operationDurationHistogram.Record(
+            durationSeconds,
+            new KeyValuePair<string, object?>[]
+            {
+                new(SpanAttrOperationName, OperationName(generation)),
+                new(SpanAttrProviderName, generation.Model.Provider ?? string.Empty),
+                new(SpanAttrRequestModel, generation.Model.Name ?? string.Empty),
+                new(SpanAttrAgentName, generation.AgentName ?? string.Empty),
+                new(SpanAttrErrorType, errorType ?? string.Empty),
+                new(SpanAttrErrorCategory, errorCategory ?? string.Empty),
+            });
+
+        RecordTokenUsage(generation, MetricTokenTypeInput, generation.Usage.InputTokens);
+        RecordTokenUsage(generation, MetricTokenTypeOutput, generation.Usage.OutputTokens);
+        RecordTokenUsage(generation, MetricTokenTypeCacheRead, generation.Usage.CacheReadInputTokens);
+        RecordTokenUsage(generation, MetricTokenTypeCacheWrite, generation.Usage.CacheWriteInputTokens);
+        RecordTokenUsage(generation, MetricTokenTypeCacheCreation, generation.Usage.CacheCreationInputTokens);
+        RecordTokenUsage(generation, MetricTokenTypeReasoning, generation.Usage.ReasoningTokens);
+
+        _toolCallsHistogram.Record(
+            CountToolCallParts(generation.Output),
+            new KeyValuePair<string, object?>[]
+            {
+                new(SpanAttrProviderName, generation.Model.Provider ?? string.Empty),
+                new(SpanAttrRequestModel, generation.Model.Name ?? string.Empty),
+                new(SpanAttrAgentName, generation.AgentName ?? string.Empty),
+            });
+
+        if (string.Equals(OperationName(generation), DefaultOperationNameStream, StringComparison.Ordinal)
+            && firstTokenAt.HasValue)
+        {
+            var ttftSeconds = (firstTokenAt.Value - startedAt).TotalSeconds;
+            if (ttftSeconds >= 0d)
+            {
+                _ttftHistogram.Record(
+                    ttftSeconds,
+                    new KeyValuePair<string, object?>[]
+                    {
+                        new(SpanAttrProviderName, generation.Model.Provider ?? string.Empty),
+                        new(SpanAttrRequestModel, generation.Model.Name ?? string.Empty),
+                        new(SpanAttrAgentName, generation.AgentName ?? string.Empty),
+                    });
+            }
+        }
+    }
+
+    internal void RecordToolExecutionMetrics(
+        ToolExecutionStart seed,
+        DateTimeOffset startedAt,
+        DateTimeOffset completedAt,
+        Exception? finalError
+    )
+    {
+        var durationSeconds = Math.Max(0d, (completedAt - startedAt).TotalSeconds);
+        var errorType = finalError == null ? string.Empty : "tool_execution_error";
+        var errorCategory = finalError == null ? string.Empty : ErrorCategoryFromException(finalError, true);
+
+        _operationDurationHistogram.Record(
+            durationSeconds,
+            new KeyValuePair<string, object?>[]
+            {
+                new(SpanAttrOperationName, "execute_tool"),
+                new(SpanAttrProviderName, string.Empty),
+                new(SpanAttrRequestModel, seed.ToolName ?? string.Empty),
+                new(SpanAttrAgentName, seed.AgentName ?? string.Empty),
+                new(SpanAttrErrorType, errorType),
+                new(SpanAttrErrorCategory, errorCategory),
+            });
+    }
+
+    internal static string ErrorCategoryFromException(Exception? error, bool fallbackSdk)
+    {
+        if (error == null)
+        {
+            return fallbackSdk ? "sdk_error" : string.Empty;
+        }
+
+        if (error is TimeoutException or OperationCanceledException)
+        {
+            return "timeout";
+        }
+
+        var message = error.Message ?? string.Empty;
+        if (message.IndexOf("timeout", StringComparison.OrdinalIgnoreCase) >= 0
+            || message.IndexOf("deadline exceeded", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            return "timeout";
+        }
+
+        var statusCode = ExtractStatusCode(error);
+        if (statusCode == 429)
+        {
+            return "rate_limit";
+        }
+
+        if (statusCode is 401 or 403)
+        {
+            return "auth_error";
+        }
+
+        if (statusCode == 408)
+        {
+            return "timeout";
+        }
+
+        if (statusCode.HasValue && statusCode.Value >= 500 && statusCode.Value <= 599)
+        {
+            return "server_error";
+        }
+
+        if (statusCode.HasValue && statusCode.Value >= 400 && statusCode.Value <= 499)
+        {
+            return "client_error";
+        }
+
+        return fallbackSdk ? "sdk_error" : string.Empty;
+    }
+
+    private void RecordTokenUsage(Generation generation, string tokenType, long value)
+    {
+        if (value == 0L)
+        {
+            return;
+        }
+
+        _tokenUsageHistogram.Record(
+            value,
+            new KeyValuePair<string, object?>[]
+            {
+                new(SpanAttrProviderName, generation.Model.Provider ?? string.Empty),
+                new(SpanAttrRequestModel, generation.Model.Name ?? string.Empty),
+                new(SpanAttrAgentName, generation.AgentName ?? string.Empty),
+                new(MetricAttrTokenType, tokenType),
+            });
+    }
+
+    private static long CountToolCallParts(IReadOnlyList<Message> messages)
+    {
+        long total = 0;
+        foreach (var message in messages)
+        {
+            foreach (var part in message.Parts)
+            {
+                if (part.Kind == PartKind.ToolCall)
+                {
+                    total++;
+                }
+            }
+        }
+
+        return total;
+    }
+
+    private static int? ExtractStatusCode(Exception error)
+    {
+        var direct = ReadStatusCodeValue(error);
+        if (direct.HasValue)
+        {
+            return direct;
+        }
+
+        foreach (var propertyName in new[] { "Response", "Error" })
+        {
+            var property = error.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            var nested = property?.GetValue(error);
+            if (nested != null)
+            {
+                var nestedValue = ReadStatusCodeValue(nested);
+                if (nestedValue.HasValue)
+                {
+                    return nestedValue;
+                }
+            }
+        }
+
+        var matches = StatusCodeRegex.Matches(error.Message ?? string.Empty);
+        foreach (Match match in matches)
+        {
+            if (int.TryParse(match.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+                && parsed is >= 100 and <= 599)
+            {
+                return parsed;
+            }
+        }
+
+        return null;
+    }
+
+    private static int? ReadStatusCodeValue(object value)
+    {
+        foreach (var memberName in new[] { "StatusCode", "Status", "statusCode", "status" })
+        {
+            var property = value.GetType().GetProperty(memberName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (property != null)
+            {
+                var parsed = ConvertToStatusCode(property.GetValue(value));
+                if (parsed.HasValue)
+                {
+                    return parsed;
+                }
+            }
+
+            var field = value.GetType().GetField(memberName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (field != null)
+            {
+                var parsed = ConvertToStatusCode(field.GetValue(value));
+                if (parsed.HasValue)
+                {
+                    return parsed;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static int? ConvertToStatusCode(object? value)
+    {
+        if (value == null)
+        {
+            return null;
+        }
+
+        if (value is int statusCode)
+        {
+            return statusCode is >= 100 and <= 599 ? statusCode : null;
+        }
+
+        if (value is long longStatus && longStatus is >= 100 and <= 599)
+        {
+            return (int)longStatus;
+        }
+
+        if (value is string text
+            && int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            && parsed is >= 100 and <= 599)
+        {
+            return parsed;
+        }
+
+        return null;
+    }
+
+    private static bool TryGetThinkingBudgetFromMetadata(
+        IReadOnlyDictionary<string, object?> metadata,
+        out long thinkingBudget
+    )
+    {
+        thinkingBudget = 0;
+        if (!metadata.TryGetValue(SpanAttrRequestThinkingBudget, out var raw) || raw == null)
+        {
+            return false;
+        }
+
+        switch (raw)
+        {
+            case long value:
+                thinkingBudget = value;
+                return true;
+            case int value:
+                thinkingBudget = value;
+                return true;
+            case short value:
+                thinkingBudget = value;
+                return true;
+            case byte value:
+                thinkingBudget = value;
+                return true;
+            case ulong value when value <= long.MaxValue:
+                thinkingBudget = (long)value;
+                return true;
+            case uint value:
+                thinkingBudget = value;
+                return true;
+            case ushort value:
+                thinkingBudget = value;
+                return true;
+            case sbyte value:
+                thinkingBudget = value;
+                return true;
+            case double value when value % 1 == 0 && value >= long.MinValue && value <= long.MaxValue:
+                thinkingBudget = (long)value;
+                return true;
+            case float value when value % 1 == 0 && value >= long.MinValue && value <= long.MaxValue:
+                thinkingBudget = (long)value;
+                return true;
+            case decimal value when decimal.Truncate(value) == value && value >= long.MinValue && value <= long.MaxValue:
+                thinkingBudget = (long)value;
+                return true;
+            case JsonElement json:
+                if (json.ValueKind == JsonValueKind.Number && json.TryGetInt64(out var jsonInt))
+                {
+                    thinkingBudget = jsonInt;
+                    return true;
+                }
+                if (json.ValueKind == JsonValueKind.String
+                    && long.TryParse(json.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var jsonParsed))
+                {
+                    thinkingBudget = jsonParsed;
+                    return true;
+                }
+                return false;
+            case string text:
+                return long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out thinkingBudget);
+            default:
+                return false;
+        }
+    }
+
     internal static void RecordException(Activity activity, Exception error)
     {
         if (activity == null || error == null)
@@ -567,6 +1484,15 @@ public sealed class SigilClient : IAsyncDisposable
         activity.SetTag("exception.type", error.GetType().FullName);
         activity.SetTag("exception.message", error.Message);
         activity.SetTag("exception.stacktrace", error.ToString());
+    }
+
+    private static Task<string> ReadResponseBodyAsync(HttpContent content, CancellationToken cancellationToken)
+    {
+#if NETSTANDARD2_0
+        return content.ReadAsStringAsync();
+#else
+        return content.ReadAsStringAsync(cancellationToken);
+#endif
     }
 }
 
@@ -585,6 +1511,7 @@ public sealed class GenerationRecorder
     private Exception? _callError;
     private Exception? _mappingError;
     private Generation? _result;
+    private DateTimeOffset? _firstTokenAt;
 
     public Generation? LastGeneration { get; private set; }
 
@@ -632,6 +1559,19 @@ public sealed class GenerationRecorder
         }
     }
 
+    public void SetFirstTokenAt(DateTimeOffset firstTokenAt)
+    {
+        if (_noop)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            _firstTokenAt = InternalUtils.Utc(firstTokenAt);
+        }
+    }
+
     public void End()
     {
         if (_noop)
@@ -642,6 +1582,7 @@ public sealed class GenerationRecorder
         Exception? callError;
         Exception? mappingError;
         Generation result;
+        DateTimeOffset? firstTokenAt;
 
         lock (_gate)
         {
@@ -654,6 +1595,7 @@ public sealed class GenerationRecorder
             callError = _callError;
             mappingError = _mappingError;
             result = _result != null ? InternalUtils.DeepClone(_result) : new Generation();
+            firstTokenAt = _firstTokenAt;
         }
 
         var completedAt = _client!._config.UtcNow!();
@@ -696,6 +1638,24 @@ public sealed class GenerationRecorder
             localError = new EnqueueException($"sigil: generation enqueue failed: {ex.Message}", ex);
         }
 
+        var errorType = string.Empty;
+        var errorCategory = string.Empty;
+        if (callError != null)
+        {
+            errorType = "provider_call_error";
+            errorCategory = SigilClient.ErrorCategoryFromException(callError, true);
+        }
+        else if (mappingError != null)
+        {
+            errorType = "mapping_error";
+            errorCategory = "sdk_error";
+        }
+        else if (localError != null)
+        {
+            errorType = localError is ValidationException ? "validation_error" : "enqueue_error";
+            errorCategory = "sdk_error";
+        }
+
         if (_activity != null)
         {
             if (localError != null)
@@ -703,23 +1663,11 @@ public sealed class GenerationRecorder
                 SigilClient.RecordException(_activity, localError);
             }
 
-            if (callError != null)
+            if (errorType.Length > 0)
             {
-                _activity.SetTag(SigilClient.SpanAttrErrorType, "provider_call_error");
-                _activity.SetStatus(ActivityStatusCode.Error, callError.Message);
-            }
-            else if (mappingError != null)
-            {
-                _activity.SetTag(SigilClient.SpanAttrErrorType, "mapping_error");
-                _activity.SetStatus(ActivityStatusCode.Error, mappingError.Message);
-            }
-            else if (localError != null)
-            {
-                _activity.SetTag(
-                    SigilClient.SpanAttrErrorType,
-                    localError is ValidationException ? "validation_error" : "enqueue_error"
-                );
-                _activity.SetStatus(ActivityStatusCode.Error, localError.Message);
+                _activity.SetTag(SigilClient.SpanAttrErrorType, errorType);
+                _activity.SetTag(SigilClient.SpanAttrErrorCategory, errorCategory);
+                _activity.SetStatus(ActivityStatusCode.Error, (callError ?? mappingError ?? localError)?.Message);
             }
             else
             {
@@ -728,6 +1676,8 @@ public sealed class GenerationRecorder
 
             _activity.Stop();
         }
+
+        _client.RecordGenerationMetrics(generation, errorType, errorCategory, firstTokenAt);
 
         LastGeneration = InternalUtils.DeepClone(generation);
         Error = localError;
@@ -751,6 +1701,11 @@ public sealed class GenerationRecorder
         generation.Model.Provider = FirstNonEmpty(generation.Model.Provider, _seed.Model.Provider);
         generation.Model.Name = FirstNonEmpty(generation.Model.Name, _seed.Model.Name);
         generation.SystemPrompt = FirstNonEmpty(generation.SystemPrompt, _seed.SystemPrompt);
+        generation.MaxTokens ??= _seed.MaxTokens;
+        generation.Temperature ??= _seed.Temperature;
+        generation.TopP ??= _seed.TopP;
+        generation.ToolChoice = FirstNonEmpty(generation.ToolChoice ?? string.Empty, _seed.ToolChoice ?? string.Empty);
+        generation.ThinkingEnabled ??= _seed.ThinkingEnabled;
 
         if (generation.Tools.Count == 0)
         {
@@ -899,6 +1854,9 @@ public sealed class ToolExecutionRecorder
         }
 
         var finalError = executionError;
+        var completedAt = result.CompletedAt.HasValue
+            ? InternalUtils.Utc(result.CompletedAt.Value)
+            : _client!._config.UtcNow!();
 
         if (_activity != null)
         {
@@ -931,6 +1889,7 @@ public sealed class ToolExecutionRecorder
             {
                 SigilClient.RecordException(_activity, finalError);
                 _activity.SetTag(SigilClient.SpanAttrErrorType, "tool_execution_error");
+                _activity.SetTag(SigilClient.SpanAttrErrorCategory, SigilClient.ErrorCategoryFromException(finalError, true));
                 _activity.SetStatus(ActivityStatusCode.Error, finalError.Message);
             }
             else
@@ -938,9 +1897,11 @@ public sealed class ToolExecutionRecorder
                 _activity.SetStatus(ActivityStatusCode.Ok);
             }
 
+            _activity.SetEndTime(completedAt.UtcDateTime);
             _activity.Stop();
         }
 
+        _client!.RecordToolExecutionMetrics(_seed, _startedAt, completedAt, finalError);
         Error = finalError;
     }
 }

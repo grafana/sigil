@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-12
+last_reviewed: 2026-02-13
 source_of_truth: true
 audience: contributors
 ---
@@ -94,6 +94,38 @@ Contract notes:
 ## Plugin Proxy Contract
 
 All query traffic from Sigil frontend routes through plugin backend resources.
+
+Current bootstrap endpoints on `main`:
+
+- plugin frontend endpoints:
+  - `GET /api/plugins/grafana-sigil-app/resources/query/conversations`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/ratings`
+  - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/ratings`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`
+  - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/completions`
+  - `/api/plugins/grafana-sigil-app/resources/query/proxy/prometheus/...`
+  - `/api/plugins/grafana-sigil-app/resources/query/proxy/tempo/...`
+- plugin backend forwards to Sigil API:
+  - `GET /api/v1/conversations`
+  - `GET /api/v1/conversations/{conversation_id}`
+  - `GET /api/v1/conversations/{conversation_id}/ratings`
+  - `POST /api/v1/conversations/{conversation_id}/ratings`
+  - `GET /api/v1/conversations/{conversation_id}/annotations`
+  - `POST /api/v1/conversations/{conversation_id}/annotations`
+  - `GET /api/v1/completions`
+  - `/api/v1/proxy/prometheus/...`
+  - `/api/v1/proxy/tempo/...`
+
+Sigil now also exposes backend query pass-through routes for downstream data sources:
+
+- `/api/v1/proxy/prometheus/...` (Prometheus/Mimir allowlisted query/read paths)
+- `/api/v1/proxy/tempo/...` (Tempo allowlisted search/trace/TraceQL-metrics paths)
+
+Plugin integration for these Sigil routes is now implemented through plugin resource proxy prefixes.
+
+Phase 2 target contract:
 
 - plugin frontend endpoint:
   - `POST /api/plugins/grafana-sigil-app/resources/query`

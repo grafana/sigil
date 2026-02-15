@@ -62,6 +62,53 @@ func TestSDKExportRoundTripProperties(t *testing.T) {
 	}
 }
 
+func TestSDKExportsGenerationOverNone_NoSend(t *testing.T) {
+	client := NewClient(Config{
+		Tracer: noop.NewTracerProvider().Tracer("test"),
+		GenerationExport: GenerationExportConfig{
+			Protocol:        GenerationExportProtocolNone,
+			BatchSize:       1,
+			QueueSize:       10,
+			FlushInterval:   time.Hour,
+			MaxRetries:      1,
+			InitialBackoff:  time.Millisecond,
+			MaxBackoff:      10 * time.Millisecond,
+			PayloadMaxBytes: 4 << 20,
+		},
+	})
+
+	_, rec := client.StartGeneration(context.Background(), GenerationStart{
+		Model: ModelRef{
+			Provider: "openai",
+			Name:     "gpt-5",
+		},
+	})
+	rec.SetResult(Generation{
+		Input:  []Message{UserTextMessage("hello")},
+		Output: []Message{AssistantTextMessage("hi")},
+	}, nil)
+	rec.End()
+	if err := rec.Err(); err != nil {
+		t.Fatalf("recorder error: %v", err)
+	}
+
+	flushCtx, flushCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer flushCancel()
+	if err := client.Flush(flushCtx); err != nil {
+		t.Fatalf("flush: %v", err)
+	}
+
+	if rec.lastGeneration.ID == "" {
+		t.Fatalf("expected recorder to capture generation result")
+	}
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer shutdownCancel()
+	if err := client.Shutdown(shutdownCtx); err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+}
+
 func runSDKRoundTrip(t *testing.T, transport exportTransport, start GenerationStart, result Generation) (*sigilv1.Generation, *sigilv1.Generation) {
 	t.Helper()
 
@@ -197,6 +244,11 @@ func payloadFromSeed(seed uint64) (GenerationStart, Generation) {
 		Tools: []ToolDefinition{
 			{Name: "tool-" + randomASCII(rnd, 5), Description: "desc-" + randomASCII(rnd, 6), Type: "function", InputSchema: []byte(`{"type":"object"}`)},
 		},
+		MaxTokens:       int64Ptr(int64(rnd.Intn(1024) + 1)),
+		Temperature:     float64Ptr(float64(rnd.Intn(100)) / 100),
+		TopP:            float64Ptr(float64(rnd.Intn(100)) / 100),
+		ToolChoice:      stringPtr("auto"),
+		ThinkingEnabled: boolPtr(seed%2 == 0),
 		Tags: map[string]string{
 			"seed": fmt.Sprintf("%d", seed),
 			"env":  "test",
@@ -229,7 +281,12 @@ func payloadFromSeed(seed uint64) (GenerationStart, Generation) {
 			{Role: RoleAssistant, Name: "assistant", Parts: []Part{ThinkingPart("think-" + randomASCII(rnd, 6)), ToolCallPart(ToolCall{ID: "call-" + randomASCII(rnd, 5), Name: "tool", InputJSON: []byte(`{"x":1}`)})}},
 			{Role: RoleTool, Name: "tool", Parts: []Part{ToolResultPart(ToolResult{ToolCallID: "call-" + randomASCII(rnd, 5), Name: "tool", Content: "ok", ContentJSON: []byte(`{"ok":true}`), IsError: seed%3 == 0})}},
 		},
-		Tools: start.Tools,
+		Tools:           start.Tools,
+		MaxTokens:       int64Ptr(*start.MaxTokens),
+		Temperature:     float64Ptr(*start.Temperature),
+		TopP:            float64Ptr(*start.TopP),
+		ToolChoice:      stringPtr(*start.ToolChoice),
+		ThinkingEnabled: boolPtr(*start.ThinkingEnabled),
 		Usage: TokenUsage{
 			InputTokens:           int64(rnd.Intn(1000)),
 			OutputTokens:          int64(rnd.Intn(1000)),
@@ -275,6 +332,22 @@ func randomHex(rnd *rand.Rand, n int) string {
 		bytes[i] = alphabet[rnd.Intn(len(alphabet))]
 	}
 	return string(bytes)
+}
+
+func int64Ptr(value int64) *int64 {
+	return &value
+}
+
+func float64Ptr(value float64) *float64 {
+	return &value
+}
+
+func stringPtr(value string) *string {
+	return &value
+}
+
+func boolPtr(value bool) *bool {
+	return &value
 }
 
 type capturingIngestServer struct {

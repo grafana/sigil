@@ -3,7 +3,7 @@
 ## Architecture
 
 - `apps/plugin`: Grafana plugin UI + backend proxy for Sigil query APIs.
-- `api`: OTLP trace ingest + generation ingest + query APIs.
+- `sigil`: OTLP trace ingest + generation ingest + query APIs.
 - `sdks/*`: manual post-LLM instrumentation helpers.
 
 ## Runtime Workflow (Compose-First)
@@ -83,7 +83,7 @@
 | any | new design started or design direction changed | relevant file in `docs/design-docs/` and matching file in `docs/exec-plans/active/` |
 | any | execution completed | move plan to `docs/exec-plans/completed/` and update linked design/spec status |
 | `apps/plugin` | query/proxy contract changes, UI behavior or data model changes | `ARCHITECTURE.md`, `docs/FRONTEND.md`, relevant plan/spec doc |
-| `api` | ingest/query endpoint changes, proto changes, validation/storage behavior changes | `ARCHITECTURE.md`, `docs/references/generation-ingest-contract.md`, relevant exec plan |
+| `sigil` | ingest/query endpoint changes, proto changes, validation/storage behavior changes | `ARCHITECTURE.md`, `docs/references/generation-ingest-contract.md`, relevant exec plan |
 | `sdks/*` | config/lifecycle changes, generation schema changes, provider wrapper behavior changes | `ARCHITECTURE.md`, `sdks/go/README.md`, relevant plan/reference docs |
 
 ## Quality Commands
