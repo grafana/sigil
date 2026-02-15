@@ -62,6 +62,7 @@ This is the canonical navigation map for repository documentation.
 - Generated docs: [`generated/db-schema.md`](generated/db-schema.md)
 - External references: [`references/index.md`](references/index.md)
   - Generation ingest contract: [`references/generation-ingest-contract.md`](references/generation-ingest-contract.md)
+  - AI o11y + evaluation market survey (online + offline): [`references/ai-observability-evaluation-market.md`](references/ai-observability-evaluation-market.md)
   - Grafana response shapes: [`references/grafana-query-response-shapes.md`](references/grafana-query-response-shapes.md)
   - Helm deployment chart: [`references/helm-chart.md`](references/helm-chart.md)
   - Model cards API shape: [`references/model-cards-api.md`](references/model-cards-api.md)

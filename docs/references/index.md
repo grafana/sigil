@@ -13,6 +13,7 @@ External ecosystem notes and comparative references used for architecture and im
 ## Documents
 
 - [`competitive-benchmark.md`](competitive-benchmark.md)
+- [`ai-observability-evaluation-market.md`](ai-observability-evaluation-market.md)
 - [`generation-ingest-contract.md`](generation-ingest-contract.md)
 - [`grafana-query-response-shapes.md`](grafana-query-response-shapes.md)
 - [`helm-chart.md`](helm-chart.md)

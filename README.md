@@ -14,6 +14,7 @@ It combines OpenTelemetry traces with normalized LLM generation data, so you can
 
 - Grafana app plugin (`/apps/plugin`) for conversations, completions, traces, and settings.
 - Go service (`/sigil`) for generation ingest and query APIs on `:8080`.
+- (Planned) Evaluations: offline experiments (datasets/regressions) and online evaluation (live scoring on production traffic). See `docs/references/ai-observability-evaluation-market.md`.
 - SDKs (`/sdks`) for Go, Python, TypeScript/JavaScript, Java, and .NET/C#:
   - OTel traces with AI-specific attributes (`gen_ai.*`).
   - OTel metrics: latency histograms and token usage distributions.
