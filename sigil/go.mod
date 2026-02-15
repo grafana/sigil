@@ -5,7 +5,7 @@ go 1.25.6
 require (
 	github.com/go-kit/log v0.2.1
 	github.com/go-sql-driver/mysql v1.9.3
-	github.com/grafana/dskit v0.0.0-20260211202609-055c19399255
+	github.com/grafana/dskit v0.0.0-20260213164647-ab41154e52ad
 	github.com/minio/minio-go/v7 v7.0.98
 	github.com/prometheus/client_golang v1.23.2
 	github.com/testcontainers/testcontainers-go v0.40.0
