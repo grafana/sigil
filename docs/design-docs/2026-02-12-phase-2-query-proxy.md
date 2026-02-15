@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-12
+last_reviewed: 2026-02-14
 source_of_truth: true
 audience: both
 ---
@@ -20,6 +20,21 @@ All query operations must go through plugin backend proxy handlers.
 - Plugin resource proxy contract: `POST /api/plugins/grafana-sigil-app/resources/query`
 
 Plugin frontend must not call Sigil API query endpoints directly.
+
+### Incremental implementation (2026-02-14)
+
+Sigil now exposes pass-through proxy routes for Prometheus/Mimir and Tempo query APIs:
+
+- prefix routes:
+  - `/api/v1/proxy/prometheus/...`
+  - `/api/v1/proxy/tempo/...`
+- behavior:
+  - allowlisted read/query endpoints only
+  - raw downstream response pass-through (no envelope transformation yet)
+  - downstream `X-Scope-OrgID` is always sourced from Sigil tenant context (real tenant or fake tenant mode)
+  - safe request-header allowlist forwarding with hop-by-hop stripping
+
+Plugin backend integration to consume these Sigil proxy routes remains tracked separately as tech debt.
 
 ## Envelope contract
 

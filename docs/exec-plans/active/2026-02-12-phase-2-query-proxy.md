@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-12
+last_reviewed: 2026-02-14
 source_of_truth: true
 audience: both
 ---
@@ -24,6 +24,11 @@ Deliver plugin-proxy-only query routing with Grafana-compatible query envelopes 
 
 ## Tasks
 
+- [x] Add Sigil pass-through query proxy routes for Prometheus/Mimir and Tempo under `/api/v1/proxy/{backend}/...`.
+- [x] Enforce allowlisted read/query downstream paths and reject non-allowlisted paths/methods at Sigil boundary.
+- [x] Forward downstream `X-Scope-OrgID` from Sigil tenant context (auth tenant or fake-tenant mode).
+- [x] Add local tests for proxy routing, allowlist/method enforcement, tenant propagation, and upstream failure handling.
+- [x] Wire plugin backend resource routes to consume Sigil proxy endpoints via `/query/proxy/prometheus/...` and `/query/proxy/tempo/...`; legacy plugin `query/traces/{trace_id}` route removed.
 - [ ] Define Sigil query API contract: `POST /api/v1/query`.
 - [ ] Define plugin resource proxy contract: `POST /api/plugins/grafana-sigil-app/resources/query`.
 - [ ] Require frontend query calls to use plugin proxy only.

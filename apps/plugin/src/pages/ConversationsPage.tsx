@@ -216,9 +216,7 @@ export default function ConversationsPage(props: ConversationsPageProps) {
                     </Text>
                   )}
                   {annotationSummary && (
-                    <Text color="secondary">
-                      Annotations: {annotationSummary.annotation_count}
-                    </Text>
+                    <Text color="secondary">Annotations: {annotationSummary.annotation_count}</Text>
                   )}
                 </button>
               );

@@ -14,6 +14,7 @@ import (
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
 	"github.com/grafana/sigil/sigil/internal/modelcards"
 	"github.com/grafana/sigil/sigil/internal/query"
+	"github.com/grafana/sigil/sigil/internal/queryproxy"
 )
 
 func RegisterRoutes(
@@ -26,6 +27,20 @@ func RegisterRoutes(
 	modelCardSvc *modelcards.Service,
 	protectedMiddleware func(http.Handler) http.Handler,
 ) {
+	RegisterRoutesWithQueryProxy(mux, querySvc, generationSvc, feedbackSvc, ratingsEnabled, annotationsEnabled, modelCardSvc, protectedMiddleware, nil)
+}
+
+func RegisterRoutesWithQueryProxy(
+	mux *http.ServeMux,
+	querySvc *query.Service,
+	generationSvc *generationingest.Service,
+	feedbackSvc *feedback.Service,
+	ratingsEnabled bool,
+	annotationsEnabled bool,
+	modelCardSvc *modelcards.Service,
+	protectedMiddleware func(http.Handler) http.Handler,
+	queryProxy *queryproxy.Proxy,
+) {
 	if protectedMiddleware == nil {
 		protectedMiddleware = func(next http.Handler) http.Handler { return next }
 	}
@@ -36,6 +51,10 @@ func RegisterRoutes(
 	mux.Handle("/api/v1/conversations/", protectedMiddleware(http.HandlerFunc(conversationRoutes(querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled))))
 	mux.Handle("/api/v1/completions", protectedMiddleware(http.HandlerFunc(listCompletions(querySvc))))
 	mux.Handle("/api/v1/traces/", protectedMiddleware(http.HandlerFunc(getTrace(querySvc))))
+	if queryProxy != nil {
+		mux.Handle("/api/v1/proxy/prometheus/", protectedMiddleware(http.HandlerFunc(proxyPrometheus(queryProxy))))
+		mux.Handle("/api/v1/proxy/tempo/", protectedMiddleware(http.HandlerFunc(proxyTempo(queryProxy))))
+	}
 
 	if modelCardSvc != nil {
 		mux.Handle("/api/v1/model-cards", protectedMiddleware(http.HandlerFunc(listModelCards(modelCardSvc))))
@@ -157,6 +176,40 @@ func getTrace(querySvc *query.Service) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, querySvc.GetTrace(id))
+	}
+}
+
+func proxyPrometheus(proxy *queryproxy.Proxy) http.HandlerFunc {
+	return proxyBackend(proxy, queryproxy.BackendPrometheus, "/api/v1/proxy/prometheus")
+}
+
+func proxyTempo(proxy *queryproxy.Proxy) http.HandlerFunc {
+	return proxyBackend(proxy, queryproxy.BackendTempo, "/api/v1/proxy/tempo")
+}
+
+func proxyBackend(proxy *queryproxy.Proxy, backend queryproxy.Backend, prefix string) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		downstreamPath := strings.TrimPrefix(req.URL.Path, prefix)
+		if downstreamPath == req.URL.Path || downstreamPath == "" {
+			http.NotFound(w, req)
+			return
+		}
+
+		err := proxy.Forward(w, req, backend, downstreamPath)
+		switch {
+		case err == nil:
+			return
+		case errors.Is(err, queryproxy.ErrPathNotAllowed):
+			http.NotFound(w, req)
+		case errors.Is(err, queryproxy.ErrMethodNotAllowed):
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		case errors.Is(err, queryproxy.ErrTenantRequired):
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+		case errors.Is(err, queryproxy.ErrUpstreamUnavailable):
+			http.Error(w, err.Error(), http.StatusBadGateway)
+		default:
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+		}
 	}
 }
 

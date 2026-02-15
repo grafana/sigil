@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-13
+last_reviewed: 2026-02-15
 source_of_truth: true
 audience: both
 ---
@@ -42,7 +42,8 @@ audience: both
 - Direct generation-to-Sigil:
   - SDK generation export uses `tenant` auth mode and sends `X-Scope-OrgID`.
 - Split path (generation direct, traces via collector/alloy):
-  - generation export and trace export auth are configured independently in SDKs.
+  - generation export auth is configured in SDKs.
+  - trace export/auth is configured in the application's OTEL SDK setup.
 - Enterprise proxy pattern:
   - SDK can send bearer auth
   - proxy authenticates bearer and translates upstream to `X-Scope-OrgID`
@@ -79,7 +80,7 @@ audience: both
 - Keep two layers of tests:
   - API handler transport tests (direct HTTP/gRPC request roundtrip).
   - SDK transport tests (SDK -> HTTP/gRPC server roundtrip).
-- SDK tests must also cover OTLP trace export over HTTP and gRPC and assert key GenAI span attributes.
+- SDK tests must assert key GenAI span attributes and generation transport behavior.
 
 ## SDK Expectations
 
@@ -88,7 +89,7 @@ audience: both
 - Use `StartGeneration` for non-stream calls and `StartStreamingGeneration` for streaming calls.
 - `rec.Err()` surfaces validation/enqueue failures only.
 - Call `Shutdown(ctx)` on application exit to flush queued generations.
-- SDK auth is per-export (`trace` vs `generation_export`) with strict modes:
+- SDK generation-export auth uses strict modes:
   - `none`
   - `tenant` (requires tenant id)
   - `bearer` (requires bearer token)

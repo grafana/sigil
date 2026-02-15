@@ -60,6 +60,12 @@ spec:
               value: {{ ternary "true" "false" .Values.sigil.auth.enabled | quote }}
             - name: SIGIL_FAKE_TENANT_ID
               value: {{ .Values.sigil.auth.fakeTenantID | quote }}
+            - name: SIGIL_QUERY_PROXY_PROMETHEUS_BASE_URL
+              value: {{ .Values.sigil.queryProxy.prometheusBaseURL | quote }}
+            - name: SIGIL_QUERY_PROXY_TEMPO_BASE_URL
+              value: {{ .Values.sigil.queryProxy.tempoBaseURL | quote }}
+            - name: SIGIL_QUERY_PROXY_TIMEOUT
+              value: {{ .Values.sigil.queryProxy.timeout | quote }}
             - name: SIGIL_STORAGE_BACKEND
               value: {{ .Values.sigil.storage.backend | quote }}
             {{- if eq (lower .Values.sigil.storage.backend) "mysql" }}

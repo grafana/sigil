@@ -130,6 +130,23 @@ func TestFromEnvCompactorScalingDefaults(t *testing.T) {
 	}
 }
 
+func TestFromEnvQueryProxyDefaults(t *testing.T) {
+	t.Setenv("SIGIL_QUERY_PROXY_PROMETHEUS_BASE_URL", "")
+	t.Setenv("SIGIL_QUERY_PROXY_TEMPO_BASE_URL", "")
+	t.Setenv("SIGIL_QUERY_PROXY_TIMEOUT", "")
+
+	cfg := FromEnv()
+	if cfg.QueryProxy.PrometheusBaseURL != "http://prometheus:9090" {
+		t.Fatalf("expected default prometheus proxy url, got %q", cfg.QueryProxy.PrometheusBaseURL)
+	}
+	if cfg.QueryProxy.TempoBaseURL != "http://tempo:3200" {
+		t.Fatalf("expected default tempo proxy url, got %q", cfg.QueryProxy.TempoBaseURL)
+	}
+	if cfg.QueryProxy.Timeout != DefaultQueryProxyTimeout {
+		t.Fatalf("expected default query proxy timeout %s, got %s", DefaultQueryProxyTimeout, cfg.QueryProxy.Timeout)
+	}
+}
+
 func TestValidateRejectsInvalidCompactorScalingConfig(t *testing.T) {
 	cfg := FromEnv()
 	cfg.CompactorConfig.ShardCount = 0
@@ -196,6 +213,26 @@ func TestValidateRejectsInvalidModelCardsConfig(t *testing.T) {
 
 	if err := cfg.Validate(); err == nil {
 		t.Fatalf("expected validation error for invalid model cards config")
+	}
+}
+
+func TestValidateRejectsInvalidQueryProxyConfig(t *testing.T) {
+	cfg := FromEnv()
+	cfg.QueryProxy.Timeout = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for invalid query proxy timeout")
+	}
+
+	cfg = FromEnv()
+	cfg.QueryProxy.PrometheusBaseURL = "://bad-url"
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for invalid prometheus query proxy url")
+	}
+
+	cfg = FromEnv()
+	cfg.QueryProxy.TempoBaseURL = "ftp://tempo:3200"
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for invalid tempo query proxy url scheme")
 	}
 }
 

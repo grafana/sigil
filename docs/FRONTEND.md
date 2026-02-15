@@ -29,7 +29,8 @@ Current bootstrap contract on `main`:
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`
   - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`
   - `GET /api/plugins/grafana-sigil-app/resources/query/completions`
-  - `GET /api/plugins/grafana-sigil-app/resources/query/traces/{trace_id}`
+  - `/api/plugins/grafana-sigil-app/resources/query/proxy/prometheus/...`
+  - `/api/plugins/grafana-sigil-app/resources/query/proxy/tempo/...`
 - Plugin backend forwards to Sigil API query endpoints:
   - `GET /api/v1/conversations`
   - `GET /api/v1/conversations/{conversation_id}`
@@ -38,7 +39,8 @@ Current bootstrap contract on `main`:
   - `GET /api/v1/conversations/{conversation_id}/annotations`
   - `POST /api/v1/conversations/{conversation_id}/annotations`
   - `GET /api/v1/completions`
-  - `GET /api/v1/traces/{trace_id}`
+  - `/api/v1/proxy/prometheus/...`
+  - `/api/v1/proxy/tempo/...`
 
 Phase 2 target contract (tracked in `docs/exec-plans/active/2026-02-12-phase-2-query-proxy.md`):
 
