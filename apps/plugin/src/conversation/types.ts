@@ -1,10 +1,3 @@
-export type ConversationMessage = {
-  id: string;
-  role: 'user' | 'assistant' | 'tool';
-  content: string;
-  timestamp: string;
-};
-
 export type ConversationRatingValue = 'CONVERSATION_RATING_VALUE_GOOD' | 'CONVERSATION_RATING_VALUE_BAD';
 
 export type ConversationRatingSummary = {
@@ -12,47 +5,9 @@ export type ConversationRatingSummary = {
   good_count: number;
   bad_count: number;
   latest_rating?: ConversationRatingValue;
-  latest_rated_at: string;
+  latest_rated_at?: string;
   latest_bad_at?: string;
   has_bad_rating: boolean;
-};
-
-export type ConversationAnnotationSummary = {
-  annotation_count: number;
-  latest_annotation_type?: string;
-  latest_annotated_at: string;
-};
-
-export type ConversationListItem = {
-  id: string;
-  title?: string;
-  last_generation_at: string;
-  generation_count: number;
-  created_at: string;
-  updated_at: string;
-  rating_summary?: ConversationRatingSummary;
-  annotation_summary?: ConversationAnnotationSummary;
-};
-
-export type ConversationListResponse = {
-  items: ConversationListItem[];
-};
-
-export type ConversationRating = {
-  rating_id: string;
-  conversation_id: string;
-  generation_id?: string;
-  rating: ConversationRatingValue;
-  comment?: string;
-  metadata?: Record<string, unknown>;
-  rater_id?: string;
-  source?: string;
-  created_at: string;
-};
-
-export type ConversationRatingsResponse = {
-  items: ConversationRating[];
-  next_cursor?: string;
 };
 
 export type ConversationAnnotation = {
@@ -69,9 +24,16 @@ export type ConversationAnnotation = {
   created_at: string;
 };
 
-export type ConversationAnnotationsResponse = {
-  items: ConversationAnnotation[];
-  next_cursor?: string;
+export type ConversationRating = {
+  rating_id: string;
+  conversation_id: string;
+  generation_id?: string;
+  rating: ConversationRatingValue;
+  comment?: string;
+  metadata?: Record<string, unknown>;
+  rater_id?: string;
+  source?: string;
+  created_at: string;
 };
 
 export type ConversationTimelineEventKind = 'rating' | 'annotation';
@@ -83,4 +45,93 @@ export type ConversationTimelineEvent = {
   badge: string;
   title: string;
   description: string;
+};
+
+export type ConversationSearchTimeRange = {
+  from: string;
+  to: string;
+};
+
+export type ConversationSearchRequest = {
+  filters: string;
+  select: string[];
+  time_range: ConversationSearchTimeRange;
+  page_size: number;
+  cursor?: string;
+};
+
+export type ConversationSearchResult = {
+  conversation_id: string;
+  generation_count: number;
+  first_generation_at: string;
+  last_generation_at: string;
+  models: string[];
+  agents: string[];
+  error_count: number;
+  has_errors: boolean;
+  trace_ids: string[];
+  rating_summary?: ConversationRatingSummary;
+  annotation_count: number;
+  selected?: Record<string, string[] | number>;
+};
+
+export type ConversationSearchResponse = {
+  conversations: ConversationSearchResult[];
+  next_cursor?: string;
+  has_more: boolean;
+};
+
+export type GenerationUsage = {
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
+  [key: string]: number | undefined;
+};
+
+export type GenerationDetail = {
+  generation_id: string;
+  conversation_id: string;
+  trace_id?: string;
+  span_id?: string;
+  mode?: string;
+  model?: {
+    provider?: string;
+    name?: string;
+  };
+  agent_name?: string;
+  agent_version?: string;
+  system_prompt?: string;
+  input?: unknown[];
+  output?: unknown[];
+  tools?: unknown[];
+  usage?: GenerationUsage;
+  stop_reason?: string;
+  metadata?: Record<string, unknown>;
+  created_at?: string;
+  error?: null | { message?: string };
+  [key: string]: unknown;
+};
+
+export type ConversationDetail = {
+  conversation_id: string;
+  generation_count: number;
+  first_generation_at: string;
+  last_generation_at: string;
+  generations: GenerationDetail[];
+  rating_summary?: ConversationRatingSummary;
+  annotations: ConversationAnnotation[];
+};
+
+export type SearchTag = {
+  key: string;
+  scope: 'well-known' | 'span' | 'resource';
+  description?: string;
+};
+
+export type SearchTagsResponse = {
+  tags: SearchTag[];
+};
+
+export type SearchTagValuesResponse = {
+  values: string[];
 };

@@ -1,51 +1,48 @@
 import { lastValueFrom } from 'rxjs';
 import { getBackendSrv } from '@grafana/runtime';
 import type {
-  ConversationAnnotationsResponse,
-  ConversationAnnotation,
-  ConversationListItem,
-  ConversationListResponse,
-  ConversationRating,
-  ConversationRatingsResponse,
+  ConversationDetail,
+  ConversationSearchRequest,
+  ConversationSearchResponse,
+  GenerationDetail,
+  SearchTag,
+  SearchTagValuesResponse,
+  SearchTagsResponse,
 } from './types';
 
 const queryBasePath = '/api/plugins/grafana-sigil-app/resources/query';
 
-export type ConversationListFilter = {
-  hasBadRating?: boolean;
-  hasAnnotations?: boolean;
-};
+function toUnixSeconds(value: string): string {
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) {
+    return '';
+  }
+  return String(Math.floor(parsed / 1000));
+}
 
 export type ConversationsDataSource = {
-  listConversations: (filter: ConversationListFilter) => Promise<ConversationListItem[]>;
-  getConversation: (conversationID: string) => Promise<ConversationListItem>;
-  listConversationRatings: (conversationID: string, limit?: number) => Promise<ConversationRating[]>;
-  listConversationAnnotations: (conversationID: string, limit?: number) => Promise<ConversationAnnotation[]>;
+  searchConversations: (request: ConversationSearchRequest) => Promise<ConversationSearchResponse>;
+  getConversationDetail: (conversationID: string) => Promise<ConversationDetail>;
+  getGeneration: (generationID: string) => Promise<GenerationDetail>;
+  getSearchTags: (from: string, to: string) => Promise<SearchTag[]>;
+  getSearchTagValues: (tag: string, from: string, to: string) => Promise<string[]>;
 };
 
 export const defaultConversationsDataSource: ConversationsDataSource = {
-  async listConversations(filter) {
-    const params = new URLSearchParams();
-    if (typeof filter.hasBadRating === 'boolean') {
-      params.set('has_bad_rating', String(filter.hasBadRating));
-    }
-    if (typeof filter.hasAnnotations === 'boolean') {
-      params.set('has_annotations', String(filter.hasAnnotations));
-    }
-
-    const query = params.toString();
+  async searchConversations(request) {
     const response = await lastValueFrom(
-      getBackendSrv().fetch<ConversationListResponse>({
-        method: 'GET',
-        url: query.length > 0 ? `${queryBasePath}/conversations?${query}` : `${queryBasePath}/conversations`,
+      getBackendSrv().fetch<ConversationSearchResponse>({
+        method: 'POST',
+        url: `${queryBasePath}/conversations/search`,
+        data: request,
       })
     );
-    return response.data.items ?? [];
+    return response.data;
   },
 
-  async getConversation(conversationID) {
+  async getConversationDetail(conversationID) {
     const response = await lastValueFrom(
-      getBackendSrv().fetch<ConversationListItem>({
+      getBackendSrv().fetch<ConversationDetail>({
         method: 'GET',
         url: `${queryBasePath}/conversations/${encodeURIComponent(conversationID)}`,
       })
@@ -53,23 +50,56 @@ export const defaultConversationsDataSource: ConversationsDataSource = {
     return response.data;
   },
 
-  async listConversationRatings(conversationID, limit = 100) {
+  async getGeneration(generationID) {
     const response = await lastValueFrom(
-      getBackendSrv().fetch<ConversationRatingsResponse>({
+      getBackendSrv().fetch<GenerationDetail>({
         method: 'GET',
-        url: `${queryBasePath}/conversations/${encodeURIComponent(conversationID)}/ratings?limit=${limit}`,
+        url: `${queryBasePath}/generations/${encodeURIComponent(generationID)}`,
       })
     );
-    return response.data.items ?? [];
+    return response.data;
   },
 
-  async listConversationAnnotations(conversationID, limit = 100) {
+  async getSearchTags(from, to) {
+    const params = new URLSearchParams();
+    const start = toUnixSeconds(from);
+    const end = toUnixSeconds(to);
+    if (start.length > 0) {
+      params.set('start', start);
+    }
+    if (end.length > 0) {
+      params.set('end', end);
+    }
+
     const response = await lastValueFrom(
-      getBackendSrv().fetch<ConversationAnnotationsResponse>({
+      getBackendSrv().fetch<SearchTagsResponse>({
         method: 'GET',
-        url: `${queryBasePath}/conversations/${encodeURIComponent(conversationID)}/annotations?limit=${limit}`,
+        url: params.toString().length > 0 ? `${queryBasePath}/search/tags?${params.toString()}` : `${queryBasePath}/search/tags`,
       })
     );
-    return response.data.items ?? [];
+    return response.data.tags ?? [];
+  },
+
+  async getSearchTagValues(tag, from, to) {
+    const params = new URLSearchParams();
+    const start = toUnixSeconds(from);
+    const end = toUnixSeconds(to);
+    if (start.length > 0) {
+      params.set('start', start);
+    }
+    if (end.length > 0) {
+      params.set('end', end);
+    }
+
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<SearchTagValuesResponse>({
+        method: 'GET',
+        url:
+          params.toString().length > 0
+            ? `${queryBasePath}/search/tag/${encodeURIComponent(tag)}/values?${params.toString()}`
+            : `${queryBasePath}/search/tag/${encodeURIComponent(tag)}/values`,
+      })
+    );
+    return response.data.values ?? [];
   },
 };

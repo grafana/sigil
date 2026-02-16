@@ -2,11 +2,22 @@ package query
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/grafana/sigil/sigil/internal/feedback"
+	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	"github.com/grafana/sigil/sigil/internal/storage"
+	"github.com/grafana/sigil/sigil/internal/storage/object"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type Conversation struct {
@@ -25,16 +36,65 @@ type ConversationListFilter struct {
 	HasAnnotations *bool
 }
 
-type Completion struct {
-	ID             string    `json:"id"`
-	ConversationID string    `json:"conversationId"`
-	Model          string    `json:"model"`
-	CreatedAt      time.Time `json:"createdAt"`
+type ConversationSearchTimeRange struct {
+	From time.Time `json:"from"`
+	To   time.Time `json:"to"`
 }
 
-type Trace struct {
-	ID            string   `json:"id"`
-	GenerationIDs []string `json:"generationIds"`
+type ConversationSearchRequest struct {
+	Filters   string                      `json:"filters"`
+	Select    []string                    `json:"select"`
+	TimeRange ConversationSearchTimeRange `json:"time_range"`
+	PageSize  int                         `json:"page_size"`
+	Cursor    string                      `json:"cursor"`
+}
+
+type ConversationSearchResult struct {
+	ConversationID    string                              `json:"conversation_id"`
+	GenerationCount   int                                 `json:"generation_count"`
+	FirstGenerationAt time.Time                           `json:"first_generation_at"`
+	LastGenerationAt  time.Time                           `json:"last_generation_at"`
+	Models            []string                            `json:"models"`
+	Agents            []string                            `json:"agents"`
+	ErrorCount        int                                 `json:"error_count"`
+	HasErrors         bool                                `json:"has_errors"`
+	TraceIDs          []string                            `json:"trace_ids"`
+	RatingSummary     *feedback.ConversationRatingSummary `json:"rating_summary,omitempty"`
+	AnnotationCount   int                                 `json:"annotation_count"`
+	Selected          map[string]any                      `json:"selected,omitempty"`
+}
+
+type ConversationSearchResponse struct {
+	Conversations []ConversationSearchResult `json:"conversations"`
+	NextCursor    string                     `json:"next_cursor"`
+	HasMore       bool                       `json:"has_more"`
+}
+
+type ConversationDetail struct {
+	ConversationID    string                              `json:"conversation_id"`
+	GenerationCount   int                                 `json:"generation_count"`
+	FirstGenerationAt time.Time                           `json:"first_generation_at"`
+	LastGenerationAt  time.Time                           `json:"last_generation_at"`
+	Generations       []map[string]any                    `json:"generations"`
+	RatingSummary     *feedback.ConversationRatingSummary `json:"rating_summary,omitempty"`
+	Annotations       []feedback.ConversationAnnotation   `json:"annotations"`
+}
+
+type ValidationError struct {
+	msg string
+}
+
+func (e *ValidationError) Error() string {
+	return e.msg
+}
+
+func NewValidationError(msg string) error {
+	return &ValidationError{msg: msg}
+}
+
+func IsValidationError(err error) bool {
+	var validationErr *ValidationError
+	return errors.As(err, &validationErr)
 }
 
 type ratingSummaryStore interface {
@@ -47,33 +107,125 @@ type annotationSummaryStore interface {
 	ListConversationAnnotationSummaries(ctx context.Context, tenantID string, conversationIDs []string) (map[string]feedback.ConversationAnnotationSummary, error)
 }
 
+type annotationEventStore interface {
+	ListConversationAnnotations(ctx context.Context, tenantID, conversationID string, limit int, cursor uint64) ([]feedback.ConversationAnnotation, uint64, error)
+}
+
 type filteredConversationStore interface {
 	ListConversationsWithFeedbackFilters(ctx context.Context, tenantID string, hasBadRating, hasAnnotations *bool) ([]storage.Conversation, error)
 }
 
+type ServiceDependencies struct {
+	ConversationStore   storage.ConversationStore
+	WALReader           storage.WALReader
+	BlockMetadataStore  storage.BlockMetadataStore
+	BlockReader         storage.BlockReader
+	FeedbackStore       feedback.Store
+	TempoBaseURL        string
+	HTTPClient          *http.Client
+	OverfetchMultiplier int
+	MaxSearchIterations int
+}
+
 type Service struct {
 	conversationStore      storage.ConversationStore
+	walReader              storage.WALReader
+	blockMetadataStore     storage.BlockMetadataStore
+	blockReader            storage.BlockReader
 	ratingSummaryStore     ratingSummaryStore
 	annotationSummaryStore annotationSummaryStore
+	annotationEventStore   annotationEventStore
+	tempoClient            TempoClient
 	nowFn                  func() time.Time
+	overfetchMultiplier    int
+	maxSearchIterations    int
+	queryDebug             bool
 }
 
 func NewService() *Service {
 	return &Service{
-		nowFn: time.Now,
+		nowFn:               time.Now,
+		overfetchMultiplier: defaultTempoOverfetchMultiplier,
+		maxSearchIterations: defaultTempoSearchMaxIterations,
+		queryDebug:          queryDebugEnabledFromEnv(),
 	}
 }
 
 func NewServiceWithStores(conversationStore storage.ConversationStore, feedbackStore feedback.Store) *Service {
 	service := NewService()
 	service.conversationStore = conversationStore
+	if reader, ok := conversationStore.(storage.WALReader); ok {
+		service.walReader = reader
+	}
+	if metadataStore, ok := conversationStore.(storage.BlockMetadataStore); ok {
+		service.blockMetadataStore = metadataStore
+	}
+	service.attachFeedbackStore(feedbackStore)
+	return service
+}
+
+func NewServiceWithDependencies(dependencies ServiceDependencies) (*Service, error) {
+	service := NewServiceWithStores(dependencies.ConversationStore, dependencies.FeedbackStore)
+	if dependencies.WALReader != nil {
+		service.walReader = dependencies.WALReader
+	}
+	if dependencies.BlockMetadataStore != nil {
+		service.blockMetadataStore = dependencies.BlockMetadataStore
+	}
+	if dependencies.BlockReader != nil {
+		service.blockReader = dependencies.BlockReader
+	}
+
+	if dependencies.OverfetchMultiplier > 0 {
+		service.overfetchMultiplier = dependencies.OverfetchMultiplier
+	}
+	if dependencies.MaxSearchIterations > 0 {
+		service.maxSearchIterations = dependencies.MaxSearchIterations
+	}
+
+	if strings.TrimSpace(dependencies.TempoBaseURL) != "" {
+		tempoClient, err := NewTempoHTTPClient(dependencies.TempoBaseURL, dependencies.HTTPClient)
+		if err != nil {
+			return nil, err
+		}
+		service.tempoClient = tempoClient
+	}
+
+	return service, nil
+}
+
+func (s *Service) attachFeedbackStore(feedbackStore feedback.Store) {
 	if store, ok := feedbackStore.(ratingSummaryStore); ok {
-		service.ratingSummaryStore = store
+		s.ratingSummaryStore = store
 	}
 	if store, ok := feedbackStore.(annotationSummaryStore); ok {
-		service.annotationSummaryStore = store
+		s.annotationSummaryStore = store
 	}
-	return service
+	if store, ok := feedbackStore.(annotationEventStore); ok {
+		s.annotationEventStore = store
+	}
+}
+
+func queryDebugEnabledFromEnv() bool {
+	raw := strings.TrimSpace(os.Getenv("SIGIL_QUERY_DEBUG"))
+	if raw == "" {
+		return false
+	}
+	enabled, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false
+	}
+	return enabled
+}
+
+func (s *Service) debugLog(event string, keyvals ...any) {
+	if !s.queryDebug {
+		return
+	}
+	payload := make([]any, 0, len(keyvals)+2)
+	payload = append(payload, "event", event)
+	payload = append(payload, keyvals...)
+	slog.Info("sigil query debug", payload...)
 }
 
 func (s *Service) ListConversationsForTenant(ctx context.Context, tenantID string, filter ConversationListFilter) ([]Conversation, error) {
@@ -194,6 +346,850 @@ func (s *Service) GetConversationForTenant(ctx context.Context, tenantID, id str
 	return out, true, nil
 }
 
+func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID string, request ConversationSearchRequest) (ConversationSearchResponse, error) {
+	trimmedTenantID := strings.TrimSpace(tenantID)
+	if trimmedTenantID == "" {
+		return ConversationSearchResponse{}, NewValidationError("tenant id is required")
+	}
+	if s.tempoClient == nil {
+		return ConversationSearchResponse{}, errors.New("tempo client is not configured")
+	}
+	if s.conversationStore == nil {
+		return ConversationSearchResponse{}, errors.New("conversation store is not configured")
+	}
+	s.debugLog("search_start",
+		"tenant_id", trimmedTenantID,
+		"filters", strings.TrimSpace(request.Filters),
+		"select_count", len(request.Select),
+		"requested_page_size", request.PageSize,
+		"cursor_present", strings.TrimSpace(request.Cursor) != "",
+	)
+
+	from, to, err := normalizeConversationSearchTimeRange(request.TimeRange)
+	if err != nil {
+		return ConversationSearchResponse{}, err
+	}
+
+	parsedFilters, err := ParseFilterExpression(request.Filters)
+	if err != nil {
+		return ConversationSearchResponse{}, NewValidationError(err.Error())
+	}
+	if err := validateMySQLFilterTerms(parsedFilters.MySQLTerms); err != nil {
+		return ConversationSearchResponse{}, err
+	}
+
+	selectFields, err := NormalizeSelectFields(request.Select)
+	if err != nil {
+		return ConversationSearchResponse{}, NewValidationError(err.Error())
+	}
+
+	pageSize := normalizeConversationSearchPageSize(request.PageSize)
+	overfetchLimit := pageSize * s.overfetchMultiplier
+	if overfetchLimit < pageSize {
+		overfetchLimit = pageSize
+	}
+
+	filterHash := buildConversationSearchFilterHash(parsedFilters, selectFields, from, to)
+	cursor, err := decodeConversationSearchCursor(request.Cursor)
+	if err != nil {
+		return ConversationSearchResponse{}, NewValidationError("invalid cursor")
+	}
+	if strings.TrimSpace(request.Cursor) != "" && cursor.FilterHash != filterHash {
+		return ConversationSearchResponse{}, NewValidationError("cursor no longer matches current filters")
+	}
+
+	traceQL, err := BuildTraceQL(parsedFilters, selectFields)
+	if err != nil {
+		return ConversationSearchResponse{}, NewValidationError(err.Error())
+	}
+
+	searchEndNanos := to.UnixNano()
+	if cursor.EndNanos > 0 && cursor.EndNanos < searchEndNanos {
+		searchEndNanos = cursor.EndNanos
+	}
+	if searchEndNanos <= from.UnixNano() {
+		s.debugLog("search_short_circuit_empty_range",
+			"from_unix_nano", from.UnixNano(),
+			"search_end_unix_nano", searchEndNanos,
+		)
+		return ConversationSearchResponse{Conversations: []ConversationSearchResult{}, HasMore: false}, nil
+	}
+
+	alreadyReturned := make(map[string]struct{}, len(cursor.ReturnedConversations))
+	for _, conversationID := range cursor.ReturnedConversations {
+		alreadyReturned[conversationID] = struct{}{}
+	}
+	currentPageIDs := make(map[string]struct{}, pageSize)
+
+	results := make([]ConversationSearchResult, 0, pageSize)
+	hasMore := false
+	terminatedByIterationLimit := s.maxSearchIterations > 0
+
+	s.debugLog("search_plan",
+		"time_from_unix", from.Unix(),
+		"time_to_unix", to.Unix(),
+		"tempo_terms", len(parsedFilters.TempoTerms),
+		"mysql_terms", len(parsedFilters.MySQLTerms),
+		"normalized_page_size", pageSize,
+		"overfetch_limit", overfetchLimit,
+		"max_iterations", s.maxSearchIterations,
+		"already_returned_count", len(alreadyReturned),
+		"traceql", traceQL,
+	)
+
+	// Tempo paginates by time-window rather than cursor token. We overfetch traces in each
+	// window and group/dedupe to conversations. Once the current page is full, we continue
+	// scanning until we can prove at least one additional eligible conversation exists.
+	// We only emit has_more/cursor when that proof exists to avoid empty follow-up pages.
+	for iteration := 0; iteration < s.maxSearchIterations; iteration++ {
+		windowEnd := time.Unix(0, searchEndNanos).UTC()
+		s.debugLog("search_iteration_begin",
+			"iteration", iteration,
+			"window_end_unix", windowEnd.Unix(),
+			"search_end_unix_nano", searchEndNanos,
+			"results_so_far", len(results),
+		)
+		if !from.Before(windowEnd) {
+			terminatedByIterationLimit = false
+			s.debugLog("search_iteration_stop", "iteration", iteration, "reason", "window_exhausted")
+			break
+		}
+
+		tempoResponse, err := s.tempoClient.Search(ctx, TempoSearchRequest{
+			TenantID:        trimmedTenantID,
+			Query:           traceQL,
+			Limit:           overfetchLimit,
+			Start:           from,
+			End:             windowEnd,
+			SpansPerSpanSet: defaultTempoSearchSpansPerSpanSet,
+		})
+		if err != nil {
+			return ConversationSearchResponse{}, err
+		}
+		s.debugLog("search_iteration_tempo_response",
+			"iteration", iteration,
+			"trace_count", len(tempoResponse.Traces),
+		)
+		if len(tempoResponse.Traces) == 0 {
+			terminatedByIterationLimit = false
+			s.debugLog("search_iteration_stop", "iteration", iteration, "reason", "tempo_empty")
+			break
+		}
+
+		grouped := groupTempoSearchResponse(tempoResponse, selectFields)
+		orderedConversationIDs := orderTempoConversationIDs(grouped.Conversations)
+		s.debugLog("search_iteration_grouped",
+			"iteration", iteration,
+			"grouped_conversations", len(grouped.Conversations),
+			"ordered_conversations", len(orderedConversationIDs),
+			"earliest_trace_start_unix_nano", grouped.EarliestTraceStartNanos,
+		)
+
+		metadataByConversation, ratingSummaries, annotationSummaries, err := s.loadConversationSearchMetadata(ctx, trimmedTenantID, orderedConversationIDs)
+		if err != nil {
+			return ConversationSearchResponse{}, err
+		}
+		s.debugLog("search_iteration_metadata",
+			"iteration", iteration,
+			"metadata_conversations", len(metadataByConversation),
+			"rating_summaries", len(ratingSummaries),
+			"annotation_summaries", len(annotationSummaries),
+		)
+
+		foundAdditionalConversation := false
+		skippedAlreadyReturned := 0
+		skippedCurrentPage := 0
+		skippedMissingMetadata := 0
+		skippedMySQL := 0
+		addedThisIteration := 0
+		for _, conversationID := range orderedConversationIDs {
+			if _, seen := alreadyReturned[conversationID]; seen {
+				skippedAlreadyReturned++
+				continue
+			}
+			if _, seen := currentPageIDs[conversationID]; seen {
+				skippedCurrentPage++
+				continue
+			}
+
+			conversationMetadata, ok := metadataByConversation[conversationID]
+			if !ok {
+				skippedMissingMetadata++
+				continue
+			}
+			if !matchesMySQLFilters(conversationMetadata, parsedFilters.MySQLTerms) {
+				skippedMySQL++
+				continue
+			}
+
+			if len(results) >= pageSize {
+				foundAdditionalConversation = true
+				break
+			}
+
+			aggregate := grouped.Conversations[conversationID]
+			result := ConversationSearchResult{
+				ConversationID:    conversationID,
+				GenerationCount:   conversationMetadata.GenerationCount,
+				FirstGenerationAt: conversationMetadata.CreatedAt.UTC(),
+				LastGenerationAt:  conversationMetadata.LastGenerationAt.UTC(),
+				Models:            sortedKeysFromSet(aggregate.Models),
+				Agents:            sortedKeysFromSet(aggregate.Agents),
+				ErrorCount:        aggregate.ErrorCount,
+				HasErrors:         aggregate.ErrorCount > 0,
+				TraceIDs:          sortedKeysFromSet(aggregate.TraceIDs),
+				AnnotationCount:   annotationSummaries[conversationID].AnnotationCount,
+			}
+			if ratingSummary, ok := ratingSummaries[conversationID]; ok {
+				copied := ratingSummary
+				result.RatingSummary = &copied
+			}
+			result.Selected = buildSelectedResultMap(aggregate.Selected)
+
+			results = append(results, result)
+			currentPageIDs[conversationID] = struct{}{}
+			addedThisIteration++
+		}
+		s.debugLog("search_iteration_candidates_applied",
+			"iteration", iteration,
+			"added_this_iteration", addedThisIteration,
+			"results_total", len(results),
+			"skipped_already_returned", skippedAlreadyReturned,
+			"skipped_current_page", skippedCurrentPage,
+			"skipped_missing_metadata", skippedMissingMetadata,
+			"skipped_mysql_filter", skippedMySQL,
+			"found_additional", foundAdditionalConversation,
+		)
+
+		if foundAdditionalConversation {
+			// Keep the current window bound so the next page can replay this window and
+			// continue from the extra conversation while skipping already returned IDs.
+			hasMore = true
+			terminatedByIterationLimit = false
+			s.debugLog("search_iteration_stop", "iteration", iteration, "reason", "found_additional_conversation")
+			break
+		}
+
+		if grouped.EarliestTraceStartNanos <= 0 || grouped.EarliestTraceStartNanos <= from.UnixNano() {
+			terminatedByIterationLimit = false
+			s.debugLog("search_iteration_stop",
+				"iteration", iteration,
+				"reason", "earliest_trace_reached_start",
+				"earliest_trace_start_unix_nano", grouped.EarliestTraceStartNanos,
+				"range_start_unix_nano", from.UnixNano(),
+			)
+			break
+		}
+		if len(tempoResponse.Traces) < overfetchLimit {
+			terminatedByIterationLimit = false
+			s.debugLog("search_iteration_stop",
+				"iteration", iteration,
+				"reason", "tempo_under_overfetch_limit",
+				"trace_count", len(tempoResponse.Traces),
+				"overfetch_limit", overfetchLimit,
+			)
+			break
+		}
+
+		searchEndNanos = grouped.EarliestTraceStartNanos - 1
+		s.debugLog("search_iteration_continue",
+			"iteration", iteration,
+			"next_search_end_unix_nano", searchEndNanos,
+		)
+	}
+
+	if terminatedByIterationLimit && !hasMore && searchEndNanos > from.UnixNano() {
+		// We reached the configured iteration cap before proving the range is exhausted.
+		// Preserve a continuation cursor so clients can keep paging older windows.
+		hasMore = true
+		s.debugLog("search_iteration_limit_reached",
+			"search_end_unix_nano", searchEndNanos,
+			"range_start_unix_nano", from.UnixNano(),
+			"results_total", len(results),
+		)
+	}
+
+	nextCursor := ""
+	if hasMore {
+		returnedConversations := make([]string, 0, len(alreadyReturned)+len(results))
+		for conversationID := range alreadyReturned {
+			returnedConversations = append(returnedConversations, conversationID)
+		}
+		for _, result := range results {
+			returnedConversations = append(returnedConversations, result.ConversationID)
+		}
+		nextCursor, err = encodeConversationSearchCursor(conversationSearchCursor{
+			EndNanos:              searchEndNanos,
+			ReturnedConversations: returnedConversations,
+			FilterHash:            filterHash,
+		})
+		if err != nil {
+			return ConversationSearchResponse{}, err
+		}
+	}
+
+	if results == nil {
+		results = []ConversationSearchResult{}
+	}
+	s.debugLog("search_done",
+		"results_count", len(results),
+		"has_more", hasMore,
+		"next_cursor_present", nextCursor != "",
+	)
+	return ConversationSearchResponse{
+		Conversations: results,
+		NextCursor:    nextCursor,
+		HasMore:       hasMore,
+	}, nil
+}
+
+func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, conversationID string) (ConversationDetail, bool, error) {
+	trimmedTenantID := strings.TrimSpace(tenantID)
+	trimmedConversationID := strings.TrimSpace(conversationID)
+	if trimmedTenantID == "" {
+		return ConversationDetail{}, false, NewValidationError("tenant id is required")
+	}
+	if trimmedConversationID == "" {
+		return ConversationDetail{}, false, NewValidationError("conversation id is required")
+	}
+	if s.conversationStore == nil {
+		return ConversationDetail{}, false, errors.New("conversation store is not configured")
+	}
+	if s.walReader == nil {
+		return ConversationDetail{}, false, errors.New("wal reader is not configured")
+	}
+
+	conversation, err := s.conversationStore.GetConversation(ctx, trimmedTenantID, trimmedConversationID)
+	if err != nil {
+		return ConversationDetail{}, false, err
+	}
+	if conversation == nil {
+		return ConversationDetail{}, false, nil
+	}
+
+	hotGenerations, err := s.walReader.GetByConversationID(ctx, trimmedTenantID, trimmedConversationID)
+	if err != nil {
+		return ConversationDetail{}, false, err
+	}
+	coldGenerations, err := s.loadColdConversationGenerations(ctx, trimmedTenantID, trimmedConversationID)
+	if err != nil {
+		return ConversationDetail{}, false, err
+	}
+	mergedGenerations := mergeGenerationsPreferHot(hotGenerations, coldGenerations)
+
+	generationPayloads := make([]map[string]any, 0, len(mergedGenerations))
+	for _, generation := range mergedGenerations {
+		payload, err := generationToResponsePayload(generation)
+		if err != nil {
+			return ConversationDetail{}, false, err
+		}
+		generationPayloads = append(generationPayloads, payload)
+	}
+
+	annotations, err := s.listAllConversationAnnotations(ctx, trimmedTenantID, trimmedConversationID)
+	if err != nil {
+		return ConversationDetail{}, false, err
+	}
+
+	var ratingSummary *feedback.ConversationRatingSummary
+	if s.ratingSummaryStore != nil {
+		summary, err := s.ratingSummaryStore.GetConversationRatingSummary(ctx, trimmedTenantID, trimmedConversationID)
+		if err != nil {
+			return ConversationDetail{}, false, err
+		}
+		if summary != nil {
+			copied := *summary
+			ratingSummary = &copied
+		}
+	}
+
+	return ConversationDetail{
+		ConversationID:    conversation.ConversationID,
+		GenerationCount:   conversation.GenerationCount,
+		FirstGenerationAt: conversation.CreatedAt.UTC(),
+		LastGenerationAt:  conversation.LastGenerationAt.UTC(),
+		Generations:       generationPayloads,
+		RatingSummary:     ratingSummary,
+		Annotations:       annotations,
+	}, true, nil
+}
+
+func (s *Service) GetGenerationDetailForTenant(ctx context.Context, tenantID, generationID string) (map[string]any, bool, error) {
+	trimmedTenantID := strings.TrimSpace(tenantID)
+	trimmedGenerationID := strings.TrimSpace(generationID)
+	if trimmedTenantID == "" {
+		return nil, false, NewValidationError("tenant id is required")
+	}
+	if trimmedGenerationID == "" {
+		return nil, false, NewValidationError("generation id is required")
+	}
+	if s.walReader == nil {
+		return nil, false, errors.New("wal reader is not configured")
+	}
+
+	generation, err := s.walReader.GetByID(ctx, trimmedTenantID, trimmedGenerationID)
+	if err != nil {
+		return nil, false, err
+	}
+	if generation == nil {
+		generation, err = s.loadColdGenerationByID(ctx, trimmedTenantID, trimmedGenerationID)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+	if generation == nil {
+		return nil, false, nil
+	}
+
+	payload, err := generationToResponsePayload(generation)
+	if err != nil {
+		return nil, false, err
+	}
+	return payload, true, nil
+}
+
+func (s *Service) ListSearchTagsForTenant(ctx context.Context, tenantID string, from, to time.Time) ([]SearchTag, error) {
+	trimmedTenantID := strings.TrimSpace(tenantID)
+	if trimmedTenantID == "" {
+		return nil, NewValidationError("tenant id is required")
+	}
+	if s.tempoClient == nil {
+		return nil, errors.New("tempo client is not configured")
+	}
+
+	startTime, endTime := normalizeTagDiscoveryRange(from, to, s.now())
+
+	spanTags, err := s.tempoClient.SearchTags(ctx, trimmedTenantID, "span", startTime, endTime)
+	if err != nil {
+		return nil, err
+	}
+	resourceTags, err := s.tempoClient.SearchTags(ctx, trimmedTenantID, "resource", startTime, endTime)
+	if err != nil {
+		return nil, err
+	}
+
+	tagMap := make(map[string]SearchTag)
+	for _, tag := range WellKnownSearchTags() {
+		tagMap[tag.Key] = tag
+	}
+	for _, tag := range spanTags {
+		normalized := normalizeTempoTagKey("span", tag)
+		tagMap[normalized] = SearchTag{Key: normalized, Scope: "span"}
+	}
+	for _, tag := range resourceTags {
+		normalized := normalizeTempoTagKey("resource", tag)
+		tagMap[normalized] = SearchTag{Key: normalized, Scope: "resource"}
+	}
+
+	out := make([]SearchTag, 0, len(tagMap))
+	for _, tag := range tagMap {
+		out = append(out, tag)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Key < out[j].Key
+	})
+	return out, nil
+}
+
+func (s *Service) ListSearchTagValuesForTenant(ctx context.Context, tenantID, tag string, from, to time.Time) ([]string, error) {
+	trimmedTenantID := strings.TrimSpace(tenantID)
+	if trimmedTenantID == "" {
+		return nil, NewValidationError("tenant id is required")
+	}
+	if s.tempoClient == nil {
+		return nil, errors.New("tempo client is not configured")
+	}
+
+	tempoTag, mysqlOnly, err := resolveTagKeyForTempo(tag)
+	if err != nil {
+		return nil, NewValidationError(err.Error())
+	}
+	if !mysqlOnly && strings.TrimSpace(tempoTag) == "" {
+		validationErr := NewValidationError(fmt.Sprintf("invalid tag %q", strings.TrimSpace(tag)))
+		s.debugLog("search_tag_values_error",
+			"requested_tag", strings.TrimSpace(tag),
+			"resolved_tempo_tag", tempoTag,
+			"error", validationErr.Error(),
+		)
+		return nil, validationErr
+	}
+	s.debugLog("search_tag_values_start",
+		"tenant_id", trimmedTenantID,
+		"requested_tag", strings.TrimSpace(tag),
+		"resolved_tempo_tag", tempoTag,
+		"mysql_only", mysqlOnly,
+	)
+	if mysqlOnly {
+		s.debugLog("search_tag_values_done", "requested_tag", strings.TrimSpace(tag), "values_count", 0)
+		return []string{}, nil
+	}
+
+	startTime, endTime := normalizeTagDiscoveryRange(from, to, s.now())
+	values, err := s.tempoClient.SearchTagValues(ctx, trimmedTenantID, tempoTag, startTime, endTime)
+	if err != nil {
+		s.debugLog("search_tag_values_error",
+			"requested_tag", strings.TrimSpace(tag),
+			"resolved_tempo_tag", tempoTag,
+			"error", err.Error(),
+		)
+		return nil, err
+	}
+	s.debugLog("search_tag_values_done",
+		"requested_tag", strings.TrimSpace(tag),
+		"resolved_tempo_tag", tempoTag,
+		"values_count", len(values),
+	)
+	return values, nil
+}
+
+func (s *Service) loadConversationSearchMetadata(
+	ctx context.Context,
+	tenantID string,
+	conversationIDs []string,
+) (map[string]storage.Conversation, map[string]feedback.ConversationRatingSummary, map[string]feedback.ConversationAnnotationSummary, error) {
+	uniqueConversationIDs := dedupeAndSortStrings(conversationIDs)
+	metadata := make(map[string]storage.Conversation, len(uniqueConversationIDs))
+	for _, conversationID := range uniqueConversationIDs {
+		conversation, err := s.conversationStore.GetConversation(ctx, tenantID, conversationID)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		if conversation == nil {
+			continue
+		}
+		metadata[conversationID] = *conversation
+	}
+
+	ratingSummaries := make(map[string]feedback.ConversationRatingSummary)
+	if s.ratingSummaryStore != nil && len(metadata) > 0 {
+		lookupIDs := make([]string, 0, len(metadata))
+		for conversationID := range metadata {
+			lookupIDs = append(lookupIDs, conversationID)
+		}
+		summaries, err := s.ratingSummaryStore.ListConversationRatingSummaries(ctx, tenantID, lookupIDs)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		ratingSummaries = summaries
+	}
+
+	annotationSummaries := make(map[string]feedback.ConversationAnnotationSummary)
+	if s.annotationSummaryStore != nil && len(metadata) > 0 {
+		lookupIDs := make([]string, 0, len(metadata))
+		for conversationID := range metadata {
+			lookupIDs = append(lookupIDs, conversationID)
+		}
+		summaries, err := s.annotationSummaryStore.ListConversationAnnotationSummaries(ctx, tenantID, lookupIDs)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		annotationSummaries = summaries
+	}
+
+	return metadata, ratingSummaries, annotationSummaries, nil
+}
+
+func (s *Service) loadColdGenerationByID(ctx context.Context, tenantID, generationID string) (*sigilv1.Generation, error) {
+	if s.blockMetadataStore == nil || s.blockReader == nil {
+		return nil, nil
+	}
+
+	blocks, err := s.blockMetadataStore.ListBlocks(ctx, tenantID, time.Time{}, time.Time{})
+	if err != nil {
+		return nil, err
+	}
+	for idx := len(blocks) - 1; idx >= 0; idx-- {
+		index, err := s.blockReader.ReadIndex(ctx, tenantID, blocks[idx].BlockID)
+		if err != nil {
+			return nil, err
+		}
+		entries := object.FindEntriesByGenerationID(index, generationID)
+		if len(entries) == 0 {
+			continue
+		}
+		generations, err := s.blockReader.ReadGenerations(ctx, tenantID, blocks[idx].BlockID, entries)
+		if err != nil {
+			return nil, err
+		}
+		for _, generation := range generations {
+			if generation.GetId() == generationID {
+				return generation, nil
+			}
+		}
+	}
+	return nil, nil
+}
+
+func (s *Service) loadColdConversationGenerations(ctx context.Context, tenantID, conversationID string) ([]*sigilv1.Generation, error) {
+	if s.blockMetadataStore == nil || s.blockReader == nil {
+		return []*sigilv1.Generation{}, nil
+	}
+
+	blocks, err := s.blockMetadataStore.ListBlocks(ctx, tenantID, time.Time{}, time.Time{})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*sigilv1.Generation, 0)
+	for _, block := range blocks {
+		index, err := s.blockReader.ReadIndex(ctx, tenantID, block.BlockID)
+		if err != nil {
+			return nil, err
+		}
+		entries := object.FindEntriesByConversationID(index, conversationID)
+		if len(entries) == 0 {
+			continue
+		}
+		generations, err := s.blockReader.ReadGenerations(ctx, tenantID, block.BlockID, entries)
+		if err != nil {
+			return nil, err
+		}
+		for _, generation := range generations {
+			// Block index lookups are hash-based; always re-check IDs to avoid hash-collision bleed.
+			if generation.GetConversationId() != conversationID {
+				continue
+			}
+			out = append(out, generation)
+		}
+	}
+	return out, nil
+}
+
+func (s *Service) listAllConversationAnnotations(ctx context.Context, tenantID, conversationID string) ([]feedback.ConversationAnnotation, error) {
+	if s.annotationEventStore == nil {
+		return []feedback.ConversationAnnotation{}, nil
+	}
+
+	cursor := uint64(0)
+	out := make([]feedback.ConversationAnnotation, 0)
+	for {
+		batch, nextCursor, err := s.annotationEventStore.ListConversationAnnotations(ctx, tenantID, conversationID, feedback.MaxPageLimit, cursor)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, batch...)
+		if nextCursor == 0 || len(batch) == 0 {
+			break
+		}
+		cursor = nextCursor
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].CreatedAt.Equal(out[j].CreatedAt) {
+			return out[i].AnnotationID < out[j].AnnotationID
+		}
+		return out[i].CreatedAt.Before(out[j].CreatedAt)
+	})
+	return out, nil
+}
+
+func normalizeConversationSearchTimeRange(timeRange ConversationSearchTimeRange) (time.Time, time.Time, error) {
+	from := timeRange.From.UTC()
+	to := timeRange.To.UTC()
+	if from.IsZero() || to.IsZero() {
+		return time.Time{}, time.Time{}, NewValidationError("time_range.from and time_range.to are required")
+	}
+	if !from.Before(to) {
+		return time.Time{}, time.Time{}, NewValidationError("time_range.from must be before time_range.to")
+	}
+	return from, to, nil
+}
+
+func validateMySQLFilterTerms(terms []FilterTerm) error {
+	for _, term := range terms {
+		if term.ResolvedKey != "generation_count" {
+			continue
+		}
+		switch term.Operator {
+		case FilterOperatorEqual,
+			FilterOperatorNotEqual,
+			FilterOperatorGreaterThan,
+			FilterOperatorLessThan,
+			FilterOperatorGreaterThanOrEqual,
+			FilterOperatorLessThanOrEqual:
+		default:
+			return NewValidationError("generation_count supports only numeric comparison operators")
+		}
+		if _, err := strconv.Atoi(strings.TrimSpace(term.Value)); err != nil {
+			return NewValidationError("generation_count value must be an integer")
+		}
+	}
+	return nil
+}
+
+func matchesMySQLFilters(conversation storage.Conversation, terms []FilterTerm) bool {
+	for _, term := range terms {
+		if term.ResolvedKey != "generation_count" {
+			continue
+		}
+		value, err := strconv.Atoi(strings.TrimSpace(term.Value))
+		if err != nil {
+			return false
+		}
+
+		count := conversation.GenerationCount
+		switch term.Operator {
+		case FilterOperatorEqual:
+			if count != value {
+				return false
+			}
+		case FilterOperatorNotEqual:
+			if count == value {
+				return false
+			}
+		case FilterOperatorGreaterThan:
+			if count <= value {
+				return false
+			}
+		case FilterOperatorGreaterThanOrEqual:
+			if count < value {
+				return false
+			}
+		case FilterOperatorLessThan:
+			if count >= value {
+				return false
+			}
+		case FilterOperatorLessThanOrEqual:
+			if count > value {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func orderTempoConversationIDs(conversations map[string]*tempoConversationAggregate) []string {
+	ids := make([]string, 0, len(conversations))
+	for conversationID := range conversations {
+		ids = append(ids, conversationID)
+	}
+	sort.Slice(ids, func(i, j int) bool {
+		left := conversations[ids[i]]
+		right := conversations[ids[j]]
+		if left.LatestTraceStartNanos == right.LatestTraceStartNanos {
+			return ids[i] < ids[j]
+		}
+		return left.LatestTraceStartNanos > right.LatestTraceStartNanos
+	})
+	return ids
+}
+
+func buildSelectedResultMap(selected map[string]*tempoSelectedAggregation) map[string]any {
+	if len(selected) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(selected))
+	for key, aggregation := range selected {
+		if aggregation == nil {
+			continue
+		}
+		if aggregation.HasNumeric {
+			out[key] = aggregation.NumericSum
+			continue
+		}
+		if len(aggregation.DistinctValues) == 0 {
+			continue
+		}
+		out[key] = sortedKeysFromSet(aggregation.DistinctValues)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func mergeGenerationsPreferHot(hotGenerations, coldGenerations []*sigilv1.Generation) []*sigilv1.Generation {
+	byID := make(map[string]*sigilv1.Generation, len(hotGenerations)+len(coldGenerations))
+	for _, generation := range coldGenerations {
+		if generation == nil || strings.TrimSpace(generation.GetId()) == "" {
+			continue
+		}
+		byID[generation.GetId()] = generation
+	}
+	for _, generation := range hotGenerations {
+		if generation == nil || strings.TrimSpace(generation.GetId()) == "" {
+			continue
+		}
+		// Hot rows win when a generation exists in both stores during retention overlap.
+		byID[generation.GetId()] = generation
+	}
+
+	out := make([]*sigilv1.Generation, 0, len(byID))
+	for _, generation := range byID {
+		out = append(out, generation)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		leftTime := generationTimestamp(out[i])
+		rightTime := generationTimestamp(out[j])
+		if leftTime.Equal(rightTime) {
+			return out[i].GetId() < out[j].GetId()
+		}
+		return leftTime.Before(rightTime)
+	})
+	return out
+}
+
+func generationToResponsePayload(generation *sigilv1.Generation) (map[string]any, error) {
+	payloadBytes, err := protojson.MarshalOptions{UseProtoNames: true}.Marshal(generation)
+	if err != nil {
+		return nil, fmt.Errorf("marshal generation payload: %w", err)
+	}
+
+	payload := make(map[string]any)
+	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+		return nil, fmt.Errorf("decode generation payload: %w", err)
+	}
+
+	if id, ok := payload["id"]; ok {
+		payload["generation_id"] = id
+		delete(payload, "id")
+	}
+	if mode, ok := payload["mode"].(string); ok {
+		payload["mode"] = normalizeGenerationMode(mode)
+	}
+
+	createdAt := generationTimestamp(generation)
+	if !createdAt.IsZero() {
+		payload["created_at"] = createdAt.UTC().Format(time.RFC3339Nano)
+	}
+	if strings.TrimSpace(generation.GetCallError()) == "" {
+		payload["error"] = nil
+	} else {
+		payload["error"] = map[string]any{"message": generation.GetCallError()}
+	}
+	return payload, nil
+}
+
+func normalizeGenerationMode(mode string) string {
+	trimmed := strings.TrimSpace(mode)
+	trimmed = strings.TrimPrefix(trimmed, "GENERATION_MODE_")
+	return trimmed
+}
+
+func generationTimestamp(generation *sigilv1.Generation) time.Time {
+	if generation == nil {
+		return time.Time{}
+	}
+	if completedAt := generation.GetCompletedAt(); completedAt != nil {
+		return completedAt.AsTime().UTC()
+	}
+	if startedAt := generation.GetStartedAt(); startedAt != nil {
+		return startedAt.AsTime().UTC()
+	}
+	return time.Time{}
+}
+
+func normalizeTempoTagKey(scope string, key string) string {
+	trimmed := strings.TrimSpace(key)
+	if trimmed == "" {
+		return ""
+	}
+	if strings.HasPrefix(trimmed, "span.") || strings.HasPrefix(trimmed, "resource.") {
+		return trimmed
+	}
+	return strings.TrimSpace(scope) + "." + trimmed
+}
+
 func (s *Service) ListConversations() []Conversation {
 	items, err := s.ListConversationsForTenant(context.Background(), "", ConversationListFilter{})
 	if err != nil {
@@ -208,19 +1204,6 @@ func (s *Service) GetConversation(id string) Conversation {
 		return s.bootstrapConversation(id)
 	}
 	return item
-}
-
-func (s *Service) ListCompletions() []Completion {
-	return []Completion{{
-		ID:             "cmp-bootstrap",
-		ConversationID: "c-bootstrap",
-		Model:          "placeholder-model",
-		CreatedAt:      s.now().UTC(),
-	}}
-}
-
-func (s *Service) GetTrace(id string) Trace {
-	return Trace{ID: id, GenerationIDs: []string{"gen-bootstrap"}}
 }
 
 func (s *Service) bootstrapConversations() []Conversation {

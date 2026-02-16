@@ -33,21 +33,50 @@ func (s *WALStore) TruncateCompacted(ctx context.Context, tenantID string, shard
 		return 0, nil
 	}
 
-	// Use raw SQL for deterministic ordered/batched delete behavior in MySQL.
-	result := s.db.WithContext(ctx).Exec(`
-DELETE FROM generations
-WHERE tenant_id = ?
-  AND compacted = TRUE
-  AND compacted_at IS NOT NULL
-  AND compacted_at <= ?
-  AND (FLOOR(UNIX_TIMESTAMP(created_at) / ?) % ?) = ?
-ORDER BY id ASC
-LIMIT ?`, tenantID, olderThan.UTC(), shard.ShardWindowSeconds, shard.ShardCount, shard.ShardID, limit)
-	if result.Error != nil {
+	var deletedRows int64
+	err := runWithRetryableLockError(ctx, func() error {
+		// Select candidate IDs first so delete locks follow a stable primary-key order.
+		query := `
+DELETE g
+FROM generations AS g
+JOIN (
+	SELECT id
+	FROM (
+		SELECT id
+		FROM generations FORCE INDEX (idx_generations_tenant_compacted_compacted_at_id)
+		WHERE tenant_id = ?
+		  AND compacted = TRUE
+		  AND compacted_at IS NOT NULL
+		  AND compacted_at <= ?`
+		args := []any{tenantID, olderThan.UTC()}
+		if shard.ShardCount > 1 {
+			query += `
+		  AND (FLOOR(UNIX_TIMESTAMP(created_at) / ?) % ?) = ?`
+			args = append(args,
+				shard.ShardWindowSeconds,
+				shard.ShardCount,
+				shard.ShardID,
+			)
+		}
+		query += `
+		ORDER BY id ASC
+		LIMIT ?
+	) AS picked_ids
+) AS to_delete ON to_delete.id = g.id`
+		args = append(args, limit)
+
+		result := s.db.WithContext(ctx).Exec(query, args...)
+		if result.Error != nil {
+			return result.Error
+		}
+		deletedRows = result.RowsAffected
+		return nil
+	})
+	if err != nil {
 		observeWALMetrics("truncate_compacted", "error", start, 0)
-		return 0, fmt.Errorf("truncate compacted rows: %w", result.Error)
+		return 0, fmt.Errorf("truncate compacted rows: %w", err)
 	}
 
-	observeWALMetrics("truncate_compacted", "success", start, int(result.RowsAffected))
-	return result.RowsAffected, nil
+	observeWALMetrics("truncate_compacted", "success", start, int(deletedRows))
+	return deletedRows, nil
 }

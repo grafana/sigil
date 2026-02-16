@@ -1,176 +1,318 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Badge, Spinner, Stack, Text } from '@grafana/ui';
-import type {
-  ConversationAnnotation,
-  ConversationListItem,
-  ConversationRating,
-  ConversationTimelineEvent,
-} from '../conversation/types';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Button, Spinner, Stack, Text } from '@grafana/ui';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
-import { buildConversationTimeline, formatTimestamp } from '../conversation/timeline';
+import type {
+  ConversationDetail,
+  ConversationSearchRequest,
+  ConversationSearchResult,
+  GenerationDetail,
+  SearchTag,
+} from '../conversation/types';
+import FilterBar from '../components/FilterBar';
 
-type BooleanFilterValue = 'all' | 'true' | 'false';
-
-export type ConversationsPageProps = {
+type ConversationsPageProps = {
   dataSource?: ConversationsDataSource;
 };
 
-function toOptionalFilterValue(value: BooleanFilterValue): boolean | undefined {
-  if (value === 'all') {
-    return undefined;
-  }
-  return value === 'true';
+function defaultRangeFrom(): string {
+  return new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+}
+
+function defaultRangeTo(): string {
+  return new Date().toISOString();
 }
 
 export default function ConversationsPage(props: ConversationsPageProps) {
   const dataSource = props.dataSource ?? defaultConversationsDataSource;
-  const [hasBadRatingFilter, setHasBadRatingFilter] = useState<BooleanFilterValue>('all');
-  const [hasAnnotationsFilter, setHasAnnotationsFilter] = useState<BooleanFilterValue>('all');
 
-  const [loadingList, setLoadingList] = useState(true);
-  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [filterText, setFilterText] = useState<string>('');
+  const [rangeFrom, setRangeFrom] = useState<string>(defaultRangeFrom());
+  const [rangeTo, setRangeTo] = useState<string>(defaultRangeTo());
+
+  const [tags, setTags] = useState<SearchTag[]>([]);
+  const [tagValues, setTagValues] = useState<string[]>([]);
+  const [loadingTags, setLoadingTags] = useState<boolean>(false);
+  const [loadingTagValues, setLoadingTagValues] = useState<boolean>(false);
+
+  const [searchResults, setSearchResults] = useState<ConversationSearchResult[]>([]);
+  const [loadingSearch, setLoadingSearch] = useState<boolean>(false);
+  const [loadingMore, setLoadingMore] = useState<boolean>(false);
+  const [nextCursor, setNextCursor] = useState<string>('');
+  const [hasMore, setHasMore] = useState<boolean>(false);
+
+  const [selectedConversationID, setSelectedConversationID] = useState<string>('');
+  const [conversationDetail, setConversationDetail] = useState<ConversationDetail | null>(null);
+  const [loadingConversationDetail, setLoadingConversationDetail] = useState<boolean>(false);
+
+  const [selectedGenerationID, setSelectedGenerationID] = useState<string>('');
+  const [generationDetail, setGenerationDetail] = useState<GenerationDetail | null>(null);
+  const [loadingGenerationDetail, setLoadingGenerationDetail] = useState<boolean>(false);
+
   const [errorMessage, setErrorMessage] = useState<string>('');
 
-  const [conversations, setConversations] = useState<ConversationListItem[]>([]);
-  const [selectedConversationID, setSelectedConversationID] = useState<string>('');
-  const [selectedConversation, setSelectedConversation] = useState<ConversationListItem | null>(null);
-  const [ratings, setRatings] = useState<ConversationRating[]>([]);
-  const [annotations, setAnnotations] = useState<ConversationAnnotation[]>([]);
+  const searchRequestVersion = useRef<number>(0);
+  const conversationDetailRequestVersion = useRef<number>(0);
+  const generationDetailRequestVersion = useRef<number>(0);
+  const tagsRequestVersion = useRef<number>(0);
+  const tagValuesRequestVersion = useRef<number>(0);
+  const inFlightTagValuesKey = useRef<string>('');
+  const tagValuesCache = useRef<Map<string, string[]>>(new Map());
+
+  const selectedConversation = useMemo(() => {
+    if (selectedConversationID.length === 0) {
+      return null;
+    }
+    return searchResults.find((item) => item.conversation_id === selectedConversationID) ?? null;
+  }, [searchResults, selectedConversationID]);
+
+  const runSearch = async (cursor?: string, append?: boolean): Promise<void> => {
+    searchRequestVersion.current += 1;
+    const requestVersion = searchRequestVersion.current;
+
+    const payload: ConversationSearchRequest = {
+      filters: filterText,
+      select: [],
+      time_range: {
+        from: rangeFrom,
+        to: rangeTo,
+      },
+      page_size: 20,
+      cursor,
+    };
+
+    if (append) {
+      setLoadingMore(true);
+    } else {
+      setLoadingSearch(true);
+      setErrorMessage('');
+    }
+
+    try {
+      const response = await dataSource.searchConversations(payload);
+      if (searchRequestVersion.current !== requestVersion) {
+        return;
+      }
+      setSearchResults((current) => (append ? [...current, ...(response.conversations ?? [])] : response.conversations ?? []));
+      setNextCursor(response.next_cursor ?? '');
+      setHasMore(Boolean(response.has_more));
+
+      if (!append) {
+        const firstConversationID = response.conversations?.[0]?.conversation_id ?? '';
+        setSelectedConversationID(firstConversationID);
+      }
+    } catch (error) {
+      if (searchRequestVersion.current !== requestVersion) {
+        return;
+      }
+      setErrorMessage(error instanceof Error ? error.message : 'failed to search conversations');
+      if (!append) {
+        setSearchResults([]);
+        setNextCursor('');
+        setHasMore(false);
+        setSelectedConversationID('');
+      }
+    } finally {
+      if (searchRequestVersion.current !== requestVersion) {
+        return;
+      }
+      setLoadingSearch(false);
+      setLoadingMore(false);
+    }
+  };
 
   useEffect(() => {
-    let cancelled = false;
-    void Promise.resolve().then(() => {
-      if (!cancelled) {
-        setLoadingList(true);
-        setErrorMessage('');
-      }
-    });
+    tagsRequestVersion.current += 1;
+    const requestVersion = tagsRequestVersion.current;
+
+    setLoadingTags(true);
+    setErrorMessage('');
 
     void dataSource
-      .listConversations({
-        hasBadRating: toOptionalFilterValue(hasBadRatingFilter),
-        hasAnnotations: toOptionalFilterValue(hasAnnotationsFilter),
-      })
+      .getSearchTags(rangeFrom, rangeTo)
       .then((items) => {
-        if (cancelled) {
+        if (tagsRequestVersion.current !== requestVersion) {
           return;
         }
-        setConversations(items);
-        setSelectedConversationID((currentSelectedID) => {
-          if (currentSelectedID.length > 0 && items.some((item) => item.id === currentSelectedID)) {
-            return currentSelectedID;
-          }
-          return items[0]?.id ?? '';
-        });
+        setTags(items);
       })
       .catch((error) => {
-        if (cancelled) {
+        if (tagsRequestVersion.current !== requestVersion) {
           return;
         }
-        setErrorMessage(error instanceof Error ? error.message : 'failed to load conversations');
-        setConversations([]);
-        setSelectedConversationID('');
+        setErrorMessage(error instanceof Error ? error.message : 'failed to load search tags');
+        setTags([]);
       })
       .finally(() => {
-        if (!cancelled) {
-          setLoadingList(false);
+        if (tagsRequestVersion.current !== requestVersion) {
+          return;
         }
+        setLoadingTags(false);
       });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [dataSource, hasBadRatingFilter, hasAnnotationsFilter]);
+  }, [dataSource, rangeFrom, rangeTo]);
 
   useEffect(() => {
-    let cancelled = false;
+    conversationDetailRequestVersion.current += 1;
+    const requestVersion = conversationDetailRequestVersion.current;
+
     if (selectedConversationID.length === 0) {
-      void Promise.resolve().then(() => {
-        if (!cancelled) {
-          setSelectedConversation(null);
-          setRatings([]);
-          setAnnotations([]);
-          setLoadingDetails(false);
-        }
-      });
+      setConversationDetail(null);
+      setSelectedGenerationID('');
+      setGenerationDetail(null);
+      setLoadingConversationDetail(false);
       return;
     }
 
-    void Promise.resolve().then(() => {
-      if (!cancelled) {
-        setLoadingDetails(true);
-        setErrorMessage('');
-      }
-    });
-
-    void Promise.all([
-      dataSource.getConversation(selectedConversationID),
-      dataSource.listConversationRatings(selectedConversationID),
-      dataSource.listConversationAnnotations(selectedConversationID),
-    ])
-      .then(([conversation, conversationRatings, conversationAnnotations]) => {
-        if (cancelled) {
+    setLoadingConversationDetail(true);
+    setErrorMessage('');
+    void dataSource
+      .getConversationDetail(selectedConversationID)
+      .then((detail) => {
+        if (conversationDetailRequestVersion.current !== requestVersion) {
           return;
         }
-        setSelectedConversation(conversation);
-        setRatings(conversationRatings);
-        setAnnotations(conversationAnnotations);
+        setConversationDetail(detail);
+        setSelectedGenerationID(detail.generations?.[0]?.generation_id ?? '');
       })
       .catch((error) => {
-        if (cancelled) {
+        if (conversationDetailRequestVersion.current !== requestVersion) {
           return;
         }
-        setErrorMessage(error instanceof Error ? error.message : 'failed to load conversation details');
-        setSelectedConversation(null);
-        setRatings([]);
-        setAnnotations([]);
+        setErrorMessage(error instanceof Error ? error.message : 'failed to load conversation detail');
+        setConversationDetail(null);
+        setSelectedGenerationID('');
+        setGenerationDetail(null);
       })
       .finally(() => {
-        if (!cancelled) {
-          setLoadingDetails(false);
+        if (conversationDetailRequestVersion.current !== requestVersion) {
+          return;
         }
+        setLoadingConversationDetail(false);
       });
-
-    return () => {
-      cancelled = true;
-    };
   }, [dataSource, selectedConversationID]);
 
-  const timelineEvents = useMemo<ConversationTimelineEvent[]>(
-    () => buildConversationTimeline(ratings, annotations),
-    [ratings, annotations]
-  );
+  useEffect(() => {
+    generationDetailRequestVersion.current += 1;
+    const requestVersion = generationDetailRequestVersion.current;
+
+    if (selectedGenerationID.length === 0) {
+      setGenerationDetail(null);
+      setLoadingGenerationDetail(false);
+      return;
+    }
+
+    setLoadingGenerationDetail(true);
+    setErrorMessage('');
+    void dataSource
+      .getGeneration(selectedGenerationID)
+      .then((detail) => {
+        if (generationDetailRequestVersion.current !== requestVersion) {
+          return;
+        }
+        setGenerationDetail(detail);
+      })
+      .catch((error) => {
+        if (generationDetailRequestVersion.current !== requestVersion) {
+          return;
+        }
+        setErrorMessage(error instanceof Error ? error.message : 'failed to load generation detail');
+        setGenerationDetail(null);
+      })
+      .finally(() => {
+        if (generationDetailRequestVersion.current !== requestVersion) {
+          return;
+        }
+        setLoadingGenerationDetail(false);
+      });
+  }, [dataSource, selectedGenerationID]);
+
+  const requestTagValues = useCallback((tag: string): void => {
+    const trimmedTag = tag.trim();
+    if (trimmedTag.length === 0) {
+      return;
+    }
+
+    const requestKey = `${trimmedTag}|${rangeFrom}|${rangeTo}`;
+    const cachedValues = tagValuesCache.current.get(requestKey);
+    if (cachedValues) {
+      setTagValues(cachedValues);
+      setLoadingTagValues(false);
+      return;
+    }
+    if (inFlightTagValuesKey.current === requestKey) {
+      return;
+    }
+
+    tagValuesRequestVersion.current += 1;
+    const requestVersion = tagValuesRequestVersion.current;
+    inFlightTagValuesKey.current = requestKey;
+    setLoadingTagValues(true);
+    void dataSource
+      .getSearchTagValues(trimmedTag, rangeFrom, rangeTo)
+      .then((values) => {
+        tagValuesCache.current.set(requestKey, values);
+        if (tagValuesRequestVersion.current !== requestVersion) {
+          return;
+        }
+        setTagValues(values);
+      })
+      .catch(() => {
+        if (tagValuesRequestVersion.current !== requestVersion) {
+          return;
+        }
+        setTagValues([]);
+      })
+      .finally(() => {
+        if (inFlightTagValuesKey.current === requestKey) {
+          inFlightTagValuesKey.current = '';
+        }
+        if (tagValuesRequestVersion.current !== requestVersion) {
+          return;
+        }
+        setLoadingTagValues(false);
+      });
+  }, [dataSource, rangeFrom, rangeTo]);
+
+  const resultRows = searchResults.map((conversation) => {
+    const selected = conversation.conversation_id === selectedConversationID;
+    return (
+      <tr key={conversation.conversation_id} style={{ background: selected ? 'rgba(34, 102, 255, 0.12)' : 'transparent' }}>
+        <td>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setSelectedConversationID(conversation.conversation_id)}
+            aria-label={`select conversation ${conversation.conversation_id}`}
+          >
+            {conversation.conversation_id}
+          </Button>
+        </td>
+        <td>{conversation.generation_count}</td>
+        <td>{conversation.models.join(', ') || '-'}</td>
+        <td>{conversation.agents.join(', ') || '-'}</td>
+        <td>{conversation.error_count}</td>
+        <td>{new Date(conversation.last_generation_at).toLocaleString()}</td>
+      </tr>
+    );
+  });
 
   return (
     <Stack direction="column" gap={2}>
       <h2>Conversations</h2>
 
-      <Stack direction="row" gap={2} wrap>
-        <label>
-          <Text element="span">Has BAD rating</Text>
-          <select
-            aria-label="has bad rating filter"
-            value={hasBadRatingFilter}
-            onChange={(event) => setHasBadRatingFilter(event.currentTarget.value as BooleanFilterValue)}
-          >
-            <option value="all">All</option>
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
-        </label>
-        <label>
-          <Text element="span">Has annotations</Text>
-          <select
-            aria-label="has annotations filter"
-            value={hasAnnotationsFilter}
-            onChange={(event) => setHasAnnotationsFilter(event.currentTarget.value as BooleanFilterValue)}
-          >
-            <option value="all">All</option>
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
-        </label>
-      </Stack>
+      <FilterBar
+        filter={filterText}
+        from={rangeFrom}
+        to={rangeTo}
+        tags={tags}
+        tagValues={tagValues}
+        loadingTags={loadingTags}
+        loadingValues={loadingTagValues}
+        onFilterChange={setFilterText}
+        onFromChange={setRangeFrom}
+        onToChange={setRangeTo}
+        onApply={() => void runSearch('', false)}
+        onRequestTagValues={requestTagValues}
+      />
 
       {errorMessage.length > 0 && (
         <Alert severity="error" title="Conversation query failed">
@@ -178,98 +320,81 @@ export default function ConversationsPage(props: ConversationsPageProps) {
         </Alert>
       )}
 
-      <Stack direction="row" gap={3}>
+      <Stack direction="row" gap={2}>
         <Stack direction="column" gap={1}>
-          <h4>Conversation list</h4>
-          {loadingList && <Spinner aria-label="loading conversations" />}
-          {!loadingList && conversations.length === 0 && <Text>No conversations found for current filters.</Text>}
-          {!loadingList &&
-            conversations.map((conversation) => {
-              const selected = conversation.id === selectedConversationID;
-              const ratingSummary = conversation.rating_summary;
-              const annotationSummary = conversation.annotation_summary;
-
-              return (
-                <button
-                  key={conversation.id}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => setSelectedConversationID(conversation.id)}
-                  style={{
-                    textAlign: 'left',
-                    padding: '8px',
-                    border: selected ? '2px solid #3274d9' : '1px solid #3a4250',
-                    borderRadius: '6px',
-                    background: selected ? 'rgba(50,116,217,0.1)' : 'transparent',
-                    cursor: 'pointer',
-                    minWidth: '360px',
-                  }}
-                >
-                  <Text>
-                    <strong>{conversation.title || conversation.id}</strong>
-                  </Text>
-                  <Text color="secondary">ID: {conversation.id}</Text>
-                  <Text color="secondary">Generations: {conversation.generation_count}</Text>
-                  {ratingSummary && (
-                    <Text color="secondary">
-                      Ratings: {ratingSummary.good_count} good / {ratingSummary.bad_count} bad
-                    </Text>
-                  )}
-                  {annotationSummary && (
-                    <Text color="secondary">Annotations: {annotationSummary.annotation_count}</Text>
-                  )}
-                </button>
-              );
-            })}
+          <Text weight="bold">Conversation search results</Text>
+          {loadingSearch && <Spinner aria-label="loading conversations" />}
+          {!loadingSearch && searchResults.length === 0 && <Text>No conversations found. Apply a filter to start.</Text>}
+          {!loadingSearch && searchResults.length > 0 && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Conversation</th>
+                  <th>Generations</th>
+                  <th>Models</th>
+                  <th>Agents</th>
+                  <th>Errors</th>
+                  <th>Last generation</th>
+                </tr>
+              </thead>
+              <tbody>{resultRows}</tbody>
+            </table>
+          )}
+          {hasMore && nextCursor.length > 0 && (
+            <Button aria-label="load more conversations" onClick={() => void runSearch(nextCursor, true)} disabled={loadingMore}>
+              {loadingMore ? 'Loading…' : 'Load more'}
+            </Button>
+          )}
         </Stack>
 
         <Stack direction="column" gap={1}>
-          <h4>Conversation detail</h4>
-          {selectedConversationID.length === 0 && <Text>Select a conversation to inspect details.</Text>}
-          {loadingDetails && selectedConversationID.length > 0 && <Spinner aria-label="loading conversation details" />}
-          {!loadingDetails && selectedConversationID.length > 0 && selectedConversation && (
+          <Text weight="bold">Conversation detail</Text>
+          {selectedConversation && (
+            <Text color="secondary">
+              {selectedConversation.conversation_id} • {selectedConversation.generation_count} generations
+            </Text>
+          )}
+          {loadingConversationDetail && <Spinner aria-label="loading conversation detail" />}
+          {!loadingConversationDetail && conversationDetail && (
             <Stack direction="column" gap={1}>
               <Text>
-                <strong>{selectedConversation.title || selectedConversation.id}</strong>
+                {conversationDetail.generations.length} generation payloads • {conversationDetail.annotations.length} annotations
               </Text>
-              <Text color="secondary">Updated: {formatTimestamp(selectedConversation.updated_at)}</Text>
-              <Text color="secondary">Last generation: {formatTimestamp(selectedConversation.last_generation_at)}</Text>
-
-              <h5>Ratings timeline ({ratings.length})</h5>
-              {ratings.length === 0 && <Text color="secondary">No ratings yet.</Text>}
-              {ratings.map((rating) => (
-                <Stack key={rating.rating_id} direction="row" gap={1}>
-                  <Badge
-                    color={rating.rating === 'CONVERSATION_RATING_VALUE_BAD' ? 'red' : 'green'}
-                    text={rating.rating === 'CONVERSATION_RATING_VALUE_BAD' ? 'BAD' : 'GOOD'}
-                  />
-                  <Text>{formatTimestamp(rating.created_at)}</Text>
-                  <Text>{rating.comment?.trim() || 'No comment provided.'}</Text>
-                </Stack>
-              ))}
-
-              <h5>Annotations timeline ({annotations.length})</h5>
-              {annotations.length === 0 && <Text color="secondary">No annotations yet.</Text>}
-              {annotations.map((annotation) => (
-                <Stack key={annotation.annotation_id} direction="row" gap={1}>
-                  <Badge color="blue" text={annotation.annotation_type} />
-                  <Text>{formatTimestamp(annotation.created_at)}</Text>
-                  <Text>{annotation.body?.trim() || 'No body provided.'}</Text>
-                </Stack>
-              ))}
-
-              <h5>Merged timeline ({timelineEvents.length})</h5>
-              {timelineEvents.length === 0 && <Text color="secondary">No timeline events.</Text>}
-              {timelineEvents.map((event) => (
-                <Stack key={event.id} direction="row" gap={1}>
-                  <Badge color={event.kind === 'rating' ? 'orange' : 'blue'} text={event.badge} />
-                  <Text>{formatTimestamp(event.createdAt)}</Text>
-                  <Text>
-                    <strong>{event.title}</strong> {event.description}
-                  </Text>
-                </Stack>
-              ))}
+              {conversationDetail.generations.map((generation) => {
+                const traceID = typeof generation.trace_id === 'string' ? generation.trace_id : '';
+                return (
+                  <Stack key={generation.generation_id} direction="row" gap={1}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      aria-label={`select generation ${generation.generation_id}`}
+                      onClick={() => setSelectedGenerationID(generation.generation_id)}
+                    >
+                      {generation.generation_id}
+                    </Button>
+                    <Text color="secondary">{generation.created_at ? new Date(generation.created_at).toLocaleString() : '-'}</Text>
+                    {traceID.length > 0 && (
+                      <a
+                        href={`/api/plugins/grafana-sigil-app/resources/query/proxy/tempo/api/v2/traces/${encodeURIComponent(traceID)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Trace
+                      </a>
+                    )}
+                  </Stack>
+                );
+              })}
             </Stack>
+          )}
+        </Stack>
+
+        <Stack direction="column" gap={1}>
+          <Text weight="bold">Generation detail</Text>
+          {selectedGenerationID.length === 0 && <Text>Select a generation to inspect payload.</Text>}
+          {loadingGenerationDetail && <Spinner aria-label="loading generation detail" />}
+          {!loadingGenerationDetail && generationDetail && (
+            <pre style={{ maxWidth: '520px', whiteSpace: 'pre-wrap' }}>{JSON.stringify(generationDetail, null, 2)}</pre>
           )}
         </Stack>
       </Stack>

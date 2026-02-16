@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-14
+last_reviewed: 2026-02-15
 source_of_truth: true
 audience: both
 ---
@@ -79,7 +79,7 @@ Tenant extraction/enforcement is uniform for:
 
 - generation ingest HTTP (`POST /api/v1/generations:export`)
 - generation ingest gRPC (`GenerationIngestService.ExportGenerations`)
-- Sigil query and feedback HTTP endpoints (conversations, ratings, annotations, completions, traces, model-cards)
+- Sigil query and feedback HTTP endpoints (conversation search/detail, generation detail, search tags/values, ratings, annotations, model-cards)
 
 Tenant enforcement does not apply in Sigil for:
 
@@ -89,6 +89,12 @@ Plugin boundary:
 
 - Grafana plugin frontend should not implement tenant header logic directly.
 - tenant headers should be applied/forwarded by backend proxy layers.
+- Sigil plugin backend tenant header precedence is:
+  - preserve inbound `X-Scope-OrgID`
+  - else use plugin connection fallback tenant ID (default `fake`)
+- Local Compose defaults:
+  - Tempo runs with `multitenancy_enabled: true`.
+  - Alloy injects `X-Scope-OrgID: fake` on Tempo OTLP exports.
 
 ## Client and Deployment Configuration
 

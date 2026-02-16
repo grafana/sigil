@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -103,6 +104,152 @@ func TestRecordsEndpointsAreRemoved(t *testing.T) {
 		if resp.Code != http.StatusNotFound {
 			t.Fatalf("expected 404 for %s, got %d", path, resp.Code)
 		}
+	}
+}
+
+func TestPlaceholderQueryEndpointsAreRemoved(t *testing.T) {
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, query.NewService(), generationingest.NewService(generationingest.NewMemoryStore()), feedback.NewService(feedback.NewMemoryStore()), true, true, newTestModelCardService(t), nil)
+
+	for _, path := range []string{"/api/v1/completions", "/api/v1/traces/t-1"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		resp := httptest.NewRecorder()
+		mux.ServeHTTP(resp, req)
+
+		if resp.Code != http.StatusNotFound {
+			t.Fatalf("expected 404 for %s, got %d", path, resp.Code)
+		}
+	}
+}
+
+func TestConversationSearchEndpoint(t *testing.T) {
+	tempo := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path != "/api/search" {
+			http.NotFound(w, req)
+			return
+		}
+		if req.Header.Get("X-Scope-OrgID") != "fake" {
+			http.Error(w, "missing tenant", http.StatusUnauthorized)
+			return
+		}
+		_, _ = io.WriteString(w, `{
+			"traces":[
+				{
+					"traceID":"trace-1",
+					"startTimeUnixNano":"1739612400000000000",
+					"spanSets":[
+						{
+							"spans":[
+								{
+									"spanID":"span-1",
+									"durationNanos":"1000000000",
+									"attributes":[
+										{"key":"sigil.generation.id","value":{"stringValue":"gen-1"}},
+										{"key":"gen_ai.conversation.id","value":{"stringValue":"conv-1"}},
+										{"key":"gen_ai.request.model","value":{"stringValue":"gpt-4o"}},
+										{"key":"gen_ai.agent.name","value":{"stringValue":"assistant"}}
+									]
+								}
+							]
+						}
+					]
+				}
+			]
+		}`)
+	}))
+	defer tempo.Close()
+
+	conversationStore := &testConversationStore{
+		items: []storage.Conversation{
+			{
+				TenantID:         "fake",
+				ConversationID:   "conv-1",
+				LastGenerationAt: time.Date(2026, 2, 15, 9, 0, 0, 0, time.UTC),
+				GenerationCount:  2,
+				CreatedAt:        time.Date(2026, 2, 15, 8, 0, 0, 0, time.UTC),
+				UpdatedAt:        time.Date(2026, 2, 15, 9, 0, 0, 0, time.UTC),
+			},
+		},
+	}
+	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
+		ConversationStore: conversationStore,
+		FeedbackStore:     feedback.NewMemoryStore(),
+		TempoBaseURL:      tempo.URL,
+	})
+	if err != nil {
+		t.Fatalf("new query service: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterRoutes(
+		mux,
+		querySvc,
+		generationingest.NewService(generationingest.NewMemoryStore()),
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		protected,
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/conversations/search", bytes.NewBufferString(`{
+		"filters":"model = \"gpt-4o\"",
+		"time_range":{"from":"2026-02-14T00:00:00Z","to":"2026-02-16T00:00:00Z"},
+		"page_size":20
+	}`))
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"conversation_id":"conv-1"`) {
+		t.Fatalf("expected conversation in response, body=%s", resp.Body.String())
+	}
+}
+
+func TestGenerationDetailEndpoint(t *testing.T) {
+	generation := &sigilv1.Generation{
+		Id:             "gen-1",
+		ConversationId: "conv-1",
+		TraceId:        "trace-1",
+		SpanId:         "span-1",
+		Mode:           sigilv1.GenerationMode_GENERATION_MODE_SYNC,
+		Model:          &sigilv1.ModelRef{Provider: "openai", Name: "gpt-4o"},
+	}
+	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
+		WALReader: &testWALReader{
+			byID: map[string]*sigilv1.Generation{
+				"gen-1": generation,
+			},
+		},
+		FeedbackStore: feedback.NewMemoryStore(),
+	})
+	if err != nil {
+		t.Fatalf("new query service: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterRoutes(
+		mux,
+		querySvc,
+		generationingest.NewService(generationingest.NewMemoryStore()),
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		protected,
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/generations/gen-1", nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"generation_id":"gen-1"`) {
+		t.Fatalf("expected generation payload, body=%s", resp.Body.String())
 	}
 }
 
@@ -683,6 +830,39 @@ func TestQueryProxyReturnsBadGatewayWhenUpstreamUnavailable(t *testing.T) {
 	}
 }
 
+func TestParseSearchTagValuesPathAllowsEscapedSlashes(t *testing.T) {
+	tag, ok := parseSearchTagValuesPath(
+		"/api/v1/search/tag/resource.k8s.label.app/kubernetes/io/name/values",
+		"/api/v1/search/tag/resource.k8s.label.app%2Fkubernetes%2Fio%2Fname/values",
+	)
+	if !ok {
+		t.Fatalf("expected escaped slash tag path to be accepted")
+	}
+	if tag != "resource.k8s.label.app/kubernetes/io/name" {
+		t.Fatalf("unexpected parsed tag: %q", tag)
+	}
+}
+
+func TestParseSearchTagValuesPathRejectsUnescapedSlashes(t *testing.T) {
+	_, ok := parseSearchTagValuesPath(
+		"/api/v1/search/tag/resource.k8s.label.app/kubernetes/io/name/values",
+		"/api/v1/search/tag/resource.k8s.label.app/kubernetes/io/name/values",
+	)
+	if ok {
+		t.Fatalf("expected unescaped slash tag path to be rejected")
+	}
+}
+
+func TestParseSearchTagValuesPathFallbackToDecodedPath(t *testing.T) {
+	tag, ok := parseSearchTagValuesPath("/api/v1/search/tag/model/values", "")
+	if !ok {
+		t.Fatalf("expected decoded path fallback to be accepted")
+	}
+	if tag != "model" {
+		t.Fatalf("unexpected parsed tag: %q", tag)
+	}
+}
+
 func newTestModelCardService(t *testing.T) *modelcards.Service {
 	t.Helper()
 
@@ -758,4 +938,19 @@ func (s *testConversationStore) GetConversation(_ context.Context, tenantID, con
 		return &copied, nil
 	}
 	return nil, nil
+}
+
+type testWALReader struct {
+	byID map[string]*sigilv1.Generation
+}
+
+func (s *testWALReader) GetByID(_ context.Context, _ string, generationID string) (*sigilv1.Generation, error) {
+	if s.byID == nil {
+		return nil, nil
+	}
+	return s.byID[generationID], nil
+}
+
+func (s *testWALReader) GetByConversationID(_ context.Context, _ string, _ string) ([]*sigilv1.Generation, error) {
+	return []*sigilv1.Generation{}, nil
 }

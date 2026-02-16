@@ -6,6 +6,7 @@ import type { ConnectionSettingsProps } from './components/config/ConnectionSett
 
 type JSONData = {
   sigilApiUrl?: string;
+  tenantId?: string;
 };
 
 const LazyApp = lazy(() => import('./app/App'));

@@ -3,17 +3,17 @@ package mysql
 import "time"
 
 type GenerationModel struct {
-	ID               uint64     `gorm:"primaryKey;autoIncrement"`
-	TenantID         string     `gorm:"size:128;not null;uniqueIndex:ux_generations_tenant_generation,priority:1;index:idx_generations_tenant_conversation_created,priority:1;index:idx_generations_tenant_compacted_claimed_created,priority:1"`
+	ID               uint64     `gorm:"primaryKey;autoIncrement;index:idx_generations_tenant_compacted_claimed_created,priority:5;index:idx_generations_tenant_compacted_compacted_at_id,priority:4"`
+	TenantID         string     `gorm:"size:128;not null;uniqueIndex:ux_generations_tenant_generation,priority:1;index:idx_generations_tenant_conversation_created,priority:1;index:idx_generations_tenant_compacted_claimed_created,priority:1;index:idx_generations_tenant_compacted_compacted_at_id,priority:1"`
 	GenerationID     string     `gorm:"size:255;not null;uniqueIndex:ux_generations_tenant_generation,priority:2"`
 	ConversationID   *string    `gorm:"size:255;index:idx_generations_tenant_conversation_created,priority:2"`
 	CreatedAt        time.Time  `gorm:"type:datetime(6);not null;index:idx_generations_tenant_conversation_created,priority:3;index:idx_generations_tenant_compacted_claimed_created,priority:4"`
 	Payload          []byte     `gorm:"type:mediumblob;not null"`
 	PayloadSizeBytes int        `gorm:"not null"`
-	Compacted        bool       `gorm:"not null;default:false;index:idx_generations_tenant_compacted_claimed_created,priority:2"`
+	Compacted        bool       `gorm:"not null;default:false;index:idx_generations_tenant_compacted_claimed_created,priority:2;index:idx_generations_tenant_compacted_compacted_at_id,priority:2"`
 	ClaimedBy        *string    `gorm:"size:255;index:idx_generations_tenant_compacted_claimed_created,priority:3"`
 	ClaimedAt        *time.Time `gorm:"type:datetime(6)"`
-	CompactedAt      *time.Time `gorm:"type:datetime(6)"`
+	CompactedAt      *time.Time `gorm:"type:datetime(6);index:idx_generations_tenant_compacted_compacted_at_id,priority:3"`
 }
 
 func (GenerationModel) TableName() string {

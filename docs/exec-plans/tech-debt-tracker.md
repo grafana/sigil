@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-14
+last_reviewed: 2026-02-15
 source_of_truth: true
 audience: both
 ---
@@ -39,6 +39,11 @@ Status rule:
 - [x] Define ingestion-log abstraction interface and implementation migration plan.
 - [ ] Evaluate Kafka as next backend for ingestion-log abstraction.
 - [ ] Evaluate WarpStream as a lower-ops-cost Kafka-compatible backend option.
+- [ ] Add ingest-time materialization for conversation-level aggregates to reduce query-time merge cost.
+- [ ] Add `sigil.sdk.name` span attribute emission for stricter query scoping.
+- [ ] Add `sigil.gen_ai.tool_call_count` span attribute for direct tool-count filtering.
+- [ ] Implement generation search endpoint (`POST /api/v1/generations/search`).
+- [ ] Implement streaming search support for conversation query results.
 - [ ] Add automated model-card catalog refresh tooling (external source + static fallback).
 
 ## Risks

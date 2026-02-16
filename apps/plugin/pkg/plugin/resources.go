@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -19,6 +20,10 @@ type stubResponse struct {
 
 func (a *App) handleListConversations(w http.ResponseWriter, req *http.Request) {
 	a.handleProxy(w, req, "/api/v1/conversations", http.MethodGet)
+}
+
+func (a *App) handleSearchConversations(w http.ResponseWriter, req *http.Request) {
+	a.handleProxy(w, req, "/api/v1/conversations/search", http.MethodPost)
 }
 
 func (a *App) handleConversationRoutes(w http.ResponseWriter, req *http.Request) {
@@ -48,8 +53,26 @@ func (a *App) handleConversationRoutes(w http.ResponseWriter, req *http.Request)
 	a.handleProxy(w, req, fmt.Sprintf("/api/v1/conversations/%s", id), http.MethodGet)
 }
 
-func (a *App) handleListCompletions(w http.ResponseWriter, req *http.Request) {
-	a.handleProxy(w, req, "/api/v1/completions", http.MethodGet)
+func (a *App) handleGenerationRoutes(w http.ResponseWriter, req *http.Request) {
+	id := strings.TrimPrefix(req.URL.Path, "/query/generations/")
+	if id == "" || strings.Contains(id, "/") {
+		http.Error(w, "invalid generation path", http.StatusBadRequest)
+		return
+	}
+	a.handleProxy(w, req, fmt.Sprintf("/api/v1/generations/%s", id), http.MethodGet)
+}
+
+func (a *App) handleSearchTags(w http.ResponseWriter, req *http.Request) {
+	a.handleProxy(w, req, "/api/v1/search/tags", http.MethodGet)
+}
+
+func (a *App) handleSearchTagValues(w http.ResponseWriter, req *http.Request) {
+	tag, ok := parseSearchTagValuesPath(req.URL.Path, req.URL.EscapedPath(), "/query/search/tag/")
+	if !ok {
+		http.Error(w, "invalid search tag path", http.StatusBadRequest)
+		return
+	}
+	a.handleProxy(w, req, fmt.Sprintf("/api/v1/search/tag/%s/values", url.PathEscape(tag)), http.MethodGet)
 }
 
 func (a *App) handlePrometheusProxyRoutes(w http.ResponseWriter, req *http.Request) {
@@ -84,6 +107,31 @@ func downstreamProxyPath(path string, routePrefix string) (string, bool) {
 	return downstream, true
 }
 
+func parseSearchTagValuesPath(path string, escapedPath string, routePrefix string) (string, bool) {
+	if escapedPath == "" {
+		escapedPath = path
+	}
+
+	trimmed := strings.TrimPrefix(escapedPath, routePrefix)
+	if trimmed == escapedPath || trimmed == "" || !strings.HasSuffix(trimmed, "/values") {
+		return "", false
+	}
+
+	tagEscaped := strings.TrimSuffix(trimmed, "/values")
+	if tagEscaped == "" || strings.HasPrefix(tagEscaped, "/") || strings.HasSuffix(tagEscaped, "/") {
+		return "", false
+	}
+
+	tag, err := url.PathUnescape(tagEscaped)
+	if err != nil {
+		return "", false
+	}
+	if strings.TrimSpace(tag) == "" {
+		return "", false
+	}
+	return tag, true
+}
+
 func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string, method string) {
 	if req.Method != method {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -105,6 +153,7 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 		return
 	}
 	proxyReq.Header = req.Header.Clone()
+	injectTenantHeaders(proxyReq, a.tenantID)
 	injectOperatorIdentityHeaders(proxyReq, method, path)
 
 	resp, err := a.client.Do(proxyReq)
@@ -163,10 +212,27 @@ func injectOperatorIdentityHeaders(proxyReq *http.Request, method string, path s
 	}
 }
 
+func injectTenantHeaders(proxyReq *http.Request, fallbackTenantID string) {
+	if proxyReq == nil {
+		return
+	}
+	if strings.TrimSpace(proxyReq.Header.Get("X-Scope-OrgID")) != "" {
+		return
+	}
+	// Do not derive Sigil tenant from Grafana org headers; only explicit
+	// tenant headers or configured plugin fallback are allowed.
+	if fallback := strings.TrimSpace(fallbackTenantID); fallback != "" {
+		proxyReq.Header.Set("X-Scope-OrgID", fallback)
+	}
+}
+
 func (a *App) registerRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/query/conversations/search", a.handleSearchConversations)
 	mux.HandleFunc("/query/conversations", a.handleListConversations)
 	mux.HandleFunc("/query/conversations/", a.handleConversationRoutes)
-	mux.HandleFunc("/query/completions", a.handleListCompletions)
+	mux.HandleFunc("/query/generations/", a.handleGenerationRoutes)
+	mux.HandleFunc("/query/search/tags", a.handleSearchTags)
+	mux.HandleFunc("/query/search/tag/", a.handleSearchTagValues)
 	mux.HandleFunc("/query/proxy/prometheus/", a.handlePrometheusProxyRoutes)
 	mux.HandleFunc("/query/proxy/tempo/", a.handleTempoProxyRoutes)
 }

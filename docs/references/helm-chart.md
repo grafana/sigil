@@ -40,8 +40,8 @@ The chart maps values into Sigil runtime env vars from `sigil/internal/config/co
 - `SIGIL_QUERY_PROXY_PROMETHEUS_BASE_URL`
 - `SIGIL_QUERY_PROXY_TEMPO_BASE_URL`
 - `SIGIL_QUERY_PROXY_TIMEOUT`
-- `SIGIL_STORAGE_BACKEND`
-- `SIGIL_MYSQL_DSN` (when backend is `mysql`)
+- `SIGIL_STORAGE_BACKEND` (must be `mysql`)
+- `SIGIL_MYSQL_DSN`
 - `SIGIL_OBJECT_STORE_BACKEND`
 - `SIGIL_OBJECT_STORE_ENDPOINT`
 - `SIGIL_OBJECT_STORE_BUCKET`

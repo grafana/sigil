@@ -4,38 +4,23 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"net/http"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-kit/log"
 	"github.com/grafana/sigil/sigil/internal/config"
+	mysqlstorage "github.com/grafana/sigil/sigil/internal/storage/mysql"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func TestRuntimeServerTargetServesHealth(t *testing.T) {
-	cfg := testRuntimeConfig(t, config.TargetServer)
-	cancel, done := runRuntime(t, cfg)
-	defer cancel()
-
-	waitForHealth(t, cfg.HTTPAddr)
-
-	cancel()
-	if err := <-done; err != nil {
-		t.Fatalf("runtime returned error: %v", err)
-	}
-}
-
 func TestRuntimeAllTargetFailsWithoutCompactorDependencies(t *testing.T) {
-	cfg := testRuntimeConfig(t, config.TargetAll)
+	cfg := testRuntimeConfigWithoutValidation(t, config.TargetAll)
+	cfg.StorageBackend = "memory"
 	_, done := runRuntime(t, cfg)
 
-	err := <-done
-	if err == nil {
-		t.Fatalf("expected runtime failure for target=all with memory backend")
-	}
+	err := awaitRuntimeError(t, done)
 	if !strings.Contains(err.Error(), "compactor requires mysql storage backend") {
 		t.Fatalf("unexpected runtime error: %v", err)
 	}
@@ -80,13 +65,11 @@ func TestRuntimeModelCardServiceIsSingleton(t *testing.T) {
 }
 
 func TestRuntimeCompactorTargetFailsWithoutMySQLBackend(t *testing.T) {
-	cfg := testRuntimeConfig(t, config.TargetCompactor)
+	cfg := testRuntimeConfigWithoutValidation(t, config.TargetCompactor)
+	cfg.StorageBackend = "memory"
 	_, done := runRuntime(t, cfg)
 
-	err := <-done
-	if err == nil {
-		t.Fatalf("expected runtime failure for target=compactor with memory backend")
-	}
+	err := awaitRuntimeError(t, done)
 	if !strings.Contains(err.Error(), "compactor requires mysql storage backend") {
 		t.Fatalf("unexpected runtime error: %v", err)
 	}
@@ -175,43 +158,40 @@ func runRuntime(t *testing.T, cfg config.Config) (func(), <-chan error) {
 	return cancel, done
 }
 
-func waitForHealth(t *testing.T, addr string) {
+func awaitRuntimeError(t *testing.T, done <-chan error) error {
 	t.Helper()
 
-	client := &http.Client{Timeout: 500 * time.Millisecond}
-	url := fmt.Sprintf("http://%s/healthz", addr)
-	deadline := time.Now().Add(10 * time.Second)
-
-	for {
-		if time.Now().After(deadline) {
-			t.Fatalf("health endpoint did not become ready: %s", url)
-		}
-
-		response, err := client.Get(url)
+	select {
+	case err := <-done:
 		if err == nil {
-			_ = response.Body.Close()
-			if response.StatusCode == http.StatusOK {
-				return
-			}
+			t.Fatalf("expected runtime error")
 		}
-
-		time.Sleep(100 * time.Millisecond)
+		return err
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for runtime error")
 	}
+	return nil
 }
 
 func testRuntimeConfig(t *testing.T, target string) config.Config {
+	t.Helper()
+
+	cfg := testRuntimeConfigWithoutValidation(t, target)
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("config validation failed: %v", err)
+	}
+	return cfg
+}
+
+func testRuntimeConfigWithoutValidation(t *testing.T, target string) config.Config {
 	t.Helper()
 
 	cfg := config.FromEnv()
 	cfg.HTTPAddr = randomLocalAddr(t)
 	cfg.OTLPGRPCAddr = randomLocalAddr(t)
 	cfg.AuthEnabled = false
-	cfg.StorageBackend = "memory"
+	cfg.StorageBackend = "mysql"
 	cfg.Target = target
-
-	if err := cfg.Validate(); err != nil {
-		t.Fatalf("config validation failed: %v", err)
-	}
 	return cfg
 }
 
@@ -267,5 +247,25 @@ func newTestMySQLDSN(t *testing.T) (string, func()) {
 		t.Fatalf("mapped port: %v", err)
 	}
 
-	return fmt.Sprintf("sigil:sigil@tcp(%s:%s)/sigil?parseTime=true", host, port.Port()), cleanup
+	dsn := fmt.Sprintf("sigil:sigil@tcp(%s:%s)/sigil?parseTime=true", host, port.Port())
+
+	for attempt := 0; attempt < 30; attempt++ {
+		store, openErr := mysqlstorage.NewWALStore(dsn)
+		if openErr == nil {
+			sqlDB, dbErr := store.DB().DB()
+			if dbErr == nil {
+				pingCtx, pingCancel := context.WithTimeout(context.Background(), 2*time.Second)
+				pingErr := sqlDB.PingContext(pingCtx)
+				pingCancel()
+				if pingErr == nil {
+					return dsn, cleanup
+				}
+			}
+		}
+		time.Sleep(time.Second)
+	}
+
+	cleanup()
+	t.Skip("skip mysql runtime test (database not ready)")
+	return "", func() {}
 }

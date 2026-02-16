@@ -18,10 +18,12 @@ set_default_env() {
   export SIGIL_TRAFFIC_GEN_GRPC_ENDPOINT="${SIGIL_TRAFFIC_GEN_GRPC_ENDPOINT:-sigil:4317}"
   export SIGIL_TRAFFIC_TRACE_HTTP_ENDPOINT="${SIGIL_TRAFFIC_TRACE_HTTP_ENDPOINT:-http://alloy:4318/v1/traces}"
   export SIGIL_TRAFFIC_TRACE_GRPC_ENDPOINT="${SIGIL_TRAFFIC_TRACE_GRPC_ENDPOINT:-alloy:4317}"
+  export SIGIL_TRAFFIC_ENABLE_DOTNET="${SIGIL_TRAFFIC_ENABLE_DOTNET:-auto}"
 }
 
 CHILD_NAMES=()
 CHILD_PIDS=()
+DOTNET_ENABLED=1
 
 cleanup_children() {
   for pid in "${CHILD_PIDS[@]:-}"; do
@@ -65,11 +67,10 @@ setup_node() {
   log "installing pnpm dependencies"
   cd "${ROOT_DIR}"
   corepack enable
-  pnpm install --frozen-lockfile
+  pnpm install --frozen-lockfile --prod=false
 
   log "building JS SDK"
-  cd "${ROOT_DIR}/sdks/js"
-  pnpm run build
+  pnpm --filter @grafana/sigil-sdk-js run build
 }
 
 setup_python() {
@@ -90,9 +91,35 @@ setup_java() {
 }
 
 setup_dotnet() {
+  local dotnet_toggle="${SIGIL_TRAFFIC_ENABLE_DOTNET}"
+  if [[ "${dotnet_toggle}" == "false" || "${dotnet_toggle}" == "0" ]]; then
+    DOTNET_ENABLED=0
+    log "dotnet emitter disabled via SIGIL_TRAFFIC_ENABLE_DOTNET=${dotnet_toggle}"
+    return 0
+  fi
+
   log "restoring .NET devex emitter project"
   cd "${ROOT_DIR}"
   dotnet restore ./sdks/dotnet/examples/Grafana.Sigil.DevExEmitter/Grafana.Sigil.DevExEmitter.csproj >/dev/null
+
+  log "running .NET emitter preflight build"
+  set +e
+  dotnet build ./sdks/dotnet/examples/Grafana.Sigil.DevExEmitter/Grafana.Sigil.DevExEmitter.csproj >/dev/null
+  local build_status=$?
+  set -e
+
+  if (( build_status == 0 )); then
+    return 0
+  fi
+
+  if [[ "${dotnet_toggle}" == "true" || "${dotnet_toggle}" == "1" ]]; then
+    log ".NET preflight failed and SIGIL_TRAFFIC_ENABLE_DOTNET is forced"
+    return "${build_status}"
+  fi
+
+  DOTNET_ENABLED=0
+  log "dotnet preflight build failed with status ${build_status}; continuing without dotnet emitter"
+  return 0
 }
 
 start_child() {
@@ -100,27 +127,33 @@ start_child() {
   local cmd="$2"
 
   log "starting ${name} emitter"
-  bash -lc "${cmd}" &
+  bash -c "${cmd}" &
   local pid=$!
 
   CHILD_NAMES+=("${name}")
   CHILD_PIDS+=("${pid}")
 }
 
-find_exited_child_name() {
+find_exited_child_index() {
   local idx
   for idx in "${!CHILD_PIDS[@]}"; do
     if ! kill -0 "${CHILD_PIDS[$idx]}" 2>/dev/null; then
-      printf '%s' "${CHILD_NAMES[$idx]}"
+      printf '%s' "${idx}"
       return 0
     fi
   done
-  printf 'unknown'
+  printf '%s' "-1"
 }
 
 supervise_children() {
   local status
+  local exited_idx
   local exited_name
+
+  if (( ${#CHILD_PIDS[@]} == 0 )); then
+    log "no emitters were started"
+    return 1
+  fi
 
   while true; do
     set +e
@@ -128,14 +161,21 @@ supervise_children() {
     status=$?
     set -e
 
-    exited_name="$(find_exited_child_name)"
-    if (( status == 0 )); then
-      log "${exited_name} emitter exited unexpectedly with status 0"
-      status=1
-    else
-      log "${exited_name} emitter exited with status ${status}"
+    exited_idx="$(find_exited_child_index)"
+    if [[ "${exited_idx}" == "-1" ]]; then
+      log "wait returned but no exited child could be identified"
+      cleanup_children
+      return 1
     fi
 
+    exited_name="${CHILD_NAMES[$exited_idx]}"
+    if (( status == 0 )); then
+      log "${exited_name} emitter exited unexpectedly with status 0"
+      cleanup_children
+      return 1
+    fi
+
+    log "${exited_name} emitter exited with status ${status}"
     cleanup_children
     return "${status}"
   done
@@ -154,7 +194,9 @@ main() {
   start_child "js" "cd '${ROOT_DIR}/sdks/js' && node ./scripts/devex-emitter.mjs"
   start_child "python" "cd '${ROOT_DIR}' && ${PYTHON_VENV}/bin/python ./sdks/python/scripts/devex_emitter.py"
   start_child "java" "cd '${ROOT_DIR}/sdks/java' && ./gradlew --no-daemon :devex-emitter:run"
-  start_child "dotnet" "cd '${ROOT_DIR}' && dotnet run --project ./sdks/dotnet/examples/Grafana.Sigil.DevExEmitter/Grafana.Sigil.DevExEmitter.csproj"
+  if (( DOTNET_ENABLED == 1 )); then
+    start_child "dotnet" "cd '${ROOT_DIR}' && dotnet run --no-build --project ./sdks/dotnet/examples/Grafana.Sigil.DevExEmitter/Grafana.Sigil.DevExEmitter.csproj"
+  fi
 
   supervise_children
 }

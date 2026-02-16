@@ -2,104 +2,121 @@ import ConversationsPage from '../pages/ConversationsPage';
 import type { ConversationsDataSource } from '../conversation/api';
 
 const mockDataSource: ConversationsDataSource = {
-  async listConversations() {
-    return [
-      {
-        id: 'conv-1',
-        title: 'Dashboard troubleshooting',
-        created_at: '2026-02-13T10:00:00Z',
-        updated_at: '2026-02-13T10:06:00Z',
-        last_generation_at: '2026-02-13T10:06:00Z',
-        generation_count: 4,
-        rating_summary: {
-          total_count: 2,
-          good_count: 1,
-          bad_count: 1,
-          latest_rating: 'CONVERSATION_RATING_VALUE_BAD',
-          latest_rated_at: '2026-02-13T10:05:00Z',
-          has_bad_rating: true,
-        },
-        annotation_summary: {
+  async searchConversations() {
+    return {
+      conversations: [
+        {
+          conversation_id: 'conv-1',
+          generation_count: 4,
+          first_generation_at: '2026-02-15T09:40:00Z',
+          last_generation_at: '2026-02-15T10:06:00Z',
+          models: ['gpt-4o'],
+          agents: ['assistant'],
+          error_count: 1,
+          has_errors: true,
+          trace_ids: ['trace-1', 'trace-2'],
           annotation_count: 2,
-          latest_annotation_type: 'TRIAGE_STATUS',
-          latest_annotated_at: '2026-02-13T10:06:00Z',
+          rating_summary: {
+            total_count: 2,
+            good_count: 1,
+            bad_count: 1,
+            has_bad_rating: true,
+          },
         },
-      },
-      {
-        id: 'conv-2',
-        title: 'Model card question',
-        created_at: '2026-02-13T09:40:00Z',
-        updated_at: '2026-02-13T09:45:00Z',
-        last_generation_at: '2026-02-13T09:45:00Z',
-        generation_count: 2,
-      },
-    ];
+        {
+          conversation_id: 'conv-2',
+          generation_count: 2,
+          first_generation_at: '2026-02-15T08:00:00Z',
+          last_generation_at: '2026-02-15T08:30:00Z',
+          models: ['gpt-4o-mini'],
+          agents: ['triage-bot'],
+          error_count: 0,
+          has_errors: false,
+          trace_ids: ['trace-3'],
+          annotation_count: 0,
+        },
+      ],
+      next_cursor: '',
+      has_more: false,
+    };
   },
 
-  async getConversation(conversationID) {
+  async getConversationDetail(conversationID) {
     return {
-      id: conversationID,
-      title: conversationID === 'conv-1' ? 'Dashboard troubleshooting' : 'Model card question',
-      created_at: '2026-02-13T10:00:00Z',
-      updated_at: '2026-02-13T10:06:00Z',
-      last_generation_at: '2026-02-13T10:06:00Z',
+      conversation_id: conversationID,
       generation_count: conversationID === 'conv-1' ? 4 : 2,
+      first_generation_at: '2026-02-15T09:40:00Z',
+      last_generation_at: '2026-02-15T10:06:00Z',
+      generations: [
+        {
+          generation_id: `${conversationID}-gen-1`,
+          conversation_id: conversationID,
+          trace_id: 'trace-1',
+          mode: 'SYNC',
+          created_at: '2026-02-15T09:40:00Z',
+          model: { provider: 'openai', name: 'gpt-4o' },
+        },
+        {
+          generation_id: `${conversationID}-gen-2`,
+          conversation_id: conversationID,
+          trace_id: 'trace-2',
+          mode: 'STREAM',
+          created_at: '2026-02-15T10:06:00Z',
+          model: { provider: 'openai', name: 'gpt-4o' },
+        },
+      ],
       rating_summary: {
         total_count: 2,
         good_count: 1,
         bad_count: 1,
-        latest_rating: 'CONVERSATION_RATING_VALUE_BAD',
-        latest_rated_at: '2026-02-13T10:05:00Z',
         has_bad_rating: true,
       },
-      annotation_summary: {
-        annotation_count: 2,
-        latest_annotation_type: 'TRIAGE_STATUS',
-        latest_annotated_at: '2026-02-13T10:06:00Z',
-      },
+      annotations: [
+        {
+          annotation_id: 'ann-1',
+          conversation_id: conversationID,
+          annotation_type: 'NOTE',
+          body: 'Escalated for review',
+          operator_id: 'oncall-1',
+          created_at: '2026-02-15T10:07:00Z',
+        },
+      ],
     };
   },
 
-  async listConversationRatings() {
+  async getGeneration(generationID) {
+    return {
+      generation_id: generationID,
+      conversation_id: generationID.split('-gen-')[0],
+      trace_id: 'trace-1',
+      mode: 'SYNC',
+      model: { provider: 'openai', name: 'gpt-4o' },
+      usage: {
+        input_tokens: 120,
+        output_tokens: 42,
+        total_tokens: 162,
+      },
+      created_at: '2026-02-15T09:40:00Z',
+    };
+  },
+
+  async getSearchTags() {
     return [
-      {
-        rating_id: 'rat-1',
-        conversation_id: 'conv-1',
-        rating: 'CONVERSATION_RATING_VALUE_BAD',
-        comment: 'Need clearer dashboard context mapping.',
-        created_at: '2026-02-13T10:05:00Z',
-      },
-      {
-        rating_id: 'rat-2',
-        conversation_id: 'conv-1',
-        rating: 'CONVERSATION_RATING_VALUE_GOOD',
-        comment: 'Follow-up answer was accurate.',
-        created_at: '2026-02-13T10:04:00Z',
-      },
+      { key: 'model', scope: 'well-known', description: 'Model name' },
+      { key: 'agent', scope: 'well-known', description: 'Agent name' },
+      { key: 'status', scope: 'well-known', description: 'Error status' },
+      { key: 'resource.k8s.namespace.name', scope: 'resource' },
     ];
   },
 
-  async listConversationAnnotations() {
-    return [
-      {
-        annotation_id: 'ann-1',
-        conversation_id: 'conv-1',
-        annotation_type: 'TRIAGE_STATUS',
-        body: 'Escalated to prompt-quality queue.',
-        operator_id: 'sre-1',
-        operator_name: 'SRE Operator',
-        created_at: '2026-02-13T10:06:00Z',
-      },
-      {
-        annotation_id: 'ann-2',
-        conversation_id: 'conv-1',
-        annotation_type: 'FOLLOW_UP',
-        body: 'Need replay with fixed context payload.',
-        operator_id: 'sre-2',
-        operator_name: 'On-call Engineer',
-        created_at: '2026-02-13T10:03:00Z',
-      },
-    ];
+  async getSearchTagValues(tag) {
+    if (tag === 'model') {
+      return ['gpt-4o', 'gpt-4o-mini'];
+    }
+    if (tag === 'agent') {
+      return ['assistant', 'triage-bot'];
+    }
+    return [];
   },
 };
 

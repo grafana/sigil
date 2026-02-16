@@ -199,6 +199,12 @@ func (c Config) Validate() error {
 		return fmt.Errorf("invalid target %q", c.Target)
 	}
 
+	switch strings.ToLower(strings.TrimSpace(c.StorageBackend)) {
+	case "", "mysql":
+	default:
+		return fmt.Errorf("SIGIL_STORAGE_BACKEND must be mysql, got %q", c.StorageBackend)
+	}
+
 	if c.CompactorConfig.CompactInterval <= 0 {
 		return fmt.Errorf("SIGIL_COMPACTOR_COMPACT_INTERVAL must be > 0")
 	}

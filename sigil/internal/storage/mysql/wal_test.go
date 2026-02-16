@@ -52,6 +52,9 @@ func TestAutoMigrateCreatesSchema(t *testing.T) {
 	if !migrator.HasIndex(&ConversationModel{}, "ux_conversations_tenant_conversation") {
 		t.Fatalf("expected unique conversation index")
 	}
+	if !migrator.HasIndex(&GenerationModel{}, "idx_generations_tenant_compacted_compacted_at_id") {
+		t.Fatalf("expected truncate-supporting compacted_at index")
+	}
 }
 
 func TestAutoMigrateDoesNotResetClaimsOnSubsequentRuns(t *testing.T) {

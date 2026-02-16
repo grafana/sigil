@@ -160,7 +160,7 @@ Important values:
 - `sigil.target`: runtime target (`all|server|querier|compactor|catalog-sync`)
 - `sigil.auth.enabled`, `sigil.auth.fakeTenantID`: tenant/auth behavior
 - `sigil.queryProxy.prometheusBaseURL`, `sigil.queryProxy.tempoBaseURL`, `sigil.queryProxy.timeout`: downstream query-proxy settings for Prometheus/Mimir and Tempo pass-through routes
-- `sigil.storage.backend`: storage backend (`mysql` or `memory`)
+- `sigil.storage.backend`: storage backend (`mysql` only)
 - `sigil.storage.mysql.dsn`: required for external MySQL when `mysql.enabled=false`
 - `alloy.outputs.tempo.endpoint`: external Tempo OTLP gRPC endpoint for Alloy
 - `alloy.outputs.prometheus.endpoint`: external Prometheus OTLP endpoint for Alloy

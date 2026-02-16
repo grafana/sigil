@@ -23,7 +23,20 @@ func (s *WALStore) ListShardsForCompaction(ctx context.Context, shardWindowSecon
 	}
 
 	now := time.Now().UTC()
-	rows, err := s.db.WithContext(ctx).Raw(`
+	query := `
+SELECT tenant_id,
+       0 AS shard_id,
+       COUNT(*) AS backlog
+FROM generations
+WHERE compacted = FALSE
+  AND claimed_by IS NULL
+  AND created_at <= ?
+GROUP BY tenant_id
+ORDER BY backlog DESC, tenant_id ASC
+LIMIT ?`
+	args := []any{now, limit}
+	if shardCount > 1 {
+		query = `
 SELECT tenant_id,
        -- CAST avoids DECIMAL scan behavior from FLOOR()/mod arithmetic.
        CAST((FLOOR(UNIX_TIMESTAMP(created_at) / ?) % ?) AS SIGNED) AS shard_id,
@@ -34,7 +47,11 @@ WHERE compacted = FALSE
   AND created_at <= ?
 GROUP BY tenant_id, shard_id
 ORDER BY backlog DESC, tenant_id ASC, shard_id ASC
-LIMIT ?`, shardWindowSeconds, shardCount, now, limit).Rows()
+LIMIT ?`
+		args = []any{shardWindowSeconds, shardCount, now, limit}
+	}
+
+	rows, err := s.db.WithContext(ctx).Raw(query, args...).Rows()
 	if err != nil {
 		observeWALMetrics("list_shards_compaction", "error", start, 0)
 		return nil, fmt.Errorf("query shards for compaction: %w", err)
@@ -84,7 +101,20 @@ func (s *WALStore) ListShardsForTruncation(ctx context.Context, shardWindowSecon
 		return []storage.TenantShard{}, nil
 	}
 
-	rows, err := s.db.WithContext(ctx).Raw(`
+	query := `
+SELECT tenant_id,
+       0 AS shard_id,
+       COUNT(*) AS backlog
+FROM generations
+WHERE compacted = TRUE
+  AND compacted_at IS NOT NULL
+  AND compacted_at <= ?
+GROUP BY tenant_id
+ORDER BY backlog DESC, tenant_id ASC
+LIMIT ?`
+	args := []any{olderThan.UTC(), limit}
+	if shardCount > 1 {
+		query = `
 SELECT tenant_id,
        -- CAST avoids DECIMAL scan behavior from FLOOR()/mod arithmetic.
        CAST((FLOOR(UNIX_TIMESTAMP(created_at) / ?) % ?) AS SIGNED) AS shard_id,
@@ -95,7 +125,11 @@ WHERE compacted = TRUE
   AND compacted_at <= ?
 GROUP BY tenant_id, shard_id
 ORDER BY backlog DESC, tenant_id ASC, shard_id ASC
-LIMIT ?`, shardWindowSeconds, shardCount, olderThan.UTC(), limit).Rows()
+LIMIT ?`
+		args = []any{shardWindowSeconds, shardCount, olderThan.UTC(), limit}
+	}
+
+	rows, err := s.db.WithContext(ctx).Raw(query, args...).Rows()
 	if err != nil {
 		observeWALMetrics("list_shards_truncation", "error", start, 0)
 		return nil, fmt.Errorf("query shards for truncation: %w", err)

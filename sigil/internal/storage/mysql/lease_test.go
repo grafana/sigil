@@ -111,6 +111,56 @@ func TestListShardsForCompactionAndTruncation(t *testing.T) {
 	}
 }
 
+func TestListShardsSingleShardUsesShardZero(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	base := time.Date(2026, 2, 12, 18, 0, 0, 0, time.UTC)
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{
+		testGeneration("gen-single-shard-1", "conv-a", base),
+		testGeneration("gen-single-shard-2", "conv-a", base.Add(10*time.Second)),
+	}))
+
+	compactionShards, err := store.ListShardsForCompaction(context.Background(), 60, 1, 10)
+	if err != nil {
+		t.Fatalf("list shards for compaction: %v", err)
+	}
+	if len(compactionShards) == 0 {
+		t.Fatalf("expected at least one compaction shard")
+	}
+	for _, shard := range compactionShards {
+		if shard.ShardID != 0 {
+			t.Fatalf("expected shard id 0 for single-shard discovery, got %#v", shard)
+		}
+	}
+
+	if err := store.DB().Model(&GenerationModel{}).
+		Where("tenant_id = ? AND generation_id = ?", "tenant-a", "gen-single-shard-1").
+		Updates(map[string]any{
+			"compacted":    true,
+			"compacted_at": time.Now().UTC().Add(-2 * time.Hour),
+		}).Error; err != nil {
+		t.Fatalf("set compaction state: %v", err)
+	}
+
+	truncationShards, err := store.ListShardsForTruncation(context.Background(), 60, 1, time.Now().UTC().Add(-time.Hour), 10)
+	if err != nil {
+		t.Fatalf("list shards for truncation: %v", err)
+	}
+	if len(truncationShards) == 0 {
+		t.Fatalf("expected at least one truncation shard")
+	}
+	for _, shard := range truncationShards {
+		if shard.ShardID != 0 {
+			t.Fatalf("expected shard id 0 for single-shard truncation discovery, got %#v", shard)
+		}
+	}
+}
+
 func TestListShardsForCompactionExcludesFutureRows(t *testing.T) {
 	store, cleanup := newTestWALStore(t)
 	defer cleanup()

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -30,34 +31,50 @@ func (s *WALStore) ClaimBatch(
 	}
 
 	now := time.Now().UTC()
-	// Claim is a single short UPDATE so object-store I/O never extends DB lock time.
-	result := s.db.WithContext(ctx).Exec(`
+	claimed := int64(0)
+	err := runWithRetryableLockError(ctx, func() error {
+		// Claim is a single short UPDATE so object-store I/O never extends DB lock time.
+		query := `
 UPDATE generations
 SET claimed_by = ?, claimed_at = ?
 WHERE tenant_id = ?
   AND compacted = FALSE
   AND claimed_by IS NULL
-  AND created_at <= ?
-  AND (FLOOR(UNIX_TIMESTAMP(created_at) / ?) % ?) = ?
+  AND created_at <= ?`
+		args := []any{
+			ownerID,
+			now,
+			tenantID,
+			olderThan.UTC(),
+		}
+		if shard.ShardCount > 1 {
+			query += `
+  AND (FLOOR(UNIX_TIMESTAMP(created_at) / ?) % ?) = ?`
+			args = append(args,
+				shard.ShardWindowSeconds,
+				shard.ShardCount,
+				shard.ShardID,
+			)
+		}
+		query += `
 ORDER BY created_at ASC, id ASC
-LIMIT ?`,
-		ownerID,
-		now,
-		tenantID,
-		olderThan.UTC(),
-		shard.ShardWindowSeconds,
-		shard.ShardCount,
-		shard.ShardID,
-		limit,
-	)
-	if result.Error != nil {
+LIMIT ?`
+		args = append(args, limit)
+
+		result := s.db.WithContext(ctx).Exec(query, args...)
+		if result.Error != nil {
+			return result.Error
+		}
+		claimed = result.RowsAffected
+		return nil
+	})
+	if err != nil {
 		observeWALMetrics("claim_batch", "error", start, 0)
-		return 0, fmt.Errorf("claim compaction rows: %w", result.Error)
+		return 0, fmt.Errorf("claim compaction rows: %w", err)
 	}
 
-	claimed := int(result.RowsAffected)
-	observeWALMetrics("claim_batch", "success", start, claimed)
-	return claimed, nil
+	observeWALMetrics("claim_batch", "success", start, int(claimed))
+	return int(claimed), nil
 }
 
 func (s *WALStore) LoadClaimed(
@@ -78,9 +95,12 @@ func (s *WALStore) LoadClaimed(
 	}
 
 	var rows []GenerationModel
-	if err := s.db.WithContext(ctx).
-		Where("tenant_id = ? AND claimed_by = ? AND compacted = FALSE", tenantID, ownerID).
-		Where("(FLOOR(UNIX_TIMESTAMP(created_at) / ?) % ?) = ?", shard.ShardWindowSeconds, shard.ShardCount, shard.ShardID).
+	query := s.db.WithContext(ctx).
+		Where("tenant_id = ? AND claimed_by = ? AND compacted = FALSE", tenantID, ownerID)
+	if shard.ShardCount > 1 {
+		query = query.Where("(FLOOR(UNIX_TIMESTAMP(created_at) / ?) % ?) = ?", shard.ShardWindowSeconds, shard.ShardCount, shard.ShardID)
+	}
+	if err := query.
 		Order("created_at ASC, id ASC").
 		Limit(limit).
 		Find(&rows).Error; err != nil {
@@ -119,22 +139,31 @@ func (s *WALStore) FinalizeClaimed(ctx context.Context, tenantID string, ownerID
 		return nil
 	}
 
+	orderedIDs := sortedUniqueIDs(ids)
 	now := time.Now().UTC()
-	result := s.db.WithContext(ctx).Model(&GenerationModel{}).
-		Where("tenant_id = ? AND claimed_by = ? AND id IN ?", tenantID, ownerID, ids).
-		Where("compacted = ?", false).
-		Updates(map[string]any{
-			"compacted":    true,
-			"compacted_at": now,
-			"claimed_by":   nil,
-			"claimed_at":   nil,
-		})
-	if result.Error != nil {
+	updatedRows := int64(0)
+	err := runWithRetryableLockError(ctx, func() error {
+		result := s.db.WithContext(ctx).Model(&GenerationModel{}).
+			Where("tenant_id = ? AND claimed_by = ? AND id IN ?", tenantID, ownerID, orderedIDs).
+			Where("compacted = ?", false).
+			Updates(map[string]any{
+				"compacted":    true,
+				"compacted_at": now,
+				"claimed_by":   nil,
+				"claimed_at":   nil,
+			})
+		if result.Error != nil {
+			return result.Error
+		}
+		updatedRows = result.RowsAffected
+		return nil
+	})
+	if err != nil {
 		observeWALMetrics("finalize_claimed", "error", start, 0)
-		return fmt.Errorf("finalize claimed rows: %w", result.Error)
+		return fmt.Errorf("finalize claimed rows: %w", err)
 	}
 
-	observeWALMetrics("finalize_claimed", "success", start, int(result.RowsAffected))
+	observeWALMetrics("finalize_claimed", "success", start, int(updatedRows))
 	return nil
 }
 
@@ -146,22 +175,49 @@ func (s *WALStore) ReleaseStaleClaims(ctx context.Context, claimTTL time.Duratio
 	}
 
 	cutoff := time.Now().UTC().Add(-claimTTL)
-	result := s.db.WithContext(ctx).Model(&GenerationModel{}).
-		Where("compacted = FALSE").
-		Where("claimed_by IS NOT NULL").
-		Where("claimed_at IS NOT NULL").
-		Where("claimed_at < ?", cutoff).
-		Updates(map[string]any{
-			"claimed_by": nil,
-			"claimed_at": nil,
-		})
-	if result.Error != nil {
+	recoveredRows := int64(0)
+	err := runWithRetryableLockError(ctx, func() error {
+		result := s.db.WithContext(ctx).Model(&GenerationModel{}).
+			Where("compacted = FALSE").
+			Where("claimed_by IS NOT NULL").
+			Where("claimed_at IS NOT NULL").
+			Where("claimed_at < ?", cutoff).
+			Updates(map[string]any{
+				"claimed_by": nil,
+				"claimed_at": nil,
+			})
+		if result.Error != nil {
+			return result.Error
+		}
+		recoveredRows = result.RowsAffected
+		return nil
+	})
+	if err != nil {
 		observeWALMetrics("release_stale_claims", "error", start, 0)
-		return 0, fmt.Errorf("release stale claims: %w", result.Error)
+		return 0, fmt.Errorf("release stale claims: %w", err)
 	}
 
-	observeWALMetrics("release_stale_claims", "success", start, int(result.RowsAffected))
-	return result.RowsAffected, nil
+	observeWALMetrics("release_stale_claims", "success", start, int(recoveredRows))
+	return recoveredRows, nil
+}
+
+func sortedUniqueIDs(ids []uint64) []uint64 {
+	if len(ids) <= 1 {
+		return append([]uint64(nil), ids...)
+	}
+
+	sorted := append([]uint64(nil), ids...)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i] < sorted[j]
+	})
+
+	out := sorted[:1]
+	for i := 1; i < len(sorted); i++ {
+		if sorted[i] != sorted[i-1] {
+			out = append(out, sorted[i])
+		}
+	}
+	return out
 }
 
 func validateClaimInput(tenantID string, ownerID string, shard storage.ShardPredicate) error {

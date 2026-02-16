@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-14
+last_reviewed: 2026-02-15
 source_of_truth: true
 audience: contributors
 ---
@@ -19,37 +19,46 @@ Purpose: define plugin UI architecture, proxy boundaries, and frame-compatibilit
 
 ## Proxy Contract
 
-Current bootstrap contract on `main`:
+Current plugin query contract:
 
 - Frontend query entrypoints:
+  - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/search`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/generations/{generation_id}`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/search/tags`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/search/tag/{tag}/values`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/ratings`
   - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/ratings`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`
   - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`
-  - `GET /api/plugins/grafana-sigil-app/resources/query/completions`
   - `/api/plugins/grafana-sigil-app/resources/query/proxy/prometheus/...`
   - `/api/plugins/grafana-sigil-app/resources/query/proxy/tempo/...`
 - Plugin backend forwards to Sigil API query endpoints:
+  - `POST /api/v1/conversations/search`
   - `GET /api/v1/conversations`
   - `GET /api/v1/conversations/{conversation_id}`
+  - `GET /api/v1/generations/{generation_id}`
+  - `GET /api/v1/search/tags`
+  - `GET /api/v1/search/tag/{tag}/values`
   - `GET /api/v1/conversations/{conversation_id}/ratings`
   - `POST /api/v1/conversations/{conversation_id}/ratings`
   - `GET /api/v1/conversations/{conversation_id}/annotations`
   - `POST /api/v1/conversations/{conversation_id}/annotations`
-  - `GET /api/v1/completions`
   - `/api/v1/proxy/prometheus/...`
   - `/api/v1/proxy/tempo/...`
 
-Phase 2 target contract (tracked in `docs/exec-plans/active/2026-02-12-phase-2-query-proxy.md`):
+Legacy placeholders removed:
 
-- Frontend query entrypoint:
-  - `POST /api/plugins/grafana-sigil-app/resources/query`
-- Plugin backend forwards to Sigil API query endpoint:
-  - `POST /api/v1/query`
+- `/api/v1/completions`
+- `/api/v1/traces/{trace_id}`
 
 Tenant headers are applied/forwarded by plugin backend proxy logic, not by page components.
+
+Current plugin backend tenant header precedence:
+
+1. Preserve inbound `X-Scope-OrgID` when present.
+2. Otherwise use plugin connection fallback tenant ID (default `fake`).
 
 ## Response Shape Contract
 
@@ -68,11 +77,12 @@ See `docs/references/grafana-query-response-shapes.md`.
 ## Page Responsibilities
 
 - Conversations:
-  - list conversations with `rating_summary` and `annotation_summary`
-  - apply list filters `has_bad_rating` and `has_annotations`
-  - open details with ratings timeline, annotations timeline, and merged event timeline
-- Completions/Generations: list/search generations with model/agent/time/attribute filters.
-- Traces: trace search and trace detail drilldown with generation links.
+  - query conversations with expression filters and selectable attributes
+  - support cursor pagination in list view
+  - open conversation detail with hydrated generations, ratings, and annotations
+  - open generation detail with trace/span identifiers
+- Traces:
+  - use Tempo proxy links for trace drilldown from generation/conversation views
 - Settings: connection and runtime preferences, including query/tenant validation visibility.
 
 ## UX Direction

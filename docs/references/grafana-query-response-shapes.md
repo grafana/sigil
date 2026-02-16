@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-13
+last_reviewed: 2026-02-15
 source_of_truth: true
 audience: contributors
 ---
@@ -95,26 +95,32 @@ Contract notes:
 
 All query traffic from Sigil frontend routes through plugin backend resources.
 
-Current bootstrap endpoints on `main`:
+Current query endpoints:
 
 - plugin frontend endpoints:
+  - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/search`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/generations/{generation_id}`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/search/tags`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/search/tag/{tag}/values`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/ratings`
   - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/ratings`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`
   - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`
-  - `GET /api/plugins/grafana-sigil-app/resources/query/completions`
   - `/api/plugins/grafana-sigil-app/resources/query/proxy/prometheus/...`
   - `/api/plugins/grafana-sigil-app/resources/query/proxy/tempo/...`
 - plugin backend forwards to Sigil API:
+  - `POST /api/v1/conversations/search`
   - `GET /api/v1/conversations`
   - `GET /api/v1/conversations/{conversation_id}`
+  - `GET /api/v1/generations/{generation_id}`
+  - `GET /api/v1/search/tags`
+  - `GET /api/v1/search/tag/{tag}/values`
   - `GET /api/v1/conversations/{conversation_id}/ratings`
   - `POST /api/v1/conversations/{conversation_id}/ratings`
   - `GET /api/v1/conversations/{conversation_id}/annotations`
   - `POST /api/v1/conversations/{conversation_id}/annotations`
-  - `GET /api/v1/completions`
   - `/api/v1/proxy/prometheus/...`
   - `/api/v1/proxy/tempo/...`
 
@@ -125,12 +131,10 @@ Sigil now also exposes backend query pass-through routes for downstream data sou
 
 Plugin integration for these Sigil routes is now implemented through plugin resource proxy prefixes.
 
-Phase 2 target contract:
+Removed placeholders:
 
-- plugin frontend endpoint:
-  - `POST /api/plugins/grafana-sigil-app/resources/query`
-- plugin backend forwards to Sigil API:
-  - `POST /api/v1/query`
+- `GET /api/v1/completions`
+- `GET /api/v1/traces/{trace_id}`
 
 Frontend must not call Sigil API query endpoints directly.
 

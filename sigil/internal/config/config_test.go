@@ -92,6 +92,15 @@ func TestValidateRejectsInvalidTarget(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsUnsupportedStorageBackend(t *testing.T) {
+	cfg := FromEnv()
+	cfg.StorageBackend = "memory"
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for unsupported storage backend")
+	}
+}
+
 func TestValidateRejectsInvalidCompactorConfig(t *testing.T) {
 	cfg := FromEnv()
 	cfg.CompactorConfig.BatchSize = 0

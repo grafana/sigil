@@ -37,16 +37,25 @@ services:
       - sigil-node-modules:/app/sigil/node_modules/
       - sigil-plugin-dist:/app/sigil/apps/plugin/dist/
     working_dir: /app/sigil
-    command: sh -c "pnpm install && cd apps/plugin && mage -v build:linux build:linuxarm64"
+    command: sh -c "pnpm install && cd apps/plugin && GOWORK=off mage -v build:linux build:linuxarm64"
 
   plugin:
     profiles: ['core']
     build:
       context: .
       dockerfile: .config/Dockerfile.plugin
+    restart: always
     depends_on:
       plugin-precache:
         condition: service_completed_successfully
+    develop:
+      watch:
+        - path: package.json
+          action: rebuild
+        - path: pnpm-lock.yaml
+          action: rebuild
+        - path: apps/plugin/package.json
+          action: rebuild
     ports:
       - '35729:35729'
       - '35728:35728'
@@ -57,7 +66,11 @@ services:
       - sigil-node-modules:/app/sigil/node_modules/
       - sigil-plugin-dist:/app/sigil/apps/plugin/dist/
     working_dir: /app/sigil
-    command: sh -c "cd apps/plugin && pnpm run dev"
+    command: >-
+      bash -lc "export PATH=/usr/local/go/bin:/opt/go/bin:$PATH;
+      export GOWORK=off;
+      cd /app/sigil/apps/plugin && mage -v watch &
+      cd /app/sigil && pnpm run dev"
     healthcheck:
       test: test -f /app/sigil/apps/plugin/dist/plugin.json
       interval: 10s
@@ -91,11 +104,11 @@ services:
       SIGIL_COMPACTOR_COMPACT_INTERVAL: 1m
       SIGIL_COMPACTOR_TRUNCATE_INTERVAL: 5m
       SIGIL_COMPACTOR_RETENTION: 1h
-      SIGIL_COMPACTOR_BATCH_SIZE: 1000
+      SIGIL_COMPACTOR_BATCH_SIZE: 250
       SIGIL_COMPACTOR_LEASE_TTL: 30s
-      SIGIL_COMPACTOR_SHARD_COUNT: 8
+      SIGIL_COMPACTOR_SHARD_COUNT: 1
       SIGIL_COMPACTOR_SHARD_WINDOW_SECONDS: 60
-      SIGIL_COMPACTOR_WORKERS: 4
+      SIGIL_COMPACTOR_WORKERS: 1
       SIGIL_COMPACTOR_CYCLE_BUDGET: 30s
       SIGIL_COMPACTOR_CLAIM_TTL: 5m
       SIGIL_COMPACTOR_TARGET_BLOCK_BYTES: 67108864
@@ -209,7 +222,7 @@ services:
       - --config.file=/etc/prometheus/prometheus.yaml
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=24h
-      - --web.enable-otlp-receiver
+      - --enable-feature=otlp-write-receiver
     ports:
       - '9090:9090'
     volumes:

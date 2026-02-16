@@ -97,13 +97,19 @@ app.kubernetes.io/component: catalog-sync
 {{- end -}}
 
 {{/* Computed Sigil endpoints */}}
+{{- define "sigil.validateStorageBackend" -}}
+{{- if ne (lower (toString .Values.sigil.storage.backend)) "mysql" -}}
+{{- fail (printf "sigil.storage.backend must be mysql, got %q" .Values.sigil.storage.backend) -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "sigil.mysql.dsn" -}}
 {{- if .Values.sigil.storage.mysql.dsn -}}
 {{- .Values.sigil.storage.mysql.dsn -}}
 {{- else if .Values.mysql.enabled -}}
 {{- printf "%s:%s@tcp(%s:%v)/%s?parseTime=true" .Values.mysql.auth.user .Values.mysql.auth.password (include "sigil.mysql.fullname" .) .Values.mysql.service.port .Values.mysql.auth.database -}}
 {{- else -}}
-{{- fail "sigil.storage.mysql.dsn must be set when mysql.enabled=false and sigil.storage.backend=mysql" -}}
+{{- fail "sigil.storage.mysql.dsn must be set when mysql.enabled=false" -}}
 {{- end -}}
 {{- end -}}
 

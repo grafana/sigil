@@ -84,6 +84,8 @@ mise run up
 ```
 
 This starts Grafana, the Sigil app plugin, the Sigil API service, Alloy, Tempo, Prometheus, MySQL, and MinIO.
+The `mise run up` task also enables Grafana development mode (`DEVELOPMENT=true`) and Docker Compose watch mode so plugin/frontend and plugin backend changes reload without manually restarting containers.
+Local Compose config runs Tempo in multitenant mode and Alloy injects `X-Scope-OrgID: fake` on trace ingest so local query and ingest tenant semantics stay aligned.
 
 ### 4. Open the Sigil app
 

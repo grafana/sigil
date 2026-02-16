@@ -52,6 +52,9 @@ otelcol.processor.batch "default" {
 otelcol.exporter.otlp "tempo" {
   client {
     endpoint = "tempo:4317"
+    headers = {
+      "X-Scope-OrgID" = "fake",
+    }
     tls {
       insecure = true
     }

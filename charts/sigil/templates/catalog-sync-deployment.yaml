@@ -1,4 +1,5 @@
 {{- if .Values.catalogSync.enabled }}
+{{ include "sigil.validateStorageBackend" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -53,10 +54,8 @@ spec:
               value: {{ .Values.sigil.auth.fakeTenantID | quote }}
             - name: SIGIL_STORAGE_BACKEND
               value: {{ .Values.sigil.storage.backend | quote }}
-            {{- if eq (lower .Values.sigil.storage.backend) "mysql" }}
             - name: SIGIL_MYSQL_DSN
               value: {{ include "sigil.mysql.dsn" . | quote }}
-            {{- end }}
             - name: SIGIL_OBJECT_STORE_BACKEND
               value: {{ .Values.sigil.objectStore.backend | lower | quote }}
             - name: SIGIL_OBJECT_STORE_BUCKET

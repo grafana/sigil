@@ -5,9 +5,11 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/grafana/dskit/tenant"
 	"github.com/grafana/sigil/sigil/internal/feedback"
@@ -47,10 +49,12 @@ func RegisterRoutesWithQueryProxy(
 
 	mux.HandleFunc("/healthz", health)
 	mux.Handle("/api/v1/generations:export", protectedMiddleware(http.HandlerFunc(generationingest.NewHTTPHandler(generationSvc))))
+	mux.Handle("/api/v1/generations/", protectedMiddleware(http.HandlerFunc(getGeneration(querySvc))))
+	mux.Handle("/api/v1/conversations/search", protectedMiddleware(http.HandlerFunc(searchConversations(querySvc))))
 	mux.Handle("/api/v1/conversations", protectedMiddleware(http.HandlerFunc(listConversations(querySvc))))
 	mux.Handle("/api/v1/conversations/", protectedMiddleware(http.HandlerFunc(conversationRoutes(querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled))))
-	mux.Handle("/api/v1/completions", protectedMiddleware(http.HandlerFunc(listCompletions(querySvc))))
-	mux.Handle("/api/v1/traces/", protectedMiddleware(http.HandlerFunc(getTrace(querySvc))))
+	mux.Handle("/api/v1/search/tags", protectedMiddleware(http.HandlerFunc(listSearchTags(querySvc))))
+	mux.Handle("/api/v1/search/tag/", protectedMiddleware(http.HandlerFunc(listSearchTagValues(querySvc))))
 	if queryProxy != nil {
 		mux.Handle("/api/v1/proxy/prometheus/", protectedMiddleware(http.HandlerFunc(proxyPrometheus(queryProxy))))
 		mux.Handle("/api/v1/proxy/tempo/", protectedMiddleware(http.HandlerFunc(proxyTempo(queryProxy))))
@@ -96,6 +100,42 @@ func listConversations(querySvc *query.Service) http.HandlerFunc {
 	}
 }
 
+func searchConversations(querySvc *query.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		tenantID, err := tenant.TenantID(req.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		var payload query.ConversationSearchRequest
+		if req.Body != nil {
+			decoder := json.NewDecoder(req.Body)
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+				http.Error(w, "invalid request body", http.StatusBadRequest)
+				return
+			}
+		}
+
+		response, err := querySvc.SearchConversationsForTenant(req.Context(), tenantID, payload)
+		if err != nil {
+			if query.IsValidationError(err) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, http.StatusOK, response)
+	}
+}
+
 func conversationRoutes(querySvc *query.Service, feedbackSvc *feedback.Service, ratingsEnabled bool, annotationsEnabled bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		id, childPath, ok := parseConversationSubPath(req.URL.Path)
@@ -116,8 +156,12 @@ func conversationRoutes(querySvc *query.Service, feedbackSvc *feedback.Service, 
 				return
 			}
 
-			item, found, err := querySvc.GetConversationForTenant(req.Context(), tenantID, id)
+			item, found, err := querySvc.GetConversationDetailForTenant(req.Context(), tenantID, id)
 			if err != nil {
+				if query.IsValidationError(err) {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
 				http.Error(w, "internal server error", http.StatusInternalServerError)
 				return
 			}
@@ -153,29 +197,109 @@ func conversationRoutes(querySvc *query.Service, feedbackSvc *feedback.Service, 
 	}
 }
 
-func listCompletions(querySvc *query.Service) http.HandlerFunc {
+func getGeneration(querySvc *query.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"items": querySvc.ListCompletions()})
+
+		id := strings.TrimPrefix(req.URL.Path, "/api/v1/generations/")
+		if id == "" || strings.Contains(id, "/") {
+			http.Error(w, "invalid generation id", http.StatusBadRequest)
+			return
+		}
+
+		tenantID, err := tenant.TenantID(req.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		item, found, err := querySvc.GetGenerationDetailForTenant(req.Context(), tenantID, id)
+		if err != nil {
+			if query.IsValidationError(err) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if !found {
+			http.NotFound(w, req)
+			return
+		}
+		writeJSON(w, http.StatusOK, item)
 	}
 }
 
-func getTrace(querySvc *query.Service) http.HandlerFunc {
+func listSearchTags(querySvc *query.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		id := strings.TrimPrefix(req.URL.Path, "/api/v1/traces/")
-		if id == "" || strings.Contains(id, "/") {
-			http.Error(w, "invalid trace id", http.StatusBadRequest)
+		tenantID, err := tenant.TenantID(req.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
-		writeJSON(w, http.StatusOK, querySvc.GetTrace(id))
+
+		start, end, err := parseSearchRange(req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		tags, err := querySvc.ListSearchTagsForTenant(req.Context(), tenantID, start, end)
+		if err != nil {
+			if query.IsValidationError(err) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"tags": tags})
+	}
+}
+
+func listSearchTagValues(querySvc *query.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		tag, ok := parseSearchTagValuesPath(req.URL.Path, req.URL.EscapedPath())
+		if !ok {
+			http.Error(w, "invalid search tag path", http.StatusBadRequest)
+			return
+		}
+
+		tenantID, err := tenant.TenantID(req.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		start, end, err := parseSearchRange(req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		values, err := querySvc.ListSearchTagValuesForTenant(req.Context(), tenantID, tag, start, end)
+		if err != nil {
+			if query.IsValidationError(err) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"values": values})
 	}
 }
 
@@ -353,6 +477,56 @@ func parseConversationSubPath(path string) (string, string, bool) {
 		return parts[0], parts[1], true
 	}
 	return "", "", false
+}
+
+func parseSearchTagValuesPath(path string, escapedPath string) (string, bool) {
+	if escapedPath == "" {
+		escapedPath = path
+	}
+
+	trimmed := strings.TrimPrefix(escapedPath, "/api/v1/search/tag/")
+	if trimmed == escapedPath || trimmed == "" || !strings.HasSuffix(trimmed, "/values") {
+		return "", false
+	}
+
+	tagEscaped := strings.TrimSuffix(trimmed, "/values")
+	if tagEscaped == "" || strings.HasPrefix(tagEscaped, "/") || strings.HasSuffix(tagEscaped, "/") || strings.Contains(tagEscaped, "/") {
+		return "", false
+	}
+
+	tag, err := url.PathUnescape(tagEscaped)
+	if err != nil {
+		return "", false
+	}
+	if strings.TrimSpace(tag) == "" {
+		return "", false
+	}
+
+	return tag, true
+}
+
+func parseSearchRange(req *http.Request) (time.Time, time.Time, error) {
+	parseUnixSeconds := func(raw string) (time.Time, error) {
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" {
+			return time.Time{}, nil
+		}
+		seconds, err := strconv.ParseInt(trimmed, 10, 64)
+		if err != nil {
+			return time.Time{}, errors.New("invalid time range")
+		}
+		return time.Unix(seconds, 0).UTC(), nil
+	}
+
+	start, err := parseUnixSeconds(req.URL.Query().Get("start"))
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	end, err := parseUnixSeconds(req.URL.Query().Get("end"))
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	return start, end, nil
 }
 
 func parsePaginationQuery(w http.ResponseWriter, req *http.Request) (int, uint64, bool) {

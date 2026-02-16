@@ -22,6 +22,7 @@ import (
 	"github.com/grafana/sigil/sigil/internal/server"
 	"github.com/grafana/sigil/sigil/internal/storage"
 	"github.com/grafana/sigil/sigil/internal/storage/mysql"
+	"github.com/grafana/sigil/sigil/internal/storage/object"
 	"github.com/grafana/sigil/sigil/internal/tenantauth"
 	"google.golang.org/grpc"
 )
@@ -72,7 +73,30 @@ func (m *serverModule) start(ctx context.Context) error {
 	if store, ok := generationStore.(storage.ConversationStore); ok {
 		conversationStore = store
 	}
-	querySvc := query.NewServiceWithStores(conversationStore, feedbackStore)
+	var walReader storage.WALReader
+	if reader, ok := generationStore.(storage.WALReader); ok {
+		walReader = reader
+	}
+	var blockMetadataStore storage.BlockMetadataStore
+	if metadataStore, ok := generationStore.(storage.BlockMetadataStore); ok {
+		blockMetadataStore = metadataStore
+	}
+	blockReader, err := m.buildBlockReader(ctx)
+	if err != nil {
+		return err
+	}
+	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
+		ConversationStore:  conversationStore,
+		WALReader:          walReader,
+		BlockMetadataStore: blockMetadataStore,
+		BlockReader:        blockReader,
+		FeedbackStore:      feedbackStore,
+		TempoBaseURL:       m.cfg.QueryProxy.TempoBaseURL,
+		HTTPClient:         &http.Client{Timeout: m.cfg.QueryProxy.Timeout},
+	})
+	if err != nil {
+		return err
+	}
 	if m.modelCardSvc == nil {
 		return errors.New("model-card service is required")
 	}
@@ -194,8 +218,6 @@ func (m *serverModule) buildGenerationStore(ctx context.Context) (generationinge
 			}
 		}
 		return store, nil
-	case "memory":
-		return generationingest.NewMemoryStore(), nil
 	default:
 		return nil, fmt.Errorf("unsupported storage backend %q", m.cfg.StorageBackend)
 	}
@@ -205,8 +227,37 @@ func (m *serverModule) buildFeedbackStore(generationStore generationingest.Store
 	if store, ok := generationStore.(feedback.Store); ok {
 		return store, nil
 	}
-	if strings.EqualFold(strings.TrimSpace(m.cfg.StorageBackend), "memory") {
-		return feedback.NewMemoryStore(), nil
-	}
 	return nil, fmt.Errorf("storage backend %q does not support feedback storage", m.cfg.StorageBackend)
+}
+
+func (m *serverModule) buildBlockReader(ctx context.Context) (storage.BlockReader, error) {
+	blockStore, err := object.NewStoreWithProviderConfig(ctx, object.ProviderConfig{
+		Backend: m.cfg.ObjectStore.Backend,
+		Bucket:  m.cfg.ObjectStore.Bucket,
+		S3: object.S3ProviderConfig{
+			Endpoint:      m.cfg.ObjectStore.S3.Endpoint,
+			Region:        m.cfg.ObjectStore.S3.Region,
+			AccessKey:     m.cfg.ObjectStore.S3.AccessKey,
+			SecretKey:     m.cfg.ObjectStore.S3.SecretKey,
+			Insecure:      m.cfg.ObjectStore.S3.Insecure,
+			UseAWSSDKAuth: m.cfg.ObjectStore.S3.UseAWSSDKAuth,
+		},
+		GCS: object.GCSProviderConfig{
+			Bucket:         m.cfg.ObjectStore.GCS.Bucket,
+			ServiceAccount: m.cfg.ObjectStore.GCS.ServiceAccount,
+			UseGRPC:        m.cfg.ObjectStore.GCS.UseGRPC,
+		},
+		Azure: object.AzureProviderConfig{
+			ContainerName:           m.cfg.ObjectStore.Azure.ContainerName,
+			StorageAccountName:      m.cfg.ObjectStore.Azure.StorageAccountName,
+			StorageAccountKey:       m.cfg.ObjectStore.Azure.StorageAccountKey,
+			StorageConnectionString: m.cfg.ObjectStore.Azure.StorageConnectionString,
+			Endpoint:                m.cfg.ObjectStore.Azure.Endpoint,
+			CreateContainer:         m.cfg.ObjectStore.Azure.CreateContainer,
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create object store reader: %w", err)
+	}
+	return blockStore, nil
 }

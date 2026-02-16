@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
-status: active
-last_reviewed: 2026-02-15
+status: completed
+last_reviewed: 2026-02-16
 source_of_truth: true
 audience: both
 ---
@@ -198,10 +198,10 @@ span.gen_ai.operation.name != ""
 
 This uses the `gen_ai.operation.name` attribute which is always present on generation spans (`generateText`, `streamText`) and tool execution spans (`execute_tool`). It excludes unrelated HTTP, DB, and gRPC spans.
 
-For the default "all conversations" search (no user filters), the base query narrows further to generation spans only (excluding tool execution spans):
+For the default "all conversations" search (no user filters), the query adds a Sigil-generation guard so we include generation spans even when custom operation names are used, while still excluding `execute_tool` spans:
 
 ```
-{ span.gen_ai.operation.name =~ "generateText|streamText" }
+{ span.sigil.generation.id != "" }
   | select(span.sigil.generation.id, span.gen_ai.conversation.id,
            span.gen_ai.request.model, span.gen_ai.agent.name,
            span.error.type, span.error.category)
@@ -241,7 +241,7 @@ For the default "all conversations" search (no user filters), the base query nar
 **Generated TraceQL** (only the Tempo-routed part; `generation_count` is applied in MySQL):
 
 ```
-{ span.gen_ai.operation.name =~ "generateText|streamText" &&
+{ span.gen_ai.operation.name != "" &&
   span.gen_ai.agent.name = "my-assistant" }
   | select(span.sigil.generation.id, span.gen_ai.conversation.id,
            span.gen_ai.request.model, span.gen_ai.agent.name,
@@ -721,9 +721,10 @@ Response:
 
 Implementation:
 
-1. Map the tag key to its full TraceQL attribute path (e.g., `model` -> `gen_ai.request.model`).
+1. Map the tag key to its full scoped TraceQL attribute path (e.g., `model` -> `span.gen_ai.request.model`).
 2. Call Tempo `GET /api/v2/search/tag/{full_attribute_path}/values` with `X-Scope-OrgID` set from inbound tenant context.
-3. For MySQL-only keys like `generation_count`, return a placeholder indicator (numeric range, not discrete values).
+3. Keep scoped keys URL-safe end-to-end; keys with `/` must be handled from both URL-escaped and already-decoded route forms.
+4. For MySQL-only keys like `generation_count`, return a placeholder indicator (numeric range, not discrete values).
 
 ## Query Flow: End-to-End Sequence
 
@@ -790,6 +791,7 @@ sequenceDiagram
 | No `sigil.gen_ai.tool_call_count` span attribute in v1 | `tool.name = X` filter via Tempo is sufficient. Count filtering is a nice-to-have for v2. |
 | Filter language abstracts TraceQL | Users never see TraceQL syntax. Sigil translates. Extensible via `resource.X`/`span.X` prefixes. |
 | `gen_ai.operation.name != ""` as base predicate | Already always present on GenAI spans, no SDK changes. Scopes Tempo search to GenAI spans only. |
+| Empty-filter guard `sigil.generation.id != ""` | Includes Sigil generation spans regardless custom operation name values, while excluding `execute_tool` spans. |
 | Time-window cursor for pagination | Tempo has no cursor; time-window shrinking is the standard approach (same as Grafana Explore). |
 
 ## Consequences

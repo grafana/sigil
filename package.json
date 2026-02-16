@@ -12,7 +12,7 @@
     "test": "pnpm --filter @grafana/sigil-plugin run test:ci",
     "typecheck": "pnpm --filter @grafana/sigil-plugin run typecheck",
     "lint": "pnpm --filter @grafana/sigil-plugin run lint",
-    "up": "docker compose --profile core up --build",
+    "up": "DEVELOPMENT=true docker compose --profile core up --watch --build",
     "down": "docker compose down"
   }
 }

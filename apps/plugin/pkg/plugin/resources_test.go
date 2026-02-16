@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -27,10 +28,26 @@ func TestCallResource(t *testing.T) {
 		switch r.URL.Path {
 		case "/api/v1/conversations":
 			_, _ = io.WriteString(w, `{"items":[]}`)
+		case "/api/v1/conversations/search":
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			_, _ = io.WriteString(w, `{"conversations":[],"next_cursor":"","has_more":false}`)
 		case "/api/v1/conversations/c-1":
-			_, _ = io.WriteString(w, `{"id":"c-1"}`)
-		case "/api/v1/completions":
-			_, _ = io.WriteString(w, `{"items":[]}`)
+			_, _ = io.WriteString(w, `{"conversation_id":"c-1"}`)
+		case "/api/v1/generations/gen-1":
+			_, _ = io.WriteString(w, `{"generation_id":"gen-1"}`)
+		case "/api/v1/search/tags":
+			_, _ = io.WriteString(w, `{"tags":[{"key":"model","scope":"well-known"}]}`)
+		case "/api/v1/search/tag/model/values":
+			_, _ = io.WriteString(w, `{"values":["gpt-4o"]}`)
+		case "/api/v1/search/tag/resource.k8s.label.app/kubernetes/io/name/values":
+			if !strings.Contains(r.RequestURI, "resource.k8s.label.app%2Fkubernetes%2Fio%2Fname") {
+				http.Error(w, "tag key must stay URL-escaped in upstream request", http.StatusBadRequest)
+				return
+			}
+			_, _ = io.WriteString(w, `{"values":["sigil"]}`)
 		case "/api/v1/proxy/prometheus/api/v1/query":
 			_, _ = io.WriteString(w, `{"status":"success"}`)
 		case "/api/v1/proxy/tempo/api/search":
@@ -87,14 +104,49 @@ func TestCallResource(t *testing.T) {
 			method:    http.MethodGet,
 			path:      "query/conversations/c-1",
 			expStatus: http.StatusOK,
-			expBody:   []byte(`{"id":"c-1"}`),
+			expBody:   []byte(`{"conversation_id":"c-1"}`),
 		},
 		{
-			name:      "get completions",
-			method:    http.MethodGet,
-			path:      "query/completions",
+			name:      "search conversations",
+			method:    http.MethodPost,
+			path:      "query/conversations/search",
 			expStatus: http.StatusOK,
-			expBody:   []byte(`{"items":[]}`),
+			expBody:   []byte(`{"conversations":[],"next_cursor":"","has_more":false}`),
+		},
+		{
+			name:      "get generation by id",
+			method:    http.MethodGet,
+			path:      "query/generations/gen-1",
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"generation_id":"gen-1"}`),
+		},
+		{
+			name:      "list search tags",
+			method:    http.MethodGet,
+			path:      "query/search/tags",
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"tags":[{"key":"model","scope":"well-known"}]}`),
+		},
+		{
+			name:      "list search tag values",
+			method:    http.MethodGet,
+			path:      "query/search/tag/model/values",
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"values":["gpt-4o"]}`),
+		},
+		{
+			name:      "list search tag values with escaped slashes",
+			method:    http.MethodGet,
+			path:      "query/search/tag/resource.k8s.label.app%2Fkubernetes%2Fio%2Fname/values",
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"values":["sigil"]}`),
+		},
+		{
+			name:      "list search tag values with decoded slashes",
+			method:    http.MethodGet,
+			path:      "query/search/tag/resource.k8s.label.app/kubernetes/io/name/values",
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"values":["sigil"]}`),
 		},
 		{
 			name:      "query proxy prometheus",
@@ -118,9 +170,9 @@ func TestCallResource(t *testing.T) {
 			expBody:   []byte(`{"traceID":"t-1"}`),
 		},
 		{
-			name:      "post not allowed",
+			name:      "generation post not allowed",
 			method:    http.MethodPost,
-			path:      "query/completions",
+			path:      "query/generations/gen-1",
 			expStatus: http.StatusMethodNotAllowed,
 		},
 		{
@@ -136,6 +188,12 @@ func TestCallResource(t *testing.T) {
 			path:      "query/conversations/c-1/annotations",
 			expStatus: http.StatusOK,
 			expBody:   []byte(`{"items":[{"annotation_id":"ann-1"}]}`),
+		},
+		{
+			name:      "legacy completions route removed",
+			method:    http.MethodGet,
+			path:      "query/completions",
+			expStatus: http.StatusNotFound,
 		},
 		{
 			name:      "legacy traces route removed",
@@ -318,6 +376,84 @@ func TestNewAppDefaultsToSigilServiceURL(t *testing.T) {
 	app := inst.(*App)
 	if app.apiURL != defaultSigilAPIURL {
 		t.Fatalf("expected default api URL %q, got %q", defaultSigilAPIURL, app.apiURL)
+	}
+	if app.tenantID != defaultTenantID {
+		t.Fatalf("expected default tenant id %q, got %q", defaultTenantID, app.tenantID)
+	}
+}
+
+func TestCallResourceInjectsFallbackTenantHeader(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("X-Scope-OrgID"); got != defaultTenantID {
+			http.Error(w, "missing fallback tenant", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"items":[]}`)
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.apiURL = upstream.URL
+
+	var sender mockCallResourceResponseSender
+	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "query/conversations",
+	}, &sender)
+	if err != nil {
+		t.Fatalf("CallResource error: %s", err)
+	}
+	if sender.response == nil {
+		t.Fatal("no response received from CallResource")
+	}
+	if sender.response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.response.Status, sender.response.Body)
+	}
+}
+
+func TestCallResourceIgnoresGrafanaOrgHeaderAndUsesFallbackTenant(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("X-Scope-OrgID"); got != defaultTenantID {
+			http.Error(w, "missing fallback tenant", http.StatusUnauthorized)
+			return
+		}
+		if got := r.Header.Get("X-Grafana-Org-Id"); got != "12" {
+			http.Error(w, "missing grafana org header passthrough", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"items":[]}`)
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.apiURL = upstream.URL
+
+	var sender mockCallResourceResponseSender
+	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "query/conversations",
+		Headers: map[string][]string{
+			"X-Grafana-Org-Id": {"12"},
+		},
+	}, &sender)
+	if err != nil {
+		t.Fatalf("CallResource error: %s", err)
+	}
+	if sender.response == nil {
+		t.Fatal("no response received from CallResource")
+	}
+	if sender.response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.response.Status, sender.response.Body)
 	}
 }
 
