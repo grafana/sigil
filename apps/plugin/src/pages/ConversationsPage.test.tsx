@@ -14,7 +14,11 @@ type MockConversationsDataSource = {
   [Key in keyof ConversationsDataSource]: jest.MockedFunction<ConversationsDataSource[Key]>;
 };
 
-function buildSearchResponse(conversations: ConversationSearchResponse['conversations'], nextCursor = '', hasMore = false): ConversationSearchResponse {
+function buildSearchResponse(
+  conversations: ConversationSearchResponse['conversations'],
+  nextCursor = '',
+  hasMore = false
+): ConversationSearchResponse {
   return {
     conversations,
     next_cursor: nextCursor,
@@ -337,7 +341,9 @@ describe('ConversationsPage', () => {
       generation_count: 1,
       first_generation_at: '2026-02-15T09:00:00Z',
       last_generation_at: '2026-02-15T09:00:00Z',
-      generations: [{ generation_id: 'gen-1', conversation_id: 'conv-1', trace_id: 'trace-1', created_at: '2026-02-15T09:00:00Z' }],
+      generations: [
+        { generation_id: 'gen-1', conversation_id: 'conv-1', trace_id: 'trace-1', created_at: '2026-02-15T09:00:00Z' },
+      ],
       annotations: [],
     };
     const detailConv2: ConversationDetail = {
@@ -345,7 +351,9 @@ describe('ConversationsPage', () => {
       generation_count: 1,
       first_generation_at: '2026-02-15T09:05:00Z',
       last_generation_at: '2026-02-15T09:05:00Z',
-      generations: [{ generation_id: 'gen-2', conversation_id: 'conv-2', trace_id: 'trace-2', created_at: '2026-02-15T09:05:00Z' }],
+      generations: [
+        { generation_id: 'gen-2', conversation_id: 'conv-2', trace_id: 'trace-2', created_at: '2026-02-15T09:05:00Z' },
+      ],
       annotations: [],
     };
 
@@ -456,7 +464,14 @@ describe('ConversationsPage', () => {
             generation_count: 1,
             first_generation_at: '2026-02-15T09:00:00Z',
             last_generation_at: '2026-02-15T09:00:00Z',
-            generations: [{ generation_id: 'gen-1', conversation_id: 'conv-1', trace_id: 'trace-1', created_at: '2026-02-15T09:00:00Z' }],
+            generations: [
+              {
+                generation_id: 'gen-1',
+                conversation_id: 'conv-1',
+                trace_id: 'trace-1',
+                created_at: '2026-02-15T09:00:00Z',
+              },
+            ],
             annotations: [],
           };
         }

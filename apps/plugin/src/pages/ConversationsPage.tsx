@@ -92,7 +92,9 @@ export default function ConversationsPage(props: ConversationsPageProps) {
       if (searchRequestVersion.current !== requestVersion) {
         return;
       }
-      setSearchResults((current) => (append ? [...current, ...(response.conversations ?? [])] : response.conversations ?? []));
+      setSearchResults((current) =>
+        append ? [...current, ...(response.conversations ?? [])] : (response.conversations ?? [])
+      );
       setNextCursor(response.next_cursor ?? '');
       setHasMore(Boolean(response.has_more));
 
@@ -225,57 +227,63 @@ export default function ConversationsPage(props: ConversationsPageProps) {
       });
   }, [dataSource, selectedGenerationID]);
 
-  const requestTagValues = useCallback((tag: string): void => {
-    const trimmedTag = tag.trim();
-    if (trimmedTag.length === 0) {
-      return;
-    }
+  const requestTagValues = useCallback(
+    (tag: string): void => {
+      const trimmedTag = tag.trim();
+      if (trimmedTag.length === 0) {
+        return;
+      }
 
-    const requestKey = `${trimmedTag}|${rangeFrom}|${rangeTo}`;
-    const cachedValues = tagValuesCache.current.get(requestKey);
-    if (cachedValues) {
-      setTagValues(cachedValues);
-      setLoadingTagValues(false);
-      return;
-    }
-    if (inFlightTagValuesKey.current === requestKey) {
-      return;
-    }
-
-    tagValuesRequestVersion.current += 1;
-    const requestVersion = tagValuesRequestVersion.current;
-    inFlightTagValuesKey.current = requestKey;
-    setLoadingTagValues(true);
-    void dataSource
-      .getSearchTagValues(trimmedTag, rangeFrom, rangeTo)
-      .then((values) => {
-        tagValuesCache.current.set(requestKey, values);
-        if (tagValuesRequestVersion.current !== requestVersion) {
-          return;
-        }
-        setTagValues(values);
-      })
-      .catch(() => {
-        if (tagValuesRequestVersion.current !== requestVersion) {
-          return;
-        }
-        setTagValues([]);
-      })
-      .finally(() => {
-        if (inFlightTagValuesKey.current === requestKey) {
-          inFlightTagValuesKey.current = '';
-        }
-        if (tagValuesRequestVersion.current !== requestVersion) {
-          return;
-        }
+      const requestKey = `${trimmedTag}|${rangeFrom}|${rangeTo}`;
+      const cachedValues = tagValuesCache.current.get(requestKey);
+      if (cachedValues) {
+        setTagValues(cachedValues);
         setLoadingTagValues(false);
-      });
-  }, [dataSource, rangeFrom, rangeTo]);
+        return;
+      }
+      if (inFlightTagValuesKey.current === requestKey) {
+        return;
+      }
+
+      tagValuesRequestVersion.current += 1;
+      const requestVersion = tagValuesRequestVersion.current;
+      inFlightTagValuesKey.current = requestKey;
+      setLoadingTagValues(true);
+      void dataSource
+        .getSearchTagValues(trimmedTag, rangeFrom, rangeTo)
+        .then((values) => {
+          tagValuesCache.current.set(requestKey, values);
+          if (tagValuesRequestVersion.current !== requestVersion) {
+            return;
+          }
+          setTagValues(values);
+        })
+        .catch(() => {
+          if (tagValuesRequestVersion.current !== requestVersion) {
+            return;
+          }
+          setTagValues([]);
+        })
+        .finally(() => {
+          if (inFlightTagValuesKey.current === requestKey) {
+            inFlightTagValuesKey.current = '';
+          }
+          if (tagValuesRequestVersion.current !== requestVersion) {
+            return;
+          }
+          setLoadingTagValues(false);
+        });
+    },
+    [dataSource, rangeFrom, rangeTo]
+  );
 
   const resultRows = searchResults.map((conversation) => {
     const selected = conversation.conversation_id === selectedConversationID;
     return (
-      <tr key={conversation.conversation_id} style={{ background: selected ? 'rgba(34, 102, 255, 0.12)' : 'transparent' }}>
+      <tr
+        key={conversation.conversation_id}
+        style={{ background: selected ? 'rgba(34, 102, 255, 0.12)' : 'transparent' }}
+      >
         <td>
           <Button
             variant="secondary"
@@ -324,7 +332,9 @@ export default function ConversationsPage(props: ConversationsPageProps) {
         <Stack direction="column" gap={1}>
           <Text weight="bold">Conversation search results</Text>
           {loadingSearch && <Spinner aria-label="loading conversations" />}
-          {!loadingSearch && searchResults.length === 0 && <Text>No conversations found. Apply a filter to start.</Text>}
+          {!loadingSearch && searchResults.length === 0 && (
+            <Text>No conversations found. Apply a filter to start.</Text>
+          )}
           {!loadingSearch && searchResults.length > 0 && (
             <table>
               <thead>
@@ -341,7 +351,11 @@ export default function ConversationsPage(props: ConversationsPageProps) {
             </table>
           )}
           {hasMore && nextCursor.length > 0 && (
-            <Button aria-label="load more conversations" onClick={() => void runSearch(nextCursor, true)} disabled={loadingMore}>
+            <Button
+              aria-label="load more conversations"
+              onClick={() => void runSearch(nextCursor, true)}
+              disabled={loadingMore}
+            >
               {loadingMore ? 'Loading…' : 'Load more'}
             </Button>
           )}
@@ -358,7 +372,8 @@ export default function ConversationsPage(props: ConversationsPageProps) {
           {!loadingConversationDetail && conversationDetail && (
             <Stack direction="column" gap={1}>
               <Text>
-                {conversationDetail.generations.length} generation payloads • {conversationDetail.annotations.length} annotations
+                {conversationDetail.generations.length} generation payloads • {conversationDetail.annotations.length}{' '}
+                annotations
               </Text>
               {conversationDetail.generations.map((generation) => {
                 const traceID = typeof generation.trace_id === 'string' ? generation.trace_id : '';
@@ -372,7 +387,9 @@ export default function ConversationsPage(props: ConversationsPageProps) {
                     >
                       {generation.generation_id}
                     </Button>
-                    <Text color="secondary">{generation.created_at ? new Date(generation.created_at).toLocaleString() : '-'}</Text>
+                    <Text color="secondary">
+                      {generation.created_at ? new Date(generation.created_at).toLocaleString() : '-'}
+                    </Text>
                     {traceID.length > 0 && (
                       <a
                         href={`/api/plugins/grafana-sigil-app/resources/query/proxy/tempo/api/v2/traces/${encodeURIComponent(traceID)}`}

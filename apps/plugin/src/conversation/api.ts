@@ -74,7 +74,10 @@ export const defaultConversationsDataSource: ConversationsDataSource = {
     const response = await lastValueFrom(
       getBackendSrv().fetch<SearchTagsResponse>({
         method: 'GET',
-        url: params.toString().length > 0 ? `${queryBasePath}/search/tags?${params.toString()}` : `${queryBasePath}/search/tags`,
+        url:
+          params.toString().length > 0
+            ? `${queryBasePath}/search/tags?${params.toString()}`
+            : `${queryBasePath}/search/tags`,
       })
     );
     return response.data.tags ?? [];
