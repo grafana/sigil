@@ -217,7 +217,7 @@ services:
 
   prometheus:
     profiles: ['core']
-    image: prom/prometheus:v2.55.1
+    image: prom/prometheus:v3.9.1@sha256:1f0f50f06acaceb0f5670d2c8a658a599affe7b0d8e78b898c1035653849a702
     command:
       - --config.file=/etc/prometheus/prometheus.yaml
       - --storage.tsdb.path=/prometheus
