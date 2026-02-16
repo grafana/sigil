@@ -8,6 +8,7 @@ import {
   totalErrorsQuery,
   errorRateQuery,
   tokenUsageOverTimeQuery,
+  rpsByModelOverTimeQuery,
   callsByProviderQuery,
   topModelsQuery,
   latencyP95Query,
@@ -16,18 +17,55 @@ import {
 } from './queries';
 import type { DashboardFilters } from './types';
 
+const empty: DashboardFilters = {
+  provider: '',
+  model: '',
+  agentName: '',
+  labelKey: '',
+  labelValue: '',
+  extraMatchers: '',
+};
+
 describe('buildLabelSelector', () => {
   it('returns empty string for empty filters', () => {
-    expect(buildLabelSelector({ provider: '', model: '', agentName: '' })).toBe('');
+    expect(buildLabelSelector(empty)).toBe('');
   });
 
-  it('builds selector for single filter', () => {
-    expect(buildLabelSelector({ provider: 'openai', model: '', agentName: '' })).toBe('gen_ai_provider_name="openai"');
+  it('builds fuzzy selector for single filter', () => {
+    expect(buildLabelSelector({ ...empty, provider: 'openai' })).toBe('gen_ai_provider_name=~"(?i).*openai.*"');
   });
 
-  it('builds selector for multiple filters', () => {
-    expect(buildLabelSelector({ provider: 'openai', model: 'gpt-4o', agentName: 'my-agent' })).toBe(
-      'gen_ai_provider_name="openai",gen_ai_request_model="gpt-4o",gen_ai_agent_name="my-agent"'
+  it('builds fuzzy selector for multiple filters', () => {
+    expect(buildLabelSelector({ ...empty, provider: 'openai', model: 'gpt-4o', agentName: 'my-agent' })).toBe(
+      'gen_ai_provider_name=~"(?i).*openai.*",gen_ai_request_model=~"(?i).*gpt-4o.*",gen_ai_agent_name=~"(?i).*my-agent.*"'
+    );
+  });
+
+  it('escapes regex metacharacters in filter values', () => {
+    expect(buildLabelSelector({ ...empty, provider: 'openai(v2)+' })).toBe(
+      'gen_ai_provider_name=~"(?i).*openai\\(v2\\)\\+.*"'
+    );
+  });
+
+  it('supports fuzzy matching on arbitrary label key and value', () => {
+    expect(buildLabelSelector({ ...empty, labelKey: 'service_name', labelValue: 'sigil-api' })).toBe(
+      'service_name=~"(?i).*sigil-api.*"'
+    );
+  });
+
+  it('ignores invalid arbitrary label keys', () => {
+    expect(buildLabelSelector({ ...empty, labelKey: 'service.name', labelValue: 'sigil-api' })).toBe('');
+  });
+
+  it('includes raw extra matchers', () => {
+    expect(buildLabelSelector({ ...empty, extraMatchers: 'telemetry_sdk_language="go",job=~"sigil.*"' })).toBe(
+      'telemetry_sdk_language="go",job=~"sigil.*"'
+    );
+  });
+
+  it('accepts extra matchers wrapped in braces', () => {
+    expect(buildLabelSelector({ ...empty, extraMatchers: '{telemetry_sdk_language="go"}' })).toBe(
+      'telemetry_sdk_language="go"'
     );
   });
 });
@@ -62,16 +100,18 @@ describe('computeRangeDuration', () => {
 });
 
 describe('query builders', () => {
-  const noFilters: DashboardFilters = { provider: '', model: '', agentName: '' };
-  const withFilters: DashboardFilters = { provider: 'openai', model: '', agentName: '' };
+  const noFilters: DashboardFilters = empty;
+  const withFilters: DashboardFilters = { ...empty, provider: 'openai' };
 
   it('totalOpsQuery without filters', () => {
-    expect(totalOpsQuery(noFilters, '3600s')).toBe('sum(increase(gen_ai_client_operation_duration_count[3600s]))');
+    expect(totalOpsQuery(noFilters, '3600s')).toBe(
+      'sum(increase(gen_ai_client_operation_duration_seconds_count[3600s]))'
+    );
   });
 
   it('totalOpsQuery with filters', () => {
     expect(totalOpsQuery(withFilters, '3600s')).toBe(
-      'sum(increase(gen_ai_client_operation_duration_count{gen_ai_provider_name="openai"}[3600s]))'
+      'sum(increase(gen_ai_client_operation_duration_seconds_count{gen_ai_provider_name=~"(?i).*openai.*"}[3600s]))'
     );
   });
 
@@ -81,7 +121,7 @@ describe('query builders', () => {
 
   it('totalErrorsQuery', () => {
     expect(totalErrorsQuery(noFilters, '3600s')).toBe(
-      'sum(increase(gen_ai_client_operation_duration_count{error_type!=""}[3600s]))'
+      'sum(increase(gen_ai_client_operation_duration_seconds_count{error_type!=""}[3600s]))'
     );
   });
 
@@ -99,23 +139,29 @@ describe('query builders', () => {
 
   it('callsByProviderQuery', () => {
     expect(callsByProviderQuery(noFilters, '3600s')).toBe(
-      'sum by (gen_ai_provider_name) (increase(gen_ai_client_operation_duration_count[3600s]))'
+      'sum by (gen_ai_provider_name) (increase(gen_ai_client_operation_duration_seconds_count[3600s]))'
+    );
+  });
+
+  it('rpsByModelOverTimeQuery', () => {
+    expect(rpsByModelOverTimeQuery(noFilters, '60s')).toBe(
+      'sum by (gen_ai_provider_name, gen_ai_request_model) (rate(gen_ai_client_operation_duration_seconds_count[60s]))'
     );
   });
 
   it('topModelsQuery', () => {
     expect(topModelsQuery(noFilters, '3600s')).toBe(
-      'sum by (gen_ai_request_model) (increase(gen_ai_client_operation_duration_count[3600s]))'
+      'topk(10, sum by (gen_ai_provider_name, gen_ai_request_model) (increase(gen_ai_client_operation_duration_seconds_count[3600s])))'
     );
   });
 
   it('latencyP95Query', () => {
     expect(latencyP95Query(noFilters, '60s')).toContain('histogram_quantile(0.95');
-    expect(latencyP95Query(noFilters, '60s')).toContain('gen_ai_client_operation_duration_bucket');
+    expect(latencyP95Query(noFilters, '60s')).toContain('gen_ai_client_operation_duration_seconds_bucket');
   });
 
   it('ttftP95Query', () => {
-    expect(ttftP95Query(noFilters, '60s')).toContain('gen_ai_client_time_to_first_token_bucket');
+    expect(ttftP95Query(noFilters, '60s')).toContain('gen_ai_client_time_to_first_token_seconds_bucket');
   });
 
   it('tokensByModelAndTypeQuery', () => {

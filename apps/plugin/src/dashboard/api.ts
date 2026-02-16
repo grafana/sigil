@@ -1,12 +1,20 @@
 import { lastValueFrom } from 'rxjs';
 import { getBackendSrv } from '@grafana/runtime';
-import type { ModelCard, ModelCardListResponse, PrometheusLabelValuesResponse, PrometheusQueryResponse } from './types';
+import type {
+  ModelCard,
+  ModelCardListResponse,
+  PrometheusLabelsResponse,
+  PrometheusLabelValuesResponse,
+  PrometheusQueryResponse,
+} from './types';
 
 const queryBasePath = '/api/plugins/grafana-sigil-app/resources/query';
+const genAIMetricsMatcher = '{__name__=~"gen_ai_client_.*"}';
 
 export type DashboardDataSource = {
   queryRange: (query: string, start: number, end: number, step: number) => Promise<PrometheusQueryResponse>;
   queryInstant: (query: string, time: number) => Promise<PrometheusQueryResponse>;
+  labels: (start: number, end: number) => Promise<string[]>;
   labelValues: (label: string, start: number, end: number) => Promise<string[]>;
   listModelCards: () => Promise<ModelCard[]>;
 };
@@ -34,12 +42,23 @@ export const defaultDashboardDataSource: DashboardDataSource = {
     return response.data;
   },
 
+  async labels(start, end) {
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<PrometheusLabelsResponse>({
+        method: 'GET',
+        url: `${queryBasePath}/proxy/prometheus/api/v1/labels`,
+        params: { start, end, 'match[]': genAIMetricsMatcher },
+      })
+    );
+    return response.data.data ?? [];
+  },
+
   async labelValues(label, start, end) {
     const response = await lastValueFrom(
       getBackendSrv().fetch<PrometheusLabelValuesResponse>({
         method: 'GET',
         url: `${queryBasePath}/proxy/prometheus/api/v1/label/${encodeURIComponent(label)}/values`,
-        params: { start, end },
+        params: { start, end, 'match[]': genAIMetricsMatcher },
       })
     );
     return response.data.data ?? [];

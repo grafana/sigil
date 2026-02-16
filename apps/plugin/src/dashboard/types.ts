@@ -25,6 +25,11 @@ export type PrometheusLabelValuesResponse = {
   data: string[];
 };
 
+export type PrometheusLabelsResponse = {
+  status: 'success' | 'error';
+  data: string[];
+};
+
 // Model card types (matching Sigil API contract from modelcards/types.go)
 
 export type ModelCardPricing = {
@@ -68,10 +73,16 @@ export type DashboardFilters = {
   provider: string;
   model: string;
   agentName: string;
+  labelKey: string;
+  labelValue: string;
+  extraMatchers: string;
 };
 
 export const emptyFilters: DashboardFilters = {
   provider: '',
   model: '',
   agentName: '',
+  labelKey: '',
+  labelValue: '',
+  extraMatchers: '',
 };

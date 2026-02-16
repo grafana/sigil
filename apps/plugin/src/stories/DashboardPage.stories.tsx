@@ -88,7 +88,7 @@ const mockDataSource: DashboardDataSource = {
         },
       ]);
     }
-    if (query.includes('operation_duration_bucket')) {
+    if (query.includes('operation_duration_seconds_bucket')) {
       return makeMatrixResponse([
         {
           labels: {},
@@ -96,7 +96,23 @@ const mockDataSource: DashboardDataSource = {
         },
       ]);
     }
-    if (query.includes('time_to_first_token')) {
+    if (query.includes('operation_duration_seconds_count') && query.includes('gen_ai_request_model')) {
+      return makeMatrixResponse([
+        {
+          labels: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o' },
+          values: timePoints.map((t) => [t, String(1.8 + Math.random() * 0.4)]),
+        },
+        {
+          labels: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o-mini' },
+          values: timePoints.map((t) => [t, String(1.1 + Math.random() * 0.3)]),
+        },
+        {
+          labels: { gen_ai_provider_name: 'anthropic', gen_ai_request_model: 'claude-sonnet-4-20250514' },
+          values: timePoints.map((t) => [t, String(0.8 + Math.random() * 0.2)]),
+        },
+      ]);
+    }
+    if (query.includes('time_to_first_token_seconds')) {
       return makeMatrixResponse([
         {
           labels: {},
@@ -131,6 +147,16 @@ const mockDataSource: DashboardDataSource = {
     if (query.includes('token_usage')) {
       return makeVectorResponse([{ labels: {}, value: '115000' }]);
     }
+    if (query.includes('gen_ai_provider_name') && query.includes('gen_ai_request_model')) {
+      return makeVectorResponse([
+        { labels: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o' }, value: '350' },
+        {
+          labels: { gen_ai_provider_name: 'anthropic', gen_ai_request_model: 'claude-sonnet-4-20250514' },
+          value: '200',
+        },
+        { labels: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o-mini' }, value: '100' },
+      ]);
+    }
     if (query.includes('gen_ai_provider_name')) {
       return makeVectorResponse([
         { labels: { gen_ai_provider_name: 'openai' }, value: '420' },
@@ -158,6 +184,17 @@ const mockDataSource: DashboardDataSource = {
       default:
         return [];
     }
+  },
+
+  async labels() {
+    return [
+      'gen_ai_provider_name',
+      'gen_ai_request_model',
+      'gen_ai_agent_name',
+      'gen_ai_operation_name',
+      'gen_ai_token_type',
+      'job',
+    ];
   },
 
   async listModelCards() {

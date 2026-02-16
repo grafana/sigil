@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { css } from '@emotion/css';
-import { type GrafanaTheme2 } from '@grafana/data';
+import { type GrafanaTheme2, type TimeRange } from '@grafana/data';
 import { useStyles2 } from '@grafana/ui';
 import type { DashboardDataSource } from '../../dashboard/api';
 import type { DashboardFilters } from '../../dashboard/types';
@@ -15,6 +15,7 @@ import {
   errorRateQuery,
   tokenUsageOverTimeQuery,
   tokenUsageByModelQuery,
+  rpsByModelOverTimeQuery,
   callsByProviderQuery,
   topModelsQuery,
   latencyP95Query,
@@ -23,7 +24,7 @@ import {
 } from '../../dashboard/queries';
 import {
   matrixToDataFrames,
-  vectorToDataFrame,
+  vectorToPieDataFrame,
   vectorToStatValue,
   statValueToDataFrame,
 } from '../../dashboard/transforms';
@@ -35,13 +36,14 @@ export type DashboardGridProps = {
   filters: DashboardFilters;
   from: number;
   to: number;
+  timeRange: TimeRange;
   pricingMap: PricingMap;
 };
 
 const STAT_HEIGHT = 120;
 const CHART_HEIGHT = 300;
 
-export function DashboardGrid({ dataSource, filters, from, to, pricingMap }: DashboardGridProps) {
+export function DashboardGrid({ dataSource, filters, from, to, timeRange, pricingMap }: DashboardGridProps) {
   const styles = useStyles2(getStyles);
 
   const step = useMemo(() => computeStep(from, to), [from, to]);
@@ -80,6 +82,14 @@ export function DashboardGrid({ dataSource, filters, from, to, pricingMap }: Das
     'range',
     step
   );
+  const rpsByModel = usePrometheusQuery(
+    dataSource,
+    rpsByModelOverTimeQuery(filters, interval),
+    from,
+    to,
+    'range',
+    step
+  );
   const latency = usePrometheusQuery(dataSource, latencyP95Query(filters, interval), from, to, 'range', step);
   const ttft = usePrometheusQuery(dataSource, ttftP95Query(filters, interval), from, to, 'range', step);
 
@@ -110,6 +120,7 @@ export function DashboardGrid({ dataSource, filters, from, to, pricingMap }: Das
           title="Total Operations"
           pluginId="stat"
           height={STAT_HEIGHT}
+          timeRange={timeRange}
           loading={totalOps.loading}
           error={totalOps.error}
           data={[statValueToDataFrame(totalOps.data ? vectorToStatValue(totalOps.data) : 0, 'Operations')]}
@@ -118,6 +129,7 @@ export function DashboardGrid({ dataSource, filters, from, to, pricingMap }: Das
           title="Total Tokens"
           pluginId="stat"
           height={STAT_HEIGHT}
+          timeRange={timeRange}
           loading={totalTokens.loading}
           error={totalTokens.error}
           data={[statValueToDataFrame(totalTokens.data ? vectorToStatValue(totalTokens.data) : 0, 'Tokens')]}
@@ -126,6 +138,7 @@ export function DashboardGrid({ dataSource, filters, from, to, pricingMap }: Das
           title="Total Errors"
           pluginId="stat"
           height={STAT_HEIGHT}
+          timeRange={timeRange}
           loading={totalErrors.loading}
           error={totalErrors.error}
           data={[statValueToDataFrame(totalErrors.data ? vectorToStatValue(totalErrors.data) : 0, 'Errors')]}
@@ -138,6 +151,7 @@ export function DashboardGrid({ dataSource, filters, from, to, pricingMap }: Das
           title="Error Rate"
           pluginId="stat"
           height={STAT_HEIGHT}
+          timeRange={timeRange}
           loading={errRate.loading}
           error={errRate.error}
           data={[statValueToDataFrame(errRate.data ? vectorToStatValue(errRate.data) : 0, 'Error Rate', 'percent')]}
@@ -146,6 +160,7 @@ export function DashboardGrid({ dataSource, filters, from, to, pricingMap }: Das
           title="Estimated Cost"
           pluginId="stat"
           height={STAT_HEIGHT}
+          timeRange={timeRange}
           loading={costTokens.loading}
           error={costTokens.error}
           data={[statValueToDataFrame(totalCostValue, 'Cost', 'currencyUSD')]}
@@ -158,6 +173,7 @@ export function DashboardGrid({ dataSource, filters, from, to, pricingMap }: Das
         description="Breakdown by token type (input, output, cache, reasoning)"
         pluginId="timeseries"
         height={CHART_HEIGHT}
+        timeRange={timeRange}
         loading={tokensOverTime.loading}
         error={tokensOverTime.error}
         data={tokensOverTime.data ? matrixToDataFrames(tokensOverTime.data) : []}
@@ -169,9 +185,34 @@ export function DashboardGrid({ dataSource, filters, from, to, pricingMap }: Das
         description="Cost computed from token rates and model card pricing"
         pluginId="timeseries"
         height={CHART_HEIGHT}
+        timeRange={timeRange}
         loading={tokensByModel.loading}
         error={tokensByModel.error}
         data={costTimeSeries}
+      />
+
+      <MetricPanel
+        title="RPS Over Time by Model"
+        description="Request rate grouped by provider and model"
+        pluginId="timeseries"
+        height={CHART_HEIGHT}
+        timeRange={timeRange}
+        loading={rpsByModel.loading}
+        error={rpsByModel.error}
+        data={rpsByModel.data ? matrixToDataFrames(rpsByModel.data) : []}
+        fieldConfig={{
+          defaults: {
+            unit: 'reqps',
+            custom: {
+              drawStyle: 'bars',
+              lineWidth: 0,
+              fillOpacity: 90,
+              showPoints: 'never',
+              stacking: { mode: 'normal', group: 'A' },
+            },
+          },
+          overrides: [],
+        }}
       />
 
       {/* Two-column row: piecharts */}
@@ -180,17 +221,23 @@ export function DashboardGrid({ dataSource, filters, from, to, pricingMap }: Das
           title="Calls by Provider"
           pluginId="piechart"
           height={CHART_HEIGHT}
+          timeRange={timeRange}
           loading={byProvider.loading}
           error={byProvider.error}
-          data={byProvider.data ? [vectorToDataFrame(byProvider.data, 'Calls')] : []}
+          data={byProvider.data ? [vectorToPieDataFrame(byProvider.data, ['gen_ai_provider_name'])] : []}
         />
         <MetricPanel
           title="Top Models"
           pluginId="piechart"
           height={CHART_HEIGHT}
+          timeRange={timeRange}
           loading={byModel.loading}
           error={byModel.error}
-          data={byModel.data ? [vectorToDataFrame(byModel.data, 'Calls')] : []}
+          data={
+            byModel.data
+              ? [vectorToPieDataFrame(byModel.data, ['gen_ai_provider_name', 'gen_ai_request_model'], '/')]
+              : []
+          }
         />
       </div>
 
@@ -201,6 +248,7 @@ export function DashboardGrid({ dataSource, filters, from, to, pricingMap }: Das
           description="95th percentile operation duration"
           pluginId="timeseries"
           height={CHART_HEIGHT}
+          timeRange={timeRange}
           loading={latency.loading}
           error={latency.error}
           data={latency.data ? matrixToDataFrames(latency.data) : []}
@@ -214,6 +262,7 @@ export function DashboardGrid({ dataSource, filters, from, to, pricingMap }: Das
           description="95th percentile TTFT (streaming only)"
           pluginId="timeseries"
           height={CHART_HEIGHT}
+          timeRange={timeRange}
           loading={ttft.loading}
           error={ttft.error}
           data={ttft.data ? matrixToDataFrames(ttft.data) : []}

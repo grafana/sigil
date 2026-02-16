@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-15
+last_reviewed: 2026-02-16
 source_of_truth: true
 audience: contributors
 ---
@@ -76,6 +76,10 @@ See `docs/references/grafana-query-response-shapes.md`.
 
 ## Page Responsibilities
 
+- Dashboard:
+  - run metrics panels from Prometheus proxy endpoints only
+  - support fuzzy filters for provider/model/agent and arbitrary label-key/value matchers
+  - allow advanced raw matcher clauses for resource labels injected by Alloy/OTel pipelines
 - Conversations:
   - query conversations with expression filters and selectable attributes
   - support cursor pagination in list view
