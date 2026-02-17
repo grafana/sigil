@@ -337,7 +337,7 @@ Online evaluation adds configurable, asynchronous scoring to production generati
 Key characteristics:
 
 - **Immediate per-generation trigger**: each eligible generation is evaluated at ingest time. No idle windows or session-completion detection.
-- **API-managed configuration**: evaluators and rules stored in MySQL, managed via CRUD APIs. Predefined evaluator templates ship with Sigil.
+- **API-managed configuration**: evaluators and rules stored in MySQL, managed via CRUD APIs. Predefined evaluator templates are exposed through dedicated template APIs and forked into tenant evaluators.
 - **Conversation-level sampling**: deterministic hash on `(conversation_id, rule_id)` ensures all eligible turns in a sampled conversation get evaluated.
 - **Built-in evaluator kinds**: `llm_judge`, `json_schema`, `regex`, `heuristic`.
 - **External scores via API**: `POST /api/v1/scores:export` for bring-your-own evaluator workflows.
@@ -405,6 +405,8 @@ Conversation query path (design doc: `docs/design-docs/2026-02-15-conversation-q
   - `GET /api/v1/eval/evaluators` -- list evaluators
   - `GET /api/v1/eval/evaluators/{id}` -- get evaluator detail
   - `DELETE /api/v1/eval/evaluators/{id}` -- soft-delete evaluator
+  - `GET /api/v1/eval/predefined/evaluators` -- list predefined evaluator templates
+  - `POST /api/v1/eval/predefined/evaluators/{id}:fork` -- fork a template into a tenant evaluator
   - `POST /api/v1/eval/rules` -- create/update online rule
   - `GET /api/v1/eval/rules` -- list rules
   - `GET /api/v1/eval/rules/{id}` -- get rule detail

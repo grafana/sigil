@@ -189,7 +189,9 @@ func (s *Service) executeItem(ctx context.Context, item evalpkg.WorkItem) {
 		return
 	}
 	if generation == nil {
-		s.failItem(ctx, item, kind, evalpkg.Permanent(fmt.Errorf("generation %q was not found", item.GenerationID)))
+		// Keep this transient to allow eventual consistency between hot WAL
+		// truncation and cold object-storage availability.
+		s.failItem(ctx, item, kind, fmt.Errorf("generation %q was not found", item.GenerationID))
 		return
 	}
 

@@ -22,6 +22,8 @@ func RegisterHTTPRoutes(mux *http.ServeMux, service *Service, protectedMiddlewar
 
 	mux.Handle("/api/v1/eval/evaluators", protectedMiddleware(http.HandlerFunc(service.handleEvaluators)))
 	mux.Handle("/api/v1/eval/evaluators/", protectedMiddleware(http.HandlerFunc(service.handleEvaluatorByID)))
+	mux.Handle("/api/v1/eval/predefined/evaluators", protectedMiddleware(http.HandlerFunc(service.handlePredefinedEvaluators)))
+	mux.Handle("/api/v1/eval/predefined/evaluators/", protectedMiddleware(http.HandlerFunc(service.handlePredefinedEvaluatorByID)))
 	mux.Handle("/api/v1/eval/rules", protectedMiddleware(http.HandlerFunc(service.handleRules)))
 	mux.Handle("/api/v1/eval/rules/", protectedMiddleware(http.HandlerFunc(service.handleRuleByID)))
 	mux.Handle("/api/v1/eval/judge/providers", protectedMiddleware(http.HandlerFunc(service.handleJudgeProviders)))
@@ -100,6 +102,47 @@ func (s *Service) handleEvaluatorByID(w http.ResponseWriter, req *http.Request) 
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (s *Service) handlePredefinedEvaluators(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items": s.ListPredefinedEvaluators(req.Context()),
+	})
+}
+
+func (s *Service) handlePredefinedEvaluatorByID(w http.ResponseWriter, req *http.Request) {
+	tenantID, ok := tenantIDFromRequest(w, req)
+	if !ok {
+		return
+	}
+
+	templateID, action, valid := pathIDAction(req.URL.Path, "/api/v1/eval/predefined/evaluators/")
+	if !valid || action != "fork" {
+		http.Error(w, "invalid predefined evaluator path", http.StatusBadRequest)
+		return
+	}
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var request ForkPredefinedEvaluatorRequest
+	if err := decodeJSONBody(req, &request); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	created, err := s.ForkPredefinedEvaluator(req.Context(), tenantID, templateID, request)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, created)
 }
 
 func (s *Service) handleRules(w http.ResponseWriter, req *http.Request) {
@@ -276,6 +319,25 @@ func pathID(path string, prefix string) (string, bool) {
 		return "", false
 	}
 	return trimmed, true
+}
+
+func pathIDAction(path string, prefix string) (string, string, bool) {
+	trimmed := strings.TrimPrefix(path, prefix)
+	if trimmed == "" || strings.Contains(trimmed, "/") {
+		return "", "", false
+	}
+
+	parts := strings.SplitN(trimmed, ":", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+
+	id := strings.TrimSpace(parts[0])
+	action := strings.TrimSpace(parts[1])
+	if id == "" || action == "" {
+		return "", "", false
+	}
+	return id, action, true
 }
 
 func tenantIDFromRequest(w http.ResponseWriter, req *http.Request) (string, bool) {

@@ -212,6 +212,40 @@ func TestServiceMetricsIncrementOnSuccess(t *testing.T) {
 	}
 }
 
+func TestServiceGenerationNotFoundIsTreatedAsTransient(t *testing.T) {
+	store := &workerStoreStub{
+		claimed: []evalpkg.WorkItem{newClaimedItem("work-1", "gen-missing")},
+		evaluators: map[string]evalpkg.EvaluatorDefinition{
+			"tenant-a|eval-1|v1": {
+				EvaluatorID: "eval-1",
+				Version:     "v1",
+				Kind:        evalpkg.EvaluatorKindHeuristic,
+				OutputKeys:  []evalpkg.OutputKey{{Key: "k", Type: evalpkg.ScoreTypeBool}},
+			},
+		},
+		statusCounts: defaultStatusCounts(),
+	}
+
+	service := newTestService(t, store, Config{
+		Enabled:          true,
+		MaxConcurrent:    1,
+		MaxRatePerMinute: 1200,
+		MaxAttempts:      3,
+		ClaimBatchSize:   10,
+		PollInterval:     time.Millisecond,
+	})
+	service.reader = &workerReaderStub{generation: nil}
+
+	service.runCycle(context.Background())
+
+	if store.failCalls != 1 {
+		t.Fatalf("expected one fail call, got %d", store.failCalls)
+	}
+	if store.lastFailPermanent {
+		t.Fatalf("expected missing generation to be treated as transient")
+	}
+}
+
 func newTestService(t *testing.T, store *workerStoreStub, cfg Config) *Service {
 	t.Helper()
 

@@ -21,7 +21,7 @@ func newOpenAICompatHTTPClient(httpClient *http.Client, baseURL, apiKey string) 
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 30 * time.Second}
 	}
-	trimmedBaseURL := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	trimmedBaseURL := normalizeOpenAICompatBaseURL(baseURL)
 	if trimmedBaseURL == "" {
 		trimmedBaseURL = "https://api.openai.com"
 	}
@@ -30,6 +30,15 @@ func newOpenAICompatHTTPClient(httpClient *http.Client, baseURL, apiKey string) 
 		baseURL:    trimmedBaseURL,
 		apiKey:     strings.TrimSpace(apiKey),
 	}
+}
+
+func normalizeOpenAICompatBaseURL(baseURL string) string {
+	normalized := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if strings.HasSuffix(strings.ToLower(normalized), "/v1") {
+		normalized = normalized[:len(normalized)-3]
+		normalized = strings.TrimRight(normalized, "/")
+	}
+	return normalized
 }
 
 func (c *openAICompatHTTPClient) Judge(ctx context.Context, req JudgeRequest) (JudgeResponse, error) {

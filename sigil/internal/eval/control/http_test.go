@@ -136,6 +136,71 @@ func TestJudgeDiscoveryHTTP(t *testing.T) {
 	}
 }
 
+func TestPredefinedEvaluatorsHTTP(t *testing.T) {
+	store := newMemoryControlStore()
+	service := NewService(store, nil, nil)
+	mux := newEvalMux(service)
+
+	listResp := doRequest(mux, http.MethodGet, "/api/v1/eval/predefined/evaluators", "")
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 list predefined evaluators, got %d body=%s", listResp.Code, listResp.Body.String())
+	}
+	if !strings.Contains(listResp.Body.String(), `"sigil.helpfulness"`) {
+		t.Fatalf("expected predefined template id in list response, body=%s", listResp.Body.String())
+	}
+}
+
+func TestForkPredefinedEvaluatorHTTP(t *testing.T) {
+	store := newMemoryControlStore()
+	service := NewService(store, nil, nil)
+	mux := newEvalMux(service)
+
+	forkPayload := `{
+		"evaluator_id":"custom.helpfulness",
+		"version":"2026-02-18",
+		"config":{
+			"provider":"google",
+			"model":"gemini-2.0-flash"
+		}
+	}`
+	forkResp := doRequest(mux, http.MethodPost, "/api/v1/eval/predefined/evaluators/sigil.helpfulness:fork", forkPayload)
+	if forkResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 fork predefined evaluator, got %d body=%s", forkResp.Code, forkResp.Body.String())
+	}
+	if !strings.Contains(forkResp.Body.String(), `"custom.helpfulness"`) {
+		t.Fatalf("expected forked evaluator id in response, body=%s", forkResp.Body.String())
+	}
+	if !strings.Contains(forkResp.Body.String(), `"provider":"google"`) {
+		t.Fatalf("expected forked evaluator config override in response, body=%s", forkResp.Body.String())
+	}
+
+	getResp := doRequest(mux, http.MethodGet, "/api/v1/eval/evaluators/custom.helpfulness", "")
+	if getResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 get forked evaluator, got %d body=%s", getResp.Code, getResp.Body.String())
+	}
+}
+
+func TestCreateRuleRejectsPredefinedTemplateReferenceWithoutFork(t *testing.T) {
+	store := newMemoryControlStore()
+	service := NewService(store, nil, nil)
+	mux := newEvalMux(service)
+
+	createRulePayload := `{
+		"rule_id":"rule-helpfulness",
+		"enabled":true,
+		"selector":"user_visible_turn",
+		"sample_rate":0.1,
+		"evaluator_ids":["sigil.helpfulness"]
+	}`
+	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/rules", createRulePayload)
+	if createResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 create rule with unforked predefined evaluator, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+	if !strings.Contains(createResp.Body.String(), `evaluator "sigil.helpfulness" was not found`) {
+		t.Fatalf("expected missing evaluator error, body=%s", createResp.Body.String())
+	}
+}
+
 func newEvalMux(service *Service) *http.ServeMux {
 	mux := http.NewServeMux()
 	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})

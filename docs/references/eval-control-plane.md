@@ -40,7 +40,7 @@ Response:
 - `next_cursor`: string cursor (empty when exhausted)
 
 Notes:
-- Predefined templates are seeded per tenant when listing evaluators for the first time.
+- This endpoint only returns tenant-configured evaluators. Predefined templates are listed via dedicated predefined endpoints.
 
 ### `GET /api/v1/eval/evaluators/{id}`
 
@@ -56,6 +56,28 @@ Soft-delete evaluator id across versions.
 
 Response:
 - `204 No Content` (idempotent)
+
+## Predefined Evaluator Templates
+
+### `GET /api/v1/eval/predefined/evaluators`
+
+List built-in evaluator templates that can be forked into tenant evaluators.
+
+Response:
+- `items`: predefined evaluator definitions (template metadata + default config)
+
+### `POST /api/v1/eval/predefined/evaluators/{template_id}:fork`
+
+Create a tenant evaluator by forking a predefined template.
+
+Request body:
+- `evaluator_id` (required, new tenant evaluator id)
+- `version` (optional, defaults to template version)
+- `config` (optional, shallow override map merged on top of template config)
+- `output_keys` (optional, replaces template output keys when provided)
+
+Response:
+- created evaluator object (`200 OK`)
 
 ## Rules
 

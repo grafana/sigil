@@ -32,9 +32,15 @@ type JudgeDiscovery interface {
 
 type Service struct {
 	store     controlStore
-	seeder    *predefined.Seeder
 	discovery JudgeDiscovery
 	now       func() time.Time
+}
+
+type ForkPredefinedEvaluatorRequest struct {
+	EvaluatorID string              `json:"evaluator_id"`
+	Version     string              `json:"version,omitempty"`
+	Config      map[string]any      `json:"config,omitempty"`
+	OutputKeys  []evalpkg.OutputKey `json:"output_keys,omitempty"`
 }
 
 type controlStore interface {
@@ -53,10 +59,9 @@ type controlStore interface {
 	CountActiveRules(ctx context.Context, tenantID string) (int64, error)
 }
 
-func NewService(store controlStore, seeder *predefined.Seeder, discovery JudgeDiscovery) *Service {
+func NewService(store controlStore, _ *predefined.Seeder, discovery JudgeDiscovery) *Service {
 	return &Service{
 		store:     store,
-		seeder:    seeder,
 		discovery: discovery,
 		now:       time.Now,
 	}
@@ -94,12 +99,63 @@ func (s *Service) ListEvaluators(ctx context.Context, tenantID string, limit int
 	if trimmedTenantID == "" {
 		return nil, 0, errors.New("tenant id is required")
 	}
-	if s.seeder != nil {
-		if err := s.seeder.EnsureTenantSeeded(ctx, trimmedTenantID); err != nil {
-			return nil, 0, err
-		}
-	}
 	return s.store.ListEvaluators(ctx, trimmedTenantID, limit, cursor)
+}
+
+func (s *Service) ListPredefinedEvaluators(_ context.Context) []evalpkg.EvaluatorDefinition {
+	templates := predefined.Templates()
+	out := make([]evalpkg.EvaluatorDefinition, 0, len(templates))
+	for _, template := range templates {
+		item := template
+		item.IsPredefined = true
+		item.TenantID = ""
+		item.DeletedAt = nil
+		out = append(out, item)
+	}
+	return out
+}
+
+func (s *Service) ForkPredefinedEvaluator(ctx context.Context, tenantID, templateID string, request ForkPredefinedEvaluatorRequest) (evalpkg.EvaluatorDefinition, error) {
+	if s.store == nil {
+		return evalpkg.EvaluatorDefinition{}, errors.New("eval store is required")
+	}
+
+	template, ok := findPredefinedTemplate(templateID)
+	if !ok {
+		return evalpkg.EvaluatorDefinition{}, fmt.Errorf("predefined evaluator %q was not found", strings.TrimSpace(templateID))
+	}
+
+	evaluatorID := strings.TrimSpace(request.EvaluatorID)
+	if evaluatorID == "" {
+		return evalpkg.EvaluatorDefinition{}, errors.New("evaluator_id is required")
+	}
+	version := strings.TrimSpace(request.Version)
+	if version == "" {
+		version = template.Version
+	}
+
+	forkConfig := cloneMap(template.Config)
+	for key, value := range request.Config {
+		forkConfig[key] = value
+	}
+
+	outputKeys := make([]evalpkg.OutputKey, 0, len(template.OutputKeys))
+	outputKeys = append(outputKeys, template.OutputKeys...)
+	if len(request.OutputKeys) > 0 {
+		outputKeys = make([]evalpkg.OutputKey, 0, len(request.OutputKeys))
+		outputKeys = append(outputKeys, request.OutputKeys...)
+	}
+
+	fork := evalpkg.EvaluatorDefinition{
+		TenantID:     strings.TrimSpace(tenantID),
+		EvaluatorID:  evaluatorID,
+		Version:      version,
+		Kind:         template.Kind,
+		Config:       forkConfig,
+		OutputKeys:   outputKeys,
+		IsPredefined: false,
+	}
+	return s.CreateEvaluator(ctx, fork.TenantID, fork)
 }
 
 func (s *Service) GetEvaluator(ctx context.Context, tenantID, evaluatorID string) (*evalpkg.EvaluatorDefinition, error) {
@@ -302,4 +358,28 @@ func (s *Service) refreshActiveMetrics(ctx context.Context, tenantID string) {
 	if err == nil {
 		worker.SetActiveRules(tenantID, activeRules)
 	}
+}
+
+func findPredefinedTemplate(templateID string) (evalpkg.EvaluatorDefinition, bool) {
+	trimmedTemplateID := strings.TrimSpace(templateID)
+	if trimmedTemplateID == "" {
+		return evalpkg.EvaluatorDefinition{}, false
+	}
+	for _, template := range predefined.Templates() {
+		if template.EvaluatorID == trimmedTemplateID {
+			return template, true
+		}
+	}
+	return evalpkg.EvaluatorDefinition{}, false
+}
+
+func cloneMap(source map[string]any) map[string]any {
+	if len(source) == 0 {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(source))
+	for key, value := range source {
+		out[key] = value
+	}
+	return out
 }

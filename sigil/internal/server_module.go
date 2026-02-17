@@ -29,7 +29,6 @@ import (
 	"github.com/grafana/sigil/sigil/internal/server"
 	"github.com/grafana/sigil/sigil/internal/storage"
 	"github.com/grafana/sigil/sigil/internal/storage/mysql"
-	"github.com/grafana/sigil/sigil/internal/storage/object"
 	"github.com/grafana/sigil/sigil/internal/tenantauth"
 	"google.golang.org/grpc"
 )
@@ -279,35 +278,7 @@ func (m *serverModule) buildFeedbackStore(generationStore generationingest.Store
 }
 
 func (m *serverModule) buildBlockReader(ctx context.Context) (storage.BlockReader, error) {
-	blockStore, err := object.NewStoreWithProviderConfig(ctx, object.ProviderConfig{
-		Backend: m.cfg.ObjectStore.Backend,
-		Bucket:  m.cfg.ObjectStore.Bucket,
-		S3: object.S3ProviderConfig{
-			Endpoint:      m.cfg.ObjectStore.S3.Endpoint,
-			Region:        m.cfg.ObjectStore.S3.Region,
-			AccessKey:     m.cfg.ObjectStore.S3.AccessKey,
-			SecretKey:     m.cfg.ObjectStore.S3.SecretKey,
-			Insecure:      m.cfg.ObjectStore.S3.Insecure,
-			UseAWSSDKAuth: m.cfg.ObjectStore.S3.UseAWSSDKAuth,
-		},
-		GCS: object.GCSProviderConfig{
-			Bucket:         m.cfg.ObjectStore.GCS.Bucket,
-			ServiceAccount: m.cfg.ObjectStore.GCS.ServiceAccount,
-			UseGRPC:        m.cfg.ObjectStore.GCS.UseGRPC,
-		},
-		Azure: object.AzureProviderConfig{
-			ContainerName:           m.cfg.ObjectStore.Azure.ContainerName,
-			StorageAccountName:      m.cfg.ObjectStore.Azure.StorageAccountName,
-			StorageAccountKey:       m.cfg.ObjectStore.Azure.StorageAccountKey,
-			StorageConnectionString: m.cfg.ObjectStore.Azure.StorageConnectionString,
-			Endpoint:                m.cfg.ObjectStore.Azure.Endpoint,
-			CreateContainer:         m.cfg.ObjectStore.Azure.CreateContainer,
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create object store reader: %w", err)
-	}
-	return blockStore, nil
+	return newObjectBlockReader(ctx, m.cfg.ObjectStore)
 }
 
 type judgeDiscoveryAdapter struct {

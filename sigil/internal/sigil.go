@@ -219,6 +219,12 @@ func (r *Runtime) initEvalWorkerModule() (services.Service, error) {
 		return nil, err
 	}
 
+	blockReader, err := newObjectBlockReader(bootstrapCtx, r.cfg.ObjectStore)
+	if err != nil {
+		return nil, err
+	}
+	reader := evalworker.NewHotColdGenerationReader(store, store, blockReader)
+
 	return evalworker.NewService(evalworker.Config{
 		Enabled:           r.cfg.EvalWorkerEnabled,
 		MaxConcurrent:     r.cfg.EvalMaxConcurrent,
@@ -227,7 +233,7 @@ func (r *Runtime) initEvalWorkerModule() (services.Service, error) {
 		ClaimBatchSize:    r.cfg.EvalClaimBatchSize,
 		PollInterval:      r.cfg.EvalPollInterval,
 		DefaultJudgeModel: r.cfg.EvalDefaultJudgeModel,
-	}, r.logger, store, store, judges.DiscoverFromEnv()), nil
+	}, r.logger, store, reader, judges.DiscoverFromEnv()), nil
 }
 
 func (r *Runtime) getModelCardService(ctx context.Context, enableLiveSource bool) (*modelcards.Service, error) {

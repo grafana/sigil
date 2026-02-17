@@ -162,7 +162,7 @@ Response includes provider ID, display name, CSP variant indicator, and per-mode
 
 ### Predefined Evaluator Library
 
-Sigil ships ready-to-use evaluator templates, seeded into the DB on first boot. Users can use them as-is in rules or clone and customize.
+Sigil ships ready-to-use evaluator templates exposed through control-plane template APIs. Templates are not auto-inserted into tenant evaluator tables; users fork a template into a tenant evaluator before attaching it to rules.
 
 **LLM-as-Judge templates:**
 
@@ -184,7 +184,7 @@ Sigil ships ready-to-use evaluator templates, seeded into the DB on first boot. 
 | `sigil.response_not_empty` | Is the response non-empty? | bool |
 | `sigil.response_length` | Is the response within configurable length bounds? | bool |
 
-Each predefined template includes: prompt text (for LLM-judge), default judge model reference, default input mapping, output key + type + pass threshold. Users override any field when referencing a template in a rule.
+Each predefined template includes prompt text (for LLM-judge), default output keys, and baseline evaluator config. Forked evaluators can override any field (including judge provider/model) before use in rules.
 
 ## Core Objects
 
@@ -350,6 +350,11 @@ CREATE TABLE eval_rules (
 - `GET /api/v1/eval/evaluators/{id}` -- get evaluator detail.
 - `DELETE /api/v1/eval/evaluators/{id}` -- soft-delete evaluator.
 
+### Predefined Templates
+
+- `GET /api/v1/eval/predefined/evaluators` -- list predefined evaluator templates.
+- `POST /api/v1/eval/predefined/evaluators/{id}:fork` -- create a tenant evaluator from a predefined template with optional config/output overrides.
+
 ### Rules
 
 - `POST /api/v1/eval/rules` -- create or update online rule.
@@ -409,7 +414,7 @@ Evaluators and rules are stored in MySQL and managed via the control plane APIs.
 
 ### YAML Seed (Optional Bootstrap)
 
-On first boot, if `sigil-eval-seed.yaml` exists, Sigil loads it and inserts evaluators + rules into the DB. After that, the DB is the source of truth. Predefined templates from the library are also seeded on first boot.
+On first boot, if `sigil-eval-seed.yaml` exists, Sigil loads it and inserts evaluators + rules into the DB. After that, the DB is the source of truth. Predefined templates are available through template APIs and are not auto-seeded per tenant.
 
 Example seed file:
 
@@ -427,17 +432,6 @@ evaluators:
           type: bool
 
 rules:
-  - id: online.helpfulness.user_visible
-    enabled: true
-    select:
-      selector: user_visible_turn
-    match:
-      agent_name: ["assistant-*"]
-    sample:
-      rate: 0.05
-    evaluators:
-      - sigil.helpfulness
-
   - id: online.json_contract.api
     enabled: true
     match:
@@ -446,12 +440,7 @@ rules:
       rate: 1.0
     evaluators:
       - custom.json_contract.v1
-      - sigil.response_not_empty
 ```
-
-### Predefined Template Seeding
-
-On first boot, Sigil seeds predefined evaluator templates (marked `is_predefined = true`) into the DB for each tenant. These appear in the evaluator list API and can be referenced directly in rules.
 
 ## Execution Model
 
