@@ -13,6 +13,13 @@ import (
 	"github.com/go-kit/log/level"
 	"github.com/grafana/dskit/services"
 	"github.com/grafana/sigil/sigil/internal/config"
+	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
+	evalcontrol "github.com/grafana/sigil/sigil/internal/eval/control"
+	evalenqueue "github.com/grafana/sigil/sigil/internal/eval/enqueue"
+	"github.com/grafana/sigil/sigil/internal/eval/evaluators/judges"
+	evalingest "github.com/grafana/sigil/sigil/internal/eval/ingest"
+	"github.com/grafana/sigil/sigil/internal/eval/predefined"
+	evalrules "github.com/grafana/sigil/sigil/internal/eval/rules"
 	"github.com/grafana/sigil/sigil/internal/feedback"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
@@ -37,6 +44,8 @@ type serverModule struct {
 	apiServer    *http.Server
 	grpcServer   *grpc.Server
 	grpcListener net.Listener
+
+	evalEnqueueDispatcher *evalenqueue.Service
 
 	runErr chan error
 }
@@ -105,6 +114,35 @@ func (m *serverModule) start(ctx context.Context) error {
 		FakeTenantID: m.cfg.FakeTenantID,
 	}
 	protectedHTTP := tenantauth.HTTPMiddleware(tenantAuthCfg)
+
+	var evalStore evalpkg.EvalStore
+	if store, ok := generationStore.(evalpkg.EvalStore); ok {
+		evalStore = store
+	}
+	if mysqlStore, ok := generationStore.(*mysql.WALStore); ok && evalStore != nil {
+		engine := evalrules.NewEngine(evalStore)
+		m.evalEnqueueDispatcher = evalenqueue.NewService(
+			evalenqueue.Config{Enabled: true},
+			m.logger,
+			evalEnqueueStoreAdapter{store: mysqlStore},
+			evalEnqueueProcessorAdapter{engine: engine},
+		)
+		mysqlStore.SetEvalHook(evalHookAdapter{notifier: m.evalEnqueueDispatcher})
+	}
+	var controlSvc *evalcontrol.Service
+	var ingestScoreSvc *evalingest.Service
+	if evalStore != nil {
+		discovery := judges.DiscoverFromEnv()
+		controlSvc = evalcontrol.NewService(evalStore, predefined.NewSeeder(evalStore), judgeDiscoveryAdapter{discovery: discovery})
+		ingestScoreSvc = evalingest.NewService(evalStore, walReader, false)
+		seedTenantID := strings.TrimSpace(m.cfg.FakeTenantID)
+		if seedTenantID != "" && strings.TrimSpace(m.cfg.EvalSeedFile) != "" {
+			if err := evalcontrol.LoadYAMLSeedFile(ctx, evalStore, seedTenantID, m.cfg.EvalSeedFile); err != nil {
+				return err
+			}
+		}
+	}
+
 	queryProxy, err := queryproxy.New(queryproxy.Config{
 		PrometheusBaseURL: m.cfg.QueryProxy.PrometheusBaseURL,
 		TempoBaseURL:      m.cfg.QueryProxy.TempoBaseURL,
@@ -126,6 +164,8 @@ func (m *serverModule) start(ctx context.Context) error {
 		protectedHTTP,
 		queryProxy,
 	)
+	evalcontrol.RegisterHTTPRoutes(apiMux, controlSvc, protectedHTTP)
+	evalingest.RegisterHTTPRoutes(apiMux, ingestScoreSvc, protectedHTTP)
 	m.apiServer = &http.Server{
 		Addr:    m.cfg.HTTPAddr,
 		Handler: apiMux,
@@ -149,6 +189,14 @@ func (m *serverModule) start(ctx context.Context) error {
 }
 
 func (m *serverModule) run(ctx context.Context) error {
+	if m.evalEnqueueDispatcher != nil {
+		go func() {
+			if err := m.evalEnqueueDispatcher.Run(ctx); err != nil {
+				m.pushRunError(err)
+			}
+		}()
+	}
+
 	if m.runModelCardSync && m.modelCardSvc != nil {
 		go func() {
 			if err := m.modelCardSvc.RunSyncLoop(ctx); err != nil {
@@ -260,4 +308,116 @@ func (m *serverModule) buildBlockReader(ctx context.Context) (storage.BlockReade
 		return nil, fmt.Errorf("create object store reader: %w", err)
 	}
 	return blockStore, nil
+}
+
+type judgeDiscoveryAdapter struct {
+	discovery *judges.Discovery
+}
+
+type evalHookAdapter struct {
+	notifier evalEnqueueNotifier
+}
+
+func (a evalHookAdapter) OnGenerationsSaved(_ string) {
+	if a.notifier == nil {
+		return
+	}
+	a.notifier.Notify()
+}
+
+type evalEnqueueNotifier interface {
+	Notify()
+}
+
+type evalEnqueueStoreAdapter struct {
+	store *mysql.WALStore
+}
+
+func (a evalEnqueueStoreAdapter) ClaimEvalEnqueueEvents(ctx context.Context, now time.Time, limit int, claimTTL time.Duration) ([]evalenqueue.Event, error) {
+	if a.store == nil {
+		return []evalenqueue.Event{}, nil
+	}
+
+	rows, err := a.store.ClaimEvalEnqueueEvents(ctx, now, limit, claimTTL)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]evalenqueue.Event, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, evalenqueue.Event{
+			TenantID:       row.TenantID,
+			GenerationID:   row.GenerationID,
+			ConversationID: row.ConversationID,
+			Payload:        row.Payload,
+			Attempts:       row.Attempts,
+		})
+	}
+	return out, nil
+}
+
+func (a evalEnqueueStoreAdapter) CompleteEvalEnqueueEvent(ctx context.Context, tenantID, generationID string) error {
+	if a.store == nil {
+		return nil
+	}
+	return a.store.CompleteEvalEnqueueEvent(ctx, tenantID, generationID)
+}
+
+func (a evalEnqueueStoreAdapter) FailEvalEnqueueEvent(ctx context.Context, tenantID, generationID, lastError string, retryAt time.Time, maxAttempts int, permanent bool) (bool, error) {
+	if a.store == nil {
+		return false, nil
+	}
+	return a.store.FailEvalEnqueueEvent(ctx, tenantID, generationID, lastError, retryAt, maxAttempts, permanent)
+}
+
+type evalEnqueueProcessorAdapter struct {
+	engine *evalrules.Engine
+}
+
+func (a evalEnqueueProcessorAdapter) Process(ctx context.Context, event evalenqueue.Event) error {
+	if a.engine == nil {
+		return nil
+	}
+
+	return a.engine.OnGenerationsSaved(ctx, event.TenantID, []evalrules.GenerationRow{{
+		GenerationID:   event.GenerationID,
+		ConversationID: event.ConversationID,
+		Payload:        event.Payload,
+	}})
+}
+
+func (a judgeDiscoveryAdapter) ListProviders(ctx context.Context) []evalcontrol.JudgeProvider {
+	if a.discovery == nil {
+		return []evalcontrol.JudgeProvider{}
+	}
+	providers := a.discovery.ListProviders(ctx)
+	out := make([]evalcontrol.JudgeProvider, 0, len(providers))
+	for _, provider := range providers {
+		out = append(out, evalcontrol.JudgeProvider{
+			ID:   provider.ID,
+			Name: provider.Name,
+			Type: provider.Type,
+		})
+	}
+	return out
+}
+
+func (a judgeDiscoveryAdapter) ListModels(ctx context.Context, providerID string) ([]evalcontrol.JudgeModel, error) {
+	if a.discovery == nil {
+		return []evalcontrol.JudgeModel{}, nil
+	}
+	models, err := a.discovery.ListModels(ctx, providerID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]evalcontrol.JudgeModel, 0, len(models))
+	for _, model := range models {
+		out = append(out, evalcontrol.JudgeModel{
+			ID:            model.ID,
+			Name:          model.Name,
+			Provider:      model.Provider,
+			ContextWindow: model.ContextWindow,
+		})
+	}
+	return out, nil
 }

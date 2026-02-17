@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	"github.com/grafana/sigil/sigil/internal/feedback"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
@@ -250,6 +251,58 @@ func TestGenerationDetailEndpoint(t *testing.T) {
 	}
 	if !strings.Contains(resp.Body.String(), `"generation_id":"gen-1"`) {
 		t.Fatalf("expected generation payload, body=%s", resp.Body.String())
+	}
+}
+
+func TestGenerationScoresEndpoint(t *testing.T) {
+	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
+		WALReader: &testWALReader{
+			byID: map[string]*sigilv1.Generation{
+				"gen-1": {
+					Id:             "gen-1",
+					ConversationId: "conv-1",
+					Mode:           sigilv1.GenerationMode_GENERATION_MODE_SYNC,
+					Model:          &sigilv1.ModelRef{Provider: "openai", Name: "gpt-4o"},
+				},
+			},
+		},
+		ScoreStore: &testScoreStore{
+			scores: []evalpkg.GenerationScore{
+				{ScoreID: "sc-1", GenerationID: "gen-1", EvaluatorID: "sigil.helpfulness", EvaluatorVersion: "2026-02-17", ScoreKey: "helpfulness", ScoreType: evalpkg.ScoreTypeNumber, Value: evalpkg.NumberValue(0.2), CreatedAt: time.Now().UTC()},
+				{ScoreID: "sc-2", GenerationID: "gen-1", EvaluatorID: "sigil.helpfulness", EvaluatorVersion: "2026-02-17", ScoreKey: "helpfulness", ScoreType: evalpkg.ScoreTypeNumber, Value: evalpkg.NumberValue(0.8), CreatedAt: time.Now().UTC()},
+			},
+		},
+		FeedbackStore: feedback.NewMemoryStore(),
+	})
+	if err != nil {
+		t.Fatalf("new query service: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterRoutes(
+		mux,
+		querySvc,
+		generationingest.NewService(generationingest.NewMemoryStore()),
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		protected,
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/generations/gen-1/scores?limit=1", nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"items":[`) {
+		t.Fatalf("expected items array in response, body=%s", resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"next_cursor":"1"`) {
+		t.Fatalf("expected next_cursor in response, body=%s", resp.Body.String())
 	}
 }
 
@@ -953,4 +1006,39 @@ func (s *testWALReader) GetByID(_ context.Context, _ string, generationID string
 
 func (s *testWALReader) GetByConversationID(_ context.Context, _ string, _ string) ([]*sigilv1.Generation, error) {
 	return []*sigilv1.Generation{}, nil
+}
+
+type testScoreStore struct {
+	scores []evalpkg.GenerationScore
+	latest map[string]evalpkg.LatestScore
+}
+
+func (s *testScoreStore) GetScoresByGeneration(_ context.Context, _ string, _ string, limit int, cursor uint64) ([]evalpkg.GenerationScore, uint64, error) {
+	if limit <= 0 {
+		return []evalpkg.GenerationScore{}, 0, nil
+	}
+	start := int(cursor)
+	if start >= len(s.scores) {
+		return []evalpkg.GenerationScore{}, 0, nil
+	}
+	end := start + limit
+	if end > len(s.scores) {
+		end = len(s.scores)
+	}
+	nextCursor := uint64(0)
+	if end < len(s.scores) {
+		nextCursor = uint64(end)
+	}
+	return append([]evalpkg.GenerationScore(nil), s.scores[start:end]...), nextCursor, nil
+}
+
+func (s *testScoreStore) GetLatestScoresByGeneration(_ context.Context, _ string, _ string) (map[string]evalpkg.LatestScore, error) {
+	if s.latest == nil {
+		return map[string]evalpkg.LatestScore{}, nil
+	}
+	out := make(map[string]evalpkg.LatestScore, len(s.latest))
+	for key, value := range s.latest {
+		out[key] = value
+	}
+	return out, nil
 }

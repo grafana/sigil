@@ -20,6 +20,112 @@ func (GenerationModel) TableName() string {
 	return "generations"
 }
 
+type GenerationScoreModel struct {
+	ID               uint64  `gorm:"primaryKey;autoIncrement;index:idx_generation_scores_tenant_generation_time,priority:4;index:idx_generation_scores_tenant_rule_time,priority:4;index:idx_generation_scores_tenant_key_time,priority:3;index:idx_generation_scores_tenant_pass_time,priority:3"`
+	TenantID         string  `gorm:"size:128;not null;uniqueIndex:ux_generation_scores_tenant_score,priority:1;index:idx_generation_scores_tenant_generation_time,priority:1;index:idx_generation_scores_tenant_rule_time,priority:1;index:idx_generation_scores_tenant_key_time,priority:1;index:idx_generation_scores_tenant_pass_time,priority:1"`
+	ScoreID          string  `gorm:"size:128;not null;uniqueIndex:ux_generation_scores_tenant_score,priority:2"`
+	GenerationID     string  `gorm:"size:255;not null;index:idx_generation_scores_tenant_generation_time,priority:2"`
+	ConversationID   *string `gorm:"size:255"`
+	TraceID          *string `gorm:"size:64"`
+	SpanID           *string `gorm:"size:16"`
+	EvaluatorID      string  `gorm:"size:255;not null"`
+	EvaluatorVersion string  `gorm:"size:64;not null"`
+	RuleID           *string `gorm:"size:255;index:idx_generation_scores_tenant_rule_time,priority:2"`
+	RunID            *string `gorm:"size:255"`
+	ScoreKey         string  `gorm:"size:255;not null;index:idx_generation_scores_tenant_key_time,priority:2"`
+	ScoreType        string  `gorm:"size:16;not null"`
+	ScoreNumber      *float64
+	ScoreBool        *bool
+	ScoreString      *string   `gorm:"size:255"`
+	Unit             *string   `gorm:"size:64"`
+	Passed           *bool     `gorm:"index:idx_generation_scores_tenant_pass_time,priority:2"`
+	Explanation      *string   `gorm:"type:text"`
+	MetadataJSON     string    `gorm:"type:json;not null"`
+	SourceKind       *string   `gorm:"size:64"`
+	SourceID         *string   `gorm:"size:255"`
+	CreatedAt        time.Time `gorm:"type:datetime(6);not null;index:idx_generation_scores_tenant_generation_time,priority:3;index:idx_generation_scores_tenant_rule_time,priority:3;index:idx_generation_scores_tenant_key_time,priority:4;index:idx_generation_scores_tenant_pass_time,priority:4"`
+	IngestedAt       time.Time `gorm:"type:datetime(6);not null;autoCreateTime"`
+}
+
+func (GenerationScoreModel) TableName() string {
+	return "generation_scores"
+}
+
+type EvalEnqueueEventModel struct {
+	ID             uint64     `gorm:"primaryKey;autoIncrement;index:idx_eval_enqueue_events_status_scheduled_id,priority:3"`
+	TenantID       string     `gorm:"size:128;not null;uniqueIndex:ux_eval_enqueue_events_tenant_generation,priority:1"`
+	GenerationID   string     `gorm:"size:255;not null;uniqueIndex:ux_eval_enqueue_events_tenant_generation,priority:2"`
+	ConversationID *string    `gorm:"size:255"`
+	Payload        []byte     `gorm:"type:mediumblob;not null"`
+	ScheduledAt    time.Time  `gorm:"type:datetime(6);not null;index:idx_eval_enqueue_events_status_scheduled_id,priority:2"`
+	Attempts       int        `gorm:"not null;default:0"`
+	Status         string     `gorm:"size:16;not null;index:idx_eval_enqueue_events_status_scheduled_id,priority:1;index:idx_eval_enqueue_events_status_claimed_at,priority:1"`
+	ClaimedAt      *time.Time `gorm:"type:datetime(6);index:idx_eval_enqueue_events_status_claimed_at,priority:2"`
+	LastError      *string    `gorm:"type:text"`
+	CreatedAt      time.Time  `gorm:"type:datetime(6);not null;autoCreateTime"`
+	UpdatedAt      time.Time  `gorm:"type:datetime(6);not null;autoUpdateTime"`
+}
+
+func (EvalEnqueueEventModel) TableName() string {
+	return "eval_enqueue_events"
+}
+
+type EvalWorkItemModel struct {
+	ID               uint64    `gorm:"primaryKey;autoIncrement"`
+	TenantID         string    `gorm:"size:128;not null;uniqueIndex:ux_eval_work_items_tenant_work,priority:1;index:idx_eval_work_items_tenant_status_scheduled,priority:1"`
+	WorkID           string    `gorm:"size:128;not null;uniqueIndex:ux_eval_work_items_tenant_work,priority:2"`
+	GenerationID     string    `gorm:"size:255;not null"`
+	EvaluatorID      string    `gorm:"size:255;not null"`
+	EvaluatorVersion string    `gorm:"size:64;not null"`
+	RuleID           string    `gorm:"size:255;not null"`
+	ScheduledAt      time.Time `gorm:"type:datetime(6);not null;index:idx_eval_work_items_tenant_status_scheduled,priority:3"`
+	Attempts         int       `gorm:"not null;default:0"`
+	Status           string    `gorm:"size:16;not null;index:idx_eval_work_items_tenant_status_scheduled,priority:2"`
+	LastError        *string   `gorm:"type:text"`
+	CreatedAt        time.Time `gorm:"type:datetime(6);not null;autoCreateTime"`
+	UpdatedAt        time.Time `gorm:"type:datetime(6);not null;autoUpdateTime"`
+}
+
+func (EvalWorkItemModel) TableName() string {
+	return "eval_work_items"
+}
+
+type EvalEvaluatorModel struct {
+	ID             uint64     `gorm:"primaryKey;autoIncrement"`
+	TenantID       string     `gorm:"size:128;not null;uniqueIndex:ux_eval_evaluators_tenant_id_version,priority:1;index:idx_eval_evaluators_tenant_deleted_updated,priority:1"`
+	EvaluatorID    string     `gorm:"size:255;not null;uniqueIndex:ux_eval_evaluators_tenant_id_version,priority:2;index:idx_eval_evaluators_tenant_deleted_updated,priority:2"`
+	Version        string     `gorm:"size:64;not null;uniqueIndex:ux_eval_evaluators_tenant_id_version,priority:3"`
+	Kind           string     `gorm:"size:32;not null"`
+	ConfigJSON     string     `gorm:"type:json;not null"`
+	OutputKeysJSON string     `gorm:"type:json;not null"`
+	IsPredefined   bool       `gorm:"not null;default:false"`
+	DeletedAt      *time.Time `gorm:"type:datetime(6);index:idx_eval_evaluators_tenant_deleted_updated,priority:3"`
+	CreatedAt      time.Time  `gorm:"type:datetime(6);not null;autoCreateTime"`
+	UpdatedAt      time.Time  `gorm:"type:datetime(6);not null;autoUpdateTime;index:idx_eval_evaluators_tenant_deleted_updated,priority:4"`
+}
+
+func (EvalEvaluatorModel) TableName() string {
+	return "eval_evaluators"
+}
+
+type EvalRuleModel struct {
+	ID               uint64     `gorm:"primaryKey;autoIncrement"`
+	TenantID         string     `gorm:"size:128;not null;uniqueIndex:ux_eval_rules_tenant_id,priority:1;index:idx_eval_rules_tenant_enabled_deleted,priority:1"`
+	RuleID           string     `gorm:"size:255;not null;uniqueIndex:ux_eval_rules_tenant_id,priority:2"`
+	Enabled          bool       `gorm:"not null;default:true;index:idx_eval_rules_tenant_enabled_deleted,priority:2"`
+	Selector         string     `gorm:"size:64;not null;default:user_visible_turn"`
+	MatchJSON        string     `gorm:"type:json;not null"`
+	SampleRate       float64    `gorm:"not null;default:0.01"`
+	EvaluatorIDsJSON string     `gorm:"type:json;not null"`
+	DeletedAt        *time.Time `gorm:"type:datetime(6);index:idx_eval_rules_tenant_enabled_deleted,priority:3"`
+	CreatedAt        time.Time  `gorm:"type:datetime(6);not null;autoCreateTime"`
+	UpdatedAt        time.Time  `gorm:"type:datetime(6);not null;autoUpdateTime"`
+}
+
+func (EvalRuleModel) TableName() string {
+	return "eval_rules"
+}
+
 type ConversationModel struct {
 	ID               uint64    `gorm:"primaryKey;autoIncrement"`
 	TenantID         string    `gorm:"size:128;not null;uniqueIndex:ux_conversations_tenant_conversation,priority:1;index:idx_conversations_tenant_updated_at,priority:1"`

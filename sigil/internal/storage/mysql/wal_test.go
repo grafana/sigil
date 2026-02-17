@@ -3,6 +3,9 @@ package mysql
 import (
 	"context"
 	"fmt"
+	"os"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -12,6 +15,30 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+const (
+	testMySQLImage    = "mysql:8.4"
+	testMySQLUser     = "sigil"
+	testMySQLPassword = "sigil"
+	testMySQLRootPass = "rootpass"
+)
+
+var (
+	sharedMySQLOnce      sync.Once
+	sharedMySQLContainer testcontainers.Container
+	sharedMySQLHost      string
+	sharedMySQLPort      string
+	sharedMySQLErr       error
+	testDatabaseSeq      atomic.Uint64
+)
+
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if sharedMySQLContainer != nil {
+		_ = sharedMySQLContainer.Terminate(context.Background())
+	}
+	os.Exit(code)
+}
 
 func TestAutoMigrateCreatesSchema(t *testing.T) {
 	store, cleanup := newTestWALStore(t)
@@ -27,6 +54,9 @@ func TestAutoMigrateCreatesSchema(t *testing.T) {
 	}
 	if !migrator.HasTable(&ConversationModel{}) {
 		t.Fatalf("expected conversations table")
+	}
+	if !migrator.HasTable(&EvalEnqueueEventModel{}) {
+		t.Fatalf("expected eval_enqueue_events table")
 	}
 	if !migrator.HasTable(&ConversationRatingModel{}) {
 		t.Fatalf("expected conversation_ratings table")
@@ -206,61 +236,194 @@ func TestSaveBatchConversationProjectionUpsert(t *testing.T) {
 	}
 }
 
+func TestSaveBatchWithEvalHookPersistsEnqueueEventAndSignalsHook(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	hook := &recordingEvalHook{}
+	store.SetEvalHook(hook)
+
+	generation := testGeneration("gen-hook-signal", "conv-hook-signal", time.Date(2026, 2, 12, 18, 0, 0, 0, time.UTC))
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{generation}))
+
+	if hook.calls != 1 {
+		t.Fatalf("expected hook calls=1, got %d", hook.calls)
+	}
+	if len(hook.tenantIDs) != 1 || hook.tenantIDs[0] != "tenant-a" {
+		t.Fatalf("expected hook tenant_ids=[tenant-a], got %v", hook.tenantIDs)
+	}
+
+	var event EvalEnqueueEventModel
+	if err := store.DB().
+		Where("tenant_id = ? AND generation_id = ?", "tenant-a", generation.GetId()).
+		First(&event).Error; err != nil {
+		t.Fatalf("expected eval enqueue event: %v", err)
+	}
+	if event.Status != evalEnqueueStatusQueued {
+		t.Fatalf("expected queued status, got %q", event.Status)
+	}
+	if len(event.Payload) == 0 {
+		t.Fatalf("expected enqueue payload bytes")
+	}
+}
+
 func newTestWALStore(t *testing.T) (*WALStore, func()) {
 	t.Helper()
 
-	ctx := context.Background()
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "mysql:8.4",
-			ExposedPorts: []string{"3306/tcp"},
-			Env: map[string]string{
-				"MYSQL_DATABASE":      "sigil",
-				"MYSQL_USER":          "sigil",
-				"MYSQL_PASSWORD":      "sigil",
-				"MYSQL_ROOT_PASSWORD": "rootpass",
-			},
-			WaitingFor: wait.ForListeningPort("3306/tcp").WithStartupTimeout(2 * time.Minute),
-		},
-		Started: true,
-	})
+	host, port := ensureSharedMySQLContainer(t)
+
+	dbName := fmt.Sprintf("sigil_test_%d", testDatabaseSeq.Add(1))
+	adminDSN := fmt.Sprintf("root:%s@tcp(%s:%s)/mysql?parseTime=true", testMySQLRootPass, host, port)
+	if err := createTestDatabase(adminDSN, dbName); err != nil {
+		t.Fatalf("create test database %q: %v", dbName, err)
+	}
+
+	testDSN := fmt.Sprintf("root:%s@tcp(%s:%s)/%s?parseTime=true", testMySQLRootPass, host, port, dbName)
+	store, err := NewWALStore(testDSN)
 	if err != nil {
-		t.Skipf("skip mysql integration tests (container start failed): %v", err)
+		if dropErr := dropTestDatabase(adminDSN, dbName); dropErr != nil {
+			t.Logf("drop failed test database %q: %v", dbName, dropErr)
+		}
+		t.Fatalf("open wal store for %q: %v", dbName, err)
+	}
+
+	sqlDB, err := store.DB().DB()
+	if err != nil {
+		_ = dropTestDatabase(adminDSN, dbName)
+		t.Fatalf("open sql db for %q: %v", dbName, err)
+	}
+	if err := sqlDB.Ping(); err != nil {
+		_ = sqlDB.Close()
+		_ = dropTestDatabase(adminDSN, dbName)
+		t.Fatalf("ping sql db for %q: %v", dbName, err)
 	}
 
 	cleanup := func() {
-		_ = container.Terminate(context.Background())
-	}
-
-	host, err := container.Host(ctx)
-	if err != nil {
-		cleanup()
-		t.Fatalf("container host: %v", err)
-	}
-
-	port, err := container.MappedPort(ctx, "3306/tcp")
-	if err != nil {
-		cleanup()
-		t.Fatalf("mapped port: %v", err)
-	}
-
-	dsn := fmt.Sprintf("sigil:sigil@tcp(%s:%s)/sigil?parseTime=true", host, port.Port())
-
-	var store *WALStore
-	for i := 0; i < 30; i++ {
-		store, err = NewWALStore(dsn)
-		if err == nil {
-			sqlDB, dbErr := store.DB().DB()
-			if dbErr == nil && sqlDB.Ping() == nil {
-				return store, cleanup
-			}
+		_ = sqlDB.Close()
+		if err := dropTestDatabase(adminDSN, dbName); err != nil {
+			t.Logf("drop test database %q: %v", dbName, err)
 		}
-		time.Sleep(time.Second)
 	}
+	return store, cleanup
+}
 
-	cleanup()
-	t.Skipf("skip mysql integration tests (database not ready): %v", err)
-	return nil, func() {}
+func ensureSharedMySQLContainer(t *testing.T) (string, string) {
+	t.Helper()
+
+	sharedMySQLOnce.Do(func() {
+		ctx := context.Background()
+		container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+			ContainerRequest: testcontainers.ContainerRequest{
+				Image:        testMySQLImage,
+				ExposedPorts: []string{"3306/tcp"},
+				Env: map[string]string{
+					"MYSQL_DATABASE":      "sigil",
+					"MYSQL_USER":          testMySQLUser,
+					"MYSQL_PASSWORD":      testMySQLPassword,
+					"MYSQL_ROOT_PASSWORD": testMySQLRootPass,
+				},
+				WaitingFor: wait.ForListeningPort("3306/tcp").WithStartupTimeout(2 * time.Minute),
+			},
+			Started: true,
+		})
+		if err != nil {
+			sharedMySQLErr = err
+			return
+		}
+
+		host, err := container.Host(ctx)
+		if err != nil {
+			_ = container.Terminate(context.Background())
+			sharedMySQLErr = err
+			return
+		}
+		mappedPort, err := container.MappedPort(ctx, "3306/tcp")
+		if err != nil {
+			_ = container.Terminate(context.Background())
+			sharedMySQLErr = err
+			return
+		}
+
+		sharedMySQLContainer = container
+		sharedMySQLHost = host
+		sharedMySQLPort = mappedPort.Port()
+
+		adminDSN := fmt.Sprintf("root:%s@tcp(%s:%s)/mysql?parseTime=true", testMySQLRootPass, sharedMySQLHost, sharedMySQLPort)
+		var readyErr error
+		for i := 0; i < 30; i++ {
+			var adminStore *WALStore
+			adminStore, readyErr = NewWALStore(adminDSN)
+			if readyErr == nil {
+				sqlDB, dbErr := adminStore.DB().DB()
+				if dbErr == nil && sqlDB.Ping() == nil {
+					_ = sqlDB.Close()
+					readyErr = nil
+					break
+				}
+				if dbErr == nil {
+					_ = sqlDB.Close()
+				}
+				if dbErr != nil {
+					readyErr = dbErr
+				}
+			}
+			time.Sleep(time.Second)
+		}
+		if readyErr != nil {
+			_ = container.Terminate(context.Background())
+			sharedMySQLErr = readyErr
+			sharedMySQLContainer = nil
+		}
+	})
+
+	if sharedMySQLErr != nil {
+		t.Skipf("skip mysql integration tests (shared container unavailable): %v", sharedMySQLErr)
+	}
+	if sharedMySQLContainer == nil {
+		t.Skip("skip mysql integration tests (shared container unavailable)")
+	}
+	return sharedMySQLHost, sharedMySQLPort
+}
+
+func createTestDatabase(adminDSN, dbName string) error {
+	adminStore, err := NewWALStore(adminDSN)
+	if err != nil {
+		return err
+	}
+	sqlDB, err := adminStore.DB().DB()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = sqlDB.Close()
+	}()
+
+	query := fmt.Sprintf(
+		"CREATE DATABASE `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci",
+		dbName,
+	)
+	return adminStore.DB().Exec(query).Error
+}
+
+func dropTestDatabase(adminDSN, dbName string) error {
+	adminStore, err := NewWALStore(adminDSN)
+	if err != nil {
+		return err
+	}
+	sqlDB, err := adminStore.DB().DB()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = sqlDB.Close()
+	}()
+
+	query := fmt.Sprintf("DROP DATABASE IF EXISTS `%s`", dbName)
+	return adminStore.DB().Exec(query).Error
 }
 
 func requireNoBatchErrors(t *testing.T, errs []error) {
@@ -286,4 +449,34 @@ func testGeneration(id, conversationID string, completedAt time.Time) *sigilv1.G
 		ToolChoice:      proto.String("required"),
 		ThinkingEnabled: proto.Bool(true),
 	}
+}
+
+func TestSaveBatchWithoutEvalHookDoesNotPersistEnqueueEvent(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	generation := testGeneration("gen-hook-disabled", "conv-hook-disabled", time.Date(2026, 2, 12, 18, 0, 0, 0, time.UTC))
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{generation}))
+
+	var count int64
+	if err := store.DB().Model(&EvalEnqueueEventModel{}).Count(&count).Error; err != nil {
+		t.Fatalf("count eval enqueue events: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected no enqueue events without hook, got %d", count)
+	}
+}
+
+type recordingEvalHook struct {
+	calls     int
+	tenantIDs []string
+}
+
+func (h *recordingEvalHook) OnGenerationsSaved(tenantID string) {
+	h.calls++
+	h.tenantIDs = append(h.tenantIDs, tenantID)
 }

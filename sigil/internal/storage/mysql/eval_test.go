@@ -1,0 +1,505 @@
+package mysql
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
+)
+
+func TestEvalStoreEvaluatorCRUD(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	err := store.CreateEvaluator(context.Background(), evalpkg.EvaluatorDefinition{
+		TenantID:    "tenant-a",
+		EvaluatorID: "sigil.helpfulness",
+		Version:     "2026-02-17",
+		Kind:        evalpkg.EvaluatorKindLLMJudge,
+		Config: map[string]any{
+			"provider":      "openai",
+			"model":         "gpt-4o-mini",
+			"system_prompt": "score this response",
+		},
+		OutputKeys: []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeNumber}},
+	})
+	if err != nil {
+		t.Fatalf("create evaluator: %v", err)
+	}
+
+	evaluator, err := store.GetEvaluator(context.Background(), "tenant-a", "sigil.helpfulness")
+	if err != nil {
+		t.Fatalf("get evaluator: %v", err)
+	}
+	if evaluator == nil {
+		t.Fatalf("expected evaluator")
+	}
+	if evaluator.Kind != evalpkg.EvaluatorKindLLMJudge {
+		t.Fatalf("unexpected evaluator kind %q", evaluator.Kind)
+	}
+	if evaluator.Config["provider"] != "openai" {
+		t.Fatalf("unexpected provider config %#v", evaluator.Config)
+	}
+
+	items, nextCursor, err := store.ListEvaluators(context.Background(), "tenant-a", 10, 0)
+	if err != nil {
+		t.Fatalf("list evaluators: %v", err)
+	}
+	if nextCursor != 0 {
+		t.Fatalf("expected next cursor 0, got %d", nextCursor)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected one evaluator, got %d", len(items))
+	}
+
+	if err := store.DeleteEvaluator(context.Background(), "tenant-a", "sigil.helpfulness"); err != nil {
+		t.Fatalf("delete evaluator: %v", err)
+	}
+	if err := store.DeleteEvaluator(context.Background(), "tenant-a", "sigil.helpfulness"); err != nil {
+		t.Fatalf("idempotent delete evaluator: %v", err)
+	}
+
+	evaluator, err = store.GetEvaluator(context.Background(), "tenant-a", "sigil.helpfulness")
+	if err != nil {
+		t.Fatalf("get evaluator after delete: %v", err)
+	}
+	if evaluator != nil {
+		t.Fatalf("expected evaluator to be deleted")
+	}
+}
+
+func TestEvalStoreRuleCRUDAndUpdate(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	err := store.CreateRule(context.Background(), evalpkg.RuleDefinition{
+		TenantID:     "tenant-a",
+		RuleID:       "online.helpfulness.user-visible",
+		Enabled:      true,
+		Selector:     evalpkg.SelectorUserVisibleTurn,
+		Match:        map[string]any{"agent_name": []string{"assistant-*"}},
+		SampleRate:   0.25,
+		EvaluatorIDs: []string{"sigil.helpfulness", "sigil.conciseness"},
+	})
+	if err != nil {
+		t.Fatalf("create rule: %v", err)
+	}
+
+	rule, err := store.GetRule(context.Background(), "tenant-a", "online.helpfulness.user-visible")
+	if err != nil {
+		t.Fatalf("get rule: %v", err)
+	}
+	if rule == nil {
+		t.Fatalf("expected rule")
+	}
+	if rule.SampleRate != 0.25 {
+		t.Fatalf("unexpected sample rate: %f", rule.SampleRate)
+	}
+	if len(rule.EvaluatorIDs) != 2 {
+		t.Fatalf("expected two evaluator ids, got %#v", rule.EvaluatorIDs)
+	}
+
+	rule.Enabled = false
+	rule.SampleRate = 0.5
+	rule.EvaluatorIDs = []string{"sigil.helpfulness"}
+	if err := store.UpdateRule(context.Background(), *rule); err != nil {
+		t.Fatalf("update rule: %v", err)
+	}
+
+	enabledRules, err := store.ListEnabledRules(context.Background(), "tenant-a")
+	if err != nil {
+		t.Fatalf("list enabled rules: %v", err)
+	}
+	if len(enabledRules) != 0 {
+		t.Fatalf("expected no enabled rules after disable, got %d", len(enabledRules))
+	}
+
+	if err := store.DeleteRule(context.Background(), "tenant-a", "online.helpfulness.user-visible"); err != nil {
+		t.Fatalf("delete rule: %v", err)
+	}
+	if err := store.DeleteRule(context.Background(), "tenant-a", "online.helpfulness.user-visible"); err != nil {
+		t.Fatalf("idempotent delete rule: %v", err)
+	}
+
+	rule, err = store.GetRule(context.Background(), "tenant-a", "online.helpfulness.user-visible")
+	if err != nil {
+		t.Fatalf("get rule after delete: %v", err)
+	}
+	if rule != nil {
+		t.Fatalf("expected deleted rule")
+	}
+}
+
+func TestEvalStoreScoreCRUDAndLatest(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	base := time.Date(2026, 2, 17, 10, 0, 0, 0, time.UTC)
+	inserted, err := store.InsertScore(context.Background(), evalpkg.GenerationScore{
+		TenantID:         "tenant-a",
+		ScoreID:          "sc-1",
+		GenerationID:     "gen-1",
+		EvaluatorID:      "sigil.helpfulness",
+		EvaluatorVersion: "2026-02-17",
+		RuleID:           "online.helpfulness",
+		ScoreKey:         "helpfulness",
+		ScoreType:        evalpkg.ScoreTypeNumber,
+		Value:            evalpkg.NumberValue(0.7),
+		CreatedAt:        base,
+		Metadata:         map[string]any{"judge": "gpt-4o-mini"},
+	})
+	if err != nil {
+		t.Fatalf("insert score: %v", err)
+	}
+	if !inserted {
+		t.Fatalf("expected inserted score")
+	}
+
+	inserted, err = store.InsertScore(context.Background(), evalpkg.GenerationScore{
+		TenantID:         "tenant-a",
+		ScoreID:          "sc-1",
+		GenerationID:     "gen-1",
+		EvaluatorID:      "sigil.helpfulness",
+		EvaluatorVersion: "2026-02-17",
+		ScoreKey:         "helpfulness",
+		ScoreType:        evalpkg.ScoreTypeNumber,
+		Value:            evalpkg.NumberValue(0.8),
+		CreatedAt:        base.Add(time.Second),
+	})
+	if err != nil {
+		t.Fatalf("insert duplicate score: %v", err)
+	}
+	if inserted {
+		t.Fatalf("expected duplicate insert to be ignored")
+	}
+
+	batchInserted, err := store.InsertScoreBatch(context.Background(), []evalpkg.GenerationScore{
+		{
+			TenantID:         "tenant-a",
+			ScoreID:          "sc-2",
+			GenerationID:     "gen-1",
+			EvaluatorID:      "sigil.helpfulness",
+			EvaluatorVersion: "2026-02-17",
+			RuleID:           "online.helpfulness",
+			ScoreKey:         "helpfulness",
+			ScoreType:        evalpkg.ScoreTypeNumber,
+			Value:            evalpkg.NumberValue(0.9),
+			CreatedAt:        base.Add(2 * time.Second),
+		},
+		{
+			TenantID:         "tenant-a",
+			ScoreID:          "sc-3",
+			GenerationID:     "gen-1",
+			EvaluatorID:      "sigil.response_not_empty",
+			EvaluatorVersion: "2026-02-17",
+			RuleID:           "online.response_not_empty",
+			ScoreKey:         "response_not_empty",
+			ScoreType:        evalpkg.ScoreTypeBool,
+			Value:            evalpkg.BoolValue(true),
+			CreatedAt:        base.Add(3 * time.Second),
+		},
+		{
+			TenantID:         "tenant-a",
+			ScoreID:          "sc-1",
+			GenerationID:     "gen-1",
+			EvaluatorID:      "sigil.helpfulness",
+			EvaluatorVersion: "2026-02-17",
+			ScoreKey:         "helpfulness",
+			ScoreType:        evalpkg.ScoreTypeNumber,
+			Value:            evalpkg.NumberValue(1.0),
+			CreatedAt:        base.Add(4 * time.Second),
+		},
+	})
+	if err != nil {
+		t.Fatalf("insert score batch: %v", err)
+	}
+	if batchInserted != 2 {
+		t.Fatalf("expected 2 inserted scores from batch, got %d", batchInserted)
+	}
+
+	scores, nextCursor, err := store.GetScoresByGeneration(context.Background(), "tenant-a", "gen-1", 2, 0)
+	if err != nil {
+		t.Fatalf("get scores by generation: %v", err)
+	}
+	if len(scores) != 2 {
+		t.Fatalf("expected first page with 2 scores, got %d", len(scores))
+	}
+	if nextCursor == 0 {
+		t.Fatalf("expected next cursor for first page")
+	}
+
+	scores, nextCursor, err = store.GetScoresByGeneration(context.Background(), "tenant-a", "gen-1", 10, nextCursor)
+	if err != nil {
+		t.Fatalf("get scores by generation page 2: %v", err)
+	}
+	if len(scores) != 1 {
+		t.Fatalf("expected second page with 1 score, got %d", len(scores))
+	}
+	if nextCursor != 0 {
+		t.Fatalf("expected no next cursor after last page")
+	}
+
+	latest, err := store.GetLatestScoresByGeneration(context.Background(), "tenant-a", "gen-1")
+	if err != nil {
+		t.Fatalf("get latest scores: %v", err)
+	}
+	if len(latest) != 2 {
+		t.Fatalf("expected 2 latest score keys, got %d", len(latest))
+	}
+	helpfulness := latest["helpfulness"]
+	if helpfulness.Value.Number == nil || *helpfulness.Value.Number != 0.9 {
+		t.Fatalf("expected latest helpfulness score 0.9, got %#v", helpfulness.Value)
+	}
+}
+
+func TestEvalStoreWorkItemClaimCompleteFailLifecycle(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	now := time.Date(2026, 2, 17, 11, 0, 0, 0, time.UTC)
+	if err := store.EnqueueWorkItem(context.Background(), evalpkg.WorkItem{
+		TenantID:         "tenant-a",
+		WorkID:           "work-1",
+		GenerationID:     "gen-1",
+		EvaluatorID:      "sigil.helpfulness",
+		EvaluatorVersion: "2026-02-17",
+		RuleID:           "online.helpfulness",
+		ScheduledAt:      now,
+	}); err != nil {
+		t.Fatalf("enqueue work-1: %v", err)
+	}
+	if err := store.EnqueueWorkItem(context.Background(), evalpkg.WorkItem{
+		TenantID:         "tenant-a",
+		WorkID:           "work-2",
+		GenerationID:     "gen-2",
+		EvaluatorID:      "sigil.helpfulness",
+		EvaluatorVersion: "2026-02-17",
+		RuleID:           "online.helpfulness",
+		ScheduledAt:      now,
+	}); err != nil {
+		t.Fatalf("enqueue work-2: %v", err)
+	}
+
+	claimed, err := store.ClaimWorkItems(context.Background(), now.Add(time.Second), 1)
+	if err != nil {
+		t.Fatalf("claim work items: %v", err)
+	}
+	if len(claimed) != 1 {
+		t.Fatalf("expected one claimed item, got %d", len(claimed))
+	}
+	if err := store.CompleteWorkItem(context.Background(), "tenant-a", claimed[0].WorkID); err != nil {
+		t.Fatalf("complete claimed item: %v", err)
+	}
+
+	claimed, err = store.ClaimWorkItems(context.Background(), now.Add(2*time.Second), 5)
+	if err != nil {
+		t.Fatalf("claim remaining items: %v", err)
+	}
+	if len(claimed) != 1 {
+		t.Fatalf("expected one remaining claimed item, got %d", len(claimed))
+	}
+
+	requeued, err := store.FailWorkItem(context.Background(), "tenant-a", claimed[0].WorkID, "transient", now.Add(10*time.Second), 3, false)
+	if err != nil {
+		t.Fatalf("fail work item transient: %v", err)
+	}
+	if !requeued {
+		t.Fatalf("expected transient failure to requeue")
+	}
+
+	claimed, err = store.ClaimWorkItems(context.Background(), now.Add(11*time.Second), 5)
+	if err != nil {
+		t.Fatalf("claim requeued item: %v", err)
+	}
+	if len(claimed) != 1 {
+		t.Fatalf("expected one requeued claimed item, got %d", len(claimed))
+	}
+
+	requeued, err = store.FailWorkItem(context.Background(), "tenant-a", claimed[0].WorkID, "permanent", now.Add(20*time.Second), 3, true)
+	if err != nil {
+		t.Fatalf("fail work item permanent: %v", err)
+	}
+	if requeued {
+		t.Fatalf("expected permanent failure to mark failed")
+	}
+
+	successCounts, err := store.CountWorkItemsByStatus(context.Background(), evalpkg.WorkItemStatusSuccess)
+	if err != nil {
+		t.Fatalf("count success work items: %v", err)
+	}
+	if successCounts["tenant-a"] != 1 {
+		t.Fatalf("expected one success item, got %d", successCounts["tenant-a"])
+	}
+
+	failedCounts, err := store.CountWorkItemsByStatus(context.Background(), evalpkg.WorkItemStatusFailed)
+	if err != nil {
+		t.Fatalf("count failed work items: %v", err)
+	}
+	if failedCounts["tenant-a"] != 1 {
+		t.Fatalf("expected one failed item, got %d", failedCounts["tenant-a"])
+	}
+}
+
+func TestEvalEnqueueEventClaimCompleteFailLifecycle(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	now := time.Date(2026, 2, 17, 12, 0, 0, 0, time.UTC)
+	for _, generationID := range []string{"gen-1", "gen-2"} {
+		row := EvalEnqueueEventModel{
+			TenantID:     "tenant-a",
+			GenerationID: generationID,
+			Payload:      []byte("payload-" + generationID),
+			ScheduledAt:  now,
+			Status:       evalEnqueueStatusQueued,
+			CreatedAt:    now,
+			UpdatedAt:    now,
+		}
+		if err := store.DB().Create(&row).Error; err != nil {
+			t.Fatalf("seed enqueue event %s: %v", generationID, err)
+		}
+	}
+
+	claimed, err := store.ClaimEvalEnqueueEvents(context.Background(), now.Add(time.Second), 1, time.Minute)
+	if err != nil {
+		t.Fatalf("claim enqueue events: %v", err)
+	}
+	if len(claimed) != 1 {
+		t.Fatalf("expected one claimed enqueue event, got %d", len(claimed))
+	}
+	if err := store.CompleteEvalEnqueueEvent(context.Background(), "tenant-a", claimed[0].GenerationID); err != nil {
+		t.Fatalf("complete enqueue event: %v", err)
+	}
+
+	claimed, err = store.ClaimEvalEnqueueEvents(context.Background(), now.Add(2*time.Second), 10, time.Minute)
+	if err != nil {
+		t.Fatalf("claim remaining enqueue events: %v", err)
+	}
+	if len(claimed) != 1 {
+		t.Fatalf("expected one remaining enqueue event, got %d", len(claimed))
+	}
+
+	requeued, err := store.FailEvalEnqueueEvent(
+		context.Background(),
+		"tenant-a",
+		claimed[0].GenerationID,
+		"transient",
+		now.Add(10*time.Second),
+		3,
+		false,
+	)
+	if err != nil {
+		t.Fatalf("fail enqueue event transient: %v", err)
+	}
+	if !requeued {
+		t.Fatalf("expected transient enqueue failure to requeue")
+	}
+
+	claimed, err = store.ClaimEvalEnqueueEvents(context.Background(), now.Add(5*time.Second), 10, time.Minute)
+	if err != nil {
+		t.Fatalf("claim before retry-at: %v", err)
+	}
+	if len(claimed) != 0 {
+		t.Fatalf("expected no enqueue claims before retry-at, got %d", len(claimed))
+	}
+
+	claimed, err = store.ClaimEvalEnqueueEvents(context.Background(), now.Add(11*time.Second), 10, time.Minute)
+	if err != nil {
+		t.Fatalf("claim requeued enqueue event: %v", err)
+	}
+	if len(claimed) != 1 {
+		t.Fatalf("expected one requeued enqueue event, got %d", len(claimed))
+	}
+	if claimed[0].Attempts != 1 {
+		t.Fatalf("expected attempts=1 after first failure, got %d", claimed[0].Attempts)
+	}
+
+	requeued, err = store.FailEvalEnqueueEvent(
+		context.Background(),
+		"tenant-a",
+		claimed[0].GenerationID,
+		"permanent",
+		now.Add(20*time.Second),
+		3,
+		true,
+	)
+	if err != nil {
+		t.Fatalf("fail enqueue event permanent: %v", err)
+	}
+	if requeued {
+		t.Fatalf("expected permanent enqueue failure to mark failed")
+	}
+
+	failed, err := store.CountEvalEnqueueEventsByStatus(context.Background(), evalEnqueueStatusFailed)
+	if err != nil {
+		t.Fatalf("count failed enqueue events: %v", err)
+	}
+	if failed != 1 {
+		t.Fatalf("expected 1 failed enqueue event, got %d", failed)
+	}
+
+	queued, err := store.CountEvalEnqueueEventsByStatus(context.Background(), evalEnqueueStatusQueued)
+	if err != nil {
+		t.Fatalf("count queued enqueue events: %v", err)
+	}
+	if queued != 0 {
+		t.Fatalf("expected 0 queued enqueue events, got %d", queued)
+	}
+}
+
+func TestEvalEnqueueEventClaimRecoversStaleClaims(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	now := time.Date(2026, 2, 17, 12, 30, 0, 0, time.UTC)
+	staleClaimedAt := now.Add(-10 * time.Minute)
+	row := EvalEnqueueEventModel{
+		TenantID:     "tenant-a",
+		GenerationID: "gen-stale",
+		Payload:      []byte("payload-stale"),
+		ScheduledAt:  now.Add(-time.Minute),
+		Status:       evalEnqueueStatusClaimed,
+		ClaimedAt:    &staleClaimedAt,
+		CreatedAt:    now.Add(-time.Hour),
+		UpdatedAt:    now.Add(-time.Hour),
+	}
+	if err := store.DB().Create(&row).Error; err != nil {
+		t.Fatalf("seed stale claimed enqueue event: %v", err)
+	}
+
+	claimed, err := store.ClaimEvalEnqueueEvents(context.Background(), now, 10, time.Minute)
+	if err != nil {
+		t.Fatalf("claim enqueue events with stale recovery: %v", err)
+	}
+	if len(claimed) != 1 {
+		t.Fatalf("expected one recovered enqueue event, got %d", len(claimed))
+	}
+	if claimed[0].GenerationID != "gen-stale" {
+		t.Fatalf("expected recovered generation gen-stale, got %q", claimed[0].GenerationID)
+	}
+}

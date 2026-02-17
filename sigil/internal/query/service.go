@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	"github.com/grafana/sigil/sigil/internal/feedback"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	"github.com/grafana/sigil/sigil/internal/storage"
@@ -111,6 +112,11 @@ type annotationEventStore interface {
 	ListConversationAnnotations(ctx context.Context, tenantID, conversationID string, limit int, cursor uint64) ([]feedback.ConversationAnnotation, uint64, error)
 }
 
+type scoreStore interface {
+	GetScoresByGeneration(ctx context.Context, tenantID, generationID string, limit int, cursor uint64) ([]evalpkg.GenerationScore, uint64, error)
+	GetLatestScoresByGeneration(ctx context.Context, tenantID, generationID string) (map[string]evalpkg.LatestScore, error)
+}
+
 type filteredConversationStore interface {
 	ListConversationsWithFeedbackFilters(ctx context.Context, tenantID string, hasBadRating, hasAnnotations *bool) ([]storage.Conversation, error)
 }
@@ -121,6 +127,7 @@ type ServiceDependencies struct {
 	BlockMetadataStore  storage.BlockMetadataStore
 	BlockReader         storage.BlockReader
 	FeedbackStore       feedback.Store
+	ScoreStore          scoreStore
 	TempoBaseURL        string
 	HTTPClient          *http.Client
 	OverfetchMultiplier int
@@ -135,6 +142,7 @@ type Service struct {
 	ratingSummaryStore     ratingSummaryStore
 	annotationSummaryStore annotationSummaryStore
 	annotationEventStore   annotationEventStore
+	scoreStore             scoreStore
 	tempoClient            TempoClient
 	nowFn                  func() time.Time
 	overfetchMultiplier    int
@@ -157,6 +165,9 @@ func NewServiceWithStores(conversationStore storage.ConversationStore, feedbackS
 	if reader, ok := conversationStore.(storage.WALReader); ok {
 		service.walReader = reader
 	}
+	if store, ok := conversationStore.(scoreStore); ok {
+		service.scoreStore = store
+	}
 	if metadataStore, ok := conversationStore.(storage.BlockMetadataStore); ok {
 		service.blockMetadataStore = metadataStore
 	}
@@ -168,12 +179,18 @@ func NewServiceWithDependencies(dependencies ServiceDependencies) (*Service, err
 	service := NewServiceWithStores(dependencies.ConversationStore, dependencies.FeedbackStore)
 	if dependencies.WALReader != nil {
 		service.walReader = dependencies.WALReader
+		if store, ok := dependencies.WALReader.(scoreStore); ok {
+			service.scoreStore = store
+		}
 	}
 	if dependencies.BlockMetadataStore != nil {
 		service.blockMetadataStore = dependencies.BlockMetadataStore
 	}
 	if dependencies.BlockReader != nil {
 		service.blockReader = dependencies.BlockReader
+	}
+	if dependencies.ScoreStore != nil {
+		service.scoreStore = dependencies.ScoreStore
 	}
 
 	if dependencies.OverfetchMultiplier > 0 {
@@ -745,7 +762,44 @@ func (s *Service) GetGenerationDetailForTenant(ctx context.Context, tenantID, ge
 	if err != nil {
 		return nil, false, err
 	}
+	if s.scoreStore != nil {
+		latestScores, err := s.scoreStore.GetLatestScoresByGeneration(ctx, trimmedTenantID, trimmedGenerationID)
+		if err != nil {
+			return nil, false, err
+		}
+		payload["latest_scores"] = latestScoresToResponse(latestScores)
+	}
 	return payload, true, nil
+}
+
+func (s *Service) ListGenerationScoresForTenant(ctx context.Context, tenantID, generationID string, limit int, cursor uint64) ([]map[string]any, uint64, error) {
+	trimmedTenantID := strings.TrimSpace(tenantID)
+	trimmedGenerationID := strings.TrimSpace(generationID)
+	if trimmedTenantID == "" {
+		return nil, 0, NewValidationError("tenant id is required")
+	}
+	if trimmedGenerationID == "" {
+		return nil, 0, NewValidationError("generation id is required")
+	}
+	if s.scoreStore == nil {
+		return nil, 0, errors.New("score store is not configured")
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	scores, nextCursor, err := s.scoreStore.GetScoresByGeneration(ctx, trimmedTenantID, trimmedGenerationID, limit, cursor)
+	if err != nil {
+		return nil, 0, err
+	}
+	items := make([]map[string]any, 0, len(scores))
+	for _, score := range scores {
+		items = append(items, scoreToResponsePayload(score))
+	}
+	return items, nextCursor, nil
 }
 
 func (s *Service) ListSearchTagsForTenant(ctx context.Context, tenantID string, from, to time.Time) ([]SearchTag, error) {
@@ -1158,6 +1212,84 @@ func generationToResponsePayload(generation *sigilv1.Generation) (map[string]any
 		payload["error"] = map[string]any{"message": generation.GetCallError()}
 	}
 	return payload, nil
+}
+
+func scoreToResponsePayload(score evalpkg.GenerationScore) map[string]any {
+	payload := map[string]any{
+		"score_id":          score.ScoreID,
+		"generation_id":     score.GenerationID,
+		"evaluator_id":      score.EvaluatorID,
+		"evaluator_version": score.EvaluatorVersion,
+		"score_key":         score.ScoreKey,
+		"score_type":        score.ScoreType,
+		"value":             scoreValueToResponse(score.Value),
+		"metadata":          score.Metadata,
+		"created_at":        score.CreatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	if score.RuleID != "" {
+		payload["rule_id"] = score.RuleID
+	}
+	if score.RunID != "" {
+		payload["run_id"] = score.RunID
+	}
+	if score.ConversationID != "" {
+		payload["conversation_id"] = score.ConversationID
+	}
+	if score.TraceID != "" {
+		payload["trace_id"] = score.TraceID
+	}
+	if score.SpanID != "" {
+		payload["span_id"] = score.SpanID
+	}
+	if score.Unit != "" {
+		payload["unit"] = score.Unit
+	}
+	if score.Passed != nil {
+		payload["passed"] = *score.Passed
+	}
+	if score.Explanation != "" {
+		payload["explanation"] = score.Explanation
+	}
+	if score.SourceKind != "" {
+		payload["source"] = map[string]any{
+			"kind": score.SourceKind,
+			"id":   score.SourceID,
+		}
+	}
+	return payload
+}
+
+func latestScoresToResponse(scores map[string]evalpkg.LatestScore) map[string]any {
+	if len(scores) == 0 {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(scores))
+	for key, score := range scores {
+		entry := map[string]any{
+			"value":             scoreValueToResponse(score.Value),
+			"evaluator_id":      score.EvaluatorID,
+			"evaluator_version": score.EvaluatorVersion,
+			"created_at":        score.CreatedAt.UTC().Format(time.RFC3339Nano),
+		}
+		if score.Passed != nil {
+			entry["passed"] = *score.Passed
+		}
+		out[key] = entry
+	}
+	return out
+}
+
+func scoreValueToResponse(value evalpkg.ScoreValue) map[string]any {
+	switch {
+	case value.Number != nil:
+		return map[string]any{"number": *value.Number}
+	case value.Bool != nil:
+		return map[string]any{"bool": *value.Bool}
+	case value.String != nil:
+		return map[string]any{"string": *value.String}
+	default:
+		return map[string]any{}
+	}
 }
 
 func normalizeGenerationMode(mode string) string {

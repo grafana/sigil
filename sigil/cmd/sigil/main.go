@@ -18,7 +18,7 @@ func main() {
 	cfg := config.FromEnv()
 
 	var targetFlag string
-	flag.StringVar(&targetFlag, "target", cfg.Target, "runtime target: all|server|querier|compactor|catalog-sync")
+	flag.StringVar(&targetFlag, "target", cfg.Target, "runtime target: all|server|querier|compactor|catalog-sync|eval-worker")
 	flag.Parse()
 
 	cfg.SetTarget(targetFlag)

@@ -11,6 +11,8 @@ import (
 	"github.com/grafana/dskit/modules"
 	"github.com/grafana/dskit/services"
 	"github.com/grafana/sigil/sigil/internal/config"
+	"github.com/grafana/sigil/sigil/internal/eval/evaluators/judges"
+	evalworker "github.com/grafana/sigil/sigil/internal/eval/worker"
 	"github.com/grafana/sigil/sigil/internal/modelcards"
 	"github.com/grafana/sigil/sigil/internal/storage/mysql"
 	"github.com/grafana/sigil/sigil/internal/storage/object"
@@ -88,9 +90,10 @@ func (r *Runtime) registerModules() error {
 	r.moduleInit.RegisterModule(config.TargetQuerier, r.initQuerierModule)
 	r.moduleInit.RegisterModule(config.TargetCompactor, r.initCompactorModule)
 	r.moduleInit.RegisterModule(config.TargetCatalogSync, r.initCatalogSyncModule)
+	r.moduleInit.RegisterModule(config.TargetEvalWorker, r.initEvalWorkerModule)
 	r.moduleInit.RegisterModule(config.TargetAll, nil)
 
-	return r.moduleInit.AddDependency(config.TargetAll, config.TargetServer, config.TargetQuerier, config.TargetCompactor, config.TargetCatalogSync)
+	return r.moduleInit.AddDependency(config.TargetAll, config.TargetServer, config.TargetQuerier, config.TargetCompactor, config.TargetCatalogSync, config.TargetEvalWorker)
 }
 
 func (r *Runtime) initServerModule() (services.Service, error) {
@@ -193,6 +196,38 @@ func (r *Runtime) initCatalogSyncModule() (services.Service, error) {
 		return nil, err
 	}
 	return newCatalogSyncModule(r.cfg, modelCardSvc)
+}
+
+func (r *Runtime) initEvalWorkerModule() (services.Service, error) {
+	if !r.cfg.EvalWorkerEnabled {
+		return services.NewIdleService(func(context.Context) error { return nil }, nil).WithName(config.TargetEvalWorker), nil
+	}
+
+	switch strings.ToLower(strings.TrimSpace(r.cfg.StorageBackend)) {
+	case "", "mysql":
+	default:
+		return nil, fmt.Errorf("eval worker requires mysql storage backend, got %q", r.cfg.StorageBackend)
+	}
+
+	store, err := mysql.NewWALStore(r.cfg.MySQLDSN)
+	if err != nil {
+		return nil, fmt.Errorf("create mysql eval worker store: %w", err)
+	}
+	bootstrapCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := store.AutoMigrate(bootstrapCtx); err != nil {
+		return nil, err
+	}
+
+	return evalworker.NewService(evalworker.Config{
+		Enabled:           r.cfg.EvalWorkerEnabled,
+		MaxConcurrent:     r.cfg.EvalMaxConcurrent,
+		MaxRatePerMinute:  r.cfg.EvalMaxRate,
+		MaxAttempts:       r.cfg.EvalMaxAttempts,
+		ClaimBatchSize:    r.cfg.EvalClaimBatchSize,
+		PollInterval:      r.cfg.EvalPollInterval,
+		DefaultJudgeModel: r.cfg.EvalDefaultJudgeModel,
+	}, r.logger, store, store, judges.DiscoverFromEnv()), nil
 }
 
 func (r *Runtime) getModelCardService(ctx context.Context, enableLiveSource bool) (*modelcards.Service, error) {

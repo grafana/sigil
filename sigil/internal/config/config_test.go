@@ -202,7 +202,7 @@ func TestValidateAcceptsGCSBackend(t *testing.T) {
 }
 
 func TestValidateAcceptsKnownTargets(t *testing.T) {
-	targets := []string{TargetAll, TargetServer, TargetQuerier, TargetCompactor, TargetCatalogSync}
+	targets := []string{TargetAll, TargetServer, TargetQuerier, TargetCompactor, TargetCatalogSync, TargetEvalWorker}
 
 	for _, target := range targets {
 		t.Run(target, func(t *testing.T) {
@@ -213,6 +213,59 @@ func TestValidateAcceptsKnownTargets(t *testing.T) {
 				t.Fatalf("expected target %q to validate, got %v", target, err)
 			}
 		})
+	}
+}
+
+func TestFromEnvEvaluationDefaults(t *testing.T) {
+	t.Setenv("SIGIL_EVAL_WORKER_ENABLED", "")
+	t.Setenv("SIGIL_EVAL_MAX_CONCURRENT", "")
+	t.Setenv("SIGIL_EVAL_MAX_RATE", "")
+	t.Setenv("SIGIL_EVAL_MAX_ATTEMPTS", "")
+	t.Setenv("SIGIL_EVAL_CLAIM_BATCH_SIZE", "")
+	t.Setenv("SIGIL_EVAL_POLL_INTERVAL", "")
+	t.Setenv("SIGIL_EVAL_DEFAULT_JUDGE_MODEL", "")
+
+	cfg := FromEnv()
+	if !cfg.EvalWorkerEnabled {
+		t.Fatalf("expected eval worker enabled by default")
+	}
+	if cfg.EvalMaxConcurrent != DefaultEvalMaxConcurrent {
+		t.Fatalf("expected default eval max concurrent %d, got %d", DefaultEvalMaxConcurrent, cfg.EvalMaxConcurrent)
+	}
+	if cfg.EvalMaxRate != DefaultEvalMaxRate {
+		t.Fatalf("expected default eval max rate %d, got %d", DefaultEvalMaxRate, cfg.EvalMaxRate)
+	}
+	if cfg.EvalMaxAttempts != DefaultEvalMaxAttempts {
+		t.Fatalf("expected default eval max attempts %d, got %d", DefaultEvalMaxAttempts, cfg.EvalMaxAttempts)
+	}
+	if cfg.EvalClaimBatchSize != DefaultEvalClaimBatchSize {
+		t.Fatalf("expected default eval claim batch size %d, got %d", DefaultEvalClaimBatchSize, cfg.EvalClaimBatchSize)
+	}
+	if cfg.EvalPollInterval != DefaultEvalPollInterval {
+		t.Fatalf("expected default eval poll interval %s, got %s", DefaultEvalPollInterval, cfg.EvalPollInterval)
+	}
+	if cfg.EvalDefaultJudgeModel != DefaultEvalDefaultJudgeModel {
+		t.Fatalf("expected default eval judge model %q, got %q", DefaultEvalDefaultJudgeModel, cfg.EvalDefaultJudgeModel)
+	}
+}
+
+func TestValidateRejectsInvalidEvaluationConfig(t *testing.T) {
+	cfg := FromEnv()
+	cfg.EvalMaxConcurrent = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for eval max concurrent")
+	}
+
+	cfg = FromEnv()
+	cfg.EvalMaxRate = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for eval max rate")
+	}
+
+	cfg = FromEnv()
+	cfg.EvalMaxAttempts = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for eval max attempts")
 	}
 }
 

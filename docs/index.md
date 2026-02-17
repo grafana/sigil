@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-15
+last_reviewed: 2026-02-17
 source_of_truth: true
 audience: both
 ---
@@ -61,10 +61,13 @@ This is the canonical navigation map for repository documentation.
     - `exec-plans/completed/2026-02-13-all-providers-strict-helper-mapper-parity.md`
     - `exec-plans/completed/2026-02-13-sdk-metrics-and-telemetry-pipeline.md`
     - `exec-plans/completed/2026-02-15-conversation-query-path.md`
+    - `exec-plans/completed/2026-02-17-online-evaluation.md`
   - Tech debt tracker: [`exec-plans/tech-debt-tracker.md`](exec-plans/tech-debt-tracker.md)
 - Generated docs: [`generated/db-schema.md`](generated/db-schema.md)
 - External references: [`references/index.md`](references/index.md)
   - Generation ingest contract: [`references/generation-ingest-contract.md`](references/generation-ingest-contract.md)
+  - Score ingest contract: [`references/score-ingest-contract.md`](references/score-ingest-contract.md)
+  - Evaluation control plane API: [`references/eval-control-plane.md`](references/eval-control-plane.md)
   - AI o11y + evaluation market survey (online + offline): [`references/ai-observability-evaluation-market.md`](references/ai-observability-evaluation-market.md)
   - Grafana response shapes: [`references/grafana-query-response-shapes.md`](references/grafana-query-response-shapes.md)
   - Helm deployment chart: [`references/helm-chart.md`](references/helm-chart.md)
