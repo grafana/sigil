@@ -662,6 +662,7 @@ export class SigilClient {
       return;
     }
     this.tokenUsageHistogram.record(value, {
+      [spanAttrOperationName]: generation.operationName,
       [spanAttrProviderName]: generation.model.provider,
       [spanAttrRequestModel]: generation.model.name,
       [spanAttrAgentName]: generation.agentName ?? '',
