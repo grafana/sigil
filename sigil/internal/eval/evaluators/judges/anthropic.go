@@ -12,13 +12,22 @@ import (
 )
 
 type AnthropicClient struct {
-	messages anthropic.MessageService
-	models   anthropic.ModelService
+	providerID        string
+	messages          anthropic.MessageService
+	models            anthropic.ModelService
+	supportsModelList bool
+	initErr           error
 }
 
-func NewAnthropicClient(httpClient *http.Client, baseURL, apiKey string) *AnthropicClient {
-	opts := []anthropicoption.RequestOption{
-		anthropicoption.WithAPIKey(strings.TrimSpace(apiKey)),
+// NewAnthropicClient constructs a direct Anthropic judge client.
+// Either apiKey or authToken can be used depending on deployment auth mode.
+func NewAnthropicClient(httpClient *http.Client, baseURL, apiKey, authToken string) *AnthropicClient {
+	opts := make([]anthropicoption.RequestOption, 0, 4)
+	if trimmedAPIKey := strings.TrimSpace(apiKey); trimmedAPIKey != "" {
+		opts = append(opts, anthropicoption.WithAPIKey(trimmedAPIKey))
+	}
+	if trimmedAuthToken := strings.TrimSpace(authToken); trimmedAuthToken != "" {
+		opts = append(opts, anthropicoption.WithAuthToken(trimmedAuthToken))
 	}
 	if httpClient != nil {
 		opts = append(opts, anthropicoption.WithHTTPClient(httpClient))
@@ -29,12 +38,17 @@ func NewAnthropicClient(httpClient *http.Client, baseURL, apiKey string) *Anthro
 
 	client := anthropic.NewClient(opts...)
 	return &AnthropicClient{
-		messages: client.Messages,
-		models:   client.Models,
+		providerID:        "anthropic",
+		messages:          client.Messages,
+		models:            client.Models,
+		supportsModelList: true,
 	}
 }
 
 func (c *AnthropicClient) Judge(ctx context.Context, req JudgeRequest) (JudgeResponse, error) {
+	if c.initErr != nil {
+		return JudgeResponse{}, c.initErr
+	}
 	model := strings.TrimSpace(req.Model)
 	if model == "" {
 		return JudgeResponse{}, fmt.Errorf("model is required")
@@ -87,6 +101,13 @@ func (c *AnthropicClient) Judge(ctx context.Context, req JudgeRequest) (JudgeRes
 }
 
 func (c *AnthropicClient) ListModels(ctx context.Context) ([]JudgeModel, error) {
+	if c.initErr != nil {
+		return nil, c.initErr
+	}
+	if !c.supportsModelList {
+		return []JudgeModel{}, nil
+	}
+
 	pager := c.models.ListAutoPaging(ctx, anthropic.ModelListParams{})
 	out := make([]JudgeModel, 0, 16)
 	for pager.Next() {
@@ -99,7 +120,7 @@ func (c *AnthropicClient) ListModels(ctx context.Context) ([]JudgeModel, error) 
 		if name == "" {
 			name = id
 		}
-		out = append(out, JudgeModel{ID: id, Name: name, Provider: "anthropic"})
+		out = append(out, JudgeModel{ID: id, Name: name, Provider: c.providerID})
 	}
 	if err := pager.Err(); err != nil {
 		return nil, err

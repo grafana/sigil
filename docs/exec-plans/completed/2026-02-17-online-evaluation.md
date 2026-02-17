@@ -147,9 +147,9 @@ Files: `sigil/internal/eval/rules/engine.go` (new), `sigil/internal/eval/rules/s
   ```
 - [x] Implement OpenAI judge client (`judges/openai.go`) using `openai-go` SDK. Support direct API key auth and Azure OpenAI variant.
 - [x] Implement OpenAI-compatible judge client (`judges/openai_compat.go`) using an HTTP compatibility adapter with custom base URL. Support multiple named instances via env vars or control plane API. Covers Ollama, vLLM, LM Studio, LiteLLM, OpenRouter.
-- [x] Implement Anthropic judge client (`judges/anthropic.go`) using `anthropic-sdk-go`. Support direct API key auth and AWS Bedrock variant (SigV4 via `aws-sdk-go-v2`).
-- [x] Implement Google judge client (`judges/google.go`) using `google.golang.org/genai`. Support Gemini API key auth and Vertex AI variant (OAuth2 via Application Default Credentials).
-- [x] Implement judge provider discovery in `judges/discovery.go`: enumerate configured providers from env vars, validate credentials, expose `ListProviders` and `ListModels`.
+- [x] Implement Anthropic judge client (`judges/anthropic.go`) using `anthropic-sdk-go`. Support direct API key/auth-token auth, AWS Bedrock variant (`anthropic-sdk-go/bedrock` + AWS config), and Anthropic-on-Vertex variant (`anthropic-sdk-go/vertex` + Google OAuth2 credentials).
+- [x] Implement Google judge client (`judges/google.go`) using `google.golang.org/genai`. Support Gemini API key auth (`google`) and Vertex AI variant (`vertexai`) with ADC or explicit credentials file/json.
+- [x] Implement judge provider discovery in `judges/discovery.go`: enumerate configured providers from explicit enable flags, validate credentials at init, and expose `ListProviders` and `ListModels` only for ready providers.
 - [x] Implement `llm_judge` evaluator: prompt template rendering, provider/model resolution, judge client dispatch, response parsing, timeout + token limits.
 - [x] Add configuration: `SIGIL_EVAL_DEFAULT_JUDGE_MODEL` (default `openai/gpt-4o-mini`).
 - [x] Register judge discovery HTTP routes:
@@ -165,7 +165,7 @@ Files: `sigil/internal/eval/rules/engine.go` (new), `sigil/internal/eval/rules/s
 - [x] Add unit tests for `llm_judge` evaluator (mocked judge client).
 - [x] Add tests for judge provider discovery (configured/unconfigured providers, model listing).
 
-**Exit criteria:** Selectors compute correctly on sample generation payloads. Matchers handle glob and exact matching. Sampling is deterministic and evenly distributed. All evaluator kinds return typed score outputs and handle errors gracefully. Judge discovery API returns only configured providers. CSP variants (Azure, Bedrock, Vertex) work when credentials are present.
+**Exit criteria:** Selectors compute correctly on sample generation payloads. Matchers handle glob and exact matching. Sampling is deterministic and evenly distributed. All evaluator kinds return typed score outputs and handle errors gracefully. Judge discovery API returns only configured and initialized providers. CSP variants (Azure, Bedrock, Vertex, Anthropic-on-Vertex) work when credentials are present.
 
 ### Phase 6: Ingest hook and eval worker
 
@@ -202,12 +202,13 @@ Files: `sigil/internal/storage/mysql/wal.go` (modify), `sigil/internal/eval/work
 
 ### Phase 7: Docs and seed config
 
-Files: `docs/references/score-ingest-contract.md` (new), `docs/references/eval-control-plane.md` (new), `sigil-eval-seed.example.yaml` (new), `ARCHITECTURE.md` (modify)
+Files: `docs/references/score-ingest-contract.md` (new), `docs/references/eval-control-plane.md` (new), `sigil-eval-seed.example.yaml` (new), `ARCHITECTURE.md` (modify), `sigil/internal/eval/doc.go` (new)
 
 - [x] Write score ingest API reference doc (request/response format, validation rules, idempotency).
 - [x] Write control plane API reference doc (evaluator and rule CRUD, predefined templates, YAML seed format).
 - [x] Create example `sigil-eval-seed.example.yaml` with predefined library templates and sample rules.
 - [x] Update `ARCHITECTURE.md` with online evaluation section referencing design doc.
 - [x] Update `docs/design-docs/index.md` with entry for the new design doc.
+- [x] Add package-level online-evaluation runtime diagram and test-weighted coverage map in `sigil/internal/eval/doc.go`.
 
-**Exit criteria:** Reference docs complete and accurate. Seed config validates and seeds correctly when loaded. Architecture doc updated.
+**Exit criteria:** Reference docs complete and accurate. Seed config validates and seeds correctly when loaded. Architecture and package-level runtime documentation are updated.

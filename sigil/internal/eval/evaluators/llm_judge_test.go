@@ -19,6 +19,7 @@ func TestLLMJudgeEvaluatorParsesNumericJSON(t *testing.T) {
 
 	t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_BASE_URL", server.URL)
 	t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_API_KEY", "test")
+	t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_ENABLED", "true")
 	discovery := judges.DiscoverFromEnv()
 	evaluator := NewLLMJudgeEvaluator(discovery, "openai-compat/judge-model")
 

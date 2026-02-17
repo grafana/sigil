@@ -2,20 +2,25 @@ package judges
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	cloudauth "cloud.google.com/go/auth"
+	cloudcredentials "cloud.google.com/go/auth/credentials"
 	"google.golang.org/genai"
 )
 
 type GoogleClient struct {
-	client  *genai.Client
-	initErr error
+	providerID string
+	client     *genai.Client
+	initErr    error
 }
 
+// NewGoogleClient constructs a direct Gemini API-key backed judge client.
 func NewGoogleClient(httpClient *http.Client, baseURL, apiKey string) *GoogleClient {
 	cfg := &genai.ClientConfig{
 		APIKey:  strings.TrimSpace(apiKey),
@@ -28,11 +33,75 @@ func NewGoogleClient(httpClient *http.Client, baseURL, apiKey string) *GoogleCli
 		cfg.HTTPOptions.BaseURL = trimmedBaseURL
 	}
 
+	return newGoogleClient("google", cfg)
+}
+
+// NewVertexAIClient constructs a Vertex AI backed judge client.
+// Vertex mode uses OAuth2 credentials (ADC or explicit credential sources) and
+// requires a project ID.
+func NewVertexAIClient(httpClient *http.Client, baseURL, projectID, location, apiKey, credentialsFile, credentialsJSON string) *GoogleClient {
+	trimmedAPIKey := strings.TrimSpace(apiKey)
+	if trimmedAPIKey != "" {
+		return &GoogleClient{
+			providerID: "vertexai",
+			initErr:    fmt.Errorf("vertex ai provider does not support API keys; use google provider for Gemini API key auth"),
+		}
+	}
+
+	credentials, err := resolveVertexCredentials(strings.TrimSpace(credentialsFile), strings.TrimSpace(credentialsJSON))
+	if err != nil {
+		return &GoogleClient{
+			providerID: "vertexai",
+			initErr:    err,
+		}
+	}
+
+	return newVertexAIClientWithCredentials(httpClient, baseURL, projectID, location, credentials)
+}
+
+func newVertexAIClientWithCredentials(httpClient *http.Client, baseURL, projectID, location string, credentials *cloudauth.Credentials) *GoogleClient {
+	trimmedProjectID := strings.TrimSpace(projectID)
+	if trimmedProjectID == "" {
+		return &GoogleClient{
+			providerID: "vertexai",
+			initErr:    fmt.Errorf("vertex project id is required"),
+		}
+	}
+	trimmedLocation := strings.TrimSpace(location)
+	if trimmedLocation == "" {
+		trimmedLocation = defaultVertexLocation
+	}
+
+	cfg := &genai.ClientConfig{
+		Backend:  genai.BackendVertexAI,
+		Project:  trimmedProjectID,
+		Location: trimmedLocation,
+	}
+	if trimmedBaseURL := strings.TrimSpace(baseURL); trimmedBaseURL != "" {
+		cfg.HTTPOptions.BaseURL = trimmedBaseURL
+	}
+	if credentials != nil {
+		cfg.Credentials = credentials
+	}
+	// Keep SDK-managed auth transport for Vertex. HTTP client customization is
+	// intentionally limited to Gemini API-key mode in NewGoogleClient.
+	_ = httpClient
+
+	return newGoogleClient("vertexai", cfg)
+}
+
+func newGoogleClient(providerID string, cfg *genai.ClientConfig) *GoogleClient {
 	client, err := genai.NewClient(context.Background(), cfg)
 	if err != nil {
-		return &GoogleClient{initErr: err}
+		return &GoogleClient{
+			providerID: providerID,
+			initErr:    err,
+		}
 	}
-	return &GoogleClient{client: client}
+	return &GoogleClient{
+		providerID: providerID,
+		client:     client,
+	}
 }
 
 func (c *GoogleClient) Judge(ctx context.Context, req JudgeRequest) (JudgeResponse, error) {
@@ -99,10 +168,7 @@ func (c *GoogleClient) ListModels(ctx context.Context) ([]JudgeModel, error) {
 			if item == nil {
 				continue
 			}
-			id := strings.TrimPrefix(strings.TrimSpace(item.Name), "models/")
-			if id == "" {
-				id = strings.TrimSpace(item.Name)
-			}
+			id := normalizeGoogleModelID(item.Name)
 			if id == "" {
 				continue
 			}
@@ -114,7 +180,7 @@ func (c *GoogleClient) ListModels(ctx context.Context) ([]JudgeModel, error) {
 			if int(item.OutputTokenLimit) > contextWindow {
 				contextWindow = int(item.OutputTokenLimit)
 			}
-			out = append(out, JudgeModel{ID: id, Name: name, Provider: "google", ContextWindow: contextWindow})
+			out = append(out, JudgeModel{ID: id, Name: name, Provider: c.providerID, ContextWindow: contextWindow})
 		}
 
 		if strings.TrimSpace(page.NextPageToken) == "" {
@@ -130,4 +196,49 @@ func (c *GoogleClient) ListModels(ctx context.Context) ([]JudgeModel, error) {
 		page = nextPage
 	}
 	return out, nil
+}
+
+func normalizeGoogleModelID(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+
+	if strings.Contains(trimmed, "/models/") {
+		parts := strings.Split(trimmed, "/models/")
+		if len(parts) > 0 {
+			last := strings.TrimSpace(parts[len(parts)-1])
+			if last != "" {
+				return last
+			}
+		}
+	}
+
+	if strings.HasPrefix(trimmed, "models/") {
+		trimmed = strings.TrimPrefix(trimmed, "models/")
+	}
+	return strings.TrimSpace(trimmed)
+}
+
+func resolveVertexCredentials(credentialsFile, credentialsJSON string) (*cloudauth.Credentials, error) {
+	if credentialsFile != "" && credentialsJSON != "" {
+		return nil, fmt.Errorf("vertex credentials file and credentials json are mutually exclusive")
+	}
+	if credentialsFile == "" && credentialsJSON == "" {
+		return nil, nil
+	}
+
+	opts := &cloudcredentials.DetectOptions{
+		Scopes: []string{vertexCloudPlatformScope},
+	}
+	if credentialsFile != "" {
+		opts.CredentialsFile = credentialsFile
+	}
+	if credentialsJSON != "" {
+		opts.CredentialsJSON = []byte(credentialsJSON)
+		if !json.Valid(opts.CredentialsJSON) {
+			return nil, fmt.Errorf("vertex credentials json is invalid")
+		}
+	}
+	return cloudcredentials.DetectDefault(opts)
 }

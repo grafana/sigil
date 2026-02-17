@@ -95,11 +95,14 @@ Supported judge providers (v1):
 | Provider | SDK | Direct Auth | CSP Variant | CSP Auth |
 |---|---|---|---|---|
 | OpenAI | `openai-go` | `SIGIL_EVAL_OPENAI_API_KEY` | Azure OpenAI | `SIGIL_EVAL_AZURE_OPENAI_ENDPOINT` + `SIGIL_EVAL_AZURE_OPENAI_API_KEY` (or Azure AD) |
-| Anthropic | `anthropic-sdk-go` | `SIGIL_EVAL_ANTHROPIC_API_KEY` | AWS Bedrock | `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` + `AWS_REGION` (or IAM role) |
-| Google | `google.golang.org/genai` | `SIGIL_EVAL_GOOGLE_API_KEY` | Vertex AI | `SIGIL_EVAL_VERTEXAI_PROJECT` + `SIGIL_EVAL_VERTEXAI_LOCATION` + Application Default Credentials |
+| Anthropic | `anthropic-sdk-go` | `SIGIL_EVAL_ANTHROPIC_API_KEY` or `SIGIL_EVAL_ANTHROPIC_AUTH_TOKEN` | AWS Bedrock | `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` + `AWS_REGION` (or IAM role), optional Bedrock bearer token |
+| Anthropic | `anthropic-sdk-go` | `SIGIL_EVAL_ANTHROPIC_API_KEY` or `SIGIL_EVAL_ANTHROPIC_AUTH_TOKEN` | Anthropic Vertex | `SIGIL_EVAL_ANTHROPIC_VERTEX_PROJECT` + ADC or explicit credentials file/json |
+| Google | `google.golang.org/genai` | `SIGIL_EVAL_GOOGLE_API_KEY` | Vertex AI | `SIGIL_EVAL_VERTEXAI_PROJECT` + ADC or explicit credentials file/json |
 | OpenAI-compatible | HTTP compatibility adapter | `SIGIL_EVAL_OPENAI_COMPAT_API_KEY` + `SIGIL_EVAL_OPENAI_COMPAT_BASE_URL` | -- | -- |
 
 The first three use official provider SDKs (same pattern as charmbracelet/crush). SDKs handle auth, retries, error types, and CSP-specific signing (SigV4 for Bedrock, OAuth2 for Vertex AI, Azure AD for Azure OpenAI).
+
+Provider discovery is explicitly enabled per provider (`SIGIL_EVAL_*_ENABLED`) and only reports providers that initialize successfully with valid credentials.
 
 The **OpenAI-compatible** provider uses a lightweight HTTP compatibility adapter with a custom base URL, covering local models (Ollama, vLLM, LM Studio), proxy gateways (LiteLLM, OpenRouter), and any endpoint that speaks the OpenAI Chat Completions API. Multiple OpenAI-compatible providers can be registered via indexed env vars (`SIGIL_EVAL_OPENAI_COMPAT_1_BASE_URL`, `SIGIL_EVAL_OPENAI_COMPAT_1_API_KEY`, `SIGIL_EVAL_OPENAI_COMPAT_1_NAME`) or via the control plane API.
 
