@@ -1734,26 +1734,29 @@ func captureEmbeddingInputTexts(inputTexts []string, cfg EmbeddingCaptureConfig)
 }
 
 func truncateEmbeddingText(text string, maxLen int) string {
-	if maxLen <= 0 || len(text) <= maxLen {
+	if maxLen <= 0 || utf8.RuneCountInString(text) <= maxLen {
 		return text
 	}
 	if maxLen <= len("...") {
-		return truncateUTF8Prefix(text, maxLen)
+		return truncateRunePrefix(text, maxLen)
 	}
-	return truncateUTF8Prefix(text, maxLen-len("...")) + "..."
+	return truncateRunePrefix(text, maxLen-len("...")) + "..."
 }
 
-func truncateUTF8Prefix(text string, maxBytes int) string {
-	if maxBytes <= 0 {
+func truncateRunePrefix(text string, maxRunes int) string {
+	if maxRunes <= 0 {
 		return ""
 	}
-	if len(text) <= maxBytes {
+	runeCount := utf8.RuneCountInString(text)
+	if runeCount <= maxRunes {
 		return text
 	}
 
-	cut := maxBytes
-	for cut > 0 && !utf8.RuneStart(text[cut]) {
-		cut--
+	// Find the byte index after maxRunes runes
+	byteIndex := 0
+	for i := 0; i < maxRunes && byteIndex < len(text); i++ {
+		_, size := utf8.DecodeRuneInString(text[byteIndex:])
+		byteIndex += size
 	}
-	return text[:cut]
+	return text[:byteIndex]
 }
