@@ -12,7 +12,7 @@ audience: both
 
 - `apps/plugin`: Grafana plugin UI and backend proxy for Sigil APIs.
 - `sigil`: generation ingest and query APIs.
-- `sdks/*`: post-LLM instrumentation SDKs (Go, Python, TypeScript/JavaScript, Java, .NET/C#). SDKs emit OTel traces, OTel metrics, and structured generation records.
+- `sdks/*`: post-LLM instrumentation SDKs (Go, Python, TypeScript/JavaScript, Java, .NET/C#). SDKs emit OTel traces, OTel metrics, structured generation records, and embedding spans.
 - Alloy / OTel Collector: telemetry pipeline for traces and metrics. Receives OTLP from SDKs, enriches with infrastructure metadata (k8s namespace, cluster, service), and forwards to backends.
 - Tempo: trace storage and TraceQL execution backend.
 - Prometheus: metrics storage for SDK-emitted AI observability metrics.
@@ -60,9 +60,9 @@ Tenant boundary completion is tracked in:
 
 SDKs emit four OTel histogram instruments alongside traces:
 
-- `gen_ai.client.operation.duration` (seconds): latency histogram for generations and tool calls.
-  - Attributes: `gen_ai.operation.name` (`generateText` | `streamText` | `execute_tool`), `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.agent.name`, `error.type`, `error.category`.
-- `gen_ai.client.token.usage` (tokens): token count histogram per generation, split by token type.
+- `gen_ai.client.operation.duration` (seconds): latency histogram for generation, embedding, and tool operations.
+  - Attributes: `gen_ai.operation.name` (`generateText` | `streamText` | `embeddings` | `execute_tool`), `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.agent.name`, `error.type`, `error.category`.
+- `gen_ai.client.token.usage` (tokens): token count histogram per operation, split by token type.
   - Attributes: `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.agent.name`, `gen_ai.token.type` (`input` | `output` | `cache_read` | `cache_write` | `cache_creation` | `reasoning`).
 - `gen_ai.client.time_to_first_token` (seconds): TTFT histogram for streaming operations.
   - Attributes: `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.agent.name`.
@@ -70,6 +70,16 @@ SDKs emit four OTel histogram instruments alongside traces:
   - Attributes: `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.agent.name`.
 
 These metrics get collector-enriched infrastructure labels (namespace, cluster, service) automatically.
+
+### Embedding call observability
+
+- SDKs expose embedding lifecycle APIs (`StartEmbedding` / `start_embedding`) across Go, Python, JS/TS, Java, and .NET.
+- Embedding calls are traces-and-metrics only:
+  - OTel spans use `gen_ai.operation.name="embeddings"` plus provider/model/usage attributes.
+  - Existing SDK metric instruments (`gen_ai.client.operation.duration`, `gen_ai.client.token.usage`) include embedding traffic.
+  - TTFT and tool-call-per-operation metrics are not emitted for embeddings.
+- There is no Sigil generation ingest/export for embeddings and no additional storage/query tables for embeddings.
+- Optional embedding input text capture is disabled by default and configurable with truncation limits per SDK.
 
 Design doc: `docs/design-docs/2026-02-13-sdk-metrics-and-telemetry-pipeline.md`
 

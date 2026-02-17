@@ -97,27 +97,28 @@ export function DashboardGrid({ dataSource, filters, from, to, timeRange }: Dash
   const byProvider = usePrometheusQuery(dataSource, callsByProviderQuery(filters, rangeDuration), from, to, 'instant');
   const byModel = usePrometheusQuery(dataSource, topModelsQuery(filters, rangeDuration), from, to, 'instant');
 
+  // Computed cost
+  const costTokensData = costTokens.data ?? undefined;
+  const tokensByModelData = tokensByModel.data ?? undefined;
+
   const resolvePairs = useMemo(() => {
     const pairs: ModelResolvePair[] = [];
-    pairs.push(...extractResolvePairs(costTokens.data));
-    pairs.push(...extractResolvePairs(tokensByModel.data));
+    pairs.push(...extractResolvePairs(costTokensData));
+    pairs.push(...extractResolvePairs(tokensByModelData));
     return pairs;
-  }, [costTokens.data, tokensByModel.data]);
+  }, [costTokensData, tokensByModelData]);
   const resolvedPricing = useResolvedModelPricing(dataSource, resolvePairs);
 
   const totalCost = useMemo(() => {
-    if (!costTokens.data) {
-      return { totalCost: 0, unresolvedTokens: 0, unresolvedSeries: [] };
-    }
-    return calculateTotalCost(costTokens.data, resolvedPricing.pricingMap);
-  }, [costTokens.data, resolvedPricing.pricingMap]);
+    return calculateTotalCost(costTokensData, resolvedPricing.pricingMap);
+  }, [costTokensData, resolvedPricing.pricingMap]);
 
   const costTimeSeries = useMemo(() => {
-    if (!tokensByModel.data) {
+    if (!tokensByModelData) {
       return [];
     }
-    return [calculateCostTimeSeries(tokensByModel.data, resolvedPricing.pricingMap)];
-  }, [tokensByModel.data, resolvedPricing.pricingMap]);
+    return [calculateCostTimeSeries(tokensByModelData, resolvedPricing.pricingMap)];
+  }, [tokensByModelData, resolvedPricing.pricingMap]);
 
   const unresolvedSummary = useMemo(() => {
     if (totalCost.unresolvedSeries.length === 0) {

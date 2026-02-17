@@ -68,7 +68,13 @@ function tokenCost(tokenType: string, count: number, pricing: ModelCardPricing):
  * Calculate total cost from a Prometheus vector response
  * that contains token counts broken down by model and token type.
  */
-export function calculateTotalCost(response: PrometheusQueryResponse, pricingMap: PricingMap): TotalCostResult {
+export function calculateTotalCost(
+  response: PrometheusQueryResponse | undefined,
+  pricingMap: PricingMap
+): TotalCostResult {
+  if (!response) {
+    return { totalCost: 0, unresolvedTokens: 0, unresolvedSeries: [] };
+  }
   if (response.data.resultType !== 'vector') {
     return { totalCost: 0, unresolvedTokens: 0, unresolvedSeries: [] };
   }
@@ -103,7 +109,13 @@ export function calculateTotalCost(response: PrometheusQueryResponse, pricingMap
  * containing token rates broken down by model and token type.
  * Returns a single aggregated cost timeseries as a DataFrame.
  */
-export function calculateCostTimeSeries(response: PrometheusQueryResponse, pricingMap: PricingMap): DataFrame {
+export function calculateCostTimeSeries(
+  response: PrometheusQueryResponse | undefined,
+  pricingMap: PricingMap
+): DataFrame {
+  if (!response) {
+    return new MutableDataFrame({ fields: [] });
+  }
   if (response.data.resultType !== 'matrix') {
     return new MutableDataFrame({ fields: [] });
   }
