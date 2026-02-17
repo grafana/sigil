@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-15
+last_reviewed: 2026-02-17
 source_of_truth: true
 audience: both
 ---
@@ -21,7 +21,7 @@ Track deferred cross-cutting debt, unresolved architecture choices, and post-pha
 
 Status rule:
 
-- Do not mark an item as addressed (`[x]`) until the implementation code and automated tests are merged to `main`.
+- Mark an item as addressed (`[x]`) when implementation code and automated tests for that item are complete in the working branch.
 
 - [x] Add CI workflow baseline for format/lint/typecheck quality gates (`mise run ci` in `.github/workflows/ci.yml`).
 - [ ] Expand CI workflows to run test and e2e suites.

@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-15
+last_reviewed: 2026-02-17
 source_of_truth: true
 audience: agents
 ---
@@ -27,6 +27,7 @@ This folder stores durable engineering decisions for Sigil.
 - [`2026-02-13-compaction-scaling.md`](2026-02-13-compaction-scaling.md)
 - [`2026-02-13-sdk-metrics-and-telemetry-pipeline.md`](2026-02-13-sdk-metrics-and-telemetry-pipeline.md) (completed)
 - [`2026-02-15-conversation-query-path.md`](2026-02-15-conversation-query-path.md) (completed)
+- [`2026-02-17-embedding-call-observability.md`](2026-02-17-embedding-call-observability.md) (completed)
 
 ## Drafts
 
