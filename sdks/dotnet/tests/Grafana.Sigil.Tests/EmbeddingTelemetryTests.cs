@@ -111,7 +111,7 @@ public sealed class EmbeddingTelemetryTests
         {
             CaptureInput = true,
             MaxInputItems = 1,
-            MaxTextLength = 4,
+            MaxTextLength = 5, // 6 code points → truncate to 2 code points + "..." = 5 code points
         };
 
         var spans = new List<Activity>();
@@ -129,7 +129,7 @@ public sealed class EmbeddingTelemetryTests
         recorder.SetResult(new EmbeddingResult
         {
             InputCount = 1,
-            InputTexts = new List<string> { "😀😀😀" },
+            InputTexts = new List<string> { "😀😀😀😀😀😀" }, // 6 emoji = 6 code points
         });
         recorder.End();
 
@@ -137,7 +137,7 @@ public sealed class EmbeddingTelemetryTests
 
         Assert.Single(spans);
         var captured = ReadTagStringValues(spans[0].GetTagItem("gen_ai.embeddings.input_texts"));
-        Assert.Equal(new[] { "..." }, captured);
+        Assert.Equal(new[] { "😀😀..." }, captured); // First 2 code points + "..."
     }
 
     [Fact]

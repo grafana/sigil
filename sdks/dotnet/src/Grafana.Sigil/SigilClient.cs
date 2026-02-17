@@ -1655,7 +1655,7 @@ public sealed class SigilClient : IAsyncDisposable
 
     private static string TruncateEmbeddingText(string text, int maxLength)
     {
-        if (text.Length <= maxLength)
+        if (GetScalarCount(text) <= maxLength)
         {
             return text;
         }
@@ -1673,30 +1673,57 @@ public sealed class SigilClient : IAsyncDisposable
         return TruncateAtScalarBoundary(text, maxLength - 3) + "...";
     }
 
-    private static string TruncateAtScalarBoundary(string text, int maxLength)
+    private static int GetScalarCount(string text)
     {
-        if (maxLength <= 0)
+        if (string.IsNullOrEmpty(text))
+        {
+            return 0;
+        }
+
+        var count = 0;
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (char.IsHighSurrogate(text[i]) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
+            {
+                i++; // Skip the low surrogate, count surrogate pair as one
+            }
+
+            count++;
+        }
+
+        return count;
+    }
+
+    private static string TruncateAtScalarBoundary(string text, int maxScalars)
+    {
+        if (maxScalars <= 0)
         {
             return string.Empty;
         }
 
-        if (text.Length <= maxLength)
+        if (GetScalarCount(text) <= maxScalars)
         {
             return text;
         }
 
-        var safeLength = maxLength;
-        if (
-            safeLength < text.Length
-            && safeLength > 0
-            && char.IsHighSurrogate(text[safeLength - 1])
-            && char.IsLowSurrogate(text[safeLength])
-        )
+        // Find the char index after maxScalars Unicode scalars
+        var charIndex = 0;
+        var scalarCount = 0;
+        while (charIndex < text.Length && scalarCount < maxScalars)
         {
-            safeLength--;
+            if (char.IsHighSurrogate(text[charIndex]) && charIndex + 1 < text.Length && char.IsLowSurrogate(text[charIndex + 1]))
+            {
+                charIndex += 2; // Surrogate pair is one scalar
+            }
+            else
+            {
+                charIndex++;
+            }
+
+            scalarCount++;
         }
 
-        return text.Substring(0, safeLength);
+        return text.Substring(0, charIndex);
     }
 
     internal static void RecordException(Activity activity, Exception error)
