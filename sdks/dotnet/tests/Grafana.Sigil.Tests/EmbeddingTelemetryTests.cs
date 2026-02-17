@@ -104,6 +104,43 @@ public sealed class EmbeddingTelemetryTests
     }
 
     [Fact]
+    public async Task EmbeddingSpan_TruncationPreservesSurrogatePairs()
+    {
+        var config = TestHelpers.TestConfig(new CapturingGenerationExporter());
+        config.EmbeddingCapture = new EmbeddingCaptureConfig
+        {
+            CaptureInput = true,
+            MaxInputItems = 1,
+            MaxTextLength = 4,
+        };
+
+        var spans = new List<Activity>();
+        using var listener = NewEmbeddingListener(spans);
+        await using var client = new SigilClient(config);
+
+        var recorder = client.StartEmbedding(new EmbeddingStart
+        {
+            Model = new ModelRef
+            {
+                Provider = "openai",
+                Name = "text-embedding-3-small",
+            },
+        });
+        recorder.SetResult(new EmbeddingResult
+        {
+            InputCount = 1,
+            InputTexts = new List<string> { "😀😀😀" },
+        });
+        recorder.End();
+
+        await client.ShutdownAsync();
+
+        Assert.Single(spans);
+        var captured = ReadTagStringValues(spans[0].GetTagItem("gen_ai.embeddings.input_texts"));
+        Assert.Equal(new[] { "..." }, captured);
+    }
+
+    [Fact]
     public async Task EmbeddingRecorder_SetCallError_MarksProviderErrorWithoutLocalError()
     {
         var config = TestHelpers.TestConfig(new CapturingGenerationExporter());

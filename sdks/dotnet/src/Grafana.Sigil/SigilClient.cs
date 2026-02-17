@@ -1659,12 +1659,43 @@ public sealed class SigilClient : IAsyncDisposable
             return text;
         }
 
-        if (maxLength <= 3)
+        if (maxLength <= 0)
         {
-            return text.Substring(0, maxLength);
+            return string.Empty;
         }
 
-        return text.Substring(0, maxLength - 3) + "...";
+        if (maxLength <= 3)
+        {
+            return TruncateAtScalarBoundary(text, maxLength);
+        }
+
+        return TruncateAtScalarBoundary(text, maxLength - 3) + "...";
+    }
+
+    private static string TruncateAtScalarBoundary(string text, int maxLength)
+    {
+        if (maxLength <= 0)
+        {
+            return string.Empty;
+        }
+
+        if (text.Length <= maxLength)
+        {
+            return text;
+        }
+
+        var safeLength = maxLength;
+        if (
+            safeLength < text.Length
+            && safeLength > 0
+            && char.IsHighSurrogate(text[safeLength - 1])
+            && char.IsLowSurrogate(text[safeLength])
+        )
+        {
+            safeLength--;
+        }
+
+        return text.Substring(0, safeLength);
     }
 
     internal static void RecordException(Activity activity, Exception error)
@@ -1966,8 +1997,6 @@ public sealed class GenerationRecorder
 
 public sealed class EmbeddingRecorder
 {
-    internal static readonly EmbeddingRecorder Noop = new(null, new EmbeddingStart(), DateTimeOffset.UtcNow, null, true);
-
     private readonly SigilClient? _client;
     private readonly EmbeddingStart _seed;
     private readonly DateTimeOffset _startedAt;
