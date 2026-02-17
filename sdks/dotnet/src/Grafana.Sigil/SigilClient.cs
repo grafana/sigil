@@ -1661,10 +1661,22 @@ public sealed class SigilClient : IAsyncDisposable
 
         if (maxLength <= 3)
         {
-            return text.Substring(0, maxLength);
+            var cut = maxLength;
+            // Avoid splitting a UTF-16 surrogate pair
+            if (cut > 0 && char.IsHighSurrogate(text[cut - 1]))
+            {
+                cut--;
+            }
+            return text.Substring(0, cut);
         }
 
-        return text.Substring(0, maxLength - 3) + "...";
+        var prefixLen = maxLength - 3;
+        // Avoid splitting a UTF-16 surrogate pair
+        if (prefixLen > 0 && char.IsHighSurrogate(text[prefixLen - 1]))
+        {
+            prefixLen--;
+        }
+        return text.Substring(0, prefixLen) + "...";
     }
 
     internal static void RecordException(Activity activity, Exception error)
@@ -1966,8 +1978,6 @@ public sealed class GenerationRecorder
 
 public sealed class EmbeddingRecorder
 {
-    internal static readonly EmbeddingRecorder Noop = new(null, new EmbeddingStart(), DateTimeOffset.UtcNow, null, true);
-
     private readonly SigilClient? _client;
     private readonly EmbeddingStart _seed;
     private readonly DateTimeOffset _startedAt;
