@@ -1134,6 +1134,7 @@ public final class SigilClient implements AutoCloseable {
         tokenUsageHistogram.record(
                 (double) value,
                 Attributes.builder()
+                        .put(SPAN_ATTR_OPERATION_NAME, operationName(generation))
                         .put(SPAN_ATTR_PROVIDER_NAME, generation.getModel() == null ? "" : generation.getModel().getProvider())
                         .put(SPAN_ATTR_REQUEST_MODEL, generation.getModel() == null ? "" : generation.getModel().getName())
                         .put(SPAN_ATTR_AGENT_NAME, generation.getAgentName())

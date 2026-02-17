@@ -1448,6 +1448,7 @@ public sealed class SigilClient : IAsyncDisposable
             value,
             new KeyValuePair<string, object?>[]
             {
+                new(SpanAttrOperationName, OperationName(generation)),
                 new(SpanAttrProviderName, generation.Model.Provider ?? string.Empty),
                 new(SpanAttrRequestModel, generation.Model.Name ?? string.Empty),
                 new(SpanAttrAgentName, generation.AgentName ?? string.Empty),
