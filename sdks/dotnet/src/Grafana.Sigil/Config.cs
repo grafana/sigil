@@ -124,6 +124,8 @@ internal static class ConfigResolver
             resolved.GenerationExport.MaxBackoff = TimeSpan.FromMilliseconds(100);
         }
 
+        resolved.EmbeddingCapture ??= new EmbeddingCaptureConfig();
+
         if (resolved.EmbeddingCapture.MaxInputItems <= 0)
         {
             resolved.EmbeddingCapture.MaxInputItems = 20;

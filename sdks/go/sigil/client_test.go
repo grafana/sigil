@@ -721,6 +721,7 @@ func TestNilClientReturnsNoOpEmbeddingRecorder(t *testing.T) {
 func TestStartEmbeddingNilContextUsesBackgroundContext(t *testing.T) {
 	client, recorder, _ := newTestClient(t, Config{})
 
+	//nolint:staticcheck // Intentional nil context to verify StartEmbedding fallback behavior.
 	callCtx, embeddingRecorder := client.StartEmbedding(nil, EmbeddingStart{
 		Model: ModelRef{Provider: "openai", Name: "text-embedding-3-small"},
 	})
@@ -1429,16 +1430,6 @@ func countToolSpans(spans []sdktrace.ReadOnlySpan) int {
 	count := 0
 	for _, span := range spans {
 		if isToolSpan(span) {
-			count++
-		}
-	}
-	return count
-}
-
-func countEmbeddingSpans(spans []sdktrace.ReadOnlySpan) int {
-	count := 0
-	for _, span := range spans {
-		if isEmbeddingSpan(span) {
 			count++
 		}
 	}

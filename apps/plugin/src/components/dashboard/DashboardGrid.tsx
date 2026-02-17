@@ -98,19 +98,22 @@ export function DashboardGrid({ dataSource, filters, from, to, timeRange, pricin
   const byModel = usePrometheusQuery(dataSource, topModelsQuery(filters, rangeDuration), from, to, 'instant');
 
   // Computed cost
+  const costTokensData = costTokens.data ?? undefined;
+  const tokensByModelData = tokensByModel.data ?? undefined;
+
   const totalCostValue = useMemo(() => {
-    if (!costTokens.data) {
+    if (costTokensData === undefined) {
       return 0;
     }
-    return calculateTotalCost(costTokens.data, pricingMap);
-  }, [costTokens.data, pricingMap]);
+    return calculateTotalCost(costTokensData, pricingMap);
+  }, [costTokensData, pricingMap]);
 
   const costTimeSeries = useMemo(() => {
-    if (!tokensByModel.data) {
+    if (tokensByModelData === undefined) {
       return [];
     }
-    return [calculateCostTimeSeries(tokensByModel.data, pricingMap)];
-  }, [tokensByModel.data, pricingMap]);
+    return [calculateCostTimeSeries(tokensByModelData, pricingMap)];
+  }, [tokensByModelData, pricingMap]);
 
   return (
     <div className={styles.grid}>
