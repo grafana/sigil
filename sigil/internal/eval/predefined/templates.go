@@ -52,8 +52,6 @@ func newLLMJudgeTemplate(id string, scoreKey string, task string, scoreType eval
 		Version:     DefaultTemplateVersion,
 		Kind:        evalpkg.EvaluatorKindLLMJudge,
 		Config: map[string]any{
-			"provider":      "openai",
-			"model":         "gpt-4o-mini",
 			"system_prompt": "You are an evaluation judge. Return JSON only with fields: score, passed, explanation.",
 			"user_prompt":   task + "\n\nUser request:\n{{input}}\n\nAssistant response:\n{{output}}",
 			"max_tokens":    256,

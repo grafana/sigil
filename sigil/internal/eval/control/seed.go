@@ -48,7 +48,7 @@ type yamlSeedRuleSelect struct {
 }
 
 type yamlSeedRuleSample struct {
-	Rate float64 `yaml:"rate"`
+	Rate *float64 `yaml:"rate"`
 }
 
 type seedStore interface {
@@ -148,9 +148,9 @@ func LoadYAMLSeed(ctx context.Context, store seedStore, tenantID string, payload
 		if item.Enabled != nil {
 			enabled = *item.Enabled
 		}
-		sampleRate := item.Sample.Rate
-		if sampleRate == 0 {
-			sampleRate = 1
+		sampleRate := 1.0
+		if item.Sample.Rate != nil {
+			sampleRate = *item.Sample.Rate
 		}
 		selector := strings.TrimSpace(item.Select.Selector)
 		if selector == "" {

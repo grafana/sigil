@@ -71,19 +71,20 @@ func (EvalEnqueueEventModel) TableName() string {
 }
 
 type EvalWorkItemModel struct {
-	ID               uint64    `gorm:"primaryKey;autoIncrement"`
-	TenantID         string    `gorm:"size:128;not null;uniqueIndex:ux_eval_work_items_tenant_work,priority:1;index:idx_eval_work_items_tenant_status_scheduled,priority:1"`
-	WorkID           string    `gorm:"size:128;not null;uniqueIndex:ux_eval_work_items_tenant_work,priority:2"`
-	GenerationID     string    `gorm:"size:255;not null"`
-	EvaluatorID      string    `gorm:"size:255;not null"`
-	EvaluatorVersion string    `gorm:"size:64;not null"`
-	RuleID           string    `gorm:"size:255;not null"`
-	ScheduledAt      time.Time `gorm:"type:datetime(6);not null;index:idx_eval_work_items_tenant_status_scheduled,priority:3"`
-	Attempts         int       `gorm:"not null;default:0"`
-	Status           string    `gorm:"size:16;not null;index:idx_eval_work_items_tenant_status_scheduled,priority:2"`
-	LastError        *string   `gorm:"type:text"`
-	CreatedAt        time.Time `gorm:"type:datetime(6);not null;autoCreateTime"`
-	UpdatedAt        time.Time `gorm:"type:datetime(6);not null;autoUpdateTime"`
+	ID               uint64     `gorm:"primaryKey;autoIncrement"`
+	TenantID         string     `gorm:"size:128;not null;uniqueIndex:ux_eval_work_items_tenant_work,priority:1;index:idx_eval_work_items_tenant_status_scheduled,priority:1"`
+	WorkID           string     `gorm:"size:128;not null;uniqueIndex:ux_eval_work_items_tenant_work,priority:2"`
+	GenerationID     string     `gorm:"size:255;not null"`
+	EvaluatorID      string     `gorm:"size:255;not null"`
+	EvaluatorVersion string     `gorm:"size:64;not null"`
+	RuleID           string     `gorm:"size:255;not null"`
+	ScheduledAt      time.Time  `gorm:"type:datetime(6);not null;index:idx_eval_work_items_tenant_status_scheduled,priority:3"`
+	Attempts         int        `gorm:"not null;default:0"`
+	Status           string     `gorm:"size:16;not null;index:idx_eval_work_items_tenant_status_scheduled,priority:2;index:idx_eval_work_items_status_claimed_at,priority:1"`
+	ClaimedAt        *time.Time `gorm:"type:datetime(6);index:idx_eval_work_items_status_claimed_at,priority:2"`
+	LastError        *string    `gorm:"type:text"`
+	CreatedAt        time.Time  `gorm:"type:datetime(6);not null;autoCreateTime"`
+	UpdatedAt        time.Time  `gorm:"type:datetime(6);not null;autoUpdateTime"`
 }
 
 func (EvalWorkItemModel) TableName() string {

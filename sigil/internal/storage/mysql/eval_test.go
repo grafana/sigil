@@ -357,6 +357,113 @@ func TestEvalStoreWorkItemClaimCompleteFailLifecycle(t *testing.T) {
 	}
 }
 
+func TestEvalStoreWorkItemClaimRecoversStaleClaim(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	base := time.Date(2026, 2, 17, 12, 0, 0, 0, time.UTC)
+	if err := store.EnqueueWorkItem(context.Background(), evalpkg.WorkItem{
+		TenantID:         "tenant-a",
+		WorkID:           "work-stale",
+		GenerationID:     "gen-stale",
+		EvaluatorID:      "sigil.helpfulness",
+		EvaluatorVersion: "2026-02-17",
+		RuleID:           "online.helpfulness",
+		ScheduledAt:      base,
+	}); err != nil {
+		t.Fatalf("enqueue stale work item: %v", err)
+	}
+
+	firstClaim, err := store.ClaimWorkItems(context.Background(), base.Add(time.Second), 1)
+	if err != nil {
+		t.Fatalf("first claim: %v", err)
+	}
+	if len(firstClaim) != 1 {
+		t.Fatalf("expected one first claim, got %d", len(firstClaim))
+	}
+
+	recoveredClaim, err := store.ClaimWorkItems(context.Background(), base.Add(defaultEvalWorkItemClaimTTL+2*time.Second), 1)
+	if err != nil {
+		t.Fatalf("claim with stale recovery: %v", err)
+	}
+	if len(recoveredClaim) != 1 {
+		t.Fatalf("expected one recovered claim, got %d", len(recoveredClaim))
+	}
+	if recoveredClaim[0].WorkID != firstClaim[0].WorkID {
+		t.Fatalf("expected stale recovery to reclaim %q, got %q", firstClaim[0].WorkID, recoveredClaim[0].WorkID)
+	}
+}
+
+func TestEvalStoreFailWorkItemDoesNotOverrideSuccessAfterReclaim(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	base := time.Date(2026, 2, 17, 13, 0, 0, 0, time.UTC)
+	if err := store.EnqueueWorkItem(context.Background(), evalpkg.WorkItem{
+		TenantID:         "tenant-a",
+		WorkID:           "work-race",
+		GenerationID:     "gen-race",
+		EvaluatorID:      "sigil.helpfulness",
+		EvaluatorVersion: "2026-02-17",
+		RuleID:           "online.helpfulness",
+		ScheduledAt:      base,
+	}); err != nil {
+		t.Fatalf("enqueue race work item: %v", err)
+	}
+
+	firstClaim, err := store.ClaimWorkItems(context.Background(), base.Add(time.Second), 1)
+	if err != nil {
+		t.Fatalf("first claim: %v", err)
+	}
+	if len(firstClaim) != 1 {
+		t.Fatalf("expected one first claim, got %d", len(firstClaim))
+	}
+
+	recoveredClaim, err := store.ClaimWorkItems(context.Background(), base.Add(defaultEvalWorkItemClaimTTL+2*time.Second), 1)
+	if err != nil {
+		t.Fatalf("claim with stale recovery: %v", err)
+	}
+	if len(recoveredClaim) != 1 {
+		t.Fatalf("expected one recovered claim, got %d", len(recoveredClaim))
+	}
+
+	if err := store.CompleteWorkItem(context.Background(), "tenant-a", recoveredClaim[0].WorkID); err != nil {
+		t.Fatalf("complete recovered claim: %v", err)
+	}
+
+	requeued, err := store.FailWorkItem(context.Background(), "tenant-a", firstClaim[0].WorkID, "late worker failure", base.Add(2*time.Hour), 3, false)
+	if err != nil {
+		t.Fatalf("fail after success should no-op: %v", err)
+	}
+	if requeued {
+		t.Fatalf("expected no requeue when failing an already-success item")
+	}
+
+	successCounts, err := store.CountWorkItemsByStatus(context.Background(), evalpkg.WorkItemStatusSuccess)
+	if err != nil {
+		t.Fatalf("count success items: %v", err)
+	}
+	if successCounts["tenant-a"] != 1 {
+		t.Fatalf("expected one success item, got %d", successCounts["tenant-a"])
+	}
+
+	failedCounts, err := store.CountWorkItemsByStatus(context.Background(), evalpkg.WorkItemStatusFailed)
+	if err != nil {
+		t.Fatalf("count failed items: %v", err)
+	}
+	if failedCounts["tenant-a"] != 0 {
+		t.Fatalf("expected zero failed items after late failure no-op, got %d", failedCounts["tenant-a"])
+	}
+}
+
 func TestEvalEnqueueEventClaimCompleteFailLifecycle(t *testing.T) {
 	store, cleanup := newTestWALStore(t)
 	defer cleanup()

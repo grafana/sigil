@@ -119,6 +119,66 @@ func TestSeedExampleFileParses(t *testing.T) {
 	}
 }
 
+func TestLoadYAMLSeedPreservesExplicitZeroSampleRate(t *testing.T) {
+	store := &seedTestStore{}
+	payload := []byte(`
+evaluators:
+  - id: eval.zero
+    kind: heuristic
+    output:
+      keys:
+        - key: zero
+          type: bool
+rules:
+  - id: rule.zero
+    select:
+      selector: user_visible_turn
+    sample:
+      rate: 0
+    evaluators:
+      - eval.zero
+`)
+
+	if err := LoadYAMLSeed(context.Background(), store, "tenant-a", payload); err != nil {
+		t.Fatalf("load yaml seed with explicit zero sample rate: %v", err)
+	}
+	if len(store.rules) != 1 {
+		t.Fatalf("expected one seeded rule, got %d", len(store.rules))
+	}
+	if store.rules[0].SampleRate != 0 {
+		t.Fatalf("expected explicit sample rate 0 to be preserved, got %v", store.rules[0].SampleRate)
+	}
+}
+
+func TestLoadYAMLSeedDefaultsSampleRateToOneWhenOmitted(t *testing.T) {
+	store := &seedTestStore{}
+	payload := []byte(`
+evaluators:
+  - id: eval.default
+    kind: heuristic
+    output:
+      keys:
+        - key: default
+          type: bool
+rules:
+  - id: rule.default
+    select:
+      selector: user_visible_turn
+    evaluators:
+      - eval.default
+`)
+
+	if err := LoadYAMLSeed(context.Background(), store, "tenant-a", payload); err != nil {
+		t.Fatalf("load yaml seed with omitted sample rate: %v", err)
+	}
+	if len(store.rules) != 1 {
+		t.Fatalf("expected one seeded rule, got %d", len(store.rules))
+	}
+	if store.rules[0].SampleRate != 1 {
+		t.Fatalf("expected omitted sample rate to default to 1, got %v", store.rules[0].SampleRate)
+	}
+}
+
 type seedTestStore struct {
 	evaluators []evalpkg.EvaluatorDefinition
 	rules      []evalpkg.RuleDefinition

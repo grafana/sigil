@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"strings"
 
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
@@ -121,7 +120,7 @@ func validateSchemaValue(schema map[string]any, value any) error {
 			}
 		}
 	case "string":
-		if reflect.TypeOf(value).Kind() != reflect.String {
+		if _, ok := value.(string); !ok {
 			return fmt.Errorf("expected string")
 		}
 	case "number":

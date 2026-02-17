@@ -16,6 +16,8 @@ import (
 
 var _ evalpkg.EvalStore = (*WALStore)(nil)
 
+const defaultEvalWorkItemClaimTTL = 10 * time.Minute
+
 func (s *WALStore) CreateEvaluator(ctx context.Context, evaluator evalpkg.EvaluatorDefinition) error {
 	if strings.TrimSpace(evaluator.TenantID) == "" {
 		return errors.New("tenant id is required")
@@ -647,14 +649,26 @@ func (s *WALStore) ClaimWorkItems(ctx context.Context, now time.Time, limit int)
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
+	now = now.UTC()
+	staleBefore := now.Add(-defaultEvalWorkItemClaimTTL)
 
 	claimed := make([]EvalWorkItemModel, 0, limit)
 	err := runWithRetryableLockError(ctx, func() error {
 		return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			if err := tx.Model(&EvalWorkItemModel{}).
+				Where("status = ? AND claimed_at IS NOT NULL AND claimed_at < ?", string(evalpkg.WorkItemStatusClaimed), staleBefore).
+				Updates(map[string]any{
+					"status":     string(evalpkg.WorkItemStatusQueued),
+					"claimed_at": nil,
+					"updated_at": now,
+				}).Error; err != nil {
+				return err
+			}
+
 			var ids []uint64
 			if err := tx.Model(&EvalWorkItemModel{}).
 				Select("id").
-				Where("status = ? AND scheduled_at <= ?", string(evalpkg.WorkItemStatusQueued), now.UTC()).
+				Where("status = ? AND scheduled_at <= ?", string(evalpkg.WorkItemStatusQueued), now).
 				Order("scheduled_at ASC, id ASC").
 				Limit(limit).
 				Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
@@ -670,7 +684,8 @@ func (s *WALStore) ClaimWorkItems(ctx context.Context, now time.Time, limit int)
 				Where("id IN ?", ids).
 				Updates(map[string]any{
 					"status":     string(evalpkg.WorkItemStatusClaimed),
-					"updated_at": time.Now().UTC(),
+					"claimed_at": now,
+					"updated_at": now,
 				}).Error; err != nil {
 				return err
 			}
@@ -702,18 +717,32 @@ func (s *WALStore) CompleteWorkItem(ctx context.Context, tenantID, workID string
 		return errors.New("work id is required")
 	}
 
+	now := time.Now().UTC()
 	result := s.db.WithContext(ctx).
 		Model(&EvalWorkItemModel{}).
-		Where("tenant_id = ? AND work_id = ?", tenantID, workID).
+		Where("tenant_id = ? AND work_id = ? AND status IN ?", tenantID, workID, []string{string(evalpkg.WorkItemStatusQueued), string(evalpkg.WorkItemStatusClaimed)}).
 		Updates(map[string]any{
 			"status":     string(evalpkg.WorkItemStatusSuccess),
-			"updated_at": time.Now().UTC(),
+			"claimed_at": nil,
+			"updated_at": now,
 		})
 	if result.Error != nil {
 		return fmt.Errorf("complete work item: %w", result.Error)
 	}
-	if result.RowsAffected == 0 {
+	if result.RowsAffected > 0 {
+		return nil
+	}
+
+	var existing EvalWorkItemModel
+	err := s.db.WithContext(ctx).
+		Select("status").
+		Where("tenant_id = ? AND work_id = ?", tenantID, workID).
+		First(&existing).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return evalpkg.ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("complete work item: %w", err)
 	}
 	return nil
 }
@@ -745,12 +774,20 @@ func (s *WALStore) FailWorkItem(ctx context.Context, tenantID, workID, lastError
 			if err != nil {
 				return err
 			}
+			if row.Status != string(evalpkg.WorkItemStatusClaimed) {
+				return nil
+			}
 
 			attempts := row.Attempts + 1
 			now := time.Now().UTC()
+			trimmedErr := strings.TrimSpace(lastError)
+			if trimmedErr == "" {
+				trimmedErr = "unknown work item error"
+			}
 			updates := map[string]any{
 				"attempts":   attempts,
-				"last_error": strings.TrimSpace(lastError),
+				"last_error": trimmedErr,
+				"claimed_at": nil,
 				"updated_at": now,
 			}
 
