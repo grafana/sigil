@@ -854,7 +854,7 @@ func TestStartEmbeddingTruncationPreservesUTF8ForMultibyteInput(t *testing.T) {
 		EmbeddingCapture: EmbeddingCaptureConfig{
 			CaptureInput:  true,
 			MaxInputItems: 1,
-			MaxTextLength: 4,
+			MaxTextLength: 5, // 6 chars → truncate to 2 chars + "..." = 5 chars
 		},
 	})
 
@@ -863,7 +863,7 @@ func TestStartEmbeddingTruncationPreservesUTF8ForMultibyteInput(t *testing.T) {
 	})
 	embeddingRecorder.SetResult(EmbeddingResult{
 		InputCount: 1,
-		InputTexts: []string{"你好世界"},
+		InputTexts: []string{"你好世界你好"}, // 6 characters
 	})
 	embeddingRecorder.End()
 
@@ -876,8 +876,9 @@ func TestStartEmbeddingTruncationPreservesUTF8ForMultibyteInput(t *testing.T) {
 	if !utf8.ValidString(texts[0]) {
 		t.Fatalf("expected valid UTF-8 captured text, got %q", texts[0])
 	}
-	if texts[0] != "..." {
-		t.Fatalf("expected safe truncation to ..., got %q", texts[0])
+	// With character-based truncation: 6 chars → first 2 chars + "..." = "你好..."
+	if texts[0] != "你好..." {
+		t.Fatalf("expected truncation to 你好..., got %q", texts[0])
 	}
 }
 
