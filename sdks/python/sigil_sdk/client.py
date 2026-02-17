@@ -597,6 +597,7 @@ class Client:
         self._token_usage_histogram.record(
             value,
             attributes={
+                _span_attr_operation_name: generation.operation_name,
                 _span_attr_provider_name: generation.model.provider,
                 _span_attr_request_model: generation.model.name,
                 _span_attr_agent_name: generation.agent_name,
