@@ -8,6 +8,7 @@ import {
   totalErrorsQuery,
   errorRateQuery,
   tokenUsageOverTimeQuery,
+  tokenUsageByModelQuery,
   rpsByModelOverTimeQuery,
   callsByProviderQuery,
   topModelsQuery,
@@ -149,6 +150,12 @@ describe('query builders', () => {
     );
   });
 
+  it('tokenUsageByModelQuery', () => {
+    expect(tokenUsageByModelQuery(noFilters, '60s')).toBe(
+      'sum by (gen_ai_provider_name, gen_ai_request_model, gen_ai_token_type) (rate(gen_ai_client_token_usage_sum[60s]))'
+    );
+  });
+
   it('topModelsQuery', () => {
     expect(topModelsQuery(noFilters, '3600s')).toBe(
       'topk(10, sum by (gen_ai_provider_name, gen_ai_request_model) (increase(gen_ai_client_operation_duration_seconds_count[3600s])))'
@@ -166,7 +173,7 @@ describe('query builders', () => {
 
   it('tokensByModelAndTypeQuery', () => {
     expect(tokensByModelAndTypeQuery(noFilters, '3600s')).toBe(
-      'sum by (gen_ai_request_model, gen_ai_token_type) (increase(gen_ai_client_token_usage_sum[3600s]))'
+      'sum by (gen_ai_provider_name, gen_ai_request_model, gen_ai_token_type) (increase(gen_ai_client_token_usage_sum[3600s]))'
     );
   });
 });

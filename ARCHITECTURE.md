@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-15
+last_reviewed: 2026-02-17
 source_of_truth: true
 audience: both
 ---
@@ -117,6 +117,9 @@ Design doc: `docs/design-docs/2026-02-15-conversation-query-path.md`
 - `GET /api/v1/generations/{id}` -- single generation detail (MySQL/object storage).
 - `GET /api/v1/search/tags` -- filter key autocomplete (Tempo tags + well-known aliases).
 - `GET /api/v1/search/tag/{tag}/values` -- filter value autocomplete (Tempo tag values).
+- `GET /api/v1/model-cards` -- model-card list and provider+model resolve mode for dashboard pricing joins.
+- `GET /api/v1/model-cards:lookup` -- model-card lookup by identity.
+- `GET /api/v1/model-cards:sources` -- model-card source freshness/status metadata.
 - Pass-through proxy routes for Prometheus (`/api/v1/proxy/prometheus/...`) and Tempo (`/api/v1/proxy/tempo/...`).
 
 ### Query access path
@@ -127,6 +130,7 @@ Design doc: `docs/design-docs/2026-02-15-conversation-query-path.md`
    - conversation search: parse filter expression, translate to TraceQL, query Tempo, extract conversation IDs from matching spans, enrich from MySQL/object storage, apply conversation-level filters, return paginated summaries.
    - conversation detail: direct MySQL/object storage fan-out read by conversation ID, return all hydrated generations.
    - generation detail: direct MySQL/object storage read by generation ID.
+   - model cards: read model-card catalog from memory/DB/snapshot fallback and optionally resolve `(provider, model)` pairs for deterministic pricing joins.
    - proxy routes: pass-through to Prometheus/Tempo for raw query access.
 4. Sigil API returns JSON responses (search summaries, full payloads, or pass-through).
 
@@ -462,7 +466,7 @@ See `docs/references/grafana-query-response-shapes.md`.
 - `apps/plugin`: UI routes and backend proxy handlers for Sigil query contracts.
 - `sigil/internal/ingest/generation`: generation ingest validation and persistence coordination.
 - `sigil/internal/query`: Tempo-first query orchestration plus storage hydration and fan-out reads.
-- `sigil/internal/modelcards`: model-card catalog bootstrap, in-memory refresh loop/cache coordination, and API read semantics.
+- `sigil/internal/modelcards`: model-card catalog bootstrap, in-memory refresh loop/cache coordination, supplemental overlay merge (`snapshot + supplemental`), and API read semantics.
 - `sigil/internal/storage/mysql`: hot metadata/index/payload access.
 - `sigil/internal/storage/object`: compacted payload access.
   - implementation should wrap Thanos `objstore` primitives.

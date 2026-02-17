@@ -580,6 +580,26 @@ func listModelCards(svc *modelcards.Service) http.HandlerFunc {
 			return
 		}
 
+		if hasResolvePairs(req) {
+			inputs, err := parseResolvePairs(req)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			resolved, freshness, err := svc.ResolveBatch(req.Context(), inputs)
+			if err != nil {
+				http.Error(w, "failed to resolve model cards", http.StatusInternalServerError)
+				return
+			}
+
+			writeJSON(w, http.StatusOK, map[string]any{
+				"resolved":  resolved,
+				"freshness": freshness,
+			})
+			return
+		}
+
 		params, err := parseListParams(req)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -603,6 +623,49 @@ func listModelCards(svc *modelcards.Service) http.HandlerFunc {
 			"freshness":   result.Freshness,
 		})
 	}
+}
+
+func hasResolvePairs(req *http.Request) bool {
+	if req == nil {
+		return false
+	}
+	_, ok := req.URL.Query()["resolve_pair"]
+	return ok
+}
+
+func parseResolvePairs(req *http.Request) ([]modelcards.ResolveInput, error) {
+	query := req.URL.Query()
+	rawPairs := query["resolve_pair"]
+	if len(rawPairs) == 0 {
+		return nil, errors.New("resolve_pair is required")
+	}
+	if len(rawPairs) > 100 {
+		return nil, errors.New("too many resolve_pair values")
+	}
+
+	for key := range query {
+		if key != "resolve_pair" {
+			return nil, errors.New("resolve_pair cannot be combined with other query params")
+		}
+	}
+
+	inputs := make([]modelcards.ResolveInput, 0, len(rawPairs))
+	for _, rawPair := range rawPairs {
+		parts := strings.SplitN(strings.TrimSpace(rawPair), ":", 2)
+		if len(parts) != 2 {
+			return nil, errors.New("invalid resolve_pair")
+		}
+		provider := strings.TrimSpace(parts[0])
+		model := strings.TrimSpace(parts[1])
+		if provider == "" || model == "" {
+			return nil, errors.New("invalid resolve_pair")
+		}
+		inputs = append(inputs, modelcards.ResolveInput{
+			Provider: provider,
+			Model:    model,
+		})
+	}
+	return inputs, nil
 }
 
 func lookupModelCard(svc *modelcards.Service) http.HandlerFunc {

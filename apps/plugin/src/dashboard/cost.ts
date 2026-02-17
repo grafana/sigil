@@ -1,6 +1,5 @@
 import { MutableDataFrame, FieldType, type DataFrame } from '@grafana/data';
 import type {
-  ModelCard,
   ModelCardPricing,
   PrometheusMatrixResult,
   PrometheusQueryResponse,
@@ -9,49 +8,44 @@ import type {
 
 export type PricingMap = Map<string, ModelCardPricing>;
 
-/**
- * Build a pricing lookup map from model cards.
- * Indexes by multiple key formats to maximize match rate against
- * the gen_ai_request_model Prometheus label.
- */
-export function buildPricingMap(cards: ModelCard[]): PricingMap {
+export type PricingEntry = {
+  provider: string;
+  model: string;
+  pricing: ModelCardPricing;
+};
+
+export type UnresolvedCostSeries = {
+  provider: string;
+  model: string;
+  tokenType: string;
+  count: number;
+};
+
+export type TotalCostResult = {
+  totalCost: number;
+  unresolvedTokens: number;
+  unresolvedSeries: UnresolvedCostSeries[];
+};
+
+export function pricingKey(provider: string, model: string): string {
+  return `${provider.trim().toLowerCase()}::${model.trim()}`;
+}
+
+export function buildPricingMap(entries: PricingEntry[]): PricingMap {
   const map: PricingMap = new Map();
-  for (const card of cards) {
-    // Key by source_model_id (e.g., "openai/gpt-4o")
-    if (card.source_model_id) {
-      map.set(card.source_model_id, card.pricing);
-    }
-    // Key by canonical_slug if different
-    if (card.canonical_slug && card.canonical_slug !== card.source_model_id) {
-      map.set(card.canonical_slug, card.pricing);
-    }
-    // Key by just the model part after the provider prefix
-    // e.g., "openai/gpt-4o" → "gpt-4o"
-    if (card.source_model_id.includes('/')) {
-      const modelPart = card.source_model_id.split('/').slice(1).join('/');
-      if (modelPart && !map.has(modelPart)) {
-        map.set(modelPart, card.pricing);
-      }
-    }
+  for (const entry of entries) {
+    map.set(pricingKey(entry.provider, entry.model), entry.pricing);
   }
   return map;
 }
 
-/** Look up pricing for a model label, trying multiple key formats. */
 export function lookupPricing(pricingMap: PricingMap, model: string, provider?: string): ModelCardPricing | undefined {
-  // Direct match
-  let pricing = pricingMap.get(model);
-  if (pricing) {
-    return pricing;
+  const normalizedProvider = provider?.trim().toLowerCase() ?? '';
+  const normalizedModel = model.trim();
+  if (!normalizedProvider || !normalizedModel) {
+    return undefined;
   }
-  // Try provider/model format
-  if (provider) {
-    pricing = pricingMap.get(`${provider}/${model}`);
-    if (pricing) {
-      return pricing;
-    }
-  }
-  return undefined;
+  return pricingMap.get(pricingKey(normalizedProvider, normalizedModel));
 }
 
 function tokenCost(tokenType: string, count: number, pricing: ModelCardPricing): number {
@@ -74,15 +68,17 @@ function tokenCost(tokenType: string, count: number, pricing: ModelCardPricing):
  * Calculate total cost from a Prometheus vector response
  * that contains token counts broken down by model and token type.
  */
-export function calculateTotalCost(response: PrometheusQueryResponse | undefined, pricingMap: PricingMap): number {
+export function calculateTotalCost(response: PrometheusQueryResponse | undefined, pricingMap: PricingMap): TotalCostResult {
   if (!response) {
-    return 0;
+    return { totalCost: 0, unresolvedTokens: 0, unresolvedSeries: [] };
   }
   if (response.data.resultType !== 'vector') {
-    return 0;
+    return { totalCost: 0, unresolvedTokens: 0, unresolvedSeries: [] };
   }
   const results = response.data.result as PrometheusVectorResult[];
   let total = 0;
+  let unresolvedTokens = 0;
+  const unresolvedSeries: UnresolvedCostSeries[] = [];
 
   for (const result of results) {
     const model = result.metric.gen_ai_request_model ?? '';
@@ -91,11 +87,18 @@ export function calculateTotalCost(response: PrometheusQueryResponse | undefined
     const count = parseFloat(result.value[1]);
     const pricing = lookupPricing(pricingMap, model, provider);
     if (!pricing) {
+      unresolvedTokens += count;
+      unresolvedSeries.push({
+        provider: provider ?? '',
+        model,
+        tokenType,
+        count,
+      });
       continue;
     }
     total += tokenCost(tokenType, count, pricing);
   }
-  return total;
+  return { totalCost: total, unresolvedTokens, unresolvedSeries };
 }
 
 /**

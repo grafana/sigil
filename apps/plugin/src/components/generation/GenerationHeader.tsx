@@ -1,7 +1,7 @@
 import React from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Badge, Button, Icon, Stack, Text, Tooltip, useStyles2 } from '@grafana/ui';
+import { Badge, Icon, LinkButton, Stack, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import type { GenerationDetail } from '../../conversation/types';
 
 export type GenerationHeaderProps = {
@@ -40,6 +40,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   tokenText: css({
     fontSize: theme.typography.bodySmall.fontSize,
     fontFamily: theme.typography.fontFamilyMonospace,
+    color: theme.colors.text.secondary,
   }),
   separator: css({
     width: '1px',
@@ -81,15 +82,15 @@ export default function GenerationHeader({ generation }: GenerationHeaderProps) 
         <Tooltip content={usageTooltip} placement="bottom">
           <Stack direction="row" gap={0.5} alignItems="center">
             <Icon name="dashboard" size="sm" />
-            <Text color="secondary" className={styles.tokenText}>
+            <span className={styles.tokenText}>
               {usage.input_tokens ?? 0} in / {usage.output_tokens ?? 0} out
-            </Text>
+            </span>
           </Stack>
         </Tooltip>
       )}
 
       {traceId.length > 0 && (
-        <Button
+        <LinkButton
           variant="secondary"
           size="sm"
           icon="external-link-alt"
@@ -99,7 +100,7 @@ export default function GenerationHeader({ generation }: GenerationHeaderProps) 
           aria-label="view trace"
         >
           Trace
-        </Button>
+        </LinkButton>
       )}
 
       {generation.created_at && (

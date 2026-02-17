@@ -357,6 +357,76 @@ func TestModelCardsListRejectsInvalidRegex(t *testing.T) {
 	}
 }
 
+func TestModelCardsListSupportsResolvePairs(t *testing.T) {
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	svc := newTestModelCardService(t)
+	RegisterRoutes(mux, query.NewService(), generationingest.NewService(generationingest.NewMemoryStore()), feedback.NewService(feedback.NewMemoryStore()), true, true, svc, protected)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/model-cards?resolve_pair=test:model&resolve_pair=test:unknown", nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", resp.Code, resp.Body.String())
+	}
+
+	var payload struct {
+		Resolved  []modelcards.ResolveResult `json:"resolved"`
+		Freshness modelcards.Freshness       `json:"freshness"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode resolve payload: %v", err)
+	}
+	if len(payload.Resolved) != 2 {
+		t.Fatalf("expected 2 resolved entries, got %d", len(payload.Resolved))
+	}
+	if payload.Resolved[0].Status != modelcards.ResolveStatusResolved {
+		t.Fatalf("expected first result to resolve, got %q", payload.Resolved[0].Status)
+	}
+	if payload.Resolved[0].Card == nil || payload.Resolved[0].Card.ModelKey != "openrouter:test/model" {
+		t.Fatalf("expected first result to map to test model card, got %#v", payload.Resolved[0].Card)
+	}
+	if payload.Resolved[1].Status != modelcards.ResolveStatusUnresolved {
+		t.Fatalf("expected second result unresolved, got %q", payload.Resolved[1].Status)
+	}
+	if payload.Resolved[1].Reason != modelcards.ResolveReasonNotFound {
+		t.Fatalf("expected second reason not_found, got %q", payload.Resolved[1].Reason)
+	}
+	if payload.Freshness.SourcePath != modelcards.SourcePathSnapshotFallback {
+		t.Fatalf("expected snapshot fallback source path, got %q", payload.Freshness.SourcePath)
+	}
+}
+
+func TestModelCardsResolvePairsRejectsMixedQueryParams(t *testing.T) {
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	svc := newTestModelCardService(t)
+	RegisterRoutes(mux, query.NewService(), generationingest.NewService(generationingest.NewMemoryStore()), feedback.NewService(feedback.NewMemoryStore()), true, true, svc, protected)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/model-cards?resolve_pair=test:model&limit=10", nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.Code)
+	}
+}
+
+func TestModelCardsResolvePairsRejectsInvalidPair(t *testing.T) {
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	svc := newTestModelCardService(t)
+	RegisterRoutes(mux, query.NewService(), generationingest.NewService(generationingest.NewMemoryStore()), feedback.NewService(feedback.NewMemoryStore()), true, true, svc, protected)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/model-cards?resolve_pair=test-model", nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.Code)
+	}
+}
+
 func TestModelCardsRefreshEndpoint(t *testing.T) {
 	mux := http.NewServeMux()
 	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})

@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-13
+last_reviewed: 2026-02-17
 source_of_truth: true
 audience: contributors
 ---
@@ -9,6 +9,11 @@ audience: contributors
 # Model Cards API
 
 This reference defines the HTTP contract for Sigil model-card endpoints under `/api/v1`.
+
+The effective read catalog is composed from:
+
+- base OpenRouter snapshot (`internal/modelcards/fallback/openrouter_models.v1.json`)
+- supplemental catalog (`internal/modelcards/fallback/supplemental_models.v1.json`) with additive models and targeted patch updates
 
 ## Endpoints
 
@@ -74,11 +79,28 @@ Allowed `source_path` values:
 - `memory_stale`
 - `snapshot_fallback`
 
+Model card `source` values currently emitted:
+
+- `openrouter`
+- `supplemental`
+
+## Catalog Maintenance
+
+- `mise run model-cards:snapshot:update`: refresh base OpenRouter snapshot.
+- `mise run model-cards:snapshot:check`: validate base snapshot schema/checksum/canonical formatting.
+- `mise run model-cards:supplemental:update`: additive/update refresh of supplemental models from current OpenRouter live entries missing in the base snapshot.
+- `mise run model-cards:supplemental:check`: validate supplemental canonical formatting and strict preflight merge compatibility with the base snapshot.
+
 ## GET /api/v1/model-cards
 
-List model cards with filtering, sorting, and cursor pagination.
+Dual-mode endpoint:
+
+- list mode: filtering, sorting, and cursor pagination
+- resolve mode: deterministic provider+model resolution for pricing joins
 
 ### Query Parameters
+
+List mode parameters:
 
 - `q`: case-insensitive substring search across `name`, `provider`, `source_model_id`
 - `regex`: RE2 regex over `model_key`, `source_model_id`, `name`, `provider`, `canonical_slug`
@@ -93,7 +115,14 @@ List model cards with filtering, sorting, and cursor pagination.
 - `limit`: integer (`1..200`, default `50`)
 - `cursor`: opaque cursor from prior response
 
-### Response 200
+Resolve mode parameters:
+
+- `resolve_pair`: repeated parameter in the form `provider:model`
+  - example: `?resolve_pair=openai:gpt-4o&resolve_pair=anthropic:claude-sonnet-4.5`
+  - max 100 values
+  - when present, no other query parameters are allowed
+
+### Response 200 (list mode)
 
 ```json
 {
@@ -116,9 +145,51 @@ List model cards with filtering, sorting, and cursor pagination.
 }
 ```
 
+### Response 200 (resolve mode)
+
+```json
+{
+  "resolved": [
+    {
+      "provider": "openai",
+      "model": "gpt-4o",
+      "status": "resolved",
+      "match_strategy": "exact",
+      "card": {
+        "model_key": "openrouter:openai/gpt-4o",
+        "source_model_id": "openai/gpt-4o",
+        "pricing": {
+          "prompt_usd_per_token": 0.00000125,
+          "completion_usd_per_token": 0.00001
+        }
+      }
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-5",
+      "status": "unresolved",
+      "reason": "not_found"
+    }
+  ],
+  "freshness": {
+    "catalog_last_refreshed_at": "2026-02-13T10:00:00Z",
+    "stale": false,
+    "soft_stale": false,
+    "hard_stale": false,
+    "source_path": "memory_live"
+  }
+}
+```
+
+Resolve item fields:
+
+- `status`: `resolved|unresolved`
+- `match_strategy` (resolved only): `exact|normalized`
+- `reason` (unresolved only): `not_found|ambiguous|invalid_input`
+
 ### Error Responses
 
-- `400`: invalid query params (for example invalid `regex`, invalid `limit`, invalid floats)
+- `400`: invalid query params (for example invalid `regex`, invalid `limit`, invalid floats, malformed `resolve_pair`, or mixed resolve/list params)
 - `500`: internal failure while reading catalog
 
 ## GET /api/v1/model-cards:lookup
