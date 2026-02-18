@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-17
+last_reviewed: 2026-02-18
 source_of_truth: true
 audience: both
 ---
@@ -344,6 +344,7 @@ Key characteristics:
 
 Design doc: `docs/design-docs/2026-02-17-online-evaluation.md`
 Execution plan: `docs/exec-plans/completed/2026-02-17-online-evaluation.md`
+User guide: `docs/references/online-evaluation-user-guide.md`
 
 ## API Contracts
 

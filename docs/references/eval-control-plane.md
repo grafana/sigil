@@ -1,16 +1,26 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-17
+last_reviewed: 2026-02-18
 source_of_truth: true
 audience: both
 ---
 
 # Online Evaluation Control Plane API
 
-## Auth
+For end-to-end setup and usage flow, see `docs/references/online-evaluation-user-guide.md`.
 
-All endpoints are tenant-scoped protected routes and require tenant context (`X-Scope-OrgID`).
+## Auth and Error Semantics
+
+All routes are protected tenant-scoped endpoints (`X-Scope-OrgID`).
+
+Write-path status semantics:
+- `400 Bad Request`: validation/config errors.
+- `500 Internal Server Error`: storage/runtime failures.
+
+Read-path status semantics:
+- `404 Not Found`: missing evaluator/rule.
+- `400 Bad Request`: invalid pagination/query params.
 
 ## Evaluators
 
@@ -18,63 +28,67 @@ All endpoints are tenant-scoped protected routes and require tenant context (`X-
 
 Create or update an evaluator definition.
 
-Request body:
-- `evaluator_id` (string, required)
-- `version` (string, required)
-- `kind` (enum string: `llm_judge|json_schema|regex|heuristic`)
+Request fields:
+- `evaluator_id` (required)
+- `version` (required)
+- `kind` (`llm_judge|json_schema|regex|heuristic`)
 - `config` (object)
-- `output_keys` (array, exactly one key is currently supported):
-  - `key` (required)
-  - `type` (`number|bool|string`)
-  - `unit` (optional)
-  - `pass_threshold` (optional)
+- `output_keys` (exactly one key currently supported)
+
+`output_keys[]`:
+- `key` (required)
+- `type` (`number|bool|string`)
+- `unit` (optional)
+- `pass_threshold` (optional)
 
 Response: evaluator object (`200 OK`).
 
 ### `GET /api/v1/eval/evaluators?limit=&cursor=`
 
-List evaluators with cursor pagination.
+List tenant evaluators with cursor pagination.
 
 Response:
-- `items`: evaluator array
-- `next_cursor`: string cursor (empty when exhausted)
+- `items`
+- `next_cursor`
 
 Notes:
-- This endpoint only returns tenant-configured evaluators. Predefined templates are listed via dedicated predefined endpoints.
+- Returns tenant-configured evaluators only.
+- Predefined templates are exposed via predefined endpoints.
 
 ### `GET /api/v1/eval/evaluators/{id}`
 
 Get latest active version for an evaluator id.
 
-Response:
+Responses:
 - `200 OK` evaluator object
-- `404 Not Found` if missing
+- `404 Not Found`
 
 ### `DELETE /api/v1/eval/evaluators/{id}`
 
 Soft-delete evaluator id across versions.
 
-Response:
-- `204 No Content` (idempotent)
+Responses:
+- `204 No Content` on success (idempotent)
+- `400 Bad Request` when referenced by enabled rules
 
 ## Predefined Evaluator Templates
 
 ### `GET /api/v1/eval/predefined/evaluators`
 
-List built-in evaluator templates that can be forked into tenant evaluators.
+List built-in evaluator templates.
 
 Response:
-- `items`: predefined evaluator definitions (template metadata + default config)
+- `items`: predefined evaluator definitions
 
 ### `POST /api/v1/eval/predefined/evaluators/{template_id}:fork`
 
-Create a tenant evaluator by forking a predefined template.
+Fork a built-in template into a tenant evaluator.
 
-Request body:
-- `evaluator_id` (required, new tenant evaluator id)
-- `version` (optional, defaults to template version)
-- `config` (optional, shallow override map merged on top of template config)
-- `output_keys` (optional, replaces template output keys when provided)
+Request fields:
+- `evaluator_id` (required)
+- `version` (optional; defaults to template version)
+- `config` (optional shallow override)
+- `output_keys` (optional; replaces template output keys)
 
 Response:
 - created evaluator object (`200 OK`)
@@ -85,13 +99,24 @@ Response:
 
 Create or update a rule.
 
-Request body:
+Request fields:
 - `rule_id` (required)
-- `enabled` (bool)
-- `selector` (`user_visible_turn|all_assistant_generations|tool_call_steps|errored_generations`)
-- `match` (object of filter keys)
-- `sample_rate` (0..1, defaults to `0.01` when omitted)
-- `evaluator_ids` (non-empty array)
+- `enabled` (optional; default `true`)
+- `selector` (`user_visible_turn|all_assistant_generations|tool_call_steps|errored_generations`, optional, default `user_visible_turn`)
+- `match` (object; optional)
+- `sample_rate` (optional, default `0.01`)
+- `evaluator_ids` (required, non-empty)
+
+Rule validation notes:
+- `sample_rate` must be in `[0,1]`.
+- `evaluator_ids` must all exist.
+- `match` values must be a string or array of non-empty strings.
+- Unsupported `match` keys are rejected.
+- Invalid glob syntax is rejected for glob-capable keys.
+
+Supported `match` keys:
+- glob-capable: `agent_name`, `agent_version`, `operation_name`, `model.provider`, `model.name`
+- exact: `mode`, `tags.<key>`, `error.type`, `error.category`
 
 Response: rule object (`200 OK`).
 
@@ -100,14 +125,14 @@ Response: rule object (`200 OK`).
 List rules with cursor pagination.
 
 Response:
-- `items`: rule array
-- `next_cursor`: string cursor
+- `items`
+- `next_cursor`
 
 ### `GET /api/v1/eval/rules/{id}`
 
 Get rule by id.
 
-Response:
+Responses:
 - `200 OK` rule object
 - `404 Not Found`
 
@@ -116,13 +141,15 @@ Response:
 Enable/disable rule.
 
 Request body:
+
 ```json
 { "enabled": true }
 ```
 
-Response:
+Responses:
 - `200 OK` updated rule
 - `404 Not Found`
+- `400 Bad Request` when enabling a rule that references missing evaluators
 
 ### `DELETE /api/v1/eval/rules/{id}`
 
@@ -136,6 +163,7 @@ Response:
 ### `GET /api/v1/eval/judge/providers`
 
 Response:
+
 ```json
 {
   "providers": [
@@ -146,7 +174,10 @@ Response:
 
 ### `GET /api/v1/eval/judge/models?provider={id}`
 
+`provider` query param is required.
+
 Response:
+
 ```json
 {
   "models": [
@@ -160,17 +191,13 @@ Response:
 }
 ```
 
-`provider` query param is required.
-
 ## Judge Provider Configuration
 
 Discovery is opt-in per provider and only returns providers that are both:
 - explicitly enabled
-- fully initialized with valid credentials/config
+- initialized with valid credentials/config
 
-Enable flag values accepted: `1`, `true`, `yes`, `on` (case-insensitive).
-
-Provider matrix:
+Enable flag truthy values: `1`, `true`, `yes`, `on` (case-insensitive).
 
 | Provider ID | Enable flag | Required auth/config | Optional auth/config |
 | --- | --- | --- | --- |
@@ -185,36 +212,36 @@ Provider matrix:
 | `openai-compat-N` (indexed) | `SIGIL_EVAL_OPENAI_COMPAT_<N>_ENABLED` | `SIGIL_EVAL_OPENAI_COMPAT_<N>_BASE_URL` | `SIGIL_EVAL_OPENAI_COMPAT_<N>_API_KEY`, `SIGIL_EVAL_OPENAI_COMPAT_<N>_NAME` |
 
 Notes:
-- `vertexai` is OAuth2-based and does not use API-key auth in this provider mode. Use `google` for Gemini API-key auth.
-- For credential file/json variants, file and JSON are mutually exclusive.
+- `vertexai` is OAuth2-based (ADC/credentials), not API-key auth.
+- `google` is the Gemini API-key provider mode.
+- Credential file/json variants are mutually exclusive.
 
 ## YAML Seed Format
 
-Optional seed file is loaded at startup when `SIGIL_EVAL_SEED_FILE` is set.
+Seed file loading is optional and controlled by runtime config.
 
-Default seed behavior is best-effort:
-- invalid evaluator/rule entries are skipped and logged
-- valid entries in the same file are still applied
-
-Set `SIGIL_EVAL_SEED_STRICT=true` to fail startup on the first seed error.
+- `SIGIL_EVAL_SEED_FILE`: path to YAML seed file
+- `SIGIL_EVAL_SEED_STRICT`: fail-fast (`true`) or best-effort (`false`, default)
+- startup bootstrap target tenant: `SIGIL_FAKE_TENANT_ID`
 
 Top-level keys:
 - `evaluators`
 - `rules`
 
-Evaluator YAML shape:
+Evaluator shape:
 - `id`, `kind`, `version`
-- evaluator config fields inline (for example `system_prompt`, `model`, `schema`, `patterns`)
-- `output.keys[]` with `key`, `type`, `unit` (exactly one key is currently supported)
+- evaluator config fields inline
+- `output.keys[]` (`key`, `type`, `unit`)
 
-Rule YAML shape:
+Rule shape:
 - `id`, `enabled`
 - `select.selector`
 - `match`
-- `sample.rate`
-  - defaults to `0.01` when omitted
+- `sample.rate` (defaults to `0.01` when omitted)
 - `evaluators` (array of evaluator IDs)
 
-Duplicate evaluator IDs or rule IDs in the same file are rejected.
+Validation:
+- duplicate IDs in the same file are rejected
+- rules referencing missing evaluators are rejected
 
-See `sigil-eval-seed.example.yaml`.
+Example file: `sigil-eval-seed.example.yaml`.
