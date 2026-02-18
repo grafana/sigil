@@ -55,10 +55,10 @@ func (e *RegexEvaluator) Evaluate(_ context.Context, input EvalInput, definition
 	return []ScoreOutput{{
 		Key:      key,
 		Type:     evalpkg.ScoreTypeBool,
-		Value:    evalpkg.BoolValue(matched),
+		Value:    evalpkg.BoolValue(passed),
 		Unit:     unit,
 		Passed:   boolPointer(passed),
-		Metadata: map[string]any{"patterns": patterns, "reject": rejectMatches},
+		Metadata: map[string]any{"patterns": patterns, "reject": rejectMatches, "matched": matched},
 	}}, nil
 }
 

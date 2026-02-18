@@ -113,32 +113,34 @@ func (e *LLMJudgeEvaluator) Evaluate(ctx context.Context, input EvalInput, defin
 func resolveJudgeTarget(config map[string]any, defaultModel string) (string, string, error) {
 	providerID := strings.TrimSpace(configString(config, "provider", ""))
 	modelName := strings.TrimSpace(configString(config, "model", ""))
+
+	if modelName != "" && strings.Contains(modelName, "/") {
+		parts := strings.SplitN(modelName, "/", 2)
+		modelProvider := strings.TrimSpace(parts[0])
+		if providerID == "" {
+			providerID = modelProvider
+		} else if modelProvider != "" && !strings.EqualFold(providerID, modelProvider) {
+			return "", "", fmt.Errorf("llm_judge evaluator model provider %q does not match provider %q", modelProvider, providerID)
+		}
+		modelName = strings.TrimSpace(parts[1])
+	}
 	if providerID != "" && modelName != "" {
 		return providerID, modelName, nil
 	}
 
-	if modelName != "" && strings.Contains(modelName, "/") {
-		parts := strings.SplitN(modelName, "/", 2)
-		if providerID == "" {
-			providerID = strings.TrimSpace(parts[0])
-		}
-		modelName = strings.TrimSpace(parts[1])
-	}
-
-	if providerID == "" || modelName == "" {
+	if providerID == "" && modelName == "" {
 		defaultValue := strings.TrimSpace(defaultModel)
 		parts := strings.SplitN(defaultValue, "/", 2)
 		if len(parts) == 2 {
-			if providerID == "" {
-				providerID = strings.TrimSpace(parts[0])
-			}
-			if modelName == "" {
-				modelName = strings.TrimSpace(parts[1])
-			}
+			providerID = strings.TrimSpace(parts[0])
+			modelName = strings.TrimSpace(parts[1])
 		}
 	}
 
 	if providerID == "" || modelName == "" {
+		if providerID != "" || modelName != "" {
+			return "", "", fmt.Errorf("llm_judge evaluator requires both provider and model when overriding defaults")
+		}
 		return "", "", fmt.Errorf("llm_judge evaluator requires provider and model")
 	}
 	return providerID, modelName, nil
@@ -160,22 +162,14 @@ func parseJudgeResponse(raw string, scoreType evalpkg.ScoreType) (evalpkg.ScoreV
 
 	parsed := map[string]any{}
 	if err := json.Unmarshal([]byte(trimmed), &parsed); err == nil {
-		value, passed, explanation, err := parseJudgeJSON(parsed, scoreType)
-		if err == nil {
-			return value, passed, explanation, nil
-		}
+		return parseJudgeJSON(parsed, scoreType)
 	}
 
 	switch scoreType {
 	case evalpkg.ScoreTypeBool:
-		lower := strings.ToLower(trimmed)
-		if strings.Contains(lower, "true") {
-			value := evalpkg.BoolValue(true)
-			return value, boolPointer(true), "", nil
-		}
-		if strings.Contains(lower, "false") {
-			value := evalpkg.BoolValue(false)
-			return value, boolPointer(false), "", nil
+		if boolValue, ok := parseJudgeBoolFallback(trimmed); ok {
+			value := evalpkg.BoolValue(boolValue)
+			return value, boolPointer(boolValue), "", nil
 		}
 		return evalpkg.ScoreValue{}, nil, "", fmt.Errorf("judge response did not include a bool score")
 	case evalpkg.ScoreTypeString:
@@ -194,6 +188,48 @@ func parseJudgeResponse(raw string, scoreType evalpkg.ScoreType) (evalpkg.ScoreV
 		return value, nil, "", nil
 	default:
 		return evalpkg.ScoreValue{}, nil, "", fmt.Errorf("unsupported score type %q", scoreType)
+	}
+}
+
+func parseJudgeBoolFallback(raw string) (bool, bool) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return false, false
+	}
+	if value, ok := parseJudgeWrappedBoolLiteral(trimmed); ok {
+		return value, true
+	}
+
+	trimmed = strings.TrimSpace(strings.TrimRight(trimmed, ".!?"))
+	if value, ok := parseJudgeWrappedBoolLiteral(trimmed); ok {
+		return value, true
+	}
+	return false, false
+}
+
+func parseJudgeWrappedBoolLiteral(raw string) (bool, bool) {
+	if value, ok := parseJudgeBoolLiteral(raw); ok {
+		return value, true
+	}
+	if len(raw) < 2 {
+		return false, false
+	}
+	start := raw[0]
+	end := raw[len(raw)-1]
+	if (start == '"' && end == '"') || (start == '\'' && end == '\'') || (start == '`' && end == '`') {
+		return parseJudgeBoolLiteral(raw[1 : len(raw)-1])
+	}
+	return false, false
+}
+
+func parseJudgeBoolLiteral(raw string) (bool, bool) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "true":
+		return true, true
+	case "false":
+		return false, true
+	default:
+		return false, false
 	}
 }
 

@@ -59,7 +59,6 @@ func (s *WALStore) SaveBatch(ctx context.Context, tenantID string, generations [
 	}
 
 	successRows := 0
-	queueEvalEvents := s.evalHook != nil
 	for i, generation := range generations {
 		generationRow, convRow, err := buildRows(tenantID, generation)
 		if err != nil {
@@ -73,9 +72,6 @@ func (s *WALStore) SaveBatch(ctx context.Context, tenantID string, generations [
 			}
 
 			if convRow == nil {
-				if !queueEvalEvents {
-					return nil
-				}
 				return enqueueEvalGenerationTx(tx, generationRow)
 			}
 
@@ -83,9 +79,6 @@ func (s *WALStore) SaveBatch(ctx context.Context, tenantID string, generations [
 				return err
 			}
 
-			if !queueEvalEvents {
-				return nil
-			}
 			return enqueueEvalGenerationTx(tx, generationRow)
 		})
 		if txErr != nil {

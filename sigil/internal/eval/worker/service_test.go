@@ -212,6 +212,58 @@ func TestServiceMetricsIncrementOnSuccess(t *testing.T) {
 	}
 }
 
+func TestServiceCompletionFailureIsHandledAsFailure(t *testing.T) {
+	store := &workerStoreStub{
+		claimed: []evalpkg.WorkItem{newClaimedItem("work-1", "gen-1")},
+		evaluators: map[string]evalpkg.EvaluatorDefinition{
+			"tenant-a|eval-1|v1": {
+				EvaluatorID: "eval-1",
+				Version:     "v1",
+				Kind:        evalpkg.EvaluatorKindHeuristic,
+				OutputKeys:  []evalpkg.OutputKey{{Key: "k", Type: evalpkg.ScoreTypeBool}},
+			},
+		},
+		statusCounts: defaultStatusCounts(),
+		completeErr:  errors.New("complete failed"),
+	}
+
+	service := newTestService(t, store, Config{
+		Enabled:          true,
+		MaxConcurrent:    1,
+		MaxRatePerMinute: 10000,
+		MaxAttempts:      3,
+		ClaimBatchSize:   10,
+		PollInterval:     time.Millisecond,
+	})
+	service.evaluators[evalpkg.EvaluatorKindHeuristic] = &workerFakeEvaluator{
+		kind:    evalpkg.EvaluatorKindHeuristic,
+		outputs: []evaluators.ScoreOutput{{Key: "k", Type: evalpkg.ScoreTypeBool, Value: evalpkg.BoolValue(true), Passed: boolPtr(true)}},
+	}
+
+	successBefore := testutil.ToFloat64(evalExecutionsTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "success"))
+	failedBefore := testutil.ToFloat64(evalExecutionsTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "failed"))
+
+	service.runCycle(context.Background())
+
+	successAfter := testutil.ToFloat64(evalExecutionsTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "success"))
+	failedAfter := testutil.ToFloat64(evalExecutionsTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "failed"))
+	if successAfter-successBefore != 0 {
+		t.Fatalf("expected no success increment when completion fails, got before=%f after=%f", successBefore, successAfter)
+	}
+	if failedAfter-failedBefore != 1 {
+		t.Fatalf("expected failed execution increment by 1 when completion fails, got before=%f after=%f", failedBefore, failedAfter)
+	}
+	if store.failCalls != 1 {
+		t.Fatalf("expected one fail call when completion fails, got %d", store.failCalls)
+	}
+	if store.completed != 0 {
+		t.Fatalf("expected zero completed transitions when completion fails, got %d", store.completed)
+	}
+	if store.insertedScores != 1 {
+		t.Fatalf("expected scores inserted before completion failure, got %d", store.insertedScores)
+	}
+}
+
 func TestServiceGenerationNotFoundIsTreatedAsTransient(t *testing.T) {
 	store := &workerStoreStub{
 		claimed: []evalpkg.WorkItem{newClaimedItem("work-1", "gen-missing")},
@@ -243,6 +295,201 @@ func TestServiceGenerationNotFoundIsTreatedAsTransient(t *testing.T) {
 	}
 	if store.lastFailPermanent {
 		t.Fatalf("expected missing generation to be treated as transient")
+	}
+}
+
+func TestServiceRunCycleRequeuesUnstartedItemsOnCancel(t *testing.T) {
+	store := &workerStoreStub{
+		claimed: []evalpkg.WorkItem{
+			newClaimedItem("work-1", "gen-1"),
+			newClaimedItem("work-2", "gen-2"),
+		},
+		evaluators: map[string]evalpkg.EvaluatorDefinition{
+			"tenant-a|eval-1|v1": {
+				EvaluatorID: "eval-1",
+				Version:     "v1",
+				Kind:        evalpkg.EvaluatorKindHeuristic,
+				OutputKeys:  []evalpkg.OutputKey{{Key: "k", Type: evalpkg.ScoreTypeBool}},
+			},
+		},
+		statusCounts:           defaultStatusCounts(),
+		completeRejectCanceled: true,
+		requeueRejectCanceled:  true,
+	}
+
+	service := newTestService(t, store, Config{
+		Enabled:          true,
+		MaxConcurrent:    1,
+		MaxRatePerMinute: 60,
+		MaxAttempts:      3,
+		ClaimBatchSize:   10,
+		PollInterval:     time.Millisecond,
+	})
+	started := make(chan struct{}, 1)
+	service.evaluators[evalpkg.EvaluatorKindHeuristic] = &workerFakeEvaluator{
+		kind:    evalpkg.EvaluatorKindHeuristic,
+		sleep:   100 * time.Millisecond,
+		started: started,
+		outputs: []evaluators.ScoreOutput{{Key: "k", Type: evalpkg.ScoreTypeBool, Value: evalpkg.BoolValue(true), Passed: boolPtr(true)}},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		service.runCycle(ctx)
+		close(done)
+	}()
+
+	select {
+	case <-started:
+		cancel()
+	case <-time.After(2 * time.Second):
+		cancel()
+		t.Fatalf("timed out waiting for first item to start")
+	}
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("timed out waiting for cycle shutdown")
+	}
+
+	if store.completed != 1 {
+		t.Fatalf("expected first item to complete, got %d", store.completed)
+	}
+	if store.insertedScores != 1 {
+		t.Fatalf("expected one score insert, got %d", store.insertedScores)
+	}
+	if store.failCalls != 0 {
+		t.Fatalf("expected no fail calls for unstarted canceled items, got %d", store.failCalls)
+	}
+	if store.requeueCalls != 1 {
+		t.Fatalf("expected one requeue call for unstarted item, got %d", store.requeueCalls)
+	}
+	if len(store.requeuedWorkIDs) != 1 || store.requeuedWorkIDs[0] != "work-2" {
+		t.Fatalf("expected work-2 to be requeued without consuming attempts, got %#v", store.requeuedWorkIDs)
+	}
+	if store.requeueCtxCanceledCount != 0 {
+		t.Fatalf("expected requeue transitions to use detached context, got %d canceled requeue calls", store.requeueCtxCanceledCount)
+	}
+	if store.completeCtxCanceledCount != 0 {
+		t.Fatalf("expected complete transitions to use detached context, got %d canceled complete calls", store.completeCtxCanceledCount)
+	}
+}
+
+func TestServiceRunCycleRequeuesInFlightCanceledItemsWithoutFailure(t *testing.T) {
+	store := &workerStoreStub{
+		claimed: []evalpkg.WorkItem{
+			newClaimedItem("work-1", "gen-1"),
+		},
+		evaluators: map[string]evalpkg.EvaluatorDefinition{
+			"tenant-a|eval-1|v1": {
+				EvaluatorID: "eval-1",
+				Version:     "v1",
+				Kind:        evalpkg.EvaluatorKindHeuristic,
+				OutputKeys:  []evalpkg.OutputKey{{Key: "k", Type: evalpkg.ScoreTypeBool}},
+			},
+		},
+		statusCounts:          defaultStatusCounts(),
+		requeueRejectCanceled: true,
+	}
+
+	service := newTestService(t, store, Config{
+		Enabled:          true,
+		MaxConcurrent:    1,
+		MaxRatePerMinute: 10000,
+		MaxAttempts:      3,
+		ClaimBatchSize:   10,
+		PollInterval:     time.Millisecond,
+	})
+	started := make(chan struct{}, 1)
+	service.evaluators[evalpkg.EvaluatorKindHeuristic] = &workerCancelingEvaluator{
+		kind:    evalpkg.EvaluatorKindHeuristic,
+		started: started,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		service.runCycle(ctx)
+		close(done)
+	}()
+
+	select {
+	case <-started:
+		cancel()
+	case <-time.After(2 * time.Second):
+		cancel()
+		t.Fatalf("timed out waiting for item execution to start")
+	}
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("timed out waiting for canceled cycle to exit")
+	}
+
+	if store.failCalls != 0 {
+		t.Fatalf("expected no fail calls for canceled in-flight item, got %d", store.failCalls)
+	}
+	if store.requeueCalls != 1 {
+		t.Fatalf("expected one requeue call for canceled in-flight item, got %d", store.requeueCalls)
+	}
+	if len(store.requeuedWorkIDs) != 1 || store.requeuedWorkIDs[0] != "work-1" {
+		t.Fatalf("expected work-1 to be requeued, got %#v", store.requeuedWorkIDs)
+	}
+	if store.insertedScores != 0 {
+		t.Fatalf("expected no inserted scores for canceled item, got %d", store.insertedScores)
+	}
+	if store.completed != 0 {
+		t.Fatalf("expected no completed transitions for canceled item, got %d", store.completed)
+	}
+	if store.requeueCtxCanceledCount != 0 {
+		t.Fatalf("expected detached context for requeue transition, got %d canceled requeue calls", store.requeueCtxCanceledCount)
+	}
+}
+
+func TestServiceRefreshQueueDepthResetsMissingTenantToZero(t *testing.T) {
+	const tenantID = "tenant-depth-reset"
+
+	store := &workerStoreStub{
+		statusCounts: map[evalpkg.WorkItemStatus]map[string]int64{
+			evalpkg.WorkItemStatusQueued:  {tenantID: 4},
+			evalpkg.WorkItemStatusClaimed: {tenantID: 2},
+			evalpkg.WorkItemStatusFailed:  {},
+		},
+	}
+
+	service := newTestService(t, store, Config{
+		Enabled:          true,
+		MaxConcurrent:    1,
+		MaxRatePerMinute: 1200,
+		MaxAttempts:      3,
+		ClaimBatchSize:   10,
+		PollInterval:     time.Millisecond,
+	})
+
+	service.refreshQueueDepth(context.Background())
+
+	if got := testutil.ToFloat64(evalQueueDepth.WithLabelValues(tenantID, string(evalpkg.WorkItemStatusQueued))); got != 4 {
+		t.Fatalf("expected queued depth=4 before drain, got %f", got)
+	}
+	if got := testutil.ToFloat64(evalQueueDepth.WithLabelValues(tenantID, string(evalpkg.WorkItemStatusClaimed))); got != 2 {
+		t.Fatalf("expected claimed depth=2 before drain, got %f", got)
+	}
+
+	store.statusCounts = map[evalpkg.WorkItemStatus]map[string]int64{
+		evalpkg.WorkItemStatusQueued:  {},
+		evalpkg.WorkItemStatusClaimed: {},
+		evalpkg.WorkItemStatusFailed:  {},
+	}
+	service.refreshQueueDepth(context.Background())
+
+	if got := testutil.ToFloat64(evalQueueDepth.WithLabelValues(tenantID, string(evalpkg.WorkItemStatusQueued))); got != 0 {
+		t.Fatalf("expected queued depth reset to zero after drain, got %f", got)
+	}
+	if got := testutil.ToFloat64(evalQueueDepth.WithLabelValues(tenantID, string(evalpkg.WorkItemStatusClaimed))); got != 0 {
+		t.Fatalf("expected claimed depth reset to zero after drain, got %f", got)
 	}
 }
 
@@ -295,16 +542,26 @@ func generationWithAssistantText(id string) *sigilv1.Generation {
 }
 
 type workerStoreStub struct {
-	claimed             []evalpkg.WorkItem
-	evaluators          map[string]evalpkg.EvaluatorDefinition
-	statusCounts        map[evalpkg.WorkItemStatus]map[string]int64
-	failCalls           int
-	lastFailPermanent   bool
-	lastFailMaxAttempts int
-	lastRetryAt         time.Time
-	insertedScores      int
-	completed           int
-	mu                  sync.Mutex
+	claimed                  []evalpkg.WorkItem
+	evaluators               map[string]evalpkg.EvaluatorDefinition
+	statusCounts             map[evalpkg.WorkItemStatus]map[string]int64
+	requeueCalls             int
+	requeuedWorkIDs          []string
+	failCalls                int
+	failedWorkIDs            []string
+	lastFailPermanent        bool
+	lastFailMaxAttempts      int
+	lastRetryAt              time.Time
+	insertedScores           int
+	completed                int
+	requeueCtxCanceledCount  int
+	failCtxCanceledCount     int
+	completeCtxCanceledCount int
+	requeueRejectCanceled    bool
+	failRejectCanceledCtx    bool
+	completeRejectCanceled   bool
+	completeErr              error
+	mu                       sync.Mutex
 }
 
 func (s *workerStoreStub) GetEvaluatorVersion(_ context.Context, tenantID, evaluatorID, version string) (*evalpkg.EvaluatorDefinition, error) {
@@ -331,17 +588,51 @@ func (s *workerStoreStub) InsertScoreBatch(_ context.Context, scores []evalpkg.G
 	return len(scores), nil
 }
 
-func (s *workerStoreStub) CompleteWorkItem(_ context.Context, _, _ string) error {
+func (s *workerStoreStub) RequeueClaimedWorkItem(ctx context.Context, _, workID string) error {
 	s.mu.Lock()
+	if ctx != nil && ctx.Err() != nil {
+		s.requeueCtxCanceledCount++
+		if s.requeueRejectCanceled {
+			s.mu.Unlock()
+			return ctx.Err()
+		}
+	}
+	defer s.mu.Unlock()
+	s.requeueCalls++
+	s.requeuedWorkIDs = append(s.requeuedWorkIDs, workID)
+	return nil
+}
+
+func (s *workerStoreStub) CompleteWorkItem(ctx context.Context, _, _ string) error {
+	s.mu.Lock()
+	if ctx != nil && ctx.Err() != nil {
+		s.completeCtxCanceledCount++
+		if s.completeRejectCanceled {
+			s.mu.Unlock()
+			return ctx.Err()
+		}
+	}
+	if s.completeErr != nil {
+		s.mu.Unlock()
+		return s.completeErr
+	}
 	defer s.mu.Unlock()
 	s.completed++
 	return nil
 }
 
-func (s *workerStoreStub) FailWorkItem(_ context.Context, _, _ string, _ string, retryAt time.Time, maxAttempts int, permanent bool) (bool, error) {
+func (s *workerStoreStub) FailWorkItem(ctx context.Context, _, workID string, _ string, retryAt time.Time, maxAttempts int, permanent bool) (bool, error) {
 	s.mu.Lock()
+	if ctx != nil && ctx.Err() != nil {
+		s.failCtxCanceledCount++
+		if s.failRejectCanceledCtx {
+			s.mu.Unlock()
+			return false, ctx.Err()
+		}
+	}
 	defer s.mu.Unlock()
 	s.failCalls++
+	s.failedWorkIDs = append(s.failedWorkIDs, workID)
 	s.lastFailPermanent = permanent
 	s.lastFailMaxAttempts = maxAttempts
 	s.lastRetryAt = retryAt
@@ -384,6 +675,7 @@ type workerFakeEvaluator struct {
 	err       error
 	outputs   []evaluators.ScoreOutput
 	sleep     time.Duration
+	started   chan struct{}
 	mu        sync.Mutex
 	active    int
 	maxActive int
@@ -400,6 +692,12 @@ func (e *workerFakeEvaluator) Evaluate(_ context.Context, _ evaluators.EvalInput
 		e.maxActive = e.active
 	}
 	e.mu.Unlock()
+	if e.started != nil {
+		select {
+		case e.started <- struct{}{}:
+		default:
+		}
+	}
 
 	if e.sleep > 0 {
 		time.Sleep(e.sleep)
@@ -418,4 +716,24 @@ func (e *workerFakeEvaluator) Evaluate(_ context.Context, _ evaluators.EvalInput
 func boolPtr(value bool) *bool {
 	copied := value
 	return &copied
+}
+
+type workerCancelingEvaluator struct {
+	kind    evalpkg.EvaluatorKind
+	started chan struct{}
+}
+
+func (e *workerCancelingEvaluator) Kind() evalpkg.EvaluatorKind {
+	return e.kind
+}
+
+func (e *workerCancelingEvaluator) Evaluate(ctx context.Context, _ evaluators.EvalInput, _ evalpkg.EvaluatorDefinition) ([]evaluators.ScoreOutput, error) {
+	if e.started != nil {
+		select {
+		case e.started <- struct{}{}:
+		default:
+		}
+	}
+	<-ctx.Done()
+	return nil, ctx.Err()
 }

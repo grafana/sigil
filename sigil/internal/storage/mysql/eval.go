@@ -747,6 +747,44 @@ func (s *WALStore) CompleteWorkItem(ctx context.Context, tenantID, workID string
 	return nil
 }
 
+func (s *WALStore) RequeueClaimedWorkItem(ctx context.Context, tenantID, workID string) error {
+	if strings.TrimSpace(tenantID) == "" {
+		return errors.New("tenant id is required")
+	}
+	if strings.TrimSpace(workID) == "" {
+		return errors.New("work id is required")
+	}
+
+	now := time.Now().UTC()
+	result := s.db.WithContext(ctx).
+		Model(&EvalWorkItemModel{}).
+		Where("tenant_id = ? AND work_id = ? AND status = ?", tenantID, workID, string(evalpkg.WorkItemStatusClaimed)).
+		Updates(map[string]any{
+			"status":     string(evalpkg.WorkItemStatusQueued),
+			"claimed_at": nil,
+			"updated_at": now,
+		})
+	if result.Error != nil {
+		return fmt.Errorf("requeue claimed work item: %w", result.Error)
+	}
+	if result.RowsAffected > 0 {
+		return nil
+	}
+
+	var existing EvalWorkItemModel
+	err := s.db.WithContext(ctx).
+		Select("status").
+		Where("tenant_id = ? AND work_id = ?", tenantID, workID).
+		First(&existing).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return evalpkg.ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("requeue claimed work item: %w", err)
+	}
+	return nil
+}
+
 func (s *WALStore) FailWorkItem(ctx context.Context, tenantID, workID, lastError string, retryAt time.Time, maxAttempts int, permanent bool) (bool, error) {
 	if strings.TrimSpace(tenantID) == "" {
 		return false, errors.New("tenant id is required")

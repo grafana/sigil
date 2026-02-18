@@ -206,7 +206,7 @@ func registerOpenAICompatFromEnv(discovery *Discovery, httpClient *http.Client) 
 			if name == "" {
 				name = "OpenAI Compatible"
 			}
-			addProviderIfReady(discovery, ProviderInfo{ID: id, Name: name, Type: "openai_compat"}, NewOpenAICompatClient(httpClient, baseURL, apiKey))
+			addProviderIfReady(discovery, ProviderInfo{ID: id, Name: name, Type: "openai_compat"}, NewOpenAICompatClient(httpClient, id, baseURL, apiKey))
 		}
 	}
 
@@ -228,7 +228,7 @@ func registerOpenAICompatFromEnv(discovery *Discovery, httpClient *http.Client) 
 		if name == "" {
 			name = fmt.Sprintf("OpenAI Compatible %d", i)
 		}
-		addProviderIfReady(discovery, ProviderInfo{ID: id, Name: name, Type: "openai_compat"}, NewOpenAICompatClient(httpClient, baseURL, apiKey))
+		addProviderIfReady(discovery, ProviderInfo{ID: id, Name: name, Type: "openai_compat"}, NewOpenAICompatClient(httpClient, id, baseURL, apiKey))
 	}
 }
 

@@ -53,45 +53,115 @@ type yamlSeedRuleSample struct {
 
 type seedStore interface {
 	CreateEvaluator(ctx context.Context, evaluator evalpkg.EvaluatorDefinition) error
+	GetEvaluator(ctx context.Context, tenantID, evaluatorID string) (*evalpkg.EvaluatorDefinition, error)
 	CreateRule(ctx context.Context, rule evalpkg.RuleDefinition) error
 }
 
+type SeedLoadOptions struct {
+	Strict bool
+}
+
+type SeedLoadIssue struct {
+	Entity string
+	ID     string
+	Error  string
+}
+
+type SeedLoadReport struct {
+	CreatedEvaluators int
+	CreatedRules      int
+	SkippedEvaluators int
+	SkippedRules      int
+	Issues            []SeedLoadIssue
+}
+
+func (r SeedLoadReport) HasIssues() bool {
+	return len(r.Issues) > 0
+}
+
+func (r *SeedLoadReport) addIssue(entity, id string, err error) {
+	if r == nil || err == nil {
+		return
+	}
+	r.Issues = append(r.Issues, SeedLoadIssue{
+		Entity: strings.TrimSpace(entity),
+		ID:     strings.TrimSpace(id),
+		Error:  strings.TrimSpace(err.Error()),
+	})
+}
+
 func LoadYAMLSeedFile(ctx context.Context, store seedStore, tenantID, path string) error {
+	_, err := LoadYAMLSeedFileWithOptions(ctx, store, tenantID, path, SeedLoadOptions{Strict: true})
+	return err
+}
+
+func LoadYAMLSeedFileWithOptions(ctx context.Context, store seedStore, tenantID, path string, options SeedLoadOptions) (SeedLoadReport, error) {
+	report := SeedLoadReport{}
+
 	trimmedPath := strings.TrimSpace(path)
 	if trimmedPath == "" {
-		return nil
+		return report, nil
 	}
 	payload, err := os.ReadFile(trimmedPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil
+			return report, nil
 		}
-		return fmt.Errorf("read yaml seed file: %w", err)
+		wrapped := fmt.Errorf("read yaml seed file: %w", err)
+		if options.Strict {
+			return report, wrapped
+		}
+		report.addIssue("seed_file", trimmedPath, wrapped)
+		return report, nil
 	}
-	return LoadYAMLSeed(ctx, store, tenantID, payload)
+	return LoadYAMLSeedWithOptions(ctx, store, tenantID, payload, options)
 }
 
 func LoadYAMLSeed(ctx context.Context, store seedStore, tenantID string, payload []byte) error {
+	_, err := LoadYAMLSeedWithOptions(ctx, store, tenantID, payload, SeedLoadOptions{Strict: true})
+	return err
+}
+
+func LoadYAMLSeedWithOptions(ctx context.Context, store seedStore, tenantID string, payload []byte, options SeedLoadOptions) (SeedLoadReport, error) {
+	report := SeedLoadReport{}
+
 	if store == nil {
-		return errors.New("eval store is required")
+		return report, errors.New("eval store is required")
 	}
 	if len(payload) == 0 {
-		return nil
+		return report, nil
 	}
 
 	var seed yamlSeed
 	if err := yaml.Unmarshal(payload, &seed); err != nil {
-		return fmt.Errorf("decode yaml seed: %w", err)
+		wrapped := fmt.Errorf("decode yaml seed: %w", err)
+		if options.Strict {
+			return report, wrapped
+		}
+		report.addIssue("seed", "decode", wrapped)
+		return report, nil
 	}
 
 	evaluatorIDs := make(map[string]struct{}, len(seed.Evaluators))
 	for _, item := range seed.Evaluators {
 		id := strings.TrimSpace(item.ID)
 		if id == "" {
-			return errors.New("yaml evaluator id is required")
+			report.SkippedEvaluators++
+			err := errors.New("yaml evaluator id is required")
+			if options.Strict {
+				return report, err
+			}
+			report.addIssue("evaluator", id, err)
+			continue
 		}
 		if _, ok := evaluatorIDs[id]; ok {
-			return fmt.Errorf("duplicate evaluator id %q", id)
+			report.SkippedEvaluators++
+			err := fmt.Errorf("duplicate evaluator id %q", id)
+			if options.Strict {
+				return report, err
+			}
+			report.addIssue("evaluator", id, err)
+			continue
 		}
 		evaluatorIDs[id] = struct{}{}
 
@@ -128,19 +198,45 @@ func LoadYAMLSeed(ctx context.Context, store seedStore, tenantID string, payload
 			Config:      config,
 			OutputKeys:  outputKeys,
 		}
-		if err := store.CreateEvaluator(ctx, evaluator); err != nil {
-			return err
+		if err := validateEvaluator(&evaluator); err != nil {
+			report.SkippedEvaluators++
+			if options.Strict {
+				return report, err
+			}
+			report.addIssue("evaluator", id, err)
+			continue
 		}
+		if err := store.CreateEvaluator(ctx, evaluator); err != nil {
+			report.SkippedEvaluators++
+			if options.Strict {
+				return report, err
+			}
+			report.addIssue("evaluator", id, err)
+			continue
+		}
+		report.CreatedEvaluators++
 	}
 
 	ruleIDs := make(map[string]struct{}, len(seed.Rules))
 	for _, item := range seed.Rules {
 		id := strings.TrimSpace(item.ID)
 		if id == "" {
-			return errors.New("yaml rule id is required")
+			report.SkippedRules++
+			err := errors.New("yaml rule id is required")
+			if options.Strict {
+				return report, err
+			}
+			report.addIssue("rule", id, err)
+			continue
 		}
 		if _, ok := ruleIDs[id]; ok {
-			return fmt.Errorf("duplicate rule id %q", id)
+			report.SkippedRules++
+			err := fmt.Errorf("duplicate rule id %q", id)
+			if options.Strict {
+				return report, err
+			}
+			report.addIssue("rule", id, err)
+			continue
 		}
 		ruleIDs[id] = struct{}{}
 
@@ -148,7 +244,7 @@ func LoadYAMLSeed(ctx context.Context, store seedStore, tenantID string, payload
 		if item.Enabled != nil {
 			enabled = *item.Enabled
 		}
-		sampleRate := 1.0
+		sampleRate := defaultRuleSampleRate
 		if item.Sample.Rate != nil {
 			sampleRate = *item.Sample.Rate
 		}
@@ -166,10 +262,50 @@ func LoadYAMLSeed(ctx context.Context, store seedStore, tenantID string, payload
 			SampleRate:   sampleRate,
 			EvaluatorIDs: item.Evaluators,
 		}
-		if err := store.CreateRule(ctx, rule); err != nil {
-			return err
+		if err := validateRule(&rule); err != nil {
+			report.SkippedRules++
+			if options.Strict {
+				return report, err
+			}
+			report.addIssue("rule", id, err)
+			continue
 		}
+		skipRule := false
+		for _, evaluatorID := range rule.EvaluatorIDs {
+			evaluator, err := store.GetEvaluator(ctx, rule.TenantID, evaluatorID)
+			if err != nil {
+				report.SkippedRules++
+				if options.Strict {
+					return report, err
+				}
+				report.addIssue("rule", id, err)
+				skipRule = true
+				break
+			}
+			if evaluator == nil {
+				report.SkippedRules++
+				err := fmt.Errorf("yaml rule %q references unknown evaluator %q", rule.RuleID, evaluatorID)
+				if options.Strict {
+					return report, err
+				}
+				report.addIssue("rule", id, err)
+				skipRule = true
+				break
+			}
+		}
+		if skipRule {
+			continue
+		}
+		if err := store.CreateRule(ctx, rule); err != nil {
+			report.SkippedRules++
+			if options.Strict {
+				return report, err
+			}
+			report.addIssue("rule", id, err)
+			continue
+		}
+		report.CreatedRules++
 	}
 
-	return nil
+	return report, nil
 }

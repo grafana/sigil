@@ -209,6 +209,13 @@ func (a evalEnqueueStoreTestAdapter) CompleteEvalEnqueueEvent(ctx context.Contex
 	return a.store.CompleteEvalEnqueueEvent(ctx, tenantID, generationID)
 }
 
+func (a evalEnqueueStoreTestAdapter) RequeueClaimedEvalEnqueueEvent(ctx context.Context, tenantID, generationID string) error {
+	if a.store == nil {
+		return nil
+	}
+	return a.store.RequeueClaimedEvalEnqueueEvent(ctx, tenantID, generationID)
+}
+
 func (a evalEnqueueStoreTestAdapter) FailEvalEnqueueEvent(ctx context.Context, tenantID, generationID, lastError string, retryAt time.Time, maxAttempts int, permanent bool) (bool, error) {
 	if a.store == nil {
 		return false, nil

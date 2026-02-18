@@ -13,11 +13,12 @@ import (
 
 type openAICompatHTTPClient struct {
 	httpClient *http.Client
+	providerID string
 	baseURL    string
 	apiKey     string
 }
 
-func newOpenAICompatHTTPClient(httpClient *http.Client, baseURL, apiKey string) *openAICompatHTTPClient {
+func newOpenAICompatHTTPClient(httpClient *http.Client, providerID, baseURL, apiKey string) *openAICompatHTTPClient {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 30 * time.Second}
 	}
@@ -25,8 +26,13 @@ func newOpenAICompatHTTPClient(httpClient *http.Client, baseURL, apiKey string) 
 	if trimmedBaseURL == "" {
 		trimmedBaseURL = "https://api.openai.com"
 	}
+	trimmedProviderID := strings.TrimSpace(providerID)
+	if trimmedProviderID == "" {
+		trimmedProviderID = "openai-compat"
+	}
 	return &openAICompatHTTPClient{
 		httpClient: httpClient,
+		providerID: trimmedProviderID,
 		baseURL:    trimmedBaseURL,
 		apiKey:     strings.TrimSpace(apiKey),
 	}
@@ -156,7 +162,7 @@ func (c *openAICompatHTTPClient) ListModels(ctx context.Context) ([]JudgeModel, 
 		if id == "" {
 			continue
 		}
-		out = append(out, JudgeModel{ID: id, Name: id, Provider: "openai"})
+		out = append(out, JudgeModel{ID: id, Name: id, Provider: c.providerID})
 	}
 	return out, nil
 }

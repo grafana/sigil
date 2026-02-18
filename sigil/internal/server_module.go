@@ -18,8 +18,8 @@ import (
 	evalenqueue "github.com/grafana/sigil/sigil/internal/eval/enqueue"
 	"github.com/grafana/sigil/sigil/internal/eval/evaluators/judges"
 	evalingest "github.com/grafana/sigil/sigil/internal/eval/ingest"
-	"github.com/grafana/sigil/sigil/internal/eval/predefined"
 	evalrules "github.com/grafana/sigil/sigil/internal/eval/rules"
+	evalworker "github.com/grafana/sigil/sigil/internal/eval/worker"
 	"github.com/grafana/sigil/sigil/internal/feedback"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
@@ -132,12 +132,46 @@ func (m *serverModule) start(ctx context.Context) error {
 	var ingestScoreSvc *evalingest.Service
 	if evalStore != nil {
 		discovery := judges.DiscoverFromEnv()
-		controlSvc = evalcontrol.NewService(evalStore, predefined.NewSeeder(evalStore), judgeDiscoveryAdapter{discovery: discovery})
-		ingestScoreSvc = evalingest.NewService(evalStore, walReader, false)
+		controlSvc = evalcontrol.NewService(evalStore, judgeDiscoveryAdapter{discovery: discovery})
+		scoreLookup := buildScoreGenerationLookup(walReader, blockMetadataStore, blockReader)
+		ingestScoreSvc = evalingest.NewService(evalStore, scoreLookup, false)
 		seedTenantID := strings.TrimSpace(m.cfg.FakeTenantID)
 		if seedTenantID != "" && strings.TrimSpace(m.cfg.EvalSeedFile) != "" {
-			if err := evalcontrol.LoadYAMLSeedFile(ctx, evalStore, seedTenantID, m.cfg.EvalSeedFile); err != nil {
+			loadSeed, err := shouldLoadEvalSeed(ctx, evalStore, seedTenantID)
+			if err != nil {
 				return err
+			}
+			if loadSeed {
+				report, err := evalcontrol.LoadYAMLSeedFileWithOptions(
+					ctx,
+					evalStore,
+					seedTenantID,
+					m.cfg.EvalSeedFile,
+					evalcontrol.SeedLoadOptions{Strict: m.cfg.EvalSeedStrict},
+				)
+				if err != nil {
+					return err
+				}
+				for _, issue := range report.Issues {
+					_ = level.Warn(m.logger).Log(
+						"msg", "eval seed skipped invalid entry",
+						"tenant_id", seedTenantID,
+						"entity", issue.Entity,
+						"id", issue.ID,
+						"err", issue.Error,
+					)
+				}
+				_ = level.Info(m.logger).Log(
+					"msg", "eval seed load completed",
+					"tenant_id", seedTenantID,
+					"strict", m.cfg.EvalSeedStrict,
+					"created_evaluators", report.CreatedEvaluators,
+					"created_rules", report.CreatedRules,
+					"skipped_evaluators", report.SkippedEvaluators,
+					"skipped_rules", report.SkippedRules,
+				)
+			} else {
+				_ = level.Info(m.logger).Log("msg", "skip eval seed load because tenant already has evaluation config", "tenant_id", seedTenantID)
 			}
 		}
 	}
@@ -229,6 +263,35 @@ func (m *serverModule) stop(_ error) error {
 	return nil
 }
 
+type evalSeedStateStore interface {
+	ListEvaluators(ctx context.Context, tenantID string, limit int, cursor uint64) ([]evalpkg.EvaluatorDefinition, uint64, error)
+	ListRules(ctx context.Context, tenantID string, limit int, cursor uint64) ([]evalpkg.RuleDefinition, uint64, error)
+}
+
+func shouldLoadEvalSeed(ctx context.Context, store evalSeedStateStore, tenantID string) (bool, error) {
+	if store == nil {
+		return false, nil
+	}
+	trimmedTenantID := strings.TrimSpace(tenantID)
+	if trimmedTenantID == "" {
+		return false, nil
+	}
+
+	evaluators, _, err := store.ListEvaluators(ctx, trimmedTenantID, 1, 0)
+	if err != nil {
+		return false, fmt.Errorf("list evaluators for seed bootstrap check: %w", err)
+	}
+	if len(evaluators) > 0 {
+		return false, nil
+	}
+
+	rules, _, err := store.ListRules(ctx, trimmedTenantID, 1, 0)
+	if err != nil {
+		return false, fmt.Errorf("list rules for seed bootstrap check: %w", err)
+	}
+	return len(rules) == 0, nil
+}
+
 func (m *serverModule) serveHTTP() {
 	_ = level.Info(m.logger).Log("msg", "sigil http listening", "addr", m.cfg.HTTPAddr)
 	err := m.apiServer.ListenAndServe()
@@ -279,6 +342,10 @@ func (m *serverModule) buildFeedbackStore(generationStore generationingest.Store
 
 func (m *serverModule) buildBlockReader(ctx context.Context) (storage.BlockReader, error) {
 	return newObjectBlockReader(ctx, m.cfg.ObjectStore)
+}
+
+func buildScoreGenerationLookup(hotReader storage.WALReader, blockMetadataStore storage.BlockMetadataStore, blockReader storage.BlockReader) evalingest.GenerationLookup {
+	return evalworker.NewHotColdGenerationReader(hotReader, blockMetadataStore, blockReader)
 }
 
 type judgeDiscoveryAdapter struct {
@@ -334,6 +401,13 @@ func (a evalEnqueueStoreAdapter) CompleteEvalEnqueueEvent(ctx context.Context, t
 	return a.store.CompleteEvalEnqueueEvent(ctx, tenantID, generationID)
 }
 
+func (a evalEnqueueStoreAdapter) RequeueClaimedEvalEnqueueEvent(ctx context.Context, tenantID, generationID string) error {
+	if a.store == nil {
+		return nil
+	}
+	return a.store.RequeueClaimedEvalEnqueueEvent(ctx, tenantID, generationID)
+}
+
 func (a evalEnqueueStoreAdapter) FailEvalEnqueueEvent(ctx context.Context, tenantID, generationID, lastError string, retryAt time.Time, maxAttempts int, permanent bool) (bool, error) {
 	if a.store == nil {
 		return false, nil
@@ -350,6 +424,10 @@ func (a evalEnqueueProcessorAdapter) Process(ctx context.Context, event evalenqu
 		return nil
 	}
 
+	// Durable enqueue events must observe the most recent control-plane config.
+	// Invalidate tenant cache before each event so rule/evaluator changes apply
+	// immediately and events are not completed against stale snapshots.
+	a.engine.InvalidateTenantCache(event.TenantID)
 	return a.engine.OnGenerationsSaved(ctx, event.TenantID, []evalrules.GenerationRow{{
 		GenerationID:   event.GenerationID,
 		ConversationID: event.ConversationID,

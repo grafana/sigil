@@ -45,6 +45,20 @@ func NewEngine(store engineStore) *Engine {
 	}
 }
 
+// InvalidateTenantCache clears the cached rule/evaluator snapshot for a tenant.
+func (e *Engine) InvalidateTenantCache(tenantID string) {
+	if e == nil {
+		return
+	}
+	tenantID = strings.TrimSpace(tenantID)
+	if tenantID == "" {
+		return
+	}
+	e.mu.Lock()
+	delete(e.cache, tenantID)
+	e.mu.Unlock()
+}
+
 func (e *Engine) OnGenerationsSaved(ctx context.Context, tenantID string, generations []GenerationRow) error {
 	if e == nil || e.store == nil || strings.TrimSpace(tenantID) == "" || len(generations) == 0 {
 		return nil
@@ -86,6 +100,10 @@ func (e *Engine) OnGenerationsSaved(ctx context.Context, tenantID string, genera
 			for _, evaluatorID := range rule.EvaluatorIDs {
 				evaluator, ok := evaluators[evaluatorID]
 				if !ok {
+					worker.ObserveEnqueueError(tenantID)
+					if firstErr == nil {
+						firstErr = evalpkg.Permanent(fmt.Errorf("rule %q references missing evaluator %q", rule.RuleID, evaluatorID))
+					}
 					continue
 				}
 				item := evalpkg.WorkItem{

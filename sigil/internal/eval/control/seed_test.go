@@ -90,7 +90,13 @@ func TestLoadYAMLSeedFile(t *testing.T) {
 }
 
 func TestSeedExampleFileParses(t *testing.T) {
-	store := &seedTestStore{}
+	store := &seedTestStore{
+		evaluators: []evalpkg.EvaluatorDefinition{
+			{TenantID: "tenant-a", EvaluatorID: "sigil.helpfulness"},
+			{TenantID: "tenant-a", EvaluatorID: "sigil.response_not_empty"},
+			{TenantID: "tenant-a", EvaluatorID: "sigil.json_valid"},
+		},
+	}
 	paths := []string{
 		filepath.Join("..", "..", "..", "..", "sigil-eval-seed.example.yaml"),
 		filepath.Join("..", "sigil-eval-seed.example.yaml"),
@@ -150,7 +156,7 @@ rules:
 	}
 }
 
-func TestLoadYAMLSeedDefaultsSampleRateToOneWhenOmitted(t *testing.T) {
+func TestLoadYAMLSeedDefaultsSampleRateWhenOmitted(t *testing.T) {
 	store := &seedTestStore{}
 	payload := []byte(`
 evaluators:
@@ -174,8 +180,138 @@ rules:
 	if len(store.rules) != 1 {
 		t.Fatalf("expected one seeded rule, got %d", len(store.rules))
 	}
-	if store.rules[0].SampleRate != 1 {
-		t.Fatalf("expected omitted sample rate to default to 1, got %v", store.rules[0].SampleRate)
+	if store.rules[0].SampleRate != defaultRuleSampleRate {
+		t.Fatalf("expected omitted sample rate to default to %v, got %v", defaultRuleSampleRate, store.rules[0].SampleRate)
+	}
+}
+
+func TestLoadYAMLSeedRejectsUnsupportedMatchKey(t *testing.T) {
+	store := &seedTestStore{}
+	payload := []byte(`
+evaluators:
+  - id: eval.match
+    kind: heuristic
+    output:
+      keys:
+        - key: match
+          type: bool
+rules:
+  - id: rule.invalid_match
+    select:
+      selector: user_visible_turn
+    match:
+      model.provier: openai
+    evaluators:
+      - eval.match
+`)
+
+	if err := LoadYAMLSeed(context.Background(), store, "tenant-a", payload); err == nil {
+		t.Fatalf("expected unsupported match key to fail")
+	}
+}
+
+func TestLoadYAMLSeedRejectsInvalidMatchValueType(t *testing.T) {
+	store := &seedTestStore{}
+	payload := []byte(`
+evaluators:
+  - id: eval.match
+    kind: heuristic
+    output:
+      keys:
+        - key: match
+          type: bool
+rules:
+  - id: rule.invalid_match_type
+    select:
+      selector: user_visible_turn
+    match:
+      mode: 1
+    evaluators:
+      - eval.match
+`)
+
+	if err := LoadYAMLSeed(context.Background(), store, "tenant-a", payload); err == nil {
+		t.Fatalf("expected invalid match value type to fail")
+	}
+}
+
+func TestLoadYAMLSeedRejectsRuleWithMissingEvaluatorReference(t *testing.T) {
+	store := &seedTestStore{}
+	payload := []byte(`
+rules:
+  - id: rule.missing_evaluator
+    select:
+      selector: user_visible_turn
+    evaluators:
+      - does.not.exist
+`)
+
+	if err := LoadYAMLSeed(context.Background(), store, "tenant-a", payload); err == nil {
+		t.Fatalf("expected missing evaluator reference to fail")
+	}
+}
+
+func TestLoadYAMLSeedWithOptionsBestEffortSkipsInvalidAndContinues(t *testing.T) {
+	store := &seedTestStore{}
+	payload := []byte(`
+evaluators:
+  - id: eval.good
+    kind: heuristic
+    output:
+      keys:
+        - key: good
+          type: bool
+rules:
+  - id: rule.bad
+    select:
+      selector: user_visible_turn
+    evaluators:
+      - does.not.exist
+  - id: rule.good
+    select:
+      selector: user_visible_turn
+    evaluators:
+      - eval.good
+`)
+
+	report, err := LoadYAMLSeedWithOptions(context.Background(), store, "tenant-a", payload, SeedLoadOptions{Strict: false})
+	if err != nil {
+		t.Fatalf("load yaml seed with best-effort options: %v", err)
+	}
+	if report.CreatedEvaluators != 1 {
+		t.Fatalf("expected one created evaluator, got %d", report.CreatedEvaluators)
+	}
+	if report.CreatedRules != 1 {
+		t.Fatalf("expected one created rule, got %d", report.CreatedRules)
+	}
+	if report.SkippedRules != 1 {
+		t.Fatalf("expected one skipped rule, got %d", report.SkippedRules)
+	}
+	if len(report.Issues) == 0 {
+		t.Fatalf("expected skipped seed issue to be reported")
+	}
+	if report.Issues[0].Entity != "rule" || report.Issues[0].ID != "rule.bad" {
+		t.Fatalf("expected issue to include invalid rule name, got %+v", report.Issues[0])
+	}
+	if len(store.rules) != 1 || store.rules[0].RuleID != "rule.good" {
+		t.Fatalf("expected valid rule to be seeded, got %#v", store.rules)
+	}
+}
+
+func TestLoadYAMLSeedWithOptionsStrictFailsOnInvalid(t *testing.T) {
+	store := &seedTestStore{}
+	payload := []byte(`
+rules:
+  - id: rule.bad
+    select:
+      selector: user_visible_turn
+    evaluators:
+      - does.not.exist
+`)
+
+	_, err := LoadYAMLSeedWithOptions(context.Background(), store, "tenant-a", payload, SeedLoadOptions{Strict: true})
+	if err == nil {
+		t.Fatalf("expected strict seed loading to fail on invalid rule")
 	}
 }
 
@@ -187,6 +323,17 @@ type seedTestStore struct {
 func (s *seedTestStore) CreateEvaluator(_ context.Context, evaluator evalpkg.EvaluatorDefinition) error {
 	s.evaluators = append(s.evaluators, evaluator)
 	return nil
+}
+
+func (s *seedTestStore) GetEvaluator(_ context.Context, tenantID, evaluatorID string) (*evalpkg.EvaluatorDefinition, error) {
+	for idx := range s.evaluators {
+		item := s.evaluators[idx]
+		if item.TenantID == tenantID && item.EvaluatorID == evaluatorID {
+			copied := item
+			return &copied, nil
+		}
+	}
+	return nil, nil
 }
 
 func (s *seedTestStore) CreateRule(_ context.Context, rule evalpkg.RuleDefinition) error {

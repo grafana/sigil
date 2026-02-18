@@ -12,6 +12,34 @@ import (
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 )
 
+type createRuleRequest struct {
+	RuleID       string           `json:"rule_id"`
+	Enabled      *bool            `json:"enabled,omitempty"`
+	Selector     evalpkg.Selector `json:"selector,omitempty"`
+	Match        map[string]any   `json:"match,omitempty"`
+	SampleRate   *float64         `json:"sample_rate,omitempty"`
+	EvaluatorIDs []string         `json:"evaluator_ids"`
+}
+
+func (r createRuleRequest) toRuleDefinition() evalpkg.RuleDefinition {
+	enabled := true
+	if r.Enabled != nil {
+		enabled = *r.Enabled
+	}
+	sampleRate := defaultRuleSampleRate
+	if r.SampleRate != nil {
+		sampleRate = *r.SampleRate
+	}
+	return evalpkg.RuleDefinition{
+		RuleID:       strings.TrimSpace(r.RuleID),
+		Enabled:      enabled,
+		Selector:     r.Selector,
+		Match:        r.Match,
+		SampleRate:   sampleRate,
+		EvaluatorIDs: r.EvaluatorIDs,
+	}
+}
+
 func RegisterHTTPRoutes(mux *http.ServeMux, service *Service, protectedMiddleware func(http.Handler) http.Handler) {
 	if mux == nil || service == nil {
 		return
@@ -45,7 +73,7 @@ func (s *Service) handleEvaluators(w http.ResponseWriter, req *http.Request) {
 		}
 		created, err := s.CreateEvaluator(req.Context(), tenantID, evaluator)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeControlWriteError(w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, created)
@@ -95,7 +123,7 @@ func (s *Service) handleEvaluatorByID(w http.ResponseWriter, req *http.Request) 
 		writeJSON(w, http.StatusOK, evaluator)
 	case http.MethodDelete:
 		if err := s.DeleteEvaluator(req.Context(), tenantID, evaluatorID); err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeControlWriteError(w, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -139,7 +167,7 @@ func (s *Service) handlePredefinedEvaluatorByID(w http.ResponseWriter, req *http
 
 	created, err := s.ForkPredefinedEvaluator(req.Context(), tenantID, templateID, request)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeControlWriteError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, created)
@@ -153,14 +181,15 @@ func (s *Service) handleRules(w http.ResponseWriter, req *http.Request) {
 
 	switch req.Method {
 	case http.MethodPost:
-		var rule evalpkg.RuleDefinition
-		if err := decodeJSONBody(req, &rule); err != nil {
+		var createRequest createRuleRequest
+		if err := decodeJSONBody(req, &createRequest); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		rule := createRequest.toRuleDefinition()
 		created, err := s.CreateRule(req.Context(), tenantID, rule)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeControlWriteError(w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, created)
@@ -222,7 +251,7 @@ func (s *Service) handleRuleByID(w http.ResponseWriter, req *http.Request) {
 		}
 		updated, err := s.UpdateRuleEnabled(req.Context(), tenantID, ruleID, *patch.Enabled)
 		if err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeControlWriteError(w, err)
 			return
 		}
 		if updated == nil {
@@ -242,6 +271,10 @@ func (s *Service) handleRuleByID(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *Service) handleJudgeProviders(w http.ResponseWriter, req *http.Request) {
+	if _, ok := tenantIDFromRequest(w, req); !ok {
+		return
+	}
+
 	if req.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -250,6 +283,10 @@ func (s *Service) handleJudgeProviders(w http.ResponseWriter, req *http.Request)
 }
 
 func (s *Service) handleJudgeModels(w http.ResponseWriter, req *http.Request) {
+	if _, ok := tenantIDFromRequest(w, req); !ok {
+		return
+	}
+
 	if req.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -353,4 +390,12 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func writeControlWriteError(w http.ResponseWriter, err error) {
+	if isValidationError(err) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	http.Error(w, "internal server error", http.StatusInternalServerError)
 }

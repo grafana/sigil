@@ -145,6 +145,46 @@ func (s *WALStore) CompleteEvalEnqueueEvent(ctx context.Context, tenantID, gener
 	return nil
 }
 
+// RequeueClaimedEvalEnqueueEvent releases a claimed enqueue event back to queued
+// without consuming retry attempts.
+func (s *WALStore) RequeueClaimedEvalEnqueueEvent(ctx context.Context, tenantID, generationID string) error {
+	if strings.TrimSpace(tenantID) == "" {
+		return errors.New("tenant id is required")
+	}
+	if strings.TrimSpace(generationID) == "" {
+		return errors.New("generation id is required")
+	}
+
+	now := time.Now().UTC()
+	result := s.db.WithContext(ctx).
+		Model(&EvalEnqueueEventModel{}).
+		Where("tenant_id = ? AND generation_id = ? AND status = ?", tenantID, generationID, evalEnqueueStatusClaimed).
+		Updates(map[string]any{
+			"status":     evalEnqueueStatusQueued,
+			"claimed_at": nil,
+			"updated_at": now,
+		})
+	if result.Error != nil {
+		return fmt.Errorf("requeue claimed eval enqueue event: %w", result.Error)
+	}
+	if result.RowsAffected > 0 {
+		return nil
+	}
+
+	var existing EvalEnqueueEventModel
+	err := s.db.WithContext(ctx).
+		Select("status").
+		Where("tenant_id = ? AND generation_id = ?", tenantID, generationID).
+		First(&existing).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return evalpkg.ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("requeue claimed eval enqueue event: %w", err)
+	}
+	return nil
+}
+
 // FailEvalEnqueueEvent records a dispatch failure and either requeues or fails.
 func (s *WALStore) FailEvalEnqueueEvent(ctx context.Context, tenantID, generationID, lastError string, retryAt time.Time, maxAttempts int, permanent bool) (bool, error) {
 	if strings.TrimSpace(tenantID) == "" {
@@ -172,6 +212,9 @@ func (s *WALStore) FailEvalEnqueueEvent(ctx context.Context, tenantID, generatio
 			}
 			if err != nil {
 				return err
+			}
+			if row.Status != evalEnqueueStatusClaimed {
+				return nil
 			}
 
 			attempts := row.Attempts + 1

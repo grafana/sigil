@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -17,6 +18,8 @@ import (
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	"golang.org/x/time/rate"
 )
+
+const statusTransitionTimeout = 5 * time.Second
 
 type Config struct {
 	Enabled           bool
@@ -42,11 +45,13 @@ type Service struct {
 	evaluators map[evalpkg.EvaluatorKind]evaluators.Evaluator
 	limiter    *rate.Limiter
 	semaphore  chan struct{}
+	seenQueue  map[evalpkg.WorkItemStatus]map[string]struct{}
 }
 
 type workerStore interface {
 	GetEvaluatorVersion(ctx context.Context, tenantID, evaluatorID, version string) (*evalpkg.EvaluatorDefinition, error)
 	ClaimWorkItems(ctx context.Context, now time.Time, limit int) ([]evalpkg.WorkItem, error)
+	RequeueClaimedWorkItem(ctx context.Context, tenantID, workID string) error
 	InsertScoreBatch(ctx context.Context, scores []evalpkg.GenerationScore) (int, error)
 	CompleteWorkItem(ctx context.Context, tenantID, workID string) error
 	FailWorkItem(ctx context.Context, tenantID, workID, lastError string, retryAt time.Time, maxAttempts int, permanent bool) (bool, error)
@@ -101,6 +106,7 @@ func (s *Service) start(_ context.Context) error {
 	ratePerSecond := float64(s.cfg.MaxRatePerMinute) / 60.0
 	s.limiter = rate.NewLimiter(rate.Limit(ratePerSecond), max(1, s.cfg.MaxConcurrent))
 	s.semaphore = make(chan struct{}, s.cfg.MaxConcurrent)
+	s.seenQueue = make(map[evalpkg.WorkItemStatus]map[string]struct{}, 3)
 
 	s.evaluators = map[evalpkg.EvaluatorKind]evaluators.Evaluator{
 		evalpkg.EvaluatorKindRegex:      evaluators.NewRegexEvaluator(),
@@ -146,11 +152,18 @@ func (s *Service) runCycle(ctx context.Context) {
 	}
 
 	var wg sync.WaitGroup
-	for _, item := range items {
+loop:
+	for idx, item := range items {
 		if err := s.limiter.Wait(ctx); err != nil {
-			return
+			s.releaseUnstartedItems(ctx, items[idx:], err)
+			break
 		}
-		s.semaphore <- struct{}{}
+		select {
+		case s.semaphore <- struct{}{}:
+		case <-ctx.Done():
+			s.releaseUnstartedItems(ctx, items[idx:], ctx.Err())
+			break loop
+		}
 		wg.Add(1)
 		go func(item evalpkg.WorkItem) {
 			defer wg.Done()
@@ -160,6 +173,34 @@ func (s *Service) runCycle(ctx context.Context) {
 	}
 	wg.Wait()
 	s.refreshQueueDepth(ctx)
+}
+
+func (s *Service) releaseUnstartedItems(ctx context.Context, items []evalpkg.WorkItem, cause error) {
+	if len(items) == 0 {
+		return
+	}
+	if cause == nil {
+		cause = context.Canceled
+	}
+	transitionCtx, cancel := detachedContextWithTimeout(ctx, statusTransitionTimeout)
+	defer cancel()
+	for _, item := range items {
+		if err := s.store.RequeueClaimedWorkItem(transitionCtx, item.TenantID, item.WorkID); err != nil && !errors.Is(err, evalpkg.ErrNotFound) {
+			_ = level.Error(s.logger).Log(
+				"msg", "eval worker release claimed item failed",
+				"tenant_id", item.TenantID,
+				"work_id", item.WorkID,
+				"err", err,
+			)
+			continue
+		}
+		_ = level.Warn(s.logger).Log(
+			"msg", "eval worker released unstarted claimed item",
+			"tenant_id", item.TenantID,
+			"work_id", item.WorkID,
+			"cause", cause.Error(),
+		)
+	}
 }
 
 func (s *Service) executeItem(ctx context.Context, item evalpkg.WorkItem) {
@@ -235,8 +276,11 @@ func (s *Service) executeItem(ctx context.Context, item evalpkg.WorkItem) {
 		s.failItem(ctx, item, kind, err)
 		return
 	}
-	if err := s.store.CompleteWorkItem(ctx, item.TenantID, item.WorkID); err != nil {
-		_ = level.Error(s.logger).Log("msg", "eval worker complete failed", "tenant_id", item.TenantID, "work_id", item.WorkID, "err", err)
+	transitionCtx, cancel := detachedContextWithTimeout(ctx, statusTransitionTimeout)
+	defer cancel()
+	if err := s.store.CompleteWorkItem(transitionCtx, item.TenantID, item.WorkID); err != nil {
+		s.failItem(ctx, item, kind, fmt.Errorf("complete work item: %w", err))
+		return
 	}
 
 	observeExecution(item.TenantID, item.EvaluatorID, kind, item.RuleID, "success")
@@ -247,9 +291,16 @@ func (s *Service) executeItem(ctx context.Context, item evalpkg.WorkItem) {
 }
 
 func (s *Service) failItem(ctx context.Context, item evalpkg.WorkItem, kind string, err error) {
+	if isRunContextCancellation(ctx, err) {
+		s.requeueCanceledItem(ctx, item, err)
+		return
+	}
+
 	permanent := evalpkg.IsPermanent(err)
 	retryAt := time.Now().UTC().Add(retryBackoff(item.Attempts + 1))
-	requeued, failErr := s.store.FailWorkItem(ctx, item.TenantID, item.WorkID, err.Error(), retryAt, s.cfg.MaxAttempts, permanent)
+	transitionCtx, cancel := detachedContextWithTimeout(ctx, statusTransitionTimeout)
+	defer cancel()
+	requeued, failErr := s.store.FailWorkItem(transitionCtx, item.TenantID, item.WorkID, err.Error(), retryAt, s.cfg.MaxAttempts, permanent)
 	if failErr != nil {
 		_ = level.Error(s.logger).Log("msg", "eval worker fail update failed", "tenant_id", item.TenantID, "work_id", item.WorkID, "err", failErr)
 	}
@@ -259,14 +310,53 @@ func (s *Service) failItem(ctx context.Context, item evalpkg.WorkItem, kind stri
 	observeExecution(item.TenantID, item.EvaluatorID, kind, item.RuleID, "failed")
 }
 
+func (s *Service) requeueCanceledItem(ctx context.Context, item evalpkg.WorkItem, cause error) {
+	if cause == nil {
+		cause = context.Canceled
+	}
+	transitionCtx, cancel := detachedContextWithTimeout(ctx, statusTransitionTimeout)
+	defer cancel()
+	if err := s.store.RequeueClaimedWorkItem(transitionCtx, item.TenantID, item.WorkID); err != nil && !errors.Is(err, evalpkg.ErrNotFound) {
+		_ = level.Error(s.logger).Log(
+			"msg", "eval worker cancellation requeue failed",
+			"tenant_id", item.TenantID,
+			"work_id", item.WorkID,
+			"err", err,
+		)
+		return
+	}
+	_ = level.Warn(s.logger).Log(
+		"msg", "eval worker released claimed item due cancellation",
+		"tenant_id", item.TenantID,
+		"work_id", item.WorkID,
+		"cause", cause.Error(),
+	)
+}
+
 func (s *Service) refreshQueueDepth(ctx context.Context) {
 	for _, status := range []evalpkg.WorkItemStatus{evalpkg.WorkItemStatusQueued, evalpkg.WorkItemStatusClaimed, evalpkg.WorkItemStatusFailed} {
 		counts, err := s.store.CountWorkItemsByStatus(ctx, status)
 		if err != nil {
 			continue
 		}
+
+		seenByStatus := s.seenQueue[status]
+		if seenByStatus == nil {
+			seenByStatus = map[string]struct{}{}
+			s.seenQueue[status] = seenByStatus
+		}
+
 		for tenantID, count := range counts {
 			setQueueDepth(tenantID, string(status), count)
+			seenByStatus[tenantID] = struct{}{}
+		}
+
+		for tenantID := range seenByStatus {
+			if _, ok := counts[tenantID]; ok {
+				continue
+			}
+			setQueueDepth(tenantID, string(status), 0)
+			delete(seenByStatus, tenantID)
 		}
 	}
 }
@@ -299,4 +389,19 @@ func max(left, right int) int {
 		return left
 	}
 	return right
+}
+
+func detachedContextWithTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	baseCtx := context.Background()
+	if ctx != nil {
+		baseCtx = context.WithoutCancel(ctx)
+	}
+	return context.WithTimeout(baseCtx, timeout)
+}
+
+func isRunContextCancellation(ctx context.Context, err error) bool {
+	if ctx == nil || ctx.Err() == nil {
+		return false
+	}
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }

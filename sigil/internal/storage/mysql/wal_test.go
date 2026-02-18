@@ -85,6 +85,9 @@ func TestAutoMigrateCreatesSchema(t *testing.T) {
 	if !migrator.HasIndex(&GenerationModel{}, "idx_generations_tenant_compacted_compacted_at_id") {
 		t.Fatalf("expected truncate-supporting compacted_at index")
 	}
+	if !migrator.HasIndex(&EvalWorkItemModel{}, "idx_eval_work_items_status_scheduled_id") {
+		t.Fatalf("expected global eval work item claim index")
+	}
 }
 
 func TestAutoMigrateDoesNotResetClaimsOnSubsequentRuns(t *testing.T) {
@@ -451,7 +454,7 @@ func testGeneration(id, conversationID string, completedAt time.Time) *sigilv1.G
 	}
 }
 
-func TestSaveBatchWithoutEvalHookDoesNotPersistEnqueueEvent(t *testing.T) {
+func TestSaveBatchWithoutEvalHookPersistsEnqueueEvent(t *testing.T) {
 	store, cleanup := newTestWALStore(t)
 	defer cleanup()
 
@@ -466,8 +469,8 @@ func TestSaveBatchWithoutEvalHookDoesNotPersistEnqueueEvent(t *testing.T) {
 	if err := store.DB().Model(&EvalEnqueueEventModel{}).Count(&count).Error; err != nil {
 		t.Fatalf("count eval enqueue events: %v", err)
 	}
-	if count != 0 {
-		t.Fatalf("expected no enqueue events without hook, got %d", count)
+	if count != 1 {
+		t.Fatalf("expected enqueue event without hook, got %d", count)
 	}
 }
 

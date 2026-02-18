@@ -43,4 +43,23 @@ func TestRegexEvaluatorRejectMode(t *testing.T) {
 	if outputs[0].Passed == nil || !*outputs[0].Passed {
 		t.Fatalf("expected pass=true when reject mode pattern did not match")
 	}
+	if outputs[0].Value.Bool == nil || !*outputs[0].Value.Bool {
+		t.Fatalf("expected score value=true when reject mode passes, got %#v", outputs[0].Value)
+	}
+
+	outputs, err = evaluator.Evaluate(context.Background(), EvalInput{ResponseText: "contains forbidden text"}, evalpkg.EvaluatorDefinition{
+		Config: map[string]any{"pattern": "forbidden", "reject": true},
+		OutputKeys: []evalpkg.OutputKey{
+			{Key: "regex_match", Type: evalpkg.ScoreTypeBool},
+		},
+	})
+	if err != nil {
+		t.Fatalf("evaluate regex reject mode (matched): %v", err)
+	}
+	if outputs[0].Passed == nil || *outputs[0].Passed {
+		t.Fatalf("expected pass=false when reject mode pattern matched")
+	}
+	if outputs[0].Value.Bool == nil || *outputs[0].Value.Bool {
+		t.Fatalf("expected score value=false when reject mode fails, got %#v", outputs[0].Value)
+	}
 }

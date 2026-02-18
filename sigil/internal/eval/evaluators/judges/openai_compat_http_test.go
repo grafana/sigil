@@ -25,7 +25,7 @@ func TestOpenAICompatHTTPClientNormalizesBaseURLWithV1Suffix(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := newOpenAICompatHTTPClient(server.Client(), server.URL+"/v1", "test-key")
+	client := newOpenAICompatHTTPClient(server.Client(), "ollama", server.URL+"/v1", "test-key")
 	if _, err := client.Judge(context.Background(), JudgeRequest{
 		SystemPrompt: "judge",
 		UserPrompt:   "answer",
@@ -40,6 +40,9 @@ func TestOpenAICompatHTTPClientNormalizesBaseURLWithV1Suffix(t *testing.T) {
 	}
 	if len(models) != 1 || models[0].ID != "judge-model" {
 		t.Fatalf("unexpected model response %+v", models)
+	}
+	if models[0].Provider != "ollama" {
+		t.Fatalf("expected provider=ollama, got %q", models[0].Provider)
 	}
 
 	for _, path := range paths {

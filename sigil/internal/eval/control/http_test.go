@@ -3,6 +3,8 @@ package control
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -16,7 +18,7 @@ import (
 
 func TestEvaluatorCRUDHTTP(t *testing.T) {
 	store := newMemoryControlStore()
-	service := NewService(store, nil, nil)
+	service := NewService(store, nil)
 	mux := newEvalMux(service)
 
 	createPayload := `{
@@ -59,6 +61,122 @@ func TestEvaluatorCRUDHTTP(t *testing.T) {
 	}
 }
 
+func TestDeleteEvaluatorRejectsEnabledRuleReferences(t *testing.T) {
+	store := newMemoryControlStore()
+	if err := store.CreateEvaluator(context.Background(), evalpkg.EvaluatorDefinition{
+		TenantID:    "fake",
+		EvaluatorID: "custom.helpfulness",
+		Version:     "2026-02-17",
+		Kind:        evalpkg.EvaluatorKindHeuristic,
+		Config:      map[string]any{"not_empty": true},
+		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
+	}); err != nil {
+		t.Fatalf("seed evaluator: %v", err)
+	}
+	if err := store.CreateRule(context.Background(), evalpkg.RuleDefinition{
+		TenantID:     "fake",
+		RuleID:       "rule-helpfulness",
+		Enabled:      true,
+		Selector:     evalpkg.SelectorUserVisibleTurn,
+		Match:        map[string]any{},
+		SampleRate:   1,
+		EvaluatorIDs: []string{"custom.helpfulness"},
+	}); err != nil {
+		t.Fatalf("seed rule: %v", err)
+	}
+
+	service := NewService(store, nil)
+	mux := newEvalMux(service)
+
+	deleteResp := doRequest(mux, http.MethodDelete, "/api/v1/eval/evaluators/custom.helpfulness", "")
+	if deleteResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 delete referenced evaluator, got %d body=%s", deleteResp.Code, deleteResp.Body.String())
+	}
+	if !strings.Contains(deleteResp.Body.String(), `referenced by enabled rules`) {
+		t.Fatalf("expected referenced-rule validation error, got body=%s", deleteResp.Body.String())
+	}
+}
+
+func TestCreateEvaluatorNormalizesIdentifiersWithWhitespace(t *testing.T) {
+	store := newMemoryControlStore()
+	service := NewService(store, nil)
+	mux := newEvalMux(service)
+
+	createPayload := `{
+		"evaluator_id":"  custom.helpfulness  ",
+		"version":" 2026-02-17 ",
+		"kind":"heuristic",
+		"config":{"not_empty":true},
+		"output_keys":[{"key":"helpfulness","type":"bool"}]
+	}`
+	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/evaluators", createPayload)
+	if createResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 create evaluator, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+
+	var created evalpkg.EvaluatorDefinition
+	if err := json.Unmarshal(createResp.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	if created.EvaluatorID != "custom.helpfulness" {
+		t.Fatalf("expected trimmed evaluator_id, got %q", created.EvaluatorID)
+	}
+	if created.Version != "2026-02-17" {
+		t.Fatalf("expected trimmed version, got %q", created.Version)
+	}
+
+	getResp := doRequest(mux, http.MethodGet, "/api/v1/eval/evaluators/custom.helpfulness", "")
+	if getResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 get evaluator using trimmed id, got %d body=%s", getResp.Code, getResp.Body.String())
+	}
+}
+
+func TestCreateEvaluatorRejectsMultipleOutputKeys(t *testing.T) {
+	store := newMemoryControlStore()
+	service := NewService(store, nil)
+	mux := newEvalMux(service)
+
+	createPayload := `{
+		"evaluator_id":"custom.multi-output",
+		"version":"2026-02-17",
+		"kind":"heuristic",
+		"config":{"not_empty":true},
+		"output_keys":[
+			{"key":"helpfulness","type":"bool"},
+			{"key":"conciseness","type":"bool"}
+		]
+	}`
+	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/evaluators", createPayload)
+	if createResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 create evaluator, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+	if !strings.Contains(createResp.Body.String(), "exactly one key") {
+		t.Fatalf("expected single-output validation error, got body=%s", createResp.Body.String())
+	}
+}
+
+func TestCreateEvaluatorReturnsInternalServerErrorOnStoreFailure(t *testing.T) {
+	store := newMemoryControlStore()
+	store.createEvaluatorErr = errors.New("mysql unavailable")
+	service := NewService(store, nil)
+	mux := newEvalMux(service)
+
+	createPayload := `{
+		"evaluator_id":"custom.helpfulness",
+		"version":"2026-02-17",
+		"kind":"heuristic",
+		"config":{"not_empty":true},
+		"output_keys":[{"key":"helpfulness","type":"bool"}]
+	}`
+	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/evaluators", createPayload)
+	if createResp.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 create evaluator on store failure, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+	if !strings.Contains(createResp.Body.String(), "internal server error") {
+		t.Fatalf("expected generic internal server error body, got body=%s", createResp.Body.String())
+	}
+}
+
 func TestRuleCRUDHTTP(t *testing.T) {
 	store := newMemoryControlStore()
 	if err := store.CreateEvaluator(context.Background(), evalpkg.EvaluatorDefinition{
@@ -72,7 +190,7 @@ func TestRuleCRUDHTTP(t *testing.T) {
 		t.Fatalf("seed evaluator: %v", err)
 	}
 
-	service := NewService(store, nil, nil)
+	service := NewService(store, nil)
 	mux := newEvalMux(service)
 
 	createPayload := `{
@@ -114,9 +232,328 @@ func TestRuleCRUDHTTP(t *testing.T) {
 	}
 }
 
+func TestEnableRuleRejectsMissingEvaluators(t *testing.T) {
+	store := newMemoryControlStore()
+	if err := store.CreateEvaluator(context.Background(), evalpkg.EvaluatorDefinition{
+		TenantID:    "fake",
+		EvaluatorID: "custom.helpfulness",
+		Version:     "2026-02-17",
+		Kind:        evalpkg.EvaluatorKindHeuristic,
+		Config:      map[string]any{"not_empty": true},
+		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
+	}); err != nil {
+		t.Fatalf("seed evaluator: %v", err)
+	}
+
+	service := NewService(store, nil)
+	mux := newEvalMux(service)
+
+	createPayload := `{
+		"rule_id":"rule-helpfulness",
+		"enabled":false,
+		"selector":"user_visible_turn",
+		"sample_rate":1.0,
+		"evaluator_ids":["custom.helpfulness"]
+	}`
+	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/rules", createPayload)
+	if createResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 create disabled rule, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+
+	deleteResp := doRequest(mux, http.MethodDelete, "/api/v1/eval/evaluators/custom.helpfulness", "")
+	if deleteResp.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 delete evaluator referenced only by disabled rule, got %d body=%s", deleteResp.Code, deleteResp.Body.String())
+	}
+
+	enableResp := doRequest(mux, http.MethodPatch, "/api/v1/eval/rules/rule-helpfulness", `{"enabled":true}`)
+	if enableResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 enable rule with missing evaluator, got %d body=%s", enableResp.Code, enableResp.Body.String())
+	}
+	if !strings.Contains(enableResp.Body.String(), `evaluator "custom.helpfulness" was not found`) {
+		t.Fatalf("expected missing evaluator error, got body=%s", enableResp.Body.String())
+	}
+}
+
+func TestCreateRuleDefaultsEnabledAndSampleRateWhenOmitted(t *testing.T) {
+	store := newMemoryControlStore()
+	if err := store.CreateEvaluator(context.Background(), evalpkg.EvaluatorDefinition{
+		TenantID:    "fake",
+		EvaluatorID: "custom.helpfulness",
+		Version:     "2026-02-17",
+		Kind:        evalpkg.EvaluatorKindHeuristic,
+		Config:      map[string]any{"not_empty": true},
+		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
+	}); err != nil {
+		t.Fatalf("seed evaluator: %v", err)
+	}
+
+	service := NewService(store, nil)
+	mux := newEvalMux(service)
+
+	createPayload := `{
+		"rule_id":"rule-defaults",
+		"evaluator_ids":["custom.helpfulness"]
+	}`
+	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/rules", createPayload)
+	if createResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 create rule with defaults, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+
+	var created evalpkg.RuleDefinition
+	if err := json.Unmarshal(createResp.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	if !created.Enabled {
+		t.Fatalf("expected enabled default true")
+	}
+	if created.SampleRate != defaultRuleSampleRate {
+		t.Fatalf("expected sample_rate default %v, got %v", defaultRuleSampleRate, created.SampleRate)
+	}
+	if created.Selector != evalpkg.SelectorUserVisibleTurn {
+		t.Fatalf("expected selector default %q, got %q", evalpkg.SelectorUserVisibleTurn, created.Selector)
+	}
+}
+
+func TestCreateRuleSupportsExplicitZeroSamplingAndDisabled(t *testing.T) {
+	store := newMemoryControlStore()
+	if err := store.CreateEvaluator(context.Background(), evalpkg.EvaluatorDefinition{
+		TenantID:    "fake",
+		EvaluatorID: "custom.helpfulness",
+		Version:     "2026-02-17",
+		Kind:        evalpkg.EvaluatorKindHeuristic,
+		Config:      map[string]any{"not_empty": true},
+		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
+	}); err != nil {
+		t.Fatalf("seed evaluator: %v", err)
+	}
+
+	service := NewService(store, nil)
+	mux := newEvalMux(service)
+
+	createPayload := `{
+		"rule_id":"rule-explicit-zero",
+		"enabled":false,
+		"sample_rate":0,
+		"evaluator_ids":["custom.helpfulness"]
+	}`
+	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/rules", createPayload)
+	if createResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 create explicit-zero rule, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+
+	var created evalpkg.RuleDefinition
+	if err := json.Unmarshal(createResp.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	if created.Enabled {
+		t.Fatalf("expected explicit enabled=false to be preserved")
+	}
+	if created.SampleRate != 0 {
+		t.Fatalf("expected explicit sample_rate=0 to be preserved, got %v", created.SampleRate)
+	}
+}
+
+func TestCreateRuleReturnsInternalServerErrorOnStoreFailure(t *testing.T) {
+	store := newMemoryControlStore()
+	if err := store.CreateEvaluator(context.Background(), evalpkg.EvaluatorDefinition{
+		TenantID:    "fake",
+		EvaluatorID: "custom.helpfulness",
+		Version:     "2026-02-17",
+		Kind:        evalpkg.EvaluatorKindHeuristic,
+		Config:      map[string]any{"not_empty": true},
+		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
+	}); err != nil {
+		t.Fatalf("seed evaluator: %v", err)
+	}
+	store.createRuleErr = errors.New("insert failed")
+
+	service := NewService(store, nil)
+	mux := newEvalMux(service)
+
+	createPayload := `{
+		"rule_id":"rule-backend-failure",
+		"evaluator_ids":["custom.helpfulness"]
+	}`
+	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/rules", createPayload)
+	if createResp.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 create rule on store failure, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+	if !strings.Contains(createResp.Body.String(), "internal server error") {
+		t.Fatalf("expected generic internal server error body, got body=%s", createResp.Body.String())
+	}
+}
+
+func TestCreateRuleRejectsUnsupportedMatchKeys(t *testing.T) {
+	store := newMemoryControlStore()
+	if err := store.CreateEvaluator(context.Background(), evalpkg.EvaluatorDefinition{
+		TenantID:    "fake",
+		EvaluatorID: "custom.helpfulness",
+		Version:     "2026-02-17",
+		Kind:        evalpkg.EvaluatorKindHeuristic,
+		Config:      map[string]any{"not_empty": true},
+		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
+	}); err != nil {
+		t.Fatalf("seed evaluator: %v", err)
+	}
+
+	service := NewService(store, nil)
+	mux := newEvalMux(service)
+
+	createPayload := `{
+		"rule_id":"rule-invalid-match",
+		"match":{"model.provier":"openai"},
+		"evaluator_ids":["custom.helpfulness"]
+	}`
+	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/rules", createPayload)
+	if createResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 create invalid rule, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+	if !strings.Contains(createResp.Body.String(), "unsupported match key") {
+		t.Fatalf("expected unsupported match key error, got body=%s", createResp.Body.String())
+	}
+}
+
+func TestCreateRuleRejectsInvalidMatchValueTypes(t *testing.T) {
+	store := newMemoryControlStore()
+	if err := store.CreateEvaluator(context.Background(), evalpkg.EvaluatorDefinition{
+		TenantID:    "fake",
+		EvaluatorID: "custom.helpfulness",
+		Version:     "2026-02-17",
+		Kind:        evalpkg.EvaluatorKindHeuristic,
+		Config:      map[string]any{"not_empty": true},
+		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
+	}); err != nil {
+		t.Fatalf("seed evaluator: %v", err)
+	}
+
+	service := NewService(store, nil)
+	mux := newEvalMux(service)
+
+	testCases := []struct {
+		name        string
+		matchJSON   string
+		expectError string
+	}{
+		{
+			name:        "scalar_non_string",
+			matchJSON:   `{"mode":1}`,
+			expectError: `match["mode"] must be a string or array of strings`,
+		},
+		{
+			name:        "array_non_string_values",
+			matchJSON:   `{"tags.env":[1,2]}`,
+			expectError: `match["tags.env"] array item 0 must be a string`,
+		},
+		{
+			name:        "glob_syntax_error_scalar",
+			matchJSON:   `{"agent_name":"assistant-["}`,
+			expectError: `match["agent_name"] value "assistant-[" has invalid glob pattern`,
+		},
+		{
+			name:        "glob_syntax_error_array",
+			matchJSON:   `{"model.name":["gpt-*","claude-["]}`,
+			expectError: `match["model.name"] value "claude-[" has invalid glob pattern`,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			createPayload := `{
+				"rule_id":"rule-invalid-match-value-` + testCase.name + `",
+				"match":` + testCase.matchJSON + `,
+				"evaluator_ids":["custom.helpfulness"]
+			}`
+			createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/rules", createPayload)
+			if createResp.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400 create invalid rule, got %d body=%s", createResp.Code, createResp.Body.String())
+			}
+			if !strings.Contains(createResp.Body.String(), testCase.expectError) {
+				t.Fatalf("expected %q, got body=%s", testCase.expectError, createResp.Body.String())
+			}
+		})
+	}
+}
+
+func TestCreateRuleNormalizesRuleIDAndMatchKeysWithWhitespace(t *testing.T) {
+	store := newMemoryControlStore()
+	if err := store.CreateEvaluator(context.Background(), evalpkg.EvaluatorDefinition{
+		TenantID:    "fake",
+		EvaluatorID: "custom.helpfulness",
+		Version:     "2026-02-17",
+		Kind:        evalpkg.EvaluatorKindHeuristic,
+		Config:      map[string]any{"not_empty": true},
+		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
+	}); err != nil {
+		t.Fatalf("seed evaluator: %v", err)
+	}
+
+	service := NewService(store, nil)
+	mux := newEvalMux(service)
+
+	createPayload := `{
+		"rule_id":"  rule-whitespace  ",
+		"match":{" agent_name ":["assistant-*"],"tags. env ":["prod"]},
+		"evaluator_ids":[" custom.helpfulness "]
+	}`
+	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/rules", createPayload)
+	if createResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 create rule, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+
+	var created evalpkg.RuleDefinition
+	if err := json.Unmarshal(createResp.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	if created.RuleID != "rule-whitespace" {
+		t.Fatalf("expected trimmed rule_id, got %q", created.RuleID)
+	}
+	if len(created.EvaluatorIDs) != 1 || created.EvaluatorIDs[0] != "custom.helpfulness" {
+		t.Fatalf("expected trimmed evaluator_ids, got %#v", created.EvaluatorIDs)
+	}
+	if _, ok := created.Match["agent_name"]; !ok {
+		t.Fatalf("expected normalized match key agent_name, got %#v", created.Match)
+	}
+	if _, ok := created.Match["tags.env"]; !ok {
+		t.Fatalf("expected normalized match key tags.env, got %#v", created.Match)
+	}
+	if _, ok := created.Match[" agent_name "]; ok {
+		t.Fatalf("unexpected unnormalized key in match map: %#v", created.Match)
+	}
+}
+
+func TestCreateRuleRejectsDuplicateMatchKeysAfterNormalization(t *testing.T) {
+	store := newMemoryControlStore()
+	if err := store.CreateEvaluator(context.Background(), evalpkg.EvaluatorDefinition{
+		TenantID:    "fake",
+		EvaluatorID: "custom.helpfulness",
+		Version:     "2026-02-17",
+		Kind:        evalpkg.EvaluatorKindHeuristic,
+		Config:      map[string]any{"not_empty": true},
+		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
+	}); err != nil {
+		t.Fatalf("seed evaluator: %v", err)
+	}
+
+	service := NewService(store, nil)
+	mux := newEvalMux(service)
+
+	createPayload := `{
+		"rule_id":"rule-dup-match-key",
+		"match":{"agent_name":["assistant-a"]," agent_name ":["assistant-b"]},
+		"evaluator_ids":["custom.helpfulness"]
+	}`
+	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/rules", createPayload)
+	if createResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 create invalid rule, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+	if !strings.Contains(createResp.Body.String(), `duplicate match key "agent_name"`) {
+		t.Fatalf("expected duplicate normalized match key error, got body=%s", createResp.Body.String())
+	}
+}
+
 func TestJudgeDiscoveryHTTP(t *testing.T) {
 	store := newMemoryControlStore()
-	service := NewService(store, nil, staticJudgeDiscovery{})
+	service := NewService(store, staticJudgeDiscovery{})
 	mux := newEvalMux(service)
 
 	providersResp := doRequest(mux, http.MethodGet, "/api/v1/eval/judge/providers", "")
@@ -136,9 +573,26 @@ func TestJudgeDiscoveryHTTP(t *testing.T) {
 	}
 }
 
+func TestJudgeDiscoveryHTTPRequiresTenantContext(t *testing.T) {
+	store := newMemoryControlStore()
+	service := NewService(store, staticJudgeDiscovery{})
+	mux := http.NewServeMux()
+	RegisterHTTPRoutes(mux, service, nil)
+
+	providersResp := doRequest(mux, http.MethodGet, "/api/v1/eval/judge/providers", "")
+	if providersResp.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 providers without tenant context, got %d body=%s", providersResp.Code, providersResp.Body.String())
+	}
+
+	modelsResp := doRequest(mux, http.MethodGet, "/api/v1/eval/judge/models?provider=openai", "")
+	if modelsResp.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 models without tenant context, got %d body=%s", modelsResp.Code, modelsResp.Body.String())
+	}
+}
+
 func TestPredefinedEvaluatorsHTTP(t *testing.T) {
 	store := newMemoryControlStore()
-	service := NewService(store, nil, nil)
+	service := NewService(store, nil)
 	mux := newEvalMux(service)
 
 	listResp := doRequest(mux, http.MethodGet, "/api/v1/eval/predefined/evaluators", "")
@@ -152,7 +606,7 @@ func TestPredefinedEvaluatorsHTTP(t *testing.T) {
 
 func TestForkPredefinedEvaluatorHTTP(t *testing.T) {
 	store := newMemoryControlStore()
-	service := NewService(store, nil, nil)
+	service := NewService(store, nil)
 	mux := newEvalMux(service)
 
 	forkPayload := `{
@@ -180,9 +634,29 @@ func TestForkPredefinedEvaluatorHTTP(t *testing.T) {
 	}
 }
 
+func TestForkPredefinedEvaluatorReturnsInternalServerErrorOnStoreFailure(t *testing.T) {
+	store := newMemoryControlStore()
+	store.createEvaluatorErr = errors.New("write failed")
+	service := NewService(store, nil)
+	mux := newEvalMux(service)
+
+	forkPayload := `{
+		"evaluator_id":"custom.helpfulness",
+		"version":"2026-02-18",
+		"config":{"provider":"google","model":"gemini-2.0-flash"}
+	}`
+	forkResp := doRequest(mux, http.MethodPost, "/api/v1/eval/predefined/evaluators/sigil.helpfulness:fork", forkPayload)
+	if forkResp.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 fork predefined evaluator on store failure, got %d body=%s", forkResp.Code, forkResp.Body.String())
+	}
+	if !strings.Contains(forkResp.Body.String(), "internal server error") {
+		t.Fatalf("expected generic internal server error body, got body=%s", forkResp.Body.String())
+	}
+}
+
 func TestCreateRuleRejectsPredefinedTemplateReferenceWithoutFork(t *testing.T) {
 	store := newMemoryControlStore()
-	service := NewService(store, nil, nil)
+	service := NewService(store, nil)
 	mux := newEvalMux(service)
 
 	createRulePayload := `{
@@ -229,8 +703,10 @@ func (staticJudgeDiscovery) ListModels(context.Context, string) ([]JudgeModel, e
 }
 
 type memoryControlStore struct {
-	evaluators map[string]evalpkg.EvaluatorDefinition
-	rules      map[string]evalpkg.RuleDefinition
+	evaluators         map[string]evalpkg.EvaluatorDefinition
+	rules              map[string]evalpkg.RuleDefinition
+	createEvaluatorErr error
+	createRuleErr      error
 }
 
 func newMemoryControlStore() *memoryControlStore {
@@ -241,6 +717,9 @@ func newMemoryControlStore() *memoryControlStore {
 }
 
 func (s *memoryControlStore) CreateEvaluator(_ context.Context, evaluator evalpkg.EvaluatorDefinition) error {
+	if s.createEvaluatorErr != nil {
+		return s.createEvaluatorErr
+	}
 	now := time.Now().UTC()
 	if evaluator.CreatedAt.IsZero() {
 		evaluator.CreatedAt = now
@@ -315,6 +794,9 @@ func (s *memoryControlStore) CountActiveEvaluators(_ context.Context, tenantID s
 }
 
 func (s *memoryControlStore) CreateRule(_ context.Context, rule evalpkg.RuleDefinition) error {
+	if s.createRuleErr != nil {
+		return s.createRuleErr
+	}
 	now := time.Now().UTC()
 	if rule.CreatedAt.IsZero() {
 		rule.CreatedAt = now

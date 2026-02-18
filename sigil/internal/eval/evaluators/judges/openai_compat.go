@@ -6,6 +6,6 @@ type OpenAICompatClient struct {
 	*openAICompatHTTPClient
 }
 
-func NewOpenAICompatClient(httpClient *http.Client, baseURL, apiKey string) *OpenAICompatClient {
-	return &OpenAICompatClient{openAICompatHTTPClient: newOpenAICompatHTTPClient(httpClient, baseURL, apiKey)}
+func NewOpenAICompatClient(httpClient *http.Client, providerID, baseURL, apiKey string) *OpenAICompatClient {
+	return &OpenAICompatClient{openAICompatHTTPClient: newOpenAICompatHTTPClient(httpClient, providerID, baseURL, apiKey)}
 }

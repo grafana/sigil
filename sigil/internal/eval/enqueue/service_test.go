@@ -156,18 +156,103 @@ func TestNotifyTriggersImmediateProcessing(t *testing.T) {
 	}
 }
 
+func TestProcessEventCompletesWithDetachedContextOnCancel(t *testing.T) {
+	store := &storeStub{rejectCanceledComplete: true}
+	processor := &processorStub{}
+	svc := NewService(Config{
+		Enabled:      true,
+		BatchSize:    10,
+		PollInterval: time.Second,
+		MaxAttempts:  3,
+	}, nil, store, processor)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	svc.processEvent(ctx, Event{TenantID: "tenant-a", GenerationID: "gen-1", Attempts: 0, Payload: []byte("payload")})
+
+	if len(store.completeCalls) != 1 {
+		t.Fatalf("expected completion call to persist even when run context is canceled, got %d", len(store.completeCalls))
+	}
+	if store.completeCanceledCtxCalls != 0 {
+		t.Fatalf("expected detached context for completion, got %d canceled context calls", store.completeCanceledCtxCalls)
+	}
+}
+
+func TestProcessEventCancellationRequeuesWithoutConsumingAttempts(t *testing.T) {
+	store := &storeStub{
+		rejectCanceledRequeue: true,
+	}
+	processor := &processorStub{errs: []error{context.Canceled}}
+	svc := NewService(Config{
+		Enabled:      true,
+		BatchSize:    10,
+		PollInterval: time.Second,
+		MaxAttempts:  3,
+	}, nil, store, processor)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	svc.processEvent(ctx, Event{TenantID: "tenant-a", GenerationID: "gen-1", Attempts: 0, Payload: []byte("payload")})
+
+	if len(store.failCalls) != 0 {
+		t.Fatalf("expected no fail calls for cancellation path, got %d", len(store.failCalls))
+	}
+	if len(store.requeueCalls) != 1 {
+		t.Fatalf("expected one cancellation requeue call, got %d", len(store.requeueCalls))
+	}
+	if store.requeueCanceledCtxCalls != 0 {
+		t.Fatalf("expected detached context for cancellation requeue, got %d canceled context calls", store.requeueCanceledCtxCalls)
+	}
+}
+
+func TestProcessEventFailsWithDetachedContextOnCancel(t *testing.T) {
+	store := &storeStub{
+		failRequeue:        true,
+		rejectCanceledFail: true,
+	}
+	processor := &processorStub{errs: []error{errors.New("temporary error")}}
+	svc := NewService(Config{
+		Enabled:      true,
+		BatchSize:    10,
+		PollInterval: time.Second,
+		MaxAttempts:  3,
+	}, nil, store, processor)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	svc.processEvent(ctx, Event{TenantID: "tenant-a", GenerationID: "gen-1", Attempts: 0, Payload: []byte("payload")})
+
+	if len(store.failCalls) != 1 {
+		t.Fatalf("expected fail call to persist even when run context is canceled, got %d", len(store.failCalls))
+	}
+	if store.failCanceledCtxCalls != 0 {
+		t.Fatalf("expected detached context for fail transition, got %d canceled context calls", store.failCanceledCtxCalls)
+	}
+}
+
 type storeStub struct {
 	mu sync.Mutex
 
 	claimBatches [][]Event
 	claimCalls   int
 
-	completeCalls  []completeCall
-	completeSignal chan struct{}
+	completeCalls            []completeCall
+	completeSignal           chan struct{}
+	rejectCanceledComplete   bool
+	completeCanceledCtxCalls int
 
-	failCalls   []failCall
-	failRequeue bool
-	failErr     error
+	requeueCalls            []completeCall
+	rejectCanceledRequeue   bool
+	requeueCanceledCtxCalls int
+
+	failCalls            []failCall
+	failRequeue          bool
+	failErr              error
+	rejectCanceledFail   bool
+	failCanceledCtxCalls int
 }
 
 func (s *storeStub) ClaimEvalEnqueueEvents(_ context.Context, _ time.Time, _ int, _ time.Duration) ([]Event, error) {
@@ -183,8 +268,15 @@ func (s *storeStub) ClaimEvalEnqueueEvents(_ context.Context, _ time.Time, _ int
 	return batch, nil
 }
 
-func (s *storeStub) CompleteEvalEnqueueEvent(_ context.Context, tenantID, generationID string) error {
+func (s *storeStub) CompleteEvalEnqueueEvent(ctx context.Context, tenantID, generationID string) error {
 	s.mu.Lock()
+	if ctx != nil && ctx.Err() != nil {
+		s.completeCanceledCtxCalls++
+		if s.rejectCanceledComplete {
+			s.mu.Unlock()
+			return ctx.Err()
+		}
+	}
 	s.completeCalls = append(s.completeCalls, completeCall{tenantID: tenantID, generationID: generationID})
 	signal := s.completeSignal
 	s.mu.Unlock()
@@ -198,8 +290,29 @@ func (s *storeStub) CompleteEvalEnqueueEvent(_ context.Context, tenantID, genera
 	return nil
 }
 
-func (s *storeStub) FailEvalEnqueueEvent(_ context.Context, tenantID, generationID, lastError string, retryAt time.Time, maxAttempts int, permanent bool) (bool, error) {
+func (s *storeStub) RequeueClaimedEvalEnqueueEvent(ctx context.Context, tenantID, generationID string) error {
 	s.mu.Lock()
+	if ctx != nil && ctx.Err() != nil {
+		s.requeueCanceledCtxCalls++
+		if s.rejectCanceledRequeue {
+			s.mu.Unlock()
+			return ctx.Err()
+		}
+	}
+	s.requeueCalls = append(s.requeueCalls, completeCall{tenantID: tenantID, generationID: generationID})
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *storeStub) FailEvalEnqueueEvent(ctx context.Context, tenantID, generationID, lastError string, retryAt time.Time, maxAttempts int, permanent bool) (bool, error) {
+	s.mu.Lock()
+	if ctx != nil && ctx.Err() != nil {
+		s.failCanceledCtxCalls++
+		if s.rejectCanceledFail {
+			s.mu.Unlock()
+			return false, ctx.Err()
+		}
+	}
 	defer s.mu.Unlock()
 	s.failCalls = append(s.failCalls, failCall{
 		tenantID:     tenantID,

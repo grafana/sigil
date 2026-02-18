@@ -124,6 +124,9 @@ func TestDiscoverFromEnvOpenAICompatIndexed(t *testing.T) {
 	if len(models) != 1 || models[0].ID != "test-model" {
 		t.Fatalf("unexpected models %+v", models)
 	}
+	if models[0].Provider != "local-vllm" {
+		t.Fatalf("expected model provider metadata to match provider id, got %+v", models[0])
+	}
 }
 
 func TestDiscoveryListModelsUnknownProvider(t *testing.T) {

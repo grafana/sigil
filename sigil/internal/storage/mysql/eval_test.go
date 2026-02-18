@@ -398,6 +398,57 @@ func TestEvalStoreWorkItemClaimRecoversStaleClaim(t *testing.T) {
 	}
 }
 
+func TestEvalStoreRequeueClaimedWorkItemDoesNotIncrementAttempts(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	base := time.Date(2026, 2, 17, 12, 10, 0, 0, time.UTC)
+	if err := store.EnqueueWorkItem(context.Background(), evalpkg.WorkItem{
+		TenantID:         "tenant-a",
+		WorkID:           "work-release",
+		GenerationID:     "gen-release",
+		EvaluatorID:      "sigil.helpfulness",
+		EvaluatorVersion: "2026-02-17",
+		RuleID:           "online.helpfulness",
+		ScheduledAt:      base,
+	}); err != nil {
+		t.Fatalf("enqueue work item: %v", err)
+	}
+
+	firstClaim, err := store.ClaimWorkItems(context.Background(), base.Add(time.Second), 1)
+	if err != nil {
+		t.Fatalf("claim work item: %v", err)
+	}
+	if len(firstClaim) != 1 {
+		t.Fatalf("expected one claimed work item, got %d", len(firstClaim))
+	}
+	if firstClaim[0].Attempts != 0 {
+		t.Fatalf("expected attempts=0 on first claim, got %d", firstClaim[0].Attempts)
+	}
+
+	if err := store.RequeueClaimedWorkItem(context.Background(), "tenant-a", firstClaim[0].WorkID); err != nil {
+		t.Fatalf("requeue claimed work item: %v", err)
+	}
+
+	secondClaim, err := store.ClaimWorkItems(context.Background(), base.Add(2*time.Second), 1)
+	if err != nil {
+		t.Fatalf("claim requeued work item: %v", err)
+	}
+	if len(secondClaim) != 1 {
+		t.Fatalf("expected one re-claimed work item, got %d", len(secondClaim))
+	}
+	if secondClaim[0].WorkID != firstClaim[0].WorkID {
+		t.Fatalf("expected re-claimed work id %q, got %q", firstClaim[0].WorkID, secondClaim[0].WorkID)
+	}
+	if secondClaim[0].Attempts != 0 {
+		t.Fatalf("expected attempts to remain 0 after claim release, got %d", secondClaim[0].Attempts)
+	}
+}
+
 func TestEvalStoreFailWorkItemDoesNotOverrideSuccessAfterReclaim(t *testing.T) {
 	store, cleanup := newTestWALStore(t)
 	defer cleanup()
@@ -608,5 +659,135 @@ func TestEvalEnqueueEventClaimRecoversStaleClaims(t *testing.T) {
 	}
 	if claimed[0].GenerationID != "gen-stale" {
 		t.Fatalf("expected recovered generation gen-stale, got %q", claimed[0].GenerationID)
+	}
+}
+
+func TestEvalEnqueueEventRequeueClaimedDoesNotIncrementAttempts(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	now := time.Date(2026, 2, 17, 12, 45, 0, 0, time.UTC)
+	row := EvalEnqueueEventModel{
+		TenantID:     "tenant-a",
+		GenerationID: "gen-release",
+		Payload:      []byte("payload-release"),
+		ScheduledAt:  now,
+		Status:       evalEnqueueStatusQueued,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	if err := store.DB().Create(&row).Error; err != nil {
+		t.Fatalf("seed enqueue event: %v", err)
+	}
+
+	firstClaim, err := store.ClaimEvalEnqueueEvents(context.Background(), now.Add(time.Second), 1, time.Minute)
+	if err != nil {
+		t.Fatalf("claim enqueue event: %v", err)
+	}
+	if len(firstClaim) != 1 {
+		t.Fatalf("expected one claimed enqueue event, got %d", len(firstClaim))
+	}
+	if firstClaim[0].Attempts != 0 {
+		t.Fatalf("expected attempts=0 on first enqueue claim, got %d", firstClaim[0].Attempts)
+	}
+
+	if err := store.RequeueClaimedEvalEnqueueEvent(context.Background(), "tenant-a", firstClaim[0].GenerationID); err != nil {
+		t.Fatalf("requeue claimed enqueue event: %v", err)
+	}
+
+	secondClaim, err := store.ClaimEvalEnqueueEvents(context.Background(), now.Add(2*time.Second), 1, time.Minute)
+	if err != nil {
+		t.Fatalf("claim requeued enqueue event: %v", err)
+	}
+	if len(secondClaim) != 1 {
+		t.Fatalf("expected one re-claimed enqueue event, got %d", len(secondClaim))
+	}
+	if secondClaim[0].GenerationID != firstClaim[0].GenerationID {
+		t.Fatalf("expected generation %q, got %q", firstClaim[0].GenerationID, secondClaim[0].GenerationID)
+	}
+	if secondClaim[0].Attempts != 0 {
+		t.Fatalf("expected attempts to remain 0 after enqueue claim release, got %d", secondClaim[0].Attempts)
+	}
+}
+
+func TestEvalEnqueueEventFailDoesNotOverrideReleasedClaim(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	now := time.Date(2026, 2, 17, 13, 0, 0, 0, time.UTC)
+	row := EvalEnqueueEventModel{
+		TenantID:     "tenant-a",
+		GenerationID: "gen-race",
+		Payload:      []byte("payload-race"),
+		ScheduledAt:  now,
+		Status:       evalEnqueueStatusQueued,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	if err := store.DB().Create(&row).Error; err != nil {
+		t.Fatalf("seed enqueue event: %v", err)
+	}
+
+	firstClaim, err := store.ClaimEvalEnqueueEvents(context.Background(), now.Add(time.Second), 1, time.Minute)
+	if err != nil {
+		t.Fatalf("claim enqueue event: %v", err)
+	}
+	if len(firstClaim) != 1 {
+		t.Fatalf("expected one claimed enqueue event, got %d", len(firstClaim))
+	}
+	if firstClaim[0].Attempts != 0 {
+		t.Fatalf("expected attempts=0 on first enqueue claim, got %d", firstClaim[0].Attempts)
+	}
+
+	if err := store.RequeueClaimedEvalEnqueueEvent(context.Background(), "tenant-a", firstClaim[0].GenerationID); err != nil {
+		t.Fatalf("release enqueue claim: %v", err)
+	}
+
+	requeued, err := store.FailEvalEnqueueEvent(
+		context.Background(),
+		"tenant-a",
+		firstClaim[0].GenerationID,
+		"late stale failure",
+		now.Add(time.Hour),
+		3,
+		false,
+	)
+	if err != nil {
+		t.Fatalf("late stale fail should no-op: %v", err)
+	}
+	if requeued {
+		t.Fatalf("expected no requeue when failing a released enqueue claim")
+	}
+
+	var refreshed EvalEnqueueEventModel
+	if err := store.DB().
+		Where("tenant_id = ? AND generation_id = ?", "tenant-a", firstClaim[0].GenerationID).
+		First(&refreshed).Error; err != nil {
+		t.Fatalf("read enqueue event after stale fail: %v", err)
+	}
+	if refreshed.Status != evalEnqueueStatusQueued {
+		t.Fatalf("expected status %q after stale fail no-op, got %q", evalEnqueueStatusQueued, refreshed.Status)
+	}
+	if refreshed.Attempts != 0 {
+		t.Fatalf("expected attempts=0 after stale fail no-op, got %d", refreshed.Attempts)
+	}
+
+	secondClaim, err := store.ClaimEvalEnqueueEvents(context.Background(), now.Add(2*time.Second), 1, time.Minute)
+	if err != nil {
+		t.Fatalf("claim enqueue event after stale fail: %v", err)
+	}
+	if len(secondClaim) != 1 {
+		t.Fatalf("expected one claim after stale fail no-op, got %d", len(secondClaim))
+	}
+	if secondClaim[0].Attempts != 0 {
+		t.Fatalf("expected attempts=0 after stale fail no-op, got %d", secondClaim[0].Attempts)
 	}
 }

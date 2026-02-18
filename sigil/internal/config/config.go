@@ -64,6 +64,7 @@ type Config struct {
 	EvalPollInterval               time.Duration
 	EvalDefaultJudgeModel          string
 	EvalSeedFile                   string
+	EvalSeedStrict                 bool
 }
 
 type QueryProxyConfig struct {
@@ -208,6 +209,7 @@ func FromEnv() Config {
 		EvalPollInterval:      getEnvDuration("SIGIL_EVAL_POLL_INTERVAL", DefaultEvalPollInterval),
 		EvalDefaultJudgeModel: getEnv("SIGIL_EVAL_DEFAULT_JUDGE_MODEL", DefaultEvalDefaultJudgeModel),
 		EvalSeedFile:          getEnv("SIGIL_EVAL_SEED_FILE", "sigil-eval-seed.yaml"),
+		EvalSeedStrict:        getEnvBool("SIGIL_EVAL_SEED_STRICT", false),
 	}
 }
 
@@ -307,6 +309,9 @@ func (c Config) Validate() error {
 	}
 	if strings.TrimSpace(c.EvalDefaultJudgeModel) == "" {
 		return fmt.Errorf("SIGIL_EVAL_DEFAULT_JUDGE_MODEL must be set")
+	}
+	if err := validateProviderModelFormat(c.EvalDefaultJudgeModel, "SIGIL_EVAL_DEFAULT_JUDGE_MODEL"); err != nil {
+		return err
 	}
 
 	if err := c.ObjectStore.Validate(); err != nil {
@@ -436,6 +441,20 @@ func validateHTTPBaseURL(raw string, key string) error {
 	}
 	if parsed.Host == "" {
 		return fmt.Errorf("%s must include host", key)
+	}
+	return nil
+}
+
+func validateProviderModelFormat(raw string, key string) error {
+	trimmed := strings.TrimSpace(raw)
+	separator := strings.Index(trimmed, "/")
+	if separator <= 0 || separator >= len(trimmed)-1 {
+		return fmt.Errorf("%s must be in provider/model format", key)
+	}
+	provider := strings.TrimSpace(trimmed[:separator])
+	model := strings.TrimSpace(trimmed[separator+1:])
+	if provider == "" || model == "" {
+		return fmt.Errorf("%s must be in provider/model format", key)
 	}
 	return nil
 }

@@ -212,3 +212,33 @@ Files: `docs/references/score-ingest-contract.md` (new), `docs/references/eval-c
 - [x] Add package-level online-evaluation runtime diagram and test-weighted coverage map in `sigil/internal/eval/doc.go`.
 
 **Exit criteria:** Reference docs complete and accurate. Seed config validates and seeds correctly when loaded. Architecture and package-level runtime documentation are updated.
+
+## Post-completion hardening
+
+- [x] Worker shutdown/cancel path requeues unstarted claimed work without consuming retry attempts.
+- [x] Enqueue dispatcher shutdown/cancel path requeues claimed events without consuming retry attempts.
+- [x] Rule creation defaults omitted `enabled` to `true` and omitted `sample_rate` to `0.01`, while preserving explicit `false` and `0`.
+- [x] Rule validation rejects unsupported `match` keys to prevent silent never-match misconfiguration.
+- [x] Rule validation rejects invalid `match` value types (must be string or array of non-empty strings).
+- [x] Control-plane create paths normalize evaluator/rule identifiers before post-create readback.
+- [x] Rule match keys are normalized (`tags.<key>` canonicalization + whitespace trimming) and duplicate keys after normalization are rejected.
+- [x] YAML seed loading now rejects rules that reference missing evaluators.
+- [x] Server startup seed loading now runs only when tenant has no existing evaluators and no existing rules (bootstrap-only behavior).
+- [x] LLM judge parser now treats malformed JSON-object responses as errors (no heuristic fallback on schema mismatch).
+- [x] `error.type`/`error.category` rule matching now supports exact value matching (with `call_error` fallback) in addition to presence semantics.
+- [x] Eval work items now include a global claim index aligned with dequeue query shape: `(status, scheduled_at, id)`.
+- [x] Worker completion-transition failures are handled through retry/fail flow (no success accounting on incomplete lifecycle transitions).
+- [x] Added regression tests for cancellation requeue paths and rule defaulting behavior.
+- [x] Worker in-flight cancellation handling now requeues claimed items without consuming retry attempts.
+- [x] LLM judge target resolution now normalizes `provider/model` config values before provider/model validation.
+- [x] LLM judge overrides now require both `provider` and `model` (defaults apply only when both are omitted).
+- [x] Enqueue processor now invalidates tenant rule/evaluator cache per event to avoid completing durable enqueue events against stale control-plane config.
+- [x] Startup config now validates `SIGIL_EVAL_DEFAULT_JUDGE_MODEL` is in `provider/model` format.
+- [x] Control-plane evaluator validation now rejects multi-output definitions (exactly one `output_key` supported).
+- [x] Startup seed loading now supports best-effort mode (skip invalid entries with logs) with optional strict mode via `SIGIL_EVAL_SEED_STRICT=true`.
+- [x] Rule match validation now rejects malformed glob syntax for glob-capable keys, and runtime glob matcher fails closed on malformed patterns.
+- [x] Control-plane write handlers now return `400` only for validation failures and `500` for backend/runtime failures.
+- [x] Seed example regex evaluator now uses supported runtime config shape (`patterns` + `reject`) instead of unsupported `must_not_match`.
+- [x] Rule engine now fails enqueue events when enabled rules reference missing evaluators as permanent failures (no silent completion/drop or retry churn).
+- [x] Evaluator deletion is now blocked when referenced by enabled rules, preventing dangling rule refs and enqueue failures.
+- [x] Rule enable path now revalidates evaluator references and rejects enabling when any referenced evaluator is missing.

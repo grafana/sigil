@@ -2,6 +2,7 @@ package query
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -60,6 +61,35 @@ func TestGetGenerationDetailForTenantIncludesLatestScores(t *testing.T) {
 	}
 }
 
+func TestGetGenerationDetailForTenantIgnoresLatestScoreErrors(t *testing.T) {
+	generation := &sigilv1.Generation{
+		Id:             "gen-1",
+		ConversationId: "conv-1",
+		Mode:           sigilv1.GenerationMode_GENERATION_MODE_SYNC,
+		Model:          &sigilv1.ModelRef{Provider: "openai", Name: "gpt-4o"},
+	}
+	service, err := NewServiceWithDependencies(ServiceDependencies{
+		WALReader: &scoreTestWALReader{byID: map[string]*sigilv1.Generation{"gen-1": generation}},
+		ScoreStore: &scoreTestStore{
+			latestErr: errors.New("scores unavailable"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("new service: %v", err)
+	}
+
+	payload, found, err := service.GetGenerationDetailForTenant(context.Background(), "tenant-a", "gen-1")
+	if err != nil {
+		t.Fatalf("expected generation detail lookup to succeed despite score enrichment error: %v", err)
+	}
+	if !found {
+		t.Fatalf("expected generation to be found")
+	}
+	if _, hasLatest := payload["latest_scores"]; hasLatest {
+		t.Fatalf("expected latest_scores to be omitted when enrichment fails, got %#v", payload["latest_scores"])
+	}
+}
+
 func TestListGenerationScoresForTenantPagination(t *testing.T) {
 	service := NewService()
 	service.scoreStore = &scoreTestStore{scores: []evalpkg.GenerationScore{
@@ -91,6 +121,33 @@ func TestListGenerationScoresForTenantPagination(t *testing.T) {
 	}
 }
 
+func TestScoreToResponsePayloadIncludesSourceWhenOnlySourceIDPresent(t *testing.T) {
+	payload := scoreToResponsePayload(evalpkg.GenerationScore{
+		ScoreID:      "sc-1",
+		GenerationID: "gen-1",
+		ScoreKey:     "helpfulness",
+		ScoreType:    evalpkg.ScoreTypeString,
+		Value:        evalpkg.StringValue("good"),
+		SourceID:     "trace-abc",
+		CreatedAt:    time.Date(2026, 2, 18, 14, 0, 0, 0, time.UTC),
+	})
+
+	sourceRaw, ok := payload["source"]
+	if !ok {
+		t.Fatalf("expected source payload when source_id is present")
+	}
+	source, ok := sourceRaw.(map[string]any)
+	if !ok {
+		t.Fatalf("expected source map payload, got %#v", sourceRaw)
+	}
+	if id, ok := source["id"].(string); !ok || id != "trace-abc" {
+		t.Fatalf("expected source.id trace-abc, got %#v", source["id"])
+	}
+	if kind, ok := source["kind"].(string); !ok || kind != "" {
+		t.Fatalf("expected empty source.kind for source-id only payload, got %#v", source["kind"])
+	}
+}
+
 type scoreTestWALReader struct {
 	byID map[string]*sigilv1.Generation
 }
@@ -107,8 +164,9 @@ func (s *scoreTestWALReader) GetByConversationID(_ context.Context, _ string, _ 
 }
 
 type scoreTestStore struct {
-	scores []evalpkg.GenerationScore
-	latest map[string]evalpkg.LatestScore
+	scores    []evalpkg.GenerationScore
+	latest    map[string]evalpkg.LatestScore
+	latestErr error
 }
 
 func (s *scoreTestStore) GetScoresByGeneration(_ context.Context, _ string, _ string, limit int, cursor uint64) ([]evalpkg.GenerationScore, uint64, error) {
@@ -131,6 +189,9 @@ func (s *scoreTestStore) GetScoresByGeneration(_ context.Context, _ string, _ st
 }
 
 func (s *scoreTestStore) GetLatestScoresByGeneration(_ context.Context, _ string, _ string) (map[string]evalpkg.LatestScore, error) {
+	if s.latestErr != nil {
+		return nil, s.latestErr
+	}
 	if s.latest == nil {
 		return map[string]evalpkg.LatestScore{}, nil
 	}

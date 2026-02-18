@@ -17,9 +17,10 @@ evaluators:
   - id: custom.no_refusal.v1
     kind: regex
     version: "2026-02-17"
-    must_not_match:
+    patterns:
       - "(?i)i can't help with that"
       - "(?i)cannot comply"
+    reject: true
     output:
       keys:
         - key: no_refusal

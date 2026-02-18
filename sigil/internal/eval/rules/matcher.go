@@ -18,7 +18,7 @@ func MatchesRule(match map[string]any, generation *sigilv1.Generation) bool {
 	for key, rawExpected := range match {
 		expectedValues := normalizeExpectedValues(rawExpected)
 		if len(expectedValues) == 0 {
-			continue
+			return false
 		}
 
 		switch {
@@ -55,8 +55,8 @@ func MatchesRule(match map[string]any, generation *sigilv1.Generation) bool {
 				return false
 			}
 		case key == "error.type", key == "error.category":
-			hasError := strings.TrimSpace(generation.GetCallError()) != ""
-			if !matchesErrorExpectation(hasError, expectedValues) {
+			errorValue := resolveErrorMatchValue(generation, key)
+			if !matchesErrorExpectation(errorValue, expectedValues) {
 				return false
 			}
 		default:
@@ -67,7 +67,10 @@ func MatchesRule(match map[string]any, generation *sigilv1.Generation) bool {
 	return true
 }
 
-func matchesErrorExpectation(hasError bool, expectedValues []string) bool {
+func matchesErrorExpectation(actualError string, expectedValues []string) bool {
+	trimmedActual := strings.TrimSpace(actualError)
+	hasError := trimmedActual != ""
+
 	for _, expected := range expectedValues {
 		switch strings.ToLower(strings.TrimSpace(expected)) {
 		case "present", "true", "1", "*":
@@ -82,9 +85,53 @@ func matchesErrorExpectation(hasError bool, expectedValues []string) bool {
 			if hasError && strings.EqualFold(expected, "error") {
 				return true
 			}
+			if strings.EqualFold(trimmedActual, strings.TrimSpace(expected)) {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+func resolveErrorMatchValue(generation *sigilv1.Generation, key string) string {
+	if generation == nil {
+		return ""
+	}
+
+	candidates := []string{
+		generation.GetTags()[key],
+		metadataFieldString(generation, key),
+	}
+	switch key {
+	case "error.type":
+		candidates = append(candidates, generation.GetTags()["span.error.type"], metadataFieldString(generation, "span.error.type"))
+	case "error.category":
+		candidates = append(candidates, generation.GetTags()["span.error.category"], metadataFieldString(generation, "span.error.category"))
+	}
+	candidates = append(candidates, generation.GetCallError())
+
+	for _, candidate := range candidates {
+		if trimmed := strings.TrimSpace(candidate); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func metadataFieldString(generation *sigilv1.Generation, key string) string {
+	if generation == nil || strings.TrimSpace(key) == "" {
+		return ""
+	}
+	metadata := generation.GetMetadata()
+	if metadata == nil {
+		return ""
+	}
+	fields := metadata.GetFields()
+	value, ok := fields[key]
+	if !ok || value == nil {
+		return ""
+	}
+	return strings.TrimSpace(value.GetStringValue())
 }
 
 func normalizeExpectedValues(raw any) []string {
@@ -122,6 +169,16 @@ func matchesGlobAny(actual string, patterns []string) bool {
 	trimmedActual := strings.TrimSpace(strings.ToLower(actual))
 	for _, pattern := range patterns {
 		trimmedPattern := strings.TrimSpace(strings.ToLower(pattern))
+		if trimmedPattern == "" || !strings.ContainsAny(trimmedPattern, "*?[") {
+			continue
+		}
+		if _, err := path.Match(trimmedPattern, ""); err != nil {
+			return false
+		}
+	}
+
+	for _, pattern := range patterns {
+		trimmedPattern := strings.TrimSpace(strings.ToLower(pattern))
 		if trimmedPattern == "" {
 			continue
 		}
@@ -132,7 +189,10 @@ func matchesGlobAny(actual string, patterns []string) bool {
 			continue
 		}
 		matched, err := path.Match(trimmedPattern, trimmedActual)
-		if err == nil && matched {
+		if err != nil {
+			return false
+		}
+		if matched {
 			return true
 		}
 	}

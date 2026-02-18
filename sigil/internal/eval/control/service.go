@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
+	"sort"
 	"strings"
 	"time"
 
@@ -36,6 +38,34 @@ type Service struct {
 	now       func() time.Time
 }
 
+type validationError struct {
+	cause error
+}
+
+func (e validationError) Error() string {
+	return e.cause.Error()
+}
+
+func (e validationError) Unwrap() error {
+	return e.cause
+}
+
+func newValidationError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var target validationError
+	if errors.As(err, &target) {
+		return err
+	}
+	return validationError{cause: err}
+}
+
+func isValidationError(err error) bool {
+	var target validationError
+	return errors.As(err, &target)
+}
+
 type ForkPredefinedEvaluatorRequest struct {
 	EvaluatorID string              `json:"evaluator_id"`
 	Version     string              `json:"version,omitempty"`
@@ -59,7 +89,7 @@ type controlStore interface {
 	CountActiveRules(ctx context.Context, tenantID string) (int64, error)
 }
 
-func NewService(store controlStore, _ *predefined.Seeder, discovery JudgeDiscovery) *Service {
+func NewService(store controlStore, discovery JudgeDiscovery) *Service {
 	return &Service{
 		store:     store,
 		discovery: discovery,
@@ -72,8 +102,8 @@ func (s *Service) CreateEvaluator(ctx context.Context, tenantID string, evaluato
 		return evalpkg.EvaluatorDefinition{}, errors.New("eval store is required")
 	}
 	evaluator.TenantID = strings.TrimSpace(tenantID)
-	if err := validateEvaluator(evaluator); err != nil {
-		return evalpkg.EvaluatorDefinition{}, err
+	if err := validateEvaluator(&evaluator); err != nil {
+		return evalpkg.EvaluatorDefinition{}, newValidationError(err)
 	}
 
 	if err := s.store.CreateEvaluator(ctx, evaluator); err != nil {
@@ -122,12 +152,12 @@ func (s *Service) ForkPredefinedEvaluator(ctx context.Context, tenantID, templat
 
 	template, ok := findPredefinedTemplate(templateID)
 	if !ok {
-		return evalpkg.EvaluatorDefinition{}, fmt.Errorf("predefined evaluator %q was not found", strings.TrimSpace(templateID))
+		return evalpkg.EvaluatorDefinition{}, newValidationError(fmt.Errorf("predefined evaluator %q was not found", strings.TrimSpace(templateID)))
 	}
 
 	evaluatorID := strings.TrimSpace(request.EvaluatorID)
 	if evaluatorID == "" {
-		return evalpkg.EvaluatorDefinition{}, errors.New("evaluator_id is required")
+		return evalpkg.EvaluatorDefinition{}, newValidationError(errors.New("evaluator_id is required"))
 	}
 	version := strings.TrimSpace(request.Version)
 	if version == "" {
@@ -170,11 +200,58 @@ func (s *Service) DeleteEvaluator(ctx context.Context, tenantID, evaluatorID str
 		return errors.New("eval store is required")
 	}
 	trimmedTenantID := strings.TrimSpace(tenantID)
-	if err := s.store.DeleteEvaluator(ctx, trimmedTenantID, strings.TrimSpace(evaluatorID)); err != nil {
+	trimmedEvaluatorID := strings.TrimSpace(evaluatorID)
+
+	referencingRules, err := s.findEnabledRulesReferencingEvaluator(ctx, trimmedTenantID, trimmedEvaluatorID)
+	if err != nil {
+		return err
+	}
+	if len(referencingRules) > 0 {
+		return newValidationError(fmt.Errorf(
+			"cannot delete evaluator %q: referenced by enabled rules %s",
+			trimmedEvaluatorID,
+			strings.Join(referencingRules, ", "),
+		))
+	}
+
+	if err := s.store.DeleteEvaluator(ctx, trimmedTenantID, trimmedEvaluatorID); err != nil {
 		return err
 	}
 	s.refreshActiveMetrics(ctx, trimmedTenantID)
 	return nil
+}
+
+func (s *Service) findEnabledRulesReferencingEvaluator(ctx context.Context, tenantID, evaluatorID string) ([]string, error) {
+	if strings.TrimSpace(tenantID) == "" || strings.TrimSpace(evaluatorID) == "" {
+		return nil, nil
+	}
+
+	matches := make([]string, 0)
+	cursor := uint64(0)
+	for {
+		rules, nextCursor, err := s.store.ListRules(ctx, tenantID, 500, cursor)
+		if err != nil {
+			return nil, err
+		}
+		for _, rule := range rules {
+			if !rule.Enabled || rule.DeletedAt != nil {
+				continue
+			}
+			for _, referencedEvaluatorID := range rule.EvaluatorIDs {
+				if strings.TrimSpace(referencedEvaluatorID) == evaluatorID {
+					matches = append(matches, rule.RuleID)
+					break
+				}
+			}
+		}
+		if nextCursor == 0 {
+			break
+		}
+		cursor = nextCursor
+	}
+
+	sort.Strings(matches)
+	return matches, nil
 }
 
 func (s *Service) CreateRule(ctx context.Context, tenantID string, rule evalpkg.RuleDefinition) (evalpkg.RuleDefinition, error) {
@@ -182,18 +259,12 @@ func (s *Service) CreateRule(ctx context.Context, tenantID string, rule evalpkg.
 		return evalpkg.RuleDefinition{}, errors.New("eval store is required")
 	}
 	rule.TenantID = strings.TrimSpace(tenantID)
-	if err := validateRule(rule); err != nil {
-		return evalpkg.RuleDefinition{}, err
+	if err := validateRule(&rule); err != nil {
+		return evalpkg.RuleDefinition{}, newValidationError(err)
 	}
 
-	for _, evaluatorID := range rule.EvaluatorIDs {
-		evaluator, err := s.store.GetEvaluator(ctx, rule.TenantID, evaluatorID)
-		if err != nil {
-			return evalpkg.RuleDefinition{}, err
-		}
-		if evaluator == nil {
-			return evalpkg.RuleDefinition{}, fmt.Errorf("evaluator %q was not found", evaluatorID)
-		}
+	if err := s.validateRuleEvaluatorReferences(ctx, rule.TenantID, rule.EvaluatorIDs); err != nil {
+		return evalpkg.RuleDefinition{}, err
 	}
 
 	if err := s.store.CreateRule(ctx, rule); err != nil {
@@ -235,6 +306,11 @@ func (s *Service) UpdateRuleEnabled(ctx context.Context, tenantID, ruleID string
 	if rule == nil {
 		return nil, nil
 	}
+	if enabled {
+		if err := s.validateRuleEvaluatorReferences(ctx, rule.TenantID, rule.EvaluatorIDs); err != nil {
+			return nil, err
+		}
+	}
 	rule.Enabled = enabled
 	rule.UpdatedAt = s.now().UTC()
 	if err := s.store.UpdateRule(ctx, *rule); err != nil {
@@ -249,6 +325,19 @@ func (s *Service) UpdateRuleEnabled(ctx context.Context, tenantID, ruleID string
 		return nil, err
 	}
 	return updated, nil
+}
+
+func (s *Service) validateRuleEvaluatorReferences(ctx context.Context, tenantID string, evaluatorIDs []string) error {
+	for _, evaluatorID := range evaluatorIDs {
+		evaluator, err := s.store.GetEvaluator(ctx, tenantID, evaluatorID)
+		if err != nil {
+			return err
+		}
+		if evaluator == nil {
+			return newValidationError(fmt.Errorf("evaluator %q was not found", evaluatorID))
+		}
+	}
+	return nil
 }
 
 func (s *Service) DeleteRule(ctx context.Context, tenantID, ruleID string) error {
@@ -280,14 +369,21 @@ func (s *Service) ListJudgeModels(ctx context.Context, providerID string) ([]Jud
 	return s.discovery.ListModels(ctx, strings.TrimSpace(providerID))
 }
 
-func validateEvaluator(evaluator evalpkg.EvaluatorDefinition) error {
-	if strings.TrimSpace(evaluator.TenantID) == "" {
+func validateEvaluator(evaluator *evalpkg.EvaluatorDefinition) error {
+	if evaluator == nil {
+		return errors.New("evaluator is required")
+	}
+	evaluator.TenantID = strings.TrimSpace(evaluator.TenantID)
+	evaluator.EvaluatorID = strings.TrimSpace(evaluator.EvaluatorID)
+	evaluator.Version = strings.TrimSpace(evaluator.Version)
+
+	if evaluator.TenantID == "" {
 		return errors.New("tenant id is required")
 	}
-	if strings.TrimSpace(evaluator.EvaluatorID) == "" {
+	if evaluator.EvaluatorID == "" {
 		return errors.New("evaluator_id is required")
 	}
-	if strings.TrimSpace(evaluator.Version) == "" {
+	if evaluator.Version == "" {
 		return errors.New("version is required")
 	}
 	switch evaluator.Kind {
@@ -298,7 +394,13 @@ func validateEvaluator(evaluator evalpkg.EvaluatorDefinition) error {
 	if len(evaluator.OutputKeys) == 0 {
 		return errors.New("output_keys must include at least one key")
 	}
-	for _, key := range evaluator.OutputKeys {
+	if len(evaluator.OutputKeys) > 1 {
+		return errors.New("output_keys must include exactly one key")
+	}
+	for idx := range evaluator.OutputKeys {
+		key := &evaluator.OutputKeys[idx]
+		key.Key = strings.TrimSpace(key.Key)
+		key.Unit = strings.TrimSpace(key.Unit)
 		if strings.TrimSpace(key.Key) == "" {
 			return errors.New("output key name is required")
 		}
@@ -314,21 +416,34 @@ func validateEvaluator(evaluator evalpkg.EvaluatorDefinition) error {
 	return nil
 }
 
-func validateRule(rule evalpkg.RuleDefinition) error {
-	if strings.TrimSpace(rule.TenantID) == "" {
+func validateRule(rule *evalpkg.RuleDefinition) error {
+	if rule == nil {
+		return errors.New("rule is required")
+	}
+	rule.TenantID = strings.TrimSpace(rule.TenantID)
+	rule.RuleID = strings.TrimSpace(rule.RuleID)
+
+	if rule.TenantID == "" {
 		return errors.New("tenant id is required")
 	}
-	if strings.TrimSpace(rule.RuleID) == "" {
+	if rule.RuleID == "" {
 		return errors.New("rule_id is required")
 	}
 	if len(rule.EvaluatorIDs) == 0 {
 		return errors.New("evaluator_ids must include at least one id")
 	}
+	normalizedEvaluatorIDs := make([]string, 0, len(rule.EvaluatorIDs))
 	for _, evaluatorID := range rule.EvaluatorIDs {
-		if strings.TrimSpace(evaluatorID) == "" {
+		trimmedEvaluatorID := strings.TrimSpace(evaluatorID)
+		if trimmedEvaluatorID == "" {
 			return errors.New("evaluator_ids cannot include empty values")
 		}
+		normalizedEvaluatorIDs = append(normalizedEvaluatorIDs, trimmedEvaluatorID)
 	}
+	rule.EvaluatorIDs = normalizedEvaluatorIDs
+
+	selector := strings.TrimSpace(string(rule.Selector))
+	rule.Selector = evalpkg.Selector(selector)
 	if rule.Selector == "" {
 		rule.Selector = evalpkg.SelectorUserVisibleTurn
 	}
@@ -342,8 +457,122 @@ func validateRule(rule evalpkg.RuleDefinition) error {
 	}
 	if rule.Match == nil {
 		rule.Match = map[string]any{}
+	} else {
+		normalizedMatch, err := validateRuleMatch(rule.Match)
+		if err != nil {
+			return err
+		}
+		rule.Match = normalizedMatch
 	}
 	return nil
+}
+
+func validateRuleMatch(match map[string]any) (map[string]any, error) {
+	normalized := make(map[string]any, len(match))
+	for key, raw := range match {
+		normalizedKey, err := validateRuleMatchKey(key)
+		if err != nil {
+			return nil, err
+		}
+		values, err := normalizeRuleMatchInput(raw)
+		if err != nil {
+			return nil, fmt.Errorf("match[%q] %w", key, err)
+		}
+		if len(values) == 0 {
+			return nil, fmt.Errorf("match[%q] must include at least one non-empty string", key)
+		}
+		if err := validateRuleMatchValues(normalizedKey, values); err != nil {
+			return nil, fmt.Errorf("match[%q] %w", key, err)
+		}
+		if _, exists := normalized[normalizedKey]; exists {
+			return nil, fmt.Errorf("duplicate match key %q after normalization", normalizedKey)
+		}
+		normalized[normalizedKey] = values
+	}
+	return normalized, nil
+}
+
+func validateRuleMatchKey(key string) (string, error) {
+	trimmedKey := strings.TrimSpace(key)
+	if trimmedKey == "" {
+		return "", errors.New("match keys cannot be empty")
+	}
+
+	switch trimmedKey {
+	case "agent_name", "agent_version", "operation_name", "model.provider", "model.name", "mode", "error.type", "error.category":
+		return trimmedKey, nil
+	}
+
+	if strings.HasPrefix(trimmedKey, "tags.") {
+		tagKey := strings.TrimSpace(strings.TrimPrefix(trimmedKey, "tags."))
+		if tagKey == "" {
+			return "", errors.New(`match key "tags." must include a tag name`)
+		}
+		return "tags." + tagKey, nil
+	}
+
+	return "", fmt.Errorf("unsupported match key %q", key)
+}
+
+func validateRuleMatchValues(key string, values []string) error {
+	if !ruleMatchKeyUsesGlob(key) {
+		return nil
+	}
+	for _, value := range values {
+		if !strings.ContainsAny(value, "*?[") {
+			continue
+		}
+		if _, err := path.Match(strings.ToLower(value), ""); err != nil {
+			return fmt.Errorf("value %q has invalid glob pattern: %v", value, err)
+		}
+	}
+	return nil
+}
+
+func ruleMatchKeyUsesGlob(key string) bool {
+	switch key {
+	case "agent_name", "agent_version", "operation_name", "model.provider", "model.name":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeRuleMatchInput(raw any) ([]string, error) {
+	switch typed := raw.(type) {
+	case string:
+		trimmed := strings.TrimSpace(typed)
+		if trimmed == "" {
+			return nil, nil
+		}
+		return []string{trimmed}, nil
+	case []string:
+		out := make([]string, 0, len(typed))
+		for idx, value := range typed {
+			trimmed := strings.TrimSpace(value)
+			if trimmed == "" {
+				return nil, fmt.Errorf("array item %d must be a non-empty string", idx)
+			}
+			out = append(out, trimmed)
+		}
+		return out, nil
+	case []any:
+		out := make([]string, 0, len(typed))
+		for idx, value := range typed {
+			asString, ok := value.(string)
+			if !ok {
+				return nil, fmt.Errorf("array item %d must be a string", idx)
+			}
+			trimmed := strings.TrimSpace(asString)
+			if trimmed == "" {
+				return nil, fmt.Errorf("array item %d must be a non-empty string", idx)
+			}
+			out = append(out, trimmed)
+		}
+		return out, nil
+	default:
+		return nil, errors.New("must be a string or array of strings")
+	}
 }
 
 func (s *Service) refreshActiveMetrics(ctx context.Context, tenantID string) {

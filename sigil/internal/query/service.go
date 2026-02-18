@@ -765,9 +765,10 @@ func (s *Service) GetGenerationDetailForTenant(ctx context.Context, tenantID, ge
 	if s.scoreStore != nil {
 		latestScores, err := s.scoreStore.GetLatestScoresByGeneration(ctx, trimmedTenantID, trimmedGenerationID)
 		if err != nil {
-			return nil, false, err
+			s.debugLog("latest_scores_enrichment_failed", "tenant_id", trimmedTenantID, "generation_id", trimmedGenerationID, "err", err.Error())
+		} else {
+			payload["latest_scores"] = latestScoresToResponse(latestScores)
 		}
-		payload["latest_scores"] = latestScoresToResponse(latestScores)
 	}
 	return payload, true, nil
 }
@@ -1250,7 +1251,7 @@ func scoreToResponsePayload(score evalpkg.GenerationScore) map[string]any {
 	if score.Explanation != "" {
 		payload["explanation"] = score.Explanation
 	}
-	if score.SourceKind != "" {
+	if score.SourceKind != "" || score.SourceID != "" {
 		payload["source"] = map[string]any{
 			"kind": score.SourceKind,
 			"id":   score.SourceID,

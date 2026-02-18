@@ -23,7 +23,7 @@ Request body:
 - `version` (string, required)
 - `kind` (enum string: `llm_judge|json_schema|regex|heuristic`)
 - `config` (object)
-- `output_keys` (array, at least one):
+- `output_keys` (array, exactly one key is currently supported):
   - `key` (required)
   - `type` (`number|bool|string`)
   - `unit` (optional)
@@ -90,7 +90,7 @@ Request body:
 - `enabled` (bool)
 - `selector` (`user_visible_turn|all_assistant_generations|tool_call_steps|errored_generations`)
 - `match` (object of filter keys)
-- `sample_rate` (0..1)
+- `sample_rate` (0..1, defaults to `0.01` when omitted)
 - `evaluator_ids` (non-empty array)
 
 Response: rule object (`200 OK`).
@@ -192,6 +192,12 @@ Notes:
 
 Optional seed file is loaded at startup when `SIGIL_EVAL_SEED_FILE` is set.
 
+Default seed behavior is best-effort:
+- invalid evaluator/rule entries are skipped and logged
+- valid entries in the same file are still applied
+
+Set `SIGIL_EVAL_SEED_STRICT=true` to fail startup on the first seed error.
+
 Top-level keys:
 - `evaluators`
 - `rules`
@@ -199,13 +205,14 @@ Top-level keys:
 Evaluator YAML shape:
 - `id`, `kind`, `version`
 - evaluator config fields inline (for example `system_prompt`, `model`, `schema`, `patterns`)
-- `output.keys[]` with `key`, `type`, `unit`
+- `output.keys[]` with `key`, `type`, `unit` (exactly one key is currently supported)
 
 Rule YAML shape:
 - `id`, `enabled`
 - `select.selector`
 - `match`
 - `sample.rate`
+  - defaults to `0.01` when omitted
 - `evaluators` (array of evaluator IDs)
 
 Duplicate evaluator IDs or rule IDs in the same file are rejected.

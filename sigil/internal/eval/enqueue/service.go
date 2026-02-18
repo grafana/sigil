@@ -2,6 +2,7 @@ package enqueue
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -15,6 +16,7 @@ const (
 	defaultPollInterval = 200 * time.Millisecond
 	defaultMaxAttempts  = 8
 	defaultClaimTTL     = 2 * time.Minute
+	statusTransitionTTL = 5 * time.Second
 )
 
 // Config controls durable enqueue dispatcher behavior.
@@ -39,6 +41,7 @@ type Event struct {
 type Store interface {
 	ClaimEvalEnqueueEvents(ctx context.Context, now time.Time, limit int, claimTTL time.Duration) ([]Event, error)
 	CompleteEvalEnqueueEvent(ctx context.Context, tenantID, generationID string) error
+	RequeueClaimedEvalEnqueueEvent(ctx context.Context, tenantID, generationID string) error
 	FailEvalEnqueueEvent(ctx context.Context, tenantID, generationID, lastError string, retryAt time.Time, maxAttempts int, permanent bool) (bool, error)
 }
 
@@ -153,9 +156,15 @@ func (s *Service) runCycle(ctx context.Context) (bool, error) {
 
 func (s *Service) processEvent(ctx context.Context, event Event) {
 	if err := s.processor.Process(ctx, event); err != nil {
+		if isRunContextCancellation(ctx, err) {
+			s.requeueClaimedEvent(ctx, event, err)
+			return
+		}
 		permanent := evalpkg.IsPermanent(err)
 		retryAt := time.Now().UTC().Add(retryBackoff(event.Attempts + 1))
-		requeued, failErr := s.store.FailEvalEnqueueEvent(ctx, event.TenantID, event.GenerationID, err.Error(), retryAt, s.cfg.MaxAttempts, permanent)
+		transitionCtx, cancel := detachedContextWithTimeout(ctx, statusTransitionTTL)
+		requeued, failErr := s.store.FailEvalEnqueueEvent(transitionCtx, event.TenantID, event.GenerationID, err.Error(), retryAt, s.cfg.MaxAttempts, permanent)
+		cancel()
 		if failErr != nil {
 			_ = level.Error(s.logger).Log(
 				"msg", "eval enqueue dispatcher fail update failed",
@@ -182,7 +191,10 @@ func (s *Service) processEvent(ctx context.Context, event Event) {
 		return
 	}
 
-	if err := s.store.CompleteEvalEnqueueEvent(ctx, event.TenantID, event.GenerationID); err != nil {
+	transitionCtx, cancel := detachedContextWithTimeout(ctx, statusTransitionTTL)
+	err := s.store.CompleteEvalEnqueueEvent(transitionCtx, event.TenantID, event.GenerationID)
+	cancel()
+	if err != nil {
 		_ = level.Error(s.logger).Log(
 			"msg", "eval enqueue dispatcher complete failed",
 			"tenant_id", event.TenantID,
@@ -190,6 +202,45 @@ func (s *Service) processEvent(ctx context.Context, event Event) {
 			"err", err,
 		)
 	}
+}
+
+func (s *Service) requeueClaimedEvent(ctx context.Context, event Event, cause error) {
+	if cause == nil {
+		cause = context.Canceled
+	}
+	transitionCtx, cancel := detachedContextWithTimeout(ctx, statusTransitionTTL)
+	err := s.store.RequeueClaimedEvalEnqueueEvent(transitionCtx, event.TenantID, event.GenerationID)
+	cancel()
+	if err != nil && !errors.Is(err, evalpkg.ErrNotFound) {
+		_ = level.Error(s.logger).Log(
+			"msg", "eval enqueue dispatcher cancellation requeue failed",
+			"tenant_id", event.TenantID,
+			"generation_id", event.GenerationID,
+			"err", err,
+		)
+		return
+	}
+	_ = level.Warn(s.logger).Log(
+		"msg", "eval enqueue dispatcher released claimed event due cancellation",
+		"tenant_id", event.TenantID,
+		"generation_id", event.GenerationID,
+		"cause", cause.Error(),
+	)
+}
+
+func isRunContextCancellation(ctx context.Context, err error) bool {
+	if ctx == nil || ctx.Err() == nil {
+		return false
+	}
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
+func detachedContextWithTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	baseCtx := context.Background()
+	if ctx != nil {
+		baseCtx = context.WithoutCancel(ctx)
+	}
+	return context.WithTimeout(baseCtx, timeout)
 }
 
 func retryBackoff(attempt int) time.Duration {
