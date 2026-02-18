@@ -364,7 +364,7 @@ func (s *Service) ListJudgeModels(ctx context.Context, providerID string) ([]Jud
 		return []JudgeModel{}, nil
 	}
 	if strings.TrimSpace(providerID) == "" {
-		return nil, errors.New("provider query param is required")
+		return nil, newValidationError(errors.New("provider query param is required"))
 	}
 	return s.discovery.ListModels(ctx, strings.TrimSpace(providerID))
 }

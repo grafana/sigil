@@ -17,6 +17,7 @@ import (
 	evalcontrol "github.com/grafana/sigil/sigil/internal/eval/control"
 	evalenqueue "github.com/grafana/sigil/sigil/internal/eval/enqueue"
 	"github.com/grafana/sigil/sigil/internal/eval/evaluators/judges"
+	"github.com/grafana/sigil/sigil/internal/eval/predefined"
 	evalingest "github.com/grafana/sigil/sigil/internal/eval/ingest"
 	evalrules "github.com/grafana/sigil/sigil/internal/eval/rules"
 	evalworker "github.com/grafana/sigil/sigil/internal/eval/worker"
@@ -142,6 +143,10 @@ func (m *serverModule) start(ctx context.Context) error {
 				return err
 			}
 			if loadSeed {
+				predefinedSeeder := predefined.NewSeeder(evalStore)
+				if err := predefinedSeeder.EnsureTenantSeeded(ctx, seedTenantID); err != nil {
+					return fmt.Errorf("seed predefined evaluators: %w", err)
+				}
 				report, err := evalcontrol.LoadYAMLSeedFileWithOptions(
 					ctx,
 					evalStore,

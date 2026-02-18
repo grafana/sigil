@@ -573,6 +573,31 @@ func TestJudgeDiscoveryHTTP(t *testing.T) {
 	}
 }
 
+func TestJudgeModelsReturns400ForMissingProvider(t *testing.T) {
+	store := newMemoryControlStore()
+	service := NewService(store, staticJudgeDiscovery{})
+	mux := newEvalMux(service)
+
+	resp := doRequest(mux, http.MethodGet, "/api/v1/eval/judge/models", "")
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing provider param, got %d body=%s", resp.Code, resp.Body.String())
+	}
+}
+
+func TestJudgeModelsReturns500ForBackendFailure(t *testing.T) {
+	store := newMemoryControlStore()
+	service := NewService(store, failingJudgeDiscovery{})
+	mux := newEvalMux(service)
+
+	resp := doRequest(mux, http.MethodGet, "/api/v1/eval/judge/models?provider=openai", "")
+	if resp.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for backend discovery failure, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), "internal server error") {
+		t.Fatalf("expected generic internal server error body, got body=%s", resp.Body.String())
+	}
+}
+
 func TestJudgeDiscoveryHTTPRequiresTenantContext(t *testing.T) {
 	store := newMemoryControlStore()
 	service := NewService(store, staticJudgeDiscovery{})
@@ -700,6 +725,16 @@ func (staticJudgeDiscovery) ListProviders(context.Context) []JudgeProvider {
 
 func (staticJudgeDiscovery) ListModels(context.Context, string) ([]JudgeModel, error) {
 	return []JudgeModel{{ID: "gpt-4o-mini", Name: "GPT-4o mini", Provider: "openai", ContextWindow: 128000}}, nil
+}
+
+type failingJudgeDiscovery struct{}
+
+func (failingJudgeDiscovery) ListProviders(context.Context) []JudgeProvider {
+	return []JudgeProvider{{ID: "openai", Name: "OpenAI", Type: "direct"}}
+}
+
+func (failingJudgeDiscovery) ListModels(context.Context, string) ([]JudgeModel, error) {
+	return nil, errors.New("discovery backend unavailable")
 }
 
 type memoryControlStore struct {

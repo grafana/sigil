@@ -9,8 +9,8 @@ import (
 	"github.com/grafana/sigil/sigil/internal/storage/object"
 )
 
-func newObjectBlockReader(ctx context.Context, cfg config.ObjectStoreConfig) (storage.BlockReader, error) {
-	blockStore, err := object.NewStoreWithProviderConfig(ctx, object.ProviderConfig{
+func newObjectStore(ctx context.Context, cfg config.ObjectStoreConfig) (*object.Store, error) {
+	store, err := object.NewStoreWithProviderConfig(ctx, object.ProviderConfig{
 		Backend: cfg.Backend,
 		Bucket:  cfg.Bucket,
 		S3: object.S3ProviderConfig{
@@ -36,7 +36,11 @@ func newObjectBlockReader(ctx context.Context, cfg config.ObjectStoreConfig) (st
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("create object store reader: %w", err)
+		return nil, fmt.Errorf("create object store: %w", err)
 	}
-	return blockStore, nil
+	return store, nil
+}
+
+func newObjectBlockReader(ctx context.Context, cfg config.ObjectStoreConfig) (storage.BlockReader, error) {
+	return newObjectStore(ctx, cfg)
 }

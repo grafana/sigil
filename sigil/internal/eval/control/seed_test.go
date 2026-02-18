@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
+	"github.com/grafana/sigil/sigil/internal/eval/predefined"
 )
 
 func TestLoadYAMLSeed(t *testing.T) {
@@ -90,12 +91,10 @@ func TestLoadYAMLSeedFile(t *testing.T) {
 }
 
 func TestSeedExampleFileParses(t *testing.T) {
-	store := &seedTestStore{
-		evaluators: []evalpkg.EvaluatorDefinition{
-			{TenantID: "tenant-a", EvaluatorID: "sigil.helpfulness"},
-			{TenantID: "tenant-a", EvaluatorID: "sigil.response_not_empty"},
-			{TenantID: "tenant-a", EvaluatorID: "sigil.json_valid"},
-		},
+	store := &seedTestStore{}
+	seeder := predefined.NewSeeder(store)
+	if err := seeder.EnsureTenantSeeded(context.Background(), "tenant-a"); err != nil {
+		t.Fatalf("seed predefined evaluators: %v", err)
 	}
 	paths := []string{
 		filepath.Join("..", "..", "..", "..", "sigil-eval-seed.example.yaml"),
