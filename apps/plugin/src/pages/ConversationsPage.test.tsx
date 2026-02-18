@@ -1,4 +1,5 @@
 import React from 'react';
+import { makeTimeRange } from '@grafana/data';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ConversationsPage from './ConversationsPage';
 import type { ConversationsDataSource } from '../conversation/api';
@@ -9,6 +10,19 @@ import type {
   GenerationDetail,
   SearchTag,
 } from '../conversation/types';
+
+let capturedTimeRangeOnChange: ((tr: ReturnType<typeof makeTimeRange>) => void) | undefined;
+
+jest.mock('@grafana/ui', () => {
+  const actual = jest.requireActual('@grafana/ui');
+  return {
+    ...actual,
+    TimeRangePicker: ({ onChange }: { value: unknown; onChange: (tr: unknown) => void }) => {
+      capturedTimeRangeOnChange = onChange;
+      return <div data-testid="time-range-picker" />;
+    },
+  };
+});
 
 type MockConversationsDataSource = {
   [Key in keyof ConversationsDataSource]: jest.MockedFunction<ConversationsDataSource[Key]>;
@@ -48,6 +62,9 @@ function createDataSource(overrides?: Partial<MockConversationsDataSource>): Moc
     conversation_id: 'conv-1',
     trace_id: 'trace-1',
     mode: 'SYNC',
+    model: { provider: 'openai', name: 'gpt-4o' },
+    input: [{ role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Hello' }] }],
+    output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'Hi there!' }] }],
   };
 
   const defaultTags: SearchTag[] = [{ key: 'model', scope: 'well-known', description: 'Model name' }];
@@ -72,28 +89,27 @@ function createDeferred<T>() {
   return { promise, resolve, reject };
 }
 
+function makeConversation(id: string, overrides?: Partial<ConversationSearchResponse['conversations'][0]>) {
+  return {
+    conversation_id: id,
+    generation_count: 1,
+    first_generation_at: '2026-02-15T09:00:00Z',
+    last_generation_at: '2026-02-15T10:00:00Z',
+    models: ['gpt-4o'],
+    agents: ['assistant'],
+    error_count: 0,
+    has_errors: false,
+    trace_ids: ['trace-1'],
+    annotation_count: 0,
+    ...overrides,
+  };
+}
+
 describe('ConversationsPage', () => {
-  it('applies filter search and renders conversation + generation detail', async () => {
+  it('applies filter search and renders conversation detail with chat messages', async () => {
     const dataSource = createDataSource({
       searchConversations: jest.fn(async (_request: ConversationSearchRequest) =>
-        buildSearchResponse(
-          [
-            {
-              conversation_id: 'conv-1',
-              generation_count: 2,
-              first_generation_at: '2026-02-15T09:00:00Z',
-              last_generation_at: '2026-02-15T10:00:00Z',
-              models: ['gpt-4o'],
-              agents: ['assistant'],
-              error_count: 0,
-              has_errors: false,
-              trace_ids: ['trace-1'],
-              annotation_count: 0,
-            },
-          ],
-          '',
-          false
-        )
+        buildSearchResponse([makeConversation('conv-1', { generation_count: 2 })])
       ),
     });
 
@@ -103,69 +119,33 @@ describe('ConversationsPage', () => {
     fireEvent.click(screen.getByLabelText('apply filters'));
 
     await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalled());
-    expect(await screen.findByRole('button', { name: /select conversation conv-1/i })).toBeInTheDocument();
+    expect(await screen.findByLabelText('select conversation conv-1')).toBeInTheDocument();
     await waitFor(() => expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-1'));
     await waitFor(() => expect(dataSource.getGeneration).toHaveBeenCalledWith('gen-1'));
-    expect(await screen.findByText(/"generation_id": "gen-1"/i)).toBeInTheDocument();
+    expect(await screen.findByText('Hi there!')).toBeInTheDocument();
   });
 
   it('loads more results with cursor pagination', async () => {
     const dataSource = createDataSource({
       searchConversations: jest
         .fn<Promise<ConversationSearchResponse>, [ConversationSearchRequest]>()
-        .mockImplementationOnce(async (_request: ConversationSearchRequest) =>
-          buildSearchResponse(
-            [
-              {
-                conversation_id: 'conv-1',
-                generation_count: 1,
-                first_generation_at: '2026-02-15T09:00:00Z',
-                last_generation_at: '2026-02-15T09:10:00Z',
-                models: ['gpt-4o'],
-                agents: ['assistant'],
-                error_count: 0,
-                has_errors: false,
-                trace_ids: ['trace-1'],
-                annotation_count: 0,
-              },
-            ],
-            'cursor-1',
-            true
-          )
-        )
+        .mockImplementationOnce(async () => buildSearchResponse([makeConversation('conv-1')], 'cursor-1', true))
         .mockImplementationOnce(async (request: ConversationSearchRequest) => {
           if (request.cursor !== 'cursor-1') {
             throw new Error(`expected cursor-1, got ${request.cursor}`);
           }
-          return buildSearchResponse(
-            [
-              {
-                conversation_id: 'conv-2',
-                generation_count: 1,
-                first_generation_at: '2026-02-15T09:20:00Z',
-                last_generation_at: '2026-02-15T09:30:00Z',
-                models: ['gpt-4o'],
-                agents: ['assistant'],
-                error_count: 0,
-                has_errors: false,
-                trace_ids: ['trace-2'],
-                annotation_count: 0,
-              },
-            ],
-            '',
-            false
-          );
+          return buildSearchResponse([makeConversation('conv-2')]);
         }),
     });
 
     render(<ConversationsPage dataSource={dataSource} />);
 
     fireEvent.click(screen.getByLabelText('apply filters'));
-    await screen.findByRole('button', { name: /select conversation conv-1/i });
+    await screen.findByLabelText('select conversation conv-1');
 
     fireEvent.click(screen.getByLabelText('load more conversations'));
     await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalledTimes(2));
-    expect(await screen.findByRole('button', { name: /select conversation conv-2/i })).toBeInTheDocument();
+    expect(await screen.findByLabelText('select conversation conv-2')).toBeInTheDocument();
   });
 
   it('ignores stale search responses when apply is triggered rapidly', async () => {
@@ -197,6 +177,8 @@ describe('ConversationsPage', () => {
         conversation_id: generationID.replace(/-gen$/, ''),
         trace_id: `${generationID}-trace`,
         mode: 'SYNC',
+        input: [{ role: 'MESSAGE_ROLE_USER', parts: [{ text: 'test' }] }],
+        output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'response' }] }],
       })),
     });
 
@@ -211,49 +193,19 @@ describe('ConversationsPage', () => {
     await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalledTimes(2));
 
     await act(async () => {
-      fastSearch.resolve(
-        buildSearchResponse([
-          {
-            conversation_id: 'conv-fast',
-            generation_count: 1,
-            first_generation_at: '2026-02-15T10:00:00Z',
-            last_generation_at: '2026-02-15T10:01:00Z',
-            models: ['gpt-4o'],
-            agents: ['assistant'],
-            error_count: 0,
-            has_errors: false,
-            trace_ids: ['trace-fast'],
-            annotation_count: 0,
-          },
-        ])
-      );
+      fastSearch.resolve(buildSearchResponse([makeConversation('conv-fast')]));
       await Promise.resolve();
     });
 
-    expect(await screen.findByRole('button', { name: /select conversation conv-fast/i })).toBeInTheDocument();
+    expect(await screen.findByLabelText('select conversation conv-fast')).toBeInTheDocument();
     await waitFor(() => expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-fast'));
 
     await act(async () => {
-      slowSearch.resolve(
-        buildSearchResponse([
-          {
-            conversation_id: 'conv-slow',
-            generation_count: 1,
-            first_generation_at: '2026-02-15T09:00:00Z',
-            last_generation_at: '2026-02-15T09:01:00Z',
-            models: ['gpt-4o'],
-            agents: ['assistant'],
-            error_count: 0,
-            has_errors: false,
-            trace_ids: ['trace-slow'],
-            annotation_count: 0,
-          },
-        ])
-      );
+      slowSearch.resolve(buildSearchResponse([makeConversation('conv-slow')]));
       await Promise.resolve();
     });
 
-    expect(screen.queryByRole('button', { name: /select conversation conv-slow/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('select conversation conv-slow')).not.toBeInTheDocument();
     expect(dataSource.getConversationDetail).not.toHaveBeenCalledWith('conv-slow');
   });
 
@@ -272,10 +224,14 @@ describe('ConversationsPage', () => {
     render(<ConversationsPage dataSource={dataSource} />);
     expect(await screen.findByRole('button', { name: 'initial-tag' })).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('search from'), { target: { value: '2026-02-15T08:00' } });
+    act(() => {
+      capturedTimeRangeOnChange?.(makeTimeRange('2026-02-15T08:00:00Z', '2026-02-16T08:00:00Z'));
+    });
     await waitFor(() => expect(dataSource.getSearchTags).toHaveBeenCalledTimes(2));
 
-    fireEvent.change(screen.getByLabelText('search from'), { target: { value: '2026-02-15T09:00' } });
+    act(() => {
+      capturedTimeRangeOnChange?.(makeTimeRange('2026-02-15T09:00:00Z', '2026-02-16T09:00:00Z'));
+    });
     await waitFor(() => expect(dataSource.getSearchTags).toHaveBeenCalledTimes(3));
 
     await act(async () => {
@@ -315,7 +271,6 @@ describe('ConversationsPage', () => {
 
     await waitFor(() => expect(dataSource.getSearchTagValues).toHaveBeenCalledTimes(1));
 
-    // Force unrelated rerenders while the same tag lookup is still in-flight.
     fireEvent.click(screen.getByLabelText('apply filters'));
     await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalledTimes(1));
     expect(dataSource.getSearchTagValues).toHaveBeenCalledTimes(1);
@@ -326,7 +281,6 @@ describe('ConversationsPage', () => {
     });
     expect(await screen.findByRole('button', { name: 'gpt-4o' })).toBeInTheDocument();
 
-    // Trigger another rerender with the same active tag/range; cached values should be reused.
     fireEvent.click(screen.getByLabelText('apply filters'));
     await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalledTimes(2));
     expect(dataSource.getSearchTagValues).toHaveBeenCalledTimes(1);
@@ -359,32 +313,7 @@ describe('ConversationsPage', () => {
 
     const dataSource = createDataSource({
       searchConversations: jest.fn(async (_request: ConversationSearchRequest) =>
-        buildSearchResponse([
-          {
-            conversation_id: 'conv-1',
-            generation_count: 1,
-            first_generation_at: '2026-02-15T09:00:00Z',
-            last_generation_at: '2026-02-15T09:00:00Z',
-            models: ['gpt-4o'],
-            agents: ['assistant'],
-            error_count: 0,
-            has_errors: false,
-            trace_ids: ['trace-1'],
-            annotation_count: 0,
-          },
-          {
-            conversation_id: 'conv-2',
-            generation_count: 1,
-            first_generation_at: '2026-02-15T09:05:00Z',
-            last_generation_at: '2026-02-15T09:05:00Z',
-            models: ['gpt-4o'],
-            agents: ['assistant'],
-            error_count: 0,
-            has_errors: false,
-            trace_ids: ['trace-2'],
-            annotation_count: 0,
-          },
-        ])
+        buildSearchResponse([makeConversation('conv-1'), makeConversation('conv-2')])
       ),
       getConversationDetail: jest.fn((conversationID: string) => {
         if (conversationID === 'conv-1') {
@@ -400,6 +329,9 @@ describe('ConversationsPage', () => {
         conversation_id: generationID === 'gen-1' ? 'conv-1' : 'conv-2',
         trace_id: generationID === 'gen-1' ? 'trace-1' : 'trace-2',
         mode: 'SYNC',
+        model: { provider: 'openai', name: 'gpt-4o' },
+        input: [{ role: 'MESSAGE_ROLE_USER', parts: [{ text: 'test' }] }],
+        output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: `reply from ${generationID}` }] }],
       })),
     });
 
@@ -407,7 +339,7 @@ describe('ConversationsPage', () => {
     fireEvent.click(screen.getByLabelText('apply filters'));
 
     await waitFor(() => expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-1'));
-    fireEvent.click(await screen.findByRole('button', { name: /select conversation conv-2/i }));
+    fireEvent.click(await screen.findByLabelText('select conversation conv-2'));
     await waitFor(() => expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-2'));
 
     await act(async () => {
@@ -415,7 +347,7 @@ describe('ConversationsPage', () => {
       await Promise.resolve();
     });
     await waitFor(() => expect(dataSource.getGeneration).toHaveBeenCalledWith('gen-2'));
-    expect(await screen.findByRole('button', { name: /select generation gen-2/i })).toBeInTheDocument();
+    expect(await screen.findByText('reply from gen-2')).toBeInTheDocument();
 
     await act(async () => {
       conv1Deferred.resolve(detailConv1);
@@ -424,38 +356,13 @@ describe('ConversationsPage', () => {
 
     expect(dataSource.getGeneration).toHaveBeenCalledTimes(1);
     expect(dataSource.getGeneration).toHaveBeenLastCalledWith('gen-2');
-    expect(screen.queryByRole('button', { name: /select generation gen-1/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('reply from gen-1')).not.toBeInTheDocument();
   });
 
   it('clears stale generation state when conversation detail request fails', async () => {
     const dataSource = createDataSource({
       searchConversations: jest.fn(async (_request: ConversationSearchRequest) =>
-        buildSearchResponse([
-          {
-            conversation_id: 'conv-1',
-            generation_count: 1,
-            first_generation_at: '2026-02-15T09:00:00Z',
-            last_generation_at: '2026-02-15T09:00:00Z',
-            models: ['gpt-4o'],
-            agents: ['assistant'],
-            error_count: 0,
-            has_errors: false,
-            trace_ids: ['trace-1'],
-            annotation_count: 0,
-          },
-          {
-            conversation_id: 'conv-2',
-            generation_count: 1,
-            first_generation_at: '2026-02-15T09:05:00Z',
-            last_generation_at: '2026-02-15T09:05:00Z',
-            models: ['gpt-4o'],
-            agents: ['assistant'],
-            error_count: 0,
-            has_errors: false,
-            trace_ids: ['trace-2'],
-            annotation_count: 0,
-          },
-        ])
+        buildSearchResponse([makeConversation('conv-1'), makeConversation('conv-2')])
       ),
       getConversationDetail: jest.fn(async (conversationID: string) => {
         if (conversationID === 'conv-1') {
@@ -482,6 +389,9 @@ describe('ConversationsPage', () => {
         conversation_id: 'conv-1',
         trace_id: 'trace-1',
         mode: 'SYNC',
+        model: { provider: 'openai', name: 'gpt-4o' },
+        input: [{ role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Hello' }] }],
+        output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'World' }] }],
       })),
     });
 
@@ -490,11 +400,10 @@ describe('ConversationsPage', () => {
 
     await waitFor(() => expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-1'));
     await waitFor(() => expect(dataSource.getGeneration).toHaveBeenCalledWith('gen-1'));
-    expect(await screen.findByText(/"generation_id": "gen-1"/i)).toBeInTheDocument();
+    expect(await screen.findByText('World')).toBeInTheDocument();
 
-    fireEvent.click(await screen.findByRole('button', { name: /select conversation conv-2/i }));
+    fireEvent.click(await screen.findByLabelText('select conversation conv-2'));
     expect(await screen.findByText(/conversation detail failed/i)).toBeInTheDocument();
-    expect(await screen.findByText(/select a generation to inspect payload\./i)).toBeInTheDocument();
-    expect(screen.queryByText(/"generation_id": "gen-1"/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('World')).not.toBeInTheDocument();
   });
 });

@@ -77,6 +77,49 @@ try {
 }
 ```
 
+## Embedding Observability
+
+Use `startEmbedding(...)` for embedding API calls. Embedding recording creates OTel spans and SDK metrics only, and does not enqueue generation exports.
+
+```ts
+await client.startEmbedding(
+  {
+    agentName: "retrieval-worker",
+    agentVersion: "1.0.0",
+    model: { provider: "openai", name: "text-embedding-3-small" },
+  },
+  async (recorder) => {
+    const response = await openai.embeddings.create(request);
+    recorder.setResult({
+      inputCount: request.input.length,
+      inputTokens: response.usage?.prompt_tokens ?? 0,
+      inputTexts: request.input,
+      responseModel: response.model,
+    });
+  }
+);
+```
+
+Input text capture is opt-in:
+
+```ts
+const client = new SigilClient({
+  embeddingCapture: {
+    captureInput: true,
+    maxInputItems: 20,
+    maxTextLength: 1024,
+  },
+});
+```
+
+`embeddingCapture.captureInput` may expose PII/document content in spans. Keep it disabled by default and enable it only for scoped debugging.
+
+TraceQL examples:
+
+- `traces{gen_ai.operation.name="embeddings"}`
+- `traces{gen_ai.operation.name="embeddings" && gen_ai.request.model="text-embedding-3-small"}`
+- `traces{gen_ai.operation.name="embeddings" && error.type!=""}`
+
 ## Tool Execution Example
 
 ```ts
@@ -108,6 +151,9 @@ await client.startToolExecution(
 - Exports are asynchronous with bounded queueing and retry/backoff.
 - `flush()` drains queued generations; `shutdown()` flushes and closes generation exporters.
 - Empty tool names produce a no-op tool recorder.
+- Generation/tool spans always include SDK identity attributes:
+  - `sigil.sdk.name=sdk-js`
+- Normalized generation metadata always includes the same SDK identity key; conflicting caller values are overwritten.
 - Raw provider artifacts are opt-in (`rawArtifacts: true`).
 
 ## Instrumentation-only mode (no generation send)

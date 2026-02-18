@@ -89,13 +89,16 @@ audience: both
 - Use `StartGeneration` for non-stream calls and `StartStreamingGeneration` for streaming calls.
 - `rec.Err()` surfaces validation/enqueue failures only.
 - Call `Shutdown(ctx)` on application exit to flush queued generations.
+- All SDKs stamp SDK identity into every normalized generation metadata map:
+  - `sigil.sdk.name`
+  - this reserved key is SDK-owned and overwrites conflicting caller-provided values
 - SDK generation-export auth uses strict modes:
   - `none`
   - `tenant` (requires tenant id)
   - `bearer` (requires bearer token)
 - Explicit transport headers override SDK-injected `Authorization` and `X-Scope-OrgID`.
 
-## Span Shape Emitted by Go SDK
+## Span Shape Emitted by SDKs
 
 - Generation span name format: `<gen_ai.operation.name> <gen_ai.request.model>`.
 - Default operations are mode-aware:
@@ -107,6 +110,7 @@ audience: both
 
 - Always present:
   - `gen_ai.operation.name`
+  - `sigil.sdk.name`
 - Conditionally present when value exists:
   - `sigil.generation.id`
   - `gen_ai.conversation.id`
@@ -170,6 +174,7 @@ audience: both
 
 The normalized payload keeps provider-only details in `metadata` with a stable Sigil prefix. Current extensions:
 
+- `sigil.sdk.name`: SDK identity marker (`sdk-go`, `sdk-js`, `sdk-python`, `sdk-java`, `sdk-dotnet`).
 - `sigil.gen_ai.request.thinking.budget_tokens`: provider thinking budget (request side).
 - `sigil.gen_ai.request.thinking.level`: provider thinking level when available (Gemini).
 - `sigil.gen_ai.usage.tool_use_prompt_tokens`: Gemini `toolUsePromptTokenCount`.
@@ -182,6 +187,7 @@ The normalized payload keeps provider-only details in `metadata` with a stable S
 - Span name format: `execute_tool <tool_name>`.
 - Attributes:
   - `gen_ai.operation.name` (`execute_tool`)
+  - `sigil.sdk.name`
   - `gen_ai.tool.name`
   - `gen_ai.tool.call.id` (if set)
   - `gen_ai.tool.type` (if set)

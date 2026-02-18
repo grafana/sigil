@@ -22,10 +22,17 @@
   "includes": [
     {
       "type": "page",
+      "name": "Dashboard",
+      "path": "/a/grafana-sigil-app/dashboard",
+      "addToNav": true,
+      "defaultNav": true
+    },
+    {
+      "type": "page",
       "name": "Conversations",
       "path": "/a/grafana-sigil-app/conversations",
       "addToNav": true,
-      "defaultNav": true
+      "defaultNav": false
     },
     {
       "type": "page",

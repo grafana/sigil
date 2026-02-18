@@ -1,5 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Spinner, Stack, Text } from '@grafana/ui';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { css } from '@emotion/css';
+import { dateTime, type GrafanaTheme2, makeTimeRange, type TimeRange } from '@grafana/data';
+import { Alert, Text, useStyles2 } from '@grafana/ui';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
 import type {
   ConversationDetail,
@@ -9,25 +11,53 @@ import type {
   SearchTag,
 } from '../conversation/types';
 import FilterBar from '../components/FilterBar';
+import ConversationListPanel from '../components/conversations/ConversationListPanel';
+import GenerationViewerPanel from '../components/generation/GenerationViewerPanel';
 
-type ConversationsPageProps = {
+export type ConversationsPageProps = {
   dataSource?: ConversationsDataSource;
 };
 
-function defaultRangeFrom(): string {
-  return new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-}
-
-function defaultRangeTo(): string {
-  return new Date().toISOString();
-}
+const getStyles = (theme: GrafanaTheme2) => ({
+  layout: css({
+    display: 'grid',
+    gridTemplateColumns: 'minmax(380px, 1fr) 2fr',
+    gap: theme.spacing(2),
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+  }),
+  leftPanel: css({
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    minHeight: 0,
+  }),
+  rightPanel: css({
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    minHeight: 0,
+    borderLeft: `1px solid ${theme.colors.border.weak}`,
+    paddingLeft: theme.spacing(2),
+  }),
+  pageContainer: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    height: '100%',
+    gap: theme.spacing(2),
+  }),
+});
 
 export default function ConversationsPage(props: ConversationsPageProps) {
   const dataSource = props.dataSource ?? defaultConversationsDataSource;
+  const styles = useStyles2(getStyles);
 
   const [filterText, setFilterText] = useState<string>('');
-  const [rangeFrom, setRangeFrom] = useState<string>(defaultRangeFrom());
-  const [rangeTo, setRangeTo] = useState<string>(defaultRangeTo());
+  const [timeRange, setTimeRange] = useState<TimeRange>(() => {
+    const now = dateTime();
+    return makeTimeRange(dateTime(now).subtract(24, 'hours'), now);
+  });
 
   const [tags, setTags] = useState<SearchTag[]>([]);
   const [tagValues, setTagValues] = useState<string[]>([]);
@@ -58,13 +88,6 @@ export default function ConversationsPage(props: ConversationsPageProps) {
   const inFlightTagValuesKey = useRef<string>('');
   const tagValuesCache = useRef<Map<string, string[]>>(new Map());
 
-  const selectedConversation = useMemo(() => {
-    if (selectedConversationID.length === 0) {
-      return null;
-    }
-    return searchResults.find((item) => item.conversation_id === selectedConversationID) ?? null;
-  }, [searchResults, selectedConversationID]);
-
   const runSearch = async (cursor?: string, append?: boolean): Promise<void> => {
     searchRequestVersion.current += 1;
     const requestVersion = searchRequestVersion.current;
@@ -72,10 +95,7 @@ export default function ConversationsPage(props: ConversationsPageProps) {
     const payload: ConversationSearchRequest = {
       filters: filterText,
       select: [],
-      time_range: {
-        from: rangeFrom,
-        to: rangeTo,
-      },
+      time_range: { from: timeRange.from.toISOString(), to: timeRange.to.toISOString() },
       page_size: 20,
       cursor,
     };
@@ -121,6 +141,9 @@ export default function ConversationsPage(props: ConversationsPageProps) {
       setLoadingMore(false);
     }
   };
+
+  const rangeFrom = timeRange.from.toISOString();
+  const rangeTo = timeRange.to.toISOString();
 
   useEffect(() => {
     tagsRequestVersion.current += 1;
@@ -277,47 +300,19 @@ export default function ConversationsPage(props: ConversationsPageProps) {
     [dataSource, rangeFrom, rangeTo]
   );
 
-  const resultRows = searchResults.map((conversation) => {
-    const selected = conversation.conversation_id === selectedConversationID;
-    return (
-      <tr
-        key={conversation.conversation_id}
-        style={{ background: selected ? 'rgba(34, 102, 255, 0.12)' : 'transparent' }}
-      >
-        <td>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setSelectedConversationID(conversation.conversation_id)}
-            aria-label={`select conversation ${conversation.conversation_id}`}
-          >
-            {conversation.conversation_id}
-          </Button>
-        </td>
-        <td>{conversation.generation_count}</td>
-        <td>{conversation.models.join(', ') || '-'}</td>
-        <td>{conversation.agents.join(', ') || '-'}</td>
-        <td>{conversation.error_count}</td>
-        <td>{new Date(conversation.last_generation_at).toLocaleString()}</td>
-      </tr>
-    );
-  });
-
   return (
-    <Stack direction="column" gap={2}>
-      <h2>Conversations</h2>
+    <div className={styles.pageContainer}>
+      <Text element="h2">Conversations</Text>
 
       <FilterBar
         filter={filterText}
-        from={rangeFrom}
-        to={rangeTo}
+        timeRange={timeRange}
         tags={tags}
         tagValues={tagValues}
         loadingTags={loadingTags}
         loadingValues={loadingTagValues}
         onFilterChange={setFilterText}
-        onFromChange={setRangeFrom}
-        onToChange={setRangeTo}
+        onTimeRangeChange={setTimeRange}
         onApply={() => void runSearch('', false)}
         onRequestTagValues={requestTagValues}
       />
@@ -328,93 +323,27 @@ export default function ConversationsPage(props: ConversationsPageProps) {
         </Alert>
       )}
 
-      <Stack direction="row" gap={2}>
-        <Stack direction="column" gap={1}>
-          <Text weight="bold">Conversation search results</Text>
-          {loadingSearch && <Spinner aria-label="loading conversations" />}
-          {!loadingSearch && searchResults.length === 0 && (
-            <Text>No conversations found. Apply a filter to start.</Text>
-          )}
-          {!loadingSearch && searchResults.length > 0 && (
-            <table>
-              <thead>
-                <tr>
-                  <th>Conversation</th>
-                  <th>Generations</th>
-                  <th>Models</th>
-                  <th>Agents</th>
-                  <th>Errors</th>
-                  <th>Last generation</th>
-                </tr>
-              </thead>
-              <tbody>{resultRows}</tbody>
-            </table>
-          )}
-          {hasMore && nextCursor.length > 0 && (
-            <Button
-              aria-label="load more conversations"
-              onClick={() => void runSearch(nextCursor, true)}
-              disabled={loadingMore}
-            >
-              {loadingMore ? 'Loading…' : 'Load more'}
-            </Button>
-          )}
-        </Stack>
-
-        <Stack direction="column" gap={1}>
-          <Text weight="bold">Conversation detail</Text>
-          {selectedConversation && (
-            <Text color="secondary">
-              {selectedConversation.conversation_id} • {selectedConversation.generation_count} generations
-            </Text>
-          )}
-          {loadingConversationDetail && <Spinner aria-label="loading conversation detail" />}
-          {!loadingConversationDetail && conversationDetail && (
-            <Stack direction="column" gap={1}>
-              <Text>
-                {conversationDetail.generations.length} generation payloads • {conversationDetail.annotations.length}{' '}
-                annotations
-              </Text>
-              {conversationDetail.generations.map((generation) => {
-                const traceID = typeof generation.trace_id === 'string' ? generation.trace_id : '';
-                return (
-                  <Stack key={generation.generation_id} direction="row" gap={1}>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      aria-label={`select generation ${generation.generation_id}`}
-                      onClick={() => setSelectedGenerationID(generation.generation_id)}
-                    >
-                      {generation.generation_id}
-                    </Button>
-                    <Text color="secondary">
-                      {generation.created_at ? new Date(generation.created_at).toLocaleString() : '-'}
-                    </Text>
-                    {traceID.length > 0 && (
-                      <a
-                        href={`/api/plugins/grafana-sigil-app/resources/query/proxy/tempo/api/v2/traces/${encodeURIComponent(traceID)}`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Trace
-                      </a>
-                    )}
-                  </Stack>
-                );
-              })}
-            </Stack>
-          )}
-        </Stack>
-
-        <Stack direction="column" gap={1}>
-          <Text weight="bold">Generation detail</Text>
-          {selectedGenerationID.length === 0 && <Text>Select a generation to inspect payload.</Text>}
-          {loadingGenerationDetail && <Spinner aria-label="loading generation detail" />}
-          {!loadingGenerationDetail && generationDetail && (
-            <pre style={{ maxWidth: '520px', whiteSpace: 'pre-wrap' }}>{JSON.stringify(generationDetail, null, 2)}</pre>
-          )}
-        </Stack>
-      </Stack>
-    </Stack>
+      <div className={styles.layout}>
+        <div className={styles.leftPanel}>
+          <ConversationListPanel
+            conversations={searchResults}
+            selectedConversationId={selectedConversationID}
+            loading={loadingSearch}
+            hasMore={hasMore && nextCursor.length > 0}
+            loadingMore={loadingMore}
+            onSelectConversation={setSelectedConversationID}
+            onLoadMore={() => void runSearch(nextCursor, true)}
+          />
+        </div>
+        <div className={styles.rightPanel}>
+          <GenerationViewerPanel
+            conversationDetail={conversationDetail}
+            generationDetail={generationDetail}
+            loading={loadingConversationDetail || loadingGenerationDetail}
+            onSelectGeneration={setSelectedGenerationID}
+          />
+        </div>
+      </div>
+    </div>
   );
 }

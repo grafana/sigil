@@ -28,6 +28,7 @@ This folder stores durable engineering decisions for Sigil.
 - [`2026-02-13-sdk-metrics-and-telemetry-pipeline.md`](2026-02-13-sdk-metrics-and-telemetry-pipeline.md) (completed)
 - [`2026-02-15-conversation-query-path.md`](2026-02-15-conversation-query-path.md) (completed)
 - [`2026-02-17-online-evaluation.md`](2026-02-17-online-evaluation.md) (completed)
+- [`2026-02-17-embedding-call-observability.md`](2026-02-17-embedding-call-observability.md) (completed)
 
 ## Drafts
 

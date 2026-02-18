@@ -153,6 +153,10 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 		return
 	}
 	proxyReq.Header = req.Header.Clone()
+	// Remove Accept-Encoding so the upstream always returns uncompressed
+	// responses. Without this the upstream may gzip the body, but
+	// our proxy does not forward Content-Encoding, causing garbled output.
+	proxyReq.Header.Del("Accept-Encoding")
 	injectTenantHeaders(proxyReq, a.tenantID)
 	injectOperatorIdentityHeaders(proxyReq, method, path)
 
@@ -168,7 +172,12 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 		}
 	}()
 
-	w.Header().Set("Content-Type", "application/json")
+	// Forward the upstream Content-Type when available; fall back to JSON.
+	ct := resp.Header.Get("Content-Type")
+	if ct == "" {
+		ct = "application/json"
+	}
+	w.Header().Set("Content-Type", ct)
 	w.WriteHeader(resp.StatusCode)
 	_, _ = io.Copy(w, resp.Body)
 }
@@ -226,6 +235,14 @@ func injectTenantHeaders(proxyReq *http.Request, fallbackTenantID string) {
 	}
 }
 
+func (a *App) handleListModelCards(w http.ResponseWriter, req *http.Request) {
+	a.handleProxy(w, req, "/api/v1/model-cards", http.MethodGet)
+}
+
+func (a *App) handleLookupModelCard(w http.ResponseWriter, req *http.Request) {
+	a.handleProxy(w, req, "/api/v1/model-cards:lookup", http.MethodGet)
+}
+
 func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/query/conversations/search", a.handleSearchConversations)
 	mux.HandleFunc("/query/conversations", a.handleListConversations)
@@ -235,4 +252,6 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/query/search/tag/", a.handleSearchTagValues)
 	mux.HandleFunc("/query/proxy/prometheus/", a.handlePrometheusProxyRoutes)
 	mux.HandleFunc("/query/proxy/tempo/", a.handleTempoProxyRoutes)
+	mux.HandleFunc("/query/model-cards", a.handleListModelCards)
+	mux.HandleFunc("/query/model-cards/lookup", a.handleLookupModelCard)
 }

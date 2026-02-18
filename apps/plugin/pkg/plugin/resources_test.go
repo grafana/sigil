@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"io"
@@ -72,6 +73,28 @@ func TestCallResource(t *testing.T) {
 				return
 			}
 			_, _ = io.WriteString(w, `{"items":[{"annotation_id":"ann-1"}]}`)
+		case "/api/v1/model-cards":
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			if resolvePairs := r.URL.Query()["resolve_pair"]; len(resolvePairs) > 0 {
+				if len(resolvePairs) != 2 ||
+					resolvePairs[0] != "openai:gpt-4o" ||
+					resolvePairs[1] != "anthropic:claude-sonnet-4-5" {
+					http.Error(w, "unexpected resolve_pair query params", http.StatusBadRequest)
+					return
+				}
+				_, _ = io.WriteString(w, `{"resolved":[{"provider":"openai","model":"gpt-4o","status":"resolved"}],"freshness":{"stale":false}}`)
+				return
+			}
+			_, _ = io.WriteString(w, `{"data":[{"model_key":"openrouter:openai/gpt-4o"}],"next_cursor":"","freshness":{"stale":false}}`)
+		case "/api/v1/model-cards:lookup":
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			_, _ = io.WriteString(w, `{"data":{"model_key":"openrouter:openai/gpt-4o"},"freshness":{"stale":false}}`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -188,6 +211,33 @@ func TestCallResource(t *testing.T) {
 			path:      "query/conversations/c-1/annotations",
 			expStatus: http.StatusOK,
 			expBody:   []byte(`{"items":[{"annotation_id":"ann-1"}]}`),
+		},
+		{
+			name:      "list model cards",
+			method:    http.MethodGet,
+			path:      "query/model-cards",
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"data":[{"model_key":"openrouter:openai/gpt-4o"}],"next_cursor":"","freshness":{"stale":false}}`),
+		},
+		{
+			name:      "lookup model card",
+			method:    http.MethodGet,
+			path:      "query/model-cards/lookup?model_key=openrouter%3Aopenai%2Fgpt-4o",
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"data":{"model_key":"openrouter:openai/gpt-4o"},"freshness":{"stale":false}}`),
+		},
+		{
+			name:      "resolve model cards with repeated params",
+			method:    http.MethodGet,
+			path:      "query/model-cards?resolve_pair=openai%3Agpt-4o&resolve_pair=anthropic%3Aclaude-sonnet-4-5",
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"resolved":[{"provider":"openai","model":"gpt-4o","status":"resolved"}],"freshness":{"stale":false}}`),
+		},
+		{
+			name:      "model cards post not allowed",
+			method:    http.MethodPost,
+			path:      "query/model-cards",
+			expStatus: http.StatusMethodNotAllowed,
 		},
 		{
 			name:      "legacy completions route removed",
@@ -638,5 +688,55 @@ func TestCallResourceReturnsNon200StubOnProxyFailures(t *testing.T) {
 				t.Fatalf("expected stub response, got %q", body.Status)
 			}
 		})
+	}
+}
+
+func TestCallResourceReturnsValidJSONWhenClientSendsAcceptEncodingGzip(t *testing.T) {
+	// Upstream responds with gzip when it sees Accept-Encoding: gzip.
+	// Go's http.Transport adds Accept-Encoding: gzip automatically when
+	// the user-provided header is stripped, and then transparently
+	// decompresses the response. This test verifies the proxy returns
+	// valid JSON instead of garbled gzip bytes.
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			w.Header().Set("Content-Encoding", "gzip")
+			gz := gzip.NewWriter(w)
+			_, _ = gz.Write([]byte(`{"items":[]}`))
+			_ = gz.Close()
+			return
+		}
+		_, _ = io.WriteString(w, `{"items":[]}`)
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.apiURL = upstream.URL
+
+	var sender mockCallResourceResponseSender
+	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "query/conversations",
+		Headers: map[string][]string{
+			"Accept-Encoding": {"gzip"},
+		},
+	}, &sender)
+	if err != nil {
+		t.Fatalf("CallResource error: %s", err)
+	}
+	if sender.response == nil {
+		t.Fatal("no response received from CallResource")
+	}
+	if sender.response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.response.Status, sender.response.Body)
+	}
+	// Verify the response body is valid JSON, not garbled gzip bytes.
+	var result map[string]interface{}
+	if err := json.Unmarshal(sender.response.Body, &result); err != nil {
+		t.Fatalf("response body is not valid JSON (garbled encoding?): %v\nbody bytes: %x", err, sender.response.Body)
 	}
 }

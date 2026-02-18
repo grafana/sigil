@@ -62,6 +62,8 @@ This is the canonical navigation map for repository documentation.
     - `exec-plans/completed/2026-02-13-sdk-metrics-and-telemetry-pipeline.md`
     - `exec-plans/completed/2026-02-15-conversation-query-path.md`
     - `exec-plans/completed/2026-02-17-online-evaluation.md`
+    - `exec-plans/completed/2026-02-17-embedding-call-observability.md`
+    - `exec-plans/completed/2026-02-17-online-evaluation.md`
   - Tech debt tracker: [`exec-plans/tech-debt-tracker.md`](exec-plans/tech-debt-tracker.md)
 - Generated docs: [`generated/db-schema.md`](generated/db-schema.md)
 - External references: [`references/index.md`](references/index.md)

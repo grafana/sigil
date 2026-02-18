@@ -1,18 +1,17 @@
-import React, { useEffect, useMemo } from 'react';
-import { Button, InlineField, InlineFieldRow, Input, Stack, Text } from '@grafana/ui';
+import React, { useCallback, useEffect, useMemo } from 'react';
+import { dateTime, makeTimeRange, type TimeRange } from '@grafana/data';
+import { FilterPill, Input, Spinner, Stack, Tag, Text, TimeRangePicker, ToolbarButton } from '@grafana/ui';
 import type { SearchTag } from '../conversation/types';
 
 export type FilterBarProps = {
   filter: string;
-  from: string;
-  to: string;
+  timeRange: TimeRange;
   tags: SearchTag[];
   tagValues: string[];
   loadingTags: boolean;
   loadingValues: boolean;
   onFilterChange: (value: string) => void;
-  onFromChange: (value: string) => void;
-  onToChange: (value: string) => void;
+  onTimeRangeChange: (timeRange: TimeRange) => void;
   onApply: () => void;
   onRequestTagValues: (tag: string) => void;
 };
@@ -21,33 +20,6 @@ type FilterChip = {
   id: string;
   label: string;
 };
-
-function toDateTimeLocal(value: string): string {
-  if (!value) {
-    return '';
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return '';
-  }
-  const year = parsed.getFullYear();
-  const month = String(parsed.getMonth() + 1).padStart(2, '0');
-  const day = String(parsed.getDate()).padStart(2, '0');
-  const hours = String(parsed.getHours()).padStart(2, '0');
-  const minutes = String(parsed.getMinutes()).padStart(2, '0');
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
-
-function fromDateTimeLocal(value: string): string {
-  if (!value) {
-    return '';
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return '';
-  }
-  return parsed.toISOString();
-}
 
 function extractFilterChips(filter: string): FilterChip[] {
   const expression = filter.trim();
@@ -98,15 +70,13 @@ function appendValueSuggestion(current: string, value: string): string {
 export default function FilterBar(props: FilterBarProps) {
   const {
     filter,
-    from,
-    to,
+    timeRange,
     tags,
     tagValues,
     loadingTags,
     loadingValues,
     onFilterChange,
-    onFromChange,
-    onToChange,
+    onTimeRangeChange,
     onApply,
     onRequestTagValues,
   } = props;
@@ -124,81 +94,94 @@ export default function FilterBar(props: FilterBarProps) {
     onRequestTagValues(activeTag);
   }, [activeTag, onRequestTagValues]);
 
+  const onMoveBackward = useCallback(() => {
+    const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
+    const half = Math.round(diff / 2);
+    onTimeRangeChange(
+      makeTimeRange(dateTime(timeRange.from.valueOf() - half), dateTime(timeRange.to.valueOf() - half))
+    );
+  }, [timeRange, onTimeRangeChange]);
+
+  const onMoveForward = useCallback(() => {
+    const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
+    const half = Math.round(diff / 2);
+    onTimeRangeChange(
+      makeTimeRange(dateTime(timeRange.from.valueOf() + half), dateTime(timeRange.to.valueOf() + half))
+    );
+  }, [timeRange, onTimeRangeChange]);
+
+  const onZoom = useCallback(() => {
+    const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
+    const half = Math.round(diff / 2);
+    onTimeRangeChange(
+      makeTimeRange(dateTime(timeRange.from.valueOf() - half), dateTime(timeRange.to.valueOf() + half))
+    );
+  }, [timeRange, onTimeRangeChange]);
+
   return (
     <Stack direction="column" gap={1}>
-      <InlineFieldRow>
-        <InlineField label="Filters" grow>
+      <Stack direction="row" gap={1} alignItems="center" wrap="wrap">
+        <div style={{ flexGrow: 1 }}>
           <Input
             aria-label="conversation filters"
             value={filter}
             onChange={(event) => onFilterChange(event.currentTarget.value)}
             placeholder='model = "gpt-4o" status = error duration > 5s'
-            width={90}
           />
-        </InlineField>
-        <InlineField label="From">
-          <input
-            aria-label="search from"
-            type="datetime-local"
-            value={toDateTimeLocal(from)}
-            onChange={(event) => onFromChange(fromDateTimeLocal(event.currentTarget.value))}
-          />
-        </InlineField>
-        <InlineField label="To">
-          <input
-            aria-label="search to"
-            type="datetime-local"
-            value={toDateTimeLocal(to)}
-            onChange={(event) => onToChange(fromDateTimeLocal(event.currentTarget.value))}
-          />
-        </InlineField>
-        <Button aria-label="apply filters" onClick={onApply}>
-          Apply
-        </Button>
-      </InlineFieldRow>
+        </div>
+        <TimeRangePicker
+          value={timeRange}
+          onChange={onTimeRangeChange}
+          onChangeTimeZone={() => {}}
+          onMoveBackward={onMoveBackward}
+          onMoveForward={onMoveForward}
+          onZoom={onZoom}
+        />
+        <ToolbarButton icon="play" variant="primary" tooltip="Run query" aria-label="apply filters" onClick={onApply}>
+          Run query
+        </ToolbarButton>
+      </Stack>
 
       {chips.length > 0 && (
-        <InlineFieldRow>
+        <Stack direction="row" gap={0.5} alignItems="center" wrap="wrap">
           {chips.map((chip) => (
-            <Text key={chip.id} color="secondary">
-              [{chip.label}]
-            </Text>
+            <Tag key={chip.id} name={chip.label} />
           ))}
-        </InlineFieldRow>
+        </Stack>
       )}
 
-      <InlineFieldRow>
-        <Text color="secondary">Keys:</Text>
-        {loadingTags && <Text color="secondary">loading…</Text>}
+      <Stack direction="row" gap={0.5} alignItems="center" wrap="wrap">
+        <Text color="secondary" italic>
+          Keys:
+        </Text>
+        {loadingTags && <Spinner inline size="sm" />}
         {!loadingTags &&
           suggestedTags.map((tag) => (
-            <Button
+            <FilterPill
               key={tag.key}
-              size="sm"
-              variant="secondary"
+              label={tag.key}
+              selected={false}
               onClick={() => onFilterChange(appendTagSuggestion(filter, tag.key))}
-            >
-              {tag.key}
-            </Button>
+            />
           ))}
-      </InlineFieldRow>
+      </Stack>
 
       {activeTag.length > 0 && (
-        <InlineFieldRow>
-          <Text color="secondary">Values for `{activeTag}`:</Text>
-          {loadingValues && <Text color="secondary">loading…</Text>}
+        <Stack direction="row" gap={0.5} alignItems="center" wrap="wrap">
+          <Text color="secondary" italic>
+            Values for {activeTag}:
+          </Text>
+          {loadingValues && <Spinner inline size="sm" />}
           {!loadingValues &&
             suggestedValues.map((value) => (
-              <Button
+              <FilterPill
                 key={value}
-                size="sm"
-                variant="secondary"
+                label={value}
+                selected={false}
                 onClick={() => onFilterChange(appendValueSuggestion(filter, value))}
-              >
-                {value}
-              </Button>
+              />
             ))}
-        </InlineFieldRow>
+        </Stack>
       )}
     </Stack>
   );

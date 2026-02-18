@@ -6,7 +6,8 @@ import (
 )
 
 const (
-	SourceOpenRouter = "openrouter"
+	SourceOpenRouter   = "openrouter"
+	SourceSupplemental = "supplemental"
 
 	BootstrapModeSnapshotFirst = "snapshot-first"
 	BootstrapModeDBOnly        = "db-only"
@@ -94,6 +95,38 @@ type ListResult struct {
 	HasMore    bool      `json:"-"`
 	NextOffset int       `json:"-"`
 	Freshness  Freshness `json:"freshness"`
+}
+
+const (
+	ResolveStatusResolved   = "resolved"
+	ResolveStatusUnresolved = "unresolved"
+
+	ResolveReasonNotFound     = "not_found"
+	ResolveReasonAmbiguous    = "ambiguous"
+	ResolveReasonInvalidInput = "invalid_input"
+
+	ResolveMatchStrategyExact      = "exact"
+	ResolveMatchStrategyNormalized = "normalized"
+)
+
+type ResolveInput struct {
+	Provider string
+	Model    string
+}
+
+type ResolvedCard struct {
+	ModelKey      string  `json:"model_key"`
+	SourceModelID string  `json:"source_model_id"`
+	Pricing       Pricing `json:"pricing"`
+}
+
+type ResolveResult struct {
+	Provider      string        `json:"provider"`
+	Model         string        `json:"model"`
+	Status        string        `json:"status"`
+	MatchStrategy string        `json:"match_strategy,omitempty"`
+	Reason        string        `json:"reason,omitempty"`
+	Card          *ResolvedCard `json:"card,omitempty"`
 }
 
 type SourceStatus struct {

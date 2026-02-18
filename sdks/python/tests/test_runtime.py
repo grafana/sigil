@@ -13,6 +13,9 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 from sigil_sdk import (
     Client,
     ClientConfig,
+    EmbeddingCaptureConfig,
+    EmbeddingResult,
+    EmbeddingStart,
     EnqueueError,
     Generation,
     GenerationExportConfig,
@@ -47,6 +50,7 @@ def _new_client(exporter: CapturingGenerationExporter, tracer=None, **overrides)
         ClientConfig(
             tracer=tracer,
             generation_export=generation_export,
+            embedding_capture=overrides.get("embedding_capture", EmbeddingCaptureConfig()),
             generation_exporter=exporter,
         )
     )
@@ -219,10 +223,177 @@ def test_call_error_sets_span_error_and_does_not_set_local_error() -> None:
         assert rec.err() is None
         assert rec.last_generation is not None
         assert rec.last_generation.call_error == "provider unavailable"
+        assert rec.last_generation.metadata["sigil.sdk.name"] == "sdk-python"
 
         span = span_exporter.get_finished_spans()[-1]
         assert span.status.status_code.name == "ERROR"
         assert span.attributes.get("error.type") == "provider_call_error"
+        assert span.attributes.get("sigil.sdk.name") == "sdk-python"
+    finally:
+        client.shutdown()
+        provider.shutdown()
+
+
+def test_embedding_span_sets_attributes_and_does_not_enqueue_generation() -> None:
+    exporter = CapturingGenerationExporter()
+    span_exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(span_exporter))
+    tracer = provider.get_tracer("sigil-test")
+
+    client = _new_client(exporter, tracer=tracer)
+    try:
+        rec = client.start_embedding(
+            EmbeddingStart(
+                model=ModelRef(provider="openai", name="text-embedding-3-small"),
+                agent_name="agent-embed",
+                agent_version="v-embed",
+                dimensions=256,
+                encoding_format="float",
+            )
+        )
+        rec.set_result(
+            EmbeddingResult(
+                input_count=2,
+                input_tokens=64,
+                input_texts=["first", "second"],
+                response_model="text-embedding-3-small",
+                dimensions=512,
+            )
+        )
+        rec.end()
+
+        assert rec.err() is None
+        assert len(exporter.requests) == 0
+
+        span = span_exporter.get_finished_spans()[-1]
+        assert span.name == "embeddings text-embedding-3-small"
+        assert span.attributes.get("gen_ai.operation.name") == "embeddings"
+        assert span.attributes.get("gen_ai.provider.name") == "openai"
+        assert span.attributes.get("gen_ai.request.model") == "text-embedding-3-small"
+        assert span.attributes.get("gen_ai.agent.name") == "agent-embed"
+        assert span.attributes.get("gen_ai.agent.version") == "v-embed"
+        assert span.attributes.get("gen_ai.embeddings.dimension.count") == 512
+        assert span.attributes.get("gen_ai.request.encoding_formats") == ("float",)
+        assert span.attributes.get("gen_ai.embeddings.input_count") == 2
+        assert span.attributes.get("gen_ai.usage.input_tokens") == 64
+        assert span.attributes.get("gen_ai.response.model") == "text-embedding-3-small"
+        assert "gen_ai.embeddings.input_texts" not in span.attributes
+    finally:
+        client.shutdown()
+        provider.shutdown()
+
+
+def test_embedding_input_capture_is_opt_in_with_truncation() -> None:
+    exporter = CapturingGenerationExporter()
+    span_exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(span_exporter))
+    tracer = provider.get_tracer("sigil-test")
+
+    client = _new_client(
+        exporter,
+        tracer=tracer,
+        embedding_capture=EmbeddingCaptureConfig(
+            capture_input=True,
+            max_input_items=2,
+            max_text_length=8,
+        ),
+    )
+    try:
+        rec = client.start_embedding(
+            EmbeddingStart(
+                model=ModelRef(provider="openai", name="text-embedding-3-small"),
+            )
+        )
+        rec.set_result(
+            EmbeddingResult(
+                input_count=3,
+                input_texts=["12345678", "123456789", "dropped"],
+            )
+        )
+        rec.end()
+
+        assert rec.err() is None
+        span = span_exporter.get_finished_spans()[-1]
+        assert span.attributes.get("gen_ai.embeddings.input_texts") == ("12345678", "12345...")
+    finally:
+        client.shutdown()
+        provider.shutdown()
+
+
+def test_embedding_call_error_marks_provider_error_without_local_error() -> None:
+    exporter = CapturingGenerationExporter()
+    span_exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(span_exporter))
+    tracer = provider.get_tracer("sigil-test")
+
+    client = _new_client(exporter, tracer=tracer)
+    try:
+        rec = client.start_embedding(
+            EmbeddingStart(
+                model=ModelRef(provider="openai", name="text-embedding-3-small"),
+            )
+        )
+        rec.set_call_error(RuntimeError("provider unavailable"))
+        rec.end()
+
+        assert rec.err() is None
+        span = span_exporter.get_finished_spans()[-1]
+        assert span.status.status_code.name == "ERROR"
+        assert span.attributes.get("error.type") == "provider_call_error"
+    finally:
+        client.shutdown()
+        provider.shutdown()
+
+
+def test_embedding_validation_error_sets_local_error() -> None:
+    exporter = CapturingGenerationExporter()
+    span_exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(span_exporter))
+    tracer = provider.get_tracer("sigil-test")
+
+    client = _new_client(exporter, tracer=tracer)
+    try:
+        rec = client.start_embedding(
+            EmbeddingStart(
+                model=ModelRef(provider="", name="text-embedding-3-small"),
+            )
+        )
+        rec.end()
+
+        assert isinstance(rec.err(), ValidationError)
+        span = span_exporter.get_finished_spans()[-1]
+        assert span.status.status_code.name == "ERROR"
+        assert span.attributes.get("error.type") == "validation_error"
+        assert span.attributes.get("error.category") == "sdk_error"
+    finally:
+        client.shutdown()
+        provider.shutdown()
+
+
+def test_embedding_context_defaults_apply_for_agent_fields() -> None:
+    exporter = CapturingGenerationExporter()
+    span_exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(span_exporter))
+    tracer = provider.get_tracer("sigil-test")
+
+    client = _new_client(exporter, tracer=tracer)
+    try:
+        with with_agent_name("agent-from-ctx"), with_agent_version("v-ctx"):
+            rec = client.start_embedding(
+                EmbeddingStart(
+                    model=ModelRef(provider="openai", name="text-embedding-3-small"),
+                )
+            )
+            rec.end()
+
+        span = span_exporter.get_finished_spans()[-1]
+        assert span.attributes.get("gen_ai.agent.name") == "agent-from-ctx"
+        assert span.attributes.get("gen_ai.agent.version") == "v-ctx"
     finally:
         client.shutdown()
         provider.shutdown()
@@ -254,7 +425,10 @@ def test_request_controls_result_overrides_seed_and_sets_span_attrs() -> None:
             top_p=0.8,
             tool_choice="required",
             thinking_enabled=False,
-            metadata={"sigil.gen_ai.request.thinking.budget_tokens": 4096},
+            metadata={
+                "sigil.gen_ai.request.thinking.budget_tokens": 4096,
+                "sigil.sdk.name": "user-value",
+            },
             stop_reason="end_turn",
             output=_assistant_output("ok"),
         )
@@ -268,6 +442,7 @@ def test_request_controls_result_overrides_seed_and_sets_span_attrs() -> None:
         assert rec.last_generation.tool_choice == "required"
         assert rec.last_generation.thinking_enabled is False
         assert rec.last_generation.metadata["sigil.gen_ai.request.thinking.budget_tokens"] == 4096
+        assert rec.last_generation.metadata["sigil.sdk.name"] == "sdk-python"
 
         span = span_exporter.get_finished_spans()[-1]
         assert span.attributes.get("gen_ai.request.max_tokens") == 256
@@ -276,10 +451,39 @@ def test_request_controls_result_overrides_seed_and_sets_span_attrs() -> None:
         assert span.attributes.get("sigil.gen_ai.request.tool_choice") == "required"
         assert span.attributes.get("sigil.gen_ai.request.thinking.enabled") is False
         assert span.attributes.get("sigil.gen_ai.request.thinking.budget_tokens") == 4096
+        assert span.attributes.get("sigil.sdk.name") == "sdk-python"
         assert span.attributes.get("gen_ai.response.finish_reasons") == ("end_turn",)
     finally:
         client.shutdown()
         provider.shutdown()
+
+
+def test_sdk_metadata_overrides_conflicting_seed_and_result_values() -> None:
+    exporter = CapturingGenerationExporter()
+    client = _new_client(exporter)
+    try:
+        rec = client.start_generation(
+            GenerationStart(
+                conversation_id="conv-sdk-metadata",
+                model=ModelRef(provider="openai", name="gpt-5"),
+                metadata={
+                    "sigil.sdk.name": "seed-value",
+                },
+            )
+        )
+        rec.set_result(
+            metadata={
+                "sigil.sdk.name": "result-value",
+            },
+            output=_assistant_output("ok"),
+        )
+        rec.end()
+
+        assert rec.err() is None
+        assert rec.last_generation is not None
+        assert rec.last_generation.metadata["sigil.sdk.name"] == "sdk-python"
+    finally:
+        client.shutdown()
 
 
 def test_validation_error_sets_local_error() -> None:
@@ -360,6 +564,7 @@ def test_tool_execution_attributes_and_content_capture() -> None:
         assert span.attributes.get("gen_ai.tool.call.id") == "call_weather"
         assert span.attributes.get("gen_ai.tool.call.arguments") is not None
         assert span.attributes.get("gen_ai.tool.call.result") is not None
+        assert span.attributes.get("sigil.sdk.name") == "sdk-python"
     finally:
         client.shutdown()
         provider.shutdown()

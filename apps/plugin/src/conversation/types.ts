@@ -135,3 +135,46 @@ export type SearchTagsResponse = {
 export type SearchTagValuesResponse = {
   values: string[];
 };
+
+// --- Message / Part types (matching generation_ingest.proto) ---
+
+export type MessageRole = 'MESSAGE_ROLE_USER' | 'MESSAGE_ROLE_ASSISTANT' | 'MESSAGE_ROLE_TOOL';
+
+export type PartMetadata = {
+  provider_type?: string;
+};
+
+export type ToolCallPart = {
+  id: string;
+  name: string;
+  input_json?: string;
+};
+
+export type ToolResultPart = {
+  tool_call_id: string;
+  name: string;
+  content?: string;
+  content_json?: string;
+  is_error?: boolean;
+};
+
+export type Part = {
+  metadata?: PartMetadata;
+  text?: string;
+  thinking?: string;
+  tool_call?: ToolCallPart;
+  tool_result?: ToolResultPart;
+};
+
+export type Message = {
+  role: MessageRole;
+  name?: string;
+  parts: Part[];
+};
+
+export type ToolDefinition = {
+  name: string;
+  description?: string;
+  type?: string;
+  input_schema_json?: string;
+};

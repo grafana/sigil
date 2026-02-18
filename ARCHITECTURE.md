@@ -12,7 +12,7 @@ audience: both
 
 - `apps/plugin`: Grafana plugin UI and backend proxy for Sigil APIs.
 - `sigil`: generation ingest and query APIs.
-- `sdks/*`: post-LLM instrumentation SDKs (Go, Python, TypeScript/JavaScript, Java, .NET/C#). SDKs emit OTel traces, OTel metrics, and structured generation records.
+- `sdks/*`: post-LLM instrumentation SDKs (Go, Python, TypeScript/JavaScript, Java, .NET/C#). SDKs emit OTel traces, OTel metrics, structured generation records, and embedding spans.
 - Alloy / OTel Collector: telemetry pipeline for traces and metrics. Receives OTLP from SDKs, enriches with infrastructure metadata (k8s namespace, cluster, service), and forwards to backends.
 - Tempo: trace storage and TraceQL execution backend.
 - Prometheus: metrics storage for SDK-emitted AI observability metrics.
@@ -60,9 +60,9 @@ Tenant boundary completion is tracked in:
 
 SDKs emit four OTel histogram instruments alongside traces:
 
-- `gen_ai.client.operation.duration` (seconds): latency histogram for generations and tool calls.
-  - Attributes: `gen_ai.operation.name` (`generateText` | `streamText` | `execute_tool`), `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.agent.name`, `error.type`, `error.category`.
-- `gen_ai.client.token.usage` (tokens): token count histogram per generation, split by token type.
+- `gen_ai.client.operation.duration` (seconds): latency histogram for generation, embedding, and tool operations.
+  - Attributes: `gen_ai.operation.name` (`generateText` | `streamText` | `embeddings` | `execute_tool`), `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.agent.name`, `error.type`, `error.category`.
+- `gen_ai.client.token.usage` (tokens): token count histogram per operation, split by token type.
   - Attributes: `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.agent.name`, `gen_ai.token.type` (`input` | `output` | `cache_read` | `cache_write` | `cache_creation` | `reasoning`).
 - `gen_ai.client.time_to_first_token` (seconds): TTFT histogram for streaming operations.
   - Attributes: `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.agent.name`.
@@ -70,6 +70,16 @@ SDKs emit four OTel histogram instruments alongside traces:
   - Attributes: `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.agent.name`.
 
 These metrics get collector-enriched infrastructure labels (namespace, cluster, service) automatically.
+
+### Embedding call observability
+
+- SDKs expose embedding lifecycle APIs (`StartEmbedding` / `start_embedding`) across Go, Python, JS/TS, Java, and .NET.
+- Embedding calls are traces-and-metrics only:
+  - OTel spans use `gen_ai.operation.name="embeddings"` plus provider/model/usage attributes.
+  - Existing SDK metric instruments (`gen_ai.client.operation.duration`, `gen_ai.client.token.usage`) include embedding traffic.
+  - TTFT and tool-call-per-operation metrics are not emitted for embeddings.
+- There is no Sigil generation ingest/export for embeddings and no additional storage/query tables for embeddings.
+- Optional embedding input text capture is disabled by default and configurable with truncation limits per SDK.
 
 Design doc: `docs/design-docs/2026-02-13-sdk-metrics-and-telemetry-pipeline.md`
 
@@ -107,6 +117,9 @@ Design doc: `docs/design-docs/2026-02-15-conversation-query-path.md`
 - `GET /api/v1/generations/{id}` -- single generation detail (MySQL/object storage).
 - `GET /api/v1/search/tags` -- filter key autocomplete (Tempo tags + well-known aliases).
 - `GET /api/v1/search/tag/{tag}/values` -- filter value autocomplete (Tempo tag values).
+- `GET /api/v1/model-cards` -- model-card list and provider+model resolve mode for dashboard pricing joins.
+- `GET /api/v1/model-cards:lookup` -- model-card lookup by identity.
+- `GET /api/v1/model-cards:sources` -- model-card source freshness/status metadata.
 - Pass-through proxy routes for Prometheus (`/api/v1/proxy/prometheus/...`) and Tempo (`/api/v1/proxy/tempo/...`).
 
 ### Query access path
@@ -117,6 +130,7 @@ Design doc: `docs/design-docs/2026-02-15-conversation-query-path.md`
    - conversation search: parse filter expression, translate to TraceQL, query Tempo, extract conversation IDs from matching spans, enrich from MySQL/object storage, apply conversation-level filters, return paginated summaries.
    - conversation detail: direct MySQL/object storage fan-out read by conversation ID, return all hydrated generations.
    - generation detail: direct MySQL/object storage read by generation ID.
+   - model cards: read model-card catalog from memory/DB/snapshot fallback and optionally resolve `(provider, model)` pairs for deterministic pricing joins.
    - proxy routes: pass-through to Prometheus/Tempo for raw query access.
 4. Sigil API returns JSON responses (search summaries, full payloads, or pass-through).
 
@@ -435,6 +449,9 @@ See `docs/references/grafana-query-response-shapes.md`.
   - `STREAM`: streaming provider flows
 - Normalized fields are always sent:
   - model/system prompt/input/output/tools/usage/metadata/timestamps/tags
+- SDK-owned identity metadata keys are always present on normalized generations:
+  - `sigil.sdk.name`
+  - callers may set this key, but SDK normalization overwrites it with SDK-owned values
 - Request controls are first-class optional generation fields:
   - `max_tokens`
   - `temperature`
@@ -463,6 +480,8 @@ See `docs/references/grafana-query-response-shapes.md`.
 - Raw provider artifacts are default OFF, explicit opt-in only.
 - SDK validation enforces message role/part compatibility and artifact payload-or-record-id constraints.
 - Empty tool names return a no-op tool recorder (instrumentation safety behavior).
+- Generation and execute_tool spans always include SDK identity attributes:
+  - `sigil.sdk.name`
 - `rec.Err()` surfaces local validation/enqueue failures only.
 - Background export failures are retried and logged.
 - Generation export auth supports strict modes:
@@ -479,7 +498,7 @@ See `docs/references/grafana-query-response-shapes.md`.
 - `apps/plugin`: UI routes and backend proxy handlers for Sigil query contracts.
 - `sigil/internal/ingest/generation`: generation ingest validation and persistence coordination.
 - `sigil/internal/query`: Tempo-first query orchestration plus storage hydration and fan-out reads.
-- `sigil/internal/modelcards`: model-card catalog bootstrap, in-memory refresh loop/cache coordination, and API read semantics.
+- `sigil/internal/modelcards`: model-card catalog bootstrap, in-memory refresh loop/cache coordination, supplemental overlay merge (`snapshot + supplemental`), and API read semantics.
 - `sigil/internal/eval`: online evaluation control plane, score ingest, rule engine, evaluator implementations, and async worker.
 - `sigil/internal/storage/mysql`: hot metadata/index/payload access.
 - `sigil/internal/storage/object`: compacted payload access.

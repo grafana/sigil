@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { makeTimeRange, type TimeRange } from '@grafana/data';
 import FilterBar from '../components/FilterBar';
 import type { SearchTag } from '../conversation/types';
 
@@ -13,21 +14,20 @@ const mockTags: SearchTag[] = [
 
 function FilterBarStoryWrapper() {
   const [filter, setFilter] = useState<string>('model = "gpt-4o"');
-  const [from, setFrom] = useState<string>('2026-02-15T08:00:00.000Z');
-  const [to, setTo] = useState<string>('2026-02-15T12:00:00.000Z');
+  const [timeRange, setTimeRange] = useState<TimeRange>(() =>
+    makeTimeRange('2026-02-15T08:00:00.000Z', '2026-02-15T12:00:00.000Z')
+  );
 
   return (
     <FilterBar
       filter={filter}
-      from={from}
-      to={to}
+      timeRange={timeRange}
       tags={mockTags}
       tagValues={['gpt-4o', 'gpt-4o-mini', 'claude-sonnet-4-5']}
       loadingTags={false}
       loadingValues={false}
       onFilterChange={setFilter}
-      onFromChange={setFrom}
-      onToChange={setTo}
+      onTimeRangeChange={setTimeRange}
       onApply={() => {
         // Storybook interaction-only callback.
       }}

@@ -1,5 +1,6 @@
 export const ROUTES = {
   Root: '',
+  Dashboard: 'dashboard',
   Conversations: 'conversations',
   Completions: 'completions',
   Traces: 'traces',
@@ -7,6 +8,7 @@ export const ROUTES = {
 } as const;
 
 export const PAGE_TITLES = {
+  [ROUTES.Dashboard]: 'Dashboard',
   [ROUTES.Conversations]: 'Conversations',
   [ROUTES.Completions]: 'Completions',
   [ROUTES.Traces]: 'Traces',
