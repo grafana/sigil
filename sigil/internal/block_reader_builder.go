@@ -9,7 +9,9 @@ import (
 	"github.com/grafana/sigil/sigil/internal/storage/object"
 )
 
-func newObjectBlockReader(ctx context.Context, cfg config.ObjectStoreConfig) (storage.BlockReader, error) {
+// newObjectBlockStore builds the shared object-store implementation used by
+// both compactor write paths and query/eval read paths.
+func newObjectBlockStore(ctx context.Context, cfg config.ObjectStoreConfig) (*object.Store, error) {
 	blockStore, err := object.NewStoreWithProviderConfig(ctx, object.ProviderConfig{
 		Backend: cfg.Backend,
 		Bucket:  cfg.Bucket,
@@ -35,6 +37,14 @@ func newObjectBlockReader(ctx context.Context, cfg config.ObjectStoreConfig) (st
 			CreateContainer:         cfg.Azure.CreateContainer,
 		},
 	})
+	if err != nil {
+		return nil, fmt.Errorf("create object store: %w", err)
+	}
+	return blockStore, nil
+}
+
+func newObjectBlockReader(ctx context.Context, cfg config.ObjectStoreConfig) (storage.BlockReader, error) {
+	blockStore, err := newObjectBlockStore(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("create object store reader: %w", err)
 	}

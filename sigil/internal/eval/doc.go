@@ -7,58 +7,58 @@
 //
 // High-level online-evaluation flow (durable, asynchronous, test-weighted):
 //
-//	    generation ingest (WAL SaveBatch tx)
-//	                |
-//	                | 1) persist generation rows
-//	                | 2) persist eval_enqueue_events rows (same tx)
-//	                v
-//	      +--------------------------+
-//	      |   eval_enqueue_events    |
-//	      +--------------------------+
-//	                |
-//	                | dispatcher claims rows
-//	                | (FOR UPDATE SKIP LOCKED, stale-claim recovery)
-//	                v
-//	      +--------------------------+
-//	      | enqueue.Service          |
-//	      | - retry with backoff     |
-//	      | - permanent-fail cutoff  |
-//	      +--------------------------+
-//	                |
-//	                | Process(event)
-//	                v
-//	      +--------------------------+
-//	      | rules.Engine             |
-//	      | - selector               |
-//	      | - matcher                |
-//	      | - conversation sampler   |
-//	      +--------------------------+
-//	                |
-//	                | enqueue deterministic work_id
-//	                v
-//	      +--------------------------+
-//	      |      eval_work_items     |
-//	      +--------------------------+
-//	                |
-//	                | worker claims rows
-//	                | (distributed-safe claim loop)
-//	                v
-//	      +--------------------------+
-//	      | worker.Service           |
-//	      | - global rate limiter    |
-//	      | - concurrency semaphore  |
-//	      | - retry/permanent fail   |
-//	      +--------------------------+
-//	                |
-//	                | execute evaluator kind
-//	                | (heuristic/regex/json_schema/llm_judge)
-//	                v
-//	      +--------------------------+
-//	      |    generation_scores     |
-//	      +--------------------------+
-//	                |
-//	                +--> score query APIs
-//	                +--> generation detail latest_scores
+//	generation ingest (WAL SaveBatch tx)
+//	            |
+//	            | 1) persist generation rows
+//	            | 2) persist eval_enqueue_events rows (same tx)
+//	            v
+//	  +--------------------------+
+//	  |   eval_enqueue_events    |
+//	  +--------------------------+
+//	            |
+//	            | dispatcher claims rows
+//	            | (FOR UPDATE SKIP LOCKED, stale-claim recovery)
+//	            v
+//	  +--------------------------+
+//	  | enqueue.Service          |
+//	  | - retry with backoff     |
+//	  | - permanent-fail cutoff  |
+//	  +--------------------------+
+//	            |
+//	            | Process(event)
+//	            v
+//	  +--------------------------+
+//	  | rules.Engine             |
+//	  | - selector               |
+//	  | - matcher                |
+//	  | - conversation sampler   |
+//	  +--------------------------+
+//	            |
+//	            | enqueue deterministic work_id
+//	            v
+//	  +--------------------------+
+//	  |      eval_work_items     |
+//	  +--------------------------+
+//	            |
+//	            | worker claims rows
+//	            | (distributed-safe claim loop)
+//	            v
+//	  +--------------------------+
+//	  | worker.Service           |
+//	  | - global rate limiter    |
+//	  | - concurrency semaphore  |
+//	  | - retry/permanent fail   |
+//	  +--------------------------+
+//	            |
+//	            | execute evaluator kind
+//	            | (heuristic/regex/json_schema/llm_judge)
+//	            v
+//	  +--------------------------+
+//	  |    generation_scores     |
+//	  +--------------------------+
+//	            |
+//	            +--> score query APIs
+//	            +--> generation detail latest_scores
 //
 // Scale and distribution model:
 //   - In single-process mode, dispatcher + worker run as local services.

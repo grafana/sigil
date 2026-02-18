@@ -89,7 +89,7 @@ func TestBedrockAnthropicClientJudgeUsesBedrockAdapter(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		gotPath = req.URL.Path
 		gotAuthorizationHeader = req.Header.Get("Authorization")
-		defer req.Body.Close()
+		defer func() { _ = req.Body.Close() }()
 		_ = json.NewDecoder(req.Body).Decode(&gotPayload)
 
 		w.Header().Set("Content-Type", "application/json")
@@ -140,7 +140,7 @@ func TestAnthropicVertexClientJudgeUsesVertexAdapter(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		gotPath = req.URL.Path
 		gotAuthorizationHeader = req.Header.Get("Authorization")
-		defer req.Body.Close()
+		defer func() { _ = req.Body.Close() }()
 		_ = json.NewDecoder(req.Body).Decode(&gotPayload)
 
 		w.Header().Set("Content-Type", "application/json")

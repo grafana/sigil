@@ -1,4 +1,25 @@
 evaluators:
+  - id: custom.helpfulness.v1
+    kind: llm_judge
+    version: "2026-02-17"
+    system_prompt: "You are an evaluation judge. Return JSON only with fields: score, passed, explanation."
+    user_prompt: "Score how helpful and complete the assistant response is for the user request.\n\nUser request:\n{{input}}\n\nAssistant response:\n{{output}}"
+    max_tokens: 256
+    temperature: 0
+    output:
+      keys:
+        - key: helpfulness
+          type: number
+
+  - id: custom.response_not_empty.v1
+    kind: heuristic
+    version: "2026-02-17"
+    not_empty: true
+    output:
+      keys:
+        - key: response_not_empty
+          type: bool
+
   - id: custom.json_contract.v1
     kind: json_schema
     version: "2026-02-17"
@@ -39,8 +60,8 @@ rules:
     sample:
       rate: 0.1
     evaluators:
-      - sigil.helpfulness
-      - sigil.response_not_empty
+      - custom.helpfulness.v1
+      - custom.response_not_empty.v1
 
   - id: online.json_contract.api
     enabled: true
@@ -55,7 +76,6 @@ rules:
       rate: 1.0
     evaluators:
       - custom.json_contract.v1
-      - sigil.json_valid
 
   - id: online.safety.refusal_check
     enabled: true

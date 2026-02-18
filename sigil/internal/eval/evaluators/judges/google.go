@@ -214,9 +214,7 @@ func normalizeGoogleModelID(raw string) string {
 		}
 	}
 
-	if strings.HasPrefix(trimmed, "models/") {
-		trimmed = strings.TrimPrefix(trimmed, "models/")
-	}
+	trimmed = strings.TrimPrefix(trimmed, "models/")
 	return strings.TrimSpace(trimmed)
 }
 

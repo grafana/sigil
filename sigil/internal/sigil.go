@@ -128,31 +128,7 @@ func (r *Runtime) initCompactorModule() (services.Service, error) {
 		return nil, err
 	}
 
-	blockStore, err := object.NewStoreWithProviderConfig(bootstrapCtx, object.ProviderConfig{
-		Backend: r.cfg.ObjectStore.Backend,
-		Bucket:  r.cfg.ObjectStore.Bucket,
-		S3: object.S3ProviderConfig{
-			Endpoint:      r.cfg.ObjectStore.S3.Endpoint,
-			Region:        r.cfg.ObjectStore.S3.Region,
-			AccessKey:     r.cfg.ObjectStore.S3.AccessKey,
-			SecretKey:     r.cfg.ObjectStore.S3.SecretKey,
-			Insecure:      r.cfg.ObjectStore.S3.Insecure,
-			UseAWSSDKAuth: r.cfg.ObjectStore.S3.UseAWSSDKAuth,
-		},
-		GCS: object.GCSProviderConfig{
-			Bucket:         r.cfg.ObjectStore.GCS.Bucket,
-			ServiceAccount: r.cfg.ObjectStore.GCS.ServiceAccount,
-			UseGRPC:        r.cfg.ObjectStore.GCS.UseGRPC,
-		},
-		Azure: object.AzureProviderConfig{
-			ContainerName:           r.cfg.ObjectStore.Azure.ContainerName,
-			StorageAccountName:      r.cfg.ObjectStore.Azure.StorageAccountName,
-			StorageAccountKey:       r.cfg.ObjectStore.Azure.StorageAccountKey,
-			StorageConnectionString: r.cfg.ObjectStore.Azure.StorageConnectionString,
-			Endpoint:                r.cfg.ObjectStore.Azure.Endpoint,
-			CreateContainer:         r.cfg.ObjectStore.Azure.CreateContainer,
-		},
-	})
+	blockStore, err := newObjectBlockStore(bootstrapCtx, r.cfg.ObjectStore)
 	if err != nil {
 		return nil, fmt.Errorf("create object store for compactor: %w", err)
 	}

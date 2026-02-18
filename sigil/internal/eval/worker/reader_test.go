@@ -9,6 +9,7 @@ import (
 
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	"github.com/grafana/sigil/sigil/internal/storage"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestHotColdGenerationReaderReturnsHotGeneration(t *testing.T) {
@@ -94,9 +95,12 @@ func (s *hotReaderStub) GetByID(_ context.Context, _, generationID string) (*sig
 	if s.generation == nil {
 		return nil, nil
 	}
-	copied := *s.generation
+	copied, ok := proto.Clone(s.generation).(*sigilv1.Generation)
+	if !ok {
+		return nil, errors.New("clone generation")
+	}
 	copied.Id = generationID
-	return &copied, nil
+	return copied, nil
 }
 
 type blockMetadataStoreStub struct {
@@ -148,8 +152,11 @@ func (s *blockReaderStub) ReadGenerations(_ context.Context, _ string, blockID s
 	}
 	out := make([]*sigilv1.Generation, 0, len(generations))
 	for _, generation := range generations {
-		copied := *generation
-		out = append(out, &copied)
+		cloned, ok := proto.Clone(generation).(*sigilv1.Generation)
+		if !ok {
+			return nil, errors.New("clone generation")
+		}
+		out = append(out, cloned)
 	}
 	return out, nil
 }

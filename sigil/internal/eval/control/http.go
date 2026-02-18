@@ -294,7 +294,7 @@ func (s *Service) handleJudgeModels(w http.ResponseWriter, req *http.Request) {
 	providerID := strings.TrimSpace(req.URL.Query().Get("provider"))
 	models, err := s.ListJudgeModels(req.Context(), providerID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeControlWriteError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"models": models})

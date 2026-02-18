@@ -90,13 +90,7 @@ func TestLoadYAMLSeedFile(t *testing.T) {
 }
 
 func TestSeedExampleFileParses(t *testing.T) {
-	store := &seedTestStore{
-		evaluators: []evalpkg.EvaluatorDefinition{
-			{TenantID: "tenant-a", EvaluatorID: "sigil.helpfulness"},
-			{TenantID: "tenant-a", EvaluatorID: "sigil.response_not_empty"},
-			{TenantID: "tenant-a", EvaluatorID: "sigil.json_valid"},
-		},
-	}
+	store := &seedTestStore{}
 	paths := []string{
 		filepath.Join("..", "..", "..", "..", "sigil-eval-seed.example.yaml"),
 		filepath.Join("..", "sigil-eval-seed.example.yaml"),

@@ -573,6 +573,34 @@ func TestJudgeDiscoveryHTTP(t *testing.T) {
 	}
 }
 
+func TestJudgeModelsHTTPRequiresProviderQueryParam(t *testing.T) {
+	store := newMemoryControlStore()
+	service := NewService(store, staticJudgeDiscovery{})
+	mux := newEvalMux(service)
+
+	modelsResp := doRequest(mux, http.MethodGet, "/api/v1/eval/judge/models", "")
+	if modelsResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing provider query param, got %d body=%s", modelsResp.Code, modelsResp.Body.String())
+	}
+	if !strings.Contains(modelsResp.Body.String(), "provider query param is required") {
+		t.Fatalf("expected validation error in response body, got body=%s", modelsResp.Body.String())
+	}
+}
+
+func TestJudgeModelsHTTPReturnsInternalServerErrorForDiscoveryFailure(t *testing.T) {
+	store := newMemoryControlStore()
+	service := NewService(store, failingJudgeDiscovery{err: errors.New("discovery unavailable")})
+	mux := newEvalMux(service)
+
+	modelsResp := doRequest(mux, http.MethodGet, "/api/v1/eval/judge/models?provider=openai", "")
+	if modelsResp.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for discovery failure, got %d body=%s", modelsResp.Code, modelsResp.Body.String())
+	}
+	if !strings.Contains(modelsResp.Body.String(), "internal server error") {
+		t.Fatalf("expected generic internal server error body, got body=%s", modelsResp.Body.String())
+	}
+}
+
 func TestJudgeDiscoveryHTTPRequiresTenantContext(t *testing.T) {
 	store := newMemoryControlStore()
 	service := NewService(store, staticJudgeDiscovery{})
@@ -700,6 +728,18 @@ func (staticJudgeDiscovery) ListProviders(context.Context) []JudgeProvider {
 
 func (staticJudgeDiscovery) ListModels(context.Context, string) ([]JudgeModel, error) {
 	return []JudgeModel{{ID: "gpt-4o-mini", Name: "GPT-4o mini", Provider: "openai", ContextWindow: 128000}}, nil
+}
+
+type failingJudgeDiscovery struct {
+	err error
+}
+
+func (failingJudgeDiscovery) ListProviders(context.Context) []JudgeProvider {
+	return []JudgeProvider{{ID: "openai", Name: "OpenAI", Type: "direct"}}
+}
+
+func (d failingJudgeDiscovery) ListModels(context.Context, string) ([]JudgeModel, error) {
+	return nil, d.err
 }
 
 type memoryControlStore struct {

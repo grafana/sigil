@@ -3,7 +3,10 @@ module github.com/grafana/sigil/sigil
 go 1.25.6
 
 require (
+	cloud.google.com/go/auth v0.14.1
 	github.com/anthropics/anthropic-sdk-go v1.22.1
+	github.com/aws/aws-sdk-go-v2 v1.30.4
+	github.com/aws/aws-sdk-go-v2/config v1.27.30
 	github.com/go-kit/log v0.2.1
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/grafana/dskit v0.0.0-20260213164647-ab41154e52ad
@@ -12,6 +15,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/testcontainers/testcontainers-go v0.40.0
 	github.com/thanos-io/objstore v0.0.0-20250813080715-4e5fd4289b50
+	golang.org/x/oauth2 v0.34.0
 	golang.org/x/time v0.14.0
 	google.golang.org/genai v1.46.0
 	google.golang.org/grpc v1.79.1
@@ -24,7 +28,6 @@ require (
 require (
 	cel.dev/expr v0.25.1 // indirect
 	cloud.google.com/go v0.118.1 // indirect
-	cloud.google.com/go/auth v0.14.1 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.7 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	cloud.google.com/go/iam v1.3.1 // indirect
@@ -43,8 +46,7 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.50.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/alecthomas/units v0.0.0-20240927000941-0f3dac36c52b // indirect
-	github.com/aws/aws-sdk-go-v2 v1.30.4 // indirect
-	github.com/aws/aws-sdk-go-v2/config v1.27.30 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.3 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.29 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.12 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.16 // indirect
@@ -179,7 +181,6 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.47.0 // indirect
 	golang.org/x/net v0.49.0 // indirect
-	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/text v0.33.0 // indirect
