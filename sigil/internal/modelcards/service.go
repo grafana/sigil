@@ -16,15 +16,27 @@ import (
 const refreshLeaseScopeKey = "model-cards-refresh"
 
 type Service struct {
-	store    Store
-	source   Source
-	snapshot *Snapshot
-	cfg      Config
-	logger   *slog.Logger
-	now      func() time.Time
+	store        Store
+	source       Source
+	snapshot     *Snapshot
+	supplemental *SupplementalCatalog
+	cfg          Config
+	logger       *slog.Logger
+	now          func() time.Time
 }
 
 func NewService(store Store, source Source, snapshot *Snapshot, cfg Config, logger *slog.Logger) *Service {
+	return NewServiceWithSupplemental(store, source, snapshot, nil, cfg, logger)
+}
+
+func NewServiceWithSupplemental(
+	store Store,
+	source Source,
+	snapshot *Snapshot,
+	supplemental *SupplementalCatalog,
+	cfg Config,
+	logger *slog.Logger,
+) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -51,11 +63,12 @@ func NewService(store Store, source Source, snapshot *Snapshot, cfg Config, logg
 	}
 
 	return &Service{
-		store:    store,
-		source:   source,
-		snapshot: snapshot,
-		cfg:      cfg,
-		logger:   logger,
+		store:        store,
+		source:       source,
+		snapshot:     snapshot,
+		supplemental: supplemental,
+		cfg:          cfg,
+		logger:       logger,
 		now: func() time.Time {
 			return time.Now().UTC()
 		},
@@ -129,6 +142,7 @@ func (s *Service) syncOnce(ctx context.Context, mode string, force bool) (Refres
 	cancel()
 
 	_, _ = s.store.RenewLease(ctx, refreshLeaseScopeKey, s.cfg.OwnerID, s.now(), s.cfg.LeaseTTL)
+	refreshedAt := s.now()
 
 	if fetchErr != nil {
 		if s.snapshot == nil {
@@ -143,14 +157,33 @@ func (s *Service) syncOnce(ctx context.Context, mode string, force bool) (Refres
 		run.Status = "partial"
 		run.ErrorSummary = fetchErr.Error()
 		s.logger.Warn("model-cards refresh using snapshot fallback", "source", run.Source, "mode", mode, "err", fetchErr)
-		cards = CardsFromSnapshot(*s.snapshot, s.now())
+		cards, err = s.snapshotCards(refreshedAt)
+		if err != nil {
+			run.Status = "failed"
+			run.ErrorSummary = err.Error()
+			run.FinishedAt = s.now()
+			_ = s.store.RecordRefreshRun(ctx, run)
+			observeRefreshMetrics(run)
+			s.logger.Error("model-cards refresh failed to build fallback snapshot catalog", "source", run.Source, "mode", mode, "err", err)
+			return run, err
+		}
 	} else {
+		cards, err = s.mergeSupplementalCards(cards, refreshedAt)
+		if err != nil {
+			run.Status = "failed"
+			run.ErrorSummary = err.Error()
+			run.FinishedAt = s.now()
+			_ = s.store.RecordRefreshRun(ctx, run)
+			observeRefreshMetrics(run)
+			s.logger.Error("model-cards refresh failed to merge supplemental catalog", "source", run.Source, "mode", mode, "err", err)
+			return run, err
+		}
 		run.Status = "success"
 		s.logger.Debug("model-cards primary source fetch succeeded", "source", run.Source, "mode", mode, "fetched_count", len(cards))
 	}
 
 	run.FetchedCount = len(cards)
-	upserted, err := s.store.UpsertCards(ctx, s.source.Name(), s.now(), cards)
+	upserted, err := s.store.UpsertCards(ctx, s.source.Name(), refreshedAt, cards)
 	if err != nil {
 		run.Status = "failed"
 		run.ErrorSummary = err.Error()
@@ -197,7 +230,10 @@ func (s *Service) List(ctx context.Context, params ListParams) (ListResult, erro
 	}
 
 	if path == SourcePathSnapshotFallback {
-		cards := CardsFromSnapshot(*s.snapshot, s.now())
+		cards, err := s.snapshotCards(s.now())
+		if err != nil {
+			return ListResult{}, err
+		}
 		filtered := filterSnapshotCards(cards, params)
 		hasMore := false
 		nextOffset := params.Offset + len(filtered)
@@ -232,7 +268,10 @@ func (s *Service) Lookup(ctx context.Context, modelKey string, source string, so
 	s.observeCatalogState(ctx)
 
 	if path == SourcePathSnapshotFallback {
-		cards := CardsFromSnapshot(*s.snapshot, s.now())
+		cards, err := s.snapshotCards(s.now())
+		if err != nil {
+			return nil, freshness, err
+		}
 		for _, card := range cards {
 			if modelKey != "" && card.ModelKey == modelKey {
 				return &card, freshness, nil
@@ -392,6 +431,17 @@ func filterSnapshotCards(cards []Card, params ListParams) []Card {
 		end = len(filtered)
 	}
 	return filtered[params.Offset:end]
+}
+
+func (s *Service) snapshotCards(refreshedAt time.Time) ([]Card, error) {
+	if s.snapshot == nil {
+		return nil, errors.New("snapshot model-card fallback is not configured")
+	}
+	return s.mergeSupplementalCards(CardsFromSnapshot(*s.snapshot, refreshedAt), refreshedAt)
+}
+
+func (s *Service) mergeSupplementalCards(cards []Card, refreshedAt time.Time) ([]Card, error) {
+	return MergeSupplementalCards(cards, refreshedAt, s.supplemental)
 }
 
 func defaultOwnerID() string {

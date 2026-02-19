@@ -1,4 +1,10 @@
-import { matrixToDataFrames, vectorToDataFrame, vectorToStatValue, statValueToDataFrame } from './transforms';
+import {
+  matrixToDataFrames,
+  vectorToDataFrame,
+  vectorToPieDataFrame,
+  vectorToStatValue,
+  statValueToDataFrame,
+} from './transforms';
 import type { PrometheusQueryResponse } from './types';
 
 describe('matrixToDataFrames', () => {
@@ -73,6 +79,71 @@ describe('vectorToDataFrame', () => {
     };
     const frame = vectorToDataFrame(response);
     expect(frame.fields).toHaveLength(0);
+  });
+
+  it('prefers gen_ai token type and avoids duplicated legend values', () => {
+    const response: PrometheusQueryResponse = {
+      status: 'success',
+      data: {
+        resultType: 'vector',
+        result: [
+          {
+            metric: {
+              __name__: 'gen_ai_client_token_usage_sum',
+              gen_ai_token_type: 'input',
+              gen_ai_provider_name: 'input',
+              gen_ai_request_model: 'input',
+            },
+            value: [1700000000, '10'],
+          },
+        ],
+      },
+    };
+
+    const frame = vectorToDataFrame(response);
+    expect(frame.fields[0].values).toEqual(['input']);
+  });
+});
+
+describe('vectorToPieDataFrame', () => {
+  it('creates one numeric field per vector series', () => {
+    const response: PrometheusQueryResponse = {
+      status: 'success',
+      data: {
+        resultType: 'vector',
+        result: [
+          { metric: { gen_ai_provider_name: 'openai' }, value: [1700000000, '500'] },
+          { metric: { gen_ai_provider_name: 'anthropic' }, value: [1700000000, '300'] },
+        ],
+      },
+    };
+
+    const frame = vectorToPieDataFrame(response, ['gen_ai_provider_name']);
+    expect(frame.fields).toHaveLength(2);
+    expect(frame.fields[0].name).toBe('openai');
+    expect(frame.fields[0].values).toEqual([500]);
+    expect(frame.fields[1].name).toBe('anthropic');
+    expect(frame.fields[1].values).toEqual([300]);
+  });
+
+  it('builds provider/model labels when both keys are requested', () => {
+    const response: PrometheusQueryResponse = {
+      status: 'success',
+      data: {
+        resultType: 'vector',
+        result: [
+          {
+            metric: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-5' },
+            value: [1700000000, '42'],
+          },
+        ],
+      },
+    };
+
+    const frame = vectorToPieDataFrame(response, ['gen_ai_provider_name', 'gen_ai_request_model'], '/');
+    expect(frame.fields).toHaveLength(1);
+    expect(frame.fields[0].name).toBe('openai/gpt-5');
+    expect(frame.fields[0].values).toEqual([42]);
   });
 });
 
