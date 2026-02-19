@@ -222,7 +222,7 @@ services:
       - --config.file=/etc/prometheus/prometheus.yaml
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=24h
-      - --enable-feature=otlp-write-receiver
+      - --web.enable-otlp-receiver
     ports:
       - '9090:9090'
     volumes:
