@@ -1,0 +1,90 @@
+evaluators:
+  - id: custom.helpfulness.v1
+    kind: llm_judge
+    version: "2026-02-17"
+    system_prompt: "You are an evaluation judge. Return JSON only with fields: score, passed, explanation."
+    user_prompt: "Score how helpful and complete the assistant response is for the user request.\n\nUser request:\n{{input}}\n\nAssistant response:\n{{output}}"
+    max_tokens: 256
+    temperature: 0
+    output:
+      keys:
+        - key: helpfulness
+          type: number
+
+  - id: custom.response_not_empty.v1
+    kind: heuristic
+    version: "2026-02-17"
+    not_empty: true
+    output:
+      keys:
+        - key: response_not_empty
+          type: bool
+
+  - id: custom.json_contract.v1
+    kind: json_schema
+    version: "2026-02-17"
+    schema:
+      type: object
+      required:
+        - answer
+      properties:
+        answer:
+          type: string
+    output:
+      keys:
+        - key: json_contract_valid
+          type: bool
+
+  - id: custom.no_refusal.v1
+    kind: regex
+    version: "2026-02-17"
+    patterns:
+      - "(?i)i can't help with that"
+      - "(?i)cannot comply"
+    reject: true
+    output:
+      keys:
+        - key: no_refusal
+          type: bool
+
+rules:
+  - id: online.helpfulness.user_visible
+    enabled: true
+    select:
+      selector: user_visible_turn
+    match:
+      agent_name:
+        - assistant-*
+      mode:
+        - SYNC
+    sample:
+      rate: 0.1
+    evaluators:
+      - custom.helpfulness.v1
+      - custom.response_not_empty.v1
+
+  - id: online.json_contract.api
+    enabled: true
+    select:
+      selector: user_visible_turn
+    match:
+      operation_name:
+        - chat.completion
+      tags.output_contract:
+        - json
+    sample:
+      rate: 1.0
+    evaluators:
+      - custom.json_contract.v1
+
+  - id: online.safety.refusal_check
+    enabled: true
+    select:
+      selector: all_assistant_generations
+    match:
+      agent_name:
+        - assistant-*
+    sample:
+      rate: 0.2
+    evaluators:
+      - custom.no_refusal.v1

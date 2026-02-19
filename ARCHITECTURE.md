@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-17
+last_reviewed: 2026-02-18
 source_of_truth: true
 audience: both
 ---
@@ -344,6 +344,22 @@ References:
 - Design doc: `docs/design-docs/2026-02-13-compaction-scaling.md`
 - Execution plan: `docs/exec-plans/active/2026-02-13-compaction-scaling.md`
 
+## Online Evaluation
+
+Online evaluation adds configurable, asynchronous scoring to production generations. Evaluators run inside Sigil workers and attach typed scores back to the generation + conversation debugging workflow.
+
+Key characteristics:
+
+- **Immediate per-generation trigger**: each eligible generation is evaluated at ingest time. No idle windows or session-completion detection.
+- **API-managed configuration**: evaluators and rules stored in MySQL, managed via CRUD APIs. Predefined evaluator templates are exposed through dedicated template APIs and forked into tenant evaluators.
+- **Conversation-level sampling**: deterministic hash on `(conversation_id, rule_id)` ensures all eligible turns in a sampled conversation get evaluated.
+- **Built-in evaluator kinds**: `llm_judge`, `json_schema`, `regex`, `heuristic`.
+- **External scores via API**: `POST /api/v1/scores:export` for bring-your-own evaluator workflows.
+
+Design doc: `docs/design-docs/2026-02-17-online-evaluation.md`
+Execution plan: `docs/exec-plans/completed/2026-02-17-online-evaluation.md`
+User guide: `docs/references/online-evaluation-user-guide.md`
+
 ## API Contracts
 
 ### Ingest
@@ -397,6 +413,22 @@ Conversation query path (design doc: `docs/design-docs/2026-02-15-conversation-q
   - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`
   - `/api/plugins/grafana-sigil-app/resources/query/proxy/prometheus/...`
   - `/api/plugins/grafana-sigil-app/resources/query/proxy/tempo/...`
+- Evaluation endpoints (design doc: `docs/design-docs/2026-02-17-online-evaluation.md`):
+  - `POST /api/v1/scores:export` -- external score ingest
+  - `GET /api/v1/generations/{generation_id}/scores` -- scores for a generation
+  - `POST /api/v1/eval/evaluators` -- create/update evaluator
+  - `GET /api/v1/eval/evaluators` -- list evaluators
+  - `GET /api/v1/eval/evaluators/{id}` -- get evaluator detail
+  - `DELETE /api/v1/eval/evaluators/{id}` -- soft-delete evaluator
+  - `GET /api/v1/eval/predefined/evaluators` -- list predefined evaluator templates
+  - `POST /api/v1/eval/predefined/evaluators/{id}:fork` -- fork a template into a tenant evaluator
+  - `POST /api/v1/eval/rules` -- create/update online rule
+  - `GET /api/v1/eval/rules` -- list rules
+  - `GET /api/v1/eval/rules/{id}` -- get rule detail
+  - `PATCH /api/v1/eval/rules/{id}` -- enable/disable rule
+  - `DELETE /api/v1/eval/rules/{id}` -- soft-delete rule
+  - `GET /api/v1/eval/judge/providers` -- list configured judge providers
+  - `GET /api/v1/eval/judge/models?provider={id}` -- list models for a provider
 - Dropped placeholder endpoints:
   - `GET /api/v1/completions` (replaced by conversation search)
   - `GET /api/v1/traces/{trace_id}` (replaced by Tempo proxy)
@@ -467,6 +499,7 @@ See `docs/references/grafana-query-response-shapes.md`.
 - `sigil/internal/ingest/generation`: generation ingest validation and persistence coordination.
 - `sigil/internal/query`: Tempo-first query orchestration plus storage hydration and fan-out reads.
 - `sigil/internal/modelcards`: model-card catalog bootstrap, in-memory refresh loop/cache coordination, supplemental overlay merge (`snapshot + supplemental`), and API read semantics.
+- `sigil/internal/eval`: online evaluation control plane, score ingest, rule engine, evaluator implementations, and async worker.
 - `sigil/internal/storage/mysql`: hot metadata/index/payload access.
 - `sigil/internal/storage/object`: compacted payload access.
   - implementation should wrap Thanos `objstore` primitives.
@@ -482,6 +515,7 @@ Runtime module targets include:
 - `querier`
 - `compactor`
 - `catalog-sync` (singleton model-card refresh loop; can run independently or as part of `all`)
+- `eval-worker` (async evaluation worker; claims work items, runs evaluators, writes scores)
 
 ## Local Runtime (Compose Core)
 
