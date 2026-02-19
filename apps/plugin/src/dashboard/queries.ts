@@ -2,21 +2,52 @@ import type { DashboardFilters } from './types';
 
 // OTel metric names converted to Prometheus format (dots → underscores).
 const TOKEN_USAGE = 'gen_ai_client_token_usage';
-const OPERATION_DURATION = 'gen_ai_client_operation_duration';
-const TIME_TO_FIRST_TOKEN = 'gen_ai_client_time_to_first_token';
+const OPERATION_DURATION = 'gen_ai_client_operation_duration_seconds';
+const TIME_TO_FIRST_TOKEN = 'gen_ai_client_time_to_first_token_seconds';
+const PROMETHEUS_LABEL_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+function escapePrometheusRegex(value: string): string {
+  return value.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
+}
+
+function fuzzyMatcher(label: string, value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || !PROMETHEUS_LABEL_NAME.test(label)) {
+    return '';
+  }
+  return `${label}=~"(?i).*${escapePrometheusRegex(trimmed)}.*"`;
+}
+
+function normalizeExtraMatchers(matchers: string): string[] {
+  const trimmed = matchers.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const braceWrapped = trimmed.match(/^\{([\s\S]*)\}$/);
+  const body = braceWrapped ? braceWrapped[1] : trimmed;
+  return body
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
 
 export function buildLabelSelector(filters: DashboardFilters): string {
   const parts: string[] = [];
   if (filters.provider) {
-    parts.push(`gen_ai_provider_name="${filters.provider}"`);
+    parts.push(fuzzyMatcher('gen_ai_provider_name', filters.provider));
   }
   if (filters.model) {
-    parts.push(`gen_ai_request_model="${filters.model}"`);
+    parts.push(fuzzyMatcher('gen_ai_request_model', filters.model));
   }
   if (filters.agentName) {
-    parts.push(`gen_ai_agent_name="${filters.agentName}"`);
+    parts.push(fuzzyMatcher('gen_ai_agent_name', filters.agentName));
   }
-  return parts.join(',');
+  if (filters.labelKey && filters.labelValue) {
+    parts.push(fuzzyMatcher(filters.labelKey.trim(), filters.labelValue));
+  }
+  parts.push(...normalizeExtraMatchers(filters.extraMatchers));
+  return parts.filter(Boolean).join(',');
 }
 
 function sel(filters: DashboardFilters, extra?: string): string {
@@ -66,7 +97,11 @@ export function tokenUsageOverTimeQuery(filters: DashboardFilters, interval: str
 }
 
 export function tokenUsageByModelQuery(filters: DashboardFilters, interval: string): string {
-  return `sum by (gen_ai_request_model, gen_ai_token_type) (rate(${TOKEN_USAGE}_sum${sel(filters)}[${interval}]))`;
+  return `sum by (gen_ai_provider_name, gen_ai_request_model, gen_ai_token_type) (rate(${TOKEN_USAGE}_sum${sel(filters)}[${interval}]))`;
+}
+
+export function rpsByModelOverTimeQuery(filters: DashboardFilters, interval: string): string {
+  return `sum by (gen_ai_provider_name, gen_ai_request_model) (rate(${OPERATION_DURATION}_count${sel(filters)}[${interval}]))`;
 }
 
 export function latencyP95Query(filters: DashboardFilters, interval: string): string {
@@ -84,11 +119,11 @@ export function callsByProviderQuery(filters: DashboardFilters, rangeDuration: s
 }
 
 export function topModelsQuery(filters: DashboardFilters, rangeDuration: string): string {
-  return `sum by (gen_ai_request_model) (increase(${OPERATION_DURATION}_count${sel(filters)}[${rangeDuration}]))`;
+  return `topk(10, sum by (gen_ai_provider_name, gen_ai_request_model) (increase(${OPERATION_DURATION}_count${sel(filters)}[${rangeDuration}])))`;
 }
 
 // --- Cost queries (token totals by model + type, for client-side pricing) ---
 
 export function tokensByModelAndTypeQuery(filters: DashboardFilters, rangeDuration: string): string {
-  return `sum by (gen_ai_request_model, gen_ai_token_type) (increase(${TOKEN_USAGE}_sum${sel(filters)}[${rangeDuration}]))`;
+  return `sum by (gen_ai_provider_name, gen_ai_request_model, gen_ai_token_type) (increase(${TOKEN_USAGE}_sum${sel(filters)}[${rangeDuration}]))`;
 }

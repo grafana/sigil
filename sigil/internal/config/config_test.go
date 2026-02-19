@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -202,7 +203,7 @@ func TestValidateAcceptsGCSBackend(t *testing.T) {
 }
 
 func TestValidateAcceptsKnownTargets(t *testing.T) {
-	targets := []string{TargetAll, TargetServer, TargetQuerier, TargetCompactor, TargetCatalogSync}
+	targets := []string{TargetAll, TargetServer, TargetQuerier, TargetCompactor, TargetCatalogSync, TargetEvalWorker}
 
 	for _, target := range targets {
 		t.Run(target, func(t *testing.T) {
@@ -211,6 +212,94 @@ func TestValidateAcceptsKnownTargets(t *testing.T) {
 
 			if err := cfg.Validate(); err != nil {
 				t.Fatalf("expected target %q to validate, got %v", target, err)
+			}
+		})
+	}
+}
+
+func TestFromEnvEvaluationDefaults(t *testing.T) {
+	t.Setenv("SIGIL_EVAL_WORKER_ENABLED", "")
+	t.Setenv("SIGIL_EVAL_MAX_CONCURRENT", "")
+	t.Setenv("SIGIL_EVAL_MAX_RATE", "")
+	t.Setenv("SIGIL_EVAL_MAX_ATTEMPTS", "")
+	t.Setenv("SIGIL_EVAL_CLAIM_BATCH_SIZE", "")
+	t.Setenv("SIGIL_EVAL_POLL_INTERVAL", "")
+	t.Setenv("SIGIL_EVAL_DEFAULT_JUDGE_MODEL", "")
+	t.Setenv("SIGIL_EVAL_SEED_STRICT", "")
+
+	cfg := FromEnv()
+	if !cfg.EvalWorkerEnabled {
+		t.Fatalf("expected eval worker enabled by default")
+	}
+	if cfg.EvalMaxConcurrent != DefaultEvalMaxConcurrent {
+		t.Fatalf("expected default eval max concurrent %d, got %d", DefaultEvalMaxConcurrent, cfg.EvalMaxConcurrent)
+	}
+	if cfg.EvalMaxRate != DefaultEvalMaxRate {
+		t.Fatalf("expected default eval max rate %d, got %d", DefaultEvalMaxRate, cfg.EvalMaxRate)
+	}
+	if cfg.EvalMaxAttempts != DefaultEvalMaxAttempts {
+		t.Fatalf("expected default eval max attempts %d, got %d", DefaultEvalMaxAttempts, cfg.EvalMaxAttempts)
+	}
+	if cfg.EvalClaimBatchSize != DefaultEvalClaimBatchSize {
+		t.Fatalf("expected default eval claim batch size %d, got %d", DefaultEvalClaimBatchSize, cfg.EvalClaimBatchSize)
+	}
+	if cfg.EvalPollInterval != DefaultEvalPollInterval {
+		t.Fatalf("expected default eval poll interval %s, got %s", DefaultEvalPollInterval, cfg.EvalPollInterval)
+	}
+	if cfg.EvalDefaultJudgeModel != DefaultEvalDefaultJudgeModel {
+		t.Fatalf("expected default eval judge model %q, got %q", DefaultEvalDefaultJudgeModel, cfg.EvalDefaultJudgeModel)
+	}
+	if cfg.EvalSeedStrict {
+		t.Fatalf("expected eval seed strict to default to false")
+	}
+}
+
+func TestFromEnvEvaluationSeedStrictOverride(t *testing.T) {
+	t.Setenv("SIGIL_EVAL_SEED_STRICT", "true")
+
+	cfg := FromEnv()
+	if !cfg.EvalSeedStrict {
+		t.Fatalf("expected eval seed strict override to be true")
+	}
+}
+
+func TestValidateRejectsInvalidEvaluationConfig(t *testing.T) {
+	cfg := FromEnv()
+	cfg.EvalMaxConcurrent = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for eval max concurrent")
+	}
+
+	cfg = FromEnv()
+	cfg.EvalMaxRate = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for eval max rate")
+	}
+
+	cfg = FromEnv()
+	cfg.EvalMaxAttempts = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for eval max attempts")
+	}
+}
+
+func TestValidateRejectsInvalidDefaultJudgeModelFormat(t *testing.T) {
+	testCases := []string{
+		"gpt-4o-mini",
+		"openai/",
+		"/gpt-4o-mini",
+	}
+
+	for _, value := range testCases {
+		t.Run(value, func(t *testing.T) {
+			cfg := FromEnv()
+			cfg.EvalDefaultJudgeModel = value
+			err := cfg.Validate()
+			if err == nil {
+				t.Fatalf("expected validation error for SIGIL_EVAL_DEFAULT_JUDGE_MODEL=%q", value)
+			}
+			if !strings.Contains(err.Error(), "provider/model format") {
+				t.Fatalf("expected provider/model format error, got %v", err)
 			}
 		})
 	}

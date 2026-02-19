@@ -58,8 +58,18 @@ function createDataSource(): MockDashboardDataSource {
   return {
     queryRange: jest.fn().mockResolvedValue(emptyMatrix),
     queryInstant: jest.fn().mockResolvedValue(emptyVector),
+    labels: jest.fn().mockResolvedValue([]),
     labelValues: jest.fn().mockResolvedValue([]),
-    listModelCards: jest.fn().mockResolvedValue([]),
+    resolveModelCards: jest.fn().mockResolvedValue({
+      resolved: [],
+      freshness: {
+        catalog_last_refreshed_at: null,
+        stale: false,
+        soft_stale: false,
+        hard_stale: false,
+        source_path: 'memory_live',
+      },
+    }),
   };
 }
 
@@ -78,8 +88,10 @@ describe('DashboardPage', () => {
       expect(screen.getByTestId('panel-Total Errors')).toBeInTheDocument();
       expect(screen.getByTestId('panel-Error Rate')).toBeInTheDocument();
       expect(screen.getByTestId('panel-Estimated Cost')).toBeInTheDocument();
+      expect(screen.getByTestId('panel-Unpriced Tokens')).toBeInTheDocument();
       expect(screen.getByTestId('panel-Token Usage Over Time')).toBeInTheDocument();
       expect(screen.getByTestId('panel-Estimated Cost Over Time')).toBeInTheDocument();
+      expect(screen.getByTestId('panel-RPS Over Time by Model')).toBeInTheDocument();
       expect(screen.getByTestId('panel-Calls by Provider')).toBeInTheDocument();
       expect(screen.getByTestId('panel-Top Models')).toBeInTheDocument();
       expect(screen.getByTestId('panel-Latency P95')).toBeInTheDocument();
@@ -96,10 +108,11 @@ describe('DashboardPage', () => {
     await waitFor(() => {
       expect(ds.queryInstant).toHaveBeenCalled();
       expect(ds.queryRange).toHaveBeenCalled();
+      expect(ds.labels).toHaveBeenCalledWith(expect.any(Number), expect.any(Number));
       expect(ds.labelValues).toHaveBeenCalledWith('gen_ai_provider_name', expect.any(Number), expect.any(Number));
       expect(ds.labelValues).toHaveBeenCalledWith('gen_ai_request_model', expect.any(Number), expect.any(Number));
       expect(ds.labelValues).toHaveBeenCalledWith('gen_ai_agent_name', expect.any(Number), expect.any(Number));
-      expect(ds.listModelCards).toHaveBeenCalled();
+      expect(ds.resolveModelCards).not.toHaveBeenCalled();
     });
   });
 });

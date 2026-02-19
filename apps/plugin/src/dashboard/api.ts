@@ -1,14 +1,22 @@
 import { lastValueFrom } from 'rxjs';
 import { getBackendSrv } from '@grafana/runtime';
-import type { ModelCard, ModelCardListResponse, PrometheusLabelValuesResponse, PrometheusQueryResponse } from './types';
+import type {
+  ModelCardResolveResponse,
+  ModelResolvePair,
+  PrometheusLabelsResponse,
+  PrometheusLabelValuesResponse,
+  PrometheusQueryResponse,
+} from './types';
 
 const queryBasePath = '/api/plugins/grafana-sigil-app/resources/query';
+const genAIMetricsMatcher = '{__name__=~"gen_ai_client_.*"}';
 
 export type DashboardDataSource = {
   queryRange: (query: string, start: number, end: number, step: number) => Promise<PrometheusQueryResponse>;
   queryInstant: (query: string, time: number) => Promise<PrometheusQueryResponse>;
+  labels: (start: number, end: number) => Promise<string[]>;
   labelValues: (label: string, start: number, end: number) => Promise<string[]>;
-  listModelCards: () => Promise<ModelCard[]>;
+  resolveModelCards: (pairs: ModelResolvePair[]) => Promise<ModelCardResolveResponse>;
 };
 
 export const defaultDashboardDataSource: DashboardDataSource = {
@@ -34,35 +42,39 @@ export const defaultDashboardDataSource: DashboardDataSource = {
     return response.data;
   },
 
-  async labelValues(label, start, end) {
+  async labels(start, end) {
     const response = await lastValueFrom(
-      getBackendSrv().fetch<PrometheusLabelValuesResponse>({
+      getBackendSrv().fetch<PrometheusLabelsResponse>({
         method: 'GET',
-        url: `${queryBasePath}/proxy/prometheus/api/v1/label/${encodeURIComponent(label)}/values`,
-        params: { start, end },
+        url: `${queryBasePath}/proxy/prometheus/api/v1/labels`,
+        params: { start, end, 'match[]': genAIMetricsMatcher },
       })
     );
     return response.data.data ?? [];
   },
 
-  async listModelCards() {
-    const allCards: ModelCard[] = [];
-    let cursor = '';
-    do {
-      const params: Record<string, string | number> = { limit: 200 };
-      if (cursor) {
-        params.cursor = cursor;
-      }
-      const response = await lastValueFrom(
-        getBackendSrv().fetch<ModelCardListResponse>({
-          method: 'GET',
-          url: `${queryBasePath}/model-cards`,
-          params,
-        })
-      );
-      allCards.push(...(response.data.data ?? []));
-      cursor = response.data.next_cursor ?? '';
-    } while (cursor);
-    return allCards;
+  async labelValues(label, start, end) {
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<PrometheusLabelValuesResponse>({
+        method: 'GET',
+        url: `${queryBasePath}/proxy/prometheus/api/v1/label/${encodeURIComponent(label)}/values`,
+        params: { start, end, 'match[]': genAIMetricsMatcher },
+      })
+    );
+    return response.data.data ?? [];
+  },
+
+  async resolveModelCards(pairs) {
+    const query = new URLSearchParams();
+    for (const pair of pairs) {
+      query.append('resolve_pair', `${pair.provider}:${pair.model}`);
+    }
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<ModelCardResolveResponse>({
+        method: 'GET',
+        url: `${queryBasePath}/model-cards?${query.toString()}`,
+      })
+    );
+    return response.data;
   },
 };

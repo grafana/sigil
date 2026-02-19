@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,13 +18,35 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
+const (
+	runtimeTestMySQLImage    = "mysql:8.4"
+	runtimeTestMySQLRootPass = "rootpass"
+)
+
+var (
+	runtimeMySQLOnce      sync.Once
+	runtimeMySQLContainer testcontainers.Container
+	runtimeMySQLHost      string
+	runtimeMySQLPort      string
+	runtimeMySQLErr       error
+	runtimeDBSeq          atomic.Uint64
+)
+
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if runtimeMySQLContainer != nil {
+		_ = runtimeMySQLContainer.Terminate(context.Background())
+	}
+	os.Exit(code)
+}
+
 func TestRuntimeAllTargetFailsWithoutCompactorDependencies(t *testing.T) {
 	cfg := testRuntimeConfigWithoutValidation(t, config.TargetAll)
 	cfg.StorageBackend = "memory"
 	_, done := runRuntime(t, cfg)
 
 	err := awaitRuntimeError(t, done)
-	if !strings.Contains(err.Error(), "compactor requires mysql storage backend") {
+	if !strings.Contains(err.Error(), "requires mysql storage backend") {
 		t.Fatalf("unexpected runtime error: %v", err)
 	}
 }
@@ -212,60 +237,149 @@ func randomLocalAddr(t *testing.T) string {
 func newTestMySQLDSN(t *testing.T) (string, func()) {
 	t.Helper()
 
-	ctx := context.Background()
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "mysql:8.4",
-			ExposedPorts: []string{"3306/tcp"},
-			Env: map[string]string{
-				"MYSQL_DATABASE":      "sigil",
-				"MYSQL_USER":          "sigil",
-				"MYSQL_PASSWORD":      "sigil",
-				"MYSQL_ROOT_PASSWORD": "rootpass",
-			},
-			WaitingFor: wait.ForListeningPort("3306/tcp").WithStartupTimeout(2 * time.Minute),
-		},
-		Started: true,
-	})
+	host, port := ensureRuntimeMySQLContainer(t)
+	adminDSN := fmt.Sprintf("root:%s@tcp(%s:%s)/mysql?parseTime=true", runtimeTestMySQLRootPass, host, port)
+	dbName := fmt.Sprintf("sigil_runtime_test_%d", runtimeDBSeq.Add(1))
+
+	if err := createRuntimeTestDatabase(adminDSN, dbName); err != nil {
+		t.Fatalf("create runtime test database %q: %v", dbName, err)
+	}
+
+	dsn := fmt.Sprintf("root:%s@tcp(%s:%s)/%s?parseTime=true", runtimeTestMySQLRootPass, host, port, dbName)
+	store, err := mysqlstorage.NewWALStore(dsn)
 	if err != nil {
-		t.Skipf("skip mysql runtime test (container start failed): %v", err)
+		_ = dropRuntimeTestDatabase(adminDSN, dbName)
+		t.Fatalf("open runtime test wal store for %q: %v", dbName, err)
+	}
+	sqlDB, err := store.DB().DB()
+	if err != nil {
+		_ = dropRuntimeTestDatabase(adminDSN, dbName)
+		t.Fatalf("open runtime test sql db for %q: %v", dbName, err)
+	}
+	if err := sqlDB.Ping(); err != nil {
+		_ = sqlDB.Close()
+		_ = dropRuntimeTestDatabase(adminDSN, dbName)
+		t.Fatalf("ping runtime test sql db for %q: %v", dbName, err)
 	}
 
 	cleanup := func() {
-		_ = container.Terminate(context.Background())
-	}
-
-	host, err := container.Host(ctx)
-	if err != nil {
-		cleanup()
-		t.Fatalf("container host: %v", err)
-	}
-
-	port, err := container.MappedPort(ctx, "3306/tcp")
-	if err != nil {
-		cleanup()
-		t.Fatalf("mapped port: %v", err)
-	}
-
-	dsn := fmt.Sprintf("sigil:sigil@tcp(%s:%s)/sigil?parseTime=true", host, port.Port())
-
-	for attempt := 0; attempt < 30; attempt++ {
-		store, openErr := mysqlstorage.NewWALStore(dsn)
-		if openErr == nil {
-			sqlDB, dbErr := store.DB().DB()
-			if dbErr == nil {
-				pingCtx, pingCancel := context.WithTimeout(context.Background(), 2*time.Second)
-				pingErr := sqlDB.PingContext(pingCtx)
-				pingCancel()
-				if pingErr == nil {
-					return dsn, cleanup
-				}
-			}
+		_ = sqlDB.Close()
+		if err := dropRuntimeTestDatabase(adminDSN, dbName); err != nil {
+			t.Logf("drop runtime test database %q: %v", dbName, err)
 		}
-		time.Sleep(time.Second)
 	}
+	return dsn, cleanup
+}
 
-	cleanup()
-	t.Skip("skip mysql runtime test (database not ready)")
-	return "", func() {}
+func ensureRuntimeMySQLContainer(t *testing.T) (string, string) {
+	t.Helper()
+
+	runtimeMySQLOnce.Do(func() {
+		ctx := context.Background()
+		container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+			ContainerRequest: testcontainers.ContainerRequest{
+				Image:        runtimeTestMySQLImage,
+				ExposedPorts: []string{"3306/tcp"},
+				Env: map[string]string{
+					"MYSQL_DATABASE":      "sigil",
+					"MYSQL_USER":          "sigil",
+					"MYSQL_PASSWORD":      "sigil",
+					"MYSQL_ROOT_PASSWORD": runtimeTestMySQLRootPass,
+				},
+				WaitingFor: wait.ForListeningPort("3306/tcp").WithStartupTimeout(2 * time.Minute),
+			},
+			Started: true,
+		})
+		if err != nil {
+			runtimeMySQLErr = err
+			return
+		}
+
+		host, err := container.Host(ctx)
+		if err != nil {
+			_ = container.Terminate(context.Background())
+			runtimeMySQLErr = err
+			return
+		}
+		mappedPort, err := container.MappedPort(ctx, "3306/tcp")
+		if err != nil {
+			_ = container.Terminate(context.Background())
+			runtimeMySQLErr = err
+			return
+		}
+
+		runtimeMySQLContainer = container
+		runtimeMySQLHost = host
+		runtimeMySQLPort = mappedPort.Port()
+
+		adminDSN := fmt.Sprintf("root:%s@tcp(%s:%s)/mysql?parseTime=true", runtimeTestMySQLRootPass, runtimeMySQLHost, runtimeMySQLPort)
+		var readyErr error
+		for i := 0; i < 30; i++ {
+			store, openErr := mysqlstorage.NewWALStore(adminDSN)
+			if openErr == nil {
+				sqlDB, dbErr := store.DB().DB()
+				if dbErr == nil && sqlDB.Ping() == nil {
+					_ = sqlDB.Close()
+					readyErr = nil
+					break
+				}
+				if dbErr == nil {
+					_ = sqlDB.Close()
+				}
+				if dbErr != nil {
+					readyErr = dbErr
+				}
+			} else {
+				readyErr = openErr
+			}
+			time.Sleep(time.Second)
+		}
+		if readyErr != nil {
+			_ = container.Terminate(context.Background())
+			runtimeMySQLContainer = nil
+			runtimeMySQLErr = readyErr
+		}
+	})
+
+	if runtimeMySQLErr != nil {
+		t.Skipf("skip mysql runtime tests (shared container unavailable): %v", runtimeMySQLErr)
+	}
+	if runtimeMySQLContainer == nil {
+		t.Skip("skip mysql runtime tests (shared container unavailable)")
+	}
+	return runtimeMySQLHost, runtimeMySQLPort
+}
+
+func createRuntimeTestDatabase(adminDSN, dbName string) error {
+	store, err := mysqlstorage.NewWALStore(adminDSN)
+	if err != nil {
+		return err
+	}
+	sqlDB, err := store.DB().DB()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = sqlDB.Close()
+	}()
+
+	query := fmt.Sprintf("CREATE DATABASE `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci", dbName)
+	return store.DB().Exec(query).Error
+}
+
+func dropRuntimeTestDatabase(adminDSN, dbName string) error {
+	store, err := mysqlstorage.NewWALStore(adminDSN)
+	if err != nil {
+		return err
+	}
+	sqlDB, err := store.DB().DB()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = sqlDB.Close()
+	}()
+
+	query := fmt.Sprintf("DROP DATABASE IF EXISTS `%s`", dbName)
+	return store.DB().Exec(query).Error
 }

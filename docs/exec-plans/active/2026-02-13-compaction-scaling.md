@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-13
+last_reviewed: 2026-02-17
 source_of_truth: true
 audience: both
 ---
@@ -32,8 +32,8 @@ Deliver sub-tenant sharded compaction so that a single hot tenant can scale acro
 
 ## Completion policy
 
-- A checkbox moves to `[x]` only when implementation code and automated tests for that item are merged to `main`.
-- Design docs, architecture text, or branch-local changes are not sufficient to close checklist items.
+- A checkbox moves to `[x]` when implementation code and automated tests for that item are complete in the working branch.
+- Design docs and architecture text without corresponding implementation and tests are not sufficient to close checklist items.
 
 ## Implementation phases
 

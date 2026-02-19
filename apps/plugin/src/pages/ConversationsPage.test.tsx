@@ -108,7 +108,7 @@ function makeConversation(id: string, overrides?: Partial<ConversationSearchResp
 describe('ConversationsPage', () => {
   it('applies filter search and renders conversation detail with chat messages', async () => {
     const dataSource = createDataSource({
-      searchConversations: jest.fn(async () =>
+      searchConversations: jest.fn(async (_request: ConversationSearchRequest) =>
         buildSearchResponse([makeConversation('conv-1', { generation_count: 2 })])
       ),
     });
@@ -312,7 +312,7 @@ describe('ConversationsPage', () => {
     };
 
     const dataSource = createDataSource({
-      searchConversations: jest.fn(async () =>
+      searchConversations: jest.fn(async (_request: ConversationSearchRequest) =>
         buildSearchResponse([makeConversation('conv-1'), makeConversation('conv-2')])
       ),
       getConversationDetail: jest.fn((conversationID: string) => {
@@ -361,7 +361,7 @@ describe('ConversationsPage', () => {
 
   it('clears stale generation state when conversation detail request fails', async () => {
     const dataSource = createDataSource({
-      searchConversations: jest.fn(async () =>
+      searchConversations: jest.fn(async (_request: ConversationSearchRequest) =>
         buildSearchResponse([makeConversation('conv-1'), makeConversation('conv-2')])
       ),
       getConversationDetail: jest.fn(async (conversationID: string) => {
@@ -384,7 +384,7 @@ describe('ConversationsPage', () => {
         }
         throw new Error('conversation detail failed');
       }),
-      getGeneration: jest.fn(async () => ({
+      getGeneration: jest.fn(async (_generationID: string) => ({
         generation_id: 'gen-1',
         conversation_id: 'conv-1',
         trace_id: 'trace-1',
