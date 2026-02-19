@@ -120,7 +120,7 @@ importers:
         specifier: ^10.1.0
         version: 10.1.8(eslint@10.0.0)
       eslint-plugin-jsdoc:
-        specifier: ^62.0.0
+        specifier: ^62.5.4
         version: 62.5.4(eslint@10.0.0)
       eslint-plugin-react:
         specifier: ^7.37.0
