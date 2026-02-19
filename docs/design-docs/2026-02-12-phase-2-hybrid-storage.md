@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-12
+last_reviewed: 2026-02-19
 source_of_truth: true
 audience: both
 ---
@@ -20,13 +20,20 @@ The implementation must be multi-tenant, distributable across multiple processes
 
 ## Current state
 
-- `sigil/` is a single Go module (`github.com/grafana/sigil/sigil`) with `cmd/sigil/main.go` running as a monolith.
-- `generations.Service` uses `MemoryStore` (`SaveBatch(ctx, []*sigilv1.Generation) []error`).
-- `storage/mysql/store.go` and `storage/object/store.go` are skeletons.
-- `query.Service` returns placeholder values.
-- Config already includes `MySQLDSN`, `ObjectStoreEndpoint`, `ObjectStoreBucket`, `StorageBackend`.
-- Docker compose includes MySQL 8.4, optional MinIO, and Tempo; bootstrap SQL only creates DB/users.
-- Proto `Generation` contains full generation payload fields (identity, model, input/output, usage, tags, timestamps, etc.).
+- `sigil/` is a single Go module (`github.com/grafana/sigil/sigil`) with `cmd/sigil/main.go`.
+- Runtime targets `all`, `server`, `querier`, and `compactor` are wired via dskit modules.
+- Generation ingest writes to MySQL WAL + conversation projections.
+- Object block read/write is implemented with Thanos `objstore` and seekable block encoding (`data.sigil` + `index.sigil`).
+- Query detail paths are backed by `storage.FanOutStore` with parallel hot/cold reads and deterministic dedupe.
+- Compaction uses shard-aware worker pools with schema-based claim/finalize flow and shard leases.
+- Docker compose includes MySQL + MinIO + Sigil service targets for local validation.
+
+## Implementation deltas (2026-02-19)
+
+- The original compaction claim plan (`FOR UPDATE SKIP LOCKED`) was superseded by schema-based claims (`claimed_by`, `claimed_at`) and shard-aware leasing. See `docs/design-docs/2026-02-13-compaction-scaling.md`.
+- Fan-out read logic is implemented as a dedicated `storage.FanOutStore` abstraction (not inline query-service merge logic).
+- Local compose-backed E2E coverage was added for ingest -> compact -> mixed hot/cold read -> cold-only read (`sigil/e2e/storage_hot_cold_local_test.go`).
+- Benchmarks are runnable via `mise run bench:storage`; baseline capture is tracked in `docs/references/storage-benchmarks.md`.
 
 ## Proposed architecture
 
@@ -55,7 +62,7 @@ Module dependency graph:
 
 - `Server` depends on `WALWriter`, `ConversationStore`
 - `Querier` depends on `WALReader`, `BlockReader`, `BlockMetadataStore`
-- `Compactor` depends on `WALCompactor`, `WALTruncator`, `BlockWriter`, `BlockMetadataStore`
+- `Compactor` depends on `Claimer`, `WALTruncator`, `BlockWriter`, `BlockMetadataStore`
 
 ### Package layout
 
@@ -105,13 +112,14 @@ type WALReader interface {
     GetByConversationID(ctx context.Context, tenantID, conversationID string) ([]*sigilv1.Generation, error)
 }
 
-type WALCompactor interface {
-    ClaimUncompacted(ctx context.Context, tenantID string, olderThan time.Time, limit int) ([]*sigilv1.Generation, error)
-    MarkCompacted(ctx context.Context, tenantID string, generationIDs []string) error
+type WALTruncator interface {
+    TruncateCompacted(ctx context.Context, tenantID string, shard ShardPredicate, olderThan time.Time, limit int) (int64, error)
 }
 
-type WALTruncator interface {
-    TruncateCompacted(ctx context.Context, tenantID string, olderThan time.Time, limit int) (int64, error)
+type Claimer interface {
+    ClaimBatch(ctx context.Context, tenantID, ownerID string, shard ShardPredicate, olderThan time.Time, limit int) (int, error)
+    LoadClaimed(ctx context.Context, tenantID, ownerID string, shard ShardPredicate, limit int) ([]*sigilv1.Generation, []uint64, error)
+    FinalizeClaimed(ctx context.Context, tenantID, ownerID string, ids []uint64) error
 }
 ```
 
@@ -157,12 +165,14 @@ Tempo handles rich filtering. MySQL WAL stores serialized generation payload plu
 - `payload_size_bytes INT NOT NULL`
 - `compacted BOOLEAN DEFAULT FALSE`
 - `compacted_at TIMESTAMP(6) NULL`
+- `claimed_by VARCHAR(255) NULL`
+- `claimed_at TIMESTAMP(6) NULL`
 
 Indexes:
 
 - unique: `(tenant_id, generation_id)`
 - lookup: `(tenant_id, conversation_id, created_at)`
-- compaction cursor: `(tenant_id, compacted, created_at)`
+- compaction/claim cursor: `(tenant_id, compacted, claimed_by, created_at)`
 
 ### `conversations` (materialized projection)
 
@@ -200,10 +210,13 @@ Indexes:
 
 ### `compactor_leases` (distributed coordination)
 
-- `tenant_id VARCHAR(128) PRIMARY KEY`
+- `tenant_id VARCHAR(128) NOT NULL`
+- `shard_id INT NOT NULL DEFAULT 0`
 - `owner_id VARCHAR(255) NOT NULL`
 - `leased_at TIMESTAMP(6) NOT NULL`
 - `expires_at TIMESTAMP(6) NOT NULL`
+
+Primary key: `(tenant_id, shard_id)`
 
 ## Seekable block format (object storage)
 
@@ -226,42 +239,34 @@ This allows index-only reads, then object range reads for matching generation pa
 
 ## Compaction and truncation flow
 
-Compactor runs as one `services.Service` with two loops.
+Compactor runs as one `services.Service` with shard-aware worker pools.
 
-### Compact loop (example interval: 1 minute)
+### Compact loop (implemented)
 
-1. Acquire/renew tenant lease in `compactor_leases`.
-2. `ClaimUncompacted` rows using `SELECT ... FOR UPDATE SKIP LOCKED`.
-3. Build block(s) and upload via `BlockWriter`.
-4. Insert block metadata via `BlockMetadataStore.InsertBlock`.
-5. `MarkCompacted` source rows (`compacted=true`, `compacted_at=NOW()`).
+1. Discover `(tenant_id, shard_id)` backlog candidates.
+2. Acquire/renew shard lease in `compactor_leases`.
+3. `ClaimBatch` rows via UPDATE-based schema claim (`claimed_by`, `claimed_at`) using shard predicates.
+4. `LoadClaimed` payload rows for block build.
+5. Build/upload block(s) via `BlockWriter` and insert metadata via `BlockMetadataStore.InsertBlock`.
+6. `FinalizeClaimed` source rows (`compacted=true`, `compacted_at=NOW()`, clear claim columns).
+7. Continue draining until shard backlog exhausted or worker cycle budget reached.
 
-### Truncate loop (example interval: 5 minutes)
+### Truncate loop (implemented)
 
-1. For leased tenants, delete compacted rows older than retention:
-   - `DELETE FROM generations WHERE compacted = TRUE AND compacted_at < NOW() - INTERVAL ? HOUR LIMIT ?`
-2. Use batched deletes (default batch size, for example `1000`) to avoid large lock windows.
+1. For owned shards, delete compacted rows older than retention using shard predicates and batched limits.
+2. Use batched deletes to avoid large lock windows.
 
-Compacted-row retention is configurable (for example, keep compacted rows for one hour as overlap safety).
+Compacted-row retention remains configurable as an overlap-safety window.
 
 ## Distributed compaction
 
-Compactor instances coordinate through `compactor_leases`.
+Compactor instances coordinate through shard leases in `compactor_leases`.
 
 - each instance has unique `owner_id` (`hostname + random suffix`)
-- expired leases are reclaimable
-- tenant discovery source: `SELECT DISTINCT tenant_id FROM generations WHERE compacted = FALSE`
-
-Lease acquisition/steal pattern:
-
-```sql
-INSERT INTO compactor_leases (tenant_id, owner_id, leased_at, expires_at)
-VALUES (?, ?, NOW(), NOW() + INTERVAL ? SECOND)
-ON DUPLICATE KEY UPDATE
-  owner_id = IF(expires_at < NOW(), VALUES(owner_id), owner_id),
-  leased_at = IF(expires_at < NOW(), VALUES(leased_at), leased_at),
-  expires_at = IF(expires_at < NOW(), VALUES(expires_at), expires_at);
-```
+- leases are keyed by `(tenant_id, shard_id)`
+- expired shard leases are reclaimable
+- discovery returns hot shard backlogs first (not just tenant-level distinct selection)
+- stale claim rows are periodically recovered using claim TTL policy
 
 Future evolution path: replace MySQL lease table with dskit ring-based shard ownership.
 
@@ -270,11 +275,10 @@ Future evolution path: replace MySQL lease table with dskit ring-based shard own
 For retrieval by `generation_id` or `conversation_id`:
 
 1. Query WAL via `WALReader`.
-2. Query `BlockMetadataStore` for overlapping block time windows.
-3. For matching blocks, read index and fetch matching ranges through `BlockReader`.
-4. Union hot + cold results.
-5. Dedupe by `generation_id`; hot (WAL) row wins conflicts.
-6. Sort by `created_at`.
+2. In parallel, query `BlockMetadataStore` for overlapping block time windows and read matching ranges through `BlockReader`.
+3. Union hot + cold results.
+4. Dedupe by `generation_id`; hot (WAL) row wins conflicts.
+5. Sort by `created_at`.
 
 ## Instrumentation contract
 
@@ -309,11 +313,16 @@ Metrics:
 
 Run MySQL + MinIO compose integration for full write -> compact -> truncate -> read lifecycle.
 
+Local compose-backed E2E:
+
+- `sigil/e2e/storage_hot_cold_local_test.go` validates batch export, hot reads, mixed hot+cold reads, and cold-only fallback.
+- Task contract: `mise run test:e2e:storage-local`.
+
 ### Benchmarks
 
-- `mysql/`: `BenchmarkSaveBatch`, `BenchmarkGetByID`, `BenchmarkGetByConversationID`, `BenchmarkTruncateCompacted`
+- `mysql/`: `BenchmarkWALStoreSaveBatchSingle`, `BenchmarkWALStoreSaveBatch100`, `BenchmarkClaimBatch`, `BenchmarkBacklogDiscovery`
 - `object/`: `BenchmarkEncodeBlock`, `BenchmarkDecodeBlock`, `BenchmarkWriteBlock`, `BenchmarkReadIndex`, `BenchmarkReadGenerations`
-- `compactor/`: `BenchmarkCompactionCycle`
+- `compactor/`: `BenchmarkParallelCompaction`
 - `storage/`: `BenchmarkFanOutQuery`
 
 Task contract: `mise run bench:storage`.
@@ -325,7 +334,7 @@ Task contract: `mise run bench:storage`.
 - hot+cold overlap with dedupe (`generation_id`) and hot preference
 - compaction mark correctness and round-trip block decode
 - truncation deletes only compacted rows older than retention
-- concurrent compactor safety (lease + `SKIP LOCKED`)
+- concurrent compactor safety (shard lease + schema-based claim/finalize)
 - strict tenant isolation
 - index range-seek correctness
 - metrics increments for all major operations

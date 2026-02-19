@@ -41,9 +41,9 @@ This is the canonical navigation map for repository documentation.
 - Execution plans:
   - Active: `exec-plans/active/`
     - Drafts: `exec-plans/active/drafts/`
-  - Current implementation priority: hybrid storage/query behavior, then compaction scaling and cross-track consistency
+  - Current implementation priority: cross-track consistency and tracked tech debt follow-up (CI scope expansion, ingestion-log evolution)
   - Phase 2 umbrella coordinator: `exec-plans/active/2026-02-12-phase-2-delivery.md`
-  - Phase 2 parallel tracks:
+  - Phase 2 completed implementation tracks (pending archive move):
     - `exec-plans/active/2026-02-12-phase-2-hybrid-storage.md`
     - `exec-plans/active/2026-02-13-compaction-scaling.md`
   - Completed: `exec-plans/completed/`
@@ -67,6 +67,7 @@ This is the canonical navigation map for repository documentation.
 - Generated docs: [`generated/db-schema.md`](generated/db-schema.md)
 - External references: [`references/index.md`](references/index.md)
   - Online evaluation user guide: [`references/online-evaluation-user-guide.md`](references/online-evaluation-user-guide.md)
+  - Storage benchmark baselines: [`references/storage-benchmarks.md`](references/storage-benchmarks.md)
   - Generation ingest contract: [`references/generation-ingest-contract.md`](references/generation-ingest-contract.md)
   - Score ingest contract: [`references/score-ingest-contract.md`](references/score-ingest-contract.md)
   - Evaluation control plane API: [`references/eval-control-plane.md`](references/eval-control-plane.md)

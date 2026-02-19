@@ -30,6 +30,10 @@ Deliver sub-tenant sharded compaction so that a single hot tenant can scale acro
 
 - `docs/design-docs/2026-02-13-compaction-scaling.md`
 
+## Status note (2026-02-19)
+
+All compaction-scaling implementation, test, and benchmark-baseline checklist items in this plan are complete. Remaining Phase 2 open work is outside this plan scope (umbrella CI/debt tracking).
+
 ## Completion policy
 
 - A checkbox moves to `[x]` when implementation code and automated tests for that item are complete in the working branch.
@@ -87,7 +91,7 @@ Deliver sub-tenant sharded compaction so that a single hot tenant can scale acro
 
 ### Phase E: Integration tests, benchmarks, and instrumentation
 
-Current status (2026-02-19): benchmark implementations are complete; baseline numbers are still pending capture in repository docs/tasks.
+Current status (2026-02-19): benchmark implementations and baseline capture are complete (`docs/references/storage-benchmarks.md`).
 
 - [x] Add/update Prometheus metrics: `claim_batch_total`, `claim_stale_recovered_total`, `worker_active`, `shard_backlog`, `drain_duration_seconds`, `lease_held` with shard label.
 - [x] Add integration test: multiple compactor instances compacting same tenant with `shard_count > 1`.
@@ -96,7 +100,7 @@ Current status (2026-02-19): benchmark implementations are complete; baseline nu
 - [x] Add `BenchmarkClaimBatch` for durable claim path throughput.
 - [x] Add `BenchmarkParallelCompaction` with N workers on one hot tenant.
 - [x] Add `BenchmarkBacklogDiscovery` with skewed tenant backlogs.
-- [ ] Capture benchmark baselines.
+- [x] Capture benchmark baselines.
 
 ### Phase F: Documentation and cleanup
 

@@ -25,6 +25,10 @@ Deliver durable generation storage with hot WAL writes, background object-storag
 
 - `docs/design-docs/2026-02-12-phase-2-hybrid-storage.md`
 
+## Status note (2026-02-19)
+
+All hybrid-storage implementation and documentation checklist items in this plan are complete. Remaining open work for Phase 2 is tracked in the umbrella plan (`2026-02-12-phase-2-delivery.md`) and tech debt tracker (CI scope expansion, ingestion-log backend evolution).
+
 ## Implementation phases
 
 ### Phase 0: Rename + service skeleton
@@ -90,11 +94,11 @@ Current status (2026-02-19): fan-out reads are handled by `storage.FanOutStore` 
 
 - [x] Add `mise run bench:storage` task.
 - [x] Add local compose-backed E2E test for batch ingest + hot/cold query round-trip (`sigil/e2e/storage_hot_cold_local_test.go`, `mise run test:e2e:storage-local`).
-- [ ] Update `ARCHITECTURE.md` with finalized runtime/module/storage contracts.
-- [ ] Update `docs/design-docs/2026-02-12-phase-2-hybrid-storage.md` with implementation deltas.
+- [x] Update `ARCHITECTURE.md` with finalized runtime/module/storage contracts.
+- [x] Update `docs/design-docs/2026-02-12-phase-2-hybrid-storage.md` with implementation deltas.
 - [x] Update `docs/generated/db-schema.md` from implemented migrations.
-- [ ] Capture baseline benchmark numbers in `docs/references/storage-benchmarks.md`.
-- [ ] Update this plan checkboxes as each phase lands.
+- [x] Capture baseline benchmark numbers in `docs/references/storage-benchmarks.md`.
+- [x] Update this plan checkboxes as each phase lands.
 - [x] Record deferred work in `docs/exec-plans/tech-debt-tracker.md` (ring sharding, Kafka WAL migration).
 
 ## Risks

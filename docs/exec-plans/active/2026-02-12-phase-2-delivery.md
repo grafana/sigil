@@ -19,12 +19,12 @@ audience: both
 | SDK parity (.NET/C#) | `exec-plans/completed/2026-02-13-phase-2-sdk-parity-dotnet-csharp.md` | Done |
 | Tenant boundary | `exec-plans/completed/2026-02-12-phase-2-tenant-boundary.md` | Done |
 | Query proxy and envelope | `exec-plans/completed/2026-02-12-phase-2-query-proxy.md` | Done |
-| Hybrid storage and query | `exec-plans/active/2026-02-12-phase-2-hybrid-storage.md` | Active |
-| Compaction scaling | `exec-plans/active/2026-02-13-compaction-scaling.md` | Active |
+| Hybrid storage and query | `exec-plans/active/2026-02-12-phase-2-hybrid-storage.md` | Done |
+| Compaction scaling | `exec-plans/active/2026-02-13-compaction-scaling.md` | Done |
 | SDK metrics and telemetry pipeline | `exec-plans/completed/2026-02-13-sdk-metrics-and-telemetry-pipeline.md` | Done |
 | Embedding call observability | `exec-plans/completed/2026-02-17-embedding-call-observability.md` | Done |
 
-Execution order status: query proxy is complete; remaining priority is (1) hybrid storage, then (2) compaction scaling + cross-track consistency and tech debt capture. Parallel planning remains allowed within that order.
+Execution order status: query proxy, hybrid storage, and compaction scaling tracks are complete. Remaining priority is cross-track consistency and tech debt tracking (CI scope expansion and ingestion-log evolution).
 
 ## Goal
 

@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-18
+last_reviewed: 2026-02-19
 source_of_truth: true
 audience: contributors
 ---
@@ -14,6 +14,7 @@ External ecosystem notes and comparative references used for architecture and im
 
 - [`online-evaluation-user-guide.md`](online-evaluation-user-guide.md)
 - [`competitive-benchmark.md`](competitive-benchmark.md)
+- [`storage-benchmarks.md`](storage-benchmarks.md)
 - [`ai-observability-evaluation-market.md`](ai-observability-evaluation-market.md)
 - [`generation-ingest-contract.md`](generation-ingest-contract.md)
 - [`score-ingest-contract.md`](score-ingest-contract.md)

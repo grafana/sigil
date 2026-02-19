@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-18
+last_reviewed: 2026-02-19
 source_of_truth: true
 audience: both
 ---
@@ -20,17 +20,17 @@ audience: both
 - Object storage: long-term compacted generation payload storage.
   - implementation standard: Thanos `objstore` Go package (`github.com/thanos-io/objstore`).
 
-## Phase 2 Target State
+## Phase 2 Delivery Status
 
-Phase 2 defines production contracts for SDK parity, query envelopes, tenant boundaries, and hybrid storage/query behavior. Some runtime paths remain placeholders today; this file defines the implementation target.
+Phase 2 defines production contracts for SDK parity, query envelopes, tenant boundaries, and hybrid storage/query behavior. These contracts are implemented on `main`; remaining follow-up is benchmark baseline documentation and CI scope expansion tracked in execution plans and tech debt docs.
 
 ### Execution priority
 
-Tenant-boundary track is completed. Active implementation sequencing is:
+Current sequencing focus is non-code follow-up:
 
-1. query proxy
-2. hybrid storage/query behavior
-3. compaction scaling and cross-track consistency / tech debt capture
+1. benchmark baseline capture and documentation
+2. cross-track consistency/docs maintenance
+3. CI scope expansion (tracked tech debt)
 
 SDK parity completion is tracked in:
 
@@ -235,8 +235,9 @@ MySQL is not only an ingest log. It stores:
 Query reads fan out to hot and cold stores, union results, and dedupe by `generation_id`.
 
 - overlap conflict policy: prefer hot MySQL row
+- implementation: `storage.FanOutStore` runs hot and cold reads in parallel and applies deterministic merge order.
 
-### Hybrid storage data flow (current compaction + target query fan-out)
+### Hybrid storage data flow (implemented hot+cold fan-out)
 
 ```mermaid
 flowchart LR
@@ -249,16 +250,16 @@ flowchart LR
     F -->|"upload data.sigil + index.sigil"| G["Object Storage (S3, GCS, Azure, MinIO)"]
     F -->|"insert block metadata"| H["MySQL: compaction_blocks"]
     F -->|"mark compacted + truncate old compacted rows"| E
-    I["Plugin Query API"] -.->|"Phase D target: fan-out reads"| E
-    I -.->|"Phase D target: list/read block metadata"| H
-    I -.->|"Phase D target: read block objects"| G
-    I -.->|"Phase D target: trace query"| D
+    I["Plugin Query API"] -.->|"fan-out reads (storage.FanOutStore)"| E
+    I -.->|"list/read block metadata"| H
+    I -.->|"read block objects"| G
+    I -.->|"trace query"| D
     I -.->|"metrics queries"| P
 ```
 
 ### Distributed compactor topology
 
-Status (2026-02-13):
+Status (2026-02-19):
 
 - Implemented on `main`: shard-level leases (`compactor_leases` keyed by `(tenant_id, shard_id)`), schema-based claims (`claimed_by`/`claimed_at`), backlog-aware shard discovery, and worker-pool drain loops.
 - Compactor claim lifecycle is now `ClaimBatch -> LoadClaimed -> Build/Upload -> InsertBlock -> FinalizeClaimed`.
@@ -292,7 +293,7 @@ flowchart TB
 
 ### Compaction flow
 
-Status (2026-02-13):
+Status (2026-02-19):
 
 - Implemented on `main`: schema-based claim/load/finalize with short claim/finalize updates and out-of-transaction object I/O.
 - Workers renew shard leases while draining and run shard-aware truncation after compaction passes.
