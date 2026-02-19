@@ -19,6 +19,7 @@ export function useLabelValues(
   useEffect(() => {
     if (!label) {
       setValues([]);
+      setLoading(false);
       return;
     }
 

@@ -15,6 +15,7 @@ const (
 	TargetQuerier     = "querier"
 	TargetCompactor   = "compactor"
 	TargetCatalogSync = "catalog-sync"
+	TargetEvalWorker  = "eval-worker"
 )
 
 const (
@@ -30,6 +31,12 @@ const (
 	DefaultCompactorClaimTTL           = 5 * time.Minute
 	DefaultCompactorTargetBlockBytes   = 64 * 1024 * 1024
 	DefaultQueryProxyTimeout           = 30 * time.Second
+	DefaultEvalMaxConcurrent           = 8
+	DefaultEvalMaxRate                 = 600
+	DefaultEvalMaxAttempts             = 3
+	DefaultEvalClaimBatchSize          = 20
+	DefaultEvalPollInterval            = 250 * time.Millisecond
+	DefaultEvalDefaultJudgeModel       = "openai/gpt-4o-mini"
 )
 
 type Config struct {
@@ -49,6 +56,15 @@ type Config struct {
 	ObjectStore                    ObjectStoreConfig
 	CompactorConfig                CompactorConfig
 	ModelCardsConfig               ModelCardsConfig
+	EvalWorkerEnabled              bool
+	EvalMaxConcurrent              int
+	EvalMaxRate                    int
+	EvalMaxAttempts                int
+	EvalClaimBatchSize             int
+	EvalPollInterval               time.Duration
+	EvalDefaultJudgeModel          string
+	EvalSeedFile                   string
+	EvalSeedStrict                 bool
 }
 
 type QueryProxyConfig struct {
@@ -185,6 +201,15 @@ func FromEnv() Config {
 			StaleHard:     getEnvDuration("SIGIL_MODEL_CARDS_STALE_HARD", 24*time.Hour),
 			BootstrapMode: strings.ToLower(strings.TrimSpace(getEnv("SIGIL_MODEL_CARDS_BOOTSTRAP_MODE", "snapshot-first"))),
 		},
+		EvalWorkerEnabled:     getEnvBool("SIGIL_EVAL_WORKER_ENABLED", true),
+		EvalMaxConcurrent:     getEnvInt("SIGIL_EVAL_MAX_CONCURRENT", DefaultEvalMaxConcurrent),
+		EvalMaxRate:           getEnvInt("SIGIL_EVAL_MAX_RATE", DefaultEvalMaxRate),
+		EvalMaxAttempts:       getEnvInt("SIGIL_EVAL_MAX_ATTEMPTS", DefaultEvalMaxAttempts),
+		EvalClaimBatchSize:    getEnvInt("SIGIL_EVAL_CLAIM_BATCH_SIZE", DefaultEvalClaimBatchSize),
+		EvalPollInterval:      getEnvDuration("SIGIL_EVAL_POLL_INTERVAL", DefaultEvalPollInterval),
+		EvalDefaultJudgeModel: getEnv("SIGIL_EVAL_DEFAULT_JUDGE_MODEL", DefaultEvalDefaultJudgeModel),
+		EvalSeedFile:          getEnv("SIGIL_EVAL_SEED_FILE", "sigil-eval-seed.yaml"),
+		EvalSeedStrict:        getEnvBool("SIGIL_EVAL_SEED_STRICT", false),
 	}
 }
 
@@ -194,7 +219,7 @@ func (c *Config) SetTarget(target string) {
 
 func (c Config) Validate() error {
 	switch c.Target {
-	case TargetAll, TargetServer, TargetQuerier, TargetCompactor, TargetCatalogSync:
+	case TargetAll, TargetServer, TargetQuerier, TargetCompactor, TargetCatalogSync, TargetEvalWorker:
 	default:
 		return fmt.Errorf("invalid target %q", c.Target)
 	}
@@ -266,6 +291,27 @@ func (c Config) Validate() error {
 	case "snapshot-first", "db-only":
 	default:
 		return fmt.Errorf("SIGIL_MODEL_CARDS_BOOTSTRAP_MODE must be one of snapshot-first|db-only")
+	}
+	if c.EvalMaxConcurrent <= 0 {
+		return fmt.Errorf("SIGIL_EVAL_MAX_CONCURRENT must be > 0")
+	}
+	if c.EvalMaxRate <= 0 {
+		return fmt.Errorf("SIGIL_EVAL_MAX_RATE must be > 0")
+	}
+	if c.EvalMaxAttempts <= 0 {
+		return fmt.Errorf("SIGIL_EVAL_MAX_ATTEMPTS must be > 0")
+	}
+	if c.EvalClaimBatchSize <= 0 {
+		return fmt.Errorf("SIGIL_EVAL_CLAIM_BATCH_SIZE must be > 0")
+	}
+	if c.EvalPollInterval <= 0 {
+		return fmt.Errorf("SIGIL_EVAL_POLL_INTERVAL must be > 0")
+	}
+	if strings.TrimSpace(c.EvalDefaultJudgeModel) == "" {
+		return fmt.Errorf("SIGIL_EVAL_DEFAULT_JUDGE_MODEL must be set")
+	}
+	if err := validateProviderModelFormat(c.EvalDefaultJudgeModel, "SIGIL_EVAL_DEFAULT_JUDGE_MODEL"); err != nil {
+		return err
 	}
 
 	if err := c.ObjectStore.Validate(); err != nil {
@@ -395,6 +441,20 @@ func validateHTTPBaseURL(raw string, key string) error {
 	}
 	if parsed.Host == "" {
 		return fmt.Errorf("%s must include host", key)
+	}
+	return nil
+}
+
+func validateProviderModelFormat(raw string, key string) error {
+	trimmed := strings.TrimSpace(raw)
+	separator := strings.Index(trimmed, "/")
+	if separator <= 0 || separator >= len(trimmed)-1 {
+		return fmt.Errorf("%s must be in provider/model format", key)
+	}
+	provider := strings.TrimSpace(trimmed[:separator])
+	model := strings.TrimSpace(trimmed[separator+1:])
+	if provider == "" || model == "" {
+		return fmt.Errorf("%s must be in provider/model format", key)
 	}
 	return nil
 }

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { dateTime, type GrafanaTheme2, makeTimeRange, type TimeRange } from '@grafana/data';
-import { Alert, Stack, Text, useStyles2 } from '@grafana/ui';
+import { Alert, Text, useStyles2 } from '@grafana/ui';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
 import type {
   ConversationDetail,

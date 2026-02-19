@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-11
+last_reviewed: 2026-02-17
 source_of_truth: true
 audience: both
 ---
@@ -31,6 +31,16 @@ Single reference for competitor benchmarking and GenAI standards links.
 | Arize Phoenix | <https://github.com/Arize-ai/phoenix> | <https://arize.com/docs/phoenix> | Open-source AI observability and evaluation platform. | Strong evaluation workflows, active OSS ecosystem, good local-first workflows. | License model is not Apache-style for all usage contexts; verify enterprise/legal fit. |
 | OpenInference | <https://github.com/Arize-ai/openinference> | <https://arize-ai.github.io/openinference/> | Conventions + instrumentations for AI tracing, OTEL-compatible outputs. | Broad instrumentation ecosystem, practical integrations, works with OTEL collectors. | Separate convention layer from official OTEL GenAI can require mapping for strict OTEL-first schemas. |
 | LangSmith | <https://github.com/langchain-ai/langsmith-sdk> | <https://docs.langchain.com/langsmith/home> | Managed platform for tracing, evals, prompt tooling, and deployment workflows. | Strong managed UX and integrated eval/tracing workflows. | Core platform is managed/proprietary; open-source surface is mainly SDKs/examples, not full product stack. |
+
+## Embedding Observability Notes
+
+| Product | Embedding Modeling Pattern | Sigil Takeaway |
+| --- | --- | --- |
+| LangSmith | Embeddings are represented as runs in the trace tree. | Trace-native modeling is proven and keeps schema simple. |
+| Langfuse | Dedicated `embedding` observation type with usage/context fields. | Dedicated UI categorization is optional; core telemetry still maps cleanly to spans + metrics. |
+| Arize Phoenix | Embedding calls flow through OTEL spans; quality analysis is downstream. | Keep call-level observability separate from retrieval quality analytics. |
+| Helicone | Proxy captures embedding request/response telemetry. | Gateway capture is useful, but not required for SDK-side span instrumentation. |
+| OpenLLMetry | Embeddings are modeled through OTEL GenAI conventions. | Aligning with OTel `gen_ai.operation.name=embeddings` is ecosystem-compatible. |
 
 ## OTEL GenAI Semantic Conventions (Primary References)
 

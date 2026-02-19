@@ -14,6 +14,13 @@ func buildModelCardService(ctx context.Context, cfg config.Config, enableLiveSou
 	if err != nil {
 		return nil, fmt.Errorf("load embedded model-card snapshot: %w", err)
 	}
+	supplemental, err := modelcards.LoadEmbeddedSupplemental()
+	if err != nil {
+		return nil, fmt.Errorf("load embedded supplemental model-card catalog: %w", err)
+	}
+	if err := modelcards.ValidateSupplementalAgainstSnapshot(*snapshot, supplemental); err != nil {
+		return nil, fmt.Errorf("validate supplemental model-card catalog against snapshot: %w", err)
+	}
 
 	store := modelcards.NewMemoryStore()
 	if err := store.AutoMigrate(ctx); err != nil {
@@ -27,7 +34,7 @@ func buildModelCardService(ctx context.Context, cfg config.Config, enableLiveSou
 		source = modelcards.NewStaticErrorSource(errors.New("live model-cards source disabled"))
 	}
 
-	svc := modelcards.NewService(store, source, snapshot, modelcards.Config{
+	svc := modelcards.NewServiceWithSupplemental(store, source, snapshot, supplemental, modelcards.Config{
 		SyncInterval:  cfg.ModelCardsConfig.SyncInterval,
 		LeaseTTL:      cfg.ModelCardsConfig.LeaseTTL,
 		SourceTimeout: cfg.ModelCardsConfig.SourceTimeout,

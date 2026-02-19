@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { PanelChrome } from '@grafana/ui';
 import { PanelRenderer } from '@grafana/runtime';
-import { LoadingState, type DataFrame, type FieldConfigSource, type PanelData } from '@grafana/data';
+import { LoadingState, type DataFrame, type FieldConfigSource, type PanelData, type TimeRange } from '@grafana/data';
 
 export type MetricPanelProps = {
   title: string;
@@ -11,6 +11,7 @@ export type MetricPanelProps = {
   loading: boolean;
   error?: string;
   height: number;
+  timeRange: TimeRange;
   options?: Record<string, unknown>;
   fieldConfig?: FieldConfigSource;
 };
@@ -23,6 +24,7 @@ export function MetricPanel({
   loading,
   error,
   height,
+  timeRange,
   options = {},
   fieldConfig = { defaults: {}, overrides: [] },
 }: MetricPanelProps) {
@@ -45,11 +47,7 @@ export function MetricPanel({
   const panelData: PanelData = {
     series: data,
     state: loading ? LoadingState.Loading : error ? LoadingState.Error : LoadingState.Done,
-    timeRange: {
-      from: new Date() as unknown as import('@grafana/data').DateTime,
-      to: new Date() as unknown as import('@grafana/data').DateTime,
-      raw: { from: 'now-1h', to: 'now' },
-    },
+    timeRange,
   };
 
   return (
