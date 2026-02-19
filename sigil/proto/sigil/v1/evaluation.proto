@@ -1,0 +1,145 @@
+syntax = "proto3";
+
+package sigil.v1;
+
+option go_package = "github.com/grafana/sigil/sigil/internal/gen/sigil/v1;sigilv1";
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+message EvalOutputKey {
+  string key = 1;
+  string type = 2;
+  string unit = 3;
+  optional double pass_threshold = 4;
+}
+
+message Evaluator {
+  string tenant_id = 1;
+  string evaluator_id = 2;
+  string version = 3;
+  string kind = 4;
+  google.protobuf.Struct config = 5;
+  repeated EvalOutputKey output_keys = 6;
+  bool is_predefined = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+message Rule {
+  string tenant_id = 1;
+  string rule_id = 2;
+  bool enabled = 3;
+  string selector = 4;
+  google.protobuf.Struct match = 5;
+  double sample_rate = 6;
+  repeated string evaluator_ids = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+message CreateEvaluatorRequest {
+  Evaluator evaluator = 1;
+}
+
+message CreateEvaluatorResponse {
+  Evaluator evaluator = 1;
+}
+
+message ListEvaluatorsRequest {
+  int32 limit = 1;
+  string cursor = 2;
+}
+
+message ListEvaluatorsResponse {
+  repeated Evaluator evaluators = 1;
+  string next_cursor = 2;
+}
+
+message GetEvaluatorRequest {
+  string evaluator_id = 1;
+}
+
+message GetEvaluatorResponse {
+  Evaluator evaluator = 1;
+}
+
+message DeleteEvaluatorRequest {
+  string evaluator_id = 1;
+}
+
+message DeleteEvaluatorResponse {}
+
+message CreateRuleRequest {
+  Rule rule = 1;
+}
+
+message CreateRuleResponse {
+  Rule rule = 1;
+}
+
+message ListRulesRequest {
+  int32 limit = 1;
+  string cursor = 2;
+}
+
+message ListRulesResponse {
+  repeated Rule rules = 1;
+  string next_cursor = 2;
+}
+
+message GetRuleRequest {
+  string rule_id = 1;
+}
+
+message GetRuleResponse {
+  Rule rule = 1;
+}
+
+message UpdateRuleRequest {
+  Rule rule = 1;
+}
+
+message UpdateRuleResponse {
+  Rule rule = 1;
+}
+
+message DeleteRuleRequest {
+  string rule_id = 1;
+}
+
+message DeleteRuleResponse {}
+
+message JudgeProvider {
+  string id = 1;
+  string name = 2;
+  string type = 3;
+}
+
+message JudgeModel {
+  string id = 1;
+  string name = 2;
+  string provider = 3;
+  int32 context_window = 4;
+}
+
+message ListJudgeProvidersResponse {
+  repeated JudgeProvider providers = 1;
+}
+
+message ListJudgeModelsResponse {
+  repeated JudgeModel models = 1;
+}
+
+service EvaluationControlService {
+  rpc CreateEvaluator(CreateEvaluatorRequest) returns (CreateEvaluatorResponse);
+  rpc ListEvaluators(ListEvaluatorsRequest) returns (ListEvaluatorsResponse);
+  rpc GetEvaluator(GetEvaluatorRequest) returns (GetEvaluatorResponse);
+  rpc DeleteEvaluator(DeleteEvaluatorRequest) returns (DeleteEvaluatorResponse);
+
+  rpc CreateRule(CreateRuleRequest) returns (CreateRuleResponse);
+  rpc ListRules(ListRulesRequest) returns (ListRulesResponse);
+  rpc GetRule(GetRuleRequest) returns (GetRuleResponse);
+  rpc UpdateRule(UpdateRuleRequest) returns (UpdateRuleResponse);
+  rpc DeleteRule(DeleteRuleRequest) returns (DeleteRuleResponse);
+}

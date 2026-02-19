@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Badge, Icon, Stack, Text, useStyles2 } from '@grafana/ui';
+import { Badge, Icon, Stack, useStyles2 } from '@grafana/ui';
 import type { ToolCallPart } from '../../conversation/types';
 import { formatJson } from '../../conversation/messageParser';
 
@@ -42,6 +42,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   callId: css({
     fontFamily: theme.typography.fontFamilyMonospace,
     fontSize: theme.typography.bodySmall.fontSize,
+    color: theme.colors.text.secondary,
   }),
 });
 
@@ -62,9 +63,7 @@ export default function ToolCallCard({ toolCall }: ToolCallCardProps) {
         <Stack direction="row" gap={1} alignItems="center">
           <Icon name="wrench" size="sm" />
           <Badge text={toolCall.name} color="blue" />
-          <Text color="secondary" className={styles.callId}>
-            {toolCall.id}
-          </Text>
+          <span className={styles.callId}>{toolCall.id}</span>
           {hasInput && <Icon name={isOpen ? 'angle-up' : 'angle-down'} size="sm" />}
         </Stack>
       </div>

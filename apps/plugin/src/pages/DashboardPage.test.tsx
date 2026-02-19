@@ -60,7 +60,16 @@ function createDataSource(): MockDashboardDataSource {
     queryInstant: jest.fn().mockResolvedValue(emptyVector),
     labels: jest.fn().mockResolvedValue([]),
     labelValues: jest.fn().mockResolvedValue([]),
-    listModelCards: jest.fn().mockResolvedValue([]),
+    resolveModelCards: jest.fn().mockResolvedValue({
+      resolved: [],
+      freshness: {
+        catalog_last_refreshed_at: null,
+        stale: false,
+        soft_stale: false,
+        hard_stale: false,
+        source_path: 'memory_live',
+      },
+    }),
   };
 }
 
@@ -79,6 +88,7 @@ describe('DashboardPage', () => {
       expect(screen.getByTestId('panel-Total Errors')).toBeInTheDocument();
       expect(screen.getByTestId('panel-Error Rate')).toBeInTheDocument();
       expect(screen.getByTestId('panel-Estimated Cost')).toBeInTheDocument();
+      expect(screen.getByTestId('panel-Unpriced Tokens')).toBeInTheDocument();
       expect(screen.getByTestId('panel-Token Usage Over Time')).toBeInTheDocument();
       expect(screen.getByTestId('panel-Estimated Cost Over Time')).toBeInTheDocument();
       expect(screen.getByTestId('panel-RPS Over Time by Model')).toBeInTheDocument();
@@ -102,7 +112,7 @@ describe('DashboardPage', () => {
       expect(ds.labelValues).toHaveBeenCalledWith('gen_ai_provider_name', expect.any(Number), expect.any(Number));
       expect(ds.labelValues).toHaveBeenCalledWith('gen_ai_request_model', expect.any(Number), expect.any(Number));
       expect(ds.labelValues).toHaveBeenCalledWith('gen_ai_agent_name', expect.any(Number), expect.any(Number));
-      expect(ds.listModelCards).toHaveBeenCalled();
+      expect(ds.resolveModelCards).not.toHaveBeenCalled();
     });
   });
 });

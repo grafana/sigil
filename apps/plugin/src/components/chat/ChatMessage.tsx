@@ -1,7 +1,7 @@
 import React from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Icon, Stack, Text, useStyles2 } from '@grafana/ui';
+import { Icon, Stack, useStyles2, type IconName } from '@grafana/ui';
 import type { Message } from '../../conversation/types';
 import { humanizeRole } from '../../conversation/messageParser';
 import MessageBubble from './MessageBubble';
@@ -62,10 +62,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   roleLabel: css({
     fontSize: theme.typography.bodySmall.fontSize,
+    color: theme.colors.text.secondary,
   }),
 });
 
-function roleToIcon(role: Message['role']): string {
+function roleToIcon(role: Message['role']): IconName {
   switch (role) {
     case 'MESSAGE_ROLE_USER':
       return 'user';
@@ -114,9 +115,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
         <Icon name={roleToIcon(role)} size="md" />
       </div>
       <div className={contentClass}>
-        <Text color="secondary" className={styles.roleLabel}>
-          {message.name ?? humanizeRole(role)}
-        </Text>
+        <span className={styles.roleLabel}>{message.name ?? humanizeRole(role)}</span>
         <Stack direction="column" gap={1}>
           {message.parts.map((part, i) => {
             if (part.thinking != null) {
