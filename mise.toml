@@ -280,6 +280,16 @@ description = "Validate model-card fallback snapshot schema, checksum, and canon
 depends = ["doctor:go"]
 run = "cd sigil && GOWORK=off go run ./cmd/modelcards-snapshot --mode check --output ./internal/modelcards/fallback/openrouter_models.v1.json"
 
+[tasks."model-cards:supplemental:update"]
+description = "Additively upsert supplemental model-cards from live OpenRouter models missing from the base snapshot"
+depends = ["doctor:go"]
+run = "cd sigil && GOWORK=off go run ./cmd/modelcards-snapshot --mode update-supplemental --snapshot-output ./internal/modelcards/fallback/openrouter_models.v1.json --supplemental-output ./internal/modelcards/fallback/supplemental_models.v1.json"
+
+[tasks."model-cards:supplemental:check"]
+description = "Validate supplemental model-card catalog canonical formatting and preflight merge against the base snapshot"
+depends = ["doctor:go"]
+run = "cd sigil && GOWORK=off go run ./cmd/modelcards-snapshot --mode check-supplemental --snapshot-output ./internal/modelcards/fallback/openrouter_models.v1.json --supplemental-output ./internal/modelcards/fallback/supplemental_models.v1.json"
+
 [tasks."test:go:sdk-core"]
 description = "Run Go SDK core tests as standalone module"
 dir = "sdks/go"

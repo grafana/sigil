@@ -13,6 +13,13 @@ import (
 	"github.com/go-kit/log/level"
 	"github.com/grafana/dskit/services"
 	"github.com/grafana/sigil/sigil/internal/config"
+	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
+	evalcontrol "github.com/grafana/sigil/sigil/internal/eval/control"
+	evalenqueue "github.com/grafana/sigil/sigil/internal/eval/enqueue"
+	"github.com/grafana/sigil/sigil/internal/eval/evaluators/judges"
+	evalingest "github.com/grafana/sigil/sigil/internal/eval/ingest"
+	evalrules "github.com/grafana/sigil/sigil/internal/eval/rules"
+	evalworker "github.com/grafana/sigil/sigil/internal/eval/worker"
 	"github.com/grafana/sigil/sigil/internal/feedback"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
@@ -22,7 +29,6 @@ import (
 	"github.com/grafana/sigil/sigil/internal/server"
 	"github.com/grafana/sigil/sigil/internal/storage"
 	"github.com/grafana/sigil/sigil/internal/storage/mysql"
-	"github.com/grafana/sigil/sigil/internal/storage/object"
 	"github.com/grafana/sigil/sigil/internal/tenantauth"
 	"google.golang.org/grpc"
 )
@@ -37,6 +43,8 @@ type serverModule struct {
 	apiServer    *http.Server
 	grpcServer   *grpc.Server
 	grpcListener net.Listener
+
+	evalEnqueueDispatcher *evalenqueue.Service
 
 	runErr chan error
 }
@@ -105,6 +113,69 @@ func (m *serverModule) start(ctx context.Context) error {
 		FakeTenantID: m.cfg.FakeTenantID,
 	}
 	protectedHTTP := tenantauth.HTTPMiddleware(tenantAuthCfg)
+
+	var evalStore evalpkg.EvalStore
+	if store, ok := generationStore.(evalpkg.EvalStore); ok {
+		evalStore = store
+	}
+	if mysqlStore, ok := generationStore.(*mysql.WALStore); ok && evalStore != nil {
+		engine := evalrules.NewEngine(evalStore)
+		m.evalEnqueueDispatcher = evalenqueue.NewService(
+			evalenqueue.Config{Enabled: true},
+			m.logger,
+			evalEnqueueStoreAdapter{store: mysqlStore},
+			evalEnqueueProcessorAdapter{engine: engine},
+		)
+		mysqlStore.SetEvalHook(evalHookAdapter{notifier: m.evalEnqueueDispatcher})
+	}
+	var controlSvc *evalcontrol.Service
+	var ingestScoreSvc *evalingest.Service
+	if evalStore != nil {
+		discovery := judges.DiscoverFromEnv()
+		controlSvc = evalcontrol.NewService(evalStore, judgeDiscoveryAdapter{discovery: discovery})
+		scoreLookup := buildScoreGenerationLookup(walReader, blockMetadataStore, blockReader)
+		ingestScoreSvc = evalingest.NewService(evalStore, scoreLookup, false)
+		seedTenantID := strings.TrimSpace(m.cfg.FakeTenantID)
+		if seedTenantID != "" && strings.TrimSpace(m.cfg.EvalSeedFile) != "" {
+			loadSeed, err := shouldLoadEvalSeed(ctx, evalStore, seedTenantID)
+			if err != nil {
+				return err
+			}
+			if loadSeed {
+				report, err := evalcontrol.LoadYAMLSeedFileWithOptions(
+					ctx,
+					evalStore,
+					seedTenantID,
+					m.cfg.EvalSeedFile,
+					evalcontrol.SeedLoadOptions{Strict: m.cfg.EvalSeedStrict},
+				)
+				if err != nil {
+					return err
+				}
+				for _, issue := range report.Issues {
+					_ = level.Warn(m.logger).Log(
+						"msg", "eval seed skipped invalid entry",
+						"tenant_id", seedTenantID,
+						"entity", issue.Entity,
+						"id", issue.ID,
+						"err", issue.Error,
+					)
+				}
+				_ = level.Info(m.logger).Log(
+					"msg", "eval seed load completed",
+					"tenant_id", seedTenantID,
+					"strict", m.cfg.EvalSeedStrict,
+					"created_evaluators", report.CreatedEvaluators,
+					"created_rules", report.CreatedRules,
+					"skipped_evaluators", report.SkippedEvaluators,
+					"skipped_rules", report.SkippedRules,
+				)
+			} else {
+				_ = level.Info(m.logger).Log("msg", "skip eval seed load because tenant already has evaluation config", "tenant_id", seedTenantID)
+			}
+		}
+	}
+
 	queryProxy, err := queryproxy.New(queryproxy.Config{
 		PrometheusBaseURL: m.cfg.QueryProxy.PrometheusBaseURL,
 		TempoBaseURL:      m.cfg.QueryProxy.TempoBaseURL,
@@ -126,6 +197,8 @@ func (m *serverModule) start(ctx context.Context) error {
 		protectedHTTP,
 		queryProxy,
 	)
+	evalcontrol.RegisterHTTPRoutes(apiMux, controlSvc, protectedHTTP)
+	evalingest.RegisterHTTPRoutes(apiMux, ingestScoreSvc, protectedHTTP)
 	m.apiServer = &http.Server{
 		Addr:    m.cfg.HTTPAddr,
 		Handler: apiMux,
@@ -149,6 +222,14 @@ func (m *serverModule) start(ctx context.Context) error {
 }
 
 func (m *serverModule) run(ctx context.Context) error {
+	if m.evalEnqueueDispatcher != nil {
+		go func() {
+			if err := m.evalEnqueueDispatcher.Run(ctx); err != nil {
+				m.pushRunError(err)
+			}
+		}()
+	}
+
 	if m.runModelCardSync && m.modelCardSvc != nil {
 		go func() {
 			if err := m.modelCardSvc.RunSyncLoop(ctx); err != nil {
@@ -180,6 +261,35 @@ func (m *serverModule) stop(_ error) error {
 	}
 
 	return nil
+}
+
+type evalSeedStateStore interface {
+	ListEvaluators(ctx context.Context, tenantID string, limit int, cursor uint64) ([]evalpkg.EvaluatorDefinition, uint64, error)
+	ListRules(ctx context.Context, tenantID string, limit int, cursor uint64) ([]evalpkg.RuleDefinition, uint64, error)
+}
+
+func shouldLoadEvalSeed(ctx context.Context, store evalSeedStateStore, tenantID string) (bool, error) {
+	if store == nil {
+		return false, nil
+	}
+	trimmedTenantID := strings.TrimSpace(tenantID)
+	if trimmedTenantID == "" {
+		return false, nil
+	}
+
+	evaluators, _, err := store.ListEvaluators(ctx, trimmedTenantID, 1, 0)
+	if err != nil {
+		return false, fmt.Errorf("list evaluators for seed bootstrap check: %w", err)
+	}
+	if len(evaluators) > 0 {
+		return false, nil
+	}
+
+	rules, _, err := store.ListRules(ctx, trimmedTenantID, 1, 0)
+	if err != nil {
+		return false, fmt.Errorf("list rules for seed bootstrap check: %w", err)
+	}
+	return len(rules) == 0, nil
 }
 
 func (m *serverModule) serveHTTP() {
@@ -231,33 +341,132 @@ func (m *serverModule) buildFeedbackStore(generationStore generationingest.Store
 }
 
 func (m *serverModule) buildBlockReader(ctx context.Context) (storage.BlockReader, error) {
-	blockStore, err := object.NewStoreWithProviderConfig(ctx, object.ProviderConfig{
-		Backend: m.cfg.ObjectStore.Backend,
-		Bucket:  m.cfg.ObjectStore.Bucket,
-		S3: object.S3ProviderConfig{
-			Endpoint:      m.cfg.ObjectStore.S3.Endpoint,
-			Region:        m.cfg.ObjectStore.S3.Region,
-			AccessKey:     m.cfg.ObjectStore.S3.AccessKey,
-			SecretKey:     m.cfg.ObjectStore.S3.SecretKey,
-			Insecure:      m.cfg.ObjectStore.S3.Insecure,
-			UseAWSSDKAuth: m.cfg.ObjectStore.S3.UseAWSSDKAuth,
-		},
-		GCS: object.GCSProviderConfig{
-			Bucket:         m.cfg.ObjectStore.GCS.Bucket,
-			ServiceAccount: m.cfg.ObjectStore.GCS.ServiceAccount,
-			UseGRPC:        m.cfg.ObjectStore.GCS.UseGRPC,
-		},
-		Azure: object.AzureProviderConfig{
-			ContainerName:           m.cfg.ObjectStore.Azure.ContainerName,
-			StorageAccountName:      m.cfg.ObjectStore.Azure.StorageAccountName,
-			StorageAccountKey:       m.cfg.ObjectStore.Azure.StorageAccountKey,
-			StorageConnectionString: m.cfg.ObjectStore.Azure.StorageConnectionString,
-			Endpoint:                m.cfg.ObjectStore.Azure.Endpoint,
-			CreateContainer:         m.cfg.ObjectStore.Azure.CreateContainer,
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create object store reader: %w", err)
+	return newObjectBlockReader(ctx, m.cfg.ObjectStore)
+}
+
+func buildScoreGenerationLookup(hotReader storage.WALReader, blockMetadataStore storage.BlockMetadataStore, blockReader storage.BlockReader) evalingest.GenerationLookup {
+	return evalworker.NewHotColdGenerationReader(hotReader, blockMetadataStore, blockReader)
+}
+
+type judgeDiscoveryAdapter struct {
+	discovery *judges.Discovery
+}
+
+type evalHookAdapter struct {
+	notifier evalEnqueueNotifier
+}
+
+func (a evalHookAdapter) OnGenerationsSaved(_ string) {
+	if a.notifier == nil {
+		return
 	}
-	return blockStore, nil
+	a.notifier.Notify()
+}
+
+type evalEnqueueNotifier interface {
+	Notify()
+}
+
+type evalEnqueueStoreAdapter struct {
+	store *mysql.WALStore
+}
+
+func (a evalEnqueueStoreAdapter) ClaimEvalEnqueueEvents(ctx context.Context, now time.Time, limit int, claimTTL time.Duration) ([]evalenqueue.Event, error) {
+	if a.store == nil {
+		return []evalenqueue.Event{}, nil
+	}
+
+	rows, err := a.store.ClaimEvalEnqueueEvents(ctx, now, limit, claimTTL)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]evalenqueue.Event, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, evalenqueue.Event{
+			TenantID:       row.TenantID,
+			GenerationID:   row.GenerationID,
+			ConversationID: row.ConversationID,
+			Payload:        row.Payload,
+			Attempts:       row.Attempts,
+		})
+	}
+	return out, nil
+}
+
+func (a evalEnqueueStoreAdapter) CompleteEvalEnqueueEvent(ctx context.Context, tenantID, generationID string) error {
+	if a.store == nil {
+		return nil
+	}
+	return a.store.CompleteEvalEnqueueEvent(ctx, tenantID, generationID)
+}
+
+func (a evalEnqueueStoreAdapter) RequeueClaimedEvalEnqueueEvent(ctx context.Context, tenantID, generationID string) error {
+	if a.store == nil {
+		return nil
+	}
+	return a.store.RequeueClaimedEvalEnqueueEvent(ctx, tenantID, generationID)
+}
+
+func (a evalEnqueueStoreAdapter) FailEvalEnqueueEvent(ctx context.Context, tenantID, generationID, lastError string, retryAt time.Time, maxAttempts int, permanent bool) (bool, error) {
+	if a.store == nil {
+		return false, nil
+	}
+	return a.store.FailEvalEnqueueEvent(ctx, tenantID, generationID, lastError, retryAt, maxAttempts, permanent)
+}
+
+type evalEnqueueProcessorAdapter struct {
+	engine *evalrules.Engine
+}
+
+func (a evalEnqueueProcessorAdapter) Process(ctx context.Context, event evalenqueue.Event) error {
+	if a.engine == nil {
+		return nil
+	}
+
+	// Durable enqueue events must observe the most recent control-plane config.
+	// Invalidate tenant cache before each event so rule/evaluator changes apply
+	// immediately and events are not completed against stale snapshots.
+	a.engine.InvalidateTenantCache(event.TenantID)
+	return a.engine.OnGenerationsSaved(ctx, event.TenantID, []evalrules.GenerationRow{{
+		GenerationID:   event.GenerationID,
+		ConversationID: event.ConversationID,
+		Payload:        event.Payload,
+	}})
+}
+
+func (a judgeDiscoveryAdapter) ListProviders(ctx context.Context) []evalcontrol.JudgeProvider {
+	if a.discovery == nil {
+		return []evalcontrol.JudgeProvider{}
+	}
+	providers := a.discovery.ListProviders(ctx)
+	out := make([]evalcontrol.JudgeProvider, 0, len(providers))
+	for _, provider := range providers {
+		out = append(out, evalcontrol.JudgeProvider{
+			ID:   provider.ID,
+			Name: provider.Name,
+			Type: provider.Type,
+		})
+	}
+	return out
+}
+
+func (a judgeDiscoveryAdapter) ListModels(ctx context.Context, providerID string) ([]evalcontrol.JudgeModel, error) {
+	if a.discovery == nil {
+		return []evalcontrol.JudgeModel{}, nil
+	}
+	models, err := a.discovery.ListModels(ctx, providerID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]evalcontrol.JudgeModel, 0, len(models))
+	for _, model := range models {
+		out = append(out, evalcontrol.JudgeModel{
+			ID:            model.ID,
+			Name:          model.Name,
+			Provider:      model.Provider,
+			ContextWindow: model.ContextWindow,
+		})
+	}
+	return out, nil
 }

@@ -78,6 +78,16 @@ func TestCallResource(t *testing.T) {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
+			if resolvePairs := r.URL.Query()["resolve_pair"]; len(resolvePairs) > 0 {
+				if len(resolvePairs) != 2 ||
+					resolvePairs[0] != "openai:gpt-4o" ||
+					resolvePairs[1] != "anthropic:claude-sonnet-4-5" {
+					http.Error(w, "unexpected resolve_pair query params", http.StatusBadRequest)
+					return
+				}
+				_, _ = io.WriteString(w, `{"resolved":[{"provider":"openai","model":"gpt-4o","status":"resolved"}],"freshness":{"stale":false}}`)
+				return
+			}
 			_, _ = io.WriteString(w, `{"data":[{"model_key":"openrouter:openai/gpt-4o"}],"next_cursor":"","freshness":{"stale":false}}`)
 		case "/api/v1/model-cards:lookup":
 			if r.Method != http.MethodGet {
@@ -215,6 +225,13 @@ func TestCallResource(t *testing.T) {
 			path:      "query/model-cards/lookup?model_key=openrouter%3Aopenai%2Fgpt-4o",
 			expStatus: http.StatusOK,
 			expBody:   []byte(`{"data":{"model_key":"openrouter:openai/gpt-4o"},"freshness":{"stale":false}}`),
+		},
+		{
+			name:      "resolve model cards with repeated params",
+			method:    http.MethodGet,
+			path:      "query/model-cards?resolve_pair=openai%3Agpt-4o&resolve_pair=anthropic%3Aclaude-sonnet-4-5",
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"resolved":[{"provider":"openai","model":"gpt-4o","status":"resolved"}],"freshness":{"stale":false}}`),
 		},
 		{
 			name:      "model cards post not allowed",
