@@ -22,6 +22,11 @@ func (s *WALStore) AutoMigrate(ctx context.Context) error {
 
 	err := s.db.WithContext(ctx).AutoMigrate(
 		&GenerationModel{},
+		&GenerationScoreModel{},
+		&EvalEnqueueEventModel{},
+		&EvalWorkItemModel{},
+		&EvalEvaluatorModel{},
+		&EvalRuleModel{},
 		&ConversationModel{},
 		&ConversationRatingModel{},
 		&ConversationRatingSummaryModel{},

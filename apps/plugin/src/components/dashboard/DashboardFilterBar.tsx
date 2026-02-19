@@ -212,7 +212,7 @@ export function DashboardFilterBar({
         onCreateOption={handleLabelValueCreate}
         placeholder={filters.labelKey ? `${filters.labelKey} value` : 'Label Value'}
         isClearable
-        isDisabled={!filters.labelKey}
+        disabled={!filters.labelKey}
         isLoading={labelValuesLoading}
         allowCustomValue
         isSearchable

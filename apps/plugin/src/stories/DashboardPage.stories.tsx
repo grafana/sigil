@@ -1,46 +1,42 @@
 import React from 'react';
 import DashboardPage from '../pages/DashboardPage';
 import type { DashboardDataSource } from '../dashboard/api';
-import type { ModelCard, PrometheusQueryResponse } from '../dashboard/types';
+import type { PrometheusQueryResponse } from '../dashboard/types';
 
-const mockModelCards: ModelCard[] = [
-  {
-    model_key: 'openrouter:openai/gpt-4o',
-    source: 'openrouter',
-    source_model_id: 'openai/gpt-4o',
-    canonical_slug: 'openai-gpt-4o',
-    name: 'gpt-4o',
-    provider: 'openai',
-    pricing: {
-      prompt_usd_per_token: 0.0025,
-      completion_usd_per_token: 0.01,
-      request_usd: null,
-      image_usd: null,
-      web_search_usd: null,
-      input_cache_read_usd_per_token: 0.00125,
-      input_cache_write_usd_per_token: 0.00375,
+const resolvedPricing = new Map([
+  [
+    'openai:gpt-4o',
+    {
+      model_key: 'openrouter:openai/gpt-4o',
+      source_model_id: 'openai/gpt-4o',
+      pricing: {
+        prompt_usd_per_token: 0.0025,
+        completion_usd_per_token: 0.01,
+        request_usd: null,
+        image_usd: null,
+        web_search_usd: null,
+        input_cache_read_usd_per_token: 0.00125,
+        input_cache_write_usd_per_token: 0.00375,
+      },
     },
-    is_free: false,
-  },
-  {
-    model_key: 'openrouter:anthropic/claude-sonnet-4-20250514',
-    source: 'openrouter',
-    source_model_id: 'anthropic/claude-sonnet-4-20250514',
-    canonical_slug: 'anthropic-claude-sonnet-4-20250514',
-    name: 'claude-sonnet-4-20250514',
-    provider: 'anthropic',
-    pricing: {
-      prompt_usd_per_token: 0.003,
-      completion_usd_per_token: 0.015,
-      request_usd: null,
-      image_usd: null,
-      web_search_usd: null,
-      input_cache_read_usd_per_token: 0.0003,
-      input_cache_write_usd_per_token: 0.00375,
+  ],
+  [
+    'anthropic:claude-sonnet-4-20250514',
+    {
+      model_key: 'openrouter:anthropic/claude-sonnet-4-20250514',
+      source_model_id: 'anthropic/claude-sonnet-4-20250514',
+      pricing: {
+        prompt_usd_per_token: 0.003,
+        completion_usd_per_token: 0.015,
+        request_usd: null,
+        image_usd: null,
+        web_search_usd: null,
+        input_cache_read_usd_per_token: 0.0003,
+        input_cache_write_usd_per_token: 0.00375,
+      },
     },
-    is_free: false,
-  },
-];
+  ],
+]);
 
 function makeMatrixResponse(
   series: Array<{ labels: Record<string, string>; values: Array<[number, string]> }>
@@ -72,6 +68,38 @@ const timePoints = Array.from({ length: 60 }, (_, i) => now - 3600 + i * 60);
 const mockDataSource: DashboardDataSource = {
   async queryRange(query) {
     // Return mock timeseries based on query pattern
+    if (
+      query.includes('token_usage') &&
+      query.includes('gen_ai_provider_name') &&
+      query.includes('gen_ai_request_model')
+    ) {
+      return makeMatrixResponse([
+        {
+          labels: {
+            gen_ai_provider_name: 'openai',
+            gen_ai_request_model: 'gpt-4o',
+            gen_ai_token_type: 'input',
+          },
+          values: timePoints.map((t) => [t, String(100 + Math.random() * 50)]),
+        },
+        {
+          labels: {
+            gen_ai_provider_name: 'openai',
+            gen_ai_request_model: 'gpt-4o',
+            gen_ai_token_type: 'output',
+          },
+          values: timePoints.map((t) => [t, String(40 + Math.random() * 20)]),
+        },
+        {
+          labels: {
+            gen_ai_provider_name: 'anthropic',
+            gen_ai_request_model: 'claude-sonnet-4-20250514',
+            gen_ai_token_type: 'input',
+          },
+          values: timePoints.map((t) => [t, String(35 + Math.random() * 15)]),
+        },
+      ]);
+    }
     if (query.includes('token_usage')) {
       return makeMatrixResponse([
         {
@@ -132,14 +160,28 @@ const mockDataSource: DashboardDataSource = {
     }
     if (query.includes('token_usage') && query.includes('gen_ai_request_model')) {
       return makeVectorResponse([
-        { labels: { gen_ai_request_model: 'gpt-4o', gen_ai_token_type: 'input' }, value: '50000' },
-        { labels: { gen_ai_request_model: 'gpt-4o', gen_ai_token_type: 'output' }, value: '20000' },
         {
-          labels: { gen_ai_request_model: 'claude-sonnet-4-20250514', gen_ai_token_type: 'input' },
+          labels: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o', gen_ai_token_type: 'input' },
+          value: '50000',
+        },
+        {
+          labels: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o', gen_ai_token_type: 'output' },
+          value: '20000',
+        },
+        {
+          labels: {
+            gen_ai_provider_name: 'anthropic',
+            gen_ai_request_model: 'claude-sonnet-4-20250514',
+            gen_ai_token_type: 'input',
+          },
           value: '30000',
         },
         {
-          labels: { gen_ai_request_model: 'claude-sonnet-4-20250514', gen_ai_token_type: 'output' },
+          labels: {
+            gen_ai_provider_name: 'anthropic',
+            gen_ai_request_model: 'claude-sonnet-4-20250514',
+            gen_ai_token_type: 'output',
+          },
           value: '15000',
         },
       ]);
@@ -197,8 +239,34 @@ const mockDataSource: DashboardDataSource = {
     ];
   },
 
-  async listModelCards() {
-    return mockModelCards;
+  async resolveModelCards(pairs) {
+    return {
+      resolved: pairs.map(({ provider, model }) => {
+        const resolvedCard = resolvedPricing.get(`${provider.toLowerCase()}:${model}`);
+        if (!resolvedCard) {
+          return {
+            provider,
+            model,
+            status: 'unresolved' as const,
+            reason: 'not_found' as const,
+          };
+        }
+        return {
+          provider,
+          model,
+          status: 'resolved' as const,
+          match_strategy: 'exact' as const,
+          card: resolvedCard,
+        };
+      }),
+      freshness: {
+        catalog_last_refreshed_at: null,
+        stale: false,
+        soft_stale: false,
+        hard_stale: false,
+        source_path: 'memory_live',
+      },
+    };
   },
 };
 

@@ -6,7 +6,6 @@ import { type DashboardDataSource, defaultDashboardDataSource } from '../dashboa
 import { type DashboardFilters, emptyFilters } from '../dashboard/types';
 import { DashboardFilterBar } from '../components/dashboard/DashboardFilterBar';
 import { DashboardGrid } from '../components/dashboard/DashboardGrid';
-import { useModelCards } from '../components/dashboard/useModelCards';
 import { useLabelNames } from '../components/dashboard/useLabelNames';
 import { useLabelValues } from '../components/dashboard/useLabelValues';
 
@@ -40,7 +39,6 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
   const from = useMemo(() => Math.floor(timeRange.from.valueOf() / 1000), [timeRange]);
   const to = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);
 
-  const { pricingMap } = useModelCards(dataSource);
   const labelNames = useLabelNames(dataSource, from, to);
 
   const providerValues = useLabelValues(dataSource, 'gen_ai_provider_name', from, to);
@@ -89,14 +87,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         onTimeRangeChange={handleTimeRangeChange}
         onFiltersChange={handleFiltersChange}
       />
-      <DashboardGrid
-        dataSource={dataSource}
-        filters={filters}
-        from={from}
-        to={to}
-        timeRange={timeRange}
-        pricingMap={pricingMap}
-      />
+      <DashboardGrid dataSource={dataSource} filters={filters} from={from} to={to} timeRange={timeRange} />
     </div>
   );
 }
