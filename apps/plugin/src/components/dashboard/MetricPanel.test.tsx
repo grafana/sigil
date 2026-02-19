@@ -24,17 +24,15 @@ jest.mock('@grafana/ui', () => {
   const actual = jest.requireActual('@grafana/ui');
   return {
     ...actual,
-    PanelChrome: ({
-      children,
-    }: {
-      children: React.ReactNode | ((w: number, h: number) => React.ReactNode);
-    }) => <div>{typeof children === 'function' ? children(400, 200) : children}</div>,
+    PanelChrome: ({ children }: { children: React.ReactNode | ((w: number, h: number) => React.ReactNode) }) => (
+      <div>{typeof children === 'function' ? children(400, 200) : children}</div>
+    ),
   };
 });
 
 jest.mock('@grafana/runtime', () => ({
   ...jest.requireActual('@grafana/runtime'),
-  PanelRenderer: ({ data }: { data: unknown }) => {
+  PanelRenderer: ({ data }: { data: PanelData | undefined }) => {
     capturedPanelData = data;
     return <div data-testid="panel-renderer" />;
   },
@@ -48,7 +46,16 @@ describe('MetricPanel', () => {
       raw: { from: 'now-1h', to: 'now' },
     };
 
-    render(<MetricPanel title="Test Panel" pluginId="timeseries" data={[]} loading={false} height={200} timeRange={timeRange} />);
+    render(
+      <MetricPanel
+        title="Test Panel"
+        pluginId="timeseries"
+        data={[]}
+        loading={false}
+        height={200}
+        timeRange={timeRange}
+      />
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId('panel-renderer')).toBeInTheDocument();

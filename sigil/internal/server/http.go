@@ -204,15 +204,47 @@ func getGeneration(querySvc *query.Service) http.HandlerFunc {
 			return
 		}
 
-		id := strings.TrimPrefix(req.URL.Path, "/api/v1/generations/")
-		if id == "" || strings.Contains(id, "/") {
-			http.Error(w, "invalid generation id", http.StatusBadRequest)
+		id, childPath, ok := parseGenerationSubPath(req.URL.Path)
+		if !ok {
+			http.Error(w, "invalid generation path", http.StatusBadRequest)
 			return
 		}
 
 		tenantID, err := tenant.TenantID(req.Context())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		if childPath == "scores" {
+			limit, cursor, err := parseGenerationScorePagination(req)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			items, nextCursor, err := querySvc.ListGenerationScoresForTenant(req.Context(), tenantID, id, limit, cursor)
+			if err != nil {
+				if query.IsValidationError(err) {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				http.Error(w, "internal server error", http.StatusInternalServerError)
+				return
+			}
+			nextCursorValue := ""
+			if nextCursor > 0 {
+				nextCursorValue = strconv.FormatUint(nextCursor, 10)
+			}
+			writeJSON(w, http.StatusOK, map[string]any{
+				"items":       items,
+				"next_cursor": nextCursorValue,
+			})
+			return
+		}
+
+		if childPath != "" {
+			http.NotFound(w, req)
 			return
 		}
 
@@ -231,6 +263,51 @@ func getGeneration(querySvc *query.Service) http.HandlerFunc {
 		}
 		writeJSON(w, http.StatusOK, item)
 	}
+}
+
+func parseGenerationSubPath(path string) (id string, childPath string, ok bool) {
+	trimmed := strings.TrimPrefix(path, "/api/v1/generations/")
+	if trimmed == "" {
+		return "", "", false
+	}
+	parts := strings.Split(trimmed, "/")
+	if len(parts) == 1 {
+		if strings.TrimSpace(parts[0]) == "" {
+			return "", "", false
+		}
+		return parts[0], "", true
+	}
+	if len(parts) == 2 {
+		if strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+			return "", "", false
+		}
+		return parts[0], parts[1], true
+	}
+	return "", "", false
+}
+
+func parseGenerationScorePagination(req *http.Request) (int, uint64, error) {
+	limit := 50
+	if rawLimit := strings.TrimSpace(req.URL.Query().Get("limit")); rawLimit != "" {
+		parsed, err := strconv.Atoi(rawLimit)
+		if err != nil || parsed <= 0 {
+			return 0, 0, errors.New("invalid limit")
+		}
+		limit = parsed
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	var cursor uint64
+	if rawCursor := strings.TrimSpace(req.URL.Query().Get("cursor")); rawCursor != "" {
+		parsed, err := strconv.ParseUint(rawCursor, 10, 64)
+		if err != nil {
+			return 0, 0, errors.New("invalid cursor")
+		}
+		cursor = parsed
+	}
+	return limit, cursor, nil
 }
 
 func listSearchTags(querySvc *query.Service) http.HandlerFunc {
@@ -580,6 +657,26 @@ func listModelCards(svc *modelcards.Service) http.HandlerFunc {
 			return
 		}
 
+		if hasResolvePairs(req) {
+			inputs, err := parseResolvePairs(req)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			resolved, freshness, err := svc.ResolveBatch(req.Context(), inputs)
+			if err != nil {
+				http.Error(w, "failed to resolve model cards", http.StatusInternalServerError)
+				return
+			}
+
+			writeJSON(w, http.StatusOK, map[string]any{
+				"resolved":  resolved,
+				"freshness": freshness,
+			})
+			return
+		}
+
 		params, err := parseListParams(req)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -603,6 +700,49 @@ func listModelCards(svc *modelcards.Service) http.HandlerFunc {
 			"freshness":   result.Freshness,
 		})
 	}
+}
+
+func hasResolvePairs(req *http.Request) bool {
+	if req == nil {
+		return false
+	}
+	_, ok := req.URL.Query()["resolve_pair"]
+	return ok
+}
+
+func parseResolvePairs(req *http.Request) ([]modelcards.ResolveInput, error) {
+	query := req.URL.Query()
+	rawPairs := query["resolve_pair"]
+	if len(rawPairs) == 0 {
+		return nil, errors.New("resolve_pair is required")
+	}
+	if len(rawPairs) > 100 {
+		return nil, errors.New("too many resolve_pair values")
+	}
+
+	for key := range query {
+		if key != "resolve_pair" {
+			return nil, errors.New("resolve_pair cannot be combined with other query params")
+		}
+	}
+
+	inputs := make([]modelcards.ResolveInput, 0, len(rawPairs))
+	for _, rawPair := range rawPairs {
+		parts := strings.SplitN(strings.TrimSpace(rawPair), ":", 2)
+		if len(parts) != 2 {
+			return nil, errors.New("invalid resolve_pair")
+		}
+		provider := strings.TrimSpace(parts[0])
+		model := strings.TrimSpace(parts[1])
+		if provider == "" || model == "" {
+			return nil, errors.New("invalid resolve_pair")
+		}
+		inputs = append(inputs, modelcards.ResolveInput{
+			Provider: provider,
+			Model:    model,
+		})
+	}
+	return inputs, nil
 }
 
 func lookupModelCard(svc *modelcards.Service) http.HandlerFunc {

@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-16
+last_reviewed: 2026-02-17
 source_of_truth: true
 audience: contributors
 ---
@@ -32,6 +32,8 @@ Current plugin query contract:
   - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/ratings`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`
   - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/model-cards`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/model-cards/lookup`
   - `/api/plugins/grafana-sigil-app/resources/query/proxy/prometheus/...`
   - `/api/plugins/grafana-sigil-app/resources/query/proxy/tempo/...`
 - Plugin backend forwards to Sigil API query endpoints:
@@ -45,6 +47,8 @@ Current plugin query contract:
   - `POST /api/v1/conversations/{conversation_id}/ratings`
   - `GET /api/v1/conversations/{conversation_id}/annotations`
   - `POST /api/v1/conversations/{conversation_id}/annotations`
+  - `GET /api/v1/model-cards` (list mode and `resolve_pair` mode)
+  - `GET /api/v1/model-cards:lookup`
   - `/api/v1/proxy/prometheus/...`
   - `/api/v1/proxy/tempo/...`
 
@@ -80,6 +84,8 @@ See `docs/references/grafana-query-response-shapes.md`.
   - run metrics panels from Prometheus proxy endpoints only
   - support fuzzy filters for provider/model/agent and arbitrary label-key/value matchers
   - allow advanced raw matcher clauses for resource labels injected by Alloy/OTel pipelines
+  - estimate cost from token metrics plus model-card resolve mode (`resolve_pair=provider:model`)
+  - use strict provider+model pricing joins; unresolved pairs remain explicit (no fallback guessing)
 - Conversations:
   - query conversations with expression filters and selectable attributes
   - support cursor pagination in list view

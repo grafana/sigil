@@ -97,7 +97,7 @@ export function tokenUsageOverTimeQuery(filters: DashboardFilters, interval: str
 }
 
 export function tokenUsageByModelQuery(filters: DashboardFilters, interval: string): string {
-  return `sum by (gen_ai_request_model, gen_ai_token_type) (rate(${TOKEN_USAGE}_sum${sel(filters)}[${interval}]))`;
+  return `sum by (gen_ai_provider_name, gen_ai_request_model, gen_ai_token_type) (rate(${TOKEN_USAGE}_sum${sel(filters)}[${interval}]))`;
 }
 
 export function rpsByModelOverTimeQuery(filters: DashboardFilters, interval: string): string {
@@ -125,5 +125,5 @@ export function topModelsQuery(filters: DashboardFilters, rangeDuration: string)
 // --- Cost queries (token totals by model + type, for client-side pricing) ---
 
 export function tokensByModelAndTypeQuery(filters: DashboardFilters, rangeDuration: string): string {
-  return `sum by (gen_ai_request_model, gen_ai_token_type) (increase(${TOKEN_USAGE}_sum${sel(filters)}[${rangeDuration}]))`;
+  return `sum by (gen_ai_provider_name, gen_ai_request_model, gen_ai_token_type) (increase(${TOKEN_USAGE}_sum${sel(filters)}[${rangeDuration}]))`;
 }
