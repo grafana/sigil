@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package sigil.v1;
+
+option go_package = "github.com/grafana/sigil/sigil/internal/gen/sigil/v1;sigilv1";
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+message ScoreValue {
+  oneof value {
+    double number = 1;
+    bool bool = 2;
+    string string = 3;
+  }
+}
+
+message ScoreSource {
+  string kind = 1;
+  string id = 2;
+}
+
+message ScoreItem {
+  string score_id = 1;
+  string generation_id = 2;
+  string conversation_id = 3;
+  string trace_id = 4;
+  string span_id = 5;
+  string evaluator_id = 6;
+  string evaluator_version = 7;
+  string rule_id = 8;
+  string run_id = 9;
+  string score_key = 10;
+  ScoreValue value = 11;
+  bool has_passed = 12;
+  bool passed = 13;
+  string explanation = 14;
+  google.protobuf.Struct metadata = 15;
+  google.protobuf.Timestamp created_at = 16;
+  ScoreSource source = 17;
+}
+
+message ExportScoresRequest {
+  repeated ScoreItem scores = 1;
+}
+
+message ExportScoreResult {
+  string score_id = 1;
+  bool accepted = 2;
+  string error = 3;
+}
+
+message ExportScoresResponse {
+  repeated ExportScoreResult results = 1;
+}
+
+service ScoreIngestService {
+  rpc ExportScores(ExportScoresRequest) returns (ExportScoresResponse);
+}

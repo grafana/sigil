@@ -1,7 +1,7 @@
 import React from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Icon, Stack, Text, useStyles2 } from '@grafana/ui';
+import { Icon, Text, useStyles2 } from '@grafana/ui';
 import type { Message } from '../../conversation/types';
 import ChatMessage from './ChatMessage';
 

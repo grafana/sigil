@@ -9,8 +9,9 @@ import (
 )
 
 type WALStore struct {
-	db     *gorm.DB
-	logger *slog.Logger
+	db       *gorm.DB
+	logger   *slog.Logger
+	evalHook EvalHook
 }
 
 func NewWALStore(dsn string) (*WALStore, error) {
@@ -31,4 +32,8 @@ func NewWALStore(dsn string) (*WALStore, error) {
 
 func (s *WALStore) DB() *gorm.DB {
 	return s.db
+}
+
+func (s *WALStore) SetEvalHook(hook EvalHook) {
+	s.evalHook = hook
 }
