@@ -11,7 +11,7 @@ require (
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/grafana/dskit v0.0.0-20260218151138-6352488fe08f
 	github.com/minio/minio-go/v7 v7.0.98
-	github.com/openai/openai-go v1.12.0
+	github.com/openai/openai-go/v3 v3.22.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/testcontainers/testcontainers-go v0.40.0
 	github.com/thanos-io/objstore v0.0.0-20250813080715-4e5fd4289b50
