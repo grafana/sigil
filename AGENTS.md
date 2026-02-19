@@ -73,6 +73,7 @@
 - Do not store priority/project context in code comments, random root markdown files, or package-level READMEs.
 - If architecture or contracts change, update `ARCHITECTURE.md` in the same change.
 - If work is in design, create or update a design doc in `docs/design-docs/` and an active plan in `docs/exec-plans/active/`.
+- While implementing, keep active execution plan checklist/status updates current in the working branch; do not wait for merge to `main`.
 - When design or execution is completed, update status and move the exec plan to `docs/exec-plans/completed/`.
 
 ## When To Update Docs
@@ -81,6 +82,7 @@
 | --- | --- | --- |
 | any | architecture shape, system boundaries, or project priority changes | `ARCHITECTURE.md` and relevant `docs/*` pages |
 | any | new design started or design direction changed | relevant file in `docs/design-docs/` and matching file in `docs/exec-plans/active/` |
+| any | execution in progress | keep checklist/status in active execution plan current in the same branch as implementation changes |
 | any | execution completed | move plan to `docs/exec-plans/completed/` and update linked design/spec status |
 | `apps/plugin` | query/proxy contract changes, UI behavior or data model changes | `ARCHITECTURE.md`, `docs/FRONTEND.md`, relevant plan/spec doc |
 | `sigil` | ingest/query endpoint changes, proto changes, validation/storage behavior changes | `ARCHITECTURE.md`, `docs/references/generation-ingest-contract.md`, relevant exec plan |

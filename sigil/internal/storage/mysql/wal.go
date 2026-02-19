@@ -35,6 +35,14 @@ var (
 
 var _ storage.WALWriter = (*WALStore)(nil)
 
+// EvalHook is a lightweight notifier invoked after successful generation saves.
+//
+// It must not perform heavy work inline; durable enqueue events are persisted
+// transactionally in SaveBatch and processed asynchronously by dispatcher loops.
+type EvalHook interface {
+	OnGenerationsSaved(tenantID string)
+}
+
 func (s *WALStore) SaveBatch(ctx context.Context, tenantID string, generations []*sigilv1.Generation) []error {
 	start := time.Now()
 	errs := make([]error, len(generations))
@@ -64,10 +72,14 @@ func (s *WALStore) SaveBatch(ctx context.Context, tenantID string, generations [
 			}
 
 			if convRow == nil {
-				return nil
+				return enqueueEvalGenerationTx(tx, generationRow)
 			}
 
-			return upsertConversation(tx, convRow)
+			if err := upsertConversation(tx, convRow); err != nil {
+				return err
+			}
+
+			return enqueueEvalGenerationTx(tx, generationRow)
 		})
 		if txErr != nil {
 			s.logger.Error("wal save failed",
@@ -82,6 +94,8 @@ func (s *WALStore) SaveBatch(ctx context.Context, tenantID string, generations [
 		successRows++
 	}
 
+	s.triggerEvalHook(tenantID, successRows)
+
 	status := "success"
 	for _, err := range errs {
 		if err != nil {
@@ -92,6 +106,13 @@ func (s *WALStore) SaveBatch(ctx context.Context, tenantID string, generations [
 	observeWALMetrics("save_batch", status, start, successRows)
 
 	return errs
+}
+
+func (s *WALStore) triggerEvalHook(tenantID string, savedRows int) {
+	if s.evalHook == nil || savedRows == 0 {
+		return
+	}
+	s.evalHook.OnGenerationsSaved(tenantID)
 }
 
 func buildRows(tenantID string, generation *sigilv1.Generation) (GenerationModel, *ConversationModel, error) {

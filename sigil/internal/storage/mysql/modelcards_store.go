@@ -360,6 +360,11 @@ func sortDirection(order string) string {
 }
 
 func toModelCardModel(card modelcards.Card, source string, refreshedAt time.Time) ModelCardModel {
+	cardSource := strings.TrimSpace(card.Source)
+	if cardSource == "" {
+		cardSource = strings.TrimSpace(source)
+	}
+
 	inputModalitiesJSON := marshalJSONOrDefault(card.InputModalities, "[]")
 	outputModalitiesJSON := marshalJSONOrDefault(card.OutputModalities, "[]")
 	supportedParamsJSON := marshalJSONOrDefault(card.SupportedParameters, "[]")
@@ -380,7 +385,7 @@ func toModelCardModel(card modelcards.Card, source string, refreshedAt time.Time
 
 	return ModelCardModel{
 		ModelKey:                        card.ModelKey,
-		Source:                          source,
+		Source:                          cardSource,
 		SourceModelID:                   card.SourceModelID,
 		CanonicalSlug:                   nullableString(card.CanonicalSlug),
 		Name:                            card.Name,

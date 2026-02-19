@@ -1,0 +1,129 @@
+{
+  "captured_at": "2026-02-17T12:13:51.210642Z",
+  "schema_version": 1,
+  "checksum_sha256": "7e46b60602fa193a4e81a339698ce059bfdb983c88f3fb961e27e7ec752d4c91",
+  "models": [
+    {
+      "model_key": "supplemental:qwen/qwen3-4b",
+      "source_model_id": "qwen/qwen3-4b",
+      "canonical_slug": "qwen/qwen3-4b-04-28",
+      "name": "Qwen: Qwen3 4B",
+      "provider": "qwen",
+      "description": "Qwen3-4B is a 4 billion parameter dense language model from the Qwen3 series, designed to support both general-purpose and reasoning-intensive tasks. It introduces a dual-mode architecture—thinking and non-thinking—allowing dynamic switching between high-precision logical reasoning and efficient dialogue generation. This makes it well-suited for multi-turn chat, instruction following, and complex agent workflows.",
+      "context_length": 131072,
+      "modality": "text-\u003etext",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "presence_penalty",
+        "reasoning",
+        "response_format",
+        "seed",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_p"
+      ],
+      "tokenizer": "Qwen3",
+      "pricing": {
+        "prompt_usd_per_token": 7.15e-8,
+        "completion_usd_per_token": 2.73e-7
+      },
+      "is_free": false,
+      "top_provider": {
+        "context_length": 131072,
+        "max_completion_tokens": 8192,
+        "is_moderated": false
+      }
+    },
+    {
+      "model_key": "supplemental:qwen/qwen3.5-397b-a17b",
+      "source_model_id": "qwen/qwen3.5-397b-a17b",
+      "canonical_slug": "qwen/qwen3.5-397b-a17b-20260216",
+      "name": "Qwen: Qwen3.5 397B A17B",
+      "provider": "qwen",
+      "description": "The Qwen3.5 series 397B-A17B native vision-language model is built on a hybrid architecture that integrates a linear attention mechanism with a sparse mixture-of-experts model, achieving higher inference efficiency. It delivers state-of-the-art performance comparable to leading-edge models across a wide range of tasks, including language understanding, logical reasoning, code generation, agent-based tasks, image understanding, video understanding, and graphical user interface (GUI) interactions. With its robust code-generation and agent capabilities, the model exhibits strong generalization across diverse agent.",
+      "context_length": 262144,
+      "modality": "text+image+video-\u003etext",
+      "input_modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "presence_penalty",
+        "reasoning",
+        "response_format",
+        "seed",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_p"
+      ],
+      "tokenizer": "Qwen3",
+      "pricing": {
+        "prompt_usd_per_token": 6e-7,
+        "completion_usd_per_token": 0.0000036
+      },
+      "is_free": false,
+      "top_provider": {
+        "context_length": 262144,
+        "max_completion_tokens": 65536,
+        "is_moderated": false
+      }
+    },
+    {
+      "model_key": "supplemental:qwen/qwen3.5-plus-02-15",
+      "source_model_id": "qwen/qwen3.5-plus-02-15",
+      "canonical_slug": "qwen/qwen3.5-plus-20260216",
+      "name": "Qwen: Qwen3.5 Plus 2026-02-15",
+      "provider": "qwen",
+      "description": "The Qwen3.5 native vision-language series Plus models are built on a hybrid architecture that integrates linear attention mechanisms with sparse mixture-of-experts models, achieving higher inference efficiency. In a variety of task evaluations, the 3.5 series consistently demonstrates performance on par with state-of-the-art leading models. Compared to the 3 series, these models show a leap forward in both pure-text and multimodal capabilities.",
+      "context_length": 1000000,
+      "modality": "text+image+video-\u003etext",
+      "input_modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "presence_penalty",
+        "reasoning",
+        "response_format",
+        "seed",
+        "structured_outputs",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_p"
+      ],
+      "tokenizer": "Qwen3",
+      "pricing": {
+        "prompt_usd_per_token": 4e-7,
+        "completion_usd_per_token": 0.0000024
+      },
+      "is_free": false,
+      "top_provider": {
+        "context_length": 1000000,
+        "max_completion_tokens": 65536,
+        "is_moderated": false
+      }
+    }
+  ]
+}

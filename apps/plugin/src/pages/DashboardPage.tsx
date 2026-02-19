@@ -6,7 +6,7 @@ import { type DashboardDataSource, defaultDashboardDataSource } from '../dashboa
 import { type DashboardFilters, emptyFilters } from '../dashboard/types';
 import { DashboardFilterBar } from '../components/dashboard/DashboardFilterBar';
 import { DashboardGrid } from '../components/dashboard/DashboardGrid';
-import { useModelCards } from '../components/dashboard/useModelCards';
+import { useLabelNames } from '../components/dashboard/useLabelNames';
 import { useLabelValues } from '../components/dashboard/useLabelValues';
 
 type DashboardPageProps = {
@@ -19,6 +19,18 @@ const defaultTimeRange: TimeRange = {
   raw: { from: 'now-1h', to: 'now' },
 };
 
+const noiseLabels = new Set(['__name__', 'le', 'quantile']);
+
+function labelPriority(label: string): number {
+  if (label.startsWith('gen_ai_')) {
+    return 0;
+  }
+  if (label.startsWith('telemetry_') || label.includes('service') || label === 'job' || label === 'instance') {
+    return 1;
+  }
+  return 2;
+}
+
 export default function DashboardPage({ dataSource = defaultDashboardDataSource }: DashboardPageProps) {
   const styles = useStyles2(getStyles);
   const [timeRange, setTimeRange] = useState<TimeRange>(defaultTimeRange);
@@ -27,11 +39,30 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
   const from = useMemo(() => Math.floor(timeRange.from.valueOf() / 1000), [timeRange]);
   const to = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);
 
-  const { pricingMap } = useModelCards(dataSource);
+  const labelNames = useLabelNames(dataSource, from, to);
 
   const providerValues = useLabelValues(dataSource, 'gen_ai_provider_name', from, to);
   const modelValues = useLabelValues(dataSource, 'gen_ai_request_model', from, to);
   const agentValues = useLabelValues(dataSource, 'gen_ai_agent_name', from, to);
+  const dynamicLabelValues = useLabelValues(dataSource, filters.labelKey, from, to);
+
+  const labelKeyOptions = useMemo(() => {
+    const merged = new Set<string>([
+      ...labelNames.names,
+      'gen_ai_provider_name',
+      'gen_ai_request_model',
+      'gen_ai_agent_name',
+    ]);
+    return Array.from(merged)
+      .filter((label) => !noiseLabels.has(label))
+      .sort((a, b) => {
+        const byPriority = labelPriority(a) - labelPriority(b);
+        if (byPriority !== 0) {
+          return byPriority;
+        }
+        return a.localeCompare(b);
+      });
+  }, [labelNames.names]);
 
   const handleTimeRangeChange = useCallback((newTimeRange: TimeRange) => {
     setTimeRange(newTimeRange);
@@ -49,10 +80,14 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         providerOptions={providerValues.values}
         modelOptions={modelValues.values}
         agentOptions={agentValues.values}
+        labelKeyOptions={labelKeyOptions}
+        labelValueOptions={dynamicLabelValues.values}
+        labelsLoading={labelNames.loading}
+        labelValuesLoading={dynamicLabelValues.loading}
         onTimeRangeChange={handleTimeRangeChange}
         onFiltersChange={handleFiltersChange}
       />
-      <DashboardGrid dataSource={dataSource} filters={filters} from={from} to={to} pricingMap={pricingMap} />
+      <DashboardGrid dataSource={dataSource} filters={filters} from={from} to={to} timeRange={timeRange} />
     </div>
   );
 }

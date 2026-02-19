@@ -25,6 +25,11 @@ export type PrometheusLabelValuesResponse = {
   data: string[];
 };
 
+export type PrometheusLabelsResponse = {
+  status: 'success' | 'error';
+  data: string[];
+};
+
 // Model card types (matching Sigil API contract from modelcards/types.go)
 
 export type ModelCardPricing = {
@@ -62,16 +67,47 @@ export type ModelCardListResponse = {
   freshness: ModelCardFreshness;
 };
 
+export type ModelResolvePair = {
+  provider: string;
+  model: string;
+};
+
+export type ResolvedModelCard = {
+  model_key: string;
+  source_model_id: string;
+  pricing: ModelCardPricing;
+};
+
+export type ModelCardResolveItem = {
+  provider: string;
+  model: string;
+  status: 'resolved' | 'unresolved';
+  match_strategy?: 'exact' | 'normalized';
+  reason?: 'not_found' | 'ambiguous' | 'invalid_input';
+  card?: ResolvedModelCard;
+};
+
+export type ModelCardResolveResponse = {
+  resolved: ModelCardResolveItem[];
+  freshness: ModelCardFreshness;
+};
+
 // Dashboard filter state
 
 export type DashboardFilters = {
   provider: string;
   model: string;
   agentName: string;
+  labelKey: string;
+  labelValue: string;
+  extraMatchers: string;
 };
 
 export const emptyFilters: DashboardFilters = {
   provider: '',
   model: '',
   agentName: '',
+  labelKey: '',
+  labelValue: '',
+  extraMatchers: '',
 };

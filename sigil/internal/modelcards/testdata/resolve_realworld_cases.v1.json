@@ -1,0 +1,1332 @@
+{
+  "captured_at": "2026-02-17",
+  "sources": [
+    {
+      "name": "openrouter_live_2026_02_17",
+      "url": "https://openrouter.ai/api/v1/models",
+      "captured_at": "2026-02-17"
+    },
+    {
+      "name": "anthropic_docs_2026_02_17",
+      "url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models",
+      "captured_at": "2026-02-17"
+    },
+    {
+      "name": "vertex_docs_2026_02_17",
+      "url": "https://cloud.google.com/vertex-ai/generative-ai/docs/models",
+      "captured_at": "2026-02-17"
+    },
+    {
+      "name": "bedrock_docs_2026_02_17",
+      "url": "https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html",
+      "captured_at": "2026-02-17"
+    },
+    {
+      "name": "openai_docs_2026_02_17",
+      "url": "https://platform.openai.com/docs/models",
+      "captured_at": "2026-02-17"
+    },
+    {
+      "name": "cohere_docs_2026_02_17",
+      "url": "https://docs.cohere.com/docs/models",
+      "captured_at": "2026-02-17"
+    },
+    {
+      "name": "xai_docs_2026_02_17",
+      "url": "https://docs.x.ai/docs/models",
+      "captured_at": "2026-02-17"
+    },
+    {
+      "name": "sdk_contract",
+      "url": "internal SDK provider/model emission contracts",
+      "captured_at": "2026-02-17"
+    },
+    {
+      "name": "user_variants",
+      "url": "manually curated common user-entered formats",
+      "captured_at": "2026-02-17"
+    }
+  ],
+  "cases": [
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "openai",
+      "model": "chatgpt-4o-latest",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "openai",
+      "model": "gpt-3.5-turbo",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "openai",
+      "model": "gpt-3.5-turbo-0613",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "openai",
+      "model": "gpt-3.5-turbo-16k",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "openai",
+      "model": "gpt-3.5-turbo-instruct",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "openai",
+      "model": "gpt-4",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "openai",
+      "model": "gpt-4-0314",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "openai",
+      "model": "gpt-4-1106-preview",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "openai",
+      "model": "gpt-4-turbo",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "openai",
+      "model": "gpt-4-turbo-preview",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "openai",
+      "model": "gpt-4.1-mini",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "anthropic",
+      "model": "claude-3-haiku",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "anthropic",
+      "model": "claude-3.5-haiku",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "anthropic",
+      "model": "claude-3.5-sonnet",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "anthropic",
+      "model": "claude-3.7-sonnet",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "anthropic",
+      "model": "claude-3.7-sonnet:thinking",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "anthropic",
+      "model": "claude-haiku-4.5",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "anthropic",
+      "model": "claude-opus-4",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "anthropic",
+      "model": "claude-opus-4.1",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "anthropic",
+      "model": "claude-opus-4.5",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "anthropic",
+      "model": "claude-opus-4.6",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4.5",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "google",
+      "model": "gemini-2.0-flash-001",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "google",
+      "model": "gemini-2.0-flash-lite-001",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "google",
+      "model": "gemini-2.5-flash",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "google",
+      "model": "gemini-2.5-flash-image",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "google",
+      "model": "gemini-2.5-flash-lite",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "google",
+      "model": "gemini-2.5-flash-lite-preview-09-2025",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "google",
+      "model": "gemini-2.5-flash-preview-09-2025",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "google",
+      "model": "gemini-2.5-pro",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "google",
+      "model": "gemini-2.5-pro-preview",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "google",
+      "model": "gemini-2.5-pro-preview-05-06",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "google",
+      "model": "gemini-3-flash-preview",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "google",
+      "model": "gemini-3-pro-image-preview",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "amazon",
+      "model": "nova-2-lite-v1",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "amazon",
+      "model": "nova-lite-v1",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "amazon",
+      "model": "nova-micro-v1",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "amazon",
+      "model": "nova-premier-v1",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "amazon",
+      "model": "nova-pro-v1",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "mistralai",
+      "model": "codestral-2508",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "mistralai",
+      "model": "devstral-2512",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "mistralai",
+      "model": "devstral-medium",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "mistralai",
+      "model": "devstral-small",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "mistralai",
+      "model": "ministral-14b-2512",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "mistralai",
+      "model": "ministral-3b-2512",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "mistralai",
+      "model": "ministral-8b-2512",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "mistralai",
+      "model": "mistral-7b-instruct",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "mistralai",
+      "model": "mistral-7b-instruct-v0.1",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "mistralai",
+      "model": "mistral-7b-instruct-v0.2",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "mistralai",
+      "model": "mistral-7b-instruct-v0.3",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "mistralai",
+      "model": "mistral-large",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "cohere",
+      "model": "command-a",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "cohere",
+      "model": "command-r-08-2024",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "cohere",
+      "model": "command-r-plus-08-2024",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "cohere",
+      "model": "command-r7b-12-2024",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "x-ai",
+      "model": "grok-3",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "x-ai",
+      "model": "grok-3-beta",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "x-ai",
+      "model": "grok-3-mini",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "x-ai",
+      "model": "grok-3-mini-beta",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "x-ai",
+      "model": "grok-4",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "x-ai",
+      "model": "grok-4-fast",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "x-ai",
+      "model": "grok-4.1-fast",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "x-ai",
+      "model": "grok-code-fast-1",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "meta-llama",
+      "model": "llama-3-70b-instruct",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "meta-llama",
+      "model": "llama-3-8b-instruct",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "meta-llama",
+      "model": "llama-3.1-405b",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "meta-llama",
+      "model": "llama-3.1-405b-instruct",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "meta-llama",
+      "model": "llama-3.1-70b-instruct",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "meta-llama",
+      "model": "llama-3.1-8b-instruct",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "meta-llama",
+      "model": "llama-3.2-11b-vision-instruct",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "meta-llama",
+      "model": "llama-3.2-1b-instruct",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "meta-llama",
+      "model": "llama-3.2-3b-instruct",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "openrouter_live_2026_02_17",
+      "category": "canonical_provider",
+      "provider": "meta-llama",
+      "model": "llama-3.2-3b-instruct:free",
+      "expectation_tier": "should_resolve",
+      "note": "real model ID captured from OpenRouter live list"
+    },
+    {
+      "source": "sdk_contract",
+      "category": "sdk_exact",
+      "provider": "openai",
+      "model": "gpt-5",
+      "expectation_tier": "should_resolve",
+      "note": "go/js/python/dotnet wrappers commonly emit provider=openai"
+    },
+    {
+      "source": "sdk_contract",
+      "category": "sdk_exact",
+      "provider": "openai",
+      "model": "gpt-4o",
+      "expectation_tier": "should_resolve",
+      "note": "sdk baseline"
+    },
+    {
+      "source": "sdk_contract",
+      "category": "sdk_exact",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "expectation_tier": "should_resolve",
+      "note": "sdk baseline"
+    },
+    {
+      "source": "sdk_contract",
+      "category": "sdk_exact",
+      "provider": "openai",
+      "model": "o3",
+      "expectation_tier": "should_resolve",
+      "note": "sdk baseline"
+    },
+    {
+      "source": "sdk_contract",
+      "category": "sdk_exact",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-5",
+      "expectation_tier": "should_resolve",
+      "note": "sdk emits dash form; resolver should normalize"
+    },
+    {
+      "source": "sdk_contract",
+      "category": "sdk_exact",
+      "provider": "anthropic",
+      "model": "claude-opus-4-5",
+      "expectation_tier": "should_resolve",
+      "note": "sdk emits dash form; resolver should normalize"
+    },
+    {
+      "source": "sdk_contract",
+      "category": "sdk_exact",
+      "provider": "anthropic",
+      "model": "claude-3.7-sonnet",
+      "expectation_tier": "should_resolve",
+      "note": "sdk baseline"
+    },
+    {
+      "source": "sdk_contract",
+      "category": "sdk_exact",
+      "provider": "gemini",
+      "model": "gemini-2.5-pro",
+      "expectation_tier": "should_resolve",
+      "note": "sdk gemini wrapper default provider name"
+    },
+    {
+      "source": "sdk_contract",
+      "category": "sdk_exact",
+      "provider": "gemini",
+      "model": "gemini-2.5-flash",
+      "expectation_tier": "should_resolve",
+      "note": "sdk gemini wrapper default provider name"
+    },
+    {
+      "source": "sdk_contract",
+      "category": "sdk_exact",
+      "provider": "gemini",
+      "model": "gemini-2.5-flash-lite",
+      "expectation_tier": "should_resolve",
+      "note": "sdk gemini wrapper default provider name"
+    },
+    {
+      "source": "sdk_contract",
+      "category": "sdk_exact",
+      "provider": "google",
+      "model": "gemini-2.5-pro",
+      "expectation_tier": "should_resolve",
+      "note": "sdk custom provider override to google"
+    },
+    {
+      "source": "sdk_contract",
+      "category": "sdk_exact",
+      "provider": "google",
+      "model": "gemini-2.5-flash",
+      "expectation_tier": "should_resolve",
+      "note": "sdk custom provider override to google"
+    },
+    {
+      "source": "sdk_contract",
+      "category": "sdk_exact",
+      "provider": "x-ai",
+      "model": "grok-4",
+      "expectation_tier": "should_resolve",
+      "note": "sdk custom provider override to x-ai"
+    },
+    {
+      "source": "sdk_contract",
+      "category": "sdk_exact",
+      "provider": "meta-llama",
+      "model": "llama-4-maverick",
+      "expectation_tier": "should_resolve",
+      "note": "sdk custom provider override to meta-llama"
+    },
+    {
+      "source": "anthropic_docs_2026_02_17",
+      "category": "provider_docs",
+      "provider": "anthropic",
+      "model": "claude-3-haiku",
+      "expectation_tier": "should_resolve",
+      "note": "model name extracted/derived from Anthropic docs"
+    },
+    {
+      "source": "anthropic_docs_2026_02_17",
+      "category": "provider_docs",
+      "provider": "anthropic",
+      "model": "claude-3-haiku-20240307",
+      "expectation_tier": "should_resolve",
+      "note": "model name extracted/derived from Anthropic docs"
+    },
+    {
+      "source": "anthropic_docs_2026_02_17",
+      "category": "provider_docs",
+      "provider": "anthropic",
+      "model": "claude-3-7-sonnet",
+      "expectation_tier": "should_resolve",
+      "note": "model name extracted/derived from Anthropic docs"
+    },
+    {
+      "source": "anthropic_docs_2026_02_17",
+      "category": "provider_docs",
+      "provider": "anthropic",
+      "model": "claude-3-7-sonnet-20250219",
+      "expectation_tier": "should_resolve",
+      "note": "model name extracted/derived from Anthropic docs"
+    },
+    {
+      "source": "anthropic_docs_2026_02_17",
+      "category": "provider_docs",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4",
+      "expectation_tier": "should_resolve",
+      "note": "model name extracted/derived from Anthropic docs"
+    },
+    {
+      "source": "anthropic_docs_2026_02_17",
+      "category": "provider_docs",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-20250514",
+      "expectation_tier": "should_resolve",
+      "note": "model name extracted/derived from Anthropic docs"
+    },
+    {
+      "source": "anthropic_docs_2026_02_17",
+      "category": "provider_docs",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-5",
+      "expectation_tier": "should_resolve",
+      "note": "model name extracted/derived from Anthropic docs"
+    },
+    {
+      "source": "anthropic_docs_2026_02_17",
+      "category": "provider_docs",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-5-20250929",
+      "expectation_tier": "should_resolve",
+      "note": "model name extracted/derived from Anthropic docs"
+    },
+    {
+      "source": "anthropic_docs_2026_02_17",
+      "category": "provider_docs",
+      "provider": "anthropic",
+      "model": "claude-haiku-4-5",
+      "expectation_tier": "should_resolve",
+      "note": "model name extracted/derived from Anthropic docs"
+    },
+    {
+      "source": "anthropic_docs_2026_02_17",
+      "category": "provider_docs",
+      "provider": "anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "expectation_tier": "should_resolve",
+      "note": "model name extracted/derived from Anthropic docs"
+    },
+    {
+      "source": "anthropic_docs_2026_02_17",
+      "category": "provider_docs",
+      "provider": "anthropic",
+      "model": "claude-opus-4",
+      "expectation_tier": "should_resolve",
+      "note": "model name extracted/derived from Anthropic docs"
+    },
+    {
+      "source": "anthropic_docs_2026_02_17",
+      "category": "provider_docs",
+      "provider": "anthropic",
+      "model": "claude-opus-4-1",
+      "expectation_tier": "should_resolve",
+      "note": "model name extracted/derived from Anthropic docs"
+    },
+    {
+      "source": "anthropic_docs_2026_02_17",
+      "category": "provider_docs",
+      "provider": "anthropic",
+      "model": "claude-opus-4-1-20250805",
+      "expectation_tier": "should_resolve",
+      "note": "model name extracted/derived from Anthropic docs"
+    },
+    {
+      "source": "anthropic_docs_2026_02_17",
+      "category": "provider_docs",
+      "provider": "anthropic",
+      "model": "claude-opus-4-5",
+      "expectation_tier": "should_resolve",
+      "note": "model name extracted/derived from Anthropic docs"
+    },
+    {
+      "source": "anthropic_docs_2026_02_17",
+      "category": "provider_docs",
+      "provider": "anthropic",
+      "model": "claude-opus-4-5-20251101",
+      "expectation_tier": "should_resolve",
+      "note": "model name extracted/derived from Anthropic docs"
+    },
+    {
+      "source": "anthropic_docs_2026_02_17",
+      "category": "provider_docs",
+      "provider": "anthropic",
+      "model": "claude-opus-4-6",
+      "expectation_tier": "should_resolve",
+      "note": "model name extracted/derived from Anthropic docs"
+    },
+    {
+      "source": "anthropic_docs_2026_02_17",
+      "category": "provider_docs",
+      "provider": "anthropic",
+      "model": "claude-opus-4-6-v1",
+      "expectation_tier": "should_resolve",
+      "note": "model name extracted/derived from Anthropic docs"
+    },
+    {
+      "source": "vertex_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "vertex",
+      "model": "gemini-2.5-pro",
+      "expectation_tier": "should_resolve",
+      "note": "common user/provider form in Vertex contexts"
+    },
+    {
+      "source": "vertex_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "vertex",
+      "model": "gemini-2.5-flash",
+      "expectation_tier": "should_resolve",
+      "note": "common user/provider form in Vertex contexts"
+    },
+    {
+      "source": "vertex_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "vertex",
+      "model": "gemini-2.5-flash-lite",
+      "expectation_tier": "should_resolve",
+      "note": "common user/provider form in Vertex contexts"
+    },
+    {
+      "source": "vertex_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "google",
+      "model": "gemini-2.5-pro@001",
+      "expectation_tier": "should_resolve",
+      "note": "Vertex version suffix form"
+    },
+    {
+      "source": "vertex_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "google",
+      "model": "gemini-2.5-flash@001",
+      "expectation_tier": "should_resolve",
+      "note": "Vertex version suffix form"
+    },
+    {
+      "source": "vertex_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "google",
+      "model": "gemini-2.5-flash-lite@001",
+      "expectation_tier": "should_resolve",
+      "note": "Vertex version suffix form"
+    },
+    {
+      "source": "vertex_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-5@20250929",
+      "expectation_tier": "should_resolve",
+      "note": "Vertex Anthropic model style"
+    },
+    {
+      "source": "vertex_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "anthropic",
+      "model": "claude-haiku-4-5@20251001",
+      "expectation_tier": "should_resolve",
+      "note": "Vertex Anthropic model style"
+    },
+    {
+      "source": "vertex_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "anthropic",
+      "model": "claude-opus-4-1@20250805",
+      "expectation_tier": "should_resolve",
+      "note": "Vertex Anthropic model style"
+    },
+    {
+      "source": "vertex_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "vertex",
+      "model": "claude-sonnet-4-5@20250929",
+      "expectation_tier": "exploratory",
+      "note": "provider alias likely unsupported today"
+    },
+    {
+      "source": "vertex_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "gemini",
+      "model": "gemini-2.5-pro@001",
+      "expectation_tier": "exploratory",
+      "note": "provider alias likely unsupported today"
+    },
+    {
+      "source": "bedrock_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "bedrock",
+      "model": "anthropic.claude-3-haiku-20240307-v1:0",
+      "expectation_tier": "should_resolve",
+      "note": "Bedrock model identifier form from AWS docs"
+    },
+    {
+      "source": "bedrock_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "bedrock",
+      "model": "anthropic.claude-3-5-haiku-20241022-v1:0",
+      "expectation_tier": "should_resolve",
+      "note": "Bedrock model identifier form from AWS docs"
+    },
+    {
+      "source": "bedrock_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "bedrock",
+      "model": "anthropic.claude-sonnet-4-20250514-v1:0",
+      "expectation_tier": "should_resolve",
+      "note": "Bedrock model identifier form from AWS docs"
+    },
+    {
+      "source": "bedrock_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "bedrock",
+      "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "expectation_tier": "should_resolve",
+      "note": "Bedrock model identifier form from AWS docs"
+    },
+    {
+      "source": "bedrock_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "bedrock",
+      "model": "anthropic.claude-haiku-4-5-20251001-v1:0",
+      "expectation_tier": "should_resolve",
+      "note": "Bedrock model identifier form from AWS docs"
+    },
+    {
+      "source": "bedrock_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "bedrock",
+      "model": "anthropic.claude-opus-4-1-20250805-v1:0",
+      "expectation_tier": "should_resolve",
+      "note": "Bedrock model identifier form from AWS docs"
+    },
+    {
+      "source": "bedrock_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "bedrock",
+      "model": "anthropic.claude-opus-4-5-20251101-v1:0",
+      "expectation_tier": "should_resolve",
+      "note": "Bedrock model identifier form from AWS docs"
+    },
+    {
+      "source": "bedrock_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "bedrock",
+      "model": "amazon.nova-lite-v1:0",
+      "expectation_tier": "should_resolve",
+      "note": "Bedrock model identifier form from AWS docs"
+    },
+    {
+      "source": "bedrock_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "bedrock",
+      "model": "amazon.nova-micro-v1:0",
+      "expectation_tier": "should_resolve",
+      "note": "Bedrock model identifier form from AWS docs"
+    },
+    {
+      "source": "bedrock_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "bedrock",
+      "model": "amazon.nova-pro-v1:0",
+      "expectation_tier": "should_resolve",
+      "note": "Bedrock model identifier form from AWS docs"
+    },
+    {
+      "source": "bedrock_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "bedrock",
+      "model": "amazon.nova-premier-v1:0",
+      "expectation_tier": "should_resolve",
+      "note": "Bedrock model identifier form from AWS docs"
+    },
+    {
+      "source": "bedrock_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "bedrock",
+      "model": "amazon.nova-2-lite-v1:0",
+      "expectation_tier": "should_resolve",
+      "note": "Bedrock model identifier form from AWS docs"
+    },
+    {
+      "source": "bedrock_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "bedrock",
+      "model": "meta.llama3-3-70b-instruct-v1:0",
+      "expectation_tier": "should_resolve",
+      "note": "Bedrock model identifier form from AWS docs"
+    },
+    {
+      "source": "bedrock_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "bedrock",
+      "model": "meta.llama4-maverick-17b-instruct-v1:0",
+      "expectation_tier": "should_resolve",
+      "note": "Bedrock model identifier form from AWS docs"
+    },
+    {
+      "source": "bedrock_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "bedrock",
+      "model": "meta.llama4-scout-17b-instruct-v1:0",
+      "expectation_tier": "should_resolve",
+      "note": "Bedrock model identifier form from AWS docs"
+    },
+    {
+      "source": "bedrock_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "bedrock",
+      "model": "cohere.command-r-v1:0",
+      "expectation_tier": "should_resolve",
+      "note": "Bedrock model identifier form from AWS docs"
+    },
+    {
+      "source": "bedrock_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "bedrock",
+      "model": "cohere.command-r-plus-v1:0",
+      "expectation_tier": "should_resolve",
+      "note": "Bedrock model identifier form from AWS docs"
+    },
+    {
+      "source": "bedrock_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "bedrock",
+      "model": "mistral.mistral-large-2407-v1:0",
+      "expectation_tier": "should_resolve",
+      "note": "Bedrock model identifier form from AWS docs"
+    },
+    {
+      "source": "bedrock_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "bedrock",
+      "model": "mistral.mixtral-8x7b-instruct-v0:1",
+      "expectation_tier": "should_resolve",
+      "note": "Bedrock model identifier form from AWS docs"
+    },
+    {
+      "source": "bedrock_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "bedrock",
+      "model": "mistral.ministral-3-8b-instruct",
+      "expectation_tier": "should_resolve",
+      "note": "Bedrock model identifier form from AWS docs"
+    },
+    {
+      "source": "user_variants",
+      "category": "user_variant",
+      "provider": "xai",
+      "model": "grok-4",
+      "expectation_tier": "should_resolve",
+      "note": "common alias for x-ai"
+    },
+    {
+      "source": "user_variants",
+      "category": "user_variant",
+      "provider": "xai",
+      "model": "grok-4.1-fast",
+      "expectation_tier": "should_resolve",
+      "note": "common alias for x-ai"
+    },
+    {
+      "source": "user_variants",
+      "category": "user_variant",
+      "provider": "meta",
+      "model": "llama-4-maverick",
+      "expectation_tier": "should_resolve",
+      "note": "common alias for meta-llama"
+    },
+    {
+      "source": "user_variants",
+      "category": "user_variant",
+      "provider": "meta",
+      "model": "llama-4-scout",
+      "expectation_tier": "should_resolve",
+      "note": "common alias for meta-llama"
+    },
+    {
+      "source": "user_variants",
+      "category": "user_variant",
+      "provider": "aws-bedrock",
+      "model": "amazon.nova-pro-v1:0",
+      "expectation_tier": "should_resolve",
+      "note": "common alias for bedrock"
+    },
+    {
+      "source": "user_variants",
+      "category": "user_variant",
+      "provider": "bedrock",
+      "model": "amazon.nova-pro-v1:0",
+      "expectation_tier": "should_resolve",
+      "note": "common alias for bedrock"
+    },
+    {
+      "source": "user_variants",
+      "category": "user_variant",
+      "provider": "google-vertex",
+      "model": "gemini-2.5-pro",
+      "expectation_tier": "should_resolve",
+      "note": "common alias for Vertex Google models"
+    },
+    {
+      "source": "user_variants",
+      "category": "user_variant",
+      "provider": "vertex-ai",
+      "model": "gemini-2.5-pro",
+      "expectation_tier": "should_resolve",
+      "note": "common alias for Vertex Google models"
+    },
+    {
+      "source": "user_variants",
+      "category": "user_variant",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4.5",
+      "expectation_tier": "should_resolve",
+      "note": "dot version form should resolve"
+    },
+    {
+      "source": "user_variants",
+      "category": "user_variant",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-5",
+      "expectation_tier": "should_resolve",
+      "note": "dash version form should resolve"
+    },
+    {
+      "source": "user_variants",
+      "category": "user_variant",
+      "provider": "anthropic",
+      "model": "claude-opus-4-6",
+      "expectation_tier": "should_resolve",
+      "note": "newer series naming"
+    },
+    {
+      "source": "user_variants",
+      "category": "user_variant",
+      "provider": "openai",
+      "model": "gpt-4o-mini",
+      "expectation_tier": "should_resolve",
+      "note": "common model"
+    },
+    {
+      "source": "user_variants",
+      "category": "user_variant",
+      "provider": "openai",
+      "model": "gpt-5-mini",
+      "expectation_tier": "should_resolve",
+      "note": "common model"
+    },
+    {
+      "source": "user_variants",
+      "category": "user_variant",
+      "provider": "openai",
+      "model": "gpt-5.1-codex",
+      "expectation_tier": "should_resolve",
+      "note": "common model"
+    },
+    {
+      "source": "user_variants",
+      "category": "user_variant",
+      "provider": "mistral",
+      "model": "mistral-large",
+      "expectation_tier": "should_resolve",
+      "note": "common alias for mistralai"
+    },
+    {
+      "source": "user_variants",
+      "category": "user_variant",
+      "provider": "cohere-ai",
+      "model": "command-r-plus-08-2024",
+      "expectation_tier": "should_resolve",
+      "note": "common alias for cohere"
+    },
+    {
+      "source": "user_variants",
+      "category": "typo_variant",
+      "provider": "anthorpic",
+      "model": "claude-sonnet-4-5",
+      "expectation_tier": "exploratory",
+      "note": "frequent typo"
+    },
+    {
+      "source": "user_variants",
+      "category": "typo_variant",
+      "provider": "gooogle",
+      "model": "gemini-2.5-pro",
+      "expectation_tier": "exploratory",
+      "note": "frequent typo"
+    },
+    {
+      "source": "user_variants",
+      "category": "typo_variant",
+      "provider": "open-ai",
+      "model": "gpt-5",
+      "expectation_tier": "exploratory",
+      "note": "hyphenated typo/alias"
+    },
+    {
+      "source": "user_variants",
+      "category": "typo_variant",
+      "provider": "amazn",
+      "model": "nova-pro-v1",
+      "expectation_tier": "exploratory",
+      "note": "provider typo"
+    },
+    {
+      "source": "user_variants",
+      "category": "typo_variant",
+      "provider": "mistrali",
+      "model": "mistral-large",
+      "expectation_tier": "exploratory",
+      "note": "provider typo"
+    },
+    {
+      "source": "user_variants",
+      "category": "typo_variant",
+      "provider": "coehere",
+      "model": "command-a",
+      "expectation_tier": "exploratory",
+      "note": "provider typo"
+    },
+    {
+      "source": "user_variants",
+      "category": "typo_variant",
+      "provider": "x-ia",
+      "model": "grok-4",
+      "expectation_tier": "exploratory",
+      "note": "provider typo"
+    }
+  ]
+}
