@@ -59,15 +59,19 @@ def _list_conversation_ids() -> list[str]:
     payload = _request_json("/api/v1/conversations")
     items = payload.get("items", []) if isinstance(payload, dict) else []
 
-    ids: list[str] = []
+    valid_items: list[dict[str, Any]] = []
     for item in items:
         if not isinstance(item, dict):
             continue
         raw_id = item.get("id")
         if isinstance(raw_id, str) and raw_id.strip() != "":
-            ids.append(raw_id.strip())
+            valid_items.append(item)
 
-    return ids[: _max_conversations()]
+    # Sort newest-first so the slice always covers the most recent conversations,
+    # regardless of the API's default ordering.
+    valid_items.sort(key=lambda it: it.get("updated_at", ""), reverse=True)
+
+    return [str(it["id"]).strip() for it in valid_items][: _max_conversations()]
 
 
 def _scan_generations() -> tuple[set[str], set[tuple[str, str]], int, int]:
