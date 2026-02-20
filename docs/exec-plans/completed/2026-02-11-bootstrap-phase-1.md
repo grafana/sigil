@@ -14,7 +14,7 @@ Superseded by the Phase 2 delivery coordinator and track-specific plans:
 
 - `docs/exec-plans/active/2026-02-12-phase-2-delivery.md`
 - `docs/exec-plans/completed/2026-02-12-phase-2-query-proxy.md`
-- `docs/exec-plans/active/2026-02-12-phase-2-hybrid-storage.md`
+- `docs/exec-plans/completed/2026-02-12-phase-2-hybrid-storage.md`
 
 ## Goal
 
@@ -36,18 +36,18 @@ Detailed implementation contracts and phase sequencing are defined in:
 - `docs/exec-plans/completed/2026-02-12-phase-2-sdk-parity-typescript-javascript.md`
 - `docs/exec-plans/completed/2026-02-12-phase-2-tenant-boundary.md`
 - `docs/exec-plans/completed/2026-02-12-phase-2-query-proxy.md`
-- `docs/exec-plans/active/2026-02-12-phase-2-hybrid-storage.md`
+- `docs/exec-plans/completed/2026-02-12-phase-2-hybrid-storage.md`
 
 This bootstrap plan stays as the umbrella phase marker while Phase 2 contains decision-complete delivery tasks.
 
 ## Tasks
 
-- [x] Replace query placeholders with Tempo-first query + storage hydration behavior (`docs/exec-plans/completed/2026-02-15-conversation-query-path.md` and `docs/exec-plans/active/2026-02-12-phase-2-hybrid-storage.md`).
+- [x] Replace query placeholders with Tempo-first query + storage hydration behavior (`docs/exec-plans/completed/2026-02-15-conversation-query-path.md` and `docs/exec-plans/completed/2026-02-12-phase-2-hybrid-storage.md`).
 - [x] Close Records-first externalization path in favor of Generation-first ingest (`docs/exec-plans/completed/2026-02-12-generation-first-ingest.md`).
 - [x] Add plugin pages with real conversations/generations/traces drilldown tables (`docs/exec-plans/completed/2026-02-15-conversation-query-path.md`).
 - [x] Add plugin backend resource proxy for query access (`docs/exec-plans/completed/2026-02-15-conversation-query-path.md` and `docs/exec-plans/completed/2026-02-12-phase-2-query-proxy.md`).
 - [x] Add tenant/auth boundaries for API and plugin proxy paths (`docs/exec-plans/completed/2026-02-12-phase-2-tenant-boundary.md`).
-- [x] Add schema migrations for generation/conversation metadata and hot storage indexes (`docs/exec-plans/active/2026-02-12-phase-2-hybrid-storage.md` and `docs/exec-plans/active/2026-02-13-compaction-scaling.md`).
+- [x] Add schema migrations for generation/conversation metadata and hot storage indexes (`docs/exec-plans/completed/2026-02-12-phase-2-hybrid-storage.md` and `docs/exec-plans/completed/2026-02-13-compaction-scaling.md`).
 
 ## Risks
 

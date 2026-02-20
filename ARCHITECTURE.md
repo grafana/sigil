@@ -343,7 +343,7 @@ Current behavior on `main`:
 References:
 
 - Design doc: `docs/design-docs/2026-02-13-compaction-scaling.md`
-- Execution plan: `docs/exec-plans/active/2026-02-13-compaction-scaling.md`
+- Execution plan: `docs/exec-plans/completed/2026-02-13-compaction-scaling.md`
 
 ## Online Evaluation
 

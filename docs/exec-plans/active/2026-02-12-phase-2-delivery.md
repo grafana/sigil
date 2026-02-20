@@ -19,8 +19,8 @@ audience: both
 | SDK parity (.NET/C#) | `exec-plans/completed/2026-02-13-phase-2-sdk-parity-dotnet-csharp.md` | Done |
 | Tenant boundary | `exec-plans/completed/2026-02-12-phase-2-tenant-boundary.md` | Done |
 | Query proxy and envelope | `exec-plans/completed/2026-02-12-phase-2-query-proxy.md` | Done |
-| Hybrid storage and query | `exec-plans/active/2026-02-12-phase-2-hybrid-storage.md` | Done |
-| Compaction scaling | `exec-plans/active/2026-02-13-compaction-scaling.md` | Done |
+| Hybrid storage and query | `exec-plans/completed/2026-02-12-phase-2-hybrid-storage.md` | Done |
+| Compaction scaling | `exec-plans/completed/2026-02-13-compaction-scaling.md` | Done |
 | SDK metrics and telemetry pipeline | `exec-plans/completed/2026-02-13-sdk-metrics-and-telemetry-pipeline.md` | Done |
 | Embedding call observability | `exec-plans/completed/2026-02-17-embedding-call-observability.md` | Done |
 

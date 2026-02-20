@@ -50,7 +50,7 @@ Replace the placeholder query endpoints with a production conversation search ba
 
 ## Dependencies
 
-- Phase D fan-out store (`storage.FanOutStore`) from `docs/exec-plans/active/2026-02-12-phase-2-hybrid-storage.md`. The conversation and generation detail endpoints need fan-out reads (hot MySQL + cold object storage, dedupe by `generation_id`). This can be developed in parallel: detail endpoints start with MySQL-only reads and switch to fan-out when Phase D lands.
+- Phase D fan-out store (`storage.FanOutStore`) from `docs/exec-plans/completed/2026-02-12-phase-2-hybrid-storage.md`. The conversation and generation detail endpoints need fan-out reads (hot MySQL + cold object storage, dedupe by `generation_id`). This can be developed in parallel: detail endpoints start with MySQL-only reads and switch to fan-out when Phase D lands.
 - Existing `WALReader.GetByID` and `WALReader.GetByConversationID` for hot reads.
 - Existing query proxy infrastructure (`sigil/internal/queryproxy`) for Tempo HTTP connectivity config.
 

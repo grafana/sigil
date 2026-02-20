@@ -43,16 +43,15 @@ This is the canonical navigation map for repository documentation.
     - Drafts: `exec-plans/active/drafts/`
   - Current implementation priority: cross-track consistency and tracked tech debt follow-up (CI scope expansion, ingestion-log evolution)
   - Phase 2 umbrella coordinator: `exec-plans/active/2026-02-12-phase-2-delivery.md`
-  - Phase 2 completed implementation tracks (pending archive move):
-    - `exec-plans/active/2026-02-12-phase-2-hybrid-storage.md`
-    - `exec-plans/active/2026-02-13-compaction-scaling.md`
   - Completed: `exec-plans/completed/`
     - `exec-plans/completed/2026-02-11-bootstrap-phase-1.md` (superseded)
     - `exec-plans/completed/2026-02-12-model-card-catalog-refresh.md`
     - `exec-plans/completed/2026-02-12-generation-first-ingest.md`
     - `exec-plans/completed/2026-02-12-agent-identity-fields.md`
+    - `exec-plans/completed/2026-02-12-phase-2-hybrid-storage.md`
     - `exec-plans/completed/2026-02-12-phase-2-sdk-parity-python.md`
     - `exec-plans/completed/2026-02-12-phase-2-sdk-parity-typescript-javascript.md`
+    - `exec-plans/completed/2026-02-13-compaction-scaling.md`
     - `exec-plans/completed/2026-02-13-phase-2-sdk-parity-dotnet-csharp.md`
     - `exec-plans/completed/2026-02-12-phase-2-tenant-boundary.md`
     - `exec-plans/completed/2026-02-12-phase-2-query-proxy.md`
