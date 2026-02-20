@@ -1,15 +1,12 @@
 [project]
-name = "sigil-sdk-langgraph"
+name = "sigil-sdk-frameworks"
 version = "0.1.0"
-description = "LangGraph callback handlers for Sigil Python SDK"
+description = "Shared handler logic for Sigil Python framework SDK packages"
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
 dependencies = [
   "sigil-sdk>=0.1.0",
-  "sigil-sdk-frameworks>=0.1.0",
-  "langchain-core>=0.3.0",
-  "langgraph>=0.2.0",
 ]
 
 [project.optional-dependencies]
@@ -26,7 +23,7 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["sigil_sdk_langgraph*"]
+include = ["sigil_sdk_frameworks*"]
 
 [tool.setuptools.package-data]
-sigil_sdk_langgraph = ["py.typed"]
+sigil_sdk_frameworks = ["py.typed"]

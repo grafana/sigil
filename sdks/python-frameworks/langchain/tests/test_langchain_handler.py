@@ -205,6 +205,38 @@ def test_langchain_async_handler_records_generation() -> None:
         client.shutdown()
 
 
+def test_langchain_first_token_at_recorded_only_once() -> None:
+    exporter = _CapturingExporter()
+    client = _new_client(exporter)
+
+    try:
+        run_id = uuid4()
+        handler = SigilLangChainHandler(client=client)
+
+        handler.on_llm_start(
+            {},
+            ["stream this"],
+            run_id=run_id,
+            invocation_params={"stream": True, "model": "gpt-5"},
+        )
+
+        run_state = handler._runs[str(run_id)]
+        assert not run_state.first_token_recorded
+
+        handler.on_llm_new_token("hello", run_id=run_id)
+        assert run_state.first_token_recorded
+        first_ts = run_state.recorder._first_token_at
+
+        handler.on_llm_new_token(" world", run_id=run_id)
+        handler.on_llm_new_token(" foo", run_id=run_id)
+
+        assert run_state.recorder._first_token_at == first_ts, "TTFT timestamp must not change after first token"
+
+        handler.on_llm_end({"llm_output": {"model_name": "gpt-5"}}, run_id=run_id)
+    finally:
+        client.shutdown()
+
+
 def test_langchain_tool_chain_and_retriever_callbacks_emit_spans() -> None:
     exporter = _CapturingExporter()
     span_exporter = InMemorySpanExporter()
