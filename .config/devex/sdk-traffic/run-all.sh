@@ -209,32 +209,44 @@ supervise_children() {
 }
 
 supervise_one_shot_children() {
-  local idx
-  local pid
   local status
+  local exited_idx
   local name
+  local remaining=${#CHILD_PIDS[@]}
 
-  if (( ${#CHILD_PIDS[@]} == 0 )); then
+  if (( remaining == 0 )); then
     log "no emitters were started"
     return 1
   fi
 
-  for idx in "${!CHILD_PIDS[@]}"; do
-    pid="${CHILD_PIDS[$idx]}"
-    name="${CHILD_NAMES[$idx]}"
+  while (( remaining > 0 )); do
     set +e
-    wait "${pid}"
+    wait -n "${CHILD_PIDS[@]}"
     status=$?
     set -e
+
+    exited_idx="$(find_exited_child_index)"
+    if [[ "${exited_idx}" == "-1" ]]; then
+      log "wait returned but no exited child could be identified"
+      cleanup_children
+      return 1
+    fi
+
+    name="${CHILD_NAMES[$exited_idx]}"
     if (( status != 0 )); then
       log "${name} emitter exited with status ${status}"
       cleanup_children
       return "${status}"
     fi
+
     log "${name} emitter completed one-shot run"
+    unset 'CHILD_PIDS[exited_idx]'
+    unset 'CHILD_NAMES[exited_idx]'
+    remaining=$((remaining - 1))
   done
 
   CHILD_PIDS=()
+  CHILD_NAMES=()
   return 0
 }
 
