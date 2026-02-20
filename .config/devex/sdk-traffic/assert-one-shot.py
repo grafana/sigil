@@ -44,19 +44,26 @@ def _max_conversations() -> int:
     return max(100, value)
 
 
-def _request_json(path: str) -> Any:
+def _request_json(path: str, deadline: float | None = None) -> Any:
+    timeout = 10.0
+    if deadline is not None:
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            raise TimeoutError("deadline exceeded before request")
+        timeout = min(timeout, remaining)
+
     req = urllib_request.Request(
         f"{_base_url()}{path}",
         headers={"accept": "application/json"},
         method="GET",
     )
-    with urllib_request.urlopen(req, timeout=10) as response:
+    with urllib_request.urlopen(req, timeout=timeout) as response:
         payload = response.read().decode("utf-8")
     return json.loads(payload)
 
 
-def _list_conversation_ids() -> list[str]:
-    payload = _request_json("/api/v1/conversations")
+def _list_conversation_ids(deadline: float | None = None) -> list[str]:
+    payload = _request_json("/api/v1/conversations", deadline=deadline)
     items = payload.get("items", []) if isinstance(payload, dict) else []
 
     ids: list[str] = []
@@ -70,16 +77,21 @@ def _list_conversation_ids() -> list[str]:
     return ids[: _max_conversations()]
 
 
-def _scan_generations() -> tuple[set[str], set[tuple[str, str]], int, int]:
+def _scan_generations(
+    deadline: float | None = None,
+) -> tuple[set[str], set[tuple[str, str]], int, int]:
     languages: set[str] = set()
     frameworks: set[tuple[str, str]] = set()
 
-    conversation_ids = _list_conversation_ids()
+    conversation_ids = _list_conversation_ids(deadline=deadline)
     scanned_generations = 0
 
     for conversation_id in conversation_ids:
+        if deadline is not None and time.time() >= deadline:
+            break
+
         encoded_id = urllib_parse.quote(conversation_id, safe="")
-        detail = _request_json(f"/api/v1/conversations/{encoded_id}")
+        detail = _request_json(f"/api/v1/conversations/{encoded_id}", deadline=deadline)
         generations = detail.get("generations", []) if isinstance(detail, dict) else []
         if not isinstance(generations, list):
             continue
@@ -116,7 +128,9 @@ def _main() -> int:
     while time.time() < deadline:
         attempts += 1
         try:
-            languages, frameworks, conversation_count, generation_count = _scan_generations()
+            languages, frameworks, conversation_count, generation_count = _scan_generations(
+                deadline=deadline,
+            )
         except Exception as exc:  # noqa: BLE001
             last_error = str(exc)
             time.sleep(2)
