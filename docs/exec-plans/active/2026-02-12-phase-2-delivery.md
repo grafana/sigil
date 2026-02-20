@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-19
+last_reviewed: 2026-02-20
 source_of_truth: true
 audience: both
 ---
@@ -23,6 +23,7 @@ audience: both
 | Compaction scaling | `exec-plans/completed/2026-02-13-compaction-scaling.md` | Done |
 | SDK metrics and telemetry pipeline | `exec-plans/completed/2026-02-13-sdk-metrics-and-telemetry-pipeline.md` | Done |
 | Embedding call observability | `exec-plans/completed/2026-02-17-embedding-call-observability.md` | Done |
+| SDK LangChain/LangGraph integrations | `exec-plans/active/2026-02-20-sdk-langchain-langgraph-integrations.md` | In progress |
 
 Execution order status: query proxy, hybrid storage, and compaction scaling tracks are complete. Remaining priority is cross-track consistency and tech debt tracking (CI scope expansion and ingestion-log evolution).
 

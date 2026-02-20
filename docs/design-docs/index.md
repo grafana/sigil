@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-19
+last_reviewed: 2026-02-20
 source_of_truth: true
 audience: agents
 ---
@@ -29,6 +29,7 @@ This folder stores durable engineering decisions for Sigil.
 - [`2026-02-15-conversation-query-path.md`](2026-02-15-conversation-query-path.md) (completed)
 - [`2026-02-17-online-evaluation.md`](2026-02-17-online-evaluation.md) (completed)
 - [`2026-02-17-embedding-call-observability.md`](2026-02-17-embedding-call-observability.md) (completed)
+- [`2026-02-20-sdk-langchain-langgraph-integrations.md`](2026-02-20-sdk-langchain-langgraph-integrations.md) (active)
 
 ## Drafts
 

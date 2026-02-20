@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-19
+last_reviewed: 2026-02-20
 source_of_truth: true
 audience: both
 ---
@@ -43,6 +43,7 @@ This is the canonical navigation map for repository documentation.
     - Drafts: `exec-plans/active/drafts/`
   - Current implementation priority: cross-track consistency and tracked tech debt follow-up (CI scope expansion, ingestion-log evolution)
   - Phase 2 umbrella coordinator: `exec-plans/active/2026-02-12-phase-2-delivery.md`
+  - LangChain/LangGraph framework integration delivery: `exec-plans/active/2026-02-20-sdk-langchain-langgraph-integrations.md`
   - Completed: `exec-plans/completed/`
     - `exec-plans/completed/2026-02-11-bootstrap-phase-1.md` (superseded)
     - `exec-plans/completed/2026-02-12-model-card-catalog-refresh.md`

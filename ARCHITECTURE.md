@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-19
+last_reviewed: 2026-02-20
 source_of_truth: true
 audience: both
 ---
@@ -45,6 +45,11 @@ SDK parity completion is tracked in:
 Tenant boundary completion is tracked in:
 
 - `docs/exec-plans/completed/2026-02-12-phase-2-tenant-boundary.md`
+
+Active SDK framework integration planning is tracked in:
+
+- `docs/design-docs/2026-02-20-sdk-langchain-langgraph-integrations.md`
+- `docs/exec-plans/active/2026-02-20-sdk-langchain-langgraph-integrations.md`
 
 ## Ingest Model (Generation-First)
 
@@ -478,6 +483,8 @@ See `docs/references/grafana-query-response-shapes.md`.
 - OpenAI provider parity now includes strict official SDK-shaped support for both Chat Completions and Responses across Go/Python/TS/Java/.NET.
 - Python SDK runtime lives in `sdks/python` with provider wrapper packages in `sdks/python-providers/*`.
 - .NET SDK runtime lives in `sdks/dotnet` with split provider packages under `sdks/dotnet/src/Grafana.Sigil.*`.
+- Framework integrations are module-based (core runtime stays framework-agnostic).
+- Active first-class framework scope is LangChain and LangGraph in Python + TypeScript/JavaScript with OpenAI/Anthropic/Gemini mapping parity; Go/Java/.NET framework modules are out of current scope.
 - Raw provider artifacts are default OFF, explicit opt-in only.
 - SDK validation enforces message role/part compatibility and artifact payload-or-record-id constraints.
 - Empty tool names return a no-op tool recorder (instrumentation safety behavior).
