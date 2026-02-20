@@ -114,6 +114,9 @@ func TestResolveVertexCredentialsValidation(t *testing.T) {
 	if _, err := resolveVertexCredentials("", "{invalid-json}"); err == nil {
 		t.Fatalf("expected invalid credentials json error")
 	}
+	if _, err := resolveVertexCredentials("", `{"type":"unsupported"}`); err == nil || !strings.Contains(err.Error(), "unsupported cloud credential type") {
+		t.Fatalf("expected unsupported credentials type error, got %v", err)
+	}
 }
 
 func TestNormalizeGoogleModelID(t *testing.T) {

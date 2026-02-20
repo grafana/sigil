@@ -81,6 +81,18 @@ func TestAnthropicClientJudgeWithAuthToken(t *testing.T) {
 	}
 }
 
+func TestResolveGoogleCredentialsValidation(t *testing.T) {
+	if _, err := resolveGoogleCredentials("/tmp/creds.json", "{}"); err == nil {
+		t.Fatalf("expected credentials file/json mutual exclusivity error")
+	}
+	if _, err := resolveGoogleCredentials("", "{invalid-json}"); err == nil {
+		t.Fatalf("expected invalid credentials json error")
+	}
+	if _, err := resolveGoogleCredentials("", `{"type":"unsupported"}`); err == nil || !strings.Contains(err.Error(), "unsupported oauth credential type") {
+		t.Fatalf("expected unsupported credentials type error, got %v", err)
+	}
+}
+
 func TestBedrockAnthropicClientJudgeUsesBedrockAdapter(t *testing.T) {
 	var gotPath string
 	var gotAuthorizationHeader string

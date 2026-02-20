@@ -2,10 +2,10 @@ package judges
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -230,13 +230,23 @@ func resolveVertexCredentials(credentialsFile, credentialsJSON string) (*cloudau
 		Scopes: []string{vertexCloudPlatformScope},
 	}
 	if credentialsFile != "" {
-		opts.CredentialsFile = credentialsFile
+		payload, err := os.ReadFile(credentialsFile)
+		if err != nil {
+			return nil, err
+		}
+		credentialType, err := cloudCredentialsTypeFromJSON(payload)
+		if err != nil {
+			return nil, fmt.Errorf("vertex credentials file is invalid: %w", err)
+		}
+		return cloudcredentials.NewCredentialsFromJSON(credentialType, payload, opts)
 	}
 	if credentialsJSON != "" {
-		opts.CredentialsJSON = []byte(credentialsJSON)
-		if !json.Valid(opts.CredentialsJSON) {
-			return nil, fmt.Errorf("vertex credentials json is invalid")
+		payload := []byte(credentialsJSON)
+		credentialType, err := cloudCredentialsTypeFromJSON(payload)
+		if err != nil {
+			return nil, fmt.Errorf("vertex credentials json is invalid: %w", err)
 		}
+		return cloudcredentials.NewCredentialsFromJSON(credentialType, payload, opts)
 	}
 	return cloudcredentials.DetectDefault(opts)
 }

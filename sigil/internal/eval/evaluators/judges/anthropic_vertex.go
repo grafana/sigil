@@ -69,14 +69,23 @@ func resolveGoogleCredentials(credentialsFile, credentialsJSON string) (*google.
 
 	ctx := context.Background()
 	if credentialsJSON != "" {
-		return google.CredentialsFromJSON(ctx, []byte(credentialsJSON), vertexCloudPlatformScope)
+		payload := []byte(credentialsJSON)
+		credentialType, err := oauthCredentialsTypeFromJSON(payload)
+		if err != nil {
+			return nil, fmt.Errorf("google credentials json is invalid: %w", err)
+		}
+		return google.CredentialsFromJSONWithType(ctx, payload, credentialType, vertexCloudPlatformScope)
 	}
 	if credentialsFile != "" {
 		payload, err := os.ReadFile(credentialsFile)
 		if err != nil {
 			return nil, err
 		}
-		return google.CredentialsFromJSON(ctx, payload, vertexCloudPlatformScope)
+		credentialType, err := oauthCredentialsTypeFromJSON(payload)
+		if err != nil {
+			return nil, fmt.Errorf("google credentials file is invalid: %w", err)
+		}
+		return google.CredentialsFromJSONWithType(ctx, payload, credentialType, vertexCloudPlatformScope)
 	}
 
 	return google.FindDefaultCredentials(ctx, vertexCloudPlatformScope)
