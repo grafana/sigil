@@ -319,6 +319,12 @@ description = "Run TypeScript/JavaScript SDK runtime tests"
 depends = ["deps"]
 run = "pnpm --filter @grafana/sigil-sdk-js run test:ci"
 
+[tasks."test:ts:sdk-js-frameworks"]
+description = "Run TypeScript/JavaScript SDK framework handler tests"
+depends = ["deps"]
+dir = "sdks/js"
+run = "pnpm run test:build && node --test test/frameworks.langchain.test.mjs test/frameworks.langgraph.test.mjs"
+
 [tasks."test:py:sdk-core"]
 description = "Run Python SDK core parity tests"
 run = """
@@ -361,6 +367,45 @@ python3 -m venv .venv-py-sdk-gemini
 . .venv-py-sdk-gemini/bin/activate
 python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-providers/gemini[dev]'
 python -m pytest sdks/python-providers/gemini/tests
+"""
+
+[tasks."test:py:sdk-langchain"]
+description = "Run Python LangChain framework handler tests"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+python3 -m venv .venv-py-sdk-langchain
+. .venv-py-sdk-langchain/bin/activate
+python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-frameworks/langchain[dev]'
+python -m pytest sdks/python-frameworks/langchain/tests
+"""
+
+[tasks."test:py:sdk-langgraph"]
+description = "Run Python LangGraph framework handler tests"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+python3 -m venv .venv-py-sdk-langgraph
+. .venv-py-sdk-langgraph/bin/activate
+python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-frameworks/langgraph[dev]'
+python -m pytest sdks/python-frameworks/langgraph/tests
+"""
+
+[tasks."test:sdk:compose-one-shot"]
+description = "Run compose sdk-traffic one-shot verification with API assertions"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+cleanup() {
+  docker compose --profile core down --volumes >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+docker compose --profile core down --volumes >/dev/null 2>&1 || true
+DEVELOPMENT=true \
+SIGIL_TRAFFIC_ONESHOT=1 \
+SIGIL_TRAFFIC_MAX_CYCLES="${SIGIL_TRAFFIC_MAX_CYCLES:-2}" \
+SIGIL_TRAFFIC_ASSERT_TIMEOUT_SECONDS="${SIGIL_TRAFFIC_ASSERT_TIMEOUT_SECONDS:-180}" \
+docker compose --profile core up --build --abort-on-container-exit --exit-code-from sdk-traffic sdk-traffic
 """
 
 [tasks."test:cs:sdk-core"]
@@ -426,11 +471,14 @@ mise run test:go:sdk-gemini
 
 mise run typecheck:ts:sdk-js
 mise run test:ts:sdk-js
+mise run test:ts:sdk-js-frameworks
 
 mise run test:py:sdk-core
 mise run test:py:sdk-openai
 mise run test:py:sdk-anthropic
 mise run test:py:sdk-gemini
+mise run test:py:sdk-langchain
+mise run test:py:sdk-langgraph
 
 mise run test:cs:sdk-core
 mise run test:cs:sdk-openai

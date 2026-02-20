@@ -27,6 +27,7 @@ RUN apt-get update \
     curl \
     bash \
     git \
+    protobuf-compiler \
   && rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable \

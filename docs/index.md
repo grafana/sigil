@@ -35,15 +35,19 @@ This is the canonical navigation map for repository documentation.
   - Java SDK README: `../sdks/java/README.md`
   - JS/TS SDK docs index: `../sdks/js/docs/index.md`
   - JS/TS SDK README: `../sdks/js/README.md`
+  - JS LangChain framework guide: `../sdks/js/docs/frameworks/langchain.md`
+  - JS LangGraph framework guide: `../sdks/js/docs/frameworks/langgraph.md`
   - .NET SDK README: `../sdks/dotnet/README.md`
   - Python SDK README: `../sdks/python/README.md`
+  - Python LangChain module README: `../sdks/python-frameworks/langchain/README.md`
+  - Python LangGraph module README: `../sdks/python-frameworks/langgraph/README.md`
   - Go SDK README: `../sdks/go/README.md`
 - Execution plans:
   - Active: `exec-plans/active/`
     - Drafts: `exec-plans/active/drafts/`
   - Current implementation priority: cross-track consistency and tracked tech debt follow-up (CI scope expansion, ingestion-log evolution)
   - Phase 2 umbrella coordinator: `exec-plans/active/2026-02-12-phase-2-delivery.md`
-  - LangChain/LangGraph framework integration delivery: `exec-plans/active/2026-02-20-sdk-langchain-langgraph-integrations.md`
+  - LangChain/LangGraph framework integration delivery: `exec-plans/completed/2026-02-20-sdk-langchain-langgraph-integrations.md`
   - Completed: `exec-plans/completed/`
     - `exec-plans/completed/2026-02-11-bootstrap-phase-1.md` (superseded)
     - `exec-plans/completed/2026-02-12-model-card-catalog-refresh.md`
@@ -63,6 +67,7 @@ This is the canonical navigation map for repository documentation.
     - `exec-plans/completed/2026-02-15-conversation-query-path.md`
     - `exec-plans/completed/2026-02-17-online-evaluation.md`
     - `exec-plans/completed/2026-02-17-embedding-call-observability.md`
+    - `exec-plans/completed/2026-02-20-sdk-langchain-langgraph-integrations.md`
   - Tech debt tracker: [`exec-plans/tech-debt-tracker.md`](exec-plans/tech-debt-tracker.md)
 - Generated docs: [`generated/db-schema.md`](generated/db-schema.md)
 - External references: [`references/index.md`](references/index.md)

@@ -482,9 +482,11 @@ See `docs/references/grafana-query-response-shapes.md`.
 - Provider parity target for Go/Python/TS/Java/.NET: OpenAI, Anthropic, Gemini.
 - OpenAI provider parity now includes strict official SDK-shaped support for both Chat Completions and Responses across Go/Python/TS/Java/.NET.
 - Python SDK runtime lives in `sdks/python` with provider wrapper packages in `sdks/python-providers/*`.
+- Python framework modules live in `sdks/python-frameworks/langchain` and `sdks/python-frameworks/langgraph`.
 - .NET SDK runtime lives in `sdks/dotnet` with split provider packages under `sdks/dotnet/src/Grafana.Sigil.*`.
 - Framework integrations are module-based (core runtime stays framework-agnostic).
 - Active first-class framework scope is LangChain and LangGraph in Python + TypeScript/JavaScript with OpenAI/Anthropic/Gemini mapping parity; Go/Java/.NET framework modules are out of current scope.
+- JS framework modules are exposed as subpath exports: `@grafana/sigil-sdk-js/langchain` and `@grafana/sigil-sdk-js/langgraph`.
 - Raw provider artifacts are default OFF, explicit opt-in only.
 - SDK validation enforces message role/part compatibility and artifact payload-or-record-id constraints.
 - Empty tool names return a no-op tool recorder (instrumentation safety behavior).
@@ -532,6 +534,7 @@ The default local stack started by `mise run up` (`docker compose --profile core
 - `sdk-traffic`: one always-on compose service that runs Go/JS/Python/Java/.NET emitters in one container.
 - The emitter continuously sends fake threaded agent conversations through all provider wrapper paths (`openai`, `anthropic`, `gemini`) plus a core custom provider path (`mistral`) for ingest/devex validation.
 - Traffic uses mixed `SYNC`/`STREAM` modes, provider/language tags, and per-turn metadata to keep shapes distinguishable in local debugging.
+- One-shot mode (`SIGIL_TRAFFIC_ONESHOT=1`) runs bounded emitter cycles and fails fast if API assertions do not observe all five SDK emitters plus Python/JS LangChain/LangGraph framework-tagged records.
 - Raw provider artifacts stay default OFF; this path is intended for synthetic ingest load and contract-shape visibility only.
 
 ## Evolution Path

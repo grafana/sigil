@@ -1,6 +1,6 @@
 ---
 owner: sigil-core
-status: active
+status: completed
 last_reviewed: 2026-02-20
 source_of_truth: true
 audience: both
@@ -45,7 +45,7 @@ Local Docker `sdk-traffic` emits multi-language synthetic traffic, but it does n
 
 Execution for this design is tracked in:
 
-- `docs/exec-plans/active/2026-02-20-sdk-langchain-langgraph-integrations.md`
+- `docs/exec-plans/completed/2026-02-20-sdk-langchain-langgraph-integrations.md`
 
 ## Architecture and packaging decisions
 

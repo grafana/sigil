@@ -1,6 +1,6 @@
 ---
 owner: sigil-core
-status: active
+status: completed
 last_reviewed: 2026-02-20
 source_of_truth: true
 audience: both
@@ -37,56 +37,63 @@ Deliver first-class, module-based LangChain and LangGraph integrations for offic
 
 ### Phase A: Python framework modules
 
-- [ ] Create `sdks/python-frameworks/langchain/` package scaffolding.
-- [ ] Create `sdks/python-frameworks/langgraph/` package scaffolding.
-- [ ] Add LangChain handler APIs (sync + async).
-- [ ] Add LangGraph handler APIs (sync + async).
-- [ ] Map lifecycle events to recorder lifecycle (sync/stream/error) for both frameworks.
-- [ ] Add provider resolver parity (OpenAI/Anthropic/Gemini + fallback) for both frameworks.
-- [ ] Inject framework tags/metadata (`sigil.framework.*`) for both frameworks.
-- [ ] Add unit tests for lifecycle, resolver behavior, errors, and tags.
-- [ ] Add integration-style tests with provider-shaped framework flows.
+- [x] Create `sdks/python-frameworks/langchain/` package scaffolding.
+- [x] Create `sdks/python-frameworks/langgraph/` package scaffolding.
+- [x] Add LangChain handler APIs (sync + async).
+- [x] Add LangGraph handler APIs (sync + async).
+- [x] Map lifecycle events to recorder lifecycle (sync/stream/error) for both frameworks.
+- [x] Add provider resolver parity (OpenAI/Anthropic/Gemini + fallback) for both frameworks.
+- [x] Inject framework tags/metadata (`sigil.framework.*`) for both frameworks.
+- [x] Add unit tests for lifecycle, resolver behavior, errors, and tags.
+- [x] Add integration-style tests with provider-shaped framework flows.
 
 ### Phase B: TypeScript/JavaScript framework modules
 
-- [ ] Add `sdks/js/src/frameworks/langchain/`.
-- [ ] Add `sdks/js/src/frameworks/langgraph/`.
-- [ ] Expose subpath exports `@grafana/sigil-sdk-js/langchain` and `@grafana/sigil-sdk-js/langgraph`.
-- [ ] Add LangChain handler implementation.
-- [ ] Add LangGraph handler implementation.
-- [ ] Add lifecycle mapping and resolver parity for both frameworks.
-- [ ] Add framework tags/metadata parity with Python.
-- [ ] Add unit tests for both framework handlers.
-- [ ] Add integration-style tests for provider-shaped framework flows.
+- [x] Add `sdks/js/src/frameworks/langchain/`.
+- [x] Add `sdks/js/src/frameworks/langgraph/`.
+- [x] Expose subpath exports `@grafana/sigil-sdk-js/langchain` and `@grafana/sigil-sdk-js/langgraph`.
+- [x] Add LangChain handler implementation.
+- [x] Add LangGraph handler implementation.
+- [x] Add lifecycle mapping and resolver parity for both frameworks.
+- [x] Add framework tags/metadata parity with Python.
+- [x] Add unit tests for both framework handlers.
+- [x] Add integration-style tests for provider-shaped framework flows.
 
 ### Phase C: SDK docs
 
-- [ ] Update `sdks/python/README.md` with LangChain and LangGraph module usage.
-- [ ] Update `sdks/js/README.md` with LangChain and LangGraph module usage.
-- [ ] Add dedicated module README/docs for Python/JS LangChain and LangGraph modules.
-- [ ] Document provider mapping behavior and stream/non-stream semantics.
+- [x] Update `sdks/python/README.md` with LangChain and LangGraph module usage.
+- [x] Update `sdks/js/README.md` with LangChain and LangGraph module usage.
+- [x] Add dedicated module README/docs for Python/JS LangChain and LangGraph modules.
+- [x] Document provider mapping behavior and stream/non-stream semantics.
 
 ### Phase D: Compose one-shot assertion harness
 
-- [ ] Add one-shot mode wiring to `.config/devex/sdk-traffic/run-all.sh`.
-- [ ] Add assertion script(s) that query Sigil APIs and fail fast on missing expected records.
-- [ ] Assert generation visibility for all SDK emitters (Go, JS, Python, Java, .NET).
-- [ ] Assert framework tags for Python/JS LangChain records.
-- [ ] Assert framework tags for Python/JS LangGraph records.
-- [ ] Add `mise` task entrypoint(s) for one-shot verification.
+- [x] Add one-shot mode wiring to `.config/devex/sdk-traffic/run-all.sh`.
+- [x] Add assertion script(s) that query Sigil APIs and fail fast on missing expected records.
+- [x] Assert generation visibility for all SDK emitters (Go, JS, Python, Java, .NET).
+- [x] Assert framework tags for Python/JS LangChain records.
+- [x] Assert framework tags for Python/JS LangGraph records.
+- [x] Add `mise` task entrypoint(s) for one-shot verification.
 
 ### Phase E: Test and quality wiring
 
-- [ ] Add/update Python framework module test tasks in `mise.toml`.
-- [ ] Add/update JS framework module test tasks in `mise.toml`.
-- [ ] Add compose one-shot verification task in `mise.toml`.
-- [ ] Document local validation flow (`test:sdk:all` + compose one-shot verification).
+- [x] Add/update Python framework module test tasks in `mise.toml`.
+- [x] Add/update JS framework module test tasks in `mise.toml`.
+- [x] Add compose one-shot verification task in `mise.toml`.
+- [x] Document local validation flow (`test:sdk:all` + compose one-shot verification).
 
 ### Phase F: Architecture and docs governance sync
 
-- [ ] Update `ARCHITECTURE.md` SDK runtime contracts to state first-class LangChain and LangGraph module direction.
-- [ ] Update `docs/index.md`, `docs/design-docs/index.md`, and active plan references.
-- [ ] Keep `last_reviewed` current in touched source-of-truth docs.
+- [x] Update `ARCHITECTURE.md` SDK runtime contracts to state first-class LangChain and LangGraph module direction.
+- [x] Update `docs/index.md`, `docs/design-docs/index.md`, and active plan references.
+- [x] Keep `last_reviewed` current in touched source-of-truth docs.
+
+## Completion evidence
+
+- Completed on 2026-02-20.
+- Validation commands:
+  - `mise run test:sdk:all`
+  - `mise run test:sdk:compose-one-shot`
 
 ## Required tests
 
