@@ -4,7 +4,7 @@ go 1.25.6
 
 require (
 	cloud.google.com/go/auth v0.18.2
-	github.com/anthropics/anthropic-sdk-go v1.22.1
+	github.com/anthropics/anthropic-sdk-go v1.25.0
 	github.com/aws/aws-sdk-go-v2 v1.41.1
 	github.com/aws/aws-sdk-go-v2/config v1.32.7
 	github.com/go-kit/log v0.2.1
