@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-20
+last_reviewed: 2026-02-22
 source_of_truth: true
 audience: both
 ---
@@ -46,10 +46,22 @@ Tenant boundary completion is tracked in:
 
 - `docs/exec-plans/completed/2026-02-12-phase-2-tenant-boundary.md`
 
-Active SDK framework integration planning is tracked in:
+SDK framework integration status:
 
-- `docs/design-docs/2026-02-20-sdk-langchain-langgraph-integrations.md`
-- `docs/exec-plans/active/2026-02-20-sdk-langchain-langgraph-integrations.md`
+- Completed (LangChain/LangGraph): `docs/exec-plans/completed/2026-02-20-sdk-langchain-langgraph-integrations.md`
+- Completed (OpenAI Agents/LlamaIndex/Google ADK):
+  - `docs/design-docs/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
+  - `docs/exec-plans/completed/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
+- Active (Vercel AI SDK TypeScript):
+  - `docs/design-docs/2026-02-22-sdk-vercel-ai-sdk-integration.md`
+  - `docs/exec-plans/active/2026-02-22-sdk-vercel-ai-sdk-integration.md`
+
+Framework contract defaults:
+
+- `conversation_id` is the primary grouping identity.
+- Framework run/thread/parent/event IDs are optional supporting metadata/span attributes when available and useful.
+- Core SDK runtimes remain framework-agnostic; framework integrations live in separate modules/packages.
+- Generation ingest and query API contracts remain unchanged.
 
 ## Ingest Model (Generation-First)
 

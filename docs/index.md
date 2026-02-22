@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-20
+last_reviewed: 2026-02-22
 source_of_truth: true
 audience: both
 ---
@@ -29,6 +29,8 @@ This is the canonical navigation map for repository documentation.
 ## Structured Collections
 
 - Design docs: [`design-docs/index.md`](design-docs/index.md)
+  - Vercel AI SDK integration design (active): `design-docs/2026-02-22-sdk-vercel-ai-sdk-integration.md`
+  - Framework integration design (completed): `design-docs/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
   - Drafts: `design-docs/drafts/`
 - Product specs: [`product-specs/index.md`](product-specs/index.md)
 - SDK docs:
@@ -45,7 +47,9 @@ This is the canonical navigation map for repository documentation.
 - Execution plans:
   - Active: `exec-plans/active/`
     - Drafts: `exec-plans/active/drafts/`
-  - Current implementation priority: cross-track consistency and tracked tech debt follow-up (CI scope expansion, ingestion-log evolution)
+  - Current implementation priorities:
+    - cross-track consistency and tracked tech debt follow-up (CI scope expansion, ingestion-log evolution)
+    - Vercel AI SDK TypeScript integration delivery (active): `exec-plans/active/2026-02-22-sdk-vercel-ai-sdk-integration.md`
   - Phase 2 umbrella coordinator: `exec-plans/active/2026-02-12-phase-2-delivery.md`
   - LangChain/LangGraph framework integration delivery: `exec-plans/completed/2026-02-20-sdk-langchain-langgraph-integrations.md`
   - Completed: `exec-plans/completed/`
