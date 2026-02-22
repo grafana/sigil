@@ -16,8 +16,14 @@ REQUIRED_LANGUAGES = {"go", "javascript", "python", "java", "dotnet"}
 REQUIRED_FRAMEWORKS = {
     ("python", "langchain"),
     ("python", "langgraph"),
+    ("python", "openai-agents"),
+    ("python", "llamaindex"),
+    ("python", "google-adk"),
     ("javascript", "langchain"),
     ("javascript", "langgraph"),
+    ("javascript", "openai-agents"),
+    ("javascript", "llamaindex"),
+    ("javascript", "google-adk"),
 }
 
 

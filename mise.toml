@@ -314,6 +314,12 @@ dir = "sdks/go-providers/gemini"
 depends = ["doctor:go"]
 run = "GOWORK=off go test ./..."
 
+[tasks."test:go:sdk-google-adk"]
+description = "Run Google ADK framework helper tests as standalone module"
+dir = "sdks/go-frameworks/google-adk"
+depends = ["doctor:go"]
+run = "GOWORK=off go test ./..."
+
 [tasks."test:ts:sdk-js"]
 description = "Run TypeScript/JavaScript SDK runtime tests"
 depends = ["deps"]
@@ -323,7 +329,7 @@ run = "pnpm --filter @grafana/sigil-sdk-js run test:ci"
 description = "Run TypeScript/JavaScript SDK framework handler tests"
 depends = ["deps"]
 dir = "sdks/js"
-run = "pnpm run test:build && node --test test/frameworks.langchain.test.mjs test/frameworks.langgraph.test.mjs"
+run = "pnpm run test:build && node --test test/frameworks.langchain.test.mjs test/frameworks.langgraph.test.mjs test/frameworks.additional.test.mjs"
 
 [tasks."test:py:sdk-core"]
 description = "Run Python SDK core parity tests"
@@ -391,6 +397,39 @@ python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-frameworks/la
 python -m pytest sdks/python-frameworks/langgraph/tests
 """
 
+[tasks."test:py:sdk-openai-agents"]
+description = "Run Python OpenAI Agents framework handler tests"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+python3 -m venv .venv-py-sdk-openai-agents
+. .venv-py-sdk-openai-agents/bin/activate
+python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-frameworks/openai-agents[dev]'
+python -m pytest sdks/python-frameworks/openai-agents/tests
+"""
+
+[tasks."test:py:sdk-llamaindex"]
+description = "Run Python LlamaIndex framework handler tests"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+python3 -m venv .venv-py-sdk-llamaindex
+. .venv-py-sdk-llamaindex/bin/activate
+python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-frameworks/llamaindex[dev]'
+python -m pytest sdks/python-frameworks/llamaindex/tests
+"""
+
+[tasks."test:py:sdk-google-adk"]
+description = "Run Python Google ADK framework handler tests"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+python3 -m venv .venv-py-sdk-google-adk
+. .venv-py-sdk-google-adk/bin/activate
+python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-frameworks/google-adk[dev]'
+python -m pytest sdks/python-frameworks/google-adk/tests
+"""
+
 [tasks."test:sdk:compose-one-shot"]
 description = "Run compose sdk-traffic one-shot verification with API assertions"
 run = """
@@ -448,10 +487,15 @@ description = "Run Java Gemini provider adapter tests"
 dir = "sdks/java"
 run = "./gradlew --no-daemon :providers:gemini:test"
 
+[tasks."test:java:sdk-google-adk"]
+description = "Run Java Google ADK framework adapter tests"
+dir = "sdks/java"
+run = "./gradlew --no-daemon :frameworks:google-adk:test"
+
 [tasks."test:java:sdk-all"]
 description = "Run all Java SDK tests"
 dir = "sdks/java"
-run = "./gradlew --no-daemon :core:test :providers:openai:test :providers:anthropic:test :providers:gemini:test"
+run = "./gradlew --no-daemon :core:test :providers:openai:test :providers:anthropic:test :providers:gemini:test :frameworks:google-adk:test"
 
 [tasks."benchmark:java:sdk"]
 description = "Run Java SDK JMH benchmarks"
@@ -468,6 +512,7 @@ mise run test:go:sdk-core
 mise run test:go:sdk-anthropic
 mise run test:go:sdk-openai
 mise run test:go:sdk-gemini
+mise run test:go:sdk-google-adk
 
 mise run typecheck:ts:sdk-js
 mise run test:ts:sdk-js
@@ -479,6 +524,9 @@ mise run test:py:sdk-anthropic
 mise run test:py:sdk-gemini
 mise run test:py:sdk-langchain
 mise run test:py:sdk-langgraph
+mise run test:py:sdk-openai-agents
+mise run test:py:sdk-llamaindex
+mise run test:py:sdk-google-adk
 
 mise run test:cs:sdk-core
 mise run test:cs:sdk-openai
