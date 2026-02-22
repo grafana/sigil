@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-20
+last_reviewed: 2026-02-22
 source_of_truth: true
 audience: agents
 ---
@@ -13,6 +13,8 @@ This folder stores durable engineering decisions for Sigil.
 ## Documents
 
 - [`core-beliefs.md`](core-beliefs.md)
+- [`2026-02-22-sdk-vercel-ai-sdk-integration.md`](2026-02-22-sdk-vercel-ai-sdk-integration.md) (active)
+- [`2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`](2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md) (completed)
 - [`2026-02-13-conversation-ratings-and-annotations.md`](2026-02-13-conversation-ratings-and-annotations.md) (completed)
 - [`2026-02-13-openai-chat-responses-strict-parity.md`](2026-02-13-openai-chat-responses-strict-parity.md) (completed)
 - [`2026-02-13-sdk-parity-java.md`](2026-02-13-sdk-parity-java.md) (completed)

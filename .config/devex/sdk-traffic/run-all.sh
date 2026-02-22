@@ -99,7 +99,10 @@ setup_python() {
     -e "${ROOT_DIR}/sdks/python-providers/anthropic" \
     -e "${ROOT_DIR}/sdks/python-providers/gemini" \
     -e "${ROOT_DIR}/sdks/python-frameworks/langchain" \
-    -e "${ROOT_DIR}/sdks/python-frameworks/langgraph"
+    -e "${ROOT_DIR}/sdks/python-frameworks/langgraph" \
+    -e "${ROOT_DIR}/sdks/python-frameworks/openai-agents" \
+    -e "${ROOT_DIR}/sdks/python-frameworks/llamaindex" \
+    -e "${ROOT_DIR}/sdks/python-frameworks/google-adk"
 }
 
 setup_java() {

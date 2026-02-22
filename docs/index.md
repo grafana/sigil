@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-20
+last_reviewed: 2026-02-22
 source_of_truth: true
 audience: both
 ---
@@ -29,6 +29,8 @@ This is the canonical navigation map for repository documentation.
 ## Structured Collections
 
 - Design docs: [`design-docs/index.md`](design-docs/index.md)
+  - Vercel AI SDK integration design (active): `design-docs/2026-02-22-sdk-vercel-ai-sdk-integration.md`
+  - Framework integration design (completed): `design-docs/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
   - Drafts: `design-docs/drafts/`
 - Product specs: [`product-specs/index.md`](product-specs/index.md)
 - SDK docs:
@@ -37,17 +39,28 @@ This is the canonical navigation map for repository documentation.
   - JS/TS SDK README: `../sdks/js/README.md`
   - JS LangChain framework guide: `../sdks/js/docs/frameworks/langchain.md`
   - JS LangGraph framework guide: `../sdks/js/docs/frameworks/langgraph.md`
+  - JS OpenAI Agents framework guide: `../sdks/js/docs/frameworks/openai-agents.md`
+  - JS LlamaIndex framework guide: `../sdks/js/docs/frameworks/llamaindex.md`
+  - JS Google ADK framework guide: `../sdks/js/docs/frameworks/google-adk.md`
   - .NET SDK README: `../sdks/dotnet/README.md`
   - Python SDK README: `../sdks/python/README.md`
   - Python LangChain module README: `../sdks/python-frameworks/langchain/README.md`
   - Python LangGraph module README: `../sdks/python-frameworks/langgraph/README.md`
+  - Python OpenAI Agents module README: `../sdks/python-frameworks/openai-agents/README.md`
+  - Python LlamaIndex module README: `../sdks/python-frameworks/llamaindex/README.md`
+  - Python Google ADK module README: `../sdks/python-frameworks/google-adk/README.md`
   - Go SDK README: `../sdks/go/README.md`
+  - Go Google ADK framework README: `../sdks/go-frameworks/google-adk/README.md`
+  - Java Google ADK framework README: `../sdks/java/frameworks/google-adk/README.md`
 - Execution plans:
   - Active: `exec-plans/active/`
     - Drafts: `exec-plans/active/drafts/`
-  - Current implementation priority: cross-track consistency and tracked tech debt follow-up (CI scope expansion, ingestion-log evolution)
+  - Current implementation priorities:
+    - cross-track consistency and tracked tech debt follow-up (CI scope expansion, ingestion-log evolution)
+    - Vercel AI SDK TypeScript integration delivery (active): `exec-plans/active/2026-02-22-sdk-vercel-ai-sdk-integration.md`
   - Phase 2 umbrella coordinator: `exec-plans/active/2026-02-12-phase-2-delivery.md`
   - LangChain/LangGraph framework integration delivery: `exec-plans/completed/2026-02-20-sdk-langchain-langgraph-integrations.md`
+  - OpenAI Agents/LlamaIndex/Google ADK framework integration delivery: `exec-plans/completed/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
   - Completed: `exec-plans/completed/`
     - `exec-plans/completed/2026-02-11-bootstrap-phase-1.md` (superseded)
     - `exec-plans/completed/2026-02-12-model-card-catalog-refresh.md`
@@ -68,6 +81,7 @@ This is the canonical navigation map for repository documentation.
     - `exec-plans/completed/2026-02-17-online-evaluation.md`
     - `exec-plans/completed/2026-02-17-embedding-call-observability.md`
     - `exec-plans/completed/2026-02-20-sdk-langchain-langgraph-integrations.md`
+    - `exec-plans/completed/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
   - Tech debt tracker: [`exec-plans/tech-debt-tracker.md`](exec-plans/tech-debt-tracker.md)
 - Generated docs: [`generated/db-schema.md`](generated/db-schema.md)
 - External references: [`references/index.md`](references/index.md)
