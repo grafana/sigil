@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-20
+last_reviewed: 2026-02-22
 source_of_truth: true
 audience: both
 ---
@@ -46,10 +46,22 @@ Tenant boundary completion is tracked in:
 
 - `docs/exec-plans/completed/2026-02-12-phase-2-tenant-boundary.md`
 
-Active SDK framework integration planning is tracked in:
+SDK framework integration status:
 
-- `docs/design-docs/2026-02-20-sdk-langchain-langgraph-integrations.md`
-- `docs/exec-plans/active/2026-02-20-sdk-langchain-langgraph-integrations.md`
+- Completed (LangChain/LangGraph): `docs/exec-plans/completed/2026-02-20-sdk-langchain-langgraph-integrations.md`
+- Completed (OpenAI Agents/LlamaIndex/Google ADK):
+  - `docs/design-docs/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
+  - `docs/exec-plans/completed/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
+- Active (Vercel AI SDK TypeScript):
+  - `docs/design-docs/2026-02-22-sdk-vercel-ai-sdk-integration.md`
+  - `docs/exec-plans/active/2026-02-22-sdk-vercel-ai-sdk-integration.md`
+
+Framework contract defaults:
+
+- `conversation_id` is the primary grouping identity.
+- Framework run/thread/parent/event IDs are optional supporting metadata/span attributes when available and useful.
+- Core SDK runtimes remain framework-agnostic; framework integrations live in separate modules/packages.
+- Generation ingest and query API contracts remain unchanged.
 
 ## Ingest Model (Generation-First)
 
@@ -482,11 +494,24 @@ See `docs/references/grafana-query-response-shapes.md`.
 - Provider parity target for Go/Python/TS/Java/.NET: OpenAI, Anthropic, Gemini.
 - OpenAI provider parity now includes strict official SDK-shaped support for both Chat Completions and Responses across Go/Python/TS/Java/.NET.
 - Python SDK runtime lives in `sdks/python` with provider wrapper packages in `sdks/python-providers/*`.
-- Python framework modules live in `sdks/python-frameworks/langchain` and `sdks/python-frameworks/langgraph`.
+- Python framework modules live in:
+  - `sdks/python-frameworks/langchain`
+  - `sdks/python-frameworks/langgraph`
+  - `sdks/python-frameworks/openai-agents`
+  - `sdks/python-frameworks/llamaindex`
+  - `sdks/python-frameworks/google-adk`
 - .NET SDK runtime lives in `sdks/dotnet` with split provider packages under `sdks/dotnet/src/Grafana.Sigil.*`.
 - Framework integrations are module-based (core runtime stays framework-agnostic).
-- Active first-class framework scope is LangChain and LangGraph in Python + TypeScript/JavaScript with OpenAI/Anthropic/Gemini mapping parity; Go/Java/.NET framework modules are out of current scope.
-- JS framework modules are exposed as subpath exports: `@grafana/sigil-sdk-js/langchain` and `@grafana/sigil-sdk-js/langgraph`.
+- Active first-class framework scope:
+  - LangChain + LangGraph in Python and TypeScript/JavaScript.
+  - OpenAI Agents + LlamaIndex in Python and TypeScript/JavaScript.
+  - Google ADK in Python, TypeScript/JavaScript, Go, and Java.
+- JS framework modules are exposed as subpath exports:
+  - `@grafana/sigil-sdk-js/langchain`
+  - `@grafana/sigil-sdk-js/langgraph`
+  - `@grafana/sigil-sdk-js/openai-agents`
+  - `@grafana/sigil-sdk-js/llamaindex`
+  - `@grafana/sigil-sdk-js/google-adk`
 - Raw provider artifacts are default OFF, explicit opt-in only.
 - SDK validation enforces message role/part compatibility and artifact payload-or-record-id constraints.
 - Empty tool names return a no-op tool recorder (instrumentation safety behavior).
@@ -534,7 +559,7 @@ The default local stack started by `mise run up` (`docker compose --profile core
 - `sdk-traffic`: one always-on compose service that runs Go/JS/Python/Java/.NET emitters in one container.
 - The emitter continuously sends fake threaded agent conversations through all provider wrapper paths (`openai`, `anthropic`, `gemini`) plus a core custom provider path (`mistral`) for ingest/devex validation.
 - Traffic uses mixed `SYNC`/`STREAM` modes, provider/language tags, and per-turn metadata to keep shapes distinguishable in local debugging.
-- One-shot mode (`SIGIL_TRAFFIC_ONESHOT=1`) runs bounded emitter cycles and fails fast if API assertions do not observe all five SDK emitters plus Python/JS LangChain/LangGraph framework-tagged records.
+- One-shot mode (`SIGIL_TRAFFIC_ONESHOT=1`) runs bounded emitter cycles and fails fast if API assertions do not observe all five SDK emitters plus Python/JS framework-tagged records for LangChain, LangGraph, OpenAI Agents, LlamaIndex, and Google ADK.
 - Raw provider artifacts stay default OFF; this path is intended for synthetic ingest load and contract-shape visibility only.
 
 ## Evolution Path

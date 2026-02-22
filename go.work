@@ -2,9 +2,10 @@ go 1.25.6
 
 use (
 	./sdks/go
-	./sdks/go/cmd/devex-emitter
+	./sdks/go-frameworks/google-adk
 	./sdks/go-providers/anthropic
 	./sdks/go-providers/gemini
 	./sdks/go-providers/openai
+	./sdks/go/cmd/devex-emitter
 	./sigil
 )
