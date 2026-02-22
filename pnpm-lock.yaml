@@ -46,7 +46,7 @@ importers:
         version: 2.0.2(eslint@10.0.0)
       '@grafana/eslint-config':
         specifier: ^9.0.0
-        version: 9.0.0(@stylistic/eslint-plugin-ts@4.4.1(eslint@10.0.0)(typescript@5.9.3))(@typescript-eslint/eslint-plugin@8.55.0(@typescript-eslint/parser@8.55.0(eslint@10.0.0)(typescript@5.9.3))(eslint@10.0.0)(typescript@5.9.3))(@typescript-eslint/parser@8.55.0(eslint@10.0.0)(typescript@5.9.3))(eslint-config-prettier@10.1.8(eslint@10.0.0))(eslint-plugin-jsdoc@62.5.4(eslint@10.0.0))(eslint-plugin-react-hooks@7.0.1(eslint@10.0.0))(eslint-plugin-react@7.37.5(eslint@10.0.0))(eslint@10.0.0)(typescript@5.9.3)
+        version: 9.0.0(@stylistic/eslint-plugin-ts@4.4.1(eslint@10.0.0)(typescript@5.9.3))(@typescript-eslint/eslint-plugin@8.55.0(@typescript-eslint/parser@8.55.0(eslint@10.0.0)(typescript@5.9.3))(eslint@10.0.0)(typescript@5.9.3))(@typescript-eslint/parser@8.55.0(eslint@10.0.0)(typescript@5.9.3))(eslint-config-prettier@10.1.8(eslint@10.0.0))(eslint-plugin-jsdoc@62.7.0(eslint@10.0.0))(eslint-plugin-react-hooks@7.0.1(eslint@10.0.0))(eslint-plugin-react@7.37.5(eslint@10.0.0))(eslint@10.0.0)(typescript@5.9.3)
       '@grafana/plugin-e2e':
         specifier: ^3.3.0
         version: 3.3.0(@playwright/test@1.58.2)
@@ -120,8 +120,8 @@ importers:
         specifier: ^10.1.0
         version: 10.1.8(eslint@10.0.0)
       eslint-plugin-jsdoc:
-        specifier: ^62.5.4
-        version: 62.5.4(eslint@10.0.0)
+        specifier: ^62.6.1
+        version: 62.7.0(eslint@10.0.0)
       eslint-plugin-react:
         specifier: ^7.37.0
         version: 7.37.5(eslint@10.0.0)
@@ -3016,11 +3016,11 @@ packages:
     peerDependencies:
       eslint: '>=7.0.0'
 
-  eslint-plugin-jsdoc@62.5.4:
-    resolution: {integrity: sha512-U+Q5ppErmC17VFQl542eBIaXcuq975BzoIHBXyx7UQx/i4gyHXxPiBkonkuxWyFA98hGLALLUuD+NJcXqSGKxg==}
+  eslint-plugin-jsdoc@62.7.0:
+    resolution: {integrity: sha512-jootujJOIGMkCLN+/WgDFKtaclCt2MEEy9cZ1RyK19Az1JvVI3awbeMXNlJ6y4h8RWIJpcXqmxsu4t9NThYbNw==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
     peerDependencies:
-      eslint: ^7.0.0 || ^8.0.0 || ^9.0.0
+      eslint: ^7.0.0 || ^8.0.0 || ^9.0.0 || ^10.0.0
 
   eslint-plugin-react-hooks@7.0.1:
     resolution: {integrity: sha512-O0d0m04evaNzEPoSW+59Mezf8Qt0InfgGIBJnpC0h3NH/WjUAR7BIKUfysC6todmtiZ/A0oUVS8Gce0WhBrHsA==}
@@ -6444,14 +6444,14 @@ snapshots:
       tslib: 2.8.1
       typescript: 5.9.2
 
-  '@grafana/eslint-config@9.0.0(@stylistic/eslint-plugin-ts@4.4.1(eslint@10.0.0)(typescript@5.9.3))(@typescript-eslint/eslint-plugin@8.55.0(@typescript-eslint/parser@8.55.0(eslint@10.0.0)(typescript@5.9.3))(eslint@10.0.0)(typescript@5.9.3))(@typescript-eslint/parser@8.55.0(eslint@10.0.0)(typescript@5.9.3))(eslint-config-prettier@10.1.8(eslint@10.0.0))(eslint-plugin-jsdoc@62.5.4(eslint@10.0.0))(eslint-plugin-react-hooks@7.0.1(eslint@10.0.0))(eslint-plugin-react@7.37.5(eslint@10.0.0))(eslint@10.0.0)(typescript@5.9.3)':
+  '@grafana/eslint-config@9.0.0(@stylistic/eslint-plugin-ts@4.4.1(eslint@10.0.0)(typescript@5.9.3))(@typescript-eslint/eslint-plugin@8.55.0(@typescript-eslint/parser@8.55.0(eslint@10.0.0)(typescript@5.9.3))(eslint@10.0.0)(typescript@5.9.3))(@typescript-eslint/parser@8.55.0(eslint@10.0.0)(typescript@5.9.3))(eslint-config-prettier@10.1.8(eslint@10.0.0))(eslint-plugin-jsdoc@62.7.0(eslint@10.0.0))(eslint-plugin-react-hooks@7.0.1(eslint@10.0.0))(eslint-plugin-react@7.37.5(eslint@10.0.0))(eslint@10.0.0)(typescript@5.9.3)':
     dependencies:
       '@stylistic/eslint-plugin-ts': 4.4.1(eslint@10.0.0)(typescript@5.9.3)
       '@typescript-eslint/eslint-plugin': 8.55.0(@typescript-eslint/parser@8.55.0(eslint@10.0.0)(typescript@5.9.3))(eslint@10.0.0)(typescript@5.9.3)
       '@typescript-eslint/parser': 8.55.0(eslint@10.0.0)(typescript@5.9.3)
       eslint: 10.0.0
       eslint-config-prettier: 10.1.8(eslint@10.0.0)
-      eslint-plugin-jsdoc: 62.5.4(eslint@10.0.0)
+      eslint-plugin-jsdoc: 62.7.0(eslint@10.0.0)
       eslint-plugin-react: 7.37.5(eslint@10.0.0)
       eslint-plugin-react-hooks: 7.0.1(eslint@10.0.0)
       typescript: 5.9.3
@@ -9119,7 +9119,7 @@ snapshots:
     dependencies:
       eslint: 10.0.0
 
-  eslint-plugin-jsdoc@62.5.4(eslint@10.0.0):
+  eslint-plugin-jsdoc@62.7.0(eslint@10.0.0):
     dependencies:
       '@es-joy/jsdoccomment': 0.84.0
       '@es-joy/resolve.exports': 1.2.0
