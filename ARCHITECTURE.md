@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-20
+last_reviewed: 2026-02-22
 source_of_truth: true
 audience: both
 ---
@@ -52,6 +52,9 @@ SDK framework integration status:
 - Completed (OpenAI Agents/LlamaIndex/Google ADK):
   - `docs/design-docs/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
   - `docs/exec-plans/completed/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
+- Active (Vercel AI SDK TypeScript):
+  - `docs/design-docs/2026-02-22-sdk-vercel-ai-sdk-integration.md`
+  - `docs/exec-plans/active/2026-02-22-sdk-vercel-ai-sdk-integration.md`
 
 Framework contract defaults:
 
