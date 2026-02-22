@@ -207,8 +207,8 @@ importers:
   sdks/js:
     dependencies:
       '@anthropic-ai/sdk':
-        specifier: ^0.74.0
-        version: 0.74.0(zod@4.3.6)
+        specifier: ^0.77.0
+        version: 0.77.0(zod@4.3.6)
       '@google/adk':
         specifier: ^0.3.0
         version: 0.3.0(442b9b9c1d8fb101a16eabe7f4c16e17)
@@ -6551,7 +6551,7 @@ snapshots:
 
   '@adobe/css-tools@4.4.4': {}
 
-  '@anthropic-ai/sdk@0.74.0(zod@4.3.6)':
+  '@anthropic-ai/sdk@0.77.0(zod@4.3.6)':
     dependencies:
       json-schema-to-ts: 3.1.1
     optionalDependencies:
