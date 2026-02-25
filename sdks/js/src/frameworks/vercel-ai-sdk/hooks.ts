@@ -662,12 +662,6 @@ export class SigilVercelAiSdkInstrumentation {
           if (stepState.firstTokenAt !== undefined) {
             recorder.setFirstTokenAt(stepState.firstTokenAt);
           }
-          if (recorder === undefined) {
-            if (stepState.toolCallIds.size > 0) {
-              closeStepTools(state, stepState, error);
-            }
-            continue;
-          }
           try {
             recorder.setCallError(error);
           } finally {
