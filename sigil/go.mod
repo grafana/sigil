@@ -4,7 +4,7 @@ go 1.25.6
 
 require (
 	cloud.google.com/go/auth v0.18.2
-	github.com/anthropics/anthropic-sdk-go v1.25.0
+	github.com/anthropics/anthropic-sdk-go v1.26.0
 	github.com/aws/aws-sdk-go-v2 v1.41.1
 	github.com/aws/aws-sdk-go-v2/config v1.32.9
 	github.com/go-kit/log v0.2.1
@@ -17,7 +17,7 @@ require (
 	github.com/thanos-io/objstore v0.0.0-20250813080715-4e5fd4289b50
 	golang.org/x/oauth2 v0.35.0
 	golang.org/x/time v0.14.0
-	google.golang.org/genai v1.46.0
+	google.golang.org/genai v1.47.0
 	google.golang.org/grpc v1.79.1
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
