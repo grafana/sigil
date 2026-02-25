@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
-status: active
-last_reviewed: 2026-02-22
+status: completed
+last_reviewed: 2026-02-23
 source_of_truth: true
 audience: both
 ---
@@ -10,146 +10,231 @@ audience: both
 
 ## Problem statement
 
-Sigil has first-class framework integrations for LangChain, LangGraph, OpenAI Agents, LlamaIndex, and Google ADK. Teams using Vercel AI SDK (TypeScript) still need manual instrumentation decisions for generation export, trace/span attributes, usage metrics, and tool lifecycle capture.
+Sigil has first-class framework integrations for LangChain, LangGraph, OpenAI Agents, LlamaIndex, and Google ADK. Teams using Vercel AI SDK (TypeScript) still need a way to get Sigil generation export, spans, and metrics without changing how they use the AI SDK.
 
-Without an official integration contract for AI SDK, teams will produce inconsistent `conversation_id` mapping, inconsistent framework metadata keys, and non-deterministic start/end correlation for streaming and tool events.
+Without an integration, teams instrument manually, producing inconsistent `conversation_id` values, missing token usage, no tool execution spans, and no TTFT for streaming flows.
 
 ## Decision summary
 
 1. Add first-class Vercel AI SDK TypeScript integration in `sdks/js`.
-2. Keep Sigil generation export as source of truth (conversation-first).
-3. Default to Sigil-native instrumentation (spans + metrics + generations) without requiring AI SDK telemetry.
-4. Support optional AI SDK telemetry (`experimental_telemetry`) as supplemental OTel enrichment.
-5. Keep framework lineage IDs optional in metadata/span attributes; do not force a thread/run-only model.
-6. Preserve generation ingest/query contracts (`ExportGenerations` gRPC and `POST /api/v1/generations:export`) unchanged.
+2. Sigil must not touch the user's model. Users keep whatever model and provider they already use.
+3. Integration is purely callback/hook-based: users spread Sigil hooks into their existing `generateText` and `streamText` calls.
+4. One `GenerationRecorder` lifecycle per step (model call) covers generation export, OTel span, and metrics automatically.
+5. Tool execution spans are captured via AI SDK's `experimental_onToolCallStart` / `experimental_onToolCallFinish` callbacks — no model wrapping needed.
+6. AI SDK `experimental_telemetry` is not used. It creates competing spans with conflicting naming and adds no value on top of what the hook-based integration already captures.
+7. `conversation_id` must be provided explicitly by the caller for multi-turn continuity — AI SDK has no server-side conversation identity.
+8. Preserve generation ingest/query contracts (`ExportGenerations` gRPC and `POST /api/v1/generations:export`) unchanged.
 
 ## Goals
 
-- Provide an idiomatic AI SDK integration path using middleware and wrapped model APIs.
-- Emit Sigil generations for `generateText` and `streamText` flows.
-- Emit Sigil spans and metrics with deterministic lifecycle closure for success, error, and abort paths.
-- Capture tool execution spans and generation attributes where AI SDK exposes tool lifecycle signals.
-- Keep setup simple (quick-start) while preserving customization hooks.
+- Provide a hook-based integration that works with any AI SDK model and provider without modification.
+- Emit Sigil generations, spans, and metrics for `generateText` and `streamText` flows, including multi-step agentic loops.
+- Capture tool execution spans and timing via AI SDK's native tool lifecycle callbacks.
+- Keep setup to a one-time factory call and a single spread per `generateText` / `streamText` invocation.
+- Be honest about what AI SDK exposes server-side (no implicit conversation detection).
 
 ## Non-goals
 
 - Core API/proto changes in Sigil ingest/query services.
 - Python/Go/Java AI SDK integration in this workstream.
-- Forcing users to enable AI SDK telemetry to get Sigil data.
-- Building a cross-framework abstraction layer that hides framework-native concepts.
+- Wrapping or replacing the user's AI SDK language model.
+- Using `experimental_telemetry` for Sigil data capture.
+- Embedding model instrumentation (`embed`, `embedMany`) — AI SDK has no callback equivalent for embedding calls; deferred to a separate workstream.
 
 ## Framework scope
 
-- Framework: Vercel AI SDK (TypeScript), current docs track (`ai-sdk.dev`, v6 docs).
-- Primary operations in scope:
-  - `generateText`
-  - `streamText`
-- Compatibility baseline:
-  - AI SDK middleware (`LanguageModelV3Middleware`) and wrapped model usage (`wrapLanguageModel`).
-  - Optional per-call telemetry settings via `experimental_telemetry`.
+- Framework: Vercel AI SDK (TypeScript), `ai` package v5.
+- Middleware type: `LanguageModelV3Middleware` from `@ai-sdk/provider` — not used in this integration but referenced for completeness.
+- Primary operations in scope: `generateText`, `streamText`.
+- Agentic loops (multi-step `generateText`/`streamText` with `stopWhen`) are first-class, not an afterthought.
+- Note: `experimental_onStepStart`, `experimental_onToolCallStart`, `experimental_onToolCallFinish` are v5 additions marked experimental in AI SDK; they can break in patch releases. Pin to a tested minor version and document this risk.
 
 Reference docs:
 
+- AI SDK generateText: <https://ai-sdk.dev/docs/reference/ai-sdk-core/generate-text>
+- AI SDK streamText: <https://ai-sdk.dev/docs/reference/ai-sdk-core/stream-text>
 - AI SDK middleware: <https://ai-sdk.dev/docs/ai-sdk-core/middleware>
-- AI SDK `generateText`: <https://ai-sdk.dev/docs/reference/ai-sdk-core/generate-text>
-- AI SDK `streamText`: <https://ai-sdk.dev/docs/reference/ai-sdk-core/stream-text>
-- AI SDK telemetry: <https://ai-sdk.dev/docs/ai-sdk-core/telemetry>
 
 ## Architecture and packaging decisions
 
 ### Boundary rule
 
 - Core Sigil JS runtime remains framework-agnostic.
-- AI SDK integration lives in framework module(s) under `sdks/js/src/frameworks/` and depends on core runtime.
+- AI SDK integration lives under `sdks/js/src/frameworks/vercel-ai-sdk/` and depends on the core runtime only.
 
 ### Module layout
 
 - `sdks/js/src/frameworks/vercel-ai-sdk/`
-  - handler/adapter implementation
-  - middleware helpers
-  - type surface for options and resolvers
-- public import subpath:
-  - `@grafana/sigil-sdk-js/vercel-ai-sdk`
+  - `index.ts` — public exports
+  - `types.ts` — `SigilVercelAiSdkOptions`, `CallOptions`, hook return types
+  - `hooks.ts` — `SigilVercelAiSdkInstrumentation` class implementing the hook factory
+  - `mapping.ts` — field extraction and normalization utilities
+- Public import subpath: `@grafana/sigil-sdk-js/vercel-ai-sdk`
 
-### Public integration surface (planned)
+### Public integration surface
 
-- `createSigilVercelAiSdkMiddleware(client, options)`
-  - returns AI SDK-compatible middleware.
-- `withSigilVercelAiSdk(model, client, options)`
-  - convenience wrapper around `wrapLanguageModel` for one-liner onboarding.
-- `buildSigilTelemetrySettings(context)` (optional helper)
-  - returns `experimental_telemetry` config for hybrid mode.
+```ts
+// Primary factory
+createSigilVercelAiSdk(client: SigilClient, options?: SigilVercelAiSdkOptions)
+  => SigilVercelAiSdkInstrumentation
 
-No unified cross-framework API is introduced.
+// On the instrumentation object:
+.generateTextHooks(callOptions?: CallOptions) => GenerateTextHooks
+.streamTextHooks(callOptions?: CallOptions)   => StreamTextHooks
 
-## Data model and mapping contract
+interface SigilVercelAiSdkOptions {
+  agentName?: string;
+  agentVersion?: string;
+  captureInputs?: boolean;               // default: true
+  captureOutputs?: boolean;              // default: true
+  extraTags?: Record<string, string>;
+  extraMetadata?: Record<string, unknown>;
+  resolveConversationId?: (event: StepStartEvent) => string | undefined;
+}
+
+interface CallOptions {
+  conversationId?: string;
+  agentName?: string;
+  extraMetadata?: Record<string, unknown>;
+}
+```
+
+No model wrapping helpers, no middleware factory, no telemetry bridge helpers.
+
+### Usage pattern
+
+```ts
+// One-time setup:
+const sigil = createSigilVercelAiSdk(client, { agentName: 'research-agent' });
+
+// generateText — spread hooks:
+const result = await generateText({
+  model: openai('gpt-4o'),              // user's model — completely unchanged
+  ...sigil.generateTextHooks({ conversationId: 'chat-123' }),
+  tools: { search, calculate },
+  stopWhen: hasToolResult(),
+  prompt: 'Research this topic...',
+});
+
+// streamText — spread hooks:
+const result = streamText({
+  model: anthropic('claude-3-5-sonnet-20241022'),
+  ...sigil.streamTextHooks({ conversationId: 'chat-456' }),
+  prompt: '...',
+});
+```
+
+## Conversation identity
+
+### Why explicit is required
+
+AI SDK is stateless on the server side. There is no session, thread, or conversation object — users manage conversation history themselves by accumulating `messages` between turns. Unlike LangChain (thread IDs in config), LangGraph (configurable thread IDs), or OpenAI Agents (run IDs), AI SDK exposes no implicit conversation identity in its step callbacks.
+
+For multi-turn continuity, callers **must** supply `conversationId` explicitly.
+
+### Precedence
+
+1. `hooks({ conversationId })` — explicit per-call (required for multi-turn conversations).
+2. `resolveConversationId(stepStartEvent)` — resolver function; receives the `experimental_onStepStart` event and may derive a conversation ID from request context or message history.
+3. Fallback: `sigil:framework:vercel-ai-sdk:<response.id>` — scoped to a single response only; does not create conversation-level continuity.
+
+The design does not attempt to auto-detect `chatId`, `sessionId`, or similar keys because these do not appear in AI SDK's server-side step callback payloads.
 
 ## Canonical framework identity
 
-All generated spans/generations include:
+All generated spans and generations include:
 
 - `sigil.framework.name = "vercel-ai-sdk"`
 - `sigil.framework.source = "framework"`
 - `sigil.framework.language = "typescript"`
 
-## Conversation identity
+## Hook lifecycle and timing
 
-`conversation_id` precedence order:
+### How all three signals are produced from one recorder
 
-1. Explicit Sigil integration option (`conversationId`).
-2. User resolver output (`resolveConversationId`) from call context.
-3. Known app/session keys passed in context metadata:
-   - `conversationId`
-   - `chatId`
-   - `sessionId`
-4. AI SDK UI chat id when available in app wiring.
-5. Deterministic fallback:
-   - `sigil:framework:vercel-ai-sdk:<root_run_id>`
+A single `GenerationRecorder` lifecycle covers generation export, OTel span, and metrics:
 
-Notes:
+1. `experimental_onStepStart` fires → `client.startGeneration({ startedAt: new Date(), model, conversationId, ... })` — recorder created, span opens at correct wall-clock time.
+2. For `streamText`: `onChunk` fires → on first chunk with `chunk.type === 'text'`, call `recorder.setFirstTokenAt(new Date())` to capture TTFT.
+3. `onStepFinish` fires → `recorder.setResult(...)` + `recorder.end()` — span closes, metrics recorded, generation enqueued for export.
 
-- `thread_id` is optional lineage metadata, not a required identity for this integration.
-- If `thread_id` is meaningful and available, keep it as supporting metadata.
+This gives correct span duration, TTFT, and generation export all without model wrapping.
+
+The instrumentation maintains a step state map keyed by step number to correlate `experimental_onStepStart` with `onStepFinish`.
+
+### `generateText` flow (`SYNC`)
+
+1. `experimental_onStepStart`: record `startedAt`, store input messages and model info, create `GenerationRecorder`.
+2. `onStepFinish`: extract usage, text output, toolCalls, toolResults, finishReason, response metadata; call `recorder.setResult(...)` and `recorder.end()`.
+3. `experimental_onToolCallStart`: open a `ToolExecutionRecorder` per tool call.
+4. `experimental_onToolCallFinish`: close the tool recorder with result or error and `durationMs`.
+
+### `streamText` flow (`STREAM`)
+
+Same as generateText flow, plus:
+
+5. `onChunk`: on first `chunk.type === 'text'` chunk, call `recorder.setFirstTokenAt(new Date())`.
+6. `onError`: call `recorder.setCallError(error)` and `recorder.end()` to ensure the recorder closes on stream failure.
+
+### Agentic loop (multi-step)
+
+Multi-step `generateText`/`streamText` with `stopWhen` fires `experimental_onStepStart` + `onStepFinish` once per model call. Each step produces one Sigil generation record under the same `conversationId`.
+
+`stepType` from `onStepFinish` (`"initial"` | `"continue"` | `"tool-result"`) is stored as framework metadata to track the position in the agentic loop. Tool results from the previous step appear as `tool` role messages in the next step's input; these are captured naturally via the per-step input from `experimental_onStepStart`.
+
+There is no global recorder spanning all steps — one recorder per step keeps lifecycle management simple and deterministic.
 
 ## Generation field mapping
 
-| Sigil generation field | Source in AI SDK flow | Notes |
+| Sigil generation field | Source in AI SDK hook | Notes |
 |---|---|---|
-| `conversation_id` | precedence resolver above | deterministic fallback required |
-| `provider` | model/provider resolution | use explicit override if configured |
-| `model` | model id from call/model object | normalize to provider/model contract |
-| `mode` | operation type | `SYNC` for `generateText`, `STREAM` for `streamText` |
-| `input` | call params/messages | gated by `captureInputs` |
-| `output` | final response text/messages | gated by `captureOutputs` |
-| `usage.input_tokens` | `usage.inputTokens`/`usage.promptTokens` equivalents | mapped to Sigil canonical token usage |
-| `usage.output_tokens` | `usage.outputTokens`/`usage.completionTokens` equivalents | mapped to Sigil canonical token usage |
-| `usage.total_tokens` | `usage.totalTokens` | fallback to sum if absent |
-| `stop_reason` | finish/stop reason fields | optional |
-| `error` | exception/abort payload | classify to `error.type` / `error.category` |
+| `conversation_id` | precedence resolver above | explicit required for multi-turn |
+| `provider` | `experimental_onStepStart` `model.provider` | fallback: infer from `modelId` prefix |
+| `model` | `onStepFinish` `response.modelId` | actual model used by provider |
+| `mode` | operation type | `SYNC` for generateText, `STREAM` for streamText |
+| `input` | `experimental_onStepStart` `messages` | gated by `captureInputs` |
+| `output` | `onStepFinish` `text` | gated by `captureOutputs` |
+| `usage.input_tokens` | `onStepFinish` `usage.inputTokens` | |
+| `usage.output_tokens` | `onStepFinish` `usage.outputTokens` | |
+| `usage.cache_read_input_tokens` | `onStepFinish` `usage.inputTokenDetails.cacheReadTokens` | |
+| `usage.cache_write_input_tokens` | `onStepFinish` `usage.inputTokenDetails.cacheWriteTokens` | |
+| `usage.reasoning_tokens` | `onStepFinish` `usage.outputTokenDetails.reasoningTokens` | |
+| `stop_reason` | `onStepFinish` `finishReason` | |
+| `response_id` | `onStepFinish` `response.id` | |
+| `response_model` | `onStepFinish` `response.modelId` | |
+| `error` | `onError` callback (streamText) or caught exception | classify to `error.type` / `error.category` |
 
-## Span attributes and metrics mapping
+Generation metadata includes:
+
+- `sigil.framework.step_type` — `onStepFinish` `stepType` (`"initial"`, `"continue"`, `"tool-result"`)
+- `sigil.framework.reasoning_text` — `onStepFinish` `reasoningText` when present (not merged into output content)
+- Standard framework identity fields (`sigil.framework.name`, `.source`, `.language`)
+- User-supplied `extraMetadata`
+
+## Span attributes and metrics
 
 ### Span attributes
 
-Required span attributes:
+Required:
 
 - `gen_ai.operation.name` (`generateText`, `streamText`, `execute_tool`)
 - `gen_ai.provider.name`
 - `gen_ai.request.model`
 - `gen_ai.conversation.id`
-- framework attributes (`sigil.framework.*`)
+- `sigil.framework.name`, `sigil.framework.source`, `sigil.framework.language`
 
-Optional span attributes (low-cardinality only):
+Optional (low-cardinality):
 
-- `sigil.framework.run_id`
-- `sigil.framework.parent_run_id`
-- `sigil.framework.thread_id`
-- `sigil.framework.component_name`
-- `sigil.framework.event_id`
-- `error.type`
-- `error.category`
+- `gen_ai.response.id`
+- `gen_ai.response.model`
+- `gen_ai.response.finish_reasons`
+- `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`
+- `gen_ai.usage.cache_read_input_tokens`, `gen_ai.usage.cache_write_input_tokens`
+- `gen_ai.usage.reasoning_tokens`
+- `sigil.framework.step_type`
+- `error.type`, `error.category`
 
-High-cardinality payload content remains in generation metadata/content, not span attrs.
+High-cardinality payload content (input messages, output text) remains in generation metadata/content, not span attributes.
 
 ### Metrics
 
@@ -157,134 +242,96 @@ Use existing Sigil SDK metric instruments:
 
 - `gen_ai.client.operation.duration`
 - `gen_ai.client.token.usage`
-- `gen_ai.client.time_to_first_token` (streaming)
+- `gen_ai.client.time_to_first_token` (streamText steps only, when TTFT captured via `onChunk`)
 - `gen_ai.client.tool_calls_per_operation`
 
-## Metadata mapping
-
-Generation metadata includes normalized framework metadata when available:
-
-- `sigil.framework.run_id`
-- `sigil.framework.parent_run_id`
-- `sigil.framework.thread_id`
-- `sigil.framework.component_name`
-- `sigil.framework.run_type`
-- `sigil.framework.event_id`
-- `sigil.framework.retry_attempt`
-
-Normalization requirements:
-
-- bounded depth
-- circular-safe
-- deterministic primitive conversion
-- invalid date/object handling should not break callback execution
-
-## Lifecycle mapping
-
-## `generateText` flow (`SYNC`)
-
-1. Create generation/span context and stable run id.
-2. Capture input payload if enabled.
-3. Execute wrapped call.
-4. Capture final output, usage, finish reason.
-5. Emit tool spans if tool call/result structures are available in result.
-6. End generation/span/metrics exactly once.
-
-## `streamText` flow (`STREAM`)
-
-1. Create generation/span context and stable run id.
-2. Capture input payload if enabled.
-3. Process stream chunks/events:
-   - record first token timestamp (TTFT)
-   - aggregate output chunks when output capture enabled
-   - correlate tool-call and tool-result events
-4. Finalize on finish event with usage and finish reason.
-5. On stream error/abort, classify error and end generation/span exactly once.
+All metrics are recorded automatically by `recorder.end()` via the existing `SigilClient` instrumentation — no additional metric wiring required in the framework module.
 
 ## Tool lifecycle mapping
 
-- Start tool span when tool invocation event is observed.
-- End tool span on corresponding result/error event.
-- For id-less tool events, synthesize stable fallback ids and persist lookup mapping until closure.
+- `experimental_onToolCallStart` event → `client.startToolExecution({ toolName: event.toolCall.toolName, toolCallId: event.toolCall.toolCallId, ... })`
+- `experimental_onToolCallFinish` event:
+  - On `event.success === true` → `recorder.setResult({ arguments: event.toolCall.input, result: event.output })` + `recorder.end()`
+  - On `event.success === false` → `recorder.setCallError(event.error)` + `recorder.end()`
+- `event.durationMs` from `onToolCallFinish` provides wall-clock tool execution time directly — no id-less correlation or fallback needed.
+- `toolCallId` is always provided by AI SDK — no synthetic fallback id required.
+- Tool recorders are stored in a `Map<toolCallId, ToolExecutionRecorder>` and removed on close.
 
 ## Error and abort behavior
 
-- Never swallow recorder finalization errors by default.
-- Abort/error paths must end all started generation/tool spans.
-- Duplicate callback delivery must be deduplicated atomically per run/tool id.
+- `onError` (streamText) → `recorder.setCallError(error)` + `recorder.end()`. Must fire even if stream was partially consumed.
+- `onStepFinish` with `finishReason === 'error'` → classify error and end recorder.
+- All started tool recorders must be closed when the parent step errors — iterate the open tool map and end any remaining recorders.
+- Recorder closure is idempotent: `recorder.end()` called multiple times is safe (guarded by `ended` flag in the core client).
 
-## Integration modes
+## Options contract
 
-## Mode A: Sigil-native (default)
+```ts
+interface SigilVercelAiSdkOptions {
+  agentName?: string;
+  agentVersion?: string;
+  captureInputs?: boolean;               // default: true
+  captureOutputs?: boolean;              // default: true
+  extraTags?: Record<string, string>;
+  extraMetadata?: Record<string, unknown>;
+  resolveConversationId?: (event: StepStartEvent) => string | undefined;
+}
 
-- Sigil middleware emits generations, spans, and metrics directly.
-- No dependency on `experimental_telemetry`.
-- Trace-generation correlation is maintained via active span context (`trace_id` / `span_id` linkage).
+interface CallOptions {
+  conversationId?: string;              // required for multi-turn continuity
+  agentName?: string;                   // overrides global agentName for this call
+  extraMetadata?: Record<string, unknown>;
+}
+```
 
-## Mode B: Hybrid telemetry (optional)
+No telemetry bridge option. No model reference option. No middleware-level options.
 
-- Keep Sigil-native generation export as source of truth.
-- Add AI SDK `experimental_telemetry` for additional OTel span enrichment.
-- Ensure capture flags are consistent between Sigil options and telemetry settings (`recordInputs`, `recordOutputs`).
-- Include Sigil correlation metadata in telemetry metadata when configured.
+## Documentation requirements
 
-Telemetry caveat:
+Framework guide at `sdks/js/docs/frameworks/vercel-ai-sdk.md`:
 
-- AI SDK telemetry is documented as experimental; Sigil correctness must not depend on it.
-
-## Options contract (planned)
-
-- `agentName?`
-- `agentVersion?`
-- `providerResolver?`
-- `captureInputs` (default `true`)
-- `captureOutputs` (default `true`)
-- `extraTags?`
-- `extraMetadata?`
-- `conversationId?`
-- `resolveConversationId?(context) => string | undefined`
-- `resolveThreadId?(context) => string | undefined`
-- `telemetryBridge?` (off by default)
-
-## Documentation requirements for implementation phase
-
-- Framework guide at `sdks/js/docs/frameworks/vercel-ai-sdk.md` including:
-  - quickstart one-liner
-  - middleware-first wiring
-  - streaming and tool examples
-  - conversation mapping example
-  - capture controls and privacy notes
-  - telemetry hybrid mode example
-  - troubleshooting section
+- Quickstart: factory setup + `generateTextHooks` spread (one-liner)
+- Conversation ID: explicit note that users must supply it for multi-turn
+- Multi-step agentic loop example with `stopWhen` and tools
+- Streaming with TTFT example
+- `captureInputs` / `captureOutputs` privacy controls
+- Troubleshooting: missing usage (provider doesn't return it), missing TTFT (non-streaming step), tool IDs
 
 ## Testing and acceptance criteria
 
 Required test categories:
 
-- unit tests for mapping functions and metadata normalization
-- integration-style tests for `generateText` and `streamText` lifecycles
-- regression tests for id-less event fallback correlation
-- capture toggles (`captureInputs`, `captureOutputs`) for model and tool payloads
-- error/abort lifecycle closure tests
-- hybrid mode tests ensuring telemetry bridge does not alter generation correctness
+- Unit tests for field extraction and metadata normalization (`mapping.ts`)
+- Integration-style tests for `generateText` single-step: success, error
+- Integration-style tests for `generateText` multi-step (agentic loop): 2-step tool call loop, stepType metadata
+- Integration-style tests for `streamText`: success, error, TTFT capture
+- Tool lifecycle: success, error, correct `durationMs` mapping
+- Capture toggles: `captureInputs=false`, `captureOutputs=false` for both model and tool payloads
+- Conversation ID: explicit override, resolver function, fallback value
+- Recorder closure: all open recorders closed on error, no leaks
+- Concurrent calls: multiple simultaneous `generateText` calls do not cross-contaminate step maps
 
 Acceptance criteria:
 
-- conversation-first mapping deterministic and documented
-- tool and generation lifecycles close correctly under concurrent/eventful flows
-- generation export contains required framework metadata and trace correlation
-- docs snippets compile against published TypeScript types
+- Model is never wrapped or modified.
+- `generateTextHooks()` and `streamTextHooks()` return objects that TypeScript accepts at the respective call sites without casts.
+- Each `onStepFinish` produces exactly one generation record, one closed span, and metric observations.
+- Each `experimental_onToolCallFinish` produces exactly one closed tool span.
+- Recorder lifecycle is always closed: no open spans on success, error, or abort.
+- `conversationId` fallback is documented and tested.
+- Docs snippets compile against published TypeScript types.
 
 ## Risks
 
-- AI SDK callback/event payload shapes may evolve between versions.
-- Streaming tool event correlation can be brittle for id-less payloads without stable fallback mapping.
-- Dual instrumentation (Sigil + telemetry) can create duplicated spans if not clearly scoped.
-- High-cardinality metadata drift if allowlist/normalization rules are not enforced.
+- `experimental_onStepStart`, `experimental_onToolCallStart`, and `experimental_onToolCallFinish` are marked experimental in AI SDK v5 and can change in patch releases.
+- If AI SDK changes the `onStepFinish` payload shape (e.g., renames `usage.inputTokenDetails`), field extraction silently produces zeroes — defensive fallback extraction required.
+- Multi-step step numbering: step map keyed by step number works only if AI SDK guarantees sequential, non-reused step numbers within a single `generateText` call.
+- `onError` (streamText) may not fire if the caller consumes the stream without error handling — document this and encourage `onError` usage.
 
 ## Explicit assumptions and defaults
 
-- TypeScript Vercel AI SDK only in this workstream.
-- Sigil generation export remains primary source of truth.
-- Optional lineage metadata is preserved when available; not required.
+- TypeScript Vercel AI SDK only, `ai` package v5.
+- Sigil generation export is the source of truth — not OTel telemetry.
+- `conversation_id` is the primary identity; no implicit detection from request payloads.
+- `experimental_telemetry` is not used and not documented.
 - No schema changes to Sigil generation ingest/query contracts.
