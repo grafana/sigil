@@ -52,9 +52,9 @@ SDK framework integration status:
 - Completed (OpenAI Agents/LlamaIndex/Google ADK):
   - `docs/design-docs/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
   - `docs/exec-plans/completed/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
-- Active (Vercel AI SDK TypeScript):
+- Completed (Vercel AI SDK TypeScript):
   - `docs/design-docs/2026-02-22-sdk-vercel-ai-sdk-integration.md`
-  - `docs/exec-plans/active/2026-02-22-sdk-vercel-ai-sdk-integration.md`
+  - `docs/exec-plans/completed/2026-02-22-sdk-vercel-ai-sdk-integration.md`
 
 Framework contract defaults:
 
@@ -506,12 +506,14 @@ See `docs/references/grafana-query-response-shapes.md`.
   - LangChain + LangGraph in Python and TypeScript/JavaScript.
   - OpenAI Agents + LlamaIndex in Python and TypeScript/JavaScript.
   - Google ADK in Python, TypeScript/JavaScript, Go, and Java.
+  - Vercel AI SDK hooks in TypeScript/JavaScript.
 - JS framework modules are exposed as subpath exports:
   - `@grafana/sigil-sdk-js/langchain`
   - `@grafana/sigil-sdk-js/langgraph`
   - `@grafana/sigil-sdk-js/openai-agents`
   - `@grafana/sigil-sdk-js/llamaindex`
   - `@grafana/sigil-sdk-js/google-adk`
+  - `@grafana/sigil-sdk-js/vercel-ai-sdk`
 - Raw provider artifacts are default OFF, explicit opt-in only.
 - SDK validation enforces message role/part compatibility and artifact payload-or-record-id constraints.
 - Empty tool names return a no-op tool recorder (instrumentation safety behavior).
