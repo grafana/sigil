@@ -30,6 +30,10 @@
     "./google-adk": {
       "types": "./dist/frameworks/google-adk/index.d.ts",
       "import": "./dist/frameworks/google-adk/index.js"
+    },
+    "./vercel-ai-sdk": {
+      "types": "./dist/frameworks/vercel-ai-sdk/index.d.ts",
+      "import": "./dist/frameworks/vercel-ai-sdk/index.js"
     }
   },
   "files": [
@@ -49,7 +53,7 @@
     "test:ci": "pnpm run test"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.77.0",
+    "@anthropic-ai/sdk": "^0.78.0",
     "@google/genai": "^1.41.0",
     "@google/adk": "^0.3.0",
     "@grpc/grpc-js": "^1.14.1",

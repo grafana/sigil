@@ -29,7 +29,7 @@ This is the canonical navigation map for repository documentation.
 ## Structured Collections
 
 - Design docs: [`design-docs/index.md`](design-docs/index.md)
-  - Vercel AI SDK integration design (active): `design-docs/2026-02-22-sdk-vercel-ai-sdk-integration.md`
+  - Vercel AI SDK integration design (completed): `design-docs/2026-02-22-sdk-vercel-ai-sdk-integration.md`
   - Framework integration design (completed): `design-docs/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
   - Drafts: `design-docs/drafts/`
 - Product specs: [`product-specs/index.md`](product-specs/index.md)
@@ -42,6 +42,7 @@ This is the canonical navigation map for repository documentation.
   - JS OpenAI Agents framework guide: `../sdks/js/docs/frameworks/openai-agents.md`
   - JS LlamaIndex framework guide: `../sdks/js/docs/frameworks/llamaindex.md`
   - JS Google ADK framework guide: `../sdks/js/docs/frameworks/google-adk.md`
+  - JS Vercel AI SDK framework guide: `../sdks/js/docs/frameworks/vercel-ai-sdk.md`
   - .NET SDK README: `../sdks/dotnet/README.md`
   - Python SDK README: `../sdks/python/README.md`
   - Python LangChain module README: `../sdks/python-frameworks/langchain/README.md`
@@ -57,10 +58,10 @@ This is the canonical navigation map for repository documentation.
     - Drafts: `exec-plans/active/drafts/`
   - Current implementation priorities:
     - cross-track consistency and tracked tech debt follow-up (CI scope expansion, ingestion-log evolution)
-    - Vercel AI SDK TypeScript integration delivery (active): `exec-plans/active/2026-02-22-sdk-vercel-ai-sdk-integration.md`
   - Phase 2 umbrella coordinator: `exec-plans/active/2026-02-12-phase-2-delivery.md`
   - LangChain/LangGraph framework integration delivery: `exec-plans/completed/2026-02-20-sdk-langchain-langgraph-integrations.md`
   - OpenAI Agents/LlamaIndex/Google ADK framework integration delivery: `exec-plans/completed/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
+  - Vercel AI SDK TypeScript integration delivery: `exec-plans/completed/2026-02-22-sdk-vercel-ai-sdk-integration.md`
   - Completed: `exec-plans/completed/`
     - `exec-plans/completed/2026-02-11-bootstrap-phase-1.md` (superseded)
     - `exec-plans/completed/2026-02-12-model-card-catalog-refresh.md`
