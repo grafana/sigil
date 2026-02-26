@@ -102,10 +102,10 @@ importers:
         specifier: 19.2.3
         version: 19.2.3(@types/react@19.2.14)
       '@typescript-eslint/eslint-plugin':
-        specifier: ^8.55.0
+        specifier: ^8.56.0
         version: 8.56.0(@typescript-eslint/parser@8.56.0(eslint@10.0.1)(typescript@5.9.3))(eslint@10.0.1)(typescript@5.9.3)
       '@typescript-eslint/parser':
-        specifier: ^8.55.0
+        specifier: ^8.56.0
         version: 8.56.0(eslint@10.0.1)(typescript@5.9.3)
       copy-webpack-plugin:
         specifier: ^13.0.0
