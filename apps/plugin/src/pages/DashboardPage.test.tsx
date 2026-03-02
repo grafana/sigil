@@ -25,6 +25,7 @@ jest.mock('@grafana/ui', () => {
   return {
     ...actual,
     TimeRangePicker: () => <div data-testid="time-range-picker" />,
+    TimeRangeInput: (props: { value: unknown; onChange: unknown }) => <div data-testid="time-range-input" />,
     PanelChrome: ({
       title,
       children,
@@ -38,6 +39,14 @@ jest.mock('@grafana/ui', () => {
 jest.mock('@grafana/runtime', () => ({
   ...jest.requireActual('@grafana/runtime'),
   PanelRenderer: ({ pluginId }: { pluginId: string }) => <div data-testid={`renderer-${pluginId}`} />,
+}));
+
+jest.mock('@grafana/assistant', () => ({
+  useInlineAssistant: () => ({
+    isGenerating: false,
+    content: '',
+    generate: jest.fn(),
+  }),
 }));
 
 const emptyVector: PrometheusQueryResponse = {
@@ -88,11 +97,11 @@ describe('DashboardPage', () => {
       renderWithRouter(ds);
     });
 
-    expect(screen.getByTestId('time-range-picker')).toBeInTheDocument();
+    expect(screen.getByTestId('time-range-input')).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getAllByTestId('renderer-timeseries')).toHaveLength(4);
-      expect(screen.getAllByTestId('renderer-stat')).toHaveLength(4);
+      expect(screen.getAllByTestId('renderer-piechart')).toHaveLength(4);
     });
   });
 
