@@ -1,0 +1,66 @@
+name: Plugins - CI / CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - apps/plugin/pkg/**
+      - apps/plugin/src/**
+      - tests/**
+      - package.json
+      - pnpm-lock.yaml
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions: {}
+
+jobs:
+  cd:
+    name: CI / CD
+    uses: grafana/plugin-ci-workflows/.github/workflows/cd.yml@ci-cd-workflows/v5.1.0
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      pull-requests: read
+    with:
+      go-version: '1.25.5'
+      go-setup-caching: true
+      golangci-lint-version: '2.8.0'
+      plugin-directory: apps/plugin
+
+      # disable playwright tests because we're running them in our own workflow (for now)
+      # running e2e tests in grafana-dev & -enterprise versions of the CI/CD workflow resulted in flaky tests due to race conditions
+      # during our database migrations that are caused by starting both, api & worker services at the same time
+      run-playwright: false
+
+      # Checkout/build PR or main branch, depending on event
+      branch: ${{ github.event_name == 'push' && github.ref_name || github.ref }}
+
+      # When pushing to "main", publish and deploy to all environments (CD).
+      # "dev" and "ops" are always deployed automatically, but "prod" needs to be approved by a human
+      # in the Argo Workflows UI.
+      # For PRs, skip publishing and deploying (run CI only).
+      # If you need to deploy a PR to a specific environment, use the "Plugins - CD" workflow.
+      environment: ${{ (github.event_name == 'push' && github.ref_name == 'main') && 'dev,ops' || 'none' }}
+
+      # Deploy provisioned plugin to Grafana Cloud
+      grafana-cloud-deployment-type: provisioned
+      auto-merge-environments: dev,ops
+      # Post to the dev deployment channel because this happens all the time
+      # and is super noisy. We don't deploy to prod with this pipeline anyway.
+      argo-workflow-slack-channel: '#hackathon-16-sigil-actually-useful-ai-o11y-deploys'
+
+      # We don't want a GitHub release for every push to `main`.
+      disable-github-release: true
+
+      # Scope for the plugin published to the catalog. Setting this to "grafana_cloud" will make it visible only in Grafana Cloud
+      # (and hide it for on-prem). This is required for some provisioned plugins.
+      scopes: grafana_cloud
+
+      # Add the git head ref sha to the plugin version as suffix (`+abcdef`). This is required for CD builds.
+      plugin-version-suffix: ${{ github.event_name == 'push' && github.sha || github.event.pull_request.head.sha }}
