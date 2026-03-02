@@ -21,11 +21,7 @@ import (
 	evalrules "github.com/grafana/sigil/sigil/internal/eval/rules"
 	evalworker "github.com/grafana/sigil/sigil/internal/eval/worker"
 	"github.com/grafana/sigil/sigil/internal/feedback"
-	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
-	"github.com/grafana/sigil/sigil/internal/modelcards"
-	"github.com/grafana/sigil/sigil/internal/query"
-	"github.com/grafana/sigil/sigil/internal/queryproxy"
 	"github.com/grafana/sigil/sigil/internal/server"
 	"github.com/grafana/sigil/sigil/internal/storage"
 	"github.com/grafana/sigil/sigil/internal/storage/mysql"
@@ -33,175 +29,43 @@ import (
 	"google.golang.org/grpc"
 )
 
+// serverModule owns transport listeners only. Runtime role modules register
+// route/service handlers through serverTransportRegistry.
 type serverModule struct {
 	cfg    config.Config
 	logger log.Logger
 
-	modelCardSvc     *modelcards.Service
-	runModelCardSync bool
+	registry *serverTransportRegistry
 
 	apiServer    *http.Server
 	grpcServer   *grpc.Server
 	grpcListener net.Listener
 
-	evalEnqueueDispatcher *evalenqueue.Service
-
 	runErr chan error
 }
 
-func newServerModule(cfg config.Config, logger log.Logger, modelCardSvc *modelcards.Service, runModelCardSync bool) services.Service {
+func newServerModule(cfg config.Config, logger log.Logger, registry *serverTransportRegistry) services.Service {
 	module := &serverModule{
-		cfg:              cfg,
-		logger:           logger,
-		modelCardSvc:     modelCardSvc,
-		runModelCardSync: runModelCardSync,
-		runErr:           make(chan error, 2),
+		cfg:      cfg,
+		logger:   logger,
+		registry: registry,
+		runErr:   make(chan error, 2),
 	}
 	return services.NewBasicService(module.start, module.run, module.stop).WithName(config.TargetServer)
 }
 
-func (m *serverModule) start(ctx context.Context) error {
-	generationStore, err := m.buildGenerationStore(ctx)
-	if err != nil {
-		return err
-	}
-
-	generationSvc := generationingest.NewService(generationStore)
-	generationGRPC := generationingest.NewGRPCServer(generationSvc)
-	var feedbackStore feedback.Store
-	var feedbackSvc *feedback.Service
-	if m.cfg.ConversationRatingsEnabled || m.cfg.ConversationAnnotationsEnabled {
-		feedbackStore, err = m.buildFeedbackStore(generationStore)
-		if err != nil {
-			return err
-		}
-		feedbackSvc = feedback.NewService(feedbackStore)
-	}
-	var conversationStore storage.ConversationStore
-	if store, ok := generationStore.(storage.ConversationStore); ok {
-		conversationStore = store
-	}
-	var walReader storage.WALReader
-	if reader, ok := generationStore.(storage.WALReader); ok {
-		walReader = reader
-	}
-	var blockMetadataStore storage.BlockMetadataStore
-	if metadataStore, ok := generationStore.(storage.BlockMetadataStore); ok {
-		blockMetadataStore = metadataStore
-	}
-	blockReader, err := m.buildBlockReader(ctx)
-	if err != nil {
-		return err
-	}
-	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
-		ConversationStore:  conversationStore,
-		WALReader:          walReader,
-		BlockMetadataStore: blockMetadataStore,
-		BlockReader:        blockReader,
-		FeedbackStore:      feedbackStore,
-		TempoBaseURL:       m.cfg.QueryProxy.TempoBaseURL,
-		HTTPClient:         &http.Client{Timeout: m.cfg.QueryProxy.Timeout},
-	})
-	if err != nil {
-		return err
-	}
-	if m.modelCardSvc == nil {
-		return errors.New("model-card service is required")
-	}
+func (m *serverModule) start(_ context.Context) error {
 	tenantAuthCfg := tenantauth.Config{
 		Enabled:      m.cfg.AuthEnabled,
 		FakeTenantID: m.cfg.FakeTenantID,
 	}
 	protectedHTTP := tenantauth.HTTPMiddleware(tenantAuthCfg)
 
-	var evalStore evalpkg.EvalStore
-	if store, ok := generationStore.(evalpkg.EvalStore); ok {
-		evalStore = store
-	}
-	if mysqlStore, ok := generationStore.(*mysql.WALStore); ok {
-		mysqlStore.SetEvalEnqueueEnabled(m.cfg.EvalWorkerEnabled)
-	}
-	if mysqlStore, ok := generationStore.(*mysql.WALStore); ok && evalStore != nil && m.cfg.EvalWorkerEnabled {
-		engine := evalrules.NewEngine(evalStore)
-		m.evalEnqueueDispatcher = evalenqueue.NewService(
-			evalenqueue.Config{Enabled: m.cfg.EvalWorkerEnabled},
-			m.logger,
-			evalEnqueueStoreAdapter{store: mysqlStore},
-			evalEnqueueProcessorAdapter{engine: engine},
-		)
-		mysqlStore.SetEvalHook(evalHookAdapter{notifier: m.evalEnqueueDispatcher})
-	}
-	var controlSvc *evalcontrol.Service
-	var ingestScoreSvc *evalingest.Service
-	if evalStore != nil {
-		discovery := judges.DiscoverFromEnv()
-		controlSvc = evalcontrol.NewService(evalStore, judgeDiscoveryAdapter{discovery: discovery})
-		scoreLookup := buildScoreGenerationLookup(walReader, blockMetadataStore, blockReader)
-		ingestScoreSvc = evalingest.NewService(evalStore, scoreLookup, false)
-		seedTenantID := strings.TrimSpace(m.cfg.FakeTenantID)
-		if seedTenantID != "" && strings.TrimSpace(m.cfg.EvalSeedFile) != "" {
-			loadSeed, err := shouldLoadEvalSeed(ctx, evalStore, seedTenantID)
-			if err != nil {
-				return err
-			}
-			if loadSeed {
-				report, err := evalcontrol.LoadYAMLSeedFileWithOptions(
-					ctx,
-					evalStore,
-					seedTenantID,
-					m.cfg.EvalSeedFile,
-					evalcontrol.SeedLoadOptions{Strict: m.cfg.EvalSeedStrict},
-				)
-				if err != nil {
-					return err
-				}
-				for _, issue := range report.Issues {
-					_ = level.Warn(m.logger).Log(
-						"msg", "eval seed skipped invalid entry",
-						"tenant_id", seedTenantID,
-						"entity", issue.Entity,
-						"id", issue.ID,
-						"err", issue.Error,
-					)
-				}
-				_ = level.Info(m.logger).Log(
-					"msg", "eval seed load completed",
-					"tenant_id", seedTenantID,
-					"strict", m.cfg.EvalSeedStrict,
-					"created_evaluators", report.CreatedEvaluators,
-					"created_rules", report.CreatedRules,
-					"skipped_evaluators", report.SkippedEvaluators,
-					"skipped_rules", report.SkippedRules,
-				)
-			} else {
-				_ = level.Info(m.logger).Log("msg", "skip eval seed load because tenant already has evaluation config", "tenant_id", seedTenantID)
-			}
-		}
-	}
-
-	queryProxy, err := queryproxy.New(queryproxy.Config{
-		PrometheusBaseURL: m.cfg.QueryProxy.PrometheusBaseURL,
-		TempoBaseURL:      m.cfg.QueryProxy.TempoBaseURL,
-		Timeout:           m.cfg.QueryProxy.Timeout,
-	})
-	if err != nil {
-		return fmt.Errorf("create query proxy: %w", err)
-	}
-
 	apiMux := http.NewServeMux()
-	server.RegisterRoutesWithQueryProxy(
-		apiMux,
-		querySvc,
-		generationSvc,
-		feedbackSvc,
-		m.cfg.ConversationRatingsEnabled,
-		m.cfg.ConversationAnnotationsEnabled,
-		m.modelCardSvc,
-		protectedHTTP,
-		queryProxy,
-	)
-	evalcontrol.RegisterHTTPRoutes(apiMux, controlSvc, protectedHTTP)
-	evalingest.RegisterHTTPRoutes(apiMux, ingestScoreSvc, protectedHTTP)
+	server.RegisterCoreRoutes(apiMux)
+	if m.registry != nil {
+		m.registry.ApplyHTTP(apiMux, protectedHTTP)
+	}
 	m.apiServer = &http.Server{
 		Addr:    m.cfg.HTTPAddr,
 		Handler: apiMux,
@@ -211,36 +75,22 @@ func (m *serverModule) start(ctx context.Context) error {
 		grpc.UnaryInterceptor(tenantauth.UnaryServerInterceptor(tenantAuthCfg)),
 		grpc.StreamInterceptor(tenantauth.StreamServerInterceptor(tenantAuthCfg)),
 	)
-	sigilv1.RegisterGenerationIngestServiceServer(m.grpcServer, generationGRPC)
+	if m.registry != nil {
+		m.registry.ApplyGRPC(m.grpcServer)
+	}
 
-	m.grpcListener, err = net.Listen("tcp", m.cfg.OTLPGRPCAddr)
+	listener, err := net.Listen("tcp", m.cfg.OTLPGRPCAddr)
 	if err != nil {
 		return fmt.Errorf("listen grpc %s: %w", m.cfg.OTLPGRPCAddr, err)
 	}
+	m.grpcListener = listener
 
 	go m.serveHTTP()
 	go m.serveGRPC()
-
 	return nil
 }
 
 func (m *serverModule) run(ctx context.Context) error {
-	if m.evalEnqueueDispatcher != nil {
-		go func() {
-			if err := m.evalEnqueueDispatcher.Run(ctx); err != nil {
-				m.pushRunError(err)
-			}
-		}()
-	}
-
-	if m.runModelCardSync && m.modelCardSvc != nil {
-		go func() {
-			if err := m.modelCardSvc.RunSyncLoop(ctx); err != nil {
-				m.pushRunError(err)
-			}
-		}()
-	}
-
 	select {
 	case <-ctx.Done():
 		return nil
@@ -264,6 +114,83 @@ func (m *serverModule) stop(_ error) error {
 	}
 
 	return nil
+}
+
+func (m *serverModule) serveHTTP() {
+	_ = level.Info(m.logger).Log("msg", "sigil http listening", "addr", m.cfg.HTTPAddr)
+	err := m.apiServer.ListenAndServe()
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		m.pushRunError(err)
+	}
+}
+
+func (m *serverModule) serveGRPC() {
+	_ = level.Info(m.logger).Log("msg", "sigil grpc listening", "addr", m.cfg.OTLPGRPCAddr)
+	err := m.grpcServer.Serve(m.grpcListener)
+	if err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+		m.pushRunError(err)
+	}
+}
+
+func (m *serverModule) pushRunError(err error) {
+	select {
+	case m.runErr <- err:
+	default:
+	}
+}
+
+func (m *serverModule) buildGenerationStore(ctx context.Context) (generationingest.Store, error) {
+	return buildGenerationStore(ctx, m.cfg, shouldAutoMigrateGenerationStoreTarget(m.cfg.Target))
+}
+
+func shouldAutoMigrateGenerationStoreTarget(target string) bool {
+	switch strings.TrimSpace(strings.ToLower(target)) {
+	case config.TargetAll, config.TargetIngester:
+		return true
+	default:
+		return false
+	}
+}
+
+func buildGenerationStore(ctx context.Context, cfg config.Config, autoMigrate bool) (generationingest.Store, error) {
+	switch strings.ToLower(strings.TrimSpace(cfg.StorageBackend)) {
+	case "", "mysql":
+		store, err := mysql.NewWALStore(cfg.MySQLDSN)
+		if err != nil {
+			return nil, fmt.Errorf("create mysql wal store: %w", err)
+		}
+		if autoMigrate {
+			if err := store.AutoMigrate(ctx); err != nil {
+				return nil, err
+			}
+		}
+		return store, nil
+	default:
+		return nil, fmt.Errorf("unsupported storage backend %q", cfg.StorageBackend)
+	}
+}
+
+func (m *serverModule) buildFeedbackStore(generationStore generationingest.Store) (feedback.Store, error) {
+	return buildFeedbackStore(m.cfg.StorageBackend, generationStore)
+}
+
+func buildFeedbackStore(storageBackend string, generationStore generationingest.Store) (feedback.Store, error) {
+	if store, ok := generationStore.(feedback.Store); ok {
+		return store, nil
+	}
+	return nil, fmt.Errorf("storage backend %q does not support feedback storage", storageBackend)
+}
+
+func (m *serverModule) buildBlockReader(ctx context.Context) (storage.BlockReader, error) {
+	return buildBlockReader(ctx, m.cfg.ObjectStore)
+}
+
+func buildBlockReader(ctx context.Context, cfg config.ObjectStoreConfig) (storage.BlockReader, error) {
+	return newObjectBlockReader(ctx, cfg)
+}
+
+func buildScoreGenerationLookup(hotReader storage.WALReader, blockMetadataStore storage.BlockMetadataStore, blockReader storage.BlockReader) evalingest.GenerationLookup {
+	return evalworker.NewHotColdGenerationReader(hotReader, blockMetadataStore, blockReader)
 }
 
 type evalSeedStateStore interface {
@@ -293,62 +220,6 @@ func shouldLoadEvalSeed(ctx context.Context, store evalSeedStateStore, tenantID 
 		return false, fmt.Errorf("list rules for seed bootstrap check: %w", err)
 	}
 	return len(rules) == 0, nil
-}
-
-func (m *serverModule) serveHTTP() {
-	_ = level.Info(m.logger).Log("msg", "sigil http listening", "addr", m.cfg.HTTPAddr)
-	err := m.apiServer.ListenAndServe()
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		m.pushRunError(err)
-	}
-}
-
-func (m *serverModule) serveGRPC() {
-	_ = level.Info(m.logger).Log("msg", "sigil generation/grpc listening", "addr", m.cfg.OTLPGRPCAddr)
-	err := m.grpcServer.Serve(m.grpcListener)
-	if err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-		m.pushRunError(err)
-	}
-}
-
-func (m *serverModule) pushRunError(err error) {
-	select {
-	case m.runErr <- err:
-	default:
-	}
-}
-
-func (m *serverModule) buildGenerationStore(ctx context.Context) (generationingest.Store, error) {
-	switch strings.ToLower(strings.TrimSpace(m.cfg.StorageBackend)) {
-	case "", "mysql":
-		store, err := mysql.NewWALStore(m.cfg.MySQLDSN)
-		if err != nil {
-			return nil, fmt.Errorf("create mysql wal store: %w", err)
-		}
-		if m.cfg.Target == config.TargetServer || m.cfg.Target == config.TargetAll {
-			if err := store.AutoMigrate(ctx); err != nil {
-				return nil, err
-			}
-		}
-		return store, nil
-	default:
-		return nil, fmt.Errorf("unsupported storage backend %q", m.cfg.StorageBackend)
-	}
-}
-
-func (m *serverModule) buildFeedbackStore(generationStore generationingest.Store) (feedback.Store, error) {
-	if store, ok := generationStore.(feedback.Store); ok {
-		return store, nil
-	}
-	return nil, fmt.Errorf("storage backend %q does not support feedback storage", m.cfg.StorageBackend)
-}
-
-func (m *serverModule) buildBlockReader(ctx context.Context) (storage.BlockReader, error) {
-	return newObjectBlockReader(ctx, m.cfg.ObjectStore)
-}
-
-func buildScoreGenerationLookup(hotReader storage.WALReader, blockMetadataStore storage.BlockMetadataStore, blockReader storage.BlockReader) evalingest.GenerationLookup {
-	return evalworker.NewHotColdGenerationReader(hotReader, blockMetadataStore, blockReader)
 }
 
 type judgeDiscoveryAdapter struct {

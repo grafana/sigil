@@ -1,25 +1,25 @@
-{{- if .Values.catalogSync.enabled }}
+{{- if .Values.evalWorker.enabled }}
 {{ include "sigil.validateStorageBackend" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "sigil.fullname" . }}-catalog-sync
+  name: {{ include "sigil.fullname" . }}-eval-worker
   labels:
     {{- include "sigil.labels" . | nindent 4 }}
-    app.kubernetes.io/component: catalog-sync
+    app.kubernetes.io/component: eval-worker
 spec:
-  replicas: {{ .Values.catalogSync.replicaCount }}
+  replicas: {{ .Values.evalWorker.replicaCount }}
   selector:
     matchLabels:
-      {{- include "sigil.catalogSyncSelectorLabels" . | nindent 6 }}
+      {{- include "sigil.evalWorkerSelectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "sigil.catalogSyncSelectorLabels" . | nindent 8 }}
-        {{- with .Values.catalogSync.podLabels }}
+        {{- include "sigil.evalWorkerSelectorLabels" . | nindent 8 }}
+        {{- with .Values.evalWorker.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- with .Values.catalogSync.podAnnotations }}
+      {{- with .Values.evalWorker.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -34,7 +34,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-        - name: catalog-sync
+        - name: eval-worker
           image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- with .Values.command }}
@@ -46,13 +46,13 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           env:
-            {{- include "sigil.commonEnv" (dict "root" . "target" .Values.catalogSync.target "extraEnv" .Values.catalogSync.extraEnv) | nindent 12 }}
-          {{- if or .Values.sigil.extraEnvFrom .Values.catalogSync.extraEnvFrom }}
+            {{- include "sigil.commonEnv" (dict "root" . "target" .Values.evalWorker.target "extraEnv" .Values.evalWorker.extraEnv) | nindent 12 }}
+          {{- if or .Values.sigil.extraEnvFrom .Values.evalWorker.extraEnvFrom }}
           envFrom:
             {{- with .Values.sigil.extraEnvFrom }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
-            {{- with .Values.catalogSync.extraEnvFrom }}
+            {{- with .Values.evalWorker.extraEnvFrom }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
           {{- end }}
@@ -60,19 +60,19 @@ spec:
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with .Values.catalogSync.resources }}
+          {{- with .Values.evalWorker.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-      {{- with .Values.catalogSync.nodeSelector }}
+      {{- with .Values.evalWorker.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.catalogSync.affinity }}
+      {{- with .Values.evalWorker.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.catalogSync.tolerations }}
+      {{- with .Values.evalWorker.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
