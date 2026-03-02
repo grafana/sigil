@@ -1076,7 +1076,8 @@ function InsightPanel({ prompt, origin, dataContext }: InsightPanelProps) {
   const styles = useStyles2(getStyles);
   const gen = useInlineAssistant();
   const [text, setText] = useState('');
-  const hasAutoRun = useRef(true);
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  const hasAutoRun = useRef(isDevelopment);
 
   const latestRef = useRef({ prompt, origin, dataContext, gen });
   useEffect(() => {
@@ -1151,7 +1152,9 @@ function InsightPanel({ prompt, origin, dataContext }: InsightPanelProps) {
         ) : renderedHtml ? (
           <div dangerouslySetInnerHTML={{ __html: renderedHtml }} />
         ) : (
-          <span className={styles.insightPlaceholder}>Generating insight...</span>
+          <span className={styles.insightPlaceholder}>
+            {isDevelopment ? 'Run button to generate insight' : 'Generating insight...'}
+          </span>
         )}
       </div>
     </div>
