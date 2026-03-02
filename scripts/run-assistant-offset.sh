@@ -157,7 +157,8 @@ derive_assistant_sigil_env
 
 TMP_COMPOSE="${ASSISTANT_DIR}/.assistant-remapped.${PROJECT_NAME}.$$.yaml"
 TMP_RESOLVED="${ASSISTANT_DIR}/.assistant-resolved.${PROJECT_NAME}.$$.yaml"
-trap 'rm -f "${TMP_COMPOSE}" "${TMP_RESOLVED}"' EXIT
+TMP_ENV_OVERRIDE="${ASSISTANT_DIR}/.assistant-sigil-env.${PROJECT_NAME}.$$.yaml"
+trap 'rm -f "${TMP_COMPOSE}" "${TMP_RESOLVED}" "${TMP_ENV_OVERRIDE}"' EXIT
 
 docker compose --project-directory "${ASSISTANT_DIR}" -f "${COMPOSE_FILE}" --profile "${PROFILE}" config > "${TMP_RESOLVED}"
 
@@ -334,7 +335,36 @@ for svc in services_order:
   print(f"  {svc}: {', '.join(ports_by_service[svc])}")
 PY
 
-COMPOSE_ARGS=(-p "${PROJECT_NAME}" -f "${TMP_COMPOSE}")
+python3 - "${TMP_ENV_OVERRIDE}" <<'PY'
+import os
+import sys
+from pathlib import Path
+
+out_path = Path(sys.argv[1])
+
+def q(value: str) -> str:
+  return "'" + value.replace("'", "''") + "'"
+
+endpoint = os.environ.get("DASH_API_SIGIL_ENDPOINT", "")
+tenant_id = os.environ.get("DASH_API_SIGIL_TENANT_ID", "")
+auth_token = os.environ.get("DASH_API_SIGIL_AUTH_TOKEN", "")
+insecure = os.environ.get("DASH_API_SIGIL_INSECURE", "true")
+
+content = [
+  "services:",
+  "  api:",
+  "    environment:",
+  f"      DASH_API_SIGIL_ENDPOINT: {q(endpoint)}",
+  f"      DASH_API_SIGIL_TENANT_ID: {q(tenant_id)}",
+  f"      DASH_API_SIGIL_AUTH_TOKEN: {q(auth_token)}",
+  f"      DASH_API_SIGIL_INSECURE: {q(insecure)}",
+  "",
+]
+
+out_path.write_text("\n".join(content), encoding="utf-8")
+PY
+
+COMPOSE_ARGS=(-p "${PROJECT_NAME}" -f "${TMP_COMPOSE}" -f "${TMP_ENV_OVERRIDE}")
 CMD=(docker compose "${COMPOSE_ARGS[@]}")
 
 case "${ACTION}" in
