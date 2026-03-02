@@ -16,15 +16,20 @@ const TRACE_ROW_STEP_PX = 14;
 const TRACE_SPAN_HEIGHT_PX = 14;
 const TRACE_LANE_PADDING_Y_PX = (TRACE_ROW_STEP_PX - TRACE_SPAN_HEIGHT_PX) / 2;
 const TRACE_MIN_SPAN_WIDTH_PCT = 1;
+const BIGINT_ZERO = BigInt(0);
+const BIGINT_ONE = BigInt(1);
+const NS_PER_US = BigInt(1_000);
+const NS_PER_MS = BigInt(1_000_000);
+const NS_PER_SECOND = BigInt(1_000_000_000);
 
 type TraceSpan = {
   traceID: string;
   spanID: string;
   name: string;
   serviceName: string;
-  startNs: number;
-  endNs: number;
-  durationNs: number;
+  startNs: bigint;
+  endNs: bigint;
+  durationNs: bigint;
   row: number;
   selectionID: string;
 };
@@ -33,10 +38,10 @@ type TraceTimeline = {
   traceID: string;
   rowCount: number;
   spans: TraceSpan[];
-  startNs: number;
-  endNs: number;
-  generationStartNs: number | null;
-  generationCompletedNs: number | null;
+  startNs: bigint;
+  endNs: bigint;
+  generationStartNs: bigint | null;
+  generationCompletedNs: bigint | null;
 };
 
 type HoveredSpanAnchor = {
@@ -85,18 +90,28 @@ type TempoTrace = {
   resource_spans?: TempoResourceSpan[];
 };
 
-function parseNs(raw: unknown): number | null {
+function parseNs(raw: unknown): bigint | null {
   if (typeof raw === 'number') {
-    return Number.isFinite(raw) && raw > 0 ? raw : null;
+    if (!Number.isFinite(raw) || raw <= 0) {
+      return null;
+    }
+    return BigInt(Math.trunc(raw));
   }
   if (typeof raw !== 'string' || raw.length === 0) {
     return null;
   }
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  if (!/^\d+$/.test(raw)) {
+    return null;
+  }
+  try {
+    const parsed = BigInt(raw);
+    return parsed > BIGINT_ZERO ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
-function parseTimestampToNs(raw: unknown): number | null {
+function parseTimestampToNs(raw: unknown): bigint | null {
   if (typeof raw === 'number') {
     return parseNs(raw);
   }
@@ -111,7 +126,7 @@ function parseTimestampToNs(raw: unknown): number | null {
   if (!Number.isFinite(parsedMs)) {
     return null;
   }
-  return parsedMs * 1_000_000;
+  return BigInt(Math.trunc(parsedMs)) * NS_PER_MS;
 }
 
 function findServiceName(resourceSpan: TempoResourceSpan): string {
@@ -176,7 +191,7 @@ function buildTraceSpans(traceID: string, payload: unknown): Array<Omit<TraceSpa
             serviceName,
             startNs,
             endNs: safeEnd,
-            durationNs: Math.max(safeEnd - startNs, 1),
+            durationNs: safeEnd > startNs ? safeEnd - startNs : BIGINT_ONE,
             selectionID: `${traceID}:${spanID.length > 0 ? spanID : `${startNs}`}`,
           });
         }
@@ -190,18 +205,23 @@ function buildTraceSpans(traceID: string, payload: unknown): Array<Omit<TraceSpa
 function layoutSpans(rawSpans: Array<Omit<TraceSpan, 'row'>>): { rowCount: number; spans: TraceSpan[] } {
   const sorted = [...rawSpans].sort((a, b) => {
     if (a.startNs !== b.startNs) {
-      return a.startNs - b.startNs;
+      return a.startNs < b.startNs ? -1 : 1;
     }
-    return b.durationNs - a.durationNs;
+    if (b.durationNs === a.durationNs) {
+      return 0;
+    }
+    return b.durationNs > a.durationNs ? 1 : -1;
   });
 
-  const rowEndNs: number[] = [];
+  const rowEndNs: bigint[] = [];
   const laidOut = sorted.map((span) => {
     let row = 0;
     while (row < rowEndNs.length && span.startNs < rowEndNs[row]) {
       row += 1;
     }
-    rowEndNs[row] = Math.max(rowEndNs[row] ?? 0, span.endNs);
+    if (rowEndNs[row] == null || span.endNs > rowEndNs[row]) {
+      rowEndNs[row] = span.endNs;
+    }
     return {
       ...span,
       row,
@@ -215,7 +235,12 @@ function layoutSpans(rawSpans: Array<Omit<TraceSpan, 'row'>>): { rowCount: numbe
 }
 
 function fillSpans(timelines: TraceTimeline[]): TraceTimeline[] {
-  const sorted = [...timelines].sort((a, b) => a.startNs - b.startNs);
+  const sorted = [...timelines].sort((a, b) => {
+    if (a.startNs === b.startNs) {
+      return 0;
+    }
+    return a.startNs < b.startNs ? -1 : 1;
+  });
   const filled = sorted.map((timeline, index) => {
     const nextTrace = sorted[index + 1];
     if (nextTrace == null) {
@@ -264,46 +289,53 @@ function fillSpans(timelines: TraceTimeline[]): TraceTimeline[] {
       ...timeline,
       rowCount: relayout.rowCount,
       spans: relayout.spans,
-      startNs: Math.min(...relayout.spans.map((span) => span.startNs)),
-      endNs: Math.max(...relayout.spans.map((span) => span.endNs)),
+      startNs: relayout.spans.reduce((min, span) => (span.startNs < min ? span.startNs : min), relayout.spans[0].startNs),
+      endNs: relayout.spans.reduce((max, span) => (span.endNs > max ? span.endNs : max), relayout.spans[0].endNs),
     };
   });
 
   return filled;
 }
 
-function formatNsDuration(durationNs: number): string {
-  if (!Number.isFinite(durationNs) || durationNs < 0) {
+function formatNsDuration(durationNs: bigint): string {
+  if (durationNs < BIGINT_ZERO) {
     return 'unknown';
   }
-  if (durationNs >= 1_000_000_000) {
-    return `${(durationNs / 1_000_000_000).toFixed(3)} s`;
+  if (durationNs >= NS_PER_SECOND) {
+    return `${(Number(durationNs) / Number(NS_PER_SECOND)).toFixed(3)} s`;
   }
-  if (durationNs >= 1_000_000) {
-    return `${(durationNs / 1_000_000).toFixed(2)} ms`;
+  if (durationNs >= NS_PER_MS) {
+    return `${(Number(durationNs) / Number(NS_PER_MS)).toFixed(2)} ms`;
   }
-  if (durationNs >= 1_000) {
-    return `${(durationNs / 1_000).toFixed(2)} us`;
+  if (durationNs >= NS_PER_US) {
+    return `${(Number(durationNs) / Number(NS_PER_US)).toFixed(2)} us`;
   }
-  return `${durationNs.toFixed(0)} ns`;
+  return `${Number(durationNs).toFixed(0)} ns`;
 }
 
-function formatNsTimestamp(ns: number): string {
-  if (!Number.isFinite(ns) || ns <= 0) {
+function formatNsTimestamp(ns: bigint): string {
+  if (ns <= BIGINT_ZERO) {
     return 'unknown';
   }
-  return new Date(ns / 1_000_000).toISOString();
+  return new Date(Number(ns / NS_PER_MS)).toISOString();
 }
 
-function formatNsShortTime(ns: number): string {
-  if (!Number.isFinite(ns) || ns <= 0) {
+function formatNsShortTime(ns: bigint): string {
+  if (ns <= BIGINT_ZERO) {
     return 'unknown';
   }
-  return new Date(ns / 1_000_000).toLocaleTimeString(undefined, {
+  return new Date(Number(ns / NS_PER_MS)).toLocaleTimeString(undefined, {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
   });
+}
+
+function ratioToPercent(numerator: bigint, denominator: bigint): number {
+  if (denominator <= BIGINT_ZERO) {
+    return 0;
+  }
+  return (Number(numerator) / Number(denominator)) * 100;
 }
 
 function findGenerationForSpan(detail: ConversationDetail | null, span: Pick<TraceSpan, 'traceID' | 'spanID'> | null) {
@@ -332,12 +364,15 @@ function getUsageValue(usage: GenerationDetail['usage'], key: 'input_tokens' | '
 
 function getHoveredSpanAnchor(
   span: TraceSpan,
-  timelineBounds: { min: number; range: number },
+  timelineBounds: { min: bigint; range: bigint },
   laneWidthPx: number,
   timelineScalePct: number
 ): HoveredSpanAnchor {
-  const rawLeftPct = ((span.startNs - timelineBounds.min) / timelineBounds.range) * 100;
-  const boundedWidthPct = Math.min(Math.max((span.durationNs / timelineBounds.range) * 100, TRACE_MIN_SPAN_WIDTH_PCT), 100);
+  const rawLeftPct = ratioToPercent(span.startNs - timelineBounds.min, timelineBounds.range);
+  const boundedWidthPct = Math.min(
+    Math.max(ratioToPercent(span.durationNs, timelineBounds.range), TRACE_MIN_SPAN_WIDTH_PCT),
+    100
+  );
   const scaledLeftPct = Math.max(0, rawLeftPct * timelineScalePct);
   const scaledWidthPct = Math.max(0, boundedWidthPct * timelineScalePct);
   const spanCenterPct = scaledLeftPct + scaledWidthPct / 2;
@@ -610,18 +645,18 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
   }, [detail]);
   const selectedSpanID = searchParams.get('span') ?? '';
   const timelineBounds = useMemo(() => {
-    let min = Number.POSITIVE_INFINITY;
-    let max = 0;
+    let min: bigint | null = null;
+    let max: bigint | null = null;
     for (const timeline of traceTimelines) {
-      if (timeline.startNs < min) {
+      if (min == null || timeline.startNs < min) {
         min = timeline.startNs;
       }
-      if (timeline.endNs > max) {
+      if (max == null || timeline.endNs > max) {
         max = timeline.endNs;
       }
     }
-    if (!Number.isFinite(min) || max <= min) {
-      return { min: 0, range: 1 };
+    if (min == null || max == null || max <= min) {
+      return { min: BIGINT_ZERO, range: BIGINT_ONE };
     }
     return { min, range: max - min };
   }, [traceTimelines]);
@@ -629,8 +664,11 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
     let maxRightPct = 100;
     for (const timeline of traceTimelines) {
       for (const span of timeline.spans) {
-        const rawLeftPct = ((span.startNs - timelineBounds.min) / timelineBounds.range) * 100;
-        const boundedWidthPct = Math.min(Math.max((span.durationNs / timelineBounds.range) * 100, TRACE_MIN_SPAN_WIDTH_PCT), 100);
+        const rawLeftPct = ratioToPercent(span.startNs - timelineBounds.min, timelineBounds.range);
+        const boundedWidthPct = Math.min(
+          Math.max(ratioToPercent(span.durationNs, timelineBounds.range), TRACE_MIN_SPAN_WIDTH_PCT),
+          100
+        );
         maxRightPct = Math.max(maxRightPct, rawLeftPct + boundedWidthPct);
       }
     }
@@ -773,8 +811,14 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
           if (spans.length > 0) {
             const layout = layoutSpans(spans);
             const generation = traceToGeneration.get(traceID);
-            const spanStart = Math.min(...layout.spans.map((span) => span.startNs));
-            const spanEnd = Math.max(...layout.spans.map((span) => span.endNs));
+            const spanStart = layout.spans.reduce(
+              (min, span) => (span.startNs < min ? span.startNs : min),
+              layout.spans[0].startNs
+            );
+            const spanEnd = layout.spans.reduce(
+              (max, span) => (span.endNs > max ? span.endNs : max),
+              layout.spans[0].endNs
+            );
             const generationStartNs = parseTimestampToNs(generation?.created_at);
             const generationCompletedNs = parseTimestampToNs(generation?.completed_at);
             collected.push({
@@ -888,9 +932,9 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                           }}
                         >
                           {timeline.spans.map((span) => {
-                            const rawLeftPct = ((span.startNs - timelineBounds.min) / timelineBounds.range) * 100;
+                            const rawLeftPct = ratioToPercent(span.startNs - timelineBounds.min, timelineBounds.range);
                             const boundedWidthPct = Math.min(
-                              Math.max((span.durationNs / timelineBounds.range) * 100, TRACE_MIN_SPAN_WIDTH_PCT),
+                              Math.max(ratioToPercent(span.durationNs, timelineBounds.range), TRACE_MIN_SPAN_WIDTH_PCT),
                               100
                             );
                             const scaledLeftPct = Math.max(0, rawLeftPct * timelineScalePct);
