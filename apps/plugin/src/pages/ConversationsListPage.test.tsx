@@ -27,7 +27,9 @@ beforeAll(() => {
 });
 
 type MockConversationsDataSource = {
-  [Key in keyof ConversationsDataSource]: jest.MockedFunction<ConversationsDataSource[Key]>;
+  [Key in keyof ConversationsDataSource as NonNullable<ConversationsDataSource[Key]> extends (...args: any[]) => any
+    ? Key
+    : never]: jest.MockedFunction<NonNullable<ConversationsDataSource[Key]>>;
 };
 
 function createConversationListResponse(items: ConversationListResponse['items']): ConversationListResponse {
@@ -51,19 +53,19 @@ function createDataSource(items: ConversationListResponse['items']): MockConvers
 
   return {
     listConversations: jest.fn(async () => createConversationListResponse(items)),
-    searchConversations: jest.fn(async () => ({
+    searchConversations: jest.fn(async (_request: Parameters<ConversationsDataSource['searchConversations']>[0]) => ({
       conversations,
       next_cursor: '',
       has_more: false,
     })),
-    getConversationDetail: jest.fn(async () => {
+    getConversationDetail: jest.fn(async (_conversationID: string) => {
       throw new Error('getConversationDetail not used in ConversationsListPage');
     }),
-    getGeneration: jest.fn(async () => {
+    getGeneration: jest.fn(async (_generationID: string) => {
       throw new Error('getGeneration not used in ConversationsListPage');
     }),
-    getSearchTags: jest.fn(async () => []),
-    getSearchTagValues: jest.fn(async () => []),
+    getSearchTags: jest.fn(async (_from: string, _to: string) => []),
+    getSearchTagValues: jest.fn(async (_tag: string, _from: string, _to: string) => []),
   };
 }
 
@@ -106,7 +108,7 @@ describe('ConversationsListPage', () => {
         has_errors: false,
         trace_ids: [],
         annotation_count: 0,
-        rating_summary: { total_count: 1, has_bad_rating: true },
+        rating_summary: { total_count: 1, good_count: 0, bad_count: 1, has_bad_rating: true },
       },
       {
         conversation_id: 'current-b',
@@ -119,7 +121,7 @@ describe('ConversationsListPage', () => {
         has_errors: false,
         trace_ids: [],
         annotation_count: 0,
-        rating_summary: { total_count: 1, has_bad_rating: false },
+        rating_summary: { total_count: 1, good_count: 1, bad_count: 0, has_bad_rating: false },
       },
       {
         conversation_id: 'current-c',
@@ -132,7 +134,7 @@ describe('ConversationsListPage', () => {
         has_errors: false,
         trace_ids: [],
         annotation_count: 0,
-        rating_summary: { total_count: 0, has_bad_rating: false },
+        rating_summary: { total_count: 0, good_count: 0, bad_count: 0, has_bad_rating: false },
       },
       {
         conversation_id: 'current-d',
@@ -150,7 +152,7 @@ describe('ConversationsListPage', () => {
     ];
 
     const searchConversations = jest
-      .fn()
+      .fn<ReturnType<ConversationsDataSource['searchConversations']>, Parameters<ConversationsDataSource['searchConversations']>>()
       .mockResolvedValueOnce({
         conversations: currentWindowConversations,
         next_cursor: '',
@@ -165,14 +167,14 @@ describe('ConversationsListPage', () => {
     const dataSource: MockConversationsDataSource = {
       listConversations: jest.fn(async () => createConversationListResponse([])),
       searchConversations,
-      getConversationDetail: jest.fn(async () => {
+      getConversationDetail: jest.fn(async (_conversationID: string) => {
         throw new Error('getConversationDetail not used in ConversationsListPage');
       }),
-      getGeneration: jest.fn(async () => {
+      getGeneration: jest.fn(async (_generationID: string) => {
         throw new Error('getGeneration not used in ConversationsListPage');
       }),
-      getSearchTags: jest.fn(async () => []),
-      getSearchTagValues: jest.fn(async () => []),
+      getSearchTags: jest.fn(async (_from: string, _to: string) => []),
+      getSearchTagValues: jest.fn(async (_tag: string, _from: string, _to: string) => []),
     };
 
     renderPage(dataSource);
@@ -277,7 +279,7 @@ describe('ConversationsListPage', () => {
 
   it('queries the previous time window and shows trend percentages', async () => {
     const searchConversations = jest
-      .fn()
+      .fn<ReturnType<ConversationsDataSource['searchConversations']>, Parameters<ConversationsDataSource['searchConversations']>>()
       .mockResolvedValueOnce({
         conversations: [
           {
@@ -291,7 +293,7 @@ describe('ConversationsListPage', () => {
             has_errors: false,
             trace_ids: [],
             annotation_count: 0,
-            rating_summary: { total_count: 1, has_bad_rating: false },
+            rating_summary: { total_count: 1, good_count: 1, bad_count: 0, has_bad_rating: false },
           },
           {
             conversation_id: 'current-b',
@@ -304,7 +306,7 @@ describe('ConversationsListPage', () => {
             has_errors: false,
             trace_ids: [],
             annotation_count: 0,
-            rating_summary: { total_count: 0, has_bad_rating: false },
+            rating_summary: { total_count: 0, good_count: 0, bad_count: 0, has_bad_rating: false },
           },
         ],
         next_cursor: '',
@@ -323,7 +325,7 @@ describe('ConversationsListPage', () => {
             has_errors: false,
             trace_ids: [],
             annotation_count: 0,
-            rating_summary: { total_count: 1, has_bad_rating: false },
+            rating_summary: { total_count: 1, good_count: 1, bad_count: 0, has_bad_rating: false },
           },
         ],
         next_cursor: '',
@@ -333,14 +335,14 @@ describe('ConversationsListPage', () => {
     const dataSource: MockConversationsDataSource = {
       listConversations: jest.fn(async () => createConversationListResponse([])),
       searchConversations,
-      getConversationDetail: jest.fn(async () => {
+      getConversationDetail: jest.fn(async (_conversationID: string) => {
         throw new Error('getConversationDetail not used in ConversationsListPage');
       }),
-      getGeneration: jest.fn(async () => {
+      getGeneration: jest.fn(async (_generationID: string) => {
         throw new Error('getGeneration not used in ConversationsListPage');
       }),
-      getSearchTags: jest.fn(async () => []),
-      getSearchTagValues: jest.fn(async () => []),
+      getSearchTags: jest.fn(async (_from: string, _to: string) => []),
+      getSearchTagValues: jest.fn(async (_tag: string, _from: string, _to: string) => []),
     };
 
     renderPage(dataSource);
