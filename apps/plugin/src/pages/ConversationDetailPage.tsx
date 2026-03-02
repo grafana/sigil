@@ -39,6 +39,11 @@ type TraceTimeline = {
   generationCompletedNs: number | null;
 };
 
+type HoveredSpanAnchor = {
+  topPx: number;
+  leftPct: number;
+};
+
 type AttrValue = {
   stringValue?: string;
 };
@@ -390,14 +395,40 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   hoveredSpanTooltip: css({
     label: 'conversationDetailPage-hoveredSpanTooltip',
-    margin: theme.spacing(0.5, 0, 1),
+    position: 'absolute' as const,
+    zIndex: 1,
+    transform: 'translateX(-50%)',
+    width: `min(560px, calc(100% - ${theme.spacing(2)}))`,
+    maxWidth: '560px',
     padding: theme.spacing(0.75, 1),
     borderRadius: theme.shape.radius.default,
     border: `1px solid ${theme.colors.border.medium}`,
     background: theme.colors.background.secondary,
+    boxShadow: theme.shadows.z2,
     display: 'grid',
     gap: theme.spacing(0.25),
     fontSize: theme.typography.bodySmall.fontSize,
+    pointerEvents: 'none' as const,
+    '&::before': {
+      content: '""',
+      position: 'absolute' as const,
+      top: -8,
+      left: '50%',
+      transform: 'translateX(-50%)',
+      borderLeft: '7px solid transparent',
+      borderRight: '7px solid transparent',
+      borderBottom: `8px solid ${theme.colors.border.medium}`,
+    },
+    '&::after': {
+      content: '""',
+      position: 'absolute' as const,
+      top: -7,
+      left: '50%',
+      transform: 'translateX(-50%)',
+      borderLeft: '6px solid transparent',
+      borderRight: '6px solid transparent',
+      borderBottom: `7px solid ${theme.colors.background.secondary}`,
+    },
   }),
   hoveredSpanTitle: css({
     label: 'conversationDetailPage-hoveredSpanTitle',
@@ -544,6 +575,7 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
   const [traceLoadFailures, setTraceLoadFailures] = useState<number>(0);
   const [traceTimelines, setTraceTimelines] = useState<TraceTimeline[]>([]);
   const [hoveredSpanSelectionID, setHoveredSpanSelectionID] = useState<string>('');
+  const [hoveredSpanAnchor, setHoveredSpanAnchor] = useState<HoveredSpanAnchor | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const requestVersionRef = useRef<number>(0);
   const traceRequestVersionRef = useRef<number>(0);
@@ -839,74 +871,91 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                             const boundedLeftPct = Math.min(Math.max(rawLeftPct, 0), maxLeftPct);
                             const isSelected = selectedSpanID === span.selectionID;
                             return (
-                              <button
-                                key={`${span.selectionID}:${span.row}`}
-                                type="button"
-                                className={`${styles.spanBar} ${isSelected ? styles.spanBarSelected : ''}`}
-                                style={{
-                                  top: `${span.row * TRACE_ROW_STEP_PX}px`,
-                                  left: `${boundedLeftPct}%`,
-                                  width: `${boundedWidthPct}%`,
-                                }}
-                                aria-label={`select span ${span.name}`}
-                                aria-pressed={isSelected}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setSelectedSpanParam(span.selectionID);
-                                }}
-                                onMouseEnter={() => setHoveredSpanSelectionID(span.selectionID)}
-                                onMouseLeave={() => setHoveredSpanSelectionID('')}
-                              >
-                                {null}
-                              </button>
+                              <React.Fragment key={`${span.selectionID}:${span.row}`}>
+                                <button
+                                  type="button"
+                                  className={`${styles.spanBar} ${isSelected ? styles.spanBarSelected : ''}`}
+                                  style={{
+                                    top: `${span.row * TRACE_ROW_STEP_PX}px`,
+                                    left: `${boundedLeftPct}%`,
+                                    width: `${boundedWidthPct}%`,
+                                  }}
+                                  aria-label={`select span ${span.name}`}
+                                  aria-pressed={isSelected}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setSelectedSpanParam(span.selectionID);
+                                  }}
+                                  onMouseEnter={() => {
+                                    setHoveredSpanSelectionID(span.selectionID);
+                                    setHoveredSpanAnchor({
+                                      topPx: span.row * TRACE_ROW_STEP_PX + TRACE_SPAN_HEIGHT_PX + 8,
+                                      leftPct: boundedLeftPct + boundedWidthPct / 2,
+                                    });
+                                  }}
+                                  onMouseLeave={() => {
+                                    setHoveredSpanSelectionID('');
+                                    setHoveredSpanAnchor(null);
+                                  }}
+                                >
+                                  {null}
+                                </button>
+                                {hoveredSpan?.selectionID === span.selectionID && hoveredSpanAnchor != null && (
+                                  <div
+                                    className={styles.hoveredSpanTooltip}
+                                    data-testid="hovered-span-tooltip"
+                                    style={{
+                                      top: `${hoveredSpanAnchor.topPx}px`,
+                                      left: `${hoveredSpanAnchor.leftPct}%`,
+                                    }}
+                                  >
+                                    <div className={styles.hoveredSpanTitle}>{hoveredSpan.name}</div>
+                                    <div className={styles.hoveredSpanMeta}>{hoveredSpan.serviceName}</div>
+                                    <div className={styles.hoveredSpanRow}>
+                                      <span className={styles.hoveredSpanLabel}>Time range</span>
+                                      <span className={styles.hoveredSpanValue}>
+                                        {formatNsTimestamp(hoveredSpan.startNs)} - {formatNsTimestamp(hoveredSpan.endNs)}
+                                      </span>
+                                    </div>
+                                    <div className={styles.hoveredSpanRow}>
+                                      <span className={styles.hoveredSpanLabel}>Duration</span>
+                                      <span className={styles.hoveredSpanValue}>{formatNsDuration(hoveredSpan.durationNs)}</span>
+                                    </div>
+                                    <div className={styles.hoveredSpanRow}>
+                                      <span className={styles.hoveredSpanLabel}>Trace ID</span>
+                                      <span className={styles.hoveredSpanValue}>{hoveredSpan.traceID}</span>
+                                    </div>
+                                    <div className={styles.hoveredSpanRow}>
+                                      <span className={styles.hoveredSpanLabel}>Span ID</span>
+                                      <span className={styles.hoveredSpanValue}>{hoveredSpan.spanID || 'unknown-span'}</span>
+                                    </div>
+                                    {hoveredGeneration != null && (
+                                      <>
+                                        <div className={styles.hoveredSpanRow}>
+                                          <span className={styles.hoveredSpanLabel}>Generation ID</span>
+                                          <span className={styles.hoveredSpanValue}>{hoveredGeneration.generation_id}</span>
+                                        </div>
+                                        <div className={styles.hoveredSpanRow}>
+                                          <span className={styles.hoveredSpanLabel}>Model</span>
+                                          <span className={styles.hoveredSpanValue}>
+                                            {hoveredGeneration.model?.provider ?? 'unknown-provider'} /{' '}
+                                            {hoveredGeneration.model?.name ?? 'unknown-model'}
+                                          </span>
+                                        </div>
+                                        <div className={styles.hoveredSpanRow}>
+                                          <span className={styles.hoveredSpanLabel}>Mode</span>
+                                          <span className={styles.hoveredSpanValue}>{hoveredGeneration.mode ?? 'n/a'}</span>
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                )}
+                              </React.Fragment>
                             );
                           })}
                         </div>
                       </div>
                     ))}
-                    {hoveredSpan != null && (
-                      <div className={styles.hoveredSpanTooltip}>
-                        <div className={styles.hoveredSpanTitle}>{hoveredSpan.name}</div>
-                        <div className={styles.hoveredSpanMeta}>{hoveredSpan.serviceName}</div>
-                        <div className={styles.hoveredSpanRow}>
-                          <span className={styles.hoveredSpanLabel}>Time range</span>
-                          <span className={styles.hoveredSpanValue}>
-                            {formatNsTimestamp(hoveredSpan.startNs)} - {formatNsTimestamp(hoveredSpan.endNs)}
-                          </span>
-                        </div>
-                        <div className={styles.hoveredSpanRow}>
-                          <span className={styles.hoveredSpanLabel}>Duration</span>
-                          <span className={styles.hoveredSpanValue}>{formatNsDuration(hoveredSpan.durationNs)}</span>
-                        </div>
-                        <div className={styles.hoveredSpanRow}>
-                          <span className={styles.hoveredSpanLabel}>Trace ID</span>
-                          <span className={styles.hoveredSpanValue}>{hoveredSpan.traceID}</span>
-                        </div>
-                        <div className={styles.hoveredSpanRow}>
-                          <span className={styles.hoveredSpanLabel}>Span ID</span>
-                          <span className={styles.hoveredSpanValue}>{hoveredSpan.spanID || 'unknown-span'}</span>
-                        </div>
-                        {hoveredGeneration != null && (
-                          <>
-                            <div className={styles.hoveredSpanRow}>
-                              <span className={styles.hoveredSpanLabel}>Generation ID</span>
-                              <span className={styles.hoveredSpanValue}>{hoveredGeneration.generation_id}</span>
-                            </div>
-                            <div className={styles.hoveredSpanRow}>
-                              <span className={styles.hoveredSpanLabel}>Model</span>
-                              <span className={styles.hoveredSpanValue}>
-                                {hoveredGeneration.model?.provider ?? 'unknown-provider'} /{' '}
-                                {hoveredGeneration.model?.name ?? 'unknown-model'}
-                              </span>
-                            </div>
-                            <div className={styles.hoveredSpanRow}>
-                              <span className={styles.hoveredSpanLabel}>Mode</span>
-                              <span className={styles.hoveredSpanValue}>{hoveredGeneration.mode ?? 'n/a'}</span>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
                     <div className={styles.traceTimeRange}>
                       <span className={styles.traceTimeLabel} title={formatNsTimestamp(timelineBounds.min)}>
                         {formatNsShortTime(timelineBounds.min)}

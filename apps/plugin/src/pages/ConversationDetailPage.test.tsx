@@ -188,6 +188,14 @@ describe('ConversationDetailPage', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     const spanButton = await screen.findByRole('button', { name: 'select span prompt' });
+    fireEvent.mouseEnter(spanButton);
+    const hoveredTooltip = await screen.findByTestId('hovered-span-tooltip');
+    expect(hoveredTooltip).toBeInTheDocument();
+    expect(hoveredTooltip.style.top).toBe('22px');
+    expect(hoveredTooltip.style.left).toBe('50%');
+    fireEvent.mouseLeave(spanButton);
+    await waitFor(() => expect(screen.queryByTestId('hovered-span-tooltip')).not.toBeInTheDocument());
+
     fireEvent.click(spanButton);
     expect(await screen.findByTestId('location-search')).toHaveTextContent('?span=trace-1%3Aspan-a');
     expect(await screen.findByText('Selected span details')).toBeInTheDocument();
