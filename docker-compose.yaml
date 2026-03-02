@@ -1,6 +1,9 @@
 services:
   grafana:
     profiles: ['core']
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     extends:
       file: .config/docker-compose-base.yaml
       service: grafana
@@ -43,6 +46,9 @@ services:
 
   plugin:
     profiles: ['core']
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     build:
       context: .
       dockerfile: .config/Dockerfile.plugin
@@ -81,6 +87,9 @@ services:
 
   sigil:
     profiles: ['core']
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     build:
       context: .
       dockerfile: .config/Dockerfile.sigil
