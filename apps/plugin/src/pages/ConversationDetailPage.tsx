@@ -371,11 +371,12 @@ const getStyles = (theme: GrafanaTheme2) => ({
     label: 'conversationDetailPage-pageContainer',
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: theme.spacing(2),
+    gap: theme.spacing(1),
   }),
   title: css({
     label: 'conversationDetailPage-title',
-    padding: theme.spacing(3),
+    margin: 0,
+    padding: theme.spacing(2, 2, 1),
   }),
   loadingContainer: css({
     label: 'conversationDetailPage-loadingContainer',
@@ -386,12 +387,12 @@ const getStyles = (theme: GrafanaTheme2) => ({
   detailsContainer: css({
     label: 'conversationDetailPage-detailsContainer',
     padding: theme.spacing(2),
+    paddingTop: 0,
   }),
   traceTimelineContainer: css({
     label: 'conversationDetailPage-traceTimelineContainer',
     display: 'grid',
     gap: 0,
-    marginTop: theme.spacing(2),
   }),
   traceTimelineEmpty: css({
     label: 'conversationDetailPage-traceTimelineEmpty',
