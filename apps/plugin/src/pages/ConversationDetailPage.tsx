@@ -6,13 +6,13 @@ import { Alert, Spinner, useStyles2 } from '@grafana/ui';
 import { lastValueFrom } from 'rxjs';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
-import type { ConversationDetail } from '../conversation/types';
+import type { ConversationDetail, GenerationDetail } from '../conversation/types';
 
 export type ConversationDetailPageProps = {
   dataSource?: ConversationsDataSource;
 };
 
-const TRACE_ROW_STEP_PX = 16;
+const TRACE_ROW_STEP_PX = 14;
 const TRACE_SPAN_HEIGHT_PX = 14;
 const TRACE_LANE_PADDING_Y_PX = (TRACE_ROW_STEP_PX - TRACE_SPAN_HEIGHT_PX) / 2;
 
@@ -265,6 +265,37 @@ function fillSpans(timelines: TraceTimeline[]): TraceTimeline[] {
   return filled;
 }
 
+function formatNsDuration(durationNs: number): string {
+  if (!Number.isFinite(durationNs) || durationNs < 0) {
+    return 'unknown';
+  }
+  if (durationNs >= 1_000_000_000) {
+    return `${(durationNs / 1_000_000_000).toFixed(3)} s`;
+  }
+  if (durationNs >= 1_000_000) {
+    return `${(durationNs / 1_000_000).toFixed(2)} ms`;
+  }
+  if (durationNs >= 1_000) {
+    return `${(durationNs / 1_000).toFixed(2)} us`;
+  }
+  return `${durationNs.toFixed(0)} ns`;
+}
+
+function formatNsTimestamp(ns: number): string {
+  if (!Number.isFinite(ns) || ns <= 0) {
+    return 'unknown';
+  }
+  return new Date(ns / 1_000_000).toISOString();
+}
+
+function getUsageValue(usage: GenerationDetail['usage'], key: 'input_tokens' | 'output_tokens' | 'total_tokens'): string {
+  const value = usage?.[key];
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return 'n/a';
+  }
+  return value.toLocaleString();
+}
+
 const getStyles = (theme: GrafanaTheme2) => ({
   pageContainer: css({
     display: 'flex',
@@ -335,6 +366,36 @@ const getStyles = (theme: GrafanaTheme2) => ({
     fontSize: theme.typography.bodySmall.fontSize,
     display: 'grid',
     gap: theme.spacing(0.5),
+  }),
+  selectedSpanSectionTitle: css({
+    marginTop: theme.spacing(0.25),
+    marginBottom: theme.spacing(0.5),
+  }),
+  selectedSpanGrid: css({
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+    gap: theme.spacing(1),
+  }),
+  selectedSpanGroup: css({
+    display: 'grid',
+    gap: theme.spacing(0.375),
+    padding: theme.spacing(0.75),
+    borderRadius: theme.shape.radius.default,
+    background: theme.colors.background.primary,
+    border: `1px solid ${theme.colors.border.weak}`,
+  }),
+  selectedSpanRow: css({
+    display: 'grid',
+    gridTemplateColumns: 'minmax(120px, 150px) minmax(0, 1fr)',
+    gap: theme.spacing(0.75),
+    alignItems: 'baseline',
+    wordBreak: 'break-word' as const,
+  }),
+  selectedSpanLabel: css({
+    color: theme.colors.text.secondary,
+  }),
+  selectedSpanValue: css({
+    color: theme.colors.text.primary,
   }),
   traceProgressContainer: css({
     display: 'grid',
@@ -420,6 +481,29 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
     }
     return null;
   }, [selectedSpanID, traceTimelines]);
+  const selectedGeneration = useMemo(() => {
+    if (detail == null || selectedSpan == null) {
+      return null;
+    }
+    const byTraceAndSpan = detail.generations.find((generation) => {
+      if (generation.trace_id !== selectedSpan.traceID) {
+        return false;
+      }
+      return generation.span_id === selectedSpan.spanID;
+    });
+    if (byTraceAndSpan != null) {
+      return byTraceAndSpan;
+    }
+    return detail.generations.find((generation) => generation.trace_id === selectedSpan.traceID) ?? null;
+  }, [detail, selectedSpan]);
+  const selectedGenerationUsageExtras = useMemo(() => {
+    if (selectedGeneration?.usage == null) {
+      return [];
+    }
+    return Object.entries(selectedGeneration.usage)
+      .filter(([key, value]) => !['input_tokens', 'output_tokens', 'total_tokens'].includes(key) && typeof value === 'number')
+      .sort(([a], [b]) => a.localeCompare(b));
+  }, [selectedGeneration]);
   const setSelectedSpanParam = (selectionID: string) => {
     const nextParams = new URLSearchParams(searchParams);
     if (selectedSpanID === selectionID) {
@@ -665,12 +749,132 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                 )}
                 {selectedSpan != null && (
                   <div className={styles.selectedSpanCard}>
-                    <strong>Selected span</strong>
-                    <div>{selectedSpan.name}</div>
-                    <div>
-                      {selectedSpan.traceID} / {selectedSpan.spanID || 'unknown-span'}
+                    <strong className={styles.selectedSpanSectionTitle}>Selected span details</strong>
+                    <div className={styles.selectedSpanGrid}>
+                      <div className={styles.selectedSpanGroup}>
+                        <div className={styles.selectedSpanRow}>
+                          <span className={styles.selectedSpanLabel}>Name</span>
+                          <span className={styles.selectedSpanValue}>{selectedSpan.name}</span>
+                        </div>
+                        <div className={styles.selectedSpanRow}>
+                          <span className={styles.selectedSpanLabel}>Service</span>
+                          <span className={styles.selectedSpanValue}>{selectedSpan.serviceName}</span>
+                        </div>
+                        <div className={styles.selectedSpanRow}>
+                          <span className={styles.selectedSpanLabel}>Trace ID</span>
+                          <span className={styles.selectedSpanValue}>{selectedSpan.traceID}</span>
+                        </div>
+                        <div className={styles.selectedSpanRow}>
+                          <span className={styles.selectedSpanLabel}>Span ID</span>
+                          <span className={styles.selectedSpanValue}>{selectedSpan.spanID || 'unknown-span'}</span>
+                        </div>
+                        <div className={styles.selectedSpanRow}>
+                          <span className={styles.selectedSpanLabel}>Start</span>
+                          <span className={styles.selectedSpanValue}>{formatNsTimestamp(selectedSpan.startNs)}</span>
+                        </div>
+                        <div className={styles.selectedSpanRow}>
+                          <span className={styles.selectedSpanLabel}>End</span>
+                          <span className={styles.selectedSpanValue}>{formatNsTimestamp(selectedSpan.endNs)}</span>
+                        </div>
+                        <div className={styles.selectedSpanRow}>
+                          <span className={styles.selectedSpanLabel}>Duration</span>
+                          <span className={styles.selectedSpanValue}>{formatNsDuration(selectedSpan.durationNs)}</span>
+                        </div>
+                      </div>
+                      <div className={styles.selectedSpanGroup}>
+                        <strong>Associated generation</strong>
+                        {selectedGeneration == null ? (
+                          <div className={styles.selectedSpanValue}>No generation found for this trace/span.</div>
+                        ) : (
+                          <>
+                            <div className={styles.selectedSpanRow}>
+                              <span className={styles.selectedSpanLabel}>Generation ID</span>
+                              <span className={styles.selectedSpanValue}>{selectedGeneration.generation_id}</span>
+                            </div>
+                            <div className={styles.selectedSpanRow}>
+                              <span className={styles.selectedSpanLabel}>Mode</span>
+                              <span className={styles.selectedSpanValue}>{selectedGeneration.mode ?? 'n/a'}</span>
+                            </div>
+                            <div className={styles.selectedSpanRow}>
+                              <span className={styles.selectedSpanLabel}>Model</span>
+                              <span className={styles.selectedSpanValue}>
+                                {selectedGeneration.model?.provider ?? 'unknown-provider'} /{' '}
+                                {selectedGeneration.model?.name ?? 'unknown-model'}
+                              </span>
+                            </div>
+                            <div className={styles.selectedSpanRow}>
+                              <span className={styles.selectedSpanLabel}>Agent</span>
+                              <span className={styles.selectedSpanValue}>
+                                {selectedGeneration.agent_name ?? 'n/a'}
+                                {selectedGeneration.agent_version ? ` (${selectedGeneration.agent_version})` : ''}
+                              </span>
+                            </div>
+                            <div className={styles.selectedSpanRow}>
+                              <span className={styles.selectedSpanLabel}>Stop reason</span>
+                              <span className={styles.selectedSpanValue}>{selectedGeneration.stop_reason ?? 'n/a'}</span>
+                            </div>
+                            <div className={styles.selectedSpanRow}>
+                              <span className={styles.selectedSpanLabel}>Created at</span>
+                              <span className={styles.selectedSpanValue}>{selectedGeneration.created_at ?? 'n/a'}</span>
+                            </div>
+                            <div className={styles.selectedSpanRow}>
+                              <span className={styles.selectedSpanLabel}>Completed at</span>
+                              <span className={styles.selectedSpanValue}>{String(selectedGeneration.completed_at ?? 'n/a')}</span>
+                            </div>
+                            <div className={styles.selectedSpanRow}>
+                              <span className={styles.selectedSpanLabel}>Input tokens</span>
+                              <span className={styles.selectedSpanValue}>
+                                {getUsageValue(selectedGeneration.usage, 'input_tokens')}
+                              </span>
+                            </div>
+                            <div className={styles.selectedSpanRow}>
+                              <span className={styles.selectedSpanLabel}>Output tokens</span>
+                              <span className={styles.selectedSpanValue}>
+                                {getUsageValue(selectedGeneration.usage, 'output_tokens')}
+                              </span>
+                            </div>
+                            <div className={styles.selectedSpanRow}>
+                              <span className={styles.selectedSpanLabel}>Total tokens</span>
+                              <span className={styles.selectedSpanValue}>
+                                {getUsageValue(selectedGeneration.usage, 'total_tokens')}
+                              </span>
+                            </div>
+                            {selectedGenerationUsageExtras.map(([key, value]) => (
+                              <div key={key} className={styles.selectedSpanRow}>
+                                <span className={styles.selectedSpanLabel}>{key}</span>
+                                <span className={styles.selectedSpanValue}>
+                                  {typeof value === 'number' ? value.toLocaleString() : 'n/a'}
+                                </span>
+                              </div>
+                            ))}
+                            <div className={styles.selectedSpanRow}>
+                              <span className={styles.selectedSpanLabel}>Inputs</span>
+                              <span className={styles.selectedSpanValue}>
+                                {Array.isArray(selectedGeneration.input) ? selectedGeneration.input.length : 0}
+                              </span>
+                            </div>
+                            <div className={styles.selectedSpanRow}>
+                              <span className={styles.selectedSpanLabel}>Outputs</span>
+                              <span className={styles.selectedSpanValue}>
+                                {Array.isArray(selectedGeneration.output) ? selectedGeneration.output.length : 0}
+                              </span>
+                            </div>
+                            <div className={styles.selectedSpanRow}>
+                              <span className={styles.selectedSpanLabel}>Tools</span>
+                              <span className={styles.selectedSpanValue}>
+                                {Array.isArray(selectedGeneration.tools) ? selectedGeneration.tools.length : 0}
+                              </span>
+                            </div>
+                            <div className={styles.selectedSpanRow}>
+                              <span className={styles.selectedSpanLabel}>Error</span>
+                              <span className={styles.selectedSpanValue}>
+                                {selectedGeneration.error?.message ?? 'none'}
+                              </span>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    <div>{selectedSpan.serviceName}</div>
                   </div>
                 )}
                 {traceLoadFailures > 0 && (

@@ -130,6 +130,10 @@ describe('ConversationDetailPage', () => {
           generation_id: 'gen-1',
           conversation_id: 'conv-with-spans',
           trace_id: 'trace-1',
+          mode: 'SYNC',
+          model: { provider: 'openai', name: 'gpt-4o-mini' },
+          usage: { input_tokens: 120, output_tokens: 60, total_tokens: 180, reasoning_tokens: 12 },
+          stop_reason: 'end_turn',
           created_at: '2026-03-01T10:00:00Z',
         },
       ],
@@ -186,6 +190,10 @@ describe('ConversationDetailPage', () => {
     const spanButton = await screen.findByRole('button', { name: 'select span prompt' });
     fireEvent.click(spanButton);
     expect(await screen.findByTestId('location-search')).toHaveTextContent('?span=trace-1%3Aspan-a');
+    expect(await screen.findByText('Selected span details')).toBeInTheDocument();
+    expect(screen.getByText('Associated generation')).toBeInTheDocument();
+    expect(screen.getByText('openai / gpt-4o-mini')).toBeInTheDocument();
+    expect(screen.getByText('reasoning_tokens')).toBeInTheDocument();
 
     fireEvent.click(spanButton);
     expect(await screen.findByTestId('location-search')).toHaveTextContent('');
