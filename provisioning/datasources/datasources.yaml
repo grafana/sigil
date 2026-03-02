@@ -9,6 +9,7 @@ datasources:
     isDefault: false
     editable: true
     jsonData:
+      httpHeaderName1: X-Scope-OrgID
       tracesToMetrics:
         datasourceUid: prometheus
       serviceMap:
@@ -17,6 +18,8 @@ datasources:
         enabled: true
       lokiSearch:
         datasourceUid: ''
+    secureJsonData:
+      httpHeaderValue1: fake
 
   - name: Prometheus
     type: prometheus
