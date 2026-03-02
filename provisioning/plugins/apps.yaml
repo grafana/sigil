@@ -23,7 +23,7 @@ apps:
       rules:
         enabled: true
       allowServiceAccountAccess: true
-      ossMode: false
+      ossMode: true
       defaultSearchProvider: tavily
     secureJsonData:
       accessToken: 4130:$GRAFANA_ASSISTANT_ACCESS_TOKEN

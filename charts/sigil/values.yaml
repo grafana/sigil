@@ -1,5 +1,8 @@
 replicaCount: 1
 
+api:
+  enabled: true
+
 image:
   repository: ghcr.io/grafana/sigil
   pullPolicy: Always
@@ -132,6 +135,71 @@ catalogSync:
   enabled: false
   replicaCount: 1
   target: catalog-sync
+  podAnnotations: {}
+  podLabels: {}
+  resources: {}
+  extraEnv: []
+  extraEnvFrom: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+ingester:
+  enabled: false
+  replicaCount: 1
+  target: ingester
+  service:
+    enabled: true
+    type: ClusterIP
+    annotations: {}
+    ports:
+      http: 8080
+      otlpGrpc: 4317
+  podAnnotations: {}
+  podLabels: {}
+  resources: {}
+  extraEnv: []
+  extraEnvFrom: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+querier:
+  enabled: false
+  replicaCount: 1
+  target: querier
+  service:
+    enabled: true
+    type: ClusterIP
+    annotations: {}
+    ports:
+      http: 8080
+  podAnnotations: {}
+  podLabels: {}
+  resources: {}
+  extraEnv: []
+  extraEnvFrom: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+compactor:
+  enabled: false
+  replicaCount: 1
+  target: compactor
+  podAnnotations: {}
+  podLabels: {}
+  resources: {}
+  extraEnv: []
+  extraEnvFrom: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+evalWorker:
+  enabled: false
+  replicaCount: 1
+  target: eval-worker
   podAnnotations: {}
   podLabels: {}
   resources: {}

@@ -43,12 +43,66 @@ func RegisterRoutesWithQueryProxy(
 	protectedMiddleware func(http.Handler) http.Handler,
 	queryProxy *queryproxy.Proxy,
 ) {
+	RegisterCoreRoutes(mux)
+	RegisterIngestRoutes(mux, generationSvc, protectedMiddleware)
+	RegisterQueryRoutesWithQueryProxy(mux, querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled, modelCardSvc, protectedMiddleware, queryProxy)
+}
+
+// RegisterCoreRoutes wires transport-level routes shared by every runtime role.
+func RegisterCoreRoutes(mux *http.ServeMux) {
+	if mux == nil {
+		return
+	}
+	mux.HandleFunc("/healthz", health)
+}
+
+// RegisterIngestRoutes wires generation ingest HTTP routes.
+func RegisterIngestRoutes(
+	mux *http.ServeMux,
+	generationSvc *generationingest.Service,
+	protectedMiddleware func(http.Handler) http.Handler,
+) {
+	if mux == nil || generationSvc == nil {
+		return
+	}
+	if protectedMiddleware == nil {
+		protectedMiddleware = func(next http.Handler) http.Handler { return next }
+	}
+	mux.Handle("/api/v1/generations:export", protectedMiddleware(http.HandlerFunc(generationingest.NewHTTPHandler(generationSvc))))
+}
+
+// RegisterQueryRoutes wires query/read HTTP routes without proxy endpoints.
+func RegisterQueryRoutes(
+	mux *http.ServeMux,
+	querySvc *query.Service,
+	feedbackSvc *feedback.Service,
+	ratingsEnabled bool,
+	annotationsEnabled bool,
+	modelCardSvc *modelcards.Service,
+	protectedMiddleware func(http.Handler) http.Handler,
+) {
+	RegisterQueryRoutesWithQueryProxy(mux, querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled, modelCardSvc, protectedMiddleware, nil)
+}
+
+// RegisterQueryRoutesWithQueryProxy wires query/read HTTP routes and optional
+// Tempo/Prometheus proxy endpoints.
+func RegisterQueryRoutesWithQueryProxy(
+	mux *http.ServeMux,
+	querySvc *query.Service,
+	feedbackSvc *feedback.Service,
+	ratingsEnabled bool,
+	annotationsEnabled bool,
+	modelCardSvc *modelcards.Service,
+	protectedMiddleware func(http.Handler) http.Handler,
+	queryProxy *queryproxy.Proxy,
+) {
+	if mux == nil || querySvc == nil {
+		return
+	}
 	if protectedMiddleware == nil {
 		protectedMiddleware = func(next http.Handler) http.Handler { return next }
 	}
 
-	mux.HandleFunc("/healthz", health)
-	mux.Handle("/api/v1/generations:export", protectedMiddleware(http.HandlerFunc(generationingest.NewHTTPHandler(generationSvc))))
 	mux.Handle("/api/v1/generations/", protectedMiddleware(http.HandlerFunc(getGeneration(querySvc))))
 	mux.Handle("/api/v1/conversations/search", protectedMiddleware(http.HandlerFunc(searchConversations(querySvc))))
 	mux.Handle("/api/v1/conversations", protectedMiddleware(http.HandlerFunc(listConversations(querySvc))))

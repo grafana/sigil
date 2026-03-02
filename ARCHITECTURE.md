@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-22
+last_reviewed: 2026-03-02
 source_of_truth: true
 audience: both
 ---
@@ -147,7 +147,7 @@ Design doc: `docs/design-docs/2026-02-15-conversation-query-path.md`
    - conversation search: parse filter expression, translate to TraceQL, query Tempo, extract conversation IDs from matching spans, enrich from MySQL/object storage, apply conversation-level filters, return paginated summaries.
    - conversation detail: direct MySQL/object storage fan-out read by conversation ID, return all hydrated generations.
    - generation detail: direct MySQL/object storage read by generation ID.
-   - model cards: read model-card catalog from memory/DB/snapshot fallback and optionally resolve `(provider, model)` pairs for deterministic pricing joins.
+   - model cards: read model-card catalog from DB/snapshot fallback and optionally resolve `(provider, model)` pairs for deterministic pricing joins.
    - proxy routes: pass-through to Prometheus/Tempo for raw query access.
 4. Sigil API returns JSON responses (search summaries, full payloads, or pass-through).
 
@@ -535,7 +535,7 @@ See `docs/references/grafana-query-response-shapes.md`.
 - `apps/plugin`: UI routes and backend proxy handlers for Sigil query contracts.
 - `sigil/internal/ingest/generation`: generation ingest validation and persistence coordination.
 - `sigil/internal/query`: Tempo-first query orchestration plus storage hydration and fan-out reads.
-- `sigil/internal/modelcards`: model-card catalog bootstrap, in-memory refresh loop/cache coordination, supplemental overlay merge (`snapshot + supplemental`), and API read semantics.
+- `sigil/internal/modelcards`: model-card catalog bootstrap, DB-backed refresh coordination, supplemental overlay merge (`snapshot + supplemental`), and API read semantics.
 - `sigil/internal/eval`: online evaluation control plane, score ingest, rule engine, evaluator implementations, and async worker.
 - `sigil/internal/storage/mysql`: hot metadata/index/payload access.
 - `sigil/internal/storage/object`: compacted payload access.
@@ -548,11 +548,14 @@ See `docs/references/grafana-query-response-shapes.md`.
 Runtime module targets include:
 
 - `all`
-- `server`
+- `server` (transport-only HTTP/gRPC listeners)
+- `ingester` (generation ingest HTTP/gRPC + eval enqueue dispatcher)
 - `querier`
 - `compactor`
-- `catalog-sync` (singleton model-card refresh loop; can run independently or as part of `all`)
+- `catalog-sync` (singleton model-card refresh loop)
 - `eval-worker` (async evaluation worker; claims work items, runs evaluators, writes scores)
+
+`all` runs `ingester`, `querier`, `compactor`, and `eval-worker` in-process through shared transport listeners.
 
 ## Local Runtime (Compose Core)
 

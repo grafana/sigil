@@ -1,24 +1,25 @@
-{{- if .Values.api.enabled }}
+{{- if .Values.querier.enabled }}
 {{ include "sigil.validateStorageBackend" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "sigil.fullname" . }}
+  name: {{ include "sigil.fullname" . }}-querier
   labels:
     {{- include "sigil.labels" . | nindent 4 }}
+    app.kubernetes.io/component: querier
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: {{ .Values.querier.replicaCount }}
   selector:
     matchLabels:
-      {{- include "sigil.apiSelectorLabels" . | nindent 6 }}
+      {{- include "sigil.querierSelectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "sigil.apiSelectorLabels" . | nindent 8 }}
-        {{- with .Values.podLabels }}
+        {{- include "sigil.querierSelectorLabels" . | nindent 8 }}
+        {{- with .Values.querier.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- with .Values.podAnnotations }}
+      {{- with .Values.querier.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -33,7 +34,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-        - name: sigil
+        - name: querier
           image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- with .Values.command }}
@@ -46,16 +47,21 @@ spec:
           {{- end }}
           ports:
             - name: http
-              containerPort: {{ .Values.service.ports.http }}
+              containerPort: {{ .Values.querier.service.ports.http }}
               protocol: TCP
             - name: otlp-grpc
               containerPort: {{ .Values.service.ports.otlpGrpc }}
               protocol: TCP
           env:
-            {{- include "sigil.commonEnv" (dict "root" . "target" .Values.sigil.target) | nindent 12 }}
-          {{- with .Values.sigil.extraEnvFrom }}
+            {{- include "sigil.commonEnv" (dict "root" . "target" .Values.querier.target "extraEnv" .Values.querier.extraEnv "httpPort" .Values.querier.service.ports.http "otlpGrpcPort" .Values.service.ports.otlpGrpc) | nindent 12 }}
+          {{- if or .Values.sigil.extraEnvFrom .Values.querier.extraEnvFrom }}
           envFrom:
+            {{- with .Values.sigil.extraEnvFrom }}
             {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- with .Values.querier.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- end }}
           {{- with .Values.securityContext }}
           securityContext:
@@ -73,27 +79,19 @@ spec:
             failureThreshold: {{ .Values.startupProbe.failureThreshold }}
             periodSeconds: {{ .Values.startupProbe.periodSeconds }}
           {{- end }}
-          {{- with .Values.resources }}
+          {{- with .Values.querier.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with .Values.extraVolumeMounts }}
-          volumeMounts:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-      {{- with .Values.extraVolumes }}
-      volumes:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.nodeSelector }}
+      {{- with .Values.querier.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.affinity }}
+      {{- with .Values.querier.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.tolerations }}
+      {{- with .Values.querier.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}

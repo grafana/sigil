@@ -19,11 +19,16 @@ import (
 )
 
 type Runtime struct {
-	cfg        config.Config
-	logger     log.Logger
-	moduleInit *modules.Manager
-	modelCards *modelcards.Service
+	cfg               config.Config
+	logger            log.Logger
+	moduleInit        *modules.Manager
+	modelCards        *modelcards.Service
+	modelCardBuilder  modelCardServiceBuilder
+	bootstrapTimeout  time.Duration
+	transportRegistry *serverTransportRegistry
 }
+
+type modelCardServiceBuilder func(context.Context, config.Config, bool) (*modelcards.Service, error)
 
 func NewRuntime(cfg config.Config, logger log.Logger) (*Runtime, error) {
 	if logger == nil {
@@ -31,9 +36,12 @@ func NewRuntime(cfg config.Config, logger log.Logger) (*Runtime, error) {
 	}
 
 	runtime := &Runtime{
-		cfg:        cfg,
-		logger:     logger,
-		moduleInit: modules.NewManager(logger),
+		cfg:               cfg,
+		logger:            logger,
+		moduleInit:        modules.NewManager(logger),
+		modelCardBuilder:  buildModelCardService,
+		bootstrapTimeout:  10 * time.Second,
+		transportRegistry: newServerTransportRegistry(),
 	}
 
 	if err := runtime.registerModules(); err != nil {
@@ -87,27 +95,40 @@ func (r *Runtime) Run(ctx context.Context) error {
 
 func (r *Runtime) registerModules() error {
 	r.moduleInit.RegisterModule(config.TargetServer, r.initServerModule)
+	r.moduleInit.RegisterModule(config.TargetIngester, r.initIngesterModule)
 	r.moduleInit.RegisterModule(config.TargetQuerier, r.initQuerierModule)
 	r.moduleInit.RegisterModule(config.TargetCompactor, r.initCompactorModule)
 	r.moduleInit.RegisterModule(config.TargetCatalogSync, r.initCatalogSyncModule)
 	r.moduleInit.RegisterModule(config.TargetEvalWorker, r.initEvalWorkerModule)
 	r.moduleInit.RegisterModule(config.TargetAll, nil)
 
-	return r.moduleInit.AddDependency(config.TargetAll, config.TargetServer, config.TargetQuerier, config.TargetCompactor, config.TargetCatalogSync, config.TargetEvalWorker)
+	if err := r.moduleInit.AddDependency(config.TargetIngester, config.TargetServer); err != nil {
+		return err
+	}
+	if err := r.moduleInit.AddDependency(config.TargetQuerier, config.TargetServer); err != nil {
+		return err
+	}
+	return r.moduleInit.AddDependency(config.TargetAll, config.TargetIngester, config.TargetQuerier, config.TargetCompactor, config.TargetEvalWorker)
 }
 
 func (r *Runtime) initServerModule() (services.Service, error) {
-	modelCardSvc, err := r.getModelCardService(context.Background(), true)
-	if err != nil {
-		return nil, err
-	}
-	runModelCardSync := r.cfg.Target == config.TargetServer
-	return newServerModule(r.cfg, r.logger, modelCardSvc, runModelCardSync), nil
+	return newServerModule(r.cfg, r.logger, r.transportRegistry), nil
+}
+
+func (r *Runtime) initIngesterModule() (services.Service, error) {
+	bootstrapCtx, cancel := r.newBootstrapContext()
+	defer cancel()
+	return newIngesterModule(bootstrapCtx, r.cfg, r.logger, r.transportRegistry)
 }
 
 func (r *Runtime) initQuerierModule() (services.Service, error) {
-	blockStore := newBlockStorePlaceholder(r.cfg.ObjectStore)
-	return newQuerierModule(blockStore), nil
+	bootstrapCtx, cancel := r.newBootstrapContext()
+	defer cancel()
+	modelCardSvc, err := r.getModelCardService(bootstrapCtx, true)
+	if err != nil {
+		return nil, err
+	}
+	return newQuerierModule(bootstrapCtx, r.cfg, r.logger, modelCardSvc, r.transportRegistry)
 }
 
 func (r *Runtime) initCompactorModule() (services.Service, error) {
@@ -121,7 +142,7 @@ func (r *Runtime) initCompactorModule() (services.Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create mysql wal store for compactor: %w", err)
 	}
-	bootstrapCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	bootstrapCtx, cancel := r.newBootstrapContext()
 	defer cancel()
 
 	if err := walStore.AutoMigrate(bootstrapCtx); err != nil {
@@ -167,7 +188,10 @@ func newBlockStorePlaceholder(cfg config.ObjectStoreConfig) *object.Store {
 }
 
 func (r *Runtime) initCatalogSyncModule() (services.Service, error) {
-	modelCardSvc, err := r.getModelCardService(context.Background(), true)
+	bootstrapCtx, cancel := r.newBootstrapContext()
+	defer cancel()
+
+	modelCardSvc, err := r.getModelCardService(bootstrapCtx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +213,7 @@ func (r *Runtime) initEvalWorkerModule() (services.Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create mysql eval worker store: %w", err)
 	}
-	bootstrapCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	bootstrapCtx, cancel := r.newBootstrapContext()
 	defer cancel()
 	if err := store.AutoMigrate(bootstrapCtx); err != nil {
 		return nil, err
@@ -216,10 +240,22 @@ func (r *Runtime) getModelCardService(ctx context.Context, enableLiveSource bool
 	if r.modelCards != nil {
 		return r.modelCards, nil
 	}
-	svc, err := buildModelCardService(ctx, r.cfg, enableLiveSource)
+	builder := r.modelCardBuilder
+	if builder == nil {
+		builder = buildModelCardService
+	}
+	svc, err := builder(ctx, r.cfg, enableLiveSource)
 	if err != nil {
 		return nil, err
 	}
 	r.modelCards = svc
 	return svc, nil
+}
+
+func (r *Runtime) newBootstrapContext() (context.Context, context.CancelFunc) {
+	timeout := r.bootstrapTimeout
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	return context.WithTimeout(context.Background(), timeout)
 }

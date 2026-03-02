@@ -23,7 +23,7 @@ services:
       GF_SESSION_PROVIDER_CONFIG: sigil:sigil@tcp(mysql:3306)/grafana
       GF_APP_URL: http://grafana:3000
       GF_SERVER_ROOT_URL: http://grafana:3000
-      GF_FEATURE_TOGGLES_ENABLE: externalServiceAccounts
+      GF_FEATURE_TOGGLES_ENABLE: extensionSidebar,externalServiceAccounts,grafanaAssistantLoop,accessControlOnCall,assistantStreaming,dashboardNewLayouts,collectorApp,k8sAlloyInstructions,fleetManagement,instrumentationHub,k8sAlloyHelmInstructions,otelSupport,alertEnrichment,alertingEnrichmentAssistantInvestigations,alertingEnrichmentPerRule,grafanaAPIServer,kubeAPIServer,assistantPlaybooks,infinityAssistantTools,assistantTunnel,investigationMemorySearch,restrictedPluginApis,dashboardTemplates,suggestedDashboards,dashboardLibrary
       GRAFANA_ASSISTANT_ACCESS_TOKEN: ${GRAFANA_ASSISTANT_ACCESS_TOKEN}
       GF_INSTALL_PLUGINS: https://storage.googleapis.com/integration-artifacts/grafana-assistant-app/release/latest/grafana-assistant-app-latest.zip;grafana-assistant-app,yesoreyeram-infinity-datasource
 

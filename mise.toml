@@ -254,8 +254,15 @@ helm template sigil ./charts/sigil \
   --set sigil.objectStore.azure.storageAccountKey='secret' >/dev/null
 
 helm template sigil ./charts/sigil \
-  --set sigil.target=server \
-  --set replicaCount=3 \
+  --set api.enabled=false \
+  --set ingester.enabled=true \
+  --set ingester.replicaCount=2 \
+  --set querier.enabled=true \
+  --set querier.replicaCount=3 \
+  --set compactor.enabled=true \
+  --set compactor.replicaCount=2 \
+  --set evalWorker.enabled=true \
+  --set evalWorker.replicaCount=2 \
   --set catalogSync.enabled=true \
   --set catalogSync.replicaCount=1 \
   --set catalogSync.target=catalog-sync >/dev/null

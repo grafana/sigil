@@ -7,6 +7,7 @@ import (
 
 	"github.com/grafana/sigil/sigil/internal/config"
 	"github.com/grafana/sigil/sigil/internal/modelcards"
+	"github.com/grafana/sigil/sigil/internal/storage/mysql"
 )
 
 func buildModelCardService(ctx context.Context, cfg config.Config, enableLiveSource bool) (*modelcards.Service, error) {
@@ -22,9 +23,12 @@ func buildModelCardService(ctx context.Context, cfg config.Config, enableLiveSou
 		return nil, fmt.Errorf("validate supplemental model-card catalog against snapshot: %w", err)
 	}
 
-	store := modelcards.NewMemoryStore()
+	store, err := mysql.NewModelCardStore(cfg.MySQLDSN)
+	if err != nil {
+		return nil, fmt.Errorf("open model-card mysql store: %w", err)
+	}
 	if err := store.AutoMigrate(ctx); err != nil {
-		return nil, fmt.Errorf("auto-migrate model cards memory store: %w", err)
+		return nil, fmt.Errorf("auto-migrate model cards store: %w", err)
 	}
 
 	var source modelcards.Source
