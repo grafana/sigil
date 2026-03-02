@@ -400,7 +400,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
     label: 'conversationDetailPage-traceZoomHeader',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
+    marginTop: theme.spacing(0.5),
     marginBottom: theme.spacing(0.5),
     gap: theme.spacing(1),
   }),
@@ -412,6 +413,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   traceZoomBackButton: css({
     label: 'conversationDetailPage-traceZoomBackButton',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
     border: `1px solid ${theme.colors.border.medium}`,
     borderRadius: theme.shape.radius.default,
     background: theme.colors.background.primary,
@@ -422,6 +426,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     '&:hover': {
       background: theme.colors.action.hover,
     },
+  }),
+  traceZoomBackArrow: css({
+    label: 'conversationDetailPage-traceZoomBackArrow',
+    fontFamily: theme.typography.fontFamilyMonospace,
   }),
   hoveredSpanTooltip: css({
     label: 'conversationDetailPage-hoveredSpanTooltip',
@@ -890,15 +898,16 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                     </div>
                     {isExpandedTraceView && (
                       <div className={styles.traceZoomHeader}>
-                        <span className={styles.traceZoomLabel}>Trace: {expandedTimeline.traceID}</span>
                         <button
                           type="button"
                           className={styles.traceZoomBackButton}
                           onClick={() => setExpandedTraceParam('')}
                           aria-label="close expanded trace"
                         >
-                          Back to traces
+                          <span className={styles.traceZoomBackArrow}>⟵</span>
+                          <span>Back to traces</span>
                         </button>
+                        <span className={styles.traceZoomLabel}>Trace: {expandedTimeline.traceID}</span>
                       </div>
                     )}
                     {displayedTimelines.map((timeline) => {
