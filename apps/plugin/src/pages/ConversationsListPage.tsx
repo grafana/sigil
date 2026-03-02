@@ -374,7 +374,7 @@ function buildTrendLabel(
   previousValue: number
 ): { direction: StatTrendDirection; label: string } | null {
   if (currentValue === previousValue) {
-    return { direction: 'neutral', label: '0' };
+    return { direction: 'neutral', label: '→ 0%' };
   }
   if (previousValue === 0) {
     return null;
@@ -386,7 +386,7 @@ function buildTrendLabel(
   if (percentageChange < 0) {
     return { direction: 'down', label: `↘ ${Math.abs(percentageChange).toFixed(1)}%` };
   }
-  return { direction: 'neutral', label: '→ 0.0%' };
+  return { direction: 'neutral', label: '→ 0%' };
 }
 
 function formatTrendComparisonValue(value: number, fractionDigits = 0, suffix = ''): string {
@@ -425,6 +425,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     justifyContent: 'flex-end',
     margin: theme.spacing(0.5, 0, 0, 0),
     padding: theme.spacing(1, 0),
+    boxShadow: 'inset 0 10px 10px -10px rgba(0, 0, 0, 0.3)',
   }),
   statsGrid: css({
     display: 'grid',
@@ -463,18 +464,23 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: theme.spacing(1),
   }),
   chartSelect: css({
-    border: `1px solid ${theme.colors.border.medium}`,
+    border: 'none',
     borderRadius: theme.shape.radius.default,
-    background: theme.colors.background.primary,
-    color: theme.colors.text.primary,
+    background: 'transparent',
+    color: theme.colors.text.maxContrast,
     padding: theme.spacing(0, 0.75),
     height: theme.spacing(4),
     minHeight: theme.spacing(4),
+    minWidth: 280,
     appearance: 'auto' as const,
     cursor: 'pointer',
     fontSize: theme.typography.h4.fontSize,
     fontWeight: theme.typography.fontWeightMedium,
     lineHeight: 1.2,
+    '& option': {
+      color: theme.colors.text.primary,
+      background: theme.colors.background.primary,
+    },
   }),
   chartBars: css({
     display: 'flex',
@@ -482,46 +488,38 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: theme.spacing(0.75),
     overflowX: 'auto' as const,
     minHeight: 180,
-    paddingBottom: theme.spacing(0.5),
-  }),
-  chartBar: css({
+    padding: theme.spacing(1),
+    paddingBottom: theme.spacing(1.25),
     border: `1px solid ${theme.colors.border.medium}`,
     borderRadius: theme.shape.radius.default,
     background: theme.colors.background.primary,
+  }),
+  chartBar: css({
     color: theme.colors.text.primary,
     cursor: 'pointer',
     minWidth: 64,
-    height: 180,
+    height: 160,
     display: 'flex',
-    alignItems: 'end',
-    justifyContent: 'stretch',
-    padding: theme.spacing(0.5),
+    flexDirection: 'column' as const,
+    alignItems: 'stretch',
+    justifyContent: 'flex-end',
+    border: 'none',
+    background: 'transparent',
+    padding: 0,
     flex: '0 0 auto',
     whiteSpace: 'normal' as const,
     textAlign: 'center' as const,
     fontSize: theme.typography.bodySmall.fontSize,
-    '&:hover': {
-      background: theme.colors.action.hover,
-    },
   }),
   chartBarActive: css({
-    borderColor: theme.colors.primary.main,
-    background: theme.colors.primary.transparent,
-  }),
-  chartBarContent: css({
-    width: '100%',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    height: '100%',
-  }),
-  chartBarFillArea: css({
-    flex: 1,
-    display: 'flex',
-    alignItems: 'end',
+    '& > div:first-child': {
+      opacity: 1,
+      outline: `1px solid ${theme.colors.primary.main}`,
+    },
   }),
   chartBarFill: css({
     width: '100%',
-    borderRadius: theme.shape.radius.default,
+    borderRadius: 2,
     background: theme.colors.primary.main,
     opacity: 0.85,
     minHeight: 4,
@@ -972,14 +970,10 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
                       : `Filter conversations with ${bucket.label} LLM calls`
                   }
                 >
-                  <div className={styles.chartBarContent}>
-                    <div className={styles.chartBarFillArea}>
-                      <div className={styles.chartBarFill} style={{ height: `${fillPercent}%` }} />
-                    </div>
-                    <div className={styles.chartBarMeta}>
-                      <div>{bucket.label}</div>
-                      <div className={styles.activityCount}>{bucket.count}</div>
-                    </div>
+                  <div className={styles.chartBarFill} style={{ height: `${fillPercent}%` }} />
+                  <div className={styles.chartBarMeta}>
+                    <div>{bucket.label}</div>
+                    <div className={styles.activityCount}>{bucket.count}</div>
                   </div>
                 </button>
               );
