@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { dateTime, makeTimeRange, type GrafanaTheme2, type TimeRange } from '@grafana/data';
-import { Alert, Text, TimeRangePicker, useStyles2 } from '@grafana/ui';
+import { Alert, TimeRangePicker, useStyles2 } from '@grafana/ui';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
 import type { ConversationSearchResult } from '../conversation/types';
@@ -544,6 +544,12 @@ const getStyles = (theme: GrafanaTheme2) => ({
   statTrendDown: css({
     color: theme.colors.error.main,
   }),
+  errorAlert: css({
+    margin: 0,
+    border: 'none',
+    borderBottom: `1px solid ${theme.colors.error.main}`,
+    borderRadius: 0,
+  }),
 });
 
 export type ConversationsListPageProps = {
@@ -723,8 +729,6 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
           return;
         }
         setErrorMessage(error instanceof Error ? error.message : 'failed to load conversations');
-        setConversations([]);
-        setPreviousConversations([]);
       } finally {
         if (requestVersionRef.current !== requestVersion) {
           return;
@@ -929,13 +933,13 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
             </div>
           </div>
         </div>
-      </div>
 
-      {errorMessage.length > 0 && (
-        <Alert severity="error" title="Conversation query failed">
-          <Text>{errorMessage}</Text>
-        </Alert>
-      )}
+        {errorMessage.length > 0 && (
+          <Alert className={styles.errorAlert} severity="error" title="Conversation query failed">
+            {errorMessage}
+          </Alert>
+        )}
+      </div>
 
       <div className={styles.chartPanel}>
         <div className={styles.chartTitle}>
