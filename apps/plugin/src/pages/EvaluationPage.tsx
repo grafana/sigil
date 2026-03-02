@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import { Route, Routes, useParams } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
 import { LoadingPlaceholder, Stack, Text } from '@grafana/ui';
 import EvalTabBar from '../components/evaluation/EvalTabBar';
 
@@ -7,11 +7,6 @@ const EvaluationOverviewPage = React.lazy(() => import('./EvaluationOverviewPage
 const EvaluatorsPage = React.lazy(() => import('./EvaluatorsPage'));
 const RulesPage = React.lazy(() => import('./RulesPage'));
 const RuleDetailPage = React.lazy(() => import('./RuleDetailPage'));
-
-function RuleDetailRoute() {
-  const { ruleID } = useParams<{ ruleID: string }>();
-  return <RuleDetailPage ruleID={ruleID} />;
-}
 
 export default function EvaluationPage() {
   return (
@@ -24,7 +19,7 @@ export default function EvaluationPage() {
           <Route path="evaluators" element={<EvaluatorsPage />} />
           <Route path="rules" element={<RulesPage />} />
           <Route path="rules/new" element={<RuleDetailPage />} />
-          <Route path="rules/:ruleID" element={<RuleDetailRoute />} />
+          <Route path="rules/:ruleID" element={<RuleDetailPage />} />
         </Routes>
       </Suspense>
     </Stack>

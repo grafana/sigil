@@ -144,7 +144,9 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
       void dataSource
         .listEvaluators()
         .then((res) => setAvailableEvaluators(res.items))
-        .catch(() => {});
+        .catch((err) => {
+          setErrorMessage(err instanceof Error ? err.message : 'Failed to load evaluators');
+        });
     }
   }, [dataSource, isNew]);
 
