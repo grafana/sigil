@@ -33,10 +33,6 @@ function formatRelativeTime(dateStr: string): string {
   return `${diffDays}d ago`;
 }
 
-function truncateId(id: string): string {
-  return id.length > 8 ? id.slice(0, 8) + '...' : id;
-}
-
 const getStyles = (theme: GrafanaTheme2) => ({
   table: css({
     width: '100%',
@@ -75,6 +71,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
   idCell: css({
     fontFamily: theme.typography.fontFamilyMonospace,
     fontSize: theme.typography.bodySmall.fontSize,
+    whiteSpace: 'normal' as const,
+    overflowWrap: 'anywhere' as const,
   }),
   modelList: css({
     display: 'flex',
@@ -138,7 +136,7 @@ export default function ConversationListPanel({
         <thead>
           <tr className={styles.headerRow}>
             <th className={styles.headerCell}>Conversation</th>
-            <th className={styles.headerCell}>Gen</th>
+            <th className={styles.headerCell}>LLM calls</th>
             <th className={styles.headerCell}>Models</th>
             <th className={styles.headerCell}>Errors</th>
             <th className={styles.headerCell}>Rating</th>
@@ -159,9 +157,7 @@ export default function ConversationListPanel({
                 aria-selected={selected}
               >
                 <td className={cx(styles.cell, styles.idCell)}>
-                  <Tooltip content={conversation.conversation_id} placement="right">
-                    <span>{truncateId(conversation.conversation_id)}</span>
-                  </Tooltip>
+                  <span>{conversation.conversation_id}</span>
                 </td>
                 <td className={styles.cell}>{conversation.generation_count}</td>
                 <td className={styles.cell}>
