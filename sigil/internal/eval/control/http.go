@@ -319,7 +319,7 @@ func decodeJSONBody(req *http.Request, out any) error {
 	if err != nil {
 		return errors.New("failed to read request body")
 	}
-	if len(data) == 0 {
+	if len(bytes.TrimSpace(data)) == 0 {
 		return errors.New("request body is required")
 	}
 	if len(data) > maxRequestBodySize {

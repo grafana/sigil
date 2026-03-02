@@ -322,7 +322,7 @@ func isValidVersionFormat(v string) bool {
 		return false
 	}
 	if len(parts) == 2 {
-		if _, err := strconv.Atoi(parts[1]); err != nil {
+		if _, err := strconv.ParseUint(parts[1], 10, 64); err != nil {
 			return false
 		}
 	}

@@ -80,6 +80,7 @@ func TestTemplateService_Create_InvalidVersion(t *testing.T) {
 		{name: "not_a_date", version: "v1.0.0"},
 		{name: "missing_day", version: "2026-03"},
 		{name: "bad_suffix", version: "2026-03-01.abc"},
+		{name: "negative_suffix", version: "2026-03-01.-1"},
 	}
 
 	for _, tc := range testCases {
