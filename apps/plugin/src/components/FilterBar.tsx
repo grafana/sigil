@@ -19,6 +19,7 @@ export type FilterBarProps = {
 type FilterChip = {
   id: string;
   label: string;
+  tagKey: string;
 };
 
 function extractFilterChips(filter: string): FilterChip[] {
@@ -31,7 +32,7 @@ function extractFilterChips(filter: string): FilterChip[] {
   const matcher = /([^\s]+)\s*(=~|!=|>=|<=|=|>|<)\s*("(?:[^"\\]|\\.)*"|[^\s]+)/g;
   let match: RegExpExecArray | null = matcher.exec(expression);
   while (match !== null) {
-    chips.push({ id: `${match.index}-${match[0]}`, label: match[0] });
+    chips.push({ id: `${match.index}-${match[0]}`, label: match[0], tagKey: match[1] });
     match = matcher.exec(expression);
   }
   return chips;
@@ -82,7 +83,13 @@ export default function FilterBar(props: FilterBarProps) {
   } = props;
 
   const chips = useMemo(() => extractFilterChips(filter), [filter]);
-  const suggestedTags = useMemo(() => tags.slice(0, 10), [tags]);
+  const suggestedTags = useMemo(() => {
+    const used = new Set(chips.map((c) => c.tagKey));
+    const seen = new Set<string>();
+    return tags
+      .filter((tag) => !used.has(tag.key) && !seen.has(tag.key) && (seen.add(tag.key), true))
+      .slice(0, 10);
+  }, [tags, chips]);
   const suggestedValues = useMemo(() => tagValues.slice(0, 10), [tagValues]);
 
   const activeTag = useMemo(() => detectLastTagForValueLookup(filter), [filter]);
