@@ -118,10 +118,13 @@ func (m *serverModule) start(ctx context.Context) error {
 	if store, ok := generationStore.(evalpkg.EvalStore); ok {
 		evalStore = store
 	}
-	if mysqlStore, ok := generationStore.(*mysql.WALStore); ok && evalStore != nil {
+	if mysqlStore, ok := generationStore.(*mysql.WALStore); ok {
+		mysqlStore.SetEvalEnqueueEnabled(m.cfg.EvalWorkerEnabled)
+	}
+	if mysqlStore, ok := generationStore.(*mysql.WALStore); ok && evalStore != nil && m.cfg.EvalWorkerEnabled {
 		engine := evalrules.NewEngine(evalStore)
 		m.evalEnqueueDispatcher = evalenqueue.NewService(
-			evalenqueue.Config{Enabled: true},
+			evalenqueue.Config{Enabled: m.cfg.EvalWorkerEnabled},
 			m.logger,
 			evalEnqueueStoreAdapter{store: mysqlStore},
 			evalEnqueueProcessorAdapter{engine: engine},

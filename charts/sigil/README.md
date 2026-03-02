@@ -38,14 +38,23 @@ Optional components:
 ## Quick Start
 
 1. Build/publish a Sigil image and choose the image tag.
-2. Install the chart:
+   - Main-branch image publishing is automated by `.github/workflows/sigil-image-publish.yml`.
+   - Published image tags on main are `ghcr.io/grafana/sigil:<git-sha>` and `ghcr.io/grafana/sigil:latest`.
+2. Install the chart using defaults (`ghcr.io/grafana/sigil:latest`):
+
+```bash
+helm upgrade --install sigil ./charts/sigil \
+  --namespace sigil \
+  --create-namespace
+```
+
+To pin to an immutable published image from CI, override the tag:
 
 ```bash
 helm upgrade --install sigil ./charts/sigil \
   --namespace sigil \
   --create-namespace \
-  --set image.repository=<your-image-repository> \
-  --set image.tag=<your-image-tag>
+  --set image.tag=<git-sha>
 ```
 
 This works with object storage out of the box because MinIO is enabled by default.
@@ -193,6 +202,7 @@ Repository-level `mise` tasks are provided:
 
 ## Operational Notes
 
-- The default chart image repository is a placeholder (`ghcr.io/grafana/sigil`); override it for real deployments.
+- The chart defaults to `ghcr.io/grafana/sigil:latest`.
+- For production, prefer pinning `image.tag` to a published commit SHA image instead of `latest`.
 - The bundled Alloy/Tempo/Prometheus/MySQL/MinIO workloads are aimed at simple deployments and development clusters.
 - For production, use managed external services and override endpoints/credentials via values.
