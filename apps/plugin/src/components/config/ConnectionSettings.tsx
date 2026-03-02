@@ -104,10 +104,7 @@ export default function ConnectionSettings({ plugin }: ConnectionSettingsProps) 
       >
         <Input width={30} value={tenantId} onChange={(e) => setTenantId(e.currentTarget.value)} />
       </Field>
-      <Field
-        label="Prometheus Datasource"
-        description="Datasource UID used for Prometheus proxy queries via Grafana."
-      >
+      <Field label="Prometheus Datasource" description="Datasource UID used for Prometheus proxy queries via Grafana.">
         <Select
           width={40}
           options={prometheusOptions}
@@ -130,7 +127,10 @@ export default function ConnectionSettings({ plugin }: ConnectionSettingsProps) 
   );
 }
 
-function buildDatasourceOptions(datasources: GrafanaDatasource[], datasourceType: string): Array<SelectableValue<string>> {
+function buildDatasourceOptions(
+  datasources: GrafanaDatasource[],
+  datasourceType: string
+): Array<SelectableValue<string>> {
   return datasources
     .filter((datasource) => datasource.type === datasourceType && datasource.uid && datasource.name)
     .map((datasource) => ({
