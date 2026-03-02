@@ -87,7 +87,7 @@ func (a *App) handleSettingsRoutes(w http.ResponseWriter, req *http.Request) {
 }
 
 func (a *App) handlePrometheusProxyRoutes(w http.ResponseWriter, req *http.Request) {
-	if !a.hasGrafanaDatasourceProxyConfig(a.prometheusDatasourceUID) {
+	if !a.hasGrafanaDatasourceProxyTarget(a.prometheusDatasourceUID) {
 		http.Error(w, "grafana prometheus datasource proxy is not configured", http.StatusServiceUnavailable)
 		return
 	}
@@ -100,7 +100,7 @@ func (a *App) handlePrometheusProxyRoutes(w http.ResponseWriter, req *http.Reque
 }
 
 func (a *App) handleTempoProxyRoutes(w http.ResponseWriter, req *http.Request) {
-	if !a.hasGrafanaDatasourceProxyConfig(a.tempoDatasourceUID) {
+	if !a.hasGrafanaDatasourceProxyTarget(a.tempoDatasourceUID) {
 		http.Error(w, "grafana tempo datasource proxy is not configured", http.StatusServiceUnavailable)
 		return
 	}
@@ -112,10 +112,9 @@ func (a *App) handleTempoProxyRoutes(w http.ResponseWriter, req *http.Request) {
 	)
 }
 
-func (a *App) hasGrafanaDatasourceProxyConfig(datasourceUID string) bool {
+func (a *App) hasGrafanaDatasourceProxyTarget(datasourceUID string) bool {
 	return strings.TrimSpace(datasourceUID) != "" &&
-		strings.TrimSpace(a.grafanaAppURL) != "" &&
-		strings.TrimSpace(a.grafanaServiceAccountToken) != ""
+		strings.TrimSpace(a.grafanaAppURL) != ""
 }
 
 func (a *App) handleGrafanaDatasourceProxy(w http.ResponseWriter, req *http.Request, routePrefix string, datasourcePrefix string) {
@@ -240,7 +239,9 @@ func (a *App) handleGrafanaProxy(w http.ResponseWriter, req *http.Request, path 
 
 	proxyReq.Header = req.Header.Clone()
 	proxyReq.Header.Del("Accept-Encoding")
-	proxyReq.Header.Set("Authorization", "Bearer "+a.grafanaServiceAccountToken)
+	if token := strings.TrimSpace(a.grafanaServiceAccountToken); token != "" {
+		proxyReq.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	resp, err := a.client.Do(proxyReq)
 	if err != nil {
