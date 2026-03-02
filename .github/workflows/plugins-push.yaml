@@ -28,7 +28,7 @@ jobs:
       attestations: write
       pull-requests: read
     with:
-      go-version: '1.25.5'
+      go-version: '1.25.6'
       go-setup-caching: true
       golangci-lint-version: '2.8.0'
       plugin-directory: apps/plugin
