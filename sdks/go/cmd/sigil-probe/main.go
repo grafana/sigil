@@ -163,7 +163,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		results = appendSkipResult(results, "http_get", httpGenerationID, "disabled by -verify-read=false")
 	}
 
-	fmt.Fprintf(
+	if _, err := fmt.Fprintf(
 		stdout,
 		"endpoint=%s\napi_base_url=%s\ntenant=%s\nuser=%s\nauth_mode=basic\ntoken_source=%s\n\n",
 		endpoint,
@@ -171,8 +171,12 @@ func run(args []string, stdout, stderr io.Writer) error {
 		strings.TrimSpace(tenantID),
 		strings.TrimSpace(userID),
 		tokenSource,
-	)
-	renderResultsTable(stdout, results)
+	); err != nil {
+		return fmt.Errorf("write probe header: %w", err)
+	}
+	if err := renderResultsTable(stdout, results); err != nil {
+		return fmt.Errorf("write results table: %w", err)
+	}
 
 	failures := countFailedResults(results)
 	if failures > 0 {
@@ -302,19 +306,26 @@ func appendSkipResult(results []probeStepResult, step, generationID, detail stri
 	})
 }
 
-func renderResultsTable(out io.Writer, results []probeStepResult) {
-	fmt.Fprintln(out, "| step | status | generation_id | detail |")
-	fmt.Fprintln(out, "| --- | --- | --- | --- |")
+func renderResultsTable(out io.Writer, results []probeStepResult) error {
+	if _, err := fmt.Fprintln(out, "| step | status | generation_id | detail |"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(out, "| --- | --- | --- | --- |"); err != nil {
+		return err
+	}
 	for _, result := range results {
-		fmt.Fprintf(
+		if _, err := fmt.Fprintf(
 			out,
 			"| %s | %s | %s | %s |\n",
 			tableCell(result.Step),
 			tableCell(string(result.Status)),
 			tableCell(result.GenerationID),
 			tableCell(result.Detail),
-		)
+		); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func tableCell(input string) string {
@@ -467,12 +478,8 @@ func resolveReadBaseURL(grpcEndpoint, readBaseURL string, insecure bool) (string
 		host = parsed.Host
 	}
 
-	if strings.HasSuffix(host, ":443") {
-		host = strings.TrimSuffix(host, ":443")
-	}
-	if strings.HasSuffix(host, ":80") {
-		host = strings.TrimSuffix(host, ":80")
-	}
+	host = strings.TrimSuffix(host, ":443")
+	host = strings.TrimSuffix(host, ":80")
 
 	scheme := "https"
 	if insecure || endpointScheme == "http" {

@@ -187,7 +187,7 @@ describe('ConversationsListPage', () => {
       getSearchTagValues: jest.fn(async (_tag: string, _from: string, _to: string) => []),
     };
 
-    const { router } = renderPage(dataSource);
+    renderPage(dataSource);
 
     await waitFor(() => expect(searchConversations).toHaveBeenCalledTimes(2));
 
