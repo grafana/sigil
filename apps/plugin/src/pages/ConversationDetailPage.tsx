@@ -571,27 +571,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     label: 'conversationDetailPage-selectedSpanValue',
     color: theme.colors.text.primary,
   }),
-  traceProgressContainer: css({
-    label: 'conversationDetailPage-traceProgressContainer',
-    display: 'grid',
-    gap: theme.spacing(0.5),
-    marginTop: theme.spacing(1),
-  }),
-  traceProgressTrack: css({
-    label: 'conversationDetailPage-traceProgressTrack',
-    width: '100%',
-    height: '8px',
-    borderRadius: '999px',
-    background: theme.colors.background.secondary,
-    border: `1px solid ${theme.colors.border.weak}`,
-    overflow: 'hidden' as const,
-  }),
-  traceProgressFill: css({
-    label: 'conversationDetailPage-traceProgressFill',
-    height: '100%',
-    background: theme.colors.primary.main,
-    transition: 'width 150ms ease',
-  }),
   rawData: css({
     label: 'conversationDetailPage-rawData',
     margin: 0,
@@ -613,7 +592,6 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [traceLoadTotal, setTraceLoadTotal] = useState<number>(0);
-  const [traceLoadDone, setTraceLoadDone] = useState<number>(0);
   const [traceLoadRunning, setTraceLoadRunning] = useState<boolean>(false);
   const [traceLoadFailures, setTraceLoadFailures] = useState<number>(0);
   const [traceTimelines, setTraceTimelines] = useState<TraceTimeline[]>([]);
@@ -744,7 +722,6 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
 
     if (loading || detail == null) {
       setTraceLoadTotal(0);
-      setTraceLoadDone(0);
       setTraceLoadRunning(false);
       setTraceLoadFailures(0);
       setTraceTimelines([]);
@@ -763,7 +740,6 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
     const traceIDs = Array.from(traceToGeneration.keys());
 
     setTraceLoadTotal(traceIDs.length);
-    setTraceLoadDone(0);
     setTraceLoadFailures(0);
     setTraceTimelines([]);
 
@@ -809,6 +785,9 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
               generationStartNs,
               generationCompletedNs,
             });
+            if (traceRequestVersionRef.current === requestVersion) {
+              setTraceTimelines(fillSpans([...collected]));
+            }
           }
         } catch (error) {
           console.error('[ConversationDetailPage] failed to preload trace', {
@@ -821,7 +800,6 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
           if (traceRequestVersionRef.current !== requestVersion) {
             return;
           }
-          setTraceLoadDone((current) => current + 1);
         }
       }
 
@@ -854,29 +832,12 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
       {!loading && hasConversationID && detail != null && (
         <>
           <div className={styles.detailsContainer}>
-            {traceLoadRunning && traceLoadTotal > 0 && (
-              <div className={styles.traceProgressContainer}>
-                <div
-                  className={styles.traceProgressTrack}
-                  role="progressbar"
-                  aria-label="Trace preload progress"
-                  aria-valuemin={0}
-                  aria-valuemax={traceLoadTotal}
-                  aria-valuenow={traceLoadDone}
-                >
-                  <div
-                    className={styles.traceProgressFill}
-                    style={{
-                      width: `${Math.round((traceLoadDone / traceLoadTotal) * 100)}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-            {traceLoadTotal > 0 && !traceLoadRunning && (
+            {traceLoadTotal > 0 && (
               <div className={styles.traceTimelineContainer}>
                 {traceTimelines.length === 0 ? (
-                  <div className={styles.traceTimelineEmpty}>No spans found in retrieved traces.</div>
+                  <div className={styles.traceTimelineEmpty}>
+                    {traceLoadRunning ? 'Loading trace spans...' : 'No spans found in retrieved traces.'}
+                  </div>
                 ) : (
                   <>
                     <div className={styles.traceTimeRange}>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor, waitForElementToBeRemoved } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { delay, of } from 'rxjs';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import ConversationDetailPage from './ConversationDetailPage';
@@ -81,7 +81,7 @@ describe('ConversationDetailPage', () => {
     expect(screen.getByText(/"generation_id": "gen-1"/)).toBeInTheDocument();
   });
 
-  it('preloads traces for generation trace IDs and shows progress', async () => {
+  it('builds the trace timeline incrementally as traces load', async () => {
     const detail: ConversationDetail = {
       conversation_id: 'conv-1',
       generation_count: 2,
@@ -104,7 +104,61 @@ describe('ConversationDetailPage', () => {
       annotations: [],
     };
 
-    fetchMock.mockImplementation(() => of({ data: { trace: [] } }).pipe(delay(10)));
+    fetchMock.mockImplementation(({ url }: { url: string }) => {
+      if (url.includes('/trace-1')) {
+        return of({
+          data: {
+            trace: {
+              resourceSpans: [
+                {
+                  resource: {
+                    attributes: [{ key: 'service.name', value: { stringValue: 'svc-a' } }],
+                  },
+                  scopeSpans: [
+                    {
+                      spans: [
+                        {
+                          spanId: 'span-1',
+                          name: 'first',
+                          startTimeUnixNano: '1000',
+                          endTimeUnixNano: '2000',
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        });
+      }
+
+      return of({
+        data: {
+          trace: {
+            resourceSpans: [
+              {
+                resource: {
+                  attributes: [{ key: 'service.name', value: { stringValue: 'svc-b' } }],
+                },
+                scopeSpans: [
+                  {
+                    spans: [
+                      {
+                        spanId: 'span-2',
+                        name: 'second',
+                        startTimeUnixNano: '3000',
+                        endTimeUnixNano: '4000',
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      }).pipe(delay(30));
+    });
     const dataSource = createDataSource(detail);
 
     render(
@@ -115,8 +169,11 @@ describe('ConversationDetailPage', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByRole('progressbar', { name: 'Trace preload progress' })).toBeInTheDocument();
-    await waitForElementToBeRemoved(() => screen.queryByRole('progressbar', { name: 'Trace preload progress' }));
+    expect(await screen.findByTestId('trace-row-trace-1')).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar', { name: 'Trace preload progress' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('trace-row-trace-2')).not.toBeInTheDocument();
+
+    expect(await screen.findByTestId('trace-row-trace-2')).toBeInTheDocument();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
   });
 
