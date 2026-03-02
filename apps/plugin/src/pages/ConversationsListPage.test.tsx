@@ -12,7 +12,10 @@ beforeAll(() => {
     disconnect() {}
   }
   class RequestMock {
-    constructor(_input: unknown, _init?: unknown) {}
+    method: string;
+    constructor(_input: unknown, init?: { method?: string }) {
+      this.method = init?.method ?? 'GET';
+    }
   }
   Object.defineProperty(window, 'ResizeObserver', {
     writable: true,
@@ -87,7 +90,10 @@ function renderPage(dataSource: ConversationsDataSource, initialEntry = '/conver
     { initialEntries: [initialEntry] }
   );
 
-  return render(<RouterProvider router={router} />);
+  return {
+    ...render(<RouterProvider router={router} />),
+    router,
+  };
 }
 
 describe('ConversationsListPage', () => {
@@ -173,7 +179,7 @@ describe('ConversationsListPage', () => {
       getSearchTagValues: jest.fn(async () => []),
     };
 
-    renderPage(dataSource);
+    const { router } = renderPage(dataSource);
 
     await waitFor(() => expect(searchConversations).toHaveBeenCalledTimes(2));
 
@@ -206,7 +212,7 @@ describe('ConversationsListPage', () => {
       },
     ]);
 
-    renderPage(dataSource);
+    const { router } = renderPage(dataSource);
 
     const bucketButton = await screen.findByRole('button', { name: 'Filter conversations with 2 LLM calls' });
     fireEvent.click(bucketButton);
@@ -217,7 +223,8 @@ describe('ConversationsListPage', () => {
         'true'
       );
     });
-    expect(window.location.search).toBe('?bucket=2-2');
+    const selectedBucketSearchParams = new URLSearchParams(router.state.location.search);
+    expect(selectedBucketSearchParams.get('bucket')).toBe('2-2');
     expect(await screen.findByLabelText('select conversation conv-2')).toBeInTheDocument();
     expect(screen.queryByLabelText('select conversation conv-5')).not.toBeInTheDocument();
   });
@@ -242,14 +249,21 @@ describe('ConversationsListPage', () => {
       },
     ]);
 
-    renderPage(dataSource);
+    const { router } = renderPage(dataSource);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Filter conversations with 2 LLM calls' }));
-    await waitFor(() => expect(window.location.search).toBe('?bucket=2-2'));
+    await waitFor(() => {
+      const selectedBucketSearchParams = new URLSearchParams(router.state.location.search);
+      expect(selectedBucketSearchParams.get('bucket')).toBe('2-2');
+    });
 
     fireEvent.change(screen.getByLabelText('Conversation chart view'), { target: { value: 'time' } });
 
-    await waitFor(() => expect(window.location.search).toBe('?view=time'));
+    await waitFor(() => {
+      const selectedViewSearchParams = new URLSearchParams(router.state.location.search);
+      expect(selectedViewSearchParams.get('view')).toBe('time');
+      expect(selectedViewSearchParams.get('bucket')).toBeNull();
+    });
     expect(screen.queryByLabelText('select conversation conv-2')).not.toBeInTheDocument();
   });
 
@@ -265,12 +279,12 @@ describe('ConversationsListPage', () => {
       },
     ]);
 
-    renderPage(dataSource);
+    const { router } = renderPage(dataSource);
     fireEvent.click(await screen.findByRole('button', { name: 'Filter conversations with 2 LLM calls' }));
     fireEvent.click(await screen.findByLabelText('select conversation devex-go-openai-2-1772463459223'));
 
     expect(await screen.findByText('detail:devex-go-openai-2-1772463459223')).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/conversations/devex-go-openai-2-1772463459223/detail');
+    expect(router.state.location.pathname).toBe('/conversations/devex-go-openai-2-1772463459223/detail');
   });
 
   it('queries the previous time window and shows trend percentages', async () => {
