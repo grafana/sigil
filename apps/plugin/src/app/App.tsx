@@ -14,6 +14,8 @@ const SettingsPage = React.lazy(() => import('../pages/SettingsPage'));
 const getStyles = (theme: GrafanaTheme2) => ({
   pageWrapper: css({
     padding: theme.spacing(3),
+    height: '100%',
+    boxSizing: 'border-box',
   }),
 });
 
