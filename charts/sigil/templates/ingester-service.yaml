@@ -1,0 +1,26 @@
+{{- if and .Values.ingester.enabled .Values.ingester.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sigil.fullname" . }}-ingester
+  labels:
+    {{- include "sigil.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingester
+  {{- with .Values.ingester.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.ingester.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.ingester.service.ports.http }}
+      targetPort: http
+      protocol: TCP
+    - name: otlp-grpc
+      port: {{ .Values.ingester.service.ports.otlpGrpc }}
+      targetPort: otlp-grpc
+      protocol: TCP
+  selector:
+    {{- include "sigil.ingesterSelectorLabels" . | nindent 4 }}
+{{- end }}

@@ -44,6 +44,30 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/component: api
 {{- end -}}
 
+{{/* Ingester selector labels */}}
+{{- define "sigil.ingesterSelectorLabels" -}}
+{{ include "sigil.selectorLabels" . }}
+app.kubernetes.io/component: ingester
+{{- end -}}
+
+{{/* Querier selector labels */}}
+{{- define "sigil.querierSelectorLabels" -}}
+{{ include "sigil.selectorLabels" . }}
+app.kubernetes.io/component: querier
+{{- end -}}
+
+{{/* Compactor selector labels */}}
+{{- define "sigil.compactorSelectorLabels" -}}
+{{ include "sigil.selectorLabels" . }}
+app.kubernetes.io/component: compactor
+{{- end -}}
+
+{{/* Eval worker selector labels */}}
+{{- define "sigil.evalWorkerSelectorLabels" -}}
+{{ include "sigil.selectorLabels" . }}
+app.kubernetes.io/component: eval-worker
+{{- end -}}
+
 {{/* Catalog sync selector labels */}}
 {{- define "sigil.catalogSyncSelectorLabels" -}}
 {{ include "sigil.selectorLabels" . }}
@@ -141,4 +165,134 @@ http://prometheus:9090/api/v1/otlp
 {{- else -}}
 http://minio:9000
 {{- end -}}
+{{- end -}}
+
+{{/*
+Common Sigil env var mapping.
+Inputs:
+  - root: chart root context
+  - target: SIGIL_TARGET value
+  - extraEnv: optional role-specific env list
+*/}}
+{{- define "sigil.commonEnv" -}}
+{{- $root := .root -}}
+{{- $target := .target -}}
+{{- $httpPort := $root.Values.service.ports.http -}}
+{{- if .httpPort -}}
+{{- $httpPort = .httpPort -}}
+{{- end -}}
+{{- $otlpGrpcPort := $root.Values.service.ports.otlpGrpc -}}
+{{- if .otlpGrpcPort -}}
+{{- $otlpGrpcPort = .otlpGrpcPort -}}
+{{- end -}}
+- name: SIGIL_HTTP_ADDR
+  value: ":{{ $httpPort }}"
+- name: SIGIL_OTLP_GRPC_ADDR
+  value: ":{{ $otlpGrpcPort }}"
+- name: SIGIL_TARGET
+  value: {{ $target | quote }}
+- name: SIGIL_AUTH_ENABLED
+  value: {{ ternary "true" "false" $root.Values.sigil.auth.enabled | quote }}
+- name: SIGIL_FAKE_TENANT_ID
+  value: {{ $root.Values.sigil.auth.fakeTenantID | quote }}
+- name: SIGIL_QUERY_PROXY_PROMETHEUS_BASE_URL
+  value: {{ $root.Values.sigil.queryProxy.prometheusBaseURL | quote }}
+- name: SIGIL_QUERY_PROXY_TEMPO_BASE_URL
+  value: {{ $root.Values.sigil.queryProxy.tempoBaseURL | quote }}
+- name: SIGIL_QUERY_PROXY_TIMEOUT
+  value: {{ $root.Values.sigil.queryProxy.timeout | quote }}
+- name: SIGIL_STORAGE_BACKEND
+  value: {{ $root.Values.sigil.storage.backend | quote }}
+- name: SIGIL_MYSQL_DSN
+  value: {{ include "sigil.mysql.dsn" $root | quote }}
+- name: SIGIL_OBJECT_STORE_BACKEND
+  value: {{ $root.Values.sigil.objectStore.backend | lower | quote }}
+- name: SIGIL_OBJECT_STORE_BUCKET
+  value: {{ $root.Values.sigil.objectStore.bucket | quote }}
+- name: SIGIL_OBJECT_STORE_ENDPOINT
+  value: {{ include "sigil.objectStore.s3Endpoint" $root | quote }}
+- name: SIGIL_OBJECT_STORE_S3_REGION
+  value: {{ $root.Values.sigil.objectStore.s3.region | quote }}
+- name: SIGIL_OBJECT_STORE_INSECURE
+  value: {{ ternary "true" "false" $root.Values.sigil.objectStore.s3.insecure | quote }}
+- name: SIGIL_OBJECT_STORE_S3_AWS_SDK_AUTH
+  value: {{ ternary "true" "false" $root.Values.sigil.objectStore.s3.useAWSSDKAuth | quote }}
+{{- if $root.Values.sigil.objectStore.s3.accessKey }}
+- name: SIGIL_OBJECT_STORE_ACCESS_KEY
+  value: {{ $root.Values.sigil.objectStore.s3.accessKey | quote }}
+{{- else if and $root.Values.minio.enabled (eq (lower $root.Values.sigil.objectStore.backend) "s3") }}
+- name: SIGIL_OBJECT_STORE_ACCESS_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "sigil.minio.secretName" $root }}
+      key: {{ $root.Values.minio.secretKeys.rootUser }}
+{{- end }}
+{{- if $root.Values.sigil.objectStore.s3.secretKey }}
+- name: SIGIL_OBJECT_STORE_SECRET_KEY
+  value: {{ $root.Values.sigil.objectStore.s3.secretKey | quote }}
+{{- else if and $root.Values.minio.enabled (eq (lower $root.Values.sigil.objectStore.backend) "s3") }}
+- name: SIGIL_OBJECT_STORE_SECRET_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "sigil.minio.secretName" $root }}
+      key: {{ $root.Values.minio.secretKeys.rootPassword }}
+{{- end }}
+- name: SIGIL_OBJECT_STORE_GCS_BUCKET
+  value: {{ $root.Values.sigil.objectStore.gcs.bucket | quote }}
+- name: SIGIL_OBJECT_STORE_GCS_SERVICE_ACCOUNT
+  value: {{ $root.Values.sigil.objectStore.gcs.serviceAccount | quote }}
+- name: SIGIL_OBJECT_STORE_GCS_USE_GRPC
+  value: {{ ternary "true" "false" $root.Values.sigil.objectStore.gcs.useGRPC | quote }}
+- name: SIGIL_OBJECT_STORE_AZURE_CONTAINER
+  value: {{ $root.Values.sigil.objectStore.azure.container | quote }}
+- name: SIGIL_OBJECT_STORE_AZURE_STORAGE_ACCOUNT
+  value: {{ $root.Values.sigil.objectStore.azure.storageAccountName | quote }}
+- name: SIGIL_OBJECT_STORE_AZURE_STORAGE_ACCOUNT_KEY
+  value: {{ $root.Values.sigil.objectStore.azure.storageAccountKey | quote }}
+- name: SIGIL_OBJECT_STORE_AZURE_STORAGE_CONNECTION_STRING
+  value: {{ $root.Values.sigil.objectStore.azure.storageConnectionString | quote }}
+- name: SIGIL_OBJECT_STORE_AZURE_ENDPOINT
+  value: {{ $root.Values.sigil.objectStore.azure.endpoint | quote }}
+- name: SIGIL_OBJECT_STORE_AZURE_CREATE_CONTAINER
+  value: {{ ternary "true" "false" $root.Values.sigil.objectStore.azure.createContainer | quote }}
+- name: SIGIL_COMPACTOR_COMPACT_INTERVAL
+  value: {{ $root.Values.sigil.compactor.compactInterval | quote }}
+- name: SIGIL_COMPACTOR_TRUNCATE_INTERVAL
+  value: {{ $root.Values.sigil.compactor.truncateInterval | quote }}
+- name: SIGIL_COMPACTOR_RETENTION
+  value: {{ $root.Values.sigil.compactor.retention | quote }}
+- name: SIGIL_COMPACTOR_BATCH_SIZE
+  value: {{ $root.Values.sigil.compactor.batchSize | quote }}
+- name: SIGIL_COMPACTOR_LEASE_TTL
+  value: {{ $root.Values.sigil.compactor.leaseTTL | quote }}
+- name: SIGIL_COMPACTOR_SHARD_COUNT
+  value: {{ $root.Values.sigil.compactor.shardCount | quote }}
+- name: SIGIL_COMPACTOR_SHARD_WINDOW_SECONDS
+  value: {{ $root.Values.sigil.compactor.shardWindowSeconds | quote }}
+- name: SIGIL_COMPACTOR_WORKERS
+  value: {{ $root.Values.sigil.compactor.workers | quote }}
+- name: SIGIL_COMPACTOR_CYCLE_BUDGET
+  value: {{ $root.Values.sigil.compactor.cycleBudget | quote }}
+- name: SIGIL_COMPACTOR_CLAIM_TTL
+  value: {{ $root.Values.sigil.compactor.claimTTL | quote }}
+- name: SIGIL_COMPACTOR_TARGET_BLOCK_BYTES
+  value: {{ $root.Values.sigil.compactor.targetBlockBytes | quote }}
+- name: SIGIL_MODEL_CARDS_SYNC_INTERVAL
+  value: {{ $root.Values.sigil.modelCards.syncInterval | quote }}
+- name: SIGIL_MODEL_CARDS_LEASE_TTL
+  value: {{ $root.Values.sigil.modelCards.leaseTTL | quote }}
+- name: SIGIL_MODEL_CARDS_SOURCE_TIMEOUT
+  value: {{ $root.Values.sigil.modelCards.sourceTimeout | quote }}
+- name: SIGIL_MODEL_CARDS_STALE_SOFT
+  value: {{ $root.Values.sigil.modelCards.staleSoft | quote }}
+- name: SIGIL_MODEL_CARDS_STALE_HARD
+  value: {{ $root.Values.sigil.modelCards.staleHard | quote }}
+- name: SIGIL_MODEL_CARDS_BOOTSTRAP_MODE
+  value: {{ $root.Values.sigil.modelCards.bootstrapMode | quote }}
+{{- with $root.Values.sigil.extraEnv }}
+{{ toYaml . }}
+{{- end }}
+{{- with .extraEnv }}
+{{ toYaml . }}
+{{- end }}
 {{- end -}}

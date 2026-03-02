@@ -203,7 +203,7 @@ func TestValidateAcceptsGCSBackend(t *testing.T) {
 }
 
 func TestValidateAcceptsKnownTargets(t *testing.T) {
-	targets := []string{TargetAll, TargetServer, TargetQuerier, TargetCompactor, TargetCatalogSync, TargetEvalWorker}
+	targets := []string{TargetAll, TargetServer, TargetIngester, TargetQuerier, TargetCompactor, TargetCatalogSync, TargetEvalWorker}
 
 	for _, target := range targets {
 		t.Run(target, func(t *testing.T) {

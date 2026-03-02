@@ -12,6 +12,7 @@ import (
 const (
 	TargetAll         = "all"
 	TargetServer      = "server"
+	TargetIngester    = "ingester"
 	TargetQuerier     = "querier"
 	TargetCompactor   = "compactor"
 	TargetCatalogSync = "catalog-sync"
@@ -219,7 +220,7 @@ func (c *Config) SetTarget(target string) {
 
 func (c Config) Validate() error {
 	switch c.Target {
-	case TargetAll, TargetServer, TargetQuerier, TargetCompactor, TargetCatalogSync, TargetEvalWorker:
+	case TargetAll, TargetServer, TargetIngester, TargetQuerier, TargetCompactor, TargetCatalogSync, TargetEvalWorker:
 	default:
 		return fmt.Errorf("invalid target %q", c.Target)
 	}
