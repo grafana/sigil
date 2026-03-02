@@ -145,7 +145,7 @@ Image publishing automation:
 
 Plugin artifact publishing automation:
 
-- GitHub Actions workflow: `.github/workflows/plugins-push.yml`
+- GitHub Actions workflow: `.github/workflows/plugins-push.yaml`
 - Pull requests: plugin CI only (`environment=none`).
 - Pushes to `main`: publish plugin artifact to `dev` only (`environment=dev`).
 

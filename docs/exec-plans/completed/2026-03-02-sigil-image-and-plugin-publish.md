@@ -55,7 +55,7 @@ This delivery is intentionally publish-only. It excludes Argo deployment hooks.
 
 ### Track C: Plugin artifact publish workflow
 
-- [x] Add `.github/workflows/plugins-push.yml`.
+- [x] Use `.github/workflows/plugins-push.yaml` for plugin CI/CD artifact publishing.
 - [x] Reuse `grafana/plugin-ci-workflows/.github/workflows/cd.yml@ci-cd-workflows/v5.1.0`.
 - [x] Run CI-only behavior on pull requests (`environment=none`).
 - [x] Publish to `dev` on `main` only (`environment=dev`).
@@ -83,5 +83,5 @@ This delivery is intentionally publish-only. It excludes Argo deployment hooks.
 
 - `sigil/Dockerfile` exists and is build-ready for CI publish.
 - `sigil-image-publish.yml` publishes Sigil image on `main`.
-- `plugins-push.yml` performs PR CI and main-to-dev plugin artifact publish.
+- `plugins-push.yaml` performs PR CI and main-to-dev plugin artifact publish.
 - Docs reflect workflow names and image tag contract.
