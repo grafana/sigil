@@ -1,21 +1,21 @@
 services:
   grafana:
     user: root
-    container_name: 'sigil-grafana'
+    container_name: "sigil-grafana"
     build:
       context: ..
       dockerfile: .config/Dockerfile
       args:
-        grafana_image: ${GRAFANA_IMAGE:-grafana-oss}
-        grafana_version: ${GRAFANA_VERSION:-12.3.2}
+        grafana_image: ${GRAFANA_IMAGE:-grafana}
+        grafana_version: ${GRAFANA_VERSION:-nightly-ubuntu}
         development: ${DEVELOPMENT:-false}
         anonymous_auth_enabled: ${ANONYMOUS_AUTH_ENABLED:-true}
     ports:
-      - '3000:3000'
-      - '2345:2345'
+      - "3000:3000"
+      - "2345:2345"
     security_opt:
-      - 'apparmor:unconfined'
-      - 'seccomp:unconfined'
+      - "apparmor:unconfined"
+      - "seccomp:unconfined"
     cap_add:
       - SYS_PTRACE
     volumes:
@@ -27,3 +27,5 @@ services:
       GF_LOG_LEVEL: debug
       GF_DATAPROXY_LOGGING: 1
       GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: grafana-sigil-app
+      GF_DEFAULT_APP_MODE: development
+      GF_PLUGINS_FORWARD_HOST_ENV_VARS: grafana-assistant-app,grafana-sigil-app
