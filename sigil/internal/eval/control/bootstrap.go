@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"fmt"
+	"time"
 
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	"github.com/grafana/sigil/sigil/internal/eval/predefined"
@@ -24,6 +25,7 @@ func BootstrapPredefinedTemplates(ctx context.Context, store evalpkg.TemplateSto
 			continue
 		}
 
+		now := time.Now().UTC()
 		tmpl := evalpkg.TemplateDefinition{
 			TenantID:      GlobalTenantID,
 			TemplateID:    def.EvaluatorID,
@@ -31,6 +33,8 @@ func BootstrapPredefinedTemplates(ctx context.Context, store evalpkg.TemplateSto
 			LatestVersion: def.Version,
 			Kind:          def.Kind,
 			Description:   def.Description,
+			CreatedAt:     now,
+			UpdatedAt:     now,
 		}
 		version := evalpkg.TemplateVersion{
 			TenantID:   GlobalTenantID,
@@ -39,6 +43,7 @@ func BootstrapPredefinedTemplates(ctx context.Context, store evalpkg.TemplateSto
 			Config:     def.Config,
 			OutputKeys: def.OutputKeys,
 			Changelog:  "Predefined template",
+			CreatedAt:  now,
 		}
 		if err := store.CreateTemplate(ctx, tmpl, version); err != nil {
 			return fmt.Errorf("bootstrap template %s: %w", def.EvaluatorID, err)

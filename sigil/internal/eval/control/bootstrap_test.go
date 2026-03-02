@@ -58,6 +58,12 @@ func TestBootstrapPredefinedTemplates(t *testing.T) {
 	if got.Description == "" {
 		t.Errorf("expected non-empty description for predefined template")
 	}
+	if got.CreatedAt.IsZero() {
+		t.Errorf("expected non-zero CreatedAt for bootstrapped template")
+	}
+	if got.UpdatedAt.IsZero() {
+		t.Errorf("expected non-zero UpdatedAt for bootstrapped template")
+	}
 
 	// Verify version was created alongside the template.
 	ver, err := store.GetTemplateVersion(context.Background(), GlobalTenantID, "sigil.helpfulness", predefined.DefaultTemplateVersion)
@@ -72,6 +78,9 @@ func TestBootstrapPredefinedTemplates(t *testing.T) {
 	}
 	if len(ver.Config) == 0 {
 		t.Errorf("expected non-empty config")
+	}
+	if ver.CreatedAt.IsZero() {
+		t.Errorf("expected non-zero CreatedAt for bootstrapped template version")
 	}
 	if len(ver.OutputKeys) != 1 {
 		t.Errorf("expected 1 output key, got %d", len(ver.OutputKeys))
