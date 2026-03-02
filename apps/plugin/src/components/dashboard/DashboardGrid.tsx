@@ -452,7 +452,11 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
       summarizeVector(topLatency.data, `Latency ${latencyPercentile} (seconds)`),
       summarizeMatrix(latencyTimeseries.data, 'Latency over time'),
     ];
-    if (costMode === 'tokens') {
+    if (costMode === 'tokens' && tokenDrilldown === 'all') {
+      parts.push(summarizeVector(tokensTotalStat.data, 'Total tokens'));
+      parts.push(summarizeVector(tokensTotalByBreakdown.data, 'Total tokens by breakdown'));
+      parts.push(summarizeMatrix(tokensTotalTimeseries.data, 'Total tokens over time'));
+    } else if (costMode === 'tokens') {
       parts.push(summarizeVector(tokensByTypeStat.data, 'Tokens by type'));
       parts.push(summarizeMatrix(tokensByTypeTimeseries.data, 'Tokens over time'));
     } else {
@@ -472,6 +476,10 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
     latencyPercentile,
     latencyTimeseries.data,
     costMode,
+    tokenDrilldown,
+    tokensTotalStat.data,
+    tokensTotalByBreakdown.data,
+    tokensTotalTimeseries.data,
     tokensByTypeStat.data,
     tokensByTypeTimeseries.data,
     totalCost.totalCost,
