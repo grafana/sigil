@@ -9,7 +9,7 @@ ASSISTANT_DIR="${ASSISTANT_DIR:-${DEFAULT_ASSISTANT_DIR}}"
 OFFSET="${ASSISTANT_PORT_OFFSET:-20000}"
 PROJECT_NAME="${ASSISTANT_COMPOSE_PROJECT:-assistant-offset}"
 PROFILE="${ASSISTANT_PROFILE:-core}"
-IMPORT_SIGIL_ENV="${ASSISTANT_IMPORT_SIGIL_ENV:-1}"
+IMPORT_SIGIL_ENV="${ASSISTANT_IMPORT_SIGIL_ENV:-0}"
 SIGIL_ENV_FILE="${SIGIL_ENV_FILE:-${SIGIL_DIR}/.env}"
 ACTION="up"
 EXTRA_ARGS=()
@@ -50,22 +50,42 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --assistant-dir)
+      if [[ -z "${2:-}" ]]; then
+        echo "Error: --assistant-dir requires a value" >&2
+        exit 1
+      fi
       ASSISTANT_DIR="$2"
       shift 2
       ;;
     --offset)
+      if [[ -z "${2:-}" ]]; then
+        echo "Error: --offset requires a value" >&2
+        exit 1
+      fi
       OFFSET="$2"
       shift 2
       ;;
     --project-name)
+      if [[ -z "${2:-}" ]]; then
+        echo "Error: --project-name requires a value" >&2
+        exit 1
+      fi
       PROJECT_NAME="$2"
       shift 2
       ;;
     --profile)
+      if [[ -z "${2:-}" ]]; then
+        echo "Error: --profile requires a value" >&2
+        exit 1
+      fi
       PROFILE="$2"
       shift 2
       ;;
     --sigil-env-file)
+      if [[ -z "${2:-}" ]]; then
+        echo "Error: --sigil-env-file requires a value" >&2
+        exit 1
+      fi
       SIGIL_ENV_FILE="$2"
       shift 2
       ;;
@@ -160,7 +180,11 @@ TMP_RESOLVED="${ASSISTANT_DIR}/.assistant-resolved.${PROJECT_NAME}.$$.yaml"
 TMP_ENV_OVERRIDE="${ASSISTANT_DIR}/.assistant-sigil-env.${PROJECT_NAME}.$$.yaml"
 trap 'rm -f "${TMP_COMPOSE}" "${TMP_RESOLVED}" "${TMP_ENV_OVERRIDE}"' EXIT
 
-docker compose --project-directory "${ASSISTANT_DIR}" -f "${COMPOSE_FILE}" --profile "${PROFILE}" config > "${TMP_RESOLVED}"
+CONFIG_ARGS=(--project-directory "${ASSISTANT_DIR}" -f "${COMPOSE_FILE}")
+if [[ "${ACTION}" == "up" ]]; then
+  CONFIG_ARGS+=(--profile "${PROFILE}")
+fi
+docker compose "${CONFIG_ARGS[@]}" config > "${TMP_RESOLVED}"
 
 python3 - "${TMP_RESOLVED}" "${TMP_COMPOSE}" "${OFFSET}" "${PROJECT_NAME}" "${SIGIL_DIR}/docker-compose.yaml" "${SIGIL_DIR}/.config/docker-compose-base.yaml" <<'PY'
 import re
