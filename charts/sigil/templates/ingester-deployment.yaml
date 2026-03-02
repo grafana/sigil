@@ -1,24 +1,25 @@
-{{- if .Values.api.enabled }}
+{{- if .Values.ingester.enabled }}
 {{ include "sigil.validateStorageBackend" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "sigil.fullname" . }}
+  name: {{ include "sigil.fullname" . }}-ingester
   labels:
     {{- include "sigil.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingester
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: {{ .Values.ingester.replicaCount }}
   selector:
     matchLabels:
-      {{- include "sigil.apiSelectorLabels" . | nindent 6 }}
+      {{- include "sigil.ingesterSelectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "sigil.apiSelectorLabels" . | nindent 8 }}
-        {{- with .Values.podLabels }}
+        {{- include "sigil.ingesterSelectorLabels" . | nindent 8 }}
+        {{- with .Values.ingester.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- with .Values.podAnnotations }}
+      {{- with .Values.ingester.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -33,7 +34,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-        - name: sigil
+        - name: ingester
           image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- with .Values.command }}
@@ -46,16 +47,21 @@ spec:
           {{- end }}
           ports:
             - name: http
-              containerPort: {{ .Values.service.ports.http }}
+              containerPort: {{ .Values.ingester.service.ports.http }}
               protocol: TCP
             - name: otlp-grpc
-              containerPort: {{ .Values.service.ports.otlpGrpc }}
+              containerPort: {{ .Values.ingester.service.ports.otlpGrpc }}
               protocol: TCP
           env:
-            {{- include "sigil.commonEnv" (dict "root" . "target" .Values.sigil.target) | nindent 12 }}
-          {{- with .Values.sigil.extraEnvFrom }}
+            {{- include "sigil.commonEnv" (dict "root" . "target" .Values.ingester.target "extraEnv" .Values.ingester.extraEnv "httpPort" .Values.ingester.service.ports.http "otlpGrpcPort" .Values.ingester.service.ports.otlpGrpc) | nindent 12 }}
+          {{- if or .Values.sigil.extraEnvFrom .Values.ingester.extraEnvFrom }}
           envFrom:
+            {{- with .Values.sigil.extraEnvFrom }}
             {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- with .Values.ingester.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- end }}
           {{- with .Values.securityContext }}
           securityContext:
@@ -73,27 +79,19 @@ spec:
             failureThreshold: {{ .Values.startupProbe.failureThreshold }}
             periodSeconds: {{ .Values.startupProbe.periodSeconds }}
           {{- end }}
-          {{- with .Values.resources }}
+          {{- with .Values.ingester.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with .Values.extraVolumeMounts }}
-          volumeMounts:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-      {{- with .Values.extraVolumes }}
-      volumes:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.nodeSelector }}
+      {{- with .Values.ingester.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.affinity }}
+      {{- with .Values.ingester.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.tolerations }}
+      {{- with .Values.ingester.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}

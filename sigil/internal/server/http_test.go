@@ -93,6 +93,68 @@ func TestExportGenerationsHTTPRejectsInvalid(t *testing.T) {
 	}
 }
 
+func TestRegisterIngestRoutesOwnsGenerationExportPath(t *testing.T) {
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterCoreRoutes(mux)
+	RegisterIngestRoutes(mux, generationingest.NewService(generationingest.NewMemoryStore()), protected)
+
+	request := &sigilv1.ExportGenerationsRequest{Generations: []*sigilv1.Generation{
+		{
+			Id:    "gen-ingester-only",
+			Mode:  sigilv1.GenerationMode_GENERATION_MODE_SYNC,
+			Model: &sigilv1.ModelRef{Provider: "openai", Name: "gpt-5"},
+		},
+	}}
+	payload, err := protojson.MarshalOptions{UseProtoNames: true}.Marshal(request)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	exportReq := httptest.NewRequest(http.MethodPost, "/api/v1/generations:export", bytes.NewReader(payload))
+	exportResp := httptest.NewRecorder()
+	mux.ServeHTTP(exportResp, exportReq)
+	if exportResp.Code != http.StatusAccepted {
+		t.Fatalf("expected export status %d, got %d", http.StatusAccepted, exportResp.Code)
+	}
+
+	queryReq := httptest.NewRequest(http.MethodGet, "/api/v1/conversations", nil)
+	queryResp := httptest.NewRecorder()
+	mux.ServeHTTP(queryResp, queryReq)
+	if queryResp.Code != http.StatusNotFound {
+		t.Fatalf("expected query route to be unregistered and return 404, got %d", queryResp.Code)
+	}
+}
+
+func TestRegisterQueryRoutesOwnsQueryPaths(t *testing.T) {
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterCoreRoutes(mux)
+	RegisterQueryRoutes(
+		mux,
+		query.NewService(),
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		protected,
+	)
+
+	queryReq := httptest.NewRequest(http.MethodGet, "/api/v1/conversations", nil)
+	queryResp := httptest.NewRecorder()
+	mux.ServeHTTP(queryResp, queryReq)
+	if queryResp.Code != http.StatusOK {
+		t.Fatalf("expected query status %d, got %d body=%s", http.StatusOK, queryResp.Code, queryResp.Body.String())
+	}
+
+	exportReq := httptest.NewRequest(http.MethodPost, "/api/v1/generations:export", bytes.NewBufferString(`{}`))
+	exportResp := httptest.NewRecorder()
+	mux.ServeHTTP(exportResp, exportReq)
+	if exportResp.Code != http.StatusNotFound {
+		t.Fatalf("expected ingest route to be unregistered and return 404, got %d", exportResp.Code)
+	}
+}
+
 func TestRecordsEndpointsAreRemoved(t *testing.T) {
 	mux := http.NewServeMux()
 	RegisterRoutes(mux, query.NewService(), generationingest.NewService(generationingest.NewMemoryStore()), feedback.NewService(feedback.NewMemoryStore()), true, true, newTestModelCardService(t), nil)

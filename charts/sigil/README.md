@@ -8,14 +8,14 @@ This chart deploys the Sigil API and can optionally deploy local backing service
 - Prometheus (`prometheus.enabled=true` by default)
 - MinIO (`minio.enabled=true` by default)
 
-The chart deploys the `sigil` service only. Grafana and the Sigil plugin are intentionally out of scope for this chart.
+The chart supports monolith (`SIGIL_TARGET=all`) and role-split deployments (ingester/querier/compactor/eval-worker/catalog-sync). Grafana and the Sigil plugin are intentionally out of scope for this chart.
 
 ## What Gets Installed
 
-Always installed:
+Installed when `api.enabled=true` (default):
 
-- Sigil `Deployment`
-- Sigil `Service` with ports:
+- Sigil API `Deployment`
+- Sigil API `Service` with ports:
   - `http` (default `8080`)
   - `otlp-grpc` (default `4317`, generation ingest gRPC contract)
 - Optional `Ingress`
@@ -23,6 +23,12 @@ Always installed:
 
 Optional components:
 
+- Role deployments:
+  - `ingester` deployment + service (`ingester.enabled=true`)
+  - `querier` deployment + service (`querier.enabled=true`)
+  - `compactor` deployment (`compactor.enabled=true`)
+  - `eval-worker` deployment (`evalWorker.enabled=true`)
+  - `catalog-sync` deployment (`catalogSync.enabled=true`)
 - Alloy `Deployment` + `Service` + `ConfigMap`
 - MySQL `Deployment` + `Service` + optional `PersistentVolumeClaim`
 - Tempo `Deployment` + `Service` + `ConfigMap` + optional `PersistentVolumeClaim`
@@ -103,26 +109,32 @@ helm upgrade --install sigil ./charts/sigil \
   --set sigil.objectStore.s3.endpoint='https://s3.example'
 ```
 
-### 2b) Split mode with dedicated singleton catalog sync
+### 2b) Split role deployments
 
-This keeps API replicas focused on serving traffic and runs model-card refresh in a separate singleton deployment.
+This runs each Sigil runtime role as its own deployment in one release.
 
 ```bash
 helm upgrade --install sigil ./charts/sigil \
   --set image.repository=<your-image-repository> \
   --set image.tag=<your-image-tag> \
-  --set sigil.target=server \
-  --set replicaCount=3 \
+  --set api.enabled=false \
+  --set ingester.enabled=true \
+  --set ingester.replicaCount=2 \
+  --set querier.enabled=true \
+  --set querier.replicaCount=3 \
+  --set compactor.enabled=true \
+  --set compactor.replicaCount=2 \
+  --set evalWorker.enabled=true \
+  --set evalWorker.replicaCount=2 \
   --set catalogSync.enabled=true \
-  --set catalogSync.replicaCount=1 \
-  --set catalogSync.target=catalog-sync
+  --set catalogSync.replicaCount=1
 ```
 
 Note:
 
-- Model-card cache is in-memory per process.
-- A dedicated `catalog-sync` pod does not propagate model-card data to separate API pods.
-- If you want each API pod to keep a fresh in-memory catalog, keep `sigil.target=server` and let each pod refresh independently.
+- The `querier` target runs query APIs and model-card sync loop.
+- The `ingester` target runs generation ingest HTTP/gRPC plus eval enqueue dispatch.
+- Model-card catalog state is shared through MySQL, so `catalog-sync` refreshes are visible to all queriers.
 
 ### 3) Disable MinIO (external object storage)
 
@@ -166,7 +178,8 @@ Use `helm show values ./charts/sigil` for the full configuration surface.
 Important values:
 
 - `image.repository`, `image.tag`: Sigil API image
-- `sigil.target`: runtime target (`all|server|querier|compactor|catalog-sync`)
+- `api.enabled`, `replicaCount`, `sigil.target`: primary deployment toggle/count/target (`all|server|ingester|querier|compactor|catalog-sync|eval-worker`)
+- `ingester.*`, `querier.*`, `compactor.*`, `evalWorker.*`, `catalogSync.*`: optional dedicated role deployments
 - `sigil.auth.enabled`, `sigil.auth.fakeTenantID`: tenant/auth behavior
 - `sigil.queryProxy.prometheusBaseURL`, `sigil.queryProxy.tempoBaseURL`, `sigil.queryProxy.timeout`: downstream query-proxy settings for Prometheus/Mimir and Tempo pass-through routes
 - `sigil.storage.backend`: storage backend (`mysql` only)
@@ -180,7 +193,6 @@ Important values:
 - `sigil.objectStore.azure.*`: Azure container/account/auth/endpoint/create-container toggle
 - `sigil.compactor.*`: compactor schedule/lease/shard/worker/claim/block-size tuning
 - `sigil.modelCards.*`: model-card sync/freshness/bootstrap settings
-- `catalogSync.enabled`, `catalogSync.replicaCount`, `catalogSync.target`: optional dedicated singleton model-card sync deployment
 - `mysql.*`, `alloy.*`, `tempo.*`, `prometheus.*`, `minio.*`: optional bundled dependency settings
 - `tests.enabled`: enable/disable Helm hook test pod
 
@@ -199,6 +211,7 @@ Repository-level `mise` tasks are provided:
 - external-dependency mode (GCS)
 - external-dependency mode (Azure)
 - explicit MinIO-enabled mode
+- split role deployments (ingester + querier + compactor + eval-worker + catalog-sync)
 
 ## Operational Notes
 
