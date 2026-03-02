@@ -2,6 +2,7 @@ package sigil
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/grafana/sigil/sigil/internal/config"
+	"github.com/grafana/sigil/sigil/internal/modelcards"
 	mysqlstorage "github.com/grafana/sigil/sigil/internal/storage/mysql"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -52,17 +54,21 @@ func TestRuntimeAllTargetFailsWithoutCompactorDependencies(t *testing.T) {
 }
 
 func TestRuntimePlaceholderTargetsRemainHealthyUntilCanceled(t *testing.T) {
-	targets := []string{config.TargetQuerier, config.TargetCatalogSync}
+	dsn, cleanup := newTestMySQLDSN(t)
+	defer cleanup()
+
+	targets := []string{config.TargetIngester, config.TargetQuerier, config.TargetCatalogSync}
 
 	for _, target := range targets {
 		t.Run(target, func(t *testing.T) {
 			cfg := testRuntimeConfig(t, target)
+			cfg.MySQLDSN = dsn
 			cancel, done := runRuntime(t, cfg)
 
 			time.Sleep(200 * time.Millisecond)
 
 			cancel()
-			if err := <-done; err != nil {
+			if err := <-done; err != nil && !errors.Is(err, context.Canceled) && !strings.Contains(err.Error(), "context canceled") {
 				t.Fatalf("runtime returned error: %v", err)
 			}
 		})
@@ -70,7 +76,11 @@ func TestRuntimePlaceholderTargetsRemainHealthyUntilCanceled(t *testing.T) {
 }
 
 func TestRuntimeModelCardServiceIsSingleton(t *testing.T) {
+	dsn, cleanup := newTestMySQLDSN(t)
+	defer cleanup()
+
 	cfg := testRuntimeConfig(t, config.TargetAll)
+	cfg.MySQLDSN = dsn
 	runtime, err := NewRuntime(cfg, log.NewNopLogger())
 	if err != nil {
 		t.Fatalf("create runtime: %v", err)
@@ -86,6 +96,52 @@ func TestRuntimeModelCardServiceIsSingleton(t *testing.T) {
 	}
 	if first != second {
 		t.Fatalf("expected shared model-card service instance")
+	}
+}
+
+func TestInitQuerierModuleUsesTimeoutBoundContextForModelCardBootstrap(t *testing.T) {
+	cfg := testRuntimeConfigWithoutValidation(t, config.TargetQuerier)
+	runtime, err := NewRuntime(cfg, log.NewNopLogger())
+	if err != nil {
+		t.Fatalf("create runtime: %v", err)
+	}
+
+	sentinel := errors.New("model-card bootstrap sentinel")
+	var hasDeadline bool
+	runtime.modelCardBuilder = func(ctx context.Context, _ config.Config, _ bool) (*modelcards.Service, error) {
+		_, hasDeadline = ctx.Deadline()
+		return nil, sentinel
+	}
+
+	_, err = runtime.initQuerierModule()
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("expected sentinel error from model-card bootstrap, got: %v", err)
+	}
+	if !hasDeadline {
+		t.Fatalf("expected timeout-bound context for model-card bootstrap")
+	}
+}
+
+func TestInitCatalogSyncModuleUsesTimeoutBoundContextForModelCardBootstrap(t *testing.T) {
+	cfg := testRuntimeConfigWithoutValidation(t, config.TargetCatalogSync)
+	runtime, err := NewRuntime(cfg, log.NewNopLogger())
+	if err != nil {
+		t.Fatalf("create runtime: %v", err)
+	}
+
+	sentinel := errors.New("model-card bootstrap sentinel")
+	var hasDeadline bool
+	runtime.modelCardBuilder = func(ctx context.Context, _ config.Config, _ bool) (*modelcards.Service, error) {
+		_, hasDeadline = ctx.Deadline()
+		return nil, sentinel
+	}
+
+	_, err = runtime.initCatalogSyncModule()
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("expected sentinel error from model-card bootstrap, got: %v", err)
+	}
+	if !hasDeadline {
+		t.Fatalf("expected timeout-bound context for model-card bootstrap")
 	}
 }
 
@@ -128,41 +184,6 @@ func TestRuntimeCompactorTargetFailsWhenObjectStoreBootstrapFails(t *testing.T) 
 	}
 	if !strings.Contains(err.Error(), "create object store for compactor") {
 		t.Fatalf("unexpected runtime error: %v", err)
-	}
-}
-
-func TestNewBlockStorePlaceholderBackendMapping(t *testing.T) {
-	s3 := newBlockStorePlaceholder(config.ObjectStoreConfig{
-		Backend: "s3",
-		Bucket:  "sigil-s3",
-		S3: config.ObjectStoreS3Config{
-			Endpoint: "http://minio:9000",
-		},
-	})
-	if s3.Endpoint() != "http://minio:9000" || s3.Bucket() != "sigil-s3" {
-		t.Fatalf("unexpected s3 placeholder endpoint=%q bucket=%q", s3.Endpoint(), s3.Bucket())
-	}
-
-	gcs := newBlockStorePlaceholder(config.ObjectStoreConfig{
-		Backend: "gcs",
-		Bucket:  "fallback-bucket",
-		GCS: config.ObjectStoreGCSConfig{
-			Bucket: "sigil-gcs",
-		},
-	})
-	if gcs.Endpoint() != "gcs://sigil-gcs" || gcs.Bucket() != "sigil-gcs" {
-		t.Fatalf("unexpected gcs placeholder endpoint=%q bucket=%q", gcs.Endpoint(), gcs.Bucket())
-	}
-
-	azure := newBlockStorePlaceholder(config.ObjectStoreConfig{
-		Backend: "azure",
-		Bucket:  "fallback-container",
-		Azure: config.ObjectStoreAzureConfig{
-			ContainerName: "sigil-azure",
-		},
-	})
-	if azure.Endpoint() != "azure://sigil-azure" || azure.Bucket() != "sigil-azure" {
-		t.Fatalf("unexpected azure placeholder endpoint=%q bucket=%q", azure.Endpoint(), azure.Bucket())
 	}
 }
 

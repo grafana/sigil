@@ -13,6 +13,7 @@ External ecosystem notes and comparative references used for architecture and im
 ## Documents
 
 - [`online-evaluation-user-guide.md`](online-evaluation-user-guide.md)
+- [`semantic-conventions.md`](semantic-conventions.md)
 - [`competitive-benchmark.md`](competitive-benchmark.md)
 - [`storage-benchmarks.md`](storage-benchmarks.md)
 - [`ai-observability-evaluation-market.md`](ai-observability-evaluation-market.md)

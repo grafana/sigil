@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-22
+last_reviewed: 2026-03-02
 source_of_truth: true
 audience: both
 ---
@@ -75,18 +75,9 @@ Framework contract defaults:
 
 ### SDK metrics
 
-SDKs emit four OTel histogram instruments alongside traces:
+SDKs emit four OTel histogram instruments alongside traces: `gen_ai.client.operation.duration`, `gen_ai.client.token.usage`, `gen_ai.client.time_to_first_token`, and `gen_ai.client.tool_calls_per_operation`. These metrics get collector-enriched infrastructure labels (namespace, cluster, service) automatically.
 
-- `gen_ai.client.operation.duration` (seconds): latency histogram for generation, embedding, and tool operations.
-  - Attributes: `gen_ai.operation.name` (`generateText` | `streamText` | `embeddings` | `execute_tool`), `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.agent.name`, `error.type`, `error.category`.
-- `gen_ai.client.token.usage` (tokens): token count histogram per operation, split by token type.
-  - Attributes: `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.agent.name`, `gen_ai.token.type` (`input` | `output` | `cache_read` | `cache_write` | `cache_creation` | `reasoning`).
-- `gen_ai.client.time_to_first_token` (seconds): TTFT histogram for streaming operations.
-  - Attributes: `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.agent.name`.
-- `gen_ai.client.tool_calls_per_operation` (count): tool call count distribution per generation.
-  - Attributes: `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.agent.name`.
-
-These metrics get collector-enriched infrastructure labels (namespace, cluster, service) automatically.
+Full instrument definitions, units, and per-recording attributes: `docs/references/semantic-conventions.md`.
 
 ### Embedding call observability
 
@@ -147,7 +138,7 @@ Design doc: `docs/design-docs/2026-02-15-conversation-query-path.md`
    - conversation search: parse filter expression, translate to TraceQL, query Tempo, extract conversation IDs from matching spans, enrich from MySQL/object storage, apply conversation-level filters, return paginated summaries.
    - conversation detail: direct MySQL/object storage fan-out read by conversation ID, return all hydrated generations.
    - generation detail: direct MySQL/object storage read by generation ID.
-   - model cards: read model-card catalog from memory/DB/snapshot fallback and optionally resolve `(provider, model)` pairs for deterministic pricing joins.
+   - model cards: read model-card catalog from DB/snapshot fallback and optionally resolve `(provider, model)` pairs for deterministic pricing joins.
    - proxy routes: pass-through to Prometheus/Tempo for raw query access.
 4. Sigil API returns JSON responses (search summaries, full payloads, or pass-through).
 
@@ -535,12 +526,12 @@ See `docs/references/grafana-query-response-shapes.md`.
 - `apps/plugin`: UI routes and backend proxy handlers for Sigil query contracts.
 - `sigil/internal/ingest/generation`: generation ingest validation and persistence coordination.
 - `sigil/internal/query`: Tempo-first query orchestration plus storage hydration and fan-out reads.
-- `sigil/internal/modelcards`: model-card catalog bootstrap, in-memory refresh loop/cache coordination, supplemental overlay merge (`snapshot + supplemental`), and API read semantics.
+- `sigil/internal/modelcards`: model-card catalog bootstrap, DB-backed refresh coordination, supplemental overlay merge (`snapshot + supplemental`), and API read semantics.
 - `sigil/internal/eval`: online evaluation control plane, score ingest, rule engine, evaluator implementations, and async worker.
 - `sigil/internal/storage/mysql`: hot metadata/index/payload access.
 - `sigil/internal/storage/object`: compacted payload access.
   - implementation should wrap Thanos `objstore` primitives.
-- `sdks/*`: OTel traces, OTel metrics (`gen_ai.client.operation.duration`, `gen_ai.client.token.usage`, `gen_ai.client.time_to_first_token`, `gen_ai.client.tool_calls_per_operation`), and structured generation export.
+- `sdks/*`: OTel traces, OTel metrics (see `docs/references/semantic-conventions.md`), and structured generation export.
 - Alloy / OTel Collector: OTLP receiver, infrastructure enrichment, trace forwarding to Tempo, metric forwarding to Prometheus.
 
 ### Runtime targets
@@ -548,11 +539,14 @@ See `docs/references/grafana-query-response-shapes.md`.
 Runtime module targets include:
 
 - `all`
-- `server`
+- `server` (transport-only HTTP/gRPC listeners)
+- `ingester` (generation ingest HTTP/gRPC + eval enqueue dispatcher)
 - `querier`
 - `compactor`
-- `catalog-sync` (singleton model-card refresh loop; can run independently or as part of `all`)
+- `catalog-sync` (singleton model-card refresh loop)
 - `eval-worker` (async evaluation worker; claims work items, runs evaluators, writes scores)
+
+`all` runs `ingester`, `querier`, `compactor`, and `eval-worker` in-process through shared transport listeners.
 
 ## Local Runtime (Compose Core)
 

@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-18
+last_reviewed: 2026-03-02
 source_of_truth: true
 audience: both
 ---
@@ -42,8 +42,11 @@ Key properties:
 
 ```mermaid
 flowchart LR
-    subgraph CP["Control Plane (server target)"]
+    subgraph QP["Query/Control Plane (querier target)"]
       API["Eval APIs\n/eval/* + /scores:export"]
+    end
+
+    subgraph IP["Ingest Plane (ingester target)"]
       DISP["Enqueue dispatcher"]
     end
 
@@ -69,7 +72,7 @@ flowchart LR
 
 Use one of these modes:
 - Single process: `SIGIL_TARGET=all`.
-- Split deployment: run `SIGIL_TARGET=server` and `SIGIL_TARGET=eval-worker` separately.
+- Split deployment: run `SIGIL_TARGET=ingester`, `SIGIL_TARGET=querier`, and `SIGIL_TARGET=eval-worker` separately.
 
 ### 2. Configure Worker Runtime
 
@@ -103,9 +106,9 @@ Providers are discovered only when both are true:
 Full provider matrix and optional vars: `docs/references/eval-control-plane.md`.
 
 Split deployment note:
-- Judge provider discovery APIs (`/api/v1/eval/judge/providers`, `/api/v1/eval/judge/models`) run in the server process.
+- Judge provider discovery APIs (`/api/v1/eval/judge/providers`, `/api/v1/eval/judge/models`) run in the querier process.
 - Evaluations execute in eval-worker processes.
-- Keep provider env/config aligned across server and worker if you want UI discovery to match worker execution capability.
+- Keep provider env/config aligned across querier and worker if you want UI discovery to match worker execution capability.
 
 ### 4. Optional YAML Bootstrap
 

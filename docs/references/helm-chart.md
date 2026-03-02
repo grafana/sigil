@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-14
+last_reviewed: 2026-03-02
 source_of_truth: true
 audience: contributors
 ---
@@ -14,7 +14,8 @@ This reference documents the Kubernetes Helm chart in `charts/sigil`.
 
 The chart deploys:
 
-- Sigil API service
+- Sigil API service (`api.enabled=true`)
+- optional split role deployments (`ingester`, `querier`, `compactor`, `eval-worker`, `catalog-sync`)
 - optional bundled Alloy
 - optional bundled MySQL
 - optional bundled Tempo
@@ -94,30 +95,29 @@ Disable bundled dependencies and set external endpoints/credentials:
 - `sigil.objectStore.bucket`
 - provider-specific values under `sigil.objectStore.s3.*`, `sigil.objectStore.gcs.*`, or `sigil.objectStore.azure.*`
 
-### Split mode with singleton catalog sync
+### Split role deployments
 
-Optionally run API and catalog refresh as separate deployments while keeping the chart default backward-compatible:
+Optionally run runtime roles as separate deployments:
 
-- API deployment:
-  - `sigil.target=server`
-  - `replicaCount > 1`
-- Singleton model-card sync deployment:
-  - `catalogSync.enabled=true`
-  - `catalogSync.replicaCount=1`
-  - `catalogSync.target=catalog-sync`
+- `api.enabled=false`
+- `ingester.enabled=true`
+- `querier.enabled=true`
+- `compactor.enabled=true`
+- `evalWorker.enabled=true`
+- `catalogSync.enabled=true`
 
 Note:
 
-- Model-card cache is in-memory per process.
-- `catalog-sync` does not replicate catalog state into API pods.
-- If you want API pods to self-refresh in-memory cache, keep `sigil.target=server` and rely on each pod refresh loop.
+- `querier` owns query/proxy/model-cards/eval control routes.
+- `ingester` owns generation ingest HTTP+gRPC and eval enqueue dispatch.
+- Model-card data is shared through MySQL, so `catalog-sync` refreshes are visible to querier pods.
 
 ## Testing and Packaging
 
 `mise` tasks for chart workflows:
 
 - `mise run lint:helm`: `helm lint` for `charts/sigil`
-- `mise run test:helm`: lint + template-render checks for default + external (S3/GCS/Azure) + minio-enabled scenarios
+- `mise run test:helm`: lint + template-render checks for default + external (S3/GCS/Azure) + minio-enabled + split-role scenarios
 - `mise run package:helm`: package chart archive to `dist/charts`
 
 Helm hook smoke test is included in `templates/tests/test-healthz.yaml` and can be executed with:
