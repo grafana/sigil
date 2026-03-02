@@ -25,8 +25,8 @@ jest.mock('@grafana/ui', () => {
 });
 
 type MockConversationsDataSource = {
-  [Key in keyof ConversationsDataSource]: jest.MockedFunction<ConversationsDataSource[Key]>;
-};
+  [Key in keyof Required<ConversationsDataSource>]: jest.MockedFunction<Required<ConversationsDataSource>[Key]>;
+}
 
 function buildSearchResponse(
   conversations: ConversationSearchResponse['conversations'],
@@ -70,6 +70,7 @@ function createDataSource(overrides?: Partial<MockConversationsDataSource>): Moc
   const defaultTags: SearchTag[] = [{ key: 'model', scope: 'well-known', description: 'Model name' }];
 
   return {
+    listConversations: jest.fn(async () => ({ items: [] })),
     searchConversations: jest.fn(async (_request: ConversationSearchRequest) => buildSearchResponse([])),
     getConversationDetail: jest.fn(async (_conversationID: string) => defaultConversationDetail),
     getGeneration: jest.fn(async (_generationID: string) => defaultGenerationDetail),

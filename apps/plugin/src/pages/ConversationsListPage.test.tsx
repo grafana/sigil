@@ -12,7 +12,10 @@ beforeAll(() => {
     disconnect() {}
   }
   class RequestMock {
-    constructor(_input: unknown, _init?: unknown) {}
+    method: string;
+    constructor(_input: unknown, init?: { method?: string }) {
+      this.method = init?.method ?? 'GET';
+    }
   }
   Object.defineProperty(window, 'ResizeObserver', {
     writable: true,
@@ -26,15 +29,11 @@ beforeAll(() => {
   });
 });
 
-type MockConversationsDataSource = {
-  [Key in keyof ConversationsDataSource]: jest.MockedFunction<ConversationsDataSource[Key]>;
-};
-
 function createConversationListResponse(items: ConversationListResponse['items']): ConversationListResponse {
   return { items };
 }
 
-function createDataSource(items: ConversationListResponse['items']): MockConversationsDataSource {
+function createDataSource(items: ConversationListResponse['items']): ConversationsDataSource {
   const conversations = items.map((item) => ({
     conversation_id: item.id,
     generation_count: item.generation_count,
@@ -87,9 +86,8 @@ function renderPage(dataSource: ConversationsDataSource, initialEntry = '/conver
     { initialEntries: [initialEntry] }
   );
 
-  return render(
-    <RouterProvider router={router} />
-  );
+  const rendered = render(<RouterProvider router={router} />);
+  return { ...rendered, router };
 }
 
 describe('ConversationsListPage', () => {
@@ -162,7 +160,7 @@ describe('ConversationsListPage', () => {
         has_more: false,
       });
 
-    const dataSource: MockConversationsDataSource = {
+    const dataSource: ConversationsDataSource = {
       listConversations: jest.fn(async () => createConversationListResponse([])),
       searchConversations,
       getConversationDetail: jest.fn(async () => {
@@ -208,7 +206,7 @@ describe('ConversationsListPage', () => {
       },
     ]);
 
-    renderPage(dataSource);
+    const { router } = renderPage(dataSource);
 
     const bucketButton = await screen.findByRole('button', { name: 'Filter conversations with 2 LLM calls' });
     fireEvent.click(bucketButton);
@@ -219,7 +217,8 @@ describe('ConversationsListPage', () => {
         'true'
       );
     });
-    expect(window.location.search).toBe('?bucket=2-2');
+    const selectedBucketParams = new URLSearchParams(router.state.location.search);
+    expect(selectedBucketParams.get('bucket')).toBe('2-2');
     expect(await screen.findByLabelText('select conversation conv-2')).toBeInTheDocument();
     expect(screen.queryByLabelText('select conversation conv-5')).not.toBeInTheDocument();
   });
@@ -244,14 +243,21 @@ describe('ConversationsListPage', () => {
       },
     ]);
 
-    renderPage(dataSource);
+    const { router } = renderPage(dataSource);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Filter conversations with 2 LLM calls' }));
-    await waitFor(() => expect(window.location.search).toBe('?bucket=2-2'));
+    await waitFor(() => {
+      const params = new URLSearchParams(router.state.location.search);
+      expect(params.get('bucket')).toBe('2-2');
+    });
 
     fireEvent.change(screen.getByLabelText('Conversation chart view'), { target: { value: 'time' } });
 
-    await waitFor(() => expect(window.location.search).toBe('?view=time'));
+    await waitFor(() => {
+      const params = new URLSearchParams(router.state.location.search);
+      expect(params.get('view')).toBe('time');
+      expect(params.get('bucket')).toBeNull();
+    });
     expect(screen.queryByLabelText('select conversation conv-2')).not.toBeInTheDocument();
   });
 
@@ -267,12 +273,12 @@ describe('ConversationsListPage', () => {
       },
     ]);
 
-    renderPage(dataSource);
+    const { router } = renderPage(dataSource);
     fireEvent.click(await screen.findByRole('button', { name: 'Filter conversations with 2 LLM calls' }));
     fireEvent.click(await screen.findByLabelText('select conversation devex-go-openai-2-1772463459223'));
 
     expect(await screen.findByText('detail:devex-go-openai-2-1772463459223')).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/conversations/devex-go-openai-2-1772463459223/detail');
+    expect(router.state.location.pathname).toBe('/conversations/devex-go-openai-2-1772463459223/detail');
   });
 
   it('queries the previous time window and shows trend percentages', async () => {
@@ -330,7 +336,7 @@ describe('ConversationsListPage', () => {
         has_more: false,
       });
 
-    const dataSource: MockConversationsDataSource = {
+    const dataSource: ConversationsDataSource = {
       listConversations: jest.fn(async () => createConversationListResponse([])),
       searchConversations,
       getConversationDetail: jest.fn(async () => {

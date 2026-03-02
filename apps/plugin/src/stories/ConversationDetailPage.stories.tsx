@@ -1,7 +1,7 @@
+import React from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import ConversationDetailPage from '../pages/ConversationDetailPage';
 import type { ConversationsDataSource } from '../conversation/api';
-import type { ConversationDetailPageProps } from '../pages/ConversationDetailPage';
+import ConversationDetailPage, { type ConversationDetailPageProps } from '../pages/ConversationDetailPage';
 import { mockConversationDetail, mockGenerationDetail } from './mockConversationData';
 
 const mockDataSource: ConversationsDataSource = {
