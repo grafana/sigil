@@ -272,7 +272,7 @@ describe('ConversationDetailPage', () => {
     expect(await screen.findByTestId('location-search')).toHaveTextContent('');
   });
 
-  it('fills spans to next trace start when generation created/completed are equal', async () => {
+  it('keeps raw span duration when generation created/completed are equal', async () => {
     const detail: ConversationDetail = {
       conversation_id: 'conv-fill-spans',
       generation_count: 2,
@@ -364,6 +364,6 @@ describe('ConversationDetailPage', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 
     const firstSpanButton = await screen.findByRole('button', { name: 'select span first' });
-    expect(parseFloat(firstSpanButton.style.width)).toBeGreaterThan(25);
+    expect(parseFloat(firstSpanButton.style.width)).toBeLessThan(5);
   });
 });

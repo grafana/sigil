@@ -40,8 +40,6 @@ type TraceTimeline = {
   spans: TraceSpan[];
   startNs: bigint;
   endNs: bigint;
-  generationStartNs: bigint | null;
-  generationCompletedNs: bigint | null;
 };
 
 type HoveredSpanAnchor = {
@@ -232,69 +230,6 @@ function layoutSpans(rawSpans: Array<Omit<TraceSpan, 'row'>>): { rowCount: numbe
     rowCount: Math.max(rowEndNs.length, 1),
     spans: laidOut,
   };
-}
-
-function fillSpans(timelines: TraceTimeline[]): TraceTimeline[] {
-  const sorted = [...timelines].sort((a, b) => {
-    if (a.startNs === b.startNs) {
-      return 0;
-    }
-    return a.startNs < b.startNs ? -1 : 1;
-  });
-  const filled = sorted.map((timeline, index) => {
-    const nextTrace = sorted[index + 1];
-    if (nextTrace == null) {
-      return timeline;
-    }
-    const hasZeroGenerationDuration =
-      timeline.generationStartNs != null &&
-      timeline.generationCompletedNs != null &&
-      timeline.generationStartNs === timeline.generationCompletedNs;
-
-    const adjustedSpans = timeline.spans.map((span) => {
-      if (nextTrace.startNs <= span.startNs) {
-        return { ...span };
-      }
-      if (hasZeroGenerationDuration) {
-        return {
-          ...span,
-          endNs: nextTrace.startNs,
-          durationNs: nextTrace.startNs - span.startNs,
-        };
-      }
-      if (span.startNs !== span.endNs) {
-        return { ...span };
-      }
-      return {
-        ...span,
-        endNs: nextTrace.startNs,
-        durationNs: nextTrace.startNs - span.startNs,
-      };
-    });
-
-    const relayout = layoutSpans(
-      adjustedSpans.map((span) => ({
-        traceID: span.traceID,
-        spanID: span.spanID,
-        name: span.name,
-        serviceName: span.serviceName,
-        startNs: span.startNs,
-        endNs: span.endNs,
-        durationNs: span.durationNs,
-        selectionID: span.selectionID,
-      }))
-    );
-
-    return {
-      ...timeline,
-      rowCount: relayout.rowCount,
-      spans: relayout.spans,
-      startNs: relayout.spans.reduce((min, span) => (span.startNs < min ? span.startNs : min), relayout.spans[0].startNs),
-      endNs: relayout.spans.reduce((max, span) => (span.endNs > max ? span.endNs : max), relayout.spans[0].endNs),
-    };
-  });
-
-  return filled;
 }
 
 function formatNsDuration(durationNs: bigint): string {
@@ -810,7 +745,6 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
           const spans = buildTraceSpans(traceID, response.data);
           if (spans.length > 0) {
             const layout = layoutSpans(spans);
-            const generation = traceToGeneration.get(traceID);
             const spanStart = layout.spans.reduce(
               (min, span) => (span.startNs < min ? span.startNs : min),
               layout.spans[0].startNs
@@ -819,19 +753,15 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
               (max, span) => (span.endNs > max ? span.endNs : max),
               layout.spans[0].endNs
             );
-            const generationStartNs = parseTimestampToNs(generation?.created_at);
-            const generationCompletedNs = parseTimestampToNs(generation?.completed_at);
             collected.push({
               traceID,
               rowCount: layout.rowCount,
               spans: layout.spans,
               startNs: spanStart,
               endNs: spanEnd,
-              generationStartNs,
-              generationCompletedNs,
             });
             if (traceRequestVersionRef.current === requestVersion) {
-              setTraceTimelines(fillSpans([...collected]));
+              setTraceTimelines([...collected]);
             }
           }
         } catch (error) {
@@ -849,13 +779,12 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
       }
 
       if (traceRequestVersionRef.current === requestVersion) {
-        const filledTimelines = fillSpans(collected);
         console.log('[ConversationDetailPage] loaded traces', {
           conversation_id: detail.conversation_id,
-          trace_count: filledTimelines.length,
-          traces: filledTimelines,
+          trace_count: collected.length,
+          traces: collected,
         });
-        setTraceTimelines(filledTimelines);
+        setTraceTimelines(collected);
         setTraceLoadRunning(false);
       }
     })();
