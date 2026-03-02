@@ -100,8 +100,7 @@ describe('DashboardPage', () => {
     expect(screen.getByTestId('time-range-input')).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(screen.getAllByTestId('renderer-timeseries')).toHaveLength(4);
-      expect(screen.getAllByTestId('renderer-piechart')).toHaveLength(4);
+      expect(screen.getAllByTestId('renderer-timeseries')).toHaveLength(5);
     });
   });
 

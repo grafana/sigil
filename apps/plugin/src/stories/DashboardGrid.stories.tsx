@@ -41,7 +41,12 @@ const timeRange: TimeRange = {
 
 const mockDataSource: DashboardDataSource = {
   async queryRange(query) {
-    if (query.includes('token_usage') && query.includes('gen_ai_token_type') && query.includes('gen_ai_provider_name') && !query.includes('gen_ai_request_model')) {
+    if (
+      query.includes('token_usage') &&
+      query.includes('gen_ai_token_type') &&
+      query.includes('gen_ai_provider_name') &&
+      !query.includes('gen_ai_request_model')
+    ) {
       const providers = ['openai', 'anthropic'];
       const allTypes = [
         { type: 'input', base: 60 },
@@ -63,12 +68,28 @@ const mockDataSource: DashboardDataSource = {
       );
       return makeMatrixResponse(series);
     }
-    if (query.includes('token_usage') && query.includes('gen_ai_token_type') && !query.includes('gen_ai_request_model')) {
+    if (
+      query.includes('token_usage') &&
+      query.includes('gen_ai_token_type') &&
+      !query.includes('gen_ai_request_model')
+    ) {
       const allTypes = [
-        { labels: { gen_ai_token_type: 'input' }, values: timePoints.map((t) => [t, String(100 + Math.random() * 50)] as [number, string]) },
-        { labels: { gen_ai_token_type: 'output' }, values: timePoints.map((t) => [t, String(40 + Math.random() * 20)] as [number, string]) },
-        { labels: { gen_ai_token_type: 'cache_read' }, values: timePoints.map((t) => [t, String(15 + Math.random() * 10)] as [number, string]) },
-        { labels: { gen_ai_token_type: 'cache_write' }, values: timePoints.map((t) => [t, String(5 + Math.random() * 5)] as [number, string]) },
+        {
+          labels: { gen_ai_token_type: 'input' },
+          values: timePoints.map((t) => [t, String(100 + Math.random() * 50)] as [number, string]),
+        },
+        {
+          labels: { gen_ai_token_type: 'output' },
+          values: timePoints.map((t) => [t, String(40 + Math.random() * 20)] as [number, string]),
+        },
+        {
+          labels: { gen_ai_token_type: 'cache_read' },
+          values: timePoints.map((t) => [t, String(15 + Math.random() * 10)] as [number, string]),
+        },
+        {
+          labels: { gen_ai_token_type: 'cache_write' },
+          values: timePoints.map((t) => [t, String(5 + Math.random() * 5)] as [number, string]),
+        },
       ];
       const filtered = allTypes.filter((s) => {
         if (query.includes('gen_ai_token_type=~')) {
@@ -78,11 +99,21 @@ const mockDataSource: DashboardDataSource = {
       });
       return makeMatrixResponse(filtered);
     }
-    if (query.includes('token_usage') && !query.includes('gen_ai_request_model') && !query.includes('gen_ai_token_type')) {
+    if (
+      query.includes('token_usage') &&
+      !query.includes('gen_ai_request_model') &&
+      !query.includes('gen_ai_token_type')
+    ) {
       if (query.includes('gen_ai_provider_name')) {
         return makeMatrixResponse([
-          { labels: { gen_ai_provider_name: 'openai' }, values: timePoints.map((t) => [t, String(200 + Math.random() * 80)] as [number, string]) },
-          { labels: { gen_ai_provider_name: 'anthropic' }, values: timePoints.map((t) => [t, String(120 + Math.random() * 40)] as [number, string]) },
+          {
+            labels: { gen_ai_provider_name: 'openai' },
+            values: timePoints.map((t) => [t, String(200 + Math.random() * 80)] as [number, string]),
+          },
+          {
+            labels: { gen_ai_provider_name: 'anthropic' },
+            values: timePoints.map((t) => [t, String(120 + Math.random() * 40)] as [number, string]),
+          },
         ]);
       }
       return makeMatrixResponse([
@@ -136,9 +167,7 @@ const mockDataSource: DashboardDataSource = {
         { labels: {}, values: timePoints.map((t) => [t, String(0.03 + Math.random() * 0.02)]) },
       ]);
     }
-    return makeMatrixResponse([
-      { labels: {}, values: timePoints.map((t) => [t, String(1 + Math.random())]) },
-    ]);
+    return makeMatrixResponse([{ labels: {}, values: timePoints.map((t) => [t, String(1 + Math.random())]) }]);
   },
 
   async queryInstant(query) {
@@ -166,13 +195,21 @@ const mockDataSource: DashboardDataSource = {
       });
       return makeVectorResponse(filtered);
     }
-    if (query.includes('token_usage') && query.includes('gen_ai_token_type=~') && query.includes('by (gen_ai_provider_name)')) {
+    if (
+      query.includes('token_usage') &&
+      query.includes('gen_ai_token_type=~') &&
+      query.includes('by (gen_ai_provider_name)')
+    ) {
       return makeVectorResponse([
         { labels: { gen_ai_provider_name: 'openai' }, value: '420000' },
         { labels: { gen_ai_provider_name: 'anthropic' }, value: '111000' },
       ]);
     }
-    if (query.includes('token_usage') && !query.includes('gen_ai_request_model') && !query.includes('gen_ai_token_type')) {
+    if (
+      query.includes('token_usage') &&
+      !query.includes('gen_ai_request_model') &&
+      !query.includes('gen_ai_token_type')
+    ) {
       if (query.includes('gen_ai_provider_name')) {
         return makeVectorResponse([
           { labels: { gen_ai_provider_name: 'openai' }, value: '580000' },

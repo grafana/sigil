@@ -250,11 +250,7 @@ export function tokensByBreakdownAndTypeQuery(
 }
 
 /** Token count broken down by type, optionally filtered to specific types. */
-export function tokensByTypeQuery(
-  filters: DashboardFilters,
-  rangeDuration: string,
-  tokenTypes?: string[]
-): string {
+export function tokensByTypeQuery(filters: DashboardFilters, rangeDuration: string, tokenTypes?: string[]): string {
   const typeFilter = tokenTypes ? `gen_ai_token_type=~"${tokenTypes.join('|')}"` : undefined;
   return `sum by (gen_ai_token_type) (increase(${TOKEN_USAGE}_sum${sel(filters, typeFilter)}[${rangeDuration}]))`;
 }

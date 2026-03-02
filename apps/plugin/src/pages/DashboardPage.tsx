@@ -27,10 +27,7 @@ function labelPriority(label: string): number {
 
 export default function DashboardPage({ dataSource = defaultDashboardDataSource }: DashboardPageProps) {
   const styles = useStyles2(getStyles);
-  const {
-    timeRange, filters, breakdownBy,
-    setTimeRange, setFilters, setBreakdownBy,
-  } = useDashboardUrlState();
+  const { timeRange, filters, breakdownBy, setTimeRange, setFilters, setBreakdownBy } = useDashboardUrlState();
 
   const from = useMemo(() => Math.floor(timeRange.from.valueOf() / 1000), [timeRange]);
   const to = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);

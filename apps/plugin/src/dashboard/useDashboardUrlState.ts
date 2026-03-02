@@ -120,7 +120,11 @@ export function useDashboardUrlState(): DashboardUrlState {
   );
 
   return {
-    timeRange, filters, breakdownBy,
-    setTimeRange, setFilters, setBreakdownBy,
+    timeRange,
+    filters,
+    breakdownBy,
+    setTimeRange,
+    setFilters,
+    setBreakdownBy,
   };
 }

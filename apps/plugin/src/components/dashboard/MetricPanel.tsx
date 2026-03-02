@@ -2,7 +2,14 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { css } from '@emotion/css';
 import { PanelChrome, useStyles2 } from '@grafana/ui';
 import { PanelRenderer } from '@grafana/runtime';
-import { LoadingState, type DataFrame, type FieldConfigSource, type GrafanaTheme2, type PanelData, type TimeRange } from '@grafana/data';
+import {
+  LoadingState,
+  type DataFrame,
+  type FieldConfigSource,
+  type GrafanaTheme2,
+  type PanelData,
+  type TimeRange,
+} from '@grafana/data';
 
 export type MetricPanelProps = {
   title: string;

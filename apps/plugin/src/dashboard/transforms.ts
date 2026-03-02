@@ -73,57 +73,6 @@ export function vectorToPieDataFrame(
   return new MutableDataFrame({ fields });
 }
 
-/** Convert a Prometheus vector to a table DataFrame with name and value columns, sorted descending. */
-export function vectorToTableDataFrame(
-  response: PrometheusQueryResponse,
-  labelKeys: string[],
-  valueLabel = 'Value',
-  unit?: string,
-  separator = ' / '
-): DataFrame {
-  if (response.data.resultType !== 'vector') {
-    return new MutableDataFrame({ fields: [] });
-  }
-  const results = response.data.result as PrometheusVectorResult[];
-  const rows = results.map((r) => ({
-    name: labelString(r.metric, { preferredKeys: labelKeys, separator }) || 'unknown',
-    value: parseFloat(r.value[1]),
-  }));
-  rows.sort((a, b) => b.value - a.value);
-
-  return new MutableDataFrame({
-    fields: [
-      { name: 'Name', type: FieldType.string, values: rows.map((r) => r.name) },
-      { name: valueLabel, type: FieldType.number, values: rows.map((r) => r.value), config: unit ? { unit } : {} },
-    ],
-  });
-}
-
-/** Convert a Prometheus vector into one DataFrame per series, suitable for bar gauge. */
-export function vectorToBarGaugeFrames(
-  response: PrometheusQueryResponse,
-  labelKeys: string[],
-  separator = ' / '
-): DataFrame[] {
-  if (response.data.resultType !== 'vector') {
-    return [];
-  }
-  const results = response.data.result as PrometheusVectorResult[];
-  const rows = results
-    .map((r) => ({
-      name: labelString(r.metric, { preferredKeys: labelKeys, separator }) || 'unknown',
-      value: parseFloat(r.value[1]),
-    }))
-    .sort((a, b) => b.value - a.value);
-
-  return rows.map((r) =>
-    new MutableDataFrame({
-      name: r.name,
-      fields: [{ name: r.name, type: FieldType.number, values: [r.value] }],
-    })
-  );
-}
-
 /** Convert a Prometheus matrix (query_range) response to Grafana DataFrames. */
 export function matrixToDataFrames(response: PrometheusQueryResponse): DataFrame[] {
   if (response.data.resultType !== 'matrix') {

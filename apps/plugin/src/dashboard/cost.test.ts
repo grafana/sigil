@@ -1,4 +1,11 @@
-import { buildPricingMap, calculateCostTimeSeries, calculateTotalCost, calculateTotalCostByGroup, lookupPricing, pricingKey } from './cost';
+import {
+  buildPricingMap,
+  calculateCostTimeSeries,
+  calculateTotalCost,
+  calculateTotalCostByGroup,
+  lookupPricing,
+  pricingKey,
+} from './cost';
 import type { ModelCardPricing, PrometheusQueryResponse } from './types';
 
 const basePricing: ModelCardPricing = {

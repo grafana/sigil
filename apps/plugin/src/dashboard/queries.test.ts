@@ -53,9 +53,9 @@ describe('buildLabelSelector', () => {
   });
 
   it('supports fuzzy matching on arbitrary label key and value', () => {
-    expect(
-      buildLabelSelector({ ...empty, labelFilters: [{ key: 'service_name', value: 'sigil-api' }] })
-    ).toBe('service_name=~"(?i).*sigil-api.*"');
+    expect(buildLabelSelector({ ...empty, labelFilters: [{ key: 'service_name', value: 'sigil-api' }] })).toBe(
+      'service_name=~"(?i).*sigil-api.*"'
+    );
   });
 
   it('supports multiple label filters', () => {
@@ -71,15 +71,11 @@ describe('buildLabelSelector', () => {
   });
 
   it('ignores invalid arbitrary label keys', () => {
-    expect(
-      buildLabelSelector({ ...empty, labelFilters: [{ key: 'service.name', value: 'sigil-api' }] })
-    ).toBe('');
+    expect(buildLabelSelector({ ...empty, labelFilters: [{ key: 'service.name', value: 'sigil-api' }] })).toBe('');
   });
 
   it('ignores label key without label value', () => {
-    expect(
-      buildLabelSelector({ ...empty, labelFilters: [{ key: 'service_name', value: '' }] })
-    ).toBe('');
+    expect(buildLabelSelector({ ...empty, labelFilters: [{ key: 'service_name', value: '' }] })).toBe('');
   });
 });
 
@@ -179,9 +175,7 @@ describe('stat query builders', () => {
   });
 
   it('totalTokensQuery without breakdown', () => {
-    expect(totalTokensQuery(noFilters, '3600s')).toBe(
-      'sum(increase(gen_ai_client_token_usage_sum[3600s]))'
-    );
+    expect(totalTokensQuery(noFilters, '3600s')).toBe('sum(increase(gen_ai_client_token_usage_sum[3600s]))');
   });
 
   it('totalTokensQuery with provider breakdown', () => {
@@ -294,9 +288,7 @@ describe('timeseries query builders', () => {
   });
 
   it('totalTokensOverTimeQuery without breakdown', () => {
-    expect(totalTokensOverTimeQuery(noFilters, '60s')).toBe(
-      'sum(rate(gen_ai_client_token_usage_sum[60s]))'
-    );
+    expect(totalTokensOverTimeQuery(noFilters, '60s')).toBe('sum(rate(gen_ai_client_token_usage_sum[60s]))');
   });
 
   it('totalTokensOverTimeQuery with model breakdown', () => {

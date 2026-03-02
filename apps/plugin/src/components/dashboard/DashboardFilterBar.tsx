@@ -245,11 +245,7 @@ export function DashboardFilterBar({
   return (
     <div className={styles.toolbar}>
       <Stack direction="row" gap={1} alignItems="center" wrap="wrap">
-        <TimeRangeInput
-          value={timeRange}
-          onChange={onTimeRangeChange}
-          showIcon
-        />
+        <TimeRangeInput value={timeRange} onChange={onTimeRangeChange} showIcon />
         <Select<BreakdownDimension>
           options={breakdownOptions}
           value={breakdownBy}
@@ -265,9 +261,7 @@ export function DashboardFilterBar({
           onClick={() => setFiltersOpen((prev) => !prev)}
         >
           Filters
-          {activeFilterCount > 0 && (
-            <Badge text={String(activeFilterCount)} color="blue" className={styles.badge} />
-          )}
+          {activeFilterCount > 0 && <Badge text={String(activeFilterCount)} color="blue" className={styles.badge} />}
         </Button>
         {filtersOpen && (
           <>

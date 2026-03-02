@@ -129,12 +129,6 @@ export type CostMode = 'usd' | 'tokens';
 
 export type TokenDrilldown = 'all' | 'io' | 'cache';
 
-export const tokenDrilldownLabel: Record<TokenDrilldown, string> = {
-  all: 'Total',
-  io: 'Input / Output',
-  cache: 'Cache',
-};
-
 export const tokenDrilldownTypes: Record<TokenDrilldown, string[] | undefined> = {
   all: undefined,
   io: ['input', 'output'],
