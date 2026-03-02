@@ -36,6 +36,12 @@
     },
     {
       "type": "page",
+      "name": "Conversations (old)",
+      "path": "/a/grafana-sigil-app/conversations-old",
+      "addToNav": false
+    },
+    {
+      "type": "page",
       "name": "Completions",
       "path": "/a/grafana-sigil-app/completions",
       "addToNav": true,
