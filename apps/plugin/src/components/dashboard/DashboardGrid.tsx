@@ -543,7 +543,7 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
           label="Total Cost"
           value={totalCost.totalCost}
           unit="currencyUSD"
-          loading={costLoading}
+          loading={costTokens.loading || resolvedPricing.loading}
           prevValue={prevTotalCost.totalCost}
           prevLoading={prevCostTokens.loading}
           invertChange
@@ -715,23 +715,29 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
               data={
                 isTokenByType && hasBreakdown
                   ? tokensByBreakdownAndType.data
-                  : costMode === 'tokens'
-                    ? tokensTotalByBreakdown.data
-                    : costByBreakdownData
+                  : isTokenByType
+                    ? tokensByTypeStat.data
+                    : costMode === 'tokens'
+                      ? tokensTotalByBreakdown.data
+                      : costByBreakdownData
               }
               loading={
                 isTokenByType && hasBreakdown
                   ? tokensByBreakdownAndType.loading
-                  : costMode === 'tokens'
-                    ? tokensTotalByBreakdown.loading
-                    : costTokens.loading || resolvedPricing.loading
+                  : isTokenByType
+                    ? tokensByTypeStat.loading
+                    : costMode === 'tokens'
+                      ? tokensTotalByBreakdown.loading
+                      : costTokens.loading || resolvedPricing.loading
               }
               error={
                 isTokenByType && hasBreakdown
                   ? tokensByBreakdownAndType.error
-                  : costMode === 'tokens'
-                    ? tokensTotalByBreakdown.error
-                    : costTokens.error
+                  : isTokenByType
+                    ? tokensByTypeStat.error
+                    : costMode === 'tokens'
+                      ? tokensTotalByBreakdown.error
+                      : costTokens.error
               }
               breakdownLabel={breakdownPromLabel}
               height={CHART_HEIGHT}
