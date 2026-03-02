@@ -93,7 +93,7 @@ export default function PipelineCard({ rule, evaluators, onToggle, onClick, onDe
   };
 
   const handleDelete = () => {
-    if (onDelete != null) {
+    if (onDelete != null && window.confirm(`Delete rule "${rule.rule_id}"?`)) {
       onDelete(rule.rule_id);
     }
   };
@@ -133,7 +133,7 @@ export default function PipelineCard({ rule, evaluators, onToggle, onClick, onDe
             </Text>
           )}
         </div>
-        {onDelete != null && <IconButton name="ellipsis-v" size="md" aria-label="Rule menu" onClick={handleDelete} />}
+        {onDelete != null && <IconButton name="trash-alt" size="md" tooltip="Delete rule" onClick={handleDelete} />}
       </div>
       <div className={styles.pipeline}>
         <PipelineNode kind="selector" label={selectorLabel} />

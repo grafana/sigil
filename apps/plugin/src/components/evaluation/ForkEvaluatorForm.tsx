@@ -20,10 +20,18 @@ export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel }: Fo
   const [evaluatorId, setEvaluatorId] = useState('');
   const [provider, setProvider] = useState<string | null>(null);
   const [model, setModel] = useState('');
+  const [touched, setTouched] = useState(false);
+
+  const isIdEmpty = evaluatorId.trim() === '';
+  const showIdError = touched && isIdEmpty;
 
   const handleSubmit = () => {
+    setTouched(true);
+    if (isIdEmpty) {
+      return;
+    }
     const req: ForkEvaluatorRequest = {
-      evaluator_id: evaluatorId.trim() || templateID,
+      evaluator_id: evaluatorId.trim(),
     };
     const configOverrides: Record<string, unknown> = {};
     if (provider != null && provider !== '') {
@@ -40,10 +48,17 @@ export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel }: Fo
 
   return (
     <FieldSet label="Fork evaluator">
-      <Field label="Evaluator ID" description="Unique ID for your forked evaluator. Required." required>
+      <Field
+        label="Evaluator ID"
+        description="Unique ID for your forked evaluator. Required."
+        required
+        invalid={showIdError}
+        error={showIdError ? 'Evaluator ID is required' : undefined}
+      >
         <Input
           value={evaluatorId}
           onChange={(e) => setEvaluatorId(e.currentTarget.value)}
+          onBlur={() => setTouched(true)}
           placeholder={templateID}
           width={40}
         />
