@@ -81,6 +81,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if strings.TrimSpace(userID) == "" {
 		return errors.New("user is required")
 	}
+	if timeout <= 0 {
+		return errors.New("timeout must be > 0")
+	}
 	if verifyRead && readPollInterval <= 0 {
 		return errors.New("read-poll-interval must be > 0")
 	}
@@ -100,11 +103,13 @@ func run(args []string, stdout, stderr io.Writer) error {
 	grpcGenerationID := fmt.Sprintf("grpc-probe-%d", now.UnixNano())
 	httpGenerationID := fmt.Sprintf("http-probe-%d", now.UnixNano()+1)
 
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	results := make([]probeStepResult, 0, 4)
 
-	grpcCtx, grpcCancel := context.WithTimeout(context.Background(), timeout)
 	grpcErr := pushGeneration(
-		grpcCtx,
+		ctx,
 		pushGenerationOptions{
 			Protocol:     sigil.GenerationExportProtocolGRPC,
 			Endpoint:     endpoint,
@@ -119,12 +124,10 @@ func run(args []string, stdout, stderr io.Writer) error {
 			Stderr:       stderr,
 		},
 	)
-	grpcCancel()
 	results = appendResult(results, "grpc_push", grpcGenerationID, grpcErr)
 
-	httpCtx, httpCancel := context.WithTimeout(context.Background(), timeout)
 	httpErr := pushGeneration(
-		httpCtx,
+		ctx,
 		pushGenerationOptions{
 			Protocol:     sigil.GenerationExportProtocolHTTP,
 			Endpoint:     httpExportEndpoint,
@@ -139,16 +142,14 @@ func run(args []string, stdout, stderr io.Writer) error {
 			Stderr:       stderr,
 		},
 	)
-	httpCancel()
 	results = appendResult(results, "http_push", httpGenerationID, httpErr)
 
 	if verifyRead {
 		if httpErr != nil {
 			results = appendSkipResult(results, "http_get", httpGenerationID, "skipped because http_push failed")
 		} else {
-			readCtx, readCancel := context.WithTimeout(context.Background(), timeout)
 			readErr := verifyGenerationReadable(
-				readCtx,
+				ctx,
 				apiBaseURL,
 				strings.TrimSpace(userID),
 				resolvedToken,
@@ -156,7 +157,6 @@ func run(args []string, stdout, stderr io.Writer) error {
 				httpGenerationID,
 				readPollInterval,
 			)
-			readCancel()
 			results = appendResult(results, "http_get", httpGenerationID, readErr)
 		}
 	} else {
@@ -457,11 +457,13 @@ func resolveReadBaseURL(grpcEndpoint, readBaseURL string, insecure bool) (string
 	if host == "" {
 		return "", errors.New("endpoint is required to derive read base url")
 	}
+	endpointScheme := ""
 	if strings.Contains(host, "://") {
 		parsed, err := url.Parse(host)
 		if err != nil {
 			return "", fmt.Errorf("parse endpoint %q: %w", grpcEndpoint, err)
 		}
+		endpointScheme = parsed.Scheme
 		host = parsed.Host
 	}
 
@@ -473,7 +475,7 @@ func resolveReadBaseURL(grpcEndpoint, readBaseURL string, insecure bool) (string
 	}
 
 	scheme := "https"
-	if insecure {
+	if insecure || endpointScheme == "http" {
 		scheme = "http"
 	}
 	return scheme + "://" + host, nil

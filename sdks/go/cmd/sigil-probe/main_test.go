@@ -1,10 +1,41 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestRunRejectsZeroTimeout(t *testing.T) {
+	testCases := []struct {
+		name    string
+		timeout string
+	}{
+		{name: "zero timeout", timeout: "0s"},
+		{name: "negative timeout", timeout: "-1s"},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+
+			err := run(
+				[]string{"-endpoint", "localhost:4317", "-token", "tok", "-timeout", testCase.timeout},
+				&stdout,
+				&stderr,
+			)
+			if err == nil {
+				t.Fatal("expected timeout validation error, got nil")
+			}
+			if !strings.Contains(err.Error(), "timeout must be > 0") {
+				t.Fatalf("expected timeout validation error, got %v", err)
+			}
+		})
+	}
+}
 
 func TestReadDotEnvValue(t *testing.T) {
 	dir := t.TempDir()
@@ -135,6 +166,18 @@ func TestResolveReadBaseURL(t *testing.T) {
 			endpoint:    "localhost:4317",
 			readBaseURL: "example.com",
 			expectErr:   true,
+		},
+		{
+			name:     "http scheme endpoint without insecure flag",
+			endpoint: "http://localhost:4317",
+			insecure: false,
+			want:     "http://localhost:4317",
+		},
+		{
+			name:     "https scheme endpoint with insecure flag",
+			endpoint: "https://sigil.example.com:443",
+			insecure: true,
+			want:     "http://sigil.example.com",
 		},
 	}
 
