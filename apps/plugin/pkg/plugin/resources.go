@@ -167,13 +167,28 @@ func parseSearchTagValuesPath(path string, escapedPath string, routePrefix strin
 	return tag, true
 }
 
+type headerInjector func(proxyReq *http.Request, method string, path string)
+
 func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string, method string) {
+	a.doProxy(w, req, a.apiURL, path, method, func(proxyReq *http.Request, m string, p string) {
+		injectTenantHeaders(proxyReq, a.tenantID)
+		injectOperatorIdentityHeaders(proxyReq, m, p)
+	})
+}
+
+func (a *App) handleGrafanaProxy(w http.ResponseWriter, req *http.Request, path string, method string) {
+	a.doProxy(w, req, a.grafanaAppURL, path, method, func(proxyReq *http.Request, _ string, _ string) {
+		proxyReq.Header.Set("Authorization", "Bearer "+a.grafanaServiceAccountToken)
+	})
+}
+
+func (a *App) doProxy(w http.ResponseWriter, req *http.Request, baseURL string, path string, method string, injectHeaders headerInjector) {
 	if req.Method != method {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	upstream := strings.TrimRight(a.apiURL, "/") + path
+	upstream := strings.TrimRight(baseURL, "/") + path
 	if req.URL.RawQuery != "" {
 		upstream += "?" + req.URL.RawQuery
 	}
@@ -192,8 +207,9 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 	// responses. Without this the upstream may gzip the body, but
 	// our proxy does not forward Content-Encoding, causing garbled output.
 	proxyReq.Header.Del("Accept-Encoding")
-	injectTenantHeaders(proxyReq, a.tenantID)
-	injectOperatorIdentityHeaders(proxyReq, method, path)
+	if injectHeaders != nil {
+		injectHeaders(proxyReq, method, path)
+	}
 
 	resp, err := a.client.Do(proxyReq)
 	if err != nil {
@@ -202,57 +218,11 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
-			// Best-effort close after response handling; no recovery path here.
 			_ = closeErr
 		}
 	}()
 
 	// Forward the upstream Content-Type when available; fall back to JSON.
-	ct := resp.Header.Get("Content-Type")
-	if ct == "" {
-		ct = "application/json"
-	}
-	w.Header().Set("Content-Type", ct)
-	w.WriteHeader(resp.StatusCode)
-	_, _ = io.Copy(w, resp.Body)
-}
-
-func (a *App) handleGrafanaProxy(w http.ResponseWriter, req *http.Request, path string, method string) {
-	if req.Method != method {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	upstream := strings.TrimRight(a.grafanaAppURL, "/") + path
-	if req.URL.RawQuery != "" {
-		upstream += "?" + req.URL.RawQuery
-	}
-
-	var body io.Reader
-	if req.Body != nil {
-		body = req.Body
-	}
-	proxyReq, err := http.NewRequestWithContext(req.Context(), method, upstream, body)
-	if err != nil {
-		writeStub(w, http.StatusInternalServerError, path, fmt.Sprintf("build request: %v", err))
-		return
-	}
-
-	proxyReq.Header = req.Header.Clone()
-	proxyReq.Header.Del("Accept-Encoding")
-	proxyReq.Header.Set("Authorization", "Bearer "+a.grafanaServiceAccountToken)
-
-	resp, err := a.client.Do(proxyReq)
-	if err != nil {
-		writeStub(w, http.StatusBadGateway, path, fmt.Sprintf("upstream unavailable: %v", err))
-		return
-	}
-	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			_ = closeErr
-		}
-	}()
-
 	ct := resp.Header.Get("Content-Type")
 	if ct == "" {
 		ct = "application/json"
