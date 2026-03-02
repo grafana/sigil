@@ -72,16 +72,14 @@ func (s *WALStore) SaveBatch(ctx context.Context, tenantID string, generations [
 					return wrapPersistError(err)
 				}
 
+				if convRow != nil {
+					if err := upsertConversation(tx, convRow); err != nil {
+						return err
+					}
+				}
+
 				if !s.evalEnqueueEnable {
 					return nil
-				}
-
-				if convRow == nil {
-					return enqueueEvalGenerationTx(tx, generationRow)
-				}
-
-				if err := upsertConversation(tx, convRow); err != nil {
-					return err
 				}
 
 				return enqueueEvalGenerationTx(tx, generationRow)
