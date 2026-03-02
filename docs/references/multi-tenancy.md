@@ -106,7 +106,7 @@ If you use a Sigil SDK version with per-export auth helpers, configure generatio
 
 ### Query path via Grafana datasource proxy
 
-Sigil plugin query proxy routes can run through Grafana datasource proxy APIs instead of direct Tempo/Prometheus base URLs.
+Sigil plugin query proxy routes run through Grafana datasource proxy APIs.
 
 - plugin configuration selects datasource UIDs (`prometheusDatasourceUID`, `tempoDatasourceUID`)
 - Sigil stores tenant-scoped datasource selections in MySQL (`tenant_settings`) and exposes:
@@ -119,7 +119,7 @@ Sigil plugin query proxy routes can run through Grafana datasource proxy APIs in
   - `SIGIL_GRAFANA_TEMPO_DATASOURCE_UID`
   are configured
 
-When these settings are not configured, Sigil keeps the direct Tempo/Prometheus base URL behavior.
+If these settings are missing, plugin proxy routes fail fast with a configuration error.
 
 ### Bearer token via reverse proxy
 

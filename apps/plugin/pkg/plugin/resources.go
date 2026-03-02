@@ -87,38 +87,29 @@ func (a *App) handleSettingsRoutes(w http.ResponseWriter, req *http.Request) {
 }
 
 func (a *App) handlePrometheusProxyRoutes(w http.ResponseWriter, req *http.Request) {
-	if a.hasGrafanaDatasourceProxyConfig(a.prometheusDatasourceUID) {
-		a.handleGrafanaDatasourceProxy(
-			w,
-			req,
-			"/query/proxy/prometheus/",
-			fmt.Sprintf("/api/datasources/uid/%s/resources", a.prometheusDatasourceUID),
-		)
+	if !a.hasGrafanaDatasourceProxyConfig(a.prometheusDatasourceUID) {
+		http.Error(w, "grafana prometheus datasource proxy is not configured", http.StatusServiceUnavailable)
 		return
 	}
-	a.handleDownstreamProxy(w, req, "/query/proxy/prometheus/", "/api/v1/proxy/prometheus")
+	a.handleGrafanaDatasourceProxy(
+		w,
+		req,
+		"/query/proxy/prometheus/",
+		fmt.Sprintf("/api/datasources/uid/%s/resources", a.prometheusDatasourceUID),
+	)
 }
 
 func (a *App) handleTempoProxyRoutes(w http.ResponseWriter, req *http.Request) {
-	if a.hasGrafanaDatasourceProxyConfig(a.tempoDatasourceUID) {
-		a.handleGrafanaDatasourceProxy(
-			w,
-			req,
-			"/query/proxy/tempo/",
-			fmt.Sprintf("/api/datasources/proxy/uid/%s", a.tempoDatasourceUID),
-		)
+	if !a.hasGrafanaDatasourceProxyConfig(a.tempoDatasourceUID) {
+		http.Error(w, "grafana tempo datasource proxy is not configured", http.StatusServiceUnavailable)
 		return
 	}
-	a.handleDownstreamProxy(w, req, "/query/proxy/tempo/", "/api/v1/proxy/tempo")
-}
-
-func (a *App) handleDownstreamProxy(w http.ResponseWriter, req *http.Request, routePrefix string, upstreamPrefix string) {
-	downstreamPath, ok := downstreamProxyPath(req.URL.Path, routePrefix)
-	if !ok {
-		http.Error(w, "invalid proxy path", http.StatusBadRequest)
-		return
-	}
-	a.handleProxy(w, req, upstreamPrefix+downstreamPath, req.Method)
+	a.handleGrafanaDatasourceProxy(
+		w,
+		req,
+		"/query/proxy/tempo/",
+		fmt.Sprintf("/api/datasources/proxy/uid/%s", a.tempoDatasourceUID),
+	)
 }
 
 func (a *App) hasGrafanaDatasourceProxyConfig(datasourceUID string) bool {

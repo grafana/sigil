@@ -141,7 +141,7 @@ Design doc: `docs/design-docs/2026-02-15-conversation-query-path.md`
    - conversation detail: direct MySQL/object storage fan-out read by conversation ID, return all hydrated generations.
    - generation detail: direct MySQL/object storage read by generation ID.
    - model cards: read model-card catalog from DB/snapshot fallback and optionally resolve `(provider, model)` pairs for deterministic pricing joins.
-   - proxy routes: pass-through to Prometheus/Tempo for raw query access (kept as fallback).
+   - proxy routes: Grafana datasource-proxy access for Prometheus/Tempo raw queries.
 4. Sigil API returns JSON responses (search summaries, full payloads, or pass-through).
 
 For Grafana app plugin deployments:
