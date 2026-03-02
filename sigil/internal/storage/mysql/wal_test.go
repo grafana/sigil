@@ -9,11 +9,13 @@ import (
 	"testing"
 	"time"
 
+	mysqlDriver "github.com/go-sql-driver/mysql"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"gorm.io/gorm"
 )
 
 const (
@@ -239,6 +241,52 @@ func TestSaveBatchConversationProjectionUpsert(t *testing.T) {
 	}
 }
 
+func TestSaveBatchRetriesOnDeadlock(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	const callbackName = "sigil:test:inject_deadlock_once"
+	var injected atomic.Uint32
+	if err := store.DB().Callback().Create().Before("gorm:create").Register(callbackName, func(tx *gorm.DB) {
+		if tx.Statement == nil || tx.Statement.Table != "generations" {
+			return
+		}
+		if injected.CompareAndSwap(0, 1) {
+			if err := tx.AddError(&mysqlDriver.MySQLError{
+				Number:  1213,
+				Message: "Deadlock found when trying to get lock; try restarting transaction",
+			}); err == nil {
+				t.Error("expected deadlock error to be recorded on transaction")
+			}
+		}
+	}); err != nil {
+		t.Fatalf("register deadlock callback: %v", err)
+	}
+	defer func() {
+		if err := store.DB().Callback().Create().Remove(callbackName); err != nil {
+			t.Errorf("remove deadlock callback: %v", err)
+		}
+	}()
+
+	generation := testGeneration("gen-deadlock-retry", "conv-deadlock-retry", time.Date(2026, 2, 12, 18, 0, 0, 0, time.UTC))
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{generation}))
+
+	if injected.Load() != 1 {
+		t.Fatalf("expected one injected deadlock, got %d", injected.Load())
+	}
+
+	var row GenerationModel
+	if err := store.DB().
+		Where("tenant_id = ? AND generation_id = ?", "tenant-a", generation.GetId()).
+		First(&row).Error; err != nil {
+		t.Fatalf("expected persisted generation after retry: %v", err)
+	}
+}
+
 func TestSaveBatchWithEvalHookPersistsEnqueueEventAndSignalsHook(t *testing.T) {
 	store, cleanup := newTestWALStore(t)
 	defer cleanup()
@@ -247,6 +295,7 @@ func TestSaveBatchWithEvalHookPersistsEnqueueEventAndSignalsHook(t *testing.T) {
 		t.Fatalf("auto migrate: %v", err)
 	}
 
+	store.SetEvalEnqueueEnabled(true)
 	hook := &recordingEvalHook{}
 	store.SetEvalHook(hook)
 
@@ -461,6 +510,7 @@ func TestSaveBatchWithoutEvalHookPersistsEnqueueEvent(t *testing.T) {
 	if err := store.AutoMigrate(context.Background()); err != nil {
 		t.Fatalf("auto migrate: %v", err)
 	}
+	store.SetEvalEnqueueEnabled(true)
 
 	generation := testGeneration("gen-hook-disabled", "conv-hook-disabled", time.Date(2026, 2, 12, 18, 0, 0, 0, time.UTC))
 	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{generation}))
@@ -471,6 +521,43 @@ func TestSaveBatchWithoutEvalHookPersistsEnqueueEvent(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("expected enqueue event without hook, got %d", count)
+	}
+}
+
+func TestSaveBatchWithEvalEnqueueDisabledSkipsEnqueueEvent(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+	store.SetEvalEnqueueEnabled(false)
+
+	generation := testGeneration("gen-hook-disabled-enqueue", "conv-hook-disabled-enqueue", time.Date(2026, 2, 12, 18, 0, 0, 0, time.UTC))
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{generation}))
+
+	var generationCount int64
+	if err := store.DB().Model(&GenerationModel{}).Count(&generationCount).Error; err != nil {
+		t.Fatalf("count generations: %v", err)
+	}
+	if generationCount != 1 {
+		t.Fatalf("expected generation row, got %d", generationCount)
+	}
+
+	var enqueueCount int64
+	if err := store.DB().Model(&EvalEnqueueEventModel{}).Count(&enqueueCount).Error; err != nil {
+		t.Fatalf("count eval enqueue events: %v", err)
+	}
+	if enqueueCount != 0 {
+		t.Fatalf("expected no enqueue events when disabled, got %d", enqueueCount)
+	}
+
+	var convCount int64
+	if err := store.DB().Model(&ConversationModel{}).Count(&convCount).Error; err != nil {
+		t.Fatalf("count conversations: %v", err)
+	}
+	if convCount != 1 {
+		t.Fatalf("expected conversation row even when eval enqueue disabled, got %d", convCount)
 	}
 }
 
