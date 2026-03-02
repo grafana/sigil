@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"hash/fnv"
 	"log/slog"
 	"sort"
@@ -217,6 +218,13 @@ func (s *FanOutStore) readColdGenerationByID(ctx context.Context, tenantID, gene
 	for idx := len(blocks) - 1; idx >= 0; idx-- {
 		index, err := s.blockReader.ReadIndex(ctx, tenantID, blocks[idx].BlockID)
 		if err != nil {
+			if errors.Is(err, ErrBlockNotFound) {
+				s.loggerOrDefault().Warn("skipping stale block during get-by-id",
+					"tenant_id", tenantID,
+					"block_id", blocks[idx].BlockID,
+				)
+				continue
+			}
 			return nil, err
 		}
 		entries := findEntriesByGenerationID(index, generationID)
@@ -225,6 +233,13 @@ func (s *FanOutStore) readColdGenerationByID(ctx context.Context, tenantID, gene
 		}
 		generations, err := s.blockReader.ReadGenerations(ctx, tenantID, blocks[idx].BlockID, entries)
 		if err != nil {
+			if errors.Is(err, ErrBlockNotFound) {
+				s.loggerOrDefault().Warn("skipping stale block during get-by-id read",
+					"tenant_id", tenantID,
+					"block_id", blocks[idx].BlockID,
+				)
+				continue
+			}
 			return nil, err
 		}
 		for _, generation := range generations {
@@ -250,6 +265,14 @@ func (s *FanOutStore) readColdConversationGenerations(ctx context.Context, tenan
 	for _, block := range blocks {
 		index, err := s.blockReader.ReadIndex(ctx, tenantID, block.BlockID)
 		if err != nil {
+			if errors.Is(err, ErrBlockNotFound) {
+				s.loggerOrDefault().Warn("skipping stale block during list-conversation",
+					"tenant_id", tenantID,
+					"block_id", block.BlockID,
+					"conversation_id", conversationID,
+				)
+				continue
+			}
 			return nil, err
 		}
 		entries := findEntriesByConversationID(index, conversationID)
@@ -258,6 +281,14 @@ func (s *FanOutStore) readColdConversationGenerations(ctx context.Context, tenan
 		}
 		generations, err := s.blockReader.ReadGenerations(ctx, tenantID, block.BlockID, entries)
 		if err != nil {
+			if errors.Is(err, ErrBlockNotFound) {
+				s.loggerOrDefault().Warn("skipping stale block during list-conversation read",
+					"tenant_id", tenantID,
+					"block_id", block.BlockID,
+					"conversation_id", conversationID,
+				)
+				continue
+			}
 			return nil, err
 		}
 		for _, generation := range generations {
