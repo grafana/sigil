@@ -172,8 +172,8 @@ derive_assistant_sigil_env() {
 
 if [[ "${IMPORT_SIGIL_ENV}" == "1" ]]; then
   load_sigil_env "${SIGIL_ENV_FILE}"
+  derive_assistant_sigil_env
 fi
-derive_assistant_sigil_env
 
 TMP_COMPOSE="${ASSISTANT_DIR}/.assistant-remapped.${PROJECT_NAME}.$$.yaml"
 TMP_RESOLVED="${ASSISTANT_DIR}/.assistant-resolved.${PROJECT_NAME}.$$.yaml"
@@ -208,7 +208,7 @@ service_has_container_name = {}
 in_service_block = False
 
 service_re = re.compile(r"^  ([A-Za-z0-9_.-]+):\s*$")
-service_key_re = re.compile(r"^    [A-Za-z0-9_.-]+:\s*(?:#.*)?$")
+service_key_re = re.compile(r"^    [A-Za-z0-9_.-]+:.*$")
 container_name_re = re.compile(r"^    container_name:\s*.*$")
 ports_key_re = re.compile(r"^    ports:\s*(?:#.*)?$")
 port_item_re = re.compile(r"""^(\s*-\s*)['"]?([^'"]+)['"]?(\s*(?:#.*)?)$""")
@@ -313,6 +313,8 @@ for line in lines:
         candidate = host + offset
         while candidate in used_ports:
           candidate += 1
+        if candidate > 65535:
+          raise ValueError(f"Remapped port {candidate} exceeds valid TCP port range (1-65535) for service '{current_service}'")
         used_ports.add(candidate)
         ports_by_service[current_service].append(str(candidate))
         out.append(f"{prefix}{candidate}{quote_suffix}{trailing_comment}")
@@ -327,6 +329,8 @@ for line in lines:
           candidate = host + offset
           while candidate in used_ports:
             candidate += 1
+          if candidate > 65535:
+            raise ValueError(f"Remapped port {candidate} exceeds valid TCP port range (1-65535) for service '{current_service}'")
           used_ports.add(candidate)
           remapped = render_mapping(ip, candidate, container, suffix)
           ports_by_service[current_service].append(remapped)
@@ -359,7 +363,10 @@ for svc in services_order:
   print(f"  {svc}: {', '.join(ports_by_service[svc])}")
 PY
 
-python3 - "${TMP_ENV_OVERRIDE}" <<'PY'
+COMPOSE_ARGS=(-p "${PROJECT_NAME}" -f "${TMP_COMPOSE}")
+
+if [[ "${IMPORT_SIGIL_ENV}" == "1" ]]; then
+  python3 - "${TMP_ENV_OVERRIDE}" <<'PY'
 import os
 import sys
 from pathlib import Path
@@ -387,8 +394,8 @@ content = [
 
 out_path.write_text("\n".join(content), encoding="utf-8")
 PY
-
-COMPOSE_ARGS=(-p "${PROJECT_NAME}" -f "${TMP_COMPOSE}" -f "${TMP_ENV_OVERRIDE}")
+  COMPOSE_ARGS+=(-f "${TMP_ENV_OVERRIDE}")
+fi
 CMD=(docker compose "${COMPOSE_ARGS[@]}")
 
 case "${ACTION}" in
