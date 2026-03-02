@@ -5,6 +5,7 @@ datasources:
     type: tempo
     access: proxy
     orgId: 1
+    uid: tempo
     url: http://tempo:3200
     isDefault: false
     editable: true

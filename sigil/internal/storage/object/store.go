@@ -152,6 +152,9 @@ func (s *Store) ReadIndex(ctx context.Context, tenantID, blockID string) (*stora
 			status = "not_found"
 		}
 		observeBlockMetrics("read_index", status, start, 0, "read")
+		if bucket.IsObjNotFoundErr(err) {
+			return nil, fmt.Errorf("read index object %q: %w: %w", indexPath, storage.ErrBlockNotFound, err)
+		}
 		return nil, fmt.Errorf("read index object %q: %w", indexPath, err)
 	}
 	defer func() {
@@ -211,6 +214,9 @@ func (s *Store) ReadGenerations(ctx context.Context, tenantID, blockID string, e
 				status = "not_found"
 			}
 			observeBlockMetrics("read_generations", status, start, bytesRead, "read")
+			if bucket.IsObjNotFoundErr(err) {
+				return nil, fmt.Errorf("read generation range offset=%d length=%d from %q: %w: %w", entry.Offset, entry.Length, dataPath, storage.ErrBlockNotFound, err)
+			}
 			return nil, fmt.Errorf("read generation range offset=%d length=%d from %q: %w", entry.Offset, entry.Length, dataPath, err)
 		}
 

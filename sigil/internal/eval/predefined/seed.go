@@ -31,7 +31,7 @@ func (s *Seeder) EnsureTenantSeeded(ctx context.Context, tenantID string) error 
 	}
 
 	for _, template := range Templates() {
-		item := template
+		item := template.EvaluatorDefinition
 		item.TenantID = trimmedTenantID
 		item.IsPredefined = true
 		if err := s.store.CreateEvaluator(ctx, item); err != nil {

@@ -43,6 +43,12 @@
     },
     {
       "type": "page",
+      "name": "Conversations (old)",
+      "path": "/a/grafana-sigil-app/conversations-old",
+      "addToNav": false
+    },
+    {
+      "type": "page",
       "name": "Completions",
       "path": "/a/grafana-sigil-app/completions",
       "addToNav": true,
@@ -71,6 +77,18 @@
       "addToNav": true
     }
   ],
+  "iam": {
+    "permissions": [
+      {
+        "action": "datasources:read",
+        "scope": "datasources:*"
+      },
+      {
+        "action": "datasources:query",
+        "scope": "datasources:*"
+      }
+    ]
+  },
   "dependencies": {
     "grafanaDependency": ">=12.0.0-0",
     "plugins": []

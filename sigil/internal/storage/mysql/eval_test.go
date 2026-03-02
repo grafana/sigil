@@ -40,10 +40,10 @@ func TestEvalStoreEvaluatorCRUD(t *testing.T) {
 		t.Fatalf("expected evaluator")
 	}
 	if evaluator.Kind != evalpkg.EvaluatorKindLLMJudge {
-		t.Fatalf("unexpected evaluator kind %q", evaluator.Kind)
+		t.Errorf("unexpected evaluator kind %q", evaluator.Kind)
 	}
 	if evaluator.Config["provider"] != "openai" {
-		t.Fatalf("unexpected provider config %#v", evaluator.Config)
+		t.Errorf("unexpected provider config %#v", evaluator.Config)
 	}
 
 	items, nextCursor, err := store.ListEvaluators(context.Background(), "tenant-a", 10, 0)
@@ -51,10 +51,10 @@ func TestEvalStoreEvaluatorCRUD(t *testing.T) {
 		t.Fatalf("list evaluators: %v", err)
 	}
 	if nextCursor != 0 {
-		t.Fatalf("expected next cursor 0, got %d", nextCursor)
+		t.Errorf("expected next cursor 0, got %d", nextCursor)
 	}
 	if len(items) != 1 {
-		t.Fatalf("expected one evaluator, got %d", len(items))
+		t.Errorf("expected one evaluator, got %d", len(items))
 	}
 
 	if err := store.DeleteEvaluator(context.Background(), "tenant-a", "sigil.helpfulness"); err != nil {
@@ -69,7 +69,7 @@ func TestEvalStoreEvaluatorCRUD(t *testing.T) {
 		t.Fatalf("get evaluator after delete: %v", err)
 	}
 	if evaluator != nil {
-		t.Fatalf("expected evaluator to be deleted")
+		t.Errorf("expected evaluator to be deleted")
 	}
 }
 
@@ -102,10 +102,10 @@ func TestEvalStoreRuleCRUDAndUpdate(t *testing.T) {
 		t.Fatalf("expected rule")
 	}
 	if rule.SampleRate != 0.25 {
-		t.Fatalf("unexpected sample rate: %f", rule.SampleRate)
+		t.Errorf("unexpected sample rate: %f", rule.SampleRate)
 	}
 	if len(rule.EvaluatorIDs) != 2 {
-		t.Fatalf("expected two evaluator ids, got %#v", rule.EvaluatorIDs)
+		t.Errorf("expected two evaluator ids, got %#v", rule.EvaluatorIDs)
 	}
 
 	rule.Enabled = false
@@ -120,7 +120,7 @@ func TestEvalStoreRuleCRUDAndUpdate(t *testing.T) {
 		t.Fatalf("list enabled rules: %v", err)
 	}
 	if len(enabledRules) != 0 {
-		t.Fatalf("expected no enabled rules after disable, got %d", len(enabledRules))
+		t.Errorf("expected no enabled rules after disable, got %d", len(enabledRules))
 	}
 
 	if err := store.DeleteRule(context.Background(), "tenant-a", "online.helpfulness.user-visible"); err != nil {
@@ -135,7 +135,7 @@ func TestEvalStoreRuleCRUDAndUpdate(t *testing.T) {
 		t.Fatalf("get rule after delete: %v", err)
 	}
 	if rule != nil {
-		t.Fatalf("expected deleted rule")
+		t.Errorf("expected deleted rule")
 	}
 }
 
@@ -789,5 +789,45 @@ func TestEvalEnqueueEventFailDoesNotOverrideReleasedClaim(t *testing.T) {
 	}
 	if secondClaim[0].Attempts != 0 {
 		t.Fatalf("expected attempts=0 after stale fail no-op, got %d", secondClaim[0].Attempts)
+	}
+}
+
+func TestEvalStoreEvaluatorLineage(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	ctx := context.Background()
+	tenantID := "test-tenant"
+
+	eval := evalpkg.EvaluatorDefinition{
+		TenantID:              tenantID,
+		EvaluatorID:           "forked.helpfulness",
+		Version:               "2026-03-02",
+		Kind:                  evalpkg.EvaluatorKindLLMJudge,
+		Config:                map[string]any{"provider": "anthropic"},
+		OutputKeys:            []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeNumber}},
+		SourceTemplateID:      "sigil.helpfulness",
+		SourceTemplateVersion: "2026-02-17",
+	}
+	err := store.CreateEvaluator(ctx, eval)
+	if err != nil {
+		t.Fatalf("create evaluator: %v", err)
+	}
+
+	got, err := store.GetEvaluator(ctx, tenantID, "forked.helpfulness")
+	if err != nil {
+		t.Fatalf("get evaluator: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected evaluator to exist")
+	}
+	if got.SourceTemplateID != "sigil.helpfulness" {
+		t.Errorf("expected source_template_id=sigil.helpfulness, got %q", got.SourceTemplateID)
+	}
+	if got.SourceTemplateVersion != "2026-02-17" {
+		t.Errorf("expected source_template_version=2026-02-17, got %q", got.SourceTemplateVersion)
 	}
 }

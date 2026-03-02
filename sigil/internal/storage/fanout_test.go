@@ -202,6 +202,84 @@ func TestFanOutStoreGetGenerationByIDRunsHotAndColdInParallel(t *testing.T) {
 	}
 }
 
+func TestFanOutStoreListConversationGenerationsSkipsStaleBlocks(t *testing.T) {
+	base := time.Date(2026, 2, 19, 10, 0, 0, 0, time.UTC)
+	hotGeneration := fanOutTestGeneration("gen-1", "conv-1", base.Add(time.Minute))
+
+	store := NewFanOutStore(
+		&fanOutTestWALReader{
+			getByConversationID: func(_ context.Context, _, _ string) ([]*sigilv1.Generation, error) {
+				return []*sigilv1.Generation{hotGeneration}, nil
+			},
+		},
+		&fanOutTestBlockMetadataStore{
+			listBlocks: func(_ context.Context, _ string, _, _ time.Time) ([]BlockMeta, error) {
+				return []BlockMeta{
+					{TenantID: "tenant-a", BlockID: "stale-block"},
+					{TenantID: "tenant-a", BlockID: "good-block"},
+				}, nil
+			},
+		},
+		&fanOutTestBlockReader{
+			readIndex: func(_ context.Context, _, blockID string) (*BlockIndex, error) {
+				if blockID == "stale-block" {
+					return nil, ErrBlockNotFound
+				}
+				return &BlockIndex{Entries: []IndexEntry{}}, nil
+			},
+		},
+	)
+
+	generations, err := store.ListConversationGenerations(context.Background(), "tenant-a", "conv-1")
+	if err != nil {
+		t.Fatalf("expected stale block to be skipped, got error: %v", err)
+	}
+	if len(generations) != 1 || generations[0].GetId() != "gen-1" {
+		t.Fatalf("expected 1 hot generation, got %d", len(generations))
+	}
+}
+
+func TestFanOutStoreGetGenerationByIDSkipsStaleBlocks(t *testing.T) {
+	base := time.Date(2026, 2, 19, 10, 0, 0, 0, time.UTC)
+	coldGeneration := fanOutTestGeneration("gen-cold", "conv-1", base.Add(time.Minute))
+	index, generationsByOffset := buildFanOutTestBlock(t, []*sigilv1.Generation{coldGeneration})
+
+	store := NewFanOutStore(
+		&fanOutTestWALReader{
+			getByID: func(_ context.Context, _, _ string) (*sigilv1.Generation, error) {
+				return nil, nil
+			},
+		},
+		&fanOutTestBlockMetadataStore{
+			listBlocks: func(_ context.Context, _ string, _, _ time.Time) ([]BlockMeta, error) {
+				return []BlockMeta{
+					{TenantID: "tenant-a", BlockID: "good-block"},
+					{TenantID: "tenant-a", BlockID: "stale-block"},
+				}, nil
+			},
+		},
+		&fanOutTestBlockReader{
+			readIndex: func(_ context.Context, _, blockID string) (*BlockIndex, error) {
+				if blockID == "stale-block" {
+					return nil, ErrBlockNotFound
+				}
+				return index, nil
+			},
+			readGenerations: func(_ context.Context, _, _ string, entries []IndexEntry) ([]*sigilv1.Generation, error) {
+				return fanOutGenerationsFromEntries(entries, generationsByOffset), nil
+			},
+		},
+	)
+
+	generation, err := store.GetGenerationByID(context.Background(), "tenant-a", "gen-cold")
+	if err != nil {
+		t.Fatalf("expected stale block to be skipped, got error: %v", err)
+	}
+	if generation == nil || generation.GetId() != "gen-cold" {
+		t.Fatalf("expected cold generation from non-stale block, got %#v", generation)
+	}
+}
+
 type fanOutTestWALReader struct {
 	getByID             func(ctx context.Context, tenantID, generationID string) (*sigilv1.Generation, error)
 	getByConversationID func(ctx context.Context, tenantID, conversationID string) ([]*sigilv1.Generation, error)

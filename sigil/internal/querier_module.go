@@ -21,6 +21,7 @@ import (
 	"github.com/grafana/sigil/sigil/internal/queryproxy"
 	"github.com/grafana/sigil/sigil/internal/server"
 	"github.com/grafana/sigil/sigil/internal/storage"
+	"github.com/grafana/sigil/sigil/internal/tenantsettings"
 )
 
 // querierModule owns read/query HTTP wiring and runs the model-cards sync loop.
@@ -88,6 +89,18 @@ func newQuerierModule(
 	if err != nil {
 		return nil, err
 	}
+	if strings.TrimSpace(cfg.GrafanaURL) != "" {
+		tempoClient, err := query.NewGrafanaTempoHTTPClient(
+			cfg.GrafanaURL,
+			cfg.GrafanaTempoDatasourceUID,
+			cfg.GrafanaServiceAccountToken,
+			&http.Client{Timeout: cfg.QueryProxy.Timeout},
+		)
+		if err != nil {
+			return nil, err
+		}
+		querySvc.SetTempoClient(tempoClient)
+	}
 
 	queryProxy, err := queryproxy.New(queryproxy.Config{
 		PrometheusBaseURL: cfg.QueryProxy.PrometheusBaseURL,
@@ -98,20 +111,39 @@ func newQuerierModule(
 		return nil, err
 	}
 
+	var tenantSettingsSvc *tenantsettings.Service
+	if tenantSettingsStore, ok := generationStore.(tenantsettings.Store); ok {
+		tenantSettingsSvc = tenantsettings.NewService(tenantSettingsStore)
+	}
+
 	var controlSvc *evalcontrol.Service
+	var templateSvc *evalcontrol.TemplateService
 	var ingestScoreSvc *evalingest.Service
 	if evalStore, ok := generationStore.(evalpkg.EvalStore); ok && evalStore != nil {
 		discovery := judges.DiscoverFromEnv()
-		var previewStore storage.RecentGenerationLister
-		if lister, ok := generationStore.(storage.RecentGenerationLister); ok {
-			previewStore = lister
+
+		// Wire optional stores supported by the active backend.
+		var controlOpts []evalcontrol.ServiceOption
+		var templateStore evalpkg.TemplateStore
+		if ts, ok := generationStore.(evalpkg.TemplateStore); ok {
+			templateStore = ts
+			if err := evalcontrol.BootstrapPredefinedTemplates(ctx, templateStore); err != nil {
+				_ = level.Warn(logger).Log("msg", "failed to bootstrap predefined templates", "err", err)
+			} else {
+				_ = level.Info(logger).Log("msg", "predefined templates bootstrapped")
+			}
+			controlOpts = append(controlOpts, evalcontrol.WithTemplateStore(templateStore))
 		}
-		controlSvc = evalcontrol.NewServiceWithPreview(
-			evalStore,
-			judgeDiscoveryAdapter{discovery: discovery},
-			previewStore,
-			cfg.EvalPreviewWindowHours,
-		)
+
+		if lister, ok := generationStore.(storage.RecentGenerationLister); ok {
+			controlOpts = append(controlOpts, evalcontrol.WithPreview(lister, cfg.EvalPreviewWindowHours))
+		}
+
+		controlSvc = evalcontrol.NewService(evalStore, judgeDiscoveryAdapter{discovery: discovery}, controlOpts...)
+
+		if templateStore != nil {
+			templateSvc = evalcontrol.NewTemplateService(templateStore, controlSvc)
+		}
 		scoreLookup := buildScoreGenerationLookup(walReader, blockMetadataStore, blockReader)
 		ingestScoreSvc = evalingest.NewService(evalStore, scoreLookup, false)
 
@@ -168,7 +200,8 @@ func newQuerierModule(
 				protectedMiddleware,
 				queryProxy,
 			)
-			evalcontrol.RegisterHTTPRoutes(mux, controlSvc, protectedMiddleware)
+			server.RegisterSettingsRoutes(mux, tenantSettingsSvc, protectedMiddleware)
+			evalcontrol.RegisterHTTPRoutes(mux, controlSvc, templateSvc, protectedMiddleware)
 			evalingest.RegisterHTTPRoutes(mux, ingestScoreSvc, protectedMiddleware)
 		})
 	}

@@ -233,6 +233,13 @@ func (s *Service) attachFeedbackStore(feedbackStore feedback.Store) {
 	}
 }
 
+func (s *Service) SetTempoClient(client TempoClient) {
+	if s == nil {
+		return
+	}
+	s.tempoClient = client
+}
+
 func queryDebugEnabledFromEnv() bool {
 	raw := strings.TrimSpace(os.Getenv("SIGIL_QUERY_DEBUG"))
 	if raw == "" {

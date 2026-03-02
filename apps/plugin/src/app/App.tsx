@@ -6,6 +6,8 @@ import { useStyles2 } from '@grafana/ui';
 import { ROUTES } from '../constants';
 
 const DashboardPage = React.lazy(() => import('../pages/DashboardPage'));
+const ConversationsListPage = React.lazy(() => import('../pages/ConversationsListPage'));
+const ConversationDetailPage = React.lazy(() => import('../pages/ConversationDetailPage'));
 const ConversationsPage = React.lazy(() => import('../pages/ConversationsPage'));
 const CompletionsPage = React.lazy(() => import('../pages/CompletionsPage'));
 const TracesPage = React.lazy(() => import('../pages/TracesPage'));
@@ -25,7 +27,9 @@ export default function App(_props: AppRootProps) {
     <div className={styles.pageWrapper}>
       <Routes>
         <Route path={ROUTES.Dashboard} element={<DashboardPage />} />
-        <Route path={ROUTES.Conversations} element={<ConversationsPage />} />
+        <Route path={ROUTES.Conversations} element={<ConversationsListPage />} />
+        <Route path={ROUTES.ConversationsDetail} element={<ConversationDetailPage />} />
+        <Route path={ROUTES.ConversationsOld} element={<ConversationsPage />} />
         <Route path={ROUTES.Completions} element={<CompletionsPage />} />
         <Route path={ROUTES.Traces} element={<TracesPage />} />
         <Route path={`${ROUTES.Evaluation}/*`} element={<EvaluationPage />} />
