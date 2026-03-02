@@ -86,6 +86,23 @@ run = "DEVELOPMENT=true docker compose --profile core up --watch --build --remov
 description = "Stop local stack"
 run = "docker compose down"
 
+[tasks.nuke]
+description = "Delete all Docker containers and volumes"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+container_ids="$(docker ps -aq)"
+if [[ -n "${container_ids}" ]]; then
+  docker rm -f ${container_ids}
+fi
+
+volume_ids="$(docker volume ls -q)"
+if [[ -n "${volume_ids}" ]]; then
+  docker volume rm ${volume_ids}
+fi
+"""
+
 [tasks.logs]
 description = "Tail local stack logs"
 run = "docker compose logs -f"
