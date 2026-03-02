@@ -157,6 +157,23 @@ func TestFromEnvQueryProxyDefaults(t *testing.T) {
 	}
 }
 
+func TestFromEnvGrafanaTempoDefaults(t *testing.T) {
+	t.Setenv("SIGIL_GRAFANA_URL", "")
+	t.Setenv("SIGIL_GRAFANA_SA_TOKEN", "")
+	t.Setenv("SIGIL_GRAFANA_TEMPO_DATASOURCE_UID", "")
+
+	cfg := FromEnv()
+	if cfg.GrafanaURL != "" {
+		t.Fatalf("expected empty grafana url by default, got %q", cfg.GrafanaURL)
+	}
+	if cfg.GrafanaServiceAccountToken != "" {
+		t.Fatalf("expected empty grafana token by default")
+	}
+	if cfg.GrafanaTempoDatasourceUID != "" {
+		t.Fatalf("expected empty grafana tempo datasource uid by default, got %q", cfg.GrafanaTempoDatasourceUID)
+	}
+}
+
 func TestValidateRejectsInvalidCompactorScalingConfig(t *testing.T) {
 	cfg := FromEnv()
 	cfg.CompactorConfig.ShardCount = 0
@@ -331,6 +348,32 @@ func TestValidateRejectsInvalidQueryProxyConfig(t *testing.T) {
 	cfg.QueryProxy.TempoBaseURL = "ftp://tempo:3200"
 	if err := cfg.Validate(); err == nil {
 		t.Fatalf("expected validation error for invalid tempo query proxy url scheme")
+	}
+}
+
+func TestValidateRejectsInvalidGrafanaTempoConfig(t *testing.T) {
+	cfg := FromEnv()
+	cfg.GrafanaURL = "://bad-url"
+	cfg.GrafanaServiceAccountToken = "token"
+	cfg.GrafanaTempoDatasourceUID = "tempo"
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for invalid grafana url")
+	}
+
+	cfg = FromEnv()
+	cfg.GrafanaURL = "https://grafana.example.com"
+	cfg.GrafanaServiceAccountToken = ""
+	cfg.GrafanaTempoDatasourceUID = "tempo"
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for missing grafana token")
+	}
+
+	cfg = FromEnv()
+	cfg.GrafanaURL = "https://grafana.example.com"
+	cfg.GrafanaServiceAccountToken = "token"
+	cfg.GrafanaTempoDatasourceUID = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for missing grafana tempo datasource uid")
 	}
 }
 
