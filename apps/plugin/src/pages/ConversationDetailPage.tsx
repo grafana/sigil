@@ -333,13 +333,14 @@ function getUsageValue(usage: GenerationDetail['usage'], key: 'input_tokens' | '
 function getHoveredSpanAnchor(
   span: TraceSpan,
   timelineBounds: { min: number; range: number },
-  laneWidthPx: number
+  laneWidthPx: number,
+  timelineScalePct: number
 ): HoveredSpanAnchor {
   const rawLeftPct = ((span.startNs - timelineBounds.min) / timelineBounds.range) * 100;
   const boundedWidthPct = Math.min(Math.max((span.durationNs / timelineBounds.range) * 100, TRACE_MIN_SPAN_WIDTH_PCT), 100);
-  const maxLeftPct = Math.max(0, 100 - boundedWidthPct);
-  const boundedLeftPct = Math.min(Math.max(rawLeftPct, 0), maxLeftPct);
-  const spanCenterPct = boundedLeftPct + boundedWidthPct / 2;
+  const scaledLeftPct = Math.max(0, rawLeftPct * timelineScalePct);
+  const scaledWidthPct = Math.max(0, boundedWidthPct * timelineScalePct);
+  const spanCenterPct = scaledLeftPct + scaledWidthPct / 2;
   const edgePaddingPx = 8;
   const topPx = span.row * TRACE_ROW_STEP_PX + TRACE_SPAN_HEIGHT_PX + 8;
 
@@ -645,6 +646,20 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
     }
     return { min, range: max - min };
   }, [traceTimelines]);
+  const timelineScalePct = useMemo(() => {
+    let maxRightPct = 100;
+    for (const timeline of traceTimelines) {
+      for (const span of timeline.spans) {
+        const rawLeftPct = ((span.startNs - timelineBounds.min) / timelineBounds.range) * 100;
+        const boundedWidthPct = Math.min(Math.max((span.durationNs / timelineBounds.range) * 100, TRACE_MIN_SPAN_WIDTH_PCT), 100);
+        maxRightPct = Math.max(maxRightPct, rawLeftPct + boundedWidthPct);
+      }
+    }
+    if (maxRightPct <= 100) {
+      return 1;
+    }
+    return 100 / maxRightPct;
+  }, [timelineBounds.min, timelineBounds.range, traceTimelines]);
   const selectedSpan = useMemo(() => {
     for (const timeline of traceTimelines) {
       for (const span of timeline.spans) {
@@ -887,12 +902,12 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                           }
                           const laneElement = event.currentTarget.querySelector(`.${styles.traceLane}`) as HTMLDivElement | null;
                           const laneWidthPx = laneElement?.clientWidth ?? 0;
-                        setHoveredTraceID(timeline.traceID);
+                          setHoveredTraceID(timeline.traceID);
                           setHoveredSpanSelectionID(firstSpan.selectionID);
-                          setHoveredSpanAnchor(getHoveredSpanAnchor(firstSpan, timelineBounds, laneWidthPx));
+                          setHoveredSpanAnchor(getHoveredSpanAnchor(firstSpan, timelineBounds, laneWidthPx, timelineScalePct));
                         }}
                         onMouseLeave={() => {
-                        setHoveredTraceID('');
+                          setHoveredTraceID('');
                           setHoveredSpanSelectionID('');
                           setHoveredSpanAnchor(null);
                         }}
@@ -916,8 +931,8 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                               Math.max((span.durationNs / timelineBounds.range) * 100, TRACE_MIN_SPAN_WIDTH_PCT),
                               100
                             );
-                            const maxLeftPct = Math.max(0, 100 - boundedWidthPct);
-                            const boundedLeftPct = Math.min(Math.max(rawLeftPct, 0), maxLeftPct);
+                            const scaledLeftPct = Math.max(0, rawLeftPct * timelineScalePct);
+                            const scaledWidthPct = Math.max(0, boundedWidthPct * timelineScalePct);
                             const isSelected = selectedSpanID === span.selectionID;
                             const isRowHovered = hoveredTraceID === timeline.traceID;
                             return (
@@ -929,8 +944,8 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                                   } ${isSelected ? styles.spanBarSelected : ''}`}
                                   style={{
                                     top: `${span.row * TRACE_ROW_STEP_PX}px`,
-                                    left: `${boundedLeftPct}%`,
-                                    width: `${boundedWidthPct}%`,
+                                    left: `${scaledLeftPct}%`,
+                                    width: `${scaledWidthPct}%`,
                                   }}
                                   aria-label={`select span ${span.name}`}
                                   aria-pressed={isSelected}
@@ -941,7 +956,7 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                                   onMouseEnter={(event) => {
                                     const laneWidthPx = event.currentTarget.parentElement?.clientWidth ?? 0;
                                     setHoveredSpanSelectionID(span.selectionID);
-                                    setHoveredSpanAnchor(getHoveredSpanAnchor(span, timelineBounds, laneWidthPx));
+                                    setHoveredSpanAnchor(getHoveredSpanAnchor(span, timelineBounds, laneWidthPx, timelineScalePct));
                                   }}
                                   onMouseLeave={() => {
                                     setHoveredSpanSelectionID('');
