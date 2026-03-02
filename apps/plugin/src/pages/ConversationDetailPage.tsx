@@ -401,7 +401,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    marginTop: theme.spacing(0.5),
     marginBottom: theme.spacing(0.5),
     gap: theme.spacing(1),
   }),
@@ -885,17 +884,6 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                   </div>
                 ) : (
                   <>
-                    <div className={styles.traceTimeRange}>
-                      <span className={styles.traceTimeLabel} title={formatNsTimestamp(timelineBounds.min)}>
-                        {formatNsShortTime(timelineBounds.min)}
-                      </span>
-                      <span
-                        className={styles.traceTimeLabel}
-                        title={formatNsTimestamp(timelineBounds.min + timelineBounds.range)}
-                      >
-                        {formatNsShortTime(timelineBounds.min + timelineBounds.range)}
-                      </span>
-                    </div>
                     {isExpandedTraceView && (
                       <div className={styles.traceZoomHeader}>
                         <button
@@ -910,6 +898,17 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                         <span className={styles.traceZoomLabel}>Trace: {expandedTimeline.traceID}</span>
                       </div>
                     )}
+                    <div className={styles.traceTimeRange}>
+                      <span className={styles.traceTimeLabel} title={formatNsTimestamp(timelineBounds.min)}>
+                        {formatNsShortTime(timelineBounds.min)}
+                      </span>
+                      <span
+                        className={styles.traceTimeLabel}
+                        title={formatNsTimestamp(timelineBounds.min + timelineBounds.range)}
+                      >
+                        {formatNsShortTime(timelineBounds.min + timelineBounds.range)}
+                      </span>
+                    </div>
                     {displayedTimelines.map((timeline) => {
                       if (!isExpandedTraceView) {
                         const traceDurationNs = timeline.endNs > timeline.startNs ? timeline.endNs - timeline.startNs : BIGINT_ONE;
