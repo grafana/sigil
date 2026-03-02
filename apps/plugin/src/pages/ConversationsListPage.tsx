@@ -707,7 +707,7 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
       window.history.replaceState(window.history.state, '', nextURL);
       return;
     }
-    setSearchParams(nextSearchParams);
+    setSearchParams(nextSearchParams, { replace: true });
   }, [canUseRouterSearchParamUpdates, canUseWindowLocation, searchParams, setSearchParams, timeRange]);
 
   const loadConversations = useCallback(async (): Promise<void> => {

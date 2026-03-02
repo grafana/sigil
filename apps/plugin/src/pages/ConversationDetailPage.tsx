@@ -347,7 +347,12 @@ function getHoveredSpanAnchor(
   };
 }
 
-function getHoveredTraceAnchor(leftPct: number, widthPct: number, laneWidthPx: number, topPx: number): HoveredSpanAnchor {
+function getHoveredTraceAnchor(
+  leftPct: number,
+  widthPct: number,
+  laneWidthPx: number,
+  topPx: number
+): HoveredSpanAnchor {
   const traceCenterPct = leftPct + widthPct / 2;
   const edgePaddingPx = 8;
   if (laneWidthPx <= 0) {
@@ -979,9 +984,9 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                             className={styles.traceRow}
                             data-testid={`trace-row-${timeline.traceID}`}
                             onMouseMove={(event) => {
-                              const laneElement = event.currentTarget.querySelector(`.${styles.traceLane}`) as
-                                | HTMLDivElement
-                                | null;
+                              const laneElement = event.currentTarget.querySelector(
+                                `.${styles.traceLane}`
+                              ) as HTMLDivElement | null;
                               if (laneElement == null) {
                                 return;
                               }
@@ -1062,7 +1067,9 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                                     <span className={styles.hoveredSpanLabel}>Duration</span>
                                     <span className={styles.hoveredSpanValue}>
                                       {formatNsDuration(
-                                        timeline.endNs > timeline.startNs ? timeline.endNs - timeline.startNs : BIGINT_ONE
+                                        timeline.endNs > timeline.startNs
+                                          ? timeline.endNs - timeline.startNs
+                                          : BIGINT_ONE
                                       )}
                                     </span>
                                   </div>
@@ -1109,9 +1116,9 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                           className={styles.traceRow}
                           data-testid={`trace-row-${timeline.traceID}`}
                           onMouseMove={(event) => {
-                            const laneElement = event.currentTarget.querySelector(`.${styles.traceLane}`) as
-                              | HTMLDivElement
-                              | null;
+                            const laneElement = event.currentTarget.querySelector(
+                              `.${styles.traceLane}`
+                            ) as HTMLDivElement | null;
                             if (laneElement == null) {
                               return;
                             }
@@ -1125,7 +1132,12 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                             }
                             setHoveredSpanSelectionID(hoveredRowSpan.selectionID);
                             setHoveredSpanAnchor(
-                              getHoveredSpanAnchor(hoveredRowSpan, timelineBounds, laneElement.clientWidth, timelineScalePct)
+                              getHoveredSpanAnchor(
+                                hoveredRowSpan,
+                                timelineBounds,
+                                laneElement.clientWidth,
+                                timelineScalePct
+                              )
                             );
                           }}
                           onMouseLeave={() => {
@@ -1133,9 +1145,9 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                             setHoveredSpanAnchor(null);
                           }}
                           onClick={(event) => {
-                            const laneElement = event.currentTarget.querySelector(`.${styles.traceLane}`) as
-                              | HTMLDivElement
-                              | null;
+                            const laneElement = event.currentTarget.querySelector(
+                              `.${styles.traceLane}`
+                            ) as HTMLDivElement | null;
                             if (laneElement == null) {
                               return;
                             }

@@ -371,4 +371,29 @@ describe('ConversationsListPage', () => {
 
     expect(await screen.findByText('↗ 100.0%')).toBeInTheDocument();
   });
+
+  it('uses replace when syncing from/to params to avoid back-button loop', async () => {
+    const dataSource = createDataSource([]);
+    const router = createMemoryRouter(
+      [
+        { path: '/back-target', element: <div>back-target</div> },
+        { path: '/conversations', element: <ConversationsListPage dataSource={dataSource} /> },
+      ],
+      {
+        initialEntries: ['/back-target', '/conversations'],
+        initialIndex: 1,
+      }
+    );
+
+    render(<RouterProvider router={router} />);
+
+    await waitFor(() => {
+      const params = new URLSearchParams(router.state.location.search);
+      expect(params.get('from')).not.toBeNull();
+      expect(params.get('to')).not.toBeNull();
+    });
+
+    await router.navigate(-1);
+    await waitFor(() => expect(router.state.location.pathname).toBe('/back-target'));
+  });
 });
