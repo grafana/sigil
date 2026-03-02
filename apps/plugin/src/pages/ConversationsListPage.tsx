@@ -11,13 +11,14 @@ import ConversationListPanel from '../components/conversations/ConversationListP
 type ActivityBucket = {
   key: string;
   label: string;
-  minCalls: number;
-  maxCalls?: number;
   count: number;
   conversationIDs: Set<string>;
 };
 
-function buildActivityBuckets(conversations: ConversationSearchResult[]): ActivityBucket[] {
+type ChartViewMode = 'llm_calls' | 'time';
+type TimeBucketUnit = 'hour' | 'week' | 'month' | 'year';
+
+function buildLLMCallBuckets(conversations: ConversationSearchResult[]): ActivityBucket[] {
   if (conversations.length === 0) {
     return [];
   }
@@ -43,7 +44,7 @@ function buildActivityBuckets(conversations: ConversationSearchResult[]): Activi
     { minCalls: 200 },
   ];
 
-  const buckets: ActivityBucket[] = bucketDefinitions
+  const buckets: Array<ActivityBucket & { minCalls: number; maxCalls?: number }> = bucketDefinitions
     .filter((definition) => {
       if (definition.maxCalls == null) {
         return maxCalls >= definition.minCalls;
@@ -86,6 +87,154 @@ function buildActivityBuckets(conversations: ConversationSearchResult[]): Activi
   return buckets.filter((bucket) => bucket.count > 0);
 }
 
+function getTimeBucketUnit(conversations: ConversationSearchResult[]): TimeBucketUnit {
+  const HOUR_MS = 60 * 60 * 1000;
+  const DAY_MS = 24 * HOUR_MS;
+  const timestamps = conversations
+    .map((conversation) => Date.parse(conversation.last_generation_at))
+    .filter((value) => Number.isFinite(value));
+  if (timestamps.length === 0) {
+    return 'week';
+  }
+  const minTs = Math.min(...timestamps);
+  const maxTs = Math.max(...timestamps);
+  const spanMs = maxTs - minTs;
+  if (spanMs <= DAY_MS) {
+    return 'hour';
+  }
+  const spanDays = (maxTs - minTs) / (1000 * 60 * 60 * 24);
+  if (spanDays <= 365 * 2) {
+    return 'week';
+  }
+  if (spanDays <= 365 * 8) {
+    return 'month';
+  }
+  return 'year';
+}
+
+function startOfBucketUTC(ts: number, unit: TimeBucketUnit): Date {
+  const date = new Date(ts);
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth();
+  const day = date.getUTCDate();
+  const hour = date.getUTCHours();
+  if (unit === 'hour') {
+    return new Date(Date.UTC(year, month, day, hour, 0, 0, 0));
+  }
+  if (unit === 'year') {
+    return new Date(Date.UTC(year, 0, 1));
+  }
+  if (unit === 'month') {
+    return new Date(Date.UTC(year, month, 1));
+  }
+  const weekday = date.getUTCDay();
+  const mondayOffset = (weekday + 6) % 7;
+  return new Date(Date.UTC(year, month, day - mondayOffset));
+}
+
+function nextBucketStartUTC(date: Date, unit: TimeBucketUnit): Date {
+  if (unit === 'hour') {
+    return new Date(date.getTime() + 60 * 60 * 1000);
+  }
+  if (unit === 'year') {
+    return new Date(Date.UTC(date.getUTCFullYear() + 1, 0, 1));
+  }
+  if (unit === 'month') {
+    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1));
+  }
+  return new Date(date.getTime() + 7 * 24 * 60 * 60 * 1000);
+}
+
+function startOfDayUTC(ts: number): Date {
+  const date = new Date(ts);
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0, 0));
+}
+
+function formatTimeBucketLabel(date: Date, unit: TimeBucketUnit): string {
+  if (unit === 'hour') {
+    const startHour24 = date.getUTCHours();
+    const endHour24 = (startHour24 + 1) % 24;
+    const startHour12 = startHour24 % 12 === 0 ? 12 : startHour24 % 12;
+    const endHour12 = endHour24 % 12 === 0 ? 12 : endHour24 % 12;
+    const startSuffix = startHour24 < 12 ? 'am' : 'pm';
+    const endSuffix = endHour24 < 12 ? 'am' : 'pm';
+    if (startSuffix === endSuffix) {
+      return `${startHour12}-${endHour12}${endSuffix}`;
+    }
+    return `${startHour12}${startSuffix}-${endHour12}${endSuffix}`;
+  }
+  if (unit === 'year') {
+    return `${date.getUTCFullYear()}`;
+  }
+  if (unit === 'month') {
+    return new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(date);
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(date);
+}
+
+function buildTimeBuckets(conversations: ConversationSearchResult[]): ActivityBucket[] {
+  if (conversations.length === 0) {
+    return [];
+  }
+  const unit = getTimeBucketUnit(conversations);
+  const timestamps = conversations
+    .map((conversation) => Date.parse(conversation.last_generation_at))
+    .filter((value) => Number.isFinite(value));
+  if (timestamps.length === 0) {
+    return [];
+  }
+
+  const minTs = Math.min(...timestamps);
+  const maxTs = Math.max(...timestamps);
+  const firstBucket = unit === 'hour' ? startOfDayUTC(minTs) : startOfBucketUTC(minTs, unit);
+  const lastBucket =
+    unit === 'hour'
+      ? new Date(startOfDayUTC(maxTs).getTime() + 23 * 60 * 60 * 1000)
+      : startOfBucketUTC(maxTs, unit);
+  const buckets: ActivityBucket[] = [];
+  const bucketByKey = new Map<string, ActivityBucket>();
+
+  for (let cursor = new Date(firstBucket); cursor.getTime() <= lastBucket.getTime(); cursor = nextBucketStartUTC(cursor, unit)) {
+    const key = cursor.toISOString();
+    const bucket: ActivityBucket = {
+      key,
+      label: formatTimeBucketLabel(cursor, unit),
+      count: 0,
+      conversationIDs: new Set<string>(),
+    };
+    bucketByKey.set(key, bucket);
+    buckets.push(bucket);
+  }
+
+  for (const conversation of conversations) {
+    const ts = Date.parse(conversation.last_generation_at);
+    if (!Number.isFinite(ts)) {
+      continue;
+    }
+    const key = startOfBucketUTC(ts, unit).toISOString();
+    const bucket = bucketByKey.get(key);
+    if (!bucket) {
+      continue;
+    }
+    bucket.count += 1;
+    bucket.conversationIDs.add(conversation.conversation_id);
+  }
+
+  if (unit === 'hour') {
+    return buckets;
+  }
+  return buckets.filter((bucket) => bucket.count > 0);
+}
+
 const getStyles = (theme: GrafanaTheme2) => ({
   pageContainer: css({
     display: 'flex',
@@ -105,7 +254,27 @@ const getStyles = (theme: GrafanaTheme2) => ({
     padding: theme.spacing(1.5),
   }),
   chartTitle: css({
-    marginBottom: theme.spacing(1),
+    marginBottom: theme.spacing(1.25),
+  }),
+  chartHeader: css({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: theme.spacing(1),
+  }),
+  chartSelect: css({
+    border: `1px solid ${theme.colors.border.medium}`,
+    borderRadius: theme.shape.radius.default,
+    background: theme.colors.background.primary,
+    color: theme.colors.text.primary,
+    padding: theme.spacing(0, 0.75),
+    height: theme.spacing(4),
+    minHeight: theme.spacing(4),
+    appearance: 'auto' as const,
+    cursor: 'pointer',
+    fontSize: theme.typography.h4.fontSize,
+    fontWeight: theme.typography.fontWeightMedium,
+    lineHeight: 1.2,
   }),
   chartBars: css({
     display: 'flex',
@@ -179,6 +348,7 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
   const [conversations, setConversations] = useState<ConversationSearchResult[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [viewMode, setViewMode] = useState<ChartViewMode>('llm_calls');
   const [selectedBucketKey, setSelectedBucketKey] = useState<string>('');
 
   const requestVersionRef = useRef<number>(0);
@@ -237,7 +407,23 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
     void loadConversations();
   }, [loadConversations]);
 
-  const activityBuckets = useMemo(() => buildActivityBuckets(conversations), [conversations]);
+  useEffect(() => {
+    setSelectedBucketKey('');
+  }, [viewMode]);
+
+  const activityBuckets = useMemo(
+    () => (viewMode === 'time' ? buildTimeBuckets(conversations) : buildLLMCallBuckets(conversations)),
+    [conversations, viewMode]
+  );
+
+  useEffect(() => {
+    if (selectedBucketKey.length === 0) {
+      return;
+    }
+    if (!activityBuckets.some((bucket) => bucket.key === selectedBucketKey)) {
+      setSelectedBucketKey('');
+    }
+  }, [activityBuckets, selectedBucketKey]);
 
   const selectedBucket = useMemo(
     () => activityBuckets.find((bucket) => bucket.key === selectedBucketKey),
@@ -266,8 +452,22 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
 
       <div className={styles.chartPanel}>
         <div className={styles.chartTitle}>
-          <Text element="h4">Conversations by LLM calls</Text>
-          <Text color="secondary">Click a bar to filter conversations by generation_count bucket.</Text>
+          <div className={styles.chartHeader}>
+            <select
+              className={styles.chartSelect}
+              value={viewMode}
+              onChange={(event) => setViewMode(event.currentTarget.value as ChartViewMode)}
+              aria-label="Conversation chart view"
+            >
+              <option value="llm_calls">Conversations by LLM calls</option>
+              <option value="time">Conversations over time</option>
+            </select>
+          </div>
+          <Text color="secondary">
+            {viewMode === 'time'
+              ? 'Click a bar to filter conversations for that week, month, or year.'
+              : 'Click a bar to filter conversations by LLM calls bucket.'}
+          </Text>
         </div>
 
         {activityBuckets.length > 0 && (
@@ -282,7 +482,11 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
                   className={`${styles.chartBar} ${active ? styles.chartBarActive : ''}`}
                   onClick={() => setSelectedBucketKey(bucket.key)}
                   aria-pressed={active}
-                  aria-label={`Filter conversations with ${bucket.label} LLM calls`}
+                  aria-label={
+                    viewMode === 'time'
+                      ? `Filter conversations for ${bucket.label}`
+                      : `Filter conversations with ${bucket.label} LLM calls`
+                  }
                 >
                   <div className={styles.chartBarContent}>
                     <div className={styles.chartBarFillArea}>
