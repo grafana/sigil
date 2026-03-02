@@ -250,7 +250,7 @@ describe('ConversationDetailPage', () => {
 
     const expandTraceButton = await screen.findByRole('button', { name: 'expand trace trace-1' });
     fireEvent.click(expandTraceButton);
-    expect(await screen.findByTestId('location-search')).toHaveTextContent('?expandTraceID=trace-1');
+    expect(await screen.findByTestId('location-search')).toHaveTextContent('?trace=trace-1');
     expect(await screen.findByRole('button', { name: 'close expanded trace' })).toBeInTheDocument();
 
     const spanButton = await screen.findByRole('button', { name: 'select span prompt' });
@@ -264,7 +264,7 @@ describe('ConversationDetailPage', () => {
 
     fireEvent.click(spanButton);
     expect(await screen.findByTestId('location-search')).toHaveTextContent(
-      '?expandTraceID=trace-1&span=trace-1%3Aspan-a'
+      '?trace=trace-1&span=trace-1%3Aspan-a'
     );
     expect(await screen.findByText('Selected span details')).toBeInTheDocument();
     expect(screen.getByText('Associated generation')).toBeInTheDocument();
@@ -272,7 +272,7 @@ describe('ConversationDetailPage', () => {
     expect(screen.getByText('reasoning_tokens')).toBeInTheDocument();
 
     fireEvent.click(spanButton);
-    expect(await screen.findByTestId('location-search')).toHaveTextContent('?expandTraceID=trace-1');
+    expect(await screen.findByTestId('location-search')).toHaveTextContent('?trace=trace-1');
 
     const closeExpandedTraceButton = await screen.findByRole('button', { name: 'close expanded trace' });
     fireEvent.click(closeExpandedTraceButton);

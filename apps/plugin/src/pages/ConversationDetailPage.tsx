@@ -616,7 +616,7 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
     return JSON.stringify(detail, null, 2);
   }, [detail]);
   const selectedSpanID = searchParams.get('span') ?? '';
-  const expandedTraceID = searchParams.get('expandTraceID') ?? '';
+  const expandedTraceID = searchParams.get('trace') ?? '';
   const expandedTimeline = useMemo(() => {
     if (expandedTraceID.length === 0) {
       return null;
@@ -720,10 +720,10 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
   const setExpandedTraceParam = (traceID: string) => {
     const nextParams = new URLSearchParams(searchParams);
     if (traceID.length === 0) {
-      nextParams.delete('expandTraceID');
+      nextParams.delete('trace');
       nextParams.delete('span');
     } else {
-      nextParams.set('expandTraceID', traceID);
+      nextParams.set('trace', traceID);
       nextParams.delete('span');
     }
     setHoveredTraceID('');
