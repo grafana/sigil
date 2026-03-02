@@ -427,7 +427,10 @@ func (s *Service) PreviewRule(ctx context.Context, tenantID string, req evalpkg.
 	totalGenerations := len(rows)
 	matchingCount := 0
 	sampled := make([]evalpkg.PreviewGenerationSample, 0)
-	ruleIDForSampling := "preview"
+	ruleIDForSampling := strings.TrimSpace(req.RuleID)
+	if ruleIDForSampling == "" {
+		ruleIDForSampling = "preview"
+	}
 
 	for _, row := range rows {
 		genRow := rules.GenerationRow{

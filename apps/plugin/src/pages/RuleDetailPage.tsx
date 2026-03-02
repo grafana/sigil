@@ -149,6 +149,7 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
   }, [dataSource, isNew]);
 
   const previewVersion = useRef(0);
+  const matchKey = JSON.stringify(match);
 
   useEffect(() => {
     if (debounceRef.current != null) {
@@ -162,7 +163,7 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
     const runPreview = () => {
       setPreviewLoading(true);
       void dataSource
-        .previewRule({ selector, match, sample_rate: sampleRate })
+        .previewRule({ rule_id: ruleID ?? ruleIDInput, selector, match, sample_rate: sampleRate })
         .then((res) => {
           if (previewVersion.current === version) {
             setPreview(res);
@@ -186,7 +187,8 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
         clearTimeout(debounceRef.current);
       }
     };
-  }, [dataSource, selector, match, sampleRate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataSource, selector, matchKey, sampleRate]);
 
   const handleSave = async () => {
     setSaving(true);

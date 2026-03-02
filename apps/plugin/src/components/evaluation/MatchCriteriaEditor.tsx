@@ -59,11 +59,14 @@ export default function MatchCriteriaEditor({ value, onChange, disabled }: Match
   const rows = toRows(value);
 
   const usedKeys = new Set(rows.map((r) => r.key));
-  const keyOptions: Array<SelectableValue<string>> = MATCH_KEY_OPTIONS.map((opt) => ({
-    label: opt.label,
-    value: opt.value,
-    description: opt.supportsGlob ? 'Supports glob patterns (e.g. assistant-*)' : undefined,
-  }));
+
+  const keyOptionsForRow = (currentKey: string): Array<SelectableValue<string>> =>
+    MATCH_KEY_OPTIONS.map((opt) => ({
+      label: opt.label,
+      value: opt.value,
+      description: opt.supportsGlob ? 'Supports glob patterns (e.g. assistant-*)' : undefined,
+      isDisabled: opt.value !== currentKey && usedKeys.has(opt.value),
+    }));
 
   const updateRow = (index: number, updates: Partial<CriteriaRow>) => {
     const next = [...rows];
@@ -91,7 +94,7 @@ export default function MatchCriteriaEditor({ value, onChange, disabled }: Match
             <div className={styles.row}>
               <Select<string>
                 className={styles.keySelect}
-                options={keyOptions}
+                options={keyOptionsForRow(row.key)}
                 value={row.key}
                 onChange={(v) => {
                   if (v?.value) {

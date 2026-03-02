@@ -94,7 +94,12 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
       queueMicrotask(() => setSelectedEvaluator(found));
       return;
     }
-    void dataSource.getEvaluator(selectedEvaluatorID).then((e) => setSelectedEvaluator(e));
+    void dataSource
+      .getEvaluator(selectedEvaluatorID)
+      .then((e) => setSelectedEvaluator(e))
+      .catch((err) => {
+        setErrorMessage(err instanceof Error ? err.message : 'Failed to load evaluator');
+      });
   }, [dataSource, selectedEvaluatorID, tenantEvaluators]);
 
   const handleFork = (evaluatorID: string) => {

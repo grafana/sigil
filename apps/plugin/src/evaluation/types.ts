@@ -79,6 +79,7 @@ export type JudgeModel = {
 };
 
 export type RulePreviewRequest = {
+  rule_id?: string;
   selector: RuleSelector;
   match?: Record<string, string | string[]>;
   sample_rate?: number;

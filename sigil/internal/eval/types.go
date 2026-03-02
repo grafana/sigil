@@ -152,6 +152,7 @@ type WorkItem struct {
 }
 
 type RulePreviewRequest struct {
+	RuleID     string         `json:"rule_id,omitempty"`
 	Selector   Selector       `json:"selector"`
 	Match      map[string]any `json:"match"`
 	SampleRate float64        `json:"sample_rate"`
