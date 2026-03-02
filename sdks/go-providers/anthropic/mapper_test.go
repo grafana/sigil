@@ -290,13 +290,16 @@ func TestFromStream_DeltaAccumulation(t *testing.T) {
 				Delta: asdk.BetaRawMessageStreamEventUnionDelta{Text: "world!"},
 			},
 			// Block 2: tool_use with partial_json deltas
+			// Real Anthropic streams send "input": {} on start, which
+			// deserializes as a non-nil empty map.
 			{
 				Type:  "content_block_start",
 				Index: 2,
 				ContentBlock: asdk.BetaRawContentBlockStartEventContentBlockUnion{
-					Type: "tool_use",
-					ID:   "toolu_1",
-					Name: "weather",
+					Type:  "tool_use",
+					ID:    "toolu_1",
+					Name:  "weather",
+					Input: map[string]any{},
 				},
 			},
 			{
@@ -376,6 +379,79 @@ func TestFromStream_DeltaAccumulation(t *testing.T) {
 	}
 	if string(output.Parts[2].ToolCall.InputJSON) != `{"city":"Berlin"}` {
 		t.Fatalf("expected tool input JSON, got %q", string(output.Parts[2].ToolCall.InputJSON))
+	}
+}
+
+func TestFromStream_DeltaWithoutContentBlockStart(t *testing.T) {
+	req := testRequest()
+	summary := StreamSummary{
+		Events: []asdk.BetaRawMessageStreamEventUnion{
+			{
+				Type: "message_start",
+				Message: asdk.BetaMessage{
+					ID:    "msg_fallback_1",
+					Model: asdk.Model("claude-sonnet-4-5"),
+				},
+			},
+			// No content_block_start for index 0 — text deltas arrive directly
+			{
+				Type:  "content_block_delta",
+				Index: 0,
+				Delta: asdk.BetaRawMessageStreamEventUnionDelta{Text: "orphan "},
+			},
+			{
+				Type:  "content_block_delta",
+				Index: 0,
+				Delta: asdk.BetaRawMessageStreamEventUnionDelta{Text: "text"},
+			},
+			// No content_block_start for index 1 — thinking deltas only
+			{
+				Type:  "content_block_delta",
+				Index: 1,
+				Delta: asdk.BetaRawMessageStreamEventUnionDelta{Thinking: "hmm"},
+			},
+			{
+				Type: "message_delta",
+				Delta: asdk.BetaRawMessageStreamEventUnionDelta{
+					StopReason: asdk.BetaStopReasonEndTurn,
+				},
+				Usage: asdk.BetaMessageDeltaUsage{
+					InputTokens:  10,
+					OutputTokens: 5,
+				},
+			},
+		},
+	}
+
+	generation, err := FromStream(req, summary,
+		WithConversationID("conv-fallback"),
+		WithAgentName("agent-fallback"),
+	)
+	if err != nil {
+		t.Fatalf("from stream: %v", err)
+	}
+
+	if len(generation.Output) == 0 {
+		t.Fatal("expected output messages but got none")
+	}
+
+	output := generation.Output[0]
+	if len(output.Parts) != 2 {
+		t.Fatalf("expected 2 parts (text + thinking), got %d", len(output.Parts))
+	}
+
+	if output.Parts[0].Kind != sigil.PartKindText {
+		t.Fatalf("expected text part at index 0, got %q", output.Parts[0].Kind)
+	}
+	if output.Parts[0].Text != "orphan text" {
+		t.Fatalf("expected 'orphan text', got %q", output.Parts[0].Text)
+	}
+
+	if output.Parts[1].Kind != sigil.PartKindThinking {
+		t.Fatalf("expected thinking part at index 1, got %q", output.Parts[1].Kind)
+	}
+	if output.Parts[1].Thinking != "hmm" {
+		t.Fatalf("expected 'hmm', got %q", output.Parts[1].Thinking)
 	}
 }
 

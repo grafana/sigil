@@ -210,7 +210,7 @@ func (a *streamBlockAccumulator) startBlock(index int, cb asdk.BetaRawContentBlo
 		b.toolID = cb.ID
 		b.toolName = cb.Name
 		if cb.Input != nil {
-			if raw, err := json.Marshal(cb.Input); err == nil {
+			if raw, err := json.Marshal(cb.Input); err == nil && string(raw) != "{}" {
 				b.toolJSON.Write(raw)
 			}
 		}
@@ -231,7 +231,7 @@ func (a *streamBlockAccumulator) startBlock(index int, cb asdk.BetaRawContentBlo
 func (a *streamBlockAccumulator) applyDelta(index int, delta asdk.BetaRawMessageStreamEventUnionDelta) {
 	b, ok := a.blocks[index]
 	if !ok {
-		b = &streamBlock{index: index, blockType: delta.Type}
+		b = &streamBlock{index: index}
 		a.blocks[index] = b
 		if index > a.maxIndex {
 			a.maxIndex = index
@@ -240,10 +240,22 @@ func (a *streamBlockAccumulator) applyDelta(index int, delta asdk.BetaRawMessage
 
 	switch {
 	case delta.Text != "":
+		if b.blockType == "" {
+			b.blockType = "text"
+			b.providerType = "text"
+		}
 		b.text.WriteString(delta.Text)
 	case delta.Thinking != "":
+		if b.blockType == "" {
+			b.blockType = "thinking"
+			b.providerType = "thinking"
+		}
 		b.thinking.WriteString(delta.Thinking)
 	case delta.PartialJSON != "":
+		if b.blockType == "" {
+			b.blockType = "tool_use"
+			b.providerType = "tool_use"
+		}
 		b.toolJSON.WriteString(delta.PartialJSON)
 	}
 }
