@@ -53,16 +53,24 @@ func (s *WALStore) CreateEvaluator(ctx context.Context, evaluator evalpkg.Evalua
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
+	if evaluator.SourceTemplateID != "" {
+		model.SourceTemplateID = &evaluator.SourceTemplateID
+	}
+	if evaluator.SourceTemplateVersion != "" {
+		model.SourceTemplateVersion = &evaluator.SourceTemplateVersion
+	}
 
 	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "tenant_id"}, {Name: "evaluator_id"}, {Name: "version"}},
 		DoUpdates: clause.Assignments(map[string]any{
-			"kind":             model.Kind,
-			"config_json":      model.ConfigJSON,
-			"output_keys_json": model.OutputKeysJSON,
-			"is_predefined":    model.IsPredefined,
-			"deleted_at":       nil,
-			"updated_at":       now,
+			"kind":                    model.Kind,
+			"config_json":             model.ConfigJSON,
+			"output_keys_json":        model.OutputKeysJSON,
+			"is_predefined":           model.IsPredefined,
+			"source_template_id":      model.SourceTemplateID,
+			"source_template_version": model.SourceTemplateVersion,
+			"deleted_at":              nil,
+			"updated_at":              now,
 		}),
 	}).Create(&model).Error
 }
@@ -885,7 +893,7 @@ func evaluatorModelToDefinition(row EvalEvaluatorModel) (evalpkg.EvaluatorDefini
 	if err := unmarshalJSONField(row.OutputKeysJSON, &outputKeys); err != nil {
 		return evalpkg.EvaluatorDefinition{}, fmt.Errorf("decode evaluator output keys: %w", err)
 	}
-	return evalpkg.EvaluatorDefinition{
+	def := evalpkg.EvaluatorDefinition{
 		TenantID:     row.TenantID,
 		EvaluatorID:  row.EvaluatorID,
 		Version:      row.Version,
@@ -896,7 +904,14 @@ func evaluatorModelToDefinition(row EvalEvaluatorModel) (evalpkg.EvaluatorDefini
 		DeletedAt:    row.DeletedAt,
 		CreatedAt:    row.CreatedAt.UTC(),
 		UpdatedAt:    row.UpdatedAt.UTC(),
-	}, nil
+	}
+	if row.SourceTemplateID != nil {
+		def.SourceTemplateID = *row.SourceTemplateID
+	}
+	if row.SourceTemplateVersion != nil {
+		def.SourceTemplateVersion = *row.SourceTemplateVersion
+	}
+	return def, nil
 }
 
 func ruleModelToDefinition(row EvalRuleModel) (evalpkg.RuleDefinition, error) {

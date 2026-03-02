@@ -77,16 +77,18 @@ type OutputKey struct {
 }
 
 type EvaluatorDefinition struct {
-	TenantID     string         `json:"tenant_id"`
-	EvaluatorID  string         `json:"evaluator_id"`
-	Version      string         `json:"version"`
-	Kind         EvaluatorKind  `json:"kind"`
-	Config       map[string]any `json:"config"`
-	OutputKeys   []OutputKey    `json:"output_keys"`
-	IsPredefined bool           `json:"is_predefined"`
-	DeletedAt    *time.Time     `json:"deleted_at,omitempty"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
+	TenantID              string         `json:"tenant_id"`
+	EvaluatorID           string         `json:"evaluator_id"`
+	Version               string         `json:"version"`
+	Kind                  EvaluatorKind  `json:"kind"`
+	Config                map[string]any `json:"config"`
+	OutputKeys            []OutputKey    `json:"output_keys"`
+	IsPredefined          bool           `json:"is_predefined"`
+	SourceTemplateID      string         `json:"source_template_id,omitempty"`
+	SourceTemplateVersion string         `json:"source_template_version,omitempty"`
+	DeletedAt             *time.Time     `json:"deleted_at,omitempty"`
+	CreatedAt             time.Time      `json:"created_at"`
+	UpdatedAt             time.Time      `json:"updated_at"`
 }
 
 type RuleDefinition struct {
@@ -100,6 +102,41 @@ type RuleDefinition struct {
 	DeletedAt    *time.Time     `json:"deleted_at,omitempty"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
+}
+
+// GlobalTenantID is the sentinel tenant ID used for global-scope templates.
+const GlobalTenantID = "global"
+
+// TemplateScope controls visibility of a template.
+type TemplateScope string
+
+const (
+	TemplateScopeGlobal TemplateScope = "global"
+	TemplateScopeTenant TemplateScope = "tenant"
+)
+
+// TemplateDefinition is a reusable, versioned evaluator blueprint.
+type TemplateDefinition struct {
+	TenantID      string        `json:"tenant_id"`
+	TemplateID    string        `json:"template_id"`
+	Scope         TemplateScope `json:"scope"`
+	LatestVersion string        `json:"latest_version"`
+	Kind          EvaluatorKind `json:"kind"`
+	Description   string        `json:"description,omitempty"`
+	DeletedAt     *time.Time    `json:"deleted_at,omitempty"`
+	CreatedAt     time.Time     `json:"created_at"`
+	UpdatedAt     time.Time     `json:"updated_at"`
+}
+
+// TemplateVersion is an immutable snapshot of a template's config.
+type TemplateVersion struct {
+	TenantID   string         `json:"tenant_id"`
+	TemplateID string         `json:"template_id"`
+	Version    string         `json:"version"`
+	Config     map[string]any `json:"config"`
+	OutputKeys []OutputKey    `json:"output_keys"`
+	Changelog  string         `json:"changelog,omitempty"`
+	CreatedAt  time.Time      `json:"created_at"`
 }
 
 type GenerationScore struct {
@@ -178,4 +215,26 @@ type EvalStore interface {
 	CompleteWorkItem(ctx context.Context, tenantID, workID string) error
 	FailWorkItem(ctx context.Context, tenantID, workID, lastError string, retryAt time.Time, maxAttempts int, permanent bool) (bool, error)
 	CountWorkItemsByStatus(ctx context.Context, status WorkItemStatus) (map[string]int64, error)
+}
+
+// TemplateStore manages evaluator template CRUD and versioning.
+type TemplateStore interface {
+	CreateTemplate(ctx context.Context, tmpl TemplateDefinition, version TemplateVersion) error
+	GetTemplate(ctx context.Context, tenantID, templateID string) (*TemplateDefinition, error)
+	GetGlobalTemplate(ctx context.Context, templateID string) (*TemplateDefinition, error)
+	ListTemplates(ctx context.Context, tenantID string, scope *TemplateScope, limit int, cursor uint64) ([]TemplateDefinition, uint64, error)
+	DeleteTemplate(ctx context.Context, tenantID, templateID string) error
+	CountActiveTemplates(ctx context.Context, tenantID string) (int64, error)
+
+	CreateTemplateVersion(ctx context.Context, version TemplateVersion) error
+	GetTemplateVersion(ctx context.Context, tenantID, templateID, version string) (*TemplateVersion, error)
+	GetLatestTemplateVersion(ctx context.Context, tenantID, templateID string) (*TemplateVersion, error)
+	ListTemplateVersions(ctx context.Context, tenantID, templateID string) ([]TemplateVersion, error)
+
+	UpdateTemplateLatestVersion(ctx context.Context, tenantID, templateID, version string) error
+
+	// PublishTemplateVersion atomically creates a version and updates the
+	// template's latest_version pointer. Implementations must wrap both
+	// operations in a single transaction to avoid inconsistent state.
+	PublishTemplateVersion(ctx context.Context, version TemplateVersion) error
 }

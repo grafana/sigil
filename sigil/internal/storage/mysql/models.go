@@ -92,17 +92,19 @@ func (EvalWorkItemModel) TableName() string {
 }
 
 type EvalEvaluatorModel struct {
-	ID             uint64     `gorm:"primaryKey;autoIncrement"`
-	TenantID       string     `gorm:"size:128;not null;uniqueIndex:ux_eval_evaluators_tenant_id_version,priority:1;index:idx_eval_evaluators_tenant_deleted_updated,priority:1"`
-	EvaluatorID    string     `gorm:"size:255;not null;uniqueIndex:ux_eval_evaluators_tenant_id_version,priority:2;index:idx_eval_evaluators_tenant_deleted_updated,priority:2"`
-	Version        string     `gorm:"size:64;not null;uniqueIndex:ux_eval_evaluators_tenant_id_version,priority:3"`
-	Kind           string     `gorm:"size:32;not null"`
-	ConfigJSON     string     `gorm:"type:json;not null"`
-	OutputKeysJSON string     `gorm:"type:json;not null"`
-	IsPredefined   bool       `gorm:"not null;default:false"`
-	DeletedAt      *time.Time `gorm:"type:datetime(6);index:idx_eval_evaluators_tenant_deleted_updated,priority:3"`
-	CreatedAt      time.Time  `gorm:"type:datetime(6);not null;autoCreateTime"`
-	UpdatedAt      time.Time  `gorm:"type:datetime(6);not null;autoUpdateTime;index:idx_eval_evaluators_tenant_deleted_updated,priority:4"`
+	ID                    uint64     `gorm:"primaryKey;autoIncrement"`
+	TenantID              string     `gorm:"size:128;not null;uniqueIndex:ux_eval_evaluators_tenant_id_version,priority:1;index:idx_eval_evaluators_tenant_deleted_updated,priority:1"`
+	EvaluatorID           string     `gorm:"size:255;not null;uniqueIndex:ux_eval_evaluators_tenant_id_version,priority:2;index:idx_eval_evaluators_tenant_deleted_updated,priority:2"`
+	Version               string     `gorm:"size:64;not null;uniqueIndex:ux_eval_evaluators_tenant_id_version,priority:3"`
+	Kind                  string     `gorm:"size:32;not null"`
+	ConfigJSON            string     `gorm:"type:json;not null"`
+	OutputKeysJSON        string     `gorm:"type:json;not null"`
+	IsPredefined          bool       `gorm:"not null;default:false"`
+	SourceTemplateID      *string    `gorm:"size:255"`
+	SourceTemplateVersion *string    `gorm:"size:64"`
+	DeletedAt             *time.Time `gorm:"type:datetime(6);index:idx_eval_evaluators_tenant_deleted_updated,priority:3"`
+	CreatedAt             time.Time  `gorm:"type:datetime(6);not null;autoCreateTime"`
+	UpdatedAt             time.Time  `gorm:"type:datetime(6);not null;autoUpdateTime;index:idx_eval_evaluators_tenant_deleted_updated,priority:4"`
 }
 
 func (EvalEvaluatorModel) TableName() string {
@@ -126,6 +128,34 @@ type EvalRuleModel struct {
 func (EvalRuleModel) TableName() string {
 	return "eval_rules"
 }
+
+type EvalTemplateModel struct {
+	ID            uint64     `gorm:"primaryKey;autoIncrement"`
+	TenantID      string     `gorm:"size:128;not null;uniqueIndex:ux_eval_templates_tenant_id,priority:1"`
+	TemplateID    string     `gorm:"size:255;not null;uniqueIndex:ux_eval_templates_tenant_id,priority:2"`
+	Scope         string     `gorm:"size:32;not null;default:tenant"`
+	LatestVersion string     `gorm:"size:64;not null"`
+	Kind          string     `gorm:"size:32;not null"`
+	Description   *string    `gorm:"type:text"`
+	DeletedAt     *time.Time `gorm:"type:datetime(6)"`
+	CreatedAt     time.Time  `gorm:"type:datetime(6);not null;autoCreateTime"`
+	UpdatedAt     time.Time  `gorm:"type:datetime(6);not null;autoUpdateTime"`
+}
+
+func (EvalTemplateModel) TableName() string { return "eval_templates" }
+
+type EvalTemplateVersionModel struct {
+	ID             uint64    `gorm:"primaryKey;autoIncrement"`
+	TenantID       string    `gorm:"size:128;not null;uniqueIndex:ux_eval_template_versions_tenant_id_version,priority:1"`
+	TemplateID     string    `gorm:"size:255;not null;uniqueIndex:ux_eval_template_versions_tenant_id_version,priority:2"`
+	Version        string    `gorm:"size:64;not null;uniqueIndex:ux_eval_template_versions_tenant_id_version,priority:3"`
+	ConfigJSON     string    `gorm:"type:json;not null"`
+	OutputKeysJSON string    `gorm:"type:json;not null"`
+	Changelog      *string   `gorm:"type:text"`
+	CreatedAt      time.Time `gorm:"type:datetime(6);not null;autoCreateTime"`
+}
+
+func (EvalTemplateVersionModel) TableName() string { return "eval_template_versions" }
 
 type ConversationModel struct {
 	ID               uint64    `gorm:"primaryKey;autoIncrement"`

@@ -22,6 +22,7 @@ apps/plugin/pkg/
 sigil/tmp/
 sigil/sigil
 *.db
+coverage.out
 
 # dotnet artifacts
 sdks/dotnet/**/bin/
