@@ -201,6 +201,12 @@ Inputs:
   value: {{ $root.Values.sigil.queryProxy.tempoBaseURL | quote }}
 - name: SIGIL_QUERY_PROXY_TIMEOUT
   value: {{ $root.Values.sigil.queryProxy.timeout | quote }}
+- name: SIGIL_GRAFANA_URL
+  value: {{ $root.Values.sigil.grafana.url | quote }}
+- name: SIGIL_GRAFANA_SA_TOKEN
+  value: {{ $root.Values.sigil.grafana.serviceAccountToken | quote }}
+- name: SIGIL_GRAFANA_TEMPO_DATASOURCE_UID
+  value: {{ $root.Values.sigil.grafana.tempoDatasourceUID | quote }}
 - name: SIGIL_STORAGE_BACKEND
   value: {{ $root.Values.sigil.storage.backend | quote }}
 - name: SIGIL_MYSQL_DSN

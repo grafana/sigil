@@ -160,6 +160,13 @@ type tempoHTTPClient struct {
 	client  *http.Client
 }
 
+type grafanaTempoHTTPClient struct {
+	grafanaBaseURL      *url.URL
+	datasourceUID       string
+	serviceAccountToken string
+	client              *http.Client
+}
+
 func NewTempoHTTPClient(rawBaseURL string, client *http.Client) (TempoClient, error) {
 	parsed, err := url.Parse(strings.TrimSpace(rawBaseURL))
 	if err != nil {
@@ -179,6 +186,36 @@ func NewTempoHTTPClient(rawBaseURL string, client *http.Client) (TempoClient, er
 	return &tempoHTTPClient{
 		baseURL: parsed,
 		client:  client,
+	}, nil
+}
+
+func NewGrafanaTempoHTTPClient(rawGrafanaURL string, datasourceUID string, serviceAccountToken string, client *http.Client) (TempoClient, error) {
+	parsed, err := url.Parse(strings.TrimSpace(rawGrafanaURL))
+	if err != nil {
+		return nil, fmt.Errorf("parse grafana url: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return nil, errors.New("grafana url scheme must be http or https")
+	}
+	if parsed.Host == "" {
+		return nil, errors.New("grafana url host is required")
+	}
+	if strings.TrimSpace(datasourceUID) == "" {
+		return nil, errors.New("grafana tempo datasource uid is required")
+	}
+	if strings.TrimSpace(serviceAccountToken) == "" {
+		return nil, errors.New("grafana service account token is required")
+	}
+
+	if client == nil {
+		client = &http.Client{Timeout: 30 * time.Second}
+	}
+
+	return &grafanaTempoHTTPClient{
+		grafanaBaseURL:      parsed,
+		datasourceUID:       strings.TrimSpace(datasourceUID),
+		serviceAccountToken: strings.TrimSpace(serviceAccountToken),
+		client:              client,
 	}, nil
 }
 
@@ -204,6 +241,39 @@ func (c *tempoHTTPClient) Search(ctx context.Context, request TempoSearchRequest
 	query.Set("spss", strconv.Itoa(request.SpansPerSpanSet))
 
 	body, err := c.doTempoRequest(ctx, request.TenantID, http.MethodGet, "/api/search", "", query, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var response TempoSearchResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("decode tempo search response: %w", err)
+	}
+	if response.Traces == nil {
+		response.Traces = []TempoTrace{}
+	}
+	return &response, nil
+}
+
+func (c *grafanaTempoHTTPClient) Search(ctx context.Context, request TempoSearchRequest) (*TempoSearchResponse, error) {
+	if strings.TrimSpace(request.Query) == "" {
+		return nil, errors.New("tempo query is required")
+	}
+	if request.Limit <= 0 {
+		return nil, errors.New("tempo limit must be positive")
+	}
+	if request.SpansPerSpanSet <= 0 {
+		request.SpansPerSpanSet = defaultTempoSearchSpansPerSpanSet
+	}
+
+	query := url.Values{}
+	query.Set("q", request.Query)
+	query.Set("limit", strconv.Itoa(request.Limit))
+	query.Set("start", strconv.FormatInt(request.Start.UTC().Unix(), 10))
+	query.Set("end", strconv.FormatInt(request.End.UTC().Unix(), 10))
+	query.Set("spss", strconv.Itoa(request.SpansPerSpanSet))
+
+	body, err := c.doGrafanaTempoRequest(ctx, http.MethodGet, "/api/search", "", query, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -246,6 +316,30 @@ func (c *tempoHTTPClient) SearchTags(ctx context.Context, tenantID string, scope
 	return dedupeAndSortStrings(values), nil
 }
 
+func (c *grafanaTempoHTTPClient) SearchTags(ctx context.Context, _ string, scope string, from, to time.Time) ([]string, error) {
+	query := url.Values{}
+	if trimmedScope := strings.TrimSpace(scope); trimmedScope != "" {
+		query.Set("scope", trimmedScope)
+	}
+	if !from.IsZero() {
+		query.Set("start", strconv.FormatInt(from.UTC().Unix(), 10))
+	}
+	if !to.IsZero() {
+		query.Set("end", strconv.FormatInt(to.UTC().Unix(), 10))
+	}
+
+	body, err := c.doGrafanaTempoRequest(ctx, http.MethodGet, "/api/v2/search/tags", "", query, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	values, err := extractStringSlice(body, "tagNames", "tags", "scopes")
+	if err != nil {
+		return nil, err
+	}
+	return dedupeAndSortStrings(values), nil
+}
+
 func (c *tempoHTTPClient) SearchTagValues(ctx context.Context, tenantID string, tag string, from, to time.Time) ([]string, error) {
 	if strings.TrimSpace(tenantID) == "" {
 		return nil, errors.New("tenant id is required")
@@ -266,6 +360,34 @@ func (c *tempoHTTPClient) SearchTagValues(ctx context.Context, tenantID string, 
 	tagPath := "/api/v2/search/tag/" + trimmedTag + "/values"
 	tagRawPath := "/api/v2/search/tag/" + url.PathEscape(trimmedTag) + "/values"
 	body, err := c.doTempoRequest(ctx, tenantID, http.MethodGet, tagPath, tagRawPath, query, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	values, err := extractStringSlice(body, "values", "tagValues")
+	if err != nil {
+		return nil, err
+	}
+	return dedupeAndSortStrings(values), nil
+}
+
+func (c *grafanaTempoHTTPClient) SearchTagValues(ctx context.Context, _ string, tag string, from, to time.Time) ([]string, error) {
+	if strings.TrimSpace(tag) == "" {
+		return nil, errors.New("tag is required")
+	}
+
+	query := url.Values{}
+	if !from.IsZero() {
+		query.Set("start", strconv.FormatInt(from.UTC().Unix(), 10))
+	}
+	if !to.IsZero() {
+		query.Set("end", strconv.FormatInt(to.UTC().Unix(), 10))
+	}
+
+	trimmedTag := strings.TrimSpace(tag)
+	tagPath := "/api/v2/search/tag/" + trimmedTag + "/values"
+	tagRawPath := "/api/v2/search/tag/" + url.PathEscape(trimmedTag) + "/values"
+	body, err := c.doGrafanaTempoRequest(ctx, http.MethodGet, tagPath, tagRawPath, query, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -314,6 +436,47 @@ func (c *tempoHTTPClient) doTempoRequest(
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("tempo request failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(payload)))
+	}
+	return payload, nil
+}
+
+func (c *grafanaTempoHTTPClient) doGrafanaTempoRequest(
+	ctx context.Context,
+	method string,
+	tempoPath string,
+	tempoRawPath string,
+	query url.Values,
+	body io.Reader,
+) ([]byte, error) {
+	basePath := "/api/datasources/proxy/uid/" + c.datasourceUID
+	requestURL := *c.grafanaBaseURL
+	requestURL.Path = joinURLPath(c.grafanaBaseURL.Path, joinURLPath(basePath, tempoPath))
+	if strings.TrimSpace(tempoRawPath) != "" {
+		requestURL.RawPath = joinURLPath(c.grafanaBaseURL.EscapedPath(), joinURLPath(basePath, tempoRawPath))
+	}
+	requestURL.RawQuery = query.Encode()
+	requestURL.Fragment = ""
+
+	req, err := http.NewRequestWithContext(ctx, method, requestURL.String(), body)
+	if err != nil {
+		return nil, fmt.Errorf("build grafana tempo request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.serviceAccountToken)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("grafana tempo request failed: %w", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	payload, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read grafana tempo response body: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("grafana tempo request failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(payload)))
 	}
 	return payload, nil
 }

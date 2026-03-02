@@ -52,6 +52,9 @@ type Config struct {
 	TempoOTLPGRPCEndpoint          string
 	TempoOTLPHTTPEndpoint          string
 	QueryProxy                     QueryProxyConfig
+	GrafanaURL                     string
+	GrafanaServiceAccountToken     string
+	GrafanaTempoDatasourceUID      string
 	StorageBackend                 string
 	MySQLDSN                       string
 	ObjectStore                    ObjectStoreConfig
@@ -154,8 +157,11 @@ func FromEnv() Config {
 			TempoBaseURL:      getEnv("SIGIL_QUERY_PROXY_TEMPO_BASE_URL", "http://tempo:3200"),
 			Timeout:           getEnvDuration("SIGIL_QUERY_PROXY_TIMEOUT", DefaultQueryProxyTimeout),
 		},
-		StorageBackend: getEnv("SIGIL_STORAGE_BACKEND", "mysql"),
-		MySQLDSN:       getEnv("SIGIL_MYSQL_DSN", "sigil:sigil@tcp(mysql:3306)/sigil?parseTime=true"),
+		GrafanaURL:                 getEnv("SIGIL_GRAFANA_URL", ""),
+		GrafanaServiceAccountToken: getEnv("SIGIL_GRAFANA_SA_TOKEN", ""),
+		GrafanaTempoDatasourceUID:  getEnv("SIGIL_GRAFANA_TEMPO_DATASOURCE_UID", ""),
+		StorageBackend:             getEnv("SIGIL_STORAGE_BACKEND", "mysql"),
+		MySQLDSN:                   getEnv("SIGIL_MYSQL_DSN", "sigil:sigil@tcp(mysql:3306)/sigil?parseTime=true"),
 		ObjectStore: ObjectStoreConfig{
 			Backend: strings.ToLower(strings.TrimSpace(getEnv("SIGIL_OBJECT_STORE_BACKEND", "s3"))),
 			Bucket:  getEnv("SIGIL_OBJECT_STORE_BUCKET", "sigil"),
@@ -272,6 +278,17 @@ func (c Config) Validate() error {
 	}
 	if err := validateHTTPBaseURL(c.QueryProxy.TempoBaseURL, "SIGIL_QUERY_PROXY_TEMPO_BASE_URL"); err != nil {
 		return err
+	}
+	if strings.TrimSpace(c.GrafanaURL) != "" {
+		if err := validateHTTPBaseURL(c.GrafanaURL, "SIGIL_GRAFANA_URL"); err != nil {
+			return err
+		}
+		if strings.TrimSpace(c.GrafanaServiceAccountToken) == "" {
+			return fmt.Errorf("SIGIL_GRAFANA_SA_TOKEN must be set when SIGIL_GRAFANA_URL is set")
+		}
+		if strings.TrimSpace(c.GrafanaTempoDatasourceUID) == "" {
+			return fmt.Errorf("SIGIL_GRAFANA_TEMPO_DATASOURCE_UID must be set when SIGIL_GRAFANA_URL is set")
+		}
 	}
 	if c.ModelCardsConfig.SyncInterval <= 0 {
 		return fmt.Errorf("SIGIL_MODEL_CARDS_SYNC_INTERVAL must be > 0")

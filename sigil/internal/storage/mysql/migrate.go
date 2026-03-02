@@ -34,6 +34,7 @@ func (s *WALStore) AutoMigrate(ctx context.Context) error {
 		&ConversationAnnotationSummaryModel{},
 		&CompactionBlockModel{},
 		&CompactorLeaseModel{},
+		&TenantSettingsModel{},
 	)
 	status := "success"
 	if err != nil {

@@ -7,6 +7,8 @@ apps:
     disabled: false
     jsonData:
       sigilApiUrl: http://sigil:8080
+      prometheusDatasourceUID: prometheus
+      tempoDatasourceUID: tempo
   - type: 'grafana-assistant-app'
     org_id: 1
     org_name: 'Main Org.'

@@ -241,6 +241,18 @@ func (CompactorLeaseModel) TableName() string {
 	return "compactor_leases"
 }
 
+type TenantSettingsModel struct {
+	TenantID                string    `gorm:"size:128;primaryKey"`
+	PrometheusDatasourceUID string    `gorm:"size:255;not null;default:''"`
+	TempoDatasourceUID      string    `gorm:"size:255;not null;default:''"`
+	CreatedAt               time.Time `gorm:"type:datetime(6);not null;autoCreateTime"`
+	UpdatedAt               time.Time `gorm:"type:datetime(6);not null;autoUpdateTime"`
+}
+
+func (TenantSettingsModel) TableName() string {
+	return "tenant_settings"
+}
+
 type ModelCardModel struct {
 	ID                              uint64     `gorm:"primaryKey;autoIncrement"`
 	ModelKey                        string     `gorm:"size:255;not null;uniqueIndex:ux_model_cards_model_key,priority:1"`
