@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-22
+last_reviewed: 2026-03-02
 source_of_truth: true
 audience: both
 ---
@@ -62,6 +62,7 @@ This is the canonical navigation map for repository documentation.
   - LangChain/LangGraph framework integration delivery: `exec-plans/completed/2026-02-20-sdk-langchain-langgraph-integrations.md`
   - OpenAI Agents/LlamaIndex/Google ADK framework integration delivery: `exec-plans/completed/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
   - Vercel AI SDK TypeScript integration delivery: `exec-plans/completed/2026-02-22-sdk-vercel-ai-sdk-integration.md`
+  - Sigil image and plugin artifact publish delivery: `exec-plans/completed/2026-03-02-sigil-image-and-plugin-publish.md`
   - Completed: `exec-plans/completed/`
     - `exec-plans/completed/2026-02-11-bootstrap-phase-1.md` (superseded)
     - `exec-plans/completed/2026-02-12-model-card-catalog-refresh.md`
@@ -83,6 +84,7 @@ This is the canonical navigation map for repository documentation.
     - `exec-plans/completed/2026-02-17-embedding-call-observability.md`
     - `exec-plans/completed/2026-02-20-sdk-langchain-langgraph-integrations.md`
     - `exec-plans/completed/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
+    - `exec-plans/completed/2026-03-02-sigil-image-and-plugin-publish.md`
   - Tech debt tracker: [`exec-plans/tech-debt-tracker.md`](exec-plans/tech-debt-tracker.md)
 - Generated docs: [`generated/db-schema.md`](generated/db-schema.md)
 - External references: [`references/index.md`](references/index.md)

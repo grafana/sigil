@@ -120,15 +120,28 @@ SIGIL_E2E_COMPACTION_WAIT=5m mise run test:e2e:storage-local
 
 The Sigil Helm chart lives in `charts/sigil`.
 
-Basic install:
+Basic install (defaults to `ghcr.io/grafana/sigil:latest`):
+
+```bash
+helm upgrade --install sigil ./charts/sigil \
+  --namespace sigil \
+  --create-namespace
+```
+
+To pin to an immutable published image from CI, set the image tag explicitly:
 
 ```bash
 helm upgrade --install sigil ./charts/sigil \
   --namespace sigil \
   --create-namespace \
-  --set image.repository=<your-image-repository> \
-  --set image.tag=<your-image-tag>
+  --set image.tag=<git-sha>
 ```
+
+Image publishing automation:
+
+- GitHub Actions workflow: `.github/workflows/sigil-image-publish.yml`
+- Trigger: pushes to `main` that touch `sigil/**` or workflow/go workspace files.
+- Published tags: `ghcr.io/grafana/sigil:<git-sha>` and `ghcr.io/grafana/sigil:latest`
 
 Chart docs and reference:
 
