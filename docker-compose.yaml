@@ -24,6 +24,8 @@ services:
       GF_APP_URL: http://grafana:3000
       GF_SERVER_ROOT_URL: http://grafana:3000
       GF_FEATURE_TOGGLES_ENABLE: externalServiceAccounts
+      GRAFANA_ASSISTANT_ACCESS_TOKEN: ${GRAFANA_ASSISTANT_ACCESS_TOKEN}
+      GF_INSTALL_PLUGINS: https://storage.googleapis.com/integration-artifacts/grafana-assistant-app/release/latest/grafana-assistant-app-latest.zip;grafana-assistant-app,yesoreyeram-infinity-datasource
 
   plugin-precache:
     profiles: ['core']
