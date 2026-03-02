@@ -2,6 +2,8 @@ package worker
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	"time"
 
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
@@ -46,6 +48,13 @@ func (r *hotColdGenerationReader) GetByID(ctx context.Context, tenantID, generat
 	for idx := len(blocks) - 1; idx >= 0; idx-- {
 		index, err := r.blockReader.ReadIndex(ctx, tenantID, blocks[idx].BlockID)
 		if err != nil {
+			if errors.Is(err, storage.ErrBlockNotFound) {
+				slog.Default().Warn("skipping stale block during eval get-by-id",
+					"tenant_id", tenantID,
+					"block_id", blocks[idx].BlockID,
+				)
+				continue
+			}
 			return nil, err
 		}
 		entries := object.FindEntriesByGenerationID(index, generationID)
@@ -55,6 +64,13 @@ func (r *hotColdGenerationReader) GetByID(ctx context.Context, tenantID, generat
 
 		generations, err := r.blockReader.ReadGenerations(ctx, tenantID, blocks[idx].BlockID, entries)
 		if err != nil {
+			if errors.Is(err, storage.ErrBlockNotFound) {
+				slog.Default().Warn("skipping stale block during eval get-by-id read",
+					"tenant_id", tenantID,
+					"block_id", blocks[idx].BlockID,
+				)
+				continue
+			}
 			return nil, err
 		}
 		for _, candidate := range generations {

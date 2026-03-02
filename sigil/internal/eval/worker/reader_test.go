@@ -83,6 +83,70 @@ func TestHotColdGenerationReaderPropagatesColdLookupErrors(t *testing.T) {
 	}
 }
 
+func TestHotColdGenerationReaderSkipsStaleBlockOnReadIndex(t *testing.T) {
+	hotReader := &hotReaderStub{}
+	metadataStore := &blockMetadataStoreStub{
+		blocks: []storage.BlockMeta{
+			{BlockID: "block-stale"},
+			{BlockID: "block-good"},
+		},
+	}
+	blockReader := &blockReaderStubWithStaleBlock{
+		staleBlockID: "block-stale",
+		indexByBlock: map[string]*storage.BlockIndex{
+			"block-good": {
+				Entries: []storage.IndexEntry{{GenerationIDHash: hashGenerationID("gen-found"), Offset: 100, Length: 20}},
+			},
+		},
+		generationsByBlock: map[string][]*sigilv1.Generation{
+			"block-good": {{Id: "gen-found"}},
+		},
+	}
+	reader := NewHotColdGenerationReader(hotReader, metadataStore, blockReader)
+
+	got, err := reader.GetByID(context.Background(), "tenant-a", "gen-found")
+	if err != nil {
+		t.Fatalf("GetByID failed: %v", err)
+	}
+	if got == nil || got.GetId() != "gen-found" {
+		t.Fatalf("expected generation gen-found, got %#v", got)
+	}
+}
+
+func TestHotColdGenerationReaderSkipsStaleBlockOnReadGenerations(t *testing.T) {
+	hotReader := &hotReaderStub{}
+	metadataStore := &blockMetadataStoreStub{
+		blocks: []storage.BlockMeta{
+			{BlockID: "block-stale"},
+			{BlockID: "block-good"},
+		},
+	}
+	blockReader := &blockReaderStubWithStaleBlock{
+		staleBlockID:          "block-stale",
+		staleOnReadGeneration: true,
+		indexByBlock: map[string]*storage.BlockIndex{
+			"block-stale": {
+				Entries: []storage.IndexEntry{{GenerationIDHash: hashGenerationID("gen-found"), Offset: 100, Length: 20}},
+			},
+			"block-good": {
+				Entries: []storage.IndexEntry{{GenerationIDHash: hashGenerationID("gen-found"), Offset: 100, Length: 20}},
+			},
+		},
+		generationsByBlock: map[string][]*sigilv1.Generation{
+			"block-good": {{Id: "gen-found"}},
+		},
+	}
+	reader := NewHotColdGenerationReader(hotReader, metadataStore, blockReader)
+
+	got, err := reader.GetByID(context.Background(), "tenant-a", "gen-found")
+	if err != nil {
+		t.Fatalf("GetByID failed: %v", err)
+	}
+	if got == nil || got.GetId() != "gen-found" {
+		t.Fatalf("expected generation gen-found, got %#v", got)
+	}
+}
+
 type hotReaderStub struct {
 	generation *sigilv1.Generation
 	err        error
@@ -165,4 +229,46 @@ func hashGenerationID(value string) uint64 {
 	hasher := fnv.New64a()
 	_, _ = hasher.Write([]byte(value))
 	return hasher.Sum64()
+}
+
+type blockReaderStubWithStaleBlock struct {
+	staleBlockID          string
+	staleOnReadGeneration bool
+	indexByBlock          map[string]*storage.BlockIndex
+	generationsByBlock    map[string][]*sigilv1.Generation
+}
+
+func (s *blockReaderStubWithStaleBlock) ReadIndex(_ context.Context, _ string, blockID string) (*storage.BlockIndex, error) {
+	if blockID == s.staleBlockID && !s.staleOnReadGeneration {
+		return nil, storage.ErrBlockNotFound
+	}
+	if s.indexByBlock == nil {
+		return &storage.BlockIndex{Entries: []storage.IndexEntry{}}, nil
+	}
+	if index, ok := s.indexByBlock[blockID]; ok {
+		return index, nil
+	}
+	return &storage.BlockIndex{Entries: []storage.IndexEntry{}}, nil
+}
+
+func (s *blockReaderStubWithStaleBlock) ReadGenerations(_ context.Context, _ string, blockID string, _ []storage.IndexEntry) ([]*sigilv1.Generation, error) {
+	if blockID == s.staleBlockID && s.staleOnReadGeneration {
+		return nil, storage.ErrBlockNotFound
+	}
+	if s.generationsByBlock == nil {
+		return []*sigilv1.Generation{}, nil
+	}
+	generations, ok := s.generationsByBlock[blockID]
+	if !ok {
+		return []*sigilv1.Generation{}, nil
+	}
+	out := make([]*sigilv1.Generation, 0, len(generations))
+	for _, generation := range generations {
+		cloned, ok := proto.Clone(generation).(*sigilv1.Generation)
+		if !ok {
+			return nil, errors.New("clone generation")
+		}
+		out = append(out, cloned)
+	}
+	return out, nil
 }
