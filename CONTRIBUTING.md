@@ -35,6 +35,7 @@ mise run up
 Run the full quality suite before opening a PR:
 
 ```bash
+mise run generate
 mise run format
 mise run lint
 mise run check
