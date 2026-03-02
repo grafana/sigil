@@ -181,10 +181,6 @@ func buildFeedbackStore(storageBackend string, generationStore generationingest.
 	return nil, fmt.Errorf("storage backend %q does not support feedback storage", storageBackend)
 }
 
-func (m *serverModule) buildBlockReader(ctx context.Context) (storage.BlockReader, error) {
-	return buildBlockReader(ctx, m.cfg.ObjectStore)
-}
-
 func buildBlockReader(ctx context.Context, cfg config.ObjectStoreConfig) (storage.BlockReader, error) {
 	return newObjectBlockReader(ctx, cfg)
 }

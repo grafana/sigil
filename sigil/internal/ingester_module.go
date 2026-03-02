@@ -43,26 +43,40 @@ func newIngesterModule(ctx context.Context, cfg config.Config, logger log.Logger
 		})
 	}
 
-	var dispatcher *evalenqueue.Service
-	mysqlStore, ok := generationStore.(*mysql.WALStore)
-	if ok {
-		if evalStore, ok := generationStore.(evalpkg.EvalStore); ok && evalStore != nil {
-			engine := evalrules.NewEngine(evalStore)
-			dispatcher = evalenqueue.NewService(
-				evalenqueue.Config{Enabled: true},
-				logger,
-				evalEnqueueStoreAdapter{store: mysqlStore},
-				evalEnqueueProcessorAdapter{engine: engine},
-			)
-			mysqlStore.SetEvalHook(evalHookAdapter{notifier: dispatcher})
-		}
-	}
+	dispatcher := configureIngesterEvalEnqueue(cfg, logger, generationStore)
 
 	module := &ingesterModule{
 		evalEnqueueDispatcher: dispatcher,
 		runErr:                make(chan error, 1),
 	}
 	return services.NewBasicService(module.start, module.run, module.stop).WithName(config.TargetIngester), nil
+}
+
+func configureIngesterEvalEnqueue(cfg config.Config, logger log.Logger, generationStore generationingest.Store) *evalenqueue.Service {
+	mysqlStore, ok := generationStore.(*mysql.WALStore)
+	if !ok {
+		return nil
+	}
+
+	mysqlStore.SetEvalEnqueueEnabled(cfg.EvalWorkerEnabled)
+	if !cfg.EvalWorkerEnabled {
+		return nil
+	}
+
+	evalStore, ok := generationStore.(evalpkg.EvalStore)
+	if !ok || evalStore == nil {
+		return nil
+	}
+
+	engine := evalrules.NewEngine(evalStore)
+	dispatcher := evalenqueue.NewService(
+		evalenqueue.Config{Enabled: cfg.EvalWorkerEnabled},
+		logger,
+		evalEnqueueStoreAdapter{store: mysqlStore},
+		evalEnqueueProcessorAdapter{engine: engine},
+	)
+	mysqlStore.SetEvalHook(evalHookAdapter{notifier: dispatcher})
+	return dispatcher
 }
 
 func (m *ingesterModule) start(_ context.Context) error {

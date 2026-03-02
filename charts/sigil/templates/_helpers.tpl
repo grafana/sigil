@@ -290,9 +290,9 @@ Inputs:
 - name: SIGIL_MODEL_CARDS_BOOTSTRAP_MODE
   value: {{ $root.Values.sigil.modelCards.bootstrapMode | quote }}
 {{- with $root.Values.sigil.extraEnv }}
-{{- toYaml . }}
+{{ toYaml . }}
 {{- end }}
 {{- with .extraEnv }}
-{{- toYaml . }}
+{{ toYaml . }}
 {{- end }}
 {{- end -}}
