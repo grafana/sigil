@@ -1,7 +1,15 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { PanelChrome } from '@grafana/ui';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { css } from '@emotion/css';
+import { PanelChrome, useStyles2 } from '@grafana/ui';
 import { PanelRenderer } from '@grafana/runtime';
-import { LoadingState, type DataFrame, type FieldConfigSource, type PanelData, type TimeRange } from '@grafana/data';
+import {
+  LoadingState,
+  type DataFrame,
+  type FieldConfigSource,
+  type GrafanaTheme2,
+  type PanelData,
+  type TimeRange,
+} from '@grafana/data';
 
 export type MetricPanelProps = {
   title: string;
@@ -14,6 +22,8 @@ export type MetricPanelProps = {
   timeRange: TimeRange;
   options?: Record<string, unknown>;
   fieldConfig?: FieldConfigSource;
+  actions?: React.ReactNode;
+  titleItems?: React.ReactNode;
 };
 
 export function MetricPanel({
@@ -27,9 +37,33 @@ export function MetricPanel({
   timeRange,
   options = {},
   fieldConfig = { defaults: {}, overrides: [] },
+  actions,
+  titleItems,
 }: MetricPanelProps) {
+  const styles = useStyles2(getStyles);
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const stableOptions = useMemo(() => options, [JSON.stringify(options)]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const stableFieldConfig = useMemo(() => fieldConfig, [JSON.stringify(fieldConfig)]);
+
+  const [userFieldConfig, setUserFieldConfig] = useState<FieldConfigSource | null>(null);
+  const [resetKey, setResetKey] = useState(0);
+
+  useEffect(() => {
+    setUserFieldConfig(null);
+    setResetKey((k) => k + 1);
+  }, [stableFieldConfig]);
+
+  const liveFieldConfig = userFieldConfig ?? stableFieldConfig;
+
+  const onOptionsChange = useCallback(() => {}, []);
+
+  const onFieldConfigChange = useCallback((updated: FieldConfigSource) => {
+    setUserFieldConfig(updated);
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current) {
@@ -44,14 +78,17 @@ export function MetricPanel({
     return () => observer.disconnect();
   }, []);
 
-  const panelData: PanelData = {
-    series: data,
-    state: loading ? LoadingState.Loading : error ? LoadingState.Error : LoadingState.Done,
-    timeRange,
-  };
+  const panelData = useMemo<PanelData>(
+    () => ({
+      series: data,
+      state: loading ? LoadingState.Loading : error ? LoadingState.Error : LoadingState.Done,
+      timeRange,
+    }),
+    [data, loading, error, timeRange]
+  );
 
   return (
-    <div ref={containerRef} style={{ width: '100%', height }}>
+    <div ref={containerRef} className={styles.container} style={{ height }}>
       {width > 0 && (
         <PanelChrome
           title={title}
@@ -60,20 +97,34 @@ export function MetricPanel({
           height={height}
           loadingState={loading ? LoadingState.Loading : undefined}
           statusMessage={error}
+          actions={actions}
+          titleItems={titleItems}
         >
           {(innerWidth, innerHeight) => (
             <PanelRenderer
+              key={resetKey}
               pluginId={pluginId}
               title=""
               data={panelData}
-              options={options}
-              fieldConfig={fieldConfig}
+              options={stableOptions}
+              fieldConfig={liveFieldConfig}
               width={innerWidth}
               height={innerHeight}
+              timeZone="browser"
+              onOptionsChange={onOptionsChange}
+              onFieldConfigChange={onFieldConfigChange}
             />
           )}
         </PanelChrome>
       )}
     </div>
   );
+}
+
+function getStyles(_theme: GrafanaTheme2) {
+  return {
+    container: css({
+      width: '100%',
+    }),
+  };
 }

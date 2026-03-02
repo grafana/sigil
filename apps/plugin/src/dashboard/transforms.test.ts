@@ -120,10 +120,10 @@ describe('vectorToPieDataFrame', () => {
 
     const frame = vectorToPieDataFrame(response, ['gen_ai_provider_name']);
     expect(frame.fields).toHaveLength(2);
-    expect(frame.fields[0].name).toBe('openai');
-    expect(frame.fields[0].values).toEqual([500]);
-    expect(frame.fields[1].name).toBe('anthropic');
-    expect(frame.fields[1].values).toEqual([300]);
+    expect(frame.fields[0].name).toBe('anthropic');
+    expect(frame.fields[0].values).toEqual([300]);
+    expect(frame.fields[1].name).toBe('openai');
+    expect(frame.fields[1].values).toEqual([500]);
   });
 
   it('builds provider/model labels when both keys are requested', () => {

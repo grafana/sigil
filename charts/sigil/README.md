@@ -182,6 +182,7 @@ Important values:
 - `ingester.*`, `querier.*`, `compactor.*`, `evalWorker.*`, `catalogSync.*`: optional dedicated role deployments
 - `sigil.auth.enabled`, `sigil.auth.fakeTenantID`: tenant/auth behavior
 - `sigil.queryProxy.prometheusBaseURL`, `sigil.queryProxy.tempoBaseURL`, `sigil.queryProxy.timeout`: downstream query-proxy settings for Prometheus/Mimir and Tempo pass-through routes
+- `sigil.grafana.url`, `sigil.grafana.serviceAccountToken`, `sigil.grafana.tempoDatasourceUID`: optional Grafana datasource-proxy settings for server-side Tempo queries
 - `sigil.storage.backend`: storage backend (`mysql` only)
 - `sigil.storage.mysql.dsn`: required for external MySQL when `mysql.enabled=false`
 - `alloy.outputs.tempo.endpoint`: external Tempo OTLP gRPC endpoint for Alloy

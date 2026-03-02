@@ -153,6 +153,72 @@ func TestTempoHTTPClientSearchAndTagEndpoints(t *testing.T) {
 	}
 }
 
+func TestGrafanaTempoHTTPClientSearchAndTagEndpoints(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Header.Get("Authorization") != "Bearer sa-token" {
+			http.Error(w, "missing auth", http.StatusUnauthorized)
+			return
+		}
+		switch req.URL.Path {
+		case "/api/datasources/proxy/uid/tempo-ds/api/search":
+			payload := TempoSearchResponse{Traces: []TempoTrace{}}
+			_ = json.NewEncoder(w).Encode(payload)
+		case "/api/datasources/proxy/uid/tempo-ds/api/v2/search/tags":
+			_ = json.NewEncoder(w).Encode(map[string]any{"tags": []string{"gen_ai.request.model", "gen_ai.agent.name"}})
+		case "/api/datasources/proxy/uid/tempo-ds/api/v2/search/tag/gen_ai.request.model/values":
+			_ = json.NewEncoder(w).Encode(map[string]any{"values": []string{"gpt-4o", "gpt-4o-mini"}})
+		case "/api/datasources/proxy/uid/tempo-ds/api/v2/search/tag/resource.k8s.label.app/kubernetes/io/name/values":
+			if !strings.Contains(req.RequestURI, "resource.k8s.label.app%2Fkubernetes%2Fio%2Fname") {
+				http.Error(w, "tag path must remain escaped", http.StatusBadRequest)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"values": []string{"sigil"}})
+		default:
+			http.NotFound(w, req)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewGrafanaTempoHTTPClient(server.URL, "tempo-ds", "sa-token", nil)
+	if err != nil {
+		t.Fatalf("new grafana tempo client: %v", err)
+	}
+
+	_, err = client.Search(context.Background(), TempoSearchRequest{
+		Query: `{ span.gen_ai.operation.name != "" } | select(span.gen_ai.conversation.id)`,
+		Limit: 10,
+		Start: time.Now().Add(-time.Hour),
+		End:   time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+
+	tags, err := client.SearchTags(context.Background(), "tenant-a", "span", time.Time{}, time.Time{})
+	if err != nil {
+		t.Fatalf("search tags: %v", err)
+	}
+	if len(tags) != 2 {
+		t.Fatalf("expected 2 tags, got %d", len(tags))
+	}
+
+	values, err := client.SearchTagValues(context.Background(), "tenant-a", "gen_ai.request.model", time.Time{}, time.Time{})
+	if err != nil {
+		t.Fatalf("search tag values: %v", err)
+	}
+	if len(values) != 2 {
+		t.Fatalf("expected 2 tag values, got %d", len(values))
+	}
+
+	slashValues, err := client.SearchTagValues(context.Background(), "tenant-a", "resource.k8s.label.app/kubernetes/io/name", time.Time{}, time.Time{})
+	if err != nil {
+		t.Fatalf("search tag values with slash key: %v", err)
+	}
+	if len(slashValues) != 1 || slashValues[0] != "sigil" {
+		t.Fatalf("unexpected slash tag values: %#v", slashValues)
+	}
+}
+
 func tempoStringValue(value string) TempoAttributeValue {
 	return TempoAttributeValue{fields: map[string]any{"stringValue": value}}
 }

@@ -1,5 +1,6 @@
 import React from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import DashboardPage from './DashboardPage';
 import type { DashboardDataSource } from '../dashboard/api';
 import type { PrometheusQueryResponse } from '../dashboard/types';
@@ -12,7 +13,6 @@ beforeAll(() => {
       this.cb = cb;
     }
     observe(target: Element) {
-      // Fire callback immediately with a reasonable width.
       this.cb([{ contentRect: { width: 600, height: 300 } } as ResizeObserverEntry], this as unknown as ResizeObserver);
     }
     unobserve() {}
@@ -25,6 +25,7 @@ jest.mock('@grafana/ui', () => {
   return {
     ...actual,
     TimeRangePicker: () => <div data-testid="time-range-picker" />,
+    TimeRangeInput: (props: { value: unknown; onChange: unknown }) => <div data-testid="time-range-input" />,
     PanelChrome: ({
       title,
       children,
@@ -38,6 +39,14 @@ jest.mock('@grafana/ui', () => {
 jest.mock('@grafana/runtime', () => ({
   ...jest.requireActual('@grafana/runtime'),
   PanelRenderer: ({ pluginId }: { pluginId: string }) => <div data-testid={`renderer-${pluginId}`} />,
+}));
+
+jest.mock('@grafana/assistant', () => ({
+  useInlineAssistant: () => ({
+    isGenerating: false,
+    content: '',
+    generate: jest.fn(),
+  }),
 }));
 
 const emptyVector: PrometheusQueryResponse = {
@@ -73,46 +82,87 @@ function createDataSource(): MockDashboardDataSource {
   };
 }
 
+function renderWithRouter(ds: MockDashboardDataSource, initialEntry = '/') {
+  return render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <DashboardPage dataSource={ds} />
+    </MemoryRouter>
+  );
+}
+
 describe('DashboardPage', () => {
-  it('renders filter bar and panels', async () => {
+  it('renders filter bar and paired metric rows', async () => {
     const ds = createDataSource();
     await act(async () => {
-      render(<DashboardPage dataSource={ds} />);
+      renderWithRouter(ds);
     });
 
-    expect(screen.getByTestId('time-range-picker')).toBeInTheDocument();
+    expect(screen.getByTestId('time-range-input')).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(screen.getByTestId('panel-Total Operations')).toBeInTheDocument();
-      expect(screen.getByTestId('panel-Total Tokens')).toBeInTheDocument();
-      expect(screen.getByTestId('panel-Total Errors')).toBeInTheDocument();
-      expect(screen.getByTestId('panel-Error Rate')).toBeInTheDocument();
-      expect(screen.getByTestId('panel-Estimated Cost')).toBeInTheDocument();
-      expect(screen.getByTestId('panel-Unpriced Tokens')).toBeInTheDocument();
-      expect(screen.getByTestId('panel-Token Usage Over Time')).toBeInTheDocument();
-      expect(screen.getByTestId('panel-Estimated Cost Over Time')).toBeInTheDocument();
-      expect(screen.getByTestId('panel-RPS Over Time by Model')).toBeInTheDocument();
-      expect(screen.getByTestId('panel-Calls by Provider')).toBeInTheDocument();
-      expect(screen.getByTestId('panel-Top Models')).toBeInTheDocument();
-      expect(screen.getByTestId('panel-Latency P95')).toBeInTheDocument();
-      expect(screen.getByTestId('panel-Time to First Token P95')).toBeInTheDocument();
+      expect(screen.getAllByTestId('renderer-timeseries')).toHaveLength(5);
     });
   });
 
   it('queries prometheus on mount', async () => {
     const ds = createDataSource();
     await act(async () => {
-      render(<DashboardPage dataSource={ds} />);
+      renderWithRouter(ds);
     });
 
     await waitFor(() => {
       expect(ds.queryInstant).toHaveBeenCalled();
       expect(ds.queryRange).toHaveBeenCalled();
       expect(ds.labels).toHaveBeenCalledWith(expect.any(Number), expect.any(Number));
-      expect(ds.labelValues).toHaveBeenCalledWith('gen_ai_provider_name', expect.any(Number), expect.any(Number));
-      expect(ds.labelValues).toHaveBeenCalledWith('gen_ai_request_model', expect.any(Number), expect.any(Number));
-      expect(ds.labelValues).toHaveBeenCalledWith('gen_ai_agent_name', expect.any(Number), expect.any(Number));
+      expect(ds.labelValues).toHaveBeenCalledWith(
+        'gen_ai_provider_name',
+        expect.any(Number),
+        expect.any(Number),
+        undefined
+      );
+      expect(ds.labelValues).toHaveBeenCalledWith(
+        'gen_ai_request_model',
+        expect.any(Number),
+        expect.any(Number),
+        undefined
+      );
+      expect(ds.labelValues).toHaveBeenCalledWith(
+        'gen_ai_agent_name',
+        expect.any(Number),
+        expect.any(Number),
+        undefined
+      );
       expect(ds.resolveModelCards).not.toHaveBeenCalled();
+    });
+  });
+
+  it('applies provider filter from URL params', async () => {
+    const ds = createDataSource();
+    await act(async () => {
+      renderWithRouter(ds, '/?provider=openai');
+    });
+
+    await waitFor(() => {
+      const calls = ds.queryInstant.mock.calls;
+      const hasProviderFilter = calls.some(
+        (call) => typeof call[0] === 'string' && call[0].includes('gen_ai_provider_name')
+      );
+      expect(hasProviderFilter).toBe(true);
+    });
+  });
+
+  it('applies breakdown from URL params', async () => {
+    const ds = createDataSource();
+    await act(async () => {
+      renderWithRouter(ds, '/?breakdownBy=model');
+    });
+
+    await waitFor(() => {
+      const calls = ds.queryRange.mock.calls;
+      const hasModelBreakdown = calls.some(
+        (call) => typeof call[0] === 'string' && call[0].includes('gen_ai_request_model')
+      );
+      expect(hasModelBreakdown).toBe(true);
     });
   });
 });

@@ -10,7 +10,8 @@ export function useLabelValues(
   dataSource: DashboardDataSource,
   label: string,
   from: number,
-  to: number
+  to: number,
+  matchers?: string
 ): LabelValuesResult {
   const [values, setValues] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -28,7 +29,7 @@ export function useLabelValues(
 
     const run = async () => {
       try {
-        const result = await dataSource.labelValues(label, from, to);
+        const result = await dataSource.labelValues(label, from, to, matchers);
         if (versionRef.current === version) {
           setValues(result);
         }
@@ -44,7 +45,7 @@ export function useLabelValues(
     };
 
     run();
-  }, [dataSource, label, from, to]);
+  }, [dataSource, label, from, to, matchers]);
 
   return { values, loading };
 }
