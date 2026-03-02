@@ -22,6 +22,7 @@ services:
       - sigil-plugin-dist:/var/lib/grafana/plugins/grafana-sigil-app
       - ../provisioning:/etc/grafana/provisioning
       - ../apps/plugin:/root/sigil/apps/plugin
+      - ./grafana.ini:/etc/grafana/grafana.ini
     environment:
       NODE_ENV: development
       GF_LOG_LEVEL: debug
