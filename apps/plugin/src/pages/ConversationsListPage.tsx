@@ -28,11 +28,48 @@ type ConversationStats = {
   badRatedPct: number;
 };
 
+const DEFAULT_TIME_RANGE_HOURS = 6;
+
 function parseViewModeParam(value: string | null): ChartViewMode {
   if (value === 'time') {
     return 'time';
   }
   return 'llm_calls';
+}
+
+function defaultTimeRange(): TimeRange {
+  const now = dateTime();
+  return makeTimeRange(dateTime(now).subtract(DEFAULT_TIME_RANGE_HOURS, 'hours'), now);
+}
+
+function parseTimeParam(value: string): number | null {
+  if (/^\d+$/.test(value)) {
+    const parsedNumber = Number(value);
+    if (!Number.isFinite(parsedNumber)) {
+      return null;
+    }
+    // Accept both Unix seconds and milliseconds.
+    return value.length <= 10 ? parsedNumber * 1000 : parsedNumber;
+  }
+  const parsedDate = Date.parse(value);
+  if (!Number.isFinite(parsedDate)) {
+    return null;
+  }
+  return parsedDate;
+}
+
+function parseTimeRangeFromQuery(queryParams: URLSearchParams): TimeRange | null {
+  const fromParam = queryParams.get('from');
+  const toParam = queryParams.get('to');
+  if (!fromParam || !toParam) {
+    return null;
+  }
+  const fromMs = parseTimeParam(fromParam);
+  const toMs = parseTimeParam(toParam);
+  if (fromMs == null || toMs == null || toMs <= fromMs) {
+    return null;
+  }
+  return makeTimeRange(dateTime(fromMs), dateTime(toMs));
 }
 
 function countLLMCallBuckets(maxCalls: number, step: number): number {
@@ -352,6 +389,13 @@ function buildTrendLabel(
   return { direction: 'neutral', label: '→ 0.0%' };
 }
 
+function formatTrendComparisonValue(value: number, fractionDigits = 0, suffix = ''): string {
+  return `${value.toLocaleString(undefined, {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  })}${suffix}`;
+}
+
 const getStyles = (theme: GrafanaTheme2) => ({
   pageContainer: css({
     display: 'flex',
@@ -374,6 +418,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     borderBottom: `1px solid ${theme.colors.border.weak}`,
     background: theme.colors.background.primary,
     padding: theme.spacing(0, 2),
+    boxShadow: 'inset 0 8px 8px -8px rgba(0, 0, 0, 0.22)',
   }),
   controlsRow: css({
     display: 'flex',
@@ -493,6 +538,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   statTrend: css({
     fontSize: theme.typography.bodySmall.fontSize,
     color: theme.colors.text.secondary,
+    cursor: 'help',
   }),
   statTrendUp: css({
     color: theme.colors.success.main,
@@ -511,9 +557,13 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const styles = useStyles2(getStyles);
-  const [timeRange, setTimeRange] = useState<TimeRange>(() => {
-    const now = dateTime();
-    return makeTimeRange(dateTime(now).subtract(7, 'days'), now);
+  const canUseRouterSearchParamUpdates = typeof Request !== 'undefined';
+  const canUseWindowLocation = typeof window !== 'undefined';
+  const [timeRange, setTimeRangeState] = useState<TimeRange>(() => {
+    const initialQueryParams = canUseRouterSearchParamUpdates
+      ? new URLSearchParams(searchParams)
+      : new URLSearchParams(canUseWindowLocation ? window.location.search : '');
+    return parseTimeRangeFromQuery(initialQueryParams) ?? defaultTimeRange();
   });
 
   const [conversations, setConversations] = useState<ConversationSearchResult[]>([]);
@@ -523,7 +573,6 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
   const [fallbackViewMode, setFallbackViewMode] = useState<ChartViewMode>(parseViewModeParam(searchParams.get('view')));
   const [fallbackSelectedBucketKey, setFallbackSelectedBucketKey] = useState<string>(searchParams.get('bucket') ?? '');
   const requestVersionRef = useRef<number>(0);
-  const canUseRouterSearchParamUpdates = typeof Request !== 'undefined';
   const viewMode = canUseRouterSearchParamUpdates ? parseViewModeParam(searchParams.get('view')) : fallbackViewMode;
   const selectedBucketKey = canUseRouterSearchParamUpdates ? (searchParams.get('bucket') ?? '') : fallbackSelectedBucketKey;
   const previousViewModeRef = useRef<ChartViewMode>(viewMode);
@@ -584,19 +633,42 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
 
   const onMoveBackward = useCallback(() => {
     const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
-    setTimeRange(makeTimeRange(dateTime(timeRange.from.valueOf() - diff), dateTime(timeRange.to.valueOf() - diff)));
+    setTimeRangeState(makeTimeRange(dateTime(timeRange.from.valueOf() - diff), dateTime(timeRange.to.valueOf() - diff)));
   }, [timeRange]);
 
   const onMoveForward = useCallback(() => {
     const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
-    setTimeRange(makeTimeRange(dateTime(timeRange.from.valueOf() + diff), dateTime(timeRange.to.valueOf() + diff)));
+    setTimeRangeState(makeTimeRange(dateTime(timeRange.from.valueOf() + diff), dateTime(timeRange.to.valueOf() + diff)));
   }, [timeRange]);
 
   const onZoom = useCallback(() => {
     const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
     const half = Math.round(diff / 2);
-    setTimeRange(makeTimeRange(dateTime(timeRange.from.valueOf() - half), dateTime(timeRange.to.valueOf() + half)));
+    setTimeRangeState(makeTimeRange(dateTime(timeRange.from.valueOf() - half), dateTime(timeRange.to.valueOf() + half)));
   }, [timeRange]);
+
+  useEffect(() => {
+    if (!canUseRouterSearchParamUpdates && !canUseWindowLocation) {
+      return;
+    }
+    const nextSearchParams = canUseRouterSearchParamUpdates
+      ? new URLSearchParams(searchParams)
+      : new URLSearchParams(window.location.search);
+    const nextFromISO = timeRange.from.toISOString();
+    const nextToISO = timeRange.to.toISOString();
+    if (nextSearchParams.get('from') === nextFromISO && nextSearchParams.get('to') === nextToISO) {
+      return;
+    }
+    nextSearchParams.set('from', nextFromISO);
+    nextSearchParams.set('to', nextToISO);
+    if (!canUseRouterSearchParamUpdates) {
+      const nextQuery = nextSearchParams.toString();
+      const nextURL = `${window.location.pathname}${nextQuery.length > 0 ? `?${nextQuery}` : ''}${window.location.hash}`;
+      window.history.replaceState(window.history.state, '', nextURL);
+      return;
+    }
+    setSearchParams(nextSearchParams, { replace: true });
+  }, [canUseRouterSearchParamUpdates, canUseWindowLocation, searchParams, setSearchParams, timeRange]);
 
   const loadConversations = useCallback(
     async (): Promise<void> => {
@@ -723,7 +795,7 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
         <div className={styles.controlsRow}>
           <TimeRangePicker
             value={timeRange}
-            onChange={setTimeRange}
+            onChange={setTimeRangeState}
             onChangeTimeZone={() => {}}
             onMoveBackward={onMoveBackward}
             onMoveForward={onMoveForward}
@@ -744,7 +816,14 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
                 if (!trend) {
                   return null;
                 }
-                return <div className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}>{trend.label}</div>;
+                return (
+                  <div
+                    className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}
+                    title={`Compared to previous window: ${formatTrendComparisonValue(previousConversationStats.totalConversations)}`}
+                  >
+                    {trend.label}
+                  </div>
+                );
               })()}
             </div>
           </div>
@@ -757,7 +836,14 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
                 if (!trend) {
                   return null;
                 }
-                return <div className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}>{trend.label}</div>;
+                return (
+                  <div
+                    className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}
+                    title={`Compared to previous window: ${formatTrendComparisonValue(previousConversationStats.totalLLMCalls)}`}
+                  >
+                    {trend.label}
+                  </div>
+                );
               })()}
             </div>
           </div>
@@ -773,7 +859,14 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
                 if (!trend) {
                   return null;
                 }
-                return <div className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}>{trend.label}</div>;
+                return (
+                  <div
+                    className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}
+                    title={`Compared to previous window: ${formatTrendComparisonValue(previousConversationStats.avgCallsPerConversation, 1)}`}
+                  >
+                    {trend.label}
+                  </div>
+                );
               })()}
             </div>
           </div>
@@ -786,7 +879,14 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
                 if (!trend) {
                   return null;
                 }
-                return <div className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}>{trend.label}</div>;
+                return (
+                  <div
+                    className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}
+                    title={`Compared to previous window: ${formatTrendComparisonValue(previousConversationStats.activeLast7d)}`}
+                  >
+                    {trend.label}
+                  </div>
+                );
               })()}
             </div>
           </div>
@@ -799,7 +899,14 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
                 if (!trend) {
                   return null;
                 }
-                return <div className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}>{trend.label}</div>;
+                return (
+                  <div
+                    className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}
+                    title={`Compared to previous window: ${formatTrendComparisonValue(previousConversationStats.ratedConversations)}`}
+                  >
+                    {trend.label}
+                  </div>
+                );
               })()}
             </div>
           </div>
@@ -812,7 +919,14 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
                 if (!trend) {
                   return null;
                 }
-                return <div className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}>{trend.label}</div>;
+                return (
+                  <div
+                    className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}
+                    title={`Compared to previous window: ${formatTrendComparisonValue(previousConversationStats.badRatedPct, 1, '%')}`}
+                  >
+                    {trend.label}
+                  </div>
+                );
               })()}
             </div>
           </div>
