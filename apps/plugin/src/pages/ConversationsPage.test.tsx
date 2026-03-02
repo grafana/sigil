@@ -25,7 +25,12 @@ jest.mock('@grafana/ui', () => {
 });
 
 type MockConversationsDataSource = {
-  [Key in keyof ConversationsDataSource]: jest.MockedFunction<ConversationsDataSource[Key]>;
+  listConversations?: jest.MockedFunction<NonNullable<ConversationsDataSource['listConversations']>>;
+  searchConversations: jest.MockedFunction<ConversationsDataSource['searchConversations']>;
+  getConversationDetail: jest.MockedFunction<ConversationsDataSource['getConversationDetail']>;
+  getGeneration: jest.MockedFunction<ConversationsDataSource['getGeneration']>;
+  getSearchTags: jest.MockedFunction<ConversationsDataSource['getSearchTags']>;
+  getSearchTagValues: jest.MockedFunction<ConversationsDataSource['getSearchTagValues']>;
 };
 
 function buildSearchResponse(

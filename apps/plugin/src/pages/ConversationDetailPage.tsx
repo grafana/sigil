@@ -49,6 +49,10 @@ type HoveredSpanAnchor = {
   maxWidthPx?: number;
 };
 
+type TooltipStyle = React.CSSProperties & {
+  '--tooltip-border-color'?: string;
+};
+
 type AttrValue = {
   stringValue?: string;
 };
@@ -1046,15 +1050,17 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                                 <div
                                   className={styles.hoveredSpanTooltip}
                                   data-testid="hovered-trace-tooltip"
-                                  style={{
-                                    '--tooltip-border-color': timelineColor,
-                                    top: `${hoveredTraceAnchor.topPx}px`,
-                                    left: hoveredTraceAnchor.left,
-                                    maxWidth:
-                                      hoveredTraceAnchor.maxWidthPx != null
-                                        ? `${hoveredTraceAnchor.maxWidthPx}px`
-                                        : undefined,
-                                  }}
+                                  style={
+                                    {
+                                      '--tooltip-border-color': timelineColor,
+                                      top: `${hoveredTraceAnchor.topPx}px`,
+                                      left: hoveredTraceAnchor.left,
+                                      maxWidth:
+                                        hoveredTraceAnchor.maxWidthPx != null
+                                          ? `${hoveredTraceAnchor.maxWidthPx}px`
+                                          : undefined,
+                                    } as TooltipStyle
+                                  }
                                 >
                                   <div className={styles.hoveredSpanTitle}>Trace {timeline.traceID}</div>
                                   <div className={styles.hoveredSpanRow}>
@@ -1231,15 +1237,17 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                                     <div
                                       className={styles.hoveredSpanTooltip}
                                       data-testid="hovered-span-tooltip"
-                                      style={{
-                                        '--tooltip-border-color': spanColor,
-                                        top: `${hoveredSpanAnchor.topPx}px`,
-                                        left: hoveredSpanAnchor.left,
-                                        maxWidth:
-                                          hoveredSpanAnchor.maxWidthPx != null
-                                            ? `${hoveredSpanAnchor.maxWidthPx}px`
-                                            : undefined,
-                                      }}
+                                      style={
+                                        {
+                                          '--tooltip-border-color': spanColor,
+                                          top: `${hoveredSpanAnchor.topPx}px`,
+                                          left: hoveredSpanAnchor.left,
+                                          maxWidth:
+                                            hoveredSpanAnchor.maxWidthPx != null
+                                              ? `${hoveredSpanAnchor.maxWidthPx}px`
+                                              : undefined,
+                                        } as TooltipStyle
+                                      }
                                     >
                                       <div className={styles.hoveredSpanTitle}>{hoveredSpan.name}</div>
                                       <div className={styles.hoveredSpanMeta}>{hoveredSpan.serviceName}</div>

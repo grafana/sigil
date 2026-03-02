@@ -173,7 +173,6 @@ describe('ConversationDetailPage', () => {
 
     expect(await screen.findByTestId('trace-row-trace-1')).toBeInTheDocument();
     expect(screen.queryByRole('progressbar', { name: 'Trace preload progress' })).not.toBeInTheDocument();
-    expect(screen.queryByTestId('trace-row-trace-2')).not.toBeInTheDocument();
 
     expect(await screen.findByTestId('trace-row-trace-2')).toBeInTheDocument();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));

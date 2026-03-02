@@ -1,9 +1,9 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { RouterProvider, createMemoryRouter, useParams } from 'react-router-dom';
 import ConversationsListPage from './ConversationsListPage';
 import type { ConversationsDataSource } from '../conversation/api';
-import type { ConversationListResponse } from '../conversation/types';
+import type { ConversationListResponse, ConversationSearchRequest, SearchTag } from '../conversation/types';
 
 beforeAll(() => {
   class ResizeObserverMock {
@@ -30,7 +30,12 @@ beforeAll(() => {
 });
 
 type MockConversationsDataSource = {
-  [Key in keyof ConversationsDataSource]: jest.MockedFunction<ConversationsDataSource[Key]>;
+  listConversations: jest.MockedFunction<NonNullable<ConversationsDataSource['listConversations']>>;
+  searchConversations: jest.MockedFunction<ConversationsDataSource['searchConversations']>;
+  getConversationDetail: jest.MockedFunction<ConversationsDataSource['getConversationDetail']>;
+  getGeneration: jest.MockedFunction<ConversationsDataSource['getGeneration']>;
+  getSearchTags: jest.MockedFunction<ConversationsDataSource['getSearchTags']>;
+  getSearchTagValues: jest.MockedFunction<ConversationsDataSource['getSearchTagValues']>;
 };
 
 function createConversationListResponse(items: ConversationListResponse['items']): ConversationListResponse {
@@ -54,19 +59,19 @@ function createDataSource(items: ConversationListResponse['items']): MockConvers
 
   return {
     listConversations: jest.fn(async () => createConversationListResponse(items)),
-    searchConversations: jest.fn(async () => ({
+    searchConversations: jest.fn(async (_request: ConversationSearchRequest) => ({
       conversations,
       next_cursor: '',
       has_more: false,
     })),
-    getConversationDetail: jest.fn(async () => {
+    getConversationDetail: jest.fn(async (_conversationID: string) => {
       throw new Error('getConversationDetail not used in ConversationsListPage');
     }),
-    getGeneration: jest.fn(async () => {
+    getGeneration: jest.fn(async (_generationID: string) => {
       throw new Error('getGeneration not used in ConversationsListPage');
     }),
-    getSearchTags: jest.fn(async () => []),
-    getSearchTagValues: jest.fn(async () => []),
+    getSearchTags: jest.fn(async (_from: string, _to: string): Promise<SearchTag[]> => []),
+    getSearchTagValues: jest.fn(async (_tag: string, _from: string, _to: string): Promise<string[]> => []),
   };
 }
 
@@ -169,17 +174,17 @@ describe('ConversationsListPage', () => {
     const dataSource: MockConversationsDataSource = {
       listConversations: jest.fn(async () => createConversationListResponse([])),
       searchConversations,
-      getConversationDetail: jest.fn(async () => {
+      getConversationDetail: jest.fn(async (_conversationID: string) => {
         throw new Error('getConversationDetail not used in ConversationsListPage');
       }),
-      getGeneration: jest.fn(async () => {
+      getGeneration: jest.fn(async (_generationID: string) => {
         throw new Error('getGeneration not used in ConversationsListPage');
       }),
-      getSearchTags: jest.fn(async () => []),
-      getSearchTagValues: jest.fn(async () => []),
+      getSearchTags: jest.fn(async (_from: string, _to: string): Promise<SearchTag[]> => []),
+      getSearchTagValues: jest.fn(async (_tag: string, _from: string, _to: string): Promise<string[]> => []),
     };
 
-    const { router } = renderPage(dataSource);
+    renderPage(dataSource);
 
     await waitFor(() => expect(searchConversations).toHaveBeenCalledTimes(2));
 
@@ -345,14 +350,14 @@ describe('ConversationsListPage', () => {
     const dataSource: MockConversationsDataSource = {
       listConversations: jest.fn(async () => createConversationListResponse([])),
       searchConversations,
-      getConversationDetail: jest.fn(async () => {
+      getConversationDetail: jest.fn(async (_conversationID: string) => {
         throw new Error('getConversationDetail not used in ConversationsListPage');
       }),
-      getGeneration: jest.fn(async () => {
+      getGeneration: jest.fn(async (_generationID: string) => {
         throw new Error('getGeneration not used in ConversationsListPage');
       }),
-      getSearchTags: jest.fn(async () => []),
-      getSearchTagValues: jest.fn(async () => []),
+      getSearchTags: jest.fn(async (_from: string, _to: string): Promise<SearchTag[]> => []),
+      getSearchTagValues: jest.fn(async (_tag: string, _from: string, _to: string): Promise<string[]> => []),
     };
 
     renderPage(dataSource);
@@ -393,7 +398,9 @@ describe('ConversationsListPage', () => {
       expect(params.get('to')).not.toBeNull();
     });
 
-    await router.navigate(-1);
+    await act(async () => {
+      await router.navigate(-1);
+    });
     await waitFor(() => expect(router.state.location.pathname).toBe('/back-target'));
   });
 });
