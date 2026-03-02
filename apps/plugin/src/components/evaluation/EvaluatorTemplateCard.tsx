@@ -2,12 +2,7 @@ import React from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, Button, Stack, Text, useStyles2 } from '@grafana/ui';
-import {
-  EVALUATOR_KIND_LABELS,
-  formatEvaluatorId,
-  getKindBadgeColor,
-  type Evaluator,
-} from '../../evaluation/types';
+import { EVALUATOR_KIND_LABELS, formatEvaluatorId, getKindBadgeColor, type Evaluator } from '../../evaluation/types';
 
 export type EvaluatorTemplateCardProps = {
   evaluator: Evaluator;

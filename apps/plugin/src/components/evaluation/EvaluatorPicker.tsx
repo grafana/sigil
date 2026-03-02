@@ -2,12 +2,7 @@ import React from 'react';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
 import { Badge, IconButton, Select, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
-import {
-  EVALUATOR_KIND_LABELS,
-  formatEvaluatorId,
-  getKindBadgeColor,
-  type Evaluator,
-} from '../../evaluation/types';
+import { EVALUATOR_KIND_LABELS, formatEvaluatorId, getKindBadgeColor, type Evaluator } from '../../evaluation/types';
 
 export type EvaluatorPickerProps = {
   value: string[];
