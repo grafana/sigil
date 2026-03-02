@@ -2,7 +2,7 @@ import React from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, Button, Stack, Text, useStyles2 } from '@grafana/ui';
-import { EVALUATOR_KIND_LABELS, type Evaluator } from '../../evaluation/types';
+import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type Evaluator } from '../../evaluation/types';
 
 export type EvaluatorTemplateCardProps = {
   evaluator: Evaluator;
@@ -14,21 +14,6 @@ function formatEvaluatorId(id: string): string {
     return id.slice(6);
   }
   return id;
-}
-
-function getKindBadgeColor(kind: Evaluator['kind']): 'blue' | 'green' | 'orange' | 'purple' {
-  switch (kind) {
-    case 'llm_judge':
-      return 'purple';
-    case 'json_schema':
-      return 'blue';
-    case 'regex':
-      return 'orange';
-    case 'heuristic':
-      return 'green';
-    default:
-      return 'blue';
-  }
 }
 
 const getStyles = (theme: GrafanaTheme2) => ({

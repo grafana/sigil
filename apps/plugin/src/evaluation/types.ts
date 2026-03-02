@@ -157,3 +157,18 @@ export const EVALUATOR_KIND_LABELS: Record<EvaluatorKind, string> = {
   regex: 'Regex',
   heuristic: 'Heuristic',
 };
+
+export function getKindBadgeColor(kind: EvaluatorKind): 'blue' | 'green' | 'orange' | 'purple' {
+  switch (kind) {
+    case 'llm_judge':
+      return 'purple';
+    case 'json_schema':
+      return 'blue';
+    case 'regex':
+      return 'orange';
+    case 'heuristic':
+      return 'green';
+    default:
+      return 'blue';
+  }
+}

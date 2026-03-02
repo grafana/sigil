@@ -2,26 +2,11 @@ import React from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, Text, useStyles2 } from '@grafana/ui';
-import { EVALUATOR_KIND_LABELS, type Evaluator } from '../../evaluation/types';
+import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type Evaluator } from '../../evaluation/types';
 
 export type EvaluatorDetailProps = {
   evaluator: Evaluator;
 };
-
-function getKindBadgeColor(kind: Evaluator['kind']): 'blue' | 'green' | 'orange' | 'purple' {
-  switch (kind) {
-    case 'llm_judge':
-      return 'purple';
-    case 'json_schema':
-      return 'blue';
-    case 'regex':
-      return 'orange';
-    case 'heuristic':
-      return 'green';
-    default:
-      return 'blue';
-  }
-}
 
 function highlightTemplateVars(text: string, templateVarClass: string): React.ReactNode {
   const parts = text.split(/(\{\{[^}]+\}\})/g);

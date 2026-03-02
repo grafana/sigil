@@ -7,6 +7,7 @@ import { MATCH_KEY_OPTIONS } from '../../evaluation/types';
 export type MatchCriteriaEditorProps = {
   value: Record<string, string | string[]>;
   onChange: (v: Record<string, string | string[]>) => void;
+  disabled?: boolean;
 };
 
 type CriteriaRow = { key: string; value: string };
@@ -53,7 +54,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function MatchCriteriaEditor({ value, onChange }: MatchCriteriaEditorProps) {
+export default function MatchCriteriaEditor({ value, onChange, disabled }: MatchCriteriaEditorProps) {
   const styles = useStyles2(getStyles);
   const rows = toRows(value);
 
@@ -97,19 +98,23 @@ export default function MatchCriteriaEditor({ value, onChange }: MatchCriteriaEd
                     updateRow(index, { key: v.value });
                   }
                 }}
+                disabled={disabled}
               />
               <Input
                 className={styles.valueInput}
                 value={row.value}
                 onChange={(e) => updateRow(index, { value: e.currentTarget.value })}
                 placeholder={supportsGlob ? 'e.g. assistant-* or exact value' : 'Value'}
+                disabled={disabled}
               />
-              <IconButton
-                name="trash-alt"
-                tooltip="Remove"
-                onClick={() => removeRow(index)}
-                aria-label="Remove criteria"
-              />
+              {!disabled && (
+                <IconButton
+                  name="trash-alt"
+                  tooltip="Remove"
+                  onClick={() => removeRow(index)}
+                  aria-label="Remove criteria"
+                />
+              )}
             </div>
             {supportsGlob && (
               <div className={styles.hint}>
@@ -121,11 +126,13 @@ export default function MatchCriteriaEditor({ value, onChange }: MatchCriteriaEd
           </div>
         );
       })}
-      <Stack direction="row" gap={1} alignItems="center">
-        <Button variant="secondary" size="sm" icon="plus" onClick={addRow}>
-          Add criteria
-        </Button>
-      </Stack>
+      {!disabled && (
+        <Stack direction="row" gap={1} alignItems="center">
+          <Button variant="secondary" size="sm" icon="plus" onClick={addRow}>
+            Add criteria
+          </Button>
+        </Stack>
+      )}
     </>
   );
 }

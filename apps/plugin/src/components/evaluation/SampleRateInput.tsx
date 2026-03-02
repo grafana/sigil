@@ -6,6 +6,7 @@ import type { GrafanaTheme2 } from '@grafana/data';
 export type SampleRateInputProps = {
   value: number;
   onChange: (v: number) => void;
+  disabled?: boolean;
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -16,7 +17,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function SampleRateInput({ value, onChange }: SampleRateInputProps) {
+export default function SampleRateInput({ value, onChange, disabled }: SampleRateInputProps) {
   const styles = useStyles2(getStyles);
 
   const displayValue = Math.round(value * 100);
@@ -39,7 +40,16 @@ export default function SampleRateInput({ value, onChange }: SampleRateInputProp
       description="Percentage of matching generations to evaluate (0–100%). Lower values reduce cost and latency."
     >
       <div className={styles.inputWrapper}>
-        <Input type="number" min={0} max={100} value={displayValue} onChange={handleChange} addonAfter="%" width={12} />
+        <Input
+          type="number"
+          min={0}
+          max={100}
+          value={displayValue}
+          onChange={handleChange}
+          addonAfter="%"
+          width={12}
+          disabled={disabled}
+        />
       </div>
     </Field>
   );

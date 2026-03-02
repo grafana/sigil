@@ -2,28 +2,14 @@ import React from 'react';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
 import { Badge, IconButton, Select, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
-import { EVALUATOR_KIND_LABELS, type Evaluator } from '../../evaluation/types';
+import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type Evaluator } from '../../evaluation/types';
 
 export type EvaluatorPickerProps = {
   value: string[];
   evaluators: Evaluator[];
   onChange: (ids: string[]) => void;
+  disabled?: boolean;
 };
-
-function getKindBadgeColor(kind: Evaluator['kind']): 'blue' | 'green' | 'orange' | 'purple' {
-  switch (kind) {
-    case 'llm_judge':
-      return 'purple';
-    case 'json_schema':
-      return 'blue';
-    case 'regex':
-      return 'orange';
-    case 'heuristic':
-      return 'green';
-    default:
-      return 'blue';
-  }
-}
 
 function formatEvaluatorId(id: string): string {
   if (id.startsWith('sigil.')) {
@@ -50,7 +36,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function EvaluatorPicker({ value, evaluators, onChange }: EvaluatorPickerProps) {
+export default function EvaluatorPicker({ value, evaluators, onChange, disabled }: EvaluatorPickerProps) {
   const styles = useStyles2(getStyles);
   const selectedSet = new Set(value);
 
@@ -80,6 +66,7 @@ export default function EvaluatorPicker({ value, evaluators, onChange }: Evaluat
         placeholder="Add evaluator..."
         isClearable={false}
         width={40}
+        disabled={disabled}
       />
       {value.length > 0 && (
         <div className={styles.chips}>
@@ -91,13 +78,15 @@ export default function EvaluatorPicker({ value, evaluators, onChange }: Evaluat
               <div key={id} className={styles.chip}>
                 <Badge text={EVALUATOR_KIND_LABELS[kind]} color={getKindBadgeColor(kind)} />
                 <span>{name}</span>
-                <IconButton
-                  name="times"
-                  size="sm"
-                  tooltip="Remove"
-                  onClick={() => handleRemove(id)}
-                  aria-label={`Remove ${name}`}
-                />
+                {!disabled && (
+                  <IconButton
+                    name="times"
+                    size="sm"
+                    tooltip="Remove"
+                    onClick={() => handleRemove(id)}
+                    aria-label={`Remove ${name}`}
+                  />
+                )}
               </div>
             );
           })}

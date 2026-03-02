@@ -21,6 +21,7 @@ export type RuleFormProps = {
   onSampleRateChange: (v: number) => void;
   onEvaluatorIDsChange: (ids: string[]) => void;
   onRuleIDChange?: (id: string) => void;
+  disabled?: boolean;
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -44,6 +45,7 @@ export default function RuleForm({
   onSampleRateChange,
   onEvaluatorIDsChange,
   onRuleIDChange,
+  disabled,
 }: RuleFormProps) {
   const styles = useStyles2(getStyles);
 
@@ -63,19 +65,24 @@ export default function RuleForm({
         </FieldSet>
 
         <FieldSet label="Selector">
-          <SelectorPicker value={selector} onChange={onSelectorChange} />
+          <SelectorPicker value={selector} onChange={onSelectorChange} disabled={disabled} />
         </FieldSet>
 
         <FieldSet label="Match criteria">
-          <MatchCriteriaEditor value={match} onChange={onMatchChange} />
+          <MatchCriteriaEditor value={match} onChange={onMatchChange} disabled={disabled} />
         </FieldSet>
 
         <FieldSet label="Sample rate">
-          <SampleRateInput value={sampleRate} onChange={onSampleRateChange} />
+          <SampleRateInput value={sampleRate} onChange={onSampleRateChange} disabled={disabled} />
         </FieldSet>
 
         <FieldSet label="Evaluators">
-          <EvaluatorPicker value={evaluatorIDs} evaluators={availableEvaluators} onChange={onEvaluatorIDsChange} />
+          <EvaluatorPicker
+            value={evaluatorIDs}
+            evaluators={availableEvaluators}
+            onChange={onEvaluatorIDsChange}
+            disabled={disabled}
+          />
         </FieldSet>
       </Stack>
     </div>

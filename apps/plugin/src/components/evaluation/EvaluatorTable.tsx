@@ -2,28 +2,13 @@ import React from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, IconButton, Text, useStyles2 } from '@grafana/ui';
-import { EVALUATOR_KIND_LABELS, type Evaluator } from '../../evaluation/types';
+import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type Evaluator } from '../../evaluation/types';
 
 export type EvaluatorTableProps = {
   evaluators: Evaluator[];
   onSelect?: (evaluatorID: string) => void;
   onDelete?: (evaluatorID: string) => void;
 };
-
-function getKindBadgeColor(kind: Evaluator['kind']): 'blue' | 'green' | 'orange' | 'purple' {
-  switch (kind) {
-    case 'llm_judge':
-      return 'purple';
-    case 'json_schema':
-      return 'blue';
-    case 'regex':
-      return 'orange';
-    case 'heuristic':
-      return 'green';
-    default:
-      return 'blue';
-  }
-}
 
 function formatDate(iso: string): string {
   try {

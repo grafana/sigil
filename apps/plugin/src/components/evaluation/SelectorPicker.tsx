@@ -7,6 +7,7 @@ import { SELECTOR_OPTIONS, type RuleSelector } from '../../evaluation/types';
 export type SelectorPickerProps = {
   value: RuleSelector;
   onChange: (v: RuleSelector) => void;
+  disabled?: boolean;
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -16,7 +17,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function SelectorPicker({ value, onChange }: SelectorPickerProps) {
+export default function SelectorPicker({ value, onChange, disabled }: SelectorPickerProps) {
   const styles = useStyles2(getStyles);
 
   const options: Array<SelectableValue<RuleSelector>> = SELECTOR_OPTIONS.map((opt) => ({
@@ -29,7 +30,7 @@ export default function SelectorPicker({ value, onChange }: SelectorPickerProps)
 
   return (
     <>
-      <RadioButtonGroup<RuleSelector> options={options} value={value} onChange={onChange} />
+      <RadioButtonGroup<RuleSelector> options={options} value={value} onChange={onChange} disabled={disabled} />
       {description && (
         <div className={styles.description}>
           <Text variant="bodySmall" color="secondary">

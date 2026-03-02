@@ -253,6 +253,7 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
             onSampleRateChange={setSampleRate}
             onEvaluatorIDsChange={setEvaluatorIDs}
             onRuleIDChange={setRuleIDInput}
+            disabled={!isNew}
           />
         </div>
         <div className={styles.right}>
