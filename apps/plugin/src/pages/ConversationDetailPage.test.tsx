@@ -163,7 +163,10 @@ describe('ConversationDetailPage', () => {
     render(
       <MemoryRouter initialEntries={['/conversations/conv-1/detail']}>
         <Routes>
-          <Route path="/conversations/:conversationID/detail" element={<ConversationDetailPage dataSource={dataSource} />} />
+          <Route
+            path="/conversations/:conversationID/detail"
+            element={<ConversationDetailPage dataSource={dataSource} />}
+          />
         </Routes>
       </MemoryRouter>
     );
@@ -260,7 +263,9 @@ describe('ConversationDetailPage', () => {
     await waitFor(() => expect(screen.queryByTestId('hovered-span-tooltip')).not.toBeInTheDocument());
 
     fireEvent.click(spanButton);
-    expect(await screen.findByTestId('location-search')).toHaveTextContent('?expandTraceID=trace-1&span=trace-1%3Aspan-a');
+    expect(await screen.findByTestId('location-search')).toHaveTextContent(
+      '?expandTraceID=trace-1&span=trace-1%3Aspan-a'
+    );
     expect(await screen.findByText('Selected span details')).toBeInTheDocument();
     expect(screen.getByText('Associated generation')).toBeInTheDocument();
     expect(screen.getByText('openai / gpt-4o-mini')).toBeInTheDocument();
@@ -359,7 +364,10 @@ describe('ConversationDetailPage', () => {
     render(
       <MemoryRouter initialEntries={['/conversations/conv-fill-spans/detail']}>
         <Routes>
-          <Route path="/conversations/:conversationID/detail" element={<ConversationDetailPage dataSource={dataSource} />} />
+          <Route
+            path="/conversations/:conversationID/detail"
+            element={<ConversationDetailPage dataSource={dataSource} />}
+          />
         </Routes>
       </MemoryRouter>
     );

@@ -87,9 +87,7 @@ function renderPage(dataSource: ConversationsDataSource, initialEntry = '/conver
     { initialEntries: [initialEntry] }
   );
 
-  return render(
-    <RouterProvider router={router} />
-  );
+  return render(<RouterProvider router={router} />);
 }
 
 describe('ConversationsListPage', () => {
