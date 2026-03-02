@@ -1,11 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
-import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Text, useStyles2 } from '@grafana/ui';
+import { dateTime, makeTimeRange, type GrafanaTheme2, type TimeRange } from '@grafana/data';
+import { Alert, Text, TimeRangePicker, useStyles2 } from '@grafana/ui';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
 import type { ConversationSearchResult } from '../conversation/types';
-import { buildConversationDetailRoute } from '../constants';
 import ConversationListPanel from '../components/conversations/ConversationListPanel';
 
 type ActivityBucket = {
@@ -260,6 +259,38 @@ const getStyles = (theme: GrafanaTheme2) => ({
     margin: theme.spacing(0, 2),
     padding: theme.spacing(1.5),
   }),
+  summarySection: css({
+    borderBottom: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.primary,
+    padding: theme.spacing(0, 2),
+  }),
+  controlsRow: css({
+    display: 'flex',
+    justifyContent: 'flex-end',
+    margin: theme.spacing(0.5, 0, 0, 0),
+    padding: theme.spacing(1, 0),
+  }),
+  statsGrid: css({
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+    gap: 0,
+  }),
+  statTile: css({
+    padding: theme.spacing(1.25, 1.5),
+    minHeight: 84,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    justifyContent: 'center',
+  }),
+  statLabel: css({
+    color: theme.colors.text.secondary,
+    marginBottom: theme.spacing(0.25),
+    fontSize: theme.typography.bodySmall.fontSize,
+  }),
+  statValue: css({
+    fontSize: theme.typography.h3.fontSize,
+    fontWeight: theme.typography.fontWeightMedium,
+  }),
   chartTitle: css({
     marginBottom: theme.spacing(1.25),
   }),
@@ -352,6 +383,10 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const styles = useStyles2(getStyles);
+  const [timeRange, setTimeRange] = useState<TimeRange>(() => {
+    const now = dateTime();
+    return makeTimeRange(dateTime(now).subtract(7, 'days'), now);
+  });
 
   const [conversations, setConversations] = useState<ConversationSearchResult[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -418,6 +453,22 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
     [canUseRouterSearchParamUpdates, searchParams, setSearchParams]
   );
 
+  const onMoveBackward = useCallback(() => {
+    const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
+    setTimeRange(makeTimeRange(dateTime(timeRange.from.valueOf() - diff), dateTime(timeRange.to.valueOf() - diff)));
+  }, [timeRange]);
+
+  const onMoveForward = useCallback(() => {
+    const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
+    setTimeRange(makeTimeRange(dateTime(timeRange.from.valueOf() + diff), dateTime(timeRange.to.valueOf() + diff)));
+  }, [timeRange]);
+
+  const onZoom = useCallback(() => {
+    const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
+    const half = Math.round(diff / 2);
+    setTimeRange(makeTimeRange(dateTime(timeRange.from.valueOf() - half), dateTime(timeRange.to.valueOf() + half)));
+  }, [timeRange]);
+
   const loadConversations = useCallback(
     async (): Promise<void> => {
       requestVersionRef.current += 1;
@@ -427,29 +478,31 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
       setErrorMessage('');
 
       try {
-        if (dataSource.listConversations == null) {
-          throw new Error('list conversations data source is not configured');
+        const pageSize = 50;
+        let cursor = '';
+        let hasMore = true;
+        const allConversations: ConversationSearchResult[] = [];
+
+        while (hasMore) {
+          const response = await dataSource.searchConversations({
+            filters: '',
+            select: [],
+            time_range: {
+              from: timeRange.from.toISOString(),
+              to: timeRange.to.toISOString(),
+            },
+            page_size: pageSize,
+            cursor,
+          });
+          allConversations.push(...(response.conversations ?? []));
+          cursor = response.next_cursor ?? '';
+          hasMore = Boolean(response.has_more && cursor.length > 0);
         }
-        const response = await dataSource.listConversations();
+
         if (requestVersionRef.current !== requestVersion) {
           return;
         }
-
-        setConversations(
-          (response?.items ?? []).map((item) => ({
-            conversation_id: item.id,
-            generation_count: item.generation_count,
-            first_generation_at: item.created_at,
-            last_generation_at: item.last_generation_at,
-            models: [],
-            agents: [],
-            error_count: 0,
-            has_errors: false,
-            trace_ids: [],
-            rating_summary: item.rating_summary,
-            annotation_count: 0,
-          }))
-        );
+        setConversations(allConversations);
       } catch (error) {
         if (requestVersionRef.current !== requestVersion) {
           return;
@@ -463,7 +516,7 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
         setLoading(false);
       }
     },
-    [dataSource]
+    [dataSource, timeRange]
   );
 
   useEffect(() => {
@@ -511,9 +564,92 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
     () => activityBuckets.reduce((max, bucket) => Math.max(max, bucket.count), 0),
     [activityBuckets]
   );
+  const conversationStats = useMemo(() => {
+    const totalConversations = conversations.length;
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const weekMs = 7 * dayMs;
+    let totalLLMCalls = 0;
+    let activeLast7d = 0;
+    let ratedConversations = 0;
+    let badRatedConversations = 0;
+
+    for (const conversation of conversations) {
+      totalLLMCalls += conversation.generation_count;
+
+      const lastActivityTs = Date.parse(conversation.last_generation_at);
+      if (Number.isFinite(lastActivityTs)) {
+        const ageMs = now - lastActivityTs;
+        if (ageMs <= weekMs) {
+          activeLast7d += 1;
+        }
+      }
+
+      const ratingSummary = conversation.rating_summary;
+      if (!ratingSummary || ratingSummary.total_count <= 0) {
+        continue;
+      }
+      ratedConversations += 1;
+      if (ratingSummary.has_bad_rating) {
+        badRatedConversations += 1;
+      }
+    }
+
+    const avgCallsPerConversation = totalConversations > 0 ? totalLLMCalls / totalConversations : 0;
+    const badRatedPct = totalConversations > 0 ? (badRatedConversations / totalConversations) * 100 : 0;
+
+    return {
+      totalConversations,
+      totalLLMCalls,
+      avgCallsPerConversation,
+      activeLast7d,
+      ratedConversations,
+      badRatedPct,
+    };
+  }, [conversations]);
 
   return (
     <div className={styles.pageContainer}>
+      <div className={styles.summarySection}>
+        <div className={styles.controlsRow}>
+          <TimeRangePicker
+            value={timeRange}
+            onChange={setTimeRange}
+            onChangeTimeZone={() => {}}
+            onMoveBackward={onMoveBackward}
+            onMoveForward={onMoveForward}
+            onZoom={onZoom}
+          />
+        </div>
+
+        <div className={styles.statsGrid}>
+          <div className={styles.statTile}>
+            <div className={styles.statLabel}>Conversations</div>
+            <div className={styles.statValue}>{conversationStats.totalConversations.toLocaleString()}</div>
+          </div>
+          <div className={styles.statTile}>
+            <div className={styles.statLabel}>LLM Calls</div>
+            <div className={styles.statValue}>{conversationStats.totalLLMCalls.toLocaleString()}</div>
+          </div>
+          <div className={styles.statTile}>
+            <div className={styles.statLabel}>Avg Calls / Conversation</div>
+            <div className={styles.statValue}>{conversationStats.avgCallsPerConversation.toFixed(1)}</div>
+          </div>
+          <div className={styles.statTile}>
+            <div className={styles.statLabel}>Active Conversations (7d)</div>
+            <div className={styles.statValue}>{conversationStats.activeLast7d.toLocaleString()}</div>
+          </div>
+          <div className={styles.statTile}>
+            <div className={styles.statLabel}>Rated Conversations</div>
+            <div className={styles.statValue}>{conversationStats.ratedConversations.toLocaleString()}</div>
+          </div>
+          <div className={styles.statTile}>
+            <div className={styles.statLabel}>Bad-Rated %</div>
+            <div className={styles.statValue}>{conversationStats.badRatedPct.toFixed(1)}%</div>
+          </div>
+        </div>
+      </div>
+
       {errorMessage.length > 0 && (
         <Alert severity="error" title="Conversation query failed">
           <Text>{errorMessage}</Text>
@@ -583,7 +719,7 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
             loading={loading}
             hasMore={false}
             loadingMore={false}
-            onSelectConversation={(conversationID) => navigate(`/${buildConversationDetailRoute(conversationID)}`)}
+            onSelectConversation={(conversationID) => navigate(`${encodeURIComponent(conversationID)}/detail`)}
             onLoadMore={() => undefined}
           />
         </div>
