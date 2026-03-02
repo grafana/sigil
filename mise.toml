@@ -90,6 +90,26 @@ run = "docker compose down"
 description = "Tail local stack logs"
 run = "docker compose logs -f"
 
+[tasks."assistant:up"]
+description = "Start grafana-assistant-app with remapped host ports"
+run = "./scripts/run-assistant-offset.sh up"
+
+[tasks."assistant:up:sigil-env"]
+description = "Start remapped assistant and import SIGIL env vars"
+run = "ASSISTANT_IMPORT_SIGIL_ENV=1 ./scripts/run-assistant-offset.sh up"
+
+[tasks."assistant:down"]
+description = "Stop remapped grafana-assistant-app stack"
+run = "./scripts/run-assistant-offset.sh down"
+
+[tasks."assistant:ps"]
+description = "List remapped grafana-assistant-app containers"
+run = "./scripts/run-assistant-offset.sh ps"
+
+[tasks."assistant:logs"]
+description = "Tail remapped grafana-assistant-app logs"
+run = "./scripts/run-assistant-offset.sh logs"
+
 [tasks.format]
 description = "Format Go and TypeScript code"
 alias = "fmt"
