@@ -1,4 +1,4 @@
-import { buildPricingMap, calculateCostTimeSeries, calculateTotalCost, lookupPricing, pricingKey } from './cost';
+import { buildPricingMap, calculateCostTimeSeries, calculateTotalCost, calculateTotalCostByGroup, lookupPricing, pricingKey } from './cost';
 import type { ModelCardPricing, PrometheusQueryResponse } from './types';
 
 const basePricing: ModelCardPricing = {
@@ -165,6 +165,69 @@ describe('calculateTotalCost', () => {
   });
 });
 
+describe('calculateTotalCostByGroup', () => {
+  const pricingMap = buildPricingMap([
+    {
+      provider: 'openai',
+      model: 'gpt-4o',
+      pricing: makePricing({ prompt_usd_per_token: 0.0025 }),
+    },
+    {
+      provider: 'anthropic',
+      model: 'claude',
+      pricing: makePricing({ prompt_usd_per_token: 0.003 }),
+    },
+  ]);
+
+  it('groups cost by provider label', () => {
+    const response: PrometheusQueryResponse = {
+      status: 'success',
+      data: {
+        resultType: 'vector',
+        result: [
+          {
+            metric: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o', gen_ai_token_type: 'input' },
+            value: [0, '1000'],
+          },
+          {
+            metric: { gen_ai_provider_name: 'anthropic', gen_ai_request_model: 'claude', gen_ai_token_type: 'input' },
+            value: [0, '2000'],
+          },
+        ],
+      },
+    };
+
+    const groups = calculateTotalCostByGroup(response, pricingMap, 'gen_ai_provider_name');
+    expect(groups).toHaveLength(2);
+
+    const openai = groups.find((g) => g.label === 'openai');
+    const anthropic = groups.find((g) => g.label === 'anthropic');
+    expect(openai?.cost).toBeCloseTo(2.5);
+    expect(anthropic?.cost).toBeCloseTo(6.0);
+  });
+
+  it('returns empty array for undefined response', () => {
+    expect(calculateTotalCostByGroup(undefined, pricingMap, 'gen_ai_provider_name')).toEqual([]);
+  });
+
+  it('skips unresolved series', () => {
+    const response: PrometheusQueryResponse = {
+      status: 'success',
+      data: {
+        resultType: 'vector',
+        result: [
+          {
+            metric: { gen_ai_provider_name: 'unknown', gen_ai_request_model: 'unknown', gen_ai_token_type: 'input' },
+            value: [0, '1000'],
+          },
+        ],
+      },
+    };
+
+    expect(calculateTotalCostByGroup(response, pricingMap, 'gen_ai_provider_name')).toEqual([]);
+  });
+});
+
 describe('calculateCostTimeSeries', () => {
   const pricingMap = buildPricingMap([
     {
@@ -212,7 +275,10 @@ describe('calculateCostTimeSeries', () => {
       },
     };
 
-    const frame = calculateCostTimeSeries(response, pricingMap);
+    const frames = calculateCostTimeSeries(response, pricingMap);
+    expect(frames).toHaveLength(1);
+
+    const frame = frames[0];
     expect(frame.fields).toHaveLength(2);
 
     const times = frame.fields[0].values;
@@ -223,12 +289,50 @@ describe('calculateCostTimeSeries', () => {
     expect(costs[1]).toBeCloseTo(1.25);
   });
 
-  it('returns empty frame for non-matrix response', () => {
+  it('returns empty array for non-matrix response', () => {
     const response: PrometheusQueryResponse = {
       status: 'success',
       data: { resultType: 'vector', result: [] },
     };
-    const frame = calculateCostTimeSeries(response, pricingMap);
-    expect(frame.fields).toHaveLength(0);
+    const frames = calculateCostTimeSeries(response, pricingMap);
+    expect(frames).toHaveLength(0);
+  });
+
+  it('groups cost by label when groupByLabel is provided', () => {
+    const multiProviderPricingMap = buildPricingMap([
+      {
+        provider: 'openai',
+        model: 'gpt-4o',
+        pricing: makePricing({ prompt_usd_per_token: 0.0025 }),
+      },
+      {
+        provider: 'anthropic',
+        model: 'claude',
+        pricing: makePricing({ prompt_usd_per_token: 0.003 }),
+      },
+    ]);
+
+    const response: PrometheusQueryResponse = {
+      status: 'success',
+      data: {
+        resultType: 'matrix',
+        result: [
+          {
+            metric: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o', gen_ai_token_type: 'input' },
+            values: [[1000, '100']],
+          },
+          {
+            metric: { gen_ai_provider_name: 'anthropic', gen_ai_request_model: 'claude', gen_ai_token_type: 'input' },
+            values: [[1000, '200']],
+          },
+        ],
+      },
+    };
+
+    const frames = calculateCostTimeSeries(response, multiProviderPricingMap, 'gen_ai_provider_name');
+    expect(frames).toHaveLength(2);
+    const names = frames.map((f) => f.name);
+    expect(names).toContain('openai');
+    expect(names).toContain('anthropic');
   });
 });

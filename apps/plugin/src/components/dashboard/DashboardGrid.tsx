@@ -1,31 +1,38 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { css } from '@emotion/css';
-import { type GrafanaTheme2, type TimeRange } from '@grafana/data';
-import { useStyles2 } from '@grafana/ui';
+import { FieldType, MutableDataFrame, type GrafanaTheme2, type IconName, type TimeRange } from '@grafana/data';
+import { Icon, Select, useStyles2 } from '@grafana/ui';
 import type { DashboardDataSource } from '../../dashboard/api';
-import type { DashboardFilters, ModelResolvePair, PrometheusQueryResponse } from '../../dashboard/types';
-import { calculateTotalCost, calculateCostTimeSeries } from '../../dashboard/cost';
+import {
+  type BreakdownDimension,
+  type DashboardFilters,
+  type LatencyPercentile,
+  type ModelResolvePair,
+  type PrometheusQueryResponse,
+  breakdownToPromLabel,
+} from '../../dashboard/types';
+import { calculateTotalCost, calculateTotalCostByGroup, calculateCostTimeSeries } from '../../dashboard/cost';
 import {
   computeStep,
   computeRateInterval,
   computeRangeDuration,
   totalOpsQuery,
-  totalTokensQuery,
-  totalErrorsQuery,
   errorRateQuery,
-  tokenUsageOverTimeQuery,
-  tokenUsageByModelQuery,
-  rpsByModelOverTimeQuery,
-  callsByProviderQuery,
-  topModelsQuery,
-  latencyP95Query,
-  ttftP95Query,
+  latencyStatQuery,
   tokensByModelAndTypeQuery,
+  totalTokensQuery,
+  totalTokensOverTimeQuery,
+  requestsSuccessOverTimeQuery,
+  requestsErrorOverTimeQuery,
+  requestsOverTimeQuery,
+  errorsByCodeOverTimeQuery,
+  latencyOverTimeQuery,
+  tokensByModelAndTypeOverTimeQuery,
 } from '../../dashboard/queries';
 import {
   matrixToDataFrames,
-  vectorToPieDataFrame,
   vectorToStatValue,
+  vectorToPieDataFrame,
   statValueToDataFrame,
 } from '../../dashboard/transforms';
 import { usePrometheusQuery } from './usePrometheusQuery';
@@ -35,305 +42,438 @@ import { useResolvedModelPricing } from './useResolvedModelPricing';
 export type DashboardGridProps = {
   dataSource: DashboardDataSource;
   filters: DashboardFilters;
+  breakdownBy: BreakdownDimension;
   from: number;
   to: number;
   timeRange: TimeRange;
 };
 
-const STAT_HEIGHT = 120;
-const CHART_HEIGHT = 300;
+const CHART_HEIGHT = 260;
 
-export function DashboardGrid({ dataSource, filters, from, to, timeRange }: DashboardGridProps) {
+type CostMode = 'usd' | 'tokens';
+
+const costModeOptions: Array<{ label: string; value: CostMode }> = [
+  { label: 'USD', value: 'usd' },
+  { label: 'Tokens', value: 'tokens' },
+];
+
+const latencyPercentileOptions: Array<{ label: string; value: LatencyPercentile }> = [
+  { label: 'P50', value: 'p50' },
+  { label: 'P95', value: 'p95' },
+  { label: 'P99', value: 'p99' },
+];
+
+const noThresholds = {
+  mode: 'absolute' as const,
+  steps: [{ value: -Infinity, color: 'green' }],
+};
+
+export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, timeRange }: DashboardGridProps) {
   const styles = useStyles2(getStyles);
+  const [latencyPercentile, setLatencyPercentile] = useState<LatencyPercentile>('p95');
+  const [costMode, setCostMode] = useState<CostMode>('usd');
+  const hasBreakdown = breakdownBy !== 'none';
 
   const step = useMemo(() => computeStep(from, to), [from, to]);
   const interval = useMemo(() => computeRateInterval(step), [step]);
   const rangeDuration = useMemo(() => computeRangeDuration(from, to), [from, to]);
 
-  // Stat queries (instant)
-  const totalOps = usePrometheusQuery(dataSource, totalOpsQuery(filters, rangeDuration), from, to, 'instant');
-  const totalTokens = usePrometheusQuery(dataSource, totalTokensQuery(filters, rangeDuration), from, to, 'instant');
-  const totalErrors = usePrometheusQuery(dataSource, totalErrorsQuery(filters, rangeDuration), from, to, 'instant');
-  const errRate = usePrometheusQuery(dataSource, errorRateQuery(filters, rangeDuration), from, to, 'instant');
+  const statPluginId = hasBreakdown ? 'piechart' : 'stat';
+  const statOptions = hasBreakdown
+    ? {
+        pieType: 'donut',
+        displayLabels: [],
+        legend: { displayMode: 'table', placement: 'right', values: ['percent'], calcs: [] },
+        tooltip: { mode: 'single', sort: 'desc' },
+        reduceOptions: { calcs: ['lastNotNull'] },
+      }
+    : { textMode: 'value', reduceOptions: { calcs: ['lastNotNull'] } };
 
-  // Cost query (instant, per model+type for client-side pricing)
+  // --- Stat queries (instant) ---
+  const totalOps = usePrometheusQuery(
+    dataSource,
+    totalOpsQuery(filters, rangeDuration, breakdownBy),
+    from,
+    to,
+    'instant'
+  );
+  const errRate = usePrometheusQuery(
+    dataSource,
+    errorRateQuery(filters, rangeDuration, breakdownBy),
+    from,
+    to,
+    'instant'
+  );
+  const latencyQuantileMap: Record<LatencyPercentile, number> = { p50: 0.5, p95: 0.95, p99: 0.99 };
+  const latencyStat = usePrometheusQuery(
+    dataSource,
+    latencyStatQuery(filters, rangeDuration, breakdownBy, latencyQuantileMap[latencyPercentile]),
+    from,
+    to,
+    'instant'
+  );
   const costTokens = usePrometheusQuery(
     dataSource,
-    tokensByModelAndTypeQuery(filters, rangeDuration),
+    tokensByModelAndTypeQuery(filters, rangeDuration, breakdownBy),
     from,
     to,
     'instant'
   );
 
-  // Timeseries queries (range)
+  // --- Requests over time ---
+  const requestsSuccess = usePrometheusQuery(
+    dataSource,
+    hasBreakdown ? '' : requestsSuccessOverTimeQuery(filters, interval),
+    from,
+    to,
+    'range',
+    step
+  );
+  const requestsError = usePrometheusQuery(
+    dataSource,
+    hasBreakdown ? '' : requestsErrorOverTimeQuery(filters, interval),
+    from,
+    to,
+    'range',
+    step
+  );
+  const requestsBroken = usePrometheusQuery(
+    dataSource,
+    hasBreakdown ? requestsOverTimeQuery(filters, interval, breakdownBy) : '',
+    from,
+    to,
+    'range',
+    step
+  );
+
+  // --- Errors over time ---
+  const errorsTimeseries = usePrometheusQuery(
+    dataSource,
+    errorsByCodeOverTimeQuery(filters, interval, breakdownBy),
+    from,
+    to,
+    'range',
+    step
+  );
+
+  // --- Latency over time ---
+  const latencyQuery = latencyOverTimeQuery(filters, interval, breakdownBy, latencyQuantileMap[latencyPercentile]);
+  const latencyTimeseries = usePrometheusQuery(dataSource, latencyQuery, from, to, 'range', step);
+
+  // --- Cost over time (with breakdown support) ---
+  const costOverTime = usePrometheusQuery(
+    dataSource,
+    costMode === 'usd' ? tokensByModelAndTypeOverTimeQuery(filters, interval, breakdownBy) : '',
+    from,
+    to,
+    'range',
+    step
+  );
+
+  // --- Token totals (for tokens mode) ---
+  const tokensStat = usePrometheusQuery(
+    dataSource,
+    costMode === 'tokens' ? totalTokensQuery(filters, rangeDuration, breakdownBy) : '',
+    from,
+    to,
+    'instant'
+  );
   const tokensOverTime = usePrometheusQuery(
     dataSource,
-    tokenUsageOverTimeQuery(filters, interval),
+    costMode === 'tokens' ? totalTokensOverTimeQuery(filters, interval, breakdownBy) : '',
     from,
     to,
     'range',
     step
   );
-  const tokensByModel = usePrometheusQuery(
-    dataSource,
-    tokenUsageByModelQuery(filters, interval),
-    from,
-    to,
-    'range',
-    step
-  );
-  const rpsByModel = usePrometheusQuery(
-    dataSource,
-    rpsByModelOverTimeQuery(filters, interval),
-    from,
-    to,
-    'range',
-    step
-  );
-  const latency = usePrometheusQuery(dataSource, latencyP95Query(filters, interval), from, to, 'range', step);
-  const ttft = usePrometheusQuery(dataSource, ttftP95Query(filters, interval), from, to, 'range', step);
 
-  // Piechart queries (instant)
-  const byProvider = usePrometheusQuery(dataSource, callsByProviderQuery(filters, rangeDuration), from, to, 'instant');
-  const byModel = usePrometheusQuery(dataSource, topModelsQuery(filters, rangeDuration), from, to, 'instant');
-
-  // Computed cost
+  // --- Computed cost ---
   const costTokensData = costTokens.data ?? undefined;
-  const tokensByModelData = tokensByModel.data ?? undefined;
+  const costOverTimeData = costOverTime.data ?? undefined;
 
   const resolvePairs = useMemo(() => {
     const pairs: ModelResolvePair[] = [];
     pairs.push(...extractResolvePairs(costTokensData));
-    pairs.push(...extractResolvePairs(tokensByModelData));
+    pairs.push(...extractResolvePairs(costOverTimeData));
     return pairs;
-  }, [costTokensData, tokensByModelData]);
+  }, [costTokensData, costOverTimeData]);
   const resolvedPricing = useResolvedModelPricing(dataSource, resolvePairs);
 
   const totalCost = useMemo(() => {
     return calculateTotalCost(costTokensData, resolvedPricing.pricingMap);
   }, [costTokensData, resolvedPricing.pricingMap]);
 
+  const breakdownPromLabel = hasBreakdown ? breakdownToPromLabel[breakdownBy] : undefined;
+
+  const costStatData = useMemo(() => {
+    if (costMode === 'tokens') {
+      if (hasBreakdown && tokensStat.data) {
+        return [vectorToPieDataFrame(tokensStat.data, [breakdownPromLabel!])];
+      }
+      return [statValueToDataFrame(tokensStat.data ? vectorToStatValue(tokensStat.data) : 0, 'Tokens')];
+    }
+    if (!hasBreakdown || !breakdownPromLabel) {
+      return [statValueToDataFrame(totalCost.totalCost, 'Cost', 'currencyUSD')];
+    }
+    const grouped = calculateTotalCostByGroup(costTokensData, resolvedPricing.pricingMap, breakdownPromLabel);
+    if (grouped.length === 0) {
+      return [statValueToDataFrame(0, 'Cost', 'currencyUSD')];
+    }
+    const frame = new MutableDataFrame({
+      fields: grouped.map((g) => ({
+        name: g.label,
+        type: FieldType.number,
+        values: [g.cost],
+        config: { unit: 'currencyUSD', displayName: g.label },
+      })),
+    });
+    return [frame];
+  }, [costMode, hasBreakdown, breakdownPromLabel, totalCost.totalCost, costTokensData, resolvedPricing.pricingMap, tokensStat.data]);
+
+  const costGroupByLabel = hasBreakdown ? breakdownToPromLabel[breakdownBy] : undefined;
   const costTimeSeries = useMemo(() => {
-    if (!tokensByModelData) {
+    if (costMode === 'tokens') {
+      return tokensOverTime.data ? matrixToDataFrames(tokensOverTime.data) : [];
+    }
+    if (!costOverTimeData) {
       return [];
     }
-    return [calculateCostTimeSeries(tokensByModelData, resolvedPricing.pricingMap)];
-  }, [tokensByModelData, resolvedPricing.pricingMap]);
-
-  const unresolvedSummary = useMemo(() => {
-    if (totalCost.unresolvedSeries.length === 0) {
-      return '';
-    }
-    const reasonByPair = new Map<string, string>();
-    for (const item of resolvedPricing.unresolved) {
-      const pair = `${item.provider}/${item.model}`;
-      if (!item.reason || reasonByPair.has(pair)) {
-        continue;
-      }
-      reasonByPair.set(pair, item.reason);
-    }
-
-    const countsByPair = new Map<string, number>();
-    for (const series of totalCost.unresolvedSeries) {
-      const pair = `${series.provider}/${series.model}`;
-      countsByPair.set(pair, (countsByPair.get(pair) ?? 0) + series.count);
-    }
-
-    const sortedPairs = Array.from(countsByPair.entries()).sort((a, b) => b[1] - a[1]);
-    const topPairs = sortedPairs.slice(0, 3).map(([pair]) => {
-      const reason = reasonByPair.get(pair);
-      return reason ? `${pair} (${reason})` : pair;
-    });
-    const remaining = sortedPairs.length - topPairs.length;
-    const suffix = remaining > 0 ? ` +${remaining} more` : '';
-    return `Excluded ${Math.round(totalCost.unresolvedTokens)} unresolved tokens: ${topPairs.join(', ')}${suffix}.`;
-  }, [resolvedPricing.unresolved, totalCost.unresolvedSeries, totalCost.unresolvedTokens]);
+    return calculateCostTimeSeries(costOverTimeData, resolvedPricing.pricingMap, costGroupByLabel);
+  }, [costMode, costOverTimeData, resolvedPricing.pricingMap, costGroupByLabel, tokensOverTime.data]);
 
   const costDescription = useMemo(() => {
-    const details: string[] = ['Cost computed from token totals and resolved model-card pricing.'];
+    if (costMode === 'tokens') {
+      return `Total token usage${hasBreakdown ? ` grouped by ${breakdownBy}` : ''}`;
+    }
+    const details: string[] = ['Cost from token totals and model-card pricing.'];
     if (resolvedPricing.error) {
       details.push(`Resolver error: ${resolvedPricing.error}.`);
     }
-    if (unresolvedSummary) {
-      details.push(unresolvedSummary);
+    if (totalCost.unresolvedSeries.length > 0) {
+      details.push(`${Math.round(totalCost.unresolvedTokens)} unpriced tokens excluded.`);
     }
     return details.join(' ');
-  }, [resolvedPricing.error, unresolvedSummary]);
+  }, [costMode, hasBreakdown, breakdownBy, resolvedPricing.error, totalCost.unresolvedSeries, totalCost.unresolvedTokens]);
 
-  const costLoading = costTokens.loading || resolvedPricing.loading;
-  const costSeriesLoading = tokensByModel.loading || resolvedPricing.loading;
+  const costLoading = costMode === 'tokens'
+    ? tokensOverTime.loading
+    : costTokens.loading || resolvedPricing.loading;
+  const costSeriesLoading = costMode === 'tokens'
+    ? tokensOverTime.loading
+    : costOverTime.loading || resolvedPricing.loading;
+
+  // --- Build request chart data ---
+  const requestsData = useMemo(() => {
+    if (hasBreakdown) {
+      return requestsBroken.data ? matrixToDataFrames(requestsBroken.data) : [];
+    }
+    const frames = [];
+    if (requestsSuccess.data) {
+      const successFrames = matrixToDataFrames(requestsSuccess.data);
+      for (const f of successFrames) {
+        f.name = 'Success';
+        if (f.fields[1]) {
+          f.fields[1].config = { ...f.fields[1].config, displayName: 'Success' };
+        }
+      }
+      frames.push(...successFrames);
+    }
+    if (requestsError.data) {
+      const errorFrames = matrixToDataFrames(requestsError.data);
+      for (const f of errorFrames) {
+        f.name = 'Errors';
+        if (f.fields[1]) {
+          f.fields[1].config = { ...f.fields[1].config, displayName: 'Errors' };
+        }
+      }
+      frames.push(...errorFrames);
+    }
+    return frames;
+  }, [hasBreakdown, requestsBroken.data, requestsSuccess.data, requestsError.data]);
+
+  const requestsLoading = hasBreakdown ? requestsBroken.loading : requestsSuccess.loading || requestsError.loading;
+  const requestsErr = hasBreakdown ? requestsBroken.error : requestsSuccess.error || requestsError.error;
+
+  const timeseriesDefaults = { fillOpacity: 6, showPoints: 'never', lineWidth: 2 };
 
   return (
     <div className={styles.grid}>
-      {/* Stat row */}
-      <div className={styles.statRow}>
-        <MetricPanel
-          title="Total Operations"
-          pluginId="stat"
-          height={STAT_HEIGHT}
-          timeRange={timeRange}
-          loading={totalOps.loading}
-          error={totalOps.error}
-          data={[statValueToDataFrame(totalOps.data ? vectorToStatValue(totalOps.data) : 0, 'Operations')]}
-        />
-        <MetricPanel
-          title="Total Tokens"
-          pluginId="stat"
-          height={STAT_HEIGHT}
-          timeRange={timeRange}
-          loading={totalTokens.loading}
-          error={totalTokens.error}
-          data={[statValueToDataFrame(totalTokens.data ? vectorToStatValue(totalTokens.data) : 0, 'Tokens')]}
-        />
-        <MetricPanel
-          title="Total Errors"
-          pluginId="stat"
-          height={STAT_HEIGHT}
-          timeRange={timeRange}
-          loading={totalErrors.loading}
-          error={totalErrors.error}
-          data={[statValueToDataFrame(totalErrors.data ? vectorToStatValue(totalErrors.data) : 0, 'Errors')]}
-          fieldConfig={{
-            defaults: { color: { mode: 'fixed', fixedColor: 'red' } },
-            overrides: [],
-          }}
-        />
-        <MetricPanel
-          title="Error Rate"
-          pluginId="stat"
-          height={STAT_HEIGHT}
-          timeRange={timeRange}
-          loading={errRate.loading}
-          error={errRate.error}
-          data={[statValueToDataFrame(errRate.data ? vectorToStatValue(errRate.data) : 0, 'Error Rate', 'percent')]}
-        />
-        <MetricPanel
-          title="Estimated Cost"
-          description={costDescription}
-          pluginId="stat"
-          height={STAT_HEIGHT}
-          timeRange={timeRange}
-          loading={costLoading}
-          error={costTokens.error}
-          data={[statValueToDataFrame(totalCost.totalCost, 'Cost', 'currencyUSD')]}
-        />
-        <MetricPanel
-          title="Unpriced Tokens"
-          description="Tokens excluded from cost because model-card pricing could not be resolved"
-          pluginId="stat"
-          height={STAT_HEIGHT}
-          timeRange={timeRange}
-          loading={costLoading}
-          error={costTokens.error}
-          data={[statValueToDataFrame(totalCost.unresolvedTokens, 'Unpriced Tokens')]}
-        />
-      </div>
+      {/* Row 1: Requests & Errors */}
+      <section className={styles.section}>
+        <div className={styles.sectionHeaderRow}>
+          <SectionHeader icon="graph-bar" title="Requests" styles={styles} />
+          <SectionHeader icon="bug" title="Errors" styles={styles} />
+        </div>
+        <div className={styles.panelRow}>
+          <MetricPanel
+            title="Requests"
+            pluginId="timeseries"
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={requestsLoading}
+            error={requestsErr}
+            data={requestsData}
+            fieldConfig={{
+              defaults: { unit: 'reqps', custom: timeseriesDefaults, thresholds: noThresholds },
+              overrides: [],
+            }}
+          />
+          <MetricPanel
+            title="Total Requests"
+            pluginId={statPluginId}
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={totalOps.loading}
+            error={totalOps.error}
+            options={statOptions}
+            data={
+              hasBreakdown && totalOps.data
+                ? [vectorToPieDataFrame(totalOps.data, [breakdownPromLabel!])]
+                : [statValueToDataFrame(totalOps.data ? vectorToStatValue(totalOps.data) : 0, 'Requests')]
+            }
+            fieldConfig={{ defaults: { min: 0, thresholds: noThresholds }, overrides: [] }}
+          />
+          <MetricPanel
+            title="Error rate"
+            pluginId="timeseries"
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={errorsTimeseries.loading}
+            error={errorsTimeseries.error}
+            data={errorsTimeseries.data ? matrixToDataFrames(errorsTimeseries.data) : []}
+            fieldConfig={{
+              defaults: {
+                unit: 'reqps',
+                custom: timeseriesDefaults,
+                thresholds: noThresholds,
+              },
+              overrides: [],
+            }}
+          />
+          <MetricPanel
+            title="Error Rate"
+            pluginId={statPluginId}
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={errRate.loading}
+            error={errRate.error}
+            options={statOptions}
+            data={
+              hasBreakdown && errRate.data
+                ? [vectorToPieDataFrame(errRate.data, [breakdownPromLabel!])]
+                : [statValueToDataFrame(errRate.data ? vectorToStatValue(errRate.data) : 0, 'Error Rate', 'percent')]
+            }
+            fieldConfig={{ defaults: { unit: 'percent', min: 0, thresholds: noThresholds }, overrides: [] }}
+          />
+        </div>
+      </section>
 
-      {/* Token usage over time */}
-      <MetricPanel
-        title="Token Usage Over Time"
-        description="Breakdown by token type (input, output, cache, reasoning)"
-        pluginId="timeseries"
-        height={CHART_HEIGHT}
-        timeRange={timeRange}
-        loading={tokensOverTime.loading}
-        error={tokensOverTime.error}
-        data={tokensOverTime.data ? matrixToDataFrames(tokensOverTime.data) : []}
-      />
+      {/* Row 2: Latency & Cost */}
+      <section className={styles.section}>
+        <div className={styles.sectionHeaderRow}>
+          <SectionHeader
+            icon="clock-nine"
+            title="Latency"
+            styles={styles}
+            extra={
+              <Select
+                options={latencyPercentileOptions}
+                value={latencyPercentile}
+                onChange={(v) => { if (v.value) { setLatencyPercentile(v.value); } }}
+                width={10}
+              />
+            }
+          />
+          <SectionHeader
+            icon="credit-card"
+            title="Cost"
+            styles={styles}
+            extra={
+              <Select
+                options={costModeOptions}
+                value={costMode}
+                onChange={(v) => { if (v.value) { setCostMode(v.value); } }}
+                width={12}
+              />
+            }
+          />
+        </div>
+        <div className={styles.panelRow}>
+          <MetricPanel
+            title={`Latency ${latencyPercentile.toUpperCase()}`}
+            pluginId="timeseries"
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={latencyTimeseries.loading}
+            error={latencyTimeseries.error}
+            data={latencyTimeseries.data ? matrixToDataFrames(latencyTimeseries.data) : []}
+            fieldConfig={{
+              defaults: { unit: 's', custom: timeseriesDefaults, thresholds: noThresholds },
+              overrides: [],
+            }}
+          />
+          <MetricPanel
+            title={`Latency ${latencyPercentile.toUpperCase()}`}
+            pluginId={statPluginId}
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={latencyStat.loading}
+            error={latencyStat.error}
+            options={statOptions}
+            data={
+              hasBreakdown && latencyStat.data
+                ? [vectorToPieDataFrame(latencyStat.data, [breakdownPromLabel!])]
+                : [statValueToDataFrame(latencyStat.data ? vectorToStatValue(latencyStat.data) : 0, 'Latency', 's')]
+            }
+            fieldConfig={{ defaults: { unit: 's', min: 0, thresholds: noThresholds }, overrides: [] }}
+          />
+          <MetricPanel
+            title={costMode === 'tokens' ? 'Tokens' : 'Cost'}
+            pluginId="timeseries"
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={costSeriesLoading}
+            error={costMode === 'tokens' ? tokensOverTime.error : costOverTime.error}
+            data={costTimeSeries}
+            fieldConfig={{
+              defaults: {
+                unit: costMode === 'tokens' ? 'short' : 'currencyUSD',
+                custom: timeseriesDefaults,
+                thresholds: noThresholds,
+              },
+              overrides: [],
+            }}
+          />
+          <MetricPanel
+            title={costMode === 'tokens' ? 'Total Tokens' : 'Estimated Cost'}
+            pluginId={statPluginId}
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={costMode === 'tokens' ? tokensStat.loading : costLoading}
+            error={costMode === 'tokens' ? tokensStat.error : costTokens.error}
+            options={statOptions}
+            data={costStatData}
+            fieldConfig={{ defaults: { unit: costMode === 'tokens' ? 'short' : 'currencyUSD', min: 0, thresholds: noThresholds }, overrides: [] }}
+          />
+        </div>
+      </section>
+    </div>
+  );
+}
 
-      {/* Cost over time */}
-      <MetricPanel
-        title="Estimated Cost Over Time"
-        description="Cost computed from token rates and model card pricing"
-        pluginId="timeseries"
-        height={CHART_HEIGHT}
-        timeRange={timeRange}
-        loading={costSeriesLoading}
-        error={tokensByModel.error}
-        data={costTimeSeries}
-      />
+type SectionHeaderProps = {
+  icon: IconName;
+  title: string;
+  styles: ReturnType<typeof getStyles>;
+  extra?: React.ReactNode;
+};
 
-      <MetricPanel
-        title="RPS Over Time by Model"
-        description="Request rate grouped by provider and model"
-        pluginId="timeseries"
-        height={CHART_HEIGHT}
-        timeRange={timeRange}
-        loading={rpsByModel.loading}
-        error={rpsByModel.error}
-        data={rpsByModel.data ? matrixToDataFrames(rpsByModel.data) : []}
-        fieldConfig={{
-          defaults: {
-            unit: 'reqps',
-            custom: {
-              drawStyle: 'bars',
-              lineWidth: 0,
-              fillOpacity: 90,
-              showPoints: 'never',
-              stacking: { mode: 'normal', group: 'A' },
-            },
-          },
-          overrides: [],
-        }}
-      />
-
-      {/* Two-column row: piecharts */}
-      <div className={styles.twoColRow}>
-        <MetricPanel
-          title="Calls by Provider"
-          pluginId="piechart"
-          height={CHART_HEIGHT}
-          timeRange={timeRange}
-          loading={byProvider.loading}
-          error={byProvider.error}
-          data={byProvider.data ? [vectorToPieDataFrame(byProvider.data, ['gen_ai_provider_name'])] : []}
-        />
-        <MetricPanel
-          title="Top Models"
-          pluginId="piechart"
-          height={CHART_HEIGHT}
-          timeRange={timeRange}
-          loading={byModel.loading}
-          error={byModel.error}
-          data={
-            byModel.data
-              ? [vectorToPieDataFrame(byModel.data, ['gen_ai_provider_name', 'gen_ai_request_model'], '/')]
-              : []
-          }
-        />
-      </div>
-
-      {/* Two-column row: latency */}
-      <div className={styles.twoColRow}>
-        <MetricPanel
-          title="Latency P95"
-          description="95th percentile operation duration"
-          pluginId="timeseries"
-          height={CHART_HEIGHT}
-          timeRange={timeRange}
-          loading={latency.loading}
-          error={latency.error}
-          data={latency.data ? matrixToDataFrames(latency.data) : []}
-          fieldConfig={{
-            defaults: { unit: 's' },
-            overrides: [],
-          }}
-        />
-        <MetricPanel
-          title="Time to First Token P95"
-          description="95th percentile TTFT (streaming only)"
-          pluginId="timeseries"
-          height={CHART_HEIGHT}
-          timeRange={timeRange}
-          loading={ttft.loading}
-          error={ttft.error}
-          data={ttft.data ? matrixToDataFrames(ttft.data) : []}
-          fieldConfig={{
-            defaults: { unit: 's' },
-            overrides: [],
-          }}
-        />
-      </div>
+function SectionHeader({ icon, title, styles, extra }: SectionHeaderProps) {
+  return (
+    <div className={styles.sectionHeader}>
+      <Icon name={icon} size="md" />
+      <span>{title}</span>
+      {extra && <div className={styles.sectionHeaderExtra}>{extra}</div>}
     </div>
   );
 }
@@ -363,16 +503,35 @@ function getStyles(theme: GrafanaTheme2) {
     grid: css({
       display: 'flex',
       flexDirection: 'column',
+      gap: theme.spacing(3),
+    }),
+    section: css({
+      display: 'flex',
+      flexDirection: 'column',
       gap: theme.spacing(1),
     }),
-    statRow: css({
-      display: 'grid',
-      gridTemplateColumns: 'repeat(6, 1fr)',
-      gap: theme.spacing(1),
-    }),
-    twoColRow: css({
+    sectionHeaderRow: css({
       display: 'grid',
       gridTemplateColumns: '1fr 1fr',
+      gap: theme.spacing(1),
+    }),
+    sectionHeader: css({
+      display: 'flex',
+      alignItems: 'center',
+      gap: theme.spacing(1),
+      fontSize: theme.typography.h5.fontSize,
+      fontWeight: theme.typography.fontWeightMedium,
+      color: theme.colors.text.primary,
+      letterSpacing: '0.01em',
+      paddingBottom: theme.spacing(0.5),
+      borderBottom: `1px solid ${theme.colors.border.weak}`,
+    }),
+    sectionHeaderExtra: css({
+      marginLeft: 'auto',
+    }),
+    panelRow: css({
+      display: 'grid',
+      gridTemplateColumns: '2fr 1fr 2fr 1fr',
       gap: theme.spacing(1),
     }),
   };

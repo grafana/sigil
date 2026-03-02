@@ -4,17 +4,23 @@ import {
   computeRateInterval,
   computeRangeDuration,
   totalOpsQuery,
-  totalTokensQuery,
   totalErrorsQuery,
   errorRateQuery,
-  tokenUsageOverTimeQuery,
-  tokenUsageByModelQuery,
-  rpsByModelOverTimeQuery,
-  callsByProviderQuery,
-  topModelsQuery,
-  latencyP95Query,
-  ttftP95Query,
+  latencyStatQuery,
   tokensByModelAndTypeQuery,
+  totalTokensQuery,
+  totalTokensOverTimeQuery,
+  requestsSuccessOverTimeQuery,
+  requestsErrorOverTimeQuery,
+  requestsOverTimeQuery,
+  errorRateOverTimeQuery,
+  errorsByCodeOverTimeQuery,
+  errorsBySpecificCodeOverTimeQuery,
+  latencyP95OverTimeQuery,
+  latencyP99OverTimeQuery,
+  latencyP50OverTimeQuery,
+  latencyOverTimeQuery,
+  tokensByModelAndTypeOverTimeQuery,
 } from './queries';
 import type { DashboardFilters } from './types';
 
@@ -22,9 +28,7 @@ const empty: DashboardFilters = {
   provider: '',
   model: '',
   agentName: '',
-  labelKey: '',
-  labelValue: '',
-  extraMatchers: '',
+  labelFilters: [],
 };
 
 describe('buildLabelSelector', () => {
@@ -49,25 +53,33 @@ describe('buildLabelSelector', () => {
   });
 
   it('supports fuzzy matching on arbitrary label key and value', () => {
-    expect(buildLabelSelector({ ...empty, labelKey: 'service_name', labelValue: 'sigil-api' })).toBe(
-      'service_name=~"(?i).*sigil-api.*"'
-    );
+    expect(
+      buildLabelSelector({ ...empty, labelFilters: [{ key: 'service_name', value: 'sigil-api' }] })
+    ).toBe('service_name=~"(?i).*sigil-api.*"');
+  });
+
+  it('supports multiple label filters', () => {
+    expect(
+      buildLabelSelector({
+        ...empty,
+        labelFilters: [
+          { key: 'service_name', value: 'sigil-api' },
+          { key: 'env', value: 'prod' },
+        ],
+      })
+    ).toBe('service_name=~"(?i).*sigil-api.*",env=~"(?i).*prod.*"');
   });
 
   it('ignores invalid arbitrary label keys', () => {
-    expect(buildLabelSelector({ ...empty, labelKey: 'service.name', labelValue: 'sigil-api' })).toBe('');
+    expect(
+      buildLabelSelector({ ...empty, labelFilters: [{ key: 'service.name', value: 'sigil-api' }] })
+    ).toBe('');
   });
 
-  it('includes raw extra matchers', () => {
-    expect(buildLabelSelector({ ...empty, extraMatchers: 'telemetry_sdk_language="go",job=~"sigil.*"' })).toBe(
-      'telemetry_sdk_language="go",job=~"sigil.*"'
-    );
-  });
-
-  it('accepts extra matchers wrapped in braces', () => {
-    expect(buildLabelSelector({ ...empty, extraMatchers: '{telemetry_sdk_language="go"}' })).toBe(
-      'telemetry_sdk_language="go"'
-    );
+  it('ignores label key without label value', () => {
+    expect(
+      buildLabelSelector({ ...empty, labelFilters: [{ key: 'service_name', value: '' }] })
+    ).toBe('');
   });
 });
 
@@ -77,9 +89,7 @@ describe('computeStep', () => {
   });
 
   it('computes step for longer ranges', () => {
-    // 1 hour = 3600s, 3600/250 = 14.4, min 15
     expect(computeStep(0, 3600)).toBe(15);
-    // 24 hours = 86400s, 86400/250 = 345.6 → 345
     expect(computeStep(0, 86400)).toBe(345);
   });
 });
@@ -100,7 +110,7 @@ describe('computeRangeDuration', () => {
   });
 });
 
-describe('query builders', () => {
+describe('stat query builders', () => {
   const noFilters: DashboardFilters = empty;
   const withFilters: DashboardFilters = { ...empty, provider: 'openai' };
 
@@ -116,8 +126,10 @@ describe('query builders', () => {
     );
   });
 
-  it('totalTokensQuery', () => {
-    expect(totalTokensQuery(noFilters, '3600s')).toBe('sum(increase(gen_ai_client_token_usage_sum[3600s]))');
+  it('totalOpsQuery with provider breakdown', () => {
+    expect(totalOpsQuery(noFilters, '3600s', 'provider')).toBe(
+      'sum by (gen_ai_provider_name)(increase(gen_ai_client_operation_duration_seconds_count[3600s]))'
+    );
   });
 
   it('totalErrorsQuery', () => {
@@ -132,48 +144,164 @@ describe('query builders', () => {
     expect(q).toContain('* 100');
   });
 
-  it('tokenUsageOverTimeQuery', () => {
-    expect(tokenUsageOverTimeQuery(noFilters, '60s')).toBe(
-      'sum by (gen_ai_token_type) (rate(gen_ai_client_token_usage_sum[60s]))'
-    );
+  it('errorRateQuery with model breakdown', () => {
+    const q = errorRateQuery(noFilters, '3600s', 'model');
+    expect(q).toContain('sum by (gen_ai_request_model)');
+    expect(q).toContain('* 100');
   });
 
-  it('callsByProviderQuery', () => {
-    expect(callsByProviderQuery(noFilters, '3600s')).toBe(
-      'sum by (gen_ai_provider_name) (increase(gen_ai_client_operation_duration_seconds_count[3600s]))'
-    );
+  it('latencyStatQuery defaults to P95', () => {
+    const q = latencyStatQuery(noFilters, '3600s');
+    expect(q).toContain('histogram_quantile(0.95');
+    expect(q).toContain('gen_ai_client_operation_duration_seconds_bucket');
   });
 
-  it('rpsByModelOverTimeQuery', () => {
-    expect(rpsByModelOverTimeQuery(noFilters, '60s')).toBe(
-      'sum by (gen_ai_provider_name, gen_ai_request_model) (rate(gen_ai_client_operation_duration_seconds_count[60s]))'
-    );
+  it('latencyStatQuery with custom quantile', () => {
+    const q = latencyStatQuery(noFilters, '3600s', 'none', 0.99);
+    expect(q).toContain('histogram_quantile(0.99');
   });
 
-  it('tokenUsageByModelQuery', () => {
-    expect(tokenUsageByModelQuery(noFilters, '60s')).toBe(
-      'sum by (gen_ai_provider_name, gen_ai_request_model, gen_ai_token_type) (rate(gen_ai_client_token_usage_sum[60s]))'
-    );
-  });
-
-  it('topModelsQuery', () => {
-    expect(topModelsQuery(noFilters, '3600s')).toBe(
-      'topk(10, sum by (gen_ai_provider_name, gen_ai_request_model) (increase(gen_ai_client_operation_duration_seconds_count[3600s])))'
-    );
-  });
-
-  it('latencyP95Query', () => {
-    expect(latencyP95Query(noFilters, '60s')).toContain('histogram_quantile(0.95');
-    expect(latencyP95Query(noFilters, '60s')).toContain('gen_ai_client_operation_duration_seconds_bucket');
-  });
-
-  it('ttftP95Query', () => {
-    expect(ttftP95Query(noFilters, '60s')).toContain('gen_ai_client_time_to_first_token_seconds_bucket');
+  it('latencyStatQuery with agent breakdown', () => {
+    const q = latencyStatQuery(noFilters, '3600s', 'agent');
+    expect(q).toContain('sum by (le, gen_ai_agent_name)');
   });
 
   it('tokensByModelAndTypeQuery', () => {
     expect(tokensByModelAndTypeQuery(noFilters, '3600s')).toBe(
       'sum by (gen_ai_provider_name, gen_ai_request_model, gen_ai_token_type) (increase(gen_ai_client_token_usage_sum[3600s]))'
+    );
+  });
+
+  it('tokensByModelAndTypeQuery with agent breakdown adds agent label', () => {
+    expect(tokensByModelAndTypeQuery(noFilters, '3600s', 'agent')).toBe(
+      'sum by (gen_ai_provider_name, gen_ai_request_model, gen_ai_token_type, gen_ai_agent_name) (increase(gen_ai_client_token_usage_sum[3600s]))'
+    );
+  });
+
+  it('totalTokensQuery without breakdown', () => {
+    expect(totalTokensQuery(noFilters, '3600s')).toBe(
+      'sum(increase(gen_ai_client_token_usage_sum[3600s]))'
+    );
+  });
+
+  it('totalTokensQuery with provider breakdown', () => {
+    expect(totalTokensQuery(noFilters, '3600s', 'provider')).toBe(
+      'sum by (gen_ai_provider_name)(increase(gen_ai_client_token_usage_sum[3600s]))'
+    );
+  });
+});
+
+describe('timeseries query builders', () => {
+  const noFilters: DashboardFilters = empty;
+
+  it('requestsSuccessOverTimeQuery', () => {
+    expect(requestsSuccessOverTimeQuery(noFilters, '60s')).toBe(
+      'sum(rate(gen_ai_client_operation_duration_seconds_count{error_type=""}[60s]))'
+    );
+  });
+
+  it('requestsErrorOverTimeQuery', () => {
+    expect(requestsErrorOverTimeQuery(noFilters, '60s')).toBe(
+      'sum(rate(gen_ai_client_operation_duration_seconds_count{error_type!=""}[60s]))'
+    );
+  });
+
+  it('requestsOverTimeQuery without breakdown', () => {
+    expect(requestsOverTimeQuery(noFilters, '60s', 'none')).toBe(
+      'sum(rate(gen_ai_client_operation_duration_seconds_count[60s]))'
+    );
+  });
+
+  it('requestsOverTimeQuery with provider breakdown', () => {
+    expect(requestsOverTimeQuery(noFilters, '60s', 'provider')).toBe(
+      'sum by (gen_ai_provider_name)(rate(gen_ai_client_operation_duration_seconds_count[60s]))'
+    );
+  });
+
+  it('errorRateOverTimeQuery', () => {
+    const q = errorRateOverTimeQuery(noFilters, '60s', 'none');
+    expect(q).toContain('error_type!=""');
+    expect(q).toContain('* 100');
+  });
+
+  it('errorsByCodeOverTimeQuery without breakdown', () => {
+    expect(errorsByCodeOverTimeQuery(noFilters, '60s', 'none')).toBe(
+      'sum by (error_type)(rate(gen_ai_client_operation_duration_seconds_count{error_type!=""}[60s]))'
+    );
+  });
+
+  it('errorsByCodeOverTimeQuery with breakdown', () => {
+    expect(errorsByCodeOverTimeQuery(noFilters, '60s', 'provider')).toBe(
+      'sum by (error_type, gen_ai_provider_name)(rate(gen_ai_client_operation_duration_seconds_count{error_type!=""}[60s]))'
+    );
+  });
+
+  it('errorsBySpecificCodeOverTimeQuery without breakdown', () => {
+    expect(errorsBySpecificCodeOverTimeQuery(noFilters, '60s', 'none', 'TIMEOUT')).toBe(
+      'sum(rate(gen_ai_client_operation_duration_seconds_count{error_type="TIMEOUT"}[60s]))'
+    );
+  });
+
+  it('errorsBySpecificCodeOverTimeQuery with breakdown', () => {
+    expect(errorsBySpecificCodeOverTimeQuery(noFilters, '60s', 'provider', 'TIMEOUT')).toBe(
+      'sum by (gen_ai_provider_name)(rate(gen_ai_client_operation_duration_seconds_count{error_type="TIMEOUT"}[60s]))'
+    );
+  });
+
+  it('latencyP95OverTimeQuery without breakdown', () => {
+    const q = latencyP95OverTimeQuery(noFilters, '60s', 'none');
+    expect(q).toContain('histogram_quantile(0.95');
+    expect(q).toContain('sum by (le)');
+  });
+
+  it('latencyP95OverTimeQuery with breakdown', () => {
+    const q = latencyP95OverTimeQuery(noFilters, '60s', 'model');
+    expect(q).toContain('sum by (le, gen_ai_request_model)');
+  });
+
+  it('latencyP99OverTimeQuery', () => {
+    const q = latencyP99OverTimeQuery(noFilters, '60s', 'none');
+    expect(q).toContain('histogram_quantile(0.99');
+    expect(q).toContain('sum by (le)');
+  });
+
+  it('latencyP50OverTimeQuery', () => {
+    const q = latencyP50OverTimeQuery(noFilters, '60s', 'none');
+    expect(q).toContain('histogram_quantile(0.5');
+  });
+
+  it('latencyOverTimeQuery with custom quantile', () => {
+    const q = latencyOverTimeQuery(noFilters, '60s', 'none', 0.75);
+    expect(q).toContain('histogram_quantile(0.75');
+  });
+
+  it('tokensByModelAndTypeOverTimeQuery without breakdown', () => {
+    expect(tokensByModelAndTypeOverTimeQuery(noFilters, '60s')).toBe(
+      'sum by (gen_ai_provider_name, gen_ai_request_model, gen_ai_token_type) (rate(gen_ai_client_token_usage_sum[60s]))'
+    );
+  });
+
+  it('tokensByModelAndTypeOverTimeQuery with agent breakdown adds agent label', () => {
+    expect(tokensByModelAndTypeOverTimeQuery(noFilters, '60s', 'agent')).toBe(
+      'sum by (gen_ai_provider_name, gen_ai_request_model, gen_ai_token_type, gen_ai_agent_name) (rate(gen_ai_client_token_usage_sum[60s]))'
+    );
+  });
+
+  it('tokensByModelAndTypeOverTimeQuery with provider breakdown does not duplicate provider label', () => {
+    expect(tokensByModelAndTypeOverTimeQuery(noFilters, '60s', 'provider')).toBe(
+      'sum by (gen_ai_provider_name, gen_ai_request_model, gen_ai_token_type) (rate(gen_ai_client_token_usage_sum[60s]))'
+    );
+  });
+
+  it('totalTokensOverTimeQuery without breakdown', () => {
+    expect(totalTokensOverTimeQuery(noFilters, '60s')).toBe(
+      'sum(rate(gen_ai_client_token_usage_sum[60s]))'
+    );
+  });
+
+  it('totalTokensOverTimeQuery with model breakdown', () => {
+    expect(totalTokensOverTimeQuery(noFilters, '60s', 'model')).toBe(
+      'sum by (gen_ai_request_model)(rate(gen_ai_client_token_usage_sum[60s]))'
     );
   });
 });

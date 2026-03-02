@@ -94,20 +94,43 @@ export type ModelCardResolveResponse = {
 
 // Dashboard filter state
 
+export type LabelFilter = {
+  key: string;
+  value: string;
+};
+
 export type DashboardFilters = {
   provider: string;
   model: string;
   agentName: string;
-  labelKey: string;
-  labelValue: string;
-  extraMatchers: string;
+  labelFilters: LabelFilter[];
 };
 
 export const emptyFilters: DashboardFilters = {
   provider: '',
   model: '',
   agentName: '',
-  labelKey: '',
-  labelValue: '',
-  extraMatchers: '',
+  labelFilters: [],
+};
+
+// Breakdown dimension for timeseries group-by
+
+export type BreakdownDimension = 'none' | 'provider' | 'model' | 'agent';
+
+// Latency percentile selector
+
+export type LatencyPercentile = 'p50' | 'p95' | 'p99';
+
+export const breakdownLabel: Record<BreakdownDimension, string> = {
+  none: 'None',
+  provider: 'Provider',
+  model: 'Model',
+  agent: 'Agent',
+};
+
+export const breakdownToPromLabel: Record<BreakdownDimension, string> = {
+  none: '',
+  provider: 'gen_ai_provider_name',
+  model: 'gen_ai_request_model',
+  agent: 'gen_ai_agent_name',
 };
