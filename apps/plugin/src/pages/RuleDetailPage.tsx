@@ -152,6 +152,10 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
   const matchKey = JSON.stringify(match);
 
   useEffect(() => {
+    if (loading) {
+      return;
+    }
+
     if (debounceRef.current != null) {
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
@@ -188,7 +192,7 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataSource, selector, matchKey, sampleRate]);
+  }, [dataSource, selector, matchKey, sampleRate, loading]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -241,7 +245,7 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
             Cancel
           </Button>
           <Button variant="primary" onClick={handleSave} disabled={saving} icon={saving ? undefined : 'save'}>
-            {saving ? 'Saving...' : 'Save'}
+            {saving ? 'Saving...' : isNew ? 'Save' : 'Update Enabled Status'}
           </Button>
         </Stack>
       </div>
