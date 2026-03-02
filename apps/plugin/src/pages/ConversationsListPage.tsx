@@ -398,6 +398,7 @@ function formatTrendComparisonValue(value: number, fractionDigits = 0, suffix = 
 
 const getStyles = (theme: GrafanaTheme2) => ({
   pageContainer: css({
+    label: 'conversationsListPage-pageContainer',
     display: 'flex',
     flexDirection: 'column' as const,
     height: '100%',
@@ -405,22 +406,26 @@ const getStyles = (theme: GrafanaTheme2) => ({
     minHeight: 0,
   }),
   listContainer: css({
+    label: 'conversationsListPage-listContainer',
     minHeight: 0,
     flex: 1,
     overflow: 'hidden',
   }),
   chartPanel: css({
+    label: 'conversationsListPage-chartPanel',
     minHeight: 240,
     margin: theme.spacing(0, 2),
     padding: theme.spacing(1.5),
   }),
   summarySection: css({
+    label: 'conversationsListPage-summarySection',
     borderBottom: `1px solid ${theme.colors.border.weak}`,
     background: theme.colors.background.primary,
     padding: theme.spacing(0, 2),
     boxShadow: 'inset 0 8px 8px -8px rgba(0, 0, 0, 0.22)',
   }),
   controlsRow: css({
+    label: 'conversationsListPage-controlsRow',
     display: 'flex',
     justifyContent: 'flex-end',
     margin: theme.spacing(0.5, 0, 0, 0),
@@ -428,11 +433,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
     boxShadow: 'inset 0 10px 10px -10px rgba(0, 0, 0, 0.3)',
   }),
   statsGrid: css({
+    label: 'conversationsListPage-statsGrid',
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
     gap: 0,
   }),
   statTile: css({
+    label: 'conversationsListPage-statTile',
     padding: theme.spacing(1.25, 1.5),
     minHeight: 84,
     display: 'flex',
@@ -440,30 +447,36 @@ const getStyles = (theme: GrafanaTheme2) => ({
     justifyContent: 'center',
   }),
   statLabel: css({
+    label: 'conversationsListPage-statLabel',
     color: theme.colors.text.secondary,
     marginBottom: theme.spacing(0.25),
     fontSize: theme.typography.bodySmall.fontSize,
   }),
   statValue: css({
+    label: 'conversationsListPage-statValue',
     fontSize: theme.typography.h3.fontSize,
     fontWeight: theme.typography.fontWeightMedium,
   }),
   statValueRow: css({
+    label: 'conversationsListPage-statValueRow',
     display: 'flex',
     alignItems: 'baseline',
     gap: theme.spacing(0.75),
     flexWrap: 'wrap' as const,
   }),
   chartTitle: css({
+    label: 'conversationsListPage-chartTitle',
     marginBottom: theme.spacing(1.25),
   }),
   chartHeader: css({
+    label: 'conversationsListPage-chartHeader',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'flex-start',
     gap: theme.spacing(1),
   }),
   chartSelect: css({
+    label: 'conversationsListPage-chartSelect',
     border: 'none',
     borderRadius: theme.shape.radius.default,
     background: 'transparent',
@@ -483,6 +496,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     },
   }),
   chartBars: css({
+    label: 'conversationsListPage-chartBars',
     display: 'flex',
     alignItems: 'end',
     gap: theme.spacing(0.75),
@@ -495,6 +509,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     background: theme.colors.background.primary,
   }),
   chartBar: css({
+    label: 'conversationsListPage-chartBar',
     color: theme.colors.text.primary,
     cursor: 'pointer',
     minWidth: 64,
@@ -512,12 +527,14 @@ const getStyles = (theme: GrafanaTheme2) => ({
     fontSize: theme.typography.bodySmall.fontSize,
   }),
   chartBarActive: css({
+    label: 'conversationsListPage-chartBarActive',
     '& > div:first-child': {
       opacity: 1,
       outline: `1px solid ${theme.colors.primary.main}`,
     },
   }),
   chartBarFill: css({
+    label: 'conversationsListPage-chartBarFill',
     width: '100%',
     borderRadius: 2,
     background: theme.colors.primary.main,
@@ -525,25 +542,31 @@ const getStyles = (theme: GrafanaTheme2) => ({
     minHeight: 4,
   }),
   chartBarMeta: css({
+    label: 'conversationsListPage-chartBarMeta',
     marginTop: theme.spacing(0.5),
     lineHeight: 1.25,
     textAlign: 'left' as const,
   }),
   activityCount: css({
+    label: 'conversationsListPage-activityCount',
     color: theme.colors.text.secondary,
     marginLeft: theme.spacing(0.5),
   }),
   statTrend: css({
+    label: 'conversationsListPage-statTrend',
     fontSize: theme.typography.bodySmall.fontSize,
     color: theme.colors.text.secondary,
   }),
   statTrendUp: css({
+    label: 'conversationsListPage-statTrendUp',
     color: theme.colors.success.main,
   }),
   statTrendDown: css({
+    label: 'conversationsListPage-statTrendDown',
     color: theme.colors.error.main,
   }),
   errorAlert: css({
+    label: 'conversationsListPage-errorAlert',
     margin: 0,
     border: 'none',
     borderBottom: `1px solid ${theme.colors.error.main}`,

@@ -288,6 +288,17 @@ function formatNsTimestamp(ns: number): string {
   return new Date(ns / 1_000_000).toISOString();
 }
 
+function formatNsShortTime(ns: number): string {
+  if (!Number.isFinite(ns) || ns <= 0) {
+    return 'unknown';
+  }
+  return new Date(ns / 1_000_000).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
 function getUsageValue(usage: GenerationDetail['usage'], key: 'input_tokens' | 'output_tokens' | 'total_tokens'): string {
   const value = usage?.[key];
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -298,35 +309,43 @@ function getUsageValue(usage: GenerationDetail['usage'], key: 'input_tokens' | '
 
 const getStyles = (theme: GrafanaTheme2) => ({
   pageContainer: css({
+    label: 'conversationDetailPage-pageContainer',
     display: 'flex',
     flexDirection: 'column' as const,
     gap: theme.spacing(2),
   }),
   title: css({
+    label: 'conversationDetailPage-title',
     padding: theme.spacing(3),
   }),
   loadingContainer: css({
+    label: 'conversationDetailPage-loadingContainer',
     display: 'flex',
     justifyContent: 'center',
     padding: theme.spacing(4),
   }),
   detailsContainer: css({
+    label: 'conversationDetailPage-detailsContainer',
     padding: theme.spacing(2),
   }),
   traceTimelineContainer: css({
+    label: 'conversationDetailPage-traceTimelineContainer',
     display: 'grid',
     gap: 0,
     marginTop: theme.spacing(2),
   }),
   traceTimelineHeader: css({
+    label: 'conversationDetailPage-traceTimelineHeader',
     fontWeight: theme.typography.fontWeightMedium,
     fontSize: theme.typography.bodySmall.fontSize,
   }),
   traceTimelineEmpty: css({
+    label: 'conversationDetailPage-traceTimelineEmpty',
     fontSize: theme.typography.bodySmall.fontSize,
     color: theme.colors.text.secondary,
   }),
   traceRow: css({
+    label: 'conversationDetailPage-traceRow',
     display: 'block',
     borderRadius: theme.shape.radius.default,
     '&:hover': {
@@ -334,13 +353,26 @@ const getStyles = (theme: GrafanaTheme2) => ({
     },
   }),
   traceLane: css({
+    label: 'conversationDetailPage-traceLane',
     position: 'relative' as const,
-    minHeight: '24px',
-    paddingTop: `${TRACE_LANE_PADDING_Y_PX}px`,
-    paddingBottom: `${TRACE_LANE_PADDING_Y_PX}px`,
     overflow: 'visible' as const,
   }),
+  traceTimeRange: css({
+    label: 'conversationDetailPage-traceTimeRange',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    margin: theme.spacing(0.5, 0),
+    fontSize: theme.typography.bodySmall.fontSize,
+    color: theme.colors.text.secondary,
+    fontFamily: theme.typography.fontFamilyMonospace,
+  }),
+  traceTimeLabel: css({
+    label: 'conversationDetailPage-traceTimeLabel',
+    whiteSpace: 'nowrap' as const,
+  }),
   spanBar: css({
+    label: 'conversationDetailPage-spanBar',
     position: 'absolute' as const,
     height: `${TRACE_SPAN_HEIGHT_PX}px`,
     borderRadius: 2,
@@ -352,12 +384,14 @@ const getStyles = (theme: GrafanaTheme2) => ({
     cursor: 'pointer',
   }),
   spanBarSelected: css({
+    label: 'conversationDetailPage-spanBarSelected',
     background: theme.colors.warning.main,
     color: theme.colors.text.primary,
     borderColor: theme.colors.warning.border,
     boxShadow: `0 0 0 2px ${theme.colors.warning.transparent}`,
   }),
   selectedSpanCard: css({
+    label: 'conversationDetailPage-selectedSpanCard',
     marginTop: theme.spacing(1),
     padding: theme.spacing(1),
     borderRadius: theme.shape.radius.default,
@@ -368,15 +402,18 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: theme.spacing(0.5),
   }),
   selectedSpanSectionTitle: css({
+    label: 'conversationDetailPage-selectedSpanSectionTitle',
     marginTop: theme.spacing(0.25),
     marginBottom: theme.spacing(0.5),
   }),
   selectedSpanGrid: css({
+    label: 'conversationDetailPage-selectedSpanGrid',
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
     gap: theme.spacing(1),
   }),
   selectedSpanGroup: css({
+    label: 'conversationDetailPage-selectedSpanGroup',
     display: 'grid',
     gap: theme.spacing(0.375),
     padding: theme.spacing(0.75),
@@ -385,6 +422,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     border: `1px solid ${theme.colors.border.weak}`,
   }),
   selectedSpanRow: css({
+    label: 'conversationDetailPage-selectedSpanRow',
     display: 'grid',
     gridTemplateColumns: 'minmax(120px, 150px) minmax(0, 1fr)',
     gap: theme.spacing(0.75),
@@ -392,17 +430,21 @@ const getStyles = (theme: GrafanaTheme2) => ({
     wordBreak: 'break-word' as const,
   }),
   selectedSpanLabel: css({
+    label: 'conversationDetailPage-selectedSpanLabel',
     color: theme.colors.text.secondary,
   }),
   selectedSpanValue: css({
+    label: 'conversationDetailPage-selectedSpanValue',
     color: theme.colors.text.primary,
   }),
   traceProgressContainer: css({
+    label: 'conversationDetailPage-traceProgressContainer',
     display: 'grid',
     gap: theme.spacing(0.5),
     marginTop: theme.spacing(1),
   }),
   traceProgressTrack: css({
+    label: 'conversationDetailPage-traceProgressTrack',
     width: '100%',
     height: '8px',
     borderRadius: '999px',
@@ -411,17 +453,20 @@ const getStyles = (theme: GrafanaTheme2) => ({
     overflow: 'hidden' as const,
   }),
   traceProgressFill: css({
+    label: 'conversationDetailPage-traceProgressFill',
     height: '100%',
     background: theme.colors.primary.main,
     transition: 'width 150ms ease',
   }),
   metaRow: css({
+    label: 'conversationDetailPage-metaRow',
     display: 'grid',
     gridTemplateColumns: '180px 1fr',
     gap: theme.spacing(0.75),
     fontSize: theme.typography.bodySmall.fontSize,
   }),
   rawData: css({
+    label: 'conversationDetailPage-rawData',
     margin: 0,
     padding: theme.spacing(1),
     borderRadius: theme.shape.radius.default,
@@ -699,53 +744,77 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                 {traceTimelines.length === 0 ? (
                   <div className={styles.traceTimelineEmpty}>No spans found in retrieved traces.</div>
                 ) : (
-                  traceTimelines.map((timeline) => (
-                    <div
-                      key={timeline.traceID}
-                      className={styles.traceRow}
-                      onClick={() => {
-                        const firstSpan = timeline.spans[0];
-                        if (firstSpan == null) {
-                          return;
-                        }
-                        setSelectedSpanParam(firstSpan.selectionID);
-                      }}
-                    >
+                  <>
+                    <div className={styles.traceTimeRange}>
+                      <span className={styles.traceTimeLabel} title={formatNsTimestamp(timelineBounds.min)}>
+                        {formatNsShortTime(timelineBounds.min)}
+                      </span>
+                      <span
+                        className={styles.traceTimeLabel}
+                        title={formatNsTimestamp(timelineBounds.min + timelineBounds.range)}
+                      >
+                        {formatNsShortTime(timelineBounds.min + timelineBounds.range)}
+                      </span>
+                    </div>
+                    {traceTimelines.map((timeline) => (
                       <div
-                        className={styles.traceLane}
-                        style={{
-                          height: `${timeline.rowCount * TRACE_ROW_STEP_PX + TRACE_LANE_PADDING_Y_PX * 2}px`,
+                        key={timeline.traceID}
+                        className={styles.traceRow}
+                        onClick={() => {
+                          const firstSpan = timeline.spans[0];
+                          if (firstSpan == null) {
+                            return;
+                          }
+                          setSelectedSpanParam(firstSpan.selectionID);
                         }}
                       >
-                        {timeline.spans.map((span) => {
-                          const leftPct = ((span.startNs - timelineBounds.min) / timelineBounds.range) * 100;
-                          const widthPct = Math.max((span.durationNs / timelineBounds.range) * 100, 0.8);
-                          const isSelected = selectedSpanID === span.selectionID;
-                          return (
-                            <button
-                              key={`${span.selectionID}:${span.row}`}
-                              type="button"
-                              className={`${styles.spanBar} ${isSelected ? styles.spanBarSelected : ''}`}
-                              style={{
-                                top: `${span.row * TRACE_ROW_STEP_PX}px`,
-                                left: `${leftPct}%`,
-                                width: `${Math.max(0.8, Math.min(widthPct, 100 - leftPct))}%`,
-                              }}
-                              aria-label={`select span ${span.name}`}
-                              aria-pressed={isSelected}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setSelectedSpanParam(span.selectionID);
-                              }}
-                              title={`${span.name} (${span.serviceName})`}
-                            >
-                              {null}
-                            </button>
-                          );
-                        })}
+                        <div
+                          className={styles.traceLane}
+                          style={{
+                            height: `${timeline.rowCount * TRACE_ROW_STEP_PX + TRACE_LANE_PADDING_Y_PX * 2}px`,
+                          }}
+                        >
+                          {timeline.spans.map((span) => {
+                            const leftPct = ((span.startNs - timelineBounds.min) / timelineBounds.range) * 100;
+                            const widthPct = Math.max((span.durationNs / timelineBounds.range) * 100, 0.8);
+                            const isSelected = selectedSpanID === span.selectionID;
+                            return (
+                              <button
+                                key={`${span.selectionID}:${span.row}`}
+                                type="button"
+                                className={`${styles.spanBar} ${isSelected ? styles.spanBarSelected : ''}`}
+                                style={{
+                                  top: `${span.row * TRACE_ROW_STEP_PX}px`,
+                                  left: `${leftPct}%`,
+                                  width: `${Math.max(0.8, Math.min(widthPct, 100 - leftPct))}%`,
+                                }}
+                                aria-label={`select span ${span.name}`}
+                                aria-pressed={isSelected}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setSelectedSpanParam(span.selectionID);
+                                }}
+                                title={`${span.name} (${span.serviceName})`}
+                              >
+                                {null}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
+                    ))}
+                    <div className={styles.traceTimeRange}>
+                      <span className={styles.traceTimeLabel} title={formatNsTimestamp(timelineBounds.min)}>
+                        {formatNsShortTime(timelineBounds.min)}
+                      </span>
+                      <span
+                        className={styles.traceTimeLabel}
+                        title={formatNsTimestamp(timelineBounds.min + timelineBounds.range)}
+                      >
+                        {formatNsShortTime(timelineBounds.min + timelineBounds.range)}
+                      </span>
                     </div>
-                  ))
+                  </>
                 )}
                 {selectedSpan != null && (
                   <div className={styles.selectedSpanCard}>

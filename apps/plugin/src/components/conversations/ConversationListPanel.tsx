@@ -35,13 +35,16 @@ function formatRelativeTime(dateStr: string): string {
 
 const getStyles = (theme: GrafanaTheme2) => ({
   table: css({
+    label: 'conversationListPanel-table',
     width: '100%',
     borderCollapse: 'collapse' as const,
   }),
   headerRow: css({
+    label: 'conversationListPanel-headerRow',
     borderBottom: `2px solid ${theme.colors.border.medium}`,
   }),
   headerCell: css({
+    label: 'conversationListPanel-headerCell',
     padding: theme.spacing(1, 1.5),
     textAlign: 'left' as const,
     fontSize: theme.typography.bodySmall.fontSize,
@@ -50,6 +53,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     whiteSpace: 'nowrap' as const,
   }),
   row: css({
+    label: 'conversationListPanel-row',
     borderBottom: `1px solid ${theme.colors.border.weak}`,
     cursor: 'pointer',
     transition: 'background 0.1s ease',
@@ -58,34 +62,40 @@ const getStyles = (theme: GrafanaTheme2) => ({
     },
   }),
   rowSelected: css({
+    label: 'conversationListPanel-rowSelected',
     background: theme.colors.primary.transparent,
     '&:hover': {
       background: theme.colors.primary.transparent,
     },
   }),
   cell: css({
+    label: 'conversationListPanel-cell',
     padding: theme.spacing(1, 1.5),
     fontSize: theme.typography.bodySmall.fontSize,
     verticalAlign: 'middle' as const,
   }),
   idCell: css({
+    label: 'conversationListPanel-idCell',
     fontFamily: theme.typography.fontFamilyMonospace,
     fontSize: theme.typography.bodySmall.fontSize,
     whiteSpace: 'normal' as const,
     overflowWrap: 'anywhere' as const,
   }),
   modelList: css({
+    label: 'conversationListPanel-modelList',
     display: 'flex',
     flexWrap: 'wrap' as const,
     gap: theme.spacing(0.5),
   }),
   ratingGroup: css({
+    label: 'conversationListPanel-ratingGroup',
     display: 'flex',
     alignItems: 'center',
     gap: theme.spacing(0.5),
     fontSize: theme.typography.bodySmall.fontSize,
   }),
   emptyState: css({
+    label: 'conversationListPanel-emptyState',
     display: 'flex',
     flexDirection: 'column' as const,
     alignItems: 'center',
@@ -95,6 +105,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.secondary,
   }),
   container: css({
+    label: 'conversationListPanel-container',
     display: 'flex',
     flexDirection: 'column' as const,
     gap: theme.spacing(1),
