@@ -15,6 +15,8 @@ export type MetricPanelProps = {
   timeRange: TimeRange;
   options?: Record<string, unknown>;
   fieldConfig?: FieldConfigSource;
+  actions?: React.ReactNode;
+  titleItems?: React.ReactNode;
 };
 
 export function MetricPanel({
@@ -28,6 +30,8 @@ export function MetricPanel({
   timeRange,
   options = {},
   fieldConfig = { defaults: {}, overrides: [] },
+  actions,
+  titleItems,
 }: MetricPanelProps) {
   const styles = useStyles2(getStyles);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -86,6 +90,8 @@ export function MetricPanel({
           height={height}
           loadingState={loading ? LoadingState.Loading : undefined}
           statusMessage={error}
+          actions={actions}
+          titleItems={titleItems}
         >
           {(innerWidth, innerHeight) => (
             <PanelRenderer
@@ -112,10 +118,6 @@ function getStyles(_theme: GrafanaTheme2) {
   return {
     container: css({
       width: '100%',
-      '& section[data-testid]': {
-        border: 'none !important',
-        boxShadow: 'none !important',
-      },
     }),
   };
 }

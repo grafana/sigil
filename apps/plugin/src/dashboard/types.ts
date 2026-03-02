@@ -125,6 +125,22 @@ export type LatencyPercentile = 'p50' | 'p95' | 'p99';
 
 export type CostMode = 'usd' | 'tokens';
 
+// Token drilldown: which token types to show in the cost panels
+
+export type TokenDrilldown = 'all' | 'io' | 'cache';
+
+export const tokenDrilldownLabel: Record<TokenDrilldown, string> = {
+  all: 'Total',
+  io: 'Input / Output',
+  cache: 'Cache',
+};
+
+export const tokenDrilldownTypes: Record<TokenDrilldown, string[] | undefined> = {
+  all: undefined,
+  io: ['input', 'output'],
+  cache: ['cache_read', 'cache_write'],
+};
+
 export const breakdownLabel: Record<BreakdownDimension, string> = {
   none: 'None',
   provider: 'Provider',

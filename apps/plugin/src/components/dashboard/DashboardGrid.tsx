@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
-import { FieldType, MutableDataFrame, ThresholdsMode, textUtil, type GrafanaTheme2, type IconName, type TimeRange } from '@grafana/data';
-import { Icon, IconButton, Select, Spinner, useStyles2 } from '@grafana/ui';
+import { ThresholdsMode, textUtil, getValueFormat, formattedValueToString, type GrafanaTheme2, type TimeRange } from '@grafana/data';
+import { Icon, IconButton, Select, Spinner, Tooltip, useStyles2, useTheme2 } from '@grafana/ui';
 import { useInlineAssistant } from '@grafana/assistant';
 import type { DashboardDataSource } from '../../dashboard/api';
 import {
@@ -11,7 +11,9 @@ import {
   type LatencyPercentile,
   type ModelResolvePair,
   type PrometheusQueryResponse,
+  type TokenDrilldown,
   breakdownToPromLabel,
+  tokenDrilldownTypes,
 } from '../../dashboard/types';
 import { calculateTotalCost, calculateTotalCostByGroup, calculateCostTimeSeries } from '../../dashboard/cost';
 import {
@@ -24,18 +26,20 @@ import {
   tokensByModelAndTypeQuery,
   totalTokensQuery,
   totalTokensOverTimeQuery,
+  tokensByTypeQuery,
+  tokensByBreakdownAndTypeQuery,
+  tokensByTypeOverTimeQuery,
   requestsSuccessOverTimeQuery,
   requestsErrorOverTimeQuery,
   requestsOverTimeQuery,
   errorsByCodeOverTimeQuery,
   latencyOverTimeQuery,
+  ttftOverTimeQuery,
   tokensByModelAndTypeOverTimeQuery,
 } from '../../dashboard/queries';
 import {
   matrixToDataFrames,
   vectorToStatValue,
-  vectorToPieDataFrame,
-  statValueToDataFrame,
 } from '../../dashboard/transforms';
 import { usePrometheusQuery } from './usePrometheusQuery';
 import { MetricPanel } from './MetricPanel';
@@ -45,19 +49,15 @@ export type DashboardGridProps = {
   dataSource: DashboardDataSource;
   filters: DashboardFilters;
   breakdownBy: BreakdownDimension;
-  latencyPercentile: LatencyPercentile;
-  costMode: CostMode;
   from: number;
   to: number;
   timeRange: TimeRange;
-  onLatencyPercentileChange: (p: LatencyPercentile) => void;
-  onCostModeChange: (m: CostMode) => void;
 };
 
 const CHART_HEIGHT = 320;
 
 const costModeOptions: Array<{ label: string; value: CostMode }> = [
-  { label: 'USD', value: 'usd' },
+  { label: 'Cost', value: 'usd' },
   { label: 'Tokens', value: 'tokens' },
 ];
 
@@ -65,6 +65,12 @@ const latencyPercentileOptions: Array<{ label: string; value: LatencyPercentile 
   { label: 'P50', value: 'p50' },
   { label: 'P95', value: 'p95' },
   { label: 'P99', value: 'p99' },
+];
+
+const tokenDrilldownOptions: Array<{ label: string; value: TokenDrilldown }> = [
+  { label: 'Total', value: 'all' },
+  { label: 'Input / Output', value: 'io' },
+  { label: 'Cache', value: 'cache' },
 ];
 
 const noThresholds = {
@@ -75,50 +81,38 @@ const noThresholds = {
 const consistentColor = { mode: 'palette-classic-by-name' };
 
 export function DashboardGrid({
-  dataSource, filters, breakdownBy, latencyPercentile, costMode,
-  from, to, timeRange, onLatencyPercentileChange, onCostModeChange,
+  dataSource, filters, breakdownBy,
+  from, to, timeRange,
 }: DashboardGridProps) {
   const styles = useStyles2(getStyles);
   const hasBreakdown = breakdownBy !== 'none';
+  const [latencyPercentile, setLatencyPercentile] = useState<LatencyPercentile>('p95');
+  const [costMode, setCostMode] = useState<CostMode>('tokens');
+  const [tokenDrilldown, setTokenDrilldown] = useState<TokenDrilldown>('all');
 
   const step = useMemo(() => computeStep(from, to), [from, to]);
   const interval = useMemo(() => computeRateInterval(step), [step]);
   const rangeDuration = useMemo(() => computeRangeDuration(from, to), [from, to]);
 
-  const statPluginId = hasBreakdown ? 'piechart' : 'stat';
-  const statOptions = hasBreakdown
-    ? {
-        pieType: 'pie',
-        displayLabels: [],
-        legend: { displayMode: 'table', placement: 'right', values: ['percent'], calcs: [], width: 200 },
-        tooltip: { mode: 'single', sort: 'desc' },
-        reduceOptions: { calcs: ['lastNotNull'] },
-      }
-    : { textMode: 'value', reduceOptions: { calcs: ['lastNotNull'] } };
-
-  // --- Stat queries (instant) ---
-  const totalOps = usePrometheusQuery(
-    dataSource,
-    totalOpsQuery(filters, rangeDuration, breakdownBy),
-    from,
-    to,
-    'instant'
-  );
-  const errRate = usePrometheusQuery(
-    dataSource,
-    errorRateQuery(filters, rangeDuration, breakdownBy),
-    from,
-    to,
-    'instant'
-  );
   const latencyQuantileMap: Record<LatencyPercentile, number> = { p50: 0.5, p95: 0.95, p99: 0.99 };
-  const latencyStat = usePrometheusQuery(
-    dataSource,
-    latencyStatQuery(filters, rangeDuration, breakdownBy, latencyQuantileMap[latencyPercentile]),
-    from,
-    to,
-    'instant'
-  );
+
+  // --- Top stats (always aggregate, no breakdown) ---
+  const topTotalOps = usePrometheusQuery(dataSource, totalOpsQuery(filters, rangeDuration), from, to, 'instant');
+  const topErrRate = usePrometheusQuery(dataSource, errorRateQuery(filters, rangeDuration), from, to, 'instant');
+  const topLatency = usePrometheusQuery(dataSource, latencyStatQuery(filters, rangeDuration, 'none', 0.95), from, to, 'instant');
+
+  // --- Total requests stat (with breakdown for pie) ---
+  const totalOpsStat = usePrometheusQuery(dataSource, totalOpsQuery(filters, rangeDuration, breakdownBy), from, to, 'instant');
+
+  // --- Previous period comparison (same queries shifted back 1 hour) ---
+  const hourAgo = 3600;
+  const prevFrom = from - hourAgo;
+  const prevTo = to - hourAgo;
+  const prevTotalOps = usePrometheusQuery(dataSource, totalOpsQuery(filters, rangeDuration), prevFrom, prevTo, 'instant');
+  const prevErrRate = usePrometheusQuery(dataSource, errorRateQuery(filters, rangeDuration), prevFrom, prevTo, 'instant');
+  const prevLatency = usePrometheusQuery(dataSource, latencyStatQuery(filters, rangeDuration, 'none', 0.95), prevFrom, prevTo, 'instant');
+  const prevTokensTotal = usePrometheusQuery(dataSource, totalTokensQuery(filters, rangeDuration), prevFrom, prevTo, 'instant');
+  const prevCostTokens = usePrometheusQuery(dataSource, tokensByModelAndTypeQuery(filters, rangeDuration, 'none'), prevFrom, prevTo, 'instant');
   const costTokens = usePrometheusQuery(
     dataSource,
     tokensByModelAndTypeQuery(filters, rangeDuration, breakdownBy),
@@ -167,6 +161,20 @@ export function DashboardGrid({
   const latencyQuery = latencyOverTimeQuery(filters, interval, breakdownBy, latencyQuantileMap[latencyPercentile]);
   const latencyTimeseries = usePrometheusQuery(dataSource, latencyQuery, from, to, 'range', step);
 
+  // --- Latency stat (with breakdown for panel) ---
+  const latencyStat = usePrometheusQuery(
+    dataSource,
+    latencyStatQuery(filters, rangeDuration, breakdownBy, latencyQuantileMap[latencyPercentile]),
+    from, to, 'instant',
+  );
+
+  // --- TTFT over time ---
+  const ttftTimeseries = usePrometheusQuery(
+    dataSource,
+    ttftOverTimeQuery(filters, interval, breakdownBy, latencyQuantileMap[latencyPercentile]),
+    from, to, 'range', step,
+  );
+
   // --- Cost over time (with breakdown support) ---
   const costOverTime = usePrometheusQuery(
     dataSource,
@@ -177,21 +185,61 @@ export function DashboardGrid({
     step
   );
 
-  // --- Token totals (for tokens mode) ---
-  const tokensStat = usePrometheusQuery(
+  // --- Token drilldown queries ---
+  const drilldownTypes = tokenDrilldownTypes[tokenDrilldown];
+  const isTokenTotal = costMode === 'tokens' && tokenDrilldown === 'all';
+  const isTokenByType = costMode === 'tokens' && tokenDrilldown !== 'all';
+
+  const tokensTotalStat = usePrometheusQuery(
+    dataSource,
+    totalTokensQuery(filters, rangeDuration),
+    from,
+    to,
+    'instant'
+  );
+  const tokensTotalByBreakdown = usePrometheusQuery(
     dataSource,
     costMode === 'tokens' ? totalTokensQuery(filters, rangeDuration, breakdownBy) : '',
     from,
     to,
     'instant'
   );
-  const tokensOverTime = usePrometheusQuery(
+  const tokensTotalTimeseries = usePrometheusQuery(
     dataSource,
-    costMode === 'tokens' ? totalTokensOverTimeQuery(filters, interval, breakdownBy) : '',
+    isTokenTotal ? totalTokensOverTimeQuery(filters, interval, breakdownBy) : '',
     from,
     to,
     'range',
     step
+  );
+  const tokensByTypeStat = usePrometheusQuery(
+    dataSource,
+    isTokenByType && !hasBreakdown ? tokensByTypeQuery(filters, rangeDuration, drilldownTypes) : '',
+    from,
+    to,
+    'instant'
+  );
+  const tokensByBreakdownStat = usePrometheusQuery(
+    dataSource,
+    isTokenByType && hasBreakdown ? totalTokensQuery(filters, rangeDuration, breakdownBy, drilldownTypes) : '',
+    from,
+    to,
+    'instant'
+  );
+  const tokensByTypeTimeseries = usePrometheusQuery(
+    dataSource,
+    isTokenByType ? tokensByTypeOverTimeQuery(filters, interval, drilldownTypes, breakdownBy) : '',
+    from,
+    to,
+    'range',
+    step
+  );
+  const tokensByBreakdownAndType = usePrometheusQuery(
+    dataSource,
+    isTokenByType && hasBreakdown ? tokensByBreakdownAndTypeQuery(filters, rangeDuration, breakdownBy, drilldownTypes) : '',
+    from,
+    to,
+    'instant'
   );
 
   // --- Computed cost ---
@@ -210,50 +258,54 @@ export function DashboardGrid({
     return calculateTotalCost(costTokensData, resolvedPricing.pricingMap);
   }, [costTokensData, resolvedPricing.pricingMap]);
 
+  const prevCostTokensData = prevCostTokens.data ?? undefined;
+  const prevTotalCost = useMemo(() => {
+    return calculateTotalCost(prevCostTokensData, resolvedPricing.pricingMap);
+  }, [prevCostTokensData, resolvedPricing.pricingMap]);
+
   const breakdownPromLabel = hasBreakdown ? breakdownToPromLabel[breakdownBy] : undefined;
+  const costGroupByLabel = breakdownPromLabel;
 
-  const costStatData = useMemo(() => {
-    if (costMode === 'tokens') {
-      if (hasBreakdown && tokensStat.data) {
-        return [vectorToPieDataFrame(tokensStat.data, [breakdownPromLabel!])];
-      }
-      return [statValueToDataFrame(tokensStat.data ? vectorToStatValue(tokensStat.data) : 0, 'Tokens')];
+  const costByBreakdownData = useMemo<PrometheusQueryResponse | null>(() => {
+    if (costMode !== 'usd' || !costGroupByLabel || !costTokensData) {
+      return null;
     }
-    if (!hasBreakdown || !breakdownPromLabel) {
-      return [statValueToDataFrame(totalCost.totalCost, 'Cost', 'currencyUSD')];
-    }
-    const grouped = calculateTotalCostByGroup(costTokensData, resolvedPricing.pricingMap, breakdownPromLabel);
-    if (grouped.length === 0) {
-      return [statValueToDataFrame(0, 'Cost', 'currencyUSD')];
-    }
-    const frame = new MutableDataFrame({
-      fields: grouped.map((g) => ({
-        name: g.label,
-        type: FieldType.number,
-        values: [g.cost],
-        config: { unit: 'currencyUSD', displayName: g.label },
-      })),
-    });
-    return [frame];
-  }, [costMode, hasBreakdown, breakdownPromLabel, totalCost.totalCost, costTokensData, resolvedPricing.pricingMap, tokensStat.data]);
+    const groups = calculateTotalCostByGroup(costTokensData, resolvedPricing.pricingMap, costGroupByLabel);
+    return {
+      status: 'success',
+      data: {
+        resultType: 'vector' as const,
+        result: groups.map((g) => ({
+          metric: { [costGroupByLabel]: g.label },
+          value: [0, String(g.cost)] as [number, string],
+        })),
+      },
+    };
+  }, [costMode, costGroupByLabel, costTokensData, resolvedPricing.pricingMap]);
 
-  const costGroupByLabel = hasBreakdown ? breakdownToPromLabel[breakdownBy] : undefined;
   const costTimeSeries = useMemo(() => {
-    if (costMode === 'tokens') {
-      return tokensOverTime.data ? matrixToDataFrames(tokensOverTime.data) : [];
+    if (isTokenTotal) {
+      return tokensTotalTimeseries.data ? matrixToDataFrames(tokensTotalTimeseries.data) : [];
+    }
+    if (isTokenByType) {
+      return tokensByTypeTimeseries.data ? matrixToDataFrames(tokensByTypeTimeseries.data) : [];
     }
     if (!costOverTimeData) {
       return [];
     }
     return calculateCostTimeSeries(costOverTimeData, resolvedPricing.pricingMap, costGroupByLabel);
-  }, [costMode, costOverTimeData, resolvedPricing.pricingMap, costGroupByLabel, tokensOverTime.data]);
+  }, [isTokenTotal, isTokenByType, costOverTimeData, resolvedPricing.pricingMap, costGroupByLabel, tokensTotalTimeseries.data, tokensByTypeTimeseries.data]);
 
-  const costLoading = costMode === 'tokens'
-    ? tokensOverTime.loading
-    : costTokens.loading || resolvedPricing.loading;
-  const costSeriesLoading = costMode === 'tokens'
-    ? tokensOverTime.loading
-    : costOverTime.loading || resolvedPricing.loading;
+  const costLoading = isTokenTotal
+    ? tokensTotalStat.loading
+    : isTokenByType
+      ? (hasBreakdown ? tokensByBreakdownStat.loading : tokensByTypeStat.loading)
+      : costTokens.loading || resolvedPricing.loading;
+  const costSeriesLoading = isTokenTotal
+    ? tokensTotalTimeseries.loading
+    : isTokenByType
+      ? tokensByTypeTimeseries.loading
+      : costOverTime.loading || resolvedPricing.loading;
 
   // --- Build request chart data ---
   const requestsData = useMemo(() => {
@@ -288,214 +340,230 @@ export function DashboardGrid({
   const requestsErr = hasBreakdown ? requestsBroken.error : requestsSuccess.error || requestsError.error;
 
   const timeseriesDefaults = { fillOpacity: 6, showPoints: 'never', lineWidth: 2 };
-  const timeseriesOptions = {
+  const tooltipOptions = { mode: 'multi', sort: 'desc' };
+  const requestsOptions = {
     legend: { displayMode: 'list', placement: 'bottom', calcs: [] },
-    tooltip: { mode: 'multi', sort: 'desc' },
+    tooltip: tooltipOptions,
+  };
+  const errorOptions = {
+    legend: { displayMode: 'table', placement: 'right', calcs: ['mean'], maxWidth: 280 },
+    tooltip: tooltipOptions,
+  };
+  const latencyOptions = {
+    legend: { displayMode: 'list', placement: 'bottom', calcs: [] },
+    tooltip: tooltipOptions,
+  };
+  const consumptionOptions = {
+    legend: { displayMode: 'table', placement: 'right', calcs: ['mean'], maxWidth: 280 },
+    tooltip: tooltipOptions,
   };
 
-  const allDataLoading = totalOps.loading || errRate.loading || requestsLoading
-    || errorsTimeseries.loading || latencyStat.loading || latencyTimeseries.loading
-    || costLoading || costSeriesLoading;
+  const allDataLoading = topTotalOps.loading || topErrRate.loading || requestsLoading
+    || errorsTimeseries.loading || topLatency.loading || latencyTimeseries.loading
+    || costLoading || costSeriesLoading
+    || tokensByTypeStat.loading || tokensByTypeTimeseries.loading;
   const insightDataContext = useMemo(() => {
     if (allDataLoading) {
       return null;
     }
     const requestsSource = hasBreakdown ? requestsBroken.data : requestsSuccess.data;
-    const hasAnyData = hasResponseData(totalOps.data)
+    const hasAnyData = hasResponseData(topTotalOps.data)
       || hasResponseData(requestsSource)
-      || hasResponseData(latencyStat.data)
+      || hasResponseData(topLatency.data)
       || hasResponseData(latencyTimeseries.data);
     if (!hasAnyData) {
       return null;
     }
     const parts = [
-      summarizeVector(totalOps.data, 'Total Requests'),
-      summarizeVector(errRate.data, 'Error Rate (%)'),
+      summarizeVector(topTotalOps.data, 'Total Requests'),
+      summarizeVector(topErrRate.data, 'Error Rate (%)'),
       summarizeMatrix(requestsSource, 'Requests over time'),
       summarizeMatrix(errorsTimeseries.data, 'Errors over time'),
-      summarizeVector(latencyStat.data, `Latency ${latencyPercentile} (seconds)`),
+      summarizeVector(topLatency.data, `Latency ${latencyPercentile} (seconds)`),
       summarizeMatrix(latencyTimeseries.data, 'Latency over time'),
     ];
     if (costMode === 'tokens') {
-      parts.push(summarizeVector(tokensStat.data, 'Total Tokens'));
-      parts.push(summarizeMatrix(tokensOverTime.data, 'Tokens over time'));
+      parts.push(summarizeVector(tokensByTypeStat.data, 'Tokens by type'));
+      parts.push(summarizeMatrix(tokensByTypeTimeseries.data, 'Tokens over time'));
     } else {
       parts.push(`Estimated total cost (USD): $${totalCost.totalCost.toFixed(4)}`);
       parts.push(summarizeVector(costTokens.data, 'Token usage by model'));
     }
     return parts.join('\n');
-  }, [allDataLoading, totalOps.data, errRate.data, hasBreakdown, requestsBroken.data, requestsSuccess.data, errorsTimeseries.data, latencyStat.data, latencyPercentile, latencyTimeseries.data, costMode, tokensStat.data, tokensOverTime.data, totalCost.totalCost, costTokens.data]);
+  }, [allDataLoading, topTotalOps.data, topErrRate.data, hasBreakdown, requestsBroken.data, requestsSuccess.data, errorsTimeseries.data, topLatency.data, latencyPercentile, latencyTimeseries.data, costMode, tokensByTypeStat.data, tokensByTypeTimeseries.data, totalCost.totalCost, costTokens.data]);
 
-  const insightPrompt = `Analyze this GenAI observability dashboard. Breakdown: ${breakdownBy}. Latency percentile: ${latencyPercentile}. Cost mode: ${costMode}. Only flag significant findings — anomalies, outliers, or actionable issues. Skip anything that looks normal.`;
+  const insightPrompt = `Analyze this GenAI observability dashboard. Breakdown: ${breakdownBy}. Latency percentile: ${latencyPercentile}. Cost mode: ${costMode}${costMode === 'tokens' ? `. Token drilldown: ${tokenDrilldown}` : ''}. Only flag significant findings — anomalies, outliers, or actionable issues. Skip anything that looks normal.`;
+
+  const totalRequestsValue = topTotalOps.data ? vectorToStatValue(topTotalOps.data) : 0;
+  const latencyValue = topLatency.data ? vectorToStatValue(topLatency.data) : 0;
+  const errorRateValue = topErrRate.data ? vectorToStatValue(topErrRate.data) : 0;
+  const totalTokensValue = tokensTotalStat.data ? vectorToStatValue(tokensTotalStat.data) : 0;
+
+  const prevRequestsValue = prevTotalOps.data ? vectorToStatValue(prevTotalOps.data) : 0;
+  const prevLatencyValue = prevLatency.data ? vectorToStatValue(prevLatency.data) : 0;
+  const prevErrRateValue = prevErrRate.data ? vectorToStatValue(prevErrRate.data) : 0;
+  const prevTokensValue = prevTokensTotal.data ? vectorToStatValue(prevTokensTotal.data) : 0;
 
   return (
-    <div className={styles.gridOuter}>
-      <div className={styles.grid}>
-        {/* Row 1: Requests & Errors */}
-        <section className={styles.section}>
-          <div className={styles.sectionHeaderRow}>
-            <SectionHeader icon="graph-bar" title="Requests" styles={styles} />
-            <SectionHeader icon="bug" title="Errors" styles={styles} />
-          </div>
-          <div className={styles.panelRow}>
-            <MetricPanel
-              title="Requests/s"
-              pluginId="timeseries"
-              height={CHART_HEIGHT}
-              timeRange={timeRange}
-              loading={requestsLoading}
-              error={requestsErr}
-              data={requestsData}
-              options={timeseriesOptions}
-              fieldConfig={{
-                defaults: { unit: 'reqps', color: consistentColor, custom: timeseriesDefaults, thresholds: noThresholds },
-                overrides: [],
-              }}
-            />
-            <MetricPanel
-              title="Total Requests"
-              pluginId={statPluginId}
-              height={CHART_HEIGHT}
-              timeRange={timeRange}
-              loading={totalOps.loading}
-              error={totalOps.error}
-              options={statOptions}
-              data={
-                hasBreakdown && totalOps.data
-                  ? [vectorToPieDataFrame(totalOps.data, [breakdownPromLabel!])]
-                  : [statValueToDataFrame(totalOps.data ? vectorToStatValue(totalOps.data) : 0, 'Requests')]
-              }
-              fieldConfig={{ defaults: { min: 0, color: consistentColor, thresholds: noThresholds }, overrides: [] }}
-            />
-            <MetricPanel
-              title="Error rate"
-              pluginId="timeseries"
-              height={CHART_HEIGHT}
-              timeRange={timeRange}
-              loading={errorsTimeseries.loading}
-              error={errorsTimeseries.error}
-              data={errorsTimeseries.data ? matrixToDataFrames(errorsTimeseries.data) : []}
-              options={timeseriesOptions}
-              fieldConfig={{
-                defaults: {
-                  unit: 'reqps',
-                  color: consistentColor,
-                  custom: timeseriesDefaults,
-                  thresholds: noThresholds,
-                },
-                overrides: [],
-              }}
-            />
-            <MetricPanel
-              title="Error Rate"
-              pluginId={statPluginId}
-              height={CHART_HEIGHT}
-              timeRange={timeRange}
-              loading={errRate.loading}
-              error={errRate.error}
-              options={statOptions}
-              data={
-                hasBreakdown && errRate.data
-                  ? [vectorToPieDataFrame(errRate.data, [breakdownPromLabel!])]
-                  : [statValueToDataFrame(errRate.data ? vectorToStatValue(errRate.data) : 0, 'Error Rate', 'percent')]
-              }
-              fieldConfig={{ defaults: { unit: 'percent', min: 0, color: consistentColor, thresholds: noThresholds }, overrides: [] }}
-            />
-          </div>
-        </section>
+    <div className={styles.gridWrapper}>
+      {/* Top-level stats row */}
+      <div className={styles.statsRow}>
+        <TopStat label="Total Requests" value={totalRequestsValue} loading={topTotalOps.loading} prevValue={prevRequestsValue} prevLoading={prevTotalOps.loading} styles={styles} />
+        <TopStat label="Avg Latency (P95)" value={latencyValue} unit="s" loading={topLatency.loading} prevValue={prevLatencyValue} prevLoading={prevLatency.loading} invertChange styles={styles} />
+        <TopStat label="Error Rate" value={errorRateValue} unit="percent" loading={topErrRate.loading} prevValue={prevErrRateValue} prevLoading={prevErrRate.loading} invertChange styles={styles} />
+        <TopStat label="Total Tokens" value={totalTokensValue} unit="short" loading={tokensTotalStat.loading} prevValue={prevTokensValue} prevLoading={prevTokensTotal.loading} styles={styles} />
+        <TopStat label="Total Cost" value={totalCost.totalCost} unit="currencyUSD" loading={costLoading} prevValue={prevTotalCost.totalCost} prevLoading={prevCostTokens.loading} invertChange styles={styles} />
+      </div>
 
-        {/* Row 2: Latency & Cost */}
-        <section className={styles.section}>
-          <div className={styles.sectionHeaderRow}>
-            <SectionHeader
-              icon="clock-nine"
-              title="Latency"
-              styles={styles}
-              extra={
-                <Select
-                  options={latencyPercentileOptions}
-                  value={latencyPercentile}
-                  onChange={(v) => { if (v.value) { onLatencyPercentileChange(v.value); } }}
-                  width={10}
-                />
-              }
-            />
-            <SectionHeader
-              icon="credit-card"
-              title="Cost"
-              styles={styles}
-              extra={
+      <div className={styles.gridOuter}>
+      <div className={styles.grid}>
+
+        {/* Row 1: Requests & Errors */}
+        <div className={styles.panelRowFirstStat}>
+          <BreakdownStatPanel
+            title="Total Requests"
+            data={totalOpsStat.data}
+            loading={totalOpsStat.loading}
+            error={totalOpsStat.error}
+            breakdownLabel={breakdownPromLabel}
+            height={CHART_HEIGHT}
+          />
+          <MetricPanel
+            title="Requests/s"
+            pluginId="timeseries"
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={requestsLoading}
+            error={requestsErr}
+            data={requestsData}
+            options={requestsOptions}
+            fieldConfig={{
+              defaults: { unit: 'short', color: consistentColor, custom: timeseriesDefaults, thresholds: noThresholds },
+              overrides: [],
+            }}
+          />
+          <MetricPanel
+            title="Error rate"
+            pluginId="timeseries"
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={errorsTimeseries.loading}
+            error={errorsTimeseries.error}
+            data={errorsTimeseries.data ? matrixToDataFrames(errorsTimeseries.data) : []}
+            options={errorOptions}
+            fieldConfig={{
+              defaults: {
+                unit: 'short',
+                color: consistentColor,
+                custom: timeseriesDefaults,
+                thresholds: noThresholds,
+              },
+              overrides: [],
+            }}
+          />
+        </div>
+
+        {/* Row 2: Latency */}
+        <div className={styles.panelRowLatencyFull}>
+          <MetricPanel
+            title="Latency"
+            pluginId="timeseries"
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={latencyTimeseries.loading}
+            error={latencyTimeseries.error}
+            data={latencyTimeseries.data ? matrixToDataFrames(latencyTimeseries.data) : []}
+            options={latencyOptions}
+            fieldConfig={{
+              defaults: { unit: 's', color: consistentColor, custom: timeseriesDefaults, thresholds: noThresholds },
+              overrides: [],
+            }}
+            titleItems={
+              <Select
+                options={latencyPercentileOptions}
+                value={latencyPercentile}
+                onChange={(v) => { if (v.value) { setLatencyPercentile(v.value); } }}
+                width={10}
+              />
+            }
+          />
+          <BreakdownStatPanel
+            title={`Avg Latency (${latencyPercentile.toUpperCase()})`}
+            data={latencyStat.data}
+            loading={latencyStat.loading}
+            error={latencyStat.error}
+            breakdownLabel={breakdownPromLabel}
+            height={CHART_HEIGHT}
+            unit="s"
+            aggregation="avg"
+          />
+          <MetricPanel
+            title="Time to First Token"
+            pluginId="timeseries"
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={ttftTimeseries.loading}
+            error={ttftTimeseries.error}
+            data={ttftTimeseries.data ? matrixToDataFrames(ttftTimeseries.data) : []}
+            options={latencyOptions}
+            fieldConfig={{
+              defaults: { unit: 's', color: consistentColor, custom: timeseriesDefaults, thresholds: noThresholds },
+              overrides: [],
+            }}
+          />
+        </div>
+
+        {/* Row 3: Consumption */}
+        <div className={styles.panelRowLatency}>
+          <MetricPanel
+            title="Consumption"
+            pluginId="timeseries"
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={costSeriesLoading}
+            error={isTokenTotal ? tokensTotalTimeseries.error : isTokenByType ? tokensByTypeTimeseries.error : costOverTime.error}
+            data={costTimeSeries}
+            options={consumptionOptions}
+            fieldConfig={{
+              defaults: {
+                unit: costMode === 'tokens' ? 'short' : 'currencyUSD',
+                color: consistentColor,
+                custom: timeseriesDefaults,
+                thresholds: noThresholds,
+              },
+              overrides: [],
+            }}
+            titleItems={
+              <div className={styles.panelActions}>
                 <Select
                   options={costModeOptions}
                   value={costMode}
-                  onChange={(v) => { if (v.value) { onCostModeChange(v.value); } }}
+                  onChange={(v) => { if (v.value) { setCostMode(v.value); } }}
                   width={12}
                 />
-              }
-            />
-          </div>
-          <div className={styles.panelRow}>
-            <MetricPanel
-              title={latencyPercentile.toUpperCase()}
-              pluginId="timeseries"
-              height={CHART_HEIGHT}
-              timeRange={timeRange}
-              loading={latencyTimeseries.loading}
-              error={latencyTimeseries.error}
-              data={latencyTimeseries.data ? matrixToDataFrames(latencyTimeseries.data) : []}
-              options={timeseriesOptions}
-              fieldConfig={{
-                defaults: { unit: 's', color: consistentColor, custom: timeseriesDefaults, thresholds: noThresholds },
-                overrides: [],
-              }}
-            />
-            <MetricPanel
-              title={latencyPercentile.toUpperCase()}
-              pluginId={statPluginId}
-              height={CHART_HEIGHT}
-              timeRange={timeRange}
-              loading={latencyStat.loading}
-              error={latencyStat.error}
-              options={statOptions}
-              data={
-                hasBreakdown && latencyStat.data
-                  ? [vectorToPieDataFrame(latencyStat.data, [breakdownPromLabel!])]
-                  : [statValueToDataFrame(latencyStat.data ? vectorToStatValue(latencyStat.data) : 0, 'Latency', 's')]
-              }
-              fieldConfig={{ defaults: { unit: 's', min: 0, color: consistentColor, thresholds: noThresholds }, overrides: [] }}
-            />
-            <MetricPanel
-              title={costMode === 'tokens' ? 'Tokens' : 'USD'}
-              pluginId="timeseries"
-              height={CHART_HEIGHT}
-              timeRange={timeRange}
-              loading={costSeriesLoading}
-              error={costMode === 'tokens' ? tokensOverTime.error : costOverTime.error}
-              data={costTimeSeries}
-              options={timeseriesOptions}
-              fieldConfig={{
-                defaults: {
-                  unit: costMode === 'tokens' ? 'short' : 'currencyUSD',
-                  color: consistentColor,
-                  custom: timeseriesDefaults,
-                  thresholds: noThresholds,
-                },
-                overrides: [],
-              }}
-            />
-            <MetricPanel
-              title={costMode === 'tokens' ? 'Total Tokens' : 'Estimated USD'}
-              pluginId={statPluginId}
-              height={CHART_HEIGHT}
-              timeRange={timeRange}
-              loading={costMode === 'tokens' ? tokensStat.loading : costLoading}
-              error={costMode === 'tokens' ? tokensStat.error : costTokens.error}
-              options={statOptions}
-              data={costStatData}
-              fieldConfig={{ defaults: { unit: costMode === 'tokens' ? 'short' : 'currencyUSD', min: 0, color: consistentColor, thresholds: noThresholds }, overrides: [] }}
-            />
-          </div>
-        </section>
+                {costMode === 'tokens' && (
+                  <Select
+                    options={tokenDrilldownOptions}
+                    value={tokenDrilldown}
+                    onChange={(v) => { if (v.value) { setTokenDrilldown(v.value); } }}
+                    width={18}
+                  />
+                )}
+              </div>
+            }
+          />
+          <BreakdownStatPanel
+            title={costMode === 'tokens' ? 'Total Tokens' : 'Total Cost'}
+            data={isTokenByType && hasBreakdown ? tokensByBreakdownAndType.data : costMode === 'tokens' ? tokensTotalByBreakdown.data : costByBreakdownData}
+            loading={isTokenByType && hasBreakdown ? tokensByBreakdownAndType.loading : costMode === 'tokens' ? tokensTotalByBreakdown.loading : costTokens.loading || resolvedPricing.loading}
+            error={isTokenByType && hasBreakdown ? tokensByBreakdownAndType.error : costMode === 'tokens' ? tokensTotalByBreakdown.error : costTokens.error}
+            breakdownLabel={breakdownPromLabel}
+            height={CHART_HEIGHT}
+            unit={costMode === 'tokens' ? 'short' : 'currencyUSD'}
+            segmentLabel={isTokenByType && hasBreakdown ? 'gen_ai_token_type' : undefined}
+            segmentNames={isTokenByType && hasBreakdown ? drilldownTypes : undefined}
+          />
+        </div>
       </div>
 
       <InsightPanel
@@ -503,25 +571,317 @@ export function DashboardGrid({
         origin="sigil-plugin/dashboard-insight"
         dataContext={insightDataContext}
       />
+      </div>
     </div>
   );
 }
 
-type SectionHeaderProps = {
-  icon: IconName;
-  title: string;
+
+function formatStatValue(value: number, unit?: string): string {
+  if (unit) {
+    const fmt = getValueFormat(unit);
+    return formattedValueToString(fmt(value));
+  }
+  const fmt = getValueFormat('short');
+  return formattedValueToString(fmt(value));
+}
+
+type TopStatProps = {
+  label: string;
+  value: number;
+  unit?: string;
+  loading: boolean;
+  prevValue?: number;
+  prevLoading?: boolean;
+  invertChange?: boolean;
   styles: ReturnType<typeof getStyles>;
-  extra?: React.ReactNode;
 };
 
-function SectionHeader({ icon, title, styles, extra }: SectionHeaderProps) {
+function TopStat({ label, value, unit, loading, prevValue, prevLoading, invertChange, styles }: TopStatProps) {
+  let changeBadge: React.ReactNode = null;
+  if (!loading && !prevLoading && prevValue !== undefined) {
+    if (prevValue === 0 && value === 0) {
+      changeBadge = (
+        <Tooltip content="No data one week ago" placement="bottom">
+          <span className={`${styles.changeBadge} ${styles.changeBadgeNeutral}`}>→ 0%</span>
+        </Tooltip>
+      );
+    } else if (prevValue === 0) {
+      changeBadge = (
+        <Tooltip content="No data one week ago" placement="bottom">
+          <span className={`${styles.changeBadge} ${styles.changeBadgeNeutral}`}>→ 0%</span>
+        </Tooltip>
+      );
+    } else {
+      const pctChange = ((value - prevValue) / Math.abs(prevValue)) * 100;
+      const isUp = pctChange > 0;
+      const isGood = invertChange ? !isUp : isUp;
+      const arrow = isUp ? '↑' : '↓';
+      const sign = isUp ? '+' : '';
+      const badgeClass = pctChange === 0 ? styles.changeBadgeNeutral : isGood ? styles.changeBadgeGood : styles.changeBadgeWarn;
+      const tooltipText = `${formatStatValue(prevValue, unit)} one hour ago`;
+      changeBadge = (
+        <Tooltip content={tooltipText} placement="bottom">
+          <span className={`${styles.changeBadge} ${badgeClass}`}>
+            {arrow} {sign}{pctChange.toFixed(1)}%
+          </span>
+        </Tooltip>
+      );
+    }
+  }
+
   return (
-    <div className={styles.sectionHeader}>
-      <div className={styles.sectionHeaderIcon}>
-        <Icon name={icon} size="lg" />
+    <div className={styles.topStat}>
+      <span className={styles.topStatLabel}>{label}</span>
+      <div className={styles.topStatRow}>
+        <span className={styles.topStatValue}>
+          {loading ? '–' : formatStatValue(value, unit)}
+        </span>
+        {changeBadge}
       </div>
-      <span className={styles.sectionHeaderTitle}>{title}</span>
-      {extra && <div className={styles.sectionHeaderExtra}>{extra}</div>}
+    </div>
+  );
+}
+
+
+// Replicates Grafana's palette-classic-by-name: djb2 hash (same as string-hash npm package)
+// + WCAG contrast filtering to match the exact subset of colors Grafana uses.
+function stringHash(str: string): number {
+  let hash = 5381;
+  let i = str.length;
+  while (i) {
+    hash = (hash * 33) ^ str.charCodeAt(--i);
+  }
+  return hash >>> 0;
+}
+
+function relativeLuminance(hex: string): number {
+  const raw = hex.startsWith('#') ? hex.slice(1) : hex;
+  const r = parseInt(raw.slice(0, 2), 16) / 255;
+  const g = parseInt(raw.slice(2, 4), 16) / 255;
+  const b = parseInt(raw.slice(4, 6), 16) / 255;
+  const toLinear = (c: number) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+}
+
+function contrastRatio(fg: string, bg: string): number {
+  const lumA = relativeLuminance(fg);
+  const lumB = relativeLuminance(bg);
+  return (Math.max(lumA, lumB) + 0.05) / (Math.min(lumA, lumB) + 0.05);
+}
+
+type BreakdownStatPanelProps = {
+  title: string;
+  data: PrometheusQueryResponse | null | undefined;
+  loading: boolean;
+  error?: string;
+  breakdownLabel?: string;
+  height: number;
+  unit?: string;
+  aggregation?: 'sum' | 'avg';
+  segmentLabel?: string;
+  segmentNames?: string[];
+};
+
+function BreakdownStatPanel({ title, data, loading, error, breakdownLabel, height, unit = 'short', aggregation = 'sum', segmentLabel, segmentNames }: BreakdownStatPanelProps) {
+  const styles = useStyles2(getStyles);
+  const theme = useTheme2();
+
+  const resolvedPalette = useMemo(() => {
+    const bg = theme.colors.background.primary;
+    const threshold = theme.colors.contrastThreshold;
+    return theme.visualization.palette
+      .filter((name) => contrastRatio(theme.visualization.getColorByName(name), bg) >= threshold)
+      .map((name) => theme.visualization.getColorByName(name));
+  }, [theme]);
+
+  const isStacked = Boolean(segmentLabel && segmentNames && segmentNames.length > 0);
+
+  const items = useMemo(() => {
+    if (!data || data.data.resultType !== 'vector') {
+      return [];
+    }
+    const results = data.data.result as Array<{ metric: Record<string, string>; value: [number, string] }>;
+    return results
+      .map((r) => {
+        const name = (breakdownLabel ? r.metric[breakdownLabel] : '') || Object.values(r.metric).filter(Boolean).join(' / ') || 'unknown';
+        const color = resolvedPalette[stringHash(name) % resolvedPalette.length];
+        return { name, value: parseFloat(r.value[1]), color };
+      })
+      .filter((r) => isFinite(r.value))
+      .sort((a, b) => b.value - a.value);
+  }, [data, breakdownLabel, resolvedPalette]);
+
+  type StackedItem = {
+    name: string;
+    total: number;
+    color: string;
+    segments: Array<{ segName: string; value: number; color: string }>;
+  };
+
+  const stackedItems = useMemo((): StackedItem[] => {
+    if (!isStacked || !data || data.data.resultType !== 'vector' || !segmentLabel || !segmentNames) {
+      return [];
+    }
+    const results = data.data.result as Array<{ metric: Record<string, string>; value: [number, string] }>;
+    const grouped = new Map<string, Map<string, number>>();
+    for (const r of results) {
+      const breakdownName = (breakdownLabel ? r.metric[breakdownLabel] : '') || 'unknown';
+      const seg = r.metric[segmentLabel] || 'unknown';
+      const val = parseFloat(r.value[1]);
+      if (!isFinite(val)) {
+        continue;
+      }
+      if (!grouped.has(breakdownName)) {
+        grouped.set(breakdownName, new Map());
+      }
+      grouped.get(breakdownName)!.set(seg, (grouped.get(breakdownName)!.get(seg) ?? 0) + val);
+    }
+
+    const segColors = new Map<string, string>();
+    for (const seg of segmentNames) {
+      segColors.set(seg, resolvedPalette[stringHash(seg) % resolvedPalette.length]);
+    }
+
+    return Array.from(grouped.entries())
+      .map(([name, segs]) => {
+        const total = Array.from(segs.values()).reduce((s, v) => s + v, 0);
+        const segments = segmentNames.map((sn) => ({
+          segName: sn,
+          value: segs.get(sn) ?? 0,
+          color: segColors.get(sn) ?? resolvedPalette[0],
+        }));
+        return { name, total, color: resolvedPalette[stringHash(name) % resolvedPalette.length], segments };
+      })
+      .sort((a, b) => b.total - a.total);
+  }, [isStacked, data, breakdownLabel, segmentLabel, segmentNames, resolvedPalette]);
+
+  const aggregate = useMemo(() => {
+    const src = isStacked ? stackedItems.map((i) => i.total) : items.map((i) => i.value);
+    if (src.length === 0) {
+      return 0;
+    }
+    const total = src.reduce((s, v) => s + v, 0);
+    return aggregation === 'avg' ? total / src.length : total;
+  }, [items, stackedItems, isStacked, aggregation]);
+
+  const formatVal = (v: number) => formattedValueToString(getValueFormat(unit)(v));
+
+  if (loading) {
+    return (
+      <div className={styles.bspPanel} style={{ height }}>
+        <div className={styles.bspHeader}>
+          <span className={styles.bspTitle}>{title}</span>
+        </div>
+        <div className={styles.bspCenter}><Spinner size="lg" /></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className={styles.bspPanel} style={{ height }}>
+        <div className={styles.bspHeader}>
+          <span className={styles.bspTitle}>{title}</span>
+        </div>
+        <div className={styles.bspCenter} style={{ opacity: 0.6 }}>{error}</div>
+      </div>
+    );
+  }
+
+  if (isStacked && stackedItems.length > 0) {
+    const maxTotal = stackedItems[0].total;
+    const segColors = segmentNames!.map((sn) => ({
+      name: sn,
+      color: resolvedPalette[stringHash(sn) % resolvedPalette.length],
+    }));
+    return (
+      <div className={styles.bspPanel} style={{ height }}>
+        <div className={styles.bspHeader}>
+          <span className={styles.bspTitle}>{title}</span>
+          <div className={styles.bspValueRow}>
+            <span className={styles.bspBigValue}>{formatVal(aggregate)}</span>
+          </div>
+          <div className={styles.bspSegmentLegend}>
+            {segColors.map((sc) => (
+              <span key={sc.name} className={styles.bspSegmentLegendItem}>
+                <span className={styles.bspBarDot} style={{ background: sc.color }} />
+                {sc.name}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className={styles.bspList}>
+          {stackedItems.map((item) => {
+            const barWidth = maxTotal > 0 ? (item.total / maxTotal) * 100 : 0;
+            return (
+              <div key={item.name} className={styles.bspBarRow}>
+                <div className={styles.bspBarMeta}>
+                  <span className={styles.bspBarName}>{item.name}</span>
+                  <span className={styles.bspBarValue}>{formatVal(item.total)}</span>
+                </div>
+                <div className={styles.bspBarTrack}>
+                  <div style={{ display: 'flex', width: `${barWidth}%`, height: '100%', borderRadius: 3, overflow: 'hidden' }}>
+                    {item.segments.map((seg) => {
+                      const segPct = item.total > 0 ? (seg.value / item.total) * 100 : 0;
+                      if (segPct === 0) {
+                        return null;
+                      }
+                      return (
+                        <Tooltip key={seg.segName} content={`${seg.segName}: ${formatVal(seg.value)}`}>
+                          <div style={{ width: `${segPct}%`, height: '100%', background: seg.color, minWidth: 2 }} />
+                        </Tooltip>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if (items.length <= 1) {
+    return (
+      <div className={styles.bspPanel} style={{ height }}>
+        <div className={styles.bspHeader}>
+          <span className={styles.bspTitle}>{title}</span>
+        </div>
+        <div className={styles.bspCenter}>
+          <span className={styles.bspBigValue}>{formatVal(aggregate)}</span>
+        </div>
+      </div>
+    );
+  }
+
+  const maxValue = items[0].value;
+  return (
+    <div className={styles.bspPanel} style={{ height }}>
+      <div className={styles.bspHeader}>
+        <span className={styles.bspTitle}>{title}</span>
+        <div className={styles.bspValueRow}>
+          <span className={styles.bspBigValue}>{formatVal(aggregate)}</span>
+        </div>
+      </div>
+      <div className={styles.bspList}>
+        {items.map((item) => {
+          const barWidth = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
+          return (
+            <div key={item.name} className={styles.bspBarRow}>
+              <div className={styles.bspBarMeta}>
+                <span className={styles.bspBarDot} style={{ background: item.color }} />
+                <span className={styles.bspBarName}>{item.name}</span>
+                <span className={styles.bspBarValue}>{formatVal(item.value)}</span>
+              </div>
+              <div className={styles.bspBarTrack}>
+                <div className={styles.bspBarFill} style={{ width: `${barWidth}%`, background: item.color }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -536,7 +896,7 @@ function InsightPanel({ prompt, origin, dataContext }: InsightPanelProps) {
   const styles = useStyles2(getStyles);
   const gen = useInlineAssistant();
   const [text, setText] = useState('');
-  const hasAutoRun = useRef(false);
+  const hasAutoRun = useRef(true);
 
   const latestRef = useRef({ prompt, origin, dataContext, gen });
   useEffect(() => {
@@ -549,7 +909,7 @@ function InsightPanel({ prompt, origin, dataContext }: InsightPanelProps) {
     g.generate({
       prompt: fullPrompt,
       origin: o,
-      systemPrompt: 'You are an observability analyst. Provide 2-3 short bullet points highlighting only the most important findings: anomalies, spikes, or key metrics. Use **bold** for numbers. One line per bullet.',
+      systemPrompt: 'You are a concise observability analyst. Return exactly 2-3 findings. Each finding is a single short sentence on its own line prefixed with "- ". Bold key numbers/metrics with **bold**. No headers, no paragraphs, no extra text. Keep each bullet under 20 words. Focus on anomalies, changes, or notable patterns only.',
       onComplete: (result: string) => setText(result),
       onError: (err: Error) => console.error('Insight generation failed:', err),
     });
@@ -581,39 +941,43 @@ function InsightPanel({ prompt, origin, dataContext }: InsightPanelProps) {
       return '';
     }
     const escaped = textUtil.escapeHtml(displayText);
-    const html = escaped
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      .replace(/`(.+?)`/g, '<code>$1</code>')
-      .replace(/^[-•]\s+(.+)$/gm, '<li>$1</li>')
-      .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
-      .replace(/\n/g, '<br/>');
-    return html;
+    const lines = escaped.split('\n').filter((l) => l.trim().length > 0);
+    const bullets = lines.map((line) => {
+      const content = line.replace(/^[-•*]\s*/, '');
+      const formatted = content
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/`(.+?)`/g, '<code>$1</code>');
+      return `<li><span class="insight-bullet">${formatted}</span></li>`;
+    });
+    return `<ul>${bullets.join('')}</ul>`;
   }, [displayText]);
 
   return (
     <div className={styles.insightPanel}>
       <div className={styles.insightPanelHeader}>
-        <Icon name="ai" size="md" />
-        <span>Assistant Insight</span>
-        {(gen.isGenerating || initialWaiting) && <Spinner size="sm" />}
-        {showRegenerate && (
-          <IconButton
-            name="repeat"
-            aria-label="Rerun insight"
-            tooltip="Rerun"
-            size="md"
-            onClick={doGenerate}
-            className={styles.regenerateButton}
-          />
-        )}
+        <span className={styles.insightTitle}>
+          <Icon name="ai" size="md" />
+          Assistant Insight
+        </span>
+        <div className={styles.insightActions}>
+          {(gen.isGenerating || initialWaiting) && <Spinner size="sm" />}
+          {showRegenerate && (
+            <IconButton
+              name="repeat"
+              aria-label="Rerun insight"
+              tooltip="Rerun"
+              size="md"
+              onClick={doGenerate}
+            />
+          )}
+        </div>
       </div>
       <div className={styles.insightPanelBody}>
         {initialWaiting
-          ? 'Waiting for data...'
+          ? <span className={styles.insightPlaceholder}>Waiting for data...</span>
           : renderedHtml
             ? <div dangerouslySetInnerHTML={{ __html: renderedHtml }} />
-            : 'Generating insight...'}
+            : <span className={styles.insightPlaceholder}>Generating insight...</span>}
       </div>
     </div>
   );
@@ -693,9 +1057,15 @@ function extractResolvePairs(response?: PrometheusQueryResponse): ModelResolvePa
 
 function getStyles(theme: GrafanaTheme2) {
   return {
+    gridWrapper: css({
+      display: 'flex',
+      flexDirection: 'column',
+      gap: theme.spacing(1),
+    }),
     gridOuter: css({
       display: 'flex',
       gap: theme.spacing(2),
+      alignItems: 'stretch',
     }),
     grid: css({
       display: 'flex',
@@ -704,45 +1074,181 @@ function getStyles(theme: GrafanaTheme2) {
       flex: 1,
       minWidth: 0,
     }),
-    section: css({
+    statsRow: css({
+      display: 'flex',
+      gap: theme.spacing(4),
+      padding: theme.spacing(1.5, 0),
+      borderBottom: `1px solid ${theme.colors.border.weak}`,
+    }),
+    topStat: css({
       display: 'flex',
       flexDirection: 'column',
+      gap: theme.spacing(0.5),
+    }),
+    topStatLabel: css({
+      fontSize: theme.typography.bodySmall.fontSize,
+      color: theme.colors.text.secondary,
+      lineHeight: 1.2,
+    }),
+    topStatRow: css({
+      display: 'flex',
+      alignItems: 'center',
       gap: theme.spacing(1),
     }),
-    sectionHeaderRow: css({
+    topStatValue: css({
+      fontSize: theme.typography.h3.fontSize,
+      fontWeight: theme.typography.fontWeightMedium,
+      color: theme.colors.text.primary,
+      lineHeight: 1.2,
+    }),
+    changeBadge: css({
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: theme.spacing(0.25),
+      fontSize: theme.typography.bodySmall.fontSize,
+      fontWeight: theme.typography.fontWeightMedium,
+      padding: theme.spacing(0.25, 1),
+      borderRadius: 999,
+      lineHeight: 1.4,
+      whiteSpace: 'nowrap',
+    }),
+    changeBadgeGood: css({
+      color: theme.colors.success.text,
+      border: `1px solid ${theme.colors.success.border}`,
+      background: theme.colors.success.transparent,
+    }),
+    changeBadgeWarn: css({
+      color: theme.colors.warning.text,
+      border: `1px solid ${theme.colors.warning.border}`,
+      background: theme.colors.warning.transparent,
+    }),
+    changeBadgeNeutral: css({
+      color: theme.colors.text.secondary,
+      border: `1px solid ${theme.colors.border.weak}`,
+      background: 'transparent',
+    }),
+    bspPanel: css({
+      display: 'flex',
+      flexDirection: 'column',
+      background: theme.colors.background.primary,
+      border: `1px solid ${theme.colors.border.weak}`,
+      borderRadius: theme.shape.radius.default,
+      overflow: 'hidden',
+    }),
+    bspHeader: css({
+      padding: theme.spacing(1.5, 2),
+      flexShrink: 0,
+    }),
+    bspTitle: css({
+      display: 'block',
+      fontSize: theme.typography.h6.fontSize,
+      fontWeight: theme.typography.fontWeightMedium,
+      color: theme.colors.text.primary,
+      marginBottom: theme.spacing(0.25),
+    }),
+    bspValueRow: css({
+      display: 'flex',
+      alignItems: 'baseline',
+      gap: theme.spacing(1),
+    }),
+    bspCenter: css({
+      flex: 1,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    }),
+    bspBigValue: css({
+      fontSize: 32,
+      fontWeight: theme.typography.fontWeightBold,
+      color: theme.colors.text.primary,
+      letterSpacing: '-0.02em',
+      lineHeight: 1,
+    }),
+    bspList: css({
+      flex: 1,
+      overflowY: 'auto',
+      padding: theme.spacing(0, 1, 1, 1),
+      display: 'flex',
+      flexDirection: 'column',
+      gap: theme.spacing(1.25),
+    }),
+    bspBarRow: css({
+      padding: theme.spacing(0, 1),
+    }),
+    bspBarMeta: css({
+      display: 'flex',
+      alignItems: 'center',
+      gap: theme.spacing(0.75),
+      marginBottom: theme.spacing(0.5),
+      fontSize: theme.typography.bodySmall.fontSize,
+      lineHeight: 1,
+    }),
+    bspBarDot: css({
+      width: 8,
+      height: 8,
+      borderRadius: '50%',
+      flexShrink: 0,
+    }),
+    bspBarName: css({
+      flex: 1,
+      color: theme.colors.text.primary,
+      fontWeight: theme.typography.fontWeightMedium,
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
+    }),
+    bspBarValue: css({
+      color: theme.colors.text.secondary,
+      fontVariantNumeric: 'tabular-nums',
+      flexShrink: 0,
+    }),
+    bspBarTrack: css({
+      height: 6,
+      borderRadius: 3,
+      background: theme.colors.background.secondary,
+      overflow: 'hidden',
+    }),
+    bspBarFill: css({
+      height: '100%',
+      borderRadius: 3,
+      transition: 'width 0.3s ease',
+    }),
+    bspSegmentLegend: css({
+      display: 'flex',
+      gap: theme.spacing(1.5),
+      marginTop: theme.spacing(0.5),
+    }),
+    bspSegmentLegendItem: css({
+      display: 'flex',
+      alignItems: 'center',
+      gap: theme.spacing(0.5),
+      fontSize: theme.typography.bodySmall.fontSize,
+      color: theme.colors.text.secondary,
+    }),
+    panelRow: css({
       display: 'grid',
       gridTemplateColumns: '1fr 1fr',
       gap: theme.spacing(1),
     }),
-    sectionHeader: css({
+    panelRowFirstStat: css({
+      display: 'grid',
+      gridTemplateColumns: '2fr 3fr 3fr',
+      gap: theme.spacing(1),
+    }),
+    panelRowLatency: css({
+      display: 'grid',
+      gridTemplateColumns: '3fr 2fr',
+      gap: theme.spacing(1),
+    }),
+    panelRowLatencyFull: css({
+      display: 'grid',
+      gridTemplateColumns: '3fr 2fr 3fr',
+      gap: theme.spacing(1),
+    }),
+    panelActions: css({
       display: 'flex',
       alignItems: 'center',
-      gap: theme.spacing(1.5),
-      padding: theme.spacing(1, 0),
-    }),
-    sectionHeaderIcon: css({
-      display: 'inline-flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      width: 32,
-      height: 32,
-      borderRadius: theme.shape.radius.default,
-      background: theme.colors.background.secondary,
-      color: theme.colors.text.secondary,
-    }),
-    sectionHeaderTitle: css({
-      fontSize: theme.typography.h4.fontSize,
-      fontWeight: theme.typography.fontWeightMedium,
-      color: theme.colors.text.primary,
-      letterSpacing: '-0.01em',
-    }),
-    sectionHeaderExtra: css({
-      marginLeft: theme.spacing(0.5),
-    }),
-    panelRow: css({
-      display: 'grid',
-      gridTemplateColumns: '5fr 4fr 5fr 4fr',
-      gap: theme.spacing(1),
+      gap: theme.spacing(0.5),
     }),
     insightPanel: css({
       width: 280,
@@ -757,50 +1263,65 @@ function getStyles(theme: GrafanaTheme2) {
     insightPanelHeader: css({
       display: 'flex',
       alignItems: 'center',
-      gap: theme.spacing(1),
-      padding: theme.spacing(1, 1.5),
-      fontSize: theme.typography.bodySmall.fontSize,
-      fontWeight: theme.typography.fontWeightMedium,
-      color: theme.colors.text.secondary,
-      borderBottom: `1px solid ${theme.colors.border.weak}`,
-      background: theme.colors.background.secondary,
+      justifyContent: 'space-between',
+      padding: theme.spacing(1.5, 2),
+      flexShrink: 0,
     }),
-    regenerateButton: css({
-      marginLeft: 'auto',
-      fontSize: theme.typography.bodySmall.fontSize,
+    insightTitle: css({
+      display: 'flex',
+      alignItems: 'center',
+      gap: theme.spacing(0.75),
+      fontSize: theme.typography.h6.fontSize,
+      fontWeight: theme.typography.fontWeightMedium,
+      color: theme.colors.text.primary,
+    }),
+    insightActions: css({
+      display: 'flex',
+      alignItems: 'center',
+      gap: theme.spacing(0.5),
+    }),
+    insightPlaceholder: css({
+      color: theme.colors.text.secondary,
+      fontStyle: 'italic',
     }),
     insightPanelBody: css({
       flex: 1,
-      padding: theme.spacing(1.5),
-      fontSize: theme.typography.body.fontSize,
-      lineHeight: 1.7,
-      color: theme.colors.text.primary,
+      padding: theme.spacing(0, 2, 2),
       overflowY: 'auto',
+      '& ul': {
+        margin: 0,
+        padding: 0,
+        listStyle: 'none',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: theme.spacing(1.5),
+      },
+      '& li': {
+        display: 'flex',
+        gap: theme.spacing(1),
+        padding: theme.spacing(1.5),
+        borderRadius: theme.shape.radius.default,
+        background: theme.colors.background.secondary,
+        fontSize: theme.typography.bodySmall.fontSize,
+        lineHeight: 1.6,
+        color: theme.colors.text.secondary,
+        '&::before': {
+          content: '"→"',
+          flexShrink: 0,
+          color: theme.colors.text.disabled,
+          fontWeight: theme.typography.fontWeightBold,
+        },
+      },
       '& strong': {
         fontWeight: theme.typography.fontWeightBold,
-        color: theme.colors.text.maxContrast,
-      },
-      '& em': {
-        fontStyle: 'italic',
+        color: theme.colors.text.primary,
       },
       '& code': {
         fontSize: '0.85em',
         padding: '1px 4px',
         borderRadius: theme.shape.radius.default,
-        background: theme.colors.background.secondary,
+        background: theme.colors.background.primary,
         fontFamily: theme.typography.fontFamilyMonospace,
-      },
-      '& ul': {
-        margin: `${theme.spacing(0.5)} 0`,
-        paddingLeft: theme.spacing(2),
-      },
-      '& li': {
-        marginBottom: theme.spacing(0.5),
-      },
-      '& br': {
-        display: 'block',
-        content: '""',
-        marginTop: theme.spacing(0.25),
       },
     }),
   };

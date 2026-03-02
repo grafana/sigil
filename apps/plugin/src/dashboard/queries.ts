@@ -1,9 +1,9 @@
-import type { BreakdownDimension, DashboardFilters } from './types';
-import { breakdownToPromLabel } from './types';
+import { breakdownToPromLabel, type BreakdownDimension, type DashboardFilters } from './types';
 
 // OTel metric names converted to Prometheus format (dots → underscores).
 const TOKEN_USAGE = 'gen_ai_client_token_usage';
 const OPERATION_DURATION = 'gen_ai_client_operation_duration_seconds';
+const TIME_TO_FIRST_TOKEN = 'gen_ai_client_time_to_first_token_seconds';
 const PROMETHEUS_LABEL_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 function escapePrometheusRegex(value: string): string {
@@ -97,7 +97,7 @@ export function latencyStatQuery(
   filters: DashboardFilters,
   rangeDuration: string,
   breakdown: BreakdownDimension = 'none',
-  quantile: number = 0.95
+  quantile = 0.95
 ): string {
   return `histogram_quantile(${quantile}, sum${byClause(breakdown, ['le'])}(increase(${OPERATION_DURATION}_bucket${sel(filters)}[${rangeDuration}])))`;
 }
@@ -206,22 +206,68 @@ export function latencyP50OverTimeQuery(
   return latencyOverTimeQuery(filters, interval, breakdown, 0.5);
 }
 
-/** Total token count (instant), optionally grouped by breakdown dimension. */
+/** TTFT over time, as a histogram quantile with optional breakdown. */
+export function ttftOverTimeQuery(
+  filters: DashboardFilters,
+  interval: string,
+  breakdown: BreakdownDimension,
+  quantile: number
+): string {
+  return `histogram_quantile(${quantile}, sum${byClause(breakdown, ['le'])}(rate(${TIME_TO_FIRST_TOKEN}_bucket${sel(filters)}[${interval}])))`;
+}
+
+/** Total token count (instant), optionally grouped by breakdown dimension and filtered by token types. */
 export function totalTokensQuery(
   filters: DashboardFilters,
   rangeDuration: string,
-  breakdown: BreakdownDimension = 'none'
+  breakdown: BreakdownDimension = 'none',
+  tokenTypes?: string[]
 ): string {
-  return `sum${byClause(breakdown)}(increase(${TOKEN_USAGE}_sum${sel(filters)}[${rangeDuration}]))`;
+  const typeFilter = tokenTypes ? `gen_ai_token_type=~"${tokenTypes.join('|')}"` : undefined;
+  return `sum${byClause(breakdown)}(increase(${TOKEN_USAGE}_sum${sel(filters, typeFilter)}[${rangeDuration}]))`;
 }
 
-/** Token usage rate over time, optionally grouped by breakdown dimension. */
+/** Token usage rate over time, optionally grouped by breakdown dimension and filtered by token types. */
 export function totalTokensOverTimeQuery(
   filters: DashboardFilters,
   interval: string,
+  breakdown: BreakdownDimension = 'none',
+  tokenTypes?: string[]
+): string {
+  const typeFilter = tokenTypes ? `gen_ai_token_type=~"${tokenTypes.join('|')}"` : undefined;
+  return `sum${byClause(breakdown)}(rate(${TOKEN_USAGE}_sum${sel(filters, typeFilter)}[${interval}]))`;
+}
+
+/** Token count broken down by both a breakdown dimension and token type. */
+export function tokensByBreakdownAndTypeQuery(
+  filters: DashboardFilters,
+  rangeDuration: string,
+  breakdown: BreakdownDimension = 'none',
+  tokenTypes?: string[]
+): string {
+  const typeFilter = tokenTypes ? `gen_ai_token_type=~"${tokenTypes.join('|')}"` : undefined;
+  return `sum${byClause(breakdown, ['gen_ai_token_type'])}(increase(${TOKEN_USAGE}_sum${sel(filters, typeFilter)}[${rangeDuration}]))`;
+}
+
+/** Token count broken down by type, optionally filtered to specific types. */
+export function tokensByTypeQuery(
+  filters: DashboardFilters,
+  rangeDuration: string,
+  tokenTypes?: string[]
+): string {
+  const typeFilter = tokenTypes ? `gen_ai_token_type=~"${tokenTypes.join('|')}"` : undefined;
+  return `sum by (gen_ai_token_type) (increase(${TOKEN_USAGE}_sum${sel(filters, typeFilter)}[${rangeDuration}]))`;
+}
+
+/** Token usage rate over time, broken down by type, optionally filtered to specific types and grouped by breakdown. */
+export function tokensByTypeOverTimeQuery(
+  filters: DashboardFilters,
+  interval: string,
+  tokenTypes?: string[],
   breakdown: BreakdownDimension = 'none'
 ): string {
-  return `sum${byClause(breakdown)}(rate(${TOKEN_USAGE}_sum${sel(filters)}[${interval}]))`;
+  const typeFilter = tokenTypes ? `gen_ai_token_type=~"${tokenTypes.join('|')}"` : undefined;
+  return `sum${byClause(breakdown, ['gen_ai_token_type'])}(rate(${TOKEN_USAGE}_sum${sel(filters, typeFilter)}[${interval}]))`;
 }
 
 /**
