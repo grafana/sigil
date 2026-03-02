@@ -1,11 +1,12 @@
 # syntax=docker/dockerfile:1.21@sha256:27f9262d43452075f3c410287a2c43f5ef1bf7ec2bb06e8c9eeb1b8d453087bc
 
-FROM golang:1.26-bookworm@sha256:eae3cdfa040d0786510a5959d36a836978724d03b34a166ba2e0e198baac9196 AS build
+FROM --platform=$BUILDPLATFORM golang:1.26-bookworm@sha256:eae3cdfa040d0786510a5959d36a836978724d03b34a166ba2e0e198baac9196 AS build
+
+ARG TARGETOS TARGETARCH
 
 WORKDIR /src
 
 ENV CGO_ENABLED=0
-ENV GOOS=linux
 
 COPY go.mod go.sum ./
 RUN go mod download
@@ -14,6 +15,7 @@ COPY . .
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
+    GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -trimpath -ldflags="-s -w" -o /out/sigil ./cmd/sigil
 
 FROM debian:bookworm-slim AS runtime
