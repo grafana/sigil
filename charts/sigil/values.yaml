@@ -2,8 +2,8 @@ replicaCount: 1
 
 image:
   repository: ghcr.io/grafana/sigil
-  pullPolicy: IfNotPresent
-  tag: ""
+  pullPolicy: Always
+  tag: latest
 
 imagePullSecrets: []
 nameOverride: ""
