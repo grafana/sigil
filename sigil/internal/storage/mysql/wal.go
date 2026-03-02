@@ -66,20 +66,28 @@ func (s *WALStore) SaveBatch(ctx context.Context, tenantID string, generations [
 			continue
 		}
 
-		txErr := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-			if err := tx.Create(&generationRow).Error; err != nil {
-				return wrapPersistError(err)
+		txErr := runWithRetryableLockError(ctx, func() error {
+			generationRow.ID = 0
+			if convRow != nil {
+				convRow.ID = 0
 			}
+			return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+				if err := tx.Create(&generationRow).Error; err != nil {
+					return wrapPersistError(err)
+				}
 
-			if convRow == nil {
+				if convRow != nil {
+					if err := upsertConversation(tx, convRow); err != nil {
+						return err
+					}
+				}
+
+				if !s.evalEnqueueEnable {
+					return nil
+				}
+
 				return enqueueEvalGenerationTx(tx, generationRow)
-			}
-
-			if err := upsertConversation(tx, convRow); err != nil {
-				return err
-			}
-
-			return enqueueEvalGenerationTx(tx, generationRow)
+			})
 		})
 		if txErr != nil {
 			s.logger.Error("wal save failed",

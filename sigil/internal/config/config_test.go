@@ -228,8 +228,8 @@ func TestFromEnvEvaluationDefaults(t *testing.T) {
 	t.Setenv("SIGIL_EVAL_SEED_STRICT", "")
 
 	cfg := FromEnv()
-	if !cfg.EvalWorkerEnabled {
-		t.Fatalf("expected eval worker enabled by default")
+	if cfg.EvalWorkerEnabled {
+		t.Fatalf("expected eval worker disabled by default")
 	}
 	if cfg.EvalMaxConcurrent != DefaultEvalMaxConcurrent {
 		t.Fatalf("expected default eval max concurrent %d, got %d", DefaultEvalMaxConcurrent, cfg.EvalMaxConcurrent)

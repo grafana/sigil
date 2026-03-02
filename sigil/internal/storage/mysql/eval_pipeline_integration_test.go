@@ -83,6 +83,7 @@ func TestOnlineEvaluationPipelineEndToEnd(t *testing.T) {
 			t.Fatalf("timed out stopping enqueue dispatcher")
 		}
 	}()
+	store.SetEvalEnqueueEnabled(true)
 	store.SetEvalHook(evalNotifyHook{dispatcher: dispatcher})
 
 	generation := &sigilv1.Generation{
