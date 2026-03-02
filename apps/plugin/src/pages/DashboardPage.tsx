@@ -15,6 +15,18 @@ type DashboardPageProps = {
 
 const noiseLabels = new Set(['__name__', 'le', 'quantile']);
 
+function escapePrometheusRegex(value: string): string {
+  return value.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
+}
+
+function fuzzyMatcher(label: string, value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '';
+  }
+  return `${label}=~"(?i).*${escapePrometheusRegex(trimmed)}.*"`;
+}
+
 function labelPriority(label: string): number {
   if (label.startsWith('gen_ai_')) {
     return 0;
@@ -33,20 +45,21 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
   const to = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);
 
   // Cascading matchers: provider restricts model options, provider+model restricts agent options.
+  // Use fuzzy matching consistent with buildLabelSelector in queries.ts.
   const providerMatcher = useMemo(() => {
-    if (!filters.provider) {
-      return undefined;
-    }
-    return `{gen_ai_provider_name="${filters.provider}"}`;
+    const matcher = fuzzyMatcher('gen_ai_provider_name', filters.provider ?? '');
+    return matcher ? `{${matcher}}` : undefined;
   }, [filters.provider]);
 
   const providerAndModelMatcher = useMemo(() => {
     const parts: string[] = [];
-    if (filters.provider) {
-      parts.push(`gen_ai_provider_name="${filters.provider}"`);
+    const providerMatch = fuzzyMatcher('gen_ai_provider_name', filters.provider ?? '');
+    if (providerMatch) {
+      parts.push(providerMatch);
     }
-    if (filters.model) {
-      parts.push(`gen_ai_request_model="${filters.model}"`);
+    const modelMatch = fuzzyMatcher('gen_ai_request_model', filters.model ?? '');
+    if (modelMatch) {
+      parts.push(modelMatch);
     }
     return parts.length > 0 ? `{${parts.join(',')}}` : undefined;
   }, [filters.provider, filters.model]);

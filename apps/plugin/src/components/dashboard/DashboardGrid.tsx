@@ -116,10 +116,10 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
     'instant'
   );
 
-  // --- Previous period comparison (same queries shifted back 1 hour) ---
-  const hourAgo = 3600;
-  const prevFrom = from - hourAgo;
-  const prevTo = to - hourAgo;
+  // --- Previous period comparison (same queries shifted back by the range duration) ---
+  const rangeDurationSeconds = to - from;
+  const prevFrom = from - rangeDurationSeconds;
+  const prevTo = to - rangeDurationSeconds;
   const prevTotalOps = usePrometheusQuery(
     dataSource,
     totalOpsQuery(filters, rangeDuration),
@@ -260,13 +260,6 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
     to,
     'instant'
   );
-  const tokensByBreakdownStat = usePrometheusQuery(
-    dataSource,
-    isTokenByType && hasBreakdown ? totalTokensQuery(filters, rangeDuration, breakdownBy, drilldownTypes) : '',
-    from,
-    to,
-    'instant'
-  );
   const tokensByTypeTimeseries = usePrometheusQuery(
     dataSource,
     isTokenByType ? tokensByTypeOverTimeQuery(filters, interval, drilldownTypes, breakdownBy) : '',
@@ -360,7 +353,7 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
     ? tokensTotalStat.loading
     : isTokenByType
       ? hasBreakdown
-        ? tokensByBreakdownStat.loading
+        ? tokensByBreakdownAndType.loading
         : tokensByTypeStat.loading
       : costTokens.loading || resolvedPricing.loading;
   const costSeriesLoading = isTokenTotal
@@ -546,7 +539,6 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
           loading={costTokens.loading || resolvedPricing.loading}
           prevValue={prevTotalCost.totalCost}
           prevLoading={prevCostTokens.loading}
-          invertChange
           styles={styles}
         />
       </div>
@@ -779,7 +771,7 @@ function TopStat({ label, value, unit, loading, prevValue, prevLoading, invertCh
   if (!loading && !prevLoading && prevValue !== undefined) {
     if (prevValue === 0 && value === 0) {
       changeBadge = (
-        <Tooltip content="Zero one hour ago" placement="bottom">
+        <Tooltip content="Zero in previous period" placement="bottom">
           <span className={`${styles.changeBadge} ${styles.changeBadgeNeutral}`}>→ 0%</span>
         </Tooltip>
       );
@@ -787,7 +779,7 @@ function TopStat({ label, value, unit, loading, prevValue, prevLoading, invertCh
       const isGood = !invertChange;
       const badgeClass = isGood ? styles.changeBadgeGood : styles.changeBadgeWarn;
       changeBadge = (
-        <Tooltip content="Zero one hour ago" placement="bottom">
+        <Tooltip content="Zero in previous period" placement="bottom">
           <span className={`${styles.changeBadge} ${badgeClass}`}>new</span>
         </Tooltip>
       );
@@ -799,7 +791,7 @@ function TopStat({ label, value, unit, loading, prevValue, prevLoading, invertCh
       const sign = isUp ? '+' : '';
       const badgeClass =
         pctChange === 0 ? styles.changeBadgeNeutral : isGood ? styles.changeBadgeGood : styles.changeBadgeWarn;
-      const tooltipText = `${formatStatValue(prevValue, unit)} one hour ago`;
+      const tooltipText = `${formatStatValue(prevValue, unit)} in previous period`;
       changeBadge = (
         <Tooltip content={tooltipText} placement="bottom">
           <span className={`${styles.changeBadge} ${badgeClass}`}>
