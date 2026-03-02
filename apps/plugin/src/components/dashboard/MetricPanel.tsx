@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { PanelChrome, useStyles2 } from '@grafana/ui';
 import { PanelRenderer } from '@grafana/runtime';
@@ -32,23 +32,26 @@ export function MetricPanel({
   const styles = useStyles2(getStyles);
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
-  const [liveOptions, setLiveOptions] = useState(options);
-  const [liveFieldConfig, setLiveFieldConfig] = useState(fieldConfig);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const stableOptions = useMemo(() => options, [JSON.stringify(options)]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const stableFieldConfig = useMemo(() => fieldConfig, [JSON.stringify(fieldConfig)]);
+
+  const [userFieldConfig, setUserFieldConfig] = useState<FieldConfigSource | null>(null);
+  const [resetKey, setResetKey] = useState(0);
 
   useEffect(() => {
-    setLiveOptions(options);
-  }, [options]);
+    setUserFieldConfig(null);
+    setResetKey((k) => k + 1);
+  }, [stableFieldConfig]);
 
-  useEffect(() => {
-    setLiveFieldConfig(fieldConfig);
-  }, [fieldConfig]);
+  const liveFieldConfig = userFieldConfig ?? stableFieldConfig;
 
-  const onOptionsChange = useCallback((updated: Record<string, unknown>) => {
-    setLiveOptions(updated);
-  }, []);
+  const onOptionsChange = useCallback(() => {}, []);
 
   const onFieldConfigChange = useCallback((updated: FieldConfigSource) => {
-    setLiveFieldConfig(updated);
+    setUserFieldConfig(updated);
   }, []);
 
   useEffect(() => {
@@ -64,11 +67,14 @@ export function MetricPanel({
     return () => observer.disconnect();
   }, []);
 
-  const panelData: PanelData = {
-    series: data,
-    state: loading ? LoadingState.Loading : error ? LoadingState.Error : LoadingState.Done,
-    timeRange,
-  };
+  const panelData = useMemo<PanelData>(
+    () => ({
+      series: data,
+      state: loading ? LoadingState.Loading : error ? LoadingState.Error : LoadingState.Done,
+      timeRange,
+    }),
+    [data, loading, error, timeRange]
+  );
 
   return (
     <div ref={containerRef} className={styles.container} style={{ height }}>
@@ -83,13 +89,15 @@ export function MetricPanel({
         >
           {(innerWidth, innerHeight) => (
             <PanelRenderer
+              key={resetKey}
               pluginId={pluginId}
               title=""
               data={panelData}
-              options={liveOptions}
+              options={stableOptions}
               fieldConfig={liveFieldConfig}
               width={innerWidth}
               height={innerHeight}
+              timeZone="browser"
               onOptionsChange={onOptionsChange}
               onFieldConfigChange={onFieldConfigChange}
             />
@@ -104,8 +112,9 @@ function getStyles(_theme: GrafanaTheme2) {
   return {
     container: css({
       width: '100%',
-      '& > div': {
-        border: 'none',
+      '& section[data-testid]': {
+        border: 'none !important',
+        boxShadow: 'none !important',
       },
     }),
   };

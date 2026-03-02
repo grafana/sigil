@@ -158,9 +158,13 @@ export const NoBreakdown = {
       dataSource={mockDataSource}
       filters={emptyFilters}
       breakdownBy="none"
+      latencyPercentile="p95"
+      costMode="usd"
       from={from}
       to={to}
       timeRange={timeRange}
+      onLatencyPercentileChange={() => {}}
+      onCostModeChange={() => {}}
     />
   ),
 };
@@ -171,9 +175,13 @@ export const BreakdownByProvider = {
       dataSource={mockDataSource}
       filters={emptyFilters}
       breakdownBy="provider"
+      latencyPercentile="p95"
+      costMode="usd"
       from={from}
       to={to}
       timeRange={timeRange}
+      onLatencyPercentileChange={() => {}}
+      onCostModeChange={() => {}}
     />
   ),
 };

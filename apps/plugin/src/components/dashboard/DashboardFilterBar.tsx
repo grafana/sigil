@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { css } from '@emotion/css';
-import { TimeRangePicker, Select, Stack, Button, Badge, IconButton, useStyles2 } from '@grafana/ui';
+import { TimeRangeInput, Select, Stack, Button, Badge, IconButton, useStyles2 } from '@grafana/ui';
 import { type GrafanaTheme2, type SelectableValue, type TimeRange } from '@grafana/data';
 import {
   type BreakdownDimension,
@@ -243,44 +243,34 @@ export function DashboardFilterBar({
   }, [onFiltersChange]);
 
   return (
-    <div className={styles.wrapper}>
-      <div className={styles.toolbar}>
-        <Stack direction="row" gap={1} alignItems="center" wrap="wrap">
-          <TimeRangePicker
-            value={timeRange}
-            onChange={onTimeRangeChange}
-            onChangeTimeZone={() => {}}
-            onMoveBackward={() => {}}
-            onMoveForward={() => {}}
-            onZoom={() => {}}
-            
-          />
-          <Button
-            variant={filtersOpen ? 'primary' : 'secondary'}
-            icon="filter"
-            size="md"
-            onClick={() => setFiltersOpen((prev) => !prev)}
-          >
-            Filters
-            {activeFilterCount > 0 && (
-              <Badge text={String(activeFilterCount)} color="blue" className={styles.badge} />
-            )}
-          </Button>
-          <div className={styles.breakdownWrapper}>
-            <Select<BreakdownDimension>
-              options={breakdownOptions}
-              value={breakdownBy}
-              onChange={handleBreakdownChange}
-              prefix="Break down by"
-              width={24}
-            />
-          </div>
-        </Stack>
-      </div>
-
-      {filtersOpen && (
-        <div className={styles.filterPanel}>
-          <Stack direction="row" gap={1.5} alignItems="center" wrap="wrap">
+    <div className={styles.toolbar}>
+      <Stack direction="row" gap={1} alignItems="center" wrap="wrap">
+        <TimeRangeInput
+          value={timeRange}
+          onChange={onTimeRangeChange}
+          showIcon
+        />
+        <Select<BreakdownDimension>
+          options={breakdownOptions}
+          value={breakdownBy}
+          onChange={handleBreakdownChange}
+          prefix="Breakdown by"
+          width={28}
+        />
+        <div className={styles.filterDivider} />
+        <Button
+          variant={filtersOpen ? 'primary' : 'secondary'}
+          icon="filter"
+          size="md"
+          onClick={() => setFiltersOpen((prev) => !prev)}
+        >
+          Filters
+          {activeFilterCount > 0 && (
+            <Badge text={String(activeFilterCount)} color="blue" className={styles.badge} />
+          )}
+        </Button>
+        {filtersOpen && (
+          <>
             <Select<string>
               options={providerSelectOptions}
               value={filters.provider || null}
@@ -301,7 +291,7 @@ export function DashboardFilterBar({
               isClearable
               allowCustomValue
               isSearchable
-              width={24}
+              width={20}
             />
             <Select<string>
               options={agentSelectOptions}
@@ -314,7 +304,6 @@ export function DashboardFilterBar({
               isSearchable
               width={20}
             />
-            <div className={styles.filterDivider} />
             {draftLabelFilters.map((lf, i) => (
               <LabelFilterRow
                 key={i}
@@ -341,43 +330,25 @@ export function DashboardFilterBar({
                 Clear all
               </Button>
             )}
-          </Stack>
-        </div>
-      )}
+          </>
+        )}
+      </Stack>
     </div>
   );
 }
 
 function getStyles(theme: GrafanaTheme2) {
-  const radius = theme.shape.radius.default;
-
   return {
-    wrapper: css({
-      display: 'flex',
-      flexDirection: 'column',
-    }),
     toolbar: css({
       display: 'flex',
       alignItems: 'center',
       padding: theme.spacing(1, 2),
       background: theme.colors.background.secondary,
-      borderRadius: radius,
+      borderRadius: theme.shape.radius.default,
       border: `1px solid ${theme.colors.border.weak}`,
     }),
     badge: css({
       marginLeft: theme.spacing(0.5),
-    }),
-    breakdownWrapper: css({
-      marginLeft: 'auto',
-    }),
-    filterPanel: css({
-      padding: theme.spacing(1.5, 2),
-      background: theme.colors.background.secondary,
-      borderTop: 'none',
-      borderLeft: `1px solid ${theme.colors.border.weak}`,
-      borderRight: `1px solid ${theme.colors.border.weak}`,
-      borderBottom: `1px solid ${theme.colors.border.weak}`,
-      borderRadius: `0 0 ${radius} ${radius}`,
     }),
     filterDivider: css({
       width: 1,
@@ -391,7 +362,7 @@ function getStyles(theme: GrafanaTheme2) {
       minWidth: 28,
       height: 32,
       padding: theme.spacing(0, 0.5),
-      borderRadius: radius,
+      borderRadius: theme.shape.radius.default,
       background: theme.colors.background.canvas,
       border: `1px solid ${theme.colors.border.weak}`,
       color: theme.colors.warning.text,

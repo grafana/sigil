@@ -121,6 +121,10 @@ export type BreakdownDimension = 'none' | 'provider' | 'model' | 'agent';
 
 export type LatencyPercentile = 'p50' | 'p95' | 'p99';
 
+// Cost display mode
+
+export type CostMode = 'usd' | 'tokens';
+
 export const breakdownLabel: Record<BreakdownDimension, string> = {
   none: 'None',
   provider: 'Provider',

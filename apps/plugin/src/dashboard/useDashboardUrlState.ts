@@ -1,9 +1,11 @@
 import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { dateTimeParse, type TimeRange } from '@grafana/data';
-import { type BreakdownDimension, type DashboardFilters, type LabelFilter } from './types';
+import { type BreakdownDimension, type CostMode, type DashboardFilters, type LabelFilter, type LatencyPercentile } from './types';
 
 const BREAKDOWN_VALUES = new Set<BreakdownDimension>(['none', 'provider', 'model', 'agent']);
+const LATENCY_PERCENTILE_VALUES = new Set<LatencyPercentile>(['p50', 'p95', 'p99']);
+const COST_MODE_VALUES = new Set<CostMode>(['usd', 'tokens']);
 
 const DEFAULT_FROM = 'now-1h';
 const DEFAULT_TO = 'now';
@@ -41,7 +43,17 @@ function parseFilters(params: URLSearchParams): DashboardFilters {
 
 function parseBreakdown(params: URLSearchParams): BreakdownDimension {
   const v = params.get('breakdownBy') as BreakdownDimension;
-  return BREAKDOWN_VALUES.has(v) ? v : 'none';
+  return BREAKDOWN_VALUES.has(v) ? v : 'provider';
+}
+
+function parseLatencyPercentile(params: URLSearchParams): LatencyPercentile {
+  const v = params.get('latency') as LatencyPercentile;
+  return LATENCY_PERCENTILE_VALUES.has(v) ? v : 'p95';
+}
+
+function parseCostMode(params: URLSearchParams): CostMode {
+  const v = params.get('costMode') as CostMode;
+  return COST_MODE_VALUES.has(v) ? v : 'usd';
 }
 
 function setOrDelete(params: URLSearchParams, key: string, value: string, defaultValue = ''): void {
@@ -56,9 +68,13 @@ export type DashboardUrlState = {
   timeRange: TimeRange;
   filters: DashboardFilters;
   breakdownBy: BreakdownDimension;
+  latencyPercentile: LatencyPercentile;
+  costMode: CostMode;
   setTimeRange: (tr: TimeRange) => void;
   setFilters: (f: DashboardFilters) => void;
   setBreakdownBy: (b: BreakdownDimension) => void;
+  setLatencyPercentile: (p: LatencyPercentile) => void;
+  setCostMode: (m: CostMode) => void;
 };
 
 export function useDashboardUrlState(): DashboardUrlState {
@@ -67,6 +83,8 @@ export function useDashboardUrlState(): DashboardUrlState {
   const timeRange = useMemo(() => parseTimeRange(searchParams), [searchParams]);
   const filters = useMemo(() => parseFilters(searchParams), [searchParams]);
   const breakdownBy = useMemo(() => parseBreakdown(searchParams), [searchParams]);
+  const latencyPercentile = useMemo(() => parseLatencyPercentile(searchParams), [searchParams]);
+  const costMode = useMemo(() => parseCostMode(searchParams), [searchParams]);
 
   const setTimeRange = useCallback(
     (tr: TimeRange) => {
@@ -110,7 +128,7 @@ export function useDashboardUrlState(): DashboardUrlState {
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
-          setOrDelete(next, 'breakdownBy', b, 'none');
+          setOrDelete(next, 'breakdownBy', b, 'provider');
           return next;
         },
         { replace: true }
@@ -119,5 +137,36 @@ export function useDashboardUrlState(): DashboardUrlState {
     [setSearchParams]
   );
 
-  return { timeRange, filters, breakdownBy, setTimeRange, setFilters, setBreakdownBy };
+  const setLatencyPercentile = useCallback(
+    (p: LatencyPercentile) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          setOrDelete(next, 'latency', p, 'p95');
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
+
+  const setCostMode = useCallback(
+    (m: CostMode) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          setOrDelete(next, 'costMode', m, 'usd');
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
+
+  return {
+    timeRange, filters, breakdownBy, latencyPercentile, costMode,
+    setTimeRange, setFilters, setBreakdownBy, setLatencyPercentile, setCostMode,
+  };
 }

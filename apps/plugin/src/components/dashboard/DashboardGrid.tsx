@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { css } from '@emotion/css';
 import { FieldType, MutableDataFrame, type GrafanaTheme2, type IconName, type TimeRange } from '@grafana/data';
 import { Icon, Select, useStyles2 } from '@grafana/ui';
 import type { DashboardDataSource } from '../../dashboard/api';
 import {
   type BreakdownDimension,
+  type CostMode,
   type DashboardFilters,
   type LatencyPercentile,
   type ModelResolvePair,
@@ -43,14 +44,16 @@ export type DashboardGridProps = {
   dataSource: DashboardDataSource;
   filters: DashboardFilters;
   breakdownBy: BreakdownDimension;
+  latencyPercentile: LatencyPercentile;
+  costMode: CostMode;
   from: number;
   to: number;
   timeRange: TimeRange;
+  onLatencyPercentileChange: (p: LatencyPercentile) => void;
+  onCostModeChange: (m: CostMode) => void;
 };
 
-const CHART_HEIGHT = 260;
-
-type CostMode = 'usd' | 'tokens';
+const CHART_HEIGHT = 350;
 
 const costModeOptions: Array<{ label: string; value: CostMode }> = [
   { label: 'USD', value: 'usd' },
@@ -68,10 +71,13 @@ const noThresholds = {
   steps: [{ value: -Infinity, color: 'green' }],
 };
 
-export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, timeRange }: DashboardGridProps) {
+const consistentColor = { mode: 'palette-classic-by-name' };
+
+export function DashboardGrid({
+  dataSource, filters, breakdownBy, latencyPercentile, costMode,
+  from, to, timeRange, onLatencyPercentileChange, onCostModeChange,
+}: DashboardGridProps) {
   const styles = useStyles2(getStyles);
-  const [latencyPercentile, setLatencyPercentile] = useState<LatencyPercentile>('p95');
-  const [costMode, setCostMode] = useState<CostMode>('usd');
   const hasBreakdown = breakdownBy !== 'none';
 
   const step = useMemo(() => computeStep(from, to), [from, to]);
@@ -81,9 +87,9 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
   const statPluginId = hasBreakdown ? 'piechart' : 'stat';
   const statOptions = hasBreakdown
     ? {
-        pieType: 'donut',
+        pieType: 'pie',
         displayLabels: [],
-        legend: { displayMode: 'table', placement: 'right', values: ['percent'], calcs: [] },
+        legend: { displayMode: 'table', placement: 'right', values: ['percent'], calcs: [], width: 200 },
         tooltip: { mode: 'single', sort: 'desc' },
         reduceOptions: { calcs: ['lastNotNull'] },
       }
@@ -295,6 +301,10 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
   const requestsErr = hasBreakdown ? requestsBroken.error : requestsSuccess.error || requestsError.error;
 
   const timeseriesDefaults = { fillOpacity: 6, showPoints: 'never', lineWidth: 2 };
+  const timeseriesOptions = {
+    legend: { displayMode: 'list', placement: 'bottom', calcs: [] },
+    tooltip: { mode: 'multi', sort: 'desc' },
+  };
 
   return (
     <div className={styles.grid}>
@@ -306,15 +316,16 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
         </div>
         <div className={styles.panelRow}>
           <MetricPanel
-            title="Requests"
+            title="Requests/s"
             pluginId="timeseries"
             height={CHART_HEIGHT}
             timeRange={timeRange}
             loading={requestsLoading}
             error={requestsErr}
             data={requestsData}
+            options={timeseriesOptions}
             fieldConfig={{
-              defaults: { unit: 'reqps', custom: timeseriesDefaults, thresholds: noThresholds },
+              defaults: { unit: 'reqps', color: consistentColor, custom: timeseriesDefaults, thresholds: noThresholds },
               overrides: [],
             }}
           />
@@ -331,7 +342,7 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
                 ? [vectorToPieDataFrame(totalOps.data, [breakdownPromLabel!])]
                 : [statValueToDataFrame(totalOps.data ? vectorToStatValue(totalOps.data) : 0, 'Requests')]
             }
-            fieldConfig={{ defaults: { min: 0, thresholds: noThresholds }, overrides: [] }}
+            fieldConfig={{ defaults: { min: 0, color: consistentColor, thresholds: noThresholds }, overrides: [] }}
           />
           <MetricPanel
             title="Error rate"
@@ -341,9 +352,11 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
             loading={errorsTimeseries.loading}
             error={errorsTimeseries.error}
             data={errorsTimeseries.data ? matrixToDataFrames(errorsTimeseries.data) : []}
+            options={timeseriesOptions}
             fieldConfig={{
               defaults: {
                 unit: 'reqps',
+                color: consistentColor,
                 custom: timeseriesDefaults,
                 thresholds: noThresholds,
               },
@@ -363,7 +376,7 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
                 ? [vectorToPieDataFrame(errRate.data, [breakdownPromLabel!])]
                 : [statValueToDataFrame(errRate.data ? vectorToStatValue(errRate.data) : 0, 'Error Rate', 'percent')]
             }
-            fieldConfig={{ defaults: { unit: 'percent', min: 0, thresholds: noThresholds }, overrides: [] }}
+            fieldConfig={{ defaults: { unit: 'percent', min: 0, color: consistentColor, thresholds: noThresholds }, overrides: [] }}
           />
         </div>
       </section>
@@ -379,7 +392,7 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
               <Select
                 options={latencyPercentileOptions}
                 value={latencyPercentile}
-                onChange={(v) => { if (v.value) { setLatencyPercentile(v.value); } }}
+                onChange={(v) => { if (v.value) { onLatencyPercentileChange(v.value); } }}
                 width={10}
               />
             }
@@ -392,7 +405,7 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
               <Select
                 options={costModeOptions}
                 value={costMode}
-                onChange={(v) => { if (v.value) { setCostMode(v.value); } }}
+                onChange={(v) => { if (v.value) { onCostModeChange(v.value); } }}
                 width={12}
               />
             }
@@ -400,20 +413,21 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
         </div>
         <div className={styles.panelRow}>
           <MetricPanel
-            title={`Latency ${latencyPercentile.toUpperCase()}`}
+            title={latencyPercentile.toUpperCase()}
             pluginId="timeseries"
             height={CHART_HEIGHT}
             timeRange={timeRange}
             loading={latencyTimeseries.loading}
             error={latencyTimeseries.error}
             data={latencyTimeseries.data ? matrixToDataFrames(latencyTimeseries.data) : []}
+            options={timeseriesOptions}
             fieldConfig={{
-              defaults: { unit: 's', custom: timeseriesDefaults, thresholds: noThresholds },
+              defaults: { unit: 's', color: consistentColor, custom: timeseriesDefaults, thresholds: noThresholds },
               overrides: [],
             }}
           />
           <MetricPanel
-            title={`Latency ${latencyPercentile.toUpperCase()}`}
+            title={latencyPercentile.toUpperCase()}
             pluginId={statPluginId}
             height={CHART_HEIGHT}
             timeRange={timeRange}
@@ -425,19 +439,21 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
                 ? [vectorToPieDataFrame(latencyStat.data, [breakdownPromLabel!])]
                 : [statValueToDataFrame(latencyStat.data ? vectorToStatValue(latencyStat.data) : 0, 'Latency', 's')]
             }
-            fieldConfig={{ defaults: { unit: 's', min: 0, thresholds: noThresholds }, overrides: [] }}
+            fieldConfig={{ defaults: { unit: 's', min: 0, color: consistentColor, thresholds: noThresholds }, overrides: [] }}
           />
           <MetricPanel
-            title={costMode === 'tokens' ? 'Tokens' : 'Cost'}
+            title={costMode === 'tokens' ? 'Tokens' : 'USD'}
             pluginId="timeseries"
             height={CHART_HEIGHT}
             timeRange={timeRange}
             loading={costSeriesLoading}
             error={costMode === 'tokens' ? tokensOverTime.error : costOverTime.error}
             data={costTimeSeries}
+            options={timeseriesOptions}
             fieldConfig={{
               defaults: {
                 unit: costMode === 'tokens' ? 'short' : 'currencyUSD',
+                color: consistentColor,
                 custom: timeseriesDefaults,
                 thresholds: noThresholds,
               },
@@ -445,7 +461,7 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
             }}
           />
           <MetricPanel
-            title={costMode === 'tokens' ? 'Total Tokens' : 'Estimated Cost'}
+            title={costMode === 'tokens' ? 'Total Tokens' : 'Estimated USD'}
             pluginId={statPluginId}
             height={CHART_HEIGHT}
             timeRange={timeRange}
@@ -453,7 +469,7 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
             error={costMode === 'tokens' ? tokensStat.error : costTokens.error}
             options={statOptions}
             data={costStatData}
-            fieldConfig={{ defaults: { unit: costMode === 'tokens' ? 'short' : 'currencyUSD', min: 0, thresholds: noThresholds }, overrides: [] }}
+            fieldConfig={{ defaults: { unit: costMode === 'tokens' ? 'short' : 'currencyUSD', min: 0, color: consistentColor, thresholds: noThresholds }, overrides: [] }}
           />
         </div>
       </section>
@@ -471,8 +487,10 @@ type SectionHeaderProps = {
 function SectionHeader({ icon, title, styles, extra }: SectionHeaderProps) {
   return (
     <div className={styles.sectionHeader}>
-      <Icon name={icon} size="md" />
-      <span>{title}</span>
+      <div className={styles.sectionHeaderIcon}>
+        <Icon name={icon} size="lg" />
+      </div>
+      <span className={styles.sectionHeaderTitle}>{title}</span>
       {extra && <div className={styles.sectionHeaderExtra}>{extra}</div>}
     </div>
   );
@@ -518,20 +536,31 @@ function getStyles(theme: GrafanaTheme2) {
     sectionHeader: css({
       display: 'flex',
       alignItems: 'center',
-      gap: theme.spacing(1),
-      fontSize: theme.typography.h5.fontSize,
+      gap: theme.spacing(1.5),
+      padding: theme.spacing(1, 0),
+    }),
+    sectionHeaderIcon: css({
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: 32,
+      height: 32,
+      borderRadius: theme.shape.radius.default,
+      background: theme.colors.background.secondary,
+      color: theme.colors.text.secondary,
+    }),
+    sectionHeaderTitle: css({
+      fontSize: theme.typography.h4.fontSize,
       fontWeight: theme.typography.fontWeightMedium,
       color: theme.colors.text.primary,
-      letterSpacing: '0.01em',
-      paddingBottom: theme.spacing(0.5),
-      borderBottom: `1px solid ${theme.colors.border.weak}`,
+      letterSpacing: '-0.01em',
     }),
     sectionHeaderExtra: css({
-      marginLeft: 'auto',
+      marginLeft: theme.spacing(0.5),
     }),
     panelRow: css({
       display: 'grid',
-      gridTemplateColumns: '2fr 1fr 2fr 1fr',
+      gridTemplateColumns: '5fr 4fr 5fr 4fr',
       gap: theme.spacing(1),
     }),
   };

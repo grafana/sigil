@@ -27,7 +27,10 @@ function labelPriority(label: string): number {
 
 export default function DashboardPage({ dataSource = defaultDashboardDataSource }: DashboardPageProps) {
   const styles = useStyles2(getStyles);
-  const { timeRange, filters, breakdownBy, setTimeRange, setFilters, setBreakdownBy } = useDashboardUrlState();
+  const {
+    timeRange, filters, breakdownBy, latencyPercentile, costMode,
+    setTimeRange, setFilters, setBreakdownBy, setLatencyPercentile, setCostMode,
+  } = useDashboardUrlState();
 
   const from = useMemo(() => Math.floor(timeRange.from.valueOf() / 1000), [timeRange]);
   const to = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);
@@ -97,9 +100,13 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         dataSource={dataSource}
         filters={filters}
         breakdownBy={breakdownBy}
+        latencyPercentile={latencyPercentile}
+        costMode={costMode}
         from={from}
         to={to}
         timeRange={timeRange}
+        onLatencyPercentileChange={setLatencyPercentile}
+        onCostModeChange={setCostMode}
       />
     </div>
   );
