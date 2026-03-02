@@ -16,6 +16,16 @@ type ActivityBucket = {
 
 type ChartViewMode = 'llm_calls' | 'time';
 type TimeBucketUnit = 'hour' | 'week' | 'month' | 'year';
+type StatTrendDirection = 'up' | 'down' | 'neutral';
+
+type ConversationStats = {
+  totalConversations: number;
+  totalLLMCalls: number;
+  avgCallsPerConversation: number;
+  activeLast7d: number;
+  ratedConversations: number;
+  badRatedPct: number;
+};
 
 function parseViewModeParam(value: string | null): ChartViewMode {
   if (value === 'time') {
@@ -241,6 +251,69 @@ function buildTimeBuckets(conversations: ConversationSearchResult[]): ActivityBu
   return buckets.filter((bucket) => bucket.count > 0);
 }
 
+function buildConversationStats(conversations: ConversationSearchResult[], windowEndMs: number): ConversationStats {
+  const totalConversations = conversations.length;
+  const dayMs = 24 * 60 * 60 * 1000;
+  const weekMs = 7 * dayMs;
+  let totalLLMCalls = 0;
+  let activeLast7d = 0;
+  let ratedConversations = 0;
+  let badRatedConversations = 0;
+
+  for (const conversation of conversations) {
+    totalLLMCalls += conversation.generation_count;
+
+    const lastActivityTs = Date.parse(conversation.last_generation_at);
+    if (Number.isFinite(lastActivityTs)) {
+      const ageMs = windowEndMs - lastActivityTs;
+      if (ageMs >= 0 && ageMs <= weekMs) {
+        activeLast7d += 1;
+      }
+    }
+
+    const ratingSummary = conversation.rating_summary;
+    if (!ratingSummary || ratingSummary.total_count <= 0) {
+      continue;
+    }
+    ratedConversations += 1;
+    if (ratingSummary.has_bad_rating) {
+      badRatedConversations += 1;
+    }
+  }
+
+  const avgCallsPerConversation = totalConversations > 0 ? totalLLMCalls / totalConversations : 0;
+  const badRatedPct = totalConversations > 0 ? (badRatedConversations / totalConversations) * 100 : 0;
+
+  return {
+    totalConversations,
+    totalLLMCalls,
+    avgCallsPerConversation,
+    activeLast7d,
+    ratedConversations,
+    badRatedPct,
+  };
+}
+
+function buildTrendLabel(
+  currentValue: number,
+  previousValue: number
+): { direction: StatTrendDirection; label: string } | null {
+  if (currentValue === previousValue) {
+    return { direction: 'neutral', label: '0' };
+  }
+  if (previousValue === 0) {
+    return null;
+  }
+  const percentageChange = ((currentValue - previousValue) / previousValue) * 100;
+  if (percentageChange > 0) {
+    return { direction: 'up', label: `↗ ${Math.abs(percentageChange).toFixed(1)}%` };
+  }
+  if (percentageChange < 0) {
+    return { direction: 'down', label: `↘ ${Math.abs(percentageChange).toFixed(1)}%` };
+  }
+  return { direction: 'neutral', label: '→ 0.0%' };
+}
+
 const getStyles = (theme: GrafanaTheme2) => ({
   pageContainer: css({
     display: 'flex',
@@ -290,6 +363,12 @@ const getStyles = (theme: GrafanaTheme2) => ({
   statValue: css({
     fontSize: theme.typography.h3.fontSize,
     fontWeight: theme.typography.fontWeightMedium,
+  }),
+  statValueRow: css({
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: theme.spacing(0.75),
+    flexWrap: 'wrap' as const,
   }),
   chartTitle: css({
     marginBottom: theme.spacing(1.25),
@@ -372,6 +451,16 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.secondary,
     marginLeft: theme.spacing(0.5),
   }),
+  statTrend: css({
+    fontSize: theme.typography.bodySmall.fontSize,
+    color: theme.colors.text.secondary,
+  }),
+  statTrendUp: css({
+    color: theme.colors.success.main,
+  }),
+  statTrendDown: css({
+    color: theme.colors.error.main,
+  }),
 });
 
 export type ConversationsListPageProps = {
@@ -389,6 +478,7 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
   });
 
   const [conversations, setConversations] = useState<ConversationSearchResult[]>([]);
+  const [previousConversations, setPreviousConversations] = useState<ConversationSearchResult[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [fallbackViewMode, setFallbackViewMode] = useState<ChartViewMode>(parseViewModeParam(searchParams.get('view')));
@@ -479,36 +569,53 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
 
       try {
         const pageSize = 50;
-        let cursor = '';
-        let hasMore = true;
-        const allConversations: ConversationSearchResult[] = [];
+        const fetchRangeConversations = async (fromISO: string, toISO: string): Promise<ConversationSearchResult[]> => {
+          let cursor = '';
+          let hasMore = true;
+          const allConversations: ConversationSearchResult[] = [];
 
-        while (hasMore) {
-          const response = await dataSource.searchConversations({
-            filters: '',
-            select: [],
-            time_range: {
-              from: timeRange.from.toISOString(),
-              to: timeRange.to.toISOString(),
-            },
-            page_size: pageSize,
-            cursor,
-          });
-          allConversations.push(...(response.conversations ?? []));
-          cursor = response.next_cursor ?? '';
-          hasMore = Boolean(response.has_more && cursor.length > 0);
-        }
+          while (hasMore) {
+            const response = await dataSource.searchConversations({
+              filters: '',
+              select: [],
+              time_range: {
+                from: fromISO,
+                to: toISO,
+              },
+              page_size: pageSize,
+              cursor,
+            });
+            allConversations.push(...(response.conversations ?? []));
+            cursor = response.next_cursor ?? '';
+            hasMore = Boolean(response.has_more && cursor.length > 0);
+          }
+
+          return allConversations;
+        };
+
+        const currentFromMs = timeRange.from.valueOf();
+        const currentToMs = timeRange.to.valueOf();
+        const windowMs = currentToMs - currentFromMs;
+        const previousFromISO = dateTime(currentFromMs - windowMs).toISOString();
+        const previousToISO = dateTime(currentToMs - windowMs).toISOString();
+
+        const [allConversations, previousRangeConversations] = await Promise.all([
+          fetchRangeConversations(timeRange.from.toISOString(), timeRange.to.toISOString()),
+          fetchRangeConversations(previousFromISO, previousToISO),
+        ]);
 
         if (requestVersionRef.current !== requestVersion) {
           return;
         }
         setConversations(allConversations);
+        setPreviousConversations(previousRangeConversations);
       } catch (error) {
         if (requestVersionRef.current !== requestVersion) {
           return;
         }
         setErrorMessage(error instanceof Error ? error.message : 'failed to load conversations');
         setConversations([]);
+        setPreviousConversations([]);
       } finally {
         if (requestVersionRef.current !== requestVersion) {
           return;
@@ -565,48 +672,11 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
     [activityBuckets]
   );
   const conversationStats = useMemo(() => {
-    const totalConversations = conversations.length;
-    const now = Date.now();
-    const dayMs = 24 * 60 * 60 * 1000;
-    const weekMs = 7 * dayMs;
-    let totalLLMCalls = 0;
-    let activeLast7d = 0;
-    let ratedConversations = 0;
-    let badRatedConversations = 0;
-
-    for (const conversation of conversations) {
-      totalLLMCalls += conversation.generation_count;
-
-      const lastActivityTs = Date.parse(conversation.last_generation_at);
-      if (Number.isFinite(lastActivityTs)) {
-        const ageMs = now - lastActivityTs;
-        if (ageMs <= weekMs) {
-          activeLast7d += 1;
-        }
-      }
-
-      const ratingSummary = conversation.rating_summary;
-      if (!ratingSummary || ratingSummary.total_count <= 0) {
-        continue;
-      }
-      ratedConversations += 1;
-      if (ratingSummary.has_bad_rating) {
-        badRatedConversations += 1;
-      }
-    }
-
-    const avgCallsPerConversation = totalConversations > 0 ? totalLLMCalls / totalConversations : 0;
-    const badRatedPct = totalConversations > 0 ? (badRatedConversations / totalConversations) * 100 : 0;
-
-    return {
-      totalConversations,
-      totalLLMCalls,
-      avgCallsPerConversation,
-      activeLast7d,
-      ratedConversations,
-      badRatedPct,
-    };
-  }, [conversations]);
+    return buildConversationStats(conversations, timeRange.to.valueOf());
+  }, [conversations, timeRange]);
+  const previousConversationStats = useMemo(() => {
+    return buildConversationStats(previousConversations, timeRange.from.valueOf());
+  }, [previousConversations, timeRange]);
 
   return (
     <div className={styles.pageContainer}>
@@ -625,27 +695,87 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
         <div className={styles.statsGrid}>
           <div className={styles.statTile}>
             <div className={styles.statLabel}>Conversations</div>
-            <div className={styles.statValue}>{conversationStats.totalConversations.toLocaleString()}</div>
+            <div className={styles.statValueRow}>
+              <div className={styles.statValue}>{conversationStats.totalConversations.toLocaleString()}</div>
+              {(() => {
+                const trend = buildTrendLabel(
+                  conversationStats.totalConversations,
+                  previousConversationStats.totalConversations
+                );
+                if (!trend) {
+                  return null;
+                }
+                return <div className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}>{trend.label}</div>;
+              })()}
+            </div>
           </div>
           <div className={styles.statTile}>
             <div className={styles.statLabel}>LLM Calls</div>
-            <div className={styles.statValue}>{conversationStats.totalLLMCalls.toLocaleString()}</div>
+            <div className={styles.statValueRow}>
+              <div className={styles.statValue}>{conversationStats.totalLLMCalls.toLocaleString()}</div>
+              {(() => {
+                const trend = buildTrendLabel(conversationStats.totalLLMCalls, previousConversationStats.totalLLMCalls);
+                if (!trend) {
+                  return null;
+                }
+                return <div className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}>{trend.label}</div>;
+              })()}
+            </div>
           </div>
           <div className={styles.statTile}>
             <div className={styles.statLabel}>Avg Calls / Conversation</div>
-            <div className={styles.statValue}>{conversationStats.avgCallsPerConversation.toFixed(1)}</div>
+            <div className={styles.statValueRow}>
+              <div className={styles.statValue}>{conversationStats.avgCallsPerConversation.toFixed(1)}</div>
+              {(() => {
+                const trend = buildTrendLabel(
+                  conversationStats.avgCallsPerConversation,
+                  previousConversationStats.avgCallsPerConversation
+                );
+                if (!trend) {
+                  return null;
+                }
+                return <div className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}>{trend.label}</div>;
+              })()}
+            </div>
           </div>
           <div className={styles.statTile}>
             <div className={styles.statLabel}>Active Conversations (7d)</div>
-            <div className={styles.statValue}>{conversationStats.activeLast7d.toLocaleString()}</div>
+            <div className={styles.statValueRow}>
+              <div className={styles.statValue}>{conversationStats.activeLast7d.toLocaleString()}</div>
+              {(() => {
+                const trend = buildTrendLabel(conversationStats.activeLast7d, previousConversationStats.activeLast7d);
+                if (!trend) {
+                  return null;
+                }
+                return <div className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}>{trend.label}</div>;
+              })()}
+            </div>
           </div>
           <div className={styles.statTile}>
             <div className={styles.statLabel}>Rated Conversations</div>
-            <div className={styles.statValue}>{conversationStats.ratedConversations.toLocaleString()}</div>
+            <div className={styles.statValueRow}>
+              <div className={styles.statValue}>{conversationStats.ratedConversations.toLocaleString()}</div>
+              {(() => {
+                const trend = buildTrendLabel(conversationStats.ratedConversations, previousConversationStats.ratedConversations);
+                if (!trend) {
+                  return null;
+                }
+                return <div className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}>{trend.label}</div>;
+              })()}
+            </div>
           </div>
           <div className={styles.statTile}>
             <div className={styles.statLabel}>Bad-Rated %</div>
-            <div className={styles.statValue}>{conversationStats.badRatedPct.toFixed(1)}%</div>
+            <div className={styles.statValueRow}>
+              <div className={styles.statValue}>{conversationStats.badRatedPct.toFixed(1)}%</div>
+              {(() => {
+                const trend = buildTrendLabel(conversationStats.badRatedPct, previousConversationStats.badRatedPct);
+                if (!trend) {
+                  return null;
+                }
+                return <div className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}>{trend.label}</div>;
+              })()}
+            </div>
           </div>
         </div>
       </div>
