@@ -104,26 +104,66 @@ export function calculateTotalCost(
   return { totalCost: total, unresolvedTokens, unresolvedSeries };
 }
 
+export type GroupedCostEntry = {
+  label: string;
+  cost: number;
+};
+
+/**
+ * Calculate total cost grouped by a Prometheus label.
+ * Returns one entry per unique value of groupByLabel.
+ */
+export function calculateTotalCostByGroup(
+  response: PrometheusQueryResponse | undefined,
+  pricingMap: PricingMap,
+  groupByLabel: string
+): GroupedCostEntry[] {
+  if (!response || response.data.resultType !== 'vector') {
+    return [];
+  }
+  const results = response.data.result as PrometheusVectorResult[];
+  const groups = new Map<string, number>();
+
+  for (const result of results) {
+    const model = result.metric.gen_ai_request_model ?? '';
+    const provider = result.metric.gen_ai_provider_name;
+    const tokenType = result.metric.gen_ai_token_type ?? '';
+    const count = parseFloat(result.value[1]);
+    const pricing = lookupPricing(pricingMap, model, provider);
+    if (!pricing) {
+      continue;
+    }
+    const cost = tokenCost(tokenType, count, pricing);
+    const groupKey = result.metric[groupByLabel] ?? 'unknown';
+    groups.set(groupKey, (groups.get(groupKey) ?? 0) + cost);
+  }
+
+  return Array.from(groups.entries()).map(([label, cost]) => ({ label, cost }));
+}
+
 /**
  * Calculate cost-over-time from a Prometheus matrix response
  * containing token rates broken down by model and token type.
- * Returns a single aggregated cost timeseries as a DataFrame.
+ *
+ * When groupByLabel is provided, returns one DataFrame per unique value of
+ * that label (e.g. one line per provider). Otherwise returns a single
+ * aggregated cost timeseries.
  */
 export function calculateCostTimeSeries(
   response: PrometheusQueryResponse | undefined,
-  pricingMap: PricingMap
-): DataFrame {
+  pricingMap: PricingMap,
+  groupByLabel?: string
+): DataFrame[] {
   if (!response) {
-    return new MutableDataFrame({ fields: [] });
+    return [];
   }
   if (response.data.resultType !== 'matrix') {
-    return new MutableDataFrame({ fields: [] });
+    return [];
   }
   const results = response.data.result as PrometheusMatrixResult[];
 
-  // Aggregate cost across all series into a single timeseries.
-  // First, collect all unique timestamps.
-  const costByTime = new Map<number, number>();
+  // groupKey → (timestamp → cost)
+  const groups = new Map<string, Map<number, number>>();
 
   for (const series of results) {
     const model = series.metric.gen_ai_request_model ?? '';
@@ -134,6 +174,13 @@ export function calculateCostTimeSeries(
       continue;
     }
 
+    const groupKey = groupByLabel ? (series.metric[groupByLabel] ?? 'unknown') : '__all__';
+    let costByTime = groups.get(groupKey);
+    if (!costByTime) {
+      costByTime = new Map<number, number>();
+      groups.set(groupKey, costByTime);
+    }
+
     for (const [ts, val] of series.values) {
       const rate = parseFloat(val);
       const cost = tokenCost(tokenType, rate, pricing);
@@ -141,24 +188,32 @@ export function calculateCostTimeSeries(
     }
   }
 
-  const sorted = Array.from(costByTime.entries()).sort((a, b) => a[0] - b[0]);
-  const times: number[] = [];
-  const values: number[] = [];
-  for (const [ts, cost] of sorted) {
-    times.push(ts * 1000);
-    values.push(cost);
+  const frames: DataFrame[] = [];
+  for (const [groupKey, costByTime] of groups) {
+    const sorted = Array.from(costByTime.entries()).sort((a, b) => a[0] - b[0]);
+    const times: number[] = [];
+    const values: number[] = [];
+    for (const [ts, cost] of sorted) {
+      times.push(ts * 1000);
+      values.push(cost);
+    }
+
+    const name = groupByLabel ? groupKey : 'Estimated Cost';
+    frames.push(
+      new MutableDataFrame({
+        name,
+        fields: [
+          { name: 'Time', type: FieldType.time, values: times },
+          {
+            name: 'Cost (USD/s)',
+            type: FieldType.number,
+            values,
+            config: { unit: 'currencyUSD', displayName: name },
+          },
+        ],
+      })
+    );
   }
 
-  return new MutableDataFrame({
-    name: 'Estimated Cost',
-    fields: [
-      { name: 'Time', type: FieldType.time, values: times },
-      {
-        name: 'Cost (USD/s)',
-        type: FieldType.number,
-        values,
-        config: { unit: 'currencyUSD' },
-      },
-    ],
-  });
+  return frames;
 }

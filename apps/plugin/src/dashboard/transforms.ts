@@ -51,10 +51,15 @@ export function vectorToPieDataFrame(
   }
 
   const results = response.data.result as PrometheusVectorResult[];
-  const fieldNameCounts = new Map<string, number>();
 
-  const fields = results.map((result, idx) => {
+  const tagged = results.map((result, idx) => {
     const baseName = labelString(result.metric, { preferredKeys: labelKeys, separator }) || `Series ${idx + 1}`;
+    return { baseName, result };
+  });
+  tagged.sort((a, b) => a.baseName.localeCompare(b.baseName));
+
+  const fieldNameCounts = new Map<string, number>();
+  const fields = tagged.map(({ baseName, result }) => {
     const name = uniqueFieldName(baseName, fieldNameCounts);
     return {
       name,
@@ -75,7 +80,7 @@ export function matrixToDataFrames(response: PrometheusQueryResponse): DataFrame
   }
   const results = response.data.result as PrometheusMatrixResult[];
 
-  return results.map((series) => {
+  const frames = results.map((series) => {
     const name = labelString(series.metric);
     const times: number[] = [];
     const values: number[] = [];
@@ -99,6 +104,9 @@ export function matrixToDataFrames(response: PrometheusQueryResponse): DataFrame
       ],
     });
   });
+
+  frames.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+  return frames;
 }
 
 /** Convert a Prometheus vector (instant) response to a single DataFrame for pie/bar charts. */
