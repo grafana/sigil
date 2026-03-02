@@ -757,13 +757,13 @@ function TopStat({ label, value, unit, loading, prevValue, prevLoading, invertCh
   if (!loading && !prevLoading && prevValue !== undefined) {
     if (prevValue === 0 && value === 0) {
       changeBadge = (
-        <Tooltip content="No data one week ago" placement="bottom">
+        <Tooltip content="No data one hour ago" placement="bottom">
           <span className={`${styles.changeBadge} ${styles.changeBadgeNeutral}`}>→ 0%</span>
         </Tooltip>
       );
     } else if (prevValue === 0) {
       changeBadge = (
-        <Tooltip content="No data one week ago" placement="bottom">
+        <Tooltip content="No data one hour ago" placement="bottom">
           <span className={`${styles.changeBadge} ${styles.changeBadgeNeutral}`}>→ 0%</span>
         </Tooltip>
       );
