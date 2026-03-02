@@ -15,7 +15,8 @@ type ActivityBucket = {
 };
 
 type ChartViewMode = 'llm_calls' | 'time';
-type TimeBucketUnit = 'hour' | 'week' | 'month' | 'year';
+type TimeBucketUnit = 'hour' | 'day' | 'week' | 'month' | 'year';
+type TimeBucketSpec = { unit: TimeBucketUnit; size: number };
 type StatTrendDirection = 'up' | 'down' | 'neutral';
 
 type ConversationStats = {
@@ -34,196 +35,234 @@ function parseViewModeParam(value: string | null): ChartViewMode {
   return 'llm_calls';
 }
 
+function countLLMCallBuckets(maxCalls: number, step: number): number {
+  if (step <= 0) {
+    return 1;
+  }
+  return Math.floor(maxCalls / step) + 1;
+}
+
+function pickLLMCallBucketStep(maxCalls: number): number {
+  if (maxCalls <= 0) {
+    return 1;
+  }
+  const minBuckets = 10;
+  const maxBuckets = 24;
+  const targetBuckets = 16;
+  const candidates = new Set<number>([1]);
+  const maxExponent = Math.ceil(Math.log10(maxCalls + 1)) + 2;
+  for (let exponent = 0; exponent <= maxExponent; exponent += 1) {
+    const scale = Math.pow(10, exponent);
+    candidates.add(1 * scale);
+    candidates.add(2 * scale);
+    candidates.add(5 * scale);
+  }
+  const scored = Array.from(candidates).map((step) => {
+    const bucketCount = countLLMCallBuckets(maxCalls, step);
+    const inRange = bucketCount >= minBuckets && bucketCount <= maxBuckets;
+    const rangeDistance = bucketCount < minBuckets ? minBuckets - bucketCount : bucketCount > maxBuckets ? bucketCount - maxBuckets : 0;
+    const targetDistance = Math.abs(bucketCount - targetBuckets);
+    const score = (inRange ? 0 : 1000) + rangeDistance * 10 + targetDistance;
+    return { step, score };
+  });
+  scored.sort((a, b) => a.score - b.score);
+  return scored[0].step;
+}
+
 function buildLLMCallBuckets(conversations: ConversationSearchResult[]): ActivityBucket[] {
   if (conversations.length === 0) {
     return [];
   }
-
   const maxCalls = conversations.reduce((max, item) => Math.max(max, item.generation_count), 0);
-  const bucketDefinitions: Array<{ minCalls: number; maxCalls?: number }> = [
-    { minCalls: 0, maxCalls: 0 },
-    { minCalls: 1, maxCalls: 1 },
-    { minCalls: 2, maxCalls: 2 },
-    { minCalls: 3, maxCalls: 3 },
-    { minCalls: 4, maxCalls: 4 },
-    { minCalls: 5, maxCalls: 5 },
-    { minCalls: 6, maxCalls: 7 },
-    { minCalls: 8, maxCalls: 9 },
-    { minCalls: 10, maxCalls: 14 },
-    { minCalls: 15, maxCalls: 19 },
-    { minCalls: 20, maxCalls: 29 },
-    { minCalls: 30, maxCalls: 39 },
-    { minCalls: 40, maxCalls: 59 },
-    { minCalls: 60, maxCalls: 79 },
-    { minCalls: 80, maxCalls: 119 },
-    { minCalls: 120, maxCalls: 199 },
-    { minCalls: 200 },
-  ];
+  const step = pickLLMCallBucketStep(maxCalls);
+  const buckets: Array<ActivityBucket & { minCalls: number; maxCalls: number }> = [];
+  const bucketByMinCalls = new Map<number, ActivityBucket & { minCalls: number; maxCalls: number }>();
 
-  const buckets: Array<ActivityBucket & { minCalls: number; maxCalls?: number }> = bucketDefinitions
-    .filter((definition) => {
-      if (definition.maxCalls == null) {
-        return maxCalls >= definition.minCalls;
-      }
-      return definition.minCalls <= maxCalls;
-    })
-    .map((definition) => {
-      const maxCallsForLabel = definition.maxCalls;
-      const label =
-        maxCallsForLabel == null
-          ? `${definition.minCalls}+`
-          : definition.minCalls === maxCallsForLabel
-            ? `${definition.minCalls}`
-            : `${definition.minCalls}-${maxCallsForLabel}`;
-
-      return {
-        key: maxCallsForLabel == null ? `${definition.minCalls}-plus` : `${definition.minCalls}-${maxCallsForLabel}`,
-        label,
-        minCalls: definition.minCalls,
-        maxCalls: maxCallsForLabel,
-        count: 0,
-        conversationIDs: new Set<string>(),
-      };
-    });
+  for (let minCalls = 0; minCalls <= maxCalls; minCalls += step) {
+    const maxCallsForBucket = Math.min(minCalls + step - 1, maxCalls);
+    const label = minCalls === maxCallsForBucket ? `${minCalls}` : `${minCalls}-${maxCallsForBucket}`;
+    const bucket: ActivityBucket & { minCalls: number; maxCalls: number } = {
+      key: `${minCalls}-${maxCallsForBucket}`,
+      label,
+      minCalls,
+      maxCalls: maxCallsForBucket,
+      count: 0,
+      conversationIDs: new Set<string>(),
+    };
+    buckets.push(bucket);
+    bucketByMinCalls.set(minCalls, bucket);
+  }
 
   for (const conversation of conversations) {
-    const bucket = buckets.find((entry) => {
-      if (entry.maxCalls == null) {
-        return conversation.generation_count >= entry.minCalls;
-      }
-      return conversation.generation_count >= entry.minCalls && conversation.generation_count <= entry.maxCalls;
-    });
+    const bucketMinCalls = Math.floor(conversation.generation_count / step) * step;
+    const bucket = bucketByMinCalls.get(bucketMinCalls);
     if (bucket == null) {
       continue;
     }
     bucket.count += 1;
     bucket.conversationIDs.add(conversation.conversation_id);
   }
-
-  return buckets.filter((bucket) => bucket.count > 0);
+  return buckets;
 }
 
-function getTimeBucketUnit(conversations: ConversationSearchResult[]): TimeBucketUnit {
-  const HOUR_MS = 60 * 60 * 1000;
-  const DAY_MS = 24 * HOUR_MS;
-  const timestamps = conversations
-    .map((conversation) => Date.parse(conversation.last_generation_at))
-    .filter((value) => Number.isFinite(value));
-  if (timestamps.length === 0) {
-    return 'week';
-  }
-  const minTs = Math.min(...timestamps);
-  const maxTs = Math.max(...timestamps);
-  const spanMs = maxTs - minTs;
-  if (spanMs <= DAY_MS) {
-    return 'hour';
-  }
-  const spanDays = (maxTs - minTs) / (1000 * 60 * 60 * 24);
-  if (spanDays <= 365 * 2) {
-    return 'week';
-  }
-  if (spanDays <= 365 * 8) {
-    return 'month';
-  }
-  return 'year';
+function startOfWeekUTC(ts: number): Date {
+  const date = new Date(ts);
+  const weekday = date.getUTCDay();
+  const mondayOffset = (weekday + 6) % 7;
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() - mondayOffset));
 }
 
-function startOfBucketUTC(ts: number, unit: TimeBucketUnit): Date {
+function startOfBucketUTC(ts: number, spec: TimeBucketSpec): Date {
   const date = new Date(ts);
   const year = date.getUTCFullYear();
   const month = date.getUTCMonth();
   const day = date.getUTCDate();
   const hour = date.getUTCHours();
-  if (unit === 'hour') {
-    return new Date(Date.UTC(year, month, day, hour, 0, 0, 0));
+  if (spec.unit === 'hour') {
+    const alignedHour = hour - (hour % spec.size);
+    return new Date(Date.UTC(year, month, day, alignedHour, 0, 0, 0));
   }
-  if (unit === 'year') {
-    return new Date(Date.UTC(year, 0, 1));
+  if (spec.unit === 'day') {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const dayStartMs = Date.UTC(year, month, day);
+    const bucketMs = spec.size * DAY_MS;
+    return new Date(Math.floor(dayStartMs / bucketMs) * bucketMs);
   }
-  if (unit === 'month') {
-    return new Date(Date.UTC(year, month, 1));
+  if (spec.unit === 'week') {
+    const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+    const anchorMondayMs = Date.UTC(1970, 0, 5);
+    const weekStartMs = startOfWeekUTC(ts).getTime();
+    const weeksSinceAnchor = Math.floor((weekStartMs - anchorMondayMs) / WEEK_MS);
+    const alignedWeeks = Math.floor(weeksSinceAnchor / spec.size) * spec.size;
+    return new Date(anchorMondayMs + alignedWeeks * WEEK_MS);
   }
-  const weekday = date.getUTCDay();
-  const mondayOffset = (weekday + 6) % 7;
-  return new Date(Date.UTC(year, month, day - mondayOffset));
+  if (spec.unit === 'month') {
+    const monthIndex = year * 12 + month;
+    const alignedMonthIndex = Math.floor(monthIndex / spec.size) * spec.size;
+    const alignedYear = Math.floor(alignedMonthIndex / 12);
+    const alignedMonth = alignedMonthIndex % 12;
+    return new Date(Date.UTC(alignedYear, alignedMonth, 1));
+  }
+  const alignedYear = Math.floor(year / spec.size) * spec.size;
+  return new Date(Date.UTC(alignedYear, 0, 1));
 }
 
-function nextBucketStartUTC(date: Date, unit: TimeBucketUnit): Date {
-  if (unit === 'hour') {
-    return new Date(date.getTime() + 60 * 60 * 1000);
+function nextBucketStartUTC(date: Date, spec: TimeBucketSpec): Date {
+  if (spec.unit === 'hour') {
+    return new Date(date.getTime() + spec.size * 60 * 60 * 1000);
   }
-  if (unit === 'year') {
-    return new Date(Date.UTC(date.getUTCFullYear() + 1, 0, 1));
+  if (spec.unit === 'day') {
+    return new Date(date.getTime() + spec.size * 24 * 60 * 60 * 1000);
   }
-  if (unit === 'month') {
-    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1));
+  if (spec.unit === 'week') {
+    return new Date(date.getTime() + spec.size * 7 * 24 * 60 * 60 * 1000);
   }
-  return new Date(date.getTime() + 7 * 24 * 60 * 60 * 1000);
+  if (spec.unit === 'month') {
+    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + spec.size, 1));
+  }
+  return new Date(Date.UTC(date.getUTCFullYear() + spec.size, 0, 1));
 }
 
-function startOfDayUTC(ts: number): Date {
-  const date = new Date(ts);
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0, 0));
-}
-
-function formatTimeBucketLabel(date: Date, unit: TimeBucketUnit): string {
-  if (unit === 'hour') {
+function formatTimeBucketLabel(date: Date, spec: TimeBucketSpec): string {
+  if (spec.unit === 'hour') {
     const startHour24 = date.getUTCHours();
-    const endHour24 = (startHour24 + 1) % 24;
     const startHour12 = startHour24 % 12 === 0 ? 12 : startHour24 % 12;
-    const endHour12 = endHour24 % 12 === 0 ? 12 : endHour24 % 12;
     const startSuffix = startHour24 < 12 ? 'am' : 'pm';
-    const endSuffix = endHour24 < 12 ? 'am' : 'pm';
-    if (startSuffix === endSuffix) {
-      return `${startHour12}-${endHour12}${endSuffix}`;
-    }
-    return `${startHour12}${startSuffix}-${endHour12}${endSuffix}`;
+    return `${startHour12}${startSuffix}`;
   }
-  if (unit === 'year') {
+  if (spec.unit === 'day' || spec.unit === 'week') {
+    return new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(date);
+  }
+  if (spec.unit === 'year') {
     return `${date.getUTCFullYear()}`;
   }
-  if (unit === 'month') {
+  if (spec.unit === 'month') {
     return new Intl.DateTimeFormat(undefined, {
       month: 'short',
       year: 'numeric',
       timeZone: 'UTC',
     }).format(date);
   }
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(date);
+  return date.toISOString();
 }
 
-function buildTimeBuckets(conversations: ConversationSearchResult[]): ActivityBucket[] {
-  if (conversations.length === 0) {
-    return [];
+function countBucketsInRange(fromMs: number, toMs: number, spec: TimeBucketSpec): number {
+  if (toMs <= fromMs) {
+    return 1;
   }
-  const unit = getTimeBucketUnit(conversations);
-  const timestamps = conversations
-    .map((conversation) => Date.parse(conversation.last_generation_at))
-    .filter((value) => Number.isFinite(value));
-  if (timestamps.length === 0) {
-    return [];
+  let count = 0;
+  const maxIterations = 10000;
+  const lastTs = Math.max(fromMs, toMs - 1);
+  for (
+    let cursor = startOfBucketUTC(fromMs, spec);
+    cursor.getTime() <= lastTs && count < maxIterations;
+    cursor = nextBucketStartUTC(cursor, spec)
+  ) {
+    count += 1;
   }
+  return Math.max(count, 1);
+}
 
-  const minTs = Math.min(...timestamps);
-  const maxTs = Math.max(...timestamps);
-  const firstBucket = unit === 'hour' ? startOfDayUTC(minTs) : startOfBucketUTC(minTs, unit);
-  const lastBucket =
-    unit === 'hour'
-      ? new Date(startOfDayUTC(maxTs).getTime() + 23 * 60 * 60 * 1000)
-      : startOfBucketUTC(maxTs, unit);
+function pickTimeBucketSpec(timeRange: TimeRange): TimeBucketSpec {
+  const minBuckets = 10;
+  const maxBuckets = 24;
+  const targetBuckets = 16;
+  const candidates: TimeBucketSpec[] = [
+    { unit: 'hour', size: 1 },
+    { unit: 'hour', size: 2 },
+    { unit: 'hour', size: 3 },
+    { unit: 'hour', size: 4 },
+    { unit: 'hour', size: 6 },
+    { unit: 'hour', size: 8 },
+    { unit: 'hour', size: 12 },
+    { unit: 'day', size: 1 },
+    { unit: 'day', size: 2 },
+    { unit: 'day', size: 3 },
+    { unit: 'day', size: 5 },
+    { unit: 'week', size: 1 },
+    { unit: 'week', size: 2 },
+    { unit: 'week', size: 4 },
+    { unit: 'month', size: 1 },
+    { unit: 'month', size: 2 },
+    { unit: 'month', size: 3 },
+    { unit: 'month', size: 6 },
+    { unit: 'year', size: 1 },
+    { unit: 'year', size: 2 },
+    { unit: 'year', size: 5 },
+  ];
+  const fromMs = timeRange.from.valueOf();
+  const toMs = timeRange.to.valueOf();
+  const scored = candidates.map((candidate) => {
+    const bucketCount = countBucketsInRange(fromMs, toMs, candidate);
+    const inRange = bucketCount >= minBuckets && bucketCount <= maxBuckets;
+    const rangeDistance = bucketCount < minBuckets ? minBuckets - bucketCount : bucketCount > maxBuckets ? bucketCount - maxBuckets : 0;
+    const targetDistance = Math.abs(bucketCount - targetBuckets);
+    const score = (inRange ? 0 : 1000) + rangeDistance * 10 + targetDistance;
+    return { candidate, score };
+  });
+  scored.sort((a, b) => a.score - b.score);
+  return scored[0].candidate;
+}
+
+function buildTimeBuckets(conversations: ConversationSearchResult[], timeRange: TimeRange): ActivityBucket[] {
+  const spec = pickTimeBucketSpec(timeRange);
+  const fromMs = timeRange.from.valueOf();
+  const toMs = timeRange.to.valueOf();
+  const firstBucket = startOfBucketUTC(fromMs, spec);
+  const lastBucket = startOfBucketUTC(Math.max(fromMs, toMs - 1), spec);
   const buckets: ActivityBucket[] = [];
   const bucketByKey = new Map<string, ActivityBucket>();
 
-  for (let cursor = new Date(firstBucket); cursor.getTime() <= lastBucket.getTime(); cursor = nextBucketStartUTC(cursor, unit)) {
+  for (let cursor = new Date(firstBucket); cursor.getTime() <= lastBucket.getTime(); cursor = nextBucketStartUTC(cursor, spec)) {
     const key = cursor.toISOString();
     const bucket: ActivityBucket = {
       key,
-      label: formatTimeBucketLabel(cursor, unit),
+      label: formatTimeBucketLabel(cursor, spec),
       count: 0,
       conversationIDs: new Set<string>(),
     };
@@ -236,7 +275,10 @@ function buildTimeBuckets(conversations: ConversationSearchResult[]): ActivityBu
     if (!Number.isFinite(ts)) {
       continue;
     }
-    const key = startOfBucketUTC(ts, unit).toISOString();
+    if (ts < fromMs || ts >= toMs) {
+      continue;
+    }
+    const key = startOfBucketUTC(ts, spec).toISOString();
     const bucket = bucketByKey.get(key);
     if (!bucket) {
       continue;
@@ -244,11 +286,7 @@ function buildTimeBuckets(conversations: ConversationSearchResult[]): ActivityBu
     bucket.count += 1;
     bucket.conversationIDs.add(conversation.conversation_id);
   }
-
-  if (unit === 'hour') {
-    return buckets;
-  }
-  return buckets.filter((bucket) => bucket.count > 0);
+  return buckets;
 }
 
 function buildConversationStats(conversations: ConversationSearchResult[], windowEndMs: number): ConversationStats {
@@ -446,6 +484,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   chartBarMeta: css({
     marginTop: theme.spacing(0.5),
     lineHeight: 1.25,
+    textAlign: 'left' as const,
   }),
   activityCount: css({
     color: theme.colors.text.secondary,
@@ -639,8 +678,8 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
   }, [setSelectedBucketKey, viewMode]);
 
   const activityBuckets = useMemo(
-    () => (viewMode === 'time' ? buildTimeBuckets(conversations) : buildLLMCallBuckets(conversations)),
-    [conversations, viewMode]
+    () => (viewMode === 'time' ? buildTimeBuckets(conversations, timeRange) : buildLLMCallBuckets(conversations)),
+    [conversations, timeRange, viewMode]
   );
 
   useEffect(() => {
@@ -799,11 +838,6 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
               <option value="time">Conversations over time</option>
             </select>
           </div>
-          <Text color="secondary">
-            {viewMode === 'time'
-              ? 'Click a bar to filter conversations for that week, month, or year.'
-              : 'Click a bar to filter conversations by LLM calls bucket.'}
-          </Text>
         </div>
 
         {activityBuckets.length > 0 && (
