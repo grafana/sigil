@@ -11,6 +11,57 @@ import (
 	"github.com/grafana/sigil/sigil/internal/storage"
 )
 
+func TestListRecentGenerations(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	base := time.Date(2026, 2, 12, 18, 0, 0, 0, time.UTC)
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{
+		testGeneration("gen-recent-1", "conv-recent", base),
+		testGeneration("gen-recent-2", "conv-recent", base.Add(1*time.Hour)),
+		testGeneration("gen-recent-3", "conv-recent", base.Add(2*time.Hour)),
+	}))
+
+	since := base.Add(-1 * time.Hour)
+	rows, err := store.ListRecentGenerations(context.Background(), "tenant-a", since, 10)
+	if err != nil {
+		t.Fatalf("list recent generations: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("expected 3 generations, got %d", len(rows))
+	}
+	if rows[0].GenerationID != "gen-recent-3" {
+		t.Fatalf("expected most recent first (gen-recent-3), got %q", rows[0].GenerationID)
+	}
+	if rows[0].ConversationID == nil || *rows[0].ConversationID != "conv-recent" {
+		t.Fatalf("expected conversation_id conv-recent, got %v", rows[0].ConversationID)
+	}
+	if len(rows[0].Payload) == 0 {
+		t.Fatalf("expected non-empty payload")
+	}
+
+	sinceExcluding := base.Add(30 * time.Minute)
+	rowsFiltered, err := store.ListRecentGenerations(context.Background(), "tenant-a", sinceExcluding, 10)
+	if err != nil {
+		t.Fatalf("list recent generations filtered: %v", err)
+	}
+	if len(rowsFiltered) != 2 {
+		t.Fatalf("expected 2 generations after since filter (gen-recent-2 at 19:00, gen-recent-3 at 20:00), got %d", len(rowsFiltered))
+	}
+
+	empty, err := store.ListRecentGenerations(context.Background(), "tenant-b", since, 10)
+	if err != nil {
+		t.Fatalf("list recent generations other tenant: %v", err)
+	}
+	if len(empty) != 0 {
+		t.Fatalf("expected 0 generations for tenant-b, got %d", len(empty))
+	}
+}
+
 func TestWALReaderGetByIDAndConversation(t *testing.T) {
 	store, cleanup := newTestWALStore(t)
 	defer cleanup()

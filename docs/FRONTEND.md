@@ -36,6 +36,20 @@ Current plugin query contract:
   - `GET /api/plugins/grafana-sigil-app/resources/query/model-cards/lookup`
   - `/api/plugins/grafana-sigil-app/resources/query/proxy/prometheus/...`
   - `/api/plugins/grafana-sigil-app/resources/query/proxy/tempo/...`
+  - `GET /api/plugins/grafana-sigil-app/resources/eval/evaluators`
+  - `POST /api/plugins/grafana-sigil-app/resources/eval/evaluators`
+  - `GET /api/plugins/grafana-sigil-app/resources/eval/evaluators/{evaluator_id}`
+  - `DELETE /api/plugins/grafana-sigil-app/resources/eval/evaluators/{evaluator_id}`
+  - `GET /api/plugins/grafana-sigil-app/resources/eval/predefined/evaluators`
+  - `POST /api/plugins/grafana-sigil-app/resources/eval/predefined/evaluators/{template_id}:fork`
+  - `GET /api/plugins/grafana-sigil-app/resources/eval/rules`
+  - `POST /api/plugins/grafana-sigil-app/resources/eval/rules`
+  - `GET /api/plugins/grafana-sigil-app/resources/eval/rules/{rule_id}`
+  - `PATCH /api/plugins/grafana-sigil-app/resources/eval/rules/{rule_id}`
+  - `DELETE /api/plugins/grafana-sigil-app/resources/eval/rules/{rule_id}`
+  - `POST /api/plugins/grafana-sigil-app/resources/eval/rules:preview`
+  - `GET /api/plugins/grafana-sigil-app/resources/eval/judge/providers`
+  - `GET /api/plugins/grafana-sigil-app/resources/eval/judge/models?provider={id}`
 - Plugin backend forwards to Sigil API query endpoints:
   - `POST /api/v1/conversations/search`
   - `GET /api/v1/conversations`
@@ -51,6 +65,20 @@ Current plugin query contract:
   - `GET /api/v1/model-cards:lookup`
   - `/api/v1/proxy/prometheus/...`
   - `/api/v1/proxy/tempo/...`
+  - `GET /api/v1/eval/evaluators`
+  - `POST /api/v1/eval/evaluators`
+  - `GET /api/v1/eval/evaluators/{evaluator_id}`
+  - `DELETE /api/v1/eval/evaluators/{evaluator_id}`
+  - `GET /api/v1/eval/predefined/evaluators`
+  - `POST /api/v1/eval/predefined/evaluators/{template_id}:fork`
+  - `GET /api/v1/eval/rules`
+  - `POST /api/v1/eval/rules`
+  - `GET /api/v1/eval/rules/{rule_id}`
+  - `PATCH /api/v1/eval/rules/{rule_id}`
+  - `DELETE /api/v1/eval/rules/{rule_id}`
+  - `POST /api/v1/eval/rules:preview`
+  - `GET /api/v1/eval/judge/providers`
+  - `GET /api/v1/eval/judge/models?provider={id}`
 
 Legacy placeholders removed:
 
@@ -91,6 +119,12 @@ See `docs/references/grafana-query-response-shapes.md`.
   - support cursor pagination in list view
   - open conversation detail with hydrated generations, ratings, and annotations
   - open generation detail with trace/span identifiers
+- Evaluation:
+  - manage evaluators: browse predefined templates, fork/customize, create custom, list and delete tenant evaluators
+  - manage rules: create with selector/match/sample-rate/evaluator config, enable/disable, list and delete
+  - visualize evaluation pipeline: render each rule as a horizontal flow (selector → match → sample → evaluators)
+  - preview rule matching: dry-run rule criteria against recent traffic to show matching generation counts and samples
+  - support two-level navigation: overview, evaluators, and rules sub-pages under a single Evaluation nav entry
 - Traces:
   - use Tempo proxy links for trace drilldown from generation/conversation views
 - Settings: connection and runtime preferences, including query/tenant validation visibility.

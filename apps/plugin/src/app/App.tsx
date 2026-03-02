@@ -7,6 +7,7 @@ const DashboardPage = React.lazy(() => import('../pages/DashboardPage'));
 const ConversationsPage = React.lazy(() => import('../pages/ConversationsPage'));
 const CompletionsPage = React.lazy(() => import('../pages/CompletionsPage'));
 const TracesPage = React.lazy(() => import('../pages/TracesPage'));
+const EvaluationPage = React.lazy(() => import('../pages/EvaluationPage'));
 const SettingsPage = React.lazy(() => import('../pages/SettingsPage'));
 
 export default function App(_props: AppRootProps) {
@@ -16,6 +17,7 @@ export default function App(_props: AppRootProps) {
       <Route path={ROUTES.Conversations} element={<ConversationsPage />} />
       <Route path={ROUTES.Completions} element={<CompletionsPage />} />
       <Route path={ROUTES.Traces} element={<TracesPage />} />
+      <Route path={`${ROUTES.Evaluation}/*`} element={<EvaluationPage />} />
       <Route path={ROUTES.Settings} element={<SettingsPage />} />
       <Route path="*" element={<DashboardPage />} />
     </Routes>

@@ -36,6 +36,13 @@
     },
     {
       "type": "page",
+      "name": "Evaluation",
+      "path": "/a/grafana-sigil-app/evaluation",
+      "addToNav": true,
+      "defaultNav": false
+    },
+    {
+      "type": "page",
       "name": "Completions",
       "path": "/a/grafana-sigil-app/completions",
       "addToNav": true,

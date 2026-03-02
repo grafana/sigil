@@ -102,7 +102,16 @@ func newQuerierModule(
 	var ingestScoreSvc *evalingest.Service
 	if evalStore, ok := generationStore.(evalpkg.EvalStore); ok && evalStore != nil {
 		discovery := judges.DiscoverFromEnv()
-		controlSvc = evalcontrol.NewService(evalStore, judgeDiscoveryAdapter{discovery: discovery})
+		var previewStore storage.RecentGenerationLister
+		if lister, ok := generationStore.(storage.RecentGenerationLister); ok {
+			previewStore = lister
+		}
+		controlSvc = evalcontrol.NewServiceWithPreview(
+			evalStore,
+			judgeDiscoveryAdapter{discovery: discovery},
+			previewStore,
+			cfg.EvalPreviewWindowHours,
+		)
 		scoreLookup := buildScoreGenerationLookup(walReader, blockMetadataStore, blockReader)
 		ingestScoreSvc = evalingest.NewService(evalStore, scoreLookup, false)
 

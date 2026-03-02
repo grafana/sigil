@@ -19,3 +19,16 @@ type WALReader interface {
 type WALTruncator interface {
 	TruncateCompacted(ctx context.Context, tenantID string, shard ShardPredicate, olderThan time.Time, limit int) (int64, error)
 }
+
+// RecentGenerationRow holds minimal generation data for rule preview.
+type RecentGenerationRow struct {
+	GenerationID   string
+	ConversationID *string
+	Payload        []byte
+	CreatedAt      time.Time
+}
+
+// RecentGenerationLister lists generations for a tenant within a time window.
+type RecentGenerationLister interface {
+	ListRecentGenerations(ctx context.Context, tenantID string, since time.Time, limit int) ([]RecentGenerationRow, error)
+}
