@@ -7,3 +7,23 @@ apps:
     disabled: false
     jsonData:
       sigilApiUrl: http://sigil:8080
+  - type: 'grafana-assistant-app'
+    org_id: 1
+    org_name: 'Main Org.'
+    disabled: false
+    jsonData:
+      backendUrl: https://assistant-dev-eu-west-2.grafana-dev.net/assistant
+      isAccessTokenSet: true
+      features: loop,integrations,rules,assistant-streaming
+      loop:
+        enabled: true
+        url: https://assistant-dev-eu-west-2.grafana-dev.net/assistant
+      integrations:
+        enabled: true
+      rules:
+        enabled: true
+      allowServiceAccountAccess: true
+      ossMode: true
+      defaultSearchProvider: tavily
+    secureJsonData:
+      accessToken: 4130:$GRAFANA_ASSISTANT_ACCESS_TOKEN
