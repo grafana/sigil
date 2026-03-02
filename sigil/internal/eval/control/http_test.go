@@ -13,6 +13,7 @@ import (
 	"time"
 
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
+	"github.com/grafana/sigil/sigil/internal/eval/predefined"
 	"github.com/grafana/sigil/sigil/internal/tenantauth"
 )
 
@@ -860,6 +861,39 @@ func TestPredefinedEndpoints_TemplateStoreFallbackToHardcoded(t *testing.T) {
 	}
 	if forked.SourceTemplateVersion != "" {
 		t.Errorf("expected empty source_template_version from hardcoded fallback, got %q", forked.SourceTemplateVersion)
+	}
+}
+
+func TestPredefinedEndpoints_TemplateStoreFallsBackWhenTemplateVersionMissing(t *testing.T) {
+	templateStore := newMemoryTemplateStore()
+	if err := BootstrapPredefinedTemplates(context.Background(), templateStore); err != nil {
+		t.Fatalf("bootstrap predefined templates: %v", err)
+	}
+
+	templateID := predefined.Templates()[0].EvaluatorID
+	template, ok := templateStore.templates[templateKey(GlobalTenantID, templateID)]
+	if !ok {
+		t.Fatalf("expected template %q to exist after bootstrap", templateID)
+	}
+	delete(templateStore.versions, versionKey(GlobalTenantID, templateID, template.LatestVersion))
+
+	evalStore := newMemoryControlStore()
+	service := NewService(evalStore, nil, WithTemplateStore(templateStore))
+	mux := newEvalMux(service)
+
+	listResp := doRequest(mux, http.MethodGet, "/api/v1/eval/predefined/evaluators", "")
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 list predefined evaluators, got %d body=%s", listResp.Code, listResp.Body.String())
+	}
+
+	var listBody struct {
+		Items []evalpkg.EvaluatorDefinition `json:"items"`
+	}
+	if err := json.Unmarshal(listResp.Body.Bytes(), &listBody); err != nil {
+		t.Fatalf("decode list response: %v", err)
+	}
+	if len(listBody.Items) != len(predefined.Templates()) {
+		t.Fatalf("expected hardcoded fallback to return %d items, got %d", len(predefined.Templates()), len(listBody.Items))
 	}
 }
 

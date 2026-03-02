@@ -203,6 +203,9 @@ func (s *TemplateService) PublishVersion(ctx context.Context, tenantID, template
 	}
 
 	if err := s.store.PublishTemplateVersion(ctx, ver); err != nil {
+		if errors.Is(err, evalpkg.ErrNotFound) {
+			return nil, newValidationError(fmt.Errorf("template %q not found", trimmedTemplateID))
+		}
 		return nil, err
 	}
 	return &ver, nil

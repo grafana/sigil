@@ -30,6 +30,14 @@ func newTemplateHTTPEnv(t *testing.T) (*http.ServeMux, *memoryTemplateStore, *me
 	return mux, ts, cs
 }
 
+type publishNotFoundTemplateStore struct {
+	*memoryTemplateStore
+}
+
+func (s *publishNotFoundTemplateStore) PublishTemplateVersion(_ context.Context, _ evalpkg.TemplateVersion) error {
+	return evalpkg.ErrNotFound
+}
+
 func TestTemplateHTTPCreateAndGet(t *testing.T) {
 	mux, _, _ := newTemplateHTTPEnv(t)
 
@@ -319,6 +327,39 @@ func TestTemplateHTTPPublishVersion(t *testing.T) {
 	}
 	if publishBody["version"] != "2026-03-02" {
 		t.Errorf("expected version=2026-03-02, got %v", publishBody["version"])
+	}
+}
+
+func TestTemplateHTTPPublishVersionTemplateNotFoundRaceReturnsBadRequest(t *testing.T) {
+	ts := &publishNotFoundTemplateStore{memoryTemplateStore: newMemoryTemplateStore()}
+	cs := newMemoryControlStore()
+	evalSvc := NewService(cs, nil)
+	tmplSvc := NewTemplateService(ts, evalSvc)
+	mux := newTemplateMux(tmplSvc, evalSvc)
+
+	createPayload := `{
+		"template_id":"race-template",
+		"kind":"llm_judge",
+		"version":"2026-03-01",
+		"config":{"provider":"openai"},
+		"output_keys":[{"key":"score","type":"number"}]
+	}`
+	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates", createPayload)
+	if createResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 create, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+
+	publishPayload := `{
+		"version":"2026-03-02",
+		"config":{"provider":"openai","model":"gpt-4o"},
+		"output_keys":[{"key":"score","type":"number"}]
+	}`
+	publishResp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates/race-template/versions", publishPayload)
+	if publishResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 publish race not found, got %d body=%s", publishResp.Code, publishResp.Body.String())
+	}
+	if !strings.Contains(publishResp.Body.String(), "not found") {
+		t.Errorf("expected not found error, got body=%s", publishResp.Body.String())
 	}
 }
 

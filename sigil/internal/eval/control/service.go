@@ -150,9 +150,10 @@ func (s *Service) ListEvaluators(ctx context.Context, tenantID string, limit int
 
 func (s *Service) ListPredefinedEvaluators(ctx context.Context) []evalpkg.EvaluatorDefinition {
 	if s.templateStore != nil {
-		// Fall through to hardcoded templates on store error or empty result,
-		// so predefined evaluators are always available.
-		if items, err := s.listPredefinedFromTemplates(ctx); err == nil && len(items) > 0 {
+		expectedCount := len(predefined.Templates())
+		// Fall through to hardcoded templates on store error, empty result, or
+		// incomplete template data, so predefined evaluators are always available.
+		if items, err := s.listPredefinedFromTemplates(ctx); err == nil && len(items) == expectedCount {
 			return items
 		}
 	}
