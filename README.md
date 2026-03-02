@@ -143,12 +143,6 @@ Image publishing automation:
 - Trigger: pushes to `main` that touch `sigil/**` or workflow/go workspace files.
 - Published tags: `ghcr.io/grafana/sigil:<git-sha>` and `ghcr.io/grafana/sigil:latest`
 
-Plugin artifact publishing automation:
-
-- GitHub Actions workflow: `.github/workflows/plugins-push.yaml`
-- Pull requests: plugin CI only (`environment=none`).
-- Pushes to `main`: publish plugin artifact to `dev` only (`environment=dev`).
-
 Chart docs and reference:
 
 - Chart usage: [`charts/sigil/README.md`](charts/sigil/README.md)
