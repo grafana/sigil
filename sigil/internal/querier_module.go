@@ -117,10 +117,29 @@ func newQuerierModule(
 	}
 
 	var controlSvc *evalcontrol.Service
+	var templateSvc *evalcontrol.TemplateService
 	var ingestScoreSvc *evalingest.Service
 	if evalStore, ok := generationStore.(evalpkg.EvalStore); ok && evalStore != nil {
 		discovery := judges.DiscoverFromEnv()
-		controlSvc = evalcontrol.NewService(evalStore, judgeDiscoveryAdapter{discovery: discovery})
+
+		// Wire template store if the underlying storage supports it.
+		var controlOpts []evalcontrol.ServiceOption
+		var templateStore evalpkg.TemplateStore
+		if ts, ok := generationStore.(evalpkg.TemplateStore); ok {
+			templateStore = ts
+			if err := evalcontrol.BootstrapPredefinedTemplates(ctx, templateStore); err != nil {
+				_ = level.Warn(logger).Log("msg", "failed to bootstrap predefined templates", "err", err)
+			} else {
+				_ = level.Info(logger).Log("msg", "predefined templates bootstrapped")
+			}
+			controlOpts = append(controlOpts, evalcontrol.WithTemplateStore(templateStore))
+		}
+
+		controlSvc = evalcontrol.NewService(evalStore, judgeDiscoveryAdapter{discovery: discovery}, controlOpts...)
+
+		if templateStore != nil {
+			templateSvc = evalcontrol.NewTemplateService(templateStore, controlSvc)
+		}
 		scoreLookup := buildScoreGenerationLookup(walReader, blockMetadataStore, blockReader)
 		ingestScoreSvc = evalingest.NewService(evalStore, scoreLookup, false)
 
@@ -178,7 +197,7 @@ func newQuerierModule(
 				queryProxy,
 			)
 			server.RegisterSettingsRoutes(mux, tenantSettingsSvc, protectedMiddleware)
-			evalcontrol.RegisterHTTPRoutes(mux, controlSvc, protectedMiddleware)
+			evalcontrol.RegisterHTTPRoutes(mux, controlSvc, templateSvc, protectedMiddleware)
 			evalingest.RegisterHTTPRoutes(mux, ingestScoreSvc, protectedMiddleware)
 		})
 	}

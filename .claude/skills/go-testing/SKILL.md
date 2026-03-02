@@ -26,7 +26,7 @@ for _, tt := range tests {
         got, err := FunctionUnderTest(tt.input)
         if tt.wantErr != "" {
             if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-                t.Fatalf("expected error containing %q, got %v", tt.wantErr, err)
+                t.Errorf("expected error containing %q, got %v", tt.wantErr, err)
             }
             return
         }
@@ -34,7 +34,7 @@ for _, tt := range tests {
             t.Fatalf("unexpected error: %v", err)
         }
         if got != tt.want {
-            t.Fatalf("got %v, want %v", got, tt.want)
+            t.Errorf("got %v, want %v", got, tt.want)
         }
     })
 }
@@ -83,15 +83,24 @@ if len(store.GetCalls()) != 1 {
 
 **Generating mocks:**
 
+All `moq` commands run from the repo root. Paths are relative to the root, not the module.
+
 ```bash
-# Generate all mocks
+# Generate all mocks across all modules
 mise run generate:mocks
 
-# One-off (for experimentation, then add to the task)
-moq -rm -out ./sigil/internal/eval/control/mock_test.gen.go ./sigil/internal/eval/control controlStore
+# Generate mocks for a single module
+mise run generate:mocks:sigil
+mise run generate:mocks:plugin
+mise run generate:mocks:sdk-go
+mise run generate:mocks:sdk-go-providers
+mise run generate:mocks:sdk-go-frameworks
+
+# One-off example (then register in the module's mise task)
+moq -rm -out ./<module>/path/to/mock_test.gen.go ./<module>/path/to/package InterfaceName
 
 # Cross-package mock (set correct package with -pkg)
-moq -rm -pkg control -out ./sigil/internal/eval/control/mock_eval_test.gen.go ./sigil/internal/eval EvalStore
+moq -rm -pkg <consumer_pkg> -out ./<module>/path/to/mock_test.gen.go ./<module>/path/to/source SourceInterface
 ```
 
 **Naming convention:**
@@ -178,31 +187,62 @@ func newTestWALStore(t *testing.T) (*WALStore, func()) {
 
 ## Test Commands
 
-```bash
-# Run sigil module tests
-cd sigil && GOWORK=off go test ./...
+This is a monorepo with a `go.work` at the root and multiple Go modules:
 
-# Run specific package
+| Module | Path |
+|---|---|
+| sigil (server) | `sigil/` |
+| Grafana plugin | `apps/plugin/` |
+| Go SDK | `sdks/go/` |
+| Go SDK providers | `sdks/go-providers/{anthropic,gemini,openai}/` |
+| Go SDK frameworks | `sdks/go-frameworks/google-adk/` |
+| devex emitter | `sdks/go/cmd/devex-emitter/` |
+
+Use `GOWORK=off` when running tests inside a single module to avoid cross-module interference.
+
+```bash
+# Run tests for a specific module (cd into the module, disable workspace)
+cd sigil && GOWORK=off go test ./...
+cd sdks/go && GOWORK=off go test ./...
+cd apps/plugin && GOWORK=off go test ./...
+
+# Run a specific package within a module
 cd sigil && GOWORK=off go test ./internal/eval/control/... -count=1
 
-# Run specific test
+# Run a specific test
 cd sigil && GOWORK=off go test ./internal/eval/control/... -run TestSpecificFunction -v
+```
 
-# Run all project tests (Go, TS, Helm, SDKs)
-mise run test
+### mise Tasks
 
-# Generate mocks
-mise run generate:mocks
+```bash
+# Quality gates
+mise run check              # lint + typecheck + tests (all languages)
+mise run test               # all project tests (Go, TS, Helm, SDKs)
+mise run lint               # Go, TS, Helm, .NET linting
+mise run format             # format Go and TypeScript
+mise run format:check       # verify formatting without modifying
 
-# Run storage benchmarks
-mise run bench:storage
+# Go-specific
+mise run test:go:all-modules   # go test across all Go SDK modules
+mise run test:coverage:go      # Go tests with coverage report
+mise run bench:storage         # WAL, object, compactor, fan-out benchmarks
+mise run generate:mocks        # generate mock implementations
+mise run generate              # generate all code (mocks, etc.)
+
+# Individual Go SDK modules
+mise run test:go:sdk-core      # Go SDK core
+mise run test:go:sdk-anthropic # Anthropic provider
+mise run test:go:sdk-openai    # OpenAI provider
+mise run test:go:sdk-gemini    # Gemini provider
+mise run test:go:sdk-google-adk # Google ADK framework
 ```
 
 ## The Design Rule
 
 **If mocking code is more complex than production code, the abstraction needs work.** Accept interfaces, return structs. Define small 1-3 method interfaces at the consumer.
 
-## Quick Reference
+## Quick Reference: Go Testing
 
 | Need | Use |
 |---|---|
@@ -214,5 +254,7 @@ mise run bench:storage
 | Database tests | testcontainers MySQL (`newTestWALStore`) |
 | Temp files | `t.TempDir()` |
 | Teardown | `t.Cleanup(func() { ... })` |
-| Run tests | `cd sigil && GOWORK=off go test ./...` |
+| Run module tests | `cd <module> && GOWORK=off go test ./...` |
+| Run all tests | `mise run test` |
+| Full quality gate | `mise run check` |
 | Generate mocks | `mise run generate:mocks` |
