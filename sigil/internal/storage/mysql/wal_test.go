@@ -293,6 +293,7 @@ func TestSaveBatchWithEvalHookPersistsEnqueueEventAndSignalsHook(t *testing.T) {
 		t.Fatalf("auto migrate: %v", err)
 	}
 
+	store.SetEvalEnqueueEnabled(true)
 	hook := &recordingEvalHook{}
 	store.SetEvalHook(hook)
 
@@ -507,6 +508,7 @@ func TestSaveBatchWithoutEvalHookPersistsEnqueueEvent(t *testing.T) {
 	if err := store.AutoMigrate(context.Background()); err != nil {
 		t.Fatalf("auto migrate: %v", err)
 	}
+	store.SetEvalEnqueueEnabled(true)
 
 	generation := testGeneration("gen-hook-disabled", "conv-hook-disabled", time.Date(2026, 2, 12, 18, 0, 0, 0, time.UTC))
 	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{generation}))

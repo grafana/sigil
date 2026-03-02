@@ -28,7 +28,7 @@ func NewWALStore(dsn string) (*WALStore, error) {
 	return &WALStore{
 		db:                db,
 		logger:            slog.Default(),
-		evalEnqueueEnable: true,
+		evalEnqueueEnable: false,
 	}, nil
 }
 

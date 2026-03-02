@@ -67,6 +67,10 @@ func (s *WALStore) SaveBatch(ctx context.Context, tenantID string, generations [
 		}
 
 		txErr := runWithRetryableLockError(ctx, func() error {
+			generationRow.ID = 0
+			if convRow != nil {
+				convRow.ID = 0
+			}
 			return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 				if err := tx.Create(&generationRow).Error; err != nil {
 					return wrapPersistError(err)
