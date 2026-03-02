@@ -26,7 +26,7 @@ jest.mock('@grafana/ui', () => {
 
 type MockConversationsDataSource = {
   [Key in keyof Required<ConversationsDataSource>]: jest.MockedFunction<Required<ConversationsDataSource>[Key]>;
-}
+};
 
 function buildSearchResponse(
   conversations: ConversationSearchResponse['conversations'],
