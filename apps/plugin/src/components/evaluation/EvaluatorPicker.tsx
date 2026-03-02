@@ -2,7 +2,12 @@ import React from 'react';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
 import { Badge, IconButton, Select, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
-import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type Evaluator } from '../../evaluation/types';
+import {
+  EVALUATOR_KIND_LABELS,
+  formatEvaluatorId,
+  getKindBadgeColor,
+  type Evaluator,
+} from '../../evaluation/types';
 
 export type EvaluatorPickerProps = {
   value: string[];
@@ -10,13 +15,6 @@ export type EvaluatorPickerProps = {
   onChange: (ids: string[]) => void;
   disabled?: boolean;
 };
-
-function formatEvaluatorId(id: string): string {
-  if (id.startsWith('sigil.')) {
-    return id.slice(6);
-  }
-  return id;
-}
 
 const getStyles = (theme: GrafanaTheme2) => ({
   chips: css({

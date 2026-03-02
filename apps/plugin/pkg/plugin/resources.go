@@ -277,7 +277,7 @@ func (a *App) handleEvalPredefinedEvaluators(w http.ResponseWriter, req *http.Re
 
 func (a *App) handleEvalPredefinedFork(w http.ResponseWriter, req *http.Request) {
 	id := strings.TrimPrefix(req.URL.Path, "/eval/predefined/evaluators/")
-	if id == "" || !strings.HasSuffix(id, ":fork") {
+	if id == "" || strings.Contains(id, "/") || !strings.HasSuffix(id, ":fork") {
 		http.Error(w, "invalid predefined evaluator fork path", http.StatusBadRequest)
 		return
 	}

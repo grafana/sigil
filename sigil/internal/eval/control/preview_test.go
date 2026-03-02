@@ -262,6 +262,60 @@ func (m *mockPreviewStore) ListRecentGenerations(_ context.Context, _ string, _ 
 	return m.rows[:limit], nil
 }
 
+func TestTruncateWithEllipsisUTF8(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		maxLen int
+		want   string
+	}{
+		{
+			name:   "ascii within limit",
+			input:  "hello",
+			maxLen: 10,
+			want:   "hello",
+		},
+		{
+			name:   "ascii truncated",
+			input:  "hello world",
+			maxLen: 8,
+			want:   "hello...",
+		},
+		{
+			name:   "multibyte within limit",
+			input:  "你好世界",
+			maxLen: 10,
+			want:   "你好世界",
+		},
+		{
+			name:   "multibyte truncated preserves rune boundary",
+			input:  "你好世界再见",
+			maxLen: 5,
+			want:   "你好...",
+		},
+		{
+			name:   "emoji truncated preserves rune boundary",
+			input:  "👋🌍🎉✨🚀🎯",
+			maxLen: 5,
+			want:   "👋🌍...",
+		},
+		{
+			name:   "maxLen 3 returns ellipsis-length slice",
+			input:  "abcdef",
+			maxLen: 3,
+			want:   "abc",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := truncateWithEllipsis(tt.input, tt.maxLen)
+			if got != tt.want {
+				t.Fatalf("truncateWithEllipsis(%q, %d) = %q, want %q", tt.input, tt.maxLen, got, tt.want)
+			}
+		})
+	}
+}
+
 func strPtr(s string) *string {
 	return &s
 }

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	"github.com/grafana/sigil/sigil/internal/eval/predefined"
@@ -515,7 +516,7 @@ func inputPreviewFromGeneration(generation *sigilv1.Generation) string {
 			t := strings.TrimSpace(part.GetText())
 			if t != "" {
 				b.WriteString(t)
-				if b.Len() >= inputPreviewMaxLen {
+				if utf8.RuneCountInString(b.String()) >= inputPreviewMaxLen {
 					return truncateWithEllipsis(b.String(), inputPreviewMaxLen)
 				}
 			}
@@ -525,13 +526,13 @@ func inputPreviewFromGeneration(generation *sigilv1.Generation) string {
 }
 
 func truncateWithEllipsis(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	if utf8.RuneCountInString(s) <= maxLen {
 		return s
 	}
 	if maxLen <= 3 {
-		return s[:maxLen]
+		return string([]rune(s)[:maxLen])
 	}
-	return s[:maxLen-3] + "..."
+	return string([]rune(s)[:maxLen-3]) + "..."
 }
 
 func validateEvaluator(evaluator *evalpkg.EvaluatorDefinition) error {

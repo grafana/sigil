@@ -2,19 +2,17 @@ import React from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, Button, Stack, Text, useStyles2 } from '@grafana/ui';
-import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type Evaluator } from '../../evaluation/types';
+import {
+  EVALUATOR_KIND_LABELS,
+  formatEvaluatorId,
+  getKindBadgeColor,
+  type Evaluator,
+} from '../../evaluation/types';
 
 export type EvaluatorTemplateCardProps = {
   evaluator: Evaluator;
   onFork?: (evaluatorID: string) => void;
 };
-
-function formatEvaluatorId(id: string): string {
-  if (id.startsWith('sigil.')) {
-    return id.slice(6);
-  }
-  return id;
-}
 
 const getStyles = (theme: GrafanaTheme2) => ({
   card: css({

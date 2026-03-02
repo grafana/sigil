@@ -158,6 +158,13 @@ export const EVALUATOR_KIND_LABELS: Record<EvaluatorKind, string> = {
   heuristic: 'Heuristic',
 };
 
+export function formatEvaluatorId(id: string): string {
+  if (id.startsWith('sigil.')) {
+    return id.slice(6);
+  }
+  return id;
+}
+
 export function getKindBadgeColor(kind: EvaluatorKind): 'blue' | 'green' | 'orange' | 'purple' {
   switch (kind) {
     case 'llm_judge':
