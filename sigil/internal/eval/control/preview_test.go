@@ -316,6 +316,78 @@ func TestTruncateWithEllipsisUTF8(t *testing.T) {
 	}
 }
 
+func TestInputPreviewFromGeneration(t *testing.T) {
+	tests := []struct {
+		name string
+		gen  *sigilv1.Generation
+		want string
+	}{
+		{
+			name: "nil generation",
+			gen:  nil,
+			want: "",
+		},
+		{
+			name: "single short message",
+			gen: &sigilv1.Generation{
+				Input: []*sigilv1.Message{{
+					Parts: []*sigilv1.Part{{Payload: &sigilv1.Part_Text{Text: "hello"}}},
+				}},
+			},
+			want: "hello",
+		},
+		{
+			name: "multiple parts joined by newline",
+			gen: &sigilv1.Generation{
+				Input: []*sigilv1.Message{
+					{Parts: []*sigilv1.Part{{Payload: &sigilv1.Part_Text{Text: "first"}}}},
+					{Parts: []*sigilv1.Part{{Payload: &sigilv1.Part_Text{Text: "second"}}}},
+				},
+			},
+			want: "first\nsecond",
+		},
+		{
+			name: "long input truncated at 200 runes",
+			gen: &sigilv1.Generation{
+				Input: []*sigilv1.Message{{
+					Parts: []*sigilv1.Part{{Payload: &sigilv1.Part_Text{Text: strings.Repeat("a", 250)}}},
+				}},
+			},
+			want: strings.Repeat("a", 197) + "...",
+		},
+		{
+			name: "multibyte runes counted correctly",
+			gen: &sigilv1.Generation{
+				Input: []*sigilv1.Message{{
+					Parts: []*sigilv1.Part{{Payload: &sigilv1.Part_Text{Text: strings.Repeat("你", 250)}}},
+				}},
+			},
+			want: strings.Repeat("你", 197) + "...",
+		},
+		{
+			name: "whitespace-only parts skipped",
+			gen: &sigilv1.Generation{
+				Input: []*sigilv1.Message{{
+					Parts: []*sigilv1.Part{
+						{Payload: &sigilv1.Part_Text{Text: "  "}},
+						{Payload: &sigilv1.Part_Text{Text: "content"}},
+					},
+				}},
+			},
+			want: "content",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := inputPreviewFromGeneration(tt.gen)
+			if got != tt.want {
+				t.Fatalf("inputPreviewFromGeneration() = %q (len %d runes), want %q (len %d runes)",
+					got, len([]rune(got)), tt.want, len([]rune(tt.want)))
+			}
+		})
+	}
+}
+
 func strPtr(s string) *string {
 	return &s
 }

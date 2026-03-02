@@ -1,12 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Alert, Button, Spinner, Stack, Text, useStyles2 } from '@grafana/ui';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
-import type { Evaluator, Rule } from '../evaluation/types';
 import PipelineCard from '../components/evaluation/PipelineCard';
+import { useEvalRulesData } from '../hooks/useEvalRulesData';
 
 const EVAL_RULES_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}/rules`;
 
@@ -51,65 +51,8 @@ export default function RulesPage(props: RulesPageProps) {
   const styles = useStyles2(getStyles);
   const navigate = useNavigate();
 
-  const [rules, setRules] = useState<Rule[]>([]);
-  const [evaluators, setEvaluators] = useState<Evaluator[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState('');
-  const requestVersion = useRef(0);
-
-  useEffect(() => {
-    requestVersion.current += 1;
-    const version = requestVersion.current;
-
-    queueMicrotask(() => {
-      if (requestVersion.current !== version) {
-        return;
-      }
-      setLoading(true);
-      setErrorMessage('');
-    });
-
-    Promise.all([dataSource.listRules(), dataSource.listEvaluators(), dataSource.listPredefinedEvaluators()])
-      .then(([rulesRes, evaluatorsRes, predefinedRes]) => {
-        if (requestVersion.current !== version) {
-          return;
-        }
-        setRules(rulesRes.items);
-        setEvaluators([...evaluatorsRes.items, ...predefinedRes.items]);
-      })
-      .catch((err) => {
-        if (requestVersion.current !== version) {
-          return;
-        }
-        setErrorMessage(err instanceof Error ? err.message : 'Failed to load rules');
-        setRules([]);
-        setEvaluators([]);
-      })
-      .finally(() => {
-        if (requestVersion.current !== version) {
-          return;
-        }
-        setLoading(false);
-      });
-  }, [dataSource]);
-
-  const handleToggle = async (ruleID: string, enabled: boolean) => {
-    try {
-      const updated = await dataSource.updateRule(ruleID, { enabled });
-      setRules((prev) => prev.map((r) => (r.rule_id === ruleID ? updated : r)));
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to update rule');
-    }
-  };
-
-  const handleDelete = async (ruleID: string) => {
-    try {
-      await dataSource.deleteRule(ruleID);
-      setRules((prev) => prev.filter((r) => r.rule_id !== ruleID));
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to delete rule');
-    }
-  };
+  const { rules, evaluators, loading, errorMessage, setErrorMessage, handleToggle, handleDelete } =
+    useEvalRulesData(dataSource);
 
   const handleClick = (ruleID: string) => {
     navigate(`${EVAL_RULES_BASE}/${ruleID}`);

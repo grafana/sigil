@@ -508,6 +508,7 @@ func inputPreviewFromGeneration(generation *sigilv1.Generation) string {
 		return ""
 	}
 	var b strings.Builder
+	runeCount := 0
 	for _, msg := range generation.GetInput() {
 		if msg == nil {
 			continue
@@ -520,9 +521,11 @@ func inputPreviewFromGeneration(generation *sigilv1.Generation) string {
 			if t != "" {
 				if b.Len() > 0 {
 					b.WriteString("\n")
+					runeCount++
 				}
 				b.WriteString(t)
-				if utf8.RuneCountInString(b.String()) >= inputPreviewMaxLen {
+				runeCount += utf8.RuneCountInString(t)
+				if runeCount >= inputPreviewMaxLen {
 					return truncateWithEllipsis(b.String(), inputPreviewMaxLen)
 				}
 			}
