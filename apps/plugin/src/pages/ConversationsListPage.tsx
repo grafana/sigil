@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Alert, Text, useStyles2 } from '@grafana/ui';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
 import type { ConversationSearchResult } from '../conversation/types';
 import { buildConversationDetailRoute } from '../constants';
@@ -343,15 +343,44 @@ export type ConversationsListPageProps = {
 export default function ConversationsListPage(props: ConversationsListPageProps) {
   const dataSource = props.dataSource ?? defaultConversationsDataSource;
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const styles = useStyles2(getStyles);
 
   const [conversations, setConversations] = useState<ConversationSearchResult[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [viewMode, setViewMode] = useState<ChartViewMode>('llm_calls');
-  const [selectedBucketKey, setSelectedBucketKey] = useState<string>('');
-
+  const [fallbackSelectedBucketKey, setFallbackSelectedBucketKey] = useState<string>(searchParams.get('selection') ?? '');
   const requestVersionRef = useRef<number>(0);
+  const previousViewModeRef = useRef<ChartViewMode>(viewMode);
+  const canUseRouterSearchParamUpdates = typeof Request !== 'undefined';
+  const selectedBucketKey = canUseRouterSearchParamUpdates ? (searchParams.get('selection') ?? '') : fallbackSelectedBucketKey;
+
+  const setSelectedBucketKey = useCallback(
+    (nextSelectionKey: string) => {
+      if (!canUseRouterSearchParamUpdates) {
+        setFallbackSelectedBucketKey(nextSelectionKey);
+        const nextSearchParams = new URLSearchParams(searchParams);
+        if (nextSelectionKey.length === 0) {
+          nextSearchParams.delete('selection');
+        } else {
+          nextSearchParams.set('selection', nextSelectionKey);
+        }
+        const nextQuery = nextSearchParams.toString();
+        const nextURL = `${window.location.pathname}${nextQuery.length > 0 ? `?${nextQuery}` : ''}${window.location.hash}`;
+        window.history.replaceState(window.history.state, '', nextURL);
+        return;
+      }
+      const nextSearchParams = new URLSearchParams(searchParams);
+      if (nextSelectionKey.length === 0) {
+        nextSearchParams.delete('selection');
+      } else {
+        nextSearchParams.set('selection', nextSelectionKey);
+      }
+      setSearchParams(nextSearchParams, { replace: true });
+    },
+    [canUseRouterSearchParamUpdates, searchParams, setSearchParams]
+  );
 
   const loadConversations = useCallback(
     async (): Promise<void> => {
@@ -385,14 +414,12 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
             annotation_count: 0,
           }))
         );
-        setSelectedBucketKey('');
       } catch (error) {
         if (requestVersionRef.current !== requestVersion) {
           return;
         }
         setErrorMessage(error instanceof Error ? error.message : 'failed to load conversations');
         setConversations([]);
-        setSelectedBucketKey('');
       } finally {
         if (requestVersionRef.current !== requestVersion) {
           return;
@@ -408,8 +435,12 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
   }, [loadConversations]);
 
   useEffect(() => {
+    if (previousViewModeRef.current === viewMode) {
+      return;
+    }
+    previousViewModeRef.current = viewMode;
     setSelectedBucketKey('');
-  }, [viewMode]);
+  }, [setSelectedBucketKey, viewMode]);
 
   const activityBuckets = useMemo(
     () => (viewMode === 'time' ? buildTimeBuckets(conversations) : buildLLMCallBuckets(conversations)),
@@ -417,13 +448,16 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
   );
 
   useEffect(() => {
+    if (loading) {
+      return;
+    }
     if (selectedBucketKey.length === 0) {
       return;
     }
     if (!activityBuckets.some((bucket) => bucket.key === selectedBucketKey)) {
       setSelectedBucketKey('');
     }
-  }, [activityBuckets, selectedBucketKey]);
+  }, [activityBuckets, loading, selectedBucketKey, setSelectedBucketKey]);
 
   const selectedBucket = useMemo(
     () => activityBuckets.find((bucket) => bucket.key === selectedBucketKey),
