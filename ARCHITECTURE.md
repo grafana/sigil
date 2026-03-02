@@ -75,18 +75,9 @@ Framework contract defaults:
 
 ### SDK metrics
 
-SDKs emit four OTel histogram instruments alongside traces:
+SDKs emit four OTel histogram instruments alongside traces: `gen_ai.client.operation.duration`, `gen_ai.client.token.usage`, `gen_ai.client.time_to_first_token`, and `gen_ai.client.tool_calls_per_operation`. These metrics get collector-enriched infrastructure labels (namespace, cluster, service) automatically.
 
-- `gen_ai.client.operation.duration` (seconds): latency histogram for generation, embedding, and tool operations.
-  - Attributes: `gen_ai.operation.name` (`generateText` | `streamText` | `embeddings` | `execute_tool`), `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.agent.name`, `error.type`, `error.category`.
-- `gen_ai.client.token.usage` (tokens): token count histogram per operation, split by token type.
-  - Attributes: `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.agent.name`, `gen_ai.token.type` (`input` | `output` | `cache_read` | `cache_write` | `cache_creation` | `reasoning`).
-- `gen_ai.client.time_to_first_token` (seconds): TTFT histogram for streaming operations.
-  - Attributes: `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.agent.name`.
-- `gen_ai.client.tool_calls_per_operation` (count): tool call count distribution per generation.
-  - Attributes: `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.agent.name`.
-
-These metrics get collector-enriched infrastructure labels (namespace, cluster, service) automatically.
+Full instrument definitions, units, and per-recording attributes: `docs/references/semantic-conventions.md`.
 
 ### Embedding call observability
 
@@ -540,7 +531,7 @@ See `docs/references/grafana-query-response-shapes.md`.
 - `sigil/internal/storage/mysql`: hot metadata/index/payload access.
 - `sigil/internal/storage/object`: compacted payload access.
   - implementation should wrap Thanos `objstore` primitives.
-- `sdks/*`: OTel traces, OTel metrics (`gen_ai.client.operation.duration`, `gen_ai.client.token.usage`, `gen_ai.client.time_to_first_token`, `gen_ai.client.tool_calls_per_operation`), and structured generation export.
+- `sdks/*`: OTel traces, OTel metrics (see `docs/references/semantic-conventions.md`), and structured generation export.
 - Alloy / OTel Collector: OTLP receiver, infrastructure enrichment, trace forwarding to Tempo, metric forwarding to Prometheus.
 
 ### Runtime targets
