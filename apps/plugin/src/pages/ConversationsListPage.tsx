@@ -18,6 +18,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: theme.spacing(2),
     minHeight: 0,
   }),
+  titleContainer: css({
+    padding: theme.spacing(3, 2, 0, 2),
+  }),
   listContainer: css({
     minHeight: 0,
     flex: 1,
@@ -104,7 +107,9 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
 
   return (
     <div className={styles.pageContainer}>
-      <Text element="h2">Conversations</Text>
+      <div className={styles.titleContainer}>
+        <Text element="h2">Conversations</Text>
+      </div>
 
       {errorMessage.length > 0 && (
         <Alert severity="error" title="Conversation query failed">
@@ -112,17 +117,19 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
         </Alert>
       )}
 
-      <div className={styles.listContainer}>
-        <ConversationListPanel
-          conversations={conversations}
-          selectedConversationId=""
-          loading={loading}
-          hasMore={hasMore && nextCursor.length > 0}
-          loadingMore={loadingMore}
-          onSelectConversation={(conversationID) => navigate(`/${buildConversationDetailRoute(conversationID)}`)}
-          onLoadMore={() => void loadConversations(nextCursor, true)}
-        />
-      </div>
+      {(errorMessage.length === 0 || conversations.length > 0) && (
+        <div className={styles.listContainer}>
+          <ConversationListPanel
+            conversations={conversations}
+            selectedConversationId=""
+            loading={loading}
+            hasMore={hasMore && nextCursor.length > 0}
+            loadingMore={loadingMore}
+            onSelectConversation={(conversationID) => navigate(`/${buildConversationDetailRoute(conversationID)}`)}
+            onLoadMore={() => void loadConversations(nextCursor, true)}
+          />
+        </div>
+      )}
     </div>
   );
 }
