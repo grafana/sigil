@@ -256,10 +256,12 @@ func TestSaveBatchRetriesOnDeadlock(t *testing.T) {
 			return
 		}
 		if injected.CompareAndSwap(0, 1) {
-			tx.AddError(&mysqlDriver.MySQLError{
+			if err := tx.AddError(&mysqlDriver.MySQLError{
 				Number:  1213,
 				Message: "Deadlock found when trying to get lock; try restarting transaction",
-			})
+			}); err == nil {
+				t.Error("expected deadlock error to be recorded on transaction")
+			}
 		}
 	}); err != nil {
 		t.Fatalf("register deadlock callback: %v", err)
