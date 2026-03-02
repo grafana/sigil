@@ -166,7 +166,12 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
 
         {forkTemplateID != null && (
           <Stack direction="column" gap={2}>
-            <ForkEvaluatorForm templateID={forkTemplateID} onSubmit={handleForkSubmit} onCancel={handleForkCancel} />
+            <ForkEvaluatorForm
+              templateID={forkTemplateID}
+              onSubmit={handleForkSubmit}
+              onCancel={handleForkCancel}
+              dataSource={dataSource}
+            />
           </Stack>
         )}
       </div>

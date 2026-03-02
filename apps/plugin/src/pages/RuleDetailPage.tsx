@@ -74,7 +74,7 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
   const [ruleIDInput, setRuleIDInput] = useState('');
   const [selector, setSelector] = useState<RuleSelector>('user_visible_turn');
   const [match, setMatch] = useState<Record<string, string | string[]>>({});
-  const [sampleRate, setSampleRate] = useState(0.1);
+  const [sampleRate, setSampleRate] = useState(0.01);
   const [evaluatorIDs, setEvaluatorIDs] = useState<string[]>([]);
   const [enabled, setEnabled] = useState(true);
   const [availableEvaluators, setAvailableEvaluators] = useState<Evaluator[]>([]);
@@ -100,7 +100,7 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
       setRuleIDInput('');
       setSelector('user_visible_turn');
       setMatch({});
-      setSampleRate(0.1);
+      setSampleRate(0.01);
       setEvaluatorIDs([]);
       setEnabled(true);
       setLoading(false);

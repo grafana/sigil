@@ -1,26 +1,39 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { SelectableValue } from '@grafana/data';
 import { Button, Field, FieldSet, Input, Select, Stack } from '@grafana/ui';
+import type { EvaluationDataSource } from '../../evaluation/api';
 import type { ForkEvaluatorRequest } from '../../evaluation/types';
 
 export type ForkEvaluatorFormProps = {
   templateID: string;
   onSubmit: (req: ForkEvaluatorRequest) => void;
   onCancel: () => void;
+  dataSource: Pick<EvaluationDataSource, 'listJudgeProviders' | 'listJudgeModels'>;
 };
 
-const PROVIDER_OPTIONS: Array<SelectableValue<string>> = [
-  { label: 'OpenAI', value: 'openai' },
-  { label: 'Anthropic', value: 'anthropic' },
-  { label: 'Azure', value: 'azure' },
-  { label: 'OpenRouter', value: 'openrouter' },
-];
-
-export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel }: ForkEvaluatorFormProps) {
+export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel, dataSource }: ForkEvaluatorFormProps) {
   const [evaluatorId, setEvaluatorId] = useState('');
   const [provider, setProvider] = useState<string | null>(null);
   const [model, setModel] = useState('');
   const [touched, setTouched] = useState(false);
+  const [providerOptions, setProviderOptions] = useState<Array<SelectableValue<string>>>([]);
+  const [modelOptions, setModelOptions] = useState<Array<SelectableValue<string>>>([]);
+
+  useEffect(() => {
+    void dataSource.listJudgeProviders().then((res) => {
+      setProviderOptions(res.providers.map((p) => ({ label: p.name, value: p.id })));
+    });
+  }, [dataSource]);
+
+  useEffect(() => {
+    if (provider == null || provider === '') {
+      setModelOptions([]);
+      return;
+    }
+    void dataSource.listJudgeModels(provider).then((res) => {
+      setModelOptions(res.models.map((m) => ({ label: m.name, value: m.id })));
+    });
+  }, [dataSource, provider]);
 
   const isIdEmpty = evaluatorId.trim() === '';
   const showIdError = touched && isIdEmpty;
@@ -65,7 +78,7 @@ export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel }: Fo
       </Field>
       <Field label="Provider override" description="Optional. Override the LLM provider for llm_judge evaluators.">
         <Select<string>
-          options={PROVIDER_OPTIONS}
+          options={providerOptions}
           value={provider}
           onChange={(v) => setProvider(v?.value ?? null)}
           isClearable
@@ -74,7 +87,15 @@ export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel }: Fo
         />
       </Field>
       <Field label="Model override" description="Optional. Override the model for llm_judge evaluators.">
-        <Input value={model} onChange={(e) => setModel(e.currentTarget.value)} placeholder="e.g. gpt-4o" width={40} />
+        <Select<string>
+          options={modelOptions}
+          value={model || null}
+          onChange={(v) => setModel(v?.value ?? '')}
+          isClearable
+          allowCustomValue
+          placeholder="e.g. gpt-4o"
+          width={40}
+        />
       </Field>
       <Stack direction="row" gap={1}>
         <Button onClick={handleSubmit}>Fork</Button>
