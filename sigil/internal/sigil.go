@@ -15,7 +15,6 @@ import (
 	evalworker "github.com/grafana/sigil/sigil/internal/eval/worker"
 	"github.com/grafana/sigil/sigil/internal/modelcards"
 	"github.com/grafana/sigil/sigil/internal/storage/mysql"
-	"github.com/grafana/sigil/sigil/internal/storage/object"
 )
 
 type Runtime struct {
@@ -165,26 +164,6 @@ func (r *Runtime) initCompactorModule() (services.Service, error) {
 		blockStore,
 		walStore,
 	), nil
-}
-
-func newBlockStorePlaceholder(cfg config.ObjectStoreConfig) *object.Store {
-	backend := strings.ToLower(strings.TrimSpace(cfg.Backend))
-	switch backend {
-	case "gcs":
-		bucket := strings.TrimSpace(cfg.GCS.Bucket)
-		if bucket == "" {
-			bucket = strings.TrimSpace(cfg.Bucket)
-		}
-		return object.NewStore("gcs://"+bucket, bucket)
-	case "azure":
-		container := strings.TrimSpace(cfg.Azure.ContainerName)
-		if container == "" {
-			container = strings.TrimSpace(cfg.Bucket)
-		}
-		return object.NewStore("azure://"+container, container)
-	default:
-		return object.NewStore(cfg.S3.Endpoint, cfg.Bucket)
-	}
 }
 
 func (r *Runtime) initCatalogSyncModule() (services.Service, error) {

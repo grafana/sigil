@@ -187,41 +187,6 @@ func TestRuntimeCompactorTargetFailsWhenObjectStoreBootstrapFails(t *testing.T) 
 	}
 }
 
-func TestNewBlockStorePlaceholderBackendMapping(t *testing.T) {
-	s3 := newBlockStorePlaceholder(config.ObjectStoreConfig{
-		Backend: "s3",
-		Bucket:  "sigil-s3",
-		S3: config.ObjectStoreS3Config{
-			Endpoint: "http://minio:9000",
-		},
-	})
-	if s3.Endpoint() != "http://minio:9000" || s3.Bucket() != "sigil-s3" {
-		t.Fatalf("unexpected s3 placeholder endpoint=%q bucket=%q", s3.Endpoint(), s3.Bucket())
-	}
-
-	gcs := newBlockStorePlaceholder(config.ObjectStoreConfig{
-		Backend: "gcs",
-		Bucket:  "fallback-bucket",
-		GCS: config.ObjectStoreGCSConfig{
-			Bucket: "sigil-gcs",
-		},
-	})
-	if gcs.Endpoint() != "gcs://sigil-gcs" || gcs.Bucket() != "sigil-gcs" {
-		t.Fatalf("unexpected gcs placeholder endpoint=%q bucket=%q", gcs.Endpoint(), gcs.Bucket())
-	}
-
-	azure := newBlockStorePlaceholder(config.ObjectStoreConfig{
-		Backend: "azure",
-		Bucket:  "fallback-container",
-		Azure: config.ObjectStoreAzureConfig{
-			ContainerName: "sigil-azure",
-		},
-	})
-	if azure.Endpoint() != "azure://sigil-azure" || azure.Bucket() != "sigil-azure" {
-		t.Fatalf("unexpected azure placeholder endpoint=%q bucket=%q", azure.Endpoint(), azure.Bucket())
-	}
-}
-
 func runRuntime(t *testing.T, cfg config.Config) (func(), <-chan error) {
 	t.Helper()
 

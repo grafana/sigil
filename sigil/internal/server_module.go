@@ -139,10 +139,6 @@ func (m *serverModule) pushRunError(err error) {
 	}
 }
 
-func (m *serverModule) buildGenerationStore(ctx context.Context) (generationingest.Store, error) {
-	return buildGenerationStore(ctx, m.cfg, shouldAutoMigrateGenerationStoreTarget(m.cfg.Target))
-}
-
 func shouldAutoMigrateGenerationStoreTarget(target string) bool {
 	switch strings.TrimSpace(strings.ToLower(target)) {
 	case config.TargetAll, config.TargetIngester:
@@ -168,10 +164,6 @@ func buildGenerationStore(ctx context.Context, cfg config.Config, autoMigrate bo
 	default:
 		return nil, fmt.Errorf("unsupported storage backend %q", cfg.StorageBackend)
 	}
-}
-
-func (m *serverModule) buildFeedbackStore(generationStore generationingest.Store) (feedback.Store, error) {
-	return buildFeedbackStore(m.cfg.StorageBackend, generationStore)
 }
 
 func buildFeedbackStore(storageBackend string, generationStore generationingest.Store) (feedback.Store, error) {

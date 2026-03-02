@@ -18,15 +18,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func TestServerModuleBuildGenerationStoreRejectsMemoryBackend(t *testing.T) {
-	module := serverModule{
-		cfg: config.Config{
-			Target:         config.TargetServer,
-			StorageBackend: "memory",
-		},
-	}
-
-	_, err := module.buildGenerationStore(context.Background())
+func TestBuildGenerationStoreRejectsMemoryBackend(t *testing.T) {
+	_, err := buildGenerationStore(context.Background(), config.Config{
+		Target:         config.TargetServer,
+		StorageBackend: "memory",
+	}, shouldAutoMigrateGenerationStoreTarget(config.TargetServer))
 	if err == nil {
 		t.Fatalf("expected unsupported backend error")
 	}
@@ -35,12 +31,8 @@ func TestServerModuleBuildGenerationStoreRejectsMemoryBackend(t *testing.T) {
 	}
 }
 
-func TestServerModuleBuildFeedbackStoreRejectsNonFeedbackStore(t *testing.T) {
-	module := serverModule{
-		cfg: config.Config{StorageBackend: "mysql"},
-	}
-
-	_, err := module.buildFeedbackStore(generationingest.NewMemoryStore())
+func TestBuildFeedbackStoreRejectsNonFeedbackStore(t *testing.T) {
+	_, err := buildFeedbackStore("mysql", generationingest.NewMemoryStore())
 	if err == nil {
 		t.Fatalf("expected feedback store compatibility error")
 	}
