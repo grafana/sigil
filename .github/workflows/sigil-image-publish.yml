@@ -1,0 +1,56 @@
+name: Sigil Image - CI / CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - sigil/**
+      - go.work
+      - go.work.sum
+      - .github/workflows/sigil-image-publish.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Build and push image
+    if: github.repository == 'grafana/sigil'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Login to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+
+      - name: Build and push image
+        env:
+          BUILDER_NAME: ${{ steps.buildx.outputs.name }}
+          IMAGE_REPOSITORY: ghcr.io/grafana/sigil
+          IMAGE_TAG_SHA: ${{ github.sha }}
+        run: |
+          docker buildx build \
+            --builder "$BUILDER_NAME" \
+            --platform linux/amd64,linux/arm64 \
+            --file ./sigil/Dockerfile \
+            --tag "$IMAGE_REPOSITORY:$IMAGE_TAG_SHA" \
+            --tag "$IMAGE_REPOSITORY:latest" \
+            --cache-from "type=registry,ref=$IMAGE_REPOSITORY:buildcache" \
+            --cache-to "type=registry,ref=$IMAGE_REPOSITORY:buildcache,mode=max" \
+            --push \
+            ./sigil
