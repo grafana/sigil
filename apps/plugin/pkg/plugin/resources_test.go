@@ -350,6 +350,50 @@ func TestCallResourceSupportsProxyPrometheusPostPassThrough(t *testing.T) {
 	}
 }
 
+func TestCallResourceProxyFallsBackToForwardedAuthWhenServiceAccountMissing(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/datasources/uid/prometheus/resources/api/v1/query":
+			if got := r.Header.Get("Authorization"); got != "Bearer user-token" {
+				http.Error(w, "missing forwarded authorization", http.StatusUnauthorized)
+				return
+			}
+			_, _ = io.WriteString(w, `{"status":"success"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.grafanaAppURL = upstream.URL
+	app.prometheusDatasourceUID = "prometheus"
+	app.grafanaServiceAccountToken = ""
+
+	var sender mockCallResourceResponseSender
+	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "query/proxy/prometheus/api/v1/query",
+		Headers: map[string][]string{
+			"Authorization": {"Bearer user-token"},
+		},
+	}, &sender)
+	if err != nil {
+		t.Fatalf("CallResource error: %s", err)
+	}
+	if sender.response == nil {
+		t.Fatal("no response received from CallResource")
+	}
+	if sender.response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.response.Status, sender.response.Body)
+	}
+}
+
 func TestCallResourceSupportsConversationRatingAndAnnotationWrites(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
