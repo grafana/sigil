@@ -13,6 +13,7 @@ dotnet = "8.0.418"
 "go:github.com/magefile/mage" = "v1.15.0"
 "go:github.com/air-verse/air" = "v1.64.5"
 "go:github.com/golangci/golangci-lint/v2/cmd/golangci-lint" = "v2.10.1"
+"go:github.com/matryer/moq" = "v0.6.0"
 
 [tasks.help]
 description = "Show available tasks"
@@ -569,6 +570,27 @@ GOWORK=off go test ./e2e -tags=e2e -run TestStorageHotColdRoundTripLocal -count=
 description = "Run Sigil storage benchmarks (WAL, object, compactor, fan-out)"
 depends = ["doctor:go"]
 run = "cd sigil && GOWORK=off go test ./internal/storage/... -run '^$' -bench . -benchmem"
+
+[tasks."generate:mocks:go"]
+description = "Generate Go mock implementations"
+depends = ["doctor:go"]
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+echo "==> generating Go mocks"
+# Add moq commands here as interfaces are mocked, e.g.:
+# moq -rm -out ./sigil/internal/eval/control/mock_test.gen.go ./sigil/internal/eval/control controlStore
+echo "No mocks to generate yet — add moq commands to this task as needed."
+"""
+
+[tasks."generate:mocks"]
+description = "Generate mock implementations across all modules"
+depends = ["generate:mocks:go"]
+
+[tasks.generate]
+description = "Generate all code (mocks, etc.)"
+depends = ["generate:mocks"]
+run = 'echo "All code generation complete"'
 
 [tasks.check]
 description = "Run lint, typecheck and tests"
