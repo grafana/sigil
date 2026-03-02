@@ -2,13 +2,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { css } from '@emotion/css';
 import {
   ThresholdsMode,
-  textUtil,
   getValueFormat,
   formattedValueToString,
   type GrafanaTheme2,
   type TimeRange,
 } from '@grafana/data';
-import { Icon, IconButton, Select, Spinner, Tooltip, useStyles2, useTheme2 } from '@grafana/ui';
+import { Button, Icon, IconButton, Select, Spinner, Tooltip, useStyles2, useTheme2 } from '@grafana/ui';
 import { useInlineAssistant } from '@grafana/assistant';
 import type { DashboardDataSource } from '../../dashboard/api';
 import {
@@ -1077,6 +1076,31 @@ function BreakdownStatPanel({
   );
 }
 
+function formatInlineMarkup(text: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  const pattern = /\*\*(.+?)\*\*|`(.+?)`/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    if (match[1] !== undefined) {
+      parts.push(<strong key={match.index}>{match[1]}</strong>);
+    } else if (match[2] !== undefined) {
+      parts.push(<code key={match.index}>{match[2]}</code>);
+    }
+    lastIndex = pattern.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts;
+}
+
 type InsightPanelProps = {
   prompt: string;
   origin: string;
@@ -1129,18 +1153,23 @@ function InsightPanel({ prompt, origin, dataContext }: InsightPanelProps) {
   const hasResult = Boolean(text) || gen.isGenerating;
   const showRegenerate = !gen.isGenerating && hasResult;
 
-  const renderedHtml = useMemo(() => {
+  const renderedBullets = useMemo(() => {
     if (!displayText) {
-      return '';
+      return null;
     }
-    const escaped = textUtil.escapeHtml(displayText);
-    const lines = escaped.split('\n').filter((l) => l.trim().length > 0);
-    const bullets = lines.map((line) => {
-      const content = line.replace(/^[-•*]\s*/, '');
-      const formatted = content.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`(.+?)`/g, '<code>$1</code>');
-      return `<li><span class="insight-bullet">${formatted}</span></li>`;
-    });
-    return `<ul>${bullets.join('')}</ul>`;
+    const lines = displayText.split('\n').filter((l) => l.trim().length > 0);
+    return (
+      <ul>
+        {lines.map((line, i) => {
+          const content = line.replace(/^[-•*]\s*/, '');
+          return (
+            <li key={i}>
+              <span className="insight-bullet">{formatInlineMarkup(content)}</span>
+            </li>
+          );
+        })}
+      </ul>
+    );
   }, [displayText]);
 
   return (
@@ -1160,12 +1189,16 @@ function InsightPanel({ prompt, origin, dataContext }: InsightPanelProps) {
       <div className={styles.insightPanelBody}>
         {initialWaiting ? (
           <span className={styles.insightPlaceholder}>Waiting for data...</span>
-        ) : renderedHtml ? (
-          <div dangerouslySetInnerHTML={{ __html: renderedHtml }} />
+        ) : renderedBullets ? (
+          <div>{renderedBullets}</div>
+        ) : gen.isGenerating ? (
+          <span className={styles.insightPlaceholder}>Generating insight...</span>
+        ) : isDevelopment ? (
+          <Button icon="ai" size="sm" variant="secondary" fill="outline" onClick={doGenerate} disabled={!dataContext}>
+            Generate Insight
+          </Button>
         ) : (
-          <span className={styles.insightPlaceholder}>
-            {isDevelopment ? 'Run button to generate insight' : 'Generating insight...'}
-          </span>
+          <span className={styles.insightPlaceholder}>Generating insight...</span>
         )}
       </div>
     </div>
