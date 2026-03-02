@@ -93,6 +93,101 @@ function renderPage(dataSource: ConversationsDataSource, initialEntry = '/conver
 }
 
 describe('ConversationsListPage', () => {
+  it('calculates Bad-Rated % from rated conversations only', async () => {
+    const currentWindowConversations = [
+      {
+        conversation_id: 'current-a',
+        generation_count: 3,
+        first_generation_at: '2026-02-08T10:00:00Z',
+        last_generation_at: '2026-02-08T10:00:00Z',
+        models: [],
+        agents: [],
+        error_count: 0,
+        has_errors: false,
+        trace_ids: [],
+        annotation_count: 0,
+        rating_summary: { total_count: 1, has_bad_rating: true },
+      },
+      {
+        conversation_id: 'current-b',
+        generation_count: 2,
+        first_generation_at: '2026-02-08T11:00:00Z',
+        last_generation_at: '2026-02-08T11:00:00Z',
+        models: [],
+        agents: [],
+        error_count: 0,
+        has_errors: false,
+        trace_ids: [],
+        annotation_count: 0,
+        rating_summary: { total_count: 1, has_bad_rating: false },
+      },
+      {
+        conversation_id: 'current-c',
+        generation_count: 1,
+        first_generation_at: '2026-02-08T12:00:00Z',
+        last_generation_at: '2026-02-08T12:00:00Z',
+        models: [],
+        agents: [],
+        error_count: 0,
+        has_errors: false,
+        trace_ids: [],
+        annotation_count: 0,
+        rating_summary: { total_count: 0, has_bad_rating: false },
+      },
+      {
+        conversation_id: 'current-d',
+        generation_count: 4,
+        first_generation_at: '2026-02-08T13:00:00Z',
+        last_generation_at: '2026-02-08T13:00:00Z',
+        models: [],
+        agents: [],
+        error_count: 0,
+        has_errors: false,
+        trace_ids: [],
+        annotation_count: 0,
+        rating_summary: undefined,
+      },
+    ];
+
+    const searchConversations = jest
+      .fn()
+      .mockResolvedValueOnce({
+        conversations: currentWindowConversations,
+        next_cursor: '',
+        has_more: false,
+      })
+      .mockResolvedValueOnce({
+        conversations: currentWindowConversations,
+        next_cursor: '',
+        has_more: false,
+      });
+
+    const dataSource: MockConversationsDataSource = {
+      listConversations: jest.fn(async () => createConversationListResponse([])),
+      searchConversations,
+      getConversationDetail: jest.fn(async () => {
+        throw new Error('getConversationDetail not used in ConversationsListPage');
+      }),
+      getGeneration: jest.fn(async () => {
+        throw new Error('getGeneration not used in ConversationsListPage');
+      }),
+      getSearchTags: jest.fn(async () => []),
+      getSearchTagValues: jest.fn(async () => []),
+    };
+
+    renderPage(dataSource);
+
+    await waitFor(() => expect(searchConversations).toHaveBeenCalledTimes(2));
+
+    const ratedLabel = await screen.findByText('Rated Conversations');
+    const ratedTile = ratedLabel.parentElement;
+    expect(ratedTile).toHaveTextContent('2');
+
+    const badRatedLabel = await screen.findByText('Bad-Rated %');
+    const badRatedTile = badRatedLabel.parentElement;
+    expect(badRatedTile).toHaveTextContent('50.0%');
+  });
+
   it('stores selected bucket in the bucket URL param', async () => {
     const dataSource = createDataSource([
       {

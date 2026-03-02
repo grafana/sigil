@@ -357,7 +357,7 @@ function buildConversationStats(conversations: ConversationSearchResult[], windo
   }
 
   const avgCallsPerConversation = totalConversations > 0 ? totalLLMCalls / totalConversations : 0;
-  const badRatedPct = totalConversations > 0 ? (badRatedConversations / totalConversations) * 100 : 0;
+  const badRatedPct = ratedConversations > 0 ? (badRatedConversations / ratedConversations) * 100 : 0;
 
   return {
     totalConversations,
@@ -536,7 +536,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
   statTrend: css({
     fontSize: theme.typography.bodySmall.fontSize,
     color: theme.colors.text.secondary,
-    cursor: 'help',
   }),
   statTrendUp: css({
     color: theme.colors.success.main,

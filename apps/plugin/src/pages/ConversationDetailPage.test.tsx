@@ -1,7 +1,7 @@
 import React from 'react';
-import { render, screen, waitFor, waitForElementToBeRemoved } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, waitForElementToBeRemoved } from '@testing-library/react';
 import { delay, of } from 'rxjs';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import ConversationDetailPage from './ConversationDetailPage';
 import type { ConversationsDataSource } from '../conversation/api';
 import type { ConversationDetail } from '../conversation/types';
@@ -29,6 +29,11 @@ function createDataSource(conversationDetail: ConversationDetail): Conversations
     getSearchTags: jest.fn(async () => []),
     getSearchTagValues: jest.fn(async () => []),
   };
+}
+
+function LocationSearchProbe() {
+  const location = useLocation();
+  return <div data-testid="location-search">{location.search}</div>;
 }
 
 describe('ConversationDetailPage', () => {
@@ -72,7 +77,7 @@ describe('ConversationDetailPage', () => {
 
     expect(await screen.findByText('Conversation Detail')).toBeInTheDocument();
     expect(screen.getByText('devex-go-openai-2-1772456234117')).toBeInTheDocument();
-    expect(screen.queryByText(/"generation_id": "gen-1"/)).not.toBeInTheDocument();
+    expect(screen.getByText(/"generation_id": "gen-1"/)).toBeInTheDocument();
   });
 
   it('preloads traces for generation trace IDs and shows progress', async () => {
@@ -112,5 +117,172 @@ describe('ConversationDetailPage', () => {
     expect(await screen.findByRole('progressbar', { name: 'Trace preload progress' })).toBeInTheDocument();
     await waitForElementToBeRemoved(() => screen.queryByRole('progressbar', { name: 'Trace preload progress' }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  });
+
+  it('sets selected span in URL query params', async () => {
+    const detail: ConversationDetail = {
+      conversation_id: 'conv-with-spans',
+      generation_count: 1,
+      first_generation_at: '2026-03-01T10:00:00Z',
+      last_generation_at: '2026-03-01T10:00:00Z',
+      generations: [
+        {
+          generation_id: 'gen-1',
+          conversation_id: 'conv-with-spans',
+          trace_id: 'trace-1',
+          created_at: '2026-03-01T10:00:00Z',
+        },
+      ],
+      annotations: [],
+    };
+
+    fetchMock.mockImplementation(() =>
+      of({
+        data: {
+          trace: {
+            resourceSpans: [
+              {
+                resource: {
+                  attributes: [{ key: 'service.name', value: { stringValue: 'llm-service' } }],
+                },
+                scopeSpans: [
+                  {
+                    spans: [
+                      {
+                        spanId: 'span-a',
+                        name: 'prompt',
+                        startTimeUnixNano: '1000000000',
+                        endTimeUnixNano: '1100000000',
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      })
+    );
+
+    const dataSource = createDataSource(detail);
+    render(
+      <MemoryRouter initialEntries={['/conversations/conv-with-spans/detail']}>
+        <Routes>
+          <Route
+            path="/conversations/:conversationID/detail"
+            element={
+              <>
+                <ConversationDetailPage dataSource={dataSource} />
+                <LocationSearchProbe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    const spanButton = await screen.findByRole('button', { name: 'select span prompt' });
+    fireEvent.click(spanButton);
+    expect(await screen.findByTestId('location-search')).toHaveTextContent('?span=trace-1%3Aspan-a');
+
+    fireEvent.click(spanButton);
+    expect(await screen.findByTestId('location-search')).toHaveTextContent('');
+  });
+
+  it('fills spans to next trace start when generation created/completed are equal', async () => {
+    const detail: ConversationDetail = {
+      conversation_id: 'conv-fill-spans',
+      generation_count: 2,
+      first_generation_at: '2026-03-01T10:00:00Z',
+      last_generation_at: '2026-03-01T10:00:02Z',
+      generations: [
+        {
+          generation_id: 'gen-1',
+          conversation_id: 'conv-fill-spans',
+          trace_id: 'trace-1',
+          created_at: '2026-03-01T10:00:00Z',
+          completed_at: '2026-03-01T10:00:00Z',
+        },
+        {
+          generation_id: 'gen-2',
+          conversation_id: 'conv-fill-spans',
+          trace_id: 'trace-2',
+          created_at: '2026-03-01T10:00:02Z',
+        },
+      ],
+      annotations: [],
+    };
+
+    fetchMock.mockImplementation(({ url }: { url: string }) => {
+      if (url.includes('/trace-1')) {
+        return of({
+          data: {
+            trace: {
+              resourceSpans: [
+                {
+                  resource: {
+                    attributes: [{ key: 'service.name', value: { stringValue: 'svc-a' } }],
+                  },
+                  scopeSpans: [
+                    {
+                      spans: [
+                        {
+                          spanId: 'span-1',
+                          name: 'first',
+                          startTimeUnixNano: '1000',
+                          endTimeUnixNano: '1001',
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        });
+      }
+
+      return of({
+        data: {
+          trace: {
+            resourceSpans: [
+              {
+                resource: {
+                  attributes: [{ key: 'service.name', value: { stringValue: 'svc-b' } }],
+                },
+                scopeSpans: [
+                  {
+                    spans: [
+                      {
+                        spanId: 'span-2',
+                        name: 'second',
+                        startTimeUnixNano: '2000',
+                        endTimeUnixNano: '3000',
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      });
+    });
+
+    const dataSource = createDataSource(detail);
+    render(
+      <MemoryRouter initialEntries={['/conversations/conv-fill-spans/detail']}>
+        <Routes>
+          <Route path="/conversations/:conversationID/detail" element={<ConversationDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    const firstSpanButton = await screen.findByRole('button', { name: 'select span first' });
+    expect(parseFloat(firstSpanButton.style.width)).toBeGreaterThan(25);
   });
 });
