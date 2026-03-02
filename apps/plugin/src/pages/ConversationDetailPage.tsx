@@ -492,11 +492,24 @@ const getStyles = (theme: GrafanaTheme2) => ({
     height: `${TRACE_SPAN_HEIGHT_PX}px`,
     borderRadius: 2,
     border: `1px solid ${theme.colors.border.medium}`,
-    background: theme.colors.primary.main,
+    background: theme.colors.text.disabled,
     color: theme.colors.primary.contrastText,
     fontSize: theme.typography.bodySmall.fontSize,
     padding: 0,
     cursor: 'pointer',
+    ...(theme.isDark && {
+      '&:hover': {
+        background: '#fff',
+        borderColor: '#fff',
+      },
+    }),
+  }),
+  spanBarRowHovered: css({
+    label: 'conversationDetailPage-spanBarRowHovered',
+    ...(theme.isDark && {
+      background: '#fff',
+      borderColor: '#fff',
+    }),
   }),
   spanBarSelected: css({
     label: 'conversationDetailPage-spanBarSelected',
@@ -504,6 +517,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.primary,
     borderColor: theme.colors.warning.border,
     boxShadow: `0 0 0 2px ${theme.colors.warning.transparent}`,
+    '&:hover': {
+      background: theme.colors.warning.main,
+      color: theme.colors.text.primary,
+      borderColor: theme.colors.warning.border,
+    },
   }),
   selectedSpanCard: css({
     label: 'conversationDetailPage-selectedSpanCard',
@@ -600,6 +618,7 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
   const [traceTimelines, setTraceTimelines] = useState<TraceTimeline[]>([]);
   const [hoveredSpanSelectionID, setHoveredSpanSelectionID] = useState<string>('');
   const [hoveredSpanAnchor, setHoveredSpanAnchor] = useState<HoveredSpanAnchor | null>(null);
+  const [hoveredTraceID, setHoveredTraceID] = useState<string>('');
   const [searchParams, setSearchParams] = useSearchParams();
   const requestVersionRef = useRef<number>(0);
   const traceRequestVersionRef = useRef<number>(0);
@@ -868,10 +887,12 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                           }
                           const laneElement = event.currentTarget.querySelector(`.${styles.traceLane}`) as HTMLDivElement | null;
                           const laneWidthPx = laneElement?.clientWidth ?? 0;
+                        setHoveredTraceID(timeline.traceID);
                           setHoveredSpanSelectionID(firstSpan.selectionID);
                           setHoveredSpanAnchor(getHoveredSpanAnchor(firstSpan, timelineBounds, laneWidthPx));
                         }}
                         onMouseLeave={() => {
+                        setHoveredTraceID('');
                           setHoveredSpanSelectionID('');
                           setHoveredSpanAnchor(null);
                         }}
@@ -898,11 +919,14 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                             const maxLeftPct = Math.max(0, 100 - boundedWidthPct);
                             const boundedLeftPct = Math.min(Math.max(rawLeftPct, 0), maxLeftPct);
                             const isSelected = selectedSpanID === span.selectionID;
+                            const isRowHovered = hoveredTraceID === timeline.traceID;
                             return (
                               <React.Fragment key={`${span.selectionID}:${span.row}`}>
                                 <button
                                   type="button"
-                                  className={`${styles.spanBar} ${isSelected ? styles.spanBarSelected : ''}`}
+                                  className={`${styles.spanBar} ${
+                                    isRowHovered && !isSelected ? styles.spanBarRowHovered : ''
+                                  } ${isSelected ? styles.spanBarSelected : ''}`}
                                   style={{
                                     top: `${span.row * TRACE_ROW_STEP_PX}px`,
                                     left: `${boundedLeftPct}%`,
