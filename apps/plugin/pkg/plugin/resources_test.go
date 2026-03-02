@@ -740,3 +740,84 @@ func TestCallResourceReturnsValidJSONWhenClientSendsAcceptEncodingGzip(t *testin
 		t.Fatalf("response body is not valid JSON (garbled encoding?): %v\nbody bytes: %x", err, sender.response.Body)
 	}
 }
+
+func TestCallResourceRoutesTempoProxyThroughGrafanaDatasourceProxy(t *testing.T) {
+	grafana := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/datasources/proxy/uid/tempo-ds/api/search" {
+			http.Error(w, "unexpected path", http.StatusBadRequest)
+			return
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer sa-token" {
+			http.Error(w, "missing authorization", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"traces":[]}`)
+	}))
+	defer grafana.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.grafanaAppURL = grafana.URL
+	app.grafanaServiceAccountToken = "sa-token"
+	app.tempoDatasourceUID = "tempo-ds"
+
+	var sender mockCallResourceResponseSender
+	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "query/proxy/tempo/api/search",
+	}, &sender)
+	if err != nil {
+		t.Fatalf("CallResource error: %s", err)
+	}
+	if sender.response == nil {
+		t.Fatal("no response received from CallResource")
+	}
+	if sender.response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.response.Status, sender.response.Body)
+	}
+	if tb := bytes.TrimSpace(sender.response.Body); !bytes.Equal(tb, []byte(`{"traces":[]}`)) {
+		t.Fatalf("unexpected response body: %s", tb)
+	}
+}
+
+func TestCallResourceSettingsRoutesProxyToSigil(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/settings" {
+			http.Error(w, "unexpected path", http.StatusBadRequest)
+			return
+		}
+		if got := r.Header.Get("X-Scope-OrgID"); got != "fake" {
+			http.Error(w, "missing tenant", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"datasources":{"prometheusDatasourceUID":"prom","tempoDatasourceUID":"tempo"}}`)
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.apiURL = upstream.URL
+
+	var sender mockCallResourceResponseSender
+	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "query/settings",
+	}, &sender)
+	if err != nil {
+		t.Fatalf("CallResource error: %s", err)
+	}
+	if sender.response == nil {
+		t.Fatal("no response received from CallResource")
+	}
+	if sender.response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.response.Status, sender.response.Body)
+	}
+}

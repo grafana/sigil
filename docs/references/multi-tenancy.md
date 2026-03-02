@@ -104,6 +104,23 @@ Send `X-Scope-OrgID` from your client for generation/query requests.
 
 If you use a Sigil SDK version with per-export auth helpers, configure generation export in `tenant` mode; otherwise set the header explicitly in transport headers.
 
+### Query path via Grafana datasource proxy
+
+Sigil plugin query proxy routes can run through Grafana datasource proxy APIs instead of direct Tempo/Prometheus base URLs.
+
+- plugin configuration selects datasource UIDs (`prometheusDatasourceUID`, `tempoDatasourceUID`)
+- Sigil stores tenant-scoped datasource selections in MySQL (`tenant_settings`) and exposes:
+  - `GET /api/v1/settings`
+  - `PUT /api/v1/settings/datasources`
+- plugin backend calls Grafana datasource proxy endpoints with a plugin managed service-account token
+- Sigil backend can optionally run server-side Tempo lookups via Grafana datasource proxy when:
+  - `SIGIL_GRAFANA_URL`
+  - `SIGIL_GRAFANA_SA_TOKEN`
+  - `SIGIL_GRAFANA_TEMPO_DATASOURCE_UID`
+  are configured
+
+When these settings are not configured, Sigil keeps the direct Tempo/Prometheus base URL behavior.
+
 ### Bearer token via reverse proxy
 
 Sigil does not validate bearer tokens in this phase. If you need token auth:

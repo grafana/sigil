@@ -21,6 +21,7 @@ import (
 	"github.com/grafana/sigil/sigil/internal/queryproxy"
 	"github.com/grafana/sigil/sigil/internal/server"
 	"github.com/grafana/sigil/sigil/internal/storage"
+	"github.com/grafana/sigil/sigil/internal/tenantsettings"
 )
 
 // querierModule owns read/query HTTP wiring and runs the model-cards sync loop.
@@ -88,6 +89,18 @@ func newQuerierModule(
 	if err != nil {
 		return nil, err
 	}
+	if strings.TrimSpace(cfg.GrafanaURL) != "" {
+		tempoClient, err := query.NewGrafanaTempoHTTPClient(
+			cfg.GrafanaURL,
+			cfg.GrafanaTempoDatasourceUID,
+			cfg.GrafanaServiceAccountToken,
+			&http.Client{Timeout: cfg.QueryProxy.Timeout},
+		)
+		if err != nil {
+			return nil, err
+		}
+		querySvc.SetTempoClient(tempoClient)
+	}
 
 	queryProxy, err := queryproxy.New(queryproxy.Config{
 		PrometheusBaseURL: cfg.QueryProxy.PrometheusBaseURL,
@@ -96,6 +109,11 @@ func newQuerierModule(
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	var tenantSettingsSvc *tenantsettings.Service
+	if tenantSettingsStore, ok := generationStore.(tenantsettings.Store); ok {
+		tenantSettingsSvc = tenantsettings.NewService(tenantSettingsStore)
 	}
 
 	var controlSvc *evalcontrol.Service
@@ -159,6 +177,7 @@ func newQuerierModule(
 				protectedMiddleware,
 				queryProxy,
 			)
+			server.RegisterSettingsRoutes(mux, tenantSettingsSvc, protectedMiddleware)
 			evalcontrol.RegisterHTTPRoutes(mux, controlSvc, protectedMiddleware)
 			evalingest.RegisterHTTPRoutes(mux, ingestScoreSvc, protectedMiddleware)
 		})

@@ -75,11 +75,40 @@ func (a *App) handleSearchTagValues(w http.ResponseWriter, req *http.Request) {
 	a.handleProxy(w, req, fmt.Sprintf("/api/v1/search/tag/%s/values", url.PathEscape(tag)), http.MethodGet)
 }
 
+func (a *App) handleSettingsRoutes(w http.ResponseWriter, req *http.Request) {
+	switch req.URL.Path {
+	case "/query/settings":
+		a.handleProxy(w, req, "/api/v1/settings", http.MethodGet)
+	case "/query/settings/datasources":
+		a.handleProxy(w, req, "/api/v1/settings/datasources", http.MethodPut)
+	default:
+		http.NotFound(w, req)
+	}
+}
+
 func (a *App) handlePrometheusProxyRoutes(w http.ResponseWriter, req *http.Request) {
+	if a.hasGrafanaDatasourceProxyConfig(a.prometheusDatasourceUID) {
+		a.handleGrafanaDatasourceProxy(
+			w,
+			req,
+			"/query/proxy/prometheus/",
+			fmt.Sprintf("/api/datasources/uid/%s/resources", a.prometheusDatasourceUID),
+		)
+		return
+	}
 	a.handleDownstreamProxy(w, req, "/query/proxy/prometheus/", "/api/v1/proxy/prometheus")
 }
 
 func (a *App) handleTempoProxyRoutes(w http.ResponseWriter, req *http.Request) {
+	if a.hasGrafanaDatasourceProxyConfig(a.tempoDatasourceUID) {
+		a.handleGrafanaDatasourceProxy(
+			w,
+			req,
+			"/query/proxy/tempo/",
+			fmt.Sprintf("/api/datasources/proxy/uid/%s", a.tempoDatasourceUID),
+		)
+		return
+	}
 	a.handleDownstreamProxy(w, req, "/query/proxy/tempo/", "/api/v1/proxy/tempo")
 }
 
@@ -90,6 +119,21 @@ func (a *App) handleDownstreamProxy(w http.ResponseWriter, req *http.Request, ro
 		return
 	}
 	a.handleProxy(w, req, upstreamPrefix+downstreamPath, req.Method)
+}
+
+func (a *App) hasGrafanaDatasourceProxyConfig(datasourceUID string) bool {
+	return strings.TrimSpace(datasourceUID) != "" &&
+		strings.TrimSpace(a.grafanaAppURL) != "" &&
+		strings.TrimSpace(a.grafanaServiceAccountToken) != ""
+}
+
+func (a *App) handleGrafanaDatasourceProxy(w http.ResponseWriter, req *http.Request, routePrefix string, datasourcePrefix string) {
+	downstreamPath, ok := downstreamProxyPath(req.URL.Path, routePrefix)
+	if !ok {
+		http.Error(w, "invalid proxy path", http.StatusBadRequest)
+		return
+	}
+	a.handleGrafanaProxy(w, req, datasourcePrefix+downstreamPath, req.Method)
 }
 
 func downstreamProxyPath(path string, routePrefix string) (string, bool) {
@@ -182,6 +226,51 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 	_, _ = io.Copy(w, resp.Body)
 }
 
+func (a *App) handleGrafanaProxy(w http.ResponseWriter, req *http.Request, path string, method string) {
+	if req.Method != method {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	upstream := strings.TrimRight(a.grafanaAppURL, "/") + path
+	if req.URL.RawQuery != "" {
+		upstream += "?" + req.URL.RawQuery
+	}
+
+	var body io.Reader
+	if req.Body != nil {
+		body = req.Body
+	}
+	proxyReq, err := http.NewRequestWithContext(req.Context(), method, upstream, body)
+	if err != nil {
+		writeStub(w, http.StatusInternalServerError, path, fmt.Sprintf("build request: %v", err))
+		return
+	}
+
+	proxyReq.Header = req.Header.Clone()
+	proxyReq.Header.Del("Accept-Encoding")
+	proxyReq.Header.Set("Authorization", "Bearer "+a.grafanaServiceAccountToken)
+
+	resp, err := a.client.Do(proxyReq)
+	if err != nil {
+		writeStub(w, http.StatusBadGateway, path, fmt.Sprintf("upstream unavailable: %v", err))
+		return
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			_ = closeErr
+		}
+	}()
+
+	ct := resp.Header.Get("Content-Type")
+	if ct == "" {
+		ct = "application/json"
+	}
+	w.Header().Set("Content-Type", ct)
+	w.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(w, resp.Body)
+}
+
 func writeStub(w http.ResponseWriter, status int, endpoint string, err string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -250,6 +339,8 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/query/generations/", a.handleGenerationRoutes)
 	mux.HandleFunc("/query/search/tags", a.handleSearchTags)
 	mux.HandleFunc("/query/search/tag/", a.handleSearchTagValues)
+	mux.HandleFunc("/query/settings", a.handleSettingsRoutes)
+	mux.HandleFunc("/query/settings/datasources", a.handleSettingsRoutes)
 	mux.HandleFunc("/query/proxy/prometheus/", a.handlePrometheusProxyRoutes)
 	mux.HandleFunc("/query/proxy/tempo/", a.handleTempoProxyRoutes)
 	mux.HandleFunc("/query/model-cards", a.handleListModelCards)
