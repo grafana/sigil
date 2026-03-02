@@ -26,4 +26,4 @@ apps:
       ossMode: false
       defaultSearchProvider: tavily
     secureJsonData:
-      accessToken: 4130:$GRAFANA_ASSISTANT_ACCESS_TOKEN
+      accessToken: $GRAFANA_ASSISTANT_ACCESS_TOKEN
