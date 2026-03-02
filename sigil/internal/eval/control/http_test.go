@@ -59,6 +59,19 @@ func TestEvaluatorCRUDHTTP(t *testing.T) {
 	}
 }
 
+func TestDecodeJSONBody_WhitespaceOnlyBodyReturnsRequiredError(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/eval/evaluators", bytes.NewBufferString(" \n\t "))
+
+	var payload map[string]any
+	err := decodeJSONBody(req, &payload)
+	if err == nil {
+		t.Fatal("expected error for whitespace-only body")
+	}
+	if err.Error() != "request body is required" {
+		t.Fatalf("expected request body required error, got %q", err.Error())
+	}
+}
+
 func TestDeleteEvaluatorRejectsEnabledRuleReferences(t *testing.T) {
 	store := newMemoryControlStore()
 	if err := store.CreateEvaluator(context.Background(), evalpkg.EvaluatorDefinition{
