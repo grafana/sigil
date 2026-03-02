@@ -1035,8 +1035,8 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                                   top: '0px',
                                   left: `${scaledLeftPct}%`,
                                   width: `${scaledWidthPct}%`,
-                                  background: timelineColor,
-                                  borderColor: timelineColor,
+                                  background: hoveredTraceID === timeline.traceID ? timelineColor : undefined,
+                                  borderColor: hoveredTraceID === timeline.traceID ? timelineColor : undefined,
                                 }}
                                 aria-label={`expand trace ${timeline.traceID}`}
                                 onClick={(event) => {
@@ -1210,8 +1210,8 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                                       top: `${span.row * TRACE_ROW_STEP_PX}px`,
                                       left: `${scaledLeftPct}%`,
                                       width: `${scaledWidthPct}%`,
-                                      background: spanColor,
-                                      borderColor: spanColor,
+                                      background: isRowHovered || isSelected ? spanColor : undefined,
+                                      borderColor: isRowHovered || isSelected ? spanColor : undefined,
                                     }}
                                     aria-label={`select span ${span.name}`}
                                     aria-pressed={isSelected}
