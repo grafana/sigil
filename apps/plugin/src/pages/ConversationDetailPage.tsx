@@ -15,6 +15,7 @@ export type ConversationDetailPageProps = {
 const TRACE_ROW_STEP_PX = 14;
 const TRACE_SPAN_HEIGHT_PX = 14;
 const TRACE_LANE_PADDING_Y_PX = (TRACE_ROW_STEP_PX - TRACE_SPAN_HEIGHT_PX) / 2;
+const TRACE_MIN_SPAN_WIDTH_PCT = 1;
 
 type TraceSpan = {
   traceID: string;
@@ -299,6 +300,22 @@ function formatNsShortTime(ns: number): string {
   });
 }
 
+function findGenerationForSpan(detail: ConversationDetail | null, span: Pick<TraceSpan, 'traceID' | 'spanID'> | null) {
+  if (detail == null || span == null) {
+    return null;
+  }
+  const byTraceAndSpan = detail.generations.find((generation) => {
+    if (generation.trace_id !== span.traceID) {
+      return false;
+    }
+    return generation.span_id === span.spanID;
+  });
+  if (byTraceAndSpan != null) {
+    return byTraceAndSpan;
+  }
+  return detail.generations.find((generation) => generation.trace_id === span.traceID) ?? null;
+}
+
 function getUsageValue(usage: GenerationDetail['usage'], key: 'input_tokens' | 'output_tokens' | 'total_tokens'): string {
   const value = usage?.[key];
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -370,6 +387,42 @@ const getStyles = (theme: GrafanaTheme2) => ({
   traceTimeLabel: css({
     label: 'conversationDetailPage-traceTimeLabel',
     whiteSpace: 'nowrap' as const,
+  }),
+  hoveredSpanTooltip: css({
+    label: 'conversationDetailPage-hoveredSpanTooltip',
+    margin: theme.spacing(0.5, 0, 1),
+    padding: theme.spacing(0.75, 1),
+    borderRadius: theme.shape.radius.default,
+    border: `1px solid ${theme.colors.border.medium}`,
+    background: theme.colors.background.secondary,
+    display: 'grid',
+    gap: theme.spacing(0.25),
+    fontSize: theme.typography.bodySmall.fontSize,
+  }),
+  hoveredSpanTitle: css({
+    label: 'conversationDetailPage-hoveredSpanTitle',
+    color: theme.colors.text.primary,
+    fontWeight: theme.typography.fontWeightMedium,
+  }),
+  hoveredSpanMeta: css({
+    label: 'conversationDetailPage-hoveredSpanMeta',
+    color: theme.colors.text.secondary,
+  }),
+  hoveredSpanRow: css({
+    label: 'conversationDetailPage-hoveredSpanRow',
+    display: 'grid',
+    gridTemplateColumns: '120px minmax(0, 1fr)',
+    gap: theme.spacing(0.5),
+    alignItems: 'baseline',
+    wordBreak: 'break-word' as const,
+  }),
+  hoveredSpanLabel: css({
+    label: 'conversationDetailPage-hoveredSpanLabel',
+    color: theme.colors.text.secondary,
+  }),
+  hoveredSpanValue: css({
+    label: 'conversationDetailPage-hoveredSpanValue',
+    color: theme.colors.text.primary,
   }),
   spanBar: css({
     label: 'conversationDetailPage-spanBar',
@@ -490,6 +543,7 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
   const [traceLoadRunning, setTraceLoadRunning] = useState<boolean>(false);
   const [traceLoadFailures, setTraceLoadFailures] = useState<number>(0);
   const [traceTimelines, setTraceTimelines] = useState<TraceTimeline[]>([]);
+  const [hoveredSpanSelectionID, setHoveredSpanSelectionID] = useState<string>('');
   const [searchParams, setSearchParams] = useSearchParams();
   const requestVersionRef = useRef<number>(0);
   const traceRequestVersionRef = useRef<number>(0);
@@ -526,21 +580,22 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
     }
     return null;
   }, [selectedSpanID, traceTimelines]);
-  const selectedGeneration = useMemo(() => {
-    if (detail == null || selectedSpan == null) {
-      return null;
-    }
-    const byTraceAndSpan = detail.generations.find((generation) => {
-      if (generation.trace_id !== selectedSpan.traceID) {
-        return false;
+  const hoveredSpan = useMemo(() => {
+    for (const timeline of traceTimelines) {
+      for (const span of timeline.spans) {
+        if (span.selectionID === hoveredSpanSelectionID) {
+          return span;
+        }
       }
-      return generation.span_id === selectedSpan.spanID;
-    });
-    if (byTraceAndSpan != null) {
-      return byTraceAndSpan;
     }
-    return detail.generations.find((generation) => generation.trace_id === selectedSpan.traceID) ?? null;
+    return null;
+  }, [hoveredSpanSelectionID, traceTimelines]);
+  const selectedGeneration = useMemo(() => {
+    return findGenerationForSpan(detail, selectedSpan);
   }, [detail, selectedSpan]);
+  const hoveredGeneration = useMemo(() => {
+    return findGenerationForSpan(detail, hoveredSpan);
+  }, [detail, hoveredSpan]);
   const selectedGenerationUsageExtras = useMemo(() => {
     if (selectedGeneration?.usage == null) {
       return [];
@@ -775,8 +830,13 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                           }}
                         >
                           {timeline.spans.map((span) => {
-                            const leftPct = ((span.startNs - timelineBounds.min) / timelineBounds.range) * 100;
-                            const widthPct = Math.max((span.durationNs / timelineBounds.range) * 100, 0.8);
+                            const rawLeftPct = ((span.startNs - timelineBounds.min) / timelineBounds.range) * 100;
+                            const boundedWidthPct = Math.min(
+                              Math.max((span.durationNs / timelineBounds.range) * 100, TRACE_MIN_SPAN_WIDTH_PCT),
+                              100
+                            );
+                            const maxLeftPct = Math.max(0, 100 - boundedWidthPct);
+                            const boundedLeftPct = Math.min(Math.max(rawLeftPct, 0), maxLeftPct);
                             const isSelected = selectedSpanID === span.selectionID;
                             return (
                               <button
@@ -785,8 +845,8 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                                 className={`${styles.spanBar} ${isSelected ? styles.spanBarSelected : ''}`}
                                 style={{
                                   top: `${span.row * TRACE_ROW_STEP_PX}px`,
-                                  left: `${leftPct}%`,
-                                  width: `${Math.max(0.8, Math.min(widthPct, 100 - leftPct))}%`,
+                                  left: `${boundedLeftPct}%`,
+                                  width: `${boundedWidthPct}%`,
                                 }}
                                 aria-label={`select span ${span.name}`}
                                 aria-pressed={isSelected}
@@ -794,7 +854,8 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                                   event.stopPropagation();
                                   setSelectedSpanParam(span.selectionID);
                                 }}
-                                title={`${span.name} (${span.serviceName})`}
+                                onMouseEnter={() => setHoveredSpanSelectionID(span.selectionID)}
+                                onMouseLeave={() => setHoveredSpanSelectionID('')}
                               >
                                 {null}
                               </button>
@@ -803,6 +864,49 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                         </div>
                       </div>
                     ))}
+                    {hoveredSpan != null && (
+                      <div className={styles.hoveredSpanTooltip}>
+                        <div className={styles.hoveredSpanTitle}>{hoveredSpan.name}</div>
+                        <div className={styles.hoveredSpanMeta}>{hoveredSpan.serviceName}</div>
+                        <div className={styles.hoveredSpanRow}>
+                          <span className={styles.hoveredSpanLabel}>Time range</span>
+                          <span className={styles.hoveredSpanValue}>
+                            {formatNsTimestamp(hoveredSpan.startNs)} - {formatNsTimestamp(hoveredSpan.endNs)}
+                          </span>
+                        </div>
+                        <div className={styles.hoveredSpanRow}>
+                          <span className={styles.hoveredSpanLabel}>Duration</span>
+                          <span className={styles.hoveredSpanValue}>{formatNsDuration(hoveredSpan.durationNs)}</span>
+                        </div>
+                        <div className={styles.hoveredSpanRow}>
+                          <span className={styles.hoveredSpanLabel}>Trace ID</span>
+                          <span className={styles.hoveredSpanValue}>{hoveredSpan.traceID}</span>
+                        </div>
+                        <div className={styles.hoveredSpanRow}>
+                          <span className={styles.hoveredSpanLabel}>Span ID</span>
+                          <span className={styles.hoveredSpanValue}>{hoveredSpan.spanID || 'unknown-span'}</span>
+                        </div>
+                        {hoveredGeneration != null && (
+                          <>
+                            <div className={styles.hoveredSpanRow}>
+                              <span className={styles.hoveredSpanLabel}>Generation ID</span>
+                              <span className={styles.hoveredSpanValue}>{hoveredGeneration.generation_id}</span>
+                            </div>
+                            <div className={styles.hoveredSpanRow}>
+                              <span className={styles.hoveredSpanLabel}>Model</span>
+                              <span className={styles.hoveredSpanValue}>
+                                {hoveredGeneration.model?.provider ?? 'unknown-provider'} /{' '}
+                                {hoveredGeneration.model?.name ?? 'unknown-model'}
+                              </span>
+                            </div>
+                            <div className={styles.hoveredSpanRow}>
+                              <span className={styles.hoveredSpanLabel}>Mode</span>
+                              <span className={styles.hoveredSpanValue}>{hoveredGeneration.mode ?? 'n/a'}</span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
                     <div className={styles.traceTimeRange}>
                       <span className={styles.traceTimeLabel} title={formatNsTimestamp(timelineBounds.min)}>
                         {formatNsShortTime(timelineBounds.min)}
