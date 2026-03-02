@@ -197,6 +197,8 @@ The normalized payload keeps provider-only details in `metadata` with a stable S
   - `gen_ai.agent.version` (if set)
   - `gen_ai.tool.call.arguments` and `gen_ai.tool.call.result` only when content capture is enabled
 
+Full canonical tables covering all span attributes, metrics, span naming, span kind, and framework attributes: [`semantic-conventions.md`](semantic-conventions.md).
+
 ## Generation Payload Shape (What SDK Sends)
 
 - SDK internal mode values: `SYNC|STREAM`.
