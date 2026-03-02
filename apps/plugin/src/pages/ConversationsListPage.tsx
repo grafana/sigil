@@ -18,6 +18,13 @@ type ActivityBucket = {
 type ChartViewMode = 'llm_calls' | 'time';
 type TimeBucketUnit = 'hour' | 'week' | 'month' | 'year';
 
+function parseViewModeParam(value: string | null): ChartViewMode {
+  if (value === 'time') {
+    return 'time';
+  }
+  return 'llm_calls';
+}
+
 function buildLLMCallBuckets(conversations: ConversationSearchResult[]): ActivityBucket[] {
   if (conversations.length === 0) {
     return [];
@@ -349,33 +356,62 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
   const [conversations, setConversations] = useState<ConversationSearchResult[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string>('');
-  const [viewMode, setViewMode] = useState<ChartViewMode>('llm_calls');
-  const [fallbackSelectedBucketKey, setFallbackSelectedBucketKey] = useState<string>(searchParams.get('selection') ?? '');
+  const [fallbackViewMode, setFallbackViewMode] = useState<ChartViewMode>(parseViewModeParam(searchParams.get('view')));
+  const [fallbackSelectedBucketKey, setFallbackSelectedBucketKey] = useState<string>(searchParams.get('bucket') ?? '');
   const requestVersionRef = useRef<number>(0);
-  const previousViewModeRef = useRef<ChartViewMode>(viewMode);
   const canUseRouterSearchParamUpdates = typeof Request !== 'undefined';
-  const selectedBucketKey = canUseRouterSearchParamUpdates ? (searchParams.get('selection') ?? '') : fallbackSelectedBucketKey;
+  const viewMode = canUseRouterSearchParamUpdates ? parseViewModeParam(searchParams.get('view')) : fallbackViewMode;
+  const selectedBucketKey = canUseRouterSearchParamUpdates ? (searchParams.get('bucket') ?? '') : fallbackSelectedBucketKey;
+  const previousViewModeRef = useRef<ChartViewMode>(viewMode);
 
-  const setSelectedBucketKey = useCallback(
-    (nextSelectionKey: string) => {
+  const setViewMode = useCallback(
+    (nextViewMode: ChartViewMode) => {
+      const nextSearchParams = canUseRouterSearchParamUpdates
+        ? new URLSearchParams(searchParams)
+        : new URLSearchParams(window.location.search);
       if (!canUseRouterSearchParamUpdates) {
-        setFallbackSelectedBucketKey(nextSelectionKey);
-        const nextSearchParams = new URLSearchParams(searchParams);
-        if (nextSelectionKey.length === 0) {
-          nextSearchParams.delete('selection');
+        setFallbackViewMode(nextViewMode);
+        if (nextViewMode === 'llm_calls') {
+          nextSearchParams.delete('view');
         } else {
-          nextSearchParams.set('selection', nextSelectionKey);
+          nextSearchParams.set('view', nextViewMode);
         }
         const nextQuery = nextSearchParams.toString();
         const nextURL = `${window.location.pathname}${nextQuery.length > 0 ? `?${nextQuery}` : ''}${window.location.hash}`;
         window.history.replaceState(window.history.state, '', nextURL);
         return;
       }
-      const nextSearchParams = new URLSearchParams(searchParams);
-      if (nextSelectionKey.length === 0) {
-        nextSearchParams.delete('selection');
+      if (nextViewMode === 'llm_calls') {
+        nextSearchParams.delete('view');
       } else {
-        nextSearchParams.set('selection', nextSelectionKey);
+        nextSearchParams.set('view', nextViewMode);
+      }
+      setSearchParams(nextSearchParams, { replace: true });
+    },
+    [canUseRouterSearchParamUpdates, searchParams, setSearchParams]
+  );
+
+  const setSelectedBucketKey = useCallback(
+    (nextSelectionKey: string) => {
+      const nextSearchParams = canUseRouterSearchParamUpdates
+        ? new URLSearchParams(searchParams)
+        : new URLSearchParams(window.location.search);
+      if (!canUseRouterSearchParamUpdates) {
+        setFallbackSelectedBucketKey(nextSelectionKey);
+        if (nextSelectionKey.length === 0) {
+          nextSearchParams.delete('bucket');
+        } else {
+          nextSearchParams.set('bucket', nextSelectionKey);
+        }
+        const nextQuery = nextSearchParams.toString();
+        const nextURL = `${window.location.pathname}${nextQuery.length > 0 ? `?${nextQuery}` : ''}${window.location.hash}`;
+        window.history.replaceState(window.history.state, '', nextURL);
+        return;
+      }
+      if (nextSelectionKey.length === 0) {
+        nextSearchParams.delete('bucket');
+      } else {
+        nextSearchParams.set('bucket', nextSelectionKey);
       }
       setSearchParams(nextSearchParams, { replace: true });
     },

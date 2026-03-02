@@ -47,7 +47,7 @@ function renderPage(dataSource: ConversationsDataSource, initialEntry = '/conver
 }
 
 describe('ConversationsListPage', () => {
-  it('stores selected bucket in URL query params', async () => {
+  it('stores selected bucket in the bucket URL param', async () => {
     const dataSource = createDataSource([
       {
         id: 'conv-2',
@@ -78,12 +78,12 @@ describe('ConversationsListPage', () => {
         'true'
       );
     });
-    expect(window.location.search).toBe('?selection=2-2');
+    expect(window.location.search).toBe('?bucket=2-2');
     expect(await screen.findByLabelText('select conversation conv-2')).toBeInTheDocument();
     expect(screen.queryByLabelText('select conversation conv-5')).not.toBeInTheDocument();
   });
 
-  it('clears selected bucket URL param when chart view changes', async () => {
+  it('persists chart view in view URL param and clears bucket when view changes', async () => {
     const dataSource = createDataSource([
       {
         id: 'conv-2',
@@ -106,11 +106,11 @@ describe('ConversationsListPage', () => {
     renderPage(dataSource);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Filter conversations with 2 LLM calls' }));
-    await waitFor(() => expect(window.location.search).toBe('?selection=2-2'));
+    await waitFor(() => expect(window.location.search).toBe('?bucket=2-2'));
 
     fireEvent.change(screen.getByLabelText('Conversation chart view'), { target: { value: 'time' } });
 
-    await waitFor(() => expect(window.location.search).toBe(''));
+    await waitFor(() => expect(window.location.search).toBe('?view=time'));
     expect(screen.queryByLabelText('select conversation conv-2')).not.toBeInTheDocument();
   });
 });
