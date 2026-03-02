@@ -60,6 +60,20 @@ export type ConversationSearchRequest = {
   cursor?: string;
 };
 
+export type ConversationListItem = {
+  id: string;
+  title?: string;
+  last_generation_at: string;
+  generation_count: number;
+  created_at: string;
+  updated_at: string;
+  rating_summary?: ConversationRatingSummary;
+};
+
+export type ConversationListResponse = {
+  items: ConversationListItem[];
+};
+
 export type ConversationSearchResult = {
   conversation_id: string;
   generation_count: number;
