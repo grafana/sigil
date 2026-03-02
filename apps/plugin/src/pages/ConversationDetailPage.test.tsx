@@ -76,7 +76,8 @@ describe('ConversationDetailPage', () => {
     });
 
     expect(await screen.findByText('Conversation Detail')).toBeInTheDocument();
-    expect(screen.getByText('devex-go-openai-2-1772456234117')).toBeInTheDocument();
+    expect(screen.queryByText('Conversation ID')).not.toBeInTheDocument();
+    expect(screen.queryByText('Generation count')).not.toBeInTheDocument();
     expect(screen.getByText(/"generation_id": "gen-1"/)).toBeInTheDocument();
   });
 
@@ -186,6 +187,13 @@ describe('ConversationDetailPage', () => {
     );
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('Trace timeline')).not.toBeInTheDocument();
+
+    const traceRow = await screen.findByTestId('trace-row-trace-1');
+    fireEvent.mouseEnter(traceRow);
+    expect(await screen.findByTestId('hovered-span-tooltip')).toBeInTheDocument();
+    fireEvent.mouseLeave(traceRow);
+    await waitFor(() => expect(screen.queryByTestId('hovered-span-tooltip')).not.toBeInTheDocument());
 
     const spanButton = await screen.findByRole('button', { name: 'select span prompt' });
     fireEvent.mouseEnter(spanButton);

@@ -41,7 +41,8 @@ type TraceTimeline = {
 
 type HoveredSpanAnchor = {
   topPx: number;
-  leftPct: number;
+  left: string;
+  maxWidthPx?: number;
 };
 
 type AttrValue = {
@@ -329,6 +330,41 @@ function getUsageValue(usage: GenerationDetail['usage'], key: 'input_tokens' | '
   return value.toLocaleString();
 }
 
+function getHoveredSpanAnchor(
+  span: TraceSpan,
+  timelineBounds: { min: number; range: number },
+  laneWidthPx: number
+): HoveredSpanAnchor {
+  const rawLeftPct = ((span.startNs - timelineBounds.min) / timelineBounds.range) * 100;
+  const boundedWidthPct = Math.min(Math.max((span.durationNs / timelineBounds.range) * 100, TRACE_MIN_SPAN_WIDTH_PCT), 100);
+  const maxLeftPct = Math.max(0, 100 - boundedWidthPct);
+  const boundedLeftPct = Math.min(Math.max(rawLeftPct, 0), maxLeftPct);
+  const spanCenterPct = boundedLeftPct + boundedWidthPct / 2;
+  const edgePaddingPx = 8;
+  const topPx = span.row * TRACE_ROW_STEP_PX + TRACE_SPAN_HEIGHT_PX + 8;
+
+  if (laneWidthPx <= 0) {
+    return {
+      topPx,
+      left: `${spanCenterPct}%`,
+    };
+  }
+
+  const tooltipMaxWidthPx = Math.min(560, Math.max(0, laneWidthPx - edgePaddingPx * 2));
+  const halfTooltipWidthPx = tooltipMaxWidthPx / 2;
+  const spanCenterPx = (spanCenterPct / 100) * laneWidthPx;
+  const clampedCenterPx = Math.min(
+    Math.max(spanCenterPx, halfTooltipWidthPx + edgePaddingPx),
+    laneWidthPx - halfTooltipWidthPx - edgePaddingPx
+  );
+
+  return {
+    topPx,
+    left: `${clampedCenterPx}px`,
+    maxWidthPx: tooltipMaxWidthPx,
+  };
+}
+
 const getStyles = (theme: GrafanaTheme2) => ({
   pageContainer: css({
     label: 'conversationDetailPage-pageContainer',
@@ -355,11 +391,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'grid',
     gap: 0,
     marginTop: theme.spacing(2),
-  }),
-  traceTimelineHeader: css({
-    label: 'conversationDetailPage-traceTimelineHeader',
-    fontWeight: theme.typography.fontWeightMedium,
-    fontSize: theme.typography.bodySmall.fontSize,
   }),
   traceTimelineEmpty: css({
     label: 'conversationDetailPage-traceTimelineEmpty',
@@ -398,8 +429,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
     position: 'absolute' as const,
     zIndex: 1,
     transform: 'translateX(-50%)',
-    width: `min(560px, calc(100% - ${theme.spacing(2)}))`,
-    maxWidth: '560px',
+    width: 'max-content',
+    maxWidth: `min(560px, calc(100% - ${theme.spacing(2)}))`,
     padding: theme.spacing(0.75, 1),
     borderRadius: theme.shape.radius.default,
     border: `1px solid ${theme.colors.border.medium}`,
@@ -541,13 +572,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     height: '100%',
     background: theme.colors.primary.main,
     transition: 'width 150ms ease',
-  }),
-  metaRow: css({
-    label: 'conversationDetailPage-metaRow',
-    display: 'grid',
-    gridTemplateColumns: '180px 1fr',
-    gap: theme.spacing(0.75),
-    fontSize: theme.typography.bodySmall.fontSize,
   }),
   rawData: css({
     label: 'conversationDetailPage-rawData',
@@ -796,16 +820,6 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
       {!loading && hasConversationID && detail != null && (
         <>
           <div className={styles.detailsContainer}>
-            <div className={styles.metaRow}>
-              <strong>Conversation ID</strong>
-              <span>{detail.conversation_id}</span>
-              <strong>Generation count</strong>
-              <span>{detail.generation_count}</span>
-              <strong>First generation</strong>
-              <span>{detail.first_generation_at}</span>
-              <strong>Last generation</strong>
-              <span>{detail.last_generation_at}</span>
-            </div>
             {traceLoadRunning && traceLoadTotal > 0 && (
               <div className={styles.traceProgressContainer}>
                 <div
@@ -827,7 +841,6 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
             )}
             {traceLoadTotal > 0 && !traceLoadRunning && (
               <div className={styles.traceTimelineContainer}>
-                <div className={styles.traceTimelineHeader}>Trace timeline</div>
                 {traceTimelines.length === 0 ? (
                   <div className={styles.traceTimelineEmpty}>No spans found in retrieved traces.</div>
                 ) : (
@@ -847,6 +860,21 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                       <div
                         key={timeline.traceID}
                         className={styles.traceRow}
+                        data-testid={`trace-row-${timeline.traceID}`}
+                        onMouseEnter={(event) => {
+                          const firstSpan = timeline.spans[0];
+                          if (firstSpan == null) {
+                            return;
+                          }
+                          const laneElement = event.currentTarget.querySelector(`.${styles.traceLane}`) as HTMLDivElement | null;
+                          const laneWidthPx = laneElement?.clientWidth ?? 0;
+                          setHoveredSpanSelectionID(firstSpan.selectionID);
+                          setHoveredSpanAnchor(getHoveredSpanAnchor(firstSpan, timelineBounds, laneWidthPx));
+                        }}
+                        onMouseLeave={() => {
+                          setHoveredSpanSelectionID('');
+                          setHoveredSpanAnchor(null);
+                        }}
                         onClick={() => {
                           const firstSpan = timeline.spans[0];
                           if (firstSpan == null) {
@@ -886,12 +914,10 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                                     event.stopPropagation();
                                     setSelectedSpanParam(span.selectionID);
                                   }}
-                                  onMouseEnter={() => {
+                                  onMouseEnter={(event) => {
+                                    const laneWidthPx = event.currentTarget.parentElement?.clientWidth ?? 0;
                                     setHoveredSpanSelectionID(span.selectionID);
-                                    setHoveredSpanAnchor({
-                                      topPx: span.row * TRACE_ROW_STEP_PX + TRACE_SPAN_HEIGHT_PX + 8,
-                                      leftPct: boundedLeftPct + boundedWidthPct / 2,
-                                    });
+                                    setHoveredSpanAnchor(getHoveredSpanAnchor(span, timelineBounds, laneWidthPx));
                                   }}
                                   onMouseLeave={() => {
                                     setHoveredSpanSelectionID('');
@@ -906,7 +932,9 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                                     data-testid="hovered-span-tooltip"
                                     style={{
                                       top: `${hoveredSpanAnchor.topPx}px`,
-                                      left: `${hoveredSpanAnchor.leftPct}%`,
+                                      left: hoveredSpanAnchor.left,
+                                      maxWidth:
+                                        hoveredSpanAnchor.maxWidthPx != null ? `${hoveredSpanAnchor.maxWidthPx}px` : undefined,
                                     }}
                                   >
                                     <div className={styles.hoveredSpanTitle}>{hoveredSpan.name}</div>
