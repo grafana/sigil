@@ -33,28 +33,28 @@ func NewTemplateService(store evalpkg.TemplateStore, evalCreator evaluatorCreato
 
 // CreateTemplateRequest is the input for creating a new template with its initial version.
 type CreateTemplateRequest struct {
-	TemplateID  string             `json:"template_id"`
-	Kind        string             `json:"kind"`
-	Description string             `json:"description,omitempty"`
-	Version     string             `json:"version"`
-	Config      map[string]any     `json:"config"`
+	TemplateID  string              `json:"template_id"`
+	Kind        string              `json:"kind"`
+	Description string              `json:"description,omitempty"`
+	Version     string              `json:"version"`
+	Config      map[string]any      `json:"config"`
 	OutputKeys  []evalpkg.OutputKey `json:"output_keys"`
-	Changelog   string             `json:"changelog,omitempty"`
+	Changelog   string              `json:"changelog,omitempty"`
 }
 
 // PublishVersionRequest is the input for publishing a new version of an existing template.
 type PublishVersionRequest struct {
-	Version    string             `json:"version"`
-	Config     map[string]any     `json:"config"`
+	Version    string              `json:"version"`
+	Config     map[string]any      `json:"config"`
 	OutputKeys []evalpkg.OutputKey `json:"output_keys"`
-	Changelog  string             `json:"changelog,omitempty"`
+	Changelog  string              `json:"changelog,omitempty"`
 }
 
 // ForkTemplateRequest is the input for forking a template into a concrete evaluator.
 type ForkTemplateRequest struct {
-	EvaluatorID string             `json:"evaluator_id"`
-	Version     string             `json:"version,omitempty"`
-	Config      map[string]any     `json:"config,omitempty"`
+	EvaluatorID string              `json:"evaluator_id"`
+	Version     string              `json:"version,omitempty"`
+	Config      map[string]any      `json:"config,omitempty"`
 	OutputKeys  []evalpkg.OutputKey `json:"output_keys,omitempty"`
 }
 
