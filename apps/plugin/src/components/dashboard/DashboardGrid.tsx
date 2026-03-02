@@ -311,8 +311,17 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
   const costGroupByLabel = breakdownPromLabel;
 
   const costByBreakdownData = useMemo<PrometheusQueryResponse | null>(() => {
-    if (costMode !== 'usd' || !costGroupByLabel || !costTokensData) {
+    if (costMode !== 'usd' || !costTokensData) {
       return null;
+    }
+    if (!costGroupByLabel) {
+      return {
+        status: 'success',
+        data: {
+          resultType: 'vector' as const,
+          result: [{ metric: {}, value: [0, String(totalCost.totalCost)] as [number, string] }],
+        },
+      };
     }
     const groups = calculateTotalCostByGroup(costTokensData, resolvedPricing.pricingMap, costGroupByLabel);
     return {
@@ -325,7 +334,7 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
         })),
       },
     };
-  }, [costMode, costGroupByLabel, costTokensData, resolvedPricing.pricingMap]);
+  }, [costMode, costGroupByLabel, costTokensData, resolvedPricing.pricingMap, totalCost.totalCost]);
 
   const costTimeSeries = useMemo(() => {
     if (isTokenTotal) {
@@ -757,14 +766,16 @@ function TopStat({ label, value, unit, loading, prevValue, prevLoading, invertCh
   if (!loading && !prevLoading && prevValue !== undefined) {
     if (prevValue === 0 && value === 0) {
       changeBadge = (
-        <Tooltip content="No data one hour ago" placement="bottom">
+        <Tooltip content="Zero one hour ago" placement="bottom">
           <span className={`${styles.changeBadge} ${styles.changeBadgeNeutral}`}>→ 0%</span>
         </Tooltip>
       );
     } else if (prevValue === 0) {
+      const isGood = !invertChange;
+      const badgeClass = isGood ? styles.changeBadgeGood : styles.changeBadgeWarn;
       changeBadge = (
-        <Tooltip content="No data one hour ago" placement="bottom">
-          <span className={`${styles.changeBadge} ${styles.changeBadgeNeutral}`}>→ 0%</span>
+        <Tooltip content="Zero one hour ago" placement="bottom">
+          <span className={`${styles.changeBadge} ${badgeClass}`}>new</span>
         </Tooltip>
       );
     } else {
@@ -1402,11 +1413,6 @@ function getStyles(theme: GrafanaTheme2) {
       gap: theme.spacing(0.5),
       fontSize: theme.typography.bodySmall.fontSize,
       color: theme.colors.text.secondary,
-    }),
-    panelRow: css({
-      display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: theme.spacing(1),
     }),
     panelRowFirstStat: css({
       display: 'grid',
