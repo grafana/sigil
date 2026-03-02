@@ -59,7 +59,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	fs.StringVar(&token, "token", "", "basic auth password/token value (overrides env/.env)")
 	fs.StringVar(&tokenEnv, "token-env", defaultTokenEnv, "environment variable name that stores basic auth password/token")
 	fs.StringVar(&dotEnvPath, "dotenv", defaultDotEnv, "path to .env file used as fallback when env var is empty")
-	fs.BoolVar(&verifyRead, "verify-read", true, "verify read path by fetching /api/v1/generations/{id} for probe generations")
+	fs.BoolVar(&verifyRead, "verify-read", true, "verify read path by fetching /api/v1/generations/{id} for the HTTP push generation")
 	fs.StringVar(&readBaseURL, "read-base-url", "", "HTTP API base URL (default derived from endpoint)")
 	fs.DurationVar(&readPollInterval, "read-poll-interval", 500*time.Millisecond, "poll interval while waiting for read visibility")
 	fs.DurationVar(&timeout, "timeout", 20*time.Second, "overall timeout for probe")
@@ -143,25 +143,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 	results = appendResult(results, "http_push", httpGenerationID, httpErr)
 
 	if verifyRead {
-		if grpcErr != nil {
-			results = appendSkipResult(results, "http_get(grpc_id)", grpcGenerationID, "skipped because grpc_push failed")
-		} else {
-			readCtx, readCancel := context.WithTimeout(context.Background(), timeout)
-			readErr := verifyGenerationReadable(
-				readCtx,
-				apiBaseURL,
-				strings.TrimSpace(userID),
-				resolvedToken,
-				strings.TrimSpace(tenantID),
-				grpcGenerationID,
-				readPollInterval,
-			)
-			readCancel()
-			results = appendResult(results, "http_get(grpc_id)", grpcGenerationID, readErr)
-		}
-
 		if httpErr != nil {
-			results = appendSkipResult(results, "http_get(http_id)", httpGenerationID, "skipped because http_push failed")
+			results = appendSkipResult(results, "http_get", httpGenerationID, "skipped because http_push failed")
 		} else {
 			readCtx, readCancel := context.WithTimeout(context.Background(), timeout)
 			readErr := verifyGenerationReadable(
@@ -174,11 +157,10 @@ func run(args []string, stdout, stderr io.Writer) error {
 				readPollInterval,
 			)
 			readCancel()
-			results = appendResult(results, "http_get(http_id)", httpGenerationID, readErr)
+			results = appendResult(results, "http_get", httpGenerationID, readErr)
 		}
 	} else {
-		results = appendSkipResult(results, "http_get(grpc_id)", grpcGenerationID, "disabled by -verify-read=false")
-		results = appendSkipResult(results, "http_get(http_id)", httpGenerationID, "disabled by -verify-read=false")
+		results = appendSkipResult(results, "http_get", httpGenerationID, "disabled by -verify-read=false")
 	}
 
 	fmt.Fprintf(
