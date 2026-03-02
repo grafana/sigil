@@ -547,6 +547,14 @@ func TestSaveBatchWithEvalEnqueueDisabledSkipsEnqueueEvent(t *testing.T) {
 	if enqueueCount != 0 {
 		t.Fatalf("expected no enqueue events when disabled, got %d", enqueueCount)
 	}
+
+	var convCount int64
+	if err := store.DB().Model(&ConversationModel{}).Count(&convCount).Error; err != nil {
+		t.Fatalf("count conversations: %v", err)
+	}
+	if convCount != 1 {
+		t.Fatalf("expected conversation row even when eval enqueue disabled, got %d", convCount)
+	}
 }
 
 type recordingEvalHook struct {
