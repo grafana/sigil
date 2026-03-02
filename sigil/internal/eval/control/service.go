@@ -515,6 +515,9 @@ func inputPreviewFromGeneration(generation *sigilv1.Generation) string {
 			}
 			t := strings.TrimSpace(part.GetText())
 			if t != "" {
+				if b.Len() > 0 {
+					b.WriteString("\n")
+				}
 				b.WriteString(t)
 				if utf8.RuneCountInString(b.String()) >= inputPreviewMaxLen {
 					return truncateWithEllipsis(b.String(), inputPreviewMaxLen)

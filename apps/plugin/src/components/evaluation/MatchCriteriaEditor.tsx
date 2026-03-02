@@ -128,7 +128,13 @@ export default function MatchCriteriaEditor({ value, onChange, disabled }: Match
       })}
       {!disabled && (
         <Stack direction="row" gap={1} alignItems="center">
-          <Button variant="secondary" size="sm" icon="plus" onClick={addRow}>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon="plus"
+            onClick={addRow}
+            disabled={usedKeys.size >= MATCH_KEY_OPTIONS.length}
+          >
             Add criteria
           </Button>
         </Stack>

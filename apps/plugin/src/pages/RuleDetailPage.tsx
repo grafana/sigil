@@ -148,19 +148,36 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
     }
   }, [dataSource, isNew]);
 
+  const previewVersion = useRef(0);
+
   useEffect(() => {
     if (debounceRef.current != null) {
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
     }
 
+    previewVersion.current += 1;
+    const version = previewVersion.current;
+
     const runPreview = () => {
       setPreviewLoading(true);
       void dataSource
         .previewRule({ selector, match, sample_rate: sampleRate })
-        .then((res) => setPreview(res))
-        .catch(() => setPreview(null))
-        .finally(() => setPreviewLoading(false));
+        .then((res) => {
+          if (previewVersion.current === version) {
+            setPreview(res);
+          }
+        })
+        .catch(() => {
+          if (previewVersion.current === version) {
+            setPreview(null);
+          }
+        })
+        .finally(() => {
+          if (previewVersion.current === version) {
+            setPreviewLoading(false);
+          }
+        });
     };
 
     debounceRef.current = setTimeout(runPreview, PREVIEW_DEBOUNCE_MS);
