@@ -201,7 +201,7 @@ func FromEnv() Config {
 			StaleHard:     getEnvDuration("SIGIL_MODEL_CARDS_STALE_HARD", 24*time.Hour),
 			BootstrapMode: strings.ToLower(strings.TrimSpace(getEnv("SIGIL_MODEL_CARDS_BOOTSTRAP_MODE", "snapshot-first"))),
 		},
-		EvalWorkerEnabled:     getEnvBool("SIGIL_EVAL_WORKER_ENABLED", true),
+		EvalWorkerEnabled:     getEnvBool("SIGIL_EVAL_WORKER_ENABLED", false),
 		EvalMaxConcurrent:     getEnvInt("SIGIL_EVAL_MAX_CONCURRENT", DefaultEvalMaxConcurrent),
 		EvalMaxRate:           getEnvInt("SIGIL_EVAL_MAX_RATE", DefaultEvalMaxRate),
 		EvalMaxAttempts:       getEnvInt("SIGIL_EVAL_MAX_ATTEMPTS", DefaultEvalMaxAttempts),

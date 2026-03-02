@@ -9,9 +9,10 @@ import (
 )
 
 type WALStore struct {
-	db       *gorm.DB
-	logger   *slog.Logger
-	evalHook EvalHook
+	db                *gorm.DB
+	logger            *slog.Logger
+	evalHook          EvalHook
+	evalEnqueueEnable bool
 }
 
 func NewWALStore(dsn string) (*WALStore, error) {
@@ -25,8 +26,9 @@ func NewWALStore(dsn string) (*WALStore, error) {
 	}
 
 	return &WALStore{
-		db:     db,
-		logger: slog.Default(),
+		db:                db,
+		logger:            slog.Default(),
+		evalEnqueueEnable: true,
 	}, nil
 }
 
@@ -36,4 +38,8 @@ func (s *WALStore) DB() *gorm.DB {
 
 func (s *WALStore) SetEvalHook(hook EvalHook) {
 	s.evalHook = hook
+}
+
+func (s *WALStore) SetEvalEnqueueEnabled(enabled bool) {
+	s.evalEnqueueEnable = enabled
 }

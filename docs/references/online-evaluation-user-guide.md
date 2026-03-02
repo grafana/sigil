@@ -75,7 +75,7 @@ Use one of these modes:
 
 | Env var | Default | Purpose |
 | --- | --- | --- |
-| `SIGIL_EVAL_WORKER_ENABLED` | `true` | Enable eval worker loop |
+| `SIGIL_EVAL_WORKER_ENABLED` | `false` | Enable eval worker loop |
 | `SIGIL_EVAL_MAX_CONCURRENT` | `8` | Max in-flight evaluations |
 | `SIGIL_EVAL_MAX_RATE` | `600` | Global eval executions/min |
 | `SIGIL_EVAL_MAX_ATTEMPTS` | `3` | Retry cap for transient failures |
