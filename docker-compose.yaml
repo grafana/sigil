@@ -23,6 +23,8 @@ services:
       GF_SESSION_PROVIDER_CONFIG: sigil:sigil@tcp(mysql:3306)/grafana
       GF_APP_URL: http://grafana:3000
       GF_SERVER_ROOT_URL: http://grafana:3000
+      SIGIL_PROM_DS_UID: ${SIGIL_PROM_DS_UID:-prometheus}
+      SIGIL_TEMPO_DS_UID: ${SIGIL_TEMPO_DS_UID:-tempo}
       GF_AUTH_MANAGED_SERVICE_ACCOUNTS_ENABLED: "true"
       GF_FEATURE_TOGGLES_ENABLE: extensionSidebar,externalServiceAccounts,grafanaAssistantLoop,accessControlOnCall,assistantStreaming,dashboardNewLayouts,collectorApp,k8sAlloyInstructions,fleetManagement,instrumentationHub,k8sAlloyHelmInstructions,otelSupport,alertEnrichment,alertingEnrichmentAssistantInvestigations,alertingEnrichmentPerRule,grafanaAPIServer,kubeAPIServer,assistantPlaybooks,infinityAssistantTools,assistantTunnel,investigationMemorySearch,restrictedPluginApis,dashboardTemplates,suggestedDashboards,dashboardLibrary
       SIGIL_API_AUTH_TOKEN: ${SIGIL_API_AUTH_TOKEN:-}
@@ -203,7 +205,7 @@ services:
         condition: service_started
 
   sdk-traffic:
-    profiles: ['core']
+    profiles: ['traffic']
     build:
       context: .
       dockerfile: .config/Dockerfile.sdk-traffic
