@@ -44,8 +44,6 @@ interface ConnectionProfile {
   tenantId: string;
   prometheusDatasourceUID: string;
   tempoDatasourceUID: string;
-  /** Plain-text token stored in localStorage for convenience. Acceptable for local dev tooling. */
-  authToken: string;
 }
 
 const PROFILES_STORAGE_KEY = 'sigil-connection-profiles';
@@ -153,7 +151,7 @@ export default function ConnectionSettings({ plugin }: ConnectionSettingsProps) 
     setTenantId(profile.tenantId);
     setPrometheusDatasourceUID(profile.prometheusDatasourceUID);
     setTempoDatasourceUID(profile.tempoDatasourceUID);
-    setApiAuthToken(profile.authToken);
+    setApiAuthToken('');
   }, []);
 
   const handleSwitchProfile = useCallback(
@@ -181,7 +179,6 @@ export default function ConnectionSettings({ plugin }: ConnectionSettingsProps) 
       tenantId,
       prometheusDatasourceUID,
       tempoDatasourceUID,
-      authToken: apiAuthToken.trim(),
     };
     const updated = [...profiles, profile];
     setProfiles(updated);
@@ -190,7 +187,7 @@ export default function ConnectionSettings({ plugin }: ConnectionSettingsProps) 
     saveActiveProfileId(profile.id);
     setNewProfileName('');
     setIsAddingProfile(false);
-  }, [newProfileName, sigilApiUrl, tenantId, prometheusDatasourceUID, tempoDatasourceUID, apiAuthToken, profiles]);
+  }, [newProfileName, sigilApiUrl, tenantId, prometheusDatasourceUID, tempoDatasourceUID, profiles]);
 
   const handleDeleteProfile = useCallback(
     (profile: ConnectionProfile) => {
@@ -243,7 +240,6 @@ export default function ConnectionSettings({ plugin }: ConnectionSettingsProps) 
               tenantId,
               prometheusDatasourceUID: prometheusDatasourceUID.trim(),
               tempoDatasourceUID: tempoDatasourceUID.trim(),
-              authToken: tokenValue || p.authToken,
             }
             : p
         );
@@ -350,7 +346,7 @@ export default function ConnectionSettings({ plugin }: ConnectionSettingsProps) 
         </Field>
         <Field
           label="API Auth Token"
-          description="Optional. When set, the plugin backend uses HTTP Basic Auth (tenant:token) for Sigil API requests. Stored in browser localStorage per profile."
+          description="Optional. When set, the plugin backend uses HTTP Basic Auth (tenant:token) for Sigil API requests. Stored securely via Grafana's backend; not persisted across profile switches."
         >
           <Input
             width={60}
