@@ -1378,26 +1378,20 @@ func TestCallResourceInjectsBasicAuthOnSigilProxy(t *testing.T) {
 		t.Fatalf("new app: %s", err)
 	}
 	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 	app.apiURL = upstream.URL
 	app.tenantID = "tenant-42"
 	app.apiAuthToken = "sigil-token"
 
-	var sender mockCallResourceResponseSender
-	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/conversations",
 		Headers: map[string][]string{
 			"Authorization": {"Bearer user-token"},
 		},
-	}, &sender)
-	if err != nil {
-		t.Fatalf("CallResource error: %s", err)
-	}
-	if sender.response == nil {
-		t.Fatal("no response received from CallResource")
-	}
-	if sender.response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.response.Status, sender.response.Body)
+	})
+	if response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, response.Status, response.Body)
 	}
 }
 
