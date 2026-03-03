@@ -1,13 +1,7 @@
 import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import ConversationTraces from '../components/conversations/ConversationTraces';
-import {
-  mockTraceTimelines,
-  mockTrace1,
-  mockTrace2,
-  mockTrace3,
-  mockTraceConversationDetail,
-} from './mockTraceData';
+import { mockTraceTimelines, mockTrace1, mockTrace2, mockTrace3, mockTraceConversationDetail } from './mockTraceData';
 
 const meta = {
   title: 'Sigil/Conversation Traces',

@@ -171,7 +171,8 @@ export function buildTraceSpans(traceID: string, payload: unknown): Array<Omit<T
 
     for (const resourceSpan of resourceSpans) {
       const serviceName = findServiceName(resourceSpan);
-      const scopeSpans = resourceSpan.scopeSpans ?? resourceSpan.scope_spans ?? resourceSpan.instrumentationLibrarySpans;
+      const scopeSpans =
+        resourceSpan.scopeSpans ?? resourceSpan.scope_spans ?? resourceSpan.instrumentationLibrarySpans;
       if (!Array.isArray(scopeSpans)) {
         continue;
       }
