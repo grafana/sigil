@@ -134,6 +134,7 @@ type ServiceDependencies struct {
 	FanOutStore         storage.GenerationFanOutReader
 	FeedbackStore       feedback.Store
 	ScoreStore          scoreStore
+	EvalSummaryStore    evalSummaryStore
 	TempoBaseURL        string
 	HTTPClient          *http.Client
 	OverfetchMultiplier int
@@ -209,6 +210,9 @@ func NewServiceWithDependencies(dependencies ServiceDependencies) (*Service, err
 	}
 	if dependencies.ScoreStore != nil {
 		service.scoreStore = dependencies.ScoreStore
+	}
+	if dependencies.EvalSummaryStore != nil {
+		service.evalSummaryStore = dependencies.EvalSummaryStore
 	}
 	if dependencies.FanOutStore != nil {
 		service.fanOutStore = dependencies.FanOutStore
