@@ -33,7 +33,7 @@ const defaultTraceFetcher = createTempoTraceFetcher();
 const DEFAULT_TIME_RANGE_HOURS = 1;
 const GENERATION_ID_SELECT_KEY = 'span.sigil.generation.id';
 const TOTAL_TOKENS_SELECT_KEY = 'span.gen_ai.usage.total_tokens';
-const DEFAULT_SEARCH_SELECT_FIELDS = [GENERATION_ID_SELECT_KEY, TOTAL_TOKENS_SELECT_KEY];
+const DEFAULT_SEARCH_SELECT_FIELDS = [GENERATION_ID_SELECT_KEY];
 
 type StatTrendDirection = 'up' | 'down' | 'neutral';
 type ConversationStats = {
