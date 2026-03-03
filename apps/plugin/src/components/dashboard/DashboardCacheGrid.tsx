@@ -684,14 +684,30 @@ function BreakdownStatPanel({
     );
   }
 
-  if (items.length <= 1) {
+  if (items.length === 0) {
     return (
       <div className={styles.bspPanel} style={{ height }}>
         <div className={styles.bspHeader}>
           <span className={styles.bspTitle}>{title}</span>
         </div>
         <div className={styles.bspCenter}>
-          <span className={styles.bspBigValue}>{formatVal(aggregate)}</span>
+          <span className={styles.bspBigValue}>{formatVal(0)}</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (items.length === 1) {
+    return (
+      <div className={styles.bspPanel} style={{ height }}>
+        <div className={styles.bspHeader}>
+          <span className={styles.bspTitle}>{title}</span>
+        </div>
+        <div className={styles.bspCenter}>
+          <div style={{ textAlign: 'center' }}>
+            <span className={styles.bspBigValue}>{formatVal(aggregate)}</span>
+            <div className={styles.bspSingleLabel}>{items[0].name}</div>
+          </div>
         </div>
       </div>
     );
@@ -846,6 +862,11 @@ function getStyles(theme: GrafanaTheme2) {
       borderRadius: 3,
       transition: 'width 0.3s ease',
       background: theme.colors.primary.main,
+    }),
+    bspSingleLabel: css({
+      marginTop: theme.spacing(0.5),
+      fontSize: theme.typography.bodySmall.fontSize,
+      color: theme.colors.text.secondary,
     }),
     bspBarDot: css({
       width: 8,
