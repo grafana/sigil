@@ -176,7 +176,6 @@ func withHTTPTracing(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
 	}
 	tracer := otel.Tracer("github.com/grafana/sigil/server/http")
-	propagator := otel.GetTextMapPropagator()
 
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if req == nil {
@@ -185,6 +184,7 @@ func withHTTPTracing(next http.Handler) http.Handler {
 		}
 
 		ctx := req.Context()
+		propagator := otel.GetTextMapPropagator()
 		if propagator != nil {
 			ctx = propagator.Extract(ctx, propagation.HeaderCarrier(req.Header))
 		}
@@ -199,6 +199,7 @@ func withHTTPTracing(next http.Handler) http.Handler {
 				attribute.String("url.path", req.URL.Path),
 			),
 		)
+		defer span.End()
 
 		recorder := &statusCapturingResponseWriter{ResponseWriter: w}
 		req = req.WithContext(ctx)
@@ -213,7 +214,6 @@ func withHTTPTracing(next http.Handler) http.Handler {
 		if statusCode >= http.StatusInternalServerError {
 			span.SetStatus(codes.Error, http.StatusText(statusCode))
 		}
-		span.End()
 	})
 }
 
