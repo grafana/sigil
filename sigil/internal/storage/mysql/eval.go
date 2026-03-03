@@ -605,20 +605,17 @@ func (s *WALStore) GetLatestScoresByConversation(ctx context.Context, tenantID, 
 		return nil, errors.New("conversation id is required")
 	}
 
-	// Deduplicate to the latest score per (generation_id, score_key) at the
-	// SQL level to avoid fetching all historical re-evaluation rows into memory.
+	// Deduplicate to the latest score per (generation_id, score_key) in a
+	// single pass using a CTE with ROW_NUMBER().
 	var rows []GenerationScoreModel
 	if err := s.db.WithContext(ctx).Raw(
-		"SELECT * FROM generation_scores "+
-			"WHERE id IN ( "+
-			"  SELECT id FROM ( "+
-			"    SELECT id, ROW_NUMBER() OVER (PARTITION BY generation_id, score_key ORDER BY created_at DESC, id DESC) AS rn "+
-			"    FROM generation_scores "+
-			"    WHERE tenant_id = ? AND conversation_id = ? "+
-			"  ) AS ranked WHERE rn = 1 "+
-			")",
+		"WITH ranked AS ( "+
+			"SELECT *, ROW_NUMBER() OVER (PARTITION BY generation_id, score_key ORDER BY created_at DESC, id DESC) AS rn "+
+			"FROM generation_scores "+
+			"WHERE tenant_id = ? AND conversation_id = ? "+
+			") SELECT * FROM ranked WHERE rn = 1",
 		tenantID, conversationID,
-	).Find(&rows).Error; err != nil {
+	).Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("get latest scores by conversation: %w", err)
 	}
 
