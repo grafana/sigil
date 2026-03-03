@@ -16,11 +16,7 @@ import {
   type PrometheusQueryResponse,
   breakdownToPromLabel,
 } from '../../dashboard/types';
-import {
-  calculateTotalCost,
-  calculateTotalCostByGroup,
-  calculateCostTimeSeries,
-} from '../../dashboard/cost';
+import { calculateTotalCost, calculateTotalCostByGroup, calculateCostTimeSeries } from '../../dashboard/cost';
 import {
   computeStep,
   computeRateInterval,
@@ -72,13 +68,7 @@ export function DashboardConsumptionGrid({
   const rangeDuration = useMemo(() => computeRangeDuration(from, to), [from, to]);
 
   // --- Top stats (always aggregate, no breakdown) ---
-  const tokensTotalStat = usePrometheusQuery(
-    dataSource,
-    totalTokensQuery(filters, rangeDuration),
-    from,
-    to,
-    'instant'
-  );
+  const tokensTotalStat = usePrometheusQuery(dataSource, totalTokensQuery(filters, rangeDuration), from, to, 'instant');
   const inputTokensStat = usePrometheusQuery(
     dataSource,
     totalTokensQuery(filters, rangeDuration, 'none', ['input']),
@@ -187,7 +177,11 @@ export function DashboardConsumptionGrid({
         },
       };
     }
-    const groups = calculateTotalCostByGroup(costTokensData.data ?? undefined, resolvedPricing.pricingMap, costGroupByLabel);
+    const groups = calculateTotalCostByGroup(
+      costTokensData.data ?? undefined,
+      resolvedPricing.pricingMap,
+      costGroupByLabel
+    );
     return {
       status: 'success',
       data: {
@@ -218,20 +212,55 @@ export function DashboardConsumptionGrid({
   const inputTokensValue = inputTokensStat.data ? vectorToStatValue(inputTokensStat.data) : 0;
   const outputTokensValue = outputTokensStat.data ? vectorToStatValue(outputTokensStat.data) : 0;
   const cacheReadValue = cacheReadTokensStat.data ? vectorToStatValue(cacheReadTokensStat.data) : 0;
-  const cacheHitRate = inputTokensValue + cacheReadValue > 0
-    ? (cacheReadValue / (inputTokensValue + cacheReadValue)) * 100
-    : 0;
+  const cacheHitRate =
+    inputTokensValue + cacheReadValue > 0 ? (cacheReadValue / (inputTokensValue + cacheReadValue)) * 100 : 0;
 
   return (
     <div className={styles.gridWrapper}>
       {/* Top stats */}
       <div className={styles.statsRow}>
-        <StatItem label="Total Tokens" value={totalTokensValue} unit="short" loading={tokensTotalStat.loading} styles={styles} />
-        <StatItem label="Input Tokens" value={inputTokensValue} unit="short" loading={inputTokensStat.loading} styles={styles} />
-        <StatItem label="Output Tokens" value={outputTokensValue} unit="short" loading={outputTokensStat.loading} styles={styles} />
-        <StatItem label="Cache Read" value={cacheReadValue} unit="short" loading={cacheReadTokensStat.loading} styles={styles} />
-        <StatItem label="Cache Hit Rate" value={cacheHitRate} unit="percent" loading={cacheReadTokensStat.loading || inputTokensStat.loading} styles={styles} />
-        <StatItem label="Estimated Cost" value={totalCost.totalCost} unit="currencyUSD" loading={costTokensData.loading || resolvedPricing.loading} styles={styles} />
+        <StatItem
+          label="Total Tokens"
+          value={totalTokensValue}
+          unit="short"
+          loading={tokensTotalStat.loading}
+          styles={styles}
+        />
+        <StatItem
+          label="Input Tokens"
+          value={inputTokensValue}
+          unit="short"
+          loading={inputTokensStat.loading}
+          styles={styles}
+        />
+        <StatItem
+          label="Output Tokens"
+          value={outputTokensValue}
+          unit="short"
+          loading={outputTokensStat.loading}
+          styles={styles}
+        />
+        <StatItem
+          label="Cache Read"
+          value={cacheReadValue}
+          unit="short"
+          loading={cacheReadTokensStat.loading}
+          styles={styles}
+        />
+        <StatItem
+          label="Cache Hit Rate"
+          value={cacheHitRate}
+          unit="percent"
+          loading={cacheReadTokensStat.loading || inputTokensStat.loading}
+          styles={styles}
+        />
+        <StatItem
+          label="Estimated Cost"
+          value={totalCost.totalCost}
+          unit="currencyUSD"
+          loading={costTokensData.loading || resolvedPricing.loading}
+          styles={styles}
+        />
       </div>
 
       <div className={styles.grid}>
@@ -538,7 +567,15 @@ function BreakdownStatPanel({
                   <span className={styles.bspBarValue}>{formatVal(item.total)}</span>
                 </div>
                 <div className={styles.bspBarTrack}>
-                  <div style={{ display: 'flex', width: `${barWidth}%`, height: '100%', borderRadius: 3, overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      width: `${barWidth}%`,
+                      height: '100%',
+                      borderRadius: 3,
+                      overflow: 'hidden',
+                    }}
+                  >
                     {item.segments.map((seg) => {
                       const segPct = item.total > 0 ? (seg.value / item.total) * 100 : 0;
                       if (segPct === 0) {
@@ -547,7 +584,12 @@ function BreakdownStatPanel({
                       return (
                         <div
                           key={seg.segName}
-                          style={{ width: `${segPct}%`, height: '100%', background: segColorMap.get(seg.segName) ?? '#888', minWidth: 2 }}
+                          style={{
+                            width: `${segPct}%`,
+                            height: '100%',
+                            background: segColorMap.get(seg.segName) ?? '#888',
+                            minWidth: 2,
+                          }}
                           title={`${seg.segName}: ${formatVal(seg.value)}`}
                         />
                       );

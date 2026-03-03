@@ -128,12 +128,36 @@ const mockDataSource: DashboardDataSource = {
       return makeVectorResponse([{ labels: {}, value: '482300' }]);
     }
     // Cache by model (for savings)
-    if (query.includes('gen_ai_provider_name') && query.includes('gen_ai_request_model') && query.includes('cache_read|input')) {
+    if (
+      query.includes('gen_ai_provider_name') &&
+      query.includes('gen_ai_request_model') &&
+      query.includes('cache_read|input')
+    ) {
       return makeVectorResponse([
-        { labels: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o', gen_ai_token_type: 'cache_read' }, value: '40000' },
-        { labels: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o', gen_ai_token_type: 'input' }, value: '300000' },
-        { labels: { gen_ai_provider_name: 'anthropic', gen_ai_request_model: 'claude-sonnet-4-20250514', gen_ai_token_type: 'cache_read' }, value: '27400' },
-        { labels: { gen_ai_provider_name: 'anthropic', gen_ai_request_model: 'claude-sonnet-4-20250514', gen_ai_token_type: 'input' }, value: '182300' },
+        {
+          labels: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o', gen_ai_token_type: 'cache_read' },
+          value: '40000',
+        },
+        {
+          labels: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o', gen_ai_token_type: 'input' },
+          value: '300000',
+        },
+        {
+          labels: {
+            gen_ai_provider_name: 'anthropic',
+            gen_ai_request_model: 'claude-sonnet-4-20250514',
+            gen_ai_token_type: 'cache_read',
+          },
+          value: '27400',
+        },
+        {
+          labels: {
+            gen_ai_provider_name: 'anthropic',
+            gen_ai_request_model: 'claude-sonnet-4-20250514',
+            gen_ai_token_type: 'input',
+          },
+          value: '182300',
+        },
       ]);
     }
     // Cache read by breakdown

@@ -52,14 +52,7 @@ const noThresholds = {
 
 const consistentColor = { mode: 'palette-classic-by-name' };
 
-export function DashboardCacheGrid({
-  dataSource,
-  filters,
-  breakdownBy,
-  from,
-  to,
-  timeRange,
-}: DashboardCacheGridProps) {
+export function DashboardCacheGrid({ dataSource, filters, breakdownBy, from, to, timeRange }: DashboardCacheGridProps) {
   const styles = useStyles2(getStyles);
   const hasBreakdown = breakdownBy !== 'none';
   const breakdownPromLabel = hasBreakdown ? breakdownToPromLabel[breakdownBy] : undefined;
@@ -159,9 +152,7 @@ export function DashboardCacheGrid({
   const cacheWriteValue = cacheWriteStat.data ? vectorToStatValue(cacheWriteStat.data) : 0;
   const inputTokensValue = inputTokensStat.data ? vectorToStatValue(inputTokensStat.data) : 0;
   const cacheHitRate =
-    inputTokensValue + cacheReadValue > 0
-      ? (cacheReadValue / (inputTokensValue + cacheReadValue)) * 100
-      : 0;
+    inputTokensValue + cacheReadValue > 0 ? (cacheReadValue / (inputTokensValue + cacheReadValue)) * 100 : 0;
 
   const savings = useMemo(() => {
     return calculateCacheSavings(cacheByModelData.data ?? undefined, resolvedPricing.pricingMap);
@@ -182,11 +173,41 @@ export function DashboardCacheGrid({
     <div className={styles.gridWrapper}>
       {/* Top stats */}
       <div className={styles.statsRow}>
-        <StatItem label="Cache Hit Rate" value={cacheHitRate} unit="percent" loading={cacheReadStat.loading || inputTokensStat.loading} styles={styles} />
-        <StatItem label="Cache Read Tokens" value={cacheReadValue} unit="short" loading={cacheReadStat.loading} styles={styles} />
-        <StatItem label="Cache Write Tokens" value={cacheWriteValue} unit="short" loading={cacheWriteStat.loading} styles={styles} />
-        <StatItem label="Input Tokens" value={inputTokensValue} unit="short" loading={inputTokensStat.loading} styles={styles} />
-        <StatItem label="Estimated Savings" value={savings.savings} unit="currencyUSD" loading={cacheByModelData.loading || resolvedPricing.loading} styles={styles} />
+        <StatItem
+          label="Cache Hit Rate"
+          value={cacheHitRate}
+          unit="percent"
+          loading={cacheReadStat.loading || inputTokensStat.loading}
+          styles={styles}
+        />
+        <StatItem
+          label="Cache Read Tokens"
+          value={cacheReadValue}
+          unit="short"
+          loading={cacheReadStat.loading}
+          styles={styles}
+        />
+        <StatItem
+          label="Cache Write Tokens"
+          value={cacheWriteValue}
+          unit="short"
+          loading={cacheWriteStat.loading}
+          styles={styles}
+        />
+        <StatItem
+          label="Input Tokens"
+          value={inputTokensValue}
+          unit="short"
+          loading={inputTokensStat.loading}
+          styles={styles}
+        />
+        <StatItem
+          label="Estimated Savings"
+          value={savings.savings}
+          unit="currencyUSD"
+          loading={cacheByModelData.loading || resolvedPricing.loading}
+          styles={styles}
+        />
       </div>
 
       <div className={styles.grid}>
@@ -291,9 +312,7 @@ export function DashboardCacheGrid({
         )}
 
         {/* Savings breakdown by model */}
-        {savings.byModel.length > 0 && (
-          <SavingsTable items={savings.byModel} styles={styles} height={CHART_HEIGHT} />
-        )}
+        {savings.byModel.length > 0 && <SavingsTable items={savings.byModel} styles={styles} height={CHART_HEIGHT} />}
       </div>
     </div>
   );
@@ -367,10 +386,7 @@ function calculateCacheSavings(
       continue;
     }
     totalSavings += saved;
-    const hitRate =
-      entry.cacheRead + entry.input > 0
-        ? (entry.cacheRead / (entry.cacheRead + entry.input)) * 100
-        : 0;
+    const hitRate = entry.cacheRead + entry.input > 0 ? (entry.cacheRead / (entry.cacheRead + entry.input)) * 100 : 0;
     byModel.push({
       model: entry.model,
       provider: entry.provider,
@@ -497,7 +513,8 @@ function SavingsTable({ items, styles, height }: SavingsTableProps) {
               <div className={styles.bspBarMeta}>
                 <span className={styles.bspBarName}>{item.model}</span>
                 <span className={styles.bspBarValue}>
-                  {formatStatValue(item.savings, 'currencyUSD')} · {formatStatValue(item.cacheHitRate, 'percent')} hit rate
+                  {formatStatValue(item.savings, 'currencyUSD')} · {formatStatValue(item.cacheHitRate, 'percent')} hit
+                  rate
                 </span>
               </div>
               <div className={styles.bspBarTrack}>
@@ -660,7 +677,15 @@ function BreakdownStatPanel({
                   <span className={styles.bspBarValue}>{formatVal(item.total)}</span>
                 </div>
                 <div className={styles.bspBarTrack}>
-                  <div style={{ display: 'flex', width: `${barWidth}%`, height: '100%', borderRadius: 3, overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      width: `${barWidth}%`,
+                      height: '100%',
+                      borderRadius: 3,
+                      overflow: 'hidden',
+                    }}
+                  >
                     {item.segments.map((seg) => {
                       const segPct = item.total > 0 ? (seg.value / item.total) * 100 : 0;
                       if (segPct === 0) {
@@ -669,7 +694,12 @@ function BreakdownStatPanel({
                       return (
                         <div
                           key={seg.segName}
-                          style={{ width: `${segPct}%`, height: '100%', background: segColorMap.get(seg.segName) ?? '#888', minWidth: 2 }}
+                          style={{
+                            width: `${segPct}%`,
+                            height: '100%',
+                            background: segColorMap.get(seg.segName) ?? '#888',
+                            minWidth: 2,
+                          }}
                           title={`${seg.segName}: ${formatVal(seg.value)}`}
                         />
                       );

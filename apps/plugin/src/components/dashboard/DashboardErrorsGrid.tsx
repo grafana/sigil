@@ -28,10 +28,7 @@ import {
 import { matrixToDataFrames, vectorToStatValue } from '../../dashboard/transforms';
 import { usePrometheusQuery } from './usePrometheusQuery';
 import { MetricPanel } from './MetricPanel';
-import {
-  type ConversationsDataSource,
-  defaultConversationsDataSource,
-} from '../../conversation/api';
+import { type ConversationsDataSource, defaultConversationsDataSource } from '../../conversation/api';
 import type { ConversationSearchResult } from '../../conversation/types';
 import { PLUGIN_BASE, buildConversationDetailRoute } from '../../constants';
 
@@ -213,10 +210,7 @@ export function DashboardErrorsGrid({
       </div>
 
       {/* Conversations with errors */}
-      <ErrorConversationsTable
-        conversationsDataSource={conversationsDataSource}
-        timeRange={timeRange}
-      />
+      <ErrorConversationsTable conversationsDataSource={conversationsDataSource} timeRange={timeRange} />
     </div>
   );
 }

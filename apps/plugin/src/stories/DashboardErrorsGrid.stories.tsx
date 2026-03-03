@@ -43,9 +43,7 @@ const timeRange: TimeRange = {
 const mockDataSource: DashboardDataSource = {
   async queryRange(query) {
     if (query.includes('* 100')) {
-      return makeMatrixResponse([
-        { labels: {}, values: timePoints.map((t) => [t, String(2 + Math.random() * 1.5)]) },
-      ]);
+      return makeMatrixResponse([{ labels: {}, values: timePoints.map((t) => [t, String(2 + Math.random() * 1.5)]) }]);
     }
     if (query.includes('error_type!=""') && query.includes('by')) {
       return makeMatrixResponse([

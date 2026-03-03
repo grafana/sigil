@@ -334,10 +334,7 @@ export function cacheWriteOverTimeQuery(
 }
 
 /** Cache read vs write tokens over time (broken down by token type). */
-export function cacheTokensByTypeOverTimeQuery(
-  filters: DashboardFilters,
-  interval: string
-): string {
+export function cacheTokensByTypeOverTimeQuery(filters: DashboardFilters, interval: string): string {
   return `sum by (gen_ai_token_type)(rate(${TOKEN_USAGE}_sum${sel(filters, 'gen_ai_token_type=~"cache_read|cache_write"')}[${interval}]))`;
 }
 
@@ -351,9 +348,6 @@ export function cacheReadByBreakdownQuery(
 }
 
 /** Cache tokens by model (for computing savings client-side). */
-export function cacheTokensByModelQuery(
-  filters: DashboardFilters,
-  rangeDuration: string
-): string {
+export function cacheTokensByModelQuery(filters: DashboardFilters, rangeDuration: string): string {
   return `sum by (gen_ai_provider_name, gen_ai_request_model, gen_ai_token_type) (increase(${TOKEN_USAGE}_sum${sel(filters, 'gen_ai_token_type=~"cache_read|input"')}[${rangeDuration}]))`;
 }

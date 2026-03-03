@@ -76,7 +76,11 @@ const resolvedPricing = new Map([
 
 const mockDataSource: DashboardDataSource = {
   async queryRange(query) {
-    if (query.includes('gen_ai_token_type') && query.includes('gen_ai_provider_name') && query.includes('gen_ai_request_model')) {
+    if (
+      query.includes('gen_ai_token_type') &&
+      query.includes('gen_ai_provider_name') &&
+      query.includes('gen_ai_request_model')
+    ) {
       return makeMatrixResponse([
         {
           labels: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o', gen_ai_token_type: 'input' },
@@ -87,11 +91,19 @@ const mockDataSource: DashboardDataSource = {
           values: timePoints.map((t) => [t, String(40 + Math.random() * 20)]),
         },
         {
-          labels: { gen_ai_provider_name: 'anthropic', gen_ai_request_model: 'claude-sonnet-4-20250514', gen_ai_token_type: 'input' },
+          labels: {
+            gen_ai_provider_name: 'anthropic',
+            gen_ai_request_model: 'claude-sonnet-4-20250514',
+            gen_ai_token_type: 'input',
+          },
           values: timePoints.map((t) => [t, String(60 + Math.random() * 30)]),
         },
         {
-          labels: { gen_ai_provider_name: 'anthropic', gen_ai_request_model: 'claude-sonnet-4-20250514', gen_ai_token_type: 'output' },
+          labels: {
+            gen_ai_provider_name: 'anthropic',
+            gen_ai_request_model: 'claude-sonnet-4-20250514',
+            gen_ai_token_type: 'output',
+          },
           values: timePoints.map((t) => [t, String(25 + Math.random() * 10)]),
         },
       ]);
@@ -147,10 +159,30 @@ const mockDataSource: DashboardDataSource = {
     }
     if (query.includes('gen_ai_request_model') && query.includes('gen_ai_token_type')) {
       return makeVectorResponse([
-        { labels: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o', gen_ai_token_type: 'input' }, value: '300000' },
-        { labels: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o', gen_ai_token_type: 'output' }, value: '120000' },
-        { labels: { gen_ai_provider_name: 'anthropic', gen_ai_request_model: 'claude-sonnet-4-20250514', gen_ai_token_type: 'input' }, value: '182300' },
-        { labels: { gen_ai_provider_name: 'anthropic', gen_ai_request_model: 'claude-sonnet-4-20250514', gen_ai_token_type: 'output' }, value: '75700' },
+        {
+          labels: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o', gen_ai_token_type: 'input' },
+          value: '300000',
+        },
+        {
+          labels: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o', gen_ai_token_type: 'output' },
+          value: '120000',
+        },
+        {
+          labels: {
+            gen_ai_provider_name: 'anthropic',
+            gen_ai_request_model: 'claude-sonnet-4-20250514',
+            gen_ai_token_type: 'input',
+          },
+          value: '182300',
+        },
+        {
+          labels: {
+            gen_ai_provider_name: 'anthropic',
+            gen_ai_request_model: 'claude-sonnet-4-20250514',
+            gen_ai_token_type: 'output',
+          },
+          value: '75700',
+        },
       ]);
     }
     if (query.includes('token_usage')) {
