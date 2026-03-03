@@ -231,4 +231,64 @@ describe('ConversationGenerations', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'toggle all spans' }));
     expect(await screen.findByText('http.client')).toBeInTheDocument();
   });
+
+  it('filters spans by free-text search', async () => {
+    fetchMock.mockReturnValue(
+      of({
+        data: {
+          trace: {
+            resourceSpans: [
+              {
+                resource: {
+                  attributes: [{ key: 'service.name', value: { stringValue: 'llm-service' } }],
+                },
+                scopeSpans: [
+                  {
+                    spans: [
+                      {
+                        spanId: 'span-1',
+                        name: 'streamText gpt-4o-mini',
+                        startTimeUnixNano: '1772480417578390317',
+                        endTimeUnixNano: '1772480417752390317',
+                        attributes: [
+                          { key: 'gen_ai.operation.name', value: { stringValue: 'streamText' } },
+                          { key: 'sigil.generation.id', value: { stringValue: 'gen-1' } },
+                        ],
+                      },
+                      {
+                        spanId: 'span-2',
+                        name: 'tool.execute',
+                        startTimeUnixNano: '1772480417578390417',
+                        endTimeUnixNano: '1772480417752390417',
+                        attributes: [{ key: 'gen_ai.operation.name', value: { stringValue: 'execute_tool' } }],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      })
+    );
+
+    const generations: GenerationDetail[] = [
+      {
+        generation_id: 'gen-1',
+        conversation_id: 'conv-1',
+        trace_id: 'trace-1',
+      },
+    ];
+
+    render(<ConversationGenerations generations={generations} />);
+    expect(await screen.findByText('streamText gpt-4o-mini')).toBeInTheDocument();
+    expect(screen.getByText('tool.execute')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'search spans' }), {
+      target: { value: 'execute_tool' },
+    });
+
+    expect(await screen.findByText('tool.execute')).toBeInTheDocument();
+    expect(screen.queryByText('streamText gpt-4o-mini')).not.toBeInTheDocument();
+  });
 });

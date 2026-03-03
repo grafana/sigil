@@ -35,3 +35,12 @@ export const WithTraceLinkedGenerations = {
     })),
   },
 };
+
+export const WithManySpanTypes = {
+  args: {
+    generations: mockConversationDetail.generations.map((generation, index) => ({
+      ...generation,
+      trace_id: generation.trace_id ?? `trace-with-types-${index + 1}`,
+    })),
+  },
+};
