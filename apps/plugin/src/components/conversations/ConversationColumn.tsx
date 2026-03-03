@@ -209,8 +209,6 @@ export default function ConversationColumn({
                         <ModelCardPopover
                           card={card}
                           anchorRect={openModel?.anchorRect ?? null}
-                          onClose={() => { setOpenModel(null); }}
-                          anchorRect={openModel?.anchorRect ?? null}
                           onClose={() => {
                             setOpenModel(null);
                           }}
