@@ -1,58 +1,34 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import SigilSpanTree from './SigilSpanTree';
-import type { SigilSpan } from '../../conversation/traceSpans';
+import type { ConversationSpan, SpanAttributeValue } from '../../conversation/types';
 
-function makeSpan({
-  selectionID,
-  spanID,
-  name,
-  ...rest
-}: Partial<SigilSpan> & Pick<SigilSpan, 'selectionID' | 'spanID' | 'name'>): SigilSpan {
+function makeSpan(overrides: Partial<ConversationSpan> & { spanID: string; name: string }): ConversationSpan {
   return {
-    selectionID,
-    spanID,
-    name,
     traceID: 'trace-1',
+    spanID: overrides.spanID,
     parentSpanID: '',
+    name: overrides.name,
+    kind: 'CLIENT',
     serviceName: 'svc',
-    startNs: BigInt(1),
-    endNs: BigInt(2),
-    durationNs: BigInt(1),
-    attributes: {},
-    sigilKind: 'generation',
-    ...rest,
+    startTimeUnixNano: BigInt(1),
+    endTimeUnixNano: BigInt(2),
+    durationNano: BigInt(1),
+    attributes: new Map<string, SpanAttributeValue>(),
+    generation: null,
+    children: [],
+    ...overrides,
   };
 }
 
 describe('SigilSpanTree', () => {
   it('starts with roots collapsed and expands in hierarchy order', () => {
-    const spans: SigilSpan[] = [
-      makeSpan({
-        selectionID: 'child-2',
-        spanID: 'child-2',
-        parentSpanID: 'root',
-        name: 'second child',
-        startNs: BigInt(3),
-      }),
-      makeSpan({ selectionID: 'root', spanID: 'root', name: 'root', startNs: BigInt(1) }),
-      makeSpan({
-        selectionID: 'child-1',
-        spanID: 'child-1',
-        parentSpanID: 'root',
-        name: 'first child',
-        startNs: BigInt(2),
-      }),
-      makeSpan({
-        selectionID: 'grandchild',
-        spanID: 'grandchild',
-        parentSpanID: 'child-1',
-        name: 'grandchild',
-        startNs: BigInt(4),
-      }),
-    ];
+    const grandchild = makeSpan({ spanID: 'grandchild', parentSpanID: 'child-1', name: 'grandchild', startTimeUnixNano: BigInt(4) });
+    const child1 = makeSpan({ spanID: 'child-1', parentSpanID: 'root', name: 'first child', startTimeUnixNano: BigInt(2), children: [grandchild] });
+    const child2 = makeSpan({ spanID: 'child-2', parentSpanID: 'root', name: 'second child', startTimeUnixNano: BigInt(3) });
+    const root = makeSpan({ spanID: 'root', name: 'root', startTimeUnixNano: BigInt(1), children: [child1, child2] });
 
-    render(<SigilSpanTree spans={spans} />);
+    render(<SigilSpanTree spans={[root]} />);
 
     expect(screen.getByRole('button', { name: 'select span root' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'select span first child' })).not.toBeInTheDocument();
@@ -73,13 +49,11 @@ describe('SigilSpanTree', () => {
   });
 
   it('sets aria-level based on hierarchy depth', () => {
-    const spans: SigilSpan[] = [
-      makeSpan({ selectionID: 'root', spanID: 'root', name: 'root' }),
-      makeSpan({ selectionID: 'child', spanID: 'child', parentSpanID: 'root', name: 'child' }),
-      makeSpan({ selectionID: 'grandchild', spanID: 'grandchild', parentSpanID: 'child', name: 'grandchild' }),
-    ];
+    const grandchild = makeSpan({ spanID: 'grandchild', parentSpanID: 'child', name: 'grandchild' });
+    const child = makeSpan({ spanID: 'child', parentSpanID: 'root', name: 'child', children: [grandchild] });
+    const root = makeSpan({ spanID: 'root', name: 'root', children: [child] });
 
-    render(<SigilSpanTree spans={spans} />);
+    render(<SigilSpanTree spans={[root]} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'expand span root' }));
     fireEvent.click(screen.getByRole('button', { name: 'expand span child' }));
@@ -90,19 +64,11 @@ describe('SigilSpanTree', () => {
   });
 
   it('collapses root items by default', () => {
-    const spans: SigilSpan[] = [
-      makeSpan({ selectionID: 'root-a', spanID: 'root-a', name: 'root-a', startNs: BigInt(1) }),
-      makeSpan({ selectionID: 'root-b', spanID: 'root-b', name: 'root-b', startNs: BigInt(2) }),
-      makeSpan({
-        selectionID: 'child-a',
-        spanID: 'child-a',
-        parentSpanID: 'root-a',
-        name: 'child-a',
-        startNs: BigInt(3),
-      }),
-    ];
+    const childA = makeSpan({ spanID: 'child-a', parentSpanID: 'root-a', name: 'child-a', startTimeUnixNano: BigInt(3) });
+    const rootA = makeSpan({ spanID: 'root-a', name: 'root-a', startTimeUnixNano: BigInt(1), children: [childA] });
+    const rootB = makeSpan({ spanID: 'root-b', name: 'root-b', startTimeUnixNano: BigInt(2) });
 
-    render(<SigilSpanTree spans={spans} />);
+    render(<SigilSpanTree spans={[rootA, rootB]} />);
 
     expect(screen.getByRole('button', { name: 'select span root-a' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'select span root-b' })).toBeInTheDocument();
@@ -110,45 +76,28 @@ describe('SigilSpanTree', () => {
   });
 
   it('expands a root item when selected', () => {
-    const spans: SigilSpan[] = [
-      makeSpan({ selectionID: 'root', spanID: 'root', name: 'root', startNs: BigInt(1) }),
-      makeSpan({ selectionID: 'child', spanID: 'child', parentSpanID: 'root', name: 'child', startNs: BigInt(2) }),
-    ];
+    const child = makeSpan({ spanID: 'child', parentSpanID: 'root', name: 'child', startTimeUnixNano: BigInt(2) });
+    const root = makeSpan({ spanID: 'root', name: 'root', startTimeUnixNano: BigInt(1), children: [child] });
 
-    render(<SigilSpanTree spans={spans} />);
+    render(<SigilSpanTree spans={[root]} />);
 
     expect(screen.queryByRole('button', { name: 'select span child' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'select span root' }));
     expect(screen.getByRole('button', { name: 'select span child' })).toBeInTheDocument();
   });
 
-  it('nests by parentSpanID within the same trace', () => {
-    const spans: SigilSpan[] = [
-      makeSpan({
-        selectionID: 'root-trace-1',
-        traceID: 'trace-1',
-        spanID: 'root',
-        name: 'root-trace-1',
-        startNs: BigInt(1),
-      }),
-      makeSpan({
-        selectionID: 'root-trace-2',
-        traceID: 'trace-2',
-        spanID: 'root',
-        name: 'root-trace-2',
-        startNs: BigInt(2),
-      }),
-      makeSpan({
-        selectionID: 'child-trace-2',
-        traceID: 'trace-2',
-        spanID: 'child',
-        parentSpanID: 'root',
-        name: 'child-trace-2',
-        startNs: BigInt(3),
-      }),
-    ];
+  it('nests children within the same trace', () => {
+    const childTrace2 = makeSpan({
+      traceID: 'trace-2',
+      spanID: 'child',
+      parentSpanID: 'root',
+      name: 'child-trace-2',
+      startTimeUnixNano: BigInt(3),
+    });
+    const rootTrace1 = makeSpan({ traceID: 'trace-1', spanID: 'root', name: 'root-trace-1', startTimeUnixNano: BigInt(1) });
+    const rootTrace2 = makeSpan({ traceID: 'trace-2', spanID: 'root', name: 'root-trace-2', startTimeUnixNano: BigInt(2), children: [childTrace2] });
 
-    render(<SigilSpanTree spans={spans} />);
+    render(<SigilSpanTree spans={[rootTrace1, rootTrace2]} />);
 
     expect(screen.queryByRole('button', { name: 'expand span root-trace-1' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'expand span root-trace-2' })).toBeInTheDocument();

@@ -25,9 +25,12 @@ const testCard: ModelCard = {
   canonical_slug: 'openai/gpt-4o',
   name: 'GPT-4o',
   provider: 'openai',
+  context_length: 128000,
+  modality: 'text+image->text',
+  tokenizer: 'o200k_base',
   pricing: basePricing,
   is_free: false,
-  top_provider: {},
+  top_provider: { context_length: 128000, max_completion_tokens: 16384 },
   first_seen_at: '2025-01-01T00:00:00Z',
   last_seen_at: '2026-03-03T00:00:00Z',
   refreshed_at: '2026-03-03T00:00:00Z',
@@ -105,7 +108,8 @@ describe('calculateGenerationCost', () => {
 });
 
 describe('resolveGenerationCost', () => {
-  it('uses resolve API when model is found', async () => {
+  it('uses resolve API for pricing and lookup for full card', async () => {
+    const lookupResp: ModelCardLookupResponse = { data: testCard, freshness: { catalog_last_refreshed_at: null, stale: false, soft_stale: false, hard_stale: false, source_path: 'memory_live' } };
     const client: ModelCardClient = {
       resolve: jest.fn().mockResolvedValue(
         makeResolvedResponse([
@@ -118,7 +122,7 @@ describe('resolveGenerationCost', () => {
           },
         ])
       ),
-      lookup: jest.fn(),
+      lookup: jest.fn().mockResolvedValue(lookupResp),
     };
 
     const gen = makeGen();
@@ -127,7 +131,10 @@ describe('resolveGenerationCost', () => {
     expect(result).not.toBeNull();
     expect(result!.generationID).toBe('gen-1');
     expect(result!.breakdown.totalCost).toBeCloseTo(6.0);
-    expect(client.lookup).not.toHaveBeenCalled();
+    expect(client.lookup).toHaveBeenCalledTimes(1);
+    expect(client.lookup).toHaveBeenCalledWith({ modelKey: testCard.model_key });
+    expect(result!.card.context_length).toBe(128000);
+    expect(result!.card.name).toBe('GPT-4o');
   });
 
   it('falls back to lookup when resolve fails', async () => {
@@ -172,7 +179,8 @@ describe('resolveGenerationCost', () => {
 });
 
 describe('resolveGenerationCosts', () => {
-  it('deduplicates model pairs and batches the resolve call', async () => {
+  it('deduplicates model pairs and enriches with full card via lookup', async () => {
+    const lookupResp: ModelCardLookupResponse = { data: testCard, freshness: { catalog_last_refreshed_at: null, stale: false, soft_stale: false, hard_stale: false, source_path: 'memory_live' } };
     const resolveFn = jest.fn().mockResolvedValue(
       makeResolvedResponse([
         {
@@ -183,7 +191,8 @@ describe('resolveGenerationCosts', () => {
         },
       ])
     );
-    const client: ModelCardClient = { resolve: resolveFn, lookup: jest.fn() };
+    const lookupFn = jest.fn().mockResolvedValue(lookupResp);
+    const client: ModelCardClient = { resolve: resolveFn, lookup: lookupFn };
 
     const gens = [
       makeGen({ generation_id: 'gen-1' }),
@@ -193,8 +202,10 @@ describe('resolveGenerationCosts', () => {
 
     expect(resolveFn).toHaveBeenCalledTimes(1);
     expect(resolveFn).toHaveBeenCalledWith([{ provider: 'openai', model: 'gpt-4o' }]);
+    expect(lookupFn).toHaveBeenCalledWith({ modelKey: testCard.model_key });
     expect(results.size).toBe(2);
     expect(results.get('gen-1')!.breakdown.totalCost).toBeCloseTo(6.0);
+    expect(results.get('gen-1')!.card.context_length).toBe(128000);
     expect(results.get('gen-2')!.breakdown.totalCost).toBeCloseTo(1.2);
   });
 

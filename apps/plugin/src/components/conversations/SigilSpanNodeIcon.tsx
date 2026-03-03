@@ -1,20 +1,20 @@
 import React from 'react';
 import { Icon, type IconName } from '@grafana/ui';
-import type { SigilSpanKind } from '../../conversation/traceSpans';
+import type { SpanType } from '../../conversation/spans';
 
 type SigilSpanNodeIconProps = {
-  kind: SigilSpanKind;
+  type: SpanType;
   className?: string;
 };
 
-const ICON_BY_KIND: Record<SigilSpanKind, IconName> = {
+const ICON_BY_TYPE: Record<SpanType, IconName> = {
   generation: 'cube',
-  tool: 'wrench',
-  model: 'filter',
-  evaluation: 'check-circle',
-  other: 'circle',
+  tool_execution: 'wrench',
+  embedding: 'filter',
+  framework: 'sitemap',
+  unknown: 'circle',
 };
 
-export default function SigilSpanNodeIcon({ kind, className }: SigilSpanNodeIconProps) {
-  return <Icon name={ICON_BY_KIND[kind]} className={className} size="md" />;
+export default function SigilSpanNodeIcon({ type, className }: SigilSpanNodeIconProps) {
+  return <Icon name={ICON_BY_TYPE[type]} className={className} size="md" />;
 }

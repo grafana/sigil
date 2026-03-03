@@ -1,294 +1,144 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { of } from 'rxjs';
 import ConversationGenerations from './ConversationGenerations';
-import type { GenerationDetail } from '../../conversation/types';
+import type { ConversationData, ConversationSpan, SpanAttributeValue } from '../../conversation/types';
 
-const fetchMock = jest.fn();
+function makeAttrs(entries: Array<[string, SpanAttributeValue]>): ReadonlyMap<string, SpanAttributeValue> {
+  return new Map(entries);
+}
 
-jest.mock('@grafana/runtime', () => ({
-  ...jest.requireActual('@grafana/runtime'),
-  getBackendSrv: () => ({
-    fetch: fetchMock,
-  }),
-}));
+function makeSpan(overrides: Partial<ConversationSpan> & { spanID: string; name: string }): ConversationSpan {
+  return {
+    traceID: 'trace-1',
+    spanID: overrides.spanID,
+    parentSpanID: '',
+    name: overrides.name,
+    kind: 'CLIENT',
+    serviceName: 'llm-service',
+    startTimeUnixNano: BigInt('1772480417578390317'),
+    endTimeUnixNano: BigInt('1772480417752390317'),
+    durationNano: BigInt('173999000'),
+    attributes: new Map(),
+    generation: null,
+    children: [],
+    ...overrides,
+  };
+}
+
+function makeData(overrides: Partial<ConversationData> = {}): ConversationData {
+  return {
+    conversationID: 'conv-1',
+    generationCount: 1,
+    firstGenerationAt: '2026-03-01T10:00:00Z',
+    lastGenerationAt: '2026-03-01T10:05:00Z',
+    ratingSummary: null,
+    annotations: [],
+    spans: [],
+    orphanGenerations: [],
+    ...overrides,
+  };
+}
 
 describe('ConversationGenerations', () => {
-  beforeEach(() => {
-    fetchMock.mockReset();
+  it('shows AI spans and keeps root OTHER spans by default', () => {
+    const sigilSpan = makeSpan({
+      spanID: 'span-1',
+      name: 'streamText gpt-4o-mini',
+      attributes: makeAttrs([
+        ['gen_ai.operation.name', { stringValue: 'streamText' }],
+        ['sigil.generation.id', { stringValue: 'gen-1' }],
+      ]),
+    });
+    const otherSpan = makeSpan({
+      spanID: 'span-2',
+      name: 'db.query',
+      startTimeUnixNano: BigInt('1772480417578390318'),
+    });
+    const data = makeData({ spans: [sigilSpan, otherSpan] });
+
+    render(<ConversationGenerations data={data} />);
+
+    expect(screen.getByText('streamText gpt-4o-mini')).toBeInTheDocument();
   });
 
-  it('loads AI spans and keeps root OTHER spans by default', async () => {
-    fetchMock.mockReturnValue(
-      of({
-        data: {
-          trace: {
-            resourceSpans: [
-              {
-                resource: {
-                  attributes: [{ key: 'service.name', value: { stringValue: 'llm-service' } }],
-                },
-                scopeSpans: [
-                  {
-                    spans: [
-                      {
-                        spanId: 'span-1',
-                        name: 'streamText gpt-4o-mini',
-                        startTimeUnixNano: '1772480417578390317',
-                        endTimeUnixNano: '1772480417752390317',
-                        attributes: [
-                          { key: 'gen_ai.operation.name', value: { stringValue: 'streamText' } },
-                          { key: 'sigil.generation.id', value: { stringValue: 'gen-1' } },
-                        ],
-                      },
-                      {
-                        spanId: 'span-2',
-                        name: 'db.query',
-                        startTimeUnixNano: '1772480417578390318',
-                        endTimeUnixNano: '1772480417752390318',
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-        },
-      })
-    );
+  it('shows all spans when All toggle is enabled', () => {
+    const child = makeSpan({
+      spanID: 'span-2',
+      parentSpanID: 'span-1',
+      name: 'db.query',
+      startTimeUnixNano: BigInt('1772480417578390318'),
+    });
+    const root = makeSpan({
+      spanID: 'span-1',
+      name: 'streamText gpt-4o-mini',
+      attributes: makeAttrs([
+        ['gen_ai.operation.name', { stringValue: 'streamText' }],
+        ['sigil.generation.id', { stringValue: 'gen-1' }],
+      ]),
+      children: [child],
+    });
+    const data = makeData({ spans: [root] });
 
-    const generations: GenerationDetail[] = [
-      {
-        generation_id: 'gen-1',
-        conversation_id: 'conv-1',
-        trace_id: 'trace-1',
-      },
-    ];
+    render(<ConversationGenerations data={data} />);
 
-    render(<ConversationGenerations generations={generations} />);
+    fireEvent.click(screen.getByRole('switch', { name: 'toggle all spans' }));
+    fireEvent.click(screen.getByRole('button', { name: 'expand span streamText gpt-4o-mini' }));
 
-    expect(await screen.findByText('streamText gpt-4o-mini')).toBeInTheDocument();
     expect(screen.getByText('db.query')).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('shows all spans (including OTHER) when All toggle is enabled', async () => {
-    fetchMock.mockReturnValue(
-      of({
-        data: {
-          trace: {
-            resourceSpans: [
-              {
-                resource: {
-                  attributes: [{ key: 'service.name', value: { stringValue: 'llm-service' } }],
-                },
-                scopeSpans: [
-                  {
-                    spans: [
-                      {
-                        spanId: 'span-1',
-                        name: 'streamText gpt-4o-mini',
-                        startTimeUnixNano: '1772480417578390317',
-                        endTimeUnixNano: '1772480417752390317',
-                        attributes: [
-                          { key: 'gen_ai.operation.name', value: { stringValue: 'streamText' } },
-                          { key: 'sigil.generation.id', value: { stringValue: 'gen-1' } },
-                        ],
-                      },
-                      {
-                        spanId: 'span-2',
-                        name: 'db.query',
-                        startTimeUnixNano: '1772480417578390318',
-                        endTimeUnixNano: '1772480417752390318',
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-        },
-      })
-    );
-
-    const generations: GenerationDetail[] = [
-      {
-        generation_id: 'gen-1',
-        conversation_id: 'conv-1',
-        trace_id: 'trace-1',
-        model: { provider: 'openai', name: 'gpt-4o-mini' },
-        created_at: '2026-03-01T10:00:00Z',
-      },
-    ];
-
-    render(<ConversationGenerations generations={generations} />);
-    expect(await screen.findByText('streamText gpt-4o-mini')).toBeInTheDocument();
-    expect(screen.getByText('db.query')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('switch', { name: 'toggle all spans' }));
-
-    expect(await screen.findByText('db.query')).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+  it('shows generation count from data', () => {
+    const data = makeData({ generationCount: 5, spans: [] });
+    render(<ConversationGenerations data={data} />);
+    expect(screen.getByText('Generations (5)')).toBeInTheDocument();
   });
 
-  it('applies All filter for collapsed roots and shows OTHER after manual expand', async () => {
-    fetchMock.mockReturnValue(
-      of({
-        data: {
-          trace: {
-            resourceSpans: [
-              {
-                resource: {
-                  attributes: [{ key: 'service.name', value: { stringValue: 'llm-service' } }],
-                },
-                scopeSpans: [
-                  {
-                    spans: [
-                      {
-                        spanId: 'span-root',
-                        name: 'sigil.generation.prompt',
-                        startTimeUnixNano: '1772480417578390317',
-                        endTimeUnixNano: '1772480417752390317',
-                        attributes: [{ key: 'sigil.generation.id', value: { stringValue: 'gen-1' } }],
-                      },
-                      {
-                        spanId: 'span-child-other',
-                        parentSpanId: 'span-root',
-                        name: 'db.query',
-                        startTimeUnixNano: '1772480417578390318',
-                        endTimeUnixNano: '1772480417752390318',
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-        },
-      })
-    );
-
-    const generations: GenerationDetail[] = [
-      {
-        generation_id: 'gen-1',
-        conversation_id: 'conv-1',
-        trace_id: 'trace-1',
-      },
-    ];
-
-    render(<ConversationGenerations generations={generations} />);
-
-    expect(await screen.findByText('sigil.generation.prompt')).toBeInTheDocument();
-    expect(screen.queryByText('db.query')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('switch', { name: 'toggle all spans' }));
-    expect(screen.queryByText('db.query')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'expand span sigil.generation.prompt' }));
-    expect(await screen.findByText('db.query')).toBeInTheDocument();
+  it('shows empty state when no generations', () => {
+    const data = makeData({ generationCount: 0, spans: [] });
+    render(<ConversationGenerations data={data} />);
+    expect(screen.getByText('No generations in this conversation.')).toBeInTheDocument();
   });
 
-  it('keeps root OTHER spans visible by default and when All is enabled', async () => {
-    fetchMock.mockReturnValue(
-      of({
-        data: {
-          trace: {
-            resourceSpans: [
-              {
-                resource: {
-                  attributes: [{ key: 'service.name', value: { stringValue: 'api-service' } }],
-                },
-                scopeSpans: [
-                  {
-                    spans: [
-                      {
-                        spanId: 'span-http',
-                        name: 'http.client',
-                        startTimeUnixNano: '1772480417578390317',
-                        endTimeUnixNano: '1772480417752390317',
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-        },
-      })
-    );
-
-    const generations: GenerationDetail[] = [
-      {
-        generation_id: 'gen-empty',
-        conversation_id: 'conv-1',
-        trace_id: 'trace-empty',
-      },
-    ];
-
-    render(<ConversationGenerations generations={generations} />);
-
-    expect(await screen.findByText('http.client')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('switch', { name: 'toggle all spans' }));
-    expect(await screen.findByText('http.client')).toBeInTheDocument();
+  it('shows loading spinner', () => {
+    const data = makeData();
+    render(<ConversationGenerations data={data} loading />);
+    expect(screen.getByLabelText('loading conversation spans')).toBeInTheDocument();
   });
 
-  it('filters spans by free-text search', async () => {
-    fetchMock.mockReturnValue(
-      of({
-        data: {
-          trace: {
-            resourceSpans: [
-              {
-                resource: {
-                  attributes: [{ key: 'service.name', value: { stringValue: 'llm-service' } }],
-                },
-                scopeSpans: [
-                  {
-                    spans: [
-                      {
-                        spanId: 'span-1',
-                        name: 'streamText gpt-4o-mini',
-                        startTimeUnixNano: '1772480417578390317',
-                        endTimeUnixNano: '1772480417752390317',
-                        attributes: [
-                          { key: 'gen_ai.operation.name', value: { stringValue: 'streamText' } },
-                          { key: 'sigil.generation.id', value: { stringValue: 'gen-1' } },
-                        ],
-                      },
-                      {
-                        spanId: 'span-2',
-                        name: 'tool.execute',
-                        startTimeUnixNano: '1772480417578390417',
-                        endTimeUnixNano: '1772480417752390417',
-                        attributes: [{ key: 'gen_ai.operation.name', value: { stringValue: 'execute_tool' } }],
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-        },
-      })
-    );
+  it('shows error message', () => {
+    const data = makeData();
+    render(<ConversationGenerations data={data} errorMessage="something went wrong" />);
+    expect(screen.getByText('something went wrong')).toBeInTheDocument();
+  });
 
-    const generations: GenerationDetail[] = [
-      {
-        generation_id: 'gen-1',
-        conversation_id: 'conv-1',
-        trace_id: 'trace-1',
-      },
-    ];
+  it('filters spans by free-text search', () => {
+    const span1 = makeSpan({
+      spanID: 'span-1',
+      name: 'streamText gpt-4o-mini',
+      attributes: makeAttrs([
+        ['gen_ai.operation.name', { stringValue: 'streamText' }],
+        ['sigil.generation.id', { stringValue: 'gen-1' }],
+      ]),
+    });
+    const span2 = makeSpan({
+      spanID: 'span-2',
+      name: 'execute_tool weather',
+      startTimeUnixNano: BigInt('1772480417578390417'),
+      attributes: makeAttrs([
+        ['gen_ai.operation.name', { stringValue: 'execute_tool' }],
+      ]),
+    });
+    const data = makeData({ spans: [span1, span2] });
 
-    render(<ConversationGenerations generations={generations} />);
-    expect(await screen.findByText('streamText gpt-4o-mini')).toBeInTheDocument();
-    expect(screen.getByText('tool.execute')).toBeInTheDocument();
+    render(<ConversationGenerations data={data} />);
+    expect(screen.getByText('streamText gpt-4o-mini')).toBeInTheDocument();
+    expect(screen.getByText('execute_tool weather')).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole('textbox', { name: 'search spans' }), {
       target: { value: 'execute_tool' },
     });
 
-    expect(await screen.findByText('tool.execute')).toBeInTheDocument();
+    expect(screen.getByText('execute_tool weather')).toBeInTheDocument();
     expect(screen.queryByText('streamText gpt-4o-mini')).not.toBeInTheDocument();
   });
 });

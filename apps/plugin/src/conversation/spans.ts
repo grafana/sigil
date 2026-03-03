@@ -2,6 +2,7 @@ import type { GenerationDetail } from '../generation/types';
 import {
   ATTR_ERROR_TYPE,
   ATTR_FRAMEWORK_NAME,
+  ATTR_GENERATION_ID,
   ATTR_OPERATION_NAME,
   ATTR_SDK_NAME,
   OperationName,
@@ -320,4 +321,117 @@ export function isSigilSDKSpan(span: ConversationSpan): boolean {
 
 export function hasError(span: ConversationSpan): boolean {
   return getStringAttr(span.attributes, ATTR_ERROR_TYPE) !== undefined;
+}
+
+// ── Span helpers for UI consumption ──
+
+export function getSelectionID(span: ConversationSpan): string {
+  return `${span.traceID}:${span.spanID}`;
+}
+
+export function isSigilSpan(span: ConversationSpan): boolean {
+  if (getStringAttr(span.attributes, ATTR_GENERATION_ID) !== undefined) {
+    return true;
+  }
+  if (getStringAttr(span.attributes, ATTR_SDK_NAME) !== undefined) {
+    return true;
+  }
+  for (const key of span.attributes.keys()) {
+    if (key.startsWith('sigil.')) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function flattenSpans(roots: ConversationSpan[]): ConversationSpan[] {
+  const result: ConversationSpan[] = [];
+  function walk(spans: ConversationSpan[]): void {
+    for (const span of spans) {
+      result.push(span);
+      walk(span.children);
+    }
+  }
+  walk(roots);
+  return result;
+}
+
+export type SpanSelectionMode = 'all' | 'sigil-only';
+
+function filterTree(roots: ConversationSpan[], predicate: (span: ConversationSpan) => boolean): ConversationSpan[] {
+  function filterNode(span: ConversationSpan): ConversationSpan | null {
+    const filteredChildren = span.children
+      .map(filterNode)
+      .filter((child): child is ConversationSpan => child !== null);
+
+    if (predicate(span) || filteredChildren.length > 0) {
+      return { ...span, children: filteredChildren };
+    }
+    return null;
+  }
+  return roots
+    .map(filterNode)
+    .filter((node): node is ConversationSpan => node !== null);
+}
+
+export function selectSpansForMode(roots: ConversationSpan[], mode: SpanSelectionMode): ConversationSpan[] {
+  if (mode === 'all') {
+    return roots;
+  }
+  return filterTree(roots, (span) => {
+    if (isSigilSpan(span)) {
+      return true;
+    }
+    const spanType = getSpanType(span);
+    return spanType !== 'unknown';
+  });
+}
+
+export function filterSpansByType(roots: ConversationSpan[], spanType: SpanType): ConversationSpan[] {
+  return filterTree(roots, (span) => getSpanType(span) === spanType);
+}
+
+export function filterSpansByText(roots: ConversationSpan[], filter: string): ConversationSpan[] {
+  const normalized = filter.trim().toLowerCase();
+  if (normalized.length === 0) {
+    return roots;
+  }
+  return filterTree(roots, (span) => spanMatchesFreeText(span, normalized));
+}
+
+export function spanMatchesFreeText(span: ConversationSpan, filter: string): boolean {
+  const normalized = filter.trim().toLowerCase();
+  if (normalized.length === 0) {
+    return true;
+  }
+  const attrParts: string[] = [];
+  for (const [key, value] of span.attributes) {
+    if (value.stringValue !== undefined) {
+      attrParts.push(`${key}=${value.stringValue}`);
+    }
+  }
+  const searchable = [
+    span.name,
+    span.serviceName,
+    span.traceID,
+    span.spanID,
+    span.parentSpanID,
+    attrParts.join(' '),
+  ]
+    .join(' ')
+    .toLowerCase();
+  return searchable.includes(normalized);
+}
+
+export function findSpanBySelectionID(roots: ConversationSpan[], selectionID: string): ConversationSpan | null {
+  for (const span of roots) {
+    if (getSelectionID(span) === selectionID) {
+      return span;
+    }
+    const found = findSpanBySelectionID(span.children, selectionID);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
 }

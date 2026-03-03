@@ -3,16 +3,27 @@ import { css } from '@emotion/css';
 import { dateTime, makeTimeRange, type GrafanaTheme2, type TimeRange } from '@grafana/data';
 import { Alert, Spinner, TimeRangePicker, useStyles2 } from '@grafana/ui';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import type { SigilSpan } from '../conversation/traceSpans';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
-import type { ConversationDetail, ConversationSearchResult } from '../conversation/types';
+import { loadConversation as loadConversationData, type TraceFetcher } from '../conversation/loader';
+import { createTempoTraceFetcher } from '../conversation/fetchTrace';
+import { findSpanBySelectionID, getSelectionID } from '../conversation/spans';
+import { getTokenSummary, getCostSummary, getAllGenerations, type TokenSummary, type CostSummary } from '../conversation/aggregates';
+import { resolveGenerationCosts } from '../generation/cost';
+import { defaultModelCardClient } from '../modelcard/api';
+import type { ModelCardClient } from '../modelcard/api';
+import type { GenerationCostResult } from '../generation/types';
+import type { ConversationData, ConversationSearchResult, ConversationSpan } from '../conversation/types';
 import ConversationColumn from '../components/conversations/ConversationColumn';
 import ConversationListPanel from '../components/conversations/ConversationListPanel';
 import { buildConversationViewRoute, ROUTES } from '../constants';
 
 export type ConversationsBrowserPageProps = {
   dataSource?: ConversationsDataSource;
+  traceFetcher?: TraceFetcher;
+  modelCardClient?: ModelCardClient;
 };
+
+const defaultTraceFetcher = createTempoTraceFetcher();
 
 const DEFAULT_TIME_RANGE_HOURS = 1;
 const TOTAL_TOKENS_SELECT_KEY = 'span.gen_ai.usage.total_tokens';
@@ -297,9 +308,43 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
+function serializeSpanToJSON(span: ConversationSpan): string {
+  const attrs: Record<string, string> = {};
+  for (const [key, value] of span.attributes) {
+    if (value.stringValue !== undefined) {
+      attrs[key] = value.stringValue;
+    } else if (value.intValue !== undefined) {
+      attrs[key] = value.intValue;
+    } else if (value.doubleValue !== undefined) {
+      attrs[key] = value.doubleValue;
+    } else if (value.boolValue !== undefined) {
+      attrs[key] = String(value.boolValue);
+    }
+  }
+  return JSON.stringify(
+    {
+      traceID: span.traceID,
+      spanID: span.spanID,
+      parentSpanID: span.parentSpanID,
+      name: span.name,
+      kind: span.kind,
+      serviceName: span.serviceName,
+      startTimeUnixNano: span.startTimeUnixNano.toString(),
+      endTimeUnixNano: span.endTimeUnixNano.toString(),
+      durationNano: span.durationNano.toString(),
+      attributes: attrs,
+      generation: span.generation,
+    },
+    null,
+    2
+  );
+}
+
 export default function ConversationsBrowserPage(props: ConversationsBrowserPageProps) {
   const styles = useStyles2(getStyles);
   const dataSource = props.dataSource ?? defaultConversationsDataSource;
+  const traceFetcher = props.traceFetcher ?? defaultTraceFetcher;
+  const modelCardClient = props.modelCardClient ?? defaultModelCardClient;
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -319,19 +364,23 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
 
   const [conversations, setConversations] = useState<ConversationSearchResult[]>([]);
   const [previousConversations, setPreviousConversations] = useState<ConversationSearchResult[]>([]);
-  const [selectedConversationDetail, setSelectedConversationDetail] = useState<ConversationDetail | null>(null);
+  const [conversationData, setConversationData] = useState<ConversationData | null>(null);
+  const [conversationCosts, setConversationCosts] = useState<Map<string, GenerationCostResult>>(new Map());
   const [selectedConversationLoading, setSelectedConversationLoading] = useState<boolean>(false);
   const [selectedConversationErrorMessage, setSelectedConversationErrorMessage] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [timeRange, setTimeRangeState] = useState<TimeRange>(() => defaultTimeRange());
-  const [loadedSpansBySelectionID, setLoadedSpansBySelectionID] = useState<Record<string, SigilSpan>>({});
   const requestVersionRef = useRef<number>(0);
   const selectedConversationRequestVersionRef = useRef<number>(0);
 
   const selectedSpanSelectionID = searchParams.get('span') ?? '';
-  const selectedSpan =
-    selectedSpanSelectionID.length > 0 ? (loadedSpansBySelectionID[selectedSpanSelectionID] ?? null) : null;
+  const selectedSpan = useMemo(() => {
+    if (selectedSpanSelectionID.length === 0 || !conversationData) {
+      return null;
+    }
+    return findSpanBySelectionID(conversationData.spans, selectedSpanSelectionID);
+  }, [selectedSpanSelectionID, conversationData]);
 
   const loadConversations = useCallback(async (): Promise<void> => {
     requestVersionRef.current += 1;
@@ -382,23 +431,23 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
     if (selectedFromList) {
       return selectedFromList;
     }
-    if (!selectedConversationDetail || selectedConversationDetail.conversation_id !== resolvedSelectedConversationID) {
+    if (!conversationData || conversationData.conversationID !== resolvedSelectedConversationID) {
       return undefined;
     }
     return {
-      conversation_id: selectedConversationDetail.conversation_id,
-      generation_count: selectedConversationDetail.generation_count,
-      first_generation_at: selectedConversationDetail.first_generation_at,
-      last_generation_at: selectedConversationDetail.last_generation_at,
+      conversation_id: conversationData.conversationID,
+      generation_count: conversationData.generationCount,
+      first_generation_at: conversationData.firstGenerationAt,
+      last_generation_at: conversationData.lastGenerationAt,
       models: [],
       agents: [],
       error_count: 0,
       has_errors: false,
       trace_ids: [],
-      rating_summary: selectedConversationDetail.rating_summary,
-      annotation_count: selectedConversationDetail.annotations.length,
+      rating_summary: conversationData.ratingSummary ?? undefined,
+      annotation_count: conversationData.annotations.length,
     };
-  }, [conversations, resolvedSelectedConversationID, selectedConversationDetail]);
+  }, [conversations, resolvedSelectedConversationID, conversationData]);
   const conversationStats = useMemo(
     () => buildConversationStats(conversations, timeRange.to.valueOf()),
     [conversations, timeRange]
@@ -446,7 +495,7 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
     const requestVersion = selectedConversationRequestVersionRef.current;
 
     if (resolvedSelectedConversationID.length === 0) {
-      setSelectedConversationDetail(null);
+      setConversationData(null);
       setSelectedConversationLoading(false);
       setSelectedConversationErrorMessage('');
       return;
@@ -454,15 +503,14 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
 
     setSelectedConversationLoading(true);
     setSelectedConversationErrorMessage('');
-    setSelectedConversationDetail(null);
+    setConversationData(null);
 
-    void dataSource
-      .getConversationDetail(resolvedSelectedConversationID)
-      .then((response) => {
+    void loadConversationData(dataSource, resolvedSelectedConversationID, traceFetcher)
+      .then((data) => {
         if (selectedConversationRequestVersionRef.current !== requestVersion) {
           return;
         }
-        setSelectedConversationDetail(response);
+        setConversationData(data);
       })
       .catch((error) => {
         if (selectedConversationRequestVersionRef.current !== requestVersion) {
@@ -478,14 +526,54 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
         }
         setSelectedConversationLoading(false);
       });
-  }, [dataSource, resolvedSelectedConversationID]);
+  }, [dataSource, resolvedSelectedConversationID, traceFetcher]);
+
+  useEffect(() => {
+    if (!conversationData) {
+      setConversationCosts(new Map());
+      return;
+    }
+    const gens = getAllGenerations(conversationData);
+    if (gens.length === 0) {
+      return;
+    }
+    void resolveGenerationCosts(gens, modelCardClient)
+      .then(setConversationCosts)
+      .catch(() => {
+        setConversationCosts(new Map());
+      });
+  }, [conversationData, modelCardClient]);
+
+  const tokenSummary = useMemo<TokenSummary | null>(() => {
+    if (!conversationData) {
+      return null;
+    }
+    return getTokenSummary(conversationData);
+  }, [conversationData]);
+
+  const costSummary = useMemo<CostSummary | null>(() => {
+    if (conversationCosts.size === 0) {
+      return null;
+    }
+    return getCostSummary(conversationCosts);
+  }, [conversationCosts]);
+
+  const modelCards = useMemo(() => {
+    const cards = new Map<string, import('../modelcard/types').ModelCard>();
+    for (const [, cost] of conversationCosts) {
+      const key = `${cost.provider}::${cost.model}`;
+      if (!cards.has(key)) {
+        cards.set(key, cost.card);
+      }
+    }
+    return cards;
+  }, [conversationCosts]);
 
   useEffect(() => {
     if (previousConversationIDRef.current === resolvedSelectedConversationID) {
       return;
     }
     previousConversationIDRef.current = resolvedSelectedConversationID;
-    setLoadedSpansBySelectionID({});
 
     const next = new URLSearchParams(location.search);
     if (!next.has('span') && !next.has('trace')) {
@@ -497,13 +585,13 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   }, [location.search, resolvedSelectedConversationID, setSearchParams]);
 
   const onSelectSpan = useCallback(
-    (span: SigilSpan | null) => {
+    (span: ConversationSpan | null) => {
       const next = new URLSearchParams(searchParams);
       if (span == null) {
         next.delete('span');
         next.delete('trace');
       } else {
-        next.set('span', span.selectionID);
+        next.set('span', getSelectionID(span));
         next.set('trace', span.traceID);
       }
       setSearchParams(next, { replace: true });
@@ -511,30 +599,11 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
     [searchParams, setSearchParams]
   );
 
-  const onSpansLoaded = useCallback((spans: SigilSpan[]) => {
-    setLoadedSpansBySelectionID(() => {
-      const next: Record<string, SigilSpan> = {};
-      for (const span of spans) {
-        next[span.selectionID] = span;
-      }
-      return next;
-    });
-  }, []);
-
   const selectedSpanDebugJSON = useMemo(() => {
     if (selectedSpan == null) {
       return '';
     }
-    return JSON.stringify(
-      {
-        ...selectedSpan,
-        startNs: selectedSpan.startNs.toString(),
-        endNs: selectedSpan.endNs.toString(),
-        durationNs: selectedSpan.durationNs.toString(),
-      },
-      null,
-      2
-    );
+    return serializeSpanToJSON(selectedSpan);
   }, [selectedSpan]);
 
   return (
@@ -719,12 +788,14 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
               ) : (
                 <ConversationColumn
                   conversation={selectedConversation!}
-                  generations={selectedConversationDetail?.generations ?? []}
-                  generationsLoading={selectedConversationLoading}
-                  generationsErrorMessage={selectedConversationErrorMessage}
+                  data={conversationData}
+                  modelCards={modelCards}
+                  tokenSummary={tokenSummary}
+                  costSummary={costSummary}
+                  loading={selectedConversationLoading}
+                  errorMessage={selectedConversationErrorMessage}
                   selectedSpanSelectionID={selectedSpanSelectionID}
                   onSelectSpan={onSelectSpan}
-                  onSpansLoaded={onSpansLoaded}
                 />
               )}
             </div>

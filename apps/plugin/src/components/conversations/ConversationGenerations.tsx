@@ -1,64 +1,31 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
-import { getBackendSrv } from '@grafana/runtime';
 import { Alert, Button, Input, Select, Spinner, Stack, Switch, useStyles2 } from '@grafana/ui';
-import { lastValueFrom } from 'rxjs';
-import type { GenerationDetail } from '../../conversation/types';
+import type { ConversationData, ConversationSpan } from '../../conversation/types';
+import type { SpanType } from '../../conversation/spans';
 import {
-  buildTraceSpans,
   selectSpansForMode,
-  type ParsedTraceSpan,
-  type SigilSpan,
-  type SigilSpanKind,
-} from '../../conversation/traceSpans';
+  filterSpansByType,
+  filterSpansByText,
+} from '../../conversation/spans';
 import SigilSpanTree from './SigilSpanTree';
 
 export type ConversationGenerationsProps = {
-  generations: GenerationDetail[];
+  data: ConversationData;
   loading?: boolean;
   errorMessage?: string;
   selectedSpanSelectionID?: string;
-  onSelectSpan?: (span: SigilSpan | null) => void;
-  onSpansLoaded?: (spans: SigilSpan[]) => void;
+  onSelectSpan?: (span: ConversationSpan | null) => void;
 };
 
-type SpanLoadState = {
-  loading: boolean;
-  errorMessage: string;
-  spans: ParsedTraceSpan[];
-};
-
-const SIGIL_KIND_OPTIONS: Array<SelectableValue<SigilSpanKind>> = [
+const SPAN_TYPE_OPTIONS: Array<SelectableValue<SpanType>> = [
   { label: 'Generation', value: 'generation' },
-  { label: 'Tool', value: 'tool' },
-  { label: 'Model', value: 'model' },
-  { label: 'Evaluation', value: 'evaluation' },
-  { label: 'Other', value: 'other' },
+  { label: 'Tool', value: 'tool_execution' },
+  { label: 'Embedding', value: 'embedding' },
+  { label: 'Framework', value: 'framework' },
+  { label: 'Other', value: 'unknown' },
 ];
-
-function spanMatchesFreeText(span: SigilSpan, freeTextFilter: string): boolean {
-  const normalized = freeTextFilter.trim().toLowerCase();
-  if (normalized.length === 0) {
-    return true;
-  }
-  const attributeText = Object.entries(span.attributes)
-    .map(([key, value]) => `${key}=${value}`)
-    .join(' ')
-    .toLowerCase();
-  const searchable = [
-    span.name,
-    span.serviceName,
-    span.sigilKind,
-    span.traceID,
-    span.spanID,
-    span.parentSpanID,
-    attributeText,
-  ]
-    .join(' ')
-    .toLowerCase();
-  return searchable.includes(normalized);
-}
 
 const getStyles = (theme: GrafanaTheme2) => ({
   container: css({
@@ -115,11 +82,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     padding: theme.spacing(0.25, 0.5),
     lineHeight: 1,
   }),
-  nestedState: css({
-    label: 'conversationGenerations-nestedState',
-    color: theme.colors.text.secondary,
-    fontSize: theme.typography.bodySmall.fontSize,
-  }),
   spinnerWrap: css({
     label: 'conversationGenerations-spinnerWrap',
     display: 'flex',
@@ -134,120 +96,45 @@ const getStyles = (theme: GrafanaTheme2) => ({
 });
 
 export default function ConversationGenerations({
-  generations,
+  data,
   loading = false,
   errorMessage = '',
   selectedSpanSelectionID = '',
   onSelectSpan,
-  onSpansLoaded,
 }: ConversationGenerationsProps) {
   const styles = useStyles2(getStyles);
   const [showAllSpans, setShowAllSpans] = useState<boolean>(false);
-  const [typeFilter, setTypeFilter] = useState<SigilSpanKind | ''>('');
+  const [typeFilter, setTypeFilter] = useState<SpanType | ''>('');
   const [textFilter, setTextFilter] = useState<string>('');
-  const [spanState, setSpanState] = useState<SpanLoadState>({
-    loading: false,
-    errorMessage: '',
-    spans: [],
-  });
 
-  const loadAllGenerationSpans = useCallback(async () => {
-    if (generations.length === 0) {
-      setSpanState({ loading: false, errorMessage: '', spans: [] });
-      return;
-    }
-    setSpanState({ loading: true, errorMessage: '', spans: [] });
-    try {
-      const uniqueTraceIDs = Array.from(
-        new Set(
-          generations
-            .map((generation) => generation.trace_id)
-            .filter((traceID): traceID is string => typeof traceID === 'string' && traceID.length > 0)
-        )
-      );
-      const spansByTraceID: Record<string, ParsedTraceSpan[]> = {};
-      await Promise.all(
-        uniqueTraceIDs.map(async (traceID) => {
-          const traceURL = new URL(
-            `/api/plugins/grafana-sigil-app/resources/query/proxy/tempo/api/v2/traces/${encodeURIComponent(traceID)}`,
-            window.location.origin
-          );
-          const response = await lastValueFrom(
-            getBackendSrv().fetch<unknown>({
-              method: 'GET',
-              url: traceURL.toString(),
-            })
-          );
-          spansByTraceID[traceID] = buildTraceSpans(traceID, response.data);
-        })
-      );
-      const uniqueBySelectionID = new Map<string, ParsedTraceSpan>();
-      for (const traceID of uniqueTraceIDs) {
-        for (const span of spansByTraceID[traceID] ?? []) {
-          uniqueBySelectionID.set(span.selectionID, span);
-        }
-      }
-      setSpanState({
-        loading: false,
-        errorMessage: '',
-        spans: Array.from(uniqueBySelectionID.values()).sort((left, right) => {
-          if (left.startNs !== right.startNs) {
-            return left.startNs < right.startNs ? -1 : 1;
-          }
-          return left.name.localeCompare(right.name);
-        }),
-      });
-    } catch (error) {
-      setSpanState({
-        loading: false,
-        errorMessage: error instanceof Error ? error.message : 'failed to load spans',
-        spans: [],
-      });
-    }
-  }, [generations]);
-
-  useEffect(() => {
-    const timeoutID = window.setTimeout(() => {
-      void loadAllGenerationSpans();
-    }, 0);
-    return () => {
-      window.clearTimeout(timeoutID);
-    };
-  }, [loadAllGenerationSpans]);
-
-  const visibleSpans = useMemo(
-    () => selectSpansForMode(spanState.spans, showAllSpans ? 'all' : 'sigil-only'),
-    [showAllSpans, spanState.spans]
+  const modeFilteredSpans = useMemo(
+    () => selectSpansForMode(data.spans, showAllSpans ? 'all' : 'sigil-only'),
+    [data.spans, showAllSpans]
   );
 
+  const typeFilteredSpans = useMemo(() => {
+    if (typeFilter.length === 0) {
+      return modeFilteredSpans;
+    }
+    return filterSpansByType(modeFilteredSpans, typeFilter as SpanType);
+  }, [modeFilteredSpans, typeFilter]);
+
   const filteredSpans = useMemo(
-    () =>
-      visibleSpans.filter((span) => {
-        if (typeFilter.length > 0 && span.sigilKind !== typeFilter) {
-          return false;
-        }
-        return spanMatchesFreeText(span, textFilter);
-      }),
-    [textFilter, typeFilter, visibleSpans]
+    () => filterSpansByText(typeFilteredSpans, textFilter),
+    [typeFilteredSpans, textFilter]
   );
 
   const hasActiveFilters = typeFilter.length > 0 || textFilter.trim().length > 0;
 
-  const allSelectableSpans = useMemo(() => selectSpansForMode(spanState.spans, 'all'), [spanState.spans]);
-
-  useEffect(() => {
-    onSpansLoaded?.(allSelectableSpans);
-  }, [allSelectableSpans, onSpansLoaded]);
-
   return (
     <div className={styles.container}>
       <div className={styles.controls}>
-        <h3 className={styles.title}>Spans ({filteredSpans.length})</h3>
+        <h3 className={styles.title}>Generations ({data.generationCount})</h3>
         <div className={styles.toggleWrap}>
           <span className={styles.toggleLabel}>All</span>
           <Switch
             value={showAllSpans}
-            onChange={(event) => setShowAllSpans(event.target.checked)}
+            onChange={(event) => { setShowAllSpans(event.target.checked); }}
             aria-label="toggle all spans"
           />
         </div>
@@ -256,7 +143,7 @@ export default function ConversationGenerations({
         <div className={styles.searchInputWrap}>
           <Input
             value={textFilter}
-            onChange={(event) => setTextFilter(event.currentTarget.value)}
+            onChange={(event) => { setTextFilter(event.currentTarget.value); }}
             placeholder="Type text or search spans"
             width={36}
             aria-label="search spans"
@@ -267,35 +154,31 @@ export default function ConversationGenerations({
               size="sm"
               className={styles.searchClearButton}
               aria-label="clear search spans"
-              onClick={() => setTextFilter('')}
+              onClick={() => { setTextFilter(''); }}
             >
               X
             </Button>
           )}
         </div>
-        <Select<SigilSpanKind>
-          options={SIGIL_KIND_OPTIONS}
+        <Select<SpanType>
+          options={SPAN_TYPE_OPTIONS}
           value={typeFilter || null}
-          onChange={(selection) => setTypeFilter(selection?.value ?? '')}
+          onChange={(selection) => { setTypeFilter(selection?.value ?? ''); }}
           placeholder="Type"
           isClearable
           width={18}
         />
       </Stack>
       {errorMessage.length > 0 && (
-        <Alert severity="error" title="Failed to load generations">
+        <Alert severity="error" title="Failed to load conversation">
           {errorMessage}
         </Alert>
       )}
-      {loading || spanState.loading ? (
+      {loading ? (
         <div className={styles.spinnerWrap}>
           <Spinner aria-label="loading conversation spans" />
         </div>
-      ) : spanState.errorMessage.length > 0 ? (
-        <Alert severity="error" title="Failed to load spans">
-          {spanState.errorMessage}
-        </Alert>
-      ) : generations.length === 0 ? (
+      ) : data.generationCount === 0 ? (
         <div className={styles.emptyState}>No generations in this conversation.</div>
       ) : filteredSpans.length === 0 ? (
         hasActiveFilters ? (
@@ -308,7 +191,7 @@ export default function ConversationGenerations({
           <SigilSpanTree
             spans={filteredSpans}
             selectedSpanSelectionID={selectedSpanSelectionID}
-            onSelectSpan={(span) => onSelectSpan?.(span)}
+            onSelectSpan={(span) => { onSelectSpan?.(span); }}
           />
         </div>
       )}

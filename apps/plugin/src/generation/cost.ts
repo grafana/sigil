@@ -34,33 +34,19 @@ export async function resolveGenerationCost(
 
   const resolveResp = await client.resolve([{ provider, model }]);
   const resolved = resolveResp.resolved[0];
+  let pricing: ModelCardPricing | null = null;
+  let modelKey = '';
+
   if (resolved?.status === 'resolved' && resolved.card) {
-    const breakdown = calculateGenerationCost(generation.usage, resolved.card.pricing);
-    return {
-      generationID: generation.generation_id,
-      model,
-      provider,
-      card: {
-        model_key: resolved.card.model_key,
-        source: 'openrouter',
-        source_model_id: resolved.card.source_model_id,
-        canonical_slug: '',
-        name: model,
-        provider,
-        pricing: resolved.card.pricing,
-        is_free: false,
-        top_provider: {},
-        first_seen_at: '',
-        last_seen_at: '',
-        refreshed_at: '',
-      },
-      breakdown,
-    };
+    pricing = resolved.card.pricing;
+    modelKey = resolved.card.model_key;
   }
 
+  const lookupKey = modelKey.length > 0 ? modelKey : `openrouter:${provider}/${model}`;
   try {
-    const lookupResp = await client.lookup({ modelKey: `openrouter:${provider}/${model}` });
-    const breakdown = calculateGenerationCost(generation.usage, lookupResp.data.pricing);
+    const lookupResp = await client.lookup({ modelKey: lookupKey });
+    const effectivePricing = pricing ?? lookupResp.data.pricing;
+    const breakdown = calculateGenerationCost(generation.usage, effectivePricing);
     return {
       generationID: generation.generation_id,
       model,
@@ -69,6 +55,29 @@ export async function resolveGenerationCost(
       breakdown,
     };
   } catch {
+    if (pricing) {
+      const breakdown = calculateGenerationCost(generation.usage, pricing);
+      return {
+        generationID: generation.generation_id,
+        model,
+        provider,
+        card: {
+          model_key: modelKey,
+          source: 'openrouter',
+          source_model_id: resolved!.card!.source_model_id,
+          canonical_slug: '',
+          name: model,
+          provider,
+          pricing,
+          is_free: false,
+          top_provider: {},
+          first_seen_at: '',
+          last_seen_at: '',
+          refreshed_at: '',
+        },
+        breakdown,
+      };
+    }
     return null;
   }
 }
@@ -103,7 +112,7 @@ export async function resolveGenerationCosts(
   const resolveResp = await client.resolve(pairs);
 
   const resolvedCards = new Map<PricingKey, { pricing: ModelCardPricing; card: ModelCard }>();
-  const unresolvedKeys: PricingKey[] = [];
+  const keysNeedingLookup: PricingKey[] = [];
 
   for (const item of resolveResp.resolved) {
     const key = pricingKey(item.provider, item.model);
@@ -125,30 +134,45 @@ export async function resolveGenerationCosts(
           refreshed_at: '',
         },
       });
-    } else {
-      unresolvedKeys.push(key);
+      keysNeedingLookup.push(key);
     }
   }
 
-  const lookupPromises = unresolvedKeys.map(async (key) => {
-    const pair = pairsByKey.get(key);
-    if (!pair) {
+  const lookupPromises = keysNeedingLookup.map(async (key) => {
+    const existing = resolvedCards.get(key);
+    if (!existing) {
       return;
     }
     try {
       const lookupResp = await client.lookup({
-        modelKey: `openrouter:${pair.provider}/${pair.model}`,
+        modelKey: existing.card.model_key,
       });
       resolvedCards.set(key, {
-        pricing: lookupResp.data.pricing,
+        pricing: existing.pricing,
         card: lookupResp.data,
       });
     } catch {
-      // Model not found in catalog; skip cost calculation for these generations.
+      // Lookup failed; keep the stub card from resolve with pricing intact.
     }
   });
 
-  await Promise.all(lookupPromises);
+  const unresolvedPairLookups = Array.from(pairsByKey.entries())
+    .filter(([key]) => !resolvedCards.has(key))
+    .map(async ([key, pair]) => {
+      try {
+        const lookupResp = await client.lookup({
+          modelKey: `openrouter:${pair.provider}/${pair.model}`,
+        });
+        resolvedCards.set(key, {
+          pricing: lookupResp.data.pricing,
+          card: lookupResp.data,
+        });
+      } catch {
+        // Model not found in catalog.
+      }
+    });
+
+  await Promise.all([...lookupPromises, ...unresolvedPairLookups]);
 
   for (const [key, gens] of gensByKey) {
     const cardInfo = resolvedCards.get(key);
