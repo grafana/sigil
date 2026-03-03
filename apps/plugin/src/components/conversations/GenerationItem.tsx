@@ -81,7 +81,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     label: 'generationItem-metaColumn',
     display: 'grid',
     gap: theme.spacing(1),
-    padding: theme.spacing(1),
+    padding: theme.spacing(2),
     width: 'fit-content',
   }),
   metaGrid: css({
