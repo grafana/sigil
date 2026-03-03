@@ -28,16 +28,34 @@ function formatModel(value: GenerationDetail): string {
   return value.model?.name ?? '-';
 }
 
+function parseNumericValue(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) {
+      return null;
+    }
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 function formatTokenUsage(value: GenerationDetail): string {
-  const usage = value.usage;
+  const usage = value.usage as Record<string, unknown> | undefined;
   if (!usage) {
     return '-';
   }
-  if (typeof usage.total_tokens === 'number') {
-    return usage.total_tokens.toLocaleString();
+  const totalTokens = parseNumericValue(usage.total_tokens ?? usage.totalTokens);
+  if (totalTokens != null) {
+    return totalTokens.toLocaleString();
   }
-  if (typeof usage.input_tokens === 'number' || typeof usage.output_tokens === 'number') {
-    return `${usage.input_tokens ?? 0}/${usage.output_tokens ?? 0}`;
+  const inputTokens = parseNumericValue(usage.input_tokens ?? usage.inputTokens);
+  const outputTokens = parseNumericValue(usage.output_tokens ?? usage.outputTokens);
+  if (inputTokens != null || outputTokens != null) {
+    return `${inputTokens ?? 0}/${outputTokens ?? 0}`;
   }
   return '-';
 }
