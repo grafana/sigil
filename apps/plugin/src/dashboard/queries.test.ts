@@ -219,15 +219,20 @@ describe('timeseries query builders', () => {
   });
 
   it('errorsByCodeOverTimeQuery without breakdown', () => {
-    expect(errorsByCodeOverTimeQuery(noFilters, '60s', 'none')).toBe(
+    const q = errorsByCodeOverTimeQuery(noFilters, '60s', 'none');
+    expect(q).toContain(
       'sum by (error_type)(rate(gen_ai_client_operation_duration_seconds_count{error_type!=""}[60s]))'
     );
+    expect(q).toContain('/ scalar(');
+    expect(q).toContain('* 100');
   });
 
   it('errorsByCodeOverTimeQuery with breakdown', () => {
-    expect(errorsByCodeOverTimeQuery(noFilters, '60s', 'provider')).toBe(
+    const q = errorsByCodeOverTimeQuery(noFilters, '60s', 'provider');
+    expect(q).toContain(
       'sum by (error_type, gen_ai_provider_name)(rate(gen_ai_client_operation_duration_seconds_count{error_type!=""}[60s]))'
     );
+    expect(q).toContain('* 100');
   });
 
   it('errorsBySpecificCodeOverTimeQuery without breakdown', () => {

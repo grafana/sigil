@@ -150,13 +150,17 @@ export function errorRateOverTimeQuery(
   return `(${errors} / ${total}) * 100`;
 }
 
-/** Error count broken down by error_type (and optionally by breakdown dimension). */
+/** Error rate as percentage over time, broken down by error_type (and optionally by breakdown dimension). */
 export function errorsByCodeOverTimeQuery(
   filters: DashboardFilters,
   interval: string,
   breakdown: BreakdownDimension
 ): string {
-  return `sum${byClause(breakdown, ['error_type'])}(rate(${OPERATION_DURATION}_count${sel(filters, 'error_type!=""')}[${interval}]))`;
+  const errorsByType = `sum${byClause(breakdown, ['error_type'])}(rate(${OPERATION_DURATION}_count${sel(filters, 'error_type!=""')}[${interval}]))`;
+  const total = `sum${byClause(breakdown)}(rate(${OPERATION_DURATION}_count${sel(filters)}[${interval}]))`;
+  const bl = breakdownToPromLabel[breakdown];
+  const div = bl ? `${errorsByType} / on(${bl}) group_left() ${total}` : `${errorsByType} / scalar(${total})`;
+  return `(${div}) * 100`;
 }
 
 /** Error count broken down by error_type (instant stat for pie/bar). */
@@ -293,17 +297,6 @@ export function tokensByModelAndTypeOverTimeQuery(
 // Cache-specific queries
 // ---------------------------------------------------------------------------
 
-/** Cache hit rate as a percentage: cache_read / (cache_read + input) * 100. */
-export function cacheHitRateQuery(
-  filters: DashboardFilters,
-  rangeDuration: string,
-  breakdown: BreakdownDimension = 'none'
-): string {
-  const cacheRead = `sum${byClause(breakdown)}(increase(${TOKEN_USAGE}_sum${sel(filters, 'gen_ai_token_type="cache_read"')}[${rangeDuration}]))`;
-  const input = `sum${byClause(breakdown)}(increase(${TOKEN_USAGE}_sum${sel(filters, 'gen_ai_token_type="input"')}[${rangeDuration}]))`;
-  return `(${cacheRead} / (${cacheRead} + ${input})) * 100`;
-}
-
 /** Cache hit rate over time as a percentage, optionally grouped by breakdown dimension. */
 export function cacheHitRateOverTimeQuery(
   filters: DashboardFilters,
@@ -322,15 +315,6 @@ export function cacheReadOverTimeQuery(
   breakdown: BreakdownDimension = 'none'
 ): string {
   return `sum${byClause(breakdown)}(rate(${TOKEN_USAGE}_sum${sel(filters, 'gen_ai_token_type="cache_read"')}[${interval}]))`;
-}
-
-/** Cache write tokens over time, optionally grouped by breakdown dimension. */
-export function cacheWriteOverTimeQuery(
-  filters: DashboardFilters,
-  interval: string,
-  breakdown: BreakdownDimension = 'none'
-): string {
-  return `sum${byClause(breakdown)}(rate(${TOKEN_USAGE}_sum${sel(filters, 'gen_ai_token_type="cache_write"')}[${interval}]))`;
 }
 
 /** Cache read vs write tokens over time (broken down by token type). */

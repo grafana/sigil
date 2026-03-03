@@ -1,13 +1,7 @@
 import React, { useMemo } from 'react';
 import { css } from '@emotion/css';
-import {
-  ThresholdsMode,
-  getValueFormat,
-  formattedValueToString,
-  type GrafanaTheme2,
-  type TimeRange,
-} from '@grafana/data';
-import { Spinner, useStyles2 } from '@grafana/ui';
+import { ThresholdsMode, type GrafanaTheme2, type TimeRange } from '@grafana/data';
+import { useStyles2 } from '@grafana/ui';
 import type { DashboardDataSource } from '../../dashboard/api';
 import {
   type BreakdownDimension,
@@ -16,6 +10,7 @@ import {
   type PrometheusQueryResponse,
   breakdownToPromLabel,
 } from '../../dashboard/types';
+import { StatItem, extractResolvePairs, BreakdownStatPanel } from './dashboardShared';
 import { calculateTotalCost, calculateTotalCostByGroup, calculateCostTimeSeries } from '../../dashboard/cost';
 import {
   computeStep,
@@ -219,47 +214,21 @@ export function DashboardConsumptionGrid({
     <div className={styles.gridWrapper}>
       {/* Top stats */}
       <div className={styles.statsRow}>
-        <StatItem
-          label="Total Tokens"
-          value={totalTokensValue}
-          unit="short"
-          loading={tokensTotalStat.loading}
-          styles={styles}
-        />
-        <StatItem
-          label="Input Tokens"
-          value={inputTokensValue}
-          unit="short"
-          loading={inputTokensStat.loading}
-          styles={styles}
-        />
-        <StatItem
-          label="Output Tokens"
-          value={outputTokensValue}
-          unit="short"
-          loading={outputTokensStat.loading}
-          styles={styles}
-        />
-        <StatItem
-          label="Cache Read"
-          value={cacheReadValue}
-          unit="short"
-          loading={cacheReadTokensStat.loading}
-          styles={styles}
-        />
+        <StatItem label="Total Tokens" value={totalTokensValue} unit="short" loading={tokensTotalStat.loading} />
+        <StatItem label="Input Tokens" value={inputTokensValue} unit="short" loading={inputTokensStat.loading} />
+        <StatItem label="Output Tokens" value={outputTokensValue} unit="short" loading={outputTokensStat.loading} />
+        <StatItem label="Cache Read" value={cacheReadValue} unit="short" loading={cacheReadTokensStat.loading} />
         <StatItem
           label="Cache Hit Rate"
           value={cacheHitRate}
           unit="percent"
           loading={cacheReadTokensStat.loading || inputTokensStat.loading}
-          styles={styles}
         />
         <StatItem
           label="Estimated Cost"
           value={totalCost.totalCost}
           unit="currencyUSD"
           loading={costTokensData.loading || resolvedPricing.loading}
-          styles={styles}
         />
       </div>
 
@@ -372,296 +341,6 @@ export function DashboardConsumptionGrid({
   );
 }
 
-function formatStatValue(value: number, unit?: string): string {
-  const fmt = getValueFormat(unit ?? 'short');
-  return formattedValueToString(fmt(value));
-}
-
-type StatItemProps = {
-  label: string;
-  value: number;
-  unit?: string;
-  loading: boolean;
-  styles: ReturnType<typeof getStyles>;
-};
-
-function StatItem({ label, value, unit, loading, styles }: StatItemProps) {
-  return (
-    <div className={styles.topStat}>
-      <span className={styles.topStatLabel}>{label}</span>
-      <span className={styles.topStatValue}>{loading ? '–' : formatStatValue(value, unit)}</span>
-    </div>
-  );
-}
-
-function extractResolvePairs(response?: PrometheusQueryResponse): ModelResolvePair[] {
-  if (!response) {
-    return [];
-  }
-  if (response.data.resultType !== 'vector' && response.data.resultType !== 'matrix') {
-    return [];
-  }
-  const pairs: ModelResolvePair[] = [];
-  for (const result of response.data.result) {
-    const provider = result.metric.gen_ai_provider_name ?? '';
-    const model = result.metric.gen_ai_request_model ?? '';
-    if (!provider || !model) {
-      continue;
-    }
-    pairs.push({ provider, model });
-  }
-  return pairs;
-}
-
-// --- BreakdownStatPanel ---
-
-type BreakdownStatPanelProps = {
-  title: string;
-  data: PrometheusQueryResponse | null | undefined;
-  loading: boolean;
-  error?: string;
-  breakdownLabel?: string;
-  height: number;
-  unit?: string;
-  aggregation?: 'sum' | 'avg';
-  segmentLabel?: string;
-  segmentNames?: string[];
-};
-
-function BreakdownStatPanel({
-  title,
-  data,
-  loading,
-  error,
-  breakdownLabel,
-  height,
-  unit = 'short',
-  aggregation = 'sum',
-  segmentLabel,
-  segmentNames,
-}: BreakdownStatPanelProps) {
-  const styles = useStyles2(getStyles);
-  const isStacked = Boolean(segmentLabel && segmentNames && segmentNames.length > 0);
-
-  const items = useMemo(() => {
-    if (isStacked || !data || data.data.resultType !== 'vector') {
-      return [];
-    }
-    const results = data.data.result as Array<{ metric: Record<string, string>; value: [number, string] }>;
-    return results
-      .map((r) => {
-        const name =
-          (breakdownLabel ? r.metric[breakdownLabel] : '') ||
-          Object.values(r.metric).filter(Boolean).join(' / ') ||
-          'unknown';
-        return { name, value: parseFloat(r.value[1]) };
-      })
-      .filter((r) => isFinite(r.value))
-      .sort((a, b) => b.value - a.value);
-  }, [data, breakdownLabel, isStacked]);
-
-  type StackedItem = {
-    name: string;
-    total: number;
-    segments: Array<{ segName: string; value: number }>;
-  };
-
-  const stackedItems = useMemo((): StackedItem[] => {
-    if (!isStacked || !data || data.data.resultType !== 'vector' || !segmentLabel || !segmentNames) {
-      return [];
-    }
-    const results = data.data.result as Array<{ metric: Record<string, string>; value: [number, string] }>;
-    const grouped = new Map<string, Map<string, number>>();
-    for (const r of results) {
-      const breakdownName = (breakdownLabel ? r.metric[breakdownLabel] : '') || 'unknown';
-      const seg = r.metric[segmentLabel] || 'unknown';
-      const val = parseFloat(r.value[1]);
-      if (!isFinite(val)) {
-        continue;
-      }
-      if (!grouped.has(breakdownName)) {
-        grouped.set(breakdownName, new Map());
-      }
-      grouped.get(breakdownName)!.set(seg, (grouped.get(breakdownName)!.get(seg) ?? 0) + val);
-    }
-    return Array.from(grouped.entries())
-      .map(([name, segs]) => {
-        const total = Array.from(segs.values()).reduce((s, v) => s + v, 0);
-        const segments = segmentNames.map((sn) => ({
-          segName: sn,
-          value: segs.get(sn) ?? 0,
-        }));
-        return { name, total, segments };
-      })
-      .sort((a, b) => b.total - a.total);
-  }, [isStacked, data, breakdownLabel, segmentLabel, segmentNames]);
-
-  const aggregate = useMemo(() => {
-    const src = isStacked ? stackedItems.map((i) => i.total) : items.map((i) => i.value);
-    if (src.length === 0) {
-      return 0;
-    }
-    const total = src.reduce((s, v) => s + v, 0);
-    return aggregation === 'avg' ? total / src.length : total;
-  }, [items, stackedItems, isStacked, aggregation]);
-
-  const formatVal = (v: number) => formattedValueToString(getValueFormat(unit)(v));
-
-  if (loading) {
-    return (
-      <div className={styles.bspPanel} style={{ height }}>
-        <div className={styles.bspHeader}>
-          <span className={styles.bspTitle}>{title}</span>
-        </div>
-        <div className={styles.bspCenter}>
-          <Spinner size="lg" />
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className={styles.bspPanel} style={{ height }}>
-        <div className={styles.bspHeader}>
-          <span className={styles.bspTitle}>{title}</span>
-        </div>
-        <div className={styles.bspCenter} style={{ opacity: 0.6 }}>
-          {error}
-        </div>
-      </div>
-    );
-  }
-
-  if (isStacked && stackedItems.length > 0) {
-    const maxTotal = stackedItems[0].total;
-    const segColorMap = new Map<string, string>([
-      ['input', '#7eb26d'],
-      ['output', '#eab839'],
-      ['cache_read', '#6ed0e0'],
-      ['cache_write', '#ef843c'],
-    ]);
-    return (
-      <div className={styles.bspPanel} style={{ height }}>
-        <div className={styles.bspHeader}>
-          <span className={styles.bspTitle}>{title}</span>
-          <div className={styles.bspValueRow}>
-            <span className={styles.bspBigValue}>{formatVal(aggregate)}</span>
-          </div>
-          <div className={styles.bspSegmentLegend}>
-            {segmentNames!.map((sn) => (
-              <span key={sn} className={styles.bspSegmentLegendItem}>
-                <span className={styles.bspBarDot} style={{ background: segColorMap.get(sn) ?? '#888' }} />
-                {sn}
-              </span>
-            ))}
-          </div>
-        </div>
-        <div className={styles.bspList}>
-          {stackedItems.map((item) => {
-            const barWidth = maxTotal > 0 ? (item.total / maxTotal) * 100 : 0;
-            return (
-              <div key={item.name} className={styles.bspBarRow}>
-                <div className={styles.bspBarMeta}>
-                  <span className={styles.bspBarName}>{item.name}</span>
-                  <span className={styles.bspBarValue}>{formatVal(item.total)}</span>
-                </div>
-                <div className={styles.bspBarTrack}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      width: `${barWidth}%`,
-                      height: '100%',
-                      borderRadius: 3,
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {item.segments.map((seg) => {
-                      const segPct = item.total > 0 ? (seg.value / item.total) * 100 : 0;
-                      if (segPct === 0) {
-                        return null;
-                      }
-                      return (
-                        <div
-                          key={seg.segName}
-                          style={{
-                            width: `${segPct}%`,
-                            height: '100%',
-                            background: segColorMap.get(seg.segName) ?? '#888',
-                            minWidth: 2,
-                          }}
-                          title={`${seg.segName}: ${formatVal(seg.value)}`}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  if (items.length === 0) {
-    return (
-      <div className={styles.bspPanel} style={{ height }}>
-        <div className={styles.bspHeader}>
-          <span className={styles.bspTitle}>{title}</span>
-        </div>
-        <div className={styles.bspCenter}>
-          <span className={styles.bspBigValue}>{formatVal(0)}</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (items.length === 1) {
-    return (
-      <div className={styles.bspPanel} style={{ height }}>
-        <div className={styles.bspHeader}>
-          <span className={styles.bspTitle}>{title}</span>
-        </div>
-        <div className={styles.bspCenter}>
-          <div style={{ textAlign: 'center' }}>
-            <span className={styles.bspBigValue}>{formatVal(aggregate)}</span>
-            {items[0].name !== 'unknown' && <div className={styles.bspSingleLabel}>{items[0].name}</div>}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const maxValue = items[0].value;
-  return (
-    <div className={styles.bspPanel} style={{ height }}>
-      <div className={styles.bspHeader}>
-        <span className={styles.bspTitle}>{title}</span>
-        <div className={styles.bspValueRow}>
-          <span className={styles.bspBigValue}>{formatVal(aggregate)}</span>
-        </div>
-      </div>
-      <div className={styles.bspList}>
-        {items.map((item) => {
-          const barWidth = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
-          return (
-            <div key={item.name} className={styles.bspBarRow}>
-              <div className={styles.bspBarMeta}>
-                <span className={styles.bspBarName}>{item.name}</span>
-                <span className={styles.bspBarValue}>{formatVal(item.value)}</span>
-              </div>
-              <div className={styles.bspBarTrack}>
-                <div className={styles.bspBarFill} style={{ width: `${barWidth}%` }} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 function getStyles(theme: GrafanaTheme2) {
   return {
     gridWrapper: css({
@@ -681,130 +360,10 @@ function getStyles(theme: GrafanaTheme2) {
       borderBottom: `1px solid ${theme.colors.border.weak}`,
       flexWrap: 'wrap',
     }),
-    topStat: css({
-      display: 'flex',
-      flexDirection: 'column',
-      gap: theme.spacing(0.5),
-    }),
-    topStatLabel: css({
-      fontSize: theme.typography.bodySmall.fontSize,
-      color: theme.colors.text.secondary,
-      lineHeight: 1.2,
-    }),
-    topStatValue: css({
-      fontSize: theme.typography.h3.fontSize,
-      fontWeight: theme.typography.fontWeightMedium,
-      color: theme.colors.text.primary,
-      lineHeight: 1.2,
-    }),
     panelRow: css({
       display: 'grid',
       gridTemplateColumns: '3fr 2fr',
       gap: theme.spacing(1),
-    }),
-    bspPanel: css({
-      display: 'flex',
-      flexDirection: 'column',
-      background: theme.colors.background.primary,
-      border: `1px solid ${theme.colors.border.weak}`,
-      borderRadius: theme.shape.radius.default,
-      overflow: 'hidden',
-    }),
-    bspHeader: css({
-      padding: theme.spacing(1.5, 2),
-      flexShrink: 0,
-    }),
-    bspTitle: css({
-      display: 'block',
-      fontSize: theme.typography.h6.fontSize,
-      fontWeight: theme.typography.fontWeightMedium,
-      color: theme.colors.text.primary,
-      marginBottom: theme.spacing(0.25),
-    }),
-    bspValueRow: css({
-      display: 'flex',
-      alignItems: 'baseline',
-      gap: theme.spacing(1),
-    }),
-    bspCenter: css({
-      flex: 1,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-    }),
-    bspBigValue: css({
-      fontSize: 32,
-      fontWeight: theme.typography.fontWeightBold,
-      color: theme.colors.text.primary,
-      letterSpacing: '-0.02em',
-      lineHeight: 1,
-    }),
-    bspList: css({
-      flex: 1,
-      overflowY: 'auto',
-      padding: theme.spacing(0, 1, 1, 1),
-      display: 'flex',
-      flexDirection: 'column',
-      gap: theme.spacing(1.25),
-    }),
-    bspBarRow: css({
-      padding: theme.spacing(0, 1),
-    }),
-    bspBarMeta: css({
-      display: 'flex',
-      alignItems: 'center',
-      gap: theme.spacing(0.75),
-      marginBottom: theme.spacing(0.5),
-      fontSize: theme.typography.bodySmall.fontSize,
-      lineHeight: 1,
-    }),
-    bspBarDot: css({
-      width: 8,
-      height: 8,
-      borderRadius: '50%',
-      flexShrink: 0,
-    }),
-    bspBarName: css({
-      flex: 1,
-      color: theme.colors.text.primary,
-      fontWeight: theme.typography.fontWeightMedium,
-      overflow: 'hidden',
-      textOverflow: 'ellipsis',
-      whiteSpace: 'nowrap',
-    }),
-    bspBarValue: css({
-      color: theme.colors.text.secondary,
-      fontVariantNumeric: 'tabular-nums',
-      flexShrink: 0,
-    }),
-    bspBarTrack: css({
-      height: 6,
-      borderRadius: 3,
-      background: theme.colors.background.secondary,
-      overflow: 'hidden',
-    }),
-    bspBarFill: css({
-      height: '100%',
-      borderRadius: 3,
-      transition: 'width 0.3s ease',
-      background: theme.colors.primary.main,
-    }),
-    bspSingleLabel: css({
-      marginTop: theme.spacing(0.5),
-      fontSize: theme.typography.bodySmall.fontSize,
-      color: theme.colors.text.secondary,
-    }),
-    bspSegmentLegend: css({
-      display: 'flex',
-      gap: theme.spacing(1.5),
-      marginTop: theme.spacing(0.5),
-    }),
-    bspSegmentLegendItem: css({
-      display: 'flex',
-      alignItems: 'center',
-      gap: theme.spacing(0.5),
-      fontSize: theme.typography.bodySmall.fontSize,
-      color: theme.colors.text.secondary,
     }),
   };
 }
