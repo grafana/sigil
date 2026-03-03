@@ -73,6 +73,66 @@ export function extractResolvePairs(response?: PrometheusQueryResponse | null): 
   return pairs;
 }
 
+type ProviderMappingBadgeRowProps = {
+  mapped: Array<{
+    provider: string;
+    model: string;
+    sourceModelID: string;
+  }>;
+  maxItems?: number;
+};
+
+export function ProviderMappingBadgeRow({ mapped, maxItems = 6 }: ProviderMappingBadgeRowProps) {
+  const styles = useStyles2(getProviderMappingBadgeRowStyles);
+  if (mapped.length === 0) {
+    return null;
+  }
+
+  const visibleMappings = mapped.slice(0, maxItems);
+  return (
+    <div className={styles.mappingRow}>
+      <span className={styles.mappingLabel}>Resolved via provider mapping:</span>
+      <div className={styles.mappingList}>
+        {visibleMappings.map((entry) => (
+          <span key={`${entry.provider}::${entry.model}::${entry.sourceModelID}`} className={styles.mappingBadge}>
+            {entry.provider}:{entry.model} {'->'} {entry.sourceModelID}
+          </span>
+        ))}
+        {mapped.length > maxItems && <span className={styles.mappingBadge}>+{mapped.length - maxItems} more</span>}
+      </div>
+    </div>
+  );
+}
+
+function getProviderMappingBadgeRowStyles(theme: GrafanaTheme2) {
+  return {
+    mappingRow: css({
+      display: 'flex',
+      flexDirection: 'column',
+      gap: theme.spacing(0.5),
+      marginTop: theme.spacing(0.5),
+    }),
+    mappingLabel: css({
+      fontSize: theme.typography.bodySmall.fontSize,
+      color: theme.colors.text.secondary,
+    }),
+    mappingList: css({
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: theme.spacing(0.75),
+    }),
+    mappingBadge: css({
+      fontSize: theme.typography.bodySmall.fontSize,
+      color: theme.colors.text.secondary,
+      border: `1px solid ${theme.colors.border.weak}`,
+      borderRadius: 999,
+      padding: theme.spacing(0.25, 1),
+      whiteSpace: 'normal',
+      wordBreak: 'break-all',
+    }),
+  };
+}
+
 // --- BreakdownStatPanel (theme-derived palette, supports stacked bars, aggregation) ---
 
 export function stringHash(str: string): number {

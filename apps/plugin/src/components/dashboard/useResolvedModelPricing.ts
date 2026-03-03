@@ -19,6 +19,50 @@ type ResolvedModelPricingResult = {
   error: string;
 };
 
+const providerCanonicalAliases: Record<string, string> = {
+  gemini: 'google',
+  google: 'google',
+  'google-vertex': 'vertex',
+  google_vertex: 'vertex',
+  vertex: 'vertex',
+  'vertex-ai': 'vertex',
+  vertexai: 'vertex',
+  bedrock: 'bedrock',
+  'aws-bedrock': 'bedrock',
+  'amazon-bedrock': 'bedrock',
+  amazon_bedrock: 'bedrock',
+  openai: 'openai',
+  'azure-openai': 'openai',
+  azure_openai: 'openai',
+  azureopenai: 'openai',
+  azure: 'openai',
+  xai: 'x-ai',
+  'x-ai': 'x-ai',
+  meta: 'meta-llama',
+  'meta-llama': 'meta-llama',
+  mistral: 'mistralai',
+  mistralai: 'mistralai',
+  cohere: 'cohere',
+  'cohere-ai': 'cohere',
+};
+
+export function canonicalizeProviderNameForMapping(provider: string): string {
+  const normalizedProvider = provider.trim().toLowerCase();
+  if (!normalizedProvider) {
+    return '';
+  }
+  return providerCanonicalAliases[normalizedProvider] ?? normalizedProvider;
+}
+
+export function isCrossProviderMapping(sourceProvider: string, targetProvider: string): boolean {
+  const normalizedSourceProvider = canonicalizeProviderNameForMapping(sourceProvider);
+  const normalizedTargetProvider = canonicalizeProviderNameForMapping(targetProvider);
+  if (!normalizedSourceProvider || !normalizedTargetProvider) {
+    return false;
+  }
+  return normalizedSourceProvider !== normalizedTargetProvider;
+}
+
 function providerFromSourceModelID(sourceModelID: string): string {
   const trimmed = sourceModelID.trim().toLowerCase();
   if (!trimmed) {
@@ -88,7 +132,7 @@ export function useResolvedModelPricing(
               nextPricingMap.set(pricingKey(item.provider, item.model), item.card.pricing);
               const sourceProvider = item.provider.trim().toLowerCase();
               const targetProvider = providerFromSourceModelID(item.card.source_model_id);
-              if (sourceProvider && targetProvider && sourceProvider !== targetProvider) {
+              if (isCrossProviderMapping(sourceProvider, targetProvider)) {
                 const mappingKey = `${sourceProvider}::${item.model.trim()}::${item.card.source_model_id.trim()}`;
                 nextMapped.set(mappingKey, {
                   provider: item.provider,

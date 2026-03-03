@@ -14,7 +14,7 @@ import {
   breakdownToPromLabel,
   tokenDrilldownTypes,
 } from '../../dashboard/types';
-import { formatStatValue, extractResolvePairs, BreakdownStatPanel } from './dashboardShared';
+import { formatStatValue, extractResolvePairs, BreakdownStatPanel, ProviderMappingBadgeRow } from './dashboardShared';
 import { calculateTotalCost, calculateTotalCostByGroup, calculateCostTimeSeries } from '../../dashboard/cost';
 import {
   computeStep,
@@ -544,21 +544,7 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
           styles={styles}
         />
       </div>
-      {resolvedPricing.mapped.length > 0 && (
-        <div className={styles.mappingRow}>
-          <span className={styles.mappingLabel}>Resolved via provider mapping:</span>
-          <div className={styles.mappingList}>
-            {resolvedPricing.mapped.slice(0, 6).map((entry) => (
-              <span key={`${entry.provider}::${entry.model}::${entry.sourceModelID}`} className={styles.mappingBadge}>
-                {entry.provider}:{entry.model} {'->'} {entry.sourceModelID}
-              </span>
-            ))}
-            {resolvedPricing.mapped.length > 6 && (
-              <span className={styles.mappingBadge}>+{resolvedPricing.mapped.length - 6} more</span>
-            )}
-          </div>
-        </div>
-      )}
+      <ProviderMappingBadgeRow mapped={resolvedPricing.mapped} />
 
       <div className={styles.gridOuter}>
         <div className={styles.grid}>
@@ -1029,30 +1015,6 @@ function getStyles(theme: GrafanaTheme2) {
       gap: theme.spacing(4),
       padding: theme.spacing(1.5, 0),
       borderBottom: `1px solid ${theme.colors.border.weak}`,
-    }),
-    mappingRow: css({
-      display: 'flex',
-      flexDirection: 'column',
-      gap: theme.spacing(0.5),
-      marginTop: theme.spacing(0.5),
-    }),
-    mappingLabel: css({
-      fontSize: theme.typography.bodySmall.fontSize,
-      color: theme.colors.text.secondary,
-    }),
-    mappingList: css({
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: theme.spacing(0.75),
-    }),
-    mappingBadge: css({
-      fontSize: theme.typography.bodySmall.fontSize,
-      color: theme.colors.text.secondary,
-      border: `1px solid ${theme.colors.border.weak}`,
-      borderRadius: 999,
-      padding: theme.spacing(0.25, 1),
-      whiteSpace: 'normal',
-      wordBreak: 'break-all',
     }),
     topStat: css({
       display: 'flex',
