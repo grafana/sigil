@@ -2,8 +2,8 @@ package ingest
 
 import (
 	"context"
-	"strings"
 
+	"github.com/grafana/sigil/sigil/internal/metriclabels"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -26,7 +26,7 @@ func withTransport(ctx context.Context, transport string) context.Context {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return context.WithValue(ctx, scoreIngestTransportContextKey{}, normalizeTransport(transport))
+	return context.WithValue(ctx, scoreIngestTransportContextKey{}, metriclabels.Transport(transport))
 }
 
 func transportFromContext(ctx context.Context) string {
@@ -34,14 +34,14 @@ func transportFromContext(ctx context.Context) string {
 		return "unknown"
 	}
 	value, _ := ctx.Value(scoreIngestTransportContextKey{}).(string)
-	return normalizeTransport(value)
+	return metriclabels.Transport(value)
 }
 
 func observeScoreIngestBatch(transport string, size int) {
 	if size < 0 {
 		size = 0
 	}
-	scoreIngestBatchSize.WithLabelValues(normalizeTransport(transport)).Observe(float64(size))
+	scoreIngestBatchSize.WithLabelValues(metriclabels.Transport(transport)).Observe(float64(size))
 }
 
 func observeScoreIngestItem(tenantID string, accepted bool, reason string, transport string) {
@@ -49,32 +49,5 @@ func observeScoreIngestItem(tenantID string, accepted bool, reason string, trans
 	if accepted {
 		status = "accepted"
 	}
-	scoreIngestItemsTotal.WithLabelValues(metricTenantID(tenantID), status, normalizeReason(reason), normalizeTransport(transport)).Inc()
-}
-
-func metricTenantID(tenantID string) string {
-	trimmed := strings.TrimSpace(tenantID)
-	if trimmed == "" {
-		return "unknown"
-	}
-	return trimmed
-}
-
-func normalizeReason(reason string) string {
-	trimmed := strings.TrimSpace(reason)
-	if trimmed == "" {
-		return "unknown"
-	}
-	return trimmed
-}
-
-func normalizeTransport(transport string) string {
-	switch strings.ToLower(strings.TrimSpace(transport)) {
-	case "http":
-		return "http"
-	case "grpc":
-		return "grpc"
-	default:
-		return "unknown"
-	}
+	scoreIngestItemsTotal.WithLabelValues(metriclabels.TenantID(tenantID), status, metriclabels.Reason(reason), metriclabels.Transport(transport)).Inc()
 }

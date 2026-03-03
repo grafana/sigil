@@ -2,9 +2,9 @@ package generation
 
 import (
 	"context"
-	"strings"
 
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
+	"github.com/grafana/sigil/sigil/internal/metriclabels"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -27,7 +27,7 @@ func withTransport(ctx context.Context, transport string) context.Context {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return context.WithValue(ctx, generationTransportContextKey{}, normalizeTransport(transport))
+	return context.WithValue(ctx, generationTransportContextKey{}, metriclabels.Transport(transport))
 }
 
 func transportFromContext(ctx context.Context) string {
@@ -35,14 +35,14 @@ func transportFromContext(ctx context.Context) string {
 		return "unknown"
 	}
 	value, _ := ctx.Value(generationTransportContextKey{}).(string)
-	return normalizeTransport(value)
+	return metriclabels.Transport(value)
 }
 
 func observeGenerationBatchSize(transport string, size int) {
 	if size < 0 {
 		size = 0
 	}
-	generationIngestBatchSize.WithLabelValues(normalizeTransport(transport)).Observe(float64(size))
+	generationIngestBatchSize.WithLabelValues(metriclabels.Transport(transport)).Observe(float64(size))
 }
 
 func observeGenerationItemOutcome(tenantID string, mode sigilv1.GenerationMode, accepted bool, reason string, transport string) {
@@ -51,20 +51,12 @@ func observeGenerationItemOutcome(tenantID string, mode sigilv1.GenerationMode, 
 		status = "accepted"
 	}
 	generationIngestItemsTotal.WithLabelValues(
-		metricTenantLabel(tenantID),
+		metriclabels.TenantID(tenantID),
 		generationModeLabel(mode),
 		status,
-		normalizeReason(reason),
-		normalizeTransport(transport),
+		metriclabels.Reason(reason),
+		metriclabels.Transport(transport),
 	).Inc()
-}
-
-func metricTenantLabel(tenantID string) string {
-	trimmed := strings.TrimSpace(tenantID)
-	if trimmed == "" {
-		return "unknown"
-	}
-	return trimmed
 }
 
 func generationModeLabel(mode sigilv1.GenerationMode) string {
@@ -73,25 +65,6 @@ func generationModeLabel(mode sigilv1.GenerationMode) string {
 		return "sync"
 	case sigilv1.GenerationMode_GENERATION_MODE_STREAM:
 		return "stream"
-	default:
-		return "unknown"
-	}
-}
-
-func normalizeReason(reason string) string {
-	trimmed := strings.TrimSpace(reason)
-	if trimmed == "" {
-		return "unknown"
-	}
-	return trimmed
-}
-
-func normalizeTransport(transport string) string {
-	switch strings.ToLower(strings.TrimSpace(transport)) {
-	case "http":
-		return "http"
-	case "grpc":
-		return "grpc"
 	default:
 		return "unknown"
 	}

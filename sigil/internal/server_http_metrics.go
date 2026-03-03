@@ -38,7 +38,7 @@ func observeHTTPRequestMetrics(req *http.Request, routePattern string, statusCod
 
 	route := metricRouteLabel(routePattern)
 	statusClass := metricStatusClass(statusCode)
-	area := metricRequestArea(route)
+	area := metricRequestArea(route, req.URL.Path)
 
 	httpRequestsTotal.WithLabelValues(req.Method, route, statusClass, area).Inc()
 	httpRequestDuration.WithLabelValues(req.Method, route, statusClass, area).Observe(duration.Seconds())
@@ -73,7 +73,14 @@ func metricStatusClass(statusCode int) string {
 	}
 }
 
-func metricRequestArea(route string) string {
+func metricRequestArea(route string, requestPath string) string {
+	if strings.HasPrefix(route, "/api/v1/conversations/") && (strings.HasSuffix(route, "/ratings") || strings.HasSuffix(route, "/annotations")) {
+		return "feedback"
+	}
+	if route == "/api/v1/conversations/" && isFeedbackPath(requestPath) {
+		return "feedback"
+	}
+
 	switch {
 	case route == "/healthz":
 		return "core"
@@ -89,8 +96,6 @@ func metricRequestArea(route string) string {
 		return "settings"
 	case strings.HasPrefix(route, "/api/v1/model-cards"):
 		return "model_cards"
-	case strings.HasPrefix(route, "/api/v1/conversations/") && (strings.HasSuffix(route, "/ratings") || strings.HasSuffix(route, "/annotations")):
-		return "feedback"
 	case strings.HasPrefix(route, "/api/v1/conversations"):
 		return "query"
 	case strings.HasPrefix(route, "/api/v1/generations/"):
@@ -98,4 +103,12 @@ func metricRequestArea(route string) string {
 	default:
 		return "unknown"
 	}
+}
+
+func isFeedbackPath(path string) bool {
+	cleanPath := strings.TrimSpace(path)
+	if !strings.HasPrefix(cleanPath, "/api/v1/conversations/") {
+		return false
+	}
+	return strings.HasSuffix(cleanPath, "/ratings") || strings.HasSuffix(cleanPath, "/annotations")
 }
