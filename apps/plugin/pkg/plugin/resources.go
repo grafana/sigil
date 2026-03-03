@@ -1197,6 +1197,17 @@ func (a *App) doGrafanaRequest(
 	query url.Values,
 	body []byte,
 ) ([]byte, error) {
+	ctx, span := pluginProxyTracer.Start(
+		req.Context(),
+		"sigil.plugin.query.grafana",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("http.request.method", method),
+			attribute.String("url.path", path),
+		),
+	)
+	defer span.End()
+
 	upstream := strings.TrimRight(a.grafanaAppURL, "/") + path
 	if encodedQuery := query.Encode(); encodedQuery != "" {
 		upstream += "?" + encodedQuery
@@ -1207,8 +1218,10 @@ func (a *App) doGrafanaRequest(
 		bodyReader = bytes.NewReader(body)
 	}
 
-	proxyReq, err := http.NewRequestWithContext(req.Context(), method, upstream, bodyReader)
+	proxyReq, err := http.NewRequestWithContext(ctx, method, upstream, bodyReader)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "build grafana request")
 		return nil, fmt.Errorf("build grafana request: %w", err)
 	}
 	proxyReq.Header = req.Header.Clone()
@@ -1220,8 +1233,18 @@ func (a *App) doGrafanaRequest(
 		proxyReq.Header.Set("Authorization", "Bearer "+token)
 	}
 	injectTenantHeaders(proxyReq, a.tenantID)
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(proxyReq.Header))
 
-	return a.executeUpstreamRequest(proxyReq)
+	payload, err := a.executeUpstreamRequest(proxyReq)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "upstream request failed")
+		if upstreamErr := (*upstreamHTTPError)(nil); errors.As(err, &upstreamErr) {
+			span.SetAttributes(attribute.Int("http.response.status_code", upstreamErr.StatusCode))
+		}
+		return nil, err
+	}
+	return payload, nil
 }
 
 func (a *App) executeUpstreamRequest(proxyReq *http.Request) ([]byte, error) {
