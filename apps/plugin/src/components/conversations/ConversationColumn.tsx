@@ -2,6 +2,7 @@ import React from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { useStyles2 } from '@grafana/ui';
+import type { SigilSpan } from '../../conversation/traceSpans';
 import type { ConversationSearchResult, GenerationDetail } from '../../conversation/types';
 import ConversationGenerations from './ConversationGenerations';
 
@@ -10,6 +11,9 @@ export type ConversationColumnProps = {
   generations: GenerationDetail[];
   generationsLoading?: boolean;
   generationsErrorMessage?: string;
+  selectedSpanSelectionID?: string;
+  onSelectSpan?: (span: SigilSpan | null) => void;
+  onSpansLoaded?: (spans: SigilSpan[]) => void;
 };
 
 function formatTimestamp(value: string): string {
@@ -65,6 +69,9 @@ export default function ConversationColumn({
   generations,
   generationsLoading = false,
   generationsErrorMessage = '',
+  selectedSpanSelectionID = '',
+  onSelectSpan,
+  onSpansLoaded,
 }: ConversationColumnProps) {
   const styles = useStyles2(getStyles);
   const ratingSummary = conversation.rating_summary;
@@ -108,6 +115,9 @@ export default function ConversationColumn({
         generations={generations}
         loading={generationsLoading}
         errorMessage={generationsErrorMessage}
+        selectedSpanSelectionID={selectedSpanSelectionID}
+        onSelectSpan={onSelectSpan}
+        onSpansLoaded={onSpansLoaded}
       />
     </div>
   );

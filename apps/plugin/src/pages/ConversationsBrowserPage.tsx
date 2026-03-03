@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { css } from '@emotion/css';
 import { dateTime, makeTimeRange, type GrafanaTheme2, type TimeRange } from '@grafana/data';
 import { Alert, Spinner, TimeRangePicker, useStyles2 } from '@grafana/ui';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import type { SigilSpan } from '../conversation/traceSpans';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
 import type { ConversationDetail, ConversationSearchResult } from '../conversation/types';
 import ConversationColumn from '../components/conversations/ConversationColumn';
@@ -274,6 +275,18 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.secondary,
     padding: theme.spacing(2),
   }),
+  detailJson: css({
+    label: 'conversationsBrowserPage-detailJson',
+    margin: 0,
+    padding: theme.spacing(1.5),
+    borderRadius: theme.shape.radius.default,
+    border: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.secondary,
+    whiteSpace: 'pre-wrap' as const,
+    overflowWrap: 'anywhere' as const,
+    fontFamily: theme.typography.fontFamilyMonospace,
+    fontSize: theme.typography.bodySmall.fontSize,
+  }),
   pageSpinner: css({
     label: 'conversationsBrowserPage-pageSpinner',
     display: 'flex',
@@ -289,6 +302,7 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   const dataSource = props.dataSource ?? defaultConversationsDataSource;
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { conversationID: selectedConversationParam = '' } = useParams<{ conversationID?: string }>();
   const hasSelection = selectedConversationParam.length > 0;
   const conversationsSegment = `/${ROUTES.Conversations}`;
@@ -311,8 +325,12 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [timeRange, setTimeRangeState] = useState<TimeRange>(() => defaultTimeRange());
+  const [loadedSpansBySelectionID, setLoadedSpansBySelectionID] = useState<Record<string, SigilSpan>>({});
   const requestVersionRef = useRef<number>(0);
   const selectedConversationRequestVersionRef = useRef<number>(0);
+
+  const selectedSpanSelectionID = searchParams.get('span') ?? '';
+  const selectedSpan = selectedSpanSelectionID.length > 0 ? (loadedSpansBySelectionID[selectedSpanSelectionID] ?? null) : null;
 
   const loadConversations = useCallback(async (): Promise<void> => {
     requestVersionRef.current += 1;
@@ -354,6 +372,7 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   }, [loadConversations]);
 
   const resolvedSelectedConversationID = selectedConversationParam;
+  const previousConversationIDRef = useRef<string>(resolvedSelectedConversationID);
 
   const selectedConversation = useMemo(() => {
     const selectedFromList = conversations.find(
@@ -459,6 +478,63 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
         setSelectedConversationLoading(false);
       });
   }, [dataSource, resolvedSelectedConversationID]);
+
+  useEffect(() => {
+    if (previousConversationIDRef.current === resolvedSelectedConversationID) {
+      return;
+    }
+    previousConversationIDRef.current = resolvedSelectedConversationID;
+    setLoadedSpansBySelectionID({});
+
+    const next = new URLSearchParams(location.search);
+    if (!next.has('span') && !next.has('trace')) {
+      return;
+    }
+    next.delete('span');
+    next.delete('trace');
+    setSearchParams(next, { replace: true });
+  }, [location.search, resolvedSelectedConversationID, setSearchParams]);
+
+  const onSelectSpan = useCallback(
+    (span: SigilSpan | null) => {
+      const next = new URLSearchParams(searchParams);
+      if (span == null) {
+        next.delete('span');
+        next.delete('trace');
+      } else {
+        next.set('span', span.selectionID);
+        next.set('trace', span.traceID);
+      }
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams]
+  );
+
+  const onSpansLoaded = useCallback((spans: SigilSpan[]) => {
+    setLoadedSpansBySelectionID(() => {
+      const next: Record<string, SigilSpan> = {};
+      for (const span of spans) {
+        next[span.selectionID] = span;
+      }
+      return next;
+    });
+  }, []);
+
+  const selectedSpanDebugJSON = useMemo(() => {
+    if (selectedSpan == null) {
+      return '';
+    }
+    return JSON.stringify(
+      {
+        ...selectedSpan,
+        startNs: selectedSpan.startNs.toString(),
+        endNs: selectedSpan.endNs.toString(),
+        durationNs: selectedSpan.durationNs.toString(),
+      },
+      null,
+      2
+    );
+  }, [selectedSpan]);
 
   return (
     <div className={styles.pageContainer}>
@@ -645,6 +721,9 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
                   generations={selectedConversationDetail?.generations ?? []}
                   generationsLoading={selectedConversationLoading}
                   generationsErrorMessage={selectedConversationErrorMessage}
+                  selectedSpanSelectionID={selectedSpanSelectionID}
+                  onSelectSpan={onSelectSpan}
+                  onSpansLoaded={onSpansLoaded}
                 />
               )}
             </div>
@@ -656,8 +735,10 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
                 </div>
               ) : selectedConversationErrorMessage.length > 0 ? (
                 <div className={styles.detailPlaceholder}>Unable to load conversation details.</div>
+              ) : selectedSpan != null ? (
+                <pre className={styles.detailJson}>{selectedSpanDebugJSON}</pre>
               ) : (
-                <div className={styles.detailPlaceholder}>Conversation details panel coming soon.</div>
+                <div className={styles.detailPlaceholder}>Select a span to inspect raw JSON.</div>
               )}
             </div>
           </>
