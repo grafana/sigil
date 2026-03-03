@@ -34,11 +34,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
   fieldWidth: css({
     width: 'var(--rule-form-field-width)',
   }),
-  sectionCard: css({
-    padding: theme.spacing(2),
-    background: theme.colors.background.primary,
-    boxShadow: theme.shadows.z1,
-  }),
   section: css({
     padding: theme.spacing(2),
     background: theme.colors.background.primary,
@@ -71,7 +66,7 @@ export default function RuleForm({
 
   return (
     <div className={styles.stack}>
-      <div className={styles.sectionCard}>
+      <div className={styles.section}>
         <div className={styles.sectionHeader}>
           <Icon name="file-alt" size="md" />
           <Text weight="medium">Rule ID</Text>
