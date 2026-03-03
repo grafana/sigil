@@ -244,7 +244,13 @@ describe('ConversationDetailPage', () => {
       </MemoryRouter>
     );
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: expect.stringContaining('/traces/trace-1'),
+        })
+      );
+    });
     expect(screen.queryByText('Trace timeline')).not.toBeInTheDocument();
 
     const expandTraceButton = await screen.findByRole('button', { name: 'expand trace trace-1' });
@@ -265,7 +271,7 @@ describe('ConversationDetailPage', () => {
     expect(await screen.findByTestId('location-search')).toHaveTextContent('?trace=trace-1&span=trace-1%3Aspan-a');
     expect(await screen.findByText('Selected span details')).toBeInTheDocument();
     expect(screen.getByText('Associated generation')).toBeInTheDocument();
-    expect(screen.getByText('openai / gpt-4o-mini')).toBeInTheDocument();
+    expect(screen.getAllByText('openai / gpt-4o-mini').length).toBeGreaterThan(0);
     expect(screen.getByText('reasoning_tokens')).toBeInTheDocument();
     const selectedSpanCard = screen.getByText('Selected span details').closest('div');
     expect(selectedSpanCard).not.toBeNull();
@@ -347,7 +353,13 @@ describe('ConversationDetailPage', () => {
       </MemoryRouter>
     );
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: expect.stringContaining('/traces/trace-1'),
+        })
+      );
+    });
     const traceSelectButton = await screen.findByRole('button', { name: 'select trace trace-1' });
     fireEvent.click(traceSelectButton);
     expect(await screen.findByTestId('location-search')).toHaveTextContent('?trace=trace-1');

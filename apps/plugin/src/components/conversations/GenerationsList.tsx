@@ -3,7 +3,9 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { useStyles2 } from '@grafana/ui';
 import type { GenerationDetail } from '../../conversation/types';
+import type { DashboardDataSource } from '../../dashboard/api';
 import GenerationItem from './GenerationItem';
+import { useConversationResolvedPricing } from './useConversationResolvedPricing';
 
 export type GenerationsListProps = {
   generations: GenerationDetail[];
@@ -11,6 +13,7 @@ export type GenerationsListProps = {
   alwaysShowMetadata?: boolean;
   selectedTraceID?: string;
   onSelectTrace?: (traceID: string) => void;
+  pricingDataSource?: DashboardDataSource;
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -38,9 +41,11 @@ export default function GenerationsList({
   alwaysShowMetadata = false,
   selectedTraceID,
   onSelectTrace,
+  pricingDataSource,
 }: GenerationsListProps) {
   const styles = useStyles2(getStyles);
   const resolvedEmptyMessage = emptyMessage ?? 'No generations found for this conversation.';
+  const resolvedPricing = useConversationResolvedPricing(generations, pricingDataSource);
 
   return (
     <section className={styles.container}>
@@ -61,6 +66,7 @@ export default function GenerationsList({
               alwaysShowMetadata={alwaysShowMetadata}
               selectedTraceID={selectedTraceID}
               onSelectTrace={onSelectTrace}
+              resolvedPricing={resolvedPricing.pricingMap}
             />
           ))}
         </div>

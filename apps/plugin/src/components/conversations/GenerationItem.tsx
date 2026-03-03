@@ -3,8 +3,11 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { useStyles2 } from '@grafana/ui';
 import type { GenerationDetail } from '../../conversation/types';
+import type { PricingMap } from '../../dashboard/cost';
 import ChatPreview from './ChatPreview';
+import GenerationMetricCards from './GenerationMetricCards';
 import TokenCountInline from './TokenCountInline';
+import { buildGenerationMetrics } from './generationMetrics';
 import { getGradientColorAtIndex } from './traceGradient';
 
 export type GenerationItemProps = {
@@ -18,6 +21,7 @@ export type GenerationItemProps = {
   alwaysShowMetadata?: boolean;
   selectedTraceID?: string;
   onSelectTrace?: (traceID: string) => void;
+  resolvedPricing?: PricingMap;
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -25,11 +29,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
     label: 'generationItem-row',
     display: 'grid',
     gap: theme.spacing(1),
-    gridTemplateColumns: '32px 360px fit-content(560px)',
+    gridTemplateColumns: '32px 360px minmax(220px, 280px) fit-content(560px)',
     alignItems: 'start',
     position: 'relative' as const,
     [`@media (max-width: ${theme.breakpoints.values.md}px)`]: {
-      gridTemplateColumns: '40px minmax(0, 1fr)',
+      gridTemplateColumns: '40px minmax(0, 1fr) minmax(0, 1fr)',
     },
   }),
   numberColumn: css({
@@ -83,6 +87,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: theme.spacing(1),
     padding: theme.spacing(2),
     width: 'fit-content',
+  }),
+  metricColumn: css({
+    label: 'generationItem-metricColumn',
+    paddingTop: theme.spacing(1),
+    minWidth: 0,
   }),
   metaGrid: css({
     label: 'generationItem-metaGrid',
@@ -157,6 +166,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
       '& [data-generation-meta="true"]': {
         gridColumn: '1 / -1',
       },
+      '& [data-generation-metrics="true"]': {
+        gridColumn: '1 / -1',
+      },
     },
   }),
 });
@@ -171,9 +183,11 @@ export default function GenerationItem({
   isLast = false,
   selectedTraceID,
   onSelectTrace,
+  resolvedPricing = new Map(),
 }: GenerationItemProps) {
   const styles = useStyles2(getStyles);
   const generationColor = getGradientColorAtIndex(total, index, 0.82);
+  const metrics = buildGenerationMetrics(generation, resolvedPricing);
   const traceID = generation.trace_id ?? '';
   const hasTraceID = traceID.length > 0;
   const isSelectedTrace = hasTraceID && selectedTraceID === traceID;
@@ -200,6 +214,10 @@ export default function GenerationItem({
           />
         </div>
       </div>
+
+      <section className={styles.metricColumn} data-generation-metrics="true" aria-label={`Generation ${index + 1} metrics`}>
+        <GenerationMetricCards metrics={metrics} />
+      </section>
 
       <aside className={styles.metaColumn} data-generation-meta="true" aria-label={`Generation ${index + 1} metadata`}>
         <div className={styles.metaGrid}>
