@@ -69,7 +69,29 @@ function createDataSource(): MockConversationsDataSource {
         has_more: false,
       }),
     getConversationDetail: jest.fn(async (_conversationID: string) => {
-      throw new Error('getConversationDetail not used in ConversationsBrowserPage');
+      return {
+        conversation_id: _conversationID,
+        generation_count: 2,
+        first_generation_at: '2026-02-01T10:00:00Z',
+        last_generation_at: '2026-02-01T10:01:00Z',
+        generations: [
+          {
+            generation_id: `${_conversationID}-gen-1`,
+            conversation_id: _conversationID,
+            created_at: '2026-02-01T10:00:00Z',
+            model: { provider: 'openai', name: 'gpt-4o-mini' },
+            usage: { total_tokens: 120 },
+          },
+          {
+            generation_id: `${_conversationID}-gen-2`,
+            conversation_id: _conversationID,
+            created_at: '2026-02-01T10:01:00Z',
+            model: { provider: 'openai', name: 'gpt-4o-mini' },
+            usage: { total_tokens: 180 },
+          },
+        ],
+        annotations: [],
+      };
     }),
     getGeneration: jest.fn(async (_generationID: string) => {
       throw new Error('getGeneration not used in ConversationsBrowserPage');
@@ -107,13 +129,15 @@ describe('ConversationsBrowserPage', () => {
     expect(await screen.findByLabelText('select conversation conv-a')).toBeInTheDocument();
     expect(screen.queryByText('Conversation ID')).not.toBeInTheDocument();
     expect(screen.getByText('LLM calls')).toBeInTheDocument();
-    expect(screen.getByText('Select a conversation to view its summary.')).toBeInTheDocument();
+    expect(screen.queryByText('Generations (2)')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('select conversation conv-b'));
     expect(await screen.findByText('Conversation ID')).toBeInTheDocument();
+    expect(await screen.findByText('Generations (2)')).toBeInTheDocument();
     expect(screen.getByLabelText('select conversation conv-b')).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Conversation ID').parentElement).toHaveTextContent('conv-b');
     expect(new URLSearchParams(router.state.location.search).get('conversation')).toBe('conv-b');
+    expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-b');
   });
 
   it('uses selected conversation from URL param when present', async () => {
@@ -123,7 +147,9 @@ describe('ConversationsBrowserPage', () => {
     await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalledTimes(2));
     expect(await screen.findByLabelText('select conversation conv-b')).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Conversation ID').parentElement).toHaveTextContent('conv-b');
+    expect(await screen.findByText('Generations (2)')).toBeInTheDocument();
     expect(new URLSearchParams(router.state.location.search).get('conversation')).toBe('conv-b');
+    expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-b');
   });
 
   it('resets selection when URL is set to /conversations', async () => {
@@ -140,6 +166,6 @@ describe('ConversationsBrowserPage', () => {
     await waitFor(() => {
       expect(screen.queryByText('Conversation ID')).not.toBeInTheDocument();
     });
-    expect(screen.getByText('Select a conversation to view its summary.')).toBeInTheDocument();
+    expect(screen.queryByText('Generations (2)')).not.toBeInTheDocument();
   });
 });

@@ -4,7 +4,7 @@ import { dateTime, makeTimeRange, type GrafanaTheme2, type TimeRange } from '@gr
 import { Alert, Spinner, Text, TimeRangePicker, useStyles2 } from '@grafana/ui';
 import { useSearchParams } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
-import type { ConversationSearchResult } from '../conversation/types';
+import type { ConversationDetail, ConversationSearchResult } from '../conversation/types';
 import ConversationColumn from '../components/conversations/ConversationColumn';
 import ConversationListPanel from '../components/conversations/ConversationListPanel';
 
@@ -284,10 +284,14 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
 
   const [conversations, setConversations] = useState<ConversationSearchResult[]>([]);
   const [previousConversations, setPreviousConversations] = useState<ConversationSearchResult[]>([]);
+  const [selectedConversationDetail, setSelectedConversationDetail] = useState<ConversationDetail | null>(null);
+  const [selectedConversationLoading, setSelectedConversationLoading] = useState<boolean>(false);
+  const [selectedConversationErrorMessage, setSelectedConversationErrorMessage] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [timeRange, setTimeRangeState] = useState<TimeRange>(() => defaultTimeRange());
   const requestVersionRef = useRef<number>(0);
+  const selectedConversationRequestVersionRef = useRef<number>(0);
 
   const loadConversations = useCallback(async (): Promise<void> => {
     requestVersionRef.current += 1;
@@ -374,6 +378,43 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
     },
     [searchParams, setSearchParams]
   );
+
+  useEffect(() => {
+    selectedConversationRequestVersionRef.current += 1;
+    const requestVersion = selectedConversationRequestVersionRef.current;
+
+    if (resolvedSelectedConversationID.length === 0) {
+      setSelectedConversationDetail(null);
+      setSelectedConversationLoading(false);
+      setSelectedConversationErrorMessage('');
+      return;
+    }
+
+    setSelectedConversationLoading(true);
+    setSelectedConversationErrorMessage('');
+    setSelectedConversationDetail(null);
+
+    void dataSource
+      .getConversationDetail(resolvedSelectedConversationID)
+      .then((response) => {
+        if (selectedConversationRequestVersionRef.current !== requestVersion) {
+          return;
+        }
+        setSelectedConversationDetail(response);
+      })
+      .catch((error) => {
+        if (selectedConversationRequestVersionRef.current !== requestVersion) {
+          return;
+        }
+        setSelectedConversationErrorMessage(error instanceof Error ? error.message : 'failed to load conversation detail');
+      })
+      .finally(() => {
+        if (selectedConversationRequestVersionRef.current !== requestVersion) {
+          return;
+        }
+        setSelectedConversationLoading(false);
+      });
+  }, [dataSource, resolvedSelectedConversationID]);
 
   return (
     <div className={styles.pageContainer}>
@@ -542,7 +583,12 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
                   <Spinner aria-label="loading selected conversation" />
                 </div>
               ) : (
-                <ConversationColumn conversation={selectedConversation} />
+                <ConversationColumn
+                  conversation={selectedConversation}
+                  generations={selectedConversationDetail?.generations ?? []}
+                  generationsLoading={selectedConversationLoading}
+                  generationsErrorMessage={selectedConversationErrorMessage}
+                />
               )}
             </div>
 

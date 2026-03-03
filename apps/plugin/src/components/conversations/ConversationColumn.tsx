@@ -2,10 +2,14 @@ import React from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { useStyles2 } from '@grafana/ui';
-import type { ConversationSearchResult } from '../../conversation/types';
+import type { ConversationSearchResult, GenerationDetail } from '../../conversation/types';
+import ConversationGenerations from './ConversationGenerations';
 
 export type ConversationColumnProps = {
   conversation: ConversationSearchResult;
+  generations: GenerationDetail[];
+  generationsLoading?: boolean;
+  generationsErrorMessage?: string;
 };
 
 function formatTimestamp(value: string): string {
@@ -56,7 +60,12 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function ConversationColumn({ conversation }: ConversationColumnProps) {
+export default function ConversationColumn({
+  conversation,
+  generations,
+  generationsLoading = false,
+  generationsErrorMessage = '',
+}: ConversationColumnProps) {
   const styles = useStyles2(getStyles);
   const ratingSummary = conversation.rating_summary;
   const models = conversation.models.length > 0 ? conversation.models.join(', ') : '-';
@@ -95,6 +104,11 @@ export default function ConversationColumn({ conversation }: ConversationColumnP
           </div>
         </div>
       </div>
+      <ConversationGenerations
+        generations={generations}
+        loading={generationsLoading}
+        errorMessage={generationsErrorMessage}
+      />
     </div>
   );
 }
