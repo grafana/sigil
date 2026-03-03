@@ -1177,10 +1177,6 @@ export default function ConversationTraces({
                     <span className={styles.selectedSpanValue}>{selectedGeneration.created_at ?? 'n/a'}</span>
                   </div>
                   <div className={styles.selectedSpanRow}>
-                    <span className={styles.selectedSpanLabel}>Completed at</span>
-                    <span className={styles.selectedSpanValue}>{String(selectedGeneration.completed_at ?? 'n/a')}</span>
-                  </div>
-                  <div className={styles.selectedSpanRow}>
                     <span className={styles.selectedSpanLabel}>Input tokens</span>
                     <span className={styles.selectedSpanValue}>
                       {getUsageValue(selectedGeneration.usage, 'input_tokens')}
