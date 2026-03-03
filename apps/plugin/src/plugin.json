@@ -45,6 +45,13 @@
     },
     {
       "type": "page",
+      "name": "Conversation chat",
+      "path": "/a/grafana-sigil-app/conversations/:conversationID/chat",
+      "action": "grafana-sigil-app.data:read",
+      "addToNav": false
+    },
+    {
+      "type": "page",
       "name": "Evaluation",
       "path": "/a/grafana-sigil-app/evaluation",
       "action": "grafana-sigil-app.data:read",

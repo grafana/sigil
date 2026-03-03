@@ -5,6 +5,7 @@ export const ROUTES = {
   Dashboard: 'dashboard',
   Conversations: 'conversations',
   ConversationsView: 'conversations/:conversationID/view',
+  ConversationsChat: 'conversations/:conversationID/chat',
   ConversationsOld: 'conversations-old',
   ConversationsDetail: 'conversations/:conversationID/detail',
   Completions: 'completions',
@@ -17,6 +18,7 @@ export const PAGE_TITLES = {
   [ROUTES.Dashboard]: 'Dashboard',
   [ROUTES.Conversations]: 'Conversations',
   [ROUTES.ConversationsView]: 'Conversation view',
+  [ROUTES.ConversationsChat]: 'Conversation chat',
   [ROUTES.ConversationsOld]: 'Conversations (old)',
   [ROUTES.ConversationsDetail]: 'Conversation detail',
   [ROUTES.Completions]: 'Completions',
@@ -31,4 +33,8 @@ export function buildConversationDetailRoute(conversationID: string): string {
 
 export function buildConversationViewRoute(conversationID: string): string {
   return `${ROUTES.Conversations}/${encodeURIComponent(conversationID)}/view`;
+}
+
+export function buildConversationChatRoute(conversationID: string): string {
+  return `${ROUTES.Conversations}/${encodeURIComponent(conversationID)}/chat`;
 }

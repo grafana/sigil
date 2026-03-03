@@ -7,6 +7,7 @@ import { ROUTES } from '../constants';
 
 const DashboardPage = React.lazy(() => import('../pages/DashboardPage'));
 const ConversationsBrowserPage = React.lazy(() => import('../pages/ConversationsBrowserPage'));
+const ConversationChatPage = React.lazy(() => import('../pages/ConversationChatPage'));
 const ConversationDetailPage = React.lazy(() => import('../pages/ConversationDetailPage'));
 const ConversationsPage = React.lazy(() => import('../pages/ConversationsPage'));
 const CompletionsPage = React.lazy(() => import('../pages/CompletionsPage'));
@@ -46,7 +47,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
 export default function App(_props: AppRootProps) {
   const styles = useStyles2(getStyles);
   const location = useLocation();
-  const isConversationsBrowserRoute = new RegExp(`(^|/)${ROUTES.Conversations}(/[^/]+/view)?/?$`).test(
+  const isConversationsBrowserRoute = new RegExp(`(^|/)${ROUTES.Conversations}(/[^/]+/(view|chat))?/?$`).test(
     location.pathname
   );
 
@@ -68,6 +69,14 @@ export default function App(_props: AppRootProps) {
             element={
               <div className={styles.conversationsRouteContainer}>
                 <ConversationsBrowserPage />
+              </div>
+            }
+          />
+          <Route
+            path={ROUTES.ConversationsChat}
+            element={
+              <div className={styles.conversationsRouteContainer}>
+                <ConversationChatPage />
               </div>
             }
           />
