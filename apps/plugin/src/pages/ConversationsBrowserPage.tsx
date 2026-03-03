@@ -172,8 +172,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     justifyContent: 'center',
-    alignItems: 'center',
-    textAlign: 'center' as const,
+    alignItems: 'flex-start',
+    textAlign: 'left' as const,
   }),
   statLabel: css({
     label: 'conversationsBrowserPage-statLabel',
@@ -191,7 +191,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     label: 'conversationsBrowserPage-statValueRow',
     display: 'flex',
     alignItems: 'baseline',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     gap: theme.spacing(0.75),
     flexWrap: 'wrap' as const,
   }),
@@ -630,7 +630,8 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
         {hasSelection && (
           <>
             <div className={styles.middlePanel}>
-              {selectedConversationLoading || (!selectedConversation && selectedConversationErrorMessage.length === 0) ? (
+              {selectedConversationLoading ||
+              (!selectedConversation && selectedConversationErrorMessage.length === 0) ? (
                 <div className={styles.pageSpinner}>
                   <Spinner aria-label="loading selected conversation" />
                 </div>
