@@ -13,7 +13,7 @@ export type ConversationsBrowserPageProps = {
 };
 
 const SELECTED_CONVERSATION_PARAM = 'conversation';
-const DEFAULT_TIME_RANGE_HOURS = 6;
+const DEFAULT_TIME_RANGE_HOURS = 1;
 const TOTAL_TOKENS_SELECT_KEY = 'span.gen_ai.usage.total_tokens';
 
 type StatTrendDirection = 'up' | 'down' | 'neutral';
@@ -143,10 +143,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     borderBottom: `1px solid ${theme.colors.border.weak}`,
     background: theme.colors.background.primary,
     boxShadow: 'inset 0 8px 8px -8px rgba(0, 0, 0, 0.22)',
-    flex: '0 1 auto',
-    minHeight: 0,
-    maxHeight: '45%',
-    overflowY: 'auto' as const,
+    flex: '0 0 auto',
   }),
   controlsRow: css({
     label: 'conversationsBrowserPage-controlsRow',
@@ -212,7 +209,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   layout: css({
     label: 'conversationsBrowserPage-layout',
     display: 'grid',
-    gridTemplateColumns: 'minmax(460px, 1.4fr) 1.6fr',
+    gridTemplateColumns: 'minmax(340px, 1fr)',
     gap: theme.spacing(2),
     flex: 1,
     minHeight: 0,
@@ -220,7 +217,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   layoutWithSelection: css({
     label: 'conversationsBrowserPage-layoutWithSelection',
-    gridTemplateColumns: 'minmax(300px, 0.8fr) 2.2fr',
+    gridTemplateColumns: '20% minmax(320px, 0.8fr) minmax(520px, 1.4fr)',
+    gap: theme.spacing(2),
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
   }),
   leftPanel: css({
     label: 'conversationsBrowserPage-leftPanel',
@@ -229,10 +230,21 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column' as const,
   }),
-  rightPanel: css({
-    label: 'conversationsBrowserPage-rightPanel',
+  middlePanel: css({
+    label: 'conversationsBrowserPage-middlePanel',
     minHeight: 0,
     overflowY: 'auto' as const,
+    minWidth: 0,
+    width: '100%',
+  }),
+  detailPanel: css({
+    label: 'conversationsBrowserPage-detailPanel',
+    minHeight: 0,
+    overflowY: 'auto' as const,
+    minWidth: 0,
+    width: '100%',
+    borderLeft: `1px solid ${theme.colors.border.weak}`,
+    paddingLeft: theme.spacing(2),
   }),
   emptySelection: css({
     label: 'conversationsBrowserPage-emptySelection',
@@ -240,9 +252,20 @@ const getStyles = (theme: GrafanaTheme2) => ({
     alignItems: 'center',
     justifyContent: 'center',
     height: '100%',
-    borderLeft: `1px solid ${theme.colors.border.weak}`,
     color: theme.colors.text.secondary,
-    paddingLeft: theme.spacing(2),
+    padding: theme.spacing(2),
+  }),
+  detailPlaceholder: css({
+    label: 'conversationsBrowserPage-detailPlaceholder',
+    flex: 1,
+    minHeight: 0,
+    border: `1px dashed ${theme.colors.border.medium}`,
+    borderRadius: theme.shape.radius.default,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: theme.colors.text.secondary,
+    padding: theme.spacing(2),
   }),
   pageSpinner: css({
     label: 'conversationsBrowserPage-pageSpinner',
@@ -511,17 +534,29 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
           />
         </div>
 
-        <div className={styles.rightPanel}>
-          {loading ? (
-            <div className={styles.pageSpinner}>
-              <Spinner aria-label="loading selected conversation" />
+        {selectedConversation && (
+          <>
+            <div className={styles.middlePanel}>
+              {loading ? (
+                <div className={styles.pageSpinner}>
+                  <Spinner aria-label="loading selected conversation" />
+                </div>
+              ) : (
+                <ConversationColumn conversation={selectedConversation} />
+              )}
             </div>
-          ) : selectedConversation ? (
-            <ConversationColumn conversation={selectedConversation} />
-          ) : (
-            <div className={styles.emptySelection}>Select a conversation to view its summary.</div>
-          )}
-        </div>
+
+            <div className={styles.detailPanel}>
+              {loading ? (
+                <div className={styles.pageSpinner}>
+                  <Spinner aria-label="loading conversation details" />
+                </div>
+              ) : (
+                <div className={styles.detailPlaceholder}>Conversation details panel coming soon.</div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

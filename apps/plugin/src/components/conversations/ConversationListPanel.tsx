@@ -50,6 +50,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     width: '100%',
     borderCollapse: 'collapse' as const,
   }),
+  tableAutoWidth: css({
+    label: 'conversationListPanel-tableAutoWidth',
+    width: 'max-content',
+  }),
   headerRow: css({
     label: 'conversationListPanel-headerRow',
     borderBottom: `2px solid ${theme.colors.border.medium}`,
@@ -92,6 +96,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
     whiteSpace: 'normal' as const,
     overflowWrap: 'anywhere' as const,
   }),
+  idCellTruncated: css({
+    label: 'conversationListPanel-idCellTruncated',
+    whiteSpace: 'nowrap' as const,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    maxWidth: 0,
+  }),
   modelList: css({
     label: 'conversationListPanel-modelList',
     display: 'flex',
@@ -109,6 +120,12 @@ const getStyles = (theme: GrafanaTheme2) => ({
     label: 'conversationListPanel-timeCell',
     color: theme.colors.text.secondary,
     whiteSpace: 'nowrap' as const,
+  }),
+  timeCellCompact: css({
+    label: 'conversationListPanel-timeCellCompact',
+    width: '1%',
+    paddingLeft: theme.spacing(0.75),
+    paddingRight: theme.spacing(0.75),
   }),
   dayHeaderRow: css({
     label: 'conversationListPanel-dayHeaderRow',
@@ -171,7 +188,7 @@ export default function ConversationListPanel({
 
   return (
     <div className={styles.container}>
-      <table className={styles.table}>
+      <table className={cx(styles.table, showExtendedColumns && styles.tableAutoWidth)}>
         {showExtendedColumns && (
           <thead>
             <tr className={styles.headerRow}>
@@ -214,12 +231,12 @@ export default function ConversationListPanel({
                   aria-label={`select conversation ${conversation.conversation_id}`}
                   aria-selected={selected}
                 >
-                  <td className={cx(styles.cell, styles.timeCell)}>
+                  <td className={cx(styles.cell, styles.timeCell, !showExtendedColumns && styles.timeCellCompact)}>
                     <Tooltip content={new Date(conversation.last_generation_at).toLocaleString()} placement="left">
                       <span>{formatTime(conversation.last_generation_at)}</span>
                     </Tooltip>
                   </td>
-                  <td className={cx(styles.cell, styles.idCell)}>
+                  <td className={cx(styles.cell, styles.idCell, !showExtendedColumns && styles.idCellTruncated)}>
                     <span>{conversation.conversation_id}</span>
                   </td>
                   {showExtendedColumns && (

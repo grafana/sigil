@@ -30,8 +30,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
   summary: css({
     label: 'conversationColumn-summary',
     borderBottom: `1px solid ${theme.colors.border.weak}`,
-    paddingBottom: theme.spacing(1.5),
-    marginBottom: theme.spacing(2),
+    padding: theme.spacing(1.5, 0.75, 2),
+    margin: theme.spacing(0.5, 0, 2.5),
   }),
   summaryGrid: css({
     label: 'conversationColumn-summaryGrid',
@@ -53,18 +53,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     label: 'conversationColumn-summaryValue',
     fontFamily: theme.typography.fontFamilyMonospace,
     overflowWrap: 'anywhere' as const,
-  }),
-  bodyPlaceholder: css({
-    label: 'conversationColumn-bodyPlaceholder',
-    flex: 1,
-    minHeight: 0,
-    border: `1px dashed ${theme.colors.border.medium}`,
-    borderRadius: theme.shape.radius.default,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: theme.colors.text.secondary,
-    padding: theme.spacing(2),
   }),
 });
 
@@ -107,7 +95,6 @@ export default function ConversationColumn({ conversation }: ConversationColumnP
           </div>
         </div>
       </div>
-      <div className={styles.bodyPlaceholder}>Conversation details panel coming soon.</div>
     </div>
   );
 }
