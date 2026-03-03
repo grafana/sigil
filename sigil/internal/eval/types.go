@@ -195,6 +195,30 @@ type WorkItem struct {
 	UpdatedAt        time.Time      `json:"updated_at"`
 }
 
+type RulePreviewRequest struct {
+	RuleID     string         `json:"rule_id,omitempty"`
+	Selector   Selector       `json:"selector"`
+	Match      map[string]any `json:"match"`
+	SampleRate float64        `json:"sample_rate"`
+}
+
+type RulePreviewResponse struct {
+	WindowHours         int                       `json:"window_hours"`
+	TotalGenerations    int                       `json:"total_generations"`
+	MatchingGenerations int                       `json:"matching_generations"`
+	SampledGenerations  int                       `json:"sampled_generations"`
+	Samples             []PreviewGenerationSample `json:"samples"`
+}
+
+type PreviewGenerationSample struct {
+	GenerationID   string `json:"generation_id"`
+	ConversationID string `json:"conversation_id"`
+	AgentName      string `json:"agent_name,omitempty"`
+	Model          string `json:"model,omitempty"`
+	CreatedAt      string `json:"created_at"`
+	InputPreview   string `json:"input_preview,omitempty"`
+}
+
 type EvalStore interface {
 	CreateEvaluator(ctx context.Context, evaluator EvaluatorDefinition) error
 	GetEvaluator(ctx context.Context, tenantID, evaluatorID string) (*EvaluatorDefinition, error)

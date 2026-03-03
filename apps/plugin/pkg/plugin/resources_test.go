@@ -107,6 +107,66 @@ func TestCallResource(t *testing.T) {
 				return
 			}
 			_, _ = io.WriteString(w, `{"data":{"model_key":"openrouter:openai/gpt-4o"},"freshness":{"stale":false}}`)
+		case "/api/v1/eval/evaluators":
+			switch r.Method {
+			case http.MethodGet:
+				_, _ = io.WriteString(w, `{"items":[],"next_cursor":""}`)
+			case http.MethodPost:
+				body, _ := io.ReadAll(r.Body)
+				_, _ = w.Write(body)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		case "/api/v1/eval/evaluators/eval-1":
+			switch r.Method {
+			case http.MethodGet:
+				_, _ = io.WriteString(w, `{"evaluator_id":"eval-1"}`)
+			case http.MethodDelete:
+				w.WriteHeader(http.StatusNoContent)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		case "/api/v1/eval/predefined/evaluators":
+			_, _ = io.WriteString(w, `{"items":[{"evaluator_id":"sigil.helpfulness"}]}`)
+		case "/api/v1/eval/predefined/evaluators/sigil.helpfulness:fork":
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			body, _ := io.ReadAll(r.Body)
+			_, _ = w.Write(body)
+		case "/api/v1/eval/rules":
+			switch r.Method {
+			case http.MethodGet:
+				_, _ = io.WriteString(w, `{"items":[],"next_cursor":""}`)
+			case http.MethodPost:
+				body, _ := io.ReadAll(r.Body)
+				_, _ = w.Write(body)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		case "/api/v1/eval/rules/rule-1":
+			switch r.Method {
+			case http.MethodGet:
+				_, _ = io.WriteString(w, `{"rule_id":"rule-1"}`)
+			case http.MethodPatch:
+				body, _ := io.ReadAll(r.Body)
+				_, _ = w.Write(body)
+			case http.MethodDelete:
+				w.WriteHeader(http.StatusNoContent)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		case "/api/v1/eval/rules:preview":
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			_, _ = io.WriteString(w, `{"window_hours":6,"total_generations":100,"matching_generations":10,"sampled_generations":1,"samples":[]}`)
+		case "/api/v1/eval/judge/providers":
+			_, _ = io.WriteString(w, `{"providers":[{"id":"openai","name":"OpenAI","type":"direct"}]}`)
+		case "/api/v1/eval/judge/models":
+			_, _ = io.WriteString(w, `{"models":[{"id":"gpt-4o-mini","name":"gpt-4o-mini","provider":"openai"}]}`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -253,6 +313,79 @@ func TestCallResource(t *testing.T) {
 			name:      "model cards post not allowed",
 			method:    http.MethodPost,
 			path:      "query/model-cards",
+			expStatus: http.StatusMethodNotAllowed,
+		},
+		{
+			name:      "list evaluators",
+			method:    http.MethodGet,
+			path:      "eval/evaluators",
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"items":[],"next_cursor":""}`),
+		},
+		{
+			name:      "get evaluator by id",
+			method:    http.MethodGet,
+			path:      "eval/evaluators/eval-1",
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"evaluator_id":"eval-1"}`),
+		},
+		{
+			name:      "delete evaluator",
+			method:    http.MethodDelete,
+			path:      "eval/evaluators/eval-1",
+			expStatus: http.StatusNoContent,
+		},
+		{
+			name:      "list predefined evaluators",
+			method:    http.MethodGet,
+			path:      "eval/predefined/evaluators",
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"items":[{"evaluator_id":"sigil.helpfulness"}]}`),
+		},
+		{
+			name:      "list rules",
+			method:    http.MethodGet,
+			path:      "eval/rules",
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"items":[],"next_cursor":""}`),
+		},
+		{
+			name:      "get rule by id",
+			method:    http.MethodGet,
+			path:      "eval/rules/rule-1",
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"rule_id":"rule-1"}`),
+		},
+		{
+			name:      "delete rule",
+			method:    http.MethodDelete,
+			path:      "eval/rules/rule-1",
+			expStatus: http.StatusNoContent,
+		},
+		{
+			name:      "list judge providers",
+			method:    http.MethodGet,
+			path:      "eval/judge/providers",
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"providers":[{"id":"openai","name":"OpenAI","type":"direct"}]}`),
+		},
+		{
+			name:      "list judge models",
+			method:    http.MethodGet,
+			path:      "eval/judge/models?provider=openai",
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"models":[{"id":"gpt-4o-mini","name":"gpt-4o-mini","provider":"openai"}]}`),
+		},
+		{
+			name:      "evaluators post not allowed via get handler",
+			method:    http.MethodPatch,
+			path:      "eval/evaluators",
+			expStatus: http.StatusMethodNotAllowed,
+		},
+		{
+			name:      "rules put not allowed",
+			method:    http.MethodPut,
+			path:      "eval/rules/rule-1",
 			expStatus: http.StatusMethodNotAllowed,
 		},
 		{
@@ -787,6 +920,133 @@ func TestCallResourceReturnsNon200StubOnProxyFailures(t *testing.T) {
 			}
 			if body.Status != "stub" {
 				t.Fatalf("expected stub response, got %q", body.Status)
+			}
+		})
+	}
+}
+
+func TestCallResourceSupportsEvalWriteOperations(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/eval/evaluators":
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			body, _ := io.ReadAll(r.Body)
+			_, _ = w.Write(body)
+		case "/api/v1/eval/predefined/evaluators/sigil.helpfulness:fork":
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			body, _ := io.ReadAll(r.Body)
+			_, _ = w.Write(body)
+		case "/api/v1/eval/rules":
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			body, _ := io.ReadAll(r.Body)
+			_, _ = w.Write(body)
+		case "/api/v1/eval/rules/rule-1":
+			if r.Method != http.MethodPatch {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			body, _ := io.ReadAll(r.Body)
+			_, _ = w.Write(body)
+		case "/api/v1/eval/rules:preview":
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			_, _ = io.WriteString(w, `{"window_hours":6,"total_generations":100}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.apiURL = upstream.URL
+
+	testCases := []struct {
+		name      string
+		method    string
+		path      string
+		body      []byte
+		expStatus int
+		expBody   []byte
+	}{
+		{
+			name:      "create evaluator",
+			method:    http.MethodPost,
+			path:      "eval/evaluators",
+			body:      []byte(`{"evaluator_id":"my-eval","kind":"llm_judge"}`),
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"evaluator_id":"my-eval","kind":"llm_judge"}`),
+		},
+		{
+			name:      "fork predefined evaluator",
+			method:    http.MethodPost,
+			path:      "eval/predefined/evaluators/sigil.helpfulness:fork",
+			body:      []byte(`{"evaluator_id":"prod.helpfulness.v1"}`),
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"evaluator_id":"prod.helpfulness.v1"}`),
+		},
+		{
+			name:      "create rule",
+			method:    http.MethodPost,
+			path:      "eval/rules",
+			body:      []byte(`{"rule_id":"my-rule","selector":"user_visible_turn"}`),
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"rule_id":"my-rule","selector":"user_visible_turn"}`),
+		},
+		{
+			name:      "update rule",
+			method:    http.MethodPatch,
+			path:      "eval/rules/rule-1",
+			body:      []byte(`{"enabled":true}`),
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"enabled":true}`),
+		},
+		{
+			name:      "preview rule",
+			method:    http.MethodPost,
+			path:      "eval/rules:preview",
+			body:      []byte(`{"selector":"user_visible_turn"}`),
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"window_hours":6,"total_generations":100}`),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var sender mockCallResourceResponseSender
+			err := app.CallResource(context.Background(), &backend.CallResourceRequest{
+				Method: tc.method,
+				Path:   tc.path,
+				Body:   tc.body,
+			}, &sender)
+			if err != nil {
+				t.Fatalf("CallResource error: %s", err)
+			}
+			if sender.response == nil {
+				t.Fatal("no response received from CallResource")
+			}
+			if sender.response.Status != tc.expStatus {
+				t.Fatalf("expected status %d, got %d body=%s", tc.expStatus, sender.response.Status, sender.response.Body)
+			}
+			if len(tc.expBody) > 0 {
+				if tb := bytes.TrimSpace(sender.response.Body); !bytes.Equal(tb, tc.expBody) {
+					t.Fatalf("response body should be %s, got %s", tc.expBody, tb)
+				}
 			}
 		})
 	}

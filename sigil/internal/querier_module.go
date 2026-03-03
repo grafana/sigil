@@ -122,7 +122,7 @@ func newQuerierModule(
 	if evalStore, ok := generationStore.(evalpkg.EvalStore); ok && evalStore != nil {
 		discovery := judges.DiscoverFromEnv()
 
-		// Wire template store if the underlying storage supports it.
+		// Wire optional stores supported by the active backend.
 		var controlOpts []evalcontrol.ServiceOption
 		var templateStore evalpkg.TemplateStore
 		if ts, ok := generationStore.(evalpkg.TemplateStore); ok {
@@ -133,6 +133,10 @@ func newQuerierModule(
 				_ = level.Info(logger).Log("msg", "predefined templates bootstrapped")
 			}
 			controlOpts = append(controlOpts, evalcontrol.WithTemplateStore(templateStore))
+		}
+
+		if lister, ok := generationStore.(storage.RecentGenerationLister); ok {
+			controlOpts = append(controlOpts, evalcontrol.WithPreview(lister, cfg.EvalPreviewWindowHours))
 		}
 
 		controlSvc = evalcontrol.NewService(evalStore, judgeDiscoveryAdapter{discovery: discovery}, controlOpts...)

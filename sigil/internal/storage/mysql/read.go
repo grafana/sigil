@@ -13,7 +13,10 @@ import (
 	"gorm.io/gorm"
 )
 
-var _ storage.WALReader = (*WALStore)(nil)
+var (
+	_ storage.WALReader              = (*WALStore)(nil)
+	_ storage.RecentGenerationLister = (*WALStore)(nil)
+)
 
 func (s *WALStore) GetByID(ctx context.Context, tenantID, generationID string) (*sigilv1.Generation, error) {
 	start := time.Now()
@@ -88,4 +91,40 @@ func decodeGenerationPayload(payload []byte) (*sigilv1.Generation, error) {
 		return nil, err
 	}
 	return &generation, nil
+}
+
+// ListRecentGenerations returns generations for a tenant since the given time,
+// ordered by created_at descending, up to limit rows.
+func (s *WALStore) ListRecentGenerations(ctx context.Context, tenantID string, since time.Time, limit int) ([]storage.RecentGenerationRow, error) {
+	if strings.TrimSpace(tenantID) == "" {
+		return nil, errors.New("tenant id is required")
+	}
+	if limit <= 0 {
+		limit = 1000
+	}
+	if limit > 10000 {
+		limit = 10000
+	}
+
+	var rows []GenerationModel
+	err := s.db.WithContext(ctx).
+		Select("generation_id", "conversation_id", "payload", "created_at").
+		Where("tenant_id = ? AND created_at >= ?", tenantID, since.UTC()).
+		Order("created_at DESC, id DESC").
+		Limit(limit).
+		Find(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("list recent generations: %w", err)
+	}
+
+	out := make([]storage.RecentGenerationRow, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, storage.RecentGenerationRow{
+			GenerationID:   row.GenerationID,
+			ConversationID: row.ConversationID,
+			Payload:        row.Payload,
+			CreatedAt:      row.CreatedAt.UTC(),
+		})
+	}
+	return out, nil
 }

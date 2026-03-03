@@ -38,6 +38,7 @@ const (
 	DefaultEvalClaimBatchSize          = 20
 	DefaultEvalPollInterval            = 250 * time.Millisecond
 	DefaultEvalDefaultJudgeModel       = "openai/gpt-4o-mini"
+	DefaultEvalPreviewWindowHours      = 6
 )
 
 type Config struct {
@@ -69,6 +70,7 @@ type Config struct {
 	EvalDefaultJudgeModel          string
 	EvalSeedFile                   string
 	EvalSeedStrict                 bool
+	EvalPreviewWindowHours         int
 }
 
 type QueryProxyConfig struct {
@@ -208,15 +210,16 @@ func FromEnv() Config {
 			StaleHard:     getEnvDuration("SIGIL_MODEL_CARDS_STALE_HARD", 24*time.Hour),
 			BootstrapMode: strings.ToLower(strings.TrimSpace(getEnv("SIGIL_MODEL_CARDS_BOOTSTRAP_MODE", "snapshot-first"))),
 		},
-		EvalWorkerEnabled:     getEnvBool("SIGIL_EVAL_WORKER_ENABLED", false),
-		EvalMaxConcurrent:     getEnvInt("SIGIL_EVAL_MAX_CONCURRENT", DefaultEvalMaxConcurrent),
-		EvalMaxRate:           getEnvInt("SIGIL_EVAL_MAX_RATE", DefaultEvalMaxRate),
-		EvalMaxAttempts:       getEnvInt("SIGIL_EVAL_MAX_ATTEMPTS", DefaultEvalMaxAttempts),
-		EvalClaimBatchSize:    getEnvInt("SIGIL_EVAL_CLAIM_BATCH_SIZE", DefaultEvalClaimBatchSize),
-		EvalPollInterval:      getEnvDuration("SIGIL_EVAL_POLL_INTERVAL", DefaultEvalPollInterval),
-		EvalDefaultJudgeModel: getEnv("SIGIL_EVAL_DEFAULT_JUDGE_MODEL", DefaultEvalDefaultJudgeModel),
-		EvalSeedFile:          getEnv("SIGIL_EVAL_SEED_FILE", "sigil-eval-seed.yaml"),
-		EvalSeedStrict:        getEnvBool("SIGIL_EVAL_SEED_STRICT", false),
+		EvalWorkerEnabled:      getEnvBool("SIGIL_EVAL_WORKER_ENABLED", false),
+		EvalMaxConcurrent:      getEnvInt("SIGIL_EVAL_MAX_CONCURRENT", DefaultEvalMaxConcurrent),
+		EvalMaxRate:            getEnvInt("SIGIL_EVAL_MAX_RATE", DefaultEvalMaxRate),
+		EvalMaxAttempts:        getEnvInt("SIGIL_EVAL_MAX_ATTEMPTS", DefaultEvalMaxAttempts),
+		EvalClaimBatchSize:     getEnvInt("SIGIL_EVAL_CLAIM_BATCH_SIZE", DefaultEvalClaimBatchSize),
+		EvalPollInterval:       getEnvDuration("SIGIL_EVAL_POLL_INTERVAL", DefaultEvalPollInterval),
+		EvalDefaultJudgeModel:  getEnv("SIGIL_EVAL_DEFAULT_JUDGE_MODEL", DefaultEvalDefaultJudgeModel),
+		EvalSeedFile:           getEnv("SIGIL_EVAL_SEED_FILE", "sigil-eval-seed.yaml"),
+		EvalSeedStrict:         getEnvBool("SIGIL_EVAL_SEED_STRICT", false),
+		EvalPreviewWindowHours: getEnvInt("SIGIL_EVAL_PREVIEW_WINDOW_HOURS", DefaultEvalPreviewWindowHours),
 	}
 }
 
@@ -321,6 +324,9 @@ func (c Config) Validate() error {
 	}
 	if c.EvalClaimBatchSize <= 0 {
 		return fmt.Errorf("SIGIL_EVAL_CLAIM_BATCH_SIZE must be > 0")
+	}
+	if c.EvalPreviewWindowHours <= 0 {
+		return fmt.Errorf("SIGIL_EVAL_PREVIEW_WINDOW_HOURS must be > 0")
 	}
 	if c.EvalPollInterval <= 0 {
 		return fmt.Errorf("SIGIL_EVAL_POLL_INTERVAL must be > 0")

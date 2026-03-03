@@ -178,6 +178,11 @@ type GenerationRow struct {
 	Payload        []byte
 }
 
+// DecodeGeneration unmarshals a GenerationRow into a Generation proto.
+func DecodeGeneration(row GenerationRow) (*sigilv1.Generation, error) {
+	return decodeGeneration(row)
+}
+
 func decodeGeneration(row GenerationRow) (*sigilv1.Generation, error) {
 	if strings.TrimSpace(row.GenerationID) == "" {
 		return nil, fmt.Errorf("generation id is required")

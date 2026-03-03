@@ -36,6 +36,13 @@
     },
     {
       "type": "page",
+      "name": "Evaluation",
+      "path": "/a/grafana-sigil-app/evaluation",
+      "addToNav": true,
+      "defaultNav": false
+    },
+    {
+      "type": "page",
       "name": "Conversations (old)",
       "path": "/a/grafana-sigil-app/conversations-old",
       "addToNav": false

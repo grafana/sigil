@@ -8,10 +8,14 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	"github.com/grafana/sigil/sigil/internal/eval/predefined"
+	"github.com/grafana/sigil/sigil/internal/eval/rules"
 	"github.com/grafana/sigil/sigil/internal/eval/worker"
+	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
+	"github.com/grafana/sigil/sigil/internal/storage"
 )
 
 type JudgeProvider struct {
@@ -36,7 +40,10 @@ type Service struct {
 	store         controlStore
 	templateStore evalpkg.TemplateStore
 	discovery     JudgeDiscovery
-	now           func() time.Time
+	previewStore  storage.RecentGenerationLister
+	// previewWindowHrs is in hours and controls preview sampling window when previewStore is configured.
+	previewWindowHrs int
+	now              func() time.Time
 }
 
 type validationError struct {
@@ -102,6 +109,12 @@ func NewService(store controlStore, discovery JudgeDiscovery, opts ...ServiceOpt
 	return s
 }
 
+// NewServiceWithPreview constructs a control service with optional preview support.
+// When previewStore is nil or previewWindowHrs <= 0, PreviewRule returns an error.
+func NewServiceWithPreview(store controlStore, discovery JudgeDiscovery, previewStore storage.RecentGenerationLister, previewWindowHrs int) *Service {
+	return NewService(store, discovery, WithPreview(previewStore, previewWindowHrs))
+}
+
 // ServiceOption configures optional dependencies on Service.
 type ServiceOption func(*Service)
 
@@ -110,6 +123,14 @@ type ServiceOption func(*Service)
 func WithTemplateStore(ts evalpkg.TemplateStore) ServiceOption {
 	return func(s *Service) {
 		s.templateStore = ts
+	}
+}
+
+// WithPreview configures preview data source and lookback window.
+func WithPreview(previewStore storage.RecentGenerationLister, previewWindowHrs int) ServiceOption {
+	return func(s *Service) {
+		s.previewStore = previewStore
+		s.previewWindowHrs = previewWindowHrs
 	}
 }
 
@@ -495,6 +516,167 @@ func (s *Service) ListJudgeModels(ctx context.Context, providerID string) ([]Jud
 		return nil, newValidationError(errors.New("provider query param is required"))
 	}
 	return s.discovery.ListModels(ctx, strings.TrimSpace(providerID))
+}
+
+const previewMaxSamples = 20
+const inputPreviewMaxLen = 200
+
+func (s *Service) PreviewRule(ctx context.Context, tenantID string, req evalpkg.RulePreviewRequest) (evalpkg.RulePreviewResponse, error) {
+	if s.previewStore == nil || s.previewWindowHrs <= 0 {
+		return evalpkg.RulePreviewResponse{}, newValidationError(errors.New("rule preview is not configured"))
+	}
+	trimmedTenantID := strings.TrimSpace(tenantID)
+	if trimmedTenantID == "" {
+		return evalpkg.RulePreviewResponse{}, newValidationError(errors.New("tenant id is required"))
+	}
+
+	selector := strings.TrimSpace(string(req.Selector))
+	if selector == "" {
+		selector = string(evalpkg.SelectorUserVisibleTurn)
+	}
+	switch evalpkg.Selector(selector) {
+	case evalpkg.SelectorUserVisibleTurn, evalpkg.SelectorAllAssistantGenerations, evalpkg.SelectorToolCallSteps, evalpkg.SelectorErroredGenerations:
+	default:
+		return evalpkg.RulePreviewResponse{}, newValidationError(errors.New("selector is invalid"))
+	}
+	if req.SampleRate < 0 || req.SampleRate > 1 {
+		return evalpkg.RulePreviewResponse{}, newValidationError(errors.New("sample_rate must be between 0 and 1"))
+	}
+	match := req.Match
+	if match == nil {
+		match = map[string]any{}
+	} else {
+		normalizedMatch, err := validateRuleMatch(match)
+		if err != nil {
+			return evalpkg.RulePreviewResponse{}, newValidationError(err)
+		}
+		match = normalizedMatch
+	}
+
+	since := s.now().UTC().Add(-time.Duration(s.previewWindowHrs) * time.Hour)
+	rows, err := s.previewStore.ListRecentGenerations(ctx, trimmedTenantID, since, 10000)
+	if err != nil {
+		return evalpkg.RulePreviewResponse{}, err
+	}
+
+	totalGenerations := len(rows)
+	matchingCount := 0
+	sampled := make([]evalpkg.PreviewGenerationSample, 0)
+	ruleIDForSampling := strings.TrimSpace(req.RuleID)
+	if ruleIDForSampling == "" {
+		ruleIDForSampling = "preview"
+	}
+
+	for _, row := range rows {
+		genRow := rules.GenerationRow{
+			GenerationID:   row.GenerationID,
+			ConversationID: row.ConversationID,
+			Payload:        row.Payload,
+		}
+		generation, err := rules.DecodeGeneration(genRow)
+		if err != nil {
+			continue
+		}
+		if !rules.MatchesSelector(evalpkg.Selector(selector), generation) {
+			continue
+		}
+		if !rules.MatchesRule(match, generation) {
+			continue
+		}
+		matchingCount++
+		conversationID := generation.GetConversationId()
+		if conversationID == "" {
+			conversationID = generation.GetId()
+		}
+		if !rules.ShouldSampleConversation(trimmedTenantID, conversationID, ruleIDForSampling, req.SampleRate) {
+			continue
+		}
+
+		modelStr := ""
+		if m := generation.GetModel(); m != nil {
+			provider := strings.TrimSpace(m.GetProvider())
+			name := strings.TrimSpace(m.GetName())
+			if provider != "" && name != "" {
+				modelStr = provider + "/" + name
+			} else if name != "" {
+				modelStr = name
+			} else if provider != "" {
+				modelStr = provider
+			}
+		}
+		createdAt := ""
+		if t := generation.GetStartedAt(); t != nil {
+			createdAt = t.AsTime().UTC().Format(time.RFC3339)
+		} else if t := generation.GetCompletedAt(); t != nil {
+			createdAt = t.AsTime().UTC().Format(time.RFC3339)
+		}
+		if createdAt == "" && !row.CreatedAt.IsZero() {
+			createdAt = row.CreatedAt.Format(time.RFC3339)
+		}
+
+		sampled = append(sampled, evalpkg.PreviewGenerationSample{
+			GenerationID:   generation.GetId(),
+			ConversationID: conversationID,
+			AgentName:      strings.TrimSpace(generation.GetAgentName()),
+			Model:          modelStr,
+			CreatedAt:      createdAt,
+			InputPreview:   inputPreviewFromGeneration(generation),
+		})
+	}
+
+	samples := sampled
+	if len(samples) > previewMaxSamples {
+		samples = sampled[:previewMaxSamples]
+	}
+
+	return evalpkg.RulePreviewResponse{
+		WindowHours:         s.previewWindowHrs,
+		TotalGenerations:    totalGenerations,
+		MatchingGenerations: matchingCount,
+		SampledGenerations:  len(sampled),
+		Samples:             samples,
+	}, nil
+}
+
+func inputPreviewFromGeneration(generation *sigilv1.Generation) string {
+	if generation == nil {
+		return ""
+	}
+	var b strings.Builder
+	runeCount := 0
+	for _, msg := range generation.GetInput() {
+		if msg == nil {
+			continue
+		}
+		for _, part := range msg.GetParts() {
+			if part == nil {
+				continue
+			}
+			t := strings.TrimSpace(part.GetText())
+			if t != "" {
+				if b.Len() > 0 {
+					b.WriteString("\n")
+					runeCount++
+				}
+				b.WriteString(t)
+				runeCount += utf8.RuneCountInString(t)
+				if runeCount >= inputPreviewMaxLen {
+					return truncateWithEllipsis(b.String(), inputPreviewMaxLen)
+				}
+			}
+		}
+	}
+	return truncateWithEllipsis(b.String(), inputPreviewMaxLen)
+}
+
+func truncateWithEllipsis(s string, maxLen int) string {
+	if utf8.RuneCountInString(s) <= maxLen {
+		return s
+	}
+	if maxLen <= 3 {
+		return string([]rune(s)[:maxLen])
+	}
+	return string([]rune(s)[:maxLen-3]) + "..."
 }
 
 func validateEvaluator(evaluator *evalpkg.EvaluatorDefinition) error {

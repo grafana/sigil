@@ -55,6 +55,7 @@ func RegisterHTTPRoutes(mux *http.ServeMux, service *Service, templateService *T
 	mux.Handle("/api/v1/eval/predefined/evaluators/", protectedMiddleware(http.HandlerFunc(service.handlePredefinedEvaluatorByID)))
 	mux.Handle("/api/v1/eval/rules", protectedMiddleware(http.HandlerFunc(service.handleRules)))
 	mux.Handle("/api/v1/eval/rules/", protectedMiddleware(http.HandlerFunc(service.handleRuleByID)))
+	mux.Handle("POST /api/v1/eval/rules:preview", protectedMiddleware(http.HandlerFunc(service.handleRulesPreview)))
 	mux.Handle("/api/v1/eval/judge/providers", protectedMiddleware(http.HandlerFunc(service.handleJudgeProviders)))
 	mux.Handle("/api/v1/eval/judge/models", protectedMiddleware(http.HandlerFunc(service.handleJudgeModels)))
 
@@ -286,6 +287,31 @@ func (s *Service) handleJudgeProviders(w http.ResponseWriter, req *http.Request)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"providers": s.ListJudgeProviders(req.Context())})
+}
+
+func (s *Service) handleRulesPreview(w http.ResponseWriter, req *http.Request) {
+	tenantID, ok := tenantIDFromRequest(w, req)
+	if !ok {
+		return
+	}
+
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var previewReq evalpkg.RulePreviewRequest
+	if err := decodeJSONBody(req, &previewReq); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	resp, err := s.PreviewRule(req.Context(), tenantID, previewReq)
+	if err != nil {
+		writeControlWriteError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Service) handleJudgeModels(w http.ResponseWriter, req *http.Request) {

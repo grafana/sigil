@@ -327,6 +327,90 @@ func (a *App) handleLookupModelCard(w http.ResponseWriter, req *http.Request) {
 	a.handleProxy(w, req, "/api/v1/model-cards:lookup", http.MethodGet)
 }
 
+func (a *App) handleEvalEvaluators(w http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case http.MethodGet:
+		a.handleProxy(w, req, "/api/v1/eval/evaluators", http.MethodGet)
+	case http.MethodPost:
+		a.handleProxy(w, req, "/api/v1/eval/evaluators", http.MethodPost)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (a *App) handleEvalEvaluatorByID(w http.ResponseWriter, req *http.Request) {
+	id := strings.TrimPrefix(req.URL.Path, "/eval/evaluators/")
+	if id == "" || strings.Contains(id, "/") {
+		http.Error(w, "invalid evaluator path", http.StatusBadRequest)
+		return
+	}
+	path := fmt.Sprintf("/api/v1/eval/evaluators/%s", id)
+	switch req.Method {
+	case http.MethodGet:
+		a.handleProxy(w, req, path, http.MethodGet)
+	case http.MethodDelete:
+		a.handleProxy(w, req, path, http.MethodDelete)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (a *App) handleEvalPredefinedEvaluators(w http.ResponseWriter, req *http.Request) {
+	a.handleProxy(w, req, "/api/v1/eval/predefined/evaluators", http.MethodGet)
+}
+
+func (a *App) handleEvalPredefinedFork(w http.ResponseWriter, req *http.Request) {
+	id := strings.TrimPrefix(req.URL.Path, "/eval/predefined/evaluators/")
+	if id == "" || strings.Contains(id, "/") || !strings.HasSuffix(id, ":fork") {
+		http.Error(w, "invalid predefined evaluator fork path", http.StatusBadRequest)
+		return
+	}
+	path := fmt.Sprintf("/api/v1/eval/predefined/evaluators/%s", id)
+	a.handleProxy(w, req, path, http.MethodPost)
+}
+
+func (a *App) handleEvalRulesPreview(w http.ResponseWriter, req *http.Request) {
+	a.handleProxy(w, req, "/api/v1/eval/rules:preview", http.MethodPost)
+}
+
+func (a *App) handleEvalRules(w http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case http.MethodGet:
+		a.handleProxy(w, req, "/api/v1/eval/rules", http.MethodGet)
+	case http.MethodPost:
+		a.handleProxy(w, req, "/api/v1/eval/rules", http.MethodPost)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (a *App) handleEvalRuleByID(w http.ResponseWriter, req *http.Request) {
+	id := strings.TrimPrefix(req.URL.Path, "/eval/rules/")
+	if id == "" || strings.Contains(id, "/") {
+		http.Error(w, "invalid rule path", http.StatusBadRequest)
+		return
+	}
+	path := fmt.Sprintf("/api/v1/eval/rules/%s", id)
+	switch req.Method {
+	case http.MethodGet:
+		a.handleProxy(w, req, path, http.MethodGet)
+	case http.MethodPatch:
+		a.handleProxy(w, req, path, http.MethodPatch)
+	case http.MethodDelete:
+		a.handleProxy(w, req, path, http.MethodDelete)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (a *App) handleEvalJudgeProviders(w http.ResponseWriter, req *http.Request) {
+	a.handleProxy(w, req, "/api/v1/eval/judge/providers", http.MethodGet)
+}
+
+func (a *App) handleEvalJudgeModels(w http.ResponseWriter, req *http.Request) {
+	a.handleProxy(w, req, "/api/v1/eval/judge/models", http.MethodGet)
+}
+
 func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/query/conversations/search", a.handleSearchConversations)
 	mux.HandleFunc("/query/conversations", a.handleListConversations)
@@ -340,4 +424,14 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/query/proxy/tempo/", a.handleTempoProxyRoutes)
 	mux.HandleFunc("/query/model-cards", a.handleListModelCards)
 	mux.HandleFunc("/query/model-cards/lookup", a.handleLookupModelCard)
+
+	mux.HandleFunc("/eval/evaluators", a.handleEvalEvaluators)
+	mux.HandleFunc("/eval/evaluators/", a.handleEvalEvaluatorByID)
+	mux.HandleFunc("/eval/predefined/evaluators", a.handleEvalPredefinedEvaluators)
+	mux.HandleFunc("/eval/predefined/evaluators/", a.handleEvalPredefinedFork)
+	mux.HandleFunc("/eval/rules:preview", a.handleEvalRulesPreview)
+	mux.HandleFunc("/eval/rules", a.handleEvalRules)
+	mux.HandleFunc("/eval/rules/", a.handleEvalRuleByID)
+	mux.HandleFunc("/eval/judge/providers", a.handleEvalJudgeProviders)
+	mux.HandleFunc("/eval/judge/models", a.handleEvalJudgeModels)
 }
