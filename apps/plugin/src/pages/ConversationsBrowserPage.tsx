@@ -2,17 +2,17 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { css } from '@emotion/css';
 import { dateTime, makeTimeRange, type GrafanaTheme2, type TimeRange } from '@grafana/data';
 import { Alert, Spinner, TimeRangePicker, useStyles2 } from '@grafana/ui';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
 import type { ConversationDetail, ConversationSearchResult } from '../conversation/types';
 import ConversationColumn from '../components/conversations/ConversationColumn';
 import ConversationListPanel from '../components/conversations/ConversationListPanel';
+import { buildConversationViewRoute, ROUTES } from '../constants';
 
 export type ConversationsBrowserPageProps = {
   dataSource?: ConversationsDataSource;
 };
 
-const SELECTED_CONVERSATION_PARAM = 'conversation';
 const DEFAULT_TIME_RANGE_HOURS = 1;
 const TOTAL_TOKENS_SELECT_KEY = 'span.gen_ai.usage.total_tokens';
 
@@ -217,7 +217,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   layoutWithSelection: css({
     label: 'conversationsBrowserPage-layoutWithSelection',
-    gridTemplateColumns: '20% minmax(320px, 0.8fr) minmax(520px, 1.4fr)',
+    gridTemplateColumns: 'minmax(320px, 0.8fr) minmax(520px, 1.4fr)',
     gap: theme.spacing(2),
     minHeight: 0,
     overflow: 'hidden',
@@ -279,7 +279,21 @@ const getStyles = (theme: GrafanaTheme2) => ({
 export default function ConversationsBrowserPage(props: ConversationsBrowserPageProps) {
   const styles = useStyles2(getStyles);
   const dataSource = props.dataSource ?? defaultConversationsDataSource;
-  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { conversationID: selectedConversationParam = '' } = useParams<{ conversationID?: string }>();
+  const hasSelection = selectedConversationParam.length > 0;
+  const conversationsSegment = `/${ROUTES.Conversations}`;
+  const conversationsSegmentIndex = location.pathname.indexOf(conversationsSegment);
+  const appBasePath = conversationsSegmentIndex >= 0 ? location.pathname.slice(0, conversationsSegmentIndex) : '';
+
+  const buildAppPath = useCallback(
+    (path: string): string => {
+      const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+      return `${appBasePath}${normalizedPath}`;
+    },
+    [appBasePath]
+  );
 
   const [conversations, setConversations] = useState<ConversationSearchResult[]>([]);
   const [previousConversations, setPreviousConversations] = useState<ConversationSearchResult[]>([]);
@@ -331,21 +345,32 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
     void loadConversations();
   }, [loadConversations]);
 
-  const resolvedSelectedConversationID = useMemo(() => {
-    const selectedConversationID = searchParams.get(SELECTED_CONVERSATION_PARAM) ?? '';
-    if (
-      selectedConversationID.length > 0 &&
-      conversations.some((item) => item.conversation_id === selectedConversationID)
-    ) {
-      return selectedConversationID;
-    }
-    return '';
-  }, [conversations, searchParams]);
+  const resolvedSelectedConversationID = selectedConversationParam;
 
-  const selectedConversation = useMemo(
-    () => conversations.find((conversation) => conversation.conversation_id === resolvedSelectedConversationID),
-    [conversations, resolvedSelectedConversationID]
-  );
+  const selectedConversation = useMemo(() => {
+    const selectedFromList = conversations.find(
+      (conversation) => conversation.conversation_id === resolvedSelectedConversationID
+    );
+    if (selectedFromList) {
+      return selectedFromList;
+    }
+    if (!selectedConversationDetail || selectedConversationDetail.conversation_id !== resolvedSelectedConversationID) {
+      return undefined;
+    }
+    return {
+      conversation_id: selectedConversationDetail.conversation_id,
+      generation_count: selectedConversationDetail.generation_count,
+      first_generation_at: selectedConversationDetail.first_generation_at,
+      last_generation_at: selectedConversationDetail.last_generation_at,
+      models: [],
+      agents: [],
+      error_count: 0,
+      has_errors: false,
+      trace_ids: [],
+      rating_summary: selectedConversationDetail.rating_summary,
+      annotation_count: selectedConversationDetail.annotations.length,
+    };
+  }, [conversations, resolvedSelectedConversationID, selectedConversationDetail]);
   const conversationStats = useMemo(
     () => buildConversationStats(conversations, timeRange.to.valueOf()),
     [conversations, timeRange]
@@ -379,15 +404,13 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
 
   const onSelectConversation = useCallback(
     (conversationID: string) => {
-      const nextSearchParams = new URLSearchParams(searchParams);
       if (conversationID.length === 0) {
-        nextSearchParams.delete(SELECTED_CONVERSATION_PARAM);
+        void navigate(buildAppPath(ROUTES.Conversations), { replace: true });
       } else {
-        nextSearchParams.set(SELECTED_CONVERSATION_PARAM, conversationID);
+        void navigate(buildAppPath(buildConversationViewRoute(conversationID)), { replace: true });
       }
-      setSearchParams(nextSearchParams, { replace: true });
     },
-    [searchParams, setSearchParams]
+    [buildAppPath, navigate]
   );
 
   useEffect(() => {
@@ -580,30 +603,36 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
         )}
       </div>
 
-      <div className={`${styles.layout} ${selectedConversation ? styles.layoutWithSelection : ''}`}>
-        <div className={styles.leftPanel}>
-          <ConversationListPanel
-            conversations={conversations}
-            selectedConversationId={resolvedSelectedConversationID}
-            loading={loading}
-            hasMore={false}
-            loadingMore={false}
-            showExtendedColumns={!selectedConversation}
-            onSelectConversation={onSelectConversation}
-            onLoadMore={() => undefined}
-          />
-        </div>
+      <div className={`${styles.layout} ${hasSelection ? styles.layoutWithSelection : ''}`}>
+        {!hasSelection && (
+          <div className={styles.leftPanel}>
+            <ConversationListPanel
+              conversations={conversations}
+              selectedConversationId={resolvedSelectedConversationID}
+              loading={loading}
+              hasMore={false}
+              loadingMore={false}
+              showExtendedColumns
+              onSelectConversation={onSelectConversation}
+              onLoadMore={() => undefined}
+            />
+          </div>
+        )}
 
-        {selectedConversation && (
+        {hasSelection && (
           <>
             <div className={styles.middlePanel}>
-              {loading ? (
+              {selectedConversationLoading || (!selectedConversation && selectedConversationErrorMessage.length === 0) ? (
                 <div className={styles.pageSpinner}>
                   <Spinner aria-label="loading selected conversation" />
                 </div>
+              ) : selectedConversationErrorMessage.length > 0 ? (
+                <Alert severity="error" title="Conversation detail query failed">
+                  {selectedConversationErrorMessage}
+                </Alert>
               ) : (
                 <ConversationColumn
-                  conversation={selectedConversation}
+                  conversation={selectedConversation!}
                   generations={selectedConversationDetail?.generations ?? []}
                   generationsLoading={selectedConversationLoading}
                   generationsErrorMessage={selectedConversationErrorMessage}
@@ -612,10 +641,12 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
             </div>
 
             <div className={styles.detailPanel}>
-              {loading ? (
+              {selectedConversationLoading ? (
                 <div className={styles.pageSpinner}>
                   <Spinner aria-label="loading conversation details" />
                 </div>
+              ) : selectedConversationErrorMessage.length > 0 ? (
+                <div className={styles.detailPlaceholder}>Unable to load conversation details.</div>
               ) : (
                 <div className={styles.detailPlaceholder}>Conversation details panel coming soon.</div>
               )}

@@ -106,6 +106,10 @@ describe('ConversationsBrowserPage', () => {
     const router = createMemoryRouter(
       [
         {
+          path: '/conversations/:conversationID/view',
+          element: <ConversationsBrowserPage dataSource={dataSource} />,
+        },
+        {
           path: '/conversations',
           element: <ConversationsBrowserPage dataSource={dataSource} />,
         },
@@ -134,27 +138,27 @@ describe('ConversationsBrowserPage', () => {
     fireEvent.click(screen.getByLabelText('select conversation conv-b'));
     expect(await screen.findByText('Conversation ID')).toBeInTheDocument();
     expect(await screen.findByText('Generations (2)')).toBeInTheDocument();
-    expect(screen.getByLabelText('select conversation conv-b')).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Conversation ID').parentElement).toHaveTextContent('conv-b');
-    expect(new URLSearchParams(router.state.location.search).get('conversation')).toBe('conv-b');
+    expect(router.state.location.pathname).toBe('/conversations/conv-b/view');
+    expect(screen.queryByLabelText('select conversation conv-b')).not.toBeInTheDocument();
     expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-b');
   });
 
   it('uses selected conversation from URL param when present', async () => {
     const dataSource = createDataSource();
-    const { router } = renderPage(dataSource, '/conversations?conversation=conv-b');
+    const { router } = renderPage(dataSource, '/conversations/conv-b/view');
 
     await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalledTimes(2));
-    expect(await screen.findByLabelText('select conversation conv-b')).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('Conversation ID').parentElement).toHaveTextContent('conv-b');
+    expect((await screen.findByText('Conversation ID')).parentElement).toHaveTextContent('conv-b');
     expect(await screen.findByText('Generations (2)')).toBeInTheDocument();
-    expect(new URLSearchParams(router.state.location.search).get('conversation')).toBe('conv-b');
+    expect(router.state.location.pathname).toBe('/conversations/conv-b/view');
+    expect(screen.queryByLabelText('select conversation conv-b')).not.toBeInTheDocument();
     expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-b');
   });
 
   it('resets selection when URL is set to /conversations', async () => {
     const dataSource = createDataSource();
-    const { router } = renderPage(dataSource, '/conversations?conversation=conv-b');
+    const { router } = renderPage(dataSource, '/conversations/conv-b/view');
 
     await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalledTimes(2));
     expect(await screen.findByText('Conversation ID')).toBeInTheDocument();
@@ -167,5 +171,15 @@ describe('ConversationsBrowserPage', () => {
       expect(screen.queryByText('Conversation ID')).not.toBeInTheDocument();
     });
     expect(screen.queryByText('Generations (2)')).not.toBeInTheDocument();
+  });
+
+  it('keeps selected route for deep links outside the current list range', async () => {
+    const dataSource = createDataSource();
+    const { router } = renderPage(dataSource, '/conversations/does-not-exist/view');
+
+    await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalledTimes(2));
+    expect((await screen.findByText('Conversation ID')).parentElement).toHaveTextContent('does-not-exist');
+    expect(router.state.location.pathname).toBe('/conversations/does-not-exist/view');
+    expect(dataSource.getConversationDetail).toHaveBeenCalledWith('does-not-exist');
   });
 });
