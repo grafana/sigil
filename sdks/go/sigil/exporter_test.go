@@ -167,6 +167,55 @@ func TestShutdownFlushesPendingGenerations(t *testing.T) {
 	}
 }
 
+func TestMergeAuthConfig(t *testing.T) {
+	testCases := []struct {
+		name     string
+		base     AuthConfig
+		override AuthConfig
+		want     AuthConfig
+	}{
+		{
+			name:     "empty override preserves base",
+			base:     AuthConfig{Mode: ExportAuthModeBasic, TenantID: "t1", BearerToken: "b1", BasicUser: "u1", BasicPassword: "p1"},
+			override: AuthConfig{},
+			want:     AuthConfig{Mode: ExportAuthModeBasic, TenantID: "t1", BearerToken: "b1", BasicUser: "u1", BasicPassword: "p1"},
+		},
+		{
+			name:     "override replaces all fields",
+			base:     AuthConfig{Mode: ExportAuthModeBearer, TenantID: "t1", BearerToken: "b1", BasicUser: "u1", BasicPassword: "p1"},
+			override: AuthConfig{Mode: ExportAuthModeBasic, TenantID: "t2", BearerToken: "b2", BasicUser: "u2", BasicPassword: "p2"},
+			want:     AuthConfig{Mode: ExportAuthModeBasic, TenantID: "t2", BearerToken: "b2", BasicUser: "u2", BasicPassword: "p2"},
+		},
+		{
+			name:     "override BasicUser only",
+			base:     AuthConfig{Mode: ExportAuthModeBasic, BasicUser: "u1", BasicPassword: "p1"},
+			override: AuthConfig{BasicUser: "u2"},
+			want:     AuthConfig{Mode: ExportAuthModeBasic, BasicUser: "u2", BasicPassword: "p1"},
+		},
+		{
+			name:     "override BasicPassword only",
+			base:     AuthConfig{Mode: ExportAuthModeBasic, BasicUser: "u1", BasicPassword: "p1"},
+			override: AuthConfig{BasicPassword: "p2"},
+			want:     AuthConfig{Mode: ExportAuthModeBasic, BasicUser: "u1", BasicPassword: "p2"},
+		},
+		{
+			name:     "basic auth override on empty base",
+			base:     AuthConfig{},
+			override: AuthConfig{Mode: ExportAuthModeBasic, BasicUser: "user", BasicPassword: "pass"},
+			want:     AuthConfig{Mode: ExportAuthModeBasic, BasicUser: "user", BasicPassword: "pass"},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got := mergeAuthConfig(testCase.base, testCase.override)
+			if got != testCase.want {
+				t.Fatalf("mergeAuthConfig(%+v, %+v) = %+v, want %+v", testCase.base, testCase.override, got, testCase.want)
+			}
+		})
+	}
+}
+
 func TestMergeGenerationExportConfigInsecure(t *testing.T) {
 	testCases := []struct {
 		name             string
