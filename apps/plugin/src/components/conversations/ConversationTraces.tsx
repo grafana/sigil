@@ -741,7 +741,8 @@ export default function ConversationTraces({
     }
     return Object.entries(selectedGeneration.usage)
       .filter(
-        ([key, value]) => !['input_tokens', 'output_tokens', 'total_tokens'].includes(key) && parseUsageNumber(value) != null
+        ([key, value]) =>
+          !['input_tokens', 'output_tokens', 'total_tokens'].includes(key) && parseUsageNumber(value) != null
       )
       .map(([key, value]) => [key, parseUsageNumber(value)] as const)
       .filter(([, value]) => value != null)
@@ -1240,9 +1241,7 @@ export default function ConversationTraces({
                   {selectedGenerationUsageExtras.map(([key, value]) => (
                     <div key={key} className={styles.selectedSpanRow}>
                       <span className={styles.selectedSpanLabel}>{key}</span>
-                      <span className={styles.selectedSpanValue}>
-                        {value.toLocaleString()}
-                      </span>
+                      <span className={styles.selectedSpanValue}>{value.toLocaleString()}</span>
                     </div>
                   ))}
                   <div className={styles.selectedSpanRow}>
