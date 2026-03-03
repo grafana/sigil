@@ -42,11 +42,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: theme.spacing(1),
     marginBottom: theme.spacing(1),
   }),
-  keySelect: css({
-    minWidth: 180,
-  }),
-  valueInput: css({
-    flex: 1,
+  fieldWidth: css({
+    width: 'var(--rule-form-field-width)',
+    flex: 'none',
   }),
   hint: css({
     marginTop: theme.spacing(0.5),
@@ -92,23 +90,24 @@ export default function MatchCriteriaEditor({ value, onChange, disabled }: Match
         return (
           <div key={`${row.key}-${index}`}>
             <div className={styles.row}>
-              <Select<string>
-                className={styles.keySelect}
-                options={keyOptionsForRow(row.key)}
-                value={row.key}
-                onChange={(v) => {
-                  if (v?.value) {
-                    updateRow(index, { key: v.value });
-                  }
-                }}
-                disabled={disabled}
-              />
+              <div className={styles.fieldWidth}>
+                <Select<string>
+                  options={keyOptionsForRow(row.key)}
+                  value={row.key}
+                  onChange={(v) => {
+                    if (v?.value) {
+                      updateRow(index, { key: v.value });
+                    }
+                  }}
+                  disabled={disabled}
+                />
+              </div>
               <Input
-                className={styles.valueInput}
                 value={row.value}
                 onChange={(e) => updateRow(index, { value: e.currentTarget.value })}
                 placeholder={supportsGlob ? 'e.g. assistant-* or exact value' : 'Value'}
                 disabled={disabled}
+                style={{ flex: '1 1 0', minWidth: 0 }}
               />
               {!disabled && (
                 <IconButton
