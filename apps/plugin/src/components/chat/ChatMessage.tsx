@@ -12,6 +12,7 @@ import ToolResultCard from './ToolResultCard';
 export type ChatMessageProps = {
   message: Message;
   alignLeft?: boolean;
+  previewMode?: boolean;
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -57,6 +58,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     minWidth: 0,
     maxWidth: '80%',
   }),
+  contentFullWidth: css({
+    maxWidth: '100%',
+    flex: 1,
+  }),
   contentTool: css({
     maxWidth: '100%',
     flex: 1,
@@ -64,6 +69,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
   roleLabel: css({
     fontSize: theme.typography.bodySmall.fontSize,
     color: theme.colors.text.secondary,
+  }),
+  contentNoRoleLabel: css({
+    gap: theme.spacing(0.5),
   }),
 });
 
@@ -93,11 +101,12 @@ function roleToBubbleRole(role: Message['role']): 'user' | 'assistant' | 'tool' 
   }
 }
 
-export default function ChatMessage({ message, alignLeft = false }: ChatMessageProps) {
+export default function ChatMessage({ message, alignLeft = false, previewMode = false }: ChatMessageProps) {
   const styles = useStyles2(getStyles);
   const role = message.role;
   const bubbleRole = roleToBubbleRole(role);
   const shouldAlignLeft = alignLeft && role !== 'MESSAGE_ROLE_TOOL';
+  const showAvatar = !previewMode || role === 'MESSAGE_ROLE_USER';
 
   const rowClass = `${styles.row} ${
     shouldAlignLeft
@@ -115,15 +124,19 @@ export default function ChatMessage({ message, alignLeft = false }: ChatMessageP
         ? styles.avatarTool
         : styles.avatarAssistant
   }`;
-  const contentClass = `${styles.content} ${role === 'MESSAGE_ROLE_TOOL' ? styles.contentTool : ''}`;
+  const contentClass = `${styles.content} ${role === 'MESSAGE_ROLE_TOOL' ? styles.contentTool : ''} ${
+    previewMode ? styles.contentNoRoleLabel : ''
+  } ${previewMode ? styles.contentFullWidth : ''}`;
 
   return (
     <div className={rowClass}>
-      <div className={avatarClass}>
-        <Icon name={roleToIcon(role)} size="md" />
-      </div>
+      {showAvatar && (
+        <div className={avatarClass}>
+          <Icon name={roleToIcon(role)} size="md" />
+        </div>
+      )}
       <div className={contentClass}>
-        <span className={styles.roleLabel}>{message.name ?? humanizeRole(role)}</span>
+        {!previewMode && <span className={styles.roleLabel}>{message.name ?? humanizeRole(role)}</span>}
         <Stack direction="column" gap={1}>
           {message.parts.map((part, i) => {
             if (part.thinking != null) {
@@ -136,7 +149,7 @@ export default function ChatMessage({ message, alignLeft = false }: ChatMessageP
               return <ToolResultCard key={i} toolResult={part.tool_result} />;
             }
             if (part.text != null) {
-              return <MessageBubble key={i} text={part.text} role={bubbleRole} />;
+              return <MessageBubble key={i} text={part.text} role={bubbleRole} flatAssistant={previewMode} />;
             }
             return null;
           })}

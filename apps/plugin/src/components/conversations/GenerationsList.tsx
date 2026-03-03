@@ -23,7 +23,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   list: css({
     label: 'generationsList-list',
     display: 'grid',
-    gap: theme.spacing(1),
+    gap: 0,
   }),
   empty: css({
     label: 'generationsList-empty',
@@ -54,6 +54,10 @@ export default function GenerationsList({
               generation={generation}
               index={index}
               total={generations.length}
+              groupedChatPreview
+              isFirst={index === 0}
+              isLast={index === generations.length - 1}
+              borderlessPreview
               alwaysShowMetadata={alwaysShowMetadata}
               selectedTraceID={selectedTraceID}
               onSelectTrace={onSelectTrace}

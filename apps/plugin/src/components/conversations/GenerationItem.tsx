@@ -11,6 +11,10 @@ export type GenerationItemProps = {
   generation: GenerationDetail;
   index: number;
   total: number;
+  borderlessPreview?: boolean;
+  groupedChatPreview?: boolean;
+  isFirst?: boolean;
+  isLast?: boolean;
   alwaysShowMetadata?: boolean;
   selectedTraceID?: string;
   onSelectTrace?: (traceID: string) => void;
@@ -20,8 +24,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
   row: css({
     label: 'generationItem-row',
     display: 'grid',
-    gap: theme.spacing(0.75),
-    gridTemplateColumns: '48px fit-content(760px) minmax(360px, 520px)',
+    gap: theme.spacing(1),
+    gridTemplateColumns: '32px 360px fit-content(560px)',
     alignItems: 'start',
     position: 'relative' as const,
     [`@media (max-width: ${theme.breakpoints.values.md}px)`]: {
@@ -34,7 +38,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     lineHeight: 1,
     fontSize: theme.typography.h2.fontSize,
     fontWeight: theme.typography.fontWeightMedium,
-    textAlign: 'right' as const,
+    textAlign: 'left' as const,
     paddingTop: theme.spacing(0.25),
     userSelect: 'none' as const,
   }),
@@ -42,6 +46,31 @@ const getStyles = (theme: GrafanaTheme2) => ({
     label: 'generationItem-chatSection',
     display: 'grid',
     minWidth: 0,
+    width: '360px',
+  }),
+  chatSectionGrouped: css({
+    label: 'generationItem-chatSectionGrouped',
+    borderLeft: `1px solid ${theme.colors.border.weak}`,
+    borderRight: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.primary,
+    padding: theme.spacing(1, 1.5),
+  }),
+  chatSectionGroupedFirst: css({
+    label: 'generationItem-chatSectionGroupedFirst',
+    borderTop: `1px solid ${theme.colors.border.weak}`,
+    borderTopLeftRadius: theme.shape.radius.default,
+    borderTopRightRadius: theme.shape.radius.default,
+    paddingTop: theme.spacing(2),
+  }),
+  chatSectionGroupedMiddle: css({
+    label: 'generationItem-chatSectionGroupedMiddle',
+  }),
+  chatSectionGroupedLast: css({
+    label: 'generationItem-chatSectionGroupedLast',
+    borderBottom: `1px solid ${theme.colors.border.weak}`,
+    borderBottomLeftRadius: theme.shape.radius.default,
+    borderBottomRightRadius: theme.shape.radius.default,
+    paddingBottom: theme.spacing(1.25),
   }),
   chatSurface: css({
     label: 'generationItem-chatSurface',
@@ -52,20 +81,17 @@ const getStyles = (theme: GrafanaTheme2) => ({
     label: 'generationItem-metaColumn',
     display: 'grid',
     gap: theme.spacing(1),
-    borderRadius: theme.shape.radius.default,
-    border: `1px solid ${theme.colors.border.weak}`,
-    background: theme.colors.background.secondary,
-    padding: theme.spacing(1.25),
-    opacity: 0,
-    pointerEvents: 'none' as const,
-    transform: 'translateX(-8px)',
-    transition: 'opacity 120ms ease, transform 120ms ease',
+    padding: theme.spacing(1),
+    width: 'fit-content',
   }),
   metaGrid: css({
     label: 'generationItem-metaGrid',
     display: 'grid',
-    gap: theme.spacing(0.75),
-    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+    gap: theme.spacing(1, 1.5),
+    gridTemplateColumns: 'repeat(2, minmax(220px, 280px))',
+    [`@media (max-width: ${theme.breakpoints.values.lg}px)`]: {
+      gridTemplateColumns: '1fr',
+    },
   }),
   metaRow: css({
     label: 'generationItem-metaRow',
@@ -125,31 +151,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.primary.main,
     fontWeight: theme.typography.fontWeightMedium,
   }),
-  rowInteractive: css({
-    label: 'generationItem-rowInteractive',
-    '&:hover [data-generation-meta="true"], &:focus-within [data-generation-meta="true"]': {
-      opacity: 1,
-      pointerEvents: 'auto' as const,
-      transform: 'translateX(0)',
-    },
-    [`@media (hover: none)`]: {
-      '& [data-generation-meta="true"]': {
-        opacity: 1,
-        pointerEvents: 'auto' as const,
-        transform: 'translateX(0)',
-      },
-    },
+  rowResponsive: css({
+    label: 'generationItem-rowResponsive',
     [`@media (max-width: ${theme.breakpoints.values.md}px)`]: {
       '& [data-generation-meta="true"]': {
         gridColumn: '1 / -1',
       },
     },
-  }),
-  metaColumnVisible: css({
-    label: 'generationItem-metaColumnVisible',
-    opacity: 1,
-    pointerEvents: 'auto' as const,
-    transform: 'translateX(0)',
   }),
 });
 
@@ -157,7 +165,10 @@ export default function GenerationItem({
   generation,
   index,
   total,
-  alwaysShowMetadata = false,
+  borderlessPreview = false,
+  groupedChatPreview = false,
+  isFirst = false,
+  isLast = false,
   selectedTraceID,
   onSelectTrace,
 }: GenerationItemProps) {
@@ -168,27 +179,29 @@ export default function GenerationItem({
   const isSelectedTrace = hasTraceID && selectedTraceID === traceID;
 
   return (
-    <article className={`${styles.row} ${styles.rowInteractive}`}>
+    <article className={`${styles.row} ${styles.rowResponsive}`}>
       <p className={styles.numberColumn} style={{ color: generationColor }}>
         {index + 1}
       </p>
 
-      <div className={styles.chatSection}>
+      <div
+        className={`${styles.chatSection} ${groupedChatPreview ? styles.chatSectionGrouped : ''} ${
+          groupedChatPreview && isFirst ? styles.chatSectionGroupedFirst : ''
+        } ${groupedChatPreview && !isFirst ? styles.chatSectionGroupedMiddle : ''} ${
+          groupedChatPreview && isLast ? styles.chatSectionGroupedLast : ''
+        }`}
+      >
         <div className={styles.chatSurface} tabIndex={0}>
           <ChatPreview
             generationID={generation.generation_id}
             input={generation.input}
             output={generation.output}
-            borderless
+            borderless={borderlessPreview}
           />
         </div>
       </div>
 
-      <aside
-        className={`${styles.metaColumn} ${alwaysShowMetadata ? styles.metaColumnVisible : ''}`}
-        data-generation-meta="true"
-        aria-label={`Generation ${index + 1} metadata`}
-      >
+      <aside className={styles.metaColumn} data-generation-meta="true" aria-label={`Generation ${index + 1} metadata`}>
         <div className={styles.metaGrid}>
           <div className={styles.metaRow}>
             <span className={`${styles.label} ${styles.labelWithMarker}`}>

@@ -38,6 +38,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
     borderRadius: 0,
     background: 'transparent',
     padding: 0,
+    maxHeight: 'none',
+    overflowY: 'visible' as const,
   }),
   rawFallback: css({
     label: 'chatPreview-rawFallback',
@@ -72,7 +74,7 @@ export default function ChatPreview({ generationID, input, output, compact = fal
     <div className={`${styles.chatPanel} ${compact ? styles.chatPanelCompact : ''} ${borderless ? styles.chatPanelBorderless : ''}`}>
       {inputMessages.length > 0 ? (
         inputMessages.map((message, messageIndex) => (
-          <ChatMessage key={`${generationID}-input-${messageIndex}`} message={message} alignLeft />
+          <ChatMessage key={`${generationID}-input-${messageIndex}`} message={message} alignLeft previewMode />
         ))
       ) : (
         <pre className={`${styles.rawFallback} ${compact ? styles.rawFallbackCompact : ''}`}>
@@ -81,7 +83,7 @@ export default function ChatPreview({ generationID, input, output, compact = fal
       )}
       {outputMessages.length > 0 ? (
         outputMessages.map((message, messageIndex) => (
-          <ChatMessage key={`${generationID}-output-${messageIndex}`} message={message} alignLeft />
+          <ChatMessage key={`${generationID}-output-${messageIndex}`} message={message} alignLeft previewMode />
         ))
       ) : (
         <pre className={`${styles.rawFallback} ${compact ? styles.rawFallbackCompact : ''}`}>

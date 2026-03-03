@@ -6,6 +6,7 @@ import { useStyles2 } from '@grafana/ui';
 export type MessageBubbleProps = {
   text: string;
   role: 'user' | 'assistant' | 'tool';
+  flatAssistant?: boolean;
 };
 
 type CodeSegment = { type: 'text'; content: string } | { type: 'code'; language: string; content: string };
@@ -52,6 +53,17 @@ const getStyles = (theme: GrafanaTheme2) => ({
     lineHeight: theme.typography.body.lineHeight,
     color: theme.colors.text.primary,
   }),
+  assistantBubbleFlat: css({
+    background: 'transparent',
+    border: 'none',
+    borderRadius: 0,
+    padding: theme.spacing(1.5, 2),
+    whiteSpace: 'pre-wrap' as const,
+    wordBreak: 'break-word' as const,
+    fontSize: theme.typography.body.fontSize,
+    lineHeight: theme.typography.body.lineHeight,
+    color: theme.colors.text.primary,
+  }),
   toolBubble: css({
     background: theme.colors.background.secondary,
     border: `1px solid ${theme.colors.border.weak}`,
@@ -80,11 +92,17 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function MessageBubble({ text, role }: MessageBubbleProps) {
+export default function MessageBubble({ text, role, flatAssistant = false }: MessageBubbleProps) {
   const styles = useStyles2(getStyles);
   const segments = splitCodeBlocks(text);
   const bubbleClass =
-    role === 'user' ? styles.userBubble : role === 'assistant' ? styles.assistantBubble : styles.toolBubble;
+    role === 'user'
+      ? styles.userBubble
+      : role === 'assistant'
+        ? flatAssistant
+          ? styles.assistantBubbleFlat
+          : styles.assistantBubble
+        : styles.toolBubble;
 
   return (
     <div className={bubbleClass}>
