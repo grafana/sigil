@@ -75,13 +75,21 @@ export function extractResolvePairs(response?: PrometheusQueryResponse | null): 
 
 // --- BreakdownStatPanel (theme-derived palette, supports stacked bars, aggregation) ---
 
-function stringHash(str: string): number {
+export function stringHash(str: string): number {
   let hash = 5381;
   let i = str.length;
   while (i) {
     hash = (hash * 33) ^ str.charCodeAt(--i);
   }
   return hash >>> 0;
+}
+
+export function getBarPalette(theme: GrafanaTheme2): string[] {
+  const bg = theme.colors.background.primary;
+  const threshold = theme.colors.contrastThreshold;
+  return theme.visualization.palette
+    .filter((name) => contrastRatio(theme.visualization.getColorByName(name), bg) >= threshold)
+    .map((name) => theme.visualization.getColorByName(name));
 }
 
 function relativeLuminance(hex: string): number {
@@ -127,13 +135,7 @@ export function BreakdownStatPanel({
   const styles = useStyles2(getBreakdownStatPanelStyles);
   const theme = useTheme2();
 
-  const resolvedPalette = useMemo(() => {
-    const bg = theme.colors.background.primary;
-    const threshold = theme.colors.contrastThreshold;
-    return theme.visualization.palette
-      .filter((name) => contrastRatio(theme.visualization.getColorByName(name), bg) >= threshold)
-      .map((name) => theme.visualization.getColorByName(name));
-  }, [theme]);
+  const resolvedPalette = useMemo(() => getBarPalette(theme), [theme]);
 
   const isStacked = Boolean(segmentLabel && segmentNames && segmentNames.length > 0);
 

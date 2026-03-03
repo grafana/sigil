@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { css } from '@emotion/css';
 import { ThresholdsMode, type GrafanaTheme2, type TimeRange } from '@grafana/data';
-import { useStyles2 } from '@grafana/ui';
+import { useStyles2, useTheme2 } from '@grafana/ui';
 import type { DashboardDataSource } from '../../dashboard/api';
 import {
   type BreakdownDimension,
@@ -15,6 +15,8 @@ import {
   extractResolvePairs,
   BreakdownStatPanel,
   getBreakdownStatPanelStyles,
+  stringHash,
+  getBarPalette,
 } from './dashboardShared';
 import { lookupPricing, pricingKey, type PricingMap } from '../../dashboard/cost';
 import {
@@ -443,6 +445,8 @@ type SavingsTableProps = {
 
 function SavingsTable({ items, height }: SavingsTableProps) {
   const styles = useStyles2(getBreakdownStatPanelStyles);
+  const theme = useTheme2();
+  const palette = useMemo(() => getBarPalette(theme), [theme]);
   const totalSavings = items.reduce((s, i) => s + i.savings, 0);
   return (
     <div className={styles.bspPanel} style={{ height }}>
@@ -455,6 +459,7 @@ function SavingsTable({ items, height }: SavingsTableProps) {
       <div className={styles.bspList}>
         {items.map((item) => {
           const barWidth = totalSavings > 0 ? (item.savings / items[0].savings) * 100 : 0;
+          const color = palette[stringHash(`${item.provider}::${item.model}`) % palette.length];
           return (
             <div key={`${item.provider}::${item.model}`} className={styles.bspBarRow}>
               <div className={styles.bspBarMeta}>
@@ -465,7 +470,7 @@ function SavingsTable({ items, height }: SavingsTableProps) {
                 </span>
               </div>
               <div className={styles.bspBarTrack}>
-                <div className={styles.bspBarFill} style={{ width: `${barWidth}%` }} />
+                <div className={styles.bspBarFill} style={{ width: `${barWidth}%`, background: color }} />
               </div>
             </div>
           );
