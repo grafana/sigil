@@ -29,7 +29,7 @@ function makeRows() {
   const child = makeSpan({ spanID: 'child', parentSpanID: 'root', name: 'child', children: [grandchild] });
   const sibling = makeSpan({ spanID: 'sibling', parentSpanID: 'root', name: 'sibling' });
   const root = makeSpan({ spanID: 'root', name: 'root', children: [child, sibling] });
-  return buildSigilSpanTreeRows([root]);
+  return buildSigilSpanTreeRows([root]).rows;
 }
 
 describe('collapseState', () => {

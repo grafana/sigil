@@ -16,6 +16,7 @@ import {
 } from '../conversation/aggregates';
 import { resolveGenerationCosts } from '../generation/cost';
 import { defaultModelCardClient, type ModelCardClient } from '../modelcard/api';
+import { resolveModelCardsFromNames } from '../modelcard/resolve';
 import type { GenerationCostResult } from '../generation/types';
 import type { ConversationData, ConversationSearchResult, ConversationSpan } from '../conversation/types';
 import ConversationColumn from '../components/conversations/ConversationColumn';
@@ -244,8 +245,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   layoutWithSelection: css({
     label: 'conversationsBrowserPage-layoutWithSelection',
-    gridTemplateColumns: 'minmax(320px, 0.8fr) minmax(520px, 1.4fr)',
-    gap: theme.spacing(2),
+    display: 'flex',
+    flexDirection: 'row' as const,
     minHeight: 0,
     overflow: 'hidden',
   }),
@@ -261,16 +262,41 @@ const getStyles = (theme: GrafanaTheme2) => ({
     minHeight: 0,
     overflow: 'hidden',
     minWidth: 0,
-    width: '100%',
   }),
   detailPanel: css({
     label: 'conversationsBrowserPage-detailPanel',
     minHeight: 0,
     overflowY: 'auto' as const,
     minWidth: 0,
-    width: '100%',
     borderLeft: `1px solid ${theme.colors.border.weak}`,
     paddingLeft: theme.spacing(2),
+  }),
+  splitterHandle: css({
+    label: 'conversationsBrowserPage-splitterHandle',
+    width: '6px',
+    flexShrink: 0,
+    cursor: 'col-resize',
+    position: 'relative',
+    zIndex: 2,
+    '&::before': {
+      content: '""',
+      position: 'absolute',
+      top: 0,
+      bottom: 0,
+      left: '2px',
+      width: '2px',
+      background: theme.colors.border.weak,
+      transition: 'background 150ms ease',
+    },
+    '&:hover::before': {
+      background: theme.colors.primary.main,
+    },
+  }),
+  splitterHandleDragging: css({
+    label: 'conversationsBrowserPage-splitterHandleDragging',
+    '&::before': {
+      background: theme.colors.primary.main,
+    },
   }),
   emptySelection: css({
     label: 'conversationsBrowserPage-emptySelection',
@@ -380,6 +406,44 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   const [timeRange, setTimeRangeState] = useState<TimeRange>(() => defaultTimeRange());
   const requestVersionRef = useRef<number>(0);
   const selectedConversationRequestVersionRef = useRef<number>(0);
+
+  const [splitterRatio, setSplitterRatio] = useState(0.55);
+  const [isSplitterDragging, setIsSplitterDragging] = useState(false);
+  const layoutRef = useRef<HTMLDivElement>(null);
+
+  const handleSplitterMouseDown = useCallback(
+    (event: React.MouseEvent) => {
+      event.preventDefault();
+      setIsSplitterDragging(true);
+      const startX = event.clientX;
+      const startRatio = splitterRatio;
+      const layoutEl = layoutRef.current;
+      if (!layoutEl) {
+        return;
+      }
+      const layoutWidth = layoutEl.getBoundingClientRect().width;
+
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        const delta = moveEvent.clientX - startX;
+        const newRatio = startRatio + delta / layoutWidth;
+        setSplitterRatio(Math.max(0.25, Math.min(0.75, newRatio)));
+      };
+
+      const handleMouseUp = () => {
+        setIsSplitterDragging(false);
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+      };
+
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'col-resize';
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    },
+    [splitterRatio]
+  );
 
   const selectedSpanSelectionID = searchParams.get('span') ?? '';
   const selectedSpan = useMemo(() => {
@@ -565,7 +629,7 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
     return getCostSummary(conversationCosts);
   }, [conversationCosts]);
 
-  const modelCards = useMemo(() => {
+  const costModelCards = useMemo(() => {
     const cards = new Map<string, import('../modelcard/types').ModelCard>();
     for (const [, cost] of conversationCosts) {
       const key = `${cost.provider}::${cost.model}`;
@@ -575,6 +639,29 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
     }
     return cards;
   }, [conversationCosts]);
+
+  const [nameResolvedModelCards, setNameResolvedModelCards] = useState<
+    Map<string, import('../modelcard/types').ModelCard>
+  >(new Map());
+
+  useEffect(() => {
+    if (costModelCards.size > 0) {
+      setNameResolvedModelCards(new Map());
+      return;
+    }
+    const models = selectedConversation?.models ?? [];
+    if (models.length === 0) {
+      setNameResolvedModelCards(new Map());
+      return;
+    }
+    void resolveModelCardsFromNames(models, modelCardClient, selectedConversation?.model_providers)
+      .then(setNameResolvedModelCards)
+      .catch(() => {
+        setNameResolvedModelCards(new Map());
+      });
+  }, [costModelCards, selectedConversation?.models, selectedConversation?.model_providers, modelCardClient]);
+
+  const modelCards = costModelCards.size > 0 ? costModelCards : nameResolvedModelCards;
 
   useEffect(() => {
     if (previousConversationIDRef.current === resolvedSelectedConversationID) {
@@ -764,7 +851,10 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
         )}
       </div>
 
-      <div className={`${styles.layout} ${hasSelection ? styles.layoutWithSelection : ''}`}>
+      <div
+        ref={layoutRef}
+        className={`${styles.layout} ${hasSelection ? styles.layoutWithSelection : ''}`}
+      >
         {!hasSelection && (
           <div className={styles.leftPanel}>
             <ConversationListPanel
@@ -782,7 +872,7 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
 
         {hasSelection && (
           <>
-            <div className={styles.middlePanel}>
+            <div className={styles.middlePanel} style={{ flexBasis: `${splitterRatio * 100}%`, maxWidth: `${splitterRatio * 100}%` }}>
               {selectedConversationLoading ||
               (!selectedConversation && selectedConversationErrorMessage.length === 0) ? (
                 <div className={styles.pageSpinner}>
@@ -807,7 +897,14 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
               )}
             </div>
 
-            <div className={styles.detailPanel}>
+            <div
+              className={`${styles.splitterHandle} ${isSplitterDragging ? styles.splitterHandleDragging : ''}`}
+              onMouseDown={handleSplitterMouseDown}
+              role="separator"
+              aria-label="resize panels"
+            />
+
+            <div className={styles.detailPanel} style={{ flex: 1 }}>
               {selectedConversationLoading ? (
                 <div className={styles.pageSpinner}>
                   <Spinner aria-label="loading conversation details" />

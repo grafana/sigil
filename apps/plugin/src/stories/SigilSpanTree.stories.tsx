@@ -1,5 +1,5 @@
 import React from 'react';
-import SigilSpanTree, { type SigilSpanTreeNodeRenderContext } from '../components/conversations/SigilSpanTree';
+import SigilSpanTree from '../components/conversations/SigilSpanTree';
 import type { ConversationSpan, SpanAttributeValue } from '../conversation/types';
 
 function makeAttrs(entries: Array<[string, string]>): ReadonlyMap<string, SpanAttributeValue> {
@@ -66,6 +66,9 @@ const embeddingSpan = makeSpan({
 const generationSpan = makeSpan({
   spanID: 'span-1',
   name: 'sigil.generation.prompt',
+  startTimeUnixNano: BigInt('1772480417578390317'),
+  endTimeUnixNano: BigInt('1772480418152390318'),
+  durationNano: BigInt('574000001'),
   attributes: makeAttrs([
     ['sigil.generation.id', 'gen-1'],
     ['gen_ai.operation.name', 'generateText'],
@@ -135,6 +138,8 @@ function makeJaegerLikeTree(): ConversationSpan[] {
     spanID: 'cw-root',
     name: 'hminstance_instance_id_metadata',
     serviceName: 'cloudwatch-exporter',
+    startTimeUnixNano: BigInt('1772480417578390317'),
+    endTimeUnixNano: BigInt('1772480432208390317'),
     durationNano: BigInt('14630000000'),
     children: branches,
   });
@@ -143,6 +148,8 @@ function makeJaegerLikeTree(): ConversationSpan[] {
     spanID: 'other-root',
     name: 'db.query user_profile',
     serviceName: 'postgres',
+    startTimeUnixNano: BigInt('1772480417578390317'),
+    endTimeUnixNano: BigInt('1772480417600390317'),
     durationNano: BigInt('22000000'),
   });
 
@@ -192,17 +199,5 @@ export const DeepAndScrollable = {
         })
       ),
     ],
-  },
-};
-
-export const CustomNodeRenderer = {
-  args: {
-    renderNode: ({ operationName, serviceName, durationLabel }: SigilSpanTreeNodeRenderContext) => (
-      <>
-        <strong>{operationName}</strong>
-        <span style={{ opacity: 0.7 }}>{serviceName}</span>
-        <span style={{ marginLeft: 'auto', opacity: 0.8 }}>{durationLabel}</span>
-      </>
-    ),
   },
 };

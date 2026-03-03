@@ -80,6 +80,7 @@ export type ConversationSearchResult = {
   first_generation_at: string;
   last_generation_at: string;
   models: string[];
+  model_providers?: Record<string, string>;
   agents: string[];
   error_count: number;
   has_errors: boolean;

@@ -18,7 +18,20 @@ export type SigilSpanTreeRow = {
   serviceName: string;
   durationLabel: string;
   hasError: boolean;
+  startTimeUnixNano: bigint;
+  endTimeUnixNano: bigint;
+  durationNano: bigint;
 };
+
+export type SigilSpanTreeResult = {
+  rows: SigilSpanTreeRow[];
+  traceStartNano: bigint;
+  traceEndNano: bigint;
+};
+
+export function toMicroseconds(nanos: bigint): number {
+  return Number(nanos / NS_PER_US);
+}
 
 export function formatDurationNs(durationNs: bigint): string {
   if (durationNs >= NS_PER_SECOND) {
@@ -33,9 +46,12 @@ export function formatDurationNs(durationNs: bigint): string {
   return `${durationNs.toString()}ns`;
 }
 
-export function buildSigilSpanTreeRows(roots: ConversationSpan[]): SigilSpanTreeRow[] {
+export function buildSigilSpanTreeRows(roots: ConversationSpan[]): SigilSpanTreeResult {
   const rows: SigilSpanTreeRow[] = [];
   const parentBySelectionID = new Map<string, string | undefined>();
+  let traceStartNano = BigInt(0);
+  let traceEndNano = BigInt(0);
+  let hasTimingData = false;
 
   function walk(span: ConversationSpan, depth: number, parentSelectionID?: string): void {
     const selectionID = getSelectionID(span);
@@ -56,6 +72,9 @@ export function buildSigilSpanTreeRows(roots: ConversationSpan[]): SigilSpanTree
       serviceName: span.serviceName,
       durationLabel: formatDurationNs(span.durationNano),
       hasError: hasError(span),
+      startTimeUnixNano: span.startTimeUnixNano,
+      endTimeUnixNano: span.endTimeUnixNano,
+      durationNano: span.durationNano,
     });
 
     for (const child of span.children) {
@@ -75,7 +94,20 @@ export function buildSigilSpanTreeRows(roots: ConversationSpan[]): SigilSpanTree
       current = parentBySelectionID.get(current);
     }
     row.ancestorSelectionIDs = ancestors;
+
+    if (!hasTimingData) {
+      traceStartNano = row.startTimeUnixNano;
+      traceEndNano = row.endTimeUnixNano;
+      hasTimingData = true;
+    } else {
+      if (row.startTimeUnixNano < traceStartNano) {
+        traceStartNano = row.startTimeUnixNano;
+      }
+      if (row.endTimeUnixNano > traceEndNano) {
+        traceEndNano = row.endTimeUnixNano;
+      }
+    }
   }
 
-  return rows;
+  return { rows, traceStartNano, traceEndNano };
 }
