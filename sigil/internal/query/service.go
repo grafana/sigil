@@ -17,6 +17,7 @@ import (
 	"github.com/grafana/sigil/sigil/internal/feedback"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	"github.com/grafana/sigil/sigil/internal/storage"
+	"github.com/grafana/sigil/sigil/pkg/searchcore"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -71,6 +72,18 @@ type ConversationSearchResponse struct {
 	HasMore       bool                       `json:"has_more"`
 }
 
+// ConversationBatchMetadata contains conversation metadata enriched with
+// optional feedback and eval summaries for batch lookup callers.
+type ConversationBatchMetadata struct {
+	ConversationID    string                              `json:"conversation_id"`
+	GenerationCount   int                                 `json:"generation_count"`
+	FirstGenerationAt time.Time                           `json:"first_generation_at"`
+	LastGenerationAt  time.Time                           `json:"last_generation_at"`
+	RatingSummary     *feedback.ConversationRatingSummary `json:"rating_summary,omitempty"`
+	AnnotationCount   int                                 `json:"annotation_count"`
+	EvalSummary       *evalpkg.ConversationEvalSummary    `json:"eval_summary,omitempty"`
+}
+
 type ConversationDetail struct {
 	ConversationID    string                              `json:"conversation_id"`
 	GenerationCount   int                                 `json:"generation_count"`
@@ -120,6 +133,10 @@ type scoreStore interface {
 
 type evalSummaryStore interface {
 	ListConversationEvalSummaries(ctx context.Context, tenantID string, conversationIDs []string) (map[string]evalpkg.ConversationEvalSummary, error)
+}
+
+type batchConversationStore interface {
+	GetConversations(ctx context.Context, tenantID string, conversationIDs []string) ([]storage.Conversation, error)
 }
 
 type filteredConversationStore interface {
@@ -895,6 +912,115 @@ func (s *Service) ListSearchTagsForTenant(ctx context.Context, tenantID string, 
 	return out, nil
 }
 
+// ListConversationBatchMetadataForTenant returns metadata rows for the requested
+// conversation IDs and a list of IDs that were not found.
+func (s *Service) ListConversationBatchMetadataForTenant(
+	ctx context.Context,
+	tenantID string,
+	conversationIDs []string,
+) ([]ConversationBatchMetadata, []string, error) {
+	trimmedTenantID := strings.TrimSpace(tenantID)
+	if trimmedTenantID == "" {
+		return nil, nil, NewValidationError("tenant id is required")
+	}
+	if s.conversationStore == nil {
+		return nil, nil, errors.New("conversation store is not configured")
+	}
+
+	ids := dedupeAndSortStrings(conversationIDs)
+	if len(ids) == 0 {
+		return []ConversationBatchMetadata{}, []string{}, nil
+	}
+
+	rowsByID := make(map[string]storage.Conversation, len(ids))
+	missing := make([]string, 0)
+	if batchStore, ok := s.conversationStore.(batchConversationStore); ok {
+		rows, err := batchStore.GetConversations(ctx, trimmedTenantID, ids)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, row := range rows {
+			rowsByID[row.ConversationID] = row
+		}
+		for _, conversationID := range ids {
+			if _, ok := rowsByID[conversationID]; !ok {
+				missing = append(missing, conversationID)
+			}
+		}
+	} else {
+		for _, conversationID := range ids {
+			row, err := s.conversationStore.GetConversation(ctx, trimmedTenantID, conversationID)
+			if err != nil {
+				return nil, nil, err
+			}
+			if row == nil {
+				missing = append(missing, conversationID)
+				continue
+			}
+			rowsByID[conversationID] = *row
+		}
+	}
+
+	ratingSummaries := make(map[string]feedback.ConversationRatingSummary)
+	annotationSummaries := make(map[string]feedback.ConversationAnnotationSummary)
+	evalSummaries := make(map[string]evalpkg.ConversationEvalSummary)
+	if len(rowsByID) > 0 {
+		lookupIDs := make([]string, 0, len(rowsByID))
+		for conversationID := range rowsByID {
+			lookupIDs = append(lookupIDs, conversationID)
+		}
+		sort.Strings(lookupIDs)
+
+		if s.ratingSummaryStore != nil {
+			summaries, err := s.ratingSummaryStore.ListConversationRatingSummaries(ctx, trimmedTenantID, lookupIDs)
+			if err != nil {
+				return nil, nil, err
+			}
+			ratingSummaries = summaries
+		}
+		if s.annotationSummaryStore != nil {
+			summaries, err := s.annotationSummaryStore.ListConversationAnnotationSummaries(ctx, trimmedTenantID, lookupIDs)
+			if err != nil {
+				return nil, nil, err
+			}
+			annotationSummaries = summaries
+		}
+		if s.evalSummaryStore != nil {
+			summaries, err := s.evalSummaryStore.ListConversationEvalSummaries(ctx, trimmedTenantID, lookupIDs)
+			if err != nil {
+				return nil, nil, err
+			}
+			evalSummaries = summaries
+		}
+	}
+
+	items := make([]ConversationBatchMetadata, 0, len(rowsByID))
+	for _, conversationID := range ids {
+		row, ok := rowsByID[conversationID]
+		if !ok {
+			continue
+		}
+		item := ConversationBatchMetadata{
+			ConversationID:    conversationID,
+			GenerationCount:   row.GenerationCount,
+			FirstGenerationAt: row.CreatedAt.UTC(),
+			LastGenerationAt:  row.LastGenerationAt.UTC(),
+			AnnotationCount:   annotationSummaries[conversationID].AnnotationCount,
+		}
+		if summary, ok := ratingSummaries[conversationID]; ok {
+			copied := summary
+			item.RatingSummary = &copied
+		}
+		if summary, ok := evalSummaries[conversationID]; ok {
+			copied := summary
+			item.EvalSummary = &copied
+		}
+		items = append(items, item)
+	}
+
+	return items, missing, nil
+}
+
 func (s *Service) ListSearchTagValuesForTenant(ctx context.Context, tenantID, tag string, from, to time.Time) ([]string, error) {
 	trimmedTenantID := strings.TrimSpace(tenantID)
 	if trimmedTenantID == "" {
@@ -1046,68 +1172,14 @@ func normalizeConversationSearchTimeRange(timeRange ConversationSearchTimeRange)
 }
 
 func validateMySQLFilterTerms(terms []FilterTerm) error {
-	for _, term := range terms {
-		if term.ResolvedKey != "generation_count" {
-			continue
-		}
-		switch term.Operator {
-		case FilterOperatorEqual,
-			FilterOperatorNotEqual,
-			FilterOperatorGreaterThan,
-			FilterOperatorLessThan,
-			FilterOperatorGreaterThanOrEqual,
-			FilterOperatorLessThanOrEqual:
-		default:
-			return NewValidationError("generation_count supports only numeric comparison operators")
-		}
-		if _, err := strconv.Atoi(strings.TrimSpace(term.Value)); err != nil {
-			return NewValidationError("generation_count value must be an integer")
-		}
+	if err := searchcore.ValidateMySQLFilterTerms(terms); err != nil {
+		return NewValidationError(err.Error())
 	}
 	return nil
 }
 
 func matchesMySQLFilters(conversation storage.Conversation, terms []FilterTerm) bool {
-	for _, term := range terms {
-		if term.ResolvedKey != "generation_count" {
-			continue
-		}
-		value, err := strconv.Atoi(strings.TrimSpace(term.Value))
-		if err != nil {
-			return false
-		}
-
-		count := conversation.GenerationCount
-		switch term.Operator {
-		case FilterOperatorEqual:
-			if count != value {
-				return false
-			}
-		case FilterOperatorNotEqual:
-			if count == value {
-				return false
-			}
-		case FilterOperatorGreaterThan:
-			if count <= value {
-				return false
-			}
-		case FilterOperatorGreaterThanOrEqual:
-			if count < value {
-				return false
-			}
-		case FilterOperatorLessThan:
-			if count >= value {
-				return false
-			}
-		case FilterOperatorLessThanOrEqual:
-			if count > value {
-				return false
-			}
-		default:
-			return false
-		}
-	}
-	return true
+	return searchcore.MatchesGenerationCountFilters(conversation.GenerationCount, terms)
 }
 
 func orderTempoConversationIDs(conversations map[string]*tempoConversationAggregate) []string {
@@ -1279,14 +1351,7 @@ func generationTimestamp(generation *sigilv1.Generation) time.Time {
 }
 
 func normalizeTempoTagKey(scope string, key string) string {
-	trimmed := strings.TrimSpace(key)
-	if trimmed == "" {
-		return ""
-	}
-	if strings.HasPrefix(trimmed, "span.") || strings.HasPrefix(trimmed, "resource.") {
-		return trimmed
-	}
-	return strings.TrimSpace(scope) + "." + trimmed
+	return searchcore.NormalizeTempoTagKey(scope, key)
 }
 
 func (s *Service) ListConversations() []Conversation {

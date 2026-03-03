@@ -37,16 +37,6 @@ type App struct {
 	mx                         sync.Mutex
 }
 
-type authorizationClient interface {
-	HasAccess(ctx context.Context, token string, action string, resources ...authz.Resource) (bool, error)
-}
-
-const (
-	PermissionDataRead      = "grafana-sigil-app.data:read"
-	PermissionFeedbackWrite = "grafana-sigil-app.feedback:write"
-	PermissionSettingsWrite = "grafana-sigil-app.settings:write"
-)
-
 type appJSONData struct {
 	SigilAPIURL             string `json:"sigilApiUrl"`
 	TenantID                string `json:"tenantId"`
@@ -56,6 +46,19 @@ type appJSONData struct {
 
 const defaultSigilAPIURL = "http://sigil:8080"
 const defaultTenantID = "fake"
+
+const (
+	// permissionDataRead grants read-only access to plugin query routes.
+	permissionDataRead = "grafana-sigil-app.data:read"
+	// permissionFeedbackWrite grants conversation feedback write access.
+	permissionFeedbackWrite = "grafana-sigil-app.feedback:write"
+	// permissionSettingsWrite grants datasource settings write access.
+	permissionSettingsWrite = "grafana-sigil-app.settings:write"
+)
+
+type authorizationClient interface {
+	HasAccess(ctx context.Context, token string, action string, resources ...authz.Resource) (bool, error)
+}
 
 func NewApp(ctx context.Context, settings backend.AppInstanceSettings) (instancemgmt.Instance, error) {
 	cfg := appJSONData{
@@ -116,7 +119,8 @@ func (a *App) CheckHealth(_ context.Context, _ *backend.CheckHealthRequest) (*ba
 	}, nil
 }
 
-func (a *App) GetAuthZClient(ctx context.Context) (authorizationClient, error) {
+// getAuthzClient lazily initializes and caches the Grafana authorization client.
+func (a *App) getAuthzClient(ctx context.Context) (authorizationClient, error) {
 	a.mx.Lock()
 	defer a.mx.Unlock()
 

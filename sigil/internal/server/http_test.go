@@ -5,8 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,7 +17,6 @@ import (
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
 	"github.com/grafana/sigil/sigil/internal/modelcards"
 	"github.com/grafana/sigil/sigil/internal/query"
-	"github.com/grafana/sigil/sigil/internal/queryproxy"
 	"github.com/grafana/sigil/sigil/internal/storage"
 	"github.com/grafana/sigil/sigil/internal/tenantauth"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -185,43 +182,7 @@ func TestPlaceholderQueryEndpointsAreRemoved(t *testing.T) {
 	}
 }
 
-func TestConversationSearchEndpoint(t *testing.T) {
-	tempo := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if req.URL.Path != "/api/search" {
-			http.NotFound(w, req)
-			return
-		}
-		if req.Header.Get("X-Scope-OrgID") != "fake" {
-			http.Error(w, "missing tenant", http.StatusUnauthorized)
-			return
-		}
-		_, _ = io.WriteString(w, `{
-			"traces":[
-				{
-					"traceID":"trace-1",
-					"startTimeUnixNano":"1739612400000000000",
-					"spanSets":[
-						{
-							"spans":[
-								{
-									"spanID":"span-1",
-									"durationNanos":"1000000000",
-									"attributes":[
-										{"key":"sigil.generation.id","value":{"stringValue":"gen-1"}},
-										{"key":"gen_ai.conversation.id","value":{"stringValue":"conv-1"}},
-										{"key":"gen_ai.request.model","value":{"stringValue":"gpt-4o"}},
-										{"key":"gen_ai.agent.name","value":{"stringValue":"assistant"}}
-									]
-								}
-							]
-						}
-					]
-				}
-			]
-		}`)
-	}))
-	defer tempo.Close()
-
+func TestConversationBatchMetadataEndpoint(t *testing.T) {
 	conversationStore := &testConversationStore{
 		items: []storage.Conversation{
 			{
@@ -237,7 +198,6 @@ func TestConversationSearchEndpoint(t *testing.T) {
 	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
 		ConversationStore: conversationStore,
 		FeedbackStore:     feedback.NewMemoryStore(),
-		TempoBaseURL:      tempo.URL,
 	})
 	if err != nil {
 		t.Fatalf("new query service: %v", err)
@@ -256,10 +216,8 @@ func TestConversationSearchEndpoint(t *testing.T) {
 		protected,
 	)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/conversations/search", bytes.NewBufferString(`{
-		"filters":"model = \"gpt-4o\"",
-		"time_range":{"from":"2026-02-14T00:00:00Z","to":"2026-02-16T00:00:00Z"},
-		"page_size":20
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/conversations:batch-metadata", bytes.NewBufferString(`{
+		"conversation_ids":["conv-1","conv-missing"]
 	}`))
 	resp := httptest.NewRecorder()
 	mux.ServeHTTP(resp, req)
@@ -267,7 +225,10 @@ func TestConversationSearchEndpoint(t *testing.T) {
 		t.Fatalf("expected 200, got %d body=%s", resp.Code, resp.Body.String())
 	}
 	if !strings.Contains(resp.Body.String(), `"conversation_id":"conv-1"`) {
-		t.Fatalf("expected conversation in response, body=%s", resp.Body.String())
+		t.Fatalf("expected conversation metadata in response, body=%s", resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"missing_conversation_ids":["conv-missing"]`) {
+		t.Fatalf("expected missing conversation ids in response, body=%s", resp.Body.String())
 	}
 }
 
@@ -819,42 +780,10 @@ func TestListConversationsReturnsEmptyItemsArray(t *testing.T) {
 	}
 }
 
-func TestQueryProxyPassThroughAndTenantHeaderWhenAuthDisabled(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if req.URL.Path != "/prom-prefix/api/v1/query_range" {
-			http.Error(w, "unexpected path", http.StatusBadRequest)
-			return
-		}
-		if req.URL.RawQuery != "query=up&step=15" {
-			http.Error(w, "unexpected query", http.StatusBadRequest)
-			return
-		}
-		if got := req.Header.Get("X-Scope-OrgID"); got != "fake" {
-			http.Error(w, "missing fake tenant header", http.StatusUnauthorized)
-			return
-		}
-		if got := req.Header.Get("Authorization"); got != "" {
-			http.Error(w, "authorization should not be forwarded", http.StatusBadRequest)
-			return
-		}
-		w.Header().Set("X-Upstream", "ok")
-		w.WriteHeader(http.StatusAccepted)
-		_, _ = w.Write([]byte(`{"status":"success"}`))
-	}))
-	defer upstream.Close()
-
-	proxy, err := queryproxy.New(queryproxy.Config{
-		PrometheusBaseURL: upstream.URL + "/prom-prefix",
-		TempoBaseURL:      upstream.URL + "/tempo-prefix",
-		Timeout:           time.Second,
-	})
-	if err != nil {
-		t.Fatalf("new query proxy: %v", err)
-	}
-
+func TestRemovedSearchAndProxyRoutesReturnNotFound(t *testing.T) {
 	mux := http.NewServeMux()
 	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
-	RegisterRoutesWithQueryProxy(
+	RegisterRoutes(
 		mux,
 		query.NewService(),
 		generationingest.NewService(generationingest.NewMemoryStore()),
@@ -863,188 +792,27 @@ func TestQueryProxyPassThroughAndTenantHeaderWhenAuthDisabled(t *testing.T) {
 		true,
 		newTestModelCardService(t),
 		protected,
-		proxy,
 	)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/prometheus/api/v1/query_range?query=up&step=15", nil)
-	req.Header.Set("Authorization", "Bearer token")
-	resp := httptest.NewRecorder()
-	mux.ServeHTTP(resp, req)
+	removedRoutes := []struct {
+		method string
+		path   string
+		status int
+	}{
+		{method: http.MethodPost, path: "/api/v1/conversations/search", status: http.StatusMethodNotAllowed},
+		{method: http.MethodGet, path: "/api/v1/search/tags", status: http.StatusNotFound},
+		{method: http.MethodGet, path: "/api/v1/search/tag/model/values", status: http.StatusNotFound},
+		{method: http.MethodGet, path: "/api/v1/proxy/prometheus/api/v1/query?query=up", status: http.StatusNotFound},
+		{method: http.MethodGet, path: "/api/v1/proxy/tempo/api/search", status: http.StatusNotFound},
+	}
 
-	if resp.Code != http.StatusAccepted {
-		t.Fatalf("expected %d, got %d body=%s", http.StatusAccepted, resp.Code, resp.Body.String())
-	}
-	if body := strings.TrimSpace(resp.Body.String()); body != `{"status":"success"}` {
-		t.Fatalf("unexpected response body: %s", body)
-	}
-	if got := resp.Header().Get("X-Upstream"); got != "ok" {
-		t.Fatalf("expected X-Upstream header, got %q", got)
-	}
-}
-
-func TestQueryProxyRequiresTenantWhenAuthEnabled(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if got := req.Header.Get("X-Scope-OrgID"); got != "tenant-a" {
-			http.Error(w, "missing tenant header", http.StatusUnauthorized)
-			return
+	for _, route := range removedRoutes {
+		req := httptest.NewRequest(route.method, route.path, nil)
+		resp := httptest.NewRecorder()
+		mux.ServeHTTP(resp, req)
+		if resp.Code != route.status {
+			t.Fatalf("expected %d for removed route %s %s, got %d", route.status, route.method, route.path, resp.Code)
 		}
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"ok":true}`))
-	}))
-	defer upstream.Close()
-
-	proxy, err := queryproxy.New(queryproxy.Config{
-		PrometheusBaseURL: upstream.URL,
-		TempoBaseURL:      upstream.URL,
-		Timeout:           time.Second,
-	})
-	if err != nil {
-		t.Fatalf("new query proxy: %v", err)
-	}
-
-	mux := http.NewServeMux()
-	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: true, FakeTenantID: "fake"})
-	RegisterRoutesWithQueryProxy(
-		mux,
-		query.NewService(),
-		generationingest.NewService(generationingest.NewMemoryStore()),
-		feedback.NewService(feedback.NewMemoryStore()),
-		true,
-		true,
-		newTestModelCardService(t),
-		protected,
-		proxy,
-	)
-
-	unauthorizedReq := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/prometheus/api/v1/query?query=up", nil)
-	unauthorizedResp := httptest.NewRecorder()
-	mux.ServeHTTP(unauthorizedResp, unauthorizedReq)
-	if unauthorizedResp.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 without tenant header, got %d", unauthorizedResp.Code)
-	}
-
-	authorizedReq := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/prometheus/api/v1/query?query=up", nil)
-	authorizedReq.Header.Set("X-Scope-OrgID", "tenant-a")
-	authorizedResp := httptest.NewRecorder()
-	mux.ServeHTTP(authorizedResp, authorizedReq)
-	if authorizedResp.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d body=%s", authorizedResp.Code, authorizedResp.Body.String())
-	}
-}
-
-func TestQueryProxyRejectsDisallowedPathsAndMethods(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer upstream.Close()
-
-	proxy, err := queryproxy.New(queryproxy.Config{
-		PrometheusBaseURL: upstream.URL,
-		TempoBaseURL:      upstream.URL,
-		Timeout:           time.Second,
-	})
-	if err != nil {
-		t.Fatalf("new query proxy: %v", err)
-	}
-
-	mux := http.NewServeMux()
-	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
-	RegisterRoutesWithQueryProxy(
-		mux,
-		query.NewService(),
-		generationingest.NewService(generationingest.NewMemoryStore()),
-		feedback.NewService(feedback.NewMemoryStore()),
-		true,
-		true,
-		newTestModelCardService(t),
-		protected,
-		proxy,
-	)
-
-	notAllowedReq := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/prometheus/api/v1/alerts", nil)
-	notAllowedResp := httptest.NewRecorder()
-	mux.ServeHTTP(notAllowedResp, notAllowedReq)
-	if notAllowedResp.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for non-allowlisted path, got %d", notAllowedResp.Code)
-	}
-
-	badMethodReq := httptest.NewRequest(http.MethodPost, "/api/v1/proxy/tempo/api/search", nil)
-	badMethodResp := httptest.NewRecorder()
-	mux.ServeHTTP(badMethodResp, badMethodReq)
-	if badMethodResp.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("expected 405 for method mismatch, got %d", badMethodResp.Code)
-	}
-}
-
-func TestQueryProxyReturnsBadGatewayWhenUpstreamUnavailable(t *testing.T) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	addr := listener.Addr().String()
-	_ = listener.Close()
-
-	proxy, err := queryproxy.New(queryproxy.Config{
-		PrometheusBaseURL: "http://" + addr,
-		TempoBaseURL:      "http://" + addr,
-		Timeout:           200 * time.Millisecond,
-	})
-	if err != nil {
-		t.Fatalf("new query proxy: %v", err)
-	}
-
-	mux := http.NewServeMux()
-	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
-	RegisterRoutesWithQueryProxy(
-		mux,
-		query.NewService(),
-		generationingest.NewService(generationingest.NewMemoryStore()),
-		feedback.NewService(feedback.NewMemoryStore()),
-		true,
-		true,
-		newTestModelCardService(t),
-		protected,
-		proxy,
-	)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/prometheus/api/v1/query?query=up", nil)
-	resp := httptest.NewRecorder()
-	mux.ServeHTTP(resp, req)
-	if resp.Code != http.StatusBadGateway {
-		t.Fatalf("expected 502 when upstream is unavailable, got %d body=%s", resp.Code, resp.Body.String())
-	}
-}
-
-func TestParseSearchTagValuesPathAllowsEscapedSlashes(t *testing.T) {
-	tag, ok := parseSearchTagValuesPath(
-		"/api/v1/search/tag/resource.k8s.label.app/kubernetes/io/name/values",
-		"/api/v1/search/tag/resource.k8s.label.app%2Fkubernetes%2Fio%2Fname/values",
-	)
-	if !ok {
-		t.Fatalf("expected escaped slash tag path to be accepted")
-	}
-	if tag != "resource.k8s.label.app/kubernetes/io/name" {
-		t.Fatalf("unexpected parsed tag: %q", tag)
-	}
-}
-
-func TestParseSearchTagValuesPathRejectsUnescapedSlashes(t *testing.T) {
-	_, ok := parseSearchTagValuesPath(
-		"/api/v1/search/tag/resource.k8s.label.app/kubernetes/io/name/values",
-		"/api/v1/search/tag/resource.k8s.label.app/kubernetes/io/name/values",
-	)
-	if ok {
-		t.Fatalf("expected unescaped slash tag path to be rejected")
-	}
-}
-
-func TestParseSearchTagValuesPathFallbackToDecodedPath(t *testing.T) {
-	tag, ok := parseSearchTagValuesPath("/api/v1/search/tag/model/values", "")
-	if !ok {
-		t.Fatalf("expected decoded path fallback to be accepted")
-	}
-	if tag != "model" {
-		t.Fatalf("unexpected parsed tag: %q", tag)
 	}
 }
 

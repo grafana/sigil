@@ -164,6 +164,32 @@ func (s *WALStore) ListConversationsWithFeedbackFilters(ctx context.Context, ten
 	return out, nil
 }
 
+func (s *WALStore) GetConversations(ctx context.Context, tenantID string, conversationIDs []string) ([]storage.Conversation, error) {
+	start := time.Now()
+	if strings.TrimSpace(tenantID) == "" {
+		observeWALMetrics("get_conversations", "error", start, 0)
+		return nil, errors.New("tenant id is required")
+	}
+	if len(conversationIDs) == 0 {
+		return nil, nil
+	}
+
+	var rows []ConversationModel
+	if err := s.db.WithContext(ctx).
+		Where("tenant_id = ? AND conversation_id IN ?", tenantID, conversationIDs).
+		Find(&rows).Error; err != nil {
+		observeWALMetrics("get_conversations", "error", start, 0)
+		return nil, fmt.Errorf("get conversations: %w", err)
+	}
+
+	out := make([]storage.Conversation, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, toConversation(row))
+	}
+	observeWALMetrics("get_conversations", "success", start, len(out))
+	return out, nil
+}
+
 func (s *WALStore) GetConversation(ctx context.Context, tenantID, conversationID string) (*storage.Conversation, error) {
 	start := time.Now()
 	if strings.TrimSpace(tenantID) == "" {

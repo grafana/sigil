@@ -47,6 +47,7 @@
       "type": "page",
       "name": "Evaluation",
       "path": "/a/grafana-sigil-app/evaluation",
+      "action": "grafana-sigil-app.data:read",
       "addToNav": true,
       "defaultNav": false
     },
@@ -111,7 +112,7 @@
       "grants": ["Editor", "Admin"],
       "role": {
         "name": "Sigil Reader",
-        "description": "Read access to Sigil dashboards, conversations, traces, and model-card data.",
+        "description": "Read access to Sigil dashboards, conversations, traces, model cards, and evaluation pages.",
         "permissions": [
           { "action": "plugins.app:access", "scope": "plugins:id:grafana-sigil-app" },
           { "action": "grafana-sigil-app.data:read" }

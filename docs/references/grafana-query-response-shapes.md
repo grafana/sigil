@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-15
+last_reviewed: 2026-03-03
 source_of_truth: true
 audience: contributors
 ---
@@ -111,23 +111,16 @@ Current query endpoints:
   - `/api/plugins/grafana-sigil-app/resources/query/proxy/prometheus/...`
   - `/api/plugins/grafana-sigil-app/resources/query/proxy/tempo/...`
 - plugin backend forwards to Sigil API:
-  - `POST /api/v1/conversations/search`
+  - `POST /api/v1/conversations:batch-metadata` (search hydration only)
   - `GET /api/v1/conversations`
   - `GET /api/v1/conversations/{conversation_id}`
   - `GET /api/v1/generations/{generation_id}`
-  - `GET /api/v1/search/tags`
-  - `GET /api/v1/search/tag/{tag}/values`
   - `GET /api/v1/conversations/{conversation_id}/ratings`
   - `POST /api/v1/conversations/{conversation_id}/ratings`
   - `GET /api/v1/conversations/{conversation_id}/annotations`
   - `POST /api/v1/conversations/{conversation_id}/annotations`
-  - `/api/v1/proxy/prometheus/...`
-  - `/api/v1/proxy/tempo/...`
 
-Sigil now also exposes backend query pass-through routes for downstream data sources:
-
-- `/api/v1/proxy/prometheus/...` (Prometheus/Mimir allowlisted query/read paths)
-- `/api/v1/proxy/tempo/...` (Tempo allowlisted search/trace/TraceQL-metrics paths)
+Conversation search and tag discovery are plugin-owned flows that call Tempo through Grafana datasource proxy APIs and then hydrate rows via Sigil `POST /api/v1/conversations:batch-metadata`.
 
 Plugin integration for these Sigil routes is now implemented through plugin resource proxy prefixes.
 
