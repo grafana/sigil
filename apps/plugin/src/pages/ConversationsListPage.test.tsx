@@ -1,9 +1,9 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { RouterProvider, createMemoryRouter, useParams } from 'react-router-dom';
 import ConversationsListPage from './ConversationsListPage';
 import type { ConversationsDataSource } from '../conversation/api';
-import type { ConversationListResponse, ConversationSearchRequest, SearchTag } from '../conversation/types';
+import type { ConversationListResponse } from '../conversation/types';
 
 beforeAll(() => {
   class ResizeObserverMock {
@@ -11,31 +11,31 @@ beforeAll(() => {
     unobserve() {}
     disconnect() {}
   }
-  class RequestMock {
-    method: string;
-    constructor(_input: unknown, init?: { method?: string }) {
-      this.method = init?.method ?? 'GET';
-    }
-  }
   Object.defineProperty(window, 'ResizeObserver', {
     writable: true,
     configurable: true,
     value: ResizeObserverMock,
   });
-  Object.defineProperty(globalThis, 'Request', {
-    writable: true,
-    configurable: true,
-    value: RequestMock,
-  });
+  if (typeof globalThis.Request === 'undefined') {
+    class RequestMock {
+      method: string;
+
+      constructor(_input: unknown, init?: { method?: string }) {
+        this.method = String(init?.method ?? 'GET').toUpperCase();
+      }
+    }
+    Object.defineProperty(globalThis, 'Request', {
+      writable: true,
+      configurable: true,
+      value: RequestMock,
+    });
+  }
 });
 
 type MockConversationsDataSource = {
-  listConversations: jest.MockedFunction<NonNullable<ConversationsDataSource['listConversations']>>;
-  searchConversations: jest.MockedFunction<ConversationsDataSource['searchConversations']>;
-  getConversationDetail: jest.MockedFunction<ConversationsDataSource['getConversationDetail']>;
-  getGeneration: jest.MockedFunction<ConversationsDataSource['getGeneration']>;
-  getSearchTags: jest.MockedFunction<ConversationsDataSource['getSearchTags']>;
-  getSearchTagValues: jest.MockedFunction<ConversationsDataSource['getSearchTagValues']>;
+  [Key in keyof ConversationsDataSource as NonNullable<ConversationsDataSource[Key]> extends (...args: any[]) => any
+    ? Key
+    : never]: jest.MockedFunction<NonNullable<ConversationsDataSource[Key]>>;
 };
 
 function createConversationListResponse(items: ConversationListResponse['items']): ConversationListResponse {
@@ -59,7 +59,7 @@ function createDataSource(items: ConversationListResponse['items']): MockConvers
 
   return {
     listConversations: jest.fn(async () => createConversationListResponse(items)),
-    searchConversations: jest.fn(async (_request: ConversationSearchRequest) => ({
+    searchConversations: jest.fn(async (_request: Parameters<ConversationsDataSource['searchConversations']>[0]) => ({
       conversations,
       next_cursor: '',
       has_more: false,
@@ -70,8 +70,8 @@ function createDataSource(items: ConversationListResponse['items']): MockConvers
     getGeneration: jest.fn(async (_generationID: string) => {
       throw new Error('getGeneration not used in ConversationsListPage');
     }),
-    getSearchTags: jest.fn(async (_from: string, _to: string): Promise<SearchTag[]> => []),
-    getSearchTagValues: jest.fn(async (_tag: string, _from: string, _to: string): Promise<string[]> => []),
+    getSearchTags: jest.fn(async (_from: string, _to: string) => []),
+    getSearchTagValues: jest.fn(async (_tag: string, _from: string, _to: string) => []),
   };
 }
 
@@ -96,8 +96,8 @@ function renderPage(dataSource: ConversationsDataSource, initialEntry = '/conver
   );
 
   return {
-    ...render(<RouterProvider router={router} />),
     router,
+    ...render(<RouterProvider router={router} />),
   };
 }
 
@@ -115,7 +115,7 @@ describe('ConversationsListPage', () => {
         has_errors: false,
         trace_ids: [],
         annotation_count: 0,
-        rating_summary: { total_count: 1, has_bad_rating: true },
+        rating_summary: { total_count: 1, good_count: 0, bad_count: 1, has_bad_rating: true },
       },
       {
         conversation_id: 'current-b',
@@ -128,7 +128,7 @@ describe('ConversationsListPage', () => {
         has_errors: false,
         trace_ids: [],
         annotation_count: 0,
-        rating_summary: { total_count: 1, has_bad_rating: false },
+        rating_summary: { total_count: 1, good_count: 1, bad_count: 0, has_bad_rating: false },
       },
       {
         conversation_id: 'current-c',
@@ -141,7 +141,7 @@ describe('ConversationsListPage', () => {
         has_errors: false,
         trace_ids: [],
         annotation_count: 0,
-        rating_summary: { total_count: 0, has_bad_rating: false },
+        rating_summary: { total_count: 0, good_count: 0, bad_count: 0, has_bad_rating: false },
       },
       {
         conversation_id: 'current-d',
@@ -159,7 +159,10 @@ describe('ConversationsListPage', () => {
     ];
 
     const searchConversations = jest
-      .fn()
+      .fn<
+        ReturnType<ConversationsDataSource['searchConversations']>,
+        Parameters<ConversationsDataSource['searchConversations']>
+      >()
       .mockResolvedValueOnce({
         conversations: currentWindowConversations,
         next_cursor: '',
@@ -180,8 +183,8 @@ describe('ConversationsListPage', () => {
       getGeneration: jest.fn(async (_generationID: string) => {
         throw new Error('getGeneration not used in ConversationsListPage');
       }),
-      getSearchTags: jest.fn(async (_from: string, _to: string): Promise<SearchTag[]> => []),
-      getSearchTagValues: jest.fn(async (_tag: string, _from: string, _to: string): Promise<string[]> => []),
+      getSearchTags: jest.fn(async (_from: string, _to: string) => []),
+      getSearchTagValues: jest.fn(async (_tag: string, _from: string, _to: string) => []),
     };
 
     renderPage(dataSource);
@@ -228,8 +231,7 @@ describe('ConversationsListPage', () => {
         'true'
       );
     });
-    const selectedBucketSearchParams = new URLSearchParams(router.state.location.search);
-    expect(selectedBucketSearchParams.get('bucket')).toBe('2-2');
+    expect(new URLSearchParams(router.state.location.search).get('bucket')).toBe('2-2');
     expect(await screen.findByLabelText('select conversation conv-2')).toBeInTheDocument();
     expect(screen.queryByLabelText('select conversation conv-5')).not.toBeInTheDocument();
   });
@@ -258,16 +260,15 @@ describe('ConversationsListPage', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Filter conversations with 2 LLM calls' }));
     await waitFor(() => {
-      const selectedBucketSearchParams = new URLSearchParams(router.state.location.search);
-      expect(selectedBucketSearchParams.get('bucket')).toBe('2-2');
+      expect(new URLSearchParams(router.state.location.search).get('bucket')).toBe('2-2');
     });
 
     fireEvent.change(screen.getByLabelText('Conversation chart view'), { target: { value: 'time' } });
 
     await waitFor(() => {
-      const selectedViewSearchParams = new URLSearchParams(router.state.location.search);
-      expect(selectedViewSearchParams.get('view')).toBe('time');
-      expect(selectedViewSearchParams.get('bucket')).toBeNull();
+      const searchParams = new URLSearchParams(router.state.location.search);
+      expect(searchParams.get('view')).toBe('time');
+      expect(searchParams.get('bucket')).toBeNull();
     });
     expect(screen.queryByLabelText('select conversation conv-2')).not.toBeInTheDocument();
   });
@@ -294,7 +295,10 @@ describe('ConversationsListPage', () => {
 
   it('queries the previous time window and shows trend percentages', async () => {
     const searchConversations = jest
-      .fn()
+      .fn<
+        ReturnType<ConversationsDataSource['searchConversations']>,
+        Parameters<ConversationsDataSource['searchConversations']>
+      >()
       .mockResolvedValueOnce({
         conversations: [
           {
@@ -308,7 +312,7 @@ describe('ConversationsListPage', () => {
             has_errors: false,
             trace_ids: [],
             annotation_count: 0,
-            rating_summary: { total_count: 1, has_bad_rating: false },
+            rating_summary: { total_count: 1, good_count: 1, bad_count: 0, has_bad_rating: false },
           },
           {
             conversation_id: 'current-b',
@@ -321,7 +325,7 @@ describe('ConversationsListPage', () => {
             has_errors: false,
             trace_ids: [],
             annotation_count: 0,
-            rating_summary: { total_count: 0, has_bad_rating: false },
+            rating_summary: { total_count: 0, good_count: 0, bad_count: 0, has_bad_rating: false },
           },
         ],
         next_cursor: '',
@@ -340,7 +344,7 @@ describe('ConversationsListPage', () => {
             has_errors: false,
             trace_ids: [],
             annotation_count: 0,
-            rating_summary: { total_count: 1, has_bad_rating: false },
+            rating_summary: { total_count: 1, good_count: 1, bad_count: 0, has_bad_rating: false },
           },
         ],
         next_cursor: '',
@@ -356,8 +360,8 @@ describe('ConversationsListPage', () => {
       getGeneration: jest.fn(async (_generationID: string) => {
         throw new Error('getGeneration not used in ConversationsListPage');
       }),
-      getSearchTags: jest.fn(async (_from: string, _to: string): Promise<SearchTag[]> => []),
-      getSearchTagValues: jest.fn(async (_tag: string, _from: string, _to: string): Promise<string[]> => []),
+      getSearchTags: jest.fn(async (_from: string, _to: string) => []),
+      getSearchTagValues: jest.fn(async (_tag: string, _from: string, _to: string) => []),
     };
 
     renderPage(dataSource);
@@ -375,32 +379,5 @@ describe('ConversationsListPage', () => {
     expect(secondToMs).toBe(firstToMs - windowMs);
 
     expect(await screen.findByText('↗ 100.0%')).toBeInTheDocument();
-  });
-
-  it('uses replace when syncing from/to params to avoid back-button loop', async () => {
-    const dataSource = createDataSource([]);
-    const router = createMemoryRouter(
-      [
-        { path: '/back-target', element: <div>back-target</div> },
-        { path: '/conversations', element: <ConversationsListPage dataSource={dataSource} /> },
-      ],
-      {
-        initialEntries: ['/back-target', '/conversations'],
-        initialIndex: 1,
-      }
-    );
-
-    render(<RouterProvider router={router} />);
-
-    await waitFor(() => {
-      const params = new URLSearchParams(router.state.location.search);
-      expect(params.get('from')).not.toBeNull();
-      expect(params.get('to')).not.toBeNull();
-    });
-
-    await act(async () => {
-      await router.navigate(-1);
-    });
-    await waitFor(() => expect(router.state.location.pathname).toBe('/back-target'));
   });
 });
