@@ -94,6 +94,20 @@ func TestRequiredPermissionAction(t *testing.T) {
 			{method: http.MethodGet, path: "/query/proxy/tempo/api/search"},
 			{method: http.MethodGet, path: "/query/model-cards"},
 			{method: http.MethodGet, path: "/query/model-cards/lookup"},
+			// Eval routes
+			{method: http.MethodGet, path: "/eval/evaluators"},
+			{method: http.MethodPost, path: "/eval/evaluators"},
+			{method: http.MethodGet, path: "/eval/evaluators/prod.helpfulness.v1"},
+			{method: http.MethodGet, path: "/eval/predefined/evaluators"},
+			{method: http.MethodPost, path: "/eval/predefined/evaluators/sigil.helpfulness"},
+			{method: http.MethodPost, path: "/eval/rules:preview"},
+			{method: http.MethodPost, path: "/eval:test"},
+			{method: http.MethodGet, path: "/eval/rules"},
+			{method: http.MethodGet, path: "/eval/rules/online.helpfulness"},
+			{method: http.MethodGet, path: "/eval/judge/providers"},
+			{method: http.MethodGet, path: "/eval/judge/models"},
+			{method: http.MethodGet, path: "/eval/templates"},
+			{method: http.MethodGet, path: "/eval/templates/my-template"},
 		}
 
 		for _, tc := range testCases {
@@ -1347,6 +1361,7 @@ func TestCallResourceSupportsEvalWriteOperations(t *testing.T) {
 	}
 	app := inst.(*App)
 	app.apiURL = upstream.URL
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 
 	testCases := []struct {
 		name      string
@@ -1400,23 +1415,16 @@ func TestCallResourceSupportsEvalWriteOperations(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			var sender mockCallResourceResponseSender
-			err := app.CallResource(context.Background(), &backend.CallResourceRequest{
+			resp := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 				Method: tc.method,
 				Path:   tc.path,
 				Body:   tc.body,
-			}, &sender)
-			if err != nil {
-				t.Fatalf("CallResource error: %s", err)
-			}
-			if sender.response == nil {
-				t.Fatal("no response received from CallResource")
-			}
-			if sender.response.Status != tc.expStatus {
-				t.Fatalf("expected status %d, got %d body=%s", tc.expStatus, sender.response.Status, sender.response.Body)
+			})
+			if resp.Status != tc.expStatus {
+				t.Fatalf("expected status %d, got %d body=%s", tc.expStatus, resp.Status, resp.Body)
 			}
 			if len(tc.expBody) > 0 {
-				if tb := bytes.TrimSpace(sender.response.Body); !bytes.Equal(tb, tc.expBody) {
+				if tb := bytes.TrimSpace(resp.Body); !bytes.Equal(tb, tc.expBody) {
 					t.Fatalf("response body should be %s, got %s", tc.expBody, tb)
 				}
 			}

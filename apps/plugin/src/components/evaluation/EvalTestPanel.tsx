@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { css, keyframes } from '@emotion/css';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
 import { Alert, Button, Field, Icon, Select, Spinner, Stack, Text, useStyles2 } from '@grafana/ui';
-import { defaultConversationsDataSource } from '../../conversation/api';
+import { defaultConversationsDataSource, type ConversationsDataSource } from '../../conversation/api';
 import type { GenerationDetail, Message } from '../../generation/types';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../../evaluation/api';
 import type { EvalOutputKey, EvalTestResponse, EvaluatorKind } from '../../evaluation/types';
@@ -15,6 +15,7 @@ export type EvalTestPanelProps = {
   config: Record<string, unknown>;
   outputKeys: EvalOutputKey[];
   dataSource?: EvaluationDataSource;
+  conversationsDataSource?: ConversationsDataSource;
 };
 
 const GRADIENT_PURPLE = 'rgb(168, 85, 247)';
@@ -98,9 +99,16 @@ const getStyles = (theme: GrafanaTheme2) => {
   };
 };
 
-export default function EvalTestPanel({ kind, config, outputKeys, dataSource }: EvalTestPanelProps) {
+export default function EvalTestPanel({
+  kind,
+  config,
+  outputKeys,
+  dataSource,
+  conversationsDataSource,
+}: EvalTestPanelProps) {
   const styles = useStyles2(getStyles);
   const ds = dataSource ?? defaultEvaluationDataSource;
+  const convDs = conversationsDataSource ?? defaultConversationsDataSource;
 
   const [generationId, setGenerationId] = useState<string | undefined>();
   const [generation, setGeneration] = useState<GenerationDetail | null>(null);
@@ -146,11 +154,11 @@ export default function EvalTestPanel({ kind, config, outputKeys, dataSource }: 
       setGeneration(null);
       return;
     }
-    void defaultConversationsDataSource
+    void convDs
       .getGeneration(generationId)
       .then(setGeneration)
       .catch(() => setGeneration(null));
-  }, [generationId]);
+  }, [generationId, convDs]);
 
   const handleRun = async () => {
     if (!generationId) {
@@ -231,7 +239,11 @@ export default function EvalTestPanel({ kind, config, outputKeys, dataSource }: 
           </Stack>
         )}
 
-        <GenerationPicker onSelect={setGenerationId} selectedGenerationId={generationId} />
+        <GenerationPicker
+          onSelect={setGenerationId}
+          selectedGenerationId={generationId}
+          conversationsDataSource={convDs}
+        />
 
         {generation && (
           <>

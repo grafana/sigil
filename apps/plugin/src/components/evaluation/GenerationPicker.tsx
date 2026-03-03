@@ -2,13 +2,14 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Button, Icon, Input, Spinner, Text, useStyles2 } from '@grafana/ui';
-import { defaultConversationsDataSource } from '../../conversation/api';
+import { defaultConversationsDataSource, type ConversationsDataSource } from '../../conversation/api';
 import type { ConversationDetail } from '../../conversation/types';
 import type { GenerationDetail } from '../../generation/types';
 
 export type GenerationPickerProps = {
   onSelect: (generationId: string | undefined) => void;
   selectedGenerationId?: string;
+  conversationsDataSource?: ConversationsDataSource;
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -80,8 +81,13 @@ type ConversationRow = {
   models?: string[];
 };
 
-export default function GenerationPicker({ onSelect, selectedGenerationId }: GenerationPickerProps) {
+export default function GenerationPicker({
+  onSelect,
+  selectedGenerationId,
+  conversationsDataSource,
+}: GenerationPickerProps) {
   const styles = useStyles2(getStyles);
+  const convDs = conversationsDataSource ?? defaultConversationsDataSource;
   const [query, setQuery] = useState('');
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -91,7 +97,7 @@ export default function GenerationPicker({ onSelect, selectedGenerationId }: Gen
   const loadList = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await defaultConversationsDataSource.listConversations?.();
+      const res = await convDs.listConversations?.();
       setConversations(
         (res?.items ?? []).slice(0, 10).map((item) => ({
           conversation_id: item.id,
@@ -104,7 +110,7 @@ export default function GenerationPicker({ onSelect, selectedGenerationId }: Gen
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [convDs]);
 
   // Load recent conversations on mount
   useEffect(() => {
@@ -122,7 +128,7 @@ export default function GenerationPicker({ onSelect, selectedGenerationId }: Gen
       try {
         const now = new Date();
         const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        const result = await defaultConversationsDataSource.searchConversations({
+        const result = await convDs.searchConversations({
           filters: query,
           select: [],
           time_range: { from: weekAgo.toISOString(), to: now.toISOString() },
@@ -143,12 +149,12 @@ export default function GenerationPicker({ onSelect, selectedGenerationId }: Gen
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [query, loadList]);
+  }, [query, loadList, convDs]);
 
   const handleConversationClick = async (conversationId: string) => {
     setLoadingDetail(true);
     try {
-      const d = await defaultConversationsDataSource.getConversationDetail(conversationId);
+      const d = await convDs.getConversationDetail(conversationId);
       setDetail(d);
     } catch {
       setDetail(null);
