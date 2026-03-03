@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"hash/fnv"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -206,6 +207,19 @@ func TestShouldLoadEvalSeed(t *testing.T) {
 	}
 }
 
+func TestStatusCapturingResponseWriterUnwrapAllowsResponseControllerFlush(t *testing.T) {
+	base := &flushTrackingResponseWriter{}
+	wrapped := &statusCapturingResponseWriter{ResponseWriter: base}
+
+	controller := http.NewResponseController(wrapped)
+	if err := controller.Flush(); err != nil {
+		t.Fatalf("expected flush to succeed through wrapped writer, got %v", err)
+	}
+	if !base.flushed {
+		t.Fatalf("expected underlying writer Flush to be called")
+	}
+}
+
 func TestEvalEnqueueProcessorAdapterInvalidatesTenantCacheBeforeProcessing(t *testing.T) {
 	store := &evalEnqueueProcessorTestStore{
 		rules: []evalpkg.RuleDefinition{{
@@ -279,6 +293,28 @@ type evalSeedStateStoreStub struct {
 	rules             []evalpkg.RuleDefinition
 	listEvaluatorsErr error
 	listRulesErr      error
+}
+
+type flushTrackingResponseWriter struct {
+	header  http.Header
+	flushed bool
+}
+
+func (w *flushTrackingResponseWriter) Header() http.Header {
+	if w.header == nil {
+		w.header = make(http.Header)
+	}
+	return w.header
+}
+
+func (w *flushTrackingResponseWriter) Write(data []byte) (int, error) {
+	return len(data), nil
+}
+
+func (w *flushTrackingResponseWriter) WriteHeader(int) {}
+
+func (w *flushTrackingResponseWriter) Flush() {
+	w.flushed = true
 }
 
 type evalEnqueueProcessorTestStore struct {

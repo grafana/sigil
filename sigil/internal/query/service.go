@@ -18,6 +18,10 @@ import (
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	"github.com/grafana/sigil/sigil/internal/storage"
 	"github.com/grafana/sigil/sigil/pkg/searchcore"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -174,6 +178,16 @@ type Service struct {
 	queryDebug             bool
 }
 
+var queryServiceTracer = otel.Tracer("github.com/grafana/sigil/query/service")
+
+func recordQuerySpanError(span trace.Span, err error) {
+	if span == nil || err == nil {
+		return
+	}
+	span.RecordError(err)
+	span.SetStatus(codes.Error, err.Error())
+}
+
 func NewService() *Service {
 	return &Service{
 		nowFn:               time.Now,
@@ -297,9 +311,18 @@ func (s *Service) debugLog(event string, keyvals ...any) {
 }
 
 func (s *Service) ListConversationsForTenant(ctx context.Context, tenantID string, filter ConversationListFilter) ([]Conversation, error) {
+	ctx, span := queryServiceTracer.Start(ctx, "sigil.query.list_conversations")
+	defer span.End()
+
 	trimmedTenantID := strings.TrimSpace(tenantID)
+	span.SetAttributes(attribute.String("sigil.tenant.id", trimmedTenantID))
 	if s.conversationStore == nil || trimmedTenantID == "" {
-		return s.bootstrapConversations(), nil
+		items := s.bootstrapConversations()
+		span.SetAttributes(
+			attribute.String("sigil.query.source", "bootstrap"),
+			attribute.Int("sigil.query.conversation_count", len(items)),
+		)
+		return items, nil
 	}
 
 	var (
@@ -314,9 +337,11 @@ func (s *Service) ListConversationsForTenant(ctx context.Context, tenantID strin
 		rows, err = s.conversationStore.ListConversations(ctx, trimmedTenantID)
 	}
 	if err != nil {
+		recordQuerySpanError(span, err)
 		return nil, err
 	}
 	if len(rows) == 0 {
+		span.SetAttributes(attribute.Int("sigil.query.conversation_count", 0))
 		return []Conversation{}, nil
 	}
 
@@ -330,6 +355,7 @@ func (s *Service) ListConversationsForTenant(ctx context.Context, tenantID strin
 	if s.ratingSummaryStore != nil {
 		ratingSummaries, err := s.ratingSummaryStore.ListConversationRatingSummaries(ctx, trimmedTenantID, conversationIDs)
 		if err != nil {
+			recordQuerySpanError(span, err)
 			return nil, err
 		}
 		for idx := range items {
@@ -345,6 +371,7 @@ func (s *Service) ListConversationsForTenant(ctx context.Context, tenantID strin
 	if s.annotationSummaryStore != nil {
 		annotationSummaries, err := s.annotationSummaryStore.ListConversationAnnotationSummaries(ctx, trimmedTenantID, conversationIDs)
 		if err != nil {
+			recordQuerySpanError(span, err)
 			return nil, err
 		}
 		for idx := range items {
@@ -365,27 +392,43 @@ func (s *Service) ListConversationsForTenant(ctx context.Context, tenantID strin
 			}
 			filtered = append(filtered, item)
 		}
+		span.SetAttributes(attribute.Int("sigil.query.conversation_count", len(filtered)))
 		return filtered, nil
 	}
 
+	span.SetAttributes(attribute.Int("sigil.query.conversation_count", len(items)))
 	return items, nil
 }
 
 func (s *Service) GetConversationForTenant(ctx context.Context, tenantID, id string) (Conversation, bool, error) {
+	ctx, span := queryServiceTracer.Start(ctx, "sigil.query.get_conversation")
+	defer span.End()
+
 	trimmedTenantID := strings.TrimSpace(tenantID)
 	trimmedConversationID := strings.TrimSpace(id)
+	span.SetAttributes(
+		attribute.String("sigil.tenant.id", trimmedTenantID),
+		attribute.String("sigil.conversation.id", trimmedConversationID),
+	)
 	if trimmedConversationID == "" {
 		return Conversation{}, false, nil
 	}
 	if s.conversationStore == nil || trimmedTenantID == "" {
-		return s.bootstrapConversation(trimmedConversationID), true, nil
+		item := s.bootstrapConversation(trimmedConversationID)
+		span.SetAttributes(
+			attribute.Bool("sigil.query.found", true),
+			attribute.String("sigil.query.source", "bootstrap"),
+		)
+		return item, true, nil
 	}
 
 	row, err := s.conversationStore.GetConversation(ctx, trimmedTenantID, trimmedConversationID)
 	if err != nil {
+		recordQuerySpanError(span, err)
 		return Conversation{}, false, err
 	}
 	if row == nil {
+		span.SetAttributes(attribute.Bool("sigil.query.found", false))
 		return Conversation{}, false, nil
 	}
 
@@ -393,6 +436,7 @@ func (s *Service) GetConversationForTenant(ctx context.Context, tenantID, id str
 	if s.ratingSummaryStore != nil {
 		summary, err := s.ratingSummaryStore.GetConversationRatingSummary(ctx, trimmedTenantID, trimmedConversationID)
 		if err != nil {
+			recordQuerySpanError(span, err)
 			return Conversation{}, false, err
 		}
 		if summary != nil {
@@ -403,6 +447,7 @@ func (s *Service) GetConversationForTenant(ctx context.Context, tenantID, id str
 	if s.annotationSummaryStore != nil {
 		summary, err := s.annotationSummaryStore.GetConversationAnnotationSummary(ctx, trimmedTenantID, trimmedConversationID)
 		if err != nil {
+			recordQuerySpanError(span, err)
 			return Conversation{}, false, err
 		}
 		if summary != nil {
@@ -410,20 +455,35 @@ func (s *Service) GetConversationForTenant(ctx context.Context, tenantID, id str
 			out.AnnotationSummary = &copied
 		}
 	}
-
+	span.SetAttributes(attribute.Bool("sigil.query.found", true))
 	return out, true, nil
 }
 
 func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID string, request ConversationSearchRequest) (ConversationSearchResponse, error) {
+	ctx, span := queryServiceTracer.Start(ctx, "sigil.query.search_conversations")
+	defer span.End()
+
 	trimmedTenantID := strings.TrimSpace(tenantID)
+	span.SetAttributes(
+		attribute.String("sigil.tenant.id", trimmedTenantID),
+		attribute.Int("sigil.query.requested_page_size", request.PageSize),
+		attribute.Int("sigil.query.select_count", len(request.Select)),
+		attribute.Bool("sigil.query.cursor_provided", strings.TrimSpace(request.Cursor) != ""),
+	)
 	if trimmedTenantID == "" {
-		return ConversationSearchResponse{}, NewValidationError("tenant id is required")
+		err := NewValidationError("tenant id is required")
+		recordQuerySpanError(span, err)
+		return ConversationSearchResponse{}, err
 	}
 	if s.tempoClient == nil {
-		return ConversationSearchResponse{}, errors.New("tempo client is not configured")
+		err := errors.New("tempo client is not configured")
+		recordQuerySpanError(span, err)
+		return ConversationSearchResponse{}, err
 	}
 	if s.conversationStore == nil {
-		return ConversationSearchResponse{}, errors.New("conversation store is not configured")
+		err := errors.New("conversation store is not configured")
+		recordQuerySpanError(span, err)
+		return ConversationSearchResponse{}, err
 	}
 	s.debugLog("search_start",
 		"tenant_id", trimmedTenantID,
@@ -435,20 +495,26 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 
 	from, to, err := normalizeConversationSearchTimeRange(request.TimeRange)
 	if err != nil {
+		recordQuerySpanError(span, err)
 		return ConversationSearchResponse{}, err
 	}
 
 	parsedFilters, err := ParseFilterExpression(request.Filters)
 	if err != nil {
-		return ConversationSearchResponse{}, NewValidationError(err.Error())
+		validationErr := NewValidationError(err.Error())
+		recordQuerySpanError(span, validationErr)
+		return ConversationSearchResponse{}, validationErr
 	}
 	if err := validateMySQLFilterTerms(parsedFilters.MySQLTerms); err != nil {
+		recordQuerySpanError(span, err)
 		return ConversationSearchResponse{}, err
 	}
 
 	selectFields, err := NormalizeSelectFields(request.Select)
 	if err != nil {
-		return ConversationSearchResponse{}, NewValidationError(err.Error())
+		validationErr := NewValidationError(err.Error())
+		recordQuerySpanError(span, validationErr)
+		return ConversationSearchResponse{}, validationErr
 	}
 
 	pageSize := normalizeConversationSearchPageSize(request.PageSize)
@@ -460,15 +526,21 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 	filterHash := buildConversationSearchFilterHash(parsedFilters, selectFields, from, to)
 	cursor, err := decodeConversationSearchCursor(request.Cursor)
 	if err != nil {
-		return ConversationSearchResponse{}, NewValidationError("invalid cursor")
+		validationErr := NewValidationError("invalid cursor")
+		recordQuerySpanError(span, validationErr)
+		return ConversationSearchResponse{}, validationErr
 	}
 	if strings.TrimSpace(request.Cursor) != "" && cursor.FilterHash != filterHash {
-		return ConversationSearchResponse{}, NewValidationError("cursor no longer matches current filters")
+		validationErr := NewValidationError("cursor no longer matches current filters")
+		recordQuerySpanError(span, validationErr)
+		return ConversationSearchResponse{}, validationErr
 	}
 
 	traceQL, err := BuildTraceQL(parsedFilters, selectFields)
 	if err != nil {
-		return ConversationSearchResponse{}, NewValidationError(err.Error())
+		validationErr := NewValidationError(err.Error())
+		recordQuerySpanError(span, validationErr)
+		return ConversationSearchResponse{}, validationErr
 	}
 
 	searchEndNanos := to.UnixNano()
@@ -479,6 +551,10 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 		s.debugLog("search_short_circuit_empty_range",
 			"from_unix_nano", from.UnixNano(),
 			"search_end_unix_nano", searchEndNanos,
+		)
+		span.SetAttributes(
+			attribute.Int("sigil.query.result_count", 0),
+			attribute.Bool("sigil.query.has_more", false),
 		)
 		return ConversationSearchResponse{Conversations: []ConversationSearchResult{}, HasMore: false}, nil
 	}
@@ -532,6 +608,7 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 			SpansPerSpanSet: defaultTempoSearchSpansPerSpanSet,
 		})
 		if err != nil {
+			recordQuerySpanError(span, err)
 			return ConversationSearchResponse{}, err
 		}
 		s.debugLog("search_iteration_tempo_response",
@@ -555,6 +632,7 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 
 		metadataByConversation, ratingSummaries, annotationSummaries, evalSummaries, err := s.loadConversationSearchMetadata(ctx, trimmedTenantID, orderedConversationIDs)
 		if err != nil {
+			recordQuerySpanError(span, err)
 			return ConversationSearchResponse{}, err
 		}
 		s.debugLog("search_iteration_metadata",
@@ -696,6 +774,7 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 			FilterHash:            filterHash,
 		})
 		if err != nil {
+			recordQuerySpanError(span, err)
 			return ConversationSearchResponse{}, err
 		}
 	}
@@ -708,6 +787,11 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 		"has_more", hasMore,
 		"next_cursor_present", nextCursor != "",
 	)
+	span.SetAttributes(
+		attribute.Int("sigil.query.result_count", len(results)),
+		attribute.Bool("sigil.query.has_more", hasMore),
+		attribute.Bool("sigil.query.next_cursor_present", nextCursor != ""),
+	)
 	return ConversationSearchResponse{
 		Conversations: results,
 		NextCursor:    nextCursor,
@@ -716,19 +800,34 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 }
 
 func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, conversationID string) (ConversationDetail, bool, error) {
+	ctx, span := queryServiceTracer.Start(ctx, "sigil.query.get_conversation_detail")
+	defer span.End()
+
 	trimmedTenantID := strings.TrimSpace(tenantID)
 	trimmedConversationID := strings.TrimSpace(conversationID)
+	span.SetAttributes(
+		attribute.String("sigil.tenant.id", trimmedTenantID),
+		attribute.String("sigil.conversation.id", trimmedConversationID),
+	)
 	if trimmedTenantID == "" {
-		return ConversationDetail{}, false, NewValidationError("tenant id is required")
+		err := NewValidationError("tenant id is required")
+		recordQuerySpanError(span, err)
+		return ConversationDetail{}, false, err
 	}
 	if trimmedConversationID == "" {
-		return ConversationDetail{}, false, NewValidationError("conversation id is required")
+		err := NewValidationError("conversation id is required")
+		recordQuerySpanError(span, err)
+		return ConversationDetail{}, false, err
 	}
 	if s.conversationStore == nil {
-		return ConversationDetail{}, false, errors.New("conversation store is not configured")
+		err := errors.New("conversation store is not configured")
+		recordQuerySpanError(span, err)
+		return ConversationDetail{}, false, err
 	}
 	if s.walReader == nil {
-		return ConversationDetail{}, false, errors.New("wal reader is not configured")
+		err := errors.New("wal reader is not configured")
+		recordQuerySpanError(span, err)
+		return ConversationDetail{}, false, err
 	}
 	fanOutStore := s.fanOutStore
 	if fanOutStore == nil {
@@ -737,14 +836,17 @@ func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, 
 
 	conversation, err := s.conversationStore.GetConversation(ctx, trimmedTenantID, trimmedConversationID)
 	if err != nil {
+		recordQuerySpanError(span, err)
 		return ConversationDetail{}, false, err
 	}
 	if conversation == nil {
+		span.SetAttributes(attribute.Bool("sigil.query.found", false))
 		return ConversationDetail{}, false, nil
 	}
 
 	mergedGenerations, err := fanOutStore.ListConversationGenerations(ctx, trimmedTenantID, trimmedConversationID)
 	if err != nil {
+		recordQuerySpanError(span, err)
 		return ConversationDetail{}, false, err
 	}
 
@@ -752,6 +854,7 @@ func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, 
 	for _, generation := range mergedGenerations {
 		payload, err := generationToResponsePayload(generation)
 		if err != nil {
+			recordQuerySpanError(span, err)
 			return ConversationDetail{}, false, err
 		}
 		generationPayloads = append(generationPayloads, payload)
@@ -773,6 +876,7 @@ func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, 
 
 	annotations, err := s.listAllConversationAnnotations(ctx, trimmedTenantID, trimmedConversationID)
 	if err != nil {
+		recordQuerySpanError(span, err)
 		return ConversationDetail{}, false, err
 	}
 
@@ -780,6 +884,7 @@ func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, 
 	if s.ratingSummaryStore != nil {
 		summary, err := s.ratingSummaryStore.GetConversationRatingSummary(ctx, trimmedTenantID, trimmedConversationID)
 		if err != nil {
+			recordQuerySpanError(span, err)
 			return ConversationDetail{}, false, err
 		}
 		if summary != nil {
@@ -787,7 +892,11 @@ func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, 
 			ratingSummary = &copied
 		}
 	}
-
+	span.SetAttributes(
+		attribute.Bool("sigil.query.found", true),
+		attribute.Int("sigil.query.generation_count", len(generationPayloads)),
+		attribute.Int("sigil.query.annotation_count", len(annotations)),
+	)
 	return ConversationDetail{
 		ConversationID:    conversation.ConversationID,
 		GenerationCount:   conversation.GenerationCount,
@@ -800,16 +909,29 @@ func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, 
 }
 
 func (s *Service) GetGenerationDetailForTenant(ctx context.Context, tenantID, generationID string) (map[string]any, bool, error) {
+	ctx, span := queryServiceTracer.Start(ctx, "sigil.query.get_generation_detail")
+	defer span.End()
+
 	trimmedTenantID := strings.TrimSpace(tenantID)
 	trimmedGenerationID := strings.TrimSpace(generationID)
+	span.SetAttributes(
+		attribute.String("sigil.tenant.id", trimmedTenantID),
+		attribute.String("sigil.generation.id", trimmedGenerationID),
+	)
 	if trimmedTenantID == "" {
-		return nil, false, NewValidationError("tenant id is required")
+		err := NewValidationError("tenant id is required")
+		recordQuerySpanError(span, err)
+		return nil, false, err
 	}
 	if trimmedGenerationID == "" {
-		return nil, false, NewValidationError("generation id is required")
+		err := NewValidationError("generation id is required")
+		recordQuerySpanError(span, err)
+		return nil, false, err
 	}
 	if s.walReader == nil {
-		return nil, false, errors.New("wal reader is not configured")
+		err := errors.New("wal reader is not configured")
+		recordQuerySpanError(span, err)
+		return nil, false, err
 	}
 	fanOutStore := s.fanOutStore
 	if fanOutStore == nil {
@@ -818,14 +940,17 @@ func (s *Service) GetGenerationDetailForTenant(ctx context.Context, tenantID, ge
 
 	generation, err := fanOutStore.GetGenerationByID(ctx, trimmedTenantID, trimmedGenerationID)
 	if err != nil {
+		recordQuerySpanError(span, err)
 		return nil, false, err
 	}
 	if generation == nil {
+		span.SetAttributes(attribute.Bool("sigil.query.found", false))
 		return nil, false, nil
 	}
 
 	payload, err := generationToResponsePayload(generation)
 	if err != nil {
+		recordQuerySpanError(span, err)
 		return nil, false, err
 	}
 	if s.scoreStore != nil {
@@ -836,20 +961,39 @@ func (s *Service) GetGenerationDetailForTenant(ctx context.Context, tenantID, ge
 			payload["latest_scores"] = latestScoresToResponse(latestScores)
 		}
 	}
+	span.SetAttributes(
+		attribute.Bool("sigil.query.found", true),
+		attribute.Bool("sigil.query.latest_scores_present", payload["latest_scores"] != nil),
+	)
 	return payload, true, nil
 }
 
 func (s *Service) ListGenerationScoresForTenant(ctx context.Context, tenantID, generationID string, limit int, cursor uint64) ([]map[string]any, uint64, error) {
+	ctx, span := queryServiceTracer.Start(ctx, "sigil.query.list_generation_scores")
+	defer span.End()
+
 	trimmedTenantID := strings.TrimSpace(tenantID)
 	trimmedGenerationID := strings.TrimSpace(generationID)
+	span.SetAttributes(
+		attribute.String("sigil.tenant.id", trimmedTenantID),
+		attribute.String("sigil.generation.id", trimmedGenerationID),
+		attribute.Int("sigil.query.limit", limit),
+		attribute.Int64("sigil.query.cursor", int64(cursor)),
+	)
 	if trimmedTenantID == "" {
-		return nil, 0, NewValidationError("tenant id is required")
+		err := NewValidationError("tenant id is required")
+		recordQuerySpanError(span, err)
+		return nil, 0, err
 	}
 	if trimmedGenerationID == "" {
-		return nil, 0, NewValidationError("generation id is required")
+		err := NewValidationError("generation id is required")
+		recordQuerySpanError(span, err)
+		return nil, 0, err
 	}
 	if s.scoreStore == nil {
-		return nil, 0, errors.New("score store is not configured")
+		err := errors.New("score store is not configured")
+		recordQuerySpanError(span, err)
+		return nil, 0, err
 	}
 	if limit <= 0 {
 		limit = 50
@@ -860,32 +1004,47 @@ func (s *Service) ListGenerationScoresForTenant(ctx context.Context, tenantID, g
 
 	scores, nextCursor, err := s.scoreStore.GetScoresByGeneration(ctx, trimmedTenantID, trimmedGenerationID, limit, cursor)
 	if err != nil {
+		recordQuerySpanError(span, err)
 		return nil, 0, err
 	}
 	items := make([]map[string]any, 0, len(scores))
 	for _, score := range scores {
 		items = append(items, scoreToResponsePayload(score))
 	}
+	span.SetAttributes(
+		attribute.Int("sigil.query.result_count", len(items)),
+		attribute.Int64("sigil.query.next_cursor", int64(nextCursor)),
+	)
 	return items, nextCursor, nil
 }
 
 func (s *Service) ListSearchTagsForTenant(ctx context.Context, tenantID string, from, to time.Time) ([]SearchTag, error) {
+	ctx, span := queryServiceTracer.Start(ctx, "sigil.query.list_search_tags")
+	defer span.End()
+
 	trimmedTenantID := strings.TrimSpace(tenantID)
+	span.SetAttributes(attribute.String("sigil.tenant.id", trimmedTenantID))
 	if trimmedTenantID == "" {
-		return nil, NewValidationError("tenant id is required")
+		err := NewValidationError("tenant id is required")
+		recordQuerySpanError(span, err)
+		return nil, err
 	}
 	if s.tempoClient == nil {
-		return nil, errors.New("tempo client is not configured")
+		err := errors.New("tempo client is not configured")
+		recordQuerySpanError(span, err)
+		return nil, err
 	}
 
 	startTime, endTime := normalizeTagDiscoveryRange(from, to, s.now())
 
 	spanTags, err := s.tempoClient.SearchTags(ctx, trimmedTenantID, "span", startTime, endTime)
 	if err != nil {
+		recordQuerySpanError(span, err)
 		return nil, err
 	}
 	resourceTags, err := s.tempoClient.SearchTags(ctx, trimmedTenantID, "resource", startTime, endTime)
 	if err != nil {
+		recordQuerySpanError(span, err)
 		return nil, err
 	}
 
@@ -909,6 +1068,7 @@ func (s *Service) ListSearchTagsForTenant(ctx context.Context, tenantID string, 
 	sort.Slice(out, func(i, j int) bool {
 		return out[i].Key < out[j].Key
 	})
+	span.SetAttributes(attribute.Int("sigil.query.result_count", len(out)))
 	return out, nil
 }
 
@@ -919,16 +1079,31 @@ func (s *Service) ListConversationBatchMetadataForTenant(
 	tenantID string,
 	conversationIDs []string,
 ) ([]ConversationBatchMetadata, []string, error) {
+	ctx, span := queryServiceTracer.Start(ctx, "sigil.query.list_conversation_batch_metadata")
+	defer span.End()
+
 	trimmedTenantID := strings.TrimSpace(tenantID)
+	span.SetAttributes(
+		attribute.String("sigil.tenant.id", trimmedTenantID),
+		attribute.Int("sigil.query.requested_conversation_count", len(conversationIDs)),
+	)
 	if trimmedTenantID == "" {
-		return nil, nil, NewValidationError("tenant id is required")
+		err := NewValidationError("tenant id is required")
+		recordQuerySpanError(span, err)
+		return nil, nil, err
 	}
 	if s.conversationStore == nil {
-		return nil, nil, errors.New("conversation store is not configured")
+		err := errors.New("conversation store is not configured")
+		recordQuerySpanError(span, err)
+		return nil, nil, err
 	}
 
 	ids := dedupeAndSortStrings(conversationIDs)
 	if len(ids) == 0 {
+		span.SetAttributes(
+			attribute.Int("sigil.query.result_count", 0),
+			attribute.Int("sigil.query.missing_count", 0),
+		)
 		return []ConversationBatchMetadata{}, []string{}, nil
 	}
 
@@ -937,6 +1112,7 @@ func (s *Service) ListConversationBatchMetadataForTenant(
 	if batchStore, ok := s.conversationStore.(batchConversationStore); ok {
 		rows, err := batchStore.GetConversations(ctx, trimmedTenantID, ids)
 		if err != nil {
+			recordQuerySpanError(span, err)
 			return nil, nil, err
 		}
 		for _, row := range rows {
@@ -951,6 +1127,7 @@ func (s *Service) ListConversationBatchMetadataForTenant(
 		for _, conversationID := range ids {
 			row, err := s.conversationStore.GetConversation(ctx, trimmedTenantID, conversationID)
 			if err != nil {
+				recordQuerySpanError(span, err)
 				return nil, nil, err
 			}
 			if row == nil {
@@ -974,6 +1151,7 @@ func (s *Service) ListConversationBatchMetadataForTenant(
 		if s.ratingSummaryStore != nil {
 			summaries, err := s.ratingSummaryStore.ListConversationRatingSummaries(ctx, trimmedTenantID, lookupIDs)
 			if err != nil {
+				recordQuerySpanError(span, err)
 				return nil, nil, err
 			}
 			ratingSummaries = summaries
@@ -981,6 +1159,7 @@ func (s *Service) ListConversationBatchMetadataForTenant(
 		if s.annotationSummaryStore != nil {
 			summaries, err := s.annotationSummaryStore.ListConversationAnnotationSummaries(ctx, trimmedTenantID, lookupIDs)
 			if err != nil {
+				recordQuerySpanError(span, err)
 				return nil, nil, err
 			}
 			annotationSummaries = summaries
@@ -988,6 +1167,7 @@ func (s *Service) ListConversationBatchMetadataForTenant(
 		if s.evalSummaryStore != nil {
 			summaries, err := s.evalSummaryStore.ListConversationEvalSummaries(ctx, trimmedTenantID, lookupIDs)
 			if err != nil {
+				recordQuerySpanError(span, err)
 				return nil, nil, err
 			}
 			evalSummaries = summaries
@@ -1018,21 +1198,39 @@ func (s *Service) ListConversationBatchMetadataForTenant(
 		items = append(items, item)
 	}
 
+	span.SetAttributes(
+		attribute.Int("sigil.query.result_count", len(items)),
+		attribute.Int("sigil.query.missing_count", len(missing)),
+	)
 	return items, missing, nil
 }
 
 func (s *Service) ListSearchTagValuesForTenant(ctx context.Context, tenantID, tag string, from, to time.Time) ([]string, error) {
+	ctx, span := queryServiceTracer.Start(ctx, "sigil.query.list_search_tag_values")
+	defer span.End()
+
 	trimmedTenantID := strings.TrimSpace(tenantID)
+	trimmedTag := strings.TrimSpace(tag)
+	span.SetAttributes(
+		attribute.String("sigil.tenant.id", trimmedTenantID),
+		attribute.String("sigil.query.tag", trimmedTag),
+	)
 	if trimmedTenantID == "" {
-		return nil, NewValidationError("tenant id is required")
+		err := NewValidationError("tenant id is required")
+		recordQuerySpanError(span, err)
+		return nil, err
 	}
 	if s.tempoClient == nil {
-		return nil, errors.New("tempo client is not configured")
+		err := errors.New("tempo client is not configured")
+		recordQuerySpanError(span, err)
+		return nil, err
 	}
 
 	tempoTag, mysqlOnly, err := resolveTagKeyForTempo(tag)
 	if err != nil {
-		return nil, NewValidationError(err.Error())
+		validationErr := NewValidationError(err.Error())
+		recordQuerySpanError(span, validationErr)
+		return nil, validationErr
 	}
 	if !mysqlOnly && strings.TrimSpace(tempoTag) == "" {
 		validationErr := NewValidationError(fmt.Sprintf("invalid tag %q", strings.TrimSpace(tag)))
@@ -1041,6 +1239,7 @@ func (s *Service) ListSearchTagValuesForTenant(ctx context.Context, tenantID, ta
 			"resolved_tempo_tag", tempoTag,
 			"error", validationErr.Error(),
 		)
+		recordQuerySpanError(span, validationErr)
 		return nil, validationErr
 	}
 	s.debugLog("search_tag_values_start",
@@ -1051,6 +1250,7 @@ func (s *Service) ListSearchTagValuesForTenant(ctx context.Context, tenantID, ta
 	)
 	if mysqlOnly {
 		s.debugLog("search_tag_values_done", "requested_tag", strings.TrimSpace(tag), "values_count", 0)
+		span.SetAttributes(attribute.Int("sigil.query.result_count", 0))
 		return []string{}, nil
 	}
 
@@ -1062,6 +1262,7 @@ func (s *Service) ListSearchTagValuesForTenant(ctx context.Context, tenantID, ta
 			"resolved_tempo_tag", tempoTag,
 			"error", err.Error(),
 		)
+		recordQuerySpanError(span, err)
 		return nil, err
 	}
 	s.debugLog("search_tag_values_done",
@@ -1069,6 +1270,7 @@ func (s *Service) ListSearchTagValuesForTenant(ctx context.Context, tenantID, ta
 		"resolved_tempo_tag", tempoTag,
 		"values_count", len(values),
 	)
+	span.SetAttributes(attribute.Int("sigil.query.result_count", len(values)))
 	return values, nil
 }
 

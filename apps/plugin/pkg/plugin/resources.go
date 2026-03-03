@@ -16,6 +16,11 @@ import (
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/sigil/sigil/pkg/searchcore"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type stubResponse struct {
@@ -24,6 +29,8 @@ type stubResponse struct {
 	Endpoint string `json:"endpoint"`
 	Error    string `json:"error,omitempty"`
 }
+
+var pluginProxyTracer = otel.Tracer("github.com/grafana/sigil/apps/plugin/proxy")
 
 func (a *App) authorizeRequest(req *http.Request) error {
 	action, ok := requiredPermissionAction(req.Method, req.URL.Path)
@@ -283,6 +290,16 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	ctx, span := pluginProxyTracer.Start(
+		req.Context(),
+		"sigil.plugin.proxy.sigil",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("http.request.method", method),
+			attribute.String("url.path", path),
+		),
+	)
+	defer span.End()
 
 	upstream := strings.TrimRight(a.apiURL, "/") + path
 	if req.URL.RawQuery != "" {
@@ -293,8 +310,10 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 	if req.Body != nil {
 		body = req.Body
 	}
-	proxyReq, err := http.NewRequestWithContext(req.Context(), method, upstream, body)
+	proxyReq, err := http.NewRequestWithContext(ctx, method, upstream, body)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "build request")
 		writeStub(w, http.StatusInternalServerError, path, fmt.Sprintf("build request: %v", err))
 		return
 	}
@@ -308,9 +327,12 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 	}
 	injectTenantHeaders(proxyReq, a.tenantID)
 	injectOperatorIdentityHeaders(proxyReq, method, path)
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(proxyReq.Header))
 
 	resp, err := a.client.Do(proxyReq)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "upstream unavailable")
 		writeStub(w, http.StatusBadGateway, path, fmt.Sprintf("upstream unavailable: %v", err))
 		return
 	}
@@ -328,6 +350,10 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 	}
 	w.Header().Set("Content-Type", ct)
 	w.WriteHeader(resp.StatusCode)
+	span.SetAttributes(attribute.Int("http.response.status_code", resp.StatusCode))
+	if resp.StatusCode >= http.StatusInternalServerError {
+		span.SetStatus(codes.Error, http.StatusText(resp.StatusCode))
+	}
 	_, _ = io.Copy(w, resp.Body)
 }
 
@@ -336,6 +362,16 @@ func (a *App) handleGrafanaProxy(w http.ResponseWriter, req *http.Request, path 
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	ctx, span := pluginProxyTracer.Start(
+		req.Context(),
+		"sigil.plugin.proxy.grafana",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("http.request.method", method),
+			attribute.String("url.path", path),
+		),
+	)
+	defer span.End()
 
 	upstream := strings.TrimRight(a.grafanaAppURL, "/") + path
 	if req.URL.RawQuery != "" {
@@ -346,8 +382,10 @@ func (a *App) handleGrafanaProxy(w http.ResponseWriter, req *http.Request, path 
 	if req.Body != nil {
 		body = req.Body
 	}
-	proxyReq, err := http.NewRequestWithContext(req.Context(), method, upstream, body)
+	proxyReq, err := http.NewRequestWithContext(ctx, method, upstream, body)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "build request")
 		writeStub(w, http.StatusInternalServerError, path, fmt.Sprintf("build request: %v", err))
 		return
 	}
@@ -357,9 +395,12 @@ func (a *App) handleGrafanaProxy(w http.ResponseWriter, req *http.Request, path 
 	if token := strings.TrimSpace(a.grafanaServiceAccountToken); token != "" {
 		proxyReq.Header.Set("Authorization", "Bearer "+token)
 	}
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(proxyReq.Header))
 
 	resp, err := a.client.Do(proxyReq)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "upstream unavailable")
 		writeStub(w, http.StatusBadGateway, path, fmt.Sprintf("upstream unavailable: %v", err))
 		return
 	}
@@ -375,6 +416,10 @@ func (a *App) handleGrafanaProxy(w http.ResponseWriter, req *http.Request, path 
 	}
 	w.Header().Set("Content-Type", ct)
 	w.WriteHeader(resp.StatusCode)
+	span.SetAttributes(attribute.Int("http.response.status_code", resp.StatusCode))
+	if resp.StatusCode >= http.StatusInternalServerError {
+		span.SetStatus(codes.Error, http.StatusText(resp.StatusCode))
+	}
 	_, _ = io.Copy(w, resp.Body)
 }
 
@@ -1152,6 +1197,17 @@ func (a *App) doGrafanaRequest(
 	query url.Values,
 	body []byte,
 ) ([]byte, error) {
+	ctx, span := pluginProxyTracer.Start(
+		req.Context(),
+		"sigil.plugin.query.grafana",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("http.request.method", method),
+			attribute.String("url.path", path),
+		),
+	)
+	defer span.End()
+
 	upstream := strings.TrimRight(a.grafanaAppURL, "/") + path
 	if encodedQuery := query.Encode(); encodedQuery != "" {
 		upstream += "?" + encodedQuery
@@ -1162,8 +1218,10 @@ func (a *App) doGrafanaRequest(
 		bodyReader = bytes.NewReader(body)
 	}
 
-	proxyReq, err := http.NewRequestWithContext(req.Context(), method, upstream, bodyReader)
+	proxyReq, err := http.NewRequestWithContext(ctx, method, upstream, bodyReader)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "build grafana request")
 		return nil, fmt.Errorf("build grafana request: %w", err)
 	}
 	proxyReq.Header = req.Header.Clone()
@@ -1175,8 +1233,18 @@ func (a *App) doGrafanaRequest(
 		proxyReq.Header.Set("Authorization", "Bearer "+token)
 	}
 	injectTenantHeaders(proxyReq, a.tenantID)
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(proxyReq.Header))
 
-	return a.executeUpstreamRequest(proxyReq)
+	payload, err := a.executeUpstreamRequest(proxyReq)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "upstream request failed")
+		if upstreamErr := (*upstreamHTTPError)(nil); errors.As(err, &upstreamErr) {
+			span.SetAttributes(attribute.Int("http.response.status_code", upstreamErr.StatusCode))
+		}
+		return nil, err
+	}
+	return payload, nil
 }
 
 func (a *App) executeUpstreamRequest(proxyReq *http.Request) ([]byte, error) {

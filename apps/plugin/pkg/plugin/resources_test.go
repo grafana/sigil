@@ -13,6 +13,9 @@ import (
 
 	"github.com/grafana/authlib/authz"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 type mockCallResourceResponseSender struct {
@@ -950,6 +953,90 @@ func TestCallResourceInjectsFallbackTenantHeader(t *testing.T) {
 	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/conversations",
+	})
+	if sender.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)
+	}
+}
+
+func TestCallResourceInjectsTraceparentHeader(t *testing.T) {
+	tracerProvider := sdktrace.NewTracerProvider()
+	prevTracerProvider := otel.GetTracerProvider()
+	prevPropagator := otel.GetTextMapPropagator()
+	otel.SetTracerProvider(tracerProvider)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	t.Cleanup(func() {
+		_ = tracerProvider.Shutdown(context.Background())
+		otel.SetTracerProvider(prevTracerProvider)
+		otel.SetTextMapPropagator(prevPropagator)
+	})
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.TrimSpace(r.Header.Get("traceparent")) == "" {
+			http.Error(w, "missing traceparent header", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"items":[]}`)
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+	app.apiURL = upstream.URL
+
+	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "query/conversations",
+	})
+	if sender.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)
+	}
+}
+
+func TestCallResourceSearchTagsInjectsTraceparentHeader(t *testing.T) {
+	tracerProvider := sdktrace.NewTracerProvider()
+	prevTracerProvider := otel.GetTracerProvider()
+	prevPropagator := otel.GetTextMapPropagator()
+	otel.SetTracerProvider(tracerProvider)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	t.Cleanup(func() {
+		_ = tracerProvider.Shutdown(context.Background())
+		otel.SetTracerProvider(prevTracerProvider)
+		otel.SetTextMapPropagator(prevPropagator)
+	})
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/datasources/proxy/uid/tempo/api/v2/search/tags" {
+			http.NotFound(w, r)
+			return
+		}
+		if strings.TrimSpace(r.Header.Get("traceparent")) == "" {
+			http.Error(w, "missing traceparent header", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"tagNames":[]}`)
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+	app.grafanaAppURL = upstream.URL
+	app.grafanaServiceAccountToken = "sa-token"
+	app.tempoDatasourceUID = "tempo"
+
+	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "query/search/tags",
 	})
 	if sender.Status != http.StatusOK {
 		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)

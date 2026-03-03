@@ -26,6 +26,12 @@ import (
 	"github.com/grafana/sigil/sigil/internal/storage"
 	"github.com/grafana/sigil/sigil/internal/storage/mysql"
 	"github.com/grafana/sigil/sigil/internal/tenantauth"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 )
 
@@ -66,12 +72,14 @@ func (m *serverModule) start(_ context.Context) error {
 	if m.registry != nil {
 		m.registry.ApplyHTTP(apiMux, protectedHTTP)
 	}
+	httpHandler := withHTTPTracing(apiMux)
 	m.apiServer = &http.Server{
 		Addr:    m.cfg.HTTPAddr,
-		Handler: apiMux,
+		Handler: httpHandler,
 	}
 
 	m.grpcServer = grpc.NewServer(
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 		grpc.UnaryInterceptor(tenantauth.UnaryServerInterceptor(tenantAuthCfg)),
 		grpc.StreamInterceptor(tenantauth.StreamServerInterceptor(tenantAuthCfg)),
 	)
@@ -137,6 +145,83 @@ func (m *serverModule) pushRunError(err error) {
 	case m.runErr <- err:
 	default:
 	}
+}
+
+type statusCapturingResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (w *statusCapturingResponseWriter) Unwrap() http.ResponseWriter {
+	if w == nil {
+		return nil
+	}
+	return w.ResponseWriter
+}
+
+func (w *statusCapturingResponseWriter) WriteHeader(statusCode int) {
+	w.statusCode = statusCode
+	w.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (w *statusCapturingResponseWriter) Write(body []byte) (int, error) {
+	if w.statusCode == 0 {
+		w.statusCode = http.StatusOK
+	}
+	return w.ResponseWriter.Write(body)
+}
+
+func (w *statusCapturingResponseWriter) status() int {
+	if w.statusCode == 0 {
+		return http.StatusOK
+	}
+	return w.statusCode
+}
+
+func withHTTPTracing(next http.Handler) http.Handler {
+	if next == nil {
+		return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
+	}
+	tracer := otel.Tracer("github.com/grafana/sigil/server/http")
+
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req == nil {
+			next.ServeHTTP(w, req)
+			return
+		}
+
+		ctx := req.Context()
+		propagator := otel.GetTextMapPropagator()
+		if propagator != nil {
+			ctx = propagator.Extract(ctx, propagation.HeaderCarrier(req.Header))
+		}
+
+		spanName := req.Method + " " + req.URL.Path
+		ctx, span := tracer.Start(
+			ctx,
+			spanName,
+			trace.WithSpanKind(trace.SpanKindServer),
+			trace.WithAttributes(
+				attribute.String("http.request.method", req.Method),
+				attribute.String("url.path", req.URL.Path),
+			),
+		)
+		defer span.End()
+
+		recorder := &statusCapturingResponseWriter{ResponseWriter: w}
+		req = req.WithContext(ctx)
+		next.ServeHTTP(recorder, req)
+
+		if req.Pattern != "" {
+			span.SetName(req.Method + " " + req.Pattern)
+			span.SetAttributes(attribute.String("http.route", req.Pattern))
+		}
+		statusCode := recorder.status()
+		span.SetAttributes(attribute.Int("http.response.status_code", statusCode))
+		if statusCode >= http.StatusInternalServerError {
+			span.SetStatus(codes.Error, http.StatusText(statusCode))
+		}
+	})
 }
 
 func shouldAutoMigrateGenerationStoreTarget(target string) bool {
