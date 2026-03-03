@@ -169,6 +169,14 @@ derive_assistant_sigil_env() {
   export DASH_API_SIGIL_AUTH_TOKEN="${DASH_API_SIGIL_AUTH_TOKEN:-${SIGIL_AUTH_TOKEN:-}}"
   export DASH_API_SIGIL_AUTH_USER="${DASH_API_SIGIL_AUTH_USER:-${SIGIL_AUTH_USER:-}}"
   export DASH_API_SIGIL_INSECURE="${DASH_API_SIGIL_INSECURE:-${SIGIL_INSECURE:-true}}"
+
+  # When running alongside the Sigil stack, route OTel traces+metrics through
+  # Sigil's Alloy (gRPC on host port 14317) so they land in Tempo and Prometheus
+  # instead of the assistant's own Jaeger.
+  # Auto-enabled when importing Sigil env; override with ASSISTANT_OTEL_ENDPOINT.
+  if [[ "${IMPORT_SIGIL_ENV}" == "1" ]]; then
+    export ASSISTANT_OTEL_ENDPOINT="${ASSISTANT_OTEL_ENDPOINT:-http://host.docker.internal:14317}"
+  fi
 }
 
 if [[ "${IMPORT_SIGIL_ENV}" == "1" ]]; then
@@ -360,7 +368,9 @@ for svc in services_order:
   print(f"  {svc}: {', '.join(ports_by_service[svc])}")
 PY
 
-python3 - "${TMP_ENV_OVERRIDE}" <<'PY'
+RESOLVED_SERVICES="$(docker compose "${CONFIG_ARGS[@]}" config --services 2>/dev/null | paste -sd, -)"
+
+python3 - "${TMP_ENV_OVERRIDE}" "${RESOLVED_SERVICES}" <<'PY'
 import os
 import sys
 from pathlib import Path
@@ -375,6 +385,7 @@ tenant_id = os.environ.get("DASH_API_SIGIL_TENANT_ID", "")
 auth_token = os.environ.get("DASH_API_SIGIL_AUTH_TOKEN", "")
 auth_user = os.environ.get("DASH_API_SIGIL_AUTH_USER", "")
 insecure = os.environ.get("DASH_API_SIGIL_INSECURE", "true")
+otel_endpoint = os.environ.get("ASSISTANT_OTEL_ENDPOINT", "")
 
 content = [
   "services:",
@@ -385,8 +396,27 @@ content = [
   f"      DASH_API_SIGIL_AUTH_TOKEN: {q(auth_token)}",
   f"      DASH_API_SIGIL_AUTH_USER: {q(auth_user)}",
   f"      DASH_API_SIGIL_INSECURE: {q(insecure)}",
-  "",
 ]
+
+otel_services = ["api", "fulfillment-analyzer", "search"]
+
+if otel_endpoint:
+  content.append(f"      OTEL_EXPORTER_OTLP_ENDPOINT: {q(otel_endpoint)}")
+  resolved = sys.argv[2] if len(sys.argv) > 2 else ""
+  resolved_services = set(resolved.split(",")) if resolved else set()
+
+  for svc in otel_services:
+    if svc == "api":
+      continue
+    if resolved_services and svc not in resolved_services:
+      continue
+    content += [
+      f"  {svc}:",
+      "    environment:",
+      f"      OTEL_EXPORTER_OTLP_ENDPOINT: {q(otel_endpoint)}",
+    ]
+
+content.append("")
 
 out_path.write_text("\n".join(content), encoding="utf-8")
 PY
