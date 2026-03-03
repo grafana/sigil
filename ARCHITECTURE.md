@@ -120,29 +120,25 @@ Design doc: `docs/design-docs/2026-02-15-conversation-query-path.md`
 
 ### Query endpoints
 
-- `POST /api/v1/conversations/search` -- Tempo-backed conversation search with filter language.
+- `POST /api/v1/conversations:batch-metadata` -- batch conversation metadata hydration for plugin-owned search results.
 - `GET /api/v1/conversations/{id}` -- full conversation with all hydrated generations (MySQL/object storage).
 - `GET /api/v1/generations/{id}` -- single generation detail (MySQL/object storage).
-- `GET /api/v1/search/tags` -- filter key autocomplete (Tempo tags + well-known aliases).
-- `GET /api/v1/search/tag/{tag}/values` -- filter value autocomplete (Tempo tag values).
 - `GET /api/v1/model-cards` -- model-card list and provider+model resolve mode for dashboard pricing joins.
 - `GET /api/v1/model-cards:lookup` -- model-card lookup by identity.
 - `GET /api/v1/model-cards:sources` -- model-card source freshness/status metadata.
 - `GET /api/v1/settings` and `PUT /api/v1/settings/datasources` -- tenant-scoped datasource settings for query proxy behavior.
-- Pass-through proxy routes for Prometheus (`/api/v1/proxy/prometheus/...`) and Tempo (`/api/v1/proxy/tempo/...`).
 - Optional Grafana datasource-proxy path for server-side Tempo reads (`SIGIL_GRAFANA_URL`, `SIGIL_GRAFANA_SA_TOKEN`, `SIGIL_GRAFANA_TEMPO_DATASOURCE_UID`).
 
 ### Query access path
 
 1. Frontend sends query request to plugin backend resource endpoint.
-2. Plugin backend applies tenant header behavior and forwards to Sigil API query endpoint.
+2. Plugin backend applies tenant/header behavior, executes conversation search + search tag discovery directly against Tempo via Grafana datasource proxy, and calls Sigil only for metadata hydration.
 3. Sigil API query path:
-   - conversation search: parse filter expression, translate to TraceQL, query Tempo, extract conversation IDs from matching spans, enrich from MySQL/object storage, apply conversation-level filters, return paginated summaries.
+   - conversation batch metadata: hydrate conversation summaries (`generation_count`, timestamps, feedback summary, eval summary) for plugin-provided IDs.
    - conversation detail: direct MySQL/object storage fan-out read by conversation ID, return all hydrated generations.
    - generation detail: direct MySQL/object storage read by generation ID.
    - model cards: read model-card catalog from DB/snapshot fallback and optionally resolve `(provider, model)` pairs for deterministic pricing joins.
-   - proxy routes: Grafana datasource-proxy access for Prometheus/Tempo raw queries.
-4. Sigil API returns JSON responses (search summaries, full payloads, or pass-through).
+4. Sigil API returns JSON responses (hydration payloads and full detail payloads).
 
 For Grafana app plugin deployments:
 
@@ -390,33 +386,14 @@ Note: OTLP trace and metric ingest is handled by Alloy / OTel Collector, not by 
 Conversation query path (design doc: `docs/design-docs/2026-02-15-conversation-query-path.md`):
 
 - Sigil API query endpoints:
-  - `POST /api/v1/conversations/search` -- Tempo-backed conversation search with filter language
+  - `POST /api/v1/conversations:batch-metadata` -- batch conversation metadata hydration for plugin search
   - `GET /api/v1/conversations/{conversation_id}` -- full conversation with hydrated generations
   - `GET /api/v1/generations/{generation_id}` -- single generation detail
-  - `GET /api/v1/search/tags` -- filter key autocomplete
-  - `GET /api/v1/search/tag/{tag}/values` -- filter value autocomplete
 - Feedback endpoints (unchanged):
   - `GET /api/v1/conversations/{conversation_id}/ratings`
   - `POST /api/v1/conversations/{conversation_id}/ratings`
   - `GET /api/v1/conversations/{conversation_id}/annotations`
   - `POST /api/v1/conversations/{conversation_id}/annotations`
-- Pass-through proxy endpoints (unchanged):
-  - `GET|POST /api/v1/proxy/prometheus/api/v1/query`
-  - `GET|POST /api/v1/proxy/prometheus/api/v1/query_range`
-  - `GET|POST /api/v1/proxy/prometheus/api/v1/query_exemplars`
-  - `GET|POST /api/v1/proxy/prometheus/api/v1/series`
-  - `GET|POST /api/v1/proxy/prometheus/api/v1/labels`
-  - `GET /api/v1/proxy/prometheus/api/v1/label/{name}/values`
-  - `GET /api/v1/proxy/prometheus/api/v1/metadata`
-  - `GET /api/v1/proxy/tempo/api/search`
-  - `GET /api/v1/proxy/tempo/api/search/tags`
-  - `GET /api/v1/proxy/tempo/api/v2/search/tags`
-  - `GET /api/v1/proxy/tempo/api/search/tag/{tag}/values`
-  - `GET /api/v1/proxy/tempo/api/v2/search/tag/{tag}/values`
-  - `GET /api/v1/proxy/tempo/api/traces/{trace_id}`
-  - `GET /api/v1/proxy/tempo/api/v2/traces/{trace_id}`
-  - `GET /api/v1/proxy/tempo/api/metrics/query`
-  - `GET /api/v1/proxy/tempo/api/metrics/query_range`
 - Plugin resource proxy endpoints:
   - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/search`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}`
@@ -429,7 +406,7 @@ Conversation query path (design doc: `docs/design-docs/2026-02-15-conversation-q
   - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`
   - `/api/plugins/grafana-sigil-app/resources/query/proxy/prometheus/...`
   - `/api/plugins/grafana-sigil-app/resources/query/proxy/tempo/...`
-  - Plugin backend enforces RBAC actions on resource routes:
+  - Plugin backend enforces RBAC actions on query routes:
     - `grafana-sigil-app.data:read` for query/read endpoints and Prometheus/Tempo proxy reads
     - `grafana-sigil-app.feedback:write` for ratings/annotations writes
     - `grafana-sigil-app.settings:write` for datasource settings updates

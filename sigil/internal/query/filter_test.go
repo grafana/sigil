@@ -47,6 +47,22 @@ func TestParseFilterExpressionSupportsQuotedValuesWithSpaces(t *testing.T) {
 	}
 }
 
+func TestParseFilterExpressionSupportsEscapedQuotedValues(t *testing.T) {
+	parsed, err := ParseFilterExpression(`span.custom = "foo\"bar"`)
+	if err != nil {
+		t.Fatalf("parse escaped quoted filter: %v", err)
+	}
+	if len(parsed.TempoTerms) != 1 {
+		t.Fatalf("expected one term, got %d", len(parsed.TempoTerms))
+	}
+	if parsed.TempoTerms[0].Value != `foo"bar` {
+		t.Fatalf("unexpected decoded value: %q", parsed.TempoTerms[0].Value)
+	}
+	if !parsed.TempoTerms[0].WasQuoted {
+		t.Fatalf("expected escaped literal to be marked quoted")
+	}
+}
+
 func TestNormalizeSelectFields(t *testing.T) {
 	fields, err := NormalizeSelectFields([]string{"namespace", "resource.k8s.namespace.name", "span.gen_ai.usage.input_tokens"})
 	if err != nil {
