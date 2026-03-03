@@ -44,6 +44,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     gap: theme.spacing(2),
+    padding: theme.spacing(0.5),
   }),
   right: css({
     overflow: 'auto',

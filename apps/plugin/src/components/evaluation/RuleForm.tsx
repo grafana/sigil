@@ -29,6 +29,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     gap: theme.spacing(2),
+    '--rule-form-field-width': `calc(50% - ${theme.spacing(0.5)})`,
+  }),
+  fieldWidth: css({
+    width: 'var(--rule-form-field-width)',
   }),
 });
 
@@ -55,10 +59,10 @@ export default function RuleForm({
         <FieldSet label="Rule ID">
           <Field label="Rule ID" description="Unique identifier for this rule.">
             <Input
+              className={styles.fieldWidth}
               value={ruleID}
               onChange={(e) => onRuleIDChange?.(e.currentTarget.value)}
               placeholder="e.g. online.helpfulness.user_visible"
-              width={40}
               disabled={!isNew}
             />
           </Field>

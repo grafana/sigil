@@ -12,6 +12,9 @@ export type EvaluatorPickerProps = {
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
+  select: css({
+    width: 'var(--rule-form-field-width)',
+  }),
   chips: css({
     display: 'flex',
     flexWrap: 'wrap' as const,
@@ -52,15 +55,16 @@ export default function EvaluatorPicker({ value, evaluators, onChange, disabled 
 
   return (
     <>
-      <Select<string>
-        options={options}
-        value={null}
-        onChange={handleAdd}
-        placeholder="Add evaluator..."
-        isClearable={false}
-        width={40}
-        disabled={disabled}
-      />
+      <div className={styles.select}>
+        <Select<string>
+          options={options}
+          value={null}
+          onChange={handleAdd}
+          placeholder="Add evaluator..."
+          isClearable={false}
+          disabled={disabled}
+        />
+      </div>
       {value.length > 0 && (
         <div className={styles.chips}>
           {value.map((id) => {
