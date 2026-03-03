@@ -153,7 +153,17 @@ const getStyles = (theme: GrafanaTheme2) => ({
     label: 'conversationListPanel-container',
     display: 'flex',
     flexDirection: 'column' as const,
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
     gap: theme.spacing(1),
+  }),
+  listScroll: css({
+    label: 'conversationListPanel-listScroll',
+    flex: 1,
+    minHeight: 0,
+    overflowY: 'auto' as const,
+    overflowX: 'auto' as const,
   }),
 });
 
@@ -188,104 +198,106 @@ export default function ConversationListPanel({
 
   return (
     <div className={styles.container}>
-      <table className={cx(styles.table, showExtendedColumns && styles.tableAutoWidth)}>
-        {showExtendedColumns && (
-          <thead>
-            <tr className={styles.headerRow}>
-              <th className={styles.headerCell}>Last activity</th>
-              <th className={styles.headerCell}>Conversation</th>
-              <th className={styles.headerCell}>LLM calls</th>
-              <th className={styles.headerCell}>Models</th>
-              <th className={styles.headerCell}>Errors</th>
-              <th className={styles.headerCell}>Rating</th>
-            </tr>
-          </thead>
-        )}
-        <tbody>
-          {(() => {
-            const rows: React.ReactNode[] = [];
-            let previousDayKey = '';
-            const dayHeaderColSpan = showExtendedColumns ? 6 : 2;
+      <div className={styles.listScroll}>
+        <table className={cx(styles.table, showExtendedColumns && styles.tableAutoWidth)}>
+          {showExtendedColumns && (
+            <thead>
+              <tr className={styles.headerRow}>
+                <th className={styles.headerCell}>Last activity</th>
+                <th className={styles.headerCell}>Conversation</th>
+                <th className={styles.headerCell}>LLM calls</th>
+                <th className={styles.headerCell}>Models</th>
+                <th className={styles.headerCell}>Errors</th>
+                <th className={styles.headerCell}>Rating</th>
+              </tr>
+            </thead>
+          )}
+          <tbody>
+            {(() => {
+              const rows: React.ReactNode[] = [];
+              let previousDayKey = '';
+              const dayHeaderColSpan = showExtendedColumns ? 6 : 2;
 
-            for (const conversation of conversations) {
-              const currentDayKey = dayKey(conversation.last_generation_at);
-              if (currentDayKey !== previousDayKey) {
-                previousDayKey = currentDayKey;
+              for (const conversation of conversations) {
+                const currentDayKey = dayKey(conversation.last_generation_at);
+                if (currentDayKey !== previousDayKey) {
+                  previousDayKey = currentDayKey;
+                  rows.push(
+                    <tr key={`day-${currentDayKey}`} className={styles.dayHeaderRow}>
+                      <td className={styles.dayHeaderCell} colSpan={dayHeaderColSpan}>
+                        {formatDayHeader(conversation.last_generation_at)}
+                      </td>
+                    </tr>
+                  );
+                }
+
+                const selected = conversation.conversation_id === selectedConversationId;
+                const rating = conversation.rating_summary;
                 rows.push(
-                  <tr key={`day-${currentDayKey}`} className={styles.dayHeaderRow}>
-                    <td className={styles.dayHeaderCell} colSpan={dayHeaderColSpan}>
-                      {formatDayHeader(conversation.last_generation_at)}
+                  <tr
+                    key={conversation.conversation_id}
+                    className={cx(styles.row, selected && styles.rowSelected)}
+                    onClick={() => onSelectConversation(conversation.conversation_id)}
+                    role="button"
+                    aria-label={`select conversation ${conversation.conversation_id}`}
+                    aria-selected={selected}
+                  >
+                    <td className={cx(styles.cell, styles.timeCell, !showExtendedColumns && styles.timeCellCompact)}>
+                      <Tooltip content={new Date(conversation.last_generation_at).toLocaleString()} placement="left">
+                        <span>{formatTime(conversation.last_generation_at)}</span>
+                      </Tooltip>
                     </td>
+                    <td className={cx(styles.cell, styles.idCell, !showExtendedColumns && styles.idCellTruncated)}>
+                      <span>{conversation.conversation_id}</span>
+                    </td>
+                    {showExtendedColumns && (
+                      <>
+                        <td className={styles.cell}>{conversation.generation_count}</td>
+                        <td className={styles.cell}>
+                          <div className={styles.modelList}>
+                            {conversation.models.map((model) => (
+                              <Badge key={model} text={model} color="blue" />
+                            ))}
+                            {conversation.models.length === 0 && <Text color="secondary">-</Text>}
+                          </div>
+                        </td>
+                        <td className={styles.cell}>
+                          {conversation.error_count > 0 ? (
+                            <Badge text={String(conversation.error_count)} color="red" />
+                          ) : (
+                            <Text color="secondary">0</Text>
+                          )}
+                        </td>
+                        <td className={styles.cell}>
+                          {rating != null && rating.total_count > 0 ? (
+                            <div className={styles.ratingGroup}>
+                              {rating.good_count > 0 && (
+                                <Stack direction="row" gap={0.25} alignItems="center">
+                                  <Icon name="thumbs-up" size="sm" />
+                                  <span>{rating.good_count}</span>
+                                </Stack>
+                              )}
+                              {rating.bad_count > 0 && (
+                                <Stack direction="row" gap={0.25} alignItems="center">
+                                  <Icon name="thumbs-down" size="sm" />
+                                  <span>{rating.bad_count}</span>
+                                </Stack>
+                              )}
+                            </div>
+                          ) : (
+                            <Text color="secondary">-</Text>
+                          )}
+                        </td>
+                      </>
+                    )}
                   </tr>
                 );
               }
-
-              const selected = conversation.conversation_id === selectedConversationId;
-              const rating = conversation.rating_summary;
-              rows.push(
-                <tr
-                  key={conversation.conversation_id}
-                  className={cx(styles.row, selected && styles.rowSelected)}
-                  onClick={() => onSelectConversation(conversation.conversation_id)}
-                  role="button"
-                  aria-label={`select conversation ${conversation.conversation_id}`}
-                  aria-selected={selected}
-                >
-                  <td className={cx(styles.cell, styles.timeCell, !showExtendedColumns && styles.timeCellCompact)}>
-                    <Tooltip content={new Date(conversation.last_generation_at).toLocaleString()} placement="left">
-                      <span>{formatTime(conversation.last_generation_at)}</span>
-                    </Tooltip>
-                  </td>
-                  <td className={cx(styles.cell, styles.idCell, !showExtendedColumns && styles.idCellTruncated)}>
-                    <span>{conversation.conversation_id}</span>
-                  </td>
-                  {showExtendedColumns && (
-                    <>
-                      <td className={styles.cell}>{conversation.generation_count}</td>
-                      <td className={styles.cell}>
-                        <div className={styles.modelList}>
-                          {conversation.models.map((model) => (
-                            <Badge key={model} text={model} color="blue" />
-                          ))}
-                          {conversation.models.length === 0 && <Text color="secondary">-</Text>}
-                        </div>
-                      </td>
-                      <td className={styles.cell}>
-                        {conversation.error_count > 0 ? (
-                          <Badge text={String(conversation.error_count)} color="red" />
-                        ) : (
-                          <Text color="secondary">0</Text>
-                        )}
-                      </td>
-                      <td className={styles.cell}>
-                        {rating != null && rating.total_count > 0 ? (
-                          <div className={styles.ratingGroup}>
-                            {rating.good_count > 0 && (
-                              <Stack direction="row" gap={0.25} alignItems="center">
-                                <Icon name="thumbs-up" size="sm" />
-                                <span>{rating.good_count}</span>
-                              </Stack>
-                            )}
-                            {rating.bad_count > 0 && (
-                              <Stack direction="row" gap={0.25} alignItems="center">
-                                <Icon name="thumbs-down" size="sm" />
-                                <span>{rating.bad_count}</span>
-                              </Stack>
-                            )}
-                          </div>
-                        ) : (
-                          <Text color="secondary">-</Text>
-                        )}
-                      </td>
-                    </>
-                  )}
-                </tr>
-              );
-            }
-            return rows;
-          })()}
-        </tbody>
-      </table>
+              return rows;
+            })()}
+          </tbody>
+        </table>
+      </div>
 
       {hasMore && (
         <Button

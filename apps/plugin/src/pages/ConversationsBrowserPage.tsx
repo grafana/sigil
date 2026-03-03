@@ -226,7 +226,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   leftPanel: css({
     label: 'conversationsBrowserPage-leftPanel',
     minHeight: 0,
-    overflowY: 'auto' as const,
+    overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column' as const,
   }),

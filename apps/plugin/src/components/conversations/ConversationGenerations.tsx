@@ -1,13 +1,26 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Spinner, Text, useStyles2 } from '@grafana/ui';
+import { getBackendSrv } from '@grafana/runtime';
+import { Alert, Icon, Spinner, Text, useStyles2 } from '@grafana/ui';
+import { lastValueFrom } from 'rxjs';
 import type { GenerationDetail } from '../../conversation/types';
+import { buildTraceSpans } from './ConversationTraces';
 
 export type ConversationGenerationsProps = {
   generations: GenerationDetail[];
   loading?: boolean;
   errorMessage?: string;
+};
+
+type GenerationSpanLoadState = {
+  loading: boolean;
+  errorMessage: string;
+  spans: Array<{
+    id: string;
+    name: string;
+    serviceName: string;
+  }>;
 };
 
 function formatTimestamp(value?: string): string {
@@ -75,46 +88,107 @@ const getStyles = (theme: GrafanaTheme2) => ({
     fontSize: theme.typography.h6.fontSize,
     fontWeight: theme.typography.fontWeightMedium,
   }),
-  table: css({
-    label: 'conversationGenerations-table',
-    width: '100%',
-    borderCollapse: 'collapse' as const,
+  list: css({
+    label: 'conversationGenerations-list',
+    display: 'grid',
+    gap: 0,
   }),
-  headerRow: css({
-    label: 'conversationGenerations-headerRow',
-    borderBottom: `1px solid ${theme.colors.border.medium}`,
-  }),
-  headerCell: css({
-    label: 'conversationGenerations-headerCell',
-    textAlign: 'left' as const,
-    color: theme.colors.text.secondary,
-    fontSize: theme.typography.bodySmall.fontSize,
-    fontWeight: theme.typography.fontWeightMedium,
-    textTransform: 'uppercase' as const,
-    padding: theme.spacing(0.75, 1),
-    whiteSpace: 'nowrap' as const,
-  }),
-  row: css({
-    label: 'conversationGenerations-row',
+  generationRowWrap: css({
+    label: 'conversationGenerations-generationRowWrap',
     borderBottom: `1px solid ${theme.colors.border.weak}`,
   }),
-  rowError: css({
-    label: 'conversationGenerations-rowError',
-    background: theme.colors.error.transparent,
+  generationRow: css({
+    label: 'conversationGenerations-generationRow',
+    width: '100%',
+    border: 0,
+    background: 'transparent',
+    textAlign: 'left' as const,
+    cursor: 'pointer',
+    padding: theme.spacing(0.75, 0.5),
+    display: 'grid',
+    gridTemplateColumns: 'auto auto minmax(0, 1fr)',
+    alignItems: 'center',
+    gap: theme.spacing(0.75),
+    '&:hover': {
+      background: theme.colors.action.hover,
+    },
   }),
-  cell: css({
-    label: 'conversationGenerations-cell',
-    padding: theme.spacing(0.75, 1),
-    fontSize: theme.typography.bodySmall.fontSize,
-    verticalAlign: 'top' as const,
+  generationIcon: css({
+    label: 'conversationGenerations-generationIcon',
+    color: theme.colors.primary.text,
+  }),
+  generationMain: css({
+    label: 'conversationGenerations-generationMain',
+    display: 'grid',
+    gap: theme.spacing(0.25),
+    minWidth: 0,
+  }),
+  generationHeadline: css({
+    label: 'conversationGenerations-generationHeadline',
+    display: 'flex',
+    gap: theme.spacing(0.75),
+    alignItems: 'center',
+    minWidth: 0,
   }),
   generationID: css({
     label: 'conversationGenerations-generationID',
     fontFamily: theme.typography.fontFamilyMonospace,
+    fontSize: theme.typography.bodySmall.fontSize,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+  }),
+  generationMeta: css({
+    label: 'conversationGenerations-generationMeta',
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.bodySmall.fontSize,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+  }),
+  generationMetaError: css({
+    label: 'conversationGenerations-generationMetaError',
+    color: theme.colors.error.main,
+  }),
+  nestedSpans: css({
+    label: 'conversationGenerations-nestedSpans',
+    margin: theme.spacing(0.25, 0, 0.75, 2.75),
+    paddingLeft: theme.spacing(1),
+    borderLeft: `1px dashed ${theme.colors.border.medium}`,
+    display: 'grid',
+    gap: theme.spacing(0.25),
+  }),
+  nestedState: css({
+    label: 'conversationGenerations-nestedState',
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.bodySmall.fontSize,
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+  }),
+  spanRow: css({
+    label: 'conversationGenerations-spanRow',
+    display: 'grid',
+    gridTemplateColumns: 'auto minmax(0, 1fr)',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    padding: theme.spacing(0.25, 0),
+  }),
+  spanIcon: css({
+    label: 'conversationGenerations-spanIcon',
+    color: theme.colors.text.secondary,
+  }),
+  spanName: css({
+    label: 'conversationGenerations-spanName',
+    minWidth: 0,
     overflow: 'hidden',
     whiteSpace: 'nowrap' as const,
     textOverflow: 'ellipsis',
-    maxWidth: 0,
+  }),
+  spanService: css({
+    label: 'conversationGenerations-spanService',
+    marginLeft: theme.spacing(0.5),
+    color: theme.colors.text.secondary,
   }),
   spinnerWrap: css({
     label: 'conversationGenerations-spinnerWrap',
@@ -127,10 +201,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.secondary,
     padding: theme.spacing(1, 0),
   }),
-  statusText: css({
-    label: 'conversationGenerations-statusText',
-    whiteSpace: 'nowrap' as const,
-  }),
 });
 
 export default function ConversationGenerations({
@@ -139,6 +209,85 @@ export default function ConversationGenerations({
   errorMessage = '',
 }: ConversationGenerationsProps) {
   const styles = useStyles2(getStyles);
+  const [expandedGenerationIDs, setExpandedGenerationIDs] = useState<string[]>([]);
+  const [spanStatesByGenerationID, setSpanStatesByGenerationID] = useState<Record<string, GenerationSpanLoadState>>({});
+
+  const loadGenerationSpans = useCallback(async (generation: GenerationDetail) => {
+    const generationID = generation.generation_id;
+    const traceID = typeof generation.trace_id === 'string' ? generation.trace_id : '';
+    if (traceID.length === 0) {
+      setSpanStatesByGenerationID((current) => ({
+        ...current,
+        [generationID]: {
+          loading: false,
+          errorMessage: '',
+          spans: [],
+        },
+      }));
+      return;
+    }
+    setSpanStatesByGenerationID((current) => ({
+      ...current,
+      [generationID]: {
+        loading: true,
+        errorMessage: '',
+        spans: [],
+      },
+    }));
+
+    const traceURL = new URL(
+      `/api/plugins/grafana-sigil-app/resources/query/proxy/tempo/api/v2/traces/${encodeURIComponent(traceID)}`,
+      window.location.origin
+    );
+    try {
+      const response = await lastValueFrom(
+        getBackendSrv().fetch<unknown>({
+          method: 'GET',
+          url: traceURL.toString(),
+        })
+      );
+      const spans = buildTraceSpans(traceID, response.data).map((span, index) => ({
+        id: span.spanID.length > 0 ? span.spanID : `${traceID}-${index}`,
+        name: span.name,
+        serviceName: span.serviceName,
+      }));
+      setSpanStatesByGenerationID((current) => ({
+        ...current,
+        [generationID]: {
+          loading: false,
+          errorMessage: '',
+          spans,
+        },
+      }));
+    } catch (error) {
+      setSpanStatesByGenerationID((current) => ({
+        ...current,
+        [generationID]: {
+          loading: false,
+          errorMessage: error instanceof Error ? error.message : 'failed to load spans',
+          spans: [],
+        },
+      }));
+    }
+  }, []);
+
+  const onToggleGeneration = useCallback(
+    (generation: GenerationDetail) => {
+      const generationID = generation.generation_id;
+      setExpandedGenerationIDs((current) => {
+        const isExpanded = current.includes(generationID);
+        if (isExpanded) {
+          return current.filter((id) => id !== generationID);
+        }
+        return [...current, generationID];
+      });
+      const existingState = spanStatesByGenerationID[generationID];
+      if (!existingState) {
+        void loadGenerationSpans(generation);
+      }
+    },
+    [loadGenerationSpans, spanStatesByGenerationID]
+  );
 
   return (
     <div className={styles.container}>
@@ -151,38 +300,68 @@ export default function ConversationGenerations({
       ) : generations.length === 0 ? (
         <div className={styles.emptyState}>No generations in this conversation.</div>
       ) : (
-        <table className={styles.table}>
-          <thead>
-            <tr className={styles.headerRow}>
-              <th className={styles.headerCell}>Generation</th>
-              <th className={styles.headerCell}>Model</th>
-              <th className={styles.headerCell}>Created</th>
-              <th className={styles.headerCell}>Tokens</th>
-              <th className={styles.headerCell}>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {generations.map((generation) => {
-              const hasError = Boolean(generation.error?.message);
-              return (
-                <tr
-                  key={generation.generation_id}
-                  className={`${styles.row} ${hasError ? styles.rowError : ''}`}
+        <div className={styles.list}>
+          {generations.map((generation) => {
+            const hasError = Boolean(generation.error?.message);
+            const generationID = generation.generation_id;
+            const isExpanded = expandedGenerationIDs.includes(generationID);
+            const spanState = spanStatesByGenerationID[generationID];
+            const model = formatModel(generation);
+            const createdAt = formatTimestamp(generation.created_at);
+            const tokens = formatTokenUsage(generation);
+            const status = hasError ? 'error' : 'ok';
+            return (
+              <div key={generationID} className={styles.generationRowWrap}>
+                <button
+                  type="button"
+                  className={styles.generationRow}
+                  aria-expanded={isExpanded}
+                  aria-label={`toggle generation ${generationID}`}
+                  onClick={() => onToggleGeneration(generation)}
                 >
-                  <td className={`${styles.cell} ${styles.generationID}`}>
-                    {generation.generation_id}
-                  </td>
-                  <td className={styles.cell}>{formatModel(generation)}</td>
-                  <td className={styles.cell}>{formatTimestamp(generation.created_at)}</td>
-                  <td className={styles.cell}>{formatTokenUsage(generation)}</td>
-                  <td className={`${styles.cell} ${styles.statusText}`}>
-                    {hasError ? <Text color="error">Error</Text> : <Text color="success">OK</Text>}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                  <Icon name={isExpanded ? 'angle-down' : 'angle-right'} />
+                  <Icon className={styles.generationIcon} name="cube" />
+                  <div className={styles.generationMain}>
+                    <div className={styles.generationHeadline}>
+                      <span className={styles.generationID}>{generationID}</span>
+                    </div>
+                    <div className={`${styles.generationMeta} ${hasError ? styles.generationMetaError : ''}`}>
+                      <Text color={hasError ? 'error' : 'secondary'}>
+                        {model} • {createdAt} • {tokens} tokens • {status}
+                      </Text>
+                    </div>
+                  </div>
+                </button>
+                {isExpanded && (
+                  <div className={styles.nestedSpans}>
+                    {spanState?.loading ? (
+                      <div className={styles.nestedState}>
+                        <Spinner inline aria-label={`loading spans for ${generationID}`} />
+                        <span>Loading spans...</span>
+                      </div>
+                    ) : spanState?.errorMessage ? (
+                      <Alert severity="error" title="Failed to load spans">
+                        {spanState.errorMessage}
+                      </Alert>
+                    ) : spanState && spanState.spans.length > 0 ? (
+                      spanState.spans.map((span) => (
+                        <div key={span.id} className={styles.spanRow}>
+                          <Icon className={styles.spanIcon} name="circle" />
+                          <div className={styles.spanName}>
+                            <span>{span.name}</span>
+                            <span className={styles.spanService}>({span.serviceName})</span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className={styles.nestedState}>No spans found for this generation.</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

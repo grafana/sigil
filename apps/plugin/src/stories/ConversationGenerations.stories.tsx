@@ -27,3 +27,12 @@ export const Empty = {
     generations: [],
   },
 };
+
+export const WithTraceLinkedGenerations = {
+  args: {
+    generations: mockConversationDetail.generations.map((generation) => ({
+      ...generation,
+      trace_id: generation.trace_id ?? `trace-${generation.generation_id}`,
+    })),
+  },
+};
