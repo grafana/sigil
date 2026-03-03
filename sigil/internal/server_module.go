@@ -152,6 +152,10 @@ type statusCapturingResponseWriter struct {
 	statusCode int
 }
 
+type routePatternResolver interface {
+	Handler(r *http.Request) (http.Handler, string)
+}
+
 func (w *statusCapturingResponseWriter) Unwrap() http.ResponseWriter {
 	if w == nil {
 		return nil
@@ -178,6 +182,27 @@ func (w *statusCapturingResponseWriter) status() int {
 	return w.statusCode
 }
 
+func resolveRoutePattern(next http.Handler, req *http.Request) string {
+	if next == nil || req == nil {
+		return ""
+	}
+	resolver, ok := next.(routePatternResolver)
+	if !ok {
+		return strings.TrimSpace(req.Pattern)
+	}
+	_, pattern := resolver.Handler(req)
+	pattern = strings.TrimSpace(pattern)
+	if pattern == "" {
+		return ""
+	}
+
+	// ServeMux patterns may be "METHOD path". Keep only the route template.
+	if _, route, hasMethod := strings.Cut(pattern, " "); hasMethod {
+		return strings.TrimSpace(route)
+	}
+	return pattern
+}
+
 func withHTTPTracing(next http.Handler) http.Handler {
 	if next == nil {
 		return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
@@ -189,6 +214,7 @@ func withHTTPTracing(next http.Handler) http.Handler {
 			next.ServeHTTP(w, req)
 			return
 		}
+		routePattern := resolveRoutePattern(next, req)
 
 		ctx := req.Context()
 		propagator := otel.GetTextMapPropagator()
@@ -212,9 +238,12 @@ func withHTTPTracing(next http.Handler) http.Handler {
 		req = req.WithContext(ctx)
 		next.ServeHTTP(recorder, req)
 
-		if req.Pattern != "" {
-			span.SetName(req.Method + " " + req.Pattern)
-			span.SetAttributes(attribute.String("http.route", req.Pattern))
+		if routePattern == "" {
+			routePattern = strings.TrimSpace(req.Pattern)
+		}
+		if routePattern != "" {
+			span.SetName(req.Method + " " + routePattern)
+			span.SetAttributes(attribute.String("http.route", routePattern))
 		}
 		statusCode := recorder.status()
 		span.SetAttributes(attribute.Int("http.response.status_code", statusCode))
