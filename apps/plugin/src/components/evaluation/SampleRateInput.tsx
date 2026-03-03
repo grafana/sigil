@@ -1,5 +1,5 @@
 import React from 'react';
-import { Field, Input, useStyles2 } from '@grafana/ui';
+import { Field, Input, Text, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 
@@ -14,6 +14,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     alignItems: 'center',
     gap: theme.spacing(1),
+  }),
+  input: css({
+    width: 'var(--rule-form-field-width)',
+    flex: 'none',
   }),
 });
 
@@ -41,15 +45,15 @@ export default function SampleRateInput({ value, onChange, disabled }: SampleRat
     >
       <div className={styles.inputWrapper}>
         <Input
+          className={styles.input}
           type="number"
           min={0}
           max={100}
           value={displayValue}
           onChange={handleChange}
-          addonAfter="%"
-          width={12}
           disabled={disabled}
         />
+        <Text color="secondary">%</Text>
       </div>
     </Field>
   );

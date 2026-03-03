@@ -95,36 +95,19 @@ export type ConversationSearchResponse = {
   has_more: boolean;
 };
 
-export type GenerationUsage = {
-  input_tokens?: number;
-  output_tokens?: number;
-  total_tokens?: number;
-  [key: string]: number | undefined;
-};
-
-export type GenerationDetail = {
-  generation_id: string;
-  conversation_id: string;
-  trace_id?: string;
-  span_id?: string;
-  mode?: string;
-  model?: {
-    provider?: string;
-    name?: string;
-  };
-  agent_name?: string;
-  agent_version?: string;
-  system_prompt?: string;
-  input?: unknown[];
-  output?: unknown[];
-  tools?: unknown[];
-  usage?: GenerationUsage;
-  stop_reason?: string;
-  metadata?: Record<string, unknown>;
-  created_at?: string;
-  error?: null | { message?: string };
-  [key: string]: unknown;
-};
+export type {
+  GenerationUsage,
+  GenerationDetail,
+  GenerationCostBreakdown,
+  GenerationCostResult,
+  Message,
+  MessageRole,
+  Part,
+  PartMetadata,
+  ToolCallPart,
+  ToolResultPart,
+  ToolDefinition,
+} from '../generation/types';
 
 export type ConversationDetail = {
   conversation_id: string;
@@ -150,45 +133,44 @@ export type SearchTagValuesResponse = {
   values: string[];
 };
 
-// --- Message / Part types (matching generation_ingest.proto) ---
+// Span types for the conversation data model
 
-export type MessageRole = 'MESSAGE_ROLE_USER' | 'MESSAGE_ROLE_ASSISTANT' | 'MESSAGE_ROLE_TOOL';
+import type { GenerationDetail } from '../generation/types';
 
-export type PartMetadata = {
-  provider_type?: string;
+export type SpanAttributeValue = {
+  stringValue?: string;
+  intValue?: string;
+  doubleValue?: string;
+  boolValue?: boolean;
+  arrayValue?: { values?: SpanAttributeValue[] };
 };
 
-export type ToolCallPart = {
-  id: string;
+export type SpanAttributes = ReadonlyMap<string, SpanAttributeValue>;
+
+export type SpanKind = 'INTERNAL' | 'CLIENT' | 'SERVER' | 'PRODUCER' | 'CONSUMER' | 'UNSPECIFIED';
+
+export type ConversationSpan = {
+  traceID: string;
+  spanID: string;
+  parentSpanID: string;
   name: string;
-  input_json?: string;
+  kind: SpanKind;
+  serviceName: string;
+  startTimeUnixNano: bigint;
+  endTimeUnixNano: bigint;
+  durationNano: bigint;
+  attributes: SpanAttributes;
+  generation: GenerationDetail | null;
+  children: ConversationSpan[];
 };
 
-export type ToolResultPart = {
-  tool_call_id: string;
-  name: string;
-  content?: string;
-  content_json?: string;
-  is_error?: boolean;
-};
-
-export type Part = {
-  metadata?: PartMetadata;
-  text?: string;
-  thinking?: string;
-  tool_call?: ToolCallPart;
-  tool_result?: ToolResultPart;
-};
-
-export type Message = {
-  role: MessageRole;
-  name?: string;
-  parts: Part[];
-};
-
-export type ToolDefinition = {
-  name: string;
-  description?: string;
-  type?: string;
-  input_schema_json?: string;
+export type ConversationData = {
+  conversationID: string;
+  generationCount: number;
+  firstGenerationAt: string;
+  lastGenerationAt: string;
+  ratingSummary: ConversationRatingSummary | null;
+  annotations: ConversationAnnotation[];
+  spans: ConversationSpan[];
+  orphanGenerations: GenerationDetail[];
 };

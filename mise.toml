@@ -72,15 +72,19 @@ run = "pnpm run storybook"
 
 [tasks.up]
 description = "Start local stack (grafana, plugin, sigil, sdk-traffic, alloy, tempo, prometheus, mysql, minio)"
-run = "DEVELOPMENT=true docker compose --profile core up --watch --build --remove-orphans"
+run = "DEVELOPMENT=true docker compose --profile core --profile traffic up --watch --build --remove-orphans"
 
 [tasks."up:object"]
 description = "Backward-compatible alias for `mise run up`"
-run = "DEVELOPMENT=true docker compose --profile core up --watch --build --remove-orphans"
+run = "DEVELOPMENT=true docker compose --profile core --profile traffic up --watch --build --remove-orphans"
+
+[tasks."up:dev"]
+description = "Start local stack without sdk-traffic, pointing to dev datasources"
+run = "DEVELOPMENT=true SIGIL_PROM_DS_UID=cortex-dev-01 SIGIL_TEMPO_DS_UID=tempo-dev-01 docker compose --profile core up --watch --build --remove-orphans"
 
 [tasks."up:build"]
 description = "Start local stack and force image rebuilds"
-run = "DEVELOPMENT=true docker compose --profile core up --watch --build --remove-orphans"
+run = "DEVELOPMENT=true docker compose --profile core --profile traffic up --watch --build --remove-orphans"
 
 [tasks.down]
 description = "Stop local stack"
@@ -481,15 +485,15 @@ run = """
 #!/usr/bin/env bash
 set -euo pipefail
 cleanup() {
-  docker compose --profile core down --volumes >/dev/null 2>&1 || true
+  docker compose --profile core --profile traffic down --volumes >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
-docker compose --profile core down --volumes >/dev/null 2>&1 || true
+docker compose --profile core --profile traffic down --volumes >/dev/null 2>&1 || true
 DEVELOPMENT=true \
 SIGIL_TRAFFIC_ONESHOT=1 \
 SIGIL_TRAFFIC_MAX_CYCLES="${SIGIL_TRAFFIC_MAX_CYCLES:-2}" \
 SIGIL_TRAFFIC_ASSERT_TIMEOUT_SECONDS="${SIGIL_TRAFFIC_ASSERT_TIMEOUT_SECONDS:-180}" \
-docker compose --profile core up --build --abort-on-container-exit --exit-code-from sdk-traffic sdk-traffic
+docker compose --profile core --profile traffic up --build --abort-on-container-exit --exit-code-from sdk-traffic sdk-traffic
 """
 
 [tasks."test:cs:sdk-core"]

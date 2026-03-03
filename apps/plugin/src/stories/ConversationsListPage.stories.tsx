@@ -2,7 +2,7 @@ import React from 'react';
 import type { ConversationsDataSource } from '../conversation/api';
 import { mockSearchResults } from './mockConversationData';
 import { MemoryRouter } from 'react-router-dom';
-import ConversationsListPage, { type ConversationsListPageProps } from '../pages/ConversationsListPage';
+import ConversationsBrowserPage, { type ConversationsBrowserPageProps } from '../pages/ConversationsBrowserPage';
 
 const mockDataSource: ConversationsDataSource = {
   async listConversations() {
@@ -26,10 +26,10 @@ const mockDataSource: ConversationsDataSource = {
     };
   },
   async getConversationDetail() {
-    throw new Error('not implemented in ConversationsListPage story');
+    throw new Error('not implemented in ConversationsBrowserPage story');
   },
   async getGeneration() {
-    throw new Error('not implemented in ConversationsListPage story');
+    throw new Error('not implemented in ConversationsBrowserPage story');
   },
   async getSearchTags() {
     return [];
@@ -40,14 +40,14 @@ const mockDataSource: ConversationsDataSource = {
 };
 
 const meta = {
-  title: 'Sigil/Conversations List Page',
-  component: ConversationsListPage,
+  title: 'Sigil/Conversations Browser Page',
+  component: ConversationsBrowserPage,
   args: {
     dataSource: mockDataSource,
   },
-  render: (args: ConversationsListPageProps) => (
+  render: (args: ConversationsBrowserPageProps) => (
     <MemoryRouter>
-      <ConversationsListPage {...args} />
+      <ConversationsBrowserPage {...args} />
     </MemoryRouter>
   ),
 };

@@ -5,18 +5,15 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/grafana/dskit/tenant"
 	"github.com/grafana/sigil/sigil/internal/feedback"
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
 	"github.com/grafana/sigil/sigil/internal/modelcards"
 	"github.com/grafana/sigil/sigil/internal/query"
-	"github.com/grafana/sigil/sigil/internal/queryproxy"
 )
 
 func RegisterRoutes(
@@ -29,23 +26,9 @@ func RegisterRoutes(
 	modelCardSvc *modelcards.Service,
 	protectedMiddleware func(http.Handler) http.Handler,
 ) {
-	RegisterRoutesWithQueryProxy(mux, querySvc, generationSvc, feedbackSvc, ratingsEnabled, annotationsEnabled, modelCardSvc, protectedMiddleware, nil)
-}
-
-func RegisterRoutesWithQueryProxy(
-	mux *http.ServeMux,
-	querySvc *query.Service,
-	generationSvc *generationingest.Service,
-	feedbackSvc *feedback.Service,
-	ratingsEnabled bool,
-	annotationsEnabled bool,
-	modelCardSvc *modelcards.Service,
-	protectedMiddleware func(http.Handler) http.Handler,
-	queryProxy *queryproxy.Proxy,
-) {
 	RegisterCoreRoutes(mux)
 	RegisterIngestRoutes(mux, generationSvc, protectedMiddleware)
-	RegisterQueryRoutesWithQueryProxy(mux, querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled, modelCardSvc, protectedMiddleware, queryProxy)
+	RegisterQueryRoutes(mux, querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled, modelCardSvc, protectedMiddleware)
 }
 
 // RegisterCoreRoutes wires transport-level routes shared by every runtime role.
@@ -81,21 +64,6 @@ func RegisterQueryRoutes(
 	modelCardSvc *modelcards.Service,
 	protectedMiddleware func(http.Handler) http.Handler,
 ) {
-	RegisterQueryRoutesWithQueryProxy(mux, querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled, modelCardSvc, protectedMiddleware, nil)
-}
-
-// RegisterQueryRoutesWithQueryProxy wires query/read HTTP routes and optional
-// Tempo/Prometheus proxy endpoints.
-func RegisterQueryRoutesWithQueryProxy(
-	mux *http.ServeMux,
-	querySvc *query.Service,
-	feedbackSvc *feedback.Service,
-	ratingsEnabled bool,
-	annotationsEnabled bool,
-	modelCardSvc *modelcards.Service,
-	protectedMiddleware func(http.Handler) http.Handler,
-	queryProxy *queryproxy.Proxy,
-) {
 	if mux == nil || querySvc == nil {
 		return
 	}
@@ -104,15 +72,9 @@ func RegisterQueryRoutesWithQueryProxy(
 	}
 
 	mux.Handle("/api/v1/generations/", protectedMiddleware(http.HandlerFunc(getGeneration(querySvc))))
-	mux.Handle("/api/v1/conversations/search", protectedMiddleware(http.HandlerFunc(searchConversations(querySvc))))
+	mux.Handle("/api/v1/conversations:batch-metadata", protectedMiddleware(http.HandlerFunc(batchConversationMetadata(querySvc))))
 	mux.Handle("/api/v1/conversations", protectedMiddleware(http.HandlerFunc(listConversations(querySvc))))
 	mux.Handle("/api/v1/conversations/", protectedMiddleware(http.HandlerFunc(conversationRoutes(querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled))))
-	mux.Handle("/api/v1/search/tags", protectedMiddleware(http.HandlerFunc(listSearchTags(querySvc))))
-	mux.Handle("/api/v1/search/tag/", protectedMiddleware(http.HandlerFunc(listSearchTagValues(querySvc))))
-	if queryProxy != nil {
-		mux.Handle("/api/v1/proxy/prometheus/", protectedMiddleware(http.HandlerFunc(proxyPrometheus(queryProxy))))
-		mux.Handle("/api/v1/proxy/tempo/", protectedMiddleware(http.HandlerFunc(proxyTempo(queryProxy))))
-	}
 
 	if modelCardSvc != nil {
 		mux.Handle("/api/v1/model-cards", protectedMiddleware(http.HandlerFunc(listModelCards(modelCardSvc))))
@@ -154,7 +116,7 @@ func listConversations(querySvc *query.Service) http.HandlerFunc {
 	}
 }
 
-func searchConversations(querySvc *query.Service) http.HandlerFunc {
+func batchConversationMetadata(querySvc *query.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -167,7 +129,9 @@ func searchConversations(querySvc *query.Service) http.HandlerFunc {
 			return
 		}
 
-		var payload query.ConversationSearchRequest
+		var payload struct {
+			ConversationIDs []string `json:"conversation_ids"`
+		}
 		if req.Body != nil {
 			decoder := json.NewDecoder(req.Body)
 			decoder.DisallowUnknownFields()
@@ -176,8 +140,12 @@ func searchConversations(querySvc *query.Service) http.HandlerFunc {
 				return
 			}
 		}
+		if len(payload.ConversationIDs) > 500 {
+			http.Error(w, "conversation_ids exceeds maximum of 500", http.StatusBadRequest)
+			return
+		}
 
-		response, err := querySvc.SearchConversationsForTenant(req.Context(), tenantID, payload)
+		items, missingConversationIDs, err := querySvc.ListConversationBatchMetadataForTenant(req.Context(), tenantID, payload.ConversationIDs)
 		if err != nil {
 			if query.IsValidationError(err) {
 				http.Error(w, err.Error(), http.StatusBadRequest)
@@ -186,7 +154,16 @@ func searchConversations(querySvc *query.Service) http.HandlerFunc {
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
 		}
-		writeJSON(w, http.StatusOK, response)
+		if items == nil {
+			items = []query.ConversationBatchMetadata{}
+		}
+		if missingConversationIDs == nil {
+			missingConversationIDs = []string{}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"items":                    items,
+			"missing_conversation_ids": missingConversationIDs,
+		})
 	}
 }
 
@@ -364,110 +341,6 @@ func parseGenerationScorePagination(req *http.Request) (int, uint64, error) {
 	return limit, cursor, nil
 }
 
-func listSearchTags(querySvc *query.Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, req *http.Request) {
-		if req.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		tenantID, err := tenant.TenantID(req.Context())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
-		}
-
-		start, end, err := parseSearchRange(req)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		tags, err := querySvc.ListSearchTagsForTenant(req.Context(), tenantID, start, end)
-		if err != nil {
-			if query.IsValidationError(err) {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			http.Error(w, "internal server error", http.StatusInternalServerError)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"tags": tags})
-	}
-}
-
-func listSearchTagValues(querySvc *query.Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, req *http.Request) {
-		if req.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		tag, ok := parseSearchTagValuesPath(req.URL.Path, req.URL.EscapedPath())
-		if !ok {
-			http.Error(w, "invalid search tag path", http.StatusBadRequest)
-			return
-		}
-
-		tenantID, err := tenant.TenantID(req.Context())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
-		}
-
-		start, end, err := parseSearchRange(req)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		values, err := querySvc.ListSearchTagValuesForTenant(req.Context(), tenantID, tag, start, end)
-		if err != nil {
-			if query.IsValidationError(err) {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			http.Error(w, "internal server error", http.StatusInternalServerError)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"values": values})
-	}
-}
-
-func proxyPrometheus(proxy *queryproxy.Proxy) http.HandlerFunc {
-	return proxyBackend(proxy, queryproxy.BackendPrometheus, "/api/v1/proxy/prometheus")
-}
-
-func proxyTempo(proxy *queryproxy.Proxy) http.HandlerFunc {
-	return proxyBackend(proxy, queryproxy.BackendTempo, "/api/v1/proxy/tempo")
-}
-
-func proxyBackend(proxy *queryproxy.Proxy, backend queryproxy.Backend, prefix string) http.HandlerFunc {
-	return func(w http.ResponseWriter, req *http.Request) {
-		downstreamPath := strings.TrimPrefix(req.URL.Path, prefix)
-		if downstreamPath == req.URL.Path || downstreamPath == "" {
-			http.NotFound(w, req)
-			return
-		}
-
-		err := proxy.Forward(w, req, backend, downstreamPath)
-		switch {
-		case err == nil:
-			return
-		case errors.Is(err, queryproxy.ErrPathNotAllowed):
-			http.NotFound(w, req)
-		case errors.Is(err, queryproxy.ErrMethodNotAllowed):
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		case errors.Is(err, queryproxy.ErrTenantRequired):
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-		case errors.Is(err, queryproxy.ErrUpstreamUnavailable):
-			http.Error(w, err.Error(), http.StatusBadGateway)
-		default:
-			http.Error(w, "internal server error", http.StatusInternalServerError)
-		}
-	}
-}
-
 func handleConversationRatings(w http.ResponseWriter, req *http.Request, feedbackSvc *feedback.Service, conversationID string) {
 	tenantID, err := tenant.TenantID(req.Context())
 	if err != nil {
@@ -608,56 +481,6 @@ func parseConversationSubPath(path string) (string, string, bool) {
 		return parts[0], parts[1], true
 	}
 	return "", "", false
-}
-
-func parseSearchTagValuesPath(path string, escapedPath string) (string, bool) {
-	if escapedPath == "" {
-		escapedPath = path
-	}
-
-	trimmed := strings.TrimPrefix(escapedPath, "/api/v1/search/tag/")
-	if trimmed == escapedPath || trimmed == "" || !strings.HasSuffix(trimmed, "/values") {
-		return "", false
-	}
-
-	tagEscaped := strings.TrimSuffix(trimmed, "/values")
-	if tagEscaped == "" || strings.HasPrefix(tagEscaped, "/") || strings.HasSuffix(tagEscaped, "/") || strings.Contains(tagEscaped, "/") {
-		return "", false
-	}
-
-	tag, err := url.PathUnescape(tagEscaped)
-	if err != nil {
-		return "", false
-	}
-	if strings.TrimSpace(tag) == "" {
-		return "", false
-	}
-
-	return tag, true
-}
-
-func parseSearchRange(req *http.Request) (time.Time, time.Time, error) {
-	parseUnixSeconds := func(raw string) (time.Time, error) {
-		trimmed := strings.TrimSpace(raw)
-		if trimmed == "" {
-			return time.Time{}, nil
-		}
-		seconds, err := strconv.ParseInt(trimmed, 10, 64)
-		if err != nil {
-			return time.Time{}, errors.New("invalid time range")
-		}
-		return time.Unix(seconds, 0).UTC(), nil
-	}
-
-	start, err := parseUnixSeconds(req.URL.Query().Get("start"))
-	if err != nil {
-		return time.Time{}, time.Time{}, err
-	}
-	end, err := parseUnixSeconds(req.URL.Query().Get("end"))
-	if err != nil {
-		return time.Time{}, time.Time{}, err
-	}
-	return start, end, nil
 }
 
 func parsePaginationQuery(w http.ResponseWriter, req *http.Request) (int, uint64, bool) {

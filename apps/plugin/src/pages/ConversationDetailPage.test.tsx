@@ -289,7 +289,6 @@ describe('ConversationDetailPage', () => {
           conversation_id: 'conv-fill-spans',
           trace_id: 'trace-1',
           created_at: '2026-03-01T10:00:00Z',
-          completed_at: '2026-03-01T10:00:00Z',
         },
         {
           generation_id: 'gen-2',

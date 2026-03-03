@@ -9,6 +9,10 @@ import (
 
 	"github.com/grafana/dskit/tenant"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -36,12 +40,29 @@ type Service struct {
 	store Store
 }
 
+var generationTracer = otel.Tracer("github.com/grafana/sigil/ingest/generation")
+
 func NewService(store Store) *Service {
 	return &Service{store: store}
 }
 
 func (s *Service) Export(ctx context.Context, req *sigilv1.ExportGenerationsRequest) *sigilv1.ExportGenerationsResponse {
+	requestedCount := 0
+	if req != nil {
+		requestedCount = len(req.Generations)
+	}
+	ctx, span := generationTracer.Start(
+		ctx,
+		"sigil.generation.export",
+		trace.WithAttributes(attribute.Int("sigil.generation.requested_count", requestedCount)),
+	)
+	defer span.End()
+
 	if req == nil || len(req.Generations) == 0 {
+		span.SetAttributes(
+			attribute.Int("sigil.generation.accepted_count", 0),
+			attribute.Int("sigil.generation.rejected_count", 0),
+		)
 		return &sigilv1.ExportGenerationsResponse{}
 	}
 
@@ -70,19 +91,37 @@ func (s *Service) Export(ctx context.Context, req *sigilv1.ExportGenerationsRequ
 	if len(accepted) > 0 {
 		tenantID, err := tenant.TenantID(ctx)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "resolve tenant")
 			for _, idx := range acceptedIdx {
 				results[idx].Accepted = false
 				results[idx].Error = err.Error()
 			}
 		} else {
-			errs := s.store.SaveBatch(ctx, tenantID, accepted)
+			span.SetAttributes(attribute.String("sigil.tenant.id", tenantID))
+			storeCtx, storeSpan := generationTracer.Start(
+				ctx,
+				"sigil.generation.store.save_batch",
+				trace.WithAttributes(
+					attribute.String("sigil.tenant.id", tenantID),
+					attribute.Int("sigil.generation.save_attempt_count", len(accepted)),
+				),
+			)
+			errs := s.store.SaveBatch(storeCtx, tenantID, accepted)
+			storeFailures := 0
 			for i := range acceptedIdx {
 				idx := acceptedIdx[i]
 				if i < len(errs) && errs[i] != nil {
+					storeFailures++
 					results[idx].Accepted = false
 					results[idx].Error = errs[i].Error()
 				}
 			}
+			storeSpan.SetAttributes(attribute.Int("sigil.generation.save_failure_count", storeFailures))
+			if storeFailures > 0 {
+				storeSpan.SetStatus(codes.Error, "save failures")
+			}
+			storeSpan.End()
 		}
 	}
 
@@ -94,6 +133,16 @@ func (s *Service) Export(ctx context.Context, req *sigilv1.ExportGenerationsRequ
 			Error:        results[i].Error,
 		}
 	}
+	acceptedCount := 0
+	for _, result := range results {
+		if result.Accepted {
+			acceptedCount++
+		}
+	}
+	span.SetAttributes(
+		attribute.Int("sigil.generation.accepted_count", acceptedCount),
+		attribute.Int("sigil.generation.rejected_count", len(results)-acceptedCount),
+	)
 
 	return response
 }

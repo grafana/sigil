@@ -97,7 +97,7 @@ func TestSearchConversationsForTenantAppliesTempoAndMySQLFilters(t *testing.T) {
 	}
 }
 
-func TestSearchConversationsForTenantEmptyFilterUsesGenerationGuard(t *testing.T) {
+func TestSearchConversationsForTenantEmptyFilterUsesSDKNameGuard(t *testing.T) {
 	base := time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)
 	conversationStore := &stubConversationStore{
 		items: map[string]storage.Conversation{
@@ -141,8 +141,8 @@ func TestSearchConversationsForTenantEmptyFilterUsesGenerationGuard(t *testing.T
 		t.Fatalf("expected at least one tempo search request")
 	}
 	traceQL := tempoClient.searchRequests[0].Query
-	if !strings.Contains(traceQL, `span.sigil.generation.id != ""`) {
-		t.Fatalf("expected empty-filter query to use generation guard, got %q", traceQL)
+	if !strings.Contains(traceQL, `span.sigil.sdk.name != ""`) {
+		t.Fatalf("expected empty-filter query to use sdk-name guard, got %q", traceQL)
 	}
 	if strings.Contains(traceQL, `span.gen_ai.operation.name =~ "generateText|streamText"`) {
 		t.Fatalf("empty-filter query should not hardcode operation names: %q", traceQL)
@@ -868,6 +868,69 @@ func TestListSearchTagsAndValues(t *testing.T) {
 	}
 }
 
+func TestListConversationBatchMetadataForTenant(t *testing.T) {
+	base := time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)
+	conversationStore := &stubConversationStore{
+		items: map[string]storage.Conversation{
+			"conv-1": {
+				TenantID:         "tenant-a",
+				ConversationID:   "conv-1",
+				GenerationCount:  3,
+				CreatedAt:        base.Add(-time.Hour),
+				LastGenerationAt: base.Add(-5 * time.Minute),
+				UpdatedAt:        base.Add(-5 * time.Minute),
+			},
+		},
+	}
+	feedbackStore := feedback.NewMemoryStore()
+	if _, _, err := feedbackStore.CreateConversationRating(context.Background(), "tenant-a", "conv-1", feedback.CreateConversationRatingInput{
+		RatingID: "rat-1",
+		Rating:   feedback.RatingValueBad,
+	}); err != nil {
+		t.Fatalf("create rating: %v", err)
+	}
+	if _, _, err := feedbackStore.CreateConversationAnnotation(context.Background(), "tenant-a", "conv-1", feedback.OperatorIdentity{
+		OperatorID: "operator-1",
+	}, feedback.CreateConversationAnnotationInput{
+		AnnotationID:   "ann-1",
+		AnnotationType: feedback.AnnotationTypeNote,
+	}); err != nil {
+		t.Fatalf("create annotation: %v", err)
+	}
+
+	service := NewServiceWithStores(conversationStore, feedbackStore)
+	items, missing, err := service.ListConversationBatchMetadataForTenant(context.Background(), "tenant-a", []string{"conv-1", "conv-missing"})
+	if err != nil {
+		t.Fatalf("list batch metadata: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected one metadata item, got %d", len(items))
+	}
+	if len(missing) != 1 || missing[0] != "conv-missing" {
+		t.Fatalf("unexpected missing ids: %#v", missing)
+	}
+
+	item := items[0]
+	if item.ConversationID != "conv-1" {
+		t.Fatalf("unexpected conversation id: %q", item.ConversationID)
+	}
+	if item.GenerationCount != 3 {
+		t.Fatalf("unexpected generation count: %d", item.GenerationCount)
+	}
+	if item.AnnotationCount != 1 {
+		t.Fatalf("unexpected annotation count: %d", item.AnnotationCount)
+	}
+	if item.RatingSummary == nil || !item.RatingSummary.HasBadRating {
+		t.Fatalf("expected bad rating summary, got %#v", item.RatingSummary)
+	}
+	if conversationStore.getConversationsCalls != 1 {
+		t.Fatalf("expected one batch conversation lookup, got %d", conversationStore.getConversationsCalls)
+	}
+	if conversationStore.getConversationCalls != 0 {
+		t.Fatalf("expected no per-id conversation lookups, got %d", conversationStore.getConversationCalls)
+	}
+}
+
 type stubTempoClient struct {
 	searchResponses     []*TempoSearchResponse
 	searchRequests      []TempoSearchRequest
@@ -906,7 +969,9 @@ func (s *stubTempoClient) SearchTagValues(_ context.Context, _ string, tag strin
 }
 
 type stubConversationStore struct {
-	items map[string]storage.Conversation
+	items                 map[string]storage.Conversation
+	getConversationCalls  int
+	getConversationsCalls int
 }
 
 func (s *stubConversationStore) ListConversations(_ context.Context, tenantID string) ([]storage.Conversation, error) {
@@ -921,6 +986,7 @@ func (s *stubConversationStore) ListConversations(_ context.Context, tenantID st
 }
 
 func (s *stubConversationStore) GetConversation(_ context.Context, tenantID, conversationID string) (*storage.Conversation, error) {
+	s.getConversationCalls++
 	item, ok := s.items[conversationID]
 	if !ok {
 		return nil, nil
@@ -930,6 +996,19 @@ func (s *stubConversationStore) GetConversation(_ context.Context, tenantID, con
 	}
 	copy := item
 	return &copy, nil
+}
+
+func (s *stubConversationStore) GetConversations(_ context.Context, tenantID string, conversationIDs []string) ([]storage.Conversation, error) {
+	s.getConversationsCalls++
+	out := make([]storage.Conversation, 0, len(conversationIDs))
+	for _, id := range conversationIDs {
+		item, ok := s.items[id]
+		if !ok || item.TenantID != tenantID {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out, nil
 }
 
 type stubWALReader struct {

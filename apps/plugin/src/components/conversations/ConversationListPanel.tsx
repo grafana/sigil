@@ -10,27 +10,38 @@ export type ConversationListPanelProps = {
   loading: boolean;
   hasMore: boolean;
   loadingMore: boolean;
+  showExtendedColumns?: boolean;
   onSelectConversation: (conversationId: string) => void;
   onLoadMore: () => void;
 };
 
-function formatRelativeTime(dateStr: string): string {
-  const now = Date.now();
-  const then = new Date(dateStr).getTime();
-  const diffSeconds = Math.floor((now - then) / 1000);
-  if (diffSeconds < 60) {
-    return `${diffSeconds}s ago`;
+function formatTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) {
+    return '-';
   }
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  if (diffMinutes < 60) {
-    return `${diffMinutes}m ago`;
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatDayHeader(dateStr: string): string {
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) {
+    return 'Unknown date';
   }
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) {
-    return `${diffHours}h ago`;
+  return date.toLocaleDateString(undefined, {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+function dayKey(dateStr: string): string {
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) {
+    return 'invalid-date';
   }
-  const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays}d ago`;
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -38,6 +49,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     label: 'conversationListPanel-table',
     width: '100%',
     borderCollapse: 'collapse' as const,
+  }),
+  tableAutoWidth: css({
+    label: 'conversationListPanel-tableAutoWidth',
+    width: 'max-content',
   }),
   headerRow: css({
     label: 'conversationListPanel-headerRow',
@@ -81,6 +96,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
     whiteSpace: 'normal' as const,
     overflowWrap: 'anywhere' as const,
   }),
+  idCellTruncated: css({
+    label: 'conversationListPanel-idCellTruncated',
+    whiteSpace: 'nowrap' as const,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    maxWidth: 0,
+  }),
   modelList: css({
     label: 'conversationListPanel-modelList',
     display: 'flex',
@@ -93,6 +115,29 @@ const getStyles = (theme: GrafanaTheme2) => ({
     alignItems: 'center',
     gap: theme.spacing(0.5),
     fontSize: theme.typography.bodySmall.fontSize,
+  }),
+  timeCell: css({
+    label: 'conversationListPanel-timeCell',
+    color: theme.colors.text.secondary,
+    whiteSpace: 'nowrap' as const,
+  }),
+  timeCellCompact: css({
+    label: 'conversationListPanel-timeCellCompact',
+    width: '1%',
+    paddingLeft: theme.spacing(0.75),
+    paddingRight: theme.spacing(0.75),
+  }),
+  dayHeaderRow: css({
+    label: 'conversationListPanel-dayHeaderRow',
+    borderBottom: `1px solid ${theme.colors.border.weak}`,
+  }),
+  dayHeaderCell: css({
+    label: 'conversationListPanel-dayHeaderCell',
+    padding: theme.spacing(0.75, 1.5),
+    fontWeight: theme.typography.fontWeightMedium,
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.bodySmall.fontSize,
+    textTransform: 'uppercase' as const,
   }),
   emptyState: css({
     label: 'conversationListPanel-emptyState',
@@ -108,8 +153,17 @@ const getStyles = (theme: GrafanaTheme2) => ({
     label: 'conversationListPanel-container',
     display: 'flex',
     flexDirection: 'column' as const,
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
     gap: theme.spacing(1),
+  }),
+  listScroll: css({
+    label: 'conversationListPanel-listScroll',
+    flex: 1,
+    minHeight: 0,
     overflowY: 'auto' as const,
+    overflowX: 'auto' as const,
   }),
 });
 
@@ -119,6 +173,7 @@ export default function ConversationListPanel({
   loading,
   hasMore,
   loadingMore,
+  showExtendedColumns = false,
   onSelectConversation,
   onLoadMore,
 }: ConversationListPanelProps) {
@@ -143,79 +198,106 @@ export default function ConversationListPanel({
 
   return (
     <div className={styles.container}>
-      <table className={styles.table}>
-        <thead>
-          <tr className={styles.headerRow}>
-            <th className={styles.headerCell}>Conversation</th>
-            <th className={styles.headerCell}>LLM calls</th>
-            <th className={styles.headerCell}>Models</th>
-            <th className={styles.headerCell}>Errors</th>
-            <th className={styles.headerCell}>Rating</th>
-            <th className={styles.headerCell}>Last activity</th>
-          </tr>
-        </thead>
-        <tbody>
-          {conversations.map((conversation) => {
-            const selected = conversation.conversation_id === selectedConversationId;
-            const rating = conversation.rating_summary;
-            return (
-              <tr
-                key={conversation.conversation_id}
-                className={cx(styles.row, selected && styles.rowSelected)}
-                onClick={() => onSelectConversation(conversation.conversation_id)}
-                role="button"
-                aria-label={`select conversation ${conversation.conversation_id}`}
-                aria-selected={selected}
-              >
-                <td className={cx(styles.cell, styles.idCell)}>
-                  <span>{conversation.conversation_id}</span>
-                </td>
-                <td className={styles.cell}>{conversation.generation_count}</td>
-                <td className={styles.cell}>
-                  <div className={styles.modelList}>
-                    {conversation.models.map((model) => (
-                      <Badge key={model} text={model} color="blue" />
-                    ))}
-                    {conversation.models.length === 0 && <Text color="secondary">-</Text>}
-                  </div>
-                </td>
-                <td className={styles.cell}>
-                  {conversation.error_count > 0 ? (
-                    <Badge text={String(conversation.error_count)} color="red" />
-                  ) : (
-                    <Text color="secondary">0</Text>
-                  )}
-                </td>
-                <td className={styles.cell}>
-                  {rating != null && rating.total_count > 0 ? (
-                    <div className={styles.ratingGroup}>
-                      {rating.good_count > 0 && (
-                        <Stack direction="row" gap={0.25} alignItems="center">
-                          <Icon name="thumbs-up" size="sm" />
-                          <span>{rating.good_count}</span>
-                        </Stack>
-                      )}
-                      {rating.bad_count > 0 && (
-                        <Stack direction="row" gap={0.25} alignItems="center">
-                          <Icon name="thumbs-down" size="sm" />
-                          <span>{rating.bad_count}</span>
-                        </Stack>
-                      )}
-                    </div>
-                  ) : (
-                    <Text color="secondary">-</Text>
-                  )}
-                </td>
-                <td className={styles.cell}>
-                  <Tooltip content={new Date(conversation.last_generation_at).toLocaleString()} placement="left">
-                    <span>{formatRelativeTime(conversation.last_generation_at)}</span>
-                  </Tooltip>
-                </td>
+      <div className={styles.listScroll}>
+        <table className={cx(styles.table, showExtendedColumns && styles.tableAutoWidth)}>
+          {showExtendedColumns && (
+            <thead>
+              <tr className={styles.headerRow}>
+                <th className={styles.headerCell}>Last activity</th>
+                <th className={styles.headerCell}>Conversation</th>
+                <th className={styles.headerCell}>LLM calls</th>
+                <th className={styles.headerCell}>Models</th>
+                <th className={styles.headerCell}>Errors</th>
+                <th className={styles.headerCell}>Rating</th>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
+            </thead>
+          )}
+          <tbody>
+            {(() => {
+              const rows: React.ReactNode[] = [];
+              let previousDayKey = '';
+              const dayHeaderColSpan = showExtendedColumns ? 6 : 2;
+
+              for (const conversation of conversations) {
+                const currentDayKey = dayKey(conversation.last_generation_at);
+                if (currentDayKey !== previousDayKey) {
+                  previousDayKey = currentDayKey;
+                  rows.push(
+                    <tr key={`day-${currentDayKey}`} className={styles.dayHeaderRow}>
+                      <td className={styles.dayHeaderCell} colSpan={dayHeaderColSpan}>
+                        {formatDayHeader(conversation.last_generation_at)}
+                      </td>
+                    </tr>
+                  );
+                }
+
+                const selected = conversation.conversation_id === selectedConversationId;
+                const rating = conversation.rating_summary;
+                rows.push(
+                  <tr
+                    key={conversation.conversation_id}
+                    className={cx(styles.row, selected && styles.rowSelected)}
+                    onClick={() => onSelectConversation(conversation.conversation_id)}
+                    role="button"
+                    aria-label={`select conversation ${conversation.conversation_id}`}
+                    aria-selected={selected}
+                  >
+                    <td className={cx(styles.cell, styles.timeCell, !showExtendedColumns && styles.timeCellCompact)}>
+                      <Tooltip content={new Date(conversation.last_generation_at).toLocaleString()} placement="left">
+                        <span>{formatTime(conversation.last_generation_at)}</span>
+                      </Tooltip>
+                    </td>
+                    <td className={cx(styles.cell, styles.idCell, !showExtendedColumns && styles.idCellTruncated)}>
+                      <span>{conversation.conversation_id}</span>
+                    </td>
+                    {showExtendedColumns && (
+                      <>
+                        <td className={styles.cell}>{conversation.generation_count}</td>
+                        <td className={styles.cell}>
+                          <div className={styles.modelList}>
+                            {conversation.models.map((model) => (
+                              <Badge key={model} text={model} color="blue" />
+                            ))}
+                            {conversation.models.length === 0 && <Text color="secondary">-</Text>}
+                          </div>
+                        </td>
+                        <td className={styles.cell}>
+                          {conversation.error_count > 0 ? (
+                            <Badge text={String(conversation.error_count)} color="red" />
+                          ) : (
+                            <Text color="secondary">0</Text>
+                          )}
+                        </td>
+                        <td className={styles.cell}>
+                          {rating != null && rating.total_count > 0 ? (
+                            <div className={styles.ratingGroup}>
+                              {rating.good_count > 0 && (
+                                <Stack direction="row" gap={0.25} alignItems="center">
+                                  <Icon name="thumbs-up" size="sm" />
+                                  <span>{rating.good_count}</span>
+                                </Stack>
+                              )}
+                              {rating.bad_count > 0 && (
+                                <Stack direction="row" gap={0.25} alignItems="center">
+                                  <Icon name="thumbs-down" size="sm" />
+                                  <span>{rating.bad_count}</span>
+                                </Stack>
+                              )}
+                            </div>
+                          ) : (
+                            <Text color="secondary">-</Text>
+                          )}
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                );
+              }
+              return rows;
+            })()}
+          </tbody>
+        </table>
+      </div>
 
       {hasMore && (
         <Button

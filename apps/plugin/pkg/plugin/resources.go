@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,9 +9,18 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	"github.com/grafana/sigil/sigil/pkg/searchcore"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type stubResponse struct {
@@ -19,6 +29,8 @@ type stubResponse struct {
 	Endpoint string `json:"endpoint"`
 	Error    string `json:"error,omitempty"`
 }
+
+var pluginProxyTracer = otel.Tracer("github.com/grafana/sigil/apps/plugin/proxy")
 
 func (a *App) authorizeRequest(req *http.Request) error {
 	action, ok := requiredPermissionAction(req.Method, req.URL.Path)
@@ -37,7 +49,7 @@ func (a *App) checkPermission(ctx context.Context, idToken string, action string
 		return errors.New("permission action is empty")
 	}
 
-	authzClient, err := a.GetAuthZClient(ctx)
+	authzClient, err := a.getAuthzClient(ctx)
 	if err != nil {
 		return fmt.Errorf("authorization unavailable: %w", err)
 	}
@@ -70,32 +82,34 @@ func (a *App) withAuthorization(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// requiredPermissionAction maps a plugin query route to the RBAC action it
+// requires. Unknown routes or method/path mismatches return ok=false.
 func requiredPermissionAction(method string, path string) (string, bool) {
 	switch {
 	case method == http.MethodGet && path == "/query/conversations":
-		return PermissionDataRead, true
+		return permissionDataRead, true
 	case method == http.MethodPost && path == "/query/conversations/search":
-		return PermissionDataRead, true
+		return permissionDataRead, true
 	case strings.HasPrefix(path, "/query/conversations/"):
 		return permissionForConversationRoute(method, path)
 	case method == http.MethodGet && strings.HasPrefix(path, "/query/generations/"):
-		return PermissionDataRead, true
+		return permissionDataRead, true
 	case method == http.MethodGet && path == "/query/search/tags":
-		return PermissionDataRead, true
+		return permissionDataRead, true
 	case method == http.MethodGet && strings.HasPrefix(path, "/query/search/tag/") && strings.HasSuffix(path, "/values"):
-		return PermissionDataRead, true
+		return permissionDataRead, true
 	case method == http.MethodGet && path == "/query/settings":
-		return PermissionDataRead, true
+		return permissionDataRead, true
 	case method == http.MethodPut && path == "/query/settings/datasources":
-		return PermissionSettingsWrite, true
+		return permissionSettingsWrite, true
 	case strings.HasPrefix(path, "/query/proxy/prometheus/"):
-		return PermissionDataRead, true
+		return permissionDataRead, true
 	case strings.HasPrefix(path, "/query/proxy/tempo/"):
-		return PermissionDataRead, true
+		return permissionDataRead, true
 	case method == http.MethodGet && path == "/query/model-cards":
-		return PermissionDataRead, true
+		return permissionDataRead, true
 	case method == http.MethodGet && path == "/query/model-cards/lookup":
-		return PermissionDataRead, true
+		return permissionDataRead, true
 	default:
 		return "", false
 	}
@@ -109,7 +123,7 @@ func permissionForConversationRoute(method string, path string) (string, bool) {
 
 	parts := strings.Split(conversationPath, "/")
 	if len(parts) == 1 && method == http.MethodGet {
-		return PermissionDataRead, true
+		return permissionDataRead, true
 	}
 	if len(parts) != 2 {
 		return "", false
@@ -118,10 +132,10 @@ func permissionForConversationRoute(method string, path string) (string, bool) {
 	switch parts[1] {
 	case "ratings", "annotations":
 		if method == http.MethodGet {
-			return PermissionDataRead, true
+			return permissionDataRead, true
 		}
 		if method == http.MethodPost {
-			return PermissionFeedbackWrite, true
+			return permissionFeedbackWrite, true
 		}
 	}
 
@@ -130,10 +144,6 @@ func permissionForConversationRoute(method string, path string) (string, bool) {
 
 func (a *App) handleListConversations(w http.ResponseWriter, req *http.Request) {
 	a.handleProxy(w, req, "/api/v1/conversations", http.MethodGet)
-}
-
-func (a *App) handleSearchConversations(w http.ResponseWriter, req *http.Request) {
-	a.handleProxy(w, req, "/api/v1/conversations/search", http.MethodPost)
 }
 
 func (a *App) handleConversationRoutes(w http.ResponseWriter, req *http.Request) {
@@ -170,19 +180,6 @@ func (a *App) handleGenerationRoutes(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	a.handleProxy(w, req, fmt.Sprintf("/api/v1/generations/%s", id), http.MethodGet)
-}
-
-func (a *App) handleSearchTags(w http.ResponseWriter, req *http.Request) {
-	a.handleProxy(w, req, "/api/v1/search/tags", http.MethodGet)
-}
-
-func (a *App) handleSearchTagValues(w http.ResponseWriter, req *http.Request) {
-	tag, ok := parseSearchTagValuesPath(req.URL.Path, req.URL.EscapedPath(), "/query/search/tag/")
-	if !ok {
-		http.Error(w, "invalid search tag path", http.StatusBadRequest)
-		return
-	}
-	a.handleProxy(w, req, fmt.Sprintf("/api/v1/search/tag/%s/values", url.PathEscape(tag)), http.MethodGet)
 }
 
 func (a *App) handleSettingsRoutes(w http.ResponseWriter, req *http.Request) {
@@ -293,6 +290,16 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	ctx, span := pluginProxyTracer.Start(
+		req.Context(),
+		"sigil.plugin.proxy.sigil",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("http.request.method", method),
+			attribute.String("url.path", path),
+		),
+	)
+	defer span.End()
 
 	upstream := strings.TrimRight(a.apiURL, "/") + path
 	if req.URL.RawQuery != "" {
@@ -303,13 +310,13 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 	if req.Body != nil {
 		body = req.Body
 	}
-	proxyReq, err := http.NewRequestWithContext(req.Context(), method, upstream, body)
+	proxyReq, err := http.NewRequestWithContext(ctx, method, upstream, body)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "build request")
 		writeStub(w, http.StatusInternalServerError, path, fmt.Sprintf("build request: %v", err))
 		return
 	}
-	// Intentionally forward Grafana identity headers (including X-Grafana-Id)
-	// to Sigil in this deployment model; RBAC checks are performed in-plugin.
 	proxyReq.Header = req.Header.Clone()
 	// Remove Accept-Encoding so the upstream always returns uncompressed
 	// responses. Without this the upstream may gzip the body, but
@@ -320,9 +327,12 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 	}
 	injectTenantHeaders(proxyReq, a.tenantID)
 	injectOperatorIdentityHeaders(proxyReq, method, path)
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(proxyReq.Header))
 
 	resp, err := a.client.Do(proxyReq)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "upstream unavailable")
 		writeStub(w, http.StatusBadGateway, path, fmt.Sprintf("upstream unavailable: %v", err))
 		return
 	}
@@ -340,6 +350,10 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 	}
 	w.Header().Set("Content-Type", ct)
 	w.WriteHeader(resp.StatusCode)
+	span.SetAttributes(attribute.Int("http.response.status_code", resp.StatusCode))
+	if resp.StatusCode >= http.StatusInternalServerError {
+		span.SetStatus(codes.Error, http.StatusText(resp.StatusCode))
+	}
 	_, _ = io.Copy(w, resp.Body)
 }
 
@@ -348,6 +362,16 @@ func (a *App) handleGrafanaProxy(w http.ResponseWriter, req *http.Request, path 
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	ctx, span := pluginProxyTracer.Start(
+		req.Context(),
+		"sigil.plugin.proxy.grafana",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("http.request.method", method),
+			attribute.String("url.path", path),
+		),
+	)
+	defer span.End()
 
 	upstream := strings.TrimRight(a.grafanaAppURL, "/") + path
 	if req.URL.RawQuery != "" {
@@ -358,22 +382,25 @@ func (a *App) handleGrafanaProxy(w http.ResponseWriter, req *http.Request, path 
 	if req.Body != nil {
 		body = req.Body
 	}
-	proxyReq, err := http.NewRequestWithContext(req.Context(), method, upstream, body)
+	proxyReq, err := http.NewRequestWithContext(ctx, method, upstream, body)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "build request")
 		writeStub(w, http.StatusInternalServerError, path, fmt.Sprintf("build request: %v", err))
 		return
 	}
 
-	// Intentionally forward Grafana identity headers (including X-Grafana-Id)
-	// to datasource-proxy targets; RBAC checks are performed in-plugin.
 	proxyReq.Header = req.Header.Clone()
 	proxyReq.Header.Del("Accept-Encoding")
 	if token := strings.TrimSpace(a.grafanaServiceAccountToken); token != "" {
 		proxyReq.Header.Set("Authorization", "Bearer "+token)
 	}
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(proxyReq.Header))
 
 	resp, err := a.client.Do(proxyReq)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "upstream unavailable")
 		writeStub(w, http.StatusBadGateway, path, fmt.Sprintf("upstream unavailable: %v", err))
 		return
 	}
@@ -389,6 +416,10 @@ func (a *App) handleGrafanaProxy(w http.ResponseWriter, req *http.Request, path 
 	}
 	w.Header().Set("Content-Type", ct)
 	w.WriteHeader(resp.StatusCode)
+	span.SetAttributes(attribute.Int("http.response.status_code", resp.StatusCode))
+	if resp.StatusCode >= http.StatusInternalServerError {
+		span.SetStatus(codes.Error, http.StatusText(resp.StatusCode))
+	}
 	_, _ = io.Copy(w, resp.Body)
 }
 
@@ -560,4 +591,734 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/eval/rules/", a.handleEvalRuleByID)
 	mux.HandleFunc("/eval/judge/providers", a.handleEvalJudgeProviders)
 	mux.HandleFunc("/eval/judge/models", a.handleEvalJudgeModels)
+}
+
+type conversationSearchTimeRange struct {
+	From time.Time `json:"from"`
+	To   time.Time `json:"to"`
+}
+
+type conversationSearchRequest struct {
+	Filters   string                      `json:"filters"`
+	Select    []string                    `json:"select"`
+	TimeRange conversationSearchTimeRange `json:"time_range"`
+	PageSize  int                         `json:"page_size"`
+	Cursor    string                      `json:"cursor"`
+}
+
+type conversationRatingSummary struct {
+	TotalCount    int       `json:"total_count"`
+	GoodCount     int       `json:"good_count"`
+	BadCount      int       `json:"bad_count"`
+	LatestRating  string    `json:"latest_rating,omitempty"`
+	LatestRatedAt time.Time `json:"latest_rated_at"`
+	LatestBadAt   time.Time `json:"latest_bad_at,omitempty"`
+	HasBadRating  bool      `json:"has_bad_rating"`
+}
+
+type conversationEvalSummary struct {
+	TotalScores int `json:"total_scores"`
+	PassCount   int `json:"pass_count"`
+	FailCount   int `json:"fail_count"`
+}
+
+type conversationSearchResult struct {
+	ConversationID    string                     `json:"conversation_id"`
+	GenerationCount   int                        `json:"generation_count"`
+	FirstGenerationAt time.Time                  `json:"first_generation_at"`
+	LastGenerationAt  time.Time                  `json:"last_generation_at"`
+	Models            []string                   `json:"models"`
+	Agents            []string                   `json:"agents"`
+	ErrorCount        int                        `json:"error_count"`
+	HasErrors         bool                       `json:"has_errors"`
+	TraceIDs          []string                   `json:"trace_ids"`
+	RatingSummary     *conversationRatingSummary `json:"rating_summary,omitempty"`
+	AnnotationCount   int                        `json:"annotation_count"`
+	EvalSummary       *conversationEvalSummary   `json:"eval_summary,omitempty"`
+	Selected          map[string]any             `json:"selected,omitempty"`
+}
+
+type conversationSearchResponse struct {
+	Conversations []conversationSearchResult `json:"conversations"`
+	NextCursor    string                     `json:"next_cursor"`
+	HasMore       bool                       `json:"has_more"`
+}
+
+type conversationBatchMetadataRequest struct {
+	ConversationIDs []string `json:"conversation_ids"`
+}
+
+type conversationBatchMetadata struct {
+	ConversationID    string                     `json:"conversation_id"`
+	GenerationCount   int                        `json:"generation_count"`
+	FirstGenerationAt time.Time                  `json:"first_generation_at"`
+	LastGenerationAt  time.Time                  `json:"last_generation_at"`
+	RatingSummary     *conversationRatingSummary `json:"rating_summary,omitempty"`
+	AnnotationCount   int                        `json:"annotation_count"`
+	EvalSummary       *conversationEvalSummary   `json:"eval_summary,omitempty"`
+}
+
+type conversationBatchMetadataResponse struct {
+	Items                  []conversationBatchMetadata `json:"items"`
+	MissingConversationIDs []string                    `json:"missing_conversation_ids"`
+}
+
+type upstreamHTTPError struct {
+	StatusCode int
+	Body       []byte
+}
+
+func (e *upstreamHTTPError) Error() string {
+	trimmed := strings.TrimSpace(string(e.Body))
+	if trimmed == "" {
+		return fmt.Sprintf("upstream request failed with status %d", e.StatusCode)
+	}
+	return fmt.Sprintf("upstream request failed with status %d: %s", e.StatusCode, trimmed)
+}
+
+type searchValidationError struct {
+	msg string
+}
+
+func (e *searchValidationError) Error() string {
+	return e.msg
+}
+
+func newSearchValidationError(msg string) error {
+	return &searchValidationError{msg: msg}
+}
+
+func (a *App) handleSearchConversations(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !a.hasGrafanaDatasourceProxyTarget(a.tempoDatasourceUID) {
+		http.Error(w, "grafana tempo datasource proxy is not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	var payload conversationSearchRequest
+	if req.Body != nil {
+		decoder := json.NewDecoder(req.Body)
+		if err := decoder.Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+	}
+
+	response, err := a.searchConversations(req, payload)
+	if err != nil {
+		a.writeSearchError(w, "/query/conversations/search", err)
+		return
+	}
+	writeJSONResponse(w, http.StatusOK, response)
+}
+
+func (a *App) handleSearchTags(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !a.hasGrafanaDatasourceProxyTarget(a.tempoDatasourceUID) {
+		http.Error(w, "grafana tempo datasource proxy is not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	from, to, err := parseSearchRange(req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	start, end := searchcore.NormalizeTagDiscoveryRange(from, to, time.Now().UTC())
+
+	spanTags, err := a.fetchTempoTags(req, "span", start, end)
+	if err != nil {
+		a.writeSearchError(w, "/query/search/tags", err)
+		return
+	}
+	resourceTags, err := a.fetchTempoTags(req, "resource", start, end)
+	if err != nil {
+		a.writeSearchError(w, "/query/search/tags", err)
+		return
+	}
+
+	tagMap := make(map[string]searchcore.SearchTag)
+	for _, tag := range searchcore.WellKnownSearchTags() {
+		tagMap[tag.Key] = tag
+	}
+	for _, tag := range spanTags {
+		normalized := searchcore.NormalizeTempoTagKey("span", tag)
+		if normalized == "" {
+			continue
+		}
+		tagMap[normalized] = searchcore.SearchTag{Key: normalized, Scope: "span"}
+	}
+	for _, tag := range resourceTags {
+		normalized := searchcore.NormalizeTempoTagKey("resource", tag)
+		if normalized == "" {
+			continue
+		}
+		tagMap[normalized] = searchcore.SearchTag{Key: normalized, Scope: "resource"}
+	}
+
+	tags := make([]searchcore.SearchTag, 0, len(tagMap))
+	for _, tag := range tagMap {
+		tags = append(tags, tag)
+	}
+	sort.Slice(tags, func(i, j int) bool {
+		return tags[i].Key < tags[j].Key
+	})
+
+	writeJSONResponse(w, http.StatusOK, map[string]any{"tags": tags})
+}
+
+func (a *App) handleSearchTagValues(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !a.hasGrafanaDatasourceProxyTarget(a.tempoDatasourceUID) {
+		http.Error(w, "grafana tempo datasource proxy is not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	tag, ok := parseSearchTagValuesPath(req.URL.Path, req.URL.EscapedPath(), "/query/search/tag/")
+	if !ok {
+		http.Error(w, "invalid search tag path", http.StatusBadRequest)
+		return
+	}
+
+	tempoTag, mysqlOnly, err := searchcore.ResolveTagKeyForTempo(tag)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if mysqlOnly {
+		writeJSONResponse(w, http.StatusOK, map[string]any{"values": []string{}})
+		return
+	}
+
+	from, to, err := parseSearchRange(req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	start, end := searchcore.NormalizeTagDiscoveryRange(from, to, time.Now().UTC())
+
+	values, err := a.fetchTempoTagValues(req, tempoTag, start, end)
+	if err != nil {
+		a.writeSearchError(w, "/query/search/tag/"+url.PathEscape(tag)+"/values", err)
+		return
+	}
+	writeJSONResponse(w, http.StatusOK, map[string]any{"values": values})
+}
+
+func (a *App) searchConversations(req *http.Request, payload conversationSearchRequest) (conversationSearchResponse, error) {
+	from, to, err := normalizeConversationSearchTimeRange(payload.TimeRange)
+	if err != nil {
+		return conversationSearchResponse{}, err
+	}
+
+	parsedFilters, err := searchcore.ParseFilterExpression(payload.Filters)
+	if err != nil {
+		return conversationSearchResponse{}, newSearchValidationError(err.Error())
+	}
+	if err := searchcore.ValidateMySQLFilterTerms(parsedFilters.MySQLTerms); err != nil {
+		return conversationSearchResponse{}, newSearchValidationError(err.Error())
+	}
+
+	selectFields, err := searchcore.NormalizeSelectFields(payload.Select)
+	if err != nil {
+		return conversationSearchResponse{}, newSearchValidationError(err.Error())
+	}
+
+	pageSize := searchcore.NormalizeConversationSearchPageSize(payload.PageSize)
+	overfetchLimit := pageSize * searchcore.DefaultTempoOverfetchMultiplier
+	if overfetchLimit < pageSize {
+		overfetchLimit = pageSize
+	}
+
+	filterHash := searchcore.BuildConversationSearchFilterHash(parsedFilters, selectFields, from, to)
+	cursor, err := searchcore.DecodeConversationSearchCursor(payload.Cursor)
+	if err != nil {
+		return conversationSearchResponse{}, newSearchValidationError("invalid cursor")
+	}
+	if strings.TrimSpace(payload.Cursor) != "" && cursor.FilterHash != filterHash {
+		return conversationSearchResponse{}, newSearchValidationError("cursor no longer matches current filters")
+	}
+
+	traceQL, err := searchcore.BuildTraceQL(parsedFilters, selectFields)
+	if err != nil {
+		return conversationSearchResponse{}, newSearchValidationError(err.Error())
+	}
+
+	searchEndNanos := to.UnixNano()
+	if cursor.EndNanos > 0 && cursor.EndNanos < searchEndNanos {
+		searchEndNanos = cursor.EndNanos
+	}
+	if searchEndNanos <= from.UnixNano() {
+		return conversationSearchResponse{Conversations: []conversationSearchResult{}, HasMore: false}, nil
+	}
+
+	alreadyReturned := make(map[string]struct{}, len(cursor.ReturnedConversations))
+	for _, conversationID := range cursor.ReturnedConversations {
+		alreadyReturned[conversationID] = struct{}{}
+	}
+	currentPageIDs := make(map[string]struct{}, pageSize)
+
+	results := make([]conversationSearchResult, 0, pageSize)
+	hasMore := false
+	terminatedByIterationLimit := searchcore.DefaultTempoSearchMaxIterations > 0
+
+	for iteration := 0; iteration < searchcore.DefaultTempoSearchMaxIterations; iteration++ {
+		windowEnd := time.Unix(0, searchEndNanos).UTC()
+		if !from.Before(windowEnd) {
+			terminatedByIterationLimit = false
+			break
+		}
+
+		tempoResponse, err := a.searchTempo(req, traceQL, overfetchLimit, from, windowEnd)
+		if err != nil {
+			return conversationSearchResponse{}, err
+		}
+		if len(tempoResponse.Traces) == 0 {
+			terminatedByIterationLimit = false
+			break
+		}
+
+		grouped := searchcore.GroupTempoSearchResponse(tempoResponse, selectFields)
+		orderedConversationIDs := searchcore.OrderTempoConversationIDs(grouped.Conversations)
+		metadataByConversation, err := a.fetchConversationBatchMetadata(req, orderedConversationIDs)
+		if err != nil {
+			return conversationSearchResponse{}, err
+		}
+
+		foundAdditionalConversation := false
+		for _, conversationID := range orderedConversationIDs {
+			if _, seen := alreadyReturned[conversationID]; seen {
+				continue
+			}
+			if _, seen := currentPageIDs[conversationID]; seen {
+				continue
+			}
+
+			conversationMetadata, ok := metadataByConversation[conversationID]
+			if !ok {
+				continue
+			}
+			if !searchcore.MatchesGenerationCountFilters(conversationMetadata.GenerationCount, parsedFilters.MySQLTerms) {
+				continue
+			}
+
+			if len(results) >= pageSize {
+				foundAdditionalConversation = true
+				break
+			}
+
+			aggregate := grouped.Conversations[conversationID]
+			result := conversationSearchResult{
+				ConversationID:    conversationID,
+				GenerationCount:   conversationMetadata.GenerationCount,
+				FirstGenerationAt: conversationMetadata.FirstGenerationAt.UTC(),
+				LastGenerationAt:  conversationMetadata.LastGenerationAt.UTC(),
+				Models:            searchcore.SortedKeysFromSet(aggregate.Models),
+				Agents:            searchcore.SortedKeysFromSet(aggregate.Agents),
+				ErrorCount:        aggregate.ErrorCount,
+				HasErrors:         aggregate.ErrorCount > 0,
+				TraceIDs:          searchcore.SortedKeysFromSet(aggregate.TraceIDs),
+				AnnotationCount:   conversationMetadata.AnnotationCount,
+				Selected:          searchcore.BuildSelectedResultMap(aggregate.Selected),
+			}
+			if conversationMetadata.RatingSummary != nil {
+				copied := *conversationMetadata.RatingSummary
+				result.RatingSummary = &copied
+			}
+			if conversationMetadata.EvalSummary != nil {
+				copied := *conversationMetadata.EvalSummary
+				result.EvalSummary = &copied
+			}
+			results = append(results, result)
+			currentPageIDs[conversationID] = struct{}{}
+		}
+
+		if foundAdditionalConversation {
+			hasMore = true
+			terminatedByIterationLimit = false
+			break
+		}
+		if grouped.EarliestTraceStartNanos <= 0 || grouped.EarliestTraceStartNanos <= from.UnixNano() {
+			terminatedByIterationLimit = false
+			break
+		}
+		if len(tempoResponse.Traces) < overfetchLimit {
+			terminatedByIterationLimit = false
+			break
+		}
+
+		searchEndNanos = grouped.EarliestTraceStartNanos - 1
+	}
+
+	if terminatedByIterationLimit && !hasMore && searchEndNanos > from.UnixNano() {
+		hasMore = true
+	}
+
+	nextCursor := ""
+	if hasMore {
+		returnedConversations := make([]string, 0, len(alreadyReturned)+len(results))
+		for conversationID := range alreadyReturned {
+			returnedConversations = append(returnedConversations, conversationID)
+		}
+		for _, result := range results {
+			returnedConversations = append(returnedConversations, result.ConversationID)
+		}
+		nextCursor, err = searchcore.EncodeConversationSearchCursor(searchcore.ConversationSearchCursor{
+			EndNanos:              searchEndNanos,
+			ReturnedConversations: returnedConversations,
+			FilterHash:            filterHash,
+		})
+		if err != nil {
+			return conversationSearchResponse{}, err
+		}
+	}
+
+	return conversationSearchResponse{
+		Conversations: results,
+		NextCursor:    nextCursor,
+		HasMore:       hasMore,
+	}, nil
+}
+
+func normalizeConversationSearchTimeRange(timeRange conversationSearchTimeRange) (time.Time, time.Time, error) {
+	from := timeRange.From.UTC()
+	to := timeRange.To.UTC()
+	if from.IsZero() || to.IsZero() {
+		return time.Time{}, time.Time{}, newSearchValidationError("time_range.from and time_range.to are required")
+	}
+	if !from.Before(to) {
+		return time.Time{}, time.Time{}, newSearchValidationError("time_range.from must be before time_range.to")
+	}
+	return from, to, nil
+}
+
+func (a *App) searchTempo(
+	req *http.Request,
+	traceQL string,
+	limit int,
+	from time.Time,
+	to time.Time,
+) (*searchcore.TempoSearchResponse, error) {
+	query := url.Values{}
+	query.Set("q", traceQL)
+	query.Set("limit", strconv.Itoa(limit))
+	query.Set("start", strconv.FormatInt(from.UTC().Unix(), 10))
+	query.Set("end", strconv.FormatInt(to.UTC().Unix(), 10))
+	query.Set("spss", strconv.Itoa(searchcore.DefaultTempoSearchSpansPerSpanSet))
+
+	var response searchcore.TempoSearchResponse
+	if err := a.doGrafanaJSONRequest(
+		req,
+		http.MethodGet,
+		fmt.Sprintf("/api/datasources/proxy/uid/%s/api/search", a.tempoDatasourceUID),
+		query,
+		nil,
+		&response,
+	); err != nil {
+		return nil, err
+	}
+	if response.Traces == nil {
+		response.Traces = []searchcore.TempoTrace{}
+	}
+	return &response, nil
+}
+
+func (a *App) fetchTempoTags(req *http.Request, scope string, from, to time.Time) ([]string, error) {
+	query := url.Values{}
+	if trimmedScope := strings.TrimSpace(scope); trimmedScope != "" {
+		query.Set("scope", trimmedScope)
+	}
+	query.Set("start", strconv.FormatInt(from.UTC().Unix(), 10))
+	query.Set("end", strconv.FormatInt(to.UTC().Unix(), 10))
+
+	body, err := a.doGrafanaRequest(
+		req,
+		http.MethodGet,
+		fmt.Sprintf("/api/datasources/proxy/uid/%s/api/v2/search/tags", a.tempoDatasourceUID),
+		query,
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return searchcore.ExtractStringSlice(body, "tagNames", "tags", "scopes")
+}
+
+func (a *App) fetchTempoTagValues(req *http.Request, tag string, from, to time.Time) ([]string, error) {
+	query := url.Values{}
+	query.Set("start", strconv.FormatInt(from.UTC().Unix(), 10))
+	query.Set("end", strconv.FormatInt(to.UTC().Unix(), 10))
+
+	body, err := a.doGrafanaRequest(
+		req,
+		http.MethodGet,
+		fmt.Sprintf("/api/datasources/proxy/uid/%s/api/v2/search/tag/%s/values", a.tempoDatasourceUID, url.PathEscape(strings.TrimSpace(tag))),
+		query,
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return searchcore.ExtractStringSlice(body, "values", "tagValues")
+}
+
+func (a *App) fetchConversationBatchMetadata(req *http.Request, conversationIDs []string) (map[string]conversationBatchMetadata, error) {
+	normalizedIDs := searchcore.DedupeAndSortStrings(conversationIDs)
+	if len(normalizedIDs) == 0 {
+		return map[string]conversationBatchMetadata{}, nil
+	}
+
+	var response conversationBatchMetadataResponse
+	if err := a.doSigilJSONRequest(req, http.MethodPost, "/api/v1/conversations:batch-metadata", nil, conversationBatchMetadataRequest{
+		ConversationIDs: normalizedIDs,
+	}, &response); err != nil {
+		return nil, err
+	}
+
+	out := make(map[string]conversationBatchMetadata, len(response.Items))
+	for _, item := range response.Items {
+		conversationID := strings.TrimSpace(item.ConversationID)
+		if conversationID == "" {
+			continue
+		}
+		out[conversationID] = item
+	}
+	return out, nil
+}
+
+func (a *App) doSigilJSONRequest(
+	req *http.Request,
+	method string,
+	path string,
+	query url.Values,
+	requestBody any,
+	responseBody any,
+) error {
+	body, err := encodeJSONBody(requestBody)
+	if err != nil {
+		return err
+	}
+	payload, err := a.doSigilRequest(req, method, path, query, body)
+	if err != nil {
+		return err
+	}
+	if responseBody == nil {
+		return nil
+	}
+	if err := json.Unmarshal(payload, responseBody); err != nil {
+		return fmt.Errorf("decode sigil response: %w", err)
+	}
+	return nil
+}
+
+func (a *App) doGrafanaJSONRequest(
+	req *http.Request,
+	method string,
+	path string,
+	query url.Values,
+	requestBody any,
+	responseBody any,
+) error {
+	body, err := encodeJSONBody(requestBody)
+	if err != nil {
+		return err
+	}
+	payload, err := a.doGrafanaRequest(req, method, path, query, body)
+	if err != nil {
+		return err
+	}
+	if responseBody == nil {
+		return nil
+	}
+	if err := json.Unmarshal(payload, responseBody); err != nil {
+		return fmt.Errorf("decode grafana response: %w", err)
+	}
+	return nil
+}
+
+func encodeJSONBody(value any) ([]byte, error) {
+	if value == nil {
+		return nil, nil
+	}
+	payload, err := json.Marshal(value)
+	if err != nil {
+		return nil, fmt.Errorf("encode request body: %w", err)
+	}
+	return payload, nil
+}
+
+func (a *App) doSigilRequest(
+	req *http.Request,
+	method string,
+	path string,
+	query url.Values,
+	body []byte,
+) ([]byte, error) {
+	upstream := strings.TrimRight(a.apiURL, "/") + path
+	if encodedQuery := query.Encode(); encodedQuery != "" {
+		upstream += "?" + encodedQuery
+	}
+
+	var bodyReader io.Reader
+	if body != nil {
+		bodyReader = bytes.NewReader(body)
+	}
+
+	proxyReq, err := http.NewRequestWithContext(req.Context(), method, upstream, bodyReader)
+	if err != nil {
+		return nil, fmt.Errorf("build sigil request: %w", err)
+	}
+	proxyReq.Header = req.Header.Clone()
+	proxyReq.Header.Del("Accept-Encoding")
+	if body != nil {
+		proxyReq.Header.Set("Content-Type", "application/json")
+	}
+	if a.apiAuthToken != "" {
+		proxyReq.SetBasicAuth(a.tenantID, a.apiAuthToken)
+	}
+	injectTenantHeaders(proxyReq, a.tenantID)
+
+	return a.executeUpstreamRequest(proxyReq)
+}
+
+func (a *App) doGrafanaRequest(
+	req *http.Request,
+	method string,
+	path string,
+	query url.Values,
+	body []byte,
+) ([]byte, error) {
+	ctx, span := pluginProxyTracer.Start(
+		req.Context(),
+		"sigil.plugin.query.grafana",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("http.request.method", method),
+			attribute.String("url.path", path),
+		),
+	)
+	defer span.End()
+
+	upstream := strings.TrimRight(a.grafanaAppURL, "/") + path
+	if encodedQuery := query.Encode(); encodedQuery != "" {
+		upstream += "?" + encodedQuery
+	}
+
+	var bodyReader io.Reader
+	if body != nil {
+		bodyReader = bytes.NewReader(body)
+	}
+
+	proxyReq, err := http.NewRequestWithContext(ctx, method, upstream, bodyReader)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "build grafana request")
+		return nil, fmt.Errorf("build grafana request: %w", err)
+	}
+	proxyReq.Header = req.Header.Clone()
+	proxyReq.Header.Del("Accept-Encoding")
+	if body != nil {
+		proxyReq.Header.Set("Content-Type", "application/json")
+	}
+	if token := strings.TrimSpace(a.grafanaServiceAccountToken); token != "" {
+		proxyReq.Header.Set("Authorization", "Bearer "+token)
+	}
+	injectTenantHeaders(proxyReq, a.tenantID)
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(proxyReq.Header))
+
+	payload, err := a.executeUpstreamRequest(proxyReq)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "upstream request failed")
+		if upstreamErr := (*upstreamHTTPError)(nil); errors.As(err, &upstreamErr) {
+			span.SetAttributes(attribute.Int("http.response.status_code", upstreamErr.StatusCode))
+		}
+		return nil, err
+	}
+	return payload, nil
+}
+
+func (a *App) executeUpstreamRequest(proxyReq *http.Request) ([]byte, error) {
+	resp, err := a.client.Do(proxyReq)
+	if err != nil {
+		return nil, fmt.Errorf("upstream unavailable: %w", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	payload, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read upstream response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, &upstreamHTTPError{
+			StatusCode: resp.StatusCode,
+			Body:       payload,
+		}
+	}
+	return payload, nil
+}
+
+func (a *App) writeSearchError(w http.ResponseWriter, endpoint string, err error) {
+	if validationErr := (*searchValidationError)(nil); errors.As(err, &validationErr) {
+		http.Error(w, validationErr.Error(), http.StatusBadRequest)
+		return
+	}
+	if upstreamErr := (*upstreamHTTPError)(nil); errors.As(err, &upstreamErr) {
+		trimmed := bytes.TrimSpace(upstreamErr.Body)
+		if json.Valid(trimmed) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(upstreamErr.StatusCode)
+			_, _ = w.Write(trimmed)
+			return
+		}
+		if len(trimmed) > 0 {
+			http.Error(w, string(trimmed), upstreamErr.StatusCode)
+			return
+		}
+		http.Error(w, http.StatusText(upstreamErr.StatusCode), upstreamErr.StatusCode)
+		return
+	}
+
+	writeStub(w, http.StatusBadGateway, endpoint, err.Error())
+}
+
+func parseSearchRange(req *http.Request) (time.Time, time.Time, error) {
+	parseUnixSeconds := func(raw string) (time.Time, error) {
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" {
+			return time.Time{}, nil
+		}
+		seconds, err := strconv.ParseInt(trimmed, 10, 64)
+		if err != nil {
+			return time.Time{}, errors.New("invalid time range")
+		}
+		return time.Unix(seconds, 0).UTC(), nil
+	}
+
+	start, err := parseUnixSeconds(req.URL.Query().Get("start"))
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	end, err := parseUnixSeconds(req.URL.Query().Get("end"))
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	return start, end, nil
+}
+
+func writeJSONResponse(w http.ResponseWriter, status int, payload any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
 }

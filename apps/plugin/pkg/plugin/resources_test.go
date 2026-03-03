@@ -13,6 +13,9 @@ import (
 
 	"github.com/grafana/authlib/authz"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 type mockCallResourceResponseSender struct {
@@ -22,6 +25,20 @@ type mockCallResourceResponseSender struct {
 func (s *mockCallResourceResponseSender) Send(response *backend.CallResourceResponse) error {
 	s.response = response
 	return nil
+}
+
+func callResource(t *testing.T, app *App, req *backend.CallResourceRequest) *backend.CallResourceResponse {
+	t.Helper()
+
+	var sender mockCallResourceResponseSender
+	err := app.CallResource(context.Background(), req, &sender)
+	if err != nil {
+		t.Fatalf("CallResource error: %s", err)
+	}
+	if sender.response == nil {
+		t.Fatal("no response received from CallResource")
+	}
+	return sender.response
 }
 
 func callResourceWithAuth(t *testing.T, app *App, req *backend.CallResourceRequest) *backend.CallResourceResponse {
@@ -34,16 +51,7 @@ func callResourceWithAuth(t *testing.T, app *App, req *backend.CallResourceReque
 		req.Headers["X-Grafana-Id"] = []string{"test-id-token"}
 	}
 
-	var sender mockCallResourceResponseSender
-	err := app.CallResource(context.Background(), req, &sender)
-	if err != nil {
-		t.Fatalf("CallResource error: %s", err)
-	}
-	if sender.response == nil {
-		t.Fatal("no response received from CallResource")
-	}
-
-	return sender.response
+	return callResource(t, app, req)
 }
 
 type mockAuthzClient struct {
@@ -58,19 +66,11 @@ func (m *mockAuthzClient) HasAccess(_ context.Context, _ string, action string, 
 	return m.allowed[action], nil
 }
 
-func (m *mockAuthzClient) Compile(_ context.Context, _ string, _ string, _ ...string) (authz.Checker, error) {
-	return nil, nil
-}
-
-func (m *mockAuthzClient) LookupResources(_ context.Context, _ string, _ string) ([]authz.Resource, error) {
-	return nil, nil
-}
-
 func allowAllSigilActions() map[string]bool {
 	return map[string]bool{
-		PermissionDataRead:      true,
-		PermissionFeedbackWrite: true,
-		PermissionSettingsWrite: true,
+		permissionDataRead:      true,
+		permissionFeedbackWrite: true,
+		permissionSettingsWrite: true,
 	}
 }
 
@@ -91,9 +91,7 @@ func TestRequiredPermissionAction(t *testing.T) {
 			{method: http.MethodGet, path: "/query/settings"},
 			{method: http.MethodGet, path: "/query/proxy/prometheus/api/v1/query"},
 			{method: http.MethodPost, path: "/query/proxy/prometheus/api/v1/query"},
-			{method: http.MethodDelete, path: "/query/proxy/prometheus/api/v1/query"},
 			{method: http.MethodGet, path: "/query/proxy/tempo/api/search"},
-			{method: http.MethodPost, path: "/query/proxy/tempo/api/search"},
 			{method: http.MethodGet, path: "/query/model-cards"},
 			{method: http.MethodGet, path: "/query/model-cards/lookup"},
 		}
@@ -103,8 +101,8 @@ func TestRequiredPermissionAction(t *testing.T) {
 			if !ok {
 				t.Fatalf("expected permission action for %s %s", tc.method, tc.path)
 			}
-			if action != PermissionDataRead {
-				t.Fatalf("expected %s for %s %s, got %s", PermissionDataRead, tc.method, tc.path, action)
+			if action != permissionDataRead {
+				t.Fatalf("expected %s for %s %s, got %s", permissionDataRead, tc.method, tc.path, action)
 			}
 		}
 	})
@@ -118,8 +116,8 @@ func TestRequiredPermissionAction(t *testing.T) {
 			if !ok {
 				t.Fatalf("expected permission action for POST %s", path)
 			}
-			if action != PermissionFeedbackWrite {
-				t.Fatalf("expected %s for POST %s, got %s", PermissionFeedbackWrite, path, action)
+			if action != permissionFeedbackWrite {
+				t.Fatalf("expected %s for POST %s, got %s", permissionFeedbackWrite, path, action)
 			}
 		}
 	})
@@ -129,8 +127,8 @@ func TestRequiredPermissionAction(t *testing.T) {
 		if !ok {
 			t.Fatal("expected permission action for PUT /query/settings/datasources")
 		}
-		if action != PermissionSettingsWrite {
-			t.Fatalf("expected %s, got %s", PermissionSettingsWrite, action)
+		if action != permissionSettingsWrite {
+			t.Fatalf("expected %s, got %s", permissionSettingsWrite, action)
 		}
 	})
 
@@ -166,19 +164,12 @@ func TestAuthorizationDeniesMissingToken(t *testing.T) {
 	app.apiURL = upstream.URL
 	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 
-	var sender mockCallResourceResponseSender
-	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+	response := callResource(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/conversations",
-	}, &sender)
-	if err != nil {
-		t.Fatalf("CallResource error: %s", err)
-	}
-	if sender.response == nil {
-		t.Fatal("no response received from CallResource")
-	}
-	if sender.response.Status != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, sender.response.Status)
+	})
+	if response.Status != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, response.Status)
 	}
 }
 
@@ -212,7 +203,7 @@ func TestAuthorizationRouteSpecificPermissions(t *testing.T) {
 
 	t.Run("reader cannot write feedback", func(t *testing.T) {
 		app.authzClient = newMockAuthzClient(map[string]bool{
-			PermissionDataRead: true,
+			permissionDataRead: true,
 		})
 
 		response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
@@ -230,7 +221,7 @@ func TestAuthorizationRouteSpecificPermissions(t *testing.T) {
 
 	t.Run("feedback writer can write feedback", func(t *testing.T) {
 		app.authzClient = newMockAuthzClient(map[string]bool{
-			PermissionFeedbackWrite: true,
+			permissionFeedbackWrite: true,
 		})
 
 		response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
@@ -248,7 +239,7 @@ func TestAuthorizationRouteSpecificPermissions(t *testing.T) {
 
 	t.Run("reader cannot write settings", func(t *testing.T) {
 		app.authzClient = newMockAuthzClient(map[string]bool{
-			PermissionDataRead: true,
+			permissionDataRead: true,
 		})
 
 		response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
@@ -266,7 +257,7 @@ func TestAuthorizationRouteSpecificPermissions(t *testing.T) {
 
 	t.Run("sigil admin can write settings", func(t *testing.T) {
 		app.authzClient = newMockAuthzClient(map[string]bool{
-			PermissionSettingsWrite: true,
+			permissionSettingsWrite: true,
 		})
 
 		response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
@@ -304,26 +295,27 @@ func TestCallResource(t *testing.T) {
 		switch r.URL.Path {
 		case "/api/v1/conversations":
 			_, _ = io.WriteString(w, `{"items":[]}`)
-		case "/api/v1/conversations/search":
+		case "/api/v1/conversations:batch-metadata":
 			if r.Method != http.MethodPost {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			_, _ = io.WriteString(w, `{"conversations":[],"next_cursor":"","has_more":false}`)
+			var payload struct {
+				ConversationIDs []string `json:"conversation_ids"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				http.Error(w, "invalid request body", http.StatusBadRequest)
+				return
+			}
+			if len(payload.ConversationIDs) == 0 {
+				http.Error(w, "missing conversation ids", http.StatusBadRequest)
+				return
+			}
+			_, _ = io.WriteString(w, `{"items":[{"conversation_id":"conv-1","generation_count":2,"first_generation_at":"2026-02-15T08:00:00Z","last_generation_at":"2026-02-15T09:00:00Z","annotation_count":0}],"missing_conversation_ids":[]}`)
 		case "/api/v1/conversations/c-1":
 			_, _ = io.WriteString(w, `{"conversation_id":"c-1"}`)
 		case "/api/v1/generations/gen-1":
 			_, _ = io.WriteString(w, `{"generation_id":"gen-1"}`)
-		case "/api/v1/search/tags":
-			_, _ = io.WriteString(w, `{"tags":[{"key":"model","scope":"well-known"}]}`)
-		case "/api/v1/search/tag/model/values":
-			_, _ = io.WriteString(w, `{"values":["gpt-4o"]}`)
-		case "/api/v1/search/tag/resource.k8s.label.app/kubernetes/io/name/values":
-			if !strings.Contains(r.RequestURI, "resource.k8s.label.app%2Fkubernetes%2Fio%2Fname") {
-				http.Error(w, "tag key must stay URL-escaped in upstream request", http.StatusBadRequest)
-				return
-			}
-			_, _ = io.WriteString(w, `{"values":["sigil"]}`)
 		case "/api/datasources/uid/prometheus/resources/api/v1/query":
 			if got := r.Header.Get("Authorization"); got != "Bearer sa-token" {
 				http.Error(w, "missing authorization", http.StatusUnauthorized)
@@ -335,7 +327,48 @@ func TestCallResource(t *testing.T) {
 				http.Error(w, "missing authorization", http.StatusUnauthorized)
 				return
 			}
+			if strings.TrimSpace(r.URL.Query().Get("q")) != "" {
+				if got := r.Header.Get("X-Scope-OrgID"); got != defaultTenantID {
+					http.Error(w, "missing fallback tenant header on tempo search", http.StatusUnauthorized)
+					return
+				}
+				_, _ = io.WriteString(w, `{"traces":[{"traceID":"trace-1","startTimeUnixNano":"1739612400000000000","spanSets":[{"spans":[{"spanID":"span-1","durationNanos":"1000000000","attributes":[{"key":"sigil.generation.id","value":{"stringValue":"gen-1"}},{"key":"gen_ai.conversation.id","value":{"stringValue":"conv-1"}},{"key":"gen_ai.request.model","value":{"stringValue":"gpt-4o"}},{"key":"gen_ai.agent.name","value":{"stringValue":"assistant"}}]}]}]}]}`)
+				return
+			}
 			_, _ = io.WriteString(w, `{"traces":[]}`)
+		case "/api/datasources/proxy/uid/tempo/api/v2/search/tags":
+			if got := r.Header.Get("Authorization"); got != "Bearer sa-token" {
+				http.Error(w, "missing authorization", http.StatusUnauthorized)
+				return
+			}
+			if got := r.Header.Get("X-Scope-OrgID"); got != defaultTenantID {
+				http.Error(w, "missing fallback tenant header on tempo tags", http.StatusUnauthorized)
+				return
+			}
+			switch r.URL.Query().Get("scope") {
+			case "span":
+				_, _ = io.WriteString(w, `{"tagNames":["gen_ai.request.model"]}`)
+			case "resource":
+				_, _ = io.WriteString(w, `{"tagNames":["k8s.namespace.name"]}`)
+			default:
+				http.Error(w, "missing scope", http.StatusBadRequest)
+			}
+		case "/api/datasources/proxy/uid/tempo/api/v2/search/tag/span.gen_ai.request.model/values":
+			if got := r.Header.Get("X-Scope-OrgID"); got != defaultTenantID {
+				http.Error(w, "missing fallback tenant header on tempo tag values", http.StatusUnauthorized)
+				return
+			}
+			_, _ = io.WriteString(w, `{"values":["gpt-4o"]}`)
+		case "/api/datasources/proxy/uid/tempo/api/v2/search/tag/resource.k8s.label.app/kubernetes/io/name/values":
+			if got := r.Header.Get("X-Scope-OrgID"); got != defaultTenantID {
+				http.Error(w, "missing fallback tenant header on tempo tag values", http.StatusUnauthorized)
+				return
+			}
+			if !strings.Contains(r.RequestURI, "resource.k8s.label.app%2Fkubernetes%2Fio%2Fname") {
+				http.Error(w, "tag key must stay URL-escaped in upstream request", http.StatusBadRequest)
+				return
+			}
+			_, _ = io.WriteString(w, `{"values":["sigil"]}`)
 		case "/api/datasources/proxy/uid/tempo/api/traces/t-1":
 			if got := r.Header.Get("Authorization"); got != "Bearer sa-token" {
 				http.Error(w, "missing authorization", http.StatusUnauthorized)
@@ -461,11 +494,13 @@ func TestCallResource(t *testing.T) {
 	app.tempoDatasourceUID = "tempo"
 
 	for _, tc := range []struct {
-		name      string
-		method    string
-		path      string
-		expStatus int
-		expBody   []byte
+		name            string
+		method          string
+		path            string
+		reqBody         []byte
+		expStatus       int
+		expBody         []byte
+		expBodyContains []string
 	}{
 		{
 			name:      "get conversations",
@@ -486,7 +521,11 @@ func TestCallResource(t *testing.T) {
 			method:    http.MethodPost,
 			path:      "query/conversations/search",
 			expStatus: http.StatusOK,
-			expBody:   []byte(`{"conversations":[],"next_cursor":"","has_more":false}`),
+			reqBody:   []byte(`{"filters":"model=\"gpt-4o\"","time_range":{"from":"2026-02-14T00:00:00Z","to":"2026-02-16T00:00:00Z"},"page_size":20}`),
+			expBodyContains: []string{
+				`"conversation_id":"conv-1"`,
+				`"has_more":false`,
+			},
 		},
 		{
 			name:      "get generation by id",
@@ -500,7 +539,10 @@ func TestCallResource(t *testing.T) {
 			method:    http.MethodGet,
 			path:      "query/search/tags",
 			expStatus: http.StatusOK,
-			expBody:   []byte(`{"tags":[{"key":"model","scope":"well-known"}]}`),
+			expBodyContains: []string{
+				`"key":"model"`,
+				`"scope":"well-known"`,
+			},
 		},
 		{
 			name:      "list search tag values",
@@ -684,16 +726,22 @@ func TestCallResource(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+			r := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 				Method: tc.method,
 				Path:   tc.path,
+				Body:   tc.reqBody,
 			})
-			if tc.expStatus != response.Status {
-				t.Fatalf("response status should be %d, got %d", tc.expStatus, response.Status)
+			if tc.expStatus != r.Status {
+				t.Fatalf("response status should be %d, got %d", tc.expStatus, r.Status)
 			}
 			if len(tc.expBody) > 0 {
-				if tb := bytes.TrimSpace(response.Body); !bytes.Equal(tb, tc.expBody) {
+				if tb := bytes.TrimSpace(r.Body); !bytes.Equal(tb, tc.expBody) {
 					t.Fatalf("response body should be %s, got %s", tc.expBody, tb)
+				}
+			}
+			for _, fragment := range tc.expBodyContains {
+				if !strings.Contains(string(r.Body), fragment) {
+					t.Fatalf("response body should contain %q, got %s", fragment, string(r.Body))
 				}
 			}
 		})
@@ -733,15 +781,15 @@ func TestCallResourceSupportsProxyPrometheusPostPassThrough(t *testing.T) {
 	app.prometheusDatasourceUID = "prometheus"
 
 	payload := []byte(`{"query":"sum(rate(http_requests_total[5m]))"}`)
-	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodPost,
 		Path:   "query/proxy/prometheus/api/v1/query",
 		Body:   payload,
 	})
-	if response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, response.Status, response.Body)
+	if sender.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)
 	}
-	if tb := bytes.TrimSpace(response.Body); !bytes.Equal(tb, payload) {
+	if tb := bytes.TrimSpace(sender.Body); !bytes.Equal(tb, payload) {
 		t.Fatalf("response body should echo request body, got %s", tb)
 	}
 }
@@ -772,56 +820,15 @@ func TestCallResourceProxyFallsBackToForwardedAuthWhenServiceAccountMissing(t *t
 	app.prometheusDatasourceUID = "prometheus"
 	app.grafanaServiceAccountToken = ""
 
-	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/proxy/prometheus/api/v1/query",
 		Headers: map[string][]string{
 			"Authorization": {"Bearer user-token"},
 		},
 	})
-	if response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, response.Status, response.Body)
-	}
-}
-
-func TestCallResourceRejectsUnsupportedProxyMethods(t *testing.T) {
-	upstreamCalls := 0
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		upstreamCalls++
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"status":"success"}`)
-	}))
-	defer upstream.Close()
-
-	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
-	if err != nil {
-		t.Fatalf("new app: %s", err)
-	}
-	app := inst.(*App)
-	app.authzClient = newMockAuthzClient(allowAllSigilActions())
-	app.grafanaAppURL = upstream.URL
-	app.grafanaServiceAccountToken = "sa-token"
-	app.prometheusDatasourceUID = "prometheus"
-	app.tempoDatasourceUID = "tempo"
-
-	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
-		Method: http.MethodDelete,
-		Path:   "query/proxy/prometheus/api/v1/query",
-	})
-	if response.Status != http.StatusMethodNotAllowed {
-		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, response.Status)
-	}
-
-	response = callResourceWithAuth(t, app, &backend.CallResourceRequest{
-		Method: http.MethodPost,
-		Path:   "query/proxy/tempo/api/search",
-	})
-	if response.Status != http.StatusMethodNotAllowed {
-		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, response.Status)
-	}
-
-	if upstreamCalls != 0 {
-		t.Fatalf("expected no upstream proxy calls for unsupported methods, got %d", upstreamCalls)
+	if sender.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)
 	}
 }
 
@@ -892,17 +899,17 @@ func TestCallResourceSupportsConversationRatingAndAnnotationWrites(t *testing.T)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+			sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 				Method:        http.MethodPost,
 				Path:          tc.path,
 				Body:          tc.body,
 				Headers:       tc.headers,
 				PluginContext: tc.pluginCtx,
 			})
-			if response.Status != tc.expStatus {
-				t.Fatalf("expected status %d, got %d body=%s", tc.expStatus, response.Status, response.Body)
+			if sender.Status != tc.expStatus {
+				t.Fatalf("expected status %d, got %d body=%s", tc.expStatus, sender.Status, sender.Body)
 			}
-			if tb := bytes.TrimSpace(response.Body); !bytes.Equal(tb, tc.body) {
+			if tb := bytes.TrimSpace(sender.Body); !bytes.Equal(tb, tc.body) {
 				t.Fatalf("response body should echo request body, got %s", tb)
 			}
 		})
@@ -943,12 +950,96 @@ func TestCallResourceInjectsFallbackTenantHeader(t *testing.T) {
 	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 	app.apiURL = upstream.URL
 
-	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/conversations",
 	})
-	if response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, response.Status, response.Body)
+	if sender.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)
+	}
+}
+
+func TestCallResourceInjectsTraceparentHeader(t *testing.T) {
+	tracerProvider := sdktrace.NewTracerProvider()
+	prevTracerProvider := otel.GetTracerProvider()
+	prevPropagator := otel.GetTextMapPropagator()
+	otel.SetTracerProvider(tracerProvider)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	t.Cleanup(func() {
+		_ = tracerProvider.Shutdown(context.Background())
+		otel.SetTracerProvider(prevTracerProvider)
+		otel.SetTextMapPropagator(prevPropagator)
+	})
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.TrimSpace(r.Header.Get("traceparent")) == "" {
+			http.Error(w, "missing traceparent header", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"items":[]}`)
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+	app.apiURL = upstream.URL
+
+	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "query/conversations",
+	})
+	if sender.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)
+	}
+}
+
+func TestCallResourceSearchTagsInjectsTraceparentHeader(t *testing.T) {
+	tracerProvider := sdktrace.NewTracerProvider()
+	prevTracerProvider := otel.GetTracerProvider()
+	prevPropagator := otel.GetTextMapPropagator()
+	otel.SetTracerProvider(tracerProvider)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	t.Cleanup(func() {
+		_ = tracerProvider.Shutdown(context.Background())
+		otel.SetTracerProvider(prevTracerProvider)
+		otel.SetTextMapPropagator(prevPropagator)
+	})
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/datasources/proxy/uid/tempo/api/v2/search/tags" {
+			http.NotFound(w, r)
+			return
+		}
+		if strings.TrimSpace(r.Header.Get("traceparent")) == "" {
+			http.Error(w, "missing traceparent header", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"tagNames":[]}`)
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+	app.grafanaAppURL = upstream.URL
+	app.grafanaServiceAccountToken = "sa-token"
+	app.tempoDatasourceUID = "tempo"
+
+	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "query/search/tags",
+	})
+	if sender.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)
 	}
 }
 
@@ -975,15 +1066,15 @@ func TestCallResourceIgnoresGrafanaOrgHeaderAndUsesFallbackTenant(t *testing.T) 
 	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 	app.apiURL = upstream.URL
 
-	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/conversations",
 		Headers: map[string][]string{
 			"X-Grafana-Org-Id": {"12"},
 		},
 	})
-	if response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, response.Status, response.Body)
+	if sender.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)
 	}
 }
 
@@ -1010,7 +1101,7 @@ func TestCallResourceForwardsTenantAndAuthHeaders(t *testing.T) {
 	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 	app.apiURL = upstream.URL
 
-	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/conversations",
 		Headers: map[string][]string{
@@ -1018,8 +1109,46 @@ func TestCallResourceForwardsTenantAndAuthHeaders(t *testing.T) {
 			"Authorization": []string{"Bearer token-a"},
 		},
 	})
-	if response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, response.Status)
+	if sender.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, sender.Status)
+	}
+}
+
+func TestCallResourceSearchPreservesExplicitTenantHeaderOnTempoRequests(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/datasources/proxy/uid/tempo/api/v2/search/tags":
+			if got := r.Header.Get("X-Scope-OrgID"); got != "tenant-a" {
+				http.Error(w, "expected explicit tenant header", http.StatusUnauthorized)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"tagNames":["gen_ai.request.model"]}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+	app.grafanaAppURL = upstream.URL
+	app.grafanaServiceAccountToken = "sa-token"
+	app.tempoDatasourceUID = "tempo"
+
+	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "query/search/tags",
+		Headers: map[string][]string{
+			"X-Scope-OrgID": {"tenant-a"},
+		},
+	})
+	if sender.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)
 	}
 }
 
@@ -1060,20 +1189,20 @@ func TestCallResourceForwardsQueryString(t *testing.T) {
 	app.grafanaServiceAccountToken = "sa-token"
 	app.tempoDatasourceUID = "tempo"
 
-	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/conversations?limit=10&cursor=next-token",
 	})
-	if response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, response.Status)
+	if sender.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, sender.Status)
 	}
 
-	response = callResourceWithAuth(t, app, &backend.CallResourceRequest{
+	sender = callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/proxy/tempo/api/search?q=service.name%3Dapi&limit=20",
 	})
-	if response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, response.Status)
+	if sender.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, sender.Status)
 	}
 }
 
@@ -1094,12 +1223,12 @@ func TestCallResourceRejectsInvalidProxyPath(t *testing.T) {
 		"query/proxy/tempo/",
 	} {
 		t.Run(path, func(t *testing.T) {
-			response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+			sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 				Method: http.MethodGet,
 				Path:   path,
 			})
-			if response.Status != http.StatusBadRequest {
-				t.Fatalf("expected status %d, got %d", http.StatusBadRequest, response.Status)
+			if sender.Status != http.StatusBadRequest {
+				t.Fatalf("expected status %d, got %d", http.StatusBadRequest, sender.Status)
 			}
 		})
 	}
@@ -1113,12 +1242,12 @@ func TestCallResourceRejectsProxyWhenGrafanaDatasourceConfigMissing(t *testing.T
 	app := inst.(*App)
 	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 
-	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/proxy/tempo/api/search",
 	})
-	if response.Status != http.StatusServiceUnavailable {
-		t.Fatalf("expected status %d, got %d body=%s", http.StatusServiceUnavailable, response.Status, response.Body)
+	if sender.Status != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusServiceUnavailable, sender.Status, sender.Body)
 	}
 }
 
@@ -1149,16 +1278,16 @@ func TestCallResourceReturnsNon200StubOnProxyFailures(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			app.apiURL = tc.apiURL
 
-			response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+			sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 				Method: http.MethodGet,
 				Path:   "query/conversations",
 			})
-			if response.Status != tc.expectedStatus {
-				t.Fatalf("expected status %d, got %d", tc.expectedStatus, response.Status)
+			if sender.Status != tc.expectedStatus {
+				t.Fatalf("expected status %d, got %d", tc.expectedStatus, sender.Status)
 			}
 
 			var body stubResponse
-			if err := json.Unmarshal(response.Body, &body); err != nil {
+			if err := json.Unmarshal(sender.Body, &body); err != nil {
 				t.Fatalf("unmarshal stub response: %v", err)
 			}
 			if body.Status != "stub" {
@@ -1322,20 +1451,20 @@ func TestCallResourceReturnsValidJSONWhenClientSendsAcceptEncodingGzip(t *testin
 	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 	app.apiURL = upstream.URL
 
-	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/conversations",
 		Headers: map[string][]string{
 			"Accept-Encoding": {"gzip"},
 		},
 	})
-	if response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, response.Status, response.Body)
+	if sender.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)
 	}
 	// Verify the response body is valid JSON, not garbled gzip bytes.
 	var result map[string]interface{}
-	if err := json.Unmarshal(response.Body, &result); err != nil {
-		t.Fatalf("response body is not valid JSON (garbled encoding?): %v\nbody bytes: %x", err, response.Body)
+	if err := json.Unmarshal(sender.Body, &result); err != nil {
+		t.Fatalf("response body is not valid JSON (garbled encoding?): %v\nbody bytes: %x", err, sender.Body)
 	}
 }
 
@@ -1364,14 +1493,14 @@ func TestCallResourceRoutesTempoProxyThroughGrafanaDatasourceProxy(t *testing.T)
 	app.grafanaServiceAccountToken = "sa-token"
 	app.tempoDatasourceUID = "tempo-ds"
 
-	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/proxy/tempo/api/search",
 	})
-	if response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, response.Status, response.Body)
+	if sender.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)
 	}
-	if tb := bytes.TrimSpace(response.Body); !bytes.Equal(tb, []byte(`{"traces":[]}`)) {
+	if tb := bytes.TrimSpace(sender.Body); !bytes.Equal(tb, []byte(`{"traces":[]}`)) {
 		t.Fatalf("unexpected response body: %s", tb)
 	}
 }
@@ -1398,15 +1527,15 @@ func TestCallResourceInjectsBasicAuthOnSigilProxy(t *testing.T) {
 	app.tenantID = "tenant-42"
 	app.apiAuthToken = "sigil-token"
 
-	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/conversations",
 		Headers: map[string][]string{
 			"Authorization": {"Bearer user-token"},
 		},
 	})
-	if response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, response.Status, response.Body)
+	if sender.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)
 	}
 }
 
@@ -1456,11 +1585,11 @@ func TestCallResourceSettingsRoutesProxyToSigil(t *testing.T) {
 	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 	app.apiURL = upstream.URL
 
-	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/settings",
 	})
-	if response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, response.Status, response.Body)
+	if sender.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)
 	}
 }

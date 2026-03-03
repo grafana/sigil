@@ -49,22 +49,41 @@ describe('ConversationListPanel', () => {
     expect(onSelect).toHaveBeenCalledWith('conv-1');
   });
 
-  it('shows error badge when error_count > 0', () => {
-    render(
-      <ConversationListPanel {...defaultProps} conversations={[makeConversation('conv-1', { error_count: 3 })]} />
-    );
-    expect(screen.getByText('3')).toBeInTheDocument();
-  });
-
-  it('shows model badges', () => {
+  it('shows time and conversation ID for each row', () => {
     render(
       <ConversationListPanel
         {...defaultProps}
-        conversations={[makeConversation('conv-1', { models: ['gpt-4o', 'claude-3'] })]}
+        conversations={[makeConversation('conv-1', { last_generation_at: '2026-02-15T10:00:00Z' })]}
       />
     );
-    expect(screen.getByText('gpt-4o')).toBeInTheDocument();
-    expect(screen.getByText('claude-3')).toBeInTheDocument();
+    expect(screen.getByText('conv-1')).toBeInTheDocument();
+    expect(screen.getByText(/\d{2}:\d{2}/)).toBeInTheDocument();
+  });
+
+  it('renders a day header row with full date', () => {
+    const firstDateLabel = new Date('2026-02-15T10:00:00Z').toLocaleDateString(undefined, {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+    const secondDateLabel = new Date('2026-02-14T09:00:00Z').toLocaleDateString(undefined, {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+    render(
+      <ConversationListPanel
+        {...defaultProps}
+        conversations={[
+          makeConversation('conv-1', { last_generation_at: '2026-02-15T10:00:00Z' }),
+          makeConversation('conv-2', { last_generation_at: '2026-02-14T09:00:00Z' }),
+        ]}
+      />
+    );
+    expect(screen.getByText(firstDateLabel)).toBeInTheDocument();
+    expect(screen.getByText(secondDateLabel)).toBeInTheDocument();
   });
 
   it('shows load more button when hasMore is true', () => {
@@ -96,14 +115,8 @@ describe('ConversationListPanel', () => {
     expect(screen.getByText(/no conversations found/i)).toBeInTheDocument();
   });
 
-  it('shows rating icons when rating_summary present', () => {
-    const conv = makeConversation('conv-1', {
-      generation_count: 5,
-      rating_summary: { total_count: 3, good_count: 2, bad_count: 1, has_bad_rating: true },
-    });
-    render(<ConversationListPanel {...defaultProps} conversations={[conv]} />);
-    // good_count shows 2, bad_count shows 1
-    expect(screen.getAllByText('2')).toHaveLength(1);
-    expect(screen.getByText('1')).toBeInTheDocument();
+  it('does not render a table header', () => {
+    render(<ConversationListPanel {...defaultProps} conversations={[makeConversation('conv-1')]} />);
+    expect(screen.queryByRole('columnheader')).not.toBeInTheDocument();
   });
 });
