@@ -292,7 +292,11 @@ export default function ConversationGenerations({
   return (
     <div className={styles.container}>
       <h3 className={styles.title}>Generations ({generations.length})</h3>
-      {errorMessage.length > 0 && <Alert severity="error" title="Failed to load generations">{errorMessage}</Alert>}
+      {errorMessage.length > 0 && (
+        <Alert severity="error" title="Failed to load generations">
+          {errorMessage}
+        </Alert>
+      )}
       {loading ? (
         <div className={styles.spinnerWrap}>
           <Spinner aria-label="loading conversation generations" />

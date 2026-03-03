@@ -333,7 +333,10 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
 
   const resolvedSelectedConversationID = useMemo(() => {
     const selectedConversationID = searchParams.get(SELECTED_CONVERSATION_PARAM) ?? '';
-    if (selectedConversationID.length > 0 && conversations.some((item) => item.conversation_id === selectedConversationID)) {
+    if (
+      selectedConversationID.length > 0 &&
+      conversations.some((item) => item.conversation_id === selectedConversationID)
+    ) {
       return selectedConversationID;
     }
     return '';
@@ -343,7 +346,10 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
     () => conversations.find((conversation) => conversation.conversation_id === resolvedSelectedConversationID),
     [conversations, resolvedSelectedConversationID]
   );
-  const conversationStats = useMemo(() => buildConversationStats(conversations, timeRange.to.valueOf()), [conversations, timeRange]);
+  const conversationStats = useMemo(
+    () => buildConversationStats(conversations, timeRange.to.valueOf()),
+    [conversations, timeRange]
+  );
   const previousConversationStats = useMemo(
     () => buildConversationStats(previousConversations, timeRange.from.valueOf()),
     [previousConversations, timeRange]
@@ -351,18 +357,24 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
 
   const onMoveBackward = useCallback(() => {
     const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
-    setTimeRangeState(makeTimeRange(dateTime(timeRange.from.valueOf() - diff), dateTime(timeRange.to.valueOf() - diff)));
+    setTimeRangeState(
+      makeTimeRange(dateTime(timeRange.from.valueOf() - diff), dateTime(timeRange.to.valueOf() - diff))
+    );
   }, [timeRange]);
 
   const onMoveForward = useCallback(() => {
     const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
-    setTimeRangeState(makeTimeRange(dateTime(timeRange.from.valueOf() + diff), dateTime(timeRange.to.valueOf() + diff)));
+    setTimeRangeState(
+      makeTimeRange(dateTime(timeRange.from.valueOf() + diff), dateTime(timeRange.to.valueOf() + diff))
+    );
   }, [timeRange]);
 
   const onZoom = useCallback(() => {
     const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
     const half = Math.round(diff / 2);
-    setTimeRangeState(makeTimeRange(dateTime(timeRange.from.valueOf() - half), dateTime(timeRange.to.valueOf() + half)));
+    setTimeRangeState(
+      makeTimeRange(dateTime(timeRange.from.valueOf() - half), dateTime(timeRange.to.valueOf() + half))
+    );
   }, [timeRange]);
 
   const onSelectConversation = useCallback(
@@ -405,7 +417,9 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
         if (selectedConversationRequestVersionRef.current !== requestVersion) {
           return;
         }
-        setSelectedConversationErrorMessage(error instanceof Error ? error.message : 'failed to load conversation detail');
+        setSelectedConversationErrorMessage(
+          error instanceof Error ? error.message : 'failed to load conversation detail'
+        );
       })
       .finally(() => {
         if (selectedConversationRequestVersionRef.current !== requestVersion) {
@@ -434,7 +448,10 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
             <div className={styles.statValueRow}>
               <div className={styles.statValue}>{conversationStats.totalConversations.toLocaleString()}</div>
               {(() => {
-                const trend = buildTrendLabel(conversationStats.totalConversations, previousConversationStats.totalConversations);
+                const trend = buildTrendLabel(
+                  conversationStats.totalConversations,
+                  previousConversationStats.totalConversations
+                );
                 if (!trend) {
                   return null;
                 }
@@ -517,7 +534,10 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
             <div className={styles.statValueRow}>
               <div className={styles.statValue}>{conversationStats.ratedConversations.toLocaleString()}</div>
               {(() => {
-                const trend = buildTrendLabel(conversationStats.ratedConversations, previousConversationStats.ratedConversations);
+                const trend = buildTrendLabel(
+                  conversationStats.ratedConversations,
+                  previousConversationStats.ratedConversations
+                );
                 if (!trend) {
                   return null;
                 }
