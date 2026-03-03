@@ -164,7 +164,10 @@ describe('ConversationDetailPage', () => {
     render(
       <MemoryRouter initialEntries={['/conversations/conv-1/detail']}>
         <Routes>
-          <Route path="/conversations/:conversationID/detail" element={<ConversationDetailPage dataSource={dataSource} />} />
+          <Route
+            path="/conversations/:conversationID/detail"
+            element={<ConversationDetailPage dataSource={dataSource} />}
+          />
         </Routes>
       </MemoryRouter>
     );
@@ -356,7 +359,10 @@ describe('ConversationDetailPage', () => {
     render(
       <MemoryRouter initialEntries={['/conversations/conv-fill-spans/detail']}>
         <Routes>
-          <Route path="/conversations/:conversationID/detail" element={<ConversationDetailPage dataSource={dataSource} />} />
+          <Route
+            path="/conversations/:conversationID/detail"
+            element={<ConversationDetailPage dataSource={dataSource} />}
+          />
         </Routes>
       </MemoryRouter>
     );

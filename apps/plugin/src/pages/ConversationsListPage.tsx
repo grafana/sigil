@@ -97,7 +97,8 @@ function pickLLMCallBucketStep(maxCalls: number): number {
   const scored = Array.from(candidates).map((step) => {
     const bucketCount = countLLMCallBuckets(maxCalls, step);
     const inRange = bucketCount >= minBuckets && bucketCount <= maxBuckets;
-    const rangeDistance = bucketCount < minBuckets ? minBuckets - bucketCount : bucketCount > maxBuckets ? bucketCount - maxBuckets : 0;
+    const rangeDistance =
+      bucketCount < minBuckets ? minBuckets - bucketCount : bucketCount > maxBuckets ? bucketCount - maxBuckets : 0;
     const targetDistance = Math.abs(bucketCount - targetBuckets);
     const score = (inRange ? 0 : 1000) + rangeDistance * 10 + targetDistance;
     return { step, score };
@@ -277,7 +278,8 @@ function pickTimeBucketSpec(timeRange: TimeRange): TimeBucketSpec {
   const scored = candidates.map((candidate) => {
     const bucketCount = countBucketsInRange(fromMs, toMs, candidate);
     const inRange = bucketCount >= minBuckets && bucketCount <= maxBuckets;
-    const rangeDistance = bucketCount < minBuckets ? minBuckets - bucketCount : bucketCount > maxBuckets ? bucketCount - maxBuckets : 0;
+    const rangeDistance =
+      bucketCount < minBuckets ? minBuckets - bucketCount : bucketCount > maxBuckets ? bucketCount - maxBuckets : 0;
     const targetDistance = Math.abs(bucketCount - targetBuckets);
     const score = (inRange ? 0 : 1000) + rangeDistance * 10 + targetDistance;
     return { candidate, score };
@@ -295,7 +297,11 @@ function buildTimeBuckets(conversations: ConversationSearchResult[], timeRange: 
   const buckets: ActivityBucket[] = [];
   const bucketByKey = new Map<string, ActivityBucket>();
 
-  for (let cursor = new Date(firstBucket); cursor.getTime() <= lastBucket.getTime(); cursor = nextBucketStartUTC(cursor, spec)) {
+  for (
+    let cursor = new Date(firstBucket);
+    cursor.getTime() <= lastBucket.getTime();
+    cursor = nextBucketStartUTC(cursor, spec)
+  ) {
     const key = cursor.toISOString();
     const bucket: ActivityBucket = {
       key,
@@ -600,7 +606,9 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
   const [fallbackSelectedBucketKey, setFallbackSelectedBucketKey] = useState<string>(searchParams.get('bucket') ?? '');
   const requestVersionRef = useRef<number>(0);
   const viewMode = canUseRouterSearchParamUpdates ? parseViewModeParam(searchParams.get('view')) : fallbackViewMode;
-  const selectedBucketKey = canUseRouterSearchParamUpdates ? (searchParams.get('bucket') ?? '') : fallbackSelectedBucketKey;
+  const selectedBucketKey = canUseRouterSearchParamUpdates
+    ? (searchParams.get('bucket') ?? '')
+    : fallbackSelectedBucketKey;
   const previousViewModeRef = useRef<ChartViewMode>(viewMode);
 
   const setViewMode = useCallback(
@@ -659,18 +667,24 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
 
   const onMoveBackward = useCallback(() => {
     const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
-    setTimeRangeState(makeTimeRange(dateTime(timeRange.from.valueOf() - diff), dateTime(timeRange.to.valueOf() - diff)));
+    setTimeRangeState(
+      makeTimeRange(dateTime(timeRange.from.valueOf() - diff), dateTime(timeRange.to.valueOf() - diff))
+    );
   }, [timeRange]);
 
   const onMoveForward = useCallback(() => {
     const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
-    setTimeRangeState(makeTimeRange(dateTime(timeRange.from.valueOf() + diff), dateTime(timeRange.to.valueOf() + diff)));
+    setTimeRangeState(
+      makeTimeRange(dateTime(timeRange.from.valueOf() + diff), dateTime(timeRange.to.valueOf() + diff))
+    );
   }, [timeRange]);
 
   const onZoom = useCallback(() => {
     const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
     const half = Math.round(diff / 2);
-    setTimeRangeState(makeTimeRange(dateTime(timeRange.from.valueOf() - half), dateTime(timeRange.to.valueOf() + half)));
+    setTimeRangeState(
+      makeTimeRange(dateTime(timeRange.from.valueOf() - half), dateTime(timeRange.to.valueOf() + half))
+    );
   }, [timeRange]);
 
   useEffect(() => {
@@ -696,70 +710,67 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
     setSearchParams(nextSearchParams, { replace: true });
   }, [canUseRouterSearchParamUpdates, canUseWindowLocation, searchParams, setSearchParams, timeRange]);
 
-  const loadConversations = useCallback(
-    async (): Promise<void> => {
-      requestVersionRef.current += 1;
-      const requestVersion = requestVersionRef.current;
+  const loadConversations = useCallback(async (): Promise<void> => {
+    requestVersionRef.current += 1;
+    const requestVersion = requestVersionRef.current;
 
-      setLoading(true);
-      setErrorMessage('');
+    setLoading(true);
+    setErrorMessage('');
 
-      try {
-        const pageSize = 50;
-        const fetchRangeConversations = async (fromISO: string, toISO: string): Promise<ConversationSearchResult[]> => {
-          let cursor = '';
-          let hasMore = true;
-          const allConversations: ConversationSearchResult[] = [];
+    try {
+      const pageSize = 50;
+      const fetchRangeConversations = async (fromISO: string, toISO: string): Promise<ConversationSearchResult[]> => {
+        let cursor = '';
+        let hasMore = true;
+        const allConversations: ConversationSearchResult[] = [];
 
-          while (hasMore) {
-            const response = await dataSource.searchConversations({
-              filters: '',
-              select: [],
-              time_range: {
-                from: fromISO,
-                to: toISO,
-              },
-              page_size: pageSize,
-              cursor,
-            });
-            allConversations.push(...(response.conversations ?? []));
-            cursor = response.next_cursor ?? '';
-            hasMore = Boolean(response.has_more && cursor.length > 0);
-          }
-
-          return allConversations;
-        };
-
-        const currentFromMs = timeRange.from.valueOf();
-        const currentToMs = timeRange.to.valueOf();
-        const windowMs = currentToMs - currentFromMs;
-        const previousFromISO = dateTime(currentFromMs - windowMs).toISOString();
-        const previousToISO = dateTime(currentToMs - windowMs).toISOString();
-
-        const [allConversations, previousRangeConversations] = await Promise.all([
-          fetchRangeConversations(timeRange.from.toISOString(), timeRange.to.toISOString()),
-          fetchRangeConversations(previousFromISO, previousToISO),
-        ]);
-
-        if (requestVersionRef.current !== requestVersion) {
-          return;
+        while (hasMore) {
+          const response = await dataSource.searchConversations({
+            filters: '',
+            select: [],
+            time_range: {
+              from: fromISO,
+              to: toISO,
+            },
+            page_size: pageSize,
+            cursor,
+          });
+          allConversations.push(...(response.conversations ?? []));
+          cursor = response.next_cursor ?? '';
+          hasMore = Boolean(response.has_more && cursor.length > 0);
         }
-        setConversations(allConversations);
-        setPreviousConversations(previousRangeConversations);
-      } catch (error) {
-        if (requestVersionRef.current !== requestVersion) {
-          return;
-        }
-        setErrorMessage(error instanceof Error ? error.message : 'failed to load conversations');
-      } finally {
-        if (requestVersionRef.current !== requestVersion) {
-          return;
-        }
-        setLoading(false);
+
+        return allConversations;
+      };
+
+      const currentFromMs = timeRange.from.valueOf();
+      const currentToMs = timeRange.to.valueOf();
+      const windowMs = currentToMs - currentFromMs;
+      const previousFromISO = dateTime(currentFromMs - windowMs).toISOString();
+      const previousToISO = dateTime(currentToMs - windowMs).toISOString();
+
+      const [allConversations, previousRangeConversations] = await Promise.all([
+        fetchRangeConversations(timeRange.from.toISOString(), timeRange.to.toISOString()),
+        fetchRangeConversations(previousFromISO, previousToISO),
+      ]);
+
+      if (requestVersionRef.current !== requestVersion) {
+        return;
       }
-    },
-    [dataSource, timeRange]
-  );
+      setConversations(allConversations);
+      setPreviousConversations(previousRangeConversations);
+    } catch (error) {
+      if (requestVersionRef.current !== requestVersion) {
+        return;
+      }
+      setErrorMessage(error instanceof Error ? error.message : 'failed to load conversations');
+    } finally {
+      if (requestVersionRef.current !== requestVersion) {
+        return;
+      }
+      setLoading(false);
+    }
+  }, [dataSource, timeRange]);
 
   useEffect(() => {
     void loadConversations();
@@ -919,7 +930,10 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
             <div className={styles.statValueRow}>
               <div className={styles.statValue}>{conversationStats.ratedConversations.toLocaleString()}</div>
               {(() => {
-                const trend = buildTrendLabel(conversationStats.ratedConversations, previousConversationStats.ratedConversations);
+                const trend = buildTrendLabel(
+                  conversationStats.ratedConversations,
+                  previousConversationStats.ratedConversations
+                );
                 if (!trend) {
                   return null;
                 }
@@ -1006,7 +1020,6 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
             })}
           </div>
         )}
-
       </div>
 
       {(errorMessage.length === 0 || conversations.length > 0) && selectedBucket != null && (

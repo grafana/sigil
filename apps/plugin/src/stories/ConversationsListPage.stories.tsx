@@ -1,8 +1,8 @@
-import ConversationsListPage from '../pages/ConversationsListPage';
+import React from 'react';
 import type { ConversationsDataSource } from '../conversation/api';
 import { mockSearchResults } from './mockConversationData';
 import { MemoryRouter } from 'react-router-dom';
-import type { ConversationsListPageProps } from '../pages/ConversationsListPage';
+import ConversationsListPage, { type ConversationsListPageProps } from '../pages/ConversationsListPage';
 
 const mockDataSource: ConversationsDataSource = {
   async listConversations() {

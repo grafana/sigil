@@ -289,7 +289,10 @@ function fillSpans(timelines: TraceTimeline[]): TraceTimeline[] {
       ...timeline,
       rowCount: relayout.rowCount,
       spans: relayout.spans,
-      startNs: relayout.spans.reduce((min, span) => (span.startNs < min ? span.startNs : min), relayout.spans[0].startNs),
+      startNs: relayout.spans.reduce(
+        (min, span) => (span.startNs < min ? span.startNs : min),
+        relayout.spans[0].startNs
+      ),
       endNs: relayout.spans.reduce((max, span) => (span.endNs > max ? span.endNs : max), relayout.spans[0].endNs),
     };
   });
@@ -354,7 +357,10 @@ function findGenerationForSpan(detail: ConversationDetail | null, span: Pick<Tra
   return detail.generations.find((generation) => generation.trace_id === span.traceID) ?? null;
 }
 
-function getUsageValue(usage: GenerationDetail['usage'], key: 'input_tokens' | 'output_tokens' | 'total_tokens'): string {
+function getUsageValue(
+  usage: GenerationDetail['usage'],
+  key: 'input_tokens' | 'output_tokens' | 'total_tokens'
+): string {
   const value = usage?.[key];
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return 'n/a';
@@ -708,7 +714,9 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
       return [];
     }
     return Object.entries(selectedGeneration.usage)
-      .filter(([key, value]) => !['input_tokens', 'output_tokens', 'total_tokens'].includes(key) && typeof value === 'number')
+      .filter(
+        ([key, value]) => !['input_tokens', 'output_tokens', 'total_tokens'].includes(key) && typeof value === 'number'
+      )
       .sort(([a], [b]) => a.localeCompare(b));
   }, [selectedGeneration]);
   const setSelectedSpanParam = (selectionID: string) => {
@@ -906,11 +914,15 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                           if (firstSpan == null) {
                             return;
                           }
-                          const laneElement = event.currentTarget.querySelector(`.${styles.traceLane}`) as HTMLDivElement | null;
+                          const laneElement = event.currentTarget.querySelector(
+                            `.${styles.traceLane}`
+                          ) as HTMLDivElement | null;
                           const laneWidthPx = laneElement?.clientWidth ?? 0;
                           setHoveredTraceID(timeline.traceID);
                           setHoveredSpanSelectionID(firstSpan.selectionID);
-                          setHoveredSpanAnchor(getHoveredSpanAnchor(firstSpan, timelineBounds, laneWidthPx, timelineScalePct));
+                          setHoveredSpanAnchor(
+                            getHoveredSpanAnchor(firstSpan, timelineBounds, laneWidthPx, timelineScalePct)
+                          );
                         }}
                         onMouseLeave={() => {
                           setHoveredTraceID('');
@@ -962,7 +974,9 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                                   onMouseEnter={(event) => {
                                     const laneWidthPx = event.currentTarget.parentElement?.clientWidth ?? 0;
                                     setHoveredSpanSelectionID(span.selectionID);
-                                    setHoveredSpanAnchor(getHoveredSpanAnchor(span, timelineBounds, laneWidthPx, timelineScalePct));
+                                    setHoveredSpanAnchor(
+                                      getHoveredSpanAnchor(span, timelineBounds, laneWidthPx, timelineScalePct)
+                                    );
                                   }}
                                   onMouseLeave={() => {
                                     setHoveredSpanSelectionID('');
@@ -979,7 +993,9 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                                       top: `${hoveredSpanAnchor.topPx}px`,
                                       left: hoveredSpanAnchor.left,
                                       maxWidth:
-                                        hoveredSpanAnchor.maxWidthPx != null ? `${hoveredSpanAnchor.maxWidthPx}px` : undefined,
+                                        hoveredSpanAnchor.maxWidthPx != null
+                                          ? `${hoveredSpanAnchor.maxWidthPx}px`
+                                          : undefined,
                                     }}
                                   >
                                     <div className={styles.hoveredSpanTitle}>{hoveredSpan.name}</div>
@@ -987,12 +1003,15 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                                     <div className={styles.hoveredSpanRow}>
                                       <span className={styles.hoveredSpanLabel}>Time range</span>
                                       <span className={styles.hoveredSpanValue}>
-                                        {formatNsTimestamp(hoveredSpan.startNs)} - {formatNsTimestamp(hoveredSpan.endNs)}
+                                        {formatNsTimestamp(hoveredSpan.startNs)} -{' '}
+                                        {formatNsTimestamp(hoveredSpan.endNs)}
                                       </span>
                                     </div>
                                     <div className={styles.hoveredSpanRow}>
                                       <span className={styles.hoveredSpanLabel}>Duration</span>
-                                      <span className={styles.hoveredSpanValue}>{formatNsDuration(hoveredSpan.durationNs)}</span>
+                                      <span className={styles.hoveredSpanValue}>
+                                        {formatNsDuration(hoveredSpan.durationNs)}
+                                      </span>
                                     </div>
                                     <div className={styles.hoveredSpanRow}>
                                       <span className={styles.hoveredSpanLabel}>Trace ID</span>
@@ -1000,13 +1019,17 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                                     </div>
                                     <div className={styles.hoveredSpanRow}>
                                       <span className={styles.hoveredSpanLabel}>Span ID</span>
-                                      <span className={styles.hoveredSpanValue}>{hoveredSpan.spanID || 'unknown-span'}</span>
+                                      <span className={styles.hoveredSpanValue}>
+                                        {hoveredSpan.spanID || 'unknown-span'}
+                                      </span>
                                     </div>
                                     {hoveredGeneration != null && (
                                       <>
                                         <div className={styles.hoveredSpanRow}>
                                           <span className={styles.hoveredSpanLabel}>Generation ID</span>
-                                          <span className={styles.hoveredSpanValue}>{hoveredGeneration.generation_id}</span>
+                                          <span className={styles.hoveredSpanValue}>
+                                            {hoveredGeneration.generation_id}
+                                          </span>
                                         </div>
                                         <div className={styles.hoveredSpanRow}>
                                           <span className={styles.hoveredSpanLabel}>Model</span>
@@ -1017,7 +1040,9 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                                         </div>
                                         <div className={styles.hoveredSpanRow}>
                                           <span className={styles.hoveredSpanLabel}>Mode</span>
-                                          <span className={styles.hoveredSpanValue}>{hoveredGeneration.mode ?? 'n/a'}</span>
+                                          <span className={styles.hoveredSpanValue}>
+                                            {hoveredGeneration.mode ?? 'n/a'}
+                                          </span>
                                         </div>
                                       </>
                                     )}
@@ -1106,7 +1131,9 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                             </div>
                             <div className={styles.selectedSpanRow}>
                               <span className={styles.selectedSpanLabel}>Stop reason</span>
-                              <span className={styles.selectedSpanValue}>{selectedGeneration.stop_reason ?? 'n/a'}</span>
+                              <span className={styles.selectedSpanValue}>
+                                {selectedGeneration.stop_reason ?? 'n/a'}
+                              </span>
                             </div>
                             <div className={styles.selectedSpanRow}>
                               <span className={styles.selectedSpanLabel}>Created at</span>
@@ -1114,7 +1141,9 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
                             </div>
                             <div className={styles.selectedSpanRow}>
                               <span className={styles.selectedSpanLabel}>Completed at</span>
-                              <span className={styles.selectedSpanValue}>{String(selectedGeneration.completed_at ?? 'n/a')}</span>
+                              <span className={styles.selectedSpanValue}>
+                                {String(selectedGeneration.completed_at ?? 'n/a')}
+                              </span>
                             </div>
                             <div className={styles.selectedSpanRow}>
                               <span className={styles.selectedSpanLabel}>Input tokens</span>
