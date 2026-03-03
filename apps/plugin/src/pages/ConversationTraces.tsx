@@ -776,14 +776,18 @@ export default function ConversationTraces({
             <span className={styles.traceTimeLabel} title={formatNsTimestamp(timelineBounds.min)}>
               {formatNsShortTime(timelineBounds.min)}
             </span>
-            <span className={styles.traceTimeLabel} title={formatNsTimestamp(timelineBounds.min + timelineBounds.range)}>
+            <span
+              className={styles.traceTimeLabel}
+              title={formatNsTimestamp(timelineBounds.min + timelineBounds.range)}
+            >
               {formatNsShortTime(timelineBounds.min + timelineBounds.range)}
             </span>
           </div>
           {displayedTimelines.map((timeline, timelineIndex) => {
             const timelineColor = getGradientColorAtIndex(displayedTimelines.length, timelineIndex, 0.82);
             if (!isExpandedTraceView) {
-              const traceDurationNs = timeline.endNs > timeline.startNs ? timeline.endNs - timeline.startNs : BIGINT_ONE;
+              const traceDurationNs =
+                timeline.endNs > timeline.startNs ? timeline.endNs - timeline.startNs : BIGINT_ONE;
               const rawLeftPct = ratioToPercent(timeline.startNs - timelineBounds.min, timelineBounds.range);
               const boundedWidthPct = Math.min(
                 Math.max(ratioToPercent(traceDurationNs, timelineBounds.range), TRACE_MIN_SPAN_WIDTH_PCT),
@@ -797,7 +801,9 @@ export default function ConversationTraces({
                   className={styles.traceRow}
                   data-testid={`trace-row-${timeline.traceID}`}
                   onMouseMove={(event) => {
-                    const laneElement = event.currentTarget.querySelector(`.${styles.traceLane}`) as HTMLDivElement | null;
+                    const laneElement = event.currentTarget.querySelector(
+                      `.${styles.traceLane}`
+                    ) as HTMLDivElement | null;
                     if (laneElement == null) {
                       return;
                     }
@@ -875,7 +881,9 @@ export default function ConversationTraces({
                         <div className={styles.hoveredSpanRow}>
                           <span className={styles.hoveredSpanLabel}>Duration</span>
                           <span className={styles.hoveredSpanValue}>
-                            {formatNsDuration(timeline.endNs > timeline.startNs ? timeline.endNs - timeline.startNs : BIGINT_ONE)}
+                            {formatNsDuration(
+                              timeline.endNs > timeline.startNs ? timeline.endNs - timeline.startNs : BIGINT_ONE
+                            )}
                           </span>
                         </div>
                         <div className={styles.hoveredSpanRow}>
@@ -918,7 +926,9 @@ export default function ConversationTraces({
                 className={styles.traceRow}
                 data-testid={`trace-row-${timeline.traceID}`}
                 onMouseMove={(event) => {
-                  const laneElement = event.currentTarget.querySelector(`.${styles.traceLane}`) as HTMLDivElement | null;
+                  const laneElement = event.currentTarget.querySelector(
+                    `.${styles.traceLane}`
+                  ) as HTMLDivElement | null;
                   if (laneElement == null) {
                     return;
                   }
@@ -940,7 +950,9 @@ export default function ConversationTraces({
                   setHoveredSpanAnchor(null);
                 }}
                 onClick={(event) => {
-                  const laneElement = event.currentTarget.querySelector(`.${styles.traceLane}`) as HTMLDivElement | null;
+                  const laneElement = event.currentTarget.querySelector(
+                    `.${styles.traceLane}`
+                  ) as HTMLDivElement | null;
                   if (laneElement == null) {
                     return;
                   }
@@ -1001,7 +1013,9 @@ export default function ConversationTraces({
                           onMouseEnter={(event) => {
                             const laneWidthPx = event.currentTarget.parentElement?.clientWidth ?? 0;
                             setHoveredSpanSelectionID(span.selectionID);
-                            setHoveredSpanAnchor(getHoveredSpanAnchor(span, timelineBounds, laneWidthPx, timelineScalePct));
+                            setHoveredSpanAnchor(
+                              getHoveredSpanAnchor(span, timelineBounds, laneWidthPx, timelineScalePct)
+                            );
                           }}
                           onMouseLeave={() => {
                             setHoveredSpanSelectionID('');
@@ -1019,7 +1033,10 @@ export default function ConversationTraces({
                                 '--tooltip-border-color': spanColor,
                                 top: `${hoveredSpanAnchor.topPx}px`,
                                 left: hoveredSpanAnchor.left,
-                                maxWidth: hoveredSpanAnchor.maxWidthPx != null ? `${hoveredSpanAnchor.maxWidthPx}px` : undefined,
+                                maxWidth:
+                                  hoveredSpanAnchor.maxWidthPx != null
+                                    ? `${hoveredSpanAnchor.maxWidthPx}px`
+                                    : undefined,
                               } as TooltipStyle
                             }
                           >
@@ -1033,7 +1050,9 @@ export default function ConversationTraces({
                             </div>
                             <div className={styles.hoveredSpanRow}>
                               <span className={styles.hoveredSpanLabel}>Duration</span>
-                              <span className={styles.hoveredSpanValue}>{formatNsDuration(hoveredSpan.durationNs)}</span>
+                              <span className={styles.hoveredSpanValue}>
+                                {formatNsDuration(hoveredSpan.durationNs)}
+                              </span>
                             </div>
                             <div className={styles.hoveredSpanRow}>
                               <span className={styles.hoveredSpanLabel}>Trace ID</span>
@@ -1075,7 +1094,10 @@ export default function ConversationTraces({
             <span className={styles.traceTimeLabel} title={formatNsTimestamp(timelineBounds.min)}>
               {formatNsShortTime(timelineBounds.min)}
             </span>
-            <span className={styles.traceTimeLabel} title={formatNsTimestamp(timelineBounds.min + timelineBounds.range)}>
+            <span
+              className={styles.traceTimeLabel}
+              title={formatNsTimestamp(timelineBounds.min + timelineBounds.range)}
+            >
               {formatNsShortTime(timelineBounds.min + timelineBounds.range)}
             </span>
           </div>
@@ -1157,15 +1179,21 @@ export default function ConversationTraces({
                   </div>
                   <div className={styles.selectedSpanRow}>
                     <span className={styles.selectedSpanLabel}>Input tokens</span>
-                    <span className={styles.selectedSpanValue}>{getUsageValue(selectedGeneration.usage, 'input_tokens')}</span>
+                    <span className={styles.selectedSpanValue}>
+                      {getUsageValue(selectedGeneration.usage, 'input_tokens')}
+                    </span>
                   </div>
                   <div className={styles.selectedSpanRow}>
                     <span className={styles.selectedSpanLabel}>Output tokens</span>
-                    <span className={styles.selectedSpanValue}>{getUsageValue(selectedGeneration.usage, 'output_tokens')}</span>
+                    <span className={styles.selectedSpanValue}>
+                      {getUsageValue(selectedGeneration.usage, 'output_tokens')}
+                    </span>
                   </div>
                   <div className={styles.selectedSpanRow}>
                     <span className={styles.selectedSpanLabel}>Total tokens</span>
-                    <span className={styles.selectedSpanValue}>{getUsageValue(selectedGeneration.usage, 'total_tokens')}</span>
+                    <span className={styles.selectedSpanValue}>
+                      {getUsageValue(selectedGeneration.usage, 'total_tokens')}
+                    </span>
                   </div>
                   {selectedGenerationUsageExtras.map(([key, value]) => (
                     <div key={key} className={styles.selectedSpanRow}>
