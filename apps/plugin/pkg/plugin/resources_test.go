@@ -885,11 +885,10 @@ func TestCallResourceRoutesTempoProxyThroughGrafanaDatasourceProxy(t *testing.T)
 	}
 }
 
-func TestCallResourceInjectsBasicAuthOnSigilProxy(t *testing.T) {
+func TestCallResourceInjectsBearerAuthOnSigilProxy(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user, pass, ok := r.BasicAuth()
-		if !ok || user != "tenant-42" || pass != "sigil-token" {
-			http.Error(w, "expected basic auth tenant-42:sigil-token", http.StatusUnauthorized)
+		if got := r.Header.Get("Authorization"); got != "Bearer sigil-token" {
+			http.Error(w, "expected bearer auth sigil-token", http.StatusUnauthorized)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
