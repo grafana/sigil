@@ -885,6 +885,69 @@ func TestCallResourceRoutesTempoProxyThroughGrafanaDatasourceProxy(t *testing.T)
 	}
 }
 
+func TestCallResourceInjectsBasicAuthOnSigilProxy(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, pass, ok := r.BasicAuth()
+		if !ok || user != "tenant-42" || pass != "sigil-token" {
+			http.Error(w, "expected basic auth tenant-42:sigil-token", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"items":[]}`)
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.apiURL = upstream.URL
+	app.tenantID = "tenant-42"
+	app.apiAuthToken = "sigil-token"
+
+	var sender mockCallResourceResponseSender
+	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "query/conversations",
+		Headers: map[string][]string{
+			"Authorization": {"Bearer user-token"},
+		},
+	}, &sender)
+	if err != nil {
+		t.Fatalf("CallResource error: %s", err)
+	}
+	if sender.response == nil {
+		t.Fatal("no response received from CallResource")
+	}
+	if sender.response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.response.Status, sender.response.Body)
+	}
+}
+
+func TestNewAppReadsApiAuthTokenFromSecureJsonData(t *testing.T) {
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{
+		JSONData: []byte(`{"sigilApiUrl":"https://remote.example.com","tenantId":"42"}`),
+		DecryptedSecureJSONData: map[string]string{
+			"sigilApiAuthToken": "secret-token",
+		},
+	})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+
+	app := inst.(*App)
+	if app.apiURL != "https://remote.example.com" {
+		t.Fatalf("expected api URL %q, got %q", "https://remote.example.com", app.apiURL)
+	}
+	if app.tenantID != "42" {
+		t.Fatalf("expected tenant id %q, got %q", "42", app.tenantID)
+	}
+	if app.apiAuthToken != "secret-token" {
+		t.Fatalf("expected api auth token %q, got %q", "secret-token", app.apiAuthToken)
+	}
+}
+
 func TestCallResourceSettingsRoutesProxyToSigil(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/settings" {

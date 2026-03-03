@@ -21,6 +21,7 @@ var (
 type App struct {
 	backend.CallResourceHandler
 	apiURL                     string
+	apiAuthToken               string
 	tenantID                   string
 	prometheusDatasourceUID    string
 	tempoDatasourceUID         string
@@ -64,8 +65,14 @@ func NewApp(ctx context.Context, settings backend.AppInstanceSettings) (instance
 		grafanaServiceAccountToken = strings.TrimSpace(serviceAccountToken)
 	}
 
+	var apiAuthToken string
+	if settings.DecryptedSecureJSONData != nil {
+		apiAuthToken = strings.TrimSpace(settings.DecryptedSecureJSONData["sigilApiAuthToken"])
+	}
+
 	app := App{
 		apiURL:                     cfg.SigilAPIURL,
+		apiAuthToken:               apiAuthToken,
 		tenantID:                   cfg.TenantID,
 		prometheusDatasourceUID:    strings.TrimSpace(cfg.PrometheusDatasourceUID),
 		tempoDatasourceUID:         strings.TrimSpace(cfg.TempoDatasourceUID),
