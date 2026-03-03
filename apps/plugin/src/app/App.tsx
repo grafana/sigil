@@ -46,7 +46,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
 export default function App(_props: AppRootProps) {
   const styles = useStyles2(getStyles);
   const location = useLocation();
-  const isConversationsBrowserRoute = new RegExp(`(^|/)${ROUTES.Conversations}(/|$)`).test(location.pathname);
+  const isConversationsBrowserRoute = new RegExp(`(^|/)${ROUTES.Conversations}(/[^/]+/view)?/?$`).test(
+    location.pathname
+  );
 
   return (
     <div className={cx(styles.pageWrapper, isConversationsBrowserRoute && styles.pageWrapperNoPadding)}>
