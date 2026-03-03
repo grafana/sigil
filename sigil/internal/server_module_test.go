@@ -5,6 +5,7 @@ import (
 	"errors"
 	"hash/fnv"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +17,10 @@ import (
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
 	"github.com/grafana/sigil/sigil/internal/storage"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -217,6 +222,60 @@ func TestStatusCapturingResponseWriterUnwrapAllowsResponseControllerFlush(t *tes
 	}
 	if !base.flushed {
 		t.Fatalf("expected underlying writer Flush to be called")
+	}
+}
+
+func TestWithHTTPTracingUsesRoutePatternForWildcardRoute(t *testing.T) {
+	spanRecorder := tracetest.NewSpanRecorder()
+	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder))
+	prevTracerProvider := otel.GetTracerProvider()
+	prevPropagator := otel.GetTextMapPropagator()
+	otel.SetTracerProvider(tracerProvider)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	t.Cleanup(func() {
+		_ = tracerProvider.Shutdown(context.Background())
+		otel.SetTracerProvider(prevTracerProvider)
+		otel.SetTextMapPropagator(prevPropagator)
+	})
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/users/{id}", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/users/42", nil)
+	recorder := httptest.NewRecorder()
+	withHTTPTracing(mux).ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("expected status %d, got %d", http.StatusNoContent, recorder.Code)
+	}
+
+	endedSpans := spanRecorder.Ended()
+	var routeSpan sdktrace.ReadOnlySpan
+	for _, span := range endedSpans {
+		if span.Name() == "GET /users/{id}" {
+			routeSpan = span
+			break
+		}
+	}
+	if routeSpan == nil {
+		names := make([]string, 0, len(endedSpans))
+		for _, span := range endedSpans {
+			names = append(names, span.Name())
+		}
+		t.Fatalf("expected route span name GET /users/{id}, got %v", names)
+	}
+
+	foundRouteAttr := false
+	for _, attr := range routeSpan.Attributes() {
+		if string(attr.Key) == "http.route" && attr.Value.AsString() == "/users/{id}" {
+			foundRouteAttr = true
+			break
+		}
+	}
+	if !foundRouteAttr {
+		t.Fatalf("expected http.route attribute /users/{id}")
 	}
 }
 
