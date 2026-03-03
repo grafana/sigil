@@ -9,7 +9,8 @@ import ConversationTraces, {
   buildTraceSpans,
   layoutSpans,
   type TraceTimeline,
-} from '../components/conversation/ConversationTraces';
+} from '../components/conversations/ConversationTraces';
+import GenerationsList from '../components/conversations/GenerationsList';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
 import type { ConversationDetail } from '../conversation/types';
 
@@ -229,6 +230,7 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
               traceLoadFailures={traceLoadFailures}
               traceTimelines={traceTimelines}
             />
+            <GenerationsList generations={detail.generations} />
           </div>
           <pre className={styles.rawData}>{detailJSON}</pre>
         </>
