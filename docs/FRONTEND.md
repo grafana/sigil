@@ -87,6 +87,36 @@ Legacy placeholders removed:
 
 Tenant headers are applied/forwarded by plugin backend proxy logic, not by page components.
 
+## Plugin RBAC
+
+Sigil plugin routes enforce action-based RBAC in the plugin backend:
+
+- `grafana-sigil-app.data:read`
+  - `GET /query/conversations`
+  - `POST /query/conversations/search`
+  - `GET /query/conversations/{conversation_id}`
+  - `GET /query/conversations/{conversation_id}/ratings`
+  - `GET /query/conversations/{conversation_id}/annotations`
+  - `GET /query/generations/{generation_id}`
+  - `GET /query/search/tags`
+  - `GET /query/search/tag/{tag}/values`
+  - `GET /query/model-cards`
+  - `GET /query/model-cards/lookup`
+  - `GET /query/settings`
+  - `GET|POST /query/proxy/prometheus/...`
+  - `GET /query/proxy/tempo/...`
+- `grafana-sigil-app.feedback:write`
+  - `POST /query/conversations/{conversation_id}/ratings`
+  - `POST /query/conversations/{conversation_id}/annotations`
+- `grafana-sigil-app.settings:write`
+  - `PUT /query/settings/datasources`
+
+Default role grants in `apps/plugin/src/plugin.json`:
+
+- `Sigil Reader` (granted to `Editor`, `Admin`)
+- `Sigil Feedback Writer` (manual assignment)
+- `Sigil Admin` (granted to `Admin`)
+
 Current plugin backend tenant header precedence:
 
 1. Preserve inbound `X-Scope-OrgID` when present.

@@ -429,6 +429,10 @@ Conversation query path (design doc: `docs/design-docs/2026-02-15-conversation-q
   - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`
   - `/api/plugins/grafana-sigil-app/resources/query/proxy/prometheus/...`
   - `/api/plugins/grafana-sigil-app/resources/query/proxy/tempo/...`
+  - Plugin backend enforces RBAC actions on resource routes:
+    - `grafana-sigil-app.data:read` for query/read endpoints and Prometheus/Tempo proxy reads
+    - `grafana-sigil-app.feedback:write` for ratings/annotations writes
+    - `grafana-sigil-app.settings:write` for datasource settings updates
 - Evaluation endpoints (design doc: `docs/design-docs/2026-02-17-online-evaluation.md`):
   - `POST /api/v1/scores:export` -- external score ingest
   - `GET /api/v1/generations/{generation_id}/scores` -- scores for a generation
