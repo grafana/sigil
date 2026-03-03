@@ -1,4 +1,3 @@
-import React from 'react';
 import ConversationColumn from '../components/conversations/ConversationColumn';
 import { mockConversationDetail, mockSearchResults } from './mockConversationData';
 

@@ -1,4 +1,3 @@
-import React from 'react';
 import ConversationGenerations from '../components/conversations/ConversationGenerations';
 import { mockConversationDetail } from './mockConversationData';
 
