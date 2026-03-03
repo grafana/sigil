@@ -550,7 +550,7 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
           <div className={styles.mappingList}>
             {resolvedPricing.mapped.slice(0, 6).map((entry) => (
               <span key={`${entry.provider}::${entry.model}::${entry.sourceModelID}`} className={styles.mappingBadge}>
-                {entry.provider}:{entry.model} {"->"} {entry.sourceModelID}
+                {entry.provider}:{entry.model} {'->'} {entry.sourceModelID}
               </span>
             ))}
             {resolvedPricing.mapped.length > 6 && (
