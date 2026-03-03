@@ -189,6 +189,7 @@ export function DashboardErrorsGrid({
             height={CHART_HEIGHT}
             unit="percent"
             aggregation="avg"
+            aggregateOverride={hasBreakdown ? errorRateValue : undefined}
           />
         </div>
       </div>

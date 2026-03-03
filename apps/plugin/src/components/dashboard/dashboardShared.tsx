@@ -116,6 +116,8 @@ export type BreakdownStatPanelProps = {
   height: number;
   unit?: string;
   aggregation?: 'sum' | 'avg';
+  /** When set, used as the panel aggregate instead of computing from items. Use for rate/percent panels where the correct aggregate is the global rate (e.g. error rate by model should show total errors/total requests, not avg of per-model rates). */
+  aggregateOverride?: number;
   segmentLabel?: string;
   segmentNames?: string[];
 };
@@ -129,6 +131,7 @@ export function BreakdownStatPanel({
   height,
   unit = 'short',
   aggregation = 'sum',
+  aggregateOverride,
   segmentLabel,
   segmentNames,
 }: BreakdownStatPanelProps) {
@@ -202,13 +205,16 @@ export function BreakdownStatPanel({
   }, [isStacked, data, breakdownLabel, segmentLabel, segmentNames, resolvedPalette]);
 
   const aggregate = useMemo(() => {
+    if (aggregateOverride !== undefined && isFinite(aggregateOverride)) {
+      return aggregateOverride;
+    }
     const src = isStacked ? stackedItems.map((i) => i.total) : items.map((i) => i.value);
     if (src.length === 0) {
       return 0;
     }
     const total = src.reduce((s, v) => s + v, 0);
     return aggregation === 'avg' ? total / src.length : total;
-  }, [items, stackedItems, isStacked, aggregation]);
+  }, [items, stackedItems, isStacked, aggregation, aggregateOverride]);
 
   const formatVal = (v: number) => formattedValueToString(getValueFormat(unit)(v));
 
