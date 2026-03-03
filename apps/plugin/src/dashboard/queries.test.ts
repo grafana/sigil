@@ -52,6 +52,12 @@ describe('buildLabelSelector', () => {
     );
   });
 
+  it('escapes dots as [.] for RE2 compatibility (Prometheus rejects \\.)', () => {
+    expect(buildLabelSelector({ ...empty, model: 'us.anthropic.claude-haiku-4-5-20251001-v1:0' })).toBe(
+      'gen_ai_request_model=~"(?i).*us[.]anthropic[.]claude-haiku-4-5-20251001-v1:0.*"'
+    );
+  });
+
   it('supports fuzzy matching on arbitrary label key and value', () => {
     expect(buildLabelSelector({ ...empty, labelFilters: [{ key: 'service_name', value: 'sigil-api' }] })).toBe(
       'service_name=~"(?i).*sigil-api.*"'
