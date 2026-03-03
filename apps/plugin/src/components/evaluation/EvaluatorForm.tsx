@@ -56,6 +56,7 @@ export default function EvaluatorForm({ onSubmit, onCancel }: EvaluatorFormProps
   const [evaluatorId, setEvaluatorId] = useState('');
   const [version, setVersion] = useState('1.0.0');
   const [kind, setKind] = useState<EvaluatorKind>('llm_judge');
+  const [touched, setTouched] = useState(false);
 
   // llm_judge: system_prompt, user_prompt, max_tokens, temperature
   const [systemPrompt, setSystemPrompt] = useState('');
@@ -106,8 +107,18 @@ export default function EvaluatorForm({ onSubmit, onCancel }: EvaluatorFormProps
     }
   };
 
+  const isIdEmpty = evaluatorId.trim() === '';
+  const isOutputKeyEmpty = outputKey.trim() === '';
+  const showIdError = touched && isIdEmpty;
+  const showOutputKeyError = touched && isOutputKeyEmpty;
+
   const handleSubmit = () => {
-    const outputKeys: EvalOutputKey[] = outputKey.trim() ? [{ key: outputKey.trim(), type: outputType }] : [];
+    setTouched(true);
+    if (isIdEmpty || isOutputKeyEmpty) {
+      return;
+    }
+
+    const outputKeys: EvalOutputKey[] = [{ key: outputKey.trim(), type: outputType }];
 
     const req: CreateEvaluatorRequest = {
       evaluator_id: evaluatorId.trim(),
@@ -121,10 +132,17 @@ export default function EvaluatorForm({ onSubmit, onCancel }: EvaluatorFormProps
 
   return (
     <FieldSet label="Create evaluator">
-      <Field label="Evaluator ID" description="Unique identifier for this evaluator." required>
+      <Field
+        label="Evaluator ID"
+        description="Unique identifier for this evaluator."
+        required
+        invalid={showIdError}
+        error={showIdError ? 'Evaluator ID is required' : undefined}
+      >
         <Input
           value={evaluatorId}
           onChange={(e) => setEvaluatorId(e.currentTarget.value)}
+          onBlur={() => setTouched(true)}
           placeholder="e.g. custom.helpfulness"
           width={40}
         />
@@ -243,7 +261,13 @@ export default function EvaluatorForm({ onSubmit, onCancel }: EvaluatorFormProps
         </>
       )}
 
-      <Field label="Output key" description="Key and type for the evaluation result.">
+      <Field
+        label="Output key"
+        description="Key and type for the evaluation result."
+        required
+        invalid={showOutputKeyError}
+        error={showOutputKeyError ? 'Output key is required' : undefined}
+      >
         <div className={styles.outputKeyRow}>
           <Input
             value={outputKey}
