@@ -1,18 +1,34 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { css } from '@emotion/css';
-import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Button, Spinner, Stack, Text, useStyles2 } from '@grafana/ui';
+import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
+import { Alert, Button, Select, Spinner, Text, useStyles2 } from '@grafana/ui';
+import { PLUGIN_BASE, ROUTES } from '../constants';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
-import type { CreateEvaluatorRequest, Evaluator, ForkEvaluatorRequest } from '../evaluation/types';
+import type {
+  CreateEvaluatorRequest,
+  Evaluator,
+  ForkTemplateRequest,
+  TemplateDefinition,
+  TemplateScope,
+} from '../evaluation/types';
 import EvaluatorDetail from '../components/evaluation/EvaluatorDetail';
 import EvaluatorForm from '../components/evaluation/EvaluatorForm';
 import EvaluatorTable from '../components/evaluation/EvaluatorTable';
-import EvaluatorTemplateGrid from '../components/evaluation/EvaluatorTemplateGrid';
-import ForkEvaluatorForm from '../components/evaluation/ForkEvaluatorForm';
+import ForkTemplateForm from '../components/evaluation/ForkTemplateForm';
+import TemplateLibraryCard from '../components/evaluation/TemplateLibraryCard';
+
+const EVAL_TEMPLATES_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}/templates`;
 
 export type EvaluatorsPageProps = {
   dataSource?: EvaluationDataSource;
 };
+
+const SCOPE_OPTIONS: Array<SelectableValue<string>> = [
+  { label: 'All scopes', value: '' },
+  { label: 'Global', value: 'global' },
+  { label: 'Tenant', value: 'tenant' },
+];
 
 const getStyles = (theme: GrafanaTheme2) => ({
   pageContainer: css({
@@ -26,6 +42,16 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexDirection: 'column' as const,
     gap: theme.spacing(2),
   }),
+  sectionHeader: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(2),
+  }),
+  grid: css({
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+    gap: theme.spacing(2),
+  }),
   loading: css({
     display: 'flex',
     justifyContent: 'center',
@@ -37,8 +63,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
 export default function EvaluatorsPage(props: EvaluatorsPageProps) {
   const dataSource = props.dataSource ?? defaultEvaluationDataSource;
   const styles = useStyles2(getStyles);
+  const navigate = useNavigate();
 
-  const [predefinedEvaluators, setPredefinedEvaluators] = useState<Evaluator[]>([]);
+  const [templates, setTemplates] = useState<TemplateDefinition[]>([]);
   const [tenantEvaluators, setTenantEvaluators] = useState<Evaluator[]>([]);
   const [selectedEvaluatorID, setSelectedEvaluatorID] = useState<string | null>(null);
   const [selectedEvaluator, setSelectedEvaluator] = useState<Evaluator | null>(null);
@@ -46,7 +73,9 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+  const [scopeFilter, setScopeFilter] = useState<string>('');
   const requestVersion = useRef(0);
+  const forkFormRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     requestVersion.current += 1;
@@ -60,21 +89,22 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
       setErrorMessage('');
     });
 
-    Promise.all([dataSource.listPredefinedEvaluators(), dataSource.listEvaluators()])
-      .then(([predefinedRes, tenantRes]) => {
+    const scope = scopeFilter ? (scopeFilter as TemplateScope) : undefined;
+    Promise.all([dataSource.listEvaluators(), dataSource.listTemplates(scope)])
+      .then(([tenantRes, templatesRes]) => {
         if (requestVersion.current !== version) {
           return;
         }
-        setPredefinedEvaluators(predefinedRes.items);
         setTenantEvaluators(tenantRes.items.filter((e) => !e.is_predefined));
+        setTemplates(templatesRes.items ?? []);
       })
       .catch((err) => {
         if (requestVersion.current !== version) {
           return;
         }
         setErrorMessage(err instanceof Error ? err.message : 'Failed to load evaluators');
-        setPredefinedEvaluators([]);
         setTenantEvaluators([]);
+        setTemplates([]);
       })
       .finally(() => {
         if (requestVersion.current !== version) {
@@ -82,7 +112,7 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
         }
         setLoading(false);
       });
-  }, [dataSource]);
+  }, [dataSource, scopeFilter]);
 
   useEffect(() => {
     if (selectedEvaluatorID == null) {
@@ -102,25 +132,35 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
       });
   }, [dataSource, selectedEvaluatorID, tenantEvaluators]);
 
-  const handleFork = (evaluatorID: string) => {
-    setForkTemplateID(evaluatorID);
+  useEffect(() => {
+    if (forkTemplateID != null) {
+      forkFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [forkTemplateID]);
+
+  const handleForkTemplate = (templateID: string) => {
+    setForkTemplateID(templateID);
   };
 
-  const handleForkSubmit = async (req: ForkEvaluatorRequest) => {
+  const handleForkTemplateSubmit = async (req: ForkTemplateRequest) => {
     if (forkTemplateID == null) {
       return;
     }
     try {
-      const created = await dataSource.forkPredefinedEvaluator(forkTemplateID, req);
+      const created = await dataSource.forkTemplate(forkTemplateID, req);
       setTenantEvaluators((prev) => [...prev, created]);
       setForkTemplateID(null);
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to fork evaluator');
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to fork template');
     }
   };
 
   const handleForkCancel = () => {
     setForkTemplateID(null);
+  };
+
+  const handleViewTemplate = (templateID: string) => {
+    navigate(`${EVAL_TEMPLATES_BASE}/${encodeURIComponent(templateID)}`);
   };
 
   const handleCreateSubmit = async (req: CreateEvaluatorRequest) => {
@@ -159,20 +199,37 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
       )}
 
       <div className={styles.section}>
-        <Text element="h3" weight="medium">
-          Template Library
-        </Text>
-        <EvaluatorTemplateGrid evaluators={predefinedEvaluators} onFork={handleFork} />
+        <div className={styles.sectionHeader}>
+          <Text element="h3" weight="medium">
+            Template Library
+          </Text>
+          <Select
+            options={SCOPE_OPTIONS}
+            value={scopeFilter}
+            onChange={(v) => setScopeFilter(v?.value ?? '')}
+            width={16}
+          />
+        </div>
+        <div className={styles.grid}>
+          {templates.map((template) => (
+            <TemplateLibraryCard
+              key={template.template_id}
+              template={template}
+              onFork={handleForkTemplate}
+              onView={handleViewTemplate}
+            />
+          ))}
+        </div>
 
         {forkTemplateID != null && (
-          <Stack direction="column" gap={2}>
-            <ForkEvaluatorForm
+          <div ref={forkFormRef}>
+            <ForkTemplateForm
               templateID={forkTemplateID}
-              onSubmit={handleForkSubmit}
+              onSubmit={handleForkTemplateSubmit}
               onCancel={handleForkCancel}
               dataSource={dataSource}
             />
-          </Stack>
+          </div>
         )}
       </div>
 

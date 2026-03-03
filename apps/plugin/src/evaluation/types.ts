@@ -120,6 +120,71 @@ export type JudgeModelListResponse = {
   models: JudgeModel[];
 };
 
+export type TemplateScope = 'global' | 'tenant';
+
+export type TemplateVersionSummary = {
+  version: string;
+  changelog: string;
+  created_at: string;
+};
+
+export type TemplateDefinition = {
+  tenant_id: string;
+  template_id: string;
+  scope: TemplateScope;
+  kind: EvaluatorKind;
+  description: string;
+  latest_version: string;
+  config?: Record<string, unknown>;
+  output_keys?: EvalOutputKey[];
+  versions: TemplateVersionSummary[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type TemplateVersion = {
+  tenant_id: string;
+  template_id: string;
+  version: string;
+  config: Record<string, unknown>;
+  output_keys: EvalOutputKey[];
+  changelog: string;
+  created_at: string;
+};
+
+export type CreateTemplateRequest = {
+  template_id: string;
+  kind: EvaluatorKind;
+  description?: string;
+  version: string;
+  config: Record<string, unknown>;
+  output_keys: EvalOutputKey[];
+  changelog?: string;
+};
+
+export type PublishVersionRequest = {
+  version: string;
+  config: Record<string, unknown>;
+  output_keys: EvalOutputKey[];
+  changelog?: string;
+};
+
+export type ForkTemplateRequest = {
+  evaluator_id: string;
+  version?: string;
+  config?: Record<string, unknown>;
+  output_keys?: EvalOutputKey[];
+};
+
+export type TemplateListResponse = {
+  items: TemplateDefinition[];
+  next_cursor: string;
+};
+
+export type TemplateVersionListResponse = {
+  items: TemplateVersion[];
+};
+
 export const SELECTOR_OPTIONS: Array<{ value: RuleSelector; label: string; description: string }> = [
   {
     value: 'user_visible_turn',

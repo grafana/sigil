@@ -191,6 +191,14 @@ func (s *TemplateService) PublishVersion(ctx context.Context, tenantID, template
 		return nil, newValidationError(fmt.Errorf("template %q not found", trimmedTemplateID))
 	}
 
+	existingVer, err := s.store.GetTemplateVersion(ctx, trimmedTenantID, trimmedTemplateID, version)
+	if err != nil {
+		return nil, err
+	}
+	if existingVer != nil {
+		return nil, newValidationError(fmt.Errorf("version %q already exists for template %q", version, trimmedTemplateID))
+	}
+
 	now := s.now().UTC()
 	ver := evalpkg.TemplateVersion{
 		TenantID:   trimmedTenantID,

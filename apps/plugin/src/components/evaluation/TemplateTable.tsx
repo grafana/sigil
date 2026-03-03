@@ -2,12 +2,12 @@ import React from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, IconButton, Text, useStyles2 } from '@grafana/ui';
-import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type Evaluator } from '../../evaluation/types';
+import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type TemplateDefinition } from '../../evaluation/types';
 
-export type EvaluatorTableProps = {
-  evaluators: Evaluator[];
-  onSelect?: (evaluatorID: string) => void;
-  onDelete?: (evaluatorID: string) => void;
+export type TemplateTableProps = {
+  templates: TemplateDefinition[];
+  onSelect?: (templateID: string) => void;
+  onDelete?: (templateID: string) => void;
 };
 
 function formatDate(iso: string): string {
@@ -27,7 +27,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   header: css({
     display: 'grid',
-    gridTemplateColumns: '2fr 100px 100px 160px 120px 40px',
+    gridTemplateColumns: '2fr 100px 80px 120px 3fr 120px 40px',
     gap: theme.spacing(2),
     padding: theme.spacing(1, 2),
     background: theme.colors.background.secondary,
@@ -36,7 +36,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   row: css({
     display: 'grid',
-    gridTemplateColumns: '2fr 100px 100px 160px 120px 40px',
+    gridTemplateColumns: '2fr 100px 80px 120px 3fr 120px 40px',
     gap: theme.spacing(2),
     padding: theme.spacing(1, 2),
     alignItems: 'center',
@@ -46,67 +46,68 @@ const getStyles = (theme: GrafanaTheme2) => ({
       background: theme.colors.action.hover,
     },
   }),
-  outputKeys: css({
-    display: 'flex',
-    flexWrap: 'wrap' as const,
-    gap: theme.spacing(0.5),
-  }),
 });
 
-export default function EvaluatorTable({ evaluators, onSelect, onDelete }: EvaluatorTableProps) {
+export default function TemplateTable({ templates, onSelect, onDelete }: TemplateTableProps) {
   const styles = useStyles2(getStyles);
 
   return (
     <div className={styles.table}>
       <div className={styles.header}>
         <Text weight="medium" variant="bodySmall">
-          Evaluator ID
+          Template ID
         </Text>
         <Text weight="medium" variant="bodySmall">
           Kind
         </Text>
         <Text weight="medium" variant="bodySmall">
-          Version
+          Scope
         </Text>
         <Text weight="medium" variant="bodySmall">
-          Output keys
+          Latest Version
+        </Text>
+        <Text weight="medium" variant="bodySmall">
+          Description
         </Text>
         <Text weight="medium" variant="bodySmall">
           Created
         </Text>
         <div />
       </div>
-      {evaluators.map((evaluator) => (
+      {templates.map((template) => (
         <div
-          key={evaluator.evaluator_id}
+          key={template.template_id}
           className={styles.row}
-          onClick={() => onSelect?.(evaluator.evaluator_id)}
+          onClick={() => onSelect?.(template.template_id)}
           role="row"
         >
-          <Text truncate>{evaluator.evaluator_id}</Text>
+          <Text truncate>{template.template_id}</Text>
           <div>
-            <Badge text={EVALUATOR_KIND_LABELS[evaluator.kind]} color={getKindBadgeColor(evaluator.kind)} />
+            <Badge text={EVALUATOR_KIND_LABELS[template.kind]} color={getKindBadgeColor(template.kind)} />
+          </div>
+          <div>
+            <Badge text={template.scope} color={template.scope === 'global' ? 'orange' : 'blue'} />
           </div>
           <Text color="secondary" variant="bodySmall">
-            {evaluator.version}
+            {template.latest_version}
           </Text>
-          <div className={styles.outputKeys}>
-            {evaluator.output_keys.map((ok) => (
-              <Badge key={ok.key} text={`${ok.key}: ${ok.type}`} color="blue" />
-            ))}
-          </div>
+          <Text truncate color="secondary" variant="bodySmall">
+            {template.description || '—'}
+          </Text>
           <Text color="secondary" variant="bodySmall">
-            {formatDate(evaluator.created_at)}
+            {formatDate(template.created_at)}
           </Text>
-          {onDelete && (
+          {onDelete && template.scope === 'tenant' ? (
             <IconButton
               name="trash-alt"
               tooltip="Delete"
               onClick={(e) => {
                 e.stopPropagation();
-                onDelete(evaluator.evaluator_id);
+                onDelete(template.template_id);
               }}
             />
+          ) : (
+            <div />
           )}
         </div>
       ))}

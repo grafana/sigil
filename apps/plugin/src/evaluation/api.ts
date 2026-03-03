@@ -3,15 +3,23 @@ import { getBackendSrv } from '@grafana/runtime';
 import type {
   CreateEvaluatorRequest,
   CreateRuleRequest,
+  CreateTemplateRequest,
   Evaluator,
   EvaluatorListResponse,
   ForkEvaluatorRequest,
+  ForkTemplateRequest,
   JudgeModelListResponse,
   JudgeProviderListResponse,
+  PublishVersionRequest,
   Rule,
   RuleListResponse,
   RulePreviewRequest,
   RulePreviewResponse,
+  TemplateDefinition,
+  TemplateListResponse,
+  TemplateScope,
+  TemplateVersion,
+  TemplateVersionListResponse,
   UpdateRuleRequest,
 } from './types';
 
@@ -32,6 +40,14 @@ export type EvaluationDataSource = {
   previewRule: (request: RulePreviewRequest) => Promise<RulePreviewResponse>;
   listJudgeProviders: () => Promise<JudgeProviderListResponse>;
   listJudgeModels: (provider: string) => Promise<JudgeModelListResponse>;
+  listTemplates: (scope?: TemplateScope, limit?: number, cursor?: string) => Promise<TemplateListResponse>;
+  createTemplate: (request: CreateTemplateRequest) => Promise<TemplateDefinition>;
+  getTemplate: (templateID: string) => Promise<TemplateDefinition>;
+  deleteTemplate: (templateID: string) => Promise<void>;
+  listTemplateVersions: (templateID: string) => Promise<TemplateVersionListResponse>;
+  publishVersion: (templateID: string, request: PublishVersionRequest) => Promise<TemplateVersion>;
+  getTemplateVersion: (templateID: string, version: string) => Promise<TemplateVersion>;
+  forkTemplate: (templateID: string, request: ForkTemplateRequest) => Promise<Evaluator>;
 };
 
 export const defaultEvaluationDataSource: EvaluationDataSource = {
@@ -183,6 +199,96 @@ export const defaultEvaluationDataSource: EvaluationDataSource = {
       getBackendSrv().fetch<JudgeModelListResponse>({
         method: 'GET',
         url: `${evalBasePath}/judge/models?${params.toString()}`,
+      })
+    );
+    return response.data;
+  },
+
+  async listTemplates(scope?: TemplateScope, limit?: number, cursor?: string) {
+    const params = new URLSearchParams();
+    if (scope) {
+      params.set('scope', scope);
+    }
+    if (limit != null) {
+      params.set('limit', String(limit));
+    }
+    if (cursor) {
+      params.set('cursor', cursor);
+    }
+    const qs = params.toString();
+    const url = qs.length > 0 ? `${evalBasePath}/templates?${qs}` : `${evalBasePath}/templates`;
+    const response = await lastValueFrom(getBackendSrv().fetch<TemplateListResponse>({ method: 'GET', url }));
+    return response.data;
+  },
+
+  async createTemplate(request) {
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<TemplateDefinition>({
+        method: 'POST',
+        url: `${evalBasePath}/templates`,
+        data: request,
+      })
+    );
+    return response.data;
+  },
+
+  async getTemplate(templateID) {
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<TemplateDefinition>({
+        method: 'GET',
+        url: `${evalBasePath}/templates/${encodeURIComponent(templateID)}`,
+      })
+    );
+    return response.data;
+  },
+
+  async deleteTemplate(templateID) {
+    await lastValueFrom(
+      getBackendSrv().fetch({
+        method: 'DELETE',
+        url: `${evalBasePath}/templates/${encodeURIComponent(templateID)}`,
+        responseType: 'text',
+      })
+    );
+  },
+
+  async listTemplateVersions(templateID) {
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<TemplateVersionListResponse>({
+        method: 'GET',
+        url: `${evalBasePath}/templates/${encodeURIComponent(templateID)}/versions`,
+      })
+    );
+    return response.data;
+  },
+
+  async publishVersion(templateID, request) {
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<TemplateVersion>({
+        method: 'POST',
+        url: `${evalBasePath}/templates/${encodeURIComponent(templateID)}/versions`,
+        data: request,
+      })
+    );
+    return response.data;
+  },
+
+  async getTemplateVersion(templateID, version) {
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<TemplateVersion>({
+        method: 'GET',
+        url: `${evalBasePath}/templates/${encodeURIComponent(templateID)}/versions/${encodeURIComponent(version)}`,
+      })
+    );
+    return response.data;
+  },
+
+  async forkTemplate(templateID, request) {
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<Evaluator>({
+        method: 'POST',
+        url: `${evalBasePath}/templates/${encodeURIComponent(templateID)}:fork`,
+        data: request,
       })
     );
     return response.data;

@@ -523,6 +523,84 @@ func (a *App) handleEvalJudgeModels(w http.ResponseWriter, req *http.Request) {
 	a.handleProxy(w, req, "/api/v1/eval/judge/models", http.MethodGet)
 }
 
+func (a *App) handleEvalTemplates(w http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case http.MethodGet:
+		a.handleProxy(w, req, "/api/v1/eval/templates", http.MethodGet)
+	case http.MethodPost:
+		a.handleProxy(w, req, "/api/v1/eval/templates", http.MethodPost)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (a *App) handleEvalTemplateRoutes(w http.ResponseWriter, req *http.Request) {
+	subpath := strings.TrimPrefix(req.URL.Path, "/eval/templates/")
+	if subpath == "" {
+		http.Error(w, "invalid template path", http.StatusBadRequest)
+		return
+	}
+
+	// Check for {id}:fork action.
+	if strings.HasSuffix(subpath, ":fork") && !strings.Contains(subpath, "/") {
+		id := strings.TrimSuffix(subpath, ":fork")
+		if id == "" {
+			http.Error(w, "invalid template fork path", http.StatusBadRequest)
+			return
+		}
+		path := fmt.Sprintf("/api/v1/eval/templates/%s:fork", id)
+		a.handleProxy(w, req, path, http.MethodPost)
+		return
+	}
+
+	parts := strings.SplitN(subpath, "/", 3)
+	switch len(parts) {
+	case 1:
+		// {id} — get or delete by ID.
+		id := parts[0]
+		if id == "" {
+			http.Error(w, "invalid template path", http.StatusBadRequest)
+			return
+		}
+		path := fmt.Sprintf("/api/v1/eval/templates/%s", id)
+		switch req.Method {
+		case http.MethodGet:
+			a.handleProxy(w, req, path, http.MethodGet)
+		case http.MethodDelete:
+			a.handleProxy(w, req, path, http.MethodDelete)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	case 2:
+		// {id}/versions — list or publish versions.
+		id := parts[0]
+		if id == "" || parts[1] != "versions" {
+			http.Error(w, "invalid template path", http.StatusBadRequest)
+			return
+		}
+		path := fmt.Sprintf("/api/v1/eval/templates/%s/versions", id)
+		switch req.Method {
+		case http.MethodGet:
+			a.handleProxy(w, req, path, http.MethodGet)
+		case http.MethodPost:
+			a.handleProxy(w, req, path, http.MethodPost)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	case 3:
+		// {id}/versions/{v} — get specific version.
+		id := parts[0]
+		if id == "" || parts[1] != "versions" || parts[2] == "" {
+			http.Error(w, "invalid template path", http.StatusBadRequest)
+			return
+		}
+		path := fmt.Sprintf("/api/v1/eval/templates/%s/versions/%s", id, parts[2])
+		a.handleProxy(w, req, path, http.MethodGet)
+	default:
+		http.Error(w, "invalid template path", http.StatusBadRequest)
+	}
+}
+
 func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/query/conversations/search", a.withAuthorization(a.handleSearchConversations))
 	mux.HandleFunc("/query/conversations", a.withAuthorization(a.handleListConversations))
@@ -546,6 +624,8 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/eval/rules/", a.handleEvalRuleByID)
 	mux.HandleFunc("/eval/judge/providers", a.handleEvalJudgeProviders)
 	mux.HandleFunc("/eval/judge/models", a.handleEvalJudgeModels)
+	mux.HandleFunc("/eval/templates", a.handleEvalTemplates)
+	mux.HandleFunc("/eval/templates/", a.handleEvalTemplateRoutes)
 }
 
 type conversationSearchTimeRange struct {

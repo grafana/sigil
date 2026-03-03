@@ -9,6 +9,7 @@ import (
 
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var _ evalpkg.TemplateStore = (*WALStore)(nil)
@@ -75,10 +76,40 @@ func (s *WALStore) CreateTemplate(ctx context.Context, tmpl evalpkg.TemplateDefi
 	}
 
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&tmplModel).Error; err != nil {
+		// Check if a non-deleted template with this ID already exists.
+		var existing EvalTemplateModel
+		err := tx.Where("tenant_id = ? AND template_id = ? AND deleted_at IS NULL",
+			tmplModel.TenantID, tmplModel.TemplateID).First(&existing).Error
+		if err == nil {
+			return fmt.Errorf("template %q already exists", tmplModel.TemplateID)
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("check existing template: %w", err)
+		}
+
+		// Use upsert to handle re-creating a soft-deleted template.
+		if err := tx.Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "tenant_id"}, {Name: "template_id"}},
+			DoUpdates: clause.Assignments(map[string]any{
+				"scope":          tmplModel.Scope,
+				"latest_version": tmplModel.LatestVersion,
+				"kind":           tmplModel.Kind,
+				"description":    tmplModel.Description,
+				"deleted_at":     nil,
+				"updated_at":     now,
+			}),
+		}).Create(&tmplModel).Error; err != nil {
 			return fmt.Errorf("create template: %w", err)
 		}
-		if err := tx.Create(&versionModel).Error; err != nil {
+		if err := tx.Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "tenant_id"}, {Name: "template_id"}, {Name: "version"}},
+			DoUpdates: clause.Assignments(map[string]any{
+				"config_json":      versionModel.ConfigJSON,
+				"output_keys_json": versionModel.OutputKeysJSON,
+				"changelog":        versionModel.Changelog,
+				"created_at":       versionModel.CreatedAt,
+			}),
+		}).Create(&versionModel).Error; err != nil {
 			return fmt.Errorf("create template version: %w", err)
 		}
 		return nil
