@@ -2,12 +2,14 @@ package query
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/grafana/sigil/sigil/internal/feedback"
 	"github.com/grafana/sigil/sigil/internal/storage"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -230,6 +232,26 @@ func TestListConversationsForTenantEmitsTracingSpan(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected sigil.query.list_conversations span")
+	}
+}
+
+func TestRecordQuerySpanErrorSetsErrorStatus(t *testing.T) {
+	spanRecorder := tracetest.NewSpanRecorder()
+	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder))
+	t.Cleanup(func() {
+		_ = tracerProvider.Shutdown(context.Background())
+	})
+
+	_, span := tracerProvider.Tracer("query-test").Start(context.Background(), "query-test-span")
+	recordQuerySpanError(span, errors.New("boom"))
+	span.End()
+
+	spans := spanRecorder.Ended()
+	if len(spans) != 1 {
+		t.Fatalf("expected one ended span, got %d", len(spans))
+	}
+	if got := spans[0].Status().Code; got != codes.Error {
+		t.Fatalf("expected span status code %v, got %v", codes.Error, got)
 	}
 }
 
