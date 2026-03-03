@@ -18,7 +18,7 @@ describe('ConversationGenerations', () => {
     fetchMock.mockReset();
   });
 
-  it('loads Sigil spans by default and hides non-Sigil spans', async () => {
+  it('loads AI spans and keeps root OTHER spans by default', async () => {
     fetchMock.mockReturnValue(
       of({
         data: {
@@ -68,7 +68,7 @@ describe('ConversationGenerations', () => {
     render(<ConversationGenerations generations={generations} />);
 
     expect(await screen.findByText('streamText gpt-4o-mini')).toBeInTheDocument();
-    expect(screen.queryByText('db.query')).not.toBeInTheDocument();
+    expect(screen.getByText('db.query')).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -123,7 +123,7 @@ describe('ConversationGenerations', () => {
 
     render(<ConversationGenerations generations={generations} />);
     expect(await screen.findByText('streamText gpt-4o-mini')).toBeInTheDocument();
-    expect(screen.queryByText('db.query')).not.toBeInTheDocument();
+    expect(screen.getByText('db.query')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('switch', { name: 'toggle all spans' }));
 
@@ -187,7 +187,7 @@ describe('ConversationGenerations', () => {
     expect(await screen.findByText('db.query')).toBeInTheDocument();
   });
 
-  it('shows Sigil-empty state by default and reveals OTHER spans when toggle is on', async () => {
+  it('keeps root OTHER spans visible by default and when All is enabled', async () => {
     fetchMock.mockReturnValue(
       of({
         data: {
@@ -226,7 +226,7 @@ describe('ConversationGenerations', () => {
 
     render(<ConversationGenerations generations={generations} />);
 
-    expect(await screen.findByText('No Sigil spans found.')).toBeInTheDocument();
+    expect(await screen.findByText('http.client')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('switch', { name: 'toggle all spans' }));
     expect(await screen.findByText('http.client')).toBeInTheDocument();
