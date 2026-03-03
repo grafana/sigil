@@ -49,11 +49,13 @@ type TempoResourceSpan = {
   resource?: TempoResource;
   scopeSpans?: TempoScopeSpan[];
   scope_spans?: TempoScopeSpan[];
+  instrumentationLibrarySpans?: TempoScopeSpan[];
 };
 
 type TempoTrace = {
   resourceSpans?: TempoResourceSpan[];
   resource_spans?: TempoResourceSpan[];
+  batches?: TempoResourceSpan[];
 };
 
 export type TraceSpan = {
@@ -162,14 +164,14 @@ export function buildTraceSpans(traceID: string, payload: unknown): Array<Omit<T
   const traceCandidates = getTraceCandidates(payload);
 
   for (const trace of traceCandidates) {
-    const resourceSpans = trace.resourceSpans ?? trace.resource_spans;
+    const resourceSpans = trace.resourceSpans ?? trace.resource_spans ?? trace.batches;
     if (!Array.isArray(resourceSpans)) {
       continue;
     }
 
     for (const resourceSpan of resourceSpans) {
       const serviceName = findServiceName(resourceSpan);
-      const scopeSpans = resourceSpan.scopeSpans ?? resourceSpan.scope_spans;
+      const scopeSpans = resourceSpan.scopeSpans ?? resourceSpan.scope_spans ?? resourceSpan.instrumentationLibrarySpans;
       if (!Array.isArray(scopeSpans)) {
         continue;
       }
