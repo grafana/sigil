@@ -13,6 +13,7 @@ dotnet = "8.0.418"
 "go:github.com/magefile/mage" = "v1.15.0"
 "go:github.com/air-verse/air" = "v1.64.5"
 "go:github.com/golangci/golangci-lint/v2/cmd/golangci-lint" = "v2.10.1"
+"go:github.com/matryer/moq" = "v0.6.0"
 
 [tasks.help]
 description = "Show available tasks"
@@ -85,9 +86,46 @@ run = "DEVELOPMENT=true docker compose --profile core up --watch --build --remov
 description = "Stop local stack"
 run = "docker compose down"
 
+[tasks.nuke]
+description = "Delete all Docker containers and volumes"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+container_ids="$(docker ps -aq)"
+if [[ -n "${container_ids}" ]]; then
+  docker rm -f ${container_ids}
+fi
+
+volume_ids="$(docker volume ls -q)"
+if [[ -n "${volume_ids}" ]]; then
+  docker volume rm ${volume_ids}
+fi
+"""
+
 [tasks.logs]
 description = "Tail local stack logs"
 run = "docker compose logs -f"
+
+[tasks."assistant:up"]
+description = "Start grafana-assistant-app with remapped host ports"
+run = "./scripts/run-assistant-offset.sh up"
+
+[tasks."assistant:up:sigil-env"]
+description = "Start remapped assistant and import SIGIL env vars"
+run = "ASSISTANT_IMPORT_SIGIL_ENV=1 ./scripts/run-assistant-offset.sh up"
+
+[tasks."assistant:down"]
+description = "Stop remapped grafana-assistant-app stack"
+run = "./scripts/run-assistant-offset.sh down"
+
+[tasks."assistant:ps"]
+description = "List remapped grafana-assistant-app containers"
+run = "./scripts/run-assistant-offset.sh ps"
+
+[tasks."assistant:logs"]
+description = "Tail remapped grafana-assistant-app logs"
+run = "./scripts/run-assistant-offset.sh logs"
 
 [tasks.format]
 description = "Format Go and TypeScript code"
@@ -569,6 +607,83 @@ GOWORK=off go test ./e2e -tags=e2e -run TestStorageHotColdRoundTripLocal -count=
 description = "Run Sigil storage benchmarks (WAL, object, compactor, fan-out)"
 depends = ["doctor:go"]
 run = "cd sigil && GOWORK=off go test ./internal/storage/... -run '^$' -bench . -benchmem"
+
+[tasks."test:coverage:go"]
+description = "Run Go tests with coverage report"
+depends = ["doctor:go"]
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+cd sigil
+GOWORK=off go test ./... -coverprofile=coverage.out -count=1
+go tool cover -func=coverage.out | tail -1
+echo ""
+echo "View HTML report: cd sigil && go tool cover -html=coverage.out"
+"""
+
+[tasks."generate:mocks:sigil"]
+description = "Generate sigil server mocks"
+depends = ["doctor:go"]
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+echo "==> generating sigil mocks"
+# moq -rm -out ./sigil/internal/eval/control/mock_test.gen.go ./sigil/internal/eval/control controlStore
+echo "No sigil mocks to generate yet."
+"""
+
+[tasks."generate:mocks:plugin"]
+description = "Generate Grafana plugin mocks"
+depends = ["doctor:go"]
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+echo "==> generating plugin mocks"
+echo "No plugin mocks to generate yet."
+"""
+
+[tasks."generate:mocks:sdk-go"]
+description = "Generate Go SDK mocks"
+depends = ["doctor:go"]
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+echo "==> generating Go SDK mocks"
+echo "No Go SDK mocks to generate yet."
+"""
+
+[tasks."generate:mocks:sdk-go-providers"]
+description = "Generate Go SDK provider mocks"
+depends = ["doctor:go"]
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+echo "==> generating Go SDK provider mocks"
+echo "No Go SDK provider mocks to generate yet."
+"""
+
+[tasks."generate:mocks:sdk-go-frameworks"]
+description = "Generate Go SDK framework mocks"
+depends = ["doctor:go"]
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+echo "==> generating Go SDK framework mocks"
+echo "No Go SDK framework mocks to generate yet."
+"""
+
+[tasks."generate:mocks:go"]
+description = "Generate all Go mock implementations"
+depends = ["generate:mocks:sigil", "generate:mocks:plugin", "generate:mocks:sdk-go", "generate:mocks:sdk-go-providers", "generate:mocks:sdk-go-frameworks"]
+
+[tasks."generate:mocks"]
+description = "Generate mock implementations across all modules"
+depends = ["generate:mocks:go"]
+
+[tasks.generate]
+description = "Generate all code (mocks, etc.)"
+depends = ["generate:mocks"]
+run = 'echo "All code generation complete"'
 
 [tasks.check]
 description = "Run lint, typecheck and tests"

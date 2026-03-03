@@ -1,6 +1,7 @@
 package control
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -40,7 +41,7 @@ func (r createRuleRequest) toRuleDefinition() evalpkg.RuleDefinition {
 	}
 }
 
-func RegisterHTTPRoutes(mux *http.ServeMux, service *Service, protectedMiddleware func(http.Handler) http.Handler) {
+func RegisterHTTPRoutes(mux *http.ServeMux, service *Service, templateService *TemplateService, protectedMiddleware func(http.Handler) http.Handler) {
 	if mux == nil || service == nil {
 		return
 	}
@@ -56,6 +57,11 @@ func RegisterHTTPRoutes(mux *http.ServeMux, service *Service, protectedMiddlewar
 	mux.Handle("/api/v1/eval/rules/", protectedMiddleware(http.HandlerFunc(service.handleRuleByID)))
 	mux.Handle("/api/v1/eval/judge/providers", protectedMiddleware(http.HandlerFunc(service.handleJudgeProviders)))
 	mux.Handle("/api/v1/eval/judge/models", protectedMiddleware(http.HandlerFunc(service.handleJudgeModels)))
+
+	if templateService != nil {
+		mux.Handle("/api/v1/eval/templates", protectedMiddleware(http.HandlerFunc(templateService.handleTemplates)))
+		mux.Handle("/api/v1/eval/templates/", protectedMiddleware(http.HandlerFunc(templateService.routeTemplateSubpaths)))
+	}
 }
 
 func (s *Service) handleEvaluators(w http.ResponseWriter, req *http.Request) {
@@ -300,18 +306,26 @@ func (s *Service) handleJudgeModels(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"models": models})
 }
 
+// maxRequestBodySize limits the size of request bodies to prevent OOM from
+// malicious or oversized payloads. 1 MB is generous for JSON config payloads.
+const maxRequestBodySize = 1 << 20
+
 func decodeJSONBody(req *http.Request, out any) error {
 	if req.Body == nil {
 		return errors.New("request body is required")
 	}
-	body, err := io.ReadAll(req.Body)
+	reader := io.LimitReader(req.Body, maxRequestBodySize+1)
+	data, err := io.ReadAll(reader)
 	if err != nil {
-		return errors.New("read request body")
+		return errors.New("failed to read request body")
 	}
-	if len(strings.TrimSpace(string(body))) == 0 {
+	if len(bytes.TrimSpace(data)) == 0 {
 		return errors.New("request body is required")
 	}
-	decoder := json.NewDecoder(strings.NewReader(string(body)))
+	if len(data) > maxRequestBodySize {
+		return errors.New("request body too large")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(out); err != nil {
 		return errors.New("invalid request body")

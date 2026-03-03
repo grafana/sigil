@@ -1,4 +1,5 @@
 import React from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import DashboardPage from '../pages/DashboardPage';
 import type { DashboardDataSource } from '../dashboard/api';
 import type { PrometheusQueryResponse } from '../dashboard/types';
@@ -67,7 +68,6 @@ const timePoints = Array.from({ length: 60 }, (_, i) => now - 3600 + i * 60);
 
 const mockDataSource: DashboardDataSource = {
   async queryRange(query) {
-    // Return mock timeseries based on query pattern
     if (
       query.includes('token_usage') &&
       query.includes('gen_ai_provider_name') &&
@@ -100,19 +100,31 @@ const mockDataSource: DashboardDataSource = {
         },
       ]);
     }
-    if (query.includes('token_usage')) {
+    if (query.includes('error_type!=""') && query.includes('error_type')) {
       return makeMatrixResponse([
         {
-          labels: { gen_ai_token_type: 'input' },
-          values: timePoints.map((t) => [t, String(100 + Math.random() * 50)]),
+          labels: { error_type: '429' },
+          values: timePoints.map((t) => [t, String(0.02 + Math.random() * 0.01)]),
         },
         {
-          labels: { gen_ai_token_type: 'output' },
-          values: timePoints.map((t) => [t, String(40 + Math.random() * 20)]),
+          labels: { error_type: '500' },
+          values: timePoints.map((t) => [t, String(0.005 + Math.random() * 0.005)]),
         },
+      ]);
+    }
+    if (query.includes('error_type=""')) {
+      return makeMatrixResponse([
         {
-          labels: { gen_ai_token_type: 'cache_read' },
-          values: timePoints.map((t) => [t, String(10 + Math.random() * 5)]),
+          labels: {},
+          values: timePoints.map((t) => [t, String(1.8 + Math.random() * 0.4)]),
+        },
+      ]);
+    }
+    if (query.includes('error_type!=""')) {
+      return makeMatrixResponse([
+        {
+          labels: {},
+          values: timePoints.map((t) => [t, String(0.03 + Math.random() * 0.02)]),
         },
       ]);
     }
@@ -124,27 +136,11 @@ const mockDataSource: DashboardDataSource = {
         },
       ]);
     }
-    if (query.includes('operation_duration_seconds_count') && query.includes('gen_ai_request_model')) {
-      return makeMatrixResponse([
-        {
-          labels: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o' },
-          values: timePoints.map((t) => [t, String(1.8 + Math.random() * 0.4)]),
-        },
-        {
-          labels: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o-mini' },
-          values: timePoints.map((t) => [t, String(1.1 + Math.random() * 0.3)]),
-        },
-        {
-          labels: { gen_ai_provider_name: 'anthropic', gen_ai_request_model: 'claude-sonnet-4-20250514' },
-          values: timePoints.map((t) => [t, String(0.8 + Math.random() * 0.2)]),
-        },
-      ]);
-    }
-    if (query.includes('time_to_first_token_seconds')) {
+    if (query.includes('operation_duration_seconds_count')) {
       return makeMatrixResponse([
         {
           labels: {},
-          values: timePoints.map((t) => [t, String(0.05 + Math.random() * 0.03)]),
+          values: timePoints.map((t) => [t, String(1.8 + Math.random() * 0.4)]),
         },
       ]);
     }
@@ -157,6 +153,9 @@ const mockDataSource: DashboardDataSource = {
     }
     if (query.includes('error_type')) {
       return makeVectorResponse([{ labels: {}, value: '15' }]);
+    }
+    if (query.includes('operation_duration_seconds_bucket')) {
+      return makeVectorResponse([{ labels: {}, value: '0.42' }]);
     }
     if (query.includes('token_usage') && query.includes('gen_ai_request_model')) {
       return makeVectorResponse([
@@ -184,32 +183,6 @@ const mockDataSource: DashboardDataSource = {
           },
           value: '15000',
         },
-      ]);
-    }
-    if (query.includes('token_usage')) {
-      return makeVectorResponse([{ labels: {}, value: '115000' }]);
-    }
-    if (query.includes('gen_ai_provider_name') && query.includes('gen_ai_request_model')) {
-      return makeVectorResponse([
-        { labels: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o' }, value: '350' },
-        {
-          labels: { gen_ai_provider_name: 'anthropic', gen_ai_request_model: 'claude-sonnet-4-20250514' },
-          value: '200',
-        },
-        { labels: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o-mini' }, value: '100' },
-      ]);
-    }
-    if (query.includes('gen_ai_provider_name')) {
-      return makeVectorResponse([
-        { labels: { gen_ai_provider_name: 'openai' }, value: '420' },
-        { labels: { gen_ai_provider_name: 'anthropic' }, value: '230' },
-      ]);
-    }
-    if (query.includes('gen_ai_request_model')) {
-      return makeVectorResponse([
-        { labels: { gen_ai_request_model: 'gpt-4o' }, value: '350' },
-        { labels: { gen_ai_request_model: 'claude-sonnet-4-20250514' }, value: '200' },
-        { labels: { gen_ai_request_model: 'gpt-4o-mini' }, value: '100' },
       ]);
     }
     return makeVectorResponse([{ labels: {}, value: '650' }]);
@@ -273,6 +246,13 @@ const mockDataSource: DashboardDataSource = {
 export default {
   title: 'Pages/DashboardPage',
   component: DashboardPage,
+  decorators: [
+    (Story: React.ComponentType) => (
+      <MemoryRouter>
+        <Story />
+      </MemoryRouter>
+    ),
+  ],
 };
 
 export const Default = {

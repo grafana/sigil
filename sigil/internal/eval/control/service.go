@@ -33,9 +33,10 @@ type JudgeDiscovery interface {
 }
 
 type Service struct {
-	store     controlStore
-	discovery JudgeDiscovery
-	now       func() time.Time
+	store         controlStore
+	templateStore evalpkg.TemplateStore
+	discovery     JudgeDiscovery
+	now           func() time.Time
 }
 
 type validationError struct {
@@ -89,11 +90,26 @@ type controlStore interface {
 	CountActiveRules(ctx context.Context, tenantID string) (int64, error)
 }
 
-func NewService(store controlStore, discovery JudgeDiscovery) *Service {
-	return &Service{
+func NewService(store controlStore, discovery JudgeDiscovery, opts ...ServiceOption) *Service {
+	s := &Service{
 		store:     store,
 		discovery: discovery,
 		now:       time.Now,
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+// ServiceOption configures optional dependencies on Service.
+type ServiceOption func(*Service)
+
+// WithTemplateStore configures the Service to read predefined evaluators
+// from the templates table instead of hardcoded Go templates.
+func WithTemplateStore(ts evalpkg.TemplateStore) ServiceOption {
+	return func(s *Service) {
+		s.templateStore = ts
 	}
 }
 
@@ -132,11 +148,22 @@ func (s *Service) ListEvaluators(ctx context.Context, tenantID string, limit int
 	return s.store.ListEvaluators(ctx, trimmedTenantID, limit, cursor)
 }
 
-func (s *Service) ListPredefinedEvaluators(_ context.Context) []evalpkg.EvaluatorDefinition {
+func (s *Service) ListPredefinedEvaluators(ctx context.Context) []evalpkg.EvaluatorDefinition {
+	if s.templateStore != nil {
+		// Fall through to hardcoded templates on store error or empty result,
+		// so predefined evaluators are always available.
+		if items, err := s.listPredefinedFromTemplates(ctx); err == nil && len(items) > 0 {
+			return items
+		}
+	}
+	return s.listPredefinedFromHardcoded()
+}
+
+func (s *Service) listPredefinedFromHardcoded() []evalpkg.EvaluatorDefinition {
 	templates := predefined.Templates()
 	out := make([]evalpkg.EvaluatorDefinition, 0, len(templates))
 	for _, template := range templates {
-		item := template
+		item := template.EvaluatorDefinition
 		item.IsPredefined = true
 		item.TenantID = ""
 		item.DeletedAt = nil
@@ -145,11 +172,114 @@ func (s *Service) ListPredefinedEvaluators(_ context.Context) []evalpkg.Evaluato
 	return out
 }
 
+func (s *Service) listPredefinedFromTemplates(ctx context.Context) ([]evalpkg.EvaluatorDefinition, error) {
+	globalScope := evalpkg.TemplateScopeGlobal
+	templates, _, err := s.templateStore.ListTemplates(ctx, GlobalTenantID, &globalScope, 500, 0)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]evalpkg.EvaluatorDefinition, 0, len(templates))
+	for _, tmpl := range templates {
+		ver, err := s.templateStore.GetLatestTemplateVersion(ctx, tmpl.TenantID, tmpl.TemplateID)
+		if err != nil || ver == nil {
+			continue
+		}
+		out = append(out, evalpkg.EvaluatorDefinition{
+			EvaluatorID:  tmpl.TemplateID,
+			Version:      ver.Version,
+			Kind:         tmpl.Kind,
+			Config:       ver.Config,
+			OutputKeys:   ver.OutputKeys,
+			IsPredefined: true,
+		})
+	}
+	return out, nil
+}
+
 func (s *Service) ForkPredefinedEvaluator(ctx context.Context, tenantID, templateID string, request ForkPredefinedEvaluatorRequest) (evalpkg.EvaluatorDefinition, error) {
 	if s.store == nil {
 		return evalpkg.EvaluatorDefinition{}, errors.New("eval store is required")
 	}
 
+	if s.templateStore != nil {
+		if result, err := s.forkFromTemplateStore(ctx, tenantID, templateID, request); err == nil {
+			return result, nil
+		} else if !isTemplateFallbackError(err) {
+			return evalpkg.EvaluatorDefinition{}, err
+		}
+		// Fall through to hardcoded templates on lookup failure.
+	}
+	return s.forkFromHardcoded(ctx, tenantID, templateID, request)
+}
+
+// templateFallbackError signals that the template store lookup failed and we
+// should fall back to the hardcoded predefined templates.
+type templateFallbackError struct{ cause error }
+
+func (e templateFallbackError) Error() string { return e.cause.Error() }
+func (e templateFallbackError) Unwrap() error { return e.cause }
+
+func isTemplateFallbackError(err error) bool {
+	var target templateFallbackError
+	return errors.As(err, &target)
+}
+
+func (s *Service) forkFromTemplateStore(ctx context.Context, tenantID, templateID string, request ForkPredefinedEvaluatorRequest) (evalpkg.EvaluatorDefinition, error) {
+	trimmedTemplateID := strings.TrimSpace(templateID)
+	tmpl, err := s.templateStore.GetGlobalTemplate(ctx, trimmedTemplateID)
+	if err != nil {
+		return evalpkg.EvaluatorDefinition{}, err
+	}
+	if tmpl == nil {
+		return evalpkg.EvaluatorDefinition{}, templateFallbackError{
+			cause: fmt.Errorf("global template %q not found in store", trimmedTemplateID),
+		}
+	}
+
+	ver, err := s.templateStore.GetLatestTemplateVersion(ctx, tmpl.TenantID, tmpl.TemplateID)
+	if err != nil {
+		return evalpkg.EvaluatorDefinition{}, err
+	}
+	if ver == nil {
+		return evalpkg.EvaluatorDefinition{}, templateFallbackError{
+			cause: fmt.Errorf("no version for global template %q", trimmedTemplateID),
+		}
+	}
+
+	evaluatorID := strings.TrimSpace(request.EvaluatorID)
+	if evaluatorID == "" {
+		return evalpkg.EvaluatorDefinition{}, newValidationError(errors.New("evaluator_id is required"))
+	}
+	version := strings.TrimSpace(request.Version)
+	if version == "" {
+		version = ver.Version
+	}
+
+	forkConfig := cloneMap(ver.Config)
+	for key, value := range request.Config {
+		forkConfig[key] = value
+	}
+
+	outputKeys := ver.OutputKeys
+	if len(request.OutputKeys) > 0 {
+		outputKeys = request.OutputKeys
+	}
+
+	fork := evalpkg.EvaluatorDefinition{
+		TenantID:              strings.TrimSpace(tenantID),
+		EvaluatorID:           evaluatorID,
+		Version:               version,
+		Kind:                  tmpl.Kind,
+		Config:                forkConfig,
+		OutputKeys:            outputKeys,
+		IsPredefined:          false,
+		SourceTemplateID:      tmpl.TemplateID,
+		SourceTemplateVersion: ver.Version,
+	}
+	return s.CreateEvaluator(ctx, fork.TenantID, fork)
+}
+
+func (s *Service) forkFromHardcoded(ctx context.Context, tenantID, templateID string, request ForkPredefinedEvaluatorRequest) (evalpkg.EvaluatorDefinition, error) {
 	template, ok := findPredefinedTemplate(templateID)
 	if !ok {
 		return evalpkg.EvaluatorDefinition{}, newValidationError(fmt.Errorf("predefined evaluator %q was not found", strings.TrimSpace(templateID)))
@@ -169,11 +299,9 @@ func (s *Service) ForkPredefinedEvaluator(ctx context.Context, tenantID, templat
 		forkConfig[key] = value
 	}
 
-	outputKeys := make([]evalpkg.OutputKey, 0, len(template.OutputKeys))
-	outputKeys = append(outputKeys, template.OutputKeys...)
+	outputKeys := template.OutputKeys
 	if len(request.OutputKeys) > 0 {
-		outputKeys = make([]evalpkg.OutputKey, 0, len(request.OutputKeys))
-		outputKeys = append(outputKeys, request.OutputKeys...)
+		outputKeys = request.OutputKeys
 	}
 
 	fork := evalpkg.EvaluatorDefinition{
@@ -386,10 +514,8 @@ func validateEvaluator(evaluator *evalpkg.EvaluatorDefinition) error {
 	if evaluator.Version == "" {
 		return errors.New("version is required")
 	}
-	switch evaluator.Kind {
-	case evalpkg.EvaluatorKindLLMJudge, evalpkg.EvaluatorKindJSONSchema, evalpkg.EvaluatorKindRegex, evalpkg.EvaluatorKindHeuristic:
-	default:
-		return errors.New("kind is invalid")
+	if err := validateKind(evaluator.Kind); err != nil {
+		return err
 	}
 	if len(evaluator.OutputKeys) == 0 {
 		return errors.New("output_keys must include at least one key")
@@ -401,7 +527,7 @@ func validateEvaluator(evaluator *evalpkg.EvaluatorDefinition) error {
 		key := &evaluator.OutputKeys[idx]
 		key.Key = strings.TrimSpace(key.Key)
 		key.Unit = strings.TrimSpace(key.Unit)
-		if strings.TrimSpace(key.Key) == "" {
+		if key.Key == "" {
 			return errors.New("output key name is required")
 		}
 		switch key.Type {
@@ -576,7 +702,7 @@ func normalizeRuleMatchInput(raw any) ([]string, error) {
 }
 
 func (s *Service) refreshActiveMetrics(ctx context.Context, tenantID string) {
-	if s == nil || s.store == nil || strings.TrimSpace(tenantID) == "" {
+	if s.store == nil || strings.TrimSpace(tenantID) == "" {
 		return
 	}
 	activeEvaluators, err := s.store.CountActiveEvaluators(ctx, tenantID)
@@ -596,7 +722,7 @@ func findPredefinedTemplate(templateID string) (evalpkg.EvaluatorDefinition, boo
 	}
 	for _, template := range predefined.Templates() {
 		if template.EvaluatorID == trimmedTemplateID {
-			return template, true
+			return template.EvaluatorDefinition, true
 		}
 	}
 	return evalpkg.EvaluatorDefinition{}, false

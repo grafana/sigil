@@ -3,6 +3,7 @@ package sigil
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -115,7 +116,7 @@ type httpGenerationExporter struct {
 }
 
 func newHTTPGenerationExporter(cfg GenerationExportConfig) (generationExporter, error) {
-	endpoint, path, _, err := splitEndpoint(cfg.Endpoint)
+	endpoint, path, insecureEndpoint, err := splitEndpoint(cfg.Endpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +124,7 @@ func newHTTPGenerationExporter(cfg GenerationExportConfig) (generationExporter, 
 	urlString := endpoint
 	if !strings.HasPrefix(urlString, "http://") && !strings.HasPrefix(urlString, "https://") {
 		scheme := "https://"
-		if cfg.Insecure {
+		if cfg.Insecure || insecureEndpoint {
 			scheme = "http://"
 		}
 		urlString = scheme + endpoint
@@ -209,9 +210,7 @@ func mergeGenerationExportConfig(base, override GenerationExportConfig) Generati
 		out.Headers = cloneTags(override.Headers)
 	}
 	out.Auth = mergeAuthConfig(out.Auth, override.Auth)
-	if override.Insecure {
-		out.Insecure = true
-	}
+	out.Insecure = override.Insecure
 	if override.BatchSize > 0 {
 		out.BatchSize = override.BatchSize
 	}
@@ -267,6 +266,12 @@ func mergeAuthConfig(base, override AuthConfig) AuthConfig {
 	if override.BearerToken != "" {
 		out.BearerToken = override.BearerToken
 	}
+	if override.BasicUser != "" {
+		out.BasicUser = override.BasicUser
+	}
+	if override.BasicPassword != "" {
+		out.BasicPassword = override.BasicPassword
+	}
 	return out
 }
 
@@ -316,6 +321,29 @@ func resolveHeadersWithAuth(headers map[string]string, auth AuthConfig) (map[str
 			out = make(map[string]string, 1)
 		}
 		out[authorizationHeaderName] = formatBearerTokenValue(bearerToken)
+		return out, nil
+	case ExportAuthModeBasic:
+		password := strings.TrimSpace(auth.BasicPassword)
+		if password == "" {
+			return nil, errors.New("auth mode basic requires basic_password")
+		}
+		user := strings.TrimSpace(auth.BasicUser)
+		if user == "" {
+			user = tenantID
+		}
+		if user == "" {
+			return nil, errors.New("auth mode basic requires basic_user or tenant_id")
+		}
+		out := cloneTags(headers)
+		if out == nil {
+			out = make(map[string]string, 2)
+		}
+		if !hasHeaderKey(out, authorizationHeaderName) {
+			out[authorizationHeaderName] = "Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+password))
+		}
+		if tenantID != "" && !hasHeaderKey(out, tenantHeaderName) {
+			out[tenantHeaderName] = tenantID
+		}
 		return out, nil
 	default:
 		return nil, fmt.Errorf("unsupported auth mode %q", mode)

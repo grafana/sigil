@@ -49,11 +49,23 @@ func TestCallResource(t *testing.T) {
 				return
 			}
 			_, _ = io.WriteString(w, `{"values":["sigil"]}`)
-		case "/api/v1/proxy/prometheus/api/v1/query":
+		case "/api/datasources/uid/prometheus/resources/api/v1/query":
+			if got := r.Header.Get("Authorization"); got != "Bearer sa-token" {
+				http.Error(w, "missing authorization", http.StatusUnauthorized)
+				return
+			}
 			_, _ = io.WriteString(w, `{"status":"success"}`)
-		case "/api/v1/proxy/tempo/api/search":
+		case "/api/datasources/proxy/uid/tempo/api/search":
+			if got := r.Header.Get("Authorization"); got != "Bearer sa-token" {
+				http.Error(w, "missing authorization", http.StatusUnauthorized)
+				return
+			}
 			_, _ = io.WriteString(w, `{"traces":[]}`)
-		case "/api/v1/proxy/tempo/api/traces/t-1":
+		case "/api/datasources/proxy/uid/tempo/api/traces/t-1":
+			if got := r.Header.Get("Authorization"); got != "Bearer sa-token" {
+				http.Error(w, "missing authorization", http.StatusUnauthorized)
+				return
+			}
 			_, _ = io.WriteString(w, `{"traceID":"t-1"}`)
 		case "/api/v1/conversations/c-1/ratings":
 			if r.Method == http.MethodPost {
@@ -107,6 +119,10 @@ func TestCallResource(t *testing.T) {
 	}
 	app := inst.(*App)
 	app.apiURL = upstream.URL
+	app.grafanaAppURL = upstream.URL
+	app.grafanaServiceAccountToken = "sa-token"
+	app.prometheusDatasourceUID = "prometheus"
+	app.tempoDatasourceUID = "tempo"
 
 	for _, tc := range []struct {
 		name      string
@@ -286,9 +302,13 @@ func TestCallResourceSupportsProxyPrometheusPostPassThrough(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/api/v1/proxy/prometheus/api/v1/query":
+		case "/api/datasources/uid/prometheus/resources/api/v1/query":
 			if r.Method != http.MethodPost {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			if got := r.Header.Get("Authorization"); got != "Bearer sa-token" {
+				http.Error(w, "missing authorization", http.StatusUnauthorized)
 				return
 			}
 			body, _ := io.ReadAll(r.Body)
@@ -305,6 +325,9 @@ func TestCallResourceSupportsProxyPrometheusPostPassThrough(t *testing.T) {
 	}
 	app := inst.(*App)
 	app.apiURL = upstream.URL
+	app.grafanaAppURL = upstream.URL
+	app.grafanaServiceAccountToken = "sa-token"
+	app.prometheusDatasourceUID = "prometheus"
 
 	payload := []byte(`{"query":"sum(rate(http_requests_total[5m]))"}`)
 	var sender mockCallResourceResponseSender
@@ -324,6 +347,50 @@ func TestCallResourceSupportsProxyPrometheusPostPassThrough(t *testing.T) {
 	}
 	if tb := bytes.TrimSpace(sender.response.Body); !bytes.Equal(tb, payload) {
 		t.Fatalf("response body should echo request body, got %s", tb)
+	}
+}
+
+func TestCallResourceProxyFallsBackToForwardedAuthWhenServiceAccountMissing(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/datasources/uid/prometheus/resources/api/v1/query":
+			if got := r.Header.Get("Authorization"); got != "Bearer user-token" {
+				http.Error(w, "missing forwarded authorization", http.StatusUnauthorized)
+				return
+			}
+			_, _ = io.WriteString(w, `{"status":"success"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.grafanaAppURL = upstream.URL
+	app.prometheusDatasourceUID = "prometheus"
+	app.grafanaServiceAccountToken = ""
+
+	var sender mockCallResourceResponseSender
+	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "query/proxy/prometheus/api/v1/query",
+		Headers: map[string][]string{
+			"Authorization": {"Bearer user-token"},
+		},
+	}, &sender)
+	if err != nil {
+		t.Fatalf("CallResource error: %s", err)
+	}
+	if sender.response == nil {
+		t.Fatal("no response received from CallResource")
+	}
+	if sender.response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.response.Status, sender.response.Body)
 	}
 }
 
@@ -560,9 +627,13 @@ func TestCallResourceForwardsQueryString(t *testing.T) {
 				return
 			}
 			_, _ = io.WriteString(w, `{"items":[]}`)
-		case "/api/v1/proxy/tempo/api/search":
+		case "/api/datasources/proxy/uid/tempo/api/search":
 			if r.URL.RawQuery != "q=service.name%3Dapi&limit=20" {
 				http.Error(w, "missing tempo query string", http.StatusBadRequest)
+				return
+			}
+			if got := r.Header.Get("Authorization"); got != "Bearer sa-token" {
+				http.Error(w, "missing authorization", http.StatusUnauthorized)
 				return
 			}
 			_, _ = io.WriteString(w, `{"traces":[]}`)
@@ -578,6 +649,9 @@ func TestCallResourceForwardsQueryString(t *testing.T) {
 	}
 	app := inst.(*App)
 	app.apiURL = upstream.URL
+	app.grafanaAppURL = upstream.URL
+	app.grafanaServiceAccountToken = "sa-token"
+	app.tempoDatasourceUID = "tempo"
 
 	var sender mockCallResourceResponseSender
 	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
@@ -615,6 +689,10 @@ func TestCallResourceRejectsInvalidProxyPath(t *testing.T) {
 		t.Fatalf("new app: %s", err)
 	}
 	app := inst.(*App)
+	app.grafanaAppURL = "http://grafana:3000"
+	app.grafanaServiceAccountToken = "sa-token"
+	app.prometheusDatasourceUID = "prometheus"
+	app.tempoDatasourceUID = "tempo"
 
 	for _, path := range []string{
 		"query/proxy/prometheus/",
@@ -636,6 +714,29 @@ func TestCallResourceRejectsInvalidProxyPath(t *testing.T) {
 				t.Fatalf("expected status %d, got %d", http.StatusBadRequest, sender.response.Status)
 			}
 		})
+	}
+}
+
+func TestCallResourceRejectsProxyWhenGrafanaDatasourceConfigMissing(t *testing.T) {
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+
+	var sender mockCallResourceResponseSender
+	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "query/proxy/tempo/api/search",
+	}, &sender)
+	if err != nil {
+		t.Fatalf("CallResource error: %s", err)
+	}
+	if sender.response == nil {
+		t.Fatal("no response received from CallResource")
+	}
+	if sender.response.Status != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusServiceUnavailable, sender.response.Status, sender.response.Body)
 	}
 }
 
@@ -738,5 +839,86 @@ func TestCallResourceReturnsValidJSONWhenClientSendsAcceptEncodingGzip(t *testin
 	var result map[string]interface{}
 	if err := json.Unmarshal(sender.response.Body, &result); err != nil {
 		t.Fatalf("response body is not valid JSON (garbled encoding?): %v\nbody bytes: %x", err, sender.response.Body)
+	}
+}
+
+func TestCallResourceRoutesTempoProxyThroughGrafanaDatasourceProxy(t *testing.T) {
+	grafana := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/datasources/proxy/uid/tempo-ds/api/search" {
+			http.Error(w, "unexpected path", http.StatusBadRequest)
+			return
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer sa-token" {
+			http.Error(w, "missing authorization", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"traces":[]}`)
+	}))
+	defer grafana.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.grafanaAppURL = grafana.URL
+	app.grafanaServiceAccountToken = "sa-token"
+	app.tempoDatasourceUID = "tempo-ds"
+
+	var sender mockCallResourceResponseSender
+	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "query/proxy/tempo/api/search",
+	}, &sender)
+	if err != nil {
+		t.Fatalf("CallResource error: %s", err)
+	}
+	if sender.response == nil {
+		t.Fatal("no response received from CallResource")
+	}
+	if sender.response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.response.Status, sender.response.Body)
+	}
+	if tb := bytes.TrimSpace(sender.response.Body); !bytes.Equal(tb, []byte(`{"traces":[]}`)) {
+		t.Fatalf("unexpected response body: %s", tb)
+	}
+}
+
+func TestCallResourceSettingsRoutesProxyToSigil(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/settings" {
+			http.Error(w, "unexpected path", http.StatusBadRequest)
+			return
+		}
+		if got := r.Header.Get("X-Scope-OrgID"); got != "fake" {
+			http.Error(w, "missing tenant", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"datasources":{"prometheusDatasourceUID":"prom","tempoDatasourceUID":"tempo"}}`)
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.apiURL = upstream.URL
+
+	var sender mockCallResourceResponseSender
+	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "query/settings",
+	}, &sender)
+	if err != nil {
+		t.Fatalf("CallResource error: %s", err)
+	}
+	if sender.response == nil {
+		t.Fatal("no response received from CallResource")
+	}
+	if sender.response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.response.Status, sender.response.Body)
 	}
 }
