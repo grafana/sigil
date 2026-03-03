@@ -97,7 +97,7 @@ func TestSearchConversationsForTenantAppliesTempoAndMySQLFilters(t *testing.T) {
 	}
 }
 
-func TestSearchConversationsForTenantEmptyFilterUsesGenerationGuard(t *testing.T) {
+func TestSearchConversationsForTenantEmptyFilterUsesSDKNameGuard(t *testing.T) {
 	base := time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)
 	conversationStore := &stubConversationStore{
 		items: map[string]storage.Conversation{
@@ -141,8 +141,8 @@ func TestSearchConversationsForTenantEmptyFilterUsesGenerationGuard(t *testing.T
 		t.Fatalf("expected at least one tempo search request")
 	}
 	traceQL := tempoClient.searchRequests[0].Query
-	if !strings.Contains(traceQL, `span.sigil.generation.id != ""`) {
-		t.Fatalf("expected empty-filter query to use generation guard, got %q", traceQL)
+	if !strings.Contains(traceQL, `span.sigil.sdk.name != ""`) {
+		t.Fatalf("expected empty-filter query to use sdk-name guard, got %q", traceQL)
 	}
 	if strings.Contains(traceQL, `span.gen_ai.operation.name =~ "generateText|streamText"`) {
 		t.Fatalf("empty-filter query should not hardcode operation names: %q", traceQL)

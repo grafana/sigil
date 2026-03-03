@@ -122,14 +122,14 @@ func TestBuildTraceQLToolFilterAddsExecuteToolPredicate(t *testing.T) {
 	}
 }
 
-func TestBuildTraceQLEmptyFilterUsesGenerationIDGuard(t *testing.T) {
+func TestBuildTraceQLEmptyFilterUsesSDKNameGuard(t *testing.T) {
 	traceQL, err := BuildTraceQL(ParsedFilters{}, nil)
 	if err != nil {
 		t.Fatalf("build traceql: %v", err)
 	}
 
-	if !strings.Contains(traceQL, `span.sigil.generation.id != ""`) {
-		t.Fatalf("expected empty-filter generation guard in query: %s", traceQL)
+	if !strings.Contains(traceQL, `span.sigil.sdk.name != ""`) {
+		t.Fatalf("expected empty-filter sdk-name guard in query: %s", traceQL)
 	}
 	if strings.Contains(traceQL, `span.gen_ai.operation.name =~ "generateText|streamText"`) {
 		t.Fatalf("empty-filter query must not hardcode operation names: %s", traceQL)

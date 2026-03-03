@@ -125,8 +125,8 @@ func TestBuildTraceQL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build traceql: %v", err)
 	}
-	if !strings.Contains(query, `span.sigil.generation.id != ""`) {
-		t.Fatalf("expected generation guard in mysql-only query, got %q", query)
+	if !strings.Contains(query, `span.sigil.sdk.name != ""`) {
+		t.Fatalf("expected sdk-name guard in mysql-only query, got %q", query)
 	}
 
 	statusFilters, err := ParseFilterExpression(`status = error`)

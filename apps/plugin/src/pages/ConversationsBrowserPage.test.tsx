@@ -128,7 +128,7 @@ describe('ConversationsBrowserPage', () => {
     const { router } = renderPage(dataSource);
 
     await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalledTimes(2));
-    expect(dataSource.searchConversations.mock.calls[0][0].select).toContain('span.sigil.generation.id');
+    expect(dataSource.searchConversations.mock.calls[0][0].select).toContain('span.sigil.sdk.name');
     expect(dataSource.searchConversations.mock.calls[0][0].select).toHaveLength(1);
 
     expect(await screen.findByLabelText('select conversation conv-a')).toBeInTheDocument();

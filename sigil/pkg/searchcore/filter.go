@@ -247,7 +247,7 @@ func NormalizeSelectFields(keys []string) ([]SelectField, error) {
 func BuildTraceQL(parsed ParsedFilters, selectFields []SelectField) (string, error) {
 	predicates := []string{"span.gen_ai.operation.name != \"\""}
 	if len(parsed.TempoTerms) == 0 {
-		predicates = append(predicates, "span.sigil.generation.id != \"\"")
+		predicates = append(predicates, "span.sigil.sdk.name != \"\"")
 	}
 
 	hasToolFilter := false
