@@ -11,6 +11,7 @@ import ToolResultCard from './ToolResultCard';
 
 export type ChatMessageProps = {
   message: Message;
+  alignLeft?: boolean;
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -92,13 +93,20 @@ function roleToBubbleRole(role: Message['role']): 'user' | 'assistant' | 'tool' 
   }
 }
 
-export default function ChatMessage({ message }: ChatMessageProps) {
+export default function ChatMessage({ message, alignLeft = false }: ChatMessageProps) {
   const styles = useStyles2(getStyles);
   const role = message.role;
   const bubbleRole = roleToBubbleRole(role);
+  const shouldAlignLeft = alignLeft && role !== 'MESSAGE_ROLE_TOOL';
 
   const rowClass = `${styles.row} ${
-    role === 'MESSAGE_ROLE_USER' ? styles.rowUser : role === 'MESSAGE_ROLE_TOOL' ? styles.rowTool : styles.rowAssistant
+    shouldAlignLeft
+      ? styles.rowAssistant
+      : role === 'MESSAGE_ROLE_USER'
+        ? styles.rowUser
+        : role === 'MESSAGE_ROLE_TOOL'
+          ? styles.rowTool
+          : styles.rowAssistant
   }`;
   const avatarClass = `${styles.avatar} ${
     role === 'MESSAGE_ROLE_USER'

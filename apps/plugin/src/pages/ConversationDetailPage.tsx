@@ -4,7 +4,7 @@ import type { GrafanaTheme2 } from '@grafana/data';
 import { getBackendSrv } from '@grafana/runtime';
 import { Alert, Spinner, useStyles2 } from '@grafana/ui';
 import { lastValueFrom } from 'rxjs';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import ConversationTraces, {
   buildTraceSpans,
   layoutSpans,
@@ -57,6 +57,7 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
   const styles = useStyles2(getStyles);
   const dataSource = props.dataSource ?? defaultConversationsDataSource;
   const { conversationID = '' } = useParams<{ conversationID: string }>();
+  const [searchParams] = useSearchParams();
   const hasConversationID = conversationID.length > 0;
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -73,6 +74,22 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
     }
     return JSON.stringify(detail, null, 2);
   }, [detail]);
+  const selectedTraceID = searchParams.get('trace') ?? '';
+  const displayedGenerations = useMemo(() => {
+    if (detail == null) {
+      return [];
+    }
+    if (selectedTraceID.length === 0) {
+      return detail.generations;
+    }
+    return detail.generations.filter((generation) => generation.trace_id === selectedTraceID);
+  }, [detail, selectedTraceID]);
+  const generationsEmptyMessage = useMemo(() => {
+    if (selectedTraceID.length === 0) {
+      return 'No generations found for this conversation.';
+    }
+    return `No generations found for selected trace ${selectedTraceID}.`;
+  }, [selectedTraceID]);
 
   useEffect(() => {
     requestVersionRef.current += 1;
@@ -230,7 +247,7 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
               traceLoadFailures={traceLoadFailures}
               traceTimelines={traceTimelines}
             />
-            <GenerationsList generations={detail.generations} />
+            <GenerationsList generations={displayedGenerations} emptyMessage={generationsEmptyMessage} />
           </div>
           <pre className={styles.rawData}>{detailJSON}</pre>
         </>

@@ -5,6 +5,7 @@ import { Alert, useStyles2 } from '@grafana/ui';
 import { useSearchParams } from 'react-router-dom';
 import type { ConversationDetail, GenerationDetail } from '../conversation/types';
 import { getGradientColorAtIndex } from './traceGradient';
+import ChatPreview from '../components/conversations/ChatPreview';
 
 const TRACE_ROW_STEP_PX = 14;
 const TRACE_SPAN_HEIGHT_PX = 14;
@@ -525,6 +526,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     label: 'conversationTraces-hoveredSpanValue',
     color: theme.colors.text.primary,
   }),
+  hoveredSpanChatPreview: css({
+    label: 'conversationTraces-hoveredSpanChatPreview',
+    marginTop: theme.spacing(0.5),
+  }),
   spanBar: css({
     label: 'conversationTraces-spanBar',
     position: 'absolute' as const,
@@ -907,6 +912,14 @@ export default function ConversationTraces({
                               <span className={styles.hoveredSpanLabel}>Mode</span>
                               <span className={styles.hoveredSpanValue}>{hoveredTraceGeneration.mode ?? 'n/a'}</span>
                             </div>
+                            <div className={styles.hoveredSpanChatPreview}>
+                              <ChatPreview
+                                generationID={hoveredTraceGeneration.generation_id}
+                                input={hoveredTraceGeneration.input}
+                                output={hoveredTraceGeneration.output}
+                                compact
+                              />
+                            </div>
                           </>
                         )}
                       </div>
@@ -1078,6 +1091,14 @@ export default function ConversationTraces({
                                 <div className={styles.hoveredSpanRow}>
                                   <span className={styles.hoveredSpanLabel}>Mode</span>
                                   <span className={styles.hoveredSpanValue}>{hoveredGeneration.mode ?? 'n/a'}</span>
+                                </div>
+                                <div className={styles.hoveredSpanChatPreview}>
+                                  <ChatPreview
+                                    generationID={hoveredGeneration.generation_id}
+                                    input={hoveredGeneration.input}
+                                    output={hoveredGeneration.output}
+                                    compact
+                                  />
                                 </div>
                               </>
                             )}
