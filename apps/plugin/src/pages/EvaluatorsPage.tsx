@@ -74,43 +74,64 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [scopeFilter, setScopeFilter] = useState<string>('');
-  const requestVersion = useRef(0);
+  const evaluatorRequestVersion = useRef(0);
+  const templateRequestVersion = useRef(0);
   const forkFormRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    requestVersion.current += 1;
-    const version = requestVersion.current;
+    evaluatorRequestVersion.current += 1;
+    const version = evaluatorRequestVersion.current;
 
     queueMicrotask(() => {
-      if (requestVersion.current !== version) {
+      if (evaluatorRequestVersion.current !== version) {
         return;
       }
       setLoading(true);
       setErrorMessage('');
     });
 
-    const scope = scopeFilter ? (scopeFilter as TemplateScope) : undefined;
-    Promise.all([dataSource.listEvaluators(), dataSource.listTemplates(scope)])
-      .then(([tenantRes, templatesRes]) => {
-        if (requestVersion.current !== version) {
+    dataSource
+      .listEvaluators()
+      .then((tenantRes) => {
+        if (evaluatorRequestVersion.current !== version) {
           return;
         }
         setTenantEvaluators(tenantRes.items.filter((e) => !e.is_predefined));
-        setTemplates(templatesRes.items ?? []);
       })
       .catch((err) => {
-        if (requestVersion.current !== version) {
+        if (evaluatorRequestVersion.current !== version) {
           return;
         }
         setErrorMessage(err instanceof Error ? err.message : 'Failed to load evaluators');
         setTenantEvaluators([]);
-        setTemplates([]);
       })
       .finally(() => {
-        if (requestVersion.current !== version) {
+        if (evaluatorRequestVersion.current !== version) {
           return;
         }
         setLoading(false);
+      });
+  }, [dataSource]);
+
+  useEffect(() => {
+    templateRequestVersion.current += 1;
+    const version = templateRequestVersion.current;
+
+    const scope = scopeFilter ? (scopeFilter as TemplateScope) : undefined;
+    dataSource
+      .listTemplates(scope)
+      .then((templatesRes) => {
+        if (templateRequestVersion.current !== version) {
+          return;
+        }
+        setTemplates(templatesRes.items ?? []);
+      })
+      .catch((err) => {
+        if (templateRequestVersion.current !== version) {
+          return;
+        }
+        setErrorMessage(err instanceof Error ? err.message : 'Failed to load templates');
+        setTemplates([]);
       });
   }, [dataSource, scopeFilter]);
 

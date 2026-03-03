@@ -59,13 +59,12 @@ function nextVersion(existingVersions?: string[]): string {
     return base;
   }
 
-  for (let n = 1; n < 100; n++) {
+  for (let n = 1; ; n++) {
     const candidate = `${base}.${n}`;
     if (!existing.has(candidate)) {
       return candidate;
     }
   }
-  return `${base}.100`;
 }
 
 export default function PublishVersionForm({

@@ -9,9 +9,31 @@ export type ForkEvaluatorFormProps = {
   onSubmit: (req: ForkEvaluatorRequest) => void;
   onCancel: () => void;
   dataSource: Pick<EvaluationDataSource, 'listJudgeProviders' | 'listJudgeModels'>;
+  copy?: {
+    formLabel?: string;
+    idDescription?: string;
+    providerDescription?: string;
+    modelDescription?: string;
+    submitLabel?: string;
+  };
 };
 
-export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel, dataSource }: ForkEvaluatorFormProps) {
+const DEFAULT_COPY: Required<NonNullable<ForkEvaluatorFormProps['copy']>> = {
+  formLabel: 'Fork evaluator',
+  idDescription: 'Unique ID for your forked evaluator. Required.',
+  providerDescription: 'Optional. Override the LLM provider for llm_judge evaluators.',
+  modelDescription: 'Optional. Override the model for llm_judge evaluators.',
+  submitLabel: 'Fork',
+};
+
+export default function ForkEvaluatorForm({
+  templateID,
+  onSubmit,
+  onCancel,
+  dataSource,
+  copy,
+}: ForkEvaluatorFormProps) {
+  const labels = { ...DEFAULT_COPY, ...copy };
   const [evaluatorId, setEvaluatorId] = useState('');
   const [provider, setProvider] = useState<string | null>(null);
   const [model, setModel] = useState('');
@@ -65,10 +87,10 @@ export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel, data
   };
 
   return (
-    <FieldSet label="Fork evaluator">
+    <FieldSet label={labels.formLabel}>
       <Field
         label="Evaluator ID"
-        description="Unique ID for your forked evaluator. Required."
+        description={labels.idDescription}
         required
         invalid={showIdError}
         error={showIdError ? 'Evaluator ID is required' : undefined}
@@ -81,7 +103,7 @@ export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel, data
           width={40}
         />
       </Field>
-      <Field label="Provider override" description="Optional. Override the LLM provider for llm_judge evaluators.">
+      <Field label="Provider override" description={labels.providerDescription}>
         <Select<string>
           options={providerOptions}
           value={provider}
@@ -95,7 +117,7 @@ export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel, data
           width={24}
         />
       </Field>
-      <Field label="Model override" description="Optional. Override the model for llm_judge evaluators.">
+      <Field label="Model override" description={labels.modelDescription}>
         <Select<string>
           options={modelOptions}
           value={model || null}
@@ -107,7 +129,7 @@ export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel, data
         />
       </Field>
       <Stack direction="row" gap={1}>
-        <Button onClick={handleSubmit}>Fork</Button>
+        <Button onClick={handleSubmit}>{labels.submitLabel}</Button>
         <Button variant="secondary" onClick={onCancel}>
           Cancel
         </Button>

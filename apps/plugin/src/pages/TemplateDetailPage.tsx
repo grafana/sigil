@@ -94,6 +94,19 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
   const [reloadCounter, setReloadCounter] = useState(0);
 
   useEffect(() => {
+    queueMicrotask(() => {
+      setErrorMessage('');
+      setActiveForm('none');
+      setRollbackVersion(undefined);
+      setRollbackConfig(undefined);
+      setRollbackOutputKeys(undefined);
+      setSelectedVersions([]);
+      setCompareLeft(null);
+      setCompareRight(null);
+    });
+  }, [templateID]);
+
+  useEffect(() => {
     if (!templateID) {
       return;
     }
@@ -145,7 +158,7 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
 
   // Load versions for compare when two are selected
   useEffect(() => {
-    if (selectedVersions.length !== 2 || !templateID) {
+    if (selectedVersions.length !== 2 || !templateID || template?.template_id !== templateID) {
       queueMicrotask(() => {
         setCompareLeft(null);
         setCompareRight(null);
@@ -172,7 +185,7 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [dataSource, templateID, selectedVersions]);
+  }, [dataSource, template, templateID, selectedVersions]);
 
   const handleRollback = async (version: string) => {
     if (!templateID) {

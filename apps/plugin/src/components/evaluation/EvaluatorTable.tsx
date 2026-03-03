@@ -3,21 +3,13 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, IconButton, Text, useStyles2 } from '@grafana/ui';
 import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type Evaluator } from '../../evaluation/types';
+import { formatDate } from './formatDate';
 
 export type EvaluatorTableProps = {
   evaluators: Evaluator[];
   onSelect?: (evaluatorID: string) => void;
   onDelete?: (evaluatorID: string) => void;
 };
-
-function formatDate(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-  } catch {
-    return iso;
-  }
-}
 
 const getStyles = (theme: GrafanaTheme2) => ({
   table: css({

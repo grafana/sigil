@@ -3,6 +3,7 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Button, Checkbox, Text, useStyles2 } from '@grafana/ui';
 import type { TemplateVersionSummary } from '../../evaluation/types';
+import { formatDate } from './formatDate';
 
 export type VersionHistoryTableProps = {
   versions: TemplateVersionSummary[];
@@ -10,15 +11,6 @@ export type VersionHistoryTableProps = {
   onToggleSelect: (version: string) => void;
   onRollback?: (version: string) => void;
 };
-
-function formatDate(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-  } catch {
-    return iso;
-  }
-}
 
 const getStyles = (theme: GrafanaTheme2) => ({
   table: css({
