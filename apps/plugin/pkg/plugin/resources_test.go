@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/grafana/authlib/authz"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 )
 
@@ -21,6 +22,280 @@ type mockCallResourceResponseSender struct {
 func (s *mockCallResourceResponseSender) Send(response *backend.CallResourceResponse) error {
 	s.response = response
 	return nil
+}
+
+func callResourceWithAuth(t *testing.T, app *App, req *backend.CallResourceRequest) *backend.CallResourceResponse {
+	t.Helper()
+
+	if req.Headers == nil {
+		req.Headers = map[string][]string{}
+	}
+	if _, ok := req.Headers["X-Grafana-Id"]; !ok {
+		req.Headers["X-Grafana-Id"] = []string{"test-id-token"}
+	}
+
+	var sender mockCallResourceResponseSender
+	err := app.CallResource(context.Background(), req, &sender)
+	if err != nil {
+		t.Fatalf("CallResource error: %s", err)
+	}
+	if sender.response == nil {
+		t.Fatal("no response received from CallResource")
+	}
+
+	return sender.response
+}
+
+type mockAuthzClient struct {
+	allowed map[string]bool
+}
+
+func newMockAuthzClient(allowed map[string]bool) *mockAuthzClient {
+	return &mockAuthzClient{allowed: allowed}
+}
+
+func (m *mockAuthzClient) HasAccess(_ context.Context, _ string, action string, _ ...authz.Resource) (bool, error) {
+	return m.allowed[action], nil
+}
+
+func (m *mockAuthzClient) Compile(_ context.Context, _ string, _ string, _ ...string) (authz.Checker, error) {
+	return nil, nil
+}
+
+func (m *mockAuthzClient) LookupResources(_ context.Context, _ string, _ string) ([]authz.Resource, error) {
+	return nil, nil
+}
+
+func allowAllSigilActions() map[string]bool {
+	return map[string]bool{
+		PermissionDataRead:      true,
+		PermissionFeedbackWrite: true,
+		PermissionSettingsWrite: true,
+	}
+}
+
+func TestRequiredPermissionAction(t *testing.T) {
+	t.Run("read routes", func(t *testing.T) {
+		testCases := []struct {
+			method string
+			path   string
+		}{
+			{method: http.MethodGet, path: "/query/conversations"},
+			{method: http.MethodPost, path: "/query/conversations/search"},
+			{method: http.MethodGet, path: "/query/conversations/c-1"},
+			{method: http.MethodGet, path: "/query/conversations/c-1/ratings"},
+			{method: http.MethodGet, path: "/query/conversations/c-1/annotations"},
+			{method: http.MethodGet, path: "/query/generations/gen-1"},
+			{method: http.MethodGet, path: "/query/search/tags"},
+			{method: http.MethodGet, path: "/query/search/tag/model/values"},
+			{method: http.MethodGet, path: "/query/settings"},
+			{method: http.MethodGet, path: "/query/proxy/prometheus/api/v1/query"},
+			{method: http.MethodPost, path: "/query/proxy/prometheus/api/v1/query"},
+			{method: http.MethodDelete, path: "/query/proxy/prometheus/api/v1/query"},
+			{method: http.MethodGet, path: "/query/proxy/tempo/api/search"},
+			{method: http.MethodPost, path: "/query/proxy/tempo/api/search"},
+			{method: http.MethodGet, path: "/query/model-cards"},
+			{method: http.MethodGet, path: "/query/model-cards/lookup"},
+		}
+
+		for _, tc := range testCases {
+			action, ok := requiredPermissionAction(tc.method, tc.path)
+			if !ok {
+				t.Fatalf("expected permission action for %s %s", tc.method, tc.path)
+			}
+			if action != PermissionDataRead {
+				t.Fatalf("expected %s for %s %s, got %s", PermissionDataRead, tc.method, tc.path, action)
+			}
+		}
+	})
+
+	t.Run("feedback write routes", func(t *testing.T) {
+		for _, path := range []string{
+			"/query/conversations/c-1/ratings",
+			"/query/conversations/c-1/annotations",
+		} {
+			action, ok := requiredPermissionAction(http.MethodPost, path)
+			if !ok {
+				t.Fatalf("expected permission action for POST %s", path)
+			}
+			if action != PermissionFeedbackWrite {
+				t.Fatalf("expected %s for POST %s, got %s", PermissionFeedbackWrite, path, action)
+			}
+		}
+	})
+
+	t.Run("settings write route", func(t *testing.T) {
+		action, ok := requiredPermissionAction(http.MethodPut, "/query/settings/datasources")
+		if !ok {
+			t.Fatal("expected permission action for PUT /query/settings/datasources")
+		}
+		if action != PermissionSettingsWrite {
+			t.Fatalf("expected %s, got %s", PermissionSettingsWrite, action)
+		}
+	})
+
+	t.Run("unknown or method-mismatch routes are ignored", func(t *testing.T) {
+		testCases := []struct {
+			method string
+			path   string
+		}{
+			{method: http.MethodPost, path: "/query/generations/gen-1"},
+			{method: http.MethodGet, path: "/query/settings/datasources"},
+			{method: http.MethodGet, path: "/unknown"},
+		}
+
+		for _, tc := range testCases {
+			if _, ok := requiredPermissionAction(tc.method, tc.path); ok {
+				t.Fatalf("did not expect permission action for %s %s", tc.method, tc.path)
+			}
+		}
+	})
+}
+
+func TestAuthorizationDeniesMissingToken(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.apiURL = upstream.URL
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+
+	var sender mockCallResourceResponseSender
+	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "query/conversations",
+	}, &sender)
+	if err != nil {
+		t.Fatalf("CallResource error: %s", err)
+	}
+	if sender.response == nil {
+		t.Fatal("no response received from CallResource")
+	}
+	if sender.response.Status != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, sender.response.Status)
+	}
+}
+
+func TestAuthorizationRouteSpecificPermissions(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/conversations/c-1/ratings":
+			if r.Method == http.MethodPost {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"ok":true}`))
+				return
+			}
+		case "/api/v1/settings/datasources":
+			if r.Method == http.MethodPut {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"ok":true}`))
+				return
+			}
+		}
+		http.NotFound(w, r)
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.apiURL = upstream.URL
+
+	t.Run("reader cannot write feedback", func(t *testing.T) {
+		app.authzClient = newMockAuthzClient(map[string]bool{
+			PermissionDataRead: true,
+		})
+
+		response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+			Method: http.MethodPost,
+			Path:   "query/conversations/c-1/ratings",
+			Body:   []byte(`{"rating":"CONVERSATION_RATING_VALUE_GOOD"}`),
+			Headers: map[string][]string{
+				"X-Grafana-Id": {"reader-token"},
+			},
+		})
+		if response.Status != http.StatusForbidden {
+			t.Fatalf("expected status %d, got %d", http.StatusForbidden, response.Status)
+		}
+	})
+
+	t.Run("feedback writer can write feedback", func(t *testing.T) {
+		app.authzClient = newMockAuthzClient(map[string]bool{
+			PermissionFeedbackWrite: true,
+		})
+
+		response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+			Method: http.MethodPost,
+			Path:   "query/conversations/c-1/ratings",
+			Body:   []byte(`{"rating":"CONVERSATION_RATING_VALUE_GOOD"}`),
+			Headers: map[string][]string{
+				"X-Grafana-Id": {"feedback-writer-token"},
+			},
+		})
+		if response.Status != http.StatusOK {
+			t.Fatalf("expected status %d, got %d", http.StatusOK, response.Status)
+		}
+	})
+
+	t.Run("reader cannot write settings", func(t *testing.T) {
+		app.authzClient = newMockAuthzClient(map[string]bool{
+			PermissionDataRead: true,
+		})
+
+		response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+			Method: http.MethodPut,
+			Path:   "query/settings/datasources",
+			Body:   []byte(`{"datasources":{"prometheusDatasourceUID":"prom"}}`),
+			Headers: map[string][]string{
+				"X-Grafana-Id": {"reader-token"},
+			},
+		})
+		if response.Status != http.StatusForbidden {
+			t.Fatalf("expected status %d, got %d", http.StatusForbidden, response.Status)
+		}
+	})
+
+	t.Run("sigil admin can write settings", func(t *testing.T) {
+		app.authzClient = newMockAuthzClient(map[string]bool{
+			PermissionSettingsWrite: true,
+		})
+
+		response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+			Method: http.MethodPut,
+			Path:   "query/settings/datasources",
+			Body:   []byte(`{"datasources":{"prometheusDatasourceUID":"prom"}}`),
+			Headers: map[string][]string{
+				"X-Grafana-Id": {"sigil-admin-token"},
+			},
+		})
+		if response.Status != http.StatusOK {
+			t.Fatalf("expected status %d, got %d", http.StatusOK, response.Status)
+		}
+	})
+
+	t.Run("GET settings/datasources is rejected regardless of permissions", func(t *testing.T) {
+		app.authzClient = newMockAuthzClient(allowAllSigilActions())
+
+		response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+			Method: http.MethodGet,
+			Path:   "query/settings/datasources",
+			Headers: map[string][]string{
+				"X-Grafana-Id": {"sigil-admin-token"},
+			},
+		})
+		if response.Status != http.StatusMethodNotAllowed {
+			t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, response.Status)
+		}
+	})
 }
 
 func TestCallResource(t *testing.T) {
@@ -178,6 +453,7 @@ func TestCallResource(t *testing.T) {
 		t.Fatalf("new app: %s", err)
 	}
 	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 	app.apiURL = upstream.URL
 	app.grafanaAppURL = upstream.URL
 	app.grafanaServiceAccountToken = "sa-token"
@@ -408,22 +684,15 @@ func TestCallResource(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			var r mockCallResourceResponseSender
-			err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+			response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 				Method: tc.method,
 				Path:   tc.path,
-			}, &r)
-			if err != nil {
-				t.Fatalf("CallResource error: %s", err)
-			}
-			if r.response == nil {
-				t.Fatal("no response received from CallResource")
-			}
-			if tc.expStatus != r.response.Status {
-				t.Fatalf("response status should be %d, got %d", tc.expStatus, r.response.Status)
+			})
+			if tc.expStatus != response.Status {
+				t.Fatalf("response status should be %d, got %d", tc.expStatus, response.Status)
 			}
 			if len(tc.expBody) > 0 {
-				if tb := bytes.TrimSpace(r.response.Body); !bytes.Equal(tb, tc.expBody) {
+				if tb := bytes.TrimSpace(response.Body); !bytes.Equal(tb, tc.expBody) {
 					t.Fatalf("response body should be %s, got %s", tc.expBody, tb)
 				}
 			}
@@ -457,28 +726,22 @@ func TestCallResourceSupportsProxyPrometheusPostPassThrough(t *testing.T) {
 		t.Fatalf("new app: %s", err)
 	}
 	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 	app.apiURL = upstream.URL
 	app.grafanaAppURL = upstream.URL
 	app.grafanaServiceAccountToken = "sa-token"
 	app.prometheusDatasourceUID = "prometheus"
 
 	payload := []byte(`{"query":"sum(rate(http_requests_total[5m]))"}`)
-	var sender mockCallResourceResponseSender
-	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodPost,
 		Path:   "query/proxy/prometheus/api/v1/query",
 		Body:   payload,
-	}, &sender)
-	if err != nil {
-		t.Fatalf("CallResource error: %s", err)
+	})
+	if response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, response.Status, response.Body)
 	}
-	if sender.response == nil {
-		t.Fatal("no response received from CallResource")
-	}
-	if sender.response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.response.Status, sender.response.Body)
-	}
-	if tb := bytes.TrimSpace(sender.response.Body); !bytes.Equal(tb, payload) {
+	if tb := bytes.TrimSpace(response.Body); !bytes.Equal(tb, payload) {
 		t.Fatalf("response body should echo request body, got %s", tb)
 	}
 }
@@ -504,26 +767,61 @@ func TestCallResourceProxyFallsBackToForwardedAuthWhenServiceAccountMissing(t *t
 		t.Fatalf("new app: %s", err)
 	}
 	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 	app.grafanaAppURL = upstream.URL
 	app.prometheusDatasourceUID = "prometheus"
 	app.grafanaServiceAccountToken = ""
 
-	var sender mockCallResourceResponseSender
-	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/proxy/prometheus/api/v1/query",
 		Headers: map[string][]string{
 			"Authorization": {"Bearer user-token"},
 		},
-	}, &sender)
+	})
+	if response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, response.Status, response.Body)
+	}
+}
+
+func TestCallResourceRejectsUnsupportedProxyMethods(t *testing.T) {
+	upstreamCalls := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		upstreamCalls++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"status":"success"}`)
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
 	if err != nil {
-		t.Fatalf("CallResource error: %s", err)
+		t.Fatalf("new app: %s", err)
 	}
-	if sender.response == nil {
-		t.Fatal("no response received from CallResource")
+	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+	app.grafanaAppURL = upstream.URL
+	app.grafanaServiceAccountToken = "sa-token"
+	app.prometheusDatasourceUID = "prometheus"
+	app.tempoDatasourceUID = "tempo"
+
+	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodDelete,
+		Path:   "query/proxy/prometheus/api/v1/query",
+	})
+	if response.Status != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, response.Status)
 	}
-	if sender.response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.response.Status, sender.response.Body)
+
+	response = callResourceWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodPost,
+		Path:   "query/proxy/tempo/api/search",
+	})
+	if response.Status != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, response.Status)
+	}
+
+	if upstreamCalls != 0 {
+		t.Fatalf("expected no upstream proxy calls for unsupported methods, got %d", upstreamCalls)
 	}
 }
 
@@ -560,6 +858,7 @@ func TestCallResourceSupportsConversationRatingAndAnnotationWrites(t *testing.T)
 		t.Fatalf("new app: %s", err)
 	}
 	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 	app.apiURL = upstream.URL
 
 	testCases := []struct {
@@ -593,24 +892,17 @@ func TestCallResourceSupportsConversationRatingAndAnnotationWrites(t *testing.T)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			var sender mockCallResourceResponseSender
-			err := app.CallResource(context.Background(), &backend.CallResourceRequest{
+			response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 				Method:        http.MethodPost,
 				Path:          tc.path,
 				Body:          tc.body,
 				Headers:       tc.headers,
 				PluginContext: tc.pluginCtx,
-			}, &sender)
-			if err != nil {
-				t.Fatalf("CallResource error: %s", err)
+			})
+			if response.Status != tc.expStatus {
+				t.Fatalf("expected status %d, got %d body=%s", tc.expStatus, response.Status, response.Body)
 			}
-			if sender.response == nil {
-				t.Fatal("no response received from CallResource")
-			}
-			if sender.response.Status != tc.expStatus {
-				t.Fatalf("expected status %d, got %d body=%s", tc.expStatus, sender.response.Status, sender.response.Body)
-			}
-			if tb := bytes.TrimSpace(sender.response.Body); !bytes.Equal(tb, tc.body) {
+			if tb := bytes.TrimSpace(response.Body); !bytes.Equal(tb, tc.body) {
 				t.Fatalf("response body should echo request body, got %s", tb)
 			}
 		})
@@ -648,21 +940,15 @@ func TestCallResourceInjectsFallbackTenantHeader(t *testing.T) {
 		t.Fatalf("new app: %s", err)
 	}
 	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 	app.apiURL = upstream.URL
 
-	var sender mockCallResourceResponseSender
-	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/conversations",
-	}, &sender)
-	if err != nil {
-		t.Fatalf("CallResource error: %s", err)
-	}
-	if sender.response == nil {
-		t.Fatal("no response received from CallResource")
-	}
-	if sender.response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.response.Status, sender.response.Body)
+	})
+	if response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, response.Status, response.Body)
 	}
 }
 
@@ -686,24 +972,18 @@ func TestCallResourceIgnoresGrafanaOrgHeaderAndUsesFallbackTenant(t *testing.T) 
 		t.Fatalf("new app: %s", err)
 	}
 	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 	app.apiURL = upstream.URL
 
-	var sender mockCallResourceResponseSender
-	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/conversations",
 		Headers: map[string][]string{
 			"X-Grafana-Org-Id": {"12"},
 		},
-	}, &sender)
-	if err != nil {
-		t.Fatalf("CallResource error: %s", err)
-	}
-	if sender.response == nil {
-		t.Fatal("no response received from CallResource")
-	}
-	if sender.response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.response.Status, sender.response.Body)
+	})
+	if response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, response.Status, response.Body)
 	}
 }
 
@@ -727,26 +1007,19 @@ func TestCallResourceForwardsTenantAndAuthHeaders(t *testing.T) {
 		t.Fatalf("new app: %s", err)
 	}
 	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 	app.apiURL = upstream.URL
 
-	var sender mockCallResourceResponseSender
-	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/conversations",
 		Headers: map[string][]string{
 			"X-Scope-OrgID": []string{"tenant-a"},
 			"Authorization": []string{"Bearer token-a"},
 		},
-	}, &sender)
-	if err != nil {
-		t.Fatalf("CallResource error: %s", err)
-	}
-
-	if sender.response == nil {
-		t.Fatal("no response received from CallResource")
-	}
-	if sender.response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, sender.response.Status)
+	})
+	if response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, response.Status)
 	}
 }
 
@@ -781,38 +1054,26 @@ func TestCallResourceForwardsQueryString(t *testing.T) {
 		t.Fatalf("new app: %s", err)
 	}
 	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 	app.apiURL = upstream.URL
 	app.grafanaAppURL = upstream.URL
 	app.grafanaServiceAccountToken = "sa-token"
 	app.tempoDatasourceUID = "tempo"
 
-	var sender mockCallResourceResponseSender
-	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/conversations?limit=10&cursor=next-token",
-	}, &sender)
-	if err != nil {
-		t.Fatalf("CallResource error: %s", err)
-	}
-	if sender.response == nil {
-		t.Fatal("no response received from CallResource")
-	}
-	if sender.response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, sender.response.Status)
+	})
+	if response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, response.Status)
 	}
 
-	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+	response = callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/proxy/tempo/api/search?q=service.name%3Dapi&limit=20",
-	}, &sender)
-	if err != nil {
-		t.Fatalf("CallResource error: %s", err)
-	}
-	if sender.response == nil {
-		t.Fatal("no response received from CallResource")
-	}
-	if sender.response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, sender.response.Status)
+	})
+	if response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, response.Status)
 	}
 }
 
@@ -822,6 +1083,7 @@ func TestCallResourceRejectsInvalidProxyPath(t *testing.T) {
 		t.Fatalf("new app: %s", err)
 	}
 	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 	app.grafanaAppURL = "http://grafana:3000"
 	app.grafanaServiceAccountToken = "sa-token"
 	app.prometheusDatasourceUID = "prometheus"
@@ -832,19 +1094,12 @@ func TestCallResourceRejectsInvalidProxyPath(t *testing.T) {
 		"query/proxy/tempo/",
 	} {
 		t.Run(path, func(t *testing.T) {
-			var sender mockCallResourceResponseSender
-			err := app.CallResource(context.Background(), &backend.CallResourceRequest{
+			response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 				Method: http.MethodGet,
 				Path:   path,
-			}, &sender)
-			if err != nil {
-				t.Fatalf("CallResource error: %s", err)
-			}
-			if sender.response == nil {
-				t.Fatal("no response received from CallResource")
-			}
-			if sender.response.Status != http.StatusBadRequest {
-				t.Fatalf("expected status %d, got %d", http.StatusBadRequest, sender.response.Status)
+			})
+			if response.Status != http.StatusBadRequest {
+				t.Fatalf("expected status %d, got %d", http.StatusBadRequest, response.Status)
 			}
 		})
 	}
@@ -856,20 +1111,14 @@ func TestCallResourceRejectsProxyWhenGrafanaDatasourceConfigMissing(t *testing.T
 		t.Fatalf("new app: %s", err)
 	}
 	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 
-	var sender mockCallResourceResponseSender
-	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/proxy/tempo/api/search",
-	}, &sender)
-	if err != nil {
-		t.Fatalf("CallResource error: %s", err)
-	}
-	if sender.response == nil {
-		t.Fatal("no response received from CallResource")
-	}
-	if sender.response.Status != http.StatusServiceUnavailable {
-		t.Fatalf("expected status %d, got %d body=%s", http.StatusServiceUnavailable, sender.response.Status, sender.response.Body)
+	})
+	if response.Status != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusServiceUnavailable, response.Status, response.Body)
 	}
 }
 
@@ -879,6 +1128,7 @@ func TestCallResourceReturnsNon200StubOnProxyFailures(t *testing.T) {
 		t.Fatalf("new app: %s", err)
 	}
 	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 
 	for _, tc := range []struct {
 		name           string
@@ -899,23 +1149,16 @@ func TestCallResourceReturnsNon200StubOnProxyFailures(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			app.apiURL = tc.apiURL
 
-			var sender mockCallResourceResponseSender
-			err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+			response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 				Method: http.MethodGet,
 				Path:   "query/conversations",
-			}, &sender)
-			if err != nil {
-				t.Fatalf("CallResource error: %s", err)
-			}
-			if sender.response == nil {
-				t.Fatal("no response received from CallResource")
-			}
-			if sender.response.Status != tc.expectedStatus {
-				t.Fatalf("expected status %d, got %d", tc.expectedStatus, sender.response.Status)
+			})
+			if response.Status != tc.expectedStatus {
+				t.Fatalf("expected status %d, got %d", tc.expectedStatus, response.Status)
 			}
 
 			var body stubResponse
-			if err := json.Unmarshal(sender.response.Body, &body); err != nil {
+			if err := json.Unmarshal(response.Body, &body); err != nil {
 				t.Fatalf("unmarshal stub response: %v", err)
 			}
 			if body.Status != "stub" {
@@ -1076,29 +1319,23 @@ func TestCallResourceReturnsValidJSONWhenClientSendsAcceptEncodingGzip(t *testin
 		t.Fatalf("new app: %s", err)
 	}
 	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 	app.apiURL = upstream.URL
 
-	var sender mockCallResourceResponseSender
-	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/conversations",
 		Headers: map[string][]string{
 			"Accept-Encoding": {"gzip"},
 		},
-	}, &sender)
-	if err != nil {
-		t.Fatalf("CallResource error: %s", err)
-	}
-	if sender.response == nil {
-		t.Fatal("no response received from CallResource")
-	}
-	if sender.response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.response.Status, sender.response.Body)
+	})
+	if response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, response.Status, response.Body)
 	}
 	// Verify the response body is valid JSON, not garbled gzip bytes.
 	var result map[string]interface{}
-	if err := json.Unmarshal(sender.response.Body, &result); err != nil {
-		t.Fatalf("response body is not valid JSON (garbled encoding?): %v\nbody bytes: %x", err, sender.response.Body)
+	if err := json.Unmarshal(response.Body, &result); err != nil {
+		t.Fatalf("response body is not valid JSON (garbled encoding?): %v\nbody bytes: %x", err, response.Body)
 	}
 }
 
@@ -1122,25 +1359,19 @@ func TestCallResourceRoutesTempoProxyThroughGrafanaDatasourceProxy(t *testing.T)
 		t.Fatalf("new app: %s", err)
 	}
 	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 	app.grafanaAppURL = grafana.URL
 	app.grafanaServiceAccountToken = "sa-token"
 	app.tempoDatasourceUID = "tempo-ds"
 
-	var sender mockCallResourceResponseSender
-	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/proxy/tempo/api/search",
-	}, &sender)
-	if err != nil {
-		t.Fatalf("CallResource error: %s", err)
+	})
+	if response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, response.Status, response.Body)
 	}
-	if sender.response == nil {
-		t.Fatal("no response received from CallResource")
-	}
-	if sender.response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.response.Status, sender.response.Body)
-	}
-	if tb := bytes.TrimSpace(sender.response.Body); !bytes.Equal(tb, []byte(`{"traces":[]}`)) {
+	if tb := bytes.TrimSpace(response.Body); !bytes.Equal(tb, []byte(`{"traces":[]}`)) {
 		t.Fatalf("unexpected response body: %s", tb)
 	}
 }
@@ -1162,26 +1393,20 @@ func TestCallResourceInjectsBasicAuthOnSigilProxy(t *testing.T) {
 		t.Fatalf("new app: %s", err)
 	}
 	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 	app.apiURL = upstream.URL
 	app.tenantID = "tenant-42"
 	app.apiAuthToken = "sigil-token"
 
-	var sender mockCallResourceResponseSender
-	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/conversations",
 		Headers: map[string][]string{
 			"Authorization": {"Bearer user-token"},
 		},
-	}, &sender)
-	if err != nil {
-		t.Fatalf("CallResource error: %s", err)
-	}
-	if sender.response == nil {
-		t.Fatal("no response received from CallResource")
-	}
-	if sender.response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.response.Status, sender.response.Body)
+	})
+	if response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, response.Status, response.Body)
 	}
 }
 
@@ -1228,20 +1453,14 @@ func TestCallResourceSettingsRoutesProxyToSigil(t *testing.T) {
 		t.Fatalf("new app: %s", err)
 	}
 	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 	app.apiURL = upstream.URL
 
-	var sender mockCallResourceResponseSender
-	err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   "query/settings",
-	}, &sender)
-	if err != nil {
-		t.Fatalf("CallResource error: %s", err)
-	}
-	if sender.response == nil {
-		t.Fatal("no response received from CallResource")
-	}
-	if sender.response.Status != http.StatusOK {
-		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.response.Status, sender.response.Body)
+	})
+	if response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, response.Status, response.Body)
 	}
 }

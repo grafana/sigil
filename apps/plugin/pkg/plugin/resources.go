@@ -1,7 +1,9 @@
 package plugin
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +18,114 @@ type stubResponse struct {
 	Source   string `json:"source"`
 	Endpoint string `json:"endpoint"`
 	Error    string `json:"error,omitempty"`
+}
+
+func (a *App) authorizeRequest(req *http.Request) error {
+	action, ok := requiredPermissionAction(req.Method, req.URL.Path)
+	if !ok {
+		return nil
+	}
+	return a.checkPermission(req.Context(), req.Header.Get("X-Grafana-Id"), action)
+}
+
+func (a *App) checkPermission(ctx context.Context, idToken string, action string) error {
+	trimmedToken := strings.TrimSpace(idToken)
+	if trimmedToken == "" {
+		return errors.New("authentication required: missing X-Grafana-Id header")
+	}
+	if strings.TrimSpace(action) == "" {
+		return errors.New("permission action is empty")
+	}
+
+	authzClient, err := a.GetAuthZClient(ctx)
+	if err != nil {
+		return fmt.Errorf("authorization unavailable: %w", err)
+	}
+
+	hasAccess, err := authzClient.HasAccess(ctx, trimmedToken, action)
+	if err != nil {
+		return fmt.Errorf("permission check failed: %w", err)
+	}
+	if !hasAccess {
+		return fmt.Errorf("permission denied: %s required", action)
+	}
+	return nil
+}
+
+func denyPermission(w http.ResponseWriter, err error) {
+	if err == nil {
+		http.Error(w, "permission denied", http.StatusForbidden)
+		return
+	}
+	http.Error(w, err.Error(), http.StatusForbidden)
+}
+
+func (a *App) withAuthorization(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if err := a.authorizeRequest(req); err != nil {
+			denyPermission(w, err)
+			return
+		}
+		next(w, req)
+	}
+}
+
+func requiredPermissionAction(method string, path string) (string, bool) {
+	switch {
+	case method == http.MethodGet && path == "/query/conversations":
+		return PermissionDataRead, true
+	case method == http.MethodPost && path == "/query/conversations/search":
+		return PermissionDataRead, true
+	case strings.HasPrefix(path, "/query/conversations/"):
+		return permissionForConversationRoute(method, path)
+	case method == http.MethodGet && strings.HasPrefix(path, "/query/generations/"):
+		return PermissionDataRead, true
+	case method == http.MethodGet && path == "/query/search/tags":
+		return PermissionDataRead, true
+	case method == http.MethodGet && strings.HasPrefix(path, "/query/search/tag/") && strings.HasSuffix(path, "/values"):
+		return PermissionDataRead, true
+	case method == http.MethodGet && path == "/query/settings":
+		return PermissionDataRead, true
+	case method == http.MethodPut && path == "/query/settings/datasources":
+		return PermissionSettingsWrite, true
+	case strings.HasPrefix(path, "/query/proxy/prometheus/"):
+		return PermissionDataRead, true
+	case strings.HasPrefix(path, "/query/proxy/tempo/"):
+		return PermissionDataRead, true
+	case method == http.MethodGet && path == "/query/model-cards":
+		return PermissionDataRead, true
+	case method == http.MethodGet && path == "/query/model-cards/lookup":
+		return PermissionDataRead, true
+	default:
+		return "", false
+	}
+}
+
+func permissionForConversationRoute(method string, path string) (string, bool) {
+	conversationPath := strings.TrimPrefix(path, "/query/conversations/")
+	if conversationPath == "" {
+		return "", false
+	}
+
+	parts := strings.Split(conversationPath, "/")
+	if len(parts) == 1 && method == http.MethodGet {
+		return PermissionDataRead, true
+	}
+	if len(parts) != 2 {
+		return "", false
+	}
+
+	switch parts[1] {
+	case "ratings", "annotations":
+		if method == http.MethodGet {
+			return PermissionDataRead, true
+		}
+		if method == http.MethodPost {
+			return PermissionFeedbackWrite, true
+		}
+	}
+
+	return "", false
 }
 
 func (a *App) handleListConversations(w http.ResponseWriter, req *http.Request) {
@@ -80,6 +190,10 @@ func (a *App) handleSettingsRoutes(w http.ResponseWriter, req *http.Request) {
 	case "/query/settings":
 		a.handleProxy(w, req, "/api/v1/settings", http.MethodGet)
 	case "/query/settings/datasources":
+		if req.Method != http.MethodPut {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 		a.handleProxy(w, req, "/api/v1/settings/datasources", http.MethodPut)
 	default:
 		http.NotFound(w, req)
@@ -87,6 +201,10 @@ func (a *App) handleSettingsRoutes(w http.ResponseWriter, req *http.Request) {
 }
 
 func (a *App) handlePrometheusProxyRoutes(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet && req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	if !a.hasGrafanaDatasourceProxyTarget(a.prometheusDatasourceUID) {
 		http.Error(w, "grafana prometheus datasource proxy is not configured", http.StatusServiceUnavailable)
 		return
@@ -100,6 +218,10 @@ func (a *App) handlePrometheusProxyRoutes(w http.ResponseWriter, req *http.Reque
 }
 
 func (a *App) handleTempoProxyRoutes(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	if !a.hasGrafanaDatasourceProxyTarget(a.tempoDatasourceUID) {
 		http.Error(w, "grafana tempo datasource proxy is not configured", http.StatusServiceUnavailable)
 		return
@@ -186,6 +308,8 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 		writeStub(w, http.StatusInternalServerError, path, fmt.Sprintf("build request: %v", err))
 		return
 	}
+	// Intentionally forward Grafana identity headers (including X-Grafana-Id)
+	// to Sigil in this deployment model; RBAC checks are performed in-plugin.
 	proxyReq.Header = req.Header.Clone()
 	// Remove Accept-Encoding so the upstream always returns uncompressed
 	// responses. Without this the upstream may gzip the body, but
@@ -240,6 +364,8 @@ func (a *App) handleGrafanaProxy(w http.ResponseWriter, req *http.Request, path 
 		return
 	}
 
+	// Intentionally forward Grafana identity headers (including X-Grafana-Id)
+	// to datasource-proxy targets; RBAC checks are performed in-plugin.
 	proxyReq.Header = req.Header.Clone()
 	proxyReq.Header.Del("Accept-Encoding")
 	if token := strings.TrimSpace(a.grafanaServiceAccountToken); token != "" {
@@ -412,18 +538,18 @@ func (a *App) handleEvalJudgeModels(w http.ResponseWriter, req *http.Request) {
 }
 
 func (a *App) registerRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/query/conversations/search", a.handleSearchConversations)
-	mux.HandleFunc("/query/conversations", a.handleListConversations)
-	mux.HandleFunc("/query/conversations/", a.handleConversationRoutes)
-	mux.HandleFunc("/query/generations/", a.handleGenerationRoutes)
-	mux.HandleFunc("/query/search/tags", a.handleSearchTags)
-	mux.HandleFunc("/query/search/tag/", a.handleSearchTagValues)
-	mux.HandleFunc("/query/settings", a.handleSettingsRoutes)
-	mux.HandleFunc("/query/settings/datasources", a.handleSettingsRoutes)
-	mux.HandleFunc("/query/proxy/prometheus/", a.handlePrometheusProxyRoutes)
-	mux.HandleFunc("/query/proxy/tempo/", a.handleTempoProxyRoutes)
-	mux.HandleFunc("/query/model-cards", a.handleListModelCards)
-	mux.HandleFunc("/query/model-cards/lookup", a.handleLookupModelCard)
+	mux.HandleFunc("/query/conversations/search", a.withAuthorization(a.handleSearchConversations))
+	mux.HandleFunc("/query/conversations", a.withAuthorization(a.handleListConversations))
+	mux.HandleFunc("/query/conversations/", a.withAuthorization(a.handleConversationRoutes))
+	mux.HandleFunc("/query/generations/", a.withAuthorization(a.handleGenerationRoutes))
+	mux.HandleFunc("/query/search/tags", a.withAuthorization(a.handleSearchTags))
+	mux.HandleFunc("/query/search/tag/", a.withAuthorization(a.handleSearchTagValues))
+	mux.HandleFunc("/query/settings", a.withAuthorization(a.handleSettingsRoutes))
+	mux.HandleFunc("/query/settings/datasources", a.withAuthorization(a.handleSettingsRoutes))
+	mux.HandleFunc("/query/proxy/prometheus/", a.withAuthorization(a.handlePrometheusProxyRoutes))
+	mux.HandleFunc("/query/proxy/tempo/", a.withAuthorization(a.handleTempoProxyRoutes))
+	mux.HandleFunc("/query/model-cards", a.withAuthorization(a.handleListModelCards))
+	mux.HandleFunc("/query/model-cards/lookup", a.withAuthorization(a.handleLookupModelCard))
 
 	mux.HandleFunc("/eval/evaluators", a.handleEvalEvaluators)
 	mux.HandleFunc("/eval/evaluators/", a.handleEvalEvaluatorByID)

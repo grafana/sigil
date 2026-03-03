@@ -24,6 +24,7 @@
       "type": "page",
       "name": "Dashboard",
       "path": "/a/grafana-sigil-app/dashboard",
+      "action": "grafana-sigil-app.data:read",
       "addToNav": true,
       "defaultNav": true
     },
@@ -31,6 +32,7 @@
       "type": "page",
       "name": "Conversations",
       "path": "/a/grafana-sigil-app/conversations",
+      "action": "grafana-sigil-app.data:read",
       "addToNav": true,
       "defaultNav": false
     },
@@ -45,12 +47,14 @@
       "type": "page",
       "name": "Conversations (old)",
       "path": "/a/grafana-sigil-app/conversations-old",
+      "action": "grafana-sigil-app.data:read",
       "addToNav": false
     },
     {
       "type": "page",
       "name": "Completions",
       "path": "/a/grafana-sigil-app/completions",
+      "action": "grafana-sigil-app.data:read",
       "addToNav": true,
       "defaultNav": false
     },
@@ -58,6 +62,7 @@
       "type": "page",
       "name": "Traces",
       "path": "/a/grafana-sigil-app/traces",
+      "action": "grafana-sigil-app.data:read",
       "addToNav": true,
       "defaultNav": false
     },
@@ -65,6 +70,7 @@
       "type": "page",
       "name": "Settings",
       "path": "/a/grafana-sigil-app/settings",
+      "action": "grafana-sigil-app.data:read",
       "addToNav": true,
       "defaultNav": false
     },
@@ -86,9 +92,51 @@
       {
         "action": "datasources:query",
         "scope": "datasources:*"
+      },
+      {
+        "action": "users.permissions:read",
+        "scope": "users:*"
       }
     ]
   },
+  "roles": [
+    {
+      "grants": ["Editor", "Admin"],
+      "role": {
+        "name": "Sigil Reader",
+        "description": "Read access to Sigil dashboards, conversations, traces, and model-card data.",
+        "permissions": [
+          { "action": "plugins.app:access", "scope": "plugins:id:grafana-sigil-app" },
+          { "action": "grafana-sigil-app.data:read" }
+        ]
+      }
+    },
+    {
+      "grants": [],
+      "role": {
+        "name": "Sigil Feedback Writer",
+        "description": "Can write conversation feedback (ratings and annotations).",
+        "permissions": [
+          { "action": "plugins.app:access", "scope": "plugins:id:grafana-sigil-app" },
+          { "action": "grafana-sigil-app.data:read" },
+          { "action": "grafana-sigil-app.feedback:write" }
+        ]
+      }
+    },
+    {
+      "grants": ["Admin"],
+      "role": {
+        "name": "Sigil Admin",
+        "description": "Full Sigil plugin access, including feedback and datasource settings writes.",
+        "permissions": [
+          { "action": "plugins.app:access", "scope": "plugins:id:grafana-sigil-app" },
+          { "action": "grafana-sigil-app.data:read" },
+          { "action": "grafana-sigil-app.feedback:write" },
+          { "action": "grafana-sigil-app.settings:write" }
+        ]
+      }
+    }
+  ],
   "dependencies": {
     "grafanaDependency": ">=12.0.0-0",
     "plugins": []
