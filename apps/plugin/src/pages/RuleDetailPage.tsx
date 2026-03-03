@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Button, Spinner, Stack, Text, useStyles2 } from '@grafana/ui';
+import { Alert, Badge, Button, Icon, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
 import type {
@@ -29,12 +29,38 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     height: '100%',
+    gap: theme.spacing(3),
+  }),
+  header: css({
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
     gap: theme.spacing(2),
+    flexWrap: 'wrap' as const,
+  }),
+  headerLeft: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+    flex: 1,
+    minWidth: 0,
+  }),
+  headerTitleRow: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+    flexWrap: 'wrap' as const,
+  }),
+  headerSubtitle: css({
+    marginTop: theme.spacing(0.5),
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.bodySmall.fontSize,
   }),
   layout: css({
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
-    gap: theme.spacing(2),
+    gridTemplateRows: '1fr',
+    gap: theme.spacing(3),
     flex: 1,
     minHeight: 0,
     overflow: 'hidden',
@@ -45,20 +71,35 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexDirection: 'column' as const,
     gap: theme.spacing(2),
     padding: theme.spacing(0.5),
+    paddingLeft: theme.spacing(2),
+    minHeight: 0,
   }),
   right: css({
-    overflow: 'auto',
+    display: 'flex',
+    flexDirection: 'column' as const,
     minHeight: 0,
+    overflow: 'hidden',
+  }),
+  rightInner: css({
+    flex: 1,
+    minHeight: 0,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    overflow: 'hidden',
+    padding: theme.spacing(0.5, 2, 2, 2),
   }),
   actions: css({
     display: 'flex',
-    gap: theme.spacing(1),
+    alignItems: 'center',
+    gap: theme.spacing(2),
+    flexShrink: 0,
+    flexWrap: 'wrap' as const,
   }),
   loading: css({
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: theme.spacing(4),
+    padding: theme.spacing(6),
   }),
 });
 
@@ -83,6 +124,7 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -228,10 +270,72 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
     goBack();
   };
 
+  const handleDelete = async () => {
+    if (!ruleID || isNew) {
+      return;
+    }
+    if (!window.confirm(`Delete rule "${ruleID}"?`)) {
+      return;
+    }
+    setDeleting(true);
+    setErrorMessage('');
+    try {
+      await dataSource.deleteRule(ruleID);
+      goBack();
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to delete rule');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleAddMatchCriteria = useCallback(
+    (key: string, value: string) => {
+      if (!isNew) {
+        return;
+      }
+      setMatch((prev) => {
+        const existing = prev[key];
+        const nextSet = new Set(Array.isArray(existing) ? existing : existing ? [existing] : []);
+        nextSet.add(value);
+        return { ...prev, [key]: [...nextSet] };
+      });
+    },
+    [isNew]
+  );
+
+  const validationErrors: string[] = [];
+  if (isNew) {
+    if (!ruleIDInput.trim()) {
+      validationErrors.push('Rule ID');
+    }
+    if (evaluatorIDs.length === 0) {
+      validationErrors.push('Evaluators');
+    }
+  }
+  const canSave = isNew ? validationErrors.length === 0 : true;
+
   if (loading) {
     return (
       <div className={styles.pageContainer}>
-        <Text element="h2">{isNew ? 'Create Rule' : 'Edit Rule'}</Text>
+        <div className={styles.header}>
+          <div className={styles.headerLeft}>
+            <Icon name="sliders-v-alt" size="xl" />
+            <div>
+              <div className={styles.headerTitleRow}>
+                <Text element="h2" weight="bold">
+                  {isNew ? 'Create Rule' : 'Edit Rule'}
+                </Text>
+                {isNew && <Badge text="New" color="blue" />}
+              </div>
+              {isNew && (
+                <div className={styles.headerSubtitle}>
+                  Define which generations to evaluate and how. Configure selectors, match criteria, and evaluators.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
         <div className={styles.loading}>
           <Spinner />
         </div>
@@ -241,16 +345,51 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
 
   return (
     <div className={styles.pageContainer}>
-      <div className={styles.actions} style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text element="h2">{isNew ? 'Create Rule' : 'Edit Rule'}</Text>
-        <Stack direction="row" gap={1}>
-          <Button variant="secondary" onClick={handleCancel} disabled={saving}>
+      <div className={styles.header}>
+        <div className={styles.headerLeft}>
+          <Icon name="sliders-v-alt" size="xl" />
+          <div>
+            <div className={styles.headerTitleRow}>
+              <Text element="h2" weight="bold">
+                {isNew ? 'Create Rule' : 'Edit Rule'}
+              </Text>
+              {isNew && <Badge text="New" color="blue" />}
+            </div>
+            {isNew && (
+              <div className={styles.headerSubtitle}>
+                Define which generations to evaluate and how. Configure selectors, match criteria, and evaluators.
+              </div>
+            )}
+          </div>
+        </div>
+        <div className={styles.actions}>
+          {!isNew && (
+            <Button variant="destructive" onClick={handleDelete} disabled={deleting || saving} icon="trash-alt">
+              {deleting ? 'Deleting...' : 'Delete Rule'}
+            </Button>
+          )}
+          <Button variant="secondary" onClick={handleCancel} disabled={saving || deleting}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={handleSave} disabled={saving} icon={saving ? undefined : 'save'}>
-            {saving ? 'Saving...' : isNew ? 'Save' : 'Update Enabled Status'}
-          </Button>
-        </Stack>
+          {isNew && !canSave ? (
+            <Tooltip content={`Missing required: ${validationErrors.join(', ')}`}>
+              <span>
+                <Button variant="primary" disabled icon="save">
+                  Save Rule
+                </Button>
+              </span>
+            </Tooltip>
+          ) : (
+            <Button
+              variant="primary"
+              onClick={handleSave}
+              disabled={saving || deleting}
+              icon={saving ? undefined : 'save'}
+            >
+              {saving ? 'Saving...' : isNew ? 'Save Rule' : 'Update Enabled Status'}
+            </Button>
+          )}
+        </div>
       </div>
 
       {errorMessage.length > 0 && (
@@ -283,7 +422,13 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
           />
         </div>
         <div className={styles.right}>
-          <DryRunPreview preview={preview} loading={previewLoading} />
+          <div className={styles.rightInner}>
+            <DryRunPreview
+              preview={preview}
+              loading={previewLoading}
+              onAddMatchCriteria={isNew ? handleAddMatchCriteria : undefined}
+            />
+          </div>
         </div>
       </div>
     </div>
