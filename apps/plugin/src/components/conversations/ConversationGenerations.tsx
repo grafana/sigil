@@ -3,12 +3,7 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
 import { Alert, Button, Input, Select, Spinner, Stack, Switch, useStyles2 } from '@grafana/ui';
 import type { ConversationData, ConversationSpan } from '../../conversation/types';
-import {
-  selectSpansForMode,
-  filterSpansByType,
-  filterSpansByText,
-  type SpanType,
-} from '../../conversation/spans';
+import { selectSpansForMode, filterSpansByType, filterSpansByText, type SpanType } from '../../conversation/spans';
 import SigilSpanTree from './SigilSpanTree';
 
 export type ConversationGenerationsProps = {
@@ -134,7 +129,9 @@ export default function ConversationGenerations({
           <span className={styles.toggleLabel}>All</span>
           <Switch
             value={showAllSpans}
-            onChange={(event) => { setShowAllSpans(event.target.checked); }}
+            onChange={(event) => {
+              setShowAllSpans(event.target.checked);
+            }}
             aria-label="toggle all spans"
           />
         </div>
@@ -143,7 +140,9 @@ export default function ConversationGenerations({
         <div className={styles.searchInputWrap}>
           <Input
             value={textFilter}
-            onChange={(event) => { setTextFilter(event.currentTarget.value); }}
+            onChange={(event) => {
+              setTextFilter(event.currentTarget.value);
+            }}
             placeholder="Type text or search spans"
             width={36}
             aria-label="search spans"
@@ -154,7 +153,9 @@ export default function ConversationGenerations({
               size="sm"
               className={styles.searchClearButton}
               aria-label="clear search spans"
-              onClick={() => { setTextFilter(''); }}
+              onClick={() => {
+                setTextFilter('');
+              }}
             >
               X
             </Button>
@@ -163,7 +164,9 @@ export default function ConversationGenerations({
         <Select<SpanType>
           options={SPAN_TYPE_OPTIONS}
           value={typeFilter || null}
-          onChange={(selection) => { setTypeFilter(selection?.value ?? ''); }}
+          onChange={(selection) => {
+            setTypeFilter(selection?.value ?? '');
+          }}
           placeholder="Type"
           isClearable
           width={18}
@@ -191,7 +194,9 @@ export default function ConversationGenerations({
           <SigilSpanTree
             spans={filteredSpans}
             selectedSpanSelectionID={selectedSpanSelectionID}
-            onSelectSpan={(span) => { onSelectSpan?.(span); }}
+            onSelectSpan={(span) => {
+              onSelectSpan?.(span);
+            }}
           />
         </div>
       )}

@@ -238,12 +238,9 @@ export default function ModelCardPopover({ card, onClose, anchorRect = null }: M
   const top = fitsBelow
     ? preferredTop
     : Math.max(
-      minEdgePadding,
-      Math.min(
-        anchorTop - popupGap - estimatedCardHeight,
-        viewportHeight - estimatedCardHeight - minEdgePadding
-      )
-    );
+        minEdgePadding,
+        Math.min(anchorTop - popupGap - estimatedCardHeight, viewportHeight - estimatedCardHeight - minEdgePadding)
+      );
 
   const handleBackdropClick = useCallback(
     (e: React.MouseEvent) => {
@@ -318,7 +315,9 @@ export default function ModelCardPopover({ card, onClose, anchorRect = null }: M
             <button
               type="button"
               className={styles.descriptionToggle}
-              onClick={() => { setIsDescriptionExpanded((prev) => !prev); }}
+              onClick={() => {
+                setIsDescriptionExpanded((prev) => !prev);
+              }}
             >
               {isDescriptionExpanded ? 'Show less' : 'Show more'}
             </button>

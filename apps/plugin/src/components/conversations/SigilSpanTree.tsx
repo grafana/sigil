@@ -23,10 +23,7 @@ type TreeRow = {
 const INDENT_PX = 14;
 const TOGGLE_COL_WIDTH_PX = 18;
 
-function buildVisibleRows(
-  roots: ConversationSpan[],
-  expandedKeys: Set<string>
-): TreeRow[] {
+function buildVisibleRows(roots: ConversationSpan[], expandedKeys: Set<string>): TreeRow[] {
   const rows: TreeRow[] = [];
   const visited = new Set<string>();
 
@@ -133,11 +130,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function SigilSpanTree({
-  spans,
-  selectedSpanSelectionID = '',
-  onSelectSpan,
-}: SigilSpanTreeProps) {
+export default function SigilSpanTree({ spans, selectedSpanSelectionID = '', onSelectSpan }: SigilSpanTreeProps) {
   const styles = useStyles2(getStyles);
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
 

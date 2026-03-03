@@ -360,18 +360,14 @@ export type SpanSelectionMode = 'all' | 'sigil-only';
 
 function filterTree(roots: ConversationSpan[], predicate: (span: ConversationSpan) => boolean): ConversationSpan[] {
   function filterNode(span: ConversationSpan): ConversationSpan | null {
-    const filteredChildren = span.children
-      .map(filterNode)
-      .filter((child): child is ConversationSpan => child !== null);
+    const filteredChildren = span.children.map(filterNode).filter((child): child is ConversationSpan => child !== null);
 
     if (predicate(span) || filteredChildren.length > 0) {
       return { ...span, children: filteredChildren };
     }
     return null;
   }
-  return roots
-    .map(filterNode)
-    .filter((node): node is ConversationSpan => node !== null);
+  return roots.map(filterNode).filter((node): node is ConversationSpan => node !== null);
 }
 
 export function selectSpansForMode(roots: ConversationSpan[], mode: SpanSelectionMode): ConversationSpan[] {
@@ -410,14 +406,7 @@ export function spanMatchesFreeText(span: ConversationSpan, filter: string): boo
       attrParts.push(`${key}=${value.stringValue}`);
     }
   }
-  const searchable = [
-    span.name,
-    span.serviceName,
-    span.traceID,
-    span.spanID,
-    span.parentSpanID,
-    attrParts.join(' '),
-  ]
+  const searchable = [span.name, span.serviceName, span.traceID, span.spanID, span.parentSpanID, attrParts.join(' ')]
     .join(' ')
     .toLowerCase();
   return searchable.includes(normalized);

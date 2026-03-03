@@ -8,9 +8,7 @@ export function createTempoTraceFetcher(): TraceFetcher {
       `/api/plugins/grafana-sigil-app/resources/query/proxy/tempo/api/v2/traces/${encodeURIComponent(traceID)}`,
       window.location.origin
     );
-    const response = await lastValueFrom(
-      getBackendSrv().fetch<unknown>({ method: 'GET', url: url.toString() })
-    );
+    const response = await lastValueFrom(getBackendSrv().fetch<unknown>({ method: 'GET', url: url.toString() }));
     return response.data;
   };
 }

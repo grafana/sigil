@@ -27,9 +27,25 @@ function makeSpan({
 
 describe('SigilSpanTree', () => {
   it('starts with roots collapsed and expands in hierarchy order', () => {
-    const grandchild = makeSpan({ spanID: 'grandchild', parentSpanID: 'child-1', name: 'grandchild', startTimeUnixNano: BigInt(4) });
-    const child1 = makeSpan({ spanID: 'child-1', parentSpanID: 'root', name: 'first child', startTimeUnixNano: BigInt(2), children: [grandchild] });
-    const child2 = makeSpan({ spanID: 'child-2', parentSpanID: 'root', name: 'second child', startTimeUnixNano: BigInt(3) });
+    const grandchild = makeSpan({
+      spanID: 'grandchild',
+      parentSpanID: 'child-1',
+      name: 'grandchild',
+      startTimeUnixNano: BigInt(4),
+    });
+    const child1 = makeSpan({
+      spanID: 'child-1',
+      parentSpanID: 'root',
+      name: 'first child',
+      startTimeUnixNano: BigInt(2),
+      children: [grandchild],
+    });
+    const child2 = makeSpan({
+      spanID: 'child-2',
+      parentSpanID: 'root',
+      name: 'second child',
+      startTimeUnixNano: BigInt(3),
+    });
     const root = makeSpan({ spanID: 'root', name: 'root', startTimeUnixNano: BigInt(1), children: [child1, child2] });
 
     render(<SigilSpanTree spans={[root]} />);
@@ -68,7 +84,12 @@ describe('SigilSpanTree', () => {
   });
 
   it('collapses root items by default', () => {
-    const childA = makeSpan({ spanID: 'child-a', parentSpanID: 'root-a', name: 'child-a', startTimeUnixNano: BigInt(3) });
+    const childA = makeSpan({
+      spanID: 'child-a',
+      parentSpanID: 'root-a',
+      name: 'child-a',
+      startTimeUnixNano: BigInt(3),
+    });
     const rootA = makeSpan({ spanID: 'root-a', name: 'root-a', startTimeUnixNano: BigInt(1), children: [childA] });
     const rootB = makeSpan({ spanID: 'root-b', name: 'root-b', startTimeUnixNano: BigInt(2) });
 
@@ -98,8 +119,19 @@ describe('SigilSpanTree', () => {
       name: 'child-trace-2',
       startTimeUnixNano: BigInt(3),
     });
-    const rootTrace1 = makeSpan({ traceID: 'trace-1', spanID: 'root', name: 'root-trace-1', startTimeUnixNano: BigInt(1) });
-    const rootTrace2 = makeSpan({ traceID: 'trace-2', spanID: 'root', name: 'root-trace-2', startTimeUnixNano: BigInt(2), children: [childTrace2] });
+    const rootTrace1 = makeSpan({
+      traceID: 'trace-1',
+      spanID: 'root',
+      name: 'root-trace-1',
+      startTimeUnixNano: BigInt(1),
+    });
+    const rootTrace2 = makeSpan({
+      traceID: 'trace-2',
+      spanID: 'root',
+      name: 'root-trace-2',
+      startTimeUnixNano: BigInt(2),
+      children: [childTrace2],
+    });
 
     render(<SigilSpanTree spans={[rootTrace1, rootTrace2]} />);
 

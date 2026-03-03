@@ -9,7 +9,8 @@ const gpt4o: ModelCard = {
   canonical_slug: 'openai/gpt-4o',
   name: 'GPT-4o',
   provider: 'openai',
-  description: 'GPT-4o is OpenAI\'s most advanced multimodal model, combining text and image understanding with fast response times.',
+  description:
+    "GPT-4o is OpenAI's most advanced multimodal model, combining text and image understanding with fast response times.",
   context_length: 128000,
   modality: 'text+image->text',
   input_modalities: ['text', 'image'],
@@ -41,7 +42,7 @@ const claude: ModelCard = {
   canonical_slug: 'anthropic/claude-sonnet-4',
   name: 'Claude Sonnet 4',
   provider: 'anthropic',
-  description: 'Claude Sonnet 4 is Anthropic\'s balanced model offering strong reasoning with efficient cost.',
+  description: "Claude Sonnet 4 is Anthropic's balanced model offering strong reasoning with efficient cost.",
   context_length: 200000,
   modality: 'text+image->text',
   input_modalities: ['text', 'image'],
@@ -73,7 +74,7 @@ const freeModel: ModelCard = {
   canonical_slug: 'meta-llama/llama-3.1-8b-instruct',
   name: 'Llama 3.1 8B Instruct (Free)',
   provider: 'meta',
-  description: 'Meta\'s Llama 3.1 8B instruction-tuned model, available for free on OpenRouter.',
+  description: "Meta's Llama 3.1 8B instruction-tuned model, available for free on OpenRouter.",
   context_length: 131072,
   modality: 'text->text',
   input_modalities: ['text'],
@@ -101,14 +102,25 @@ function PopoverWrapper({ card }: { card: ModelCard }) {
   const [open, setOpen] = useState(true);
   if (!open) {
     return (
-      <button type="button" onClick={() => { setOpen(true); }} style={{ padding: '8px 16px' }}>
+      <button
+        type="button"
+        onClick={() => {
+          setOpen(true);
+        }}
+        style={{ padding: '8px 16px' }}
+      >
         Show card for {card.name}
       </button>
     );
   }
   return (
     <div style={{ position: 'relative', display: 'inline-block', margin: 40 }}>
-      <ModelCardPopover card={card} onClose={() => { setOpen(false); }} />
+      <ModelCardPopover
+        card={card}
+        onClose={() => {
+          setOpen(false);
+        }}
+      />
     </div>
   );
 }

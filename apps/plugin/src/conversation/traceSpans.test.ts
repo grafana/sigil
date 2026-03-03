@@ -48,7 +48,8 @@ describe('getSelectionID', () => {
 describe('isSigilSpan', () => {
   it('returns true for spans with sigil.generation.id', () => {
     const span = makeSpan({
-      spanID: 's1', name: 'test',
+      spanID: 's1',
+      name: 'test',
       attributes: makeAttrs([['sigil.generation.id', { stringValue: 'gen-1' }]]),
     });
     expect(isSigilSpan(span)).toBe(true);
@@ -56,7 +57,8 @@ describe('isSigilSpan', () => {
 
   it('returns true for spans with sigil.sdk.name', () => {
     const span = makeSpan({
-      spanID: 's1', name: 'test',
+      spanID: 's1',
+      name: 'test',
       attributes: makeAttrs([['sigil.sdk.name', { stringValue: 'sdk-go' }]]),
     });
     expect(isSigilSpan(span)).toBe(true);
@@ -64,7 +66,8 @@ describe('isSigilSpan', () => {
 
   it('returns true for spans with any sigil.* attribute', () => {
     const span = makeSpan({
-      spanID: 's1', name: 'test',
+      spanID: 's1',
+      name: 'test',
       attributes: makeAttrs([['sigil.framework.name', { stringValue: 'langchain' }]]),
     });
     expect(isSigilSpan(span)).toBe(true);
@@ -72,7 +75,8 @@ describe('isSigilSpan', () => {
 
   it('returns false for spans without sigil attributes', () => {
     const span = makeSpan({
-      spanID: 's1', name: 'test',
+      spanID: 's1',
+      name: 'test',
       attributes: makeAttrs([['http.method', { stringValue: 'GET' }]]),
     });
     expect(isSigilSpan(span)).toBe(false);
@@ -88,7 +92,8 @@ describe('getSpanType', () => {
     { opName: 'framework_chain', expected: 'framework' },
   ])('classifies $opName as $expected', ({ opName, expected }) => {
     const span = makeSpan({
-      spanID: 's1', name: 'test',
+      spanID: 's1',
+      name: 'test',
       attributes: makeAttrs([['gen_ai.operation.name', { stringValue: opName }]]),
     });
     expect(getSpanType(span)).toBe(expected);
@@ -107,14 +112,19 @@ describe('selectSpansForMode', () => {
 
   it('filters non-sigil leaf spans in sigil-only mode', () => {
     const sigilChild = makeSpan({
-      spanID: 'sigil-child', parentSpanID: 'root', name: 'generateText',
+      spanID: 'sigil-child',
+      parentSpanID: 'root',
+      name: 'generateText',
       attributes: makeAttrs([['gen_ai.operation.name', { stringValue: 'generateText' }]]),
     });
     const otherChild = makeSpan({
-      spanID: 'other-child', parentSpanID: 'root', name: 'db.query',
+      spanID: 'other-child',
+      parentSpanID: 'root',
+      name: 'db.query',
     });
     const root = makeSpan({
-      spanID: 'root', name: 'root',
+      spanID: 'root',
+      name: 'root',
       attributes: makeAttrs([['sigil.generation.id', { stringValue: 'gen-1' }]]),
       children: [sigilChild, otherChild],
     });
@@ -143,7 +153,8 @@ describe('spanMatchesFreeText', () => {
 
   it('matches attribute values', () => {
     const span = makeSpan({
-      spanID: 's1', name: 'test',
+      spanID: 's1',
+      name: 'test',
       attributes: makeAttrs([['gen_ai.request.model', { stringValue: 'claude-3' }]]),
     });
     expect(spanMatchesFreeText(span, 'claude')).toBe(true);
@@ -170,11 +181,13 @@ describe('findSpanBySelectionID', () => {
 describe('filterSpansByType', () => {
   it('keeps only spans of the specified type', () => {
     const genSpan = makeSpan({
-      spanID: 's1', name: 'gen',
+      spanID: 's1',
+      name: 'gen',
       attributes: makeAttrs([['gen_ai.operation.name', { stringValue: 'generateText' }]]),
     });
     const toolSpan = makeSpan({
-      spanID: 's2', name: 'tool',
+      spanID: 's2',
+      name: 'tool',
       attributes: makeAttrs([['gen_ai.operation.name', { stringValue: 'execute_tool' }]]),
     });
 

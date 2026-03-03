@@ -109,7 +109,16 @@ describe('calculateGenerationCost', () => {
 
 describe('resolveGenerationCost', () => {
   it('uses resolve API for pricing and lookup for full card', async () => {
-    const lookupResp: ModelCardLookupResponse = { data: testCard, freshness: { catalog_last_refreshed_at: null, stale: false, soft_stale: false, hard_stale: false, source_path: 'memory_live' } };
+    const lookupResp: ModelCardLookupResponse = {
+      data: testCard,
+      freshness: {
+        catalog_last_refreshed_at: null,
+        stale: false,
+        soft_stale: false,
+        hard_stale: false,
+        source_path: 'memory_live',
+      },
+    };
     const client: ModelCardClient = {
       resolve: jest.fn().mockResolvedValue(
         makeResolvedResponse([
@@ -180,7 +189,16 @@ describe('resolveGenerationCost', () => {
 
 describe('resolveGenerationCosts', () => {
   it('deduplicates model pairs and enriches with full card via lookup', async () => {
-    const lookupResp: ModelCardLookupResponse = { data: testCard, freshness: { catalog_last_refreshed_at: null, stale: false, soft_stale: false, hard_stale: false, source_path: 'memory_live' } };
+    const lookupResp: ModelCardLookupResponse = {
+      data: testCard,
+      freshness: {
+        catalog_last_refreshed_at: null,
+        stale: false,
+        soft_stale: false,
+        hard_stale: false,
+        source_path: 'memory_live',
+      },
+    };
     const resolveFn = jest.fn().mockResolvedValue(
       makeResolvedResponse([
         {

@@ -45,7 +45,10 @@ const toolSpan = makeSpan({
   startTimeUnixNano: BigInt('1772480417752390318'),
   endTimeUnixNano: BigInt('1772480417852390318'),
   durationNano: BigInt('100000000'),
-  attributes: makeAttrs([['gen_ai.operation.name', 'execute_tool'], ['gen_ai.tool.name', 'web_search']]),
+  attributes: makeAttrs([
+    ['gen_ai.operation.name', 'execute_tool'],
+    ['gen_ai.tool.name', 'web_search'],
+  ]),
   children: [evalSpan],
 });
 
@@ -62,7 +65,10 @@ const embeddingSpan = makeSpan({
 const generationSpan = makeSpan({
   spanID: 'span-1',
   name: 'sigil.generation.prompt',
-  attributes: makeAttrs([['sigil.generation.id', 'gen-1'], ['gen_ai.operation.name', 'generateText']]),
+  attributes: makeAttrs([
+    ['sigil.generation.id', 'gen-1'],
+    ['gen_ai.operation.name', 'generateText'],
+  ]),
   children: [toolSpan, embeddingSpan],
 });
 

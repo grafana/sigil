@@ -128,9 +128,7 @@ describe('ConversationGenerations', () => {
       spanID: 'span-2',
       name: 'execute_tool weather',
       startTimeUnixNano: BigInt('1772480417578390417'),
-      attributes: makeAttrs([
-        ['gen_ai.operation.name', { stringValue: 'execute_tool' }],
-      ]),
+      attributes: makeAttrs([['gen_ai.operation.name', { stringValue: 'execute_tool' }]]),
     });
     const data = makeData({ spans: [span1, span2] });
 
