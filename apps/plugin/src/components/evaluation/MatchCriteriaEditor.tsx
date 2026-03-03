@@ -90,9 +90,7 @@ export default function MatchCriteriaEditor({ value, onChange, disabled }: Match
 
   const addRow = () => {
     const firstUnused =
-      MATCH_KEY_OPTIONS.find((o) => !usedKeys.has(o.value))?.value ??
-      MATCH_KEY_OPTIONS[0]?.value ??
-      'agent_name';
+      MATCH_KEY_OPTIONS.find((o) => !usedKeys.has(o.value))?.value ?? MATCH_KEY_OPTIONS[0]?.value ?? 'agent_name';
     setPendingKeys((prev) => [...prev, firstUnused]);
   };
 
@@ -124,7 +122,7 @@ export default function MatchCriteriaEditor({ value, onChange, disabled }: Match
   };
 
   const handleBlur = (index: number) => {
-    const finalValue = (draft != null && draft.index === index ? draft.text : rows[index]?.value ?? '').trim();
+    const finalValue = (draft != null && draft.index === index ? draft.text : (rows[index]?.value ?? '')).trim();
     setDraft(null);
     const next = [...rows];
     next[index] = { ...next[index], value: finalValue };

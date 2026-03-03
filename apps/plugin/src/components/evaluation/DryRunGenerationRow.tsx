@@ -133,63 +133,63 @@ export default function DryRunGenerationRow({ sample, onAddMatchCriteria }: DryR
             {truncate(sample.generation_id, TRUNCATE_LEN)}
           </Text>
           {sample.agent_name != null &&
-          (onAddMatchCriteria != null ? (
-            <Tooltip content="Add as matcher" placement="top">
-              <button
-                type="button"
-                className={`${styles.badge} ${styles.badgeClickable}`}
-                onClick={handleAgentClick}
+            (onAddMatchCriteria != null ? (
+              <Tooltip content="Add as matcher" placement="top">
+                <button
+                  type="button"
+                  className={`${styles.badge} ${styles.badgeClickable}`}
+                  onClick={handleAgentClick}
+                  style={{
+                    background: getBadgeColor(sample.agent_name).bg,
+                    border: `1px solid ${getBadgeColor(sample.agent_name).border}`,
+                    color: getBadgeColor(sample.agent_name).text,
+                  }}
+                >
+                  <Icon name="plus" size="xs" />
+                  {sample.agent_name}
+                </button>
+              </Tooltip>
+            ) : (
+              <span
+                className={styles.badge}
                 style={{
                   background: getBadgeColor(sample.agent_name).bg,
                   border: `1px solid ${getBadgeColor(sample.agent_name).border}`,
                   color: getBadgeColor(sample.agent_name).text,
                 }}
               >
-                <Icon name="plus" size="xs" />
                 {sample.agent_name}
-              </button>
-            </Tooltip>
-          ) : (
-            <span
-              className={styles.badge}
-              style={{
-                background: getBadgeColor(sample.agent_name).bg,
-                border: `1px solid ${getBadgeColor(sample.agent_name).border}`,
-                color: getBadgeColor(sample.agent_name).text,
-              }}
-            >
-              {sample.agent_name}
-            </span>
-          ))}
+              </span>
+            ))}
           {sample.model != null &&
-          (onAddMatchCriteria != null ? (
-            <Tooltip content="Add as matcher" placement="top">
-              <button
-                type="button"
-                className={`${styles.badge} ${styles.badgeClickable}`}
-                onClick={handleModelClick}
+            (onAddMatchCriteria != null ? (
+              <Tooltip content="Add as matcher" placement="top">
+                <button
+                  type="button"
+                  className={`${styles.badge} ${styles.badgeClickable}`}
+                  onClick={handleModelClick}
+                  style={{
+                    background: getBadgeColor(sample.model).bg,
+                    border: `1px solid ${getBadgeColor(sample.model).border}`,
+                    color: getBadgeColor(sample.model).text,
+                  }}
+                >
+                  <Icon name="plus" size="xs" />
+                  {sample.model}
+                </button>
+              </Tooltip>
+            ) : (
+              <span
+                className={styles.badge}
                 style={{
                   background: getBadgeColor(sample.model).bg,
                   border: `1px solid ${getBadgeColor(sample.model).border}`,
                   color: getBadgeColor(sample.model).text,
                 }}
               >
-                <Icon name="plus" size="xs" />
                 {sample.model}
-              </button>
-            </Tooltip>
-          ) : (
-            <span
-              className={styles.badge}
-              style={{
-                background: getBadgeColor(sample.model).bg,
-                border: `1px solid ${getBadgeColor(sample.model).border}`,
-                color: getBadgeColor(sample.model).text,
-              }}
-            >
-              {sample.model}
-            </span>
-          ))}
+              </span>
+            ))}
         </Stack>
         <span className={styles.meta}>{formatDate(sample.created_at)}</span>
         {sample.input_preview != null && sample.input_preview.length > 0 && (

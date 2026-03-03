@@ -113,8 +113,7 @@ export default function DryRunPreview({ preview, loading, onAddMatchCriteria }: 
 
   const { window_hours, total_generations, matching_generations, sampled_generations, samples } = preview;
 
-  const matchRatePct =
-    total_generations > 0 ? ((matching_generations / total_generations) * 100).toFixed(1) : '0';
+  const matchRatePct = total_generations > 0 ? ((matching_generations / total_generations) * 100).toFixed(1) : '0';
   const sampledRatePct =
     matching_generations > 0 ? ((sampled_generations / matching_generations) * 100).toFixed(1) : '0';
 
@@ -143,9 +142,7 @@ export default function DryRunPreview({ preview, loading, onAddMatchCriteria }: 
           </div>
           <div className={styles.statItem}>
             <div className={styles.statValue}>
-              {window_hours > 0
-                ? Math.round(sampled_generations / window_hours).toLocaleString()
-                : '0'}
+              {window_hours > 0 ? Math.round(sampled_generations / window_hours).toLocaleString() : '0'}
             </div>
             <div className={styles.statLabel}>Evaluations / hour</div>
           </div>
@@ -158,11 +155,7 @@ export default function DryRunPreview({ preview, loading, onAddMatchCriteria }: 
           </div>
         ) : (
           samples.map((sample) => (
-            <DryRunGenerationRow
-              key={sample.generation_id}
-              sample={sample}
-              onAddMatchCriteria={onAddMatchCriteria}
-            />
+            <DryRunGenerationRow key={sample.generation_id} sample={sample} onAddMatchCriteria={onAddMatchCriteria} />
           ))
         )}
       </div>
