@@ -1,0 +1,185 @@
+import React from 'react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { RouterProvider, createMemoryRouter } from 'react-router-dom';
+import ConversationsBrowserPage from './ConversationsBrowserPage';
+import type { ConversationsDataSource } from '../conversation/api';
+
+type MockConversationsDataSource = {
+  [Key in keyof ConversationsDataSource as NonNullable<ConversationsDataSource[Key]> extends (...args: any[]) => any
+    ? Key
+    : never]: jest.MockedFunction<NonNullable<ConversationsDataSource[Key]>>;
+};
+
+beforeAll(() => {
+  if (typeof globalThis.Request === 'undefined') {
+    class RequestMock {
+      method: string;
+
+      constructor(_input: unknown, init?: { method?: string }) {
+        this.method = String(init?.method ?? 'GET').toUpperCase();
+      }
+    }
+    Object.defineProperty(globalThis, 'Request', {
+      writable: true,
+      configurable: true,
+      value: RequestMock,
+    });
+  }
+});
+
+function createDataSource(): MockConversationsDataSource {
+  const currentConversations = [
+    {
+      conversation_id: 'conv-b',
+      generation_count: 3,
+      first_generation_at: '2026-02-01T10:00:00Z',
+      last_generation_at: '2026-02-01T10:00:00Z',
+      models: [],
+      agents: [],
+      error_count: 0,
+      has_errors: false,
+      trace_ids: [],
+      annotation_count: 0,
+    },
+    {
+      conversation_id: 'conv-a',
+      generation_count: 1,
+      first_generation_at: '2026-02-02T10:00:00Z',
+      last_generation_at: '2026-02-02T10:00:00Z',
+      models: [],
+      agents: [],
+      error_count: 0,
+      has_errors: false,
+      trace_ids: [],
+      annotation_count: 0,
+    },
+  ];
+  return {
+    listConversations: jest.fn(async () => ({ items: [] })),
+    searchConversations: jest
+      .fn()
+      .mockResolvedValueOnce({
+        conversations: currentConversations,
+        next_cursor: '',
+        has_more: false,
+      })
+      .mockResolvedValueOnce({
+        conversations: [],
+        next_cursor: '',
+        has_more: false,
+      }),
+    getConversationDetail: jest.fn(async (_conversationID: string) => {
+      return {
+        conversation_id: _conversationID,
+        generation_count: 2,
+        first_generation_at: '2026-02-01T10:00:00Z',
+        last_generation_at: '2026-02-01T10:01:00Z',
+        generations: [
+          {
+            generation_id: `${_conversationID}-gen-1`,
+            conversation_id: _conversationID,
+            created_at: '2026-02-01T10:00:00Z',
+            model: { provider: 'openai', name: 'gpt-4o-mini' },
+            usage: { total_tokens: 120 },
+          },
+          {
+            generation_id: `${_conversationID}-gen-2`,
+            conversation_id: _conversationID,
+            created_at: '2026-02-01T10:01:00Z',
+            model: { provider: 'openai', name: 'gpt-4o-mini' },
+            usage: { total_tokens: 180 },
+          },
+        ],
+        annotations: [],
+      };
+    }),
+    getGeneration: jest.fn(async (_generationID: string) => {
+      throw new Error('getGeneration not used in ConversationsBrowserPage');
+    }),
+    getSearchTags: jest.fn(async (_from: string, _to: string) => []),
+    getSearchTagValues: jest.fn(async (_tag: string, _from: string, _to: string) => []),
+  };
+}
+
+describe('ConversationsBrowserPage', () => {
+  function renderPage(dataSource: ConversationsDataSource, initialEntry = '/conversations') {
+    const router = createMemoryRouter(
+      [
+        {
+          path: '/conversations/:conversationID/view',
+          element: <ConversationsBrowserPage dataSource={dataSource} />,
+        },
+        {
+          path: '/conversations',
+          element: <ConversationsBrowserPage dataSource={dataSource} />,
+        },
+      ],
+      { initialEntries: [initialEntry] }
+    );
+
+    return {
+      router,
+      ...render(<RouterProvider router={router} />),
+    };
+  }
+
+  it('shows expanded list when no selection, then shows summary after selecting', async () => {
+    const dataSource = createDataSource();
+    const { router } = renderPage(dataSource);
+
+    await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalledTimes(2));
+    expect(dataSource.searchConversations.mock.calls[0][0].select).toContain('span.gen_ai.usage.total_tokens');
+
+    expect(await screen.findByLabelText('select conversation conv-a')).toBeInTheDocument();
+    expect(screen.queryByText('Conversation ID')).not.toBeInTheDocument();
+    expect(screen.getByText('LLM calls')).toBeInTheDocument();
+    expect(screen.queryByText(/^Spans \(\d+\)$/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('select conversation conv-b'));
+    expect(await screen.findByText('Conversation ID')).toBeInTheDocument();
+    expect(await screen.findByText(/^Spans \(\d+\)$/)).toBeInTheDocument();
+    expect(screen.getByText('Conversation ID').parentElement).toHaveTextContent('conv-b');
+    expect(router.state.location.pathname).toBe('/conversations/conv-b/view');
+    expect(screen.queryByLabelText('select conversation conv-b')).not.toBeInTheDocument();
+    expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-b');
+  });
+
+  it('uses selected conversation from URL param when present', async () => {
+    const dataSource = createDataSource();
+    const { router } = renderPage(dataSource, '/conversations/conv-b/view');
+
+    await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalledTimes(2));
+    expect((await screen.findByText('Conversation ID')).parentElement).toHaveTextContent('conv-b');
+    expect(await screen.findByText(/^Spans \(\d+\)$/)).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/conversations/conv-b/view');
+    expect(screen.queryByLabelText('select conversation conv-b')).not.toBeInTheDocument();
+    expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-b');
+  });
+
+  it('resets selection when URL is set to /conversations', async () => {
+    const dataSource = createDataSource();
+    const { router } = renderPage(dataSource, '/conversations/conv-b/view');
+
+    await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText('Conversation ID')).toBeInTheDocument();
+
+    await act(async () => {
+      await router.navigate('/conversations');
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('Conversation ID')).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText(/^Spans \(\d+\)$/)).not.toBeInTheDocument();
+  });
+
+  it('keeps selected route for deep links outside the current list range', async () => {
+    const dataSource = createDataSource();
+    const { router } = renderPage(dataSource, '/conversations/does-not-exist/view');
+
+    await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalledTimes(2));
+    expect((await screen.findByText('Conversation ID')).parentElement).toHaveTextContent('does-not-exist');
+    expect(router.state.location.pathname).toBe('/conversations/does-not-exist/view');
+    expect(dataSource.getConversationDetail).toHaveBeenCalledWith('does-not-exist');
+  });
+});

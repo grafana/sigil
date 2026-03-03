@@ -2,17 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { lastValueFrom } from 'rxjs';
 import type { AppPluginMeta, GrafanaTheme2, PluginConfigPageProps, PluginMeta, SelectableValue } from '@grafana/data';
 import { getBackendSrv } from '@grafana/runtime';
-import {
-  Alert,
-  Button,
-  ConfirmModal,
-  Field,
-  FieldSet,
-  IconButton,
-  Input,
-  Select,
-  useStyles2,
-} from '@grafana/ui';
+import { Alert, Button, ConfirmModal, Field, FieldSet, IconButton, Input, Select, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
 
 type SigilJSONData = {
@@ -86,7 +76,7 @@ function generateId(): string {
 
 // --- Component ---
 
-export interface ConnectionSettingsProps extends PluginConfigPageProps<AppPluginMeta<SigilJSONData>> { }
+export interface ConnectionSettingsProps extends PluginConfigPageProps<AppPluginMeta<SigilJSONData>> {}
 
 export default function ConnectionSettings({ plugin }: ConnectionSettingsProps) {
   const styles = useStyles2(getStyles);
@@ -232,19 +222,19 @@ export default function ConnectionSettings({ plugin }: ConnectionSettingsProps) 
       await updateTenantDatasourceSettings(plugin.meta.id, {
         prometheusDatasourceUID: prometheusDatasourceUID.trim(),
         tempoDatasourceUID: tempoDatasourceUID.trim(),
-      }).catch(() => { });
+      }).catch(() => {});
 
       if (activeProfileId) {
         const updated = profiles.map((p) =>
           p.id === activeProfileId
             ? {
-              ...p,
-              sigilApiUrl,
-              tenantId,
-              prometheusDatasourceUID: prometheusDatasourceUID.trim(),
-              tempoDatasourceUID: tempoDatasourceUID.trim(),
-              authToken: tokenValue || p.authToken,
-            }
+                ...p,
+                sigilApiUrl,
+                tenantId,
+                prometheusDatasourceUID: prometheusDatasourceUID.trim(),
+                tempoDatasourceUID: tempoDatasourceUID.trim(),
+                authToken: tokenValue || p.authToken,
+              }
             : p
         );
         setProfiles(updated);
@@ -268,11 +258,7 @@ export default function ConnectionSettings({ plugin }: ConnectionSettingsProps) 
           const isActive = p.id === activeProfileId;
           return (
             <div key={p.id} className={isActive ? styles.profileChipActive : styles.profileChip}>
-              <button
-                type="button"
-                className={styles.profileChipButton}
-                onClick={() => handleSwitchProfile(p.id)}
-              >
+              <button type="button" className={styles.profileChipButton} onClick={() => handleSwitchProfile(p.id)}>
                 {p.name}
               </button>
               <IconButton
@@ -304,12 +290,7 @@ export default function ConnectionSettings({ plugin }: ConnectionSettingsProps) 
                   }
                 }}
               />
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={!newProfileName.trim()}
-                onClick={handleCreateProfile}
-              >
+              <Button variant="primary" size="sm" disabled={!newProfileName.trim()} onClick={handleCreateProfile}>
                 Save
               </Button>
               <Button
@@ -360,7 +341,10 @@ export default function ConnectionSettings({ plugin }: ConnectionSettingsProps) 
             onChange={(e) => setApiAuthToken(e.currentTarget.value)}
           />
         </Field>
-        <Field label="Prometheus Datasource" description="Datasource UID used for Prometheus proxy queries via Grafana.">
+        <Field
+          label="Prometheus Datasource"
+          description="Datasource UID used for Prometheus proxy queries via Grafana."
+        >
           <Select
             width={40}
             options={prometheusOptions}

@@ -38,6 +38,13 @@
     },
     {
       "type": "page",
+      "name": "Conversation view",
+      "path": "/a/grafana-sigil-app/conversations/:conversationID/view",
+      "action": "grafana-sigil-app.data:read",
+      "addToNav": false
+    },
+    {
+      "type": "page",
       "name": "Evaluation",
       "path": "/a/grafana-sigil-app/evaluation",
       "action": "grafana-sigil-app.data:read",

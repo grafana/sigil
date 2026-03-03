@@ -175,14 +175,16 @@ describe('ConversationsPage', () => {
         ],
         annotations: [],
       })),
-      getGeneration: jest.fn(async (generationID: string) => ({
-        generation_id: generationID,
-        conversation_id: generationID.replace(/-gen$/, ''),
-        trace_id: `${generationID}-trace`,
-        mode: 'SYNC',
-        input: [{ role: 'MESSAGE_ROLE_USER', parts: [{ text: 'test' }] }],
-        output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'response' }] }],
-      })),
+      getGeneration: jest.fn(
+        async (generationID: string): Promise<GenerationDetail> => ({
+          generation_id: generationID,
+          conversation_id: generationID.replace(/-gen$/, ''),
+          trace_id: `${generationID}-trace`,
+          mode: 'SYNC',
+          input: [{ role: 'MESSAGE_ROLE_USER', parts: [{ text: 'test' }] }],
+          output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'response' }] }],
+        })
+      ),
     });
 
     render(<ConversationsPage dataSource={dataSource} />);
@@ -327,15 +329,17 @@ describe('ConversationsPage', () => {
         }
         throw new Error(`unexpected conversation id ${conversationID}`);
       }),
-      getGeneration: jest.fn(async (generationID: string) => ({
-        generation_id: generationID,
-        conversation_id: generationID === 'gen-1' ? 'conv-1' : 'conv-2',
-        trace_id: generationID === 'gen-1' ? 'trace-1' : 'trace-2',
-        mode: 'SYNC',
-        model: { provider: 'openai', name: 'gpt-4o' },
-        input: [{ role: 'MESSAGE_ROLE_USER', parts: [{ text: 'test' }] }],
-        output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: `reply from ${generationID}` }] }],
-      })),
+      getGeneration: jest.fn(
+        async (generationID: string): Promise<GenerationDetail> => ({
+          generation_id: generationID,
+          conversation_id: generationID === 'gen-1' ? 'conv-1' : 'conv-2',
+          trace_id: generationID === 'gen-1' ? 'trace-1' : 'trace-2',
+          mode: 'SYNC',
+          model: { provider: 'openai', name: 'gpt-4o' },
+          input: [{ role: 'MESSAGE_ROLE_USER', parts: [{ text: 'test' }] }],
+          output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: `reply from ${generationID}` }] }],
+        })
+      ),
     });
 
     render(<ConversationsPage dataSource={dataSource} />);
@@ -387,15 +391,17 @@ describe('ConversationsPage', () => {
         }
         throw new Error('conversation detail failed');
       }),
-      getGeneration: jest.fn(async (_generationID: string) => ({
-        generation_id: 'gen-1',
-        conversation_id: 'conv-1',
-        trace_id: 'trace-1',
-        mode: 'SYNC',
-        model: { provider: 'openai', name: 'gpt-4o' },
-        input: [{ role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Hello' }] }],
-        output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'World' }] }],
-      })),
+      getGeneration: jest.fn(
+        async (_generationID: string): Promise<GenerationDetail> => ({
+          generation_id: 'gen-1',
+          conversation_id: 'conv-1',
+          trace_id: 'trace-1',
+          mode: 'SYNC',
+          model: { provider: 'openai', name: 'gpt-4o' },
+          input: [{ role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Hello' }] }],
+          output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'World' }] }],
+        })
+      ),
     });
 
     render(<ConversationsPage dataSource={dataSource} />);

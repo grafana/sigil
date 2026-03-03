@@ -1,0 +1,92 @@
+import type { ModelCard, ModelCardPricing } from '../modelcard/types';
+
+export type MessageRole = 'MESSAGE_ROLE_USER' | 'MESSAGE_ROLE_ASSISTANT' | 'MESSAGE_ROLE_TOOL';
+
+export type PartMetadata = {
+  provider_type?: string;
+};
+
+export type ToolCallPart = {
+  id: string;
+  name: string;
+  input_json?: string;
+};
+
+export type ToolResultPart = {
+  tool_call_id: string;
+  name: string;
+  content?: string;
+  content_json?: string;
+  is_error?: boolean;
+};
+
+export type Part = {
+  metadata?: PartMetadata;
+  text?: string;
+  thinking?: string;
+  tool_call?: ToolCallPart;
+  tool_result?: ToolResultPart;
+};
+
+export type Message = {
+  role: MessageRole;
+  name?: string;
+  parts: Part[];
+};
+
+export type ToolDefinition = {
+  name: string;
+  description?: string;
+  type?: string;
+  input_schema_json?: string;
+};
+
+export type GenerationUsage = {
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_write_input_tokens?: number;
+  reasoning_tokens?: number;
+};
+
+export type GenerationDetail = {
+  generation_id: string;
+  conversation_id: string;
+  trace_id?: string;
+  span_id?: string;
+  mode?: string;
+  model?: {
+    provider?: string;
+    name?: string;
+  };
+  agent_name?: string;
+  agent_version?: string;
+  system_prompt?: string;
+  input?: Message[];
+  output?: Message[];
+  tools?: ToolDefinition[];
+  usage?: GenerationUsage;
+  stop_reason?: string;
+  metadata?: Record<string, unknown>;
+  created_at?: string;
+  error?: null | { message?: string };
+};
+
+export type GenerationCostBreakdown = {
+  inputCost: number;
+  outputCost: number;
+  cacheReadCost: number;
+  cacheWriteCost: number;
+  totalCost: number;
+};
+
+export type GenerationCostResult = {
+  generationID: string;
+  model: string;
+  provider: string;
+  card: ModelCard;
+  breakdown: GenerationCostBreakdown;
+};
+
+export type { ModelCard, ModelCardPricing };
