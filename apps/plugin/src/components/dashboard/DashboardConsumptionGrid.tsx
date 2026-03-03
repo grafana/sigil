@@ -584,7 +584,7 @@ function BreakdownStatPanel({
         <div className={styles.bspCenter}>
           <div style={{ textAlign: 'center' }}>
             <span className={styles.bspBigValue}>{formatVal(aggregate)}</span>
-            <div className={styles.bspSingleLabel}>{items[0].name}</div>
+            {items[0].name !== 'unknown' && <div className={styles.bspSingleLabel}>{items[0].name}</div>}
           </div>
         </div>
       </div>
