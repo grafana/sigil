@@ -22,17 +22,48 @@ function emptyTokenSummary(): TokenSummary {
   };
 }
 
+function toFiniteTokenNumber(value: unknown): number {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+function hasTokenValue(value: unknown): boolean {
+  if (typeof value === 'number') {
+    return Number.isFinite(value);
+  }
+  if (typeof value === 'string') {
+    if (value.trim().length === 0) {
+      return false;
+    }
+    return Number.isFinite(Number(value));
+  }
+  return false;
+}
+
 function addUsageToSummary(summary: TokenSummary, gen: GenerationDetail): void {
   const u = gen.usage;
   if (!u) {
     return;
   }
-  summary.inputTokens += u.input_tokens ?? 0;
-  summary.outputTokens += u.output_tokens ?? 0;
-  summary.cacheReadTokens += u.cache_read_input_tokens ?? 0;
-  summary.cacheWriteTokens += u.cache_write_input_tokens ?? 0;
-  summary.reasoningTokens += u.reasoning_tokens ?? 0;
-  summary.totalTokens += u.total_tokens ?? (u.input_tokens ?? 0) + (u.output_tokens ?? 0);
+  const inputTokens = toFiniteTokenNumber(u.input_tokens);
+  const outputTokens = toFiniteTokenNumber(u.output_tokens);
+  summary.inputTokens += inputTokens;
+  summary.outputTokens += outputTokens;
+  summary.cacheReadTokens += toFiniteTokenNumber(u.cache_read_input_tokens);
+  summary.cacheWriteTokens += toFiniteTokenNumber(u.cache_write_input_tokens);
+  summary.reasoningTokens += toFiniteTokenNumber(u.reasoning_tokens);
+
+  if (hasTokenValue(u.total_tokens)) {
+    summary.totalTokens += toFiniteTokenNumber(u.total_tokens);
+    return;
+  }
+  summary.totalTokens += inputTokens + outputTokens;
 }
 
 export function getAllGenerations(data: ConversationData): GenerationDetail[] {

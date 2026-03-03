@@ -125,6 +125,24 @@ describe('getTokenSummary', () => {
     const summary = getTokenSummary(data);
     expect(summary.totalTokens).toBe(0);
   });
+
+  it('coerces numeric token strings to numbers', () => {
+    const data = makeData({
+      orphanGenerations: [
+        makeGen({
+          usage: {
+            input_tokens: '7507575' as unknown as number,
+            output_tokens: '3103131' as unknown as number,
+            total_tokens: '10610706' as unknown as number,
+          },
+        }),
+      ],
+    });
+    const summary = getTokenSummary(data);
+    expect(summary.inputTokens).toBe(7507575);
+    expect(summary.outputTokens).toBe(3103131);
+    expect(summary.totalTokens).toBe(10610706);
+  });
 });
 
 describe('getCostSummary', () => {

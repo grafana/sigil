@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, IconButton, useStyles2 } from '@grafana/ui';
@@ -7,6 +7,7 @@ import type { ModelCard } from '../../modelcard/types';
 export type ModelCardPopoverProps = {
   card: ModelCard;
   onClose: () => void;
+  anchorRect?: DOMRect | null;
 };
 
 type ProviderMeta = {
@@ -68,12 +69,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
     zIndex: theme.zIndex.modal,
   }),
   card: css({
-    position: 'absolute',
+    position: 'fixed',
     zIndex: theme.zIndex.modal + 1,
-    top: '100%',
-    left: 0,
-    marginTop: theme.spacing(0.5),
-    width: 360,
     background: theme.colors.background.primary,
     border: `1px solid ${theme.colors.border.medium}`,
     borderRadius: theme.shape.radius.default,
@@ -126,11 +123,26 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.secondary,
     fontSize: theme.typography.bodySmall.fontSize,
     lineHeight: 1.5,
+    overflowWrap: 'anywhere' as const,
+  }),
+  descriptionCollapsed: css({
     display: '-webkit-box',
     WebkitLineClamp: 3,
     WebkitBoxOrient: 'vertical' as const,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
+  }),
+  descriptionToggle: css({
+    padding: theme.spacing(0, 2, 1.25),
+    border: 'none',
+    background: 'none',
+    color: theme.colors.text.link,
+    fontSize: theme.typography.bodySmall.fontSize,
+    cursor: 'pointer',
+    textAlign: 'left' as const,
+    '&:hover': {
+      textDecoration: 'underline',
+    },
   }),
   modalityRow: css({
     display: 'flex',
@@ -223,12 +235,35 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function ModelCardPopover({ card, onClose }: ModelCardPopoverProps) {
+export default function ModelCardPopover({ card, onClose, anchorRect = null }: ModelCardPopoverProps) {
   const styles = useStyles2(getStyles);
   const cardRef = useRef<HTMLDivElement>(null);
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState<boolean>(false);
   const meta = getProviderMeta(card.provider);
   const sourceURL = buildSourceURL(card);
   const pricing = card.pricing;
+  const viewportWidth = typeof window === 'undefined' ? 1280 : window.innerWidth;
+  const viewportHeight = typeof window === 'undefined' ? 720 : window.innerHeight;
+  const cardWidth = Math.min(360, Math.max(300, viewportWidth - 16));
+  const estimatedCardHeight = 520;
+  const minEdgePadding = 8;
+  const anchorLeft = anchorRect?.left ?? minEdgePadding;
+  const anchorTop = anchorRect?.top ?? minEdgePadding;
+  const anchorBottom = anchorRect?.bottom ?? minEdgePadding;
+  const popupGap = 8;
+  const maxLeft = viewportWidth - cardWidth - minEdgePadding;
+  const left = Math.min(Math.max(anchorLeft, minEdgePadding), Math.max(maxLeft, minEdgePadding));
+  const preferredTop = anchorBottom + popupGap;
+  const fitsBelow = preferredTop + estimatedCardHeight <= viewportHeight - minEdgePadding;
+  const top = fitsBelow
+    ? preferredTop
+    : Math.max(
+      minEdgePadding,
+      Math.min(
+        anchorTop - popupGap - estimatedCardHeight,
+        viewportHeight - estimatedCardHeight - minEdgePadding
+      )
+    );
 
   const handleBackdropClick = useCallback(
     (e: React.MouseEvent) => {
@@ -265,7 +300,17 @@ export default function ModelCardPopover({ card, onClose }: ModelCardPopoverProp
   return (
     <>
       <div className={styles.backdrop} onClick={handleBackdropClick} />
-      <div className={styles.card} ref={cardRef}>
+      <div
+        className={styles.card}
+        ref={cardRef}
+        style={{
+          top,
+          left,
+          width: cardWidth,
+          maxHeight: viewportHeight - minEdgePadding * 2,
+          overflowY: 'auto',
+        }}
+      >
         <div className={styles.header}>
           <div
             className={styles.providerIcon}
@@ -287,7 +332,18 @@ export default function ModelCardPopover({ card, onClose }: ModelCardPopoverProp
         </div>
 
         {card.description && (
-          <div className={styles.description}>{card.description}</div>
+          <>
+            <div className={`${styles.description} ${!isDescriptionExpanded ? styles.descriptionCollapsed : ''}`}>
+              {card.description}
+            </div>
+            <button
+              type="button"
+              className={styles.descriptionToggle}
+              onClick={() => { setIsDescriptionExpanded((prev) => !prev); }}
+            >
+              {isDescriptionExpanded ? 'Show less' : 'Show more'}
+            </button>
+          </>
         )}
 
         {hasModalities && (

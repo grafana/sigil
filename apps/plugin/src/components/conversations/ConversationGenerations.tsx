@@ -3,11 +3,11 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
 import { Alert, Button, Input, Select, Spinner, Stack, Switch, useStyles2 } from '@grafana/ui';
 import type { ConversationData, ConversationSpan } from '../../conversation/types';
-import type { SpanType } from '../../conversation/spans';
 import {
   selectSpansForMode,
   filterSpansByType,
   filterSpansByText,
+  type SpanType,
 } from '../../conversation/spans';
 import SigilSpanTree from './SigilSpanTree';
 

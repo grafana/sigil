@@ -178,7 +178,7 @@ export default function ConversationColumn({
 }: ConversationColumnProps) {
   const styles = useStyles2(getStyles);
   const ratingSummary = conversation.rating_summary;
-  const [openModelKey, setOpenModelKey] = useState<string | null>(null);
+  const [openModel, setOpenModel] = useState<{ key: string; anchorRect: DOMRect } | null>(null);
 
   const modelNames = conversation.models;
   const hasModelCards = modelCards && modelCards.size > 0;
@@ -200,7 +200,7 @@ export default function ConversationColumn({
             {hasModelCards ? (
               <div className={styles.modelChipsWrap}>
                 {Array.from(modelCards.entries()).map(([key, card]) => {
-                  const isOpen = openModelKey === key;
+                  const isOpen = openModel?.key === key;
                   const chipLabel = (card.name || card.source_model_id).replace(
                     new RegExp(`^${card.provider}[:/]\\s*`, 'i'), ''
                   );
@@ -209,7 +209,13 @@ export default function ConversationColumn({
                       <button
                         type="button"
                         className={`${styles.modelChip} ${isOpen ? styles.modelChipActive : ''}`}
-                        onClick={() => { setOpenModelKey(isOpen ? null : key); }}
+                        onClick={(event) => {
+                          if (isOpen) {
+                            setOpenModel(null);
+                            return;
+                          }
+                          setOpenModel({ key, anchorRect: event.currentTarget.getBoundingClientRect() });
+                        }}
                         aria-label={`model card ${chipLabel}`}
                       >
                         <span
@@ -221,7 +227,8 @@ export default function ConversationColumn({
                       {isOpen && (
                         <ModelCardPopover
                           card={card}
-                          onClose={() => { setOpenModelKey(null); }}
+                          anchorRect={openModel?.anchorRect ?? null}
+                          onClose={() => { setOpenModel(null); }}
                         />
                       )}
                     </div>

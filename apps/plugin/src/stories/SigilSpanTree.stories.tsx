@@ -5,12 +5,16 @@ function makeAttrs(entries: Array<[string, string]>): ReadonlyMap<string, SpanAt
   return new Map(entries.map(([key, value]) => [key, { stringValue: value }]));
 }
 
-function makeSpan(overrides: Partial<ConversationSpan> & { spanID: string; name: string }): ConversationSpan {
+function makeSpan({
+  spanID,
+  name,
+  ...overrides
+}: Partial<ConversationSpan> & { spanID: string; name: string }): ConversationSpan {
   return {
     traceID: 'trace-1',
-    spanID: overrides.spanID,
+    spanID,
     parentSpanID: '',
-    name: overrides.name,
+    name,
     kind: 'CLIENT',
     serviceName: 'llm-gateway',
     startTimeUnixNano: BigInt('1772480417578390317'),

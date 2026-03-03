@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Icon, useStyles2 } from '@grafana/ui';
@@ -141,27 +141,29 @@ export default function SigilSpanTree({
   const styles = useStyles2(getStyles);
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    const allKeys = new Set<string>();
+  const allKeys = useMemo(() => {
+    const next = new Set<string>();
     function collectKeys(list: ConversationSpan[]): void {
       for (const span of list) {
-        allKeys.add(getSelectionID(span));
+        next.add(getSelectionID(span));
         collectKeys(span.children);
       }
     }
     collectKeys(spans);
-    setExpandedKeys((current) => {
-      const next = new Set<string>();
-      for (const key of current) {
-        if (allKeys.has(key)) {
-          next.add(key);
-        }
-      }
-      return next;
-    });
+    return next;
   }, [spans]);
 
-  const rows = useMemo(() => buildVisibleRows(spans, expandedKeys), [spans, expandedKeys]);
+  const visibleExpandedKeys = useMemo(() => {
+    const next = new Set<string>();
+    for (const key of expandedKeys) {
+      if (allKeys.has(key)) {
+        next.add(key);
+      }
+    }
+    return next;
+  }, [allKeys, expandedKeys]);
+
+  const rows = useMemo(() => buildVisibleRows(spans, visibleExpandedKeys), [spans, visibleExpandedKeys]);
 
   return (
     <div className={styles.list}>

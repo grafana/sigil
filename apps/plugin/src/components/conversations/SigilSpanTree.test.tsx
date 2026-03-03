@@ -3,12 +3,16 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import SigilSpanTree from './SigilSpanTree';
 import type { ConversationSpan, SpanAttributeValue } from '../../conversation/types';
 
-function makeSpan(overrides: Partial<ConversationSpan> & { spanID: string; name: string }): ConversationSpan {
+function makeSpan({
+  spanID,
+  name,
+  ...overrides
+}: Partial<ConversationSpan> & { spanID: string; name: string }): ConversationSpan {
   return {
     traceID: 'trace-1',
-    spanID: overrides.spanID,
+    spanID,
     parentSpanID: '',
-    name: overrides.name,
+    name,
     kind: 'CLIENT',
     serviceName: 'svc',
     startTimeUnixNano: BigInt(1),

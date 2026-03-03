@@ -7,12 +7,16 @@ function makeAttrs(entries: Array<[string, SpanAttributeValue]>): ReadonlyMap<st
   return new Map(entries);
 }
 
-function makeSpan(overrides: Partial<ConversationSpan> & { spanID: string; name: string }): ConversationSpan {
+function makeSpan({
+  spanID,
+  name,
+  ...overrides
+}: Partial<ConversationSpan> & { spanID: string; name: string }): ConversationSpan {
   return {
     traceID: 'trace-1',
-    spanID: overrides.spanID,
+    spanID,
     parentSpanID: '',
-    name: overrides.name,
+    name,
     kind: 'CLIENT',
     serviceName: 'llm-service',
     startTimeUnixNano: BigInt('1772480417578390317'),
@@ -102,7 +106,7 @@ describe('ConversationGenerations', () => {
   it('shows loading spinner', () => {
     const data = makeData();
     render(<ConversationGenerations data={data} loading />);
-    expect(screen.getByLabelText('loading conversation spans')).toBeInTheDocument();
+    expect(screen.getByTestId('Spinner')).toBeInTheDocument();
   });
 
   it('shows error message', () => {
