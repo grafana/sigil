@@ -145,6 +145,7 @@ See `docs/references/grafana-query-response-shapes.md`.
   - allow advanced raw matcher clauses for resource labels injected by Alloy/OTel pipelines
   - estimate cost from token metrics plus model-card resolve mode (`resolve_pair=provider:model`)
   - use strict provider+model pricing joins; unresolved pairs remain explicit (no fallback guessing)
+  - when resolve maps cloud-provider model IDs to catalog IDs (for example Bedrock IDs mapping to `anthropic/*` cards), keep original provider/model labels in UI and show mapping as supplemental context
 - Conversations:
   - query conversations with expression filters and selectable attributes
   - support cursor pagination in list view

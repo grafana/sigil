@@ -232,6 +232,9 @@ func (i resolveIndex) resolve(input ResolveInput) ResolveResult {
 	) {
 		return result
 	}
+	if i.tryResolveBedrockHeuristic(&result, provider, model) {
+		return result
+	}
 
 	result.Reason = ResolveReasonNotFound
 	return result
@@ -293,6 +296,56 @@ func (i resolveIndex) tryResolveWithCollector(
 ) bool {
 	matches := collect(providerCandidates, modelCandidates)
 	return applyResolveMatches(result, inputModel, matchStrategy, matches)
+}
+
+func (i resolveIndex) tryResolveBedrockHeuristic(result *ResolveResult, provider string, model string) bool {
+	if !isBedrockProvider(provider) {
+		return false
+	}
+
+	bedrockProvider, bedrockModel, ok := parseBedrockModelID(model)
+	if !ok {
+		return false
+	}
+
+	modelCandidates := mergeResolveCandidates(
+		[]string{bedrockModel, strings.ToLower(bedrockModel)},
+		resolveRelaxedInputModelCandidates(bedrockModel),
+	)
+	if trimmed := trimBedrockInvocationVersion(bedrockModel); trimmed != "" && trimmed != bedrockModel {
+		modelCandidates = mergeResolveCandidates(
+			modelCandidates,
+			[]string{trimmed, strings.ToLower(trimmed)},
+			resolveRelaxedInputModelCandidates(trimmed),
+		)
+	}
+	if major := trimBedrockInvocationMajorVersion(bedrockModel); major != "" && major != bedrockModel {
+		modelCandidates = mergeResolveCandidates(
+			modelCandidates,
+			[]string{major, strings.ToLower(major)},
+			resolveRelaxedInputModelCandidates(major),
+		)
+	}
+
+	providerCandidates := resolveInputProviderCandidates(provider, modelCandidates, []string{bedrockProvider})
+	if i.tryResolveWithCollector(
+		result,
+		model,
+		ResolveMatchStrategyExact,
+		providerCandidates,
+		modelCandidates,
+		i.collectExactMatches,
+	) {
+		return true
+	}
+	return i.tryResolveWithCollector(
+		result,
+		model,
+		ResolveMatchStrategyNormalized,
+		providerCandidates,
+		modelCandidates,
+		i.collectNormalizedMatches,
+	)
 }
 
 func applyResolveMatches(result *ResolveResult, inputModel string, matchStrategy string, matches map[string]Card) bool {
@@ -780,21 +833,67 @@ func parseBedrockModelID(model string) (provider string, parsedModel string, ok 
 	if trimmed == "" {
 		return "", "", false
 	}
-	if idx := strings.Index(trimmed, "foundation-model/"); idx >= 0 {
-		trimmed = strings.TrimSpace(trimmed[idx+len("foundation-model/"):])
-	}
-
-	parts := strings.SplitN(trimmed, ".", 2)
-	if len(parts) != 2 {
+	trimmed = stripBedrockResourcePrefix(trimmed)
+	if trimmed == "" {
 		return "", "", false
 	}
 
-	provider = providerFromBedrockVendor(parts[0])
-	parsedModel = strings.TrimSpace(parts[1])
+	parts := strings.Split(trimmed, ".")
+	if len(parts) < 2 {
+		return "", "", false
+	}
+
+	vendorIdx := 0
+	if len(parts) >= 3 && isBedrockRegionalPrefix(parts[0]) {
+		vendorIdx = 1
+	}
+	if vendorIdx+1 >= len(parts) {
+		return "", "", false
+	}
+
+	provider = providerFromBedrockVendor(parts[vendorIdx])
+	parsedModel = strings.TrimSpace(strings.Join(parts[vendorIdx+1:], "."))
 	if provider == "" || parsedModel == "" {
 		return "", "", false
 	}
 	return provider, parsedModel, true
+}
+
+func stripBedrockResourcePrefix(value string) string {
+	trimmed := strings.TrimSpace(strings.ToLower(value))
+	if trimmed == "" {
+		return ""
+	}
+
+	// Keep longest markers first to avoid partial matches.
+	for _, marker := range []string{
+		"application-inference-profile/",
+		"inference-profile/",
+		"foundation-model/",
+	} {
+		if idx := strings.Index(trimmed, marker); idx >= 0 {
+			return strings.TrimSpace(trimmed[idx+len(marker):])
+		}
+	}
+	return trimmed
+}
+
+func isBedrockRegionalPrefix(prefix string) bool {
+	switch strings.TrimSpace(strings.ToLower(prefix)) {
+	case "us", "eu", "apac", "jp", "global":
+		return true
+	default:
+		return false
+	}
+}
+
+func isBedrockProvider(provider string) bool {
+	switch strings.TrimSpace(strings.ToLower(provider)) {
+	case "bedrock", "aws-bedrock", "amazon-bedrock", "amazon_bedrock":
+		return true
+	default:
+		return false
+	}
 }
 
 func providerFromBedrockVendor(vendor string) string {

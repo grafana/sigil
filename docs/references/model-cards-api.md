@@ -122,6 +122,11 @@ Resolve mode parameters:
   - max 100 values
   - when present, no other query parameters are allowed
 
+Resolve behavior notes:
+
+- Bedrock provider-family heuristics normalize AWS model identifier variants (for example regional/profile IDs like `us.anthropic.claude-haiku-4-5-20251001-v1:0`, and ARN/resource forms containing `foundation-model/` or `inference-profile/`).
+- Matching remains strict for pricing joins: resolver normalizes format but does not guess nearest model versions when the exact target model is absent.
+
 ### Response 200 (list mode)
 
 ```json

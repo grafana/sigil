@@ -213,6 +213,17 @@ func TestResolveBatch(t *testing.T) {
 			},
 		},
 		{
+			ModelKey:      "openrouter:anthropic/claude-haiku-4.5",
+			Source:        SourceOpenRouter,
+			SourceModelID: "anthropic/claude-haiku-4.5",
+			Name:          "Claude Haiku 4.5",
+			Provider:      "anthropic",
+			Pricing: Pricing{
+				PromptUSDPerToken:     floatPtr(0.001),
+				CompletionUSDPerToken: floatPtr(0.005),
+			},
+		},
+		{
 			ModelKey:      "openrouter:openai/test.foo",
 			Source:        SourceOpenRouter,
 			SourceModelID: "openai/test.foo",
@@ -670,6 +681,22 @@ func TestResolveBatch(t *testing.T) {
 			expectedSourcePath: SourcePathMemoryLive,
 		},
 		{
+			name:               "bedrock regional anthropic model resolves",
+			input:              ResolveInput{Provider: "bedrock", Model: "us.anthropic.claude-haiku-4-5-20251001-v1:0"},
+			expectedStatus:     ResolveStatusResolved,
+			expectedStrategy:   ResolveMatchStrategyExact,
+			expectedModelKey:   "openrouter:anthropic/claude-haiku-4.5",
+			expectedSourceID:   "anthropic/claude-haiku-4.5",
+			expectedSourcePath: SourcePathMemoryLive,
+		},
+		{
+			name:               "bedrock regional sonnet 4-6 stays unresolved without exact catalog model",
+			input:              ResolveInput{Provider: "bedrock", Model: "us.anthropic.claude-sonnet-4-6"},
+			expectedStatus:     ResolveStatusUnresolved,
+			expectedReason:     ResolveReasonNotFound,
+			expectedSourcePath: SourcePathMemoryLive,
+		},
+		{
 			name:               "bedrock amazon model resolves",
 			input:              ResolveInput{Provider: "bedrock", Model: "amazon.nova-pro-v1:0"},
 			expectedStatus:     ResolveStatusResolved,
@@ -733,6 +760,15 @@ func TestResolveBatch(t *testing.T) {
 			expectedSourcePath: SourcePathMemoryLive,
 		},
 		{
+			name:               "bedrock arn inference profile resolves",
+			input:              ResolveInput{Provider: "aws-bedrock", Model: "arn:aws:bedrock:us-east-1:123456789012:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0"},
+			expectedStatus:     ResolveStatusResolved,
+			expectedStrategy:   ResolveMatchStrategyExact,
+			expectedModelKey:   "openrouter:anthropic/claude-haiku-4.5",
+			expectedSourceID:   "anthropic/claude-haiku-4.5",
+			expectedSourcePath: SourcePathMemoryLive,
+		},
+		{
 			name:               "xai provider alias resolves",
 			input:              ResolveInput{Provider: "xai", Model: "grok-4"},
 			expectedStatus:     ResolveStatusResolved,
@@ -793,6 +829,67 @@ func TestResolveBatch(t *testing.T) {
 				t.Fatalf("expected freshness source path %q, got %q", tc.expectedSourcePath, freshness.SourcePath)
 			}
 		})
+	}
+}
+
+func TestResolveBatchBedrockRegionalSonnet46ResolvesWhenCatalogHasExactModel(t *testing.T) {
+	now := time.Now().UTC()
+	store := NewMemoryStore()
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	_, err := store.UpsertCards(context.Background(), SourceOpenRouter, now, []Card{
+		{
+			ModelKey:      "openrouter:anthropic/claude-sonnet-4.6",
+			Source:        SourceOpenRouter,
+			SourceModelID: "anthropic/claude-sonnet-4.6",
+			Name:          "Claude Sonnet 4.6",
+			Provider:      "anthropic",
+		},
+	})
+	if err != nil {
+		t.Fatalf("seed cards: %v", err)
+	}
+
+	svc := NewService(store, NewStaticErrorSource(errors.New("disabled")), nil, Config{
+		SyncInterval:  30 * time.Minute,
+		LeaseTTL:      2 * time.Minute,
+		SourceTimeout: 2 * time.Second,
+		StaleSoft:     2 * time.Hour,
+		StaleHard:     24 * time.Hour,
+		BootstrapMode: BootstrapModeDBOnly,
+		OwnerID:       "owner-a",
+	}, nil)
+
+	results, freshness, err := svc.ResolveBatch(context.Background(), []ResolveInput{{
+		Provider: "bedrock",
+		Model:    "us.anthropic.claude-sonnet-4-6",
+	}})
+	if err != nil {
+		t.Fatalf("resolve batch: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected one result, got %d", len(results))
+	}
+	got := results[0]
+	if got.Status != ResolveStatusResolved {
+		t.Fatalf("expected resolved status, got %q", got.Status)
+	}
+	if got.MatchStrategy != ResolveMatchStrategyExact {
+		t.Fatalf("expected exact match strategy, got %q", got.MatchStrategy)
+	}
+	if got.Card == nil {
+		t.Fatalf("expected resolved card")
+	}
+	if got.Card.ModelKey != "openrouter:anthropic/claude-sonnet-4.6" {
+		t.Fatalf("expected model key %q, got %q", "openrouter:anthropic/claude-sonnet-4.6", got.Card.ModelKey)
+	}
+	if got.Card.SourceModelID != "anthropic/claude-sonnet-4.6" {
+		t.Fatalf("expected source model id %q, got %q", "anthropic/claude-sonnet-4.6", got.Card.SourceModelID)
+	}
+	if freshness.SourcePath != SourcePathMemoryLive {
+		t.Fatalf("expected freshness source path %q, got %q", SourcePathMemoryLive, freshness.SourcePath)
 	}
 }
 

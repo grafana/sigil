@@ -1028,6 +1028,22 @@
       "source": "bedrock_docs_2026_02_17",
       "category": "cloud_variant",
       "provider": "bedrock",
+      "model": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "expectation_tier": "should_resolve",
+      "note": "Bedrock regional profile identifier form from AWS docs"
+    },
+    {
+      "source": "bedrock_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "bedrock",
+      "model": "us.anthropic.claude-sonnet-4-6",
+      "expectation_tier": "exploratory",
+      "note": "Bedrock regional profile identifier form from AWS docs"
+    },
+    {
+      "source": "bedrock_docs_2026_02_17",
+      "category": "cloud_variant",
+      "provider": "bedrock",
       "model": "anthropic.claude-opus-4-1-20250805-v1:0",
       "expectation_tier": "should_resolve",
       "note": "Bedrock model identifier form from AWS docs"

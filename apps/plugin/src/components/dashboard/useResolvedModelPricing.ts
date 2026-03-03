@@ -8,9 +8,28 @@ const RESOLVE_BATCH_SIZE = 50;
 type ResolvedModelPricingResult = {
   pricingMap: PricingMap;
   unresolved: ModelCardResolveItem[];
+  mapped: Array<{
+    provider: string;
+    model: string;
+    sourceModelID: string;
+    targetProvider: string;
+    matchStrategy: 'exact' | 'normalized' | undefined;
+  }>;
   loading: boolean;
   error: string;
 };
+
+function providerFromSourceModelID(sourceModelID: string): string {
+  const trimmed = sourceModelID.trim().toLowerCase();
+  if (!trimmed) {
+    return '';
+  }
+  const slash = trimmed.indexOf('/');
+  if (slash <= 0) {
+    return '';
+  }
+  return trimmed.slice(0, slash);
+}
 
 export function useResolvedModelPricing(
   dataSource: DashboardDataSource,
@@ -37,6 +56,7 @@ export function useResolvedModelPricing(
 
   const [pricingMap, setPricingMap] = useState<PricingMap>(new Map());
   const [unresolved, setUnresolved] = useState<ModelCardResolveItem[]>([]);
+  const [mapped, setMapped] = useState<ResolvedModelPricingResult['mapped']>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -44,6 +64,7 @@ export function useResolvedModelPricing(
     if (dedupedPairs.length === 0) {
       setPricingMap(new Map());
       setUnresolved([]);
+      setMapped([]);
       setLoading(false);
       setError('');
       return;
@@ -56,6 +77,7 @@ export function useResolvedModelPricing(
 
       const nextPricingMap: PricingMap = new Map();
       const nextUnresolved: ModelCardResolveItem[] = [];
+      const nextMapped = new Map<string, ResolvedModelPricingResult['mapped'][number]>();
 
       try {
         for (let i = 0; i < dedupedPairs.length; i += RESOLVE_BATCH_SIZE) {
@@ -64,6 +86,18 @@ export function useResolvedModelPricing(
           for (const item of response.resolved ?? []) {
             if (item.status === 'resolved' && item.card) {
               nextPricingMap.set(pricingKey(item.provider, item.model), item.card.pricing);
+              const sourceProvider = item.provider.trim().toLowerCase();
+              const targetProvider = providerFromSourceModelID(item.card.source_model_id);
+              if (sourceProvider && targetProvider && sourceProvider !== targetProvider) {
+                const mappingKey = `${sourceProvider}::${item.model.trim()}::${item.card.source_model_id.trim()}`;
+                nextMapped.set(mappingKey, {
+                  provider: item.provider,
+                  model: item.model,
+                  sourceModelID: item.card.source_model_id,
+                  targetProvider,
+                  matchStrategy: item.match_strategy,
+                });
+              }
               continue;
             }
             nextUnresolved.push(item);
@@ -75,12 +109,14 @@ export function useResolvedModelPricing(
         }
         setPricingMap(nextPricingMap);
         setUnresolved(nextUnresolved);
+        setMapped(Array.from(nextMapped.values()));
       } catch (err) {
         if (cancelled) {
           return;
         }
         setPricingMap(new Map());
         setUnresolved([]);
+        setMapped([]);
         setError(err instanceof Error ? err.message : 'Failed to resolve model pricing');
       } finally {
         if (!cancelled) {
@@ -96,5 +132,5 @@ export function useResolvedModelPricing(
     };
   }, [dataSource, dedupedPairs]);
 
-  return { pricingMap, unresolved, loading, error };
+  return { pricingMap, unresolved, mapped, loading, error };
 }
