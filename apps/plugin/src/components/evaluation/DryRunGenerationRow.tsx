@@ -12,10 +12,11 @@ const TRUNCATE_LEN = 24;
 const PREVIEW_LEN = 80;
 
 function truncate(s: string, max: number): string {
-  if (s.length <= max) {
+  const chars = Array.from(s);
+  if (chars.length <= max) {
     return s;
   }
-  return `${s.slice(0, max)}…`;
+  return `${chars.slice(0, max).join('')}…`;
 }
 
 function formatDate(iso: string): string {

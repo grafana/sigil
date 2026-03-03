@@ -26,6 +26,7 @@ export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel, data
   }, [dataSource]);
 
   useEffect(() => {
+    setModel('');
     if (provider == null || provider === '') {
       setModelOptions([]);
       return;
