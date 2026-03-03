@@ -656,15 +656,26 @@ func (s *WALStore) ListConversationEvalSummaries(ctx context.Context, tenantID s
 		FailCount      int
 	}
 
+	// Deduplicate to the latest score per (generation_id, score_key) before
+	// aggregating. Without this, re-evaluations inflate counts and can show
+	// both a pass and a fail for the same evaluation — inconsistent with the
+	// latest_scores returned by GetLatestScoresByConversation.
 	var rows []summaryRow
-	if err := s.db.WithContext(ctx).
-		Model(&GenerationScoreModel{}).
-		Select("conversation_id, COUNT(*) AS total_scores, "+
+	if err := s.db.WithContext(ctx).Raw(
+		"SELECT conversation_id, "+
+			"COUNT(*) AS total_scores, "+
 			"SUM(CASE WHEN passed = true THEN 1 ELSE 0 END) AS pass_count, "+
-			"SUM(CASE WHEN passed = false THEN 1 ELSE 0 END) AS fail_count").
-		Where("tenant_id = ? AND conversation_id IN ?", tenantID, normalizedIDs).
-		Group("conversation_id").
-		Scan(&rows).Error; err != nil {
+			"SUM(CASE WHEN passed = false THEN 1 ELSE 0 END) AS fail_count "+
+			"FROM ( "+
+			"  SELECT conversation_id, passed, "+
+			"    ROW_NUMBER() OVER (PARTITION BY conversation_id, generation_id, score_key ORDER BY created_at DESC, id DESC) AS rn "+
+			"  FROM generation_scores "+
+			"  WHERE tenant_id = ? AND conversation_id IN ? "+
+			") AS latest "+
+			"WHERE rn = 1 "+
+			"GROUP BY conversation_id",
+		tenantID, normalizedIDs,
+	).Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("list conversation eval summaries: %w", err)
 	}
 
