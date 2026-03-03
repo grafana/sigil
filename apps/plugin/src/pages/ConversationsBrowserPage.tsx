@@ -143,6 +143,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     label: 'conversationsBrowserPage-summarySection',
     borderBottom: `1px solid ${theme.colors.border.weak}`,
     background: theme.colors.background.primary,
+    padding: theme.spacing(0, 2, 0),
     boxShadow: 'inset 0 8px 8px -8px rgba(0, 0, 0, 0.22)',
     flex: '0 0 auto',
   }),
@@ -151,6 +152,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     justifyContent: 'flex-end',
     margin: theme.spacing(0.5, 0, 0, 0),
+    width: '100%',
     padding: theme.spacing(1, 0),
     boxShadow: 'inset 0 10px 10px -10px rgba(0, 0, 0, 0.3)',
   }),
@@ -158,6 +160,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     label: 'conversationsBrowserPage-statsGrid',
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+    width: '100%',
     gap: 0,
   }),
   statTile: css({
