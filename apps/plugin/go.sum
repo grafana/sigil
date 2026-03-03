@@ -70,8 +70,8 @@ github.com/gopherjs/gopherjs v0.0.0-20181103185306-d547d1d9531e h1:JKmoR8x90Iww1
 github.com/gopherjs/gopherjs v0.0.0-20181103185306-d547d1d9531e/go.mod h1:wJfORRmW1u3UXTncJ5qlYoELFm8eSnnEO6hX4iZ3EWY=
 github.com/grafana/authlib v0.0.0-20260226130908-b01d89f85c4d h1:9cE/YVzudTOdWRf+nv1LFSOnEMl4tM+aTp+juBd0eU8=
 github.com/grafana/authlib v0.0.0-20260226130908-b01d89f85c4d/go.mod h1:TZHiNIUlZa3p1ElRPnSQaHK1fIm/nPdJvlvdWqThggU=
-github.com/grafana/authlib/types v0.0.0-20251203163023-dd5a97c606e3 h1:T4AMrL8ZB1U25m/+FOmkqWPnz0X7u/Oqj1ISg4OrS2c=
-github.com/grafana/authlib/types v0.0.0-20251203163023-dd5a97c606e3/go.mod h1:CZ5McGzO/q6lnRb8xvTODCC2bJniQoQ+gho0AVZC/zY=
+github.com/grafana/authlib/types v0.0.0-20260206084955-bcd399ec8b53 h1:Wj+rGWlcM+VwJHjrEVLBaUNGrlm8SZ084vOlcyJ1gNk=
+github.com/grafana/authlib/types v0.0.0-20260206084955-bcd399ec8b53/go.mod h1:j+YTXmAcD4zCNyl4QSNqYSEe/q9KgrH1btodnhK29hI=
 github.com/grafana/dskit v0.0.0-20260228091820-49ab18c8ab1e h1:3ZOzp9j5vafkXRxx9WZ3WdRVpoAu/gTgciXCRhjASaI=
 github.com/grafana/dskit v0.0.0-20260228091820-49ab18c8ab1e/go.mod h1:gRbVlfiQhg7U9B1RYXY7wWqn1q0APPvyVtXNGDQPKKc=
 github.com/grafana/grafana-plugin-sdk-go v0.290.0 h1:yTzMqqZSfH+sACXdHmypJgyTgRXcaa7z4SpaTl3UuRI=

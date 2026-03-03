@@ -10,7 +10,7 @@ require (
 require (
 	github.com/go-jose/go-jose/v4 v4.1.3 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
-	github.com/grafana/authlib/types v0.0.0-20251203163023-dd5a97c606e3 // indirect
+	github.com/grafana/authlib/types v0.0.0-20260206084955-bcd399ec8b53 // indirect
 	github.com/grafana/dskit v0.0.0-20260228091820-49ab18c8ab1e // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260209200024-4cfbd4190f57 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260209200024-4cfbd4190f57 // indirect
