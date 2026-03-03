@@ -656,7 +656,6 @@ func (a *App) handleSearchConversations(w http.ResponseWriter, req *http.Request
 	var payload conversationSearchRequest
 	if req.Body != nil {
 		decoder := json.NewDecoder(req.Body)
-		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
 			http.Error(w, "invalid request body", http.StatusBadRequest)
 			return
@@ -1124,7 +1123,12 @@ func (a *App) doSigilRequest(
 		upstream += "?" + encodedQuery
 	}
 
-	proxyReq, err := http.NewRequestWithContext(req.Context(), method, upstream, bytes.NewReader(body))
+	var bodyReader io.Reader
+	if body != nil {
+		bodyReader = bytes.NewReader(body)
+	}
+
+	proxyReq, err := http.NewRequestWithContext(req.Context(), method, upstream, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("build sigil request: %w", err)
 	}
@@ -1153,7 +1157,12 @@ func (a *App) doGrafanaRequest(
 		upstream += "?" + encodedQuery
 	}
 
-	proxyReq, err := http.NewRequestWithContext(req.Context(), method, upstream, bytes.NewReader(body))
+	var bodyReader io.Reader
+	if body != nil {
+		bodyReader = bytes.NewReader(body)
+	}
+
+	proxyReq, err := http.NewRequestWithContext(req.Context(), method, upstream, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("build grafana request: %w", err)
 	}
