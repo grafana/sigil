@@ -938,9 +938,6 @@ func (a *App) searchConversations(req *http.Request, payload conversationSearchR
 		}
 	}
 
-	if results == nil {
-		results = []conversationSearchResult{}
-	}
 	return conversationSearchResponse{
 		Conversations: results,
 		NextCursor:    nextCursor,

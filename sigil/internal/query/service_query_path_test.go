@@ -923,6 +923,12 @@ func TestListConversationBatchMetadataForTenant(t *testing.T) {
 	if item.RatingSummary == nil || !item.RatingSummary.HasBadRating {
 		t.Fatalf("expected bad rating summary, got %#v", item.RatingSummary)
 	}
+	if conversationStore.getConversationsCalls != 1 {
+		t.Fatalf("expected one batch conversation lookup, got %d", conversationStore.getConversationsCalls)
+	}
+	if conversationStore.getConversationCalls != 0 {
+		t.Fatalf("expected no per-id conversation lookups, got %d", conversationStore.getConversationCalls)
+	}
 }
 
 type stubTempoClient struct {
@@ -963,7 +969,9 @@ func (s *stubTempoClient) SearchTagValues(_ context.Context, _ string, tag strin
 }
 
 type stubConversationStore struct {
-	items map[string]storage.Conversation
+	items                 map[string]storage.Conversation
+	getConversationCalls  int
+	getConversationsCalls int
 }
 
 func (s *stubConversationStore) ListConversations(_ context.Context, tenantID string) ([]storage.Conversation, error) {
@@ -978,6 +986,7 @@ func (s *stubConversationStore) ListConversations(_ context.Context, tenantID st
 }
 
 func (s *stubConversationStore) GetConversation(_ context.Context, tenantID, conversationID string) (*storage.Conversation, error) {
+	s.getConversationCalls++
 	item, ok := s.items[conversationID]
 	if !ok {
 		return nil, nil
@@ -987,6 +996,19 @@ func (s *stubConversationStore) GetConversation(_ context.Context, tenantID, con
 	}
 	copy := item
 	return &copy, nil
+}
+
+func (s *stubConversationStore) GetConversations(_ context.Context, tenantID string, conversationIDs []string) ([]storage.Conversation, error) {
+	s.getConversationsCalls++
+	out := make([]storage.Conversation, 0, len(conversationIDs))
+	for _, id := range conversationIDs {
+		item, ok := s.items[id]
+		if !ok || item.TenantID != tenantID {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out, nil
 }
 
 type stubWALReader struct {

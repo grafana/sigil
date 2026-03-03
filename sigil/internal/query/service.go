@@ -135,6 +135,10 @@ type evalSummaryStore interface {
 	ListConversationEvalSummaries(ctx context.Context, tenantID string, conversationIDs []string) (map[string]evalpkg.ConversationEvalSummary, error)
 }
 
+type batchConversationStore interface {
+	GetConversations(ctx context.Context, tenantID string, conversationIDs []string) ([]storage.Conversation, error)
+}
+
 type filteredConversationStore interface {
 	ListConversationsWithFeedbackFilters(ctx context.Context, tenantID string, hasBadRating, hasAnnotations *bool) ([]storage.Conversation, error)
 }
@@ -930,16 +934,31 @@ func (s *Service) ListConversationBatchMetadataForTenant(
 
 	rowsByID := make(map[string]storage.Conversation, len(ids))
 	missing := make([]string, 0)
-	for _, conversationID := range ids {
-		row, err := s.conversationStore.GetConversation(ctx, trimmedTenantID, conversationID)
+	if batchStore, ok := s.conversationStore.(batchConversationStore); ok {
+		rows, err := batchStore.GetConversations(ctx, trimmedTenantID, ids)
 		if err != nil {
 			return nil, nil, err
 		}
-		if row == nil {
-			missing = append(missing, conversationID)
-			continue
+		for _, row := range rows {
+			rowsByID[row.ConversationID] = row
 		}
-		rowsByID[conversationID] = *row
+		for _, conversationID := range ids {
+			if _, ok := rowsByID[conversationID]; !ok {
+				missing = append(missing, conversationID)
+			}
+		}
+	} else {
+		for _, conversationID := range ids {
+			row, err := s.conversationStore.GetConversation(ctx, trimmedTenantID, conversationID)
+			if err != nil {
+				return nil, nil, err
+			}
+			if row == nil {
+				missing = append(missing, conversationID)
+				continue
+			}
+			rowsByID[conversationID] = *row
+		}
 	}
 
 	ratingSummaries := make(map[string]feedback.ConversationRatingSummary)
