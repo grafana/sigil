@@ -3,17 +3,17 @@ module github.com/grafana/sigil/apps/plugin
 go 1.25.7
 
 require (
-	github.com/grafana/authlib v0.0.0-20251208153936-bf396ef182dd
+	github.com/grafana/authlib v0.0.0-20260226130908-b01d89f85c4d
 	github.com/grafana/grafana-plugin-sdk-go v0.290.0
 )
 
 require (
 	github.com/go-jose/go-jose/v4 v4.1.3 // indirect
-	github.com/google/go-querystring v1.1.0 // indirect
-	github.com/grafana/authlib/types v0.0.0-20251203163023-dd5a97c606e3 // indirect
+	github.com/google/go-querystring v1.2.0 // indirect
+	github.com/grafana/authlib/types v0.0.0-20260206084955-bcd399ec8b53 // indirect
 	github.com/grafana/dskit v0.0.0-20260228091820-49ab18c8ab1e // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20260128011058-8636f8732409 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260128011058-8636f8732409 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20260209200024-4cfbd4190f57 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260209200024-4cfbd4190f57 // indirect
 )
 
 require (
@@ -42,7 +42,7 @@ require (
 	github.com/grafana/sigil/sigil v0.0.0
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.3 // indirect
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.7 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.8 // indirect
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
 	github.com/hashicorp/go-plugin v1.7.0 // indirect
 	github.com/hashicorp/yamux v0.1.2 // indirect
