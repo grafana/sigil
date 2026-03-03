@@ -3,7 +3,7 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Alert, useStyles2 } from '@grafana/ui';
 import { useSearchParams } from 'react-router-dom';
-import type { ConversationDetail, GenerationDetail } from '../conversation/types';
+import type { ConversationDetail, GenerationDetail } from '../../conversation/types';
 import { getGradientColorAtIndex } from './traceGradient';
 
 const TRACE_ROW_STEP_PX = 14;

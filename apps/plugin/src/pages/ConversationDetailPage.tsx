@@ -9,7 +9,7 @@ import ConversationTraces, {
   buildTraceSpans,
   layoutSpans,
   type TraceTimeline,
-} from '../components/conversation/ConversationTraces';
+} from '../components/conversations/ConversationTraces';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
 import type { ConversationDetail } from '../conversation/types';
 
