@@ -92,7 +92,7 @@ export default function ForkTemplateForm({ templateID, onSubmit, onCancel, dataS
           }}
           isClearable
           placeholder="Keep template default"
-          width={24}
+          width={30}
         />
       </Field>
       <Field label="Model override" description="Optional. Override the model for llm_judge templates.">

@@ -6,8 +6,13 @@ const OPERATION_DURATION = 'gen_ai_client_operation_duration_seconds';
 const TIME_TO_FIRST_TOKEN = 'gen_ai_client_time_to_first_token_seconds';
 const PROMETHEUS_LABEL_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
+/**
+ * Escapes special regex characters for use in Prometheus label matchers.
+ * Uses [.] for literal dots because RE2 (used by Prometheus) rejects \. as
+ * "unknown escape sequence"; other metacharacters are escaped with backslash.
+ */
 function escapePrometheusRegex(value: string): string {
-  return value.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
+  return value.replace(/[\\^$.*+?()[\]{}|]/g, (c) => (c === '.' ? '[.]' : `\\${c}`));
 }
 
 function fuzzyMatcher(label: string, value: string): string {
