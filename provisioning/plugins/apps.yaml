@@ -9,6 +9,8 @@ apps:
       sigilApiUrl: http://sigil:8080
       prometheusDatasourceUID: prometheus
       tempoDatasourceUID: tempo
+    secureJsonData:
+      sigilApiAuthToken: $SIGIL_API_AUTH_TOKEN
     allowServiceAccountAccess: true
   - type: 'grafana-assistant-app'
     org_id: 1

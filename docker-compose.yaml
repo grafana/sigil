@@ -25,6 +25,7 @@ services:
       GF_SERVER_ROOT_URL: http://grafana:3000
       GF_AUTH_MANAGED_SERVICE_ACCOUNTS_ENABLED: "true"
       GF_FEATURE_TOGGLES_ENABLE: extensionSidebar,externalServiceAccounts,grafanaAssistantLoop,accessControlOnCall,assistantStreaming,dashboardNewLayouts,collectorApp,k8sAlloyInstructions,fleetManagement,instrumentationHub,k8sAlloyHelmInstructions,otelSupport,alertEnrichment,alertingEnrichmentAssistantInvestigations,alertingEnrichmentPerRule,grafanaAPIServer,kubeAPIServer,assistantPlaybooks,infinityAssistantTools,assistantTunnel,investigationMemorySearch,restrictedPluginApis,dashboardTemplates,suggestedDashboards,dashboardLibrary
+      SIGIL_API_AUTH_TOKEN: ${SIGIL_API_AUTH_TOKEN:-}
       GRAFANA_ASSISTANT_ACCESS_TOKEN: ${GRAFANA_ASSISTANT_ACCESS_TOKEN}
       OPS_READ_KEY: ${OPS_READ_KEY}
       TEMPO_DEV_01_READ_KEY: ${TEMPO_DEV_01_READ_KEY}
