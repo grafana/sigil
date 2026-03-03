@@ -1174,3 +1174,7 @@ func (s *testScoreStore) GetLatestScoresByGeneration(_ context.Context, _ string
 	}
 	return out, nil
 }
+
+func (s *testScoreStore) GetLatestScoresByConversation(_ context.Context, _ string, _ string) (map[string]map[string]evalpkg.LatestScore, error) {
+	return map[string]map[string]evalpkg.LatestScore{}, nil
+}

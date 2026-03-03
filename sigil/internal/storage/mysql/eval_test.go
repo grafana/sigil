@@ -792,6 +792,294 @@ func TestEvalEnqueueEventFailDoesNotOverrideReleasedClaim(t *testing.T) {
 	}
 }
 
+func TestEvalStoreGetLatestScoresByConversation(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	base := time.Date(2026, 3, 2, 10, 0, 0, 0, time.UTC)
+	convID := "conv-scores"
+
+	// Insert scores across two generations in the same conversation.
+	// gen-1: helpfulness scored twice (should keep latest), response_not_empty once.
+	// gen-2: helpfulness scored once.
+	scores := []evalpkg.GenerationScore{
+		{
+			TenantID:         "tenant-a",
+			ScoreID:          "sc-conv-1",
+			GenerationID:     "gen-1",
+			ConversationID:   convID,
+			EvaluatorID:      "sigil.helpfulness",
+			EvaluatorVersion: "2026-02-17",
+			RuleID:           "online.helpfulness",
+			ScoreKey:         "helpfulness",
+			ScoreType:        evalpkg.ScoreTypeNumber,
+			Value:            evalpkg.NumberValue(0.5),
+			CreatedAt:        base,
+		},
+		{
+			TenantID:         "tenant-a",
+			ScoreID:          "sc-conv-2",
+			GenerationID:     "gen-1",
+			ConversationID:   convID,
+			EvaluatorID:      "sigil.helpfulness",
+			EvaluatorVersion: "2026-02-17",
+			RuleID:           "online.helpfulness",
+			ScoreKey:         "helpfulness",
+			ScoreType:        evalpkg.ScoreTypeNumber,
+			Value:            evalpkg.NumberValue(0.9),
+			CreatedAt:        base.Add(time.Second),
+		},
+		{
+			TenantID:         "tenant-a",
+			ScoreID:          "sc-conv-3",
+			GenerationID:     "gen-1",
+			ConversationID:   convID,
+			EvaluatorID:      "sigil.response_not_empty",
+			EvaluatorVersion: "2026-02-17",
+			RuleID:           "online.response_not_empty",
+			ScoreKey:         "response_not_empty",
+			ScoreType:        evalpkg.ScoreTypeBool,
+			Value:            evalpkg.BoolValue(true),
+			CreatedAt:        base.Add(2 * time.Second),
+		},
+		{
+			TenantID:         "tenant-a",
+			ScoreID:          "sc-conv-4",
+			GenerationID:     "gen-2",
+			ConversationID:   convID,
+			EvaluatorID:      "sigil.helpfulness",
+			EvaluatorVersion: "2026-02-17",
+			RuleID:           "online.helpfulness",
+			ScoreKey:         "helpfulness",
+			ScoreType:        evalpkg.ScoreTypeNumber,
+			Value:            evalpkg.NumberValue(0.7),
+			CreatedAt:        base.Add(3 * time.Second),
+		},
+	}
+
+	inserted, err := store.InsertScoreBatch(context.Background(), scores)
+	if err != nil {
+		t.Fatalf("insert score batch: %v", err)
+	}
+	if inserted != 4 {
+		t.Fatalf("expected 4 inserted scores, got %d", inserted)
+	}
+
+	result, err := store.GetLatestScoresByConversation(context.Background(), "tenant-a", convID)
+	if err != nil {
+		t.Fatalf("get latest scores by conversation: %v", err)
+	}
+
+	// gen-1 should have 2 keys: helpfulness (latest=0.9) and response_not_empty (true)
+	gen1Scores, ok := result["gen-1"]
+	if !ok {
+		t.Fatalf("expected gen-1 in results")
+	}
+	if len(gen1Scores) != 2 {
+		t.Fatalf("expected 2 score keys for gen-1, got %d", len(gen1Scores))
+	}
+	helpfulness := gen1Scores["helpfulness"]
+	if helpfulness.Value.Number == nil || *helpfulness.Value.Number != 0.9 {
+		t.Fatalf("expected latest helpfulness=0.9 for gen-1, got %#v", helpfulness.Value)
+	}
+	notEmpty := gen1Scores["response_not_empty"]
+	if notEmpty.Value.Bool == nil || !*notEmpty.Value.Bool {
+		t.Fatalf("expected response_not_empty=true for gen-1, got %#v", notEmpty.Value)
+	}
+
+	// gen-2 should have 1 key: helpfulness (0.7)
+	gen2Scores, ok := result["gen-2"]
+	if !ok {
+		t.Fatalf("expected gen-2 in results")
+	}
+	if len(gen2Scores) != 1 {
+		t.Fatalf("expected 1 score key for gen-2, got %d", len(gen2Scores))
+	}
+	if gen2Scores["helpfulness"].Value.Number == nil || *gen2Scores["helpfulness"].Value.Number != 0.7 {
+		t.Fatalf("expected helpfulness=0.7 for gen-2, got %#v", gen2Scores["helpfulness"].Value)
+	}
+
+	// Empty conversation should return empty map
+	empty, err := store.GetLatestScoresByConversation(context.Background(), "tenant-a", "conv-nonexistent")
+	if err != nil {
+		t.Fatalf("get latest scores for nonexistent conversation: %v", err)
+	}
+	if len(empty) != 0 {
+		t.Fatalf("expected empty map for nonexistent conversation, got %d", len(empty))
+	}
+
+	// Different tenant should return empty map (tenant isolation)
+	isolated, err := store.GetLatestScoresByConversation(context.Background(), "tenant-b", convID)
+	if err != nil {
+		t.Fatalf("get latest scores for different tenant: %v", err)
+	}
+	if len(isolated) != 0 {
+		t.Fatalf("expected empty map for different tenant, got %d", len(isolated))
+	}
+
+	// Validation: empty tenant
+	_, err = store.GetLatestScoresByConversation(context.Background(), "", convID)
+	if err == nil {
+		t.Fatalf("expected error for empty tenant id")
+	}
+
+	// Validation: empty conversation
+	_, err = store.GetLatestScoresByConversation(context.Background(), "tenant-a", "")
+	if err == nil {
+		t.Fatalf("expected error for empty conversation id")
+	}
+}
+
+func TestEvalStoreListConversationEvalSummaries(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	base := time.Date(2026, 3, 2, 11, 0, 0, 0, time.UTC)
+	passed := true
+	failed := false
+
+	scores := []evalpkg.GenerationScore{
+		// conv-1: 3 scores — 2 passed, 1 failed
+		{TenantID: "tenant-a", ScoreID: "sc-s1", GenerationID: "gen-1", ConversationID: "conv-1", EvaluatorID: "eval-1", EvaluatorVersion: "v1", ScoreKey: "helpfulness", ScoreType: evalpkg.ScoreTypeNumber, Value: evalpkg.NumberValue(0.9), Passed: &passed, CreatedAt: base},
+		{TenantID: "tenant-a", ScoreID: "sc-s2", GenerationID: "gen-1", ConversationID: "conv-1", EvaluatorID: "eval-2", EvaluatorVersion: "v1", ScoreKey: "toxicity", ScoreType: evalpkg.ScoreTypeBool, Value: evalpkg.BoolValue(false), Passed: &passed, CreatedAt: base.Add(time.Second)},
+		{TenantID: "tenant-a", ScoreID: "sc-s3", GenerationID: "gen-2", ConversationID: "conv-1", EvaluatorID: "eval-1", EvaluatorVersion: "v1", ScoreKey: "helpfulness", ScoreType: evalpkg.ScoreTypeNumber, Value: evalpkg.NumberValue(0.2), Passed: &failed, CreatedAt: base.Add(2 * time.Second)},
+		// conv-2: 1 score — no passed field (nil)
+		{TenantID: "tenant-a", ScoreID: "sc-s4", GenerationID: "gen-3", ConversationID: "conv-2", EvaluatorID: "eval-1", EvaluatorVersion: "v1", ScoreKey: "helpfulness", ScoreType: evalpkg.ScoreTypeNumber, Value: evalpkg.NumberValue(0.5), CreatedAt: base.Add(3 * time.Second)},
+	}
+
+	inserted, err := store.InsertScoreBatch(context.Background(), scores)
+	if err != nil {
+		t.Fatalf("insert score batch: %v", err)
+	}
+	if inserted != 4 {
+		t.Fatalf("expected 4 inserted scores, got %d", inserted)
+	}
+
+	// Query both conversations
+	summaries, err := store.ListConversationEvalSummaries(context.Background(), "tenant-a", []string{"conv-1", "conv-2", "conv-nonexistent"})
+	if err != nil {
+		t.Fatalf("list conversation eval summaries: %v", err)
+	}
+
+	// conv-1: total=3, pass=2, fail=1
+	conv1, ok := summaries["conv-1"]
+	if !ok {
+		t.Fatalf("expected conv-1 in summaries")
+	}
+	if conv1.TotalScores != 3 {
+		t.Errorf("expected conv-1 total_scores=3, got %d", conv1.TotalScores)
+	}
+	if conv1.PassCount != 2 {
+		t.Errorf("expected conv-1 pass_count=2, got %d", conv1.PassCount)
+	}
+	if conv1.FailCount != 1 {
+		t.Errorf("expected conv-1 fail_count=1, got %d", conv1.FailCount)
+	}
+
+	// conv-2: total=1, pass=0, fail=0 (passed is nil)
+	conv2, ok := summaries["conv-2"]
+	if !ok {
+		t.Fatalf("expected conv-2 in summaries")
+	}
+	if conv2.TotalScores != 1 {
+		t.Errorf("expected conv-2 total_scores=1, got %d", conv2.TotalScores)
+	}
+	if conv2.PassCount != 0 {
+		t.Errorf("expected conv-2 pass_count=0, got %d", conv2.PassCount)
+	}
+	if conv2.FailCount != 0 {
+		t.Errorf("expected conv-2 fail_count=0, got %d", conv2.FailCount)
+	}
+
+	// conv-nonexistent should not appear
+	if _, ok := summaries["conv-nonexistent"]; ok {
+		t.Errorf("expected conv-nonexistent to be absent from summaries")
+	}
+
+	// Empty conversation list should return empty map
+	empty, err := store.ListConversationEvalSummaries(context.Background(), "tenant-a", []string{})
+	if err != nil {
+		t.Fatalf("list with empty ids: %v", err)
+	}
+	if len(empty) != 0 {
+		t.Fatalf("expected empty map for empty ids, got %d", len(empty))
+	}
+
+	// Nil conversation list should return empty map
+	nilResult, err := store.ListConversationEvalSummaries(context.Background(), "tenant-a", nil)
+	if err != nil {
+		t.Fatalf("list with nil ids: %v", err)
+	}
+	if len(nilResult) != 0 {
+		t.Fatalf("expected empty map for nil ids, got %d", len(nilResult))
+	}
+
+	// Different tenant should return empty map (tenant isolation)
+	isolated, err := store.ListConversationEvalSummaries(context.Background(), "tenant-b", []string{"conv-1"})
+	if err != nil {
+		t.Fatalf("list for different tenant: %v", err)
+	}
+	if len(isolated) != 0 {
+		t.Fatalf("expected empty map for different tenant, got %d", len(isolated))
+	}
+
+	// Re-evaluation: insert a newer score for the same (gen-1, helpfulness) with
+	// a different score_id and opposite passed value. The summary must not
+	// double-count — it should reflect only the latest score per
+	// (generation_id, score_key), consistent with GetLatestScoresByConversation.
+	reEvalScore := evalpkg.GenerationScore{
+		TenantID:         "tenant-a",
+		ScoreID:          "sc-s5-reeval",
+		GenerationID:     "gen-1",
+		ConversationID:   "conv-1",
+		EvaluatorID:      "eval-1",
+		EvaluatorVersion: "v2",
+		ScoreKey:         "helpfulness",
+		ScoreType:        evalpkg.ScoreTypeNumber,
+		Value:            evalpkg.NumberValue(0.3),
+		Passed:           &failed,
+		CreatedAt:        base.Add(10 * time.Second),
+	}
+	reInserted, err := store.InsertScore(context.Background(), reEvalScore)
+	if err != nil {
+		t.Fatalf("insert re-eval score: %v", err)
+	}
+	if !reInserted {
+		t.Fatalf("expected re-eval score to be inserted")
+	}
+
+	summariesAfterReeval, err := store.ListConversationEvalSummaries(context.Background(), "tenant-a", []string{"conv-1"})
+	if err != nil {
+		t.Fatalf("list summaries after re-eval: %v", err)
+	}
+	conv1AfterReeval := summariesAfterReeval["conv-1"]
+	// Before fix: total=4 (double-counted helpfulness), pass=2, fail=2
+	// After fix:  total=3 (deduplicated), pass=1 (toxicity), fail=2 (helpfulness re-eval + gen-2 helpfulness)
+	if conv1AfterReeval.TotalScores != 3 {
+		t.Errorf("expected conv-1 total_scores=3 after re-eval (deduplicated), got %d", conv1AfterReeval.TotalScores)
+	}
+	if conv1AfterReeval.PassCount != 1 {
+		t.Errorf("expected conv-1 pass_count=1 after re-eval, got %d", conv1AfterReeval.PassCount)
+	}
+	if conv1AfterReeval.FailCount != 2 {
+		t.Errorf("expected conv-1 fail_count=2 after re-eval, got %d", conv1AfterReeval.FailCount)
+	}
+
+	// Validation: empty tenant
+	_, err = store.ListConversationEvalSummaries(context.Background(), "", []string{"conv-1"})
+	if err == nil {
+		t.Fatalf("expected error for empty tenant id")
+	}
+}
+
 func TestEvalStoreEvaluatorLineage(t *testing.T) {
 	store, cleanup := newTestWALStore(t)
 	defer cleanup()

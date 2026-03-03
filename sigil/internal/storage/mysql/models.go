@@ -22,10 +22,10 @@ func (GenerationModel) TableName() string {
 
 type GenerationScoreModel struct {
 	ID               uint64  `gorm:"primaryKey;autoIncrement;index:idx_generation_scores_tenant_generation_time,priority:4;index:idx_generation_scores_tenant_rule_time,priority:4;index:idx_generation_scores_tenant_key_time,priority:3;index:idx_generation_scores_tenant_pass_time,priority:3"`
-	TenantID         string  `gorm:"size:128;not null;uniqueIndex:ux_generation_scores_tenant_score,priority:1;index:idx_generation_scores_tenant_generation_time,priority:1;index:idx_generation_scores_tenant_rule_time,priority:1;index:idx_generation_scores_tenant_key_time,priority:1;index:idx_generation_scores_tenant_pass_time,priority:1"`
+	TenantID         string  `gorm:"size:128;not null;uniqueIndex:ux_generation_scores_tenant_score,priority:1;index:idx_generation_scores_tenant_generation_time,priority:1;index:idx_generation_scores_tenant_rule_time,priority:1;index:idx_generation_scores_tenant_key_time,priority:1;index:idx_generation_scores_tenant_pass_time,priority:1;index:idx_generation_scores_tenant_conversation_time,priority:1"`
 	ScoreID          string  `gorm:"size:128;not null;uniqueIndex:ux_generation_scores_tenant_score,priority:2"`
 	GenerationID     string  `gorm:"size:255;not null;index:idx_generation_scores_tenant_generation_time,priority:2"`
-	ConversationID   *string `gorm:"size:255"`
+	ConversationID   *string `gorm:"size:255;index:idx_generation_scores_tenant_conversation_time,priority:2"`
 	TraceID          *string `gorm:"size:64"`
 	SpanID           *string `gorm:"size:16"`
 	EvaluatorID      string  `gorm:"size:255;not null"`
@@ -43,7 +43,7 @@ type GenerationScoreModel struct {
 	MetadataJSON     string    `gorm:"type:json;not null"`
 	SourceKind       *string   `gorm:"size:64"`
 	SourceID         *string   `gorm:"size:255"`
-	CreatedAt        time.Time `gorm:"type:datetime(6);not null;index:idx_generation_scores_tenant_generation_time,priority:3;index:idx_generation_scores_tenant_rule_time,priority:3;index:idx_generation_scores_tenant_key_time,priority:4;index:idx_generation_scores_tenant_pass_time,priority:4"`
+	CreatedAt        time.Time `gorm:"type:datetime(6);not null;index:idx_generation_scores_tenant_generation_time,priority:3;index:idx_generation_scores_tenant_rule_time,priority:3;index:idx_generation_scores_tenant_key_time,priority:4;index:idx_generation_scores_tenant_pass_time,priority:4;index:idx_generation_scores_tenant_conversation_time,priority:3"`
 	IngestedAt       time.Time `gorm:"type:datetime(6);not null;autoCreateTime"`
 }
 

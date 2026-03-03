@@ -61,6 +61,7 @@ type ConversationSearchResult struct {
 	TraceIDs          []string                            `json:"trace_ids"`
 	RatingSummary     *feedback.ConversationRatingSummary `json:"rating_summary,omitempty"`
 	AnnotationCount   int                                 `json:"annotation_count"`
+	EvalSummary       *evalpkg.ConversationEvalSummary    `json:"eval_summary,omitempty"`
 	Selected          map[string]any                      `json:"selected,omitempty"`
 }
 
@@ -114,6 +115,11 @@ type annotationEventStore interface {
 type scoreStore interface {
 	GetScoresByGeneration(ctx context.Context, tenantID, generationID string, limit int, cursor uint64) ([]evalpkg.GenerationScore, uint64, error)
 	GetLatestScoresByGeneration(ctx context.Context, tenantID, generationID string) (map[string]evalpkg.LatestScore, error)
+	GetLatestScoresByConversation(ctx context.Context, tenantID, conversationID string) (map[string]map[string]evalpkg.LatestScore, error)
+}
+
+type evalSummaryStore interface {
+	ListConversationEvalSummaries(ctx context.Context, tenantID string, conversationIDs []string) (map[string]evalpkg.ConversationEvalSummary, error)
 }
 
 type filteredConversationStore interface {
@@ -128,6 +134,7 @@ type ServiceDependencies struct {
 	FanOutStore         storage.GenerationFanOutReader
 	FeedbackStore       feedback.Store
 	ScoreStore          scoreStore
+	EvalSummaryStore    evalSummaryStore
 	TempoBaseURL        string
 	HTTPClient          *http.Client
 	OverfetchMultiplier int
@@ -142,6 +149,7 @@ type Service struct {
 	annotationSummaryStore annotationSummaryStore
 	annotationEventStore   annotationEventStore
 	scoreStore             scoreStore
+	evalSummaryStore       evalSummaryStore
 	tempoClient            TempoClient
 	nowFn                  func() time.Time
 	overfetchMultiplier    int
@@ -169,6 +177,9 @@ func NewServiceWithStores(conversationStore storage.ConversationStore, feedbackS
 	if store, ok := conversationStore.(scoreStore); ok {
 		service.scoreStore = store
 	}
+	if store, ok := conversationStore.(evalSummaryStore); ok {
+		service.evalSummaryStore = store
+	}
 	if metadataStore, ok := conversationStore.(storage.BlockMetadataStore); ok {
 		blockMetadataStore = metadataStore
 	}
@@ -190,12 +201,18 @@ func NewServiceWithDependencies(dependencies ServiceDependencies) (*Service, err
 		if store, ok := dependencies.WALReader.(scoreStore); ok {
 			service.scoreStore = store
 		}
+		if store, ok := dependencies.WALReader.(evalSummaryStore); ok {
+			service.evalSummaryStore = store
+		}
 	}
 	if dependencies.BlockMetadataStore != nil {
 		blockMetadataStore = dependencies.BlockMetadataStore
 	}
 	if dependencies.ScoreStore != nil {
 		service.scoreStore = dependencies.ScoreStore
+	}
+	if dependencies.EvalSummaryStore != nil {
+		service.evalSummaryStore = dependencies.EvalSummaryStore
 	}
 	if dependencies.FanOutStore != nil {
 		service.fanOutStore = dependencies.FanOutStore
@@ -519,7 +536,7 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 			"earliest_trace_start_unix_nano", grouped.EarliestTraceStartNanos,
 		)
 
-		metadataByConversation, ratingSummaries, annotationSummaries, err := s.loadConversationSearchMetadata(ctx, trimmedTenantID, orderedConversationIDs)
+		metadataByConversation, ratingSummaries, annotationSummaries, evalSummaries, err := s.loadConversationSearchMetadata(ctx, trimmedTenantID, orderedConversationIDs)
 		if err != nil {
 			return ConversationSearchResponse{}, err
 		}
@@ -577,6 +594,10 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 			if ratingSummary, ok := ratingSummaries[conversationID]; ok {
 				copied := ratingSummary
 				result.RatingSummary = &copied
+			}
+			if evalSummary, ok := evalSummaries[conversationID]; ok {
+				copied := evalSummary
+				result.EvalSummary = &copied
 			}
 			result.Selected = buildSelectedResultMap(aggregate.Selected)
 
@@ -717,6 +738,20 @@ func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, 
 			return ConversationDetail{}, false, err
 		}
 		generationPayloads = append(generationPayloads, payload)
+	}
+
+	if s.scoreStore != nil {
+		scoresByGen, err := s.scoreStore.GetLatestScoresByConversation(ctx, trimmedTenantID, trimmedConversationID)
+		if err != nil {
+			s.debugLog("conversation_scores_enrichment_failed", "tenant_id", trimmedTenantID, "conversation_id", trimmedConversationID, "err", err.Error())
+		} else {
+			for i, payload := range generationPayloads {
+				genID, _ := payload["generation_id"].(string)
+				if scores, ok := scoresByGen[genID]; ok {
+					generationPayloads[i]["latest_scores"] = latestScoresToResponse(scores)
+				}
+			}
+		}
 	}
 
 	annotations, err := s.listAllConversationAnnotations(ctx, trimmedTenantID, trimmedConversationID)
@@ -915,13 +950,13 @@ func (s *Service) loadConversationSearchMetadata(
 	ctx context.Context,
 	tenantID string,
 	conversationIDs []string,
-) (map[string]storage.Conversation, map[string]feedback.ConversationRatingSummary, map[string]feedback.ConversationAnnotationSummary, error) {
+) (map[string]storage.Conversation, map[string]feedback.ConversationRatingSummary, map[string]feedback.ConversationAnnotationSummary, map[string]evalpkg.ConversationEvalSummary, error) {
 	uniqueConversationIDs := dedupeAndSortStrings(conversationIDs)
 	metadata := make(map[string]storage.Conversation, len(uniqueConversationIDs))
 	for _, conversationID := range uniqueConversationIDs {
 		conversation, err := s.conversationStore.GetConversation(ctx, tenantID, conversationID)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 		if conversation == nil {
 			continue
@@ -937,7 +972,7 @@ func (s *Service) loadConversationSearchMetadata(
 		}
 		summaries, err := s.ratingSummaryStore.ListConversationRatingSummaries(ctx, tenantID, lookupIDs)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 		ratingSummaries = summaries
 	}
@@ -950,12 +985,25 @@ func (s *Service) loadConversationSearchMetadata(
 		}
 		summaries, err := s.annotationSummaryStore.ListConversationAnnotationSummaries(ctx, tenantID, lookupIDs)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 		annotationSummaries = summaries
 	}
 
-	return metadata, ratingSummaries, annotationSummaries, nil
+	evalSummaries := make(map[string]evalpkg.ConversationEvalSummary)
+	if s.evalSummaryStore != nil && len(metadata) > 0 {
+		lookupIDs := make([]string, 0, len(metadata))
+		for conversationID := range metadata {
+			lookupIDs = append(lookupIDs, conversationID)
+		}
+		summaries, err := s.evalSummaryStore.ListConversationEvalSummaries(ctx, tenantID, lookupIDs)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+		evalSummaries = summaries
+	}
+
+	return metadata, ratingSummaries, annotationSummaries, evalSummaries, nil
 }
 
 func (s *Service) listAllConversationAnnotations(ctx context.Context, tenantID, conversationID string) ([]feedback.ConversationAnnotation, error) {
