@@ -8,6 +8,9 @@ import GenerationItem from './GenerationItem';
 export type GenerationsListProps = {
   generations: GenerationDetail[];
   emptyMessage?: string;
+  alwaysShowMetadata?: boolean;
+  selectedTraceID?: string;
+  onSelectTrace?: (traceID: string) => void;
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -29,7 +32,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function GenerationsList({ generations, emptyMessage }: GenerationsListProps) {
+export default function GenerationsList({
+  generations,
+  emptyMessage,
+  alwaysShowMetadata = false,
+  selectedTraceID,
+  onSelectTrace,
+}: GenerationsListProps) {
   const styles = useStyles2(getStyles);
   const resolvedEmptyMessage = emptyMessage ?? 'No generations found for this conversation.';
 
@@ -40,7 +49,15 @@ export default function GenerationsList({ generations, emptyMessage }: Generatio
       ) : (
         <div className={styles.list}>
           {generations.map((generation, index) => (
-            <GenerationItem key={generation.generation_id} generation={generation} index={index} />
+            <GenerationItem
+              key={generation.generation_id}
+              generation={generation}
+              index={index}
+              total={generations.length}
+              alwaysShowMetadata={alwaysShowMetadata}
+              selectedTraceID={selectedTraceID}
+              onSelectTrace={onSelectTrace}
+            />
           ))}
         </div>
       )}

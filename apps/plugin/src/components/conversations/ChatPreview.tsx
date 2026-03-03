@@ -11,6 +11,7 @@ export type ChatPreviewProps = {
   input: GenerationDetail['input'];
   output: GenerationDetail['output'];
   compact?: boolean;
+  borderless?: boolean;
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -30,6 +31,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: theme.spacing(0.5),
     padding: theme.spacing(0.75),
     maxHeight: '220px',
+  }),
+  chatPanelBorderless: css({
+    label: 'chatPreview-chatPanelBorderless',
+    border: 'none',
+    borderRadius: 0,
+    background: 'transparent',
+    padding: 0,
   }),
   rawFallback: css({
     label: 'chatPreview-rawFallback',
@@ -53,7 +61,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function ChatPreview({ generationID, input, output, compact = false }: ChatPreviewProps) {
+export default function ChatPreview({ generationID, input, output, compact = false, borderless = false }: ChatPreviewProps) {
   const styles = useStyles2(getStyles);
   const inputMessages = parseMessages(input);
   const outputMessages = parseMessages(output);
@@ -61,7 +69,7 @@ export default function ChatPreview({ generationID, input, output, compact = fal
   const outputRaw = output != null ? JSON.stringify(output, null, 2) : '';
 
   return (
-    <div className={`${styles.chatPanel} ${compact ? styles.chatPanelCompact : ''}`}>
+    <div className={`${styles.chatPanel} ${compact ? styles.chatPanelCompact : ''} ${borderless ? styles.chatPanelBorderless : ''}`}>
       {inputMessages.length > 0 ? (
         inputMessages.map((message, messageIndex) => (
           <ChatMessage key={`${generationID}-input-${messageIndex}`} message={message} alignLeft />

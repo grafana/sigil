@@ -32,8 +32,8 @@ function splitCodeBlocks(text: string): CodeSegment[] {
 const getStyles = (theme: GrafanaTheme2) => ({
   userBubble: css({
     background: theme.colors.primary.transparent,
-    border: `1px solid ${theme.colors.primary.border}`,
-    borderRadius: '12px 12px 4px 12px',
+    border: 'none',
+    borderRadius: 0,
     padding: theme.spacing(1.5, 2),
     whiteSpace: 'pre-wrap' as const,
     wordBreak: 'break-word' as const,
@@ -44,7 +44,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   assistantBubble: css({
     background: theme.colors.background.secondary,
     border: `1px solid ${theme.colors.border.weak}`,
-    borderRadius: '4px 12px 12px 12px',
+    borderRadius: 0,
     padding: theme.spacing(1.5, 2),
     whiteSpace: 'pre-wrap' as const,
     wordBreak: 'break-word' as const,
@@ -55,7 +55,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   toolBubble: css({
     background: theme.colors.background.secondary,
     border: `1px solid ${theme.colors.border.weak}`,
-    borderRadius: '8px',
+    borderRadius: 0,
     padding: theme.spacing(1.5, 2),
     whiteSpace: 'pre-wrap' as const,
     wordBreak: 'break-word' as const,

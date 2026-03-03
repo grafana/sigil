@@ -86,7 +86,7 @@ type HoveredSpanAnchor = {
 };
 
 type TooltipStyle = React.CSSProperties & {
-  '--tooltip-border-color'?: string;
+  '--tooltip-marker-color'?: string;
 };
 
 type ConversationTracesProps = {
@@ -492,7 +492,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     maxWidth: `min(560px, calc(100% - ${theme.spacing(2)}))`,
     padding: theme.spacing(0.75, 1),
     borderRadius: theme.shape.radius.default,
-    border: `2px solid var(--tooltip-border-color, ${theme.colors.border.medium})`,
+    border: `1px solid ${theme.colors.border.medium}`,
     background: theme.colors.background.secondary,
     boxShadow: theme.shadows.z2,
     display: 'grid',
@@ -507,7 +507,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
       transform: 'translateX(-50%)',
       borderLeft: '7px solid transparent',
       borderRight: '7px solid transparent',
-      borderBottom: `8px solid var(--tooltip-border-color, ${theme.colors.border.medium})`,
+      borderBottom: `8px solid ${theme.colors.border.medium}`,
     },
     '&::after': {
       content: '""',
@@ -522,8 +522,19 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   hoveredSpanTitle: css({
     label: 'conversationTraces-hoveredSpanTitle',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
     color: theme.colors.text.primary,
     fontWeight: theme.typography.fontWeightMedium,
+  }),
+  hoveredSpanTitleMarker: css({
+    label: 'conversationTraces-hoveredSpanTitleMarker',
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+    background: 'var(--tooltip-marker-color, currentColor)',
+    flexShrink: 0,
   }),
   hoveredSpanMeta: css({
     label: 'conversationTraces-hoveredSpanMeta',
@@ -745,7 +756,7 @@ export default function ConversationTraces({
           !['input_tokens', 'output_tokens', 'total_tokens'].includes(key) && parseUsageNumber(value) != null
       )
       .map(([key, value]) => [key, parseUsageNumber(value)] as const)
-      .filter(([, value]) => value != null)
+      .filter((entry): entry is readonly [string, number] => entry[1] != null)
       .sort(([a], [b]) => a.localeCompare(b));
   }, [selectedGeneration]);
   const setSelectedSpanParam = (selectionID: string) => {
@@ -890,7 +901,7 @@ export default function ConversationTraces({
                         data-testid="hovered-trace-tooltip"
                         style={
                           {
-                            '--tooltip-border-color': timelineColor,
+                            '--tooltip-marker-color': timelineColor,
                             top: `${hoveredTraceAnchor.topPx}px`,
                             left: hoveredTraceAnchor.left,
                             maxWidth:
@@ -898,7 +909,10 @@ export default function ConversationTraces({
                           } as TooltipStyle
                         }
                       >
-                        <div className={styles.hoveredSpanTitle}>Trace {timeline.traceID}</div>
+                        <div className={styles.hoveredSpanTitle}>
+                          <span className={styles.hoveredSpanTitleMarker} />
+                          <span>Trace {timeline.traceID}</span>
+                        </div>
                         <div className={styles.hoveredSpanRow}>
                           <span className={styles.hoveredSpanLabel}>Time range</span>
                           <span className={styles.hoveredSpanValue}>
@@ -1065,7 +1079,7 @@ export default function ConversationTraces({
                             data-testid="hovered-span-tooltip"
                             style={
                               {
-                                '--tooltip-border-color': spanColor,
+                                '--tooltip-marker-color': spanColor,
                                 top: `${hoveredSpanAnchor.topPx}px`,
                                 left: hoveredSpanAnchor.left,
                                 maxWidth:
@@ -1075,7 +1089,10 @@ export default function ConversationTraces({
                               } as TooltipStyle
                             }
                           >
-                            <div className={styles.hoveredSpanTitle}>{hoveredSpan.name}</div>
+                            <div className={styles.hoveredSpanTitle}>
+                              <span className={styles.hoveredSpanTitleMarker} />
+                              <span>{hoveredSpan.name}</span>
+                            </div>
                             <div className={styles.hoveredSpanMeta}>{hoveredSpan.serviceName}</div>
                             <div className={styles.hoveredSpanRow}>
                               <span className={styles.hoveredSpanLabel}>Time range</span>

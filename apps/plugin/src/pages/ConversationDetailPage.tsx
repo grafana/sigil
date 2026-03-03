@@ -57,7 +57,7 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
   const styles = useStyles2(getStyles);
   const dataSource = props.dataSource ?? defaultConversationsDataSource;
   const { conversationID = '' } = useParams<{ conversationID: string }>();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const hasConversationID = conversationID.length > 0;
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -90,6 +90,17 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
     }
     return `No generations found for selected trace ${selectedTraceID}.`;
   }, [selectedTraceID]);
+  const selectTrace = (traceID: string) => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (traceID.length === 0) {
+      nextParams.delete('trace');
+      nextParams.delete('span');
+    } else {
+      nextParams.set('trace', traceID);
+      nextParams.delete('span');
+    }
+    setSearchParams(nextParams);
+  };
 
   useEffect(() => {
     requestVersionRef.current += 1;
@@ -247,7 +258,13 @@ export default function ConversationDetailPage(props: ConversationDetailPageProp
               traceLoadFailures={traceLoadFailures}
               traceTimelines={traceTimelines}
             />
-            <GenerationsList generations={displayedGenerations} emptyMessage={generationsEmptyMessage} />
+            <GenerationsList
+              generations={displayedGenerations}
+              emptyMessage={generationsEmptyMessage}
+              alwaysShowMetadata={selectedTraceID.length > 0}
+              selectedTraceID={selectedTraceID}
+              onSelectTrace={selectTrace}
+            />
           </div>
           <pre className={styles.rawData}>{detailJSON}</pre>
         </>

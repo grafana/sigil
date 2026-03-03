@@ -284,6 +284,75 @@ describe('ConversationDetailPage', () => {
     expect(screen.queryByRole('button', { name: 'select span prompt' })).not.toBeInTheDocument();
   });
 
+  it('selects trace when trace ID is clicked in generation metadata', async () => {
+    const detail: ConversationDetail = {
+      conversation_id: 'conv-trace-select',
+      generation_count: 1,
+      first_generation_at: '2026-03-01T10:00:00Z',
+      last_generation_at: '2026-03-01T10:00:00Z',
+      generations: [
+        {
+          generation_id: 'gen-1',
+          conversation_id: 'conv-trace-select',
+          trace_id: 'trace-1',
+          mode: 'SYNC',
+          created_at: '2026-03-01T10:00:00Z',
+        },
+      ],
+      annotations: [],
+    };
+
+    fetchMock.mockImplementation(() =>
+      of({
+        data: {
+          trace: {
+            resourceSpans: [
+              {
+                resource: {
+                  attributes: [{ key: 'service.name', value: { stringValue: 'llm-service' } }],
+                },
+                scopeSpans: [
+                  {
+                    spans: [
+                      {
+                        spanId: 'span-a',
+                        name: 'prompt',
+                        startTimeUnixNano: '1772480417611539268',
+                        endTimeUnixNano: '1772480417752539268',
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      })
+    );
+
+    const dataSource = createDataSource(detail);
+    render(
+      <MemoryRouter initialEntries={['/conversations/conv-trace-select/detail']}>
+        <Routes>
+          <Route
+            path="/conversations/:conversationID/detail"
+            element={
+              <>
+                <ConversationDetailPage dataSource={dataSource} />
+                <LocationSearchProbe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const traceSelectButton = await screen.findByRole('button', { name: 'select trace trace-1' });
+    fireEvent.click(traceSelectButton);
+    expect(await screen.findByTestId('location-search')).toHaveTextContent('?trace=trace-1');
+  });
+
   it('keeps raw span duration when generation created/completed are equal', async () => {
     const detail: ConversationDetail = {
       conversation_id: 'conv-fill-spans',
