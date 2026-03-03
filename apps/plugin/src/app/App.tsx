@@ -19,11 +19,27 @@ const getStyles = (theme: GrafanaTheme2) => ({
     padding: theme.spacing(3),
     display: 'flex',
     flexDirection: 'column' as const,
+    flex: 1,
     height: '100%',
+    minHeight: 0,
+  }),
+  routesContainer: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    flex: 1,
     minHeight: 0,
   }),
   pageWrapperNoPadding: css({
     padding: 0,
+    overflow: 'hidden',
+  }),
+  conversationsRouteContainer: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+    position: 'relative',
   }),
 });
 
@@ -34,17 +50,26 @@ export default function App(_props: AppRootProps) {
 
   return (
     <div className={cx(styles.pageWrapper, isConversationsBrowserRoute && styles.pageWrapperNoPadding)}>
-      <Routes>
-        <Route path={ROUTES.Dashboard} element={<DashboardPage />} />
-        <Route path={ROUTES.Conversations} element={<ConversationsBrowserPage />} />
-        <Route path={ROUTES.ConversationsDetail} element={<ConversationDetailPage />} />
-        <Route path={ROUTES.ConversationsOld} element={<ConversationsPage />} />
-        <Route path={ROUTES.Completions} element={<CompletionsPage />} />
-        <Route path={ROUTES.Traces} element={<TracesPage />} />
-        <Route path={`${ROUTES.Evaluation}/*`} element={<EvaluationPage />} />
-        <Route path={ROUTES.Settings} element={<SettingsPage />} />
-        <Route path="*" element={<DashboardPage />} />
-      </Routes>
+      <div className={styles.routesContainer}>
+        <Routes>
+          <Route path={ROUTES.Dashboard} element={<DashboardPage />} />
+          <Route
+            path={ROUTES.Conversations}
+            element={
+              <div className={styles.conversationsRouteContainer}>
+                <ConversationsBrowserPage />
+              </div>
+            }
+          />
+          <Route path={ROUTES.ConversationsDetail} element={<ConversationDetailPage />} />
+          <Route path={ROUTES.ConversationsOld} element={<ConversationsPage />} />
+          <Route path={ROUTES.Completions} element={<CompletionsPage />} />
+          <Route path={ROUTES.Traces} element={<TracesPage />} />
+          <Route path={`${ROUTES.Evaluation}/*`} element={<EvaluationPage />} />
+          <Route path={ROUTES.Settings} element={<SettingsPage />} />
+          <Route path="*" element={<DashboardPage />} />
+        </Routes>
+      </div>
     </div>
   );
 }

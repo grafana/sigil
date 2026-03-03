@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { dateTime, makeTimeRange, type GrafanaTheme2, type TimeRange } from '@grafana/data';
-import { Alert, Spinner, Text, TimeRangePicker, useStyles2 } from '@grafana/ui';
+import { Alert, Spinner, TimeRangePicker, useStyles2 } from '@grafana/ui';
 import { useSearchParams } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
 import type { ConversationDetail, ConversationSearchResult } from '../conversation/types';
@@ -131,12 +131,13 @@ function formatTrendComparisonValue(value: number, fractionDigits = 0, suffix = 
 const getStyles = (theme: GrafanaTheme2) => ({
   pageContainer: css({
     label: 'conversationsBrowserPage-pageContainer',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    flex: 1,
-    height: '100%',
+    position: 'absolute',
+    inset: 0,
+    display: 'grid',
+    gridTemplateRows: 'auto minmax(0, 1fr)',
     gap: theme.spacing(1),
     minHeight: 0,
+    overflow: 'hidden',
   }),
   summarySection: css({
     label: 'conversationsBrowserPage-summarySection',
@@ -211,7 +212,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'grid',
     gridTemplateColumns: 'minmax(340px, 1fr)',
     gap: theme.spacing(2),
-    flex: 1,
     minHeight: 0,
     overflow: 'hidden',
   }),
@@ -219,7 +219,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     label: 'conversationsBrowserPage-layoutWithSelection',
     gridTemplateColumns: '20% minmax(320px, 0.8fr) minmax(520px, 1.4fr)',
     gap: theme.spacing(2),
-    flex: 1,
     minHeight: 0,
     overflow: 'hidden',
   }),
@@ -233,7 +232,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   middlePanel: css({
     label: 'conversationsBrowserPage-middlePanel',
     minHeight: 0,
-    overflowY: 'auto' as const,
+    overflow: 'hidden',
     minWidth: 0,
     width: '100%',
   }),
