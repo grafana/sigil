@@ -191,6 +191,9 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 	// responses. Without this the upstream may gzip the body, but
 	// our proxy does not forward Content-Encoding, causing garbled output.
 	proxyReq.Header.Del("Accept-Encoding")
+	if a.apiAuthToken != "" {
+		proxyReq.SetBasicAuth(a.tenantID, a.apiAuthToken)
+	}
 	injectTenantHeaders(proxyReq, a.tenantID)
 	injectOperatorIdentityHeaders(proxyReq, method, path)
 
