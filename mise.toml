@@ -2,7 +2,7 @@
 experimental = true
 
 [env]
-GOTOOLCHAIN = "go1.25.6+auto"
+GOTOOLCHAIN = "go1.25.7+auto"
 
 [tools]
 node = "24"
@@ -34,8 +34,8 @@ run = """
 #!/usr/bin/env bash
 set -euo pipefail
 
-required_go_version="go1.25.6"
-required_go_work_version="1.25.6"
+required_go_version="go1.25.7"
+required_go_work_version="1.25.7"
 
 actual_go_version="$(go env GOVERSION)"
 if [[ "${actual_go_version}" != "${required_go_version}" ]]; then
