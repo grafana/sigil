@@ -38,7 +38,7 @@ import {
   requestsSuccessOverTimeQuery,
   requestsErrorOverTimeQuery,
   requestsOverTimeQuery,
-  errorsByCodeOverTimeQuery,
+  errorRateOverTimeQuery,
   latencyOverTimeQuery,
   ttftOverTimeQuery,
   tokensByModelAndTypeOverTimeQuery,
@@ -189,10 +189,10 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
     step
   );
 
-  // --- Errors over time ---
+  // --- Error rate over time ---
   const errorsTimeseries = usePrometheusQuery(
     dataSource,
-    errorsByCodeOverTimeQuery(filters, interval, breakdownBy),
+    errorRateOverTimeQuery(filters, interval, breakdownBy),
     from,
     to,
     'range',
@@ -408,7 +408,7 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
     tooltip: tooltipOptions,
   };
   const errorOptions = {
-    legend: { displayMode: 'table', placement: 'right', calcs: ['mean'], maxWidth: 280 },
+    legend: { displayMode: 'list', placement: 'bottom', calcs: [] },
     tooltip: tooltipOptions,
   };
   const latencyOptions = {
@@ -593,7 +593,7 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
               options={errorOptions}
               fieldConfig={{
                 defaults: {
-                  unit: 'short',
+                  unit: 'percent',
                   color: consistentColor,
                   custom: timeseriesDefaults,
                   thresholds: noThresholds,

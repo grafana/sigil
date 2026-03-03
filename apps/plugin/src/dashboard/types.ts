@@ -92,6 +92,9 @@ export type ModelCardResolveResponse = {
   freshness: ModelCardFreshness;
 };
 
+// Dashboard tab
+export type DashboardTab = 'overview' | 'errors' | 'consumption' | 'cache';
+
 // Dashboard filter state
 
 export type LabelFilter = {

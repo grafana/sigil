@@ -1,9 +1,10 @@
 import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { dateTimeParse, type TimeRange } from '@grafana/data';
-import { type BreakdownDimension, type DashboardFilters, type LabelFilter } from './types';
+import { type BreakdownDimension, type DashboardFilters, type DashboardTab, type LabelFilter } from './types';
 
 const BREAKDOWN_VALUES = new Set<BreakdownDimension>(['none', 'provider', 'model', 'agent']);
+const TAB_VALUES = new Set<DashboardTab>(['overview', 'errors', 'consumption', 'cache']);
 
 const DEFAULT_FROM = 'now-1h';
 const DEFAULT_TO = 'now';
@@ -44,6 +45,11 @@ function parseBreakdown(params: URLSearchParams): BreakdownDimension {
   return BREAKDOWN_VALUES.has(v) ? v : 'provider';
 }
 
+function parseTab(params: URLSearchParams): DashboardTab {
+  const v = params.get('tab') as DashboardTab;
+  return TAB_VALUES.has(v) ? v : 'overview';
+}
+
 function setOrDelete(params: URLSearchParams, key: string, value: string, defaultValue = ''): void {
   if (value === defaultValue) {
     params.delete(key);
@@ -56,9 +62,11 @@ export type DashboardUrlState = {
   timeRange: TimeRange;
   filters: DashboardFilters;
   breakdownBy: BreakdownDimension;
+  tab: DashboardTab;
   setTimeRange: (tr: TimeRange) => void;
   setFilters: (f: DashboardFilters) => void;
   setBreakdownBy: (b: BreakdownDimension) => void;
+  setTab: (t: DashboardTab) => void;
 };
 
 export function useDashboardUrlState(): DashboardUrlState {
@@ -67,6 +75,7 @@ export function useDashboardUrlState(): DashboardUrlState {
   const timeRange = useMemo(() => parseTimeRange(searchParams), [searchParams]);
   const filters = useMemo(() => parseFilters(searchParams), [searchParams]);
   const breakdownBy = useMemo(() => parseBreakdown(searchParams), [searchParams]);
+  const tab = useMemo(() => parseTab(searchParams), [searchParams]);
 
   const setTimeRange = useCallback(
     (tr: TimeRange) => {
@@ -119,12 +128,28 @@ export function useDashboardUrlState(): DashboardUrlState {
     [setSearchParams]
   );
 
+  const setTab = useCallback(
+    (t: DashboardTab) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          setOrDelete(next, 'tab', t, 'overview');
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
+
   return {
     timeRange,
     filters,
     breakdownBy,
+    tab,
     setTimeRange,
     setFilters,
     setBreakdownBy,
+    setTab,
   };
 }

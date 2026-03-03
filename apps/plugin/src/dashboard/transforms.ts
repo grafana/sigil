@@ -9,6 +9,7 @@ type LabelStringOptions = {
 /** Build a display label from a set of Prometheus labels. */
 function labelString(metric: Record<string, string>, options?: LabelStringOptions): string {
   const preferredKeys = options?.preferredKeys ?? [
+    'error_type',
     'gen_ai_token_type',
     'gen_ai_provider_name',
     'gen_ai_request_model',

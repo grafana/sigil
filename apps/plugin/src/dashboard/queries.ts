@@ -159,6 +159,11 @@ export function errorsByCodeOverTimeQuery(
   return `sum${byClause(breakdown, ['error_type'])}(rate(${OPERATION_DURATION}_count${sel(filters, 'error_type!=""')}[${interval}]))`;
 }
 
+/** Error count broken down by error_type (instant stat for pie/bar). */
+export function errorsByCodeStatQuery(filters: DashboardFilters, rangeDuration: string): string {
+  return `sum by (error_type)(increase(${OPERATION_DURATION}_count${sel(filters, 'error_type!=""')}[${rangeDuration}]))`;
+}
+
 /** Errors filtered to a specific error_type, optionally grouped by breakdown dimension. */
 export function errorsBySpecificCodeOverTimeQuery(
   filters: DashboardFilters,
@@ -282,4 +287,73 @@ export function tokensByModelAndTypeOverTimeQuery(
     baseLabels.push(bl);
   }
   return `sum by (${baseLabels.join(', ')}) (rate(${TOKEN_USAGE}_sum${sel(filters)}[${interval}]))`;
+}
+
+// ---------------------------------------------------------------------------
+// Cache-specific queries
+// ---------------------------------------------------------------------------
+
+/** Cache hit rate as a percentage: cache_read / (cache_read + input) * 100. */
+export function cacheHitRateQuery(
+  filters: DashboardFilters,
+  rangeDuration: string,
+  breakdown: BreakdownDimension = 'none'
+): string {
+  const cacheRead = `sum${byClause(breakdown)}(increase(${TOKEN_USAGE}_sum${sel(filters, 'gen_ai_token_type="cache_read"')}[${rangeDuration}]))`;
+  const input = `sum${byClause(breakdown)}(increase(${TOKEN_USAGE}_sum${sel(filters, 'gen_ai_token_type="input"')}[${rangeDuration}]))`;
+  return `(${cacheRead} / (${cacheRead} + ${input})) * 100`;
+}
+
+/** Cache hit rate over time as a percentage, optionally grouped by breakdown dimension. */
+export function cacheHitRateOverTimeQuery(
+  filters: DashboardFilters,
+  interval: string,
+  breakdown: BreakdownDimension = 'none'
+): string {
+  const cacheRead = `sum${byClause(breakdown)}(rate(${TOKEN_USAGE}_sum${sel(filters, 'gen_ai_token_type="cache_read"')}[${interval}]))`;
+  const input = `sum${byClause(breakdown)}(rate(${TOKEN_USAGE}_sum${sel(filters, 'gen_ai_token_type="input"')}[${interval}]))`;
+  return `(${cacheRead} / (${cacheRead} + ${input})) * 100`;
+}
+
+/** Cache read tokens over time, optionally grouped by breakdown dimension. */
+export function cacheReadOverTimeQuery(
+  filters: DashboardFilters,
+  interval: string,
+  breakdown: BreakdownDimension = 'none'
+): string {
+  return `sum${byClause(breakdown)}(rate(${TOKEN_USAGE}_sum${sel(filters, 'gen_ai_token_type="cache_read"')}[${interval}]))`;
+}
+
+/** Cache write tokens over time, optionally grouped by breakdown dimension. */
+export function cacheWriteOverTimeQuery(
+  filters: DashboardFilters,
+  interval: string,
+  breakdown: BreakdownDimension = 'none'
+): string {
+  return `sum${byClause(breakdown)}(rate(${TOKEN_USAGE}_sum${sel(filters, 'gen_ai_token_type="cache_write"')}[${interval}]))`;
+}
+
+/** Cache read vs write tokens over time (broken down by token type). */
+export function cacheTokensByTypeOverTimeQuery(
+  filters: DashboardFilters,
+  interval: string
+): string {
+  return `sum by (gen_ai_token_type)(rate(${TOKEN_USAGE}_sum${sel(filters, 'gen_ai_token_type=~"cache_read|cache_write"')}[${interval}]))`;
+}
+
+/** Cache read tokens by breakdown dimension (instant). */
+export function cacheReadByBreakdownQuery(
+  filters: DashboardFilters,
+  rangeDuration: string,
+  breakdown: BreakdownDimension = 'none'
+): string {
+  return `sum${byClause(breakdown)}(increase(${TOKEN_USAGE}_sum${sel(filters, 'gen_ai_token_type="cache_read"')}[${rangeDuration}]))`;
+}
+
+/** Cache tokens by model (for computing savings client-side). */
+export function cacheTokensByModelQuery(
+  filters: DashboardFilters,
+  rangeDuration: string
+): string {
+  return `sum by (gen_ai_provider_name, gen_ai_request_model, gen_ai_token_type) (increase(${TOKEN_USAGE}_sum${sel(filters, 'gen_ai_token_type=~"cache_read|input"')}[${rangeDuration}]))`;
 }
