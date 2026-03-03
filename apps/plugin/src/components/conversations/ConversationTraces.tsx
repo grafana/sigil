@@ -308,10 +308,26 @@ function getUsageValue(
   key: 'input_tokens' | 'output_tokens' | 'total_tokens'
 ): string {
   const value = usage?.[key];
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
+  const parsed =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim().length > 0
+        ? Number(value)
+        : Number.NaN;
+  if (!Number.isFinite(parsed)) {
     return 'n/a';
   }
-  return value.toLocaleString();
+  return parsed.toLocaleString();
+}
+
+function parseUsageNumber(value: unknown): number | null {
+  const parsed =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim().length > 0
+        ? Number(value)
+        : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function getHoveredSpanAnchor(
@@ -722,8 +738,10 @@ export default function ConversationTraces({
     }
     return Object.entries(selectedGeneration.usage)
       .filter(
-        ([key, value]) => !['input_tokens', 'output_tokens', 'total_tokens'].includes(key) && typeof value === 'number'
+        ([key, value]) => !['input_tokens', 'output_tokens', 'total_tokens'].includes(key) && parseUsageNumber(value) != null
       )
+      .map(([key, value]) => [key, parseUsageNumber(value)] as const)
+      .filter(([, value]) => value != null)
       .sort(([a], [b]) => a.localeCompare(b));
   }, [selectedGeneration]);
   const setSelectedSpanParam = (selectionID: string) => {
@@ -1220,7 +1238,7 @@ export default function ConversationTraces({
                     <div key={key} className={styles.selectedSpanRow}>
                       <span className={styles.selectedSpanLabel}>{key}</span>
                       <span className={styles.selectedSpanValue}>
-                        {typeof value === 'number' ? value.toLocaleString() : 'n/a'}
+                        {value.toLocaleString()}
                       </span>
                     </div>
                   ))}

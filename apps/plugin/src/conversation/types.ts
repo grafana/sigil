@@ -96,10 +96,10 @@ export type ConversationSearchResponse = {
 };
 
 export type GenerationUsage = {
-  input_tokens?: number;
-  output_tokens?: number;
-  total_tokens?: number;
-  [key: string]: number | undefined;
+  input_tokens?: number | string;
+  output_tokens?: number | string;
+  total_tokens?: number | string;
+  [key: string]: number | string | undefined;
 };
 
 export type GenerationDetail = {

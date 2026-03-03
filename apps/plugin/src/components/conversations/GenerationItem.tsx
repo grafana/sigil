@@ -11,10 +11,16 @@ export type GenerationItemProps = {
 };
 
 function formatUsageValue(value: unknown): string {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
+  const parsed =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim().length > 0
+        ? Number(value)
+        : Number.NaN;
+  if (!Number.isFinite(parsed)) {
     return 'n/a';
   }
-  return value.toLocaleString();
+  return parsed.toLocaleString();
 }
 
 const getStyles = (theme: GrafanaTheme2) => ({

@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { delay, of } from 'rxjs';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import ConversationDetailPage from './ConversationDetailPage';
@@ -191,7 +191,7 @@ describe('ConversationDetailPage', () => {
           trace_id: 'trace-1',
           mode: 'SYNC',
           model: { provider: 'openai', name: 'gpt-4o-mini' },
-          usage: { input_tokens: 120, output_tokens: 60, total_tokens: 180, reasoning_tokens: 12 },
+          usage: { input_tokens: '120', output_tokens: '60', total_tokens: '180', reasoning_tokens: '12' },
           stop_reason: 'end_turn',
           created_at: '2026-03-01T10:00:00Z',
         },
@@ -267,6 +267,13 @@ describe('ConversationDetailPage', () => {
     expect(screen.getByText('Associated generation')).toBeInTheDocument();
     expect(screen.getByText('openai / gpt-4o-mini')).toBeInTheDocument();
     expect(screen.getByText('reasoning_tokens')).toBeInTheDocument();
+    const selectedSpanCard = screen.getByText('Selected span details').closest('div');
+    expect(selectedSpanCard).not.toBeNull();
+    const selectedSpanScope = within(selectedSpanCard as HTMLElement);
+    expect(selectedSpanScope.getByText('Input tokens').parentElement).toHaveTextContent('120');
+    expect(selectedSpanScope.getByText('Output tokens').parentElement).toHaveTextContent('60');
+    expect(selectedSpanScope.getByText('Total tokens').parentElement).toHaveTextContent('180');
+    expect(selectedSpanScope.getByText('reasoning_tokens').parentElement).toHaveTextContent('12');
 
     fireEvent.click(spanButton);
     expect(await screen.findByTestId('location-search')).toHaveTextContent('?trace=trace-1');
