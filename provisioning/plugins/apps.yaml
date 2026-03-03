@@ -7,8 +7,8 @@ apps:
     disabled: false
     jsonData:
       sigilApiUrl: http://sigil:8080
-      prometheusDatasourceUID: prometheus
-      tempoDatasourceUID: tempo
+      prometheusDatasourceUID: $SIGIL_PROM_DS_UID
+      tempoDatasourceUID: $SIGIL_TEMPO_DS_UID
     secureJsonData:
       sigilApiAuthToken: $SIGIL_API_AUTH_TOKEN
     allowServiceAccountAccess: true
