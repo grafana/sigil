@@ -75,10 +75,9 @@ describe('ConversationDetailPage', () => {
       expect(dataSource.getConversationDetail).toHaveBeenCalledWith('devex-go-openai-2-1772456234117');
     });
 
-    expect(await screen.findByText('Conversation Detail')).toBeInTheDocument();
+    expect(await screen.findByText(/"generation_id": "gen-1"/)).toBeInTheDocument();
     expect(screen.queryByText('Conversation ID')).not.toBeInTheDocument();
     expect(screen.queryByText('Generation count')).not.toBeInTheDocument();
-    expect(screen.getByText(/"generation_id": "gen-1"/)).toBeInTheDocument();
   });
 
   it('builds the trace timeline incrementally as traces load', async () => {
@@ -174,7 +173,6 @@ describe('ConversationDetailPage', () => {
 
     expect(await screen.findByTestId('trace-row-trace-1')).toBeInTheDocument();
     expect(screen.queryByRole('progressbar', { name: 'Trace preload progress' })).not.toBeInTheDocument();
-    expect(screen.queryByTestId('trace-row-trace-2')).not.toBeInTheDocument();
 
     expect(await screen.findByTestId('trace-row-trace-2')).toBeInTheDocument();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
@@ -249,11 +247,10 @@ describe('ConversationDetailPage', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(screen.queryByText('Trace timeline')).not.toBeInTheDocument();
 
-    const traceRow = await screen.findByTestId('trace-row-trace-1');
-    fireEvent.mouseEnter(traceRow);
-    expect(await screen.findByTestId('hovered-span-tooltip')).toBeInTheDocument();
-    fireEvent.mouseLeave(traceRow);
-    await waitFor(() => expect(screen.queryByTestId('hovered-span-tooltip')).not.toBeInTheDocument());
+    const expandTraceButton = await screen.findByRole('button', { name: 'expand trace trace-1' });
+    fireEvent.click(expandTraceButton);
+    expect(await screen.findByTestId('location-search')).toHaveTextContent('?trace=trace-1');
+    expect(await screen.findByRole('button', { name: 'close expanded trace' })).toBeInTheDocument();
 
     const spanButton = await screen.findByRole('button', { name: 'select span prompt' });
     fireEvent.mouseEnter(spanButton);
@@ -265,17 +262,22 @@ describe('ConversationDetailPage', () => {
     await waitFor(() => expect(screen.queryByTestId('hovered-span-tooltip')).not.toBeInTheDocument());
 
     fireEvent.click(spanButton);
-    expect(await screen.findByTestId('location-search')).toHaveTextContent('?span=trace-1%3Aspan-a');
+    expect(await screen.findByTestId('location-search')).toHaveTextContent('?trace=trace-1&span=trace-1%3Aspan-a');
     expect(await screen.findByText('Selected span details')).toBeInTheDocument();
     expect(screen.getByText('Associated generation')).toBeInTheDocument();
     expect(screen.getByText('openai / gpt-4o-mini')).toBeInTheDocument();
     expect(screen.getByText('reasoning_tokens')).toBeInTheDocument();
 
     fireEvent.click(spanButton);
+    expect(await screen.findByTestId('location-search')).toHaveTextContent('?trace=trace-1');
+
+    const closeExpandedTraceButton = await screen.findByRole('button', { name: 'close expanded trace' });
+    fireEvent.click(closeExpandedTraceButton);
     expect(await screen.findByTestId('location-search')).toHaveTextContent('');
+    expect(screen.queryByRole('button', { name: 'select span prompt' })).not.toBeInTheDocument();
   });
 
-  it('fills spans to next trace start when generation created/completed are equal', async () => {
+  it('keeps raw span duration when generation created/completed are equal', async () => {
     const detail: ConversationDetail = {
       conversation_id: 'conv-fill-spans',
       generation_count: 2,
@@ -369,7 +371,10 @@ describe('ConversationDetailPage', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 
+    const expandTraceButton = await screen.findByRole('button', { name: 'expand trace trace-1' });
+    expect(parseFloat(expandTraceButton.style.width)).toBeLessThan(5);
+    fireEvent.click(expandTraceButton);
     const firstSpanButton = await screen.findByRole('button', { name: 'select span first' });
-    expect(parseFloat(firstSpanButton.style.width)).toBeGreaterThan(25);
+    expect(parseFloat(firstSpanButton.style.width)).toBeGreaterThan(95);
   });
 });

@@ -633,7 +633,7 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
       } else {
         nextSearchParams.set('view', nextViewMode);
       }
-      setSearchParams(nextSearchParams, { replace: true });
+      setSearchParams(nextSearchParams);
     },
     [canUseRouterSearchParamUpdates, searchParams, setSearchParams]
   );
@@ -660,7 +660,7 @@ export default function ConversationsListPage(props: ConversationsListPageProps)
       } else {
         nextSearchParams.set('bucket', nextSelectionKey);
       }
-      setSearchParams(nextSearchParams, { replace: true });
+      setSearchParams(nextSearchParams);
     },
     [canUseRouterSearchParamUpdates, searchParams, setSearchParams]
   );
