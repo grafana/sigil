@@ -1,0 +1,24 @@
+apiVersion: 1
+
+datasources:
+  - name: dev-tempo
+    type: tempo
+    access: proxy
+    uid: tempo-dev-01
+    basicAuth: true
+    basicAuthUser: "3"
+    isDefault: false
+    editable: true
+    jsonData:
+      httpMethod: GET
+      serviceMap:
+        datasourceUid: cortex-dev-01
+      tracesToLogs:
+        datasourceUid: ""
+        tags:
+          - cluster
+          - namespace
+          - pod
+    secureJsonData:
+      basicAuthPassword: $TEMPO_DEV_01_READ_KEY
+    url: https://tempo-dev-01-dev-us-central-0.grafana.net/tempo

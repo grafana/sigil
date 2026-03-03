@@ -1,0 +1,19 @@
+apiVersion: 1
+
+datasources:
+  - name: dev-cortex
+    type: prometheus
+    access: proxy
+    uid: cortex-dev-01
+    basicAuth: true
+    basicAuthUser: "9960"
+    isDefault: false
+    editable: true
+    jsonData:
+      exemplarTraceIdDestinations:
+        - datasourceUid: tempo-dev-01
+          name: traceID
+      httpMethod: POST
+    secureJsonData:
+      basicAuthPassword: $OPS_READ_KEY
+    url: https://prometheus-dev-01-dev-us-central-0.grafana-dev.net/api/prom
