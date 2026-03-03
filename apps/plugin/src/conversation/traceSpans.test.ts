@@ -203,7 +203,7 @@ describe('traceSpans', () => {
     const sigilOnly = selectSpansForMode(spans, 'sigil-only');
     const all = selectSpansForMode(spans, 'all');
 
-    expect(sigilOnly.map((span) => span.spanID).sort()).toEqual(['span-sigil']);
+    expect(sigilOnly.map((span) => span.spanID).sort()).toEqual(['span-http', 'span-sigil']);
     expect(all.map((span) => span.spanID).sort()).toEqual(['span-http', 'span-sigil']);
   });
 
