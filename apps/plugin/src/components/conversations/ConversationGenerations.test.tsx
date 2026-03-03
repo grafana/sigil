@@ -86,7 +86,6 @@ describe('ConversationGenerations', () => {
     render(<ConversationGenerations data={data} />);
 
     fireEvent.click(screen.getByRole('switch', { name: 'toggle all spans' }));
-    fireEvent.click(screen.getByRole('button', { name: 'expand span streamText gpt-4o-mini' }));
 
     expect(screen.getByText('db.query')).toBeInTheDocument();
   });

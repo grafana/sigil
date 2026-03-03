@@ -66,6 +66,7 @@ This is the canonical navigation map for repository documentation.
   - Vercel AI SDK TypeScript integration delivery: `exec-plans/completed/2026-02-22-sdk-vercel-ai-sdk-integration.md`
   - Sigil image and plugin artifact publish delivery: `exec-plans/completed/2026-03-02-sigil-image-and-plugin-publish.md`
   - Runtime role split and distributed Helm topology delivery: `exec-plans/completed/2026-03-02-runtime-role-split.md`
+  - Conversation details Jaeger-style tree port: `exec-plans/completed/2026-03-03-conversation-jaeger-tree.md`
   - Completed: `exec-plans/completed/`
     - `exec-plans/completed/2026-02-11-bootstrap-phase-1.md` (superseded)
     - `exec-plans/completed/2026-02-12-model-card-catalog-refresh.md`
@@ -89,6 +90,7 @@ This is the canonical navigation map for repository documentation.
     - `exec-plans/completed/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
     - `exec-plans/completed/2026-03-02-sigil-image-and-plugin-publish.md`
     - `exec-plans/completed/2026-03-02-runtime-role-split.md`
+    - `exec-plans/completed/2026-03-03-conversation-jaeger-tree.md`
   - Tech debt tracker: [`exec-plans/tech-debt-tracker.md`](exec-plans/tech-debt-tracker.md)
 - Generated docs: [`generated/db-schema.md`](generated/db-schema.md)
 - External references: [`references/index.md`](references/index.md)

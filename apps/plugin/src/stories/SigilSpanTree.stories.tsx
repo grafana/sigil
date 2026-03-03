@@ -1,4 +1,5 @@
-import SigilSpanTree from '../components/conversations/SigilSpanTree';
+import React from 'react';
+import SigilSpanTree, { type SigilSpanTreeNodeRenderContext } from '../components/conversations/SigilSpanTree';
 import type { ConversationSpan, SpanAttributeValue } from '../conversation/types';
 
 function makeAttrs(entries: Array<[string, string]>): ReadonlyMap<string, SpanAttributeValue> {
@@ -82,7 +83,73 @@ const frameworkSpan = makeSpan({
   attributes: makeAttrs([['sigil.framework.name', 'langchain']]),
 });
 
-const demoSpans: ConversationSpan[] = [generationSpan, frameworkSpan];
+const errorSpan = makeSpan({
+  spanID: 'span-6',
+  name: 'HTTP POST',
+  serviceName: 'cloudwatch-exporter',
+  startTimeUnixNano: BigInt('1772480418152390318'),
+  endTimeUnixNano: BigInt('1772480418185390318'),
+  durationNano: BigInt('33000000'),
+  attributes: makeAttrs([
+    ['error.type', 'timeout'],
+    ['gen_ai.operation.name', 'execute_tool'],
+  ]),
+});
+
+const demoSpans: ConversationSpan[] = [generationSpan, frameworkSpan, errorSpan];
+
+function makeJaegerLikeTree(): ConversationSpan[] {
+  const branches: ConversationSpan[] = [];
+
+  for (let i = 0; i < 6; i += 1) {
+    const client = makeSpan({
+      spanID: `cw-client-${i}`,
+      parentSpanID: 'cw-root',
+      name: 'aws.sts_getcalleridentity',
+      serviceName: 'cloudwatch-exporter',
+      startTimeUnixNano: BigInt(`1772480418${20 + i}52390318`),
+      endTimeUnixNano: BigInt(`1772480418${23 + i}82390318`),
+      durationNano: BigInt('32940000'),
+      attributes: makeAttrs([['http.method', 'POST']]),
+    });
+
+    const httpPost = makeSpan({
+      spanID: `cw-post-${i}`,
+      parentSpanID: client.spanID,
+      name: 'HTTP POST',
+      serviceName: 'cloudwatch-exporter',
+      startTimeUnixNano: BigInt(`1772480418${20 + i}52390319`),
+      endTimeUnixNano: BigInt(`1772480418${23 + i}92390319`),
+      durationNano: BigInt('33040000'),
+      attributes: makeAttrs([
+        ['http.method', 'POST'],
+        ['error.type', 'timeout'],
+      ]),
+    });
+
+    client.children = [httpPost];
+    branches.push(client);
+  }
+
+  const root = makeSpan({
+    spanID: 'cw-root',
+    name: 'hminstance_instance_id_metadata',
+    serviceName: 'cloudwatch-exporter',
+    durationNano: BigInt('14630000000'),
+    children: branches,
+  });
+
+  const sideRoot = makeSpan({
+    spanID: 'other-root',
+    name: 'db.query user_profile',
+    serviceName: 'postgres',
+    durationNano: BigInt('22000000'),
+  });
+
+  return [root, sideRoot];
+}
+
+const jaegerLikeSpans = makeJaegerLikeTree();
 
 const meta = {
   title: 'Sigil/Sigil Span Tree',
@@ -95,3 +162,47 @@ const meta = {
 export default meta;
 
 export const Default = {};
+
+export const JaegerLikeNarrow = {
+  args: {
+    spans: jaegerLikeSpans,
+    selectedSpanSelectionID: 'trace-1:cw-client-2',
+  },
+  decorators: [
+    (Story: React.ComponentType) => (
+      <div style={{ width: 700, border: '1px solid #2f3742' }}>
+        <Story />
+      </div>
+    ),
+  ],
+};
+
+export const DeepAndScrollable = {
+  args: {
+    spans: [
+      ...jaegerLikeSpans,
+      ...Array.from({ length: 8 }).map((_, index) =>
+        makeSpan({
+          spanID: `async-${index}`,
+          name: `background.worker.${index}`,
+          serviceName: `worker-${index % 3}`,
+          startTimeUnixNano: BigInt(`1772480419${index}52390318`),
+          endTimeUnixNano: BigInt(`1772480419${index}92390318`),
+          durationNano: BigInt('40000000'),
+        })
+      ),
+    ],
+  },
+};
+
+export const CustomNodeRenderer = {
+  args: {
+    renderNode: ({ operationName, serviceName, durationLabel }: SigilSpanTreeNodeRenderContext) => (
+      <>
+        <strong>{operationName}</strong>
+        <span style={{ opacity: 0.7 }}>{serviceName}</span>
+        <span style={{ marginLeft: 'auto', opacity: 0.8 }}>{durationLabel}</span>
+      </>
+    ),
+  },
+};
