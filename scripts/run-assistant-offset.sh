@@ -167,6 +167,7 @@ derive_assistant_sigil_env() {
   export DASH_API_SIGIL_ENDPOINT="${DASH_API_SIGIL_ENDPOINT:-${SIGIL_ENDPOINT:-host.docker.internal:4317}}"
   export DASH_API_SIGIL_TENANT_ID="${DASH_API_SIGIL_TENANT_ID:-${SIGIL_FAKE_TENANT_ID:-${SIGIL_TENANT_ID:-fake}}}"
   export DASH_API_SIGIL_AUTH_TOKEN="${DASH_API_SIGIL_AUTH_TOKEN:-${SIGIL_AUTH_TOKEN:-}}"
+  export DASH_API_SIGIL_AUTH_USER="${DASH_API_SIGIL_AUTH_USER:-${SIGIL_AUTH_USER:-}}"
   export DASH_API_SIGIL_INSECURE="${DASH_API_SIGIL_INSECURE:-${SIGIL_INSECURE:-true}}"
 }
 
@@ -372,6 +373,7 @@ def q(value: str) -> str:
 endpoint = os.environ.get("DASH_API_SIGIL_ENDPOINT", "")
 tenant_id = os.environ.get("DASH_API_SIGIL_TENANT_ID", "")
 auth_token = os.environ.get("DASH_API_SIGIL_AUTH_TOKEN", "")
+auth_user = os.environ.get("DASH_API_SIGIL_AUTH_USER", "")
 insecure = os.environ.get("DASH_API_SIGIL_INSECURE", "true")
 
 content = [
@@ -381,6 +383,7 @@ content = [
   f"      DASH_API_SIGIL_ENDPOINT: {q(endpoint)}",
   f"      DASH_API_SIGIL_TENANT_ID: {q(tenant_id)}",
   f"      DASH_API_SIGIL_AUTH_TOKEN: {q(auth_token)}",
+  f"      DASH_API_SIGIL_AUTH_USER: {q(auth_user)}",
   f"      DASH_API_SIGIL_INSECURE: {q(insecure)}",
   "",
 ]
