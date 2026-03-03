@@ -7,6 +7,7 @@ import type { ConversationData, ConversationSpan, ConversationSearchResult } fro
 import type { TokenSummary, CostSummary } from '../../conversation/aggregates';
 import ConversationGenerations from './ConversationGenerations';
 import ModelCardPopover from './ModelCardPopover';
+import { getProviderColor, stripProviderPrefix } from './providerMeta';
 
 export type ConversationColumnProps = {
   conversation: ConversationSearchResult;
@@ -46,21 +47,6 @@ function formatTokenCount(count: number): string {
     return `${(count / 1_000).toFixed(1)}k`;
   }
   return count.toLocaleString();
-}
-
-const PROVIDER_COLORS: Record<string, string> = {
-  openai: '#10a37f',
-  anthropic: '#d97757',
-  google: '#4285f4',
-  gemini: '#4285f4',
-  meta: '#0668E1',
-  mistral: '#F54E42',
-  cohere: '#39594D',
-  deepseek: '#4D6BFE',
-};
-
-function getProviderColor(provider: string): string {
-  return PROVIDER_COLORS[provider.trim().toLowerCase()] ?? '#888888';
 }
 
 const emptyConversationData: ConversationData = {
@@ -201,9 +187,7 @@ export default function ConversationColumn({
               <div className={styles.modelChipsWrap}>
                 {Array.from(modelCards.entries()).map(([key, card]) => {
                   const isOpen = openModel?.key === key;
-                  const chipLabel = (card.name || card.source_model_id).replace(
-                    new RegExp(`^${card.provider}[:/]\\s*`, 'i'), ''
-                  );
+                  const chipLabel = stripProviderPrefix(card.name || card.source_model_id, card.provider);
                   return (
                     <div key={key} className={styles.modelChipAnchor}>
                       <button
@@ -218,10 +202,7 @@ export default function ConversationColumn({
                         }}
                         aria-label={`model card ${chipLabel}`}
                       >
-                        <span
-                          className={styles.modelChipDot}
-                          style={{ background: getProviderColor(card.provider) }}
-                        />
+                        <span className={styles.modelChipDot} style={{ background: getProviderColor(card.provider) }} />
                         <span>{chipLabel}</span>
                       </button>
                       {isOpen && (
@@ -229,6 +210,10 @@ export default function ConversationColumn({
                           card={card}
                           anchorRect={openModel?.anchorRect ?? null}
                           onClose={() => { setOpenModel(null); }}
+                          anchorRect={openModel?.anchorRect ?? null}
+                          onClose={() => {
+                            setOpenModel(null);
+                          }}
                         />
                       )}
                     </div>
@@ -251,9 +236,15 @@ export default function ConversationColumn({
                   <div>
                     <div>Input: {tokenSummary.inputTokens.toLocaleString()}</div>
                     <div>Output: {tokenSummary.outputTokens.toLocaleString()}</div>
-                    {tokenSummary.cacheReadTokens > 0 && <div>Cache read: {tokenSummary.cacheReadTokens.toLocaleString()}</div>}
-                    {tokenSummary.cacheWriteTokens > 0 && <div>Cache write: {tokenSummary.cacheWriteTokens.toLocaleString()}</div>}
-                    {tokenSummary.reasoningTokens > 0 && <div>Reasoning: {tokenSummary.reasoningTokens.toLocaleString()}</div>}
+                    {tokenSummary.cacheReadTokens > 0 && (
+                      <div>Cache read: {tokenSummary.cacheReadTokens.toLocaleString()}</div>
+                    )}
+                    {tokenSummary.cacheWriteTokens > 0 && (
+                      <div>Cache write: {tokenSummary.cacheWriteTokens.toLocaleString()}</div>
+                    )}
+                    {tokenSummary.reasoningTokens > 0 && (
+                      <div>Reasoning: {tokenSummary.reasoningTokens.toLocaleString()}</div>
+                    )}
                   </div>
                 }
                 placement="bottom"

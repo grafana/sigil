@@ -3,33 +3,13 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, IconButton, useStyles2 } from '@grafana/ui';
 import type { ModelCard } from '../../modelcard/types';
+import { getProviderMeta, stripProviderPrefix } from './providerMeta';
 
 export type ModelCardPopoverProps = {
   card: ModelCard;
   onClose: () => void;
   anchorRect?: DOMRect | null;
 };
-
-type ProviderMeta = {
-  label: string;
-  color: string;
-};
-
-const PROVIDER_META: Record<string, ProviderMeta> = {
-  openai: { label: 'OpenAI', color: '#10a37f' },
-  anthropic: { label: 'Anthropic', color: '#d97757' },
-  google: { label: 'Google', color: '#4285f4' },
-  gemini: { label: 'Google', color: '#4285f4' },
-  meta: { label: 'Meta', color: '#0668E1' },
-  mistral: { label: 'Mistral', color: '#F54E42' },
-  cohere: { label: 'Cohere', color: '#39594D' },
-  deepseek: { label: 'DeepSeek', color: '#4D6BFE' },
-};
-
-function getProviderMeta(provider: string): ProviderMeta {
-  const normalized = provider.trim().toLowerCase();
-  return PROVIDER_META[normalized] ?? { label: provider || 'Unknown', color: '#888888' };
-}
 
 function formatPricePer1M(perToken: number | null): string {
   if (perToken == null || perToken === 0) {
@@ -281,7 +261,9 @@ export default function ModelCardPopover({ card, onClose, anchorRect = null }: M
       }
     }
     document.addEventListener('keydown', handleEscape);
-    return () => { document.removeEventListener('keydown', handleEscape); };
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+    };
   }, [onClose]);
 
   const hasPricing =
@@ -295,7 +277,7 @@ export default function ModelCardPopover({ card, onClose, anchorRect = null }: M
   const hasModalities = inputMods.length > 0 || outputMods.length > 0;
 
   const displayName = card.name || card.source_model_id;
-  const cleanName = displayName.replace(new RegExp(`^${meta.label}:\\s*`, 'i'), '');
+  const cleanName = stripProviderPrefix(displayName, meta.label);
 
   return (
     <>
@@ -312,10 +294,7 @@ export default function ModelCardPopover({ card, onClose, anchorRect = null }: M
         }}
       >
         <div className={styles.header}>
-          <div
-            className={styles.providerIcon}
-            style={{ background: meta.color }}
-          >
+          <div className={styles.providerIcon} style={{ background: meta.color }}>
             {meta.label.charAt(0).toUpperCase()}
           </div>
           <div className={styles.headerText}>
@@ -376,9 +355,7 @@ export default function ModelCardPopover({ card, onClose, anchorRect = null }: M
           </div>
           <div className={styles.specCell}>
             <div className={styles.specLabel}>Max output</div>
-            <div className={styles.specValue}>
-              {formatContextLength(card.top_provider?.max_completion_tokens)}
-            </div>
+            <div className={styles.specValue}>{formatContextLength(card.top_provider?.max_completion_tokens)}</div>
           </div>
         </div>
 
@@ -393,13 +370,17 @@ export default function ModelCardPopover({ card, onClose, anchorRect = null }: M
               {pricing.input_cache_read_usd_per_token != null && pricing.input_cache_read_usd_per_token > 0 && (
                 <>
                   <span className={styles.pricingLabel}>Cache read</span>
-                  <span className={styles.pricingValue}>{formatPricePer1M(pricing.input_cache_read_usd_per_token)}</span>
+                  <span className={styles.pricingValue}>
+                    {formatPricePer1M(pricing.input_cache_read_usd_per_token)}
+                  </span>
                 </>
               )}
               {pricing.input_cache_write_usd_per_token != null && pricing.input_cache_write_usd_per_token > 0 && (
                 <>
                   <span className={styles.pricingLabel}>Cache write</span>
-                  <span className={styles.pricingValue}>{formatPricePer1M(pricing.input_cache_write_usd_per_token)}</span>
+                  <span className={styles.pricingValue}>
+                    {formatPricePer1M(pricing.input_cache_write_usd_per_token)}
+                  </span>
                 </>
               )}
             </div>
@@ -407,16 +388,9 @@ export default function ModelCardPopover({ card, onClose, anchorRect = null }: M
         )}
 
         <div className={styles.footer}>
-          <div className={styles.badgeRow}>
-            {card.is_free && <Badge text="Free" color="green" />}
-          </div>
+          <div className={styles.badgeRow}>{card.is_free && <Badge text="Free" color="green" />}</div>
           {sourceURL && (
-            <a
-              href={sourceURL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={styles.sourceLink}
-            >
+            <a href={sourceURL} target="_blank" rel="noopener noreferrer" className={styles.sourceLink}>
               View on OpenRouter &rarr;
             </a>
           )}
