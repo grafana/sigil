@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"hash/fnv"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/go-kit/log"
 	"github.com/grafana/sigil/sigil/internal/config"
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	evalenqueue "github.com/grafana/sigil/sigil/internal/eval/enqueue"
@@ -17,10 +19,14 @@ import (
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
 	"github.com/grafana/sigil/sigil/internal/storage"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -277,6 +283,112 @@ func TestWithHTTPTracingUsesRoutePatternForWildcardRoute(t *testing.T) {
 	if !foundRouteAttr {
 		t.Fatalf("expected http.route attribute /users/{id}")
 	}
+}
+
+func TestWithHTTPTracingEmitsHTTPRequestMetrics(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /users/{id}", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte("ok"))
+	})
+
+	before := testutil.ToFloat64(httpRequestsTotal.WithLabelValues("POST", "/users/{id}", "2xx", "unknown"))
+	req := httptest.NewRequest(http.MethodPost, "/users/42", strings.NewReader("hello"))
+	recorder := httptest.NewRecorder()
+	withHTTPTracing(mux).ServeHTTP(recorder, req)
+	after := testutil.ToFloat64(httpRequestsTotal.WithLabelValues("POST", "/users/{id}", "2xx", "unknown"))
+
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d", http.StatusCreated, recorder.Code)
+	}
+	if delta := after - before; delta != 1 {
+		t.Fatalf("expected request metric increment of 1, got %v", delta)
+	}
+}
+
+func TestGRPCUnaryMetricsInterceptorEmitsCounters(t *testing.T) {
+	interceptor := grpcMetricsUnaryInterceptor()
+	info := &grpc.UnaryServerInfo{FullMethod: "/sigil.v1.GenerationIngestService/ExportGenerations"}
+	before := testutil.ToFloat64(grpcServerRequestsTotal.WithLabelValues("sigil.v1.GenerationIngestService", "ExportGenerations", "unary", codes.OK.String()))
+
+	_, err := interceptor(context.Background(), "req", info, func(context.Context, any) (any, error) {
+		return "ok", nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected interceptor error: %v", err)
+	}
+	after := testutil.ToFloat64(grpcServerRequestsTotal.WithLabelValues("sigil.v1.GenerationIngestService", "ExportGenerations", "unary", codes.OK.String()))
+	if delta := after - before; delta != 1 {
+		t.Fatalf("expected unary request metric increment of 1, got %v", delta)
+	}
+}
+
+func TestGRPCStreamMetricsInterceptorEmitsErrorCode(t *testing.T) {
+	interceptor := grpcMetricsStreamInterceptor()
+	info := &grpc.StreamServerInfo{FullMethod: "/sigil.v1.GenerationIngestService/StreamExportGenerations"}
+	before := testutil.ToFloat64(grpcServerRequestsTotal.WithLabelValues("sigil.v1.GenerationIngestService", "StreamExportGenerations", "stream", codes.Unauthenticated.String()))
+
+	err := interceptor("srv", nil, info, func(any, grpc.ServerStream) error {
+		return status.Error(codes.Unauthenticated, "no tenant")
+	})
+	if status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("expected unauthenticated error, got %v", err)
+	}
+	after := testutil.ToFloat64(grpcServerRequestsTotal.WithLabelValues("sigil.v1.GenerationIngestService", "StreamExportGenerations", "stream", codes.Unauthenticated.String()))
+	if delta := after - before; delta != 1 {
+		t.Fatalf("expected stream request metric increment of 1, got %v", delta)
+	}
+}
+
+func TestShouldStartGRPCServer(t *testing.T) {
+	registry := newServerTransportRegistry()
+	if shouldStartGRPCServer(registry) {
+		t.Fatalf("expected grpc server disabled without grpc registrars")
+	}
+
+	registry.RegisterGRPC(func(*grpc.Server) {})
+	if !shouldStartGRPCServer(registry) {
+		t.Fatalf("expected grpc server enabled when grpc registrar is present")
+	}
+}
+
+func TestServerModuleStartSkipsGRPCWithoutRegistrars(t *testing.T) {
+	cfg := config.FromEnv()
+	cfg.HTTPAddr = freeLocalAddr(t)
+	cfg.OTLPGRPCAddr = freeLocalAddr(t)
+	cfg.AuthEnabled = false
+
+	module := &serverModule{
+		cfg:      cfg,
+		logger:   log.NewNopLogger(),
+		registry: newServerTransportRegistry(),
+		runErr:   make(chan error, 2),
+	}
+	if err := module.start(context.Background()); err != nil {
+		t.Fatalf("start server module: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = module.stop(nil)
+	})
+
+	if module.grpcServer != nil {
+		t.Fatalf("expected grpc server to be disabled when no grpc registrars are present")
+	}
+	if module.grpcListener != nil {
+		t.Fatalf("expected grpc listener to be nil when no grpc registrars are present")
+	}
+}
+
+func freeLocalAddr(t *testing.T) string {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("reserve local addr: %v", err)
+	}
+	defer func() {
+		_ = listener.Close()
+	}()
+	return listener.Addr().String()
 }
 
 func TestEvalEnqueueProcessorAdapterInvalidatesTenantCacheBeforeProcessing(t *testing.T) {

@@ -139,6 +139,12 @@ catalogSync:
   enabled: false
   replicaCount: 1
   target: catalog-sync
+  service:
+    enabled: true
+    type: ClusterIP
+    annotations: {}
+    ports:
+      http: 8080
   podAnnotations: {}
   podLabels: {}
   resources: {}
@@ -191,6 +197,12 @@ compactor:
   enabled: false
   replicaCount: 1
   target: compactor
+  service:
+    enabled: true
+    type: ClusterIP
+    annotations: {}
+    ports:
+      http: 8080
   podAnnotations: {}
   podLabels: {}
   resources: {}
@@ -204,6 +216,12 @@ evalWorker:
   enabled: false
   replicaCount: 1
   target: eval-worker
+  service:
+    enabled: true
+    type: ClusterIP
+    annotations: {}
+    ports:
+      http: 8080
   podAnnotations: {}
   podLabels: {}
   resources: {}
@@ -423,6 +441,42 @@ prometheus:
         static_configs:
           - targets:
               - localhost:9090
+      {{- if .Values.api.enabled }}
+      - job_name: sigil-api
+        static_configs:
+          - targets:
+              - {{ include "sigil.fullname" . }}:{{ .Values.service.ports.http }}
+      {{- end }}
+      {{- if and .Values.ingester.enabled .Values.ingester.service.enabled }}
+      - job_name: sigil-ingester
+        static_configs:
+          - targets:
+              - {{ include "sigil.fullname" . }}-ingester:{{ .Values.ingester.service.ports.http }}
+      {{- end }}
+      {{- if and .Values.querier.enabled .Values.querier.service.enabled }}
+      - job_name: sigil-querier
+        static_configs:
+          - targets:
+              - {{ include "sigil.fullname" . }}-querier:{{ .Values.querier.service.ports.http }}
+      {{- end }}
+      {{- if and .Values.compactor.enabled .Values.compactor.service.enabled }}
+      - job_name: sigil-compactor
+        static_configs:
+          - targets:
+              - {{ include "sigil.fullname" . }}-compactor:{{ .Values.compactor.service.ports.http }}
+      {{- end }}
+      {{- if and .Values.evalWorker.enabled .Values.evalWorker.service.enabled }}
+      - job_name: sigil-eval-worker
+        static_configs:
+          - targets:
+              - {{ include "sigil.fullname" . }}-eval-worker:{{ .Values.evalWorker.service.ports.http }}
+      {{- end }}
+      {{- if and .Values.catalogSync.enabled .Values.catalogSync.service.enabled }}
+      - job_name: sigil-catalog-sync
+        static_configs:
+          - targets:
+              - {{ include "sigil.fullname" . }}-catalog-sync:{{ .Values.catalogSync.service.ports.http }}
+      {{- end }}
 
 minio:
   # Enabled by default so Helm installs work out of the box with object storage.

@@ -79,17 +79,22 @@ func NewService(store ingestStore, generationLookup GenerationLookup, allowMissi
 }
 
 func (s *Service) Export(ctx context.Context, tenantID string, request ExportScoresRequest) ExportScoresResponse {
+	transport := transportFromContext(ctx)
+	observeScoreIngestBatch(transport, len(request.Scores))
+
 	response := ExportScoresResponse{Results: make([]ExportScoreResult, 0, len(request.Scores))}
 	trimmedTenantID := strings.TrimSpace(tenantID)
 	if trimmedTenantID == "" {
 		for _, item := range request.Scores {
 			response.Results = append(response.Results, ExportScoreResult{ScoreID: item.ScoreID, Accepted: false, Error: "tenant id is required"})
+			observeScoreIngestItem("", false, "tenant_missing", transport)
 		}
 		return response
 	}
 	if s.store == nil {
 		for _, item := range request.Scores {
 			response.Results = append(response.Results, ExportScoreResult{ScoreID: item.ScoreID, Accepted: false, Error: "eval store is required"})
+			observeScoreIngestItem(trimmedTenantID, false, "store_unavailable", transport)
 		}
 		return response
 	}
@@ -101,6 +106,7 @@ func (s *Service) Export(ctx context.Context, tenantID string, request ExportSco
 			result.Error = err.Error()
 			worker.ObserveScoreIngestError(trimmedTenantID, "validation")
 			response.Results = append(response.Results, result)
+			observeScoreIngestItem(trimmedTenantID, false, "validation", transport)
 			continue
 		}
 
@@ -110,12 +116,14 @@ func (s *Service) Export(ctx context.Context, tenantID string, request ExportSco
 				result.Error = fmt.Sprintf("generation lookup failed: %v", err)
 				worker.ObserveScoreIngestError(trimmedTenantID, "generation_lookup")
 				response.Results = append(response.Results, result)
+				observeScoreIngestItem(trimmedTenantID, false, "generation_lookup", transport)
 				continue
 			}
 			if generation == nil {
 				result.Error = "generation_id was not found"
 				worker.ObserveScoreIngestError(trimmedTenantID, "generation_not_found")
 				response.Results = append(response.Results, result)
+				observeScoreIngestItem(trimmedTenantID, false, "generation_not_found", transport)
 				continue
 			}
 		}
@@ -125,6 +133,7 @@ func (s *Service) Export(ctx context.Context, tenantID string, request ExportSco
 			result.Error = err.Error()
 			worker.ObserveScoreIngestError(trimmedTenantID, "insert")
 			response.Results = append(response.Results, result)
+			observeScoreIngestItem(trimmedTenantID, false, "insert_error", transport)
 			continue
 		}
 
@@ -135,6 +144,7 @@ func (s *Service) Export(ctx context.Context, tenantID string, request ExportSco
 		}
 		worker.ObserveScoreIngest(trimmedTenantID, source)
 		response.Results = append(response.Results, result)
+		observeScoreIngestItem(trimmedTenantID, true, "none", transport)
 	}
 
 	return response

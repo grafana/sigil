@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/grafana/dskit/tenant"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 func TestHTTPMiddlewareEnabledRequiresTenantHeader(t *testing.T) {
@@ -22,6 +23,19 @@ func TestHTTPMiddlewareEnabledRequiresTenantHeader(t *testing.T) {
 	protected.ServeHTTP(resp, req)
 	if resp.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", resp.Code)
+	}
+
+	before := testutil.ToFloat64(authFailuresTotal.WithLabelValues("http", "tenant_id"))
+	invalidTenantReq := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	invalidTenantReq.Header.Set("X-Scope-OrgID", "tenant with spaces")
+	invalidTenantResp := httptest.NewRecorder()
+	protected.ServeHTTP(invalidTenantResp, invalidTenantReq)
+	if invalidTenantResp.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for invalid tenant id, got %d", invalidTenantResp.Code)
+	}
+	after := testutil.ToFloat64(authFailuresTotal.WithLabelValues("http", "tenant_id"))
+	if delta := after - before; delta != 1 {
+		t.Fatalf("expected auth failure metric increment of 1, got %v", delta)
 	}
 
 	authorizedReq := httptest.NewRequest(http.MethodGet, "/protected", nil)

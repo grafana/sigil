@@ -1,0 +1,22 @@
+{{- if and .Values.evalWorker.enabled .Values.evalWorker.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sigil.fullname" . }}-eval-worker
+  labels:
+    {{- include "sigil.labels" . | nindent 4 }}
+    app.kubernetes.io/component: eval-worker
+  {{- with .Values.evalWorker.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.evalWorker.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.evalWorker.service.ports.http }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "sigil.evalWorkerSelectorLabels" . | nindent 4 }}
+{{- end }}

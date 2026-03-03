@@ -34,7 +34,7 @@ func RegisterHTTPRoutes(mux *http.ServeMux, service *Service, protectedMiddlewar
 			return
 		}
 
-		response := service.Export(req.Context(), tenantID, request)
+		response := service.Export(withTransport(req.Context(), "http"), tenantID, request)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
 		_ = json.NewEncoder(w).Encode(response)

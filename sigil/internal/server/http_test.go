@@ -370,6 +370,22 @@ func TestHealthRouteIsExemptFromTenantHeader(t *testing.T) {
 	}
 }
 
+func TestMetricsRouteIsExemptFromTenantHeader(t *testing.T) {
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: true, FakeTenantID: "fake"})
+	RegisterRoutes(mux, query.NewService(), generationingest.NewService(generationingest.NewMemoryStore()), feedback.NewService(feedback.NewMemoryStore()), true, true, newTestModelCardService(t), protected)
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.Code)
+	}
+	if !strings.Contains(resp.Body.String(), "sigil_") {
+		t.Fatalf("expected prometheus payload, body=%s", resp.Body.String())
+	}
+}
+
 func TestModelCardsListAndLookup(t *testing.T) {
 	mux := http.NewServeMux()
 	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})

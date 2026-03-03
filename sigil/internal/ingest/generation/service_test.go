@@ -7,6 +7,7 @@ import (
 
 	"github.com/grafana/dskit/user"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -237,6 +238,40 @@ func TestServiceExportRejectsMissingTenant(t *testing.T) {
 	}
 	if response.Results[0].Error == "" {
 		t.Fatalf("expected missing tenant error")
+	}
+}
+
+func TestServiceExportEmitsIngestMetrics(t *testing.T) {
+	svc := NewService(NewMemoryStore())
+	ctx := withTransport(tenantContext(), "http")
+
+	acceptedBefore := testutil.ToFloat64(generationIngestItemsTotal.WithLabelValues("tenant-a", "sync", "accepted", "none", "http"))
+	rejectedBefore := testutil.ToFloat64(generationIngestItemsTotal.WithLabelValues("tenant-a", "sync", "rejected", "validation", "http"))
+
+	response := svc.Export(ctx, &sigilv1.ExportGenerationsRequest{Generations: []*sigilv1.Generation{
+		{
+			Id:    "gen-metrics-ok",
+			Mode:  sigilv1.GenerationMode_GENERATION_MODE_SYNC,
+			Model: &sigilv1.ModelRef{Provider: "openai", Name: "gpt-5"},
+		},
+		{
+			Id:    "gen-metrics-bad",
+			Mode:  sigilv1.GenerationMode_GENERATION_MODE_SYNC,
+			Model: &sigilv1.ModelRef{Name: "gpt-5"},
+		},
+	}})
+	if len(response.Results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(response.Results))
+	}
+
+	acceptedAfter := testutil.ToFloat64(generationIngestItemsTotal.WithLabelValues("tenant-a", "sync", "accepted", "none", "http"))
+	rejectedAfter := testutil.ToFloat64(generationIngestItemsTotal.WithLabelValues("tenant-a", "sync", "rejected", "validation", "http"))
+
+	if delta := acceptedAfter - acceptedBefore; delta != 1 {
+		t.Fatalf("expected one accepted metric increment, got %v", delta)
+	}
+	if delta := rejectedAfter - rejectedBefore; delta != 1 {
+		t.Fatalf("expected one rejected metric increment, got %v", delta)
 	}
 }
 

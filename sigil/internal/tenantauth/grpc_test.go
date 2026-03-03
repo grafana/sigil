@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/grafana/dskit/tenant"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -13,11 +14,16 @@ import (
 
 func TestUnaryServerInterceptorRequiresTenantMetadataWhenEnabled(t *testing.T) {
 	interceptor := UnaryServerInterceptor(Config{Enabled: true, FakeTenantID: "fake"})
+	before := testutil.ToFloat64(authFailuresTotal.WithLabelValues("grpc", "tenant_context"))
 	_, err := interceptor(context.Background(), nil, &grpc.UnaryServerInfo{}, func(ctx context.Context, req any) (any, error) {
 		return nil, nil
 	})
 	if status.Code(err) != codes.Unauthenticated {
 		t.Fatalf("expected unauthenticated, got %v", err)
+	}
+	after := testutil.ToFloat64(authFailuresTotal.WithLabelValues("grpc", "tenant_context"))
+	if delta := after - before; delta != 1 {
+		t.Fatalf("expected auth failure metric increment of 1, got %v", delta)
 	}
 }
 

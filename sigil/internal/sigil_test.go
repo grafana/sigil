@@ -48,7 +48,9 @@ func TestRuntimeAllTargetFailsWithoutCompactorDependencies(t *testing.T) {
 	_, done := runRuntime(t, cfg)
 
 	err := awaitRuntimeError(t, done)
-	if !strings.Contains(err.Error(), "requires mysql storage backend") {
+	if !strings.Contains(err.Error(), "requires mysql storage backend") &&
+		!strings.Contains(err.Error(), "unsupported storage backend") &&
+		!strings.Contains(err.Error(), "open model-card mysql store") {
 		t.Fatalf("unexpected runtime error: %v", err)
 	}
 }

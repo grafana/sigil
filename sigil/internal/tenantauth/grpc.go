@@ -16,6 +16,7 @@ func UnaryServerInterceptor(cfg Config) grpc.UnaryServerInterceptor {
 		var err error
 		ctx, err = injectTenantContext(ctx, cfg)
 		if err != nil {
+			observeAuthFailure("grpc", "tenant_context")
 			return nil, status.Error(codes.Unauthenticated, err.Error())
 		}
 		return handler(ctx, req)
@@ -27,6 +28,7 @@ func StreamServerInterceptor(cfg Config) grpc.StreamServerInterceptor {
 	return func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx, err := injectTenantContext(ss.Context(), cfg)
 		if err != nil {
+			observeAuthFailure("grpc", "tenant_context")
 			return status.Error(codes.Unauthenticated, err.Error())
 		}
 		return handler(srv, wrappedServerStream{ServerStream: ss, ctx: ctx})

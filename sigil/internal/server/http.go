@@ -14,6 +14,7 @@ import (
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
 	"github.com/grafana/sigil/sigil/internal/modelcards"
 	"github.com/grafana/sigil/sigil/internal/query"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func RegisterRoutes(
@@ -37,6 +38,7 @@ func RegisterCoreRoutes(mux *http.ServeMux) {
 		return
 	}
 	mux.HandleFunc("/healthz", health)
+	mux.Handle("/metrics", promhttp.Handler())
 }
 
 // RegisterIngestRoutes wires generation ingest HTTP routes.

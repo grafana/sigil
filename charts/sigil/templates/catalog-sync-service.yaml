@@ -1,0 +1,22 @@
+{{- if and .Values.catalogSync.enabled .Values.catalogSync.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sigil.fullname" . }}-catalog-sync
+  labels:
+    {{- include "sigil.labels" . | nindent 4 }}
+    app.kubernetes.io/component: catalog-sync
+  {{- with .Values.catalogSync.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.catalogSync.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.catalogSync.service.ports.http }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "sigil.catalogSyncSelectorLabels" . | nindent 4 }}
+{{- end }}

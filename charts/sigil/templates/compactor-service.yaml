@@ -1,0 +1,22 @@
+{{- if and .Values.compactor.enabled .Values.compactor.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sigil.fullname" . }}-compactor
+  labels:
+    {{- include "sigil.labels" . | nindent 4 }}
+    app.kubernetes.io/component: compactor
+  {{- with .Values.compactor.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.compactor.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.compactor.service.ports.http }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "sigil.compactorSelectorLabels" . | nindent 4 }}
+{{- end }}

@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-03-02
+last_reviewed: 2026-03-03
 source_of_truth: true
 audience: both
 ---
@@ -29,6 +29,7 @@ This is the canonical navigation map for repository documentation.
 ## Structured Collections
 
 - Design docs: [`design-docs/index.md`](design-docs/index.md)
+  - Backend operational metrics baseline (active): `design-docs/2026-03-03-backend-operational-metrics-baseline.md`
   - Vercel AI SDK integration design (completed): `design-docs/2026-02-22-sdk-vercel-ai-sdk-integration.md`
   - Framework integration design (completed): `design-docs/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
   - Drafts: `design-docs/drafts/`
@@ -59,6 +60,7 @@ This is the canonical navigation map for repository documentation.
   - Current implementation priorities:
     - cross-track consistency and tracked tech debt follow-up (CI scope expansion, ingestion-log evolution)
   - Phase 2 umbrella coordinator: `exec-plans/active/2026-02-12-phase-2-delivery.md`
+  - Backend operational metrics baseline: `exec-plans/active/2026-03-03-backend-operational-metrics-baseline.md`
   - LangChain/LangGraph framework integration delivery: `exec-plans/completed/2026-02-20-sdk-langchain-langgraph-integrations.md`
   - OpenAI Agents/LlamaIndex/Google ADK framework integration delivery: `exec-plans/completed/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
   - Vercel AI SDK TypeScript integration delivery: `exec-plans/completed/2026-02-22-sdk-vercel-ai-sdk-integration.md`

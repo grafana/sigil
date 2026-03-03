@@ -11,6 +11,7 @@ import (
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	"github.com/grafana/sigil/sigil/internal/tenantauth"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 func TestServiceExportScores(t *testing.T) {
@@ -119,6 +120,49 @@ func TestHTTPExportScores(t *testing.T) {
 	}
 	if len(decoded.Results) != 1 || !decoded.Results[0].Accepted {
 		t.Fatalf("expected accepted result, got %#v", decoded.Results)
+	}
+}
+
+func TestServiceExportEmitsScoreIngestMetrics(t *testing.T) {
+	store := &ingestStoreStub{}
+	lookup := &generationLookupStub{existing: map[string]bool{"gen-1": true}}
+	service := NewService(store, lookup, false)
+
+	acceptedBefore := testutil.ToFloat64(scoreIngestItemsTotal.WithLabelValues("tenant-a", "accepted", "none", "http"))
+	rejectedBefore := testutil.ToFloat64(scoreIngestItemsTotal.WithLabelValues("tenant-a", "rejected", "validation", "http"))
+
+	response := service.Export(withTransport(context.Background(), "http"), "tenant-a", ExportScoresRequest{
+		Scores: []ScoreItem{
+			{
+				ScoreID:          "sc-ok",
+				GenerationID:     "gen-1",
+				EvaluatorID:      "custom.eval",
+				EvaluatorVersion: "v1",
+				ScoreKey:         "helpfulness",
+				Value:            ScoreValue{Number: floatPtr(0.7)},
+			},
+			{
+				ScoreID:          "sc-bad",
+				GenerationID:     "",
+				EvaluatorID:      "custom.eval",
+				EvaluatorVersion: "v1",
+				ScoreKey:         "helpfulness",
+				Value:            ScoreValue{Number: floatPtr(0.2)},
+			},
+		},
+	})
+	if len(response.Results) != 2 {
+		t.Fatalf("expected two results, got %d", len(response.Results))
+	}
+
+	acceptedAfter := testutil.ToFloat64(scoreIngestItemsTotal.WithLabelValues("tenant-a", "accepted", "none", "http"))
+	rejectedAfter := testutil.ToFloat64(scoreIngestItemsTotal.WithLabelValues("tenant-a", "rejected", "validation", "http"))
+
+	if delta := acceptedAfter - acceptedBefore; delta != 1 {
+		t.Fatalf("expected one accepted metric increment, got %v", delta)
+	}
+	if delta := rejectedAfter - rejectedBefore; delta != 1 {
+		t.Fatalf("expected one rejected metric increment, got %v", delta)
 	}
 }
 

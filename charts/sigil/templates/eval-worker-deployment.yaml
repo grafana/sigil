@@ -45,8 +45,12 @@ spec:
           args:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.evalWorker.service.ports.http }}
+              protocol: TCP
           env:
-            {{- include "sigil.commonEnv" (dict "root" . "target" .Values.evalWorker.target "extraEnv" .Values.evalWorker.extraEnv) | nindent 12 }}
+            {{- include "sigil.commonEnv" (dict "root" . "target" .Values.evalWorker.target "extraEnv" .Values.evalWorker.extraEnv "httpPort" .Values.evalWorker.service.ports.http) | nindent 12 }}
           {{- if or .Values.sigil.extraEnvFrom .Values.evalWorker.extraEnvFrom }}
           envFrom:
             {{- with .Values.sigil.extraEnvFrom }}

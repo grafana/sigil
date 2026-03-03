@@ -45,8 +45,12 @@ spec:
           args:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.catalogSync.service.ports.http }}
+              protocol: TCP
           env:
-            {{- include "sigil.commonEnv" (dict "root" . "target" .Values.catalogSync.target "extraEnv" .Values.catalogSync.extraEnv) | nindent 12 }}
+            {{- include "sigil.commonEnv" (dict "root" . "target" .Values.catalogSync.target "extraEnv" .Values.catalogSync.extraEnv "httpPort" .Values.catalogSync.service.ports.http) | nindent 12 }}
           {{- if or .Values.sigil.extraEnvFrom .Values.catalogSync.extraEnvFrom }}
           envFrom:
             {{- with .Values.sigil.extraEnvFrom }}

@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-22
+last_reviewed: 2026-03-03
 source_of_truth: true
 audience: agents
 ---
@@ -33,6 +33,7 @@ This folder stores durable engineering decisions for Sigil.
 - [`2026-02-17-embedding-call-observability.md`](2026-02-17-embedding-call-observability.md) (completed)
 - [`2026-02-20-sdk-langchain-langgraph-integrations.md`](2026-02-20-sdk-langchain-langgraph-integrations.md) (completed)
 - [`2026-03-02-evaluator-templates.md`](2026-03-02-evaluator-templates.md) (active)
+- [`2026-03-03-backend-operational-metrics-baseline.md`](2026-03-03-backend-operational-metrics-baseline.md) (active)
 
 ## Drafts
 

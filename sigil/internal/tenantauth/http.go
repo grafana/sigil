@@ -14,6 +14,7 @@ func HTTPMiddleware(cfg Config) func(http.Handler) http.Handler {
 		return func(next http.Handler) http.Handler {
 			protected := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 				if _, err := tenant.TenantID(req.Context()); err != nil {
+					observeAuthFailure("http", "tenant_id")
 					http.Error(w, err.Error(), http.StatusUnauthorized)
 					return
 				}
@@ -26,6 +27,7 @@ func HTTPMiddleware(cfg Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			if err := tenant.ValidTenantID(cfg.FakeTenantID); err != nil {
+				observeAuthFailure("http", "invalid_fake_tenant")
 				http.Error(w, "invalid fake tenant id", http.StatusInternalServerError)
 				return
 			}

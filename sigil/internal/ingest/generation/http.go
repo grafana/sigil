@@ -27,7 +27,7 @@ func NewHTTPHandler(exporter Exporter) http.HandlerFunc {
 			return
 		}
 
-		response := exporter.Export(req.Context(), &request)
+		response := exporter.Export(withTransport(req.Context(), "http"), &request)
 		payload, err := protojson.MarshalOptions{UseProtoNames: true}.Marshal(response)
 		if err != nil {
 			http.Error(w, "marshal response", http.StatusInternalServerError)

@@ -107,6 +107,15 @@ func (r *Runtime) registerModules() error {
 	if err := r.moduleInit.AddDependency(config.TargetQuerier, config.TargetServer); err != nil {
 		return err
 	}
+	if err := r.moduleInit.AddDependency(config.TargetCompactor, config.TargetServer); err != nil {
+		return err
+	}
+	if err := r.moduleInit.AddDependency(config.TargetCatalogSync, config.TargetServer); err != nil {
+		return err
+	}
+	if err := r.moduleInit.AddDependency(config.TargetEvalWorker, config.TargetServer); err != nil {
+		return err
+	}
 	return r.moduleInit.AddDependency(config.TargetAll, config.TargetIngester, config.TargetQuerier, config.TargetCompactor, config.TargetEvalWorker)
 }
 

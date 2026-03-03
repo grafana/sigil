@@ -8,5 +8,5 @@ metadata:
     app.kubernetes.io/component: prometheus
 data:
   prometheus.yaml: |
-{{ .Values.prometheus.config | nindent 4 }}
+{{ tpl .Values.prometheus.config . | nindent 4 }}
 {{- end }}

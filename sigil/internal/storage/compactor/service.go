@@ -476,6 +476,8 @@ func (s *Service) writeAndFinalize(ctx context.Context, tenantID string, rows []
 	}
 
 	observeCompacted(len(generations))
+	observeCompactionBatchRows(len(generations))
+	observeCompactionBlockSizeBytes(built.Meta.SizeBytes)
 	_ = level.Info(s.logger).Log(
 		"msg", "compactor block created",
 		"phase", compactPhase,

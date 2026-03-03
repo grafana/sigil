@@ -51,12 +51,19 @@ func (s *Service) Export(ctx context.Context, req *sigilv1.ExportGenerationsRequ
 	if req != nil {
 		requestedCount = len(req.Generations)
 	}
+	transport := transportFromContext(ctx)
+	observeGenerationBatchSize(transport, requestedCount)
+
 	ctx, span := generationTracer.Start(
 		ctx,
 		"sigil.generation.export",
 		trace.WithAttributes(attribute.Int("sigil.generation.requested_count", requestedCount)),
 	)
 	defer span.End()
+	metricTenantID := ""
+	if tenantID, err := tenant.TenantID(ctx); err == nil {
+		metricTenantID = tenantID
+	}
 
 	if req == nil || len(req.Generations) == 0 {
 		span.SetAttributes(
@@ -69,17 +76,22 @@ func (s *Service) Export(ctx context.Context, req *sigilv1.ExportGenerationsRequ
 	results := make([]ExportResult, len(req.Generations))
 	accepted := make([]*sigilv1.Generation, 0, len(req.Generations))
 	acceptedIdx := make([]int, 0, len(req.Generations))
+	modes := make([]sigilv1.GenerationMode, len(req.Generations))
+	reasons := make([]string, len(req.Generations))
 
 	for i := range req.Generations {
 		generation := cloneGeneration(req.Generations[i])
 		if generation == nil {
 			results[i] = ExportResult{Accepted: false, Error: "generation is required"}
+			reasons[i] = "nil_generation"
 			continue
 		}
 
 		normalizeGeneration(generation)
+		modes[i] = generation.GetMode()
 		if err := validateGeneration(generation); err != nil {
 			results[i] = ExportResult{GenerationID: generation.Id, Accepted: false, Error: err.Error()}
+			reasons[i] = "validation"
 			continue
 		}
 
@@ -96,8 +108,10 @@ func (s *Service) Export(ctx context.Context, req *sigilv1.ExportGenerationsRequ
 			for _, idx := range acceptedIdx {
 				results[idx].Accepted = false
 				results[idx].Error = err.Error()
+				reasons[idx] = "tenant_resolution"
 			}
 		} else {
+			metricTenantID = tenantID
 			span.SetAttributes(attribute.String("sigil.tenant.id", tenantID))
 			storeCtx, storeSpan := generationTracer.Start(
 				ctx,
@@ -115,6 +129,7 @@ func (s *Service) Export(ctx context.Context, req *sigilv1.ExportGenerationsRequ
 					storeFailures++
 					results[idx].Accepted = false
 					results[idx].Error = errs[i].Error()
+					reasons[idx] = "store_error"
 				}
 			}
 			storeSpan.SetAttributes(attribute.Int("sigil.generation.save_failure_count", storeFailures))
@@ -127,11 +142,15 @@ func (s *Service) Export(ctx context.Context, req *sigilv1.ExportGenerationsRequ
 
 	response := &sigilv1.ExportGenerationsResponse{Results: make([]*sigilv1.ExportGenerationResult, len(results))}
 	for i := range results {
+		if reasons[i] == "" && results[i].Accepted {
+			reasons[i] = "none"
+		}
 		response.Results[i] = &sigilv1.ExportGenerationResult{
 			GenerationId: results[i].GenerationID,
 			Accepted:     results[i].Accepted,
 			Error:        results[i].Error,
 		}
+		observeGenerationItemOutcome(metricTenantID, modes[i], results[i].Accepted, reasons[i], transport)
 	}
 	acceptedCount := 0
 	for _, result := range results {

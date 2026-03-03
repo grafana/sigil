@@ -38,6 +38,17 @@ var queryFanOutDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Buckets: prometheus.DefBuckets,
 }, []string{"source"})
 
+var queryResolutionTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "sigil_query_resolution_total",
+	Help: "Query read-path resolution outcomes by operation.",
+}, []string{"operation", "result"})
+
+var queryReturnedItems = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	Name:    "sigil_query_returned_items",
+	Help:    "Number of items returned by query operations.",
+	Buckets: []float64{0, 1, 2, 5, 10, 20, 50, 100, 250, 500, 1000},
+}, []string{"operation"})
+
 type fanOutGenerationResult struct {
 	generation *sigilv1.Generation
 	err        error
@@ -101,6 +112,8 @@ func (s *FanOutStore) GetGenerationByID(ctx context.Context, tenantID, generatio
 
 	hotResult := <-hotResultCh
 	if hotResult.err != nil {
+		observeQueryResolution("get_by_id", "error")
+		observeQueryReturnedItems("get_by_id", 0)
 		logger.Error("fanout get by id hot read failed",
 			"tenant_id", tenantID,
 			"generation_id", generationID,
@@ -109,6 +122,8 @@ func (s *FanOutStore) GetGenerationByID(ctx context.Context, tenantID, generatio
 		return nil, hotResult.err
 	}
 	if hotResult.generation != nil {
+		observeQueryResolution("get_by_id", "hot")
+		observeQueryReturnedItems("get_by_id", 1)
 		logger.Debug("fanout get by id resolved from hot storage",
 			"tenant_id", tenantID,
 			"generation_id", generationID,
@@ -118,6 +133,8 @@ func (s *FanOutStore) GetGenerationByID(ctx context.Context, tenantID, generatio
 
 	coldResult := <-coldResultCh
 	if coldResult.err != nil {
+		observeQueryResolution("get_by_id", "error")
+		observeQueryReturnedItems("get_by_id", 0)
 		logger.Error("fanout get by id cold read failed",
 			"tenant_id", tenantID,
 			"generation_id", generationID,
@@ -126,12 +143,17 @@ func (s *FanOutStore) GetGenerationByID(ctx context.Context, tenantID, generatio
 		return nil, coldResult.err
 	}
 	if coldResult.generation != nil {
+		observeQueryResolution("get_by_id", "cold")
+		observeQueryReturnedItems("get_by_id", 1)
 		logger.Debug("fanout get by id resolved from cold storage",
 			"tenant_id", tenantID,
 			"generation_id", generationID,
 		)
+		return coldResult.generation, nil
 	}
-	return coldResult.generation, nil
+	observeQueryResolution("get_by_id", "miss")
+	observeQueryReturnedItems("get_by_id", 0)
+	return nil, nil
 }
 
 // ListConversationGenerations returns all generations for a conversation with
@@ -175,6 +197,8 @@ func (s *FanOutStore) ListConversationGenerations(ctx context.Context, tenantID,
 	coldResult := <-coldResultCh
 
 	if hotResult.err != nil {
+		observeQueryResolution("list_conversation", "error")
+		observeQueryReturnedItems("list_conversation", 0)
 		logger.Error("fanout list conversation generations hot read failed",
 			"tenant_id", tenantID,
 			"conversation_id", conversationID,
@@ -183,6 +207,8 @@ func (s *FanOutStore) ListConversationGenerations(ctx context.Context, tenantID,
 		return nil, hotResult.err
 	}
 	if coldResult.err != nil {
+		observeQueryResolution("list_conversation", "error")
+		observeQueryReturnedItems("list_conversation", 0)
 		logger.Error("fanout list conversation generations cold read failed",
 			"tenant_id", tenantID,
 			"conversation_id", conversationID,
@@ -192,6 +218,17 @@ func (s *FanOutStore) ListConversationGenerations(ctx context.Context, tenantID,
 	}
 
 	merged := mergeGenerationsPreferHot(hotResult.generations, coldResult.generations)
+	resolution := "miss"
+	switch {
+	case len(hotResult.generations) > 0 && len(coldResult.generations) > 0:
+		resolution = "merged"
+	case len(hotResult.generations) > 0:
+		resolution = "hot"
+	case len(coldResult.generations) > 0:
+		resolution = "cold"
+	}
+	observeQueryResolution("list_conversation", resolution)
+	observeQueryReturnedItems("list_conversation", len(merged))
 	logger.Debug("fanout list conversation generations completed",
 		"tenant_id", tenantID,
 		"conversation_id", conversationID,
@@ -200,6 +237,17 @@ func (s *FanOutStore) ListConversationGenerations(ctx context.Context, tenantID,
 		"merged_count", len(merged),
 	)
 	return merged, nil
+}
+
+func observeQueryResolution(operation, result string) {
+	queryResolutionTotal.WithLabelValues(operation, result).Inc()
+}
+
+func observeQueryReturnedItems(operation string, count int) {
+	if count < 0 {
+		count = 0
+	}
+	queryReturnedItems.WithLabelValues(operation).Observe(float64(count))
 }
 
 func (s *FanOutStore) hasColdReadPath() bool {

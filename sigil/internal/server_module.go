@@ -78,23 +78,34 @@ func (m *serverModule) start(_ context.Context) error {
 		Handler: httpHandler,
 	}
 
-	m.grpcServer = grpc.NewServer(
-		grpc.StatsHandler(otelgrpc.NewServerHandler()),
-		grpc.UnaryInterceptor(tenantauth.UnaryServerInterceptor(tenantAuthCfg)),
-		grpc.StreamInterceptor(tenantauth.StreamServerInterceptor(tenantAuthCfg)),
-	)
-	if m.registry != nil {
-		m.registry.ApplyGRPC(m.grpcServer)
-	}
+	startGRPC := shouldStartGRPCServer(m.registry)
+	if startGRPC {
+		m.grpcServer = grpc.NewServer(
+			grpc.StatsHandler(otelgrpc.NewServerHandler()),
+			grpc.ChainUnaryInterceptor(
+				grpcMetricsUnaryInterceptor(),
+				tenantauth.UnaryServerInterceptor(tenantAuthCfg),
+			),
+			grpc.ChainStreamInterceptor(
+				grpcMetricsStreamInterceptor(),
+				tenantauth.StreamServerInterceptor(tenantAuthCfg),
+			),
+		)
+		if m.registry != nil {
+			m.registry.ApplyGRPC(m.grpcServer)
+		}
 
-	listener, err := net.Listen("tcp", m.cfg.OTLPGRPCAddr)
-	if err != nil {
-		return fmt.Errorf("listen grpc %s: %w", m.cfg.OTLPGRPCAddr, err)
+		listener, err := net.Listen("tcp", m.cfg.OTLPGRPCAddr)
+		if err != nil {
+			return fmt.Errorf("listen grpc %s: %w", m.cfg.OTLPGRPCAddr, err)
+		}
+		m.grpcListener = listener
 	}
-	m.grpcListener = listener
 
 	go m.serveHTTP()
-	go m.serveGRPC()
+	if startGRPC {
+		go m.serveGRPC()
+	}
 	return nil
 }
 
@@ -140,6 +151,13 @@ func (m *serverModule) serveGRPC() {
 	}
 }
 
+func shouldStartGRPCServer(registry *serverTransportRegistry) bool {
+	if registry == nil {
+		return false
+	}
+	return registry.HasGRPCRegistrars()
+}
+
 func (m *serverModule) pushRunError(err error) {
 	select {
 	case m.runErr <- err:
@@ -149,7 +167,8 @@ func (m *serverModule) pushRunError(err error) {
 
 type statusCapturingResponseWriter struct {
 	http.ResponseWriter
-	statusCode int
+	statusCode   int
+	bytesWritten int
 }
 
 type routePatternResolver interface {
@@ -172,7 +191,9 @@ func (w *statusCapturingResponseWriter) Write(body []byte) (int, error) {
 	if w.statusCode == 0 {
 		w.statusCode = http.StatusOK
 	}
-	return w.ResponseWriter.Write(body)
+	n, err := w.ResponseWriter.Write(body)
+	w.bytesWritten += n
+	return n, err
 }
 
 func (w *statusCapturingResponseWriter) status() int {
@@ -214,7 +235,12 @@ func withHTTPTracing(next http.Handler) http.Handler {
 			next.ServeHTTP(w, req)
 			return
 		}
+		start := time.Now()
 		routePattern := resolveRoutePattern(next, req)
+		requestBytes := req.ContentLength
+		if requestBytes < 0 {
+			requestBytes = 0
+		}
 
 		ctx := req.Context()
 		propagator := otel.GetTextMapPropagator()
@@ -250,6 +276,7 @@ func withHTTPTracing(next http.Handler) http.Handler {
 		if statusCode >= http.StatusInternalServerError {
 			span.SetStatus(codes.Error, http.StatusText(statusCode))
 		}
+		observeHTTPRequestMetrics(req, routePattern, statusCode, time.Since(start), requestBytes, recorder.bytesWritten)
 	})
 }
 

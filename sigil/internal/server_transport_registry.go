@@ -75,3 +75,12 @@ func (r *serverTransportRegistry) ApplyGRPC(server *grpc.Server) {
 		registrar(server)
 	}
 }
+
+func (r *serverTransportRegistry) HasGRPCRegistrars() bool {
+	if r == nil {
+		return false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.grpcRegistrars) > 0
+}

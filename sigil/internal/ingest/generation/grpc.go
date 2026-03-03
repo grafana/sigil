@@ -17,5 +17,5 @@ func NewGRPCServer(exporter Exporter) *GRPCServer {
 }
 
 func (s *GRPCServer) ExportGenerations(ctx context.Context, req *sigilv1.ExportGenerationsRequest) (*sigilv1.ExportGenerationsResponse, error) {
-	return s.exporter.Export(ctx, req), nil
+	return s.exporter.Export(withTransport(ctx, "grpc"), req), nil
 }

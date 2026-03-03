@@ -7,6 +7,7 @@ import (
 	"time"
 
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -102,6 +103,43 @@ func TestFanOutStoreGetGenerationByIDFallsBackToCold(t *testing.T) {
 	}
 	if generation == nil || generation.GetId() != "gen-cold" {
 		t.Fatalf("expected cold fallback generation, got %#v", generation)
+	}
+}
+
+func TestFanOutStoreGetGenerationByIDEmitsResolutionMetrics(t *testing.T) {
+	base := time.Date(2026, 2, 19, 10, 0, 0, 0, time.UTC)
+	coldGeneration := fanOutTestGeneration("gen-metrics", "conv-1", base.Add(time.Minute))
+	index, generationsByOffset := buildFanOutTestBlock(t, []*sigilv1.Generation{coldGeneration})
+
+	store := NewFanOutStore(
+		&fanOutTestWALReader{
+			getByID: func(_ context.Context, _, _ string) (*sigilv1.Generation, error) {
+				return nil, nil
+			},
+		},
+		&fanOutTestBlockMetadataStore{
+			listBlocks: func(_ context.Context, _ string, _, _ time.Time) ([]BlockMeta, error) {
+				return []BlockMeta{{TenantID: "tenant-a", BlockID: "block-1"}}, nil
+			},
+		},
+		&fanOutTestBlockReader{
+			readIndex: func(_ context.Context, _, _ string) (*BlockIndex, error) {
+				return index, nil
+			},
+			readGenerations: func(_ context.Context, _, _ string, entries []IndexEntry) ([]*sigilv1.Generation, error) {
+				return fanOutGenerationsFromEntries(entries, generationsByOffset), nil
+			},
+		},
+	)
+
+	coldBefore := testutil.ToFloat64(queryResolutionTotal.WithLabelValues("get_by_id", "cold"))
+	_, err := store.GetGenerationByID(context.Background(), "tenant-a", "gen-metrics")
+	if err != nil {
+		t.Fatalf("get generation by id: %v", err)
+	}
+	coldAfter := testutil.ToFloat64(queryResolutionTotal.WithLabelValues("get_by_id", "cold"))
+	if delta := coldAfter - coldBefore; delta != 1 {
+		t.Fatalf("expected cold resolution metric increment of 1, got %v", delta)
 	}
 }
 

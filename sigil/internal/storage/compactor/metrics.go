@@ -60,6 +60,16 @@ var (
 		Help:    "Duration of stale claim sweep in seconds.",
 		Buckets: prometheus.DefBuckets,
 	})
+	compactorCompactedBatchRows = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "sigil_compactor_compacted_batch_rows",
+		Help:    "Rows compacted per finalized compaction batch.",
+		Buckets: []float64{1, 2, 5, 10, 20, 50, 100, 250, 500, 1000},
+	})
+	compactorBlockSizeBytes = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "sigil_compactor_block_size_bytes",
+		Help:    "Size in bytes of compacted blocks written to cold storage.",
+		Buckets: []float64{1024, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864},
+	})
 )
 
 func observeRunMetrics(phase, status string, start time.Time) {
@@ -73,6 +83,20 @@ func observeCompacted(count int) {
 	}
 	compactorBlocksCreatedTotal.Inc()
 	compactorGenerationsCompactedTotal.Add(float64(count))
+}
+
+func observeCompactionBatchRows(count int) {
+	if count <= 0 {
+		return
+	}
+	compactorCompactedBatchRows.Observe(float64(count))
+}
+
+func observeCompactionBlockSizeBytes(size int64) {
+	if size <= 0 {
+		return
+	}
+	compactorBlockSizeBytes.Observe(float64(size))
 }
 
 func observeTruncated(count int64) {

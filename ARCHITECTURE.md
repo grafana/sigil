@@ -71,7 +71,13 @@ Framework contract defaults:
 - Alloy/Collector enriches telemetry with infrastructure metadata (k8s namespace, cluster, service, pod) and forwards:
   - Traces to Tempo.
   - Metrics to Prometheus.
-- Sigil is NOT in the trace or metrics path. Traces and metrics flow through the standard OTel pipeline.
+- Sigil is NOT in the SDK trace/metrics path. SDK traces and SDK metrics flow through the standard OTel pipeline.
+
+### Sigil backend operational metrics
+
+- Sigil runtime components expose operational Prometheus metrics at `GET /metrics`.
+- These metrics cover Sigil internals (HTTP/gRPC transport, ingest outcomes, compactor, storage read/write internals, query fan-out).
+- They are scraped directly from Sigil component services by Prometheus and are separate from SDK-emitted OTel metrics.
 
 ### SDK metrics
 
@@ -159,6 +165,7 @@ Write path components:
 4. Client SDKs export OTLP traces and metrics to Alloy / OTel Collector.
 5. Alloy enriches telemetry with infrastructure metadata and forwards traces to Tempo and metrics to Prometheus.
 6. Compactor target reads MySQL generations, writes object blocks + metadata, then marks/truncates compacted rows.
+7. Prometheus scrapes Sigil `GET /metrics` endpoints for backend operational metrics.
 
 ```mermaid
 flowchart LR
