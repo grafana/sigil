@@ -7,6 +7,10 @@ import (
 
 	"github.com/grafana/dskit/user"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 const testTenantID = "tenant-a"
@@ -39,6 +43,60 @@ func TestServiceExportAcceptsValidBatch(t *testing.T) {
 	}
 	if stored.Mode != sigilv1.GenerationMode_GENERATION_MODE_SYNC {
 		t.Fatalf("expected stored mode sync")
+	}
+}
+
+func TestServiceExportEmitsTracingSpans(t *testing.T) {
+	store := NewMemoryStore()
+	svc := NewService(store)
+
+	spanRecorder := tracetest.NewSpanRecorder()
+	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder))
+
+	prevTracerProvider := otel.GetTracerProvider()
+	prevPropagator := otel.GetTextMapPropagator()
+	otel.SetTracerProvider(tracerProvider)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	t.Cleanup(func() {
+		_ = tracerProvider.Shutdown(context.Background())
+		otel.SetTracerProvider(prevTracerProvider)
+		otel.SetTextMapPropagator(prevPropagator)
+	})
+
+	response := svc.Export(tenantContext(), &sigilv1.ExportGenerationsRequest{Generations: []*sigilv1.Generation{
+		{
+			Id:    "gen-trace",
+			Mode:  sigilv1.GenerationMode_GENERATION_MODE_SYNC,
+			Model: &sigilv1.ModelRef{Provider: "openai", Name: "gpt-5"},
+		},
+	}})
+	if len(response.Results) != 1 || !response.Results[0].Accepted {
+		t.Fatalf("expected accepted export response, got %#v", response.Results)
+	}
+
+	spans := spanRecorder.Ended()
+	if len(spans) == 0 {
+		t.Fatalf("expected ended spans")
+	}
+
+	var exportSpan sdktrace.ReadOnlySpan
+	var saveBatchSpan sdktrace.ReadOnlySpan
+	for _, span := range spans {
+		switch span.Name() {
+		case "sigil.generation.export":
+			exportSpan = span
+		case "sigil.generation.store.save_batch":
+			saveBatchSpan = span
+		}
+	}
+	if exportSpan == nil {
+		t.Fatalf("expected export span, got spans=%d", len(spans))
+	}
+	if saveBatchSpan == nil {
+		t.Fatalf("expected save batch span, got spans=%d", len(spans))
+	}
+	if saveBatchSpan.Parent().SpanID() != exportSpan.SpanContext().SpanID() {
+		t.Fatalf("expected save batch span to be child of export span")
 	}
 }
 

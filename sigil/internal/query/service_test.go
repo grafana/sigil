@@ -7,6 +7,10 @@ import (
 
 	"github.com/grafana/sigil/sigil/internal/feedback"
 	"github.com/grafana/sigil/sigil/internal/storage"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 func TestListConversationsForTenantAppliesFeedbackFilters(t *testing.T) {
@@ -176,6 +180,56 @@ func TestListConversationsForTenantReturnsEmptySliceWhenNoRows(t *testing.T) {
 	}
 	if len(items) != 0 {
 		t.Fatalf("expected empty list, got %d items", len(items))
+	}
+}
+
+func TestListConversationsForTenantEmitsTracingSpan(t *testing.T) {
+	base := time.Date(2026, 2, 20, 12, 0, 0, 0, time.UTC)
+	service := NewServiceWithStores(&testConversationStore{
+		items: []storage.Conversation{{
+			TenantID:         "tenant-a",
+			ConversationID:   "conv-1",
+			LastGenerationAt: base,
+			GenerationCount:  1,
+			CreatedAt:        base.Add(-time.Minute),
+			UpdatedAt:        base,
+		}},
+	}, feedback.NewMemoryStore())
+
+	spanRecorder := tracetest.NewSpanRecorder()
+	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder))
+
+	prevTracerProvider := otel.GetTracerProvider()
+	prevPropagator := otel.GetTextMapPropagator()
+	otel.SetTracerProvider(tracerProvider)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	t.Cleanup(func() {
+		_ = tracerProvider.Shutdown(context.Background())
+		otel.SetTracerProvider(prevTracerProvider)
+		otel.SetTextMapPropagator(prevPropagator)
+	})
+
+	items, err := service.ListConversationsForTenant(context.Background(), "tenant-a", ConversationListFilter{})
+	if err != nil {
+		t.Fatalf("list conversations: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected one conversation, got %d", len(items))
+	}
+
+	spans := spanRecorder.Ended()
+	if len(spans) == 0 {
+		t.Fatalf("expected tracing span")
+	}
+	found := false
+	for _, span := range spans {
+		if span.Name() == "sigil.query.list_conversations" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected sigil.query.list_conversations span")
 	}
 }
 
