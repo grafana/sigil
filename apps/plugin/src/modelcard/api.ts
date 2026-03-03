@@ -1,10 +1,6 @@
 import { lastValueFrom } from 'rxjs';
 import { getBackendSrv } from '@grafana/runtime';
-import type {
-  ModelCardLookupResponse,
-  ModelCardResolveResponse,
-  ModelResolvePair,
-} from './types';
+import type { ModelCardLookupResponse, ModelCardResolveResponse, ModelResolvePair } from './types';
 
 const queryBasePath = '/api/plugins/grafana-sigil-app/resources/query';
 

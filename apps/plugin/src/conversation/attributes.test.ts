@@ -97,9 +97,7 @@ describe('getBoolAttr', () => {
 
 describe('getStringArrayAttr', () => {
   it('returns array of stringValues', () => {
-    const attrs = makeAttrs([
-      ['key', { arrayValue: { values: [{ stringValue: 'a' }, { stringValue: 'b' }] } }],
-    ]);
+    const attrs = makeAttrs([['key', { arrayValue: { values: [{ stringValue: 'a' }, { stringValue: 'b' }] } }]]);
     expect(getStringArrayAttr(attrs, 'key')).toEqual(['a', 'b']);
   });
 
@@ -143,9 +141,7 @@ describe('getRequest', () => {
 
 describe('getResponse', () => {
   it('extracts response with finish reasons array', () => {
-    const span = makeSpan([
-      [ATTR_RESPONSE_FINISH_REASONS, { arrayValue: { values: [{ stringValue: 'stop' }] } }],
-    ]);
+    const span = makeSpan([[ATTR_RESPONSE_FINISH_REASONS, { arrayValue: { values: [{ stringValue: 'stop' }] } }]]);
     const resp = getResponse(span);
     expect(resp.finishReasons).toEqual(['stop']);
   });
@@ -153,9 +149,7 @@ describe('getResponse', () => {
 
 describe('getTokenUsage', () => {
   it('extracts standard and provider-specific tokens', () => {
-    const span = makeSpan([
-      [ATTR_USAGE_INPUT_TOKENS, { intValue: '1000' }],
-    ]);
+    const span = makeSpan([[ATTR_USAGE_INPUT_TOKENS, { intValue: '1000' }]]);
     const usage = getTokenUsage(span);
     expect(usage.inputTokens).toBe(1000);
     expect(usage.outputTokens).toBeUndefined();
@@ -164,9 +158,7 @@ describe('getTokenUsage', () => {
 
 describe('getToolInfo', () => {
   it('extracts tool fields', () => {
-    const span = makeSpan([
-      [ATTR_TOOL_NAME, { stringValue: 'search' }],
-    ]);
+    const span = makeSpan([[ATTR_TOOL_NAME, { stringValue: 'search' }]]);
     expect(getToolInfo(span).name).toBe('search');
   });
 });
@@ -180,9 +172,7 @@ describe('getEmbeddingInfo', () => {
 
 describe('getErrorInfo', () => {
   it('extracts error type and category', () => {
-    const span = makeSpan([
-      [ATTR_ERROR_TYPE, { stringValue: 'provider_call_error' }],
-    ]);
+    const span = makeSpan([[ATTR_ERROR_TYPE, { stringValue: 'provider_call_error' }]]);
     expect(getErrorInfo(span).type).toBe('provider_call_error');
   });
 });

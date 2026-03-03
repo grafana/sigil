@@ -205,7 +205,8 @@ export function buildTraceSpans(traceID: string, payload: unknown): ParsedTraceS
 
     for (const resourceSpan of resourceSpans) {
       const serviceName = findServiceName(resourceSpan);
-      const scopeSpans = resourceSpan.scopeSpans ?? resourceSpan.scope_spans ?? resourceSpan.instrumentationLibrarySpans;
+      const scopeSpans =
+        resourceSpan.scopeSpans ?? resourceSpan.scope_spans ?? resourceSpan.instrumentationLibrarySpans;
       if (!Array.isArray(scopeSpans)) {
         continue;
       }
@@ -308,10 +309,20 @@ export function classifySigilSpanKind(span: ParsedTraceSpan): SigilSpanKind {
   if (joined.includes('eval') || joined.includes('score') || joined.includes('judge')) {
     return 'evaluation';
   }
-  if (GENERATION_OPERATION_NAMES.has(operationName) || joined.includes('generation') || joined.includes('prompt') || joined.includes('response')) {
+  if (
+    GENERATION_OPERATION_NAMES.has(operationName) ||
+    joined.includes('generation') ||
+    joined.includes('prompt') ||
+    joined.includes('response')
+  ) {
     return 'generation';
   }
-  if (MODEL_OPERATION_NAMES.has(operationName) || joined.includes('model') || joined.includes('llm') || joined.includes('embedding')) {
+  if (
+    MODEL_OPERATION_NAMES.has(operationName) ||
+    joined.includes('model') ||
+    joined.includes('llm') ||
+    joined.includes('embedding')
+  ) {
     return 'model';
   }
   return 'other';
@@ -402,7 +413,9 @@ export function groupSpansByGenerationID(
   const grouped: Record<string, SigilSpan[]> = {};
   const selectedSpans = selectSpansForMode(spans, mode);
   for (const generation of generations) {
-    grouped[generation.generation_id] = selectedSpans.filter((span) => isSpanAssociatedWithGeneration(generation, span));
+    grouped[generation.generation_id] = selectedSpans.filter((span) =>
+      isSpanAssociatedWithGeneration(generation, span)
+    );
   }
   return grouped;
 }

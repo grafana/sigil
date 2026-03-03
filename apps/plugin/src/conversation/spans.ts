@@ -131,11 +131,7 @@ function isOTLPTrace(obj: unknown): obj is OTLPTrace {
     return false;
   }
   const record = obj as Record<string, unknown>;
-  return (
-    Array.isArray(record.resourceSpans) ||
-    Array.isArray(record.resource_spans) ||
-    Array.isArray(record.batches)
-  );
+  return Array.isArray(record.resourceSpans) || Array.isArray(record.resource_spans) || Array.isArray(record.batches);
 }
 
 function getTraceCandidates(payload: unknown): OTLPTrace[] {
@@ -167,7 +163,8 @@ export function parseOTLPTrace(traceID: string, payload: unknown): ParsedSpan[] 
     const resourceSpans = candidate.resourceSpans ?? candidate.resource_spans ?? candidate.batches ?? [];
     for (const resourceSpan of resourceSpans) {
       const serviceName = findServiceName(resourceSpan.resource);
-      const scopeSpans = resourceSpan.scopeSpans ?? resourceSpan.scope_spans ?? resourceSpan.instrumentationLibrarySpans ?? [];
+      const scopeSpans =
+        resourceSpan.scopeSpans ?? resourceSpan.scope_spans ?? resourceSpan.instrumentationLibrarySpans ?? [];
       for (const scopeSpan of scopeSpans) {
         if (!scopeSpan.spans) {
           continue;
@@ -264,9 +261,7 @@ export function buildSpanTree(
     a.startTimeUnixNano < b.startTimeUnixNano ? -1 : a.startTimeUnixNano > b.startTimeUnixNano ? 1 : 0
   );
 
-  const orphanGenerations = generations.filter(
-    (gen) => !matchedGenerationIDs.has(gen.generation_id)
-  );
+  const orphanGenerations = generations.filter((gen) => !matchedGenerationIDs.has(gen.generation_id));
 
   return { roots, orphanGenerations };
 }

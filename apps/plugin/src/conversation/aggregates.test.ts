@@ -60,9 +60,7 @@ describe('getAllGenerations', () => {
     const orphan = makeGen({ generation_id: 'orphan' });
 
     const data = makeData({
-      spans: [
-        makeSpan({ generation: gen1, children: [makeSpan({ spanID: 'child', generation: gen2 })] }),
-      ],
+      spans: [makeSpan({ generation: gen1, children: [makeSpan({ spanID: 'child', generation: gen2 })] })],
       orphanGenerations: [orphan],
     });
 
@@ -98,7 +96,13 @@ describe('getTokenSummary', () => {
       spans: [
         makeSpan({
           generation: makeGen({
-            usage: { input_tokens: 100, output_tokens: 50, total_tokens: 150, cache_read_input_tokens: 20, reasoning_tokens: 10 },
+            usage: {
+              input_tokens: 100,
+              output_tokens: 50,
+              total_tokens: 150,
+              cache_read_input_tokens: 20,
+              reasoning_tokens: 10,
+            },
           }),
         }),
       ],
@@ -167,7 +171,10 @@ describe('getModelUsageBreakdown', () => {
         makeSpan({
           spanID: 's2',
           children: [
-            makeSpan({ spanID: 's3', generation: makeGen({ generation_id: 'g2', model: { provider: 'anthropic', name: 'claude-3' } }) }),
+            makeSpan({
+              spanID: 's3',
+              generation: makeGen({ generation_id: 'g2', model: { provider: 'anthropic', name: 'claude-3' } }),
+            }),
           ],
         }),
       ],
@@ -205,12 +212,8 @@ describe('getErrorSummary', () => {
 
 describe('getSpanSummary', () => {
   it('counts spans by type', () => {
-    const genAttrs = new Map<string, SpanAttributeValue>([
-      ['gen_ai.operation.name', { stringValue: 'generateText' }],
-    ]);
-    const toolAttrs = new Map<string, SpanAttributeValue>([
-      ['gen_ai.operation.name', { stringValue: 'execute_tool' }],
-    ]);
+    const genAttrs = new Map<string, SpanAttributeValue>([['gen_ai.operation.name', { stringValue: 'generateText' }]]);
+    const toolAttrs = new Map<string, SpanAttributeValue>([['gen_ai.operation.name', { stringValue: 'execute_tool' }]]);
 
     const data = makeData({
       spans: [

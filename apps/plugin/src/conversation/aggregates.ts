@@ -32,7 +32,7 @@ function addUsageToSummary(summary: TokenSummary, gen: GenerationDetail): void {
   summary.cacheReadTokens += u.cache_read_input_tokens ?? 0;
   summary.cacheWriteTokens += u.cache_write_input_tokens ?? 0;
   summary.reasoningTokens += u.reasoning_tokens ?? 0;
-  summary.totalTokens += u.total_tokens ?? ((u.input_tokens ?? 0) + (u.output_tokens ?? 0));
+  summary.totalTokens += u.total_tokens ?? (u.input_tokens ?? 0) + (u.output_tokens ?? 0);
 }
 
 export function getAllGenerations(data: ConversationData): GenerationDetail[] {

@@ -1,5 +1,10 @@
 import type { ModelCardClient } from '../modelcard/api';
-import type { ModelCard, ModelCardPricing, ModelCardResolveResponse, ModelCardLookupResponse } from '../modelcard/types';
+import type {
+  ModelCard,
+  ModelCardPricing,
+  ModelCardResolveResponse,
+  ModelCardLookupResponse,
+} from '../modelcard/types';
 import { calculateGenerationCost, resolveGenerationCost, resolveGenerationCosts } from './cost';
 import type { GenerationDetail, GenerationUsage } from './types';
 
@@ -126,11 +131,22 @@ describe('resolveGenerationCost', () => {
   });
 
   it('falls back to lookup when resolve fails', async () => {
-    const lookupResp: ModelCardLookupResponse = { data: testCard, freshness: { catalog_last_refreshed_at: null, stale: false, soft_stale: false, hard_stale: false, source_path: 'memory_live' } };
+    const lookupResp: ModelCardLookupResponse = {
+      data: testCard,
+      freshness: {
+        catalog_last_refreshed_at: null,
+        stale: false,
+        soft_stale: false,
+        hard_stale: false,
+        source_path: 'memory_live',
+      },
+    };
     const client: ModelCardClient = {
-      resolve: jest.fn().mockResolvedValue(
-        makeResolvedResponse([{ provider: 'openai', model: 'gpt-4o', status: 'unresolved', reason: 'not_found' }])
-      ),
+      resolve: jest
+        .fn()
+        .mockResolvedValue(
+          makeResolvedResponse([{ provider: 'openai', model: 'gpt-4o', status: 'unresolved', reason: 'not_found' }])
+        ),
       lookup: jest.fn().mockResolvedValue(lookupResp),
     };
 
@@ -183,11 +199,22 @@ describe('resolveGenerationCosts', () => {
   });
 
   it('uses lookup fallback for unresolved pairs', async () => {
-    const lookupResp: ModelCardLookupResponse = { data: testCard, freshness: { catalog_last_refreshed_at: null, stale: false, soft_stale: false, hard_stale: false, source_path: 'memory_live' } };
+    const lookupResp: ModelCardLookupResponse = {
+      data: testCard,
+      freshness: {
+        catalog_last_refreshed_at: null,
+        stale: false,
+        soft_stale: false,
+        hard_stale: false,
+        source_path: 'memory_live',
+      },
+    };
     const client: ModelCardClient = {
-      resolve: jest.fn().mockResolvedValue(
-        makeResolvedResponse([{ provider: 'openai', model: 'gpt-4o', status: 'unresolved', reason: 'not_found' }])
-      ),
+      resolve: jest
+        .fn()
+        .mockResolvedValue(
+          makeResolvedResponse([{ provider: 'openai', model: 'gpt-4o', status: 'unresolved', reason: 'not_found' }])
+        ),
       lookup: jest.fn().mockResolvedValue(lookupResp),
     };
 

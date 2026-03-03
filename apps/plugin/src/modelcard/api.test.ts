@@ -1,10 +1,5 @@
 import type { ModelCardClient } from './api';
-import type {
-  ModelCard,
-  ModelCardLookupResponse,
-  ModelCardPricing,
-  ModelCardResolveResponse,
-} from './types';
+import type { ModelCard, ModelCardLookupResponse, ModelCardPricing, ModelCardResolveResponse } from './types';
 
 const basePricing: ModelCardPricing = {
   prompt_usd_per_token: 0.0025,

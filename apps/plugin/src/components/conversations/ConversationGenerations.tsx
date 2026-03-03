@@ -5,8 +5,13 @@ import { getBackendSrv } from '@grafana/runtime';
 import { Alert, Button, Input, Select, Spinner, Stack, Switch, useStyles2 } from '@grafana/ui';
 import { lastValueFrom } from 'rxjs';
 import type { GenerationDetail } from '../../conversation/types';
-import type { ParsedTraceSpan, SigilSpan, SigilSpanKind } from '../../conversation/traceSpans';
-import { buildTraceSpans, selectSpansForMode } from '../../conversation/traceSpans';
+import {
+  buildTraceSpans,
+  selectSpansForMode,
+  type ParsedTraceSpan,
+  type SigilSpan,
+  type SigilSpanKind,
+} from '../../conversation/traceSpans';
 import SigilSpanTree from './SigilSpanTree';
 
 export type ConversationGenerationsProps = {
@@ -202,7 +207,12 @@ export default function ConversationGenerations({
   }, [generations]);
 
   useEffect(() => {
-    void loadAllGenerationSpans();
+    const timeoutID = window.setTimeout(() => {
+      void loadAllGenerationSpans();
+    }, 0);
+    return () => {
+      window.clearTimeout(timeoutID);
+    };
   }, [loadAllGenerationSpans]);
 
   const visibleSpans = useMemo(

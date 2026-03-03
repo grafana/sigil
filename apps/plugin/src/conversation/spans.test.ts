@@ -85,9 +85,7 @@ describe('parseOTLPTrace', () => {
       batches: [
         {
           resource: { attributes: [] },
-          instrumentationLibrarySpans: [
-            { spans: [makeOTLPSpan({ spanId: 'batch-span' })] },
-          ],
+          instrumentationLibrarySpans: [{ spans: [makeOTLPSpan({ spanId: 'batch-span' })] }],
         },
       ],
     };
@@ -121,9 +119,7 @@ describe('parseOTLPTrace', () => {
   });
 
   it('skips spans without startTimeUnixNano', () => {
-    const payload = makeOTLPPayload([
-      makeOTLPSpan({ startTimeUnixNano: undefined, start_time_unix_nano: undefined }),
-    ]);
+    const payload = makeOTLPPayload([makeOTLPSpan({ startTimeUnixNano: undefined, start_time_unix_nano: undefined })]);
     expect(parseOTLPTrace('t1', payload)).toHaveLength(0);
   });
 
@@ -186,10 +182,7 @@ describe('buildSpanTree', () => {
     const payload2 = makeOTLPPayload([
       makeOTLPSpan({ spanId: 'root-b', parentSpanId: '', startTimeUnixNano: '1000', endTimeUnixNano: '2000' }),
     ]);
-    const spans = [
-      ...parseOTLPTrace('trace-a', payload1),
-      ...parseOTLPTrace('trace-b', payload2),
-    ];
+    const spans = [...parseOTLPTrace('trace-a', payload1), ...parseOTLPTrace('trace-b', payload2)];
     const { roots } = buildSpanTree(spans, []);
     expect(roots).toHaveLength(2);
     expect(roots[0].spanID).toBe('root-b');

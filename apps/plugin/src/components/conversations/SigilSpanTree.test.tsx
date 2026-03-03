@@ -28,10 +28,28 @@ function makeSpan({
 describe('SigilSpanTree', () => {
   it('starts with roots collapsed and expands in hierarchy order', () => {
     const spans: SigilSpan[] = [
-      makeSpan({ selectionID: 'child-2', spanID: 'child-2', parentSpanID: 'root', name: 'second child', startNs: BigInt(3) }),
+      makeSpan({
+        selectionID: 'child-2',
+        spanID: 'child-2',
+        parentSpanID: 'root',
+        name: 'second child',
+        startNs: BigInt(3),
+      }),
       makeSpan({ selectionID: 'root', spanID: 'root', name: 'root', startNs: BigInt(1) }),
-      makeSpan({ selectionID: 'child-1', spanID: 'child-1', parentSpanID: 'root', name: 'first child', startNs: BigInt(2) }),
-      makeSpan({ selectionID: 'grandchild', spanID: 'grandchild', parentSpanID: 'child-1', name: 'grandchild', startNs: BigInt(4) }),
+      makeSpan({
+        selectionID: 'child-1',
+        spanID: 'child-1',
+        parentSpanID: 'root',
+        name: 'first child',
+        startNs: BigInt(2),
+      }),
+      makeSpan({
+        selectionID: 'grandchild',
+        spanID: 'grandchild',
+        parentSpanID: 'child-1',
+        name: 'grandchild',
+        startNs: BigInt(4),
+      }),
     ];
 
     render(<SigilSpanTree spans={spans} />);
@@ -75,7 +93,13 @@ describe('SigilSpanTree', () => {
     const spans: SigilSpan[] = [
       makeSpan({ selectionID: 'root-a', spanID: 'root-a', name: 'root-a', startNs: BigInt(1) }),
       makeSpan({ selectionID: 'root-b', spanID: 'root-b', name: 'root-b', startNs: BigInt(2) }),
-      makeSpan({ selectionID: 'child-a', spanID: 'child-a', parentSpanID: 'root-a', name: 'child-a', startNs: BigInt(3) }),
+      makeSpan({
+        selectionID: 'child-a',
+        spanID: 'child-a',
+        parentSpanID: 'root-a',
+        name: 'child-a',
+        startNs: BigInt(3),
+      }),
     ];
 
     render(<SigilSpanTree spans={spans} />);
@@ -100,8 +124,20 @@ describe('SigilSpanTree', () => {
 
   it('nests by parentSpanID within the same trace', () => {
     const spans: SigilSpan[] = [
-      makeSpan({ selectionID: 'root-trace-1', traceID: 'trace-1', spanID: 'root', name: 'root-trace-1', startNs: BigInt(1) }),
-      makeSpan({ selectionID: 'root-trace-2', traceID: 'trace-2', spanID: 'root', name: 'root-trace-2', startNs: BigInt(2) }),
+      makeSpan({
+        selectionID: 'root-trace-1',
+        traceID: 'trace-1',
+        spanID: 'root',
+        name: 'root-trace-1',
+        startNs: BigInt(1),
+      }),
+      makeSpan({
+        selectionID: 'root-trace-2',
+        traceID: 'trace-2',
+        spanID: 'root',
+        name: 'root-trace-2',
+        startNs: BigInt(2),
+      }),
       makeSpan({
         selectionID: 'child-trace-2',
         traceID: 'trace-2',

@@ -330,7 +330,8 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   const selectedConversationRequestVersionRef = useRef<number>(0);
 
   const selectedSpanSelectionID = searchParams.get('span') ?? '';
-  const selectedSpan = selectedSpanSelectionID.length > 0 ? (loadedSpansBySelectionID[selectedSpanSelectionID] ?? null) : null;
+  const selectedSpan =
+    selectedSpanSelectionID.length > 0 ? (loadedSpansBySelectionID[selectedSpanSelectionID] ?? null) : null;
 
   const loadConversations = useCallback(async (): Promise<void> => {
     requestVersionRef.current += 1;

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Icon, useStyles2 } from '@grafana/ui';
@@ -76,7 +76,9 @@ function buildSpanTree(spans: SigilSpan[]): SpanTree {
     childrenByParentTreeKey.set(parentTreeKey, [...children].sort(sortSpanRows));
   }
   const roots = spans
-    .filter((span) => span.parentSpanID.length === 0 || !bySpanTreeKey.has(toSpanTreeKey(span.traceID, span.parentSpanID)))
+    .filter(
+      (span) => span.parentSpanID.length === 0 || !bySpanTreeKey.has(toSpanTreeKey(span.traceID, span.parentSpanID))
+    )
     .sort(sortSpanRows);
   return { roots, childrenByParentTreeKey };
 }
@@ -190,27 +192,20 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function SigilSpanTree({
-  spans,
-  selectedSpanSelectionID = '',
-  onSelectSpan,
-}: SigilSpanTreeProps) {
+export default function SigilSpanTree({ spans, selectedSpanSelectionID = '', onSelectSpan }: SigilSpanTreeProps) {
   const styles = useStyles2(getStyles);
   const tree = useMemo(() => buildSpanTree(spans), [spans]);
-  const [expandedSpanTreeKeys, setExpandedSpanTreeKeys] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    const availableSpanTreeKeys = new Set(spans.map((span) => getSpanTreeKey(span)));
-    setExpandedSpanTreeKeys((current) => {
-      const next = new Set<string>();
-      for (const spanTreeKey of current) {
-        if (availableSpanTreeKeys.has(spanTreeKey)) {
-          next.add(spanTreeKey);
-        }
+  const [requestedExpandedSpanTreeKeys, setRequestedExpandedSpanTreeKeys] = useState<Set<string>>(new Set());
+  const availableSpanTreeKeys = useMemo(() => new Set(spans.map((span) => getSpanTreeKey(span))), [spans]);
+  const expandedSpanTreeKeys = useMemo(() => {
+    const next = new Set<string>();
+    for (const spanTreeKey of requestedExpandedSpanTreeKeys) {
+      if (availableSpanTreeKeys.has(spanTreeKey)) {
+        next.add(spanTreeKey);
       }
-      return next;
-    });
-  }, [spans]);
+    }
+    return next;
+  }, [availableSpanTreeKeys, requestedExpandedSpanTreeKeys]);
 
   const rows = useMemo(() => buildVisibleRows(tree, expandedSpanTreeKeys), [tree, expandedSpanTreeKeys]);
 
@@ -227,7 +222,7 @@ export default function SigilSpanTree({
                 aria-label={`${isExpanded ? 'collapse' : 'expand'} span ${span.name}`}
                 aria-expanded={isExpanded}
                 onClick={() => {
-                  setExpandedSpanTreeKeys((current) => {
+                  setRequestedExpandedSpanTreeKeys((current) => {
                     const next = new Set(current);
                     if (next.has(spanTreeKey)) {
                       next.delete(spanTreeKey);
@@ -253,7 +248,7 @@ export default function SigilSpanTree({
               onClick={() => {
                 onSelectSpan?.(span);
                 if (depth === 0 && hasChildren && !isExpanded) {
-                  setExpandedSpanTreeKeys((current) => new Set(current).add(spanTreeKey));
+                  setRequestedExpandedSpanTreeKeys((current) => new Set(current).add(spanTreeKey));
                 }
               }}
               style={{ paddingLeft: `${depth * INDENT_PX}px` }}

@@ -100,9 +100,7 @@ describe('loadConversation', () => {
 
   it('handles orphan generations without trace_id', async () => {
     const detail = makeDetail({
-      generations: [
-        { generation_id: 'orphan', conversation_id: 'conv-1' },
-      ],
+      generations: [{ generation_id: 'orphan', conversation_id: 'conv-1' }],
     });
     const fetchTrace = jest.fn();
 
@@ -116,9 +114,7 @@ describe('loadConversation', () => {
 
   it('handles trace fetch failures gracefully', async () => {
     const detail = makeDetail({
-      generations: [
-        { generation_id: 'gen-1', conversation_id: 'conv-1', trace_id: 'trace-fail', span_id: 's1' },
-      ],
+      generations: [{ generation_id: 'gen-1', conversation_id: 'conv-1', trace_id: 'trace-fail', span_id: 's1' }],
     });
     const fetchTrace = jest.fn().mockRejectedValue(new Error('network error'));
 
