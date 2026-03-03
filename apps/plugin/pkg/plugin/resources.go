@@ -75,21 +75,55 @@ func (a *App) handleSearchTagValues(w http.ResponseWriter, req *http.Request) {
 	a.handleProxy(w, req, fmt.Sprintf("/api/v1/search/tag/%s/values", url.PathEscape(tag)), http.MethodGet)
 }
 
+func (a *App) handleSettingsRoutes(w http.ResponseWriter, req *http.Request) {
+	switch req.URL.Path {
+	case "/query/settings":
+		a.handleProxy(w, req, "/api/v1/settings", http.MethodGet)
+	case "/query/settings/datasources":
+		a.handleProxy(w, req, "/api/v1/settings/datasources", http.MethodPut)
+	default:
+		http.NotFound(w, req)
+	}
+}
+
 func (a *App) handlePrometheusProxyRoutes(w http.ResponseWriter, req *http.Request) {
-	a.handleDownstreamProxy(w, req, "/query/proxy/prometheus/", "/api/v1/proxy/prometheus")
+	if !a.hasGrafanaDatasourceProxyTarget(a.prometheusDatasourceUID) {
+		http.Error(w, "grafana prometheus datasource proxy is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	a.handleGrafanaDatasourceProxy(
+		w,
+		req,
+		"/query/proxy/prometheus/",
+		fmt.Sprintf("/api/datasources/uid/%s/resources", a.prometheusDatasourceUID),
+	)
 }
 
 func (a *App) handleTempoProxyRoutes(w http.ResponseWriter, req *http.Request) {
-	a.handleDownstreamProxy(w, req, "/query/proxy/tempo/", "/api/v1/proxy/tempo")
+	if !a.hasGrafanaDatasourceProxyTarget(a.tempoDatasourceUID) {
+		http.Error(w, "grafana tempo datasource proxy is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	a.handleGrafanaDatasourceProxy(
+		w,
+		req,
+		"/query/proxy/tempo/",
+		fmt.Sprintf("/api/datasources/proxy/uid/%s", a.tempoDatasourceUID),
+	)
 }
 
-func (a *App) handleDownstreamProxy(w http.ResponseWriter, req *http.Request, routePrefix string, upstreamPrefix string) {
+func (a *App) hasGrafanaDatasourceProxyTarget(datasourceUID string) bool {
+	return strings.TrimSpace(datasourceUID) != "" &&
+		strings.TrimSpace(a.grafanaAppURL) != ""
+}
+
+func (a *App) handleGrafanaDatasourceProxy(w http.ResponseWriter, req *http.Request, routePrefix string, datasourcePrefix string) {
 	downstreamPath, ok := downstreamProxyPath(req.URL.Path, routePrefix)
 	if !ok {
 		http.Error(w, "invalid proxy path", http.StatusBadRequest)
 		return
 	}
-	a.handleProxy(w, req, upstreamPrefix+downstreamPath, req.Method)
+	a.handleGrafanaProxy(w, req, datasourcePrefix+downstreamPath, req.Method)
 }
 
 func downstreamProxyPath(path string, routePrefix string) (string, bool) {
@@ -157,6 +191,9 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 	// responses. Without this the upstream may gzip the body, but
 	// our proxy does not forward Content-Encoding, causing garbled output.
 	proxyReq.Header.Del("Accept-Encoding")
+	if a.apiAuthToken != "" {
+		proxyReq.SetBasicAuth(a.tenantID, a.apiAuthToken)
+	}
 	injectTenantHeaders(proxyReq, a.tenantID)
 	injectOperatorIdentityHeaders(proxyReq, method, path)
 
@@ -173,6 +210,53 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 	}()
 
 	// Forward the upstream Content-Type when available; fall back to JSON.
+	ct := resp.Header.Get("Content-Type")
+	if ct == "" {
+		ct = "application/json"
+	}
+	w.Header().Set("Content-Type", ct)
+	w.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(w, resp.Body)
+}
+
+func (a *App) handleGrafanaProxy(w http.ResponseWriter, req *http.Request, path string, method string) {
+	if req.Method != method {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	upstream := strings.TrimRight(a.grafanaAppURL, "/") + path
+	if req.URL.RawQuery != "" {
+		upstream += "?" + req.URL.RawQuery
+	}
+
+	var body io.Reader
+	if req.Body != nil {
+		body = req.Body
+	}
+	proxyReq, err := http.NewRequestWithContext(req.Context(), method, upstream, body)
+	if err != nil {
+		writeStub(w, http.StatusInternalServerError, path, fmt.Sprintf("build request: %v", err))
+		return
+	}
+
+	proxyReq.Header = req.Header.Clone()
+	proxyReq.Header.Del("Accept-Encoding")
+	if token := strings.TrimSpace(a.grafanaServiceAccountToken); token != "" {
+		proxyReq.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	resp, err := a.client.Do(proxyReq)
+	if err != nil {
+		writeStub(w, http.StatusBadGateway, path, fmt.Sprintf("upstream unavailable: %v", err))
+		return
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			_ = closeErr
+		}
+	}()
+
 	ct := resp.Header.Get("Content-Type")
 	if ct == "" {
 		ct = "application/json"
@@ -250,6 +334,8 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/query/generations/", a.handleGenerationRoutes)
 	mux.HandleFunc("/query/search/tags", a.handleSearchTags)
 	mux.HandleFunc("/query/search/tag/", a.handleSearchTagValues)
+	mux.HandleFunc("/query/settings", a.handleSettingsRoutes)
+	mux.HandleFunc("/query/settings/datasources", a.handleSettingsRoutes)
 	mux.HandleFunc("/query/proxy/prometheus/", a.handlePrometheusProxyRoutes)
 	mux.HandleFunc("/query/proxy/tempo/", a.handleTempoProxyRoutes)
 	mux.HandleFunc("/query/model-cards", a.handleListModelCards)

@@ -1,0 +1,1 @@
+Run mise run format and mise run lint and mise run test etc. in one command. Iterate until everything is happy.

@@ -10,7 +10,7 @@ audience: both
 
 Baseline capture date: 2026-02-19  
 Host: Apple M4 Pro (`darwin/arm64`)  
-Go runtime: `go1.25.6` via `mise` toolchain
+Go runtime: `go1.25.7` via `mise` toolchain
 
 ## Commands
 

@@ -2,6 +2,7 @@ import { lastValueFrom } from 'rxjs';
 import { getBackendSrv } from '@grafana/runtime';
 import type {
   ConversationDetail,
+  ConversationListResponse,
   ConversationSearchRequest,
   ConversationSearchResponse,
   GenerationDetail,
@@ -21,6 +22,7 @@ function toUnixSeconds(value: string): string {
 }
 
 export type ConversationsDataSource = {
+  listConversations?: () => Promise<ConversationListResponse>;
   searchConversations: (request: ConversationSearchRequest) => Promise<ConversationSearchResponse>;
   getConversationDetail: (conversationID: string) => Promise<ConversationDetail>;
   getGeneration: (generationID: string) => Promise<GenerationDetail>;
@@ -29,6 +31,16 @@ export type ConversationsDataSource = {
 };
 
 export const defaultConversationsDataSource: ConversationsDataSource = {
+  async listConversations() {
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<ConversationListResponse>({
+        method: 'GET',
+        url: `${queryBasePath}/conversations`,
+      })
+    );
+    return response.data;
+  },
+
   async searchConversations(request) {
     const response = await lastValueFrom(
       getBackendSrv().fetch<ConversationSearchResponse>({

@@ -108,7 +108,6 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
 function getStyles(theme: GrafanaTheme2) {
   return {
     container: css({
-      padding: theme.spacing(3, 3),
       display: 'flex',
       flexDirection: 'column',
       gap: theme.spacing(3),

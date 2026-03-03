@@ -17,9 +17,7 @@ import (
 )
 
 func TestEvaluatorCRUDHTTP(t *testing.T) {
-	store := newMemoryControlStore()
-	service := NewService(store, nil)
-	mux := newEvalMux(service)
+	mux, _, _ := newEvalHTTPEnv(t)
 
 	createPayload := `{
 		"evaluator_id":"custom.helpfulness",
@@ -38,7 +36,7 @@ func TestEvaluatorCRUDHTTP(t *testing.T) {
 		t.Fatalf("expected 200 list evaluators, got %d body=%s", listResp.Code, listResp.Body.String())
 	}
 	if !strings.Contains(listResp.Body.String(), `"custom.helpfulness"`) {
-		t.Fatalf("expected evaluator id in list response, body=%s", listResp.Body.String())
+		t.Errorf("expected evaluator id in list response, body=%s", listResp.Body.String())
 	}
 
 	getResp := doRequest(mux, http.MethodGet, "/api/v1/eval/evaluators/custom.helpfulness", "")
@@ -58,6 +56,19 @@ func TestEvaluatorCRUDHTTP(t *testing.T) {
 	missingResp := doRequest(mux, http.MethodGet, "/api/v1/eval/evaluators/custom.helpfulness", "")
 	if missingResp.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 after delete, got %d body=%s", missingResp.Code, missingResp.Body.String())
+	}
+}
+
+func TestDecodeJSONBody_WhitespaceOnlyBodyReturnsRequiredError(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/eval/evaluators", bytes.NewBufferString(" \n\t "))
+
+	var payload map[string]any
+	err := decodeJSONBody(req, &payload)
+	if err == nil {
+		t.Fatal("expected error for whitespace-only body")
+	}
+	if err.Error() != "request body is required" {
+		t.Fatalf("expected request body required error, got %q", err.Error())
 	}
 }
 
@@ -93,14 +104,12 @@ func TestDeleteEvaluatorRejectsEnabledRuleReferences(t *testing.T) {
 		t.Fatalf("expected 400 delete referenced evaluator, got %d body=%s", deleteResp.Code, deleteResp.Body.String())
 	}
 	if !strings.Contains(deleteResp.Body.String(), `referenced by enabled rules`) {
-		t.Fatalf("expected referenced-rule validation error, got body=%s", deleteResp.Body.String())
+		t.Errorf("expected referenced-rule validation error, got body=%s", deleteResp.Body.String())
 	}
 }
 
 func TestCreateEvaluatorNormalizesIdentifiersWithWhitespace(t *testing.T) {
-	store := newMemoryControlStore()
-	service := NewService(store, nil)
-	mux := newEvalMux(service)
+	mux, _, _ := newEvalHTTPEnv(t)
 
 	createPayload := `{
 		"evaluator_id":"  custom.helpfulness  ",
@@ -119,22 +128,20 @@ func TestCreateEvaluatorNormalizesIdentifiersWithWhitespace(t *testing.T) {
 		t.Fatalf("decode create response: %v", err)
 	}
 	if created.EvaluatorID != "custom.helpfulness" {
-		t.Fatalf("expected trimmed evaluator_id, got %q", created.EvaluatorID)
+		t.Errorf("expected trimmed evaluator_id, got %q", created.EvaluatorID)
 	}
 	if created.Version != "2026-02-17" {
-		t.Fatalf("expected trimmed version, got %q", created.Version)
+		t.Errorf("expected trimmed version, got %q", created.Version)
 	}
 
 	getResp := doRequest(mux, http.MethodGet, "/api/v1/eval/evaluators/custom.helpfulness", "")
 	if getResp.Code != http.StatusOK {
-		t.Fatalf("expected 200 get evaluator using trimmed id, got %d body=%s", getResp.Code, getResp.Body.String())
+		t.Errorf("expected 200 get evaluator using trimmed id, got %d body=%s", getResp.Code, getResp.Body.String())
 	}
 }
 
 func TestCreateEvaluatorRejectsMultipleOutputKeys(t *testing.T) {
-	store := newMemoryControlStore()
-	service := NewService(store, nil)
-	mux := newEvalMux(service)
+	mux, _, _ := newEvalHTTPEnv(t)
 
 	createPayload := `{
 		"evaluator_id":"custom.multi-output",
@@ -151,15 +158,13 @@ func TestCreateEvaluatorRejectsMultipleOutputKeys(t *testing.T) {
 		t.Fatalf("expected 400 create evaluator, got %d body=%s", createResp.Code, createResp.Body.String())
 	}
 	if !strings.Contains(createResp.Body.String(), "exactly one key") {
-		t.Fatalf("expected single-output validation error, got body=%s", createResp.Body.String())
+		t.Errorf("expected single-output validation error, got body=%s", createResp.Body.String())
 	}
 }
 
 func TestCreateEvaluatorReturnsInternalServerErrorOnStoreFailure(t *testing.T) {
-	store := newMemoryControlStore()
+	mux, _, store := newEvalHTTPEnv(t)
 	store.createEvaluatorErr = errors.New("mysql unavailable")
-	service := NewService(store, nil)
-	mux := newEvalMux(service)
 
 	createPayload := `{
 		"evaluator_id":"custom.helpfulness",
@@ -173,7 +178,7 @@ func TestCreateEvaluatorReturnsInternalServerErrorOnStoreFailure(t *testing.T) {
 		t.Fatalf("expected 500 create evaluator on store failure, got %d body=%s", createResp.Code, createResp.Body.String())
 	}
 	if !strings.Contains(createResp.Body.String(), "internal server error") {
-		t.Fatalf("expected generic internal server error body, got body=%s", createResp.Body.String())
+		t.Errorf("expected generic internal server error body, got body=%s", createResp.Body.String())
 	}
 }
 
@@ -211,7 +216,7 @@ func TestRuleCRUDHTTP(t *testing.T) {
 		t.Fatalf("expected 200 list rules, got %d body=%s", listResp.Code, listResp.Body.String())
 	}
 	if !strings.Contains(listResp.Body.String(), `"rule-helpfulness"`) {
-		t.Fatalf("expected rule id in list response, body=%s", listResp.Body.String())
+		t.Errorf("expected rule id in list response, body=%s", listResp.Body.String())
 	}
 
 	patchResp := doRequest(mux, http.MethodPatch, "/api/v1/eval/rules/rule-helpfulness", `{"enabled":false}`)
@@ -219,7 +224,7 @@ func TestRuleCRUDHTTP(t *testing.T) {
 		t.Fatalf("expected 200 patch rule, got %d body=%s", patchResp.Code, patchResp.Body.String())
 	}
 	if !strings.Contains(patchResp.Body.String(), `"enabled":false`) {
-		t.Fatalf("expected enabled=false after patch, body=%s", patchResp.Body.String())
+		t.Errorf("expected enabled=false after patch, body=%s", patchResp.Body.String())
 	}
 
 	deleteResp := doRequest(mux, http.MethodDelete, "/api/v1/eval/rules/rule-helpfulness", "")
@@ -270,7 +275,7 @@ func TestEnableRuleRejectsMissingEvaluators(t *testing.T) {
 		t.Fatalf("expected 400 enable rule with missing evaluator, got %d body=%s", enableResp.Code, enableResp.Body.String())
 	}
 	if !strings.Contains(enableResp.Body.String(), `evaluator "custom.helpfulness" was not found`) {
-		t.Fatalf("expected missing evaluator error, got body=%s", enableResp.Body.String())
+		t.Errorf("expected missing evaluator error, got body=%s", enableResp.Body.String())
 	}
 }
 
@@ -304,13 +309,13 @@ func TestCreateRuleDefaultsEnabledAndSampleRateWhenOmitted(t *testing.T) {
 		t.Fatalf("decode create response: %v", err)
 	}
 	if !created.Enabled {
-		t.Fatalf("expected enabled default true")
+		t.Errorf("expected enabled default true")
 	}
 	if created.SampleRate != defaultRuleSampleRate {
-		t.Fatalf("expected sample_rate default %v, got %v", defaultRuleSampleRate, created.SampleRate)
+		t.Errorf("expected sample_rate default %v, got %v", defaultRuleSampleRate, created.SampleRate)
 	}
 	if created.Selector != evalpkg.SelectorUserVisibleTurn {
-		t.Fatalf("expected selector default %q, got %q", evalpkg.SelectorUserVisibleTurn, created.Selector)
+		t.Errorf("expected selector default %q, got %q", evalpkg.SelectorUserVisibleTurn, created.Selector)
 	}
 }
 
@@ -346,10 +351,10 @@ func TestCreateRuleSupportsExplicitZeroSamplingAndDisabled(t *testing.T) {
 		t.Fatalf("decode create response: %v", err)
 	}
 	if created.Enabled {
-		t.Fatalf("expected explicit enabled=false to be preserved")
+		t.Errorf("expected explicit enabled=false to be preserved")
 	}
 	if created.SampleRate != 0 {
-		t.Fatalf("expected explicit sample_rate=0 to be preserved, got %v", created.SampleRate)
+		t.Errorf("expected explicit sample_rate=0 to be preserved, got %v", created.SampleRate)
 	}
 }
 
@@ -379,7 +384,7 @@ func TestCreateRuleReturnsInternalServerErrorOnStoreFailure(t *testing.T) {
 		t.Fatalf("expected 500 create rule on store failure, got %d body=%s", createResp.Code, createResp.Body.String())
 	}
 	if !strings.Contains(createResp.Body.String(), "internal server error") {
-		t.Fatalf("expected generic internal server error body, got body=%s", createResp.Body.String())
+		t.Errorf("expected generic internal server error body, got body=%s", createResp.Body.String())
 	}
 }
 
@@ -409,7 +414,7 @@ func TestCreateRuleRejectsUnsupportedMatchKeys(t *testing.T) {
 		t.Fatalf("expected 400 create invalid rule, got %d body=%s", createResp.Code, createResp.Body.String())
 	}
 	if !strings.Contains(createResp.Body.String(), "unsupported match key") {
-		t.Fatalf("expected unsupported match key error, got body=%s", createResp.Body.String())
+		t.Errorf("expected unsupported match key error, got body=%s", createResp.Body.String())
 	}
 }
 
@@ -468,7 +473,7 @@ func TestCreateRuleRejectsInvalidMatchValueTypes(t *testing.T) {
 				t.Fatalf("expected 400 create invalid rule, got %d body=%s", createResp.Code, createResp.Body.String())
 			}
 			if !strings.Contains(createResp.Body.String(), testCase.expectError) {
-				t.Fatalf("expected %q, got body=%s", testCase.expectError, createResp.Body.String())
+				t.Errorf("expected %q, got body=%s", testCase.expectError, createResp.Body.String())
 			}
 		})
 	}
@@ -505,19 +510,19 @@ func TestCreateRuleNormalizesRuleIDAndMatchKeysWithWhitespace(t *testing.T) {
 		t.Fatalf("decode create response: %v", err)
 	}
 	if created.RuleID != "rule-whitespace" {
-		t.Fatalf("expected trimmed rule_id, got %q", created.RuleID)
+		t.Errorf("expected trimmed rule_id, got %q", created.RuleID)
 	}
 	if len(created.EvaluatorIDs) != 1 || created.EvaluatorIDs[0] != "custom.helpfulness" {
-		t.Fatalf("expected trimmed evaluator_ids, got %#v", created.EvaluatorIDs)
+		t.Errorf("expected trimmed evaluator_ids, got %#v", created.EvaluatorIDs)
 	}
 	if _, ok := created.Match["agent_name"]; !ok {
-		t.Fatalf("expected normalized match key agent_name, got %#v", created.Match)
+		t.Errorf("expected normalized match key agent_name, got %#v", created.Match)
 	}
 	if _, ok := created.Match["tags.env"]; !ok {
-		t.Fatalf("expected normalized match key tags.env, got %#v", created.Match)
+		t.Errorf("expected normalized match key tags.env, got %#v", created.Match)
 	}
 	if _, ok := created.Match[" agent_name "]; ok {
-		t.Fatalf("unexpected unnormalized key in match map: %#v", created.Match)
+		t.Errorf("unexpected unnormalized key in match map: %#v", created.Match)
 	}
 }
 
@@ -547,7 +552,7 @@ func TestCreateRuleRejectsDuplicateMatchKeysAfterNormalization(t *testing.T) {
 		t.Fatalf("expected 400 create invalid rule, got %d body=%s", createResp.Code, createResp.Body.String())
 	}
 	if !strings.Contains(createResp.Body.String(), `duplicate match key "agent_name"`) {
-		t.Fatalf("expected duplicate normalized match key error, got body=%s", createResp.Body.String())
+		t.Errorf("expected duplicate normalized match key error, got body=%s", createResp.Body.String())
 	}
 }
 
@@ -561,7 +566,7 @@ func TestJudgeDiscoveryHTTP(t *testing.T) {
 		t.Fatalf("expected 200 providers, got %d body=%s", providersResp.Code, providersResp.Body.String())
 	}
 	if !strings.Contains(providersResp.Body.String(), `"openai"`) {
-		t.Fatalf("expected provider in response, body=%s", providersResp.Body.String())
+		t.Errorf("expected provider in response, body=%s", providersResp.Body.String())
 	}
 
 	modelsResp := doRequest(mux, http.MethodGet, "/api/v1/eval/judge/models?provider=openai", "")
@@ -569,7 +574,7 @@ func TestJudgeDiscoveryHTTP(t *testing.T) {
 		t.Fatalf("expected 200 models, got %d body=%s", modelsResp.Code, modelsResp.Body.String())
 	}
 	if !strings.Contains(modelsResp.Body.String(), `"gpt-4o-mini"`) {
-		t.Fatalf("expected model in response, body=%s", modelsResp.Body.String())
+		t.Errorf("expected model in response, body=%s", modelsResp.Body.String())
 	}
 }
 
@@ -583,7 +588,7 @@ func TestJudgeModelsHTTPRequiresProviderQueryParam(t *testing.T) {
 		t.Fatalf("expected 400 for missing provider query param, got %d body=%s", modelsResp.Code, modelsResp.Body.String())
 	}
 	if !strings.Contains(modelsResp.Body.String(), "provider query param is required") {
-		t.Fatalf("expected validation error in response body, got body=%s", modelsResp.Body.String())
+		t.Errorf("expected validation error in response body, got body=%s", modelsResp.Body.String())
 	}
 }
 
@@ -597,7 +602,7 @@ func TestJudgeModelsHTTPReturnsInternalServerErrorForDiscoveryFailure(t *testing
 		t.Fatalf("expected 500 for discovery failure, got %d body=%s", modelsResp.Code, modelsResp.Body.String())
 	}
 	if !strings.Contains(modelsResp.Body.String(), "internal server error") {
-		t.Fatalf("expected generic internal server error body, got body=%s", modelsResp.Body.String())
+		t.Errorf("expected generic internal server error body, got body=%s", modelsResp.Body.String())
 	}
 }
 
@@ -605,7 +610,7 @@ func TestJudgeDiscoveryHTTPRequiresTenantContext(t *testing.T) {
 	store := newMemoryControlStore()
 	service := NewService(store, staticJudgeDiscovery{})
 	mux := http.NewServeMux()
-	RegisterHTTPRoutes(mux, service, nil)
+	RegisterHTTPRoutes(mux, service, nil, nil)
 
 	providersResp := doRequest(mux, http.MethodGet, "/api/v1/eval/judge/providers", "")
 	if providersResp.Code != http.StatusUnauthorized {
@@ -619,23 +624,19 @@ func TestJudgeDiscoveryHTTPRequiresTenantContext(t *testing.T) {
 }
 
 func TestPredefinedEvaluatorsHTTP(t *testing.T) {
-	store := newMemoryControlStore()
-	service := NewService(store, nil)
-	mux := newEvalMux(service)
+	mux, _, _ := newEvalHTTPEnv(t)
 
 	listResp := doRequest(mux, http.MethodGet, "/api/v1/eval/predefined/evaluators", "")
 	if listResp.Code != http.StatusOK {
 		t.Fatalf("expected 200 list predefined evaluators, got %d body=%s", listResp.Code, listResp.Body.String())
 	}
 	if !strings.Contains(listResp.Body.String(), `"sigil.helpfulness"`) {
-		t.Fatalf("expected predefined template id in list response, body=%s", listResp.Body.String())
+		t.Errorf("expected predefined template id in list response, body=%s", listResp.Body.String())
 	}
 }
 
 func TestForkPredefinedEvaluatorHTTP(t *testing.T) {
-	store := newMemoryControlStore()
-	service := NewService(store, nil)
-	mux := newEvalMux(service)
+	mux, _, _ := newEvalHTTPEnv(t)
 
 	forkPayload := `{
 		"evaluator_id":"custom.helpfulness",
@@ -650,23 +651,21 @@ func TestForkPredefinedEvaluatorHTTP(t *testing.T) {
 		t.Fatalf("expected 200 fork predefined evaluator, got %d body=%s", forkResp.Code, forkResp.Body.String())
 	}
 	if !strings.Contains(forkResp.Body.String(), `"custom.helpfulness"`) {
-		t.Fatalf("expected forked evaluator id in response, body=%s", forkResp.Body.String())
+		t.Errorf("expected forked evaluator id in response, body=%s", forkResp.Body.String())
 	}
 	if !strings.Contains(forkResp.Body.String(), `"provider":"google"`) {
-		t.Fatalf("expected forked evaluator config override in response, body=%s", forkResp.Body.String())
+		t.Errorf("expected forked evaluator config override in response, body=%s", forkResp.Body.String())
 	}
 
 	getResp := doRequest(mux, http.MethodGet, "/api/v1/eval/evaluators/custom.helpfulness", "")
 	if getResp.Code != http.StatusOK {
-		t.Fatalf("expected 200 get forked evaluator, got %d body=%s", getResp.Code, getResp.Body.String())
+		t.Errorf("expected 200 get forked evaluator, got %d body=%s", getResp.Code, getResp.Body.String())
 	}
 }
 
 func TestForkPredefinedEvaluatorReturnsInternalServerErrorOnStoreFailure(t *testing.T) {
-	store := newMemoryControlStore()
+	mux, _, store := newEvalHTTPEnv(t)
 	store.createEvaluatorErr = errors.New("write failed")
-	service := NewService(store, nil)
-	mux := newEvalMux(service)
 
 	forkPayload := `{
 		"evaluator_id":"custom.helpfulness",
@@ -678,14 +677,194 @@ func TestForkPredefinedEvaluatorReturnsInternalServerErrorOnStoreFailure(t *test
 		t.Fatalf("expected 500 fork predefined evaluator on store failure, got %d body=%s", forkResp.Code, forkResp.Body.String())
 	}
 	if !strings.Contains(forkResp.Body.String(), "internal server error") {
-		t.Fatalf("expected generic internal server error body, got body=%s", forkResp.Body.String())
+		t.Errorf("expected generic internal server error body, got body=%s", forkResp.Body.String())
+	}
+}
+
+func TestPredefinedEndpoints_BackwardsCompatible_WithTemplateStore(t *testing.T) {
+	templateStore := newMemoryTemplateStore()
+	if err := BootstrapPredefinedTemplates(context.Background(), templateStore); err != nil {
+		t.Fatalf("bootstrap predefined templates: %v", err)
+	}
+
+	evalStore := newMemoryControlStore()
+	service := NewService(evalStore, nil, WithTemplateStore(templateStore))
+	mux := newEvalMux(service)
+
+	// List predefined evaluators — should return all 11 templates with correct shape.
+	listResp := doRequest(mux, http.MethodGet, "/api/v1/eval/predefined/evaluators", "")
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 list predefined evaluators, got %d body=%s", listResp.Code, listResp.Body.String())
+	}
+
+	var listBody struct {
+		Items []evalpkg.EvaluatorDefinition `json:"items"`
+	}
+	if err := json.Unmarshal(listResp.Body.Bytes(), &listBody); err != nil {
+		t.Fatalf("decode list response: %v", err)
+	}
+	if len(listBody.Items) != 10 {
+		t.Errorf("expected 10 predefined evaluators from templates table, got %d", len(listBody.Items))
+	}
+
+	// Verify response shape for each item.
+	foundHelpfulness := false
+	for _, item := range listBody.Items {
+		if !item.IsPredefined {
+			t.Errorf("expected is_predefined=true for %q", item.EvaluatorID)
+		}
+		if item.TenantID != "" {
+			t.Errorf("expected empty tenant_id for predefined, got %q", item.TenantID)
+		}
+		if item.EvaluatorID == "" {
+			t.Error("expected non-empty evaluator_id")
+		}
+		if item.Version == "" {
+			t.Error("expected non-empty version")
+		}
+		if item.Kind == "" {
+			t.Error("expected non-empty kind")
+		}
+		if len(item.OutputKeys) == 0 {
+			t.Errorf("expected non-empty output_keys for %q", item.EvaluatorID)
+		}
+		if item.EvaluatorID == "sigil.helpfulness" {
+			foundHelpfulness = true
+		}
+	}
+	if !foundHelpfulness {
+		t.Error("expected sigil.helpfulness in predefined list")
+	}
+
+	// Fork with template store — should set lineage fields.
+	forkPayload := `{
+		"evaluator_id":"custom.helpfulness",
+		"version":"2026-02-18",
+		"config":{"provider":"google","model":"gemini-2.0-flash"}
+	}`
+	forkResp := doRequest(mux, http.MethodPost, "/api/v1/eval/predefined/evaluators/sigil.helpfulness:fork", forkPayload)
+	if forkResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 fork predefined evaluator, got %d body=%s", forkResp.Code, forkResp.Body.String())
+	}
+
+	var forked evalpkg.EvaluatorDefinition
+	if err := json.Unmarshal(forkResp.Body.Bytes(), &forked); err != nil {
+		t.Fatalf("decode fork response: %v", err)
+	}
+	if forked.EvaluatorID != "custom.helpfulness" {
+		t.Errorf("expected evaluator_id=custom.helpfulness, got %q", forked.EvaluatorID)
+	}
+	if forked.SourceTemplateID != "sigil.helpfulness" {
+		t.Errorf("expected source_template_id=sigil.helpfulness, got %q", forked.SourceTemplateID)
+	}
+	if forked.SourceTemplateVersion != "2026-02-17" {
+		t.Errorf("expected source_template_version=2026-02-17, got %q", forked.SourceTemplateVersion)
+	}
+	if forked.Config["provider"] != "google" {
+		t.Errorf("expected config.provider=google, got %v", forked.Config["provider"])
+	}
+	if forked.IsPredefined {
+		t.Error("expected forked evaluator is_predefined=false")
+	}
+}
+
+func TestPredefinedEndpoints_FallbackToHardcoded_WithNilTemplateStore(t *testing.T) {
+	mux, _, _ := newEvalHTTPEnv(t) // No template store — should use hardcoded.
+
+	listResp := doRequest(mux, http.MethodGet, "/api/v1/eval/predefined/evaluators", "")
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", listResp.Code, listResp.Body.String())
+	}
+
+	var listBody struct {
+		Items []evalpkg.EvaluatorDefinition `json:"items"`
+	}
+	if err := json.Unmarshal(listResp.Body.Bytes(), &listBody); err != nil {
+		t.Fatalf("decode list response: %v", err)
+	}
+	if len(listBody.Items) != 10 {
+		t.Errorf("expected 10 hardcoded predefined evaluators, got %d", len(listBody.Items))
+	}
+	for _, item := range listBody.Items {
+		if !item.IsPredefined {
+			t.Errorf("expected is_predefined=true for %q", item.EvaluatorID)
+		}
+	}
+
+	// Fork should work using hardcoded fallback (no lineage fields).
+	forkPayload := `{
+		"evaluator_id":"custom.helpfulness-fallback",
+		"config":{"provider":"openai"}
+	}`
+	forkResp := doRequest(mux, http.MethodPost, "/api/v1/eval/predefined/evaluators/sigil.helpfulness:fork", forkPayload)
+	if forkResp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", forkResp.Code, forkResp.Body.String())
+	}
+
+	var forked evalpkg.EvaluatorDefinition
+	if err := json.Unmarshal(forkResp.Body.Bytes(), &forked); err != nil {
+		t.Fatalf("decode fork response: %v", err)
+	}
+	if forked.SourceTemplateID != "" {
+		t.Errorf("expected empty source_template_id in hardcoded fallback, got %q", forked.SourceTemplateID)
+	}
+}
+
+func TestPredefinedEndpoints_TemplateStoreFallbackToHardcoded(t *testing.T) {
+	// Template store present but empty (no bootstrap) — simulates a transient DB
+	// error at startup where BootstrapPredefinedTemplates fails but
+	// WithTemplateStore is still registered.
+	emptyTemplateStore := newMemoryTemplateStore()
+	evalStore := newMemoryControlStore()
+	service := NewService(evalStore, nil, WithTemplateStore(emptyTemplateStore))
+	mux := newEvalMux(service)
+
+	// List should fall back to hardcoded templates when store returns empty.
+	listResp := doRequest(mux, http.MethodGet, "/api/v1/eval/predefined/evaluators", "")
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 list predefined evaluators, got %d body=%s", listResp.Code, listResp.Body.String())
+	}
+	var listBody struct{ Items []evalpkg.EvaluatorDefinition }
+	if err := json.Unmarshal(listResp.Body.Bytes(), &listBody); err != nil {
+		t.Fatalf("decode list response: %v", err)
+	}
+	if len(listBody.Items) == 0 {
+		t.Fatal("expected hardcoded predefined evaluators from fallback, got empty list")
+	}
+	for _, item := range listBody.Items {
+		if !item.IsPredefined {
+			t.Errorf("expected is_predefined=true for %q", item.EvaluatorID)
+		}
+	}
+
+	// Fork should succeed via hardcoded fallback.
+	forkPayload := `{
+		"evaluator_id":"custom.helpfulness-from-hardcoded",
+		"config":{"provider":"openai"}
+	}`
+	forkResp := doRequest(mux, http.MethodPost, "/api/v1/eval/predefined/evaluators/sigil.helpfulness:fork", forkPayload)
+	if forkResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 fork via hardcoded fallback, got %d body=%s", forkResp.Code, forkResp.Body.String())
+	}
+
+	var forked evalpkg.EvaluatorDefinition
+	if err := json.Unmarshal(forkResp.Body.Bytes(), &forked); err != nil {
+		t.Fatalf("decode fork response: %v", err)
+	}
+	if forked.EvaluatorID != "custom.helpfulness-from-hardcoded" {
+		t.Errorf("expected evaluator_id=custom.helpfulness-from-hardcoded, got %q", forked.EvaluatorID)
+	}
+	// Hardcoded fallback produces no lineage fields.
+	if forked.SourceTemplateID != "" {
+		t.Errorf("expected empty source_template_id from hardcoded fallback, got %q", forked.SourceTemplateID)
+	}
+	if forked.SourceTemplateVersion != "" {
+		t.Errorf("expected empty source_template_version from hardcoded fallback, got %q", forked.SourceTemplateVersion)
 	}
 }
 
 func TestCreateRuleRejectsPredefinedTemplateReferenceWithoutFork(t *testing.T) {
-	store := newMemoryControlStore()
-	service := NewService(store, nil)
-	mux := newEvalMux(service)
+	mux, _, _ := newEvalHTTPEnv(t)
 
 	createRulePayload := `{
 		"rule_id":"rule-helpfulness",
@@ -699,14 +878,22 @@ func TestCreateRuleRejectsPredefinedTemplateReferenceWithoutFork(t *testing.T) {
 		t.Fatalf("expected 400 create rule with unforked predefined evaluator, got %d body=%s", createResp.Code, createResp.Body.String())
 	}
 	if !strings.Contains(createResp.Body.String(), `evaluator "sigil.helpfulness" was not found`) {
-		t.Fatalf("expected missing evaluator error, body=%s", createResp.Body.String())
+		t.Errorf("expected missing evaluator error, body=%s", createResp.Body.String())
 	}
+}
+
+func newEvalHTTPEnv(t *testing.T) (*http.ServeMux, *Service, *memoryControlStore) {
+	t.Helper()
+	store := newMemoryControlStore()
+	service := NewService(store, nil)
+	mux := newEvalMux(service)
+	return mux, service, store
 }
 
 func newEvalMux(service *Service) *http.ServeMux {
 	mux := http.NewServeMux()
 	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
-	RegisterHTTPRoutes(mux, service, protected)
+	RegisterHTTPRoutes(mux, service, nil, protected)
 	return mux
 }
 
