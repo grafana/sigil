@@ -26,9 +26,7 @@ export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel, data
   }, [dataSource]);
 
   useEffect(() => {
-    setModel('');
     if (provider == null || provider === '') {
-      setModelOptions([]);
       return;
     }
     void dataSource.listJudgeModels(provider).then((res) => {
@@ -81,7 +79,11 @@ export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel, data
         <Select<string>
           options={providerOptions}
           value={provider}
-          onChange={(v) => setProvider(v?.value ?? null)}
+          onChange={(v) => {
+            setProvider(v?.value ?? null);
+            setModel('');
+            setModelOptions([]);
+          }}
           isClearable
           placeholder="Keep template default"
           width={24}

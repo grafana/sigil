@@ -1,6 +1,5 @@
 import React from 'react';
-import ForkEvaluatorForm from '../../components/evaluation/ForkEvaluatorForm';
-import type { ForkEvaluatorFormProps } from '../../components/evaluation/ForkEvaluatorForm';
+import ForkEvaluatorForm, { type ForkEvaluatorFormProps } from '../../components/evaluation/ForkEvaluatorForm';
 import type { ForkEvaluatorRequest } from '../../evaluation/types';
 
 const mockDataSource: ForkEvaluatorFormProps['dataSource'] = {

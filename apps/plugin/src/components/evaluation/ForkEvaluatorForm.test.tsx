@@ -1,7 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import type { ForkEvaluatorFormProps } from './ForkEvaluatorForm';
-import ForkEvaluatorForm from './ForkEvaluatorForm';
+import ForkEvaluatorForm, { type ForkEvaluatorFormProps } from './ForkEvaluatorForm';
 
 const mockDataSource: ForkEvaluatorFormProps['dataSource'] = {
   listJudgeProviders: async () => ({
