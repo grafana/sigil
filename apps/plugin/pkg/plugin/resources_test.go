@@ -281,6 +281,21 @@ func TestAuthorizationRouteSpecificPermissions(t *testing.T) {
 			t.Fatalf("expected status %d, got %d", http.StatusOK, response.Status)
 		}
 	})
+
+	t.Run("GET settings/datasources is rejected regardless of permissions", func(t *testing.T) {
+		app.authzClient = newMockAuthzClient(allowAllSigilActions())
+
+		response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+			Method: http.MethodGet,
+			Path:   "query/settings/datasources",
+			Headers: map[string][]string{
+				"X-Grafana-Id": {"sigil-admin-token"},
+			},
+		})
+		if response.Status != http.StatusMethodNotAllowed {
+			t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, response.Status)
+		}
+	})
 }
 
 func TestCallResource(t *testing.T) {

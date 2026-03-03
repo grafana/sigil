@@ -190,6 +190,10 @@ func (a *App) handleSettingsRoutes(w http.ResponseWriter, req *http.Request) {
 	case "/query/settings":
 		a.handleProxy(w, req, "/api/v1/settings", http.MethodGet)
 	case "/query/settings/datasources":
+		if req.Method != http.MethodPut {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 		a.handleProxy(w, req, "/api/v1/settings/datasources", http.MethodPut)
 	default:
 		http.NotFound(w, req)
