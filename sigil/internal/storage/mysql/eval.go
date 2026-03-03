@@ -597,6 +597,88 @@ func (s *WALStore) GetLatestScoresByGeneration(ctx context.Context, tenantID, ge
 	return out, nil
 }
 
+func (s *WALStore) GetLatestScoresByConversation(ctx context.Context, tenantID, conversationID string) (map[string]map[string]evalpkg.LatestScore, error) {
+	if strings.TrimSpace(tenantID) == "" {
+		return nil, errors.New("tenant id is required")
+	}
+	if strings.TrimSpace(conversationID) == "" {
+		return nil, errors.New("conversation id is required")
+	}
+
+	var rows []GenerationScoreModel
+	if err := s.db.WithContext(ctx).
+		Where("tenant_id = ? AND conversation_id = ?", tenantID, conversationID).
+		Order("created_at DESC, id DESC").
+		Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("get latest scores by conversation: %w", err)
+	}
+
+	out := make(map[string]map[string]evalpkg.LatestScore)
+	for _, row := range rows {
+		genScores, ok := out[row.GenerationID]
+		if !ok {
+			genScores = make(map[string]evalpkg.LatestScore)
+			out[row.GenerationID] = genScores
+		}
+		if _, exists := genScores[row.ScoreKey]; exists {
+			continue
+		}
+		score, err := scoreModelToDomain(row)
+		if err != nil {
+			return nil, err
+		}
+		genScores[row.ScoreKey] = evalpkg.LatestScore{
+			ScoreKey:         score.ScoreKey,
+			ScoreType:        score.ScoreType,
+			Value:            score.Value,
+			Passed:           score.Passed,
+			EvaluatorID:      score.EvaluatorID,
+			EvaluatorVersion: score.EvaluatorVersion,
+			CreatedAt:        score.CreatedAt,
+		}
+	}
+	return out, nil
+}
+
+func (s *WALStore) ListConversationEvalSummaries(ctx context.Context, tenantID string, conversationIDs []string) (map[string]evalpkg.ConversationEvalSummary, error) {
+	if strings.TrimSpace(tenantID) == "" {
+		return nil, errors.New("tenant id is required")
+	}
+	normalizedIDs := normalizeConversationIDs(conversationIDs)
+	if len(normalizedIDs) == 0 {
+		return map[string]evalpkg.ConversationEvalSummary{}, nil
+	}
+
+	type summaryRow struct {
+		ConversationID string
+		TotalScores    int
+		PassCount      int
+		FailCount      int
+	}
+
+	var rows []summaryRow
+	if err := s.db.WithContext(ctx).
+		Model(&GenerationScoreModel{}).
+		Select("conversation_id, COUNT(*) AS total_scores, "+
+			"SUM(CASE WHEN passed = true THEN 1 ELSE 0 END) AS pass_count, "+
+			"SUM(CASE WHEN passed = false THEN 1 ELSE 0 END) AS fail_count").
+		Where("tenant_id = ? AND conversation_id IN ?", tenantID, normalizedIDs).
+		Group("conversation_id").
+		Scan(&rows).Error; err != nil {
+		return nil, fmt.Errorf("list conversation eval summaries: %w", err)
+	}
+
+	out := make(map[string]evalpkg.ConversationEvalSummary, len(rows))
+	for _, row := range rows {
+		out[row.ConversationID] = evalpkg.ConversationEvalSummary{
+			TotalScores: row.TotalScores,
+			PassCount:   row.PassCount,
+			FailCount:   row.FailCount,
+		}
+	}
+	return out, nil
+}
+
 func (s *WALStore) EnqueueWorkItem(ctx context.Context, item evalpkg.WorkItem) error {
 	if strings.TrimSpace(item.TenantID) == "" {
 		return errors.New("tenant id is required")

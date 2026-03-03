@@ -173,6 +173,13 @@ type LatestScore struct {
 	CreatedAt        time.Time  `json:"created_at"`
 }
 
+// ConversationEvalSummary is an aggregate summary of eval scores for a conversation.
+type ConversationEvalSummary struct {
+	TotalScores int `json:"total_scores"`
+	PassCount   int `json:"pass_count"`
+	FailCount   int `json:"fail_count"`
+}
+
 type WorkItem struct {
 	TenantID         string         `json:"tenant_id"`
 	WorkID           string         `json:"work_id"`
@@ -209,6 +216,8 @@ type EvalStore interface {
 	GetScoresByGeneration(ctx context.Context, tenantID, generationID string, limit int, cursor uint64) ([]GenerationScore, uint64, error)
 	GetScoresByRule(ctx context.Context, tenantID, ruleID string, limit int, cursor uint64) ([]GenerationScore, uint64, error)
 	GetLatestScoresByGeneration(ctx context.Context, tenantID, generationID string) (map[string]LatestScore, error)
+	GetLatestScoresByConversation(ctx context.Context, tenantID, conversationID string) (map[string]map[string]LatestScore, error)
+	ListConversationEvalSummaries(ctx context.Context, tenantID string, conversationIDs []string) (map[string]ConversationEvalSummary, error)
 
 	EnqueueWorkItem(ctx context.Context, item WorkItem) error
 	ClaimWorkItems(ctx context.Context, now time.Time, limit int) ([]WorkItem, error)
