@@ -298,7 +298,8 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
         const existing = prev[key];
         const nextSet = new Set(Array.isArray(existing) ? existing : existing ? [existing] : []);
         nextSet.add(value);
-        return { ...prev, [key]: [...nextSet] };
+        const arr = [...nextSet];
+        return { ...prev, [key]: arr.length === 1 ? arr[0] : arr };
       });
     },
     [isNew]
