@@ -2,12 +2,14 @@ package control
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/grafana/dskit/tenant"
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
@@ -41,7 +43,7 @@ func (r createRuleRequest) toRuleDefinition() evalpkg.RuleDefinition {
 	}
 }
 
-func RegisterHTTPRoutes(mux *http.ServeMux, service *Service, templateService *TemplateService, protectedMiddleware func(http.Handler) http.Handler) {
+func RegisterHTTPRoutes(mux *http.ServeMux, service *Service, templateService *TemplateService, testService *TestService, protectedMiddleware func(http.Handler) http.Handler) {
 	if mux == nil || service == nil {
 		return
 	}
@@ -63,6 +65,45 @@ func RegisterHTTPRoutes(mux *http.ServeMux, service *Service, templateService *T
 		mux.Handle("/api/v1/eval/templates", protectedMiddleware(http.HandlerFunc(templateService.handleTemplates)))
 		mux.Handle("/api/v1/eval/templates/", protectedMiddleware(http.HandlerFunc(templateService.routeTemplateSubpaths)))
 	}
+
+	if testService != nil {
+		mux.Handle("POST /api/v1/eval:test", protectedMiddleware(http.HandlerFunc(testService.handleEvalTest)))
+	}
+}
+
+func (s *TestService) handleEvalTest(w http.ResponseWriter, req *http.Request) {
+	tenantID, ok := tenantIDFromRequest(w, req)
+	if !ok {
+		return
+	}
+
+	var testReq EvalTestRequest
+	if err := decodeJSONBody(req, &testReq); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(req.Context(), 30*time.Second)
+	defer cancel()
+
+	resp, err := s.RunTest(ctx, tenantID, testReq)
+	if err != nil {
+		if isValidationError(err) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if isNotFoundError(err) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if ctx.Err() != nil {
+			http.Error(w, "evaluation timed out", http.StatusGatewayTimeout)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Service) handleEvaluators(w http.ResponseWriter, req *http.Request) {

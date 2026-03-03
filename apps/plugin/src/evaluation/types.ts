@@ -1,5 +1,12 @@
 export type EvaluatorKind = 'llm_judge' | 'json_schema' | 'regex' | 'heuristic';
 
+/** Shared state emitted by evaluator/template forms for the test panel. */
+export type EvalFormState = {
+  kind: EvaluatorKind;
+  config: Record<string, unknown>;
+  outputKeys: EvalOutputKey[];
+};
+
 export type ScoreType = 'number' | 'bool' | 'string';
 
 export type EvalOutputKey = {
@@ -118,6 +125,29 @@ export type JudgeProviderListResponse = {
 
 export type JudgeModelListResponse = {
   models: JudgeModel[];
+};
+
+export type EvalTestRequest = {
+  kind: EvaluatorKind;
+  config: Record<string, unknown>;
+  output_keys: EvalOutputKey[];
+  generation_id: string;
+};
+
+export type EvalTestScore = {
+  key: string;
+  type: ScoreType;
+  value: unknown;
+  passed?: boolean;
+  explanation?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type EvalTestResponse = {
+  generation_id: string;
+  conversation_id: string;
+  scores: EvalTestScore[];
+  execution_time_ms: number;
 };
 
 export type TemplateScope = 'global' | 'tenant';

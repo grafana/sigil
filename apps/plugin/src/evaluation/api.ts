@@ -4,6 +4,8 @@ import type {
   CreateEvaluatorRequest,
   CreateRuleRequest,
   CreateTemplateRequest,
+  EvalTestRequest,
+  EvalTestResponse,
   Evaluator,
   EvaluatorListResponse,
   ForkEvaluatorRequest,
@@ -40,6 +42,7 @@ export type EvaluationDataSource = {
   previewRule: (request: RulePreviewRequest) => Promise<RulePreviewResponse>;
   listJudgeProviders: () => Promise<JudgeProviderListResponse>;
   listJudgeModels: (provider: string) => Promise<JudgeModelListResponse>;
+  testEval: (request: EvalTestRequest) => Promise<EvalTestResponse>;
   listTemplates: (scope?: TemplateScope, limit?: number, cursor?: string) => Promise<TemplateListResponse>;
   createTemplate: (request: CreateTemplateRequest) => Promise<TemplateDefinition>;
   getTemplate: (templateID: string) => Promise<TemplateDefinition>;
@@ -199,6 +202,17 @@ export const defaultEvaluationDataSource: EvaluationDataSource = {
       getBackendSrv().fetch<JudgeModelListResponse>({
         method: 'GET',
         url: `${evalBasePath}/judge/models?${params.toString()}`,
+      })
+    );
+    return response.data;
+  },
+
+  async testEval(request) {
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<EvalTestResponse>({
+        method: 'POST',
+        url: `${evalBasePath}:test`,
+        data: request,
       })
     );
     return response.data;

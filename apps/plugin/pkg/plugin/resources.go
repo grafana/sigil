@@ -530,6 +530,10 @@ func (a *App) handleEvalRulesPreview(w http.ResponseWriter, req *http.Request) {
 	a.handleProxy(w, req, "/api/v1/eval/rules:preview", http.MethodPost)
 }
 
+func (a *App) handleEvalTest(w http.ResponseWriter, req *http.Request) {
+	a.handleProxy(w, req, "/api/v1/eval:test", http.MethodPost)
+}
+
 func (a *App) handleEvalRules(w http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case http.MethodGet:
@@ -665,6 +669,7 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/eval/predefined/evaluators", a.handleEvalPredefinedEvaluators)
 	mux.HandleFunc("/eval/predefined/evaluators/", a.handleEvalPredefinedFork)
 	mux.HandleFunc("/eval/rules:preview", a.handleEvalRulesPreview)
+	mux.HandleFunc("/eval:test", a.handleEvalTest)
 	mux.HandleFunc("/eval/rules", a.handleEvalRules)
 	mux.HandleFunc("/eval/rules/", a.handleEvalRuleByID)
 	mux.HandleFunc("/eval/judge/providers", a.handleEvalJudgeProviders)
