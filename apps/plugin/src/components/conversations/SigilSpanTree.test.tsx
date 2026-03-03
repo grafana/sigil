@@ -97,4 +97,29 @@ describe('SigilSpanTree', () => {
     fireEvent.click(screen.getByRole('button', { name: 'select span root' }));
     expect(screen.getByRole('button', { name: 'select span child' })).toBeInTheDocument();
   });
+
+  it('nests by parentSpanID within the same trace', () => {
+    const spans: SigilSpan[] = [
+      makeSpan({ selectionID: 'root-trace-1', traceID: 'trace-1', spanID: 'root', name: 'root-trace-1', startNs: BigInt(1) }),
+      makeSpan({ selectionID: 'root-trace-2', traceID: 'trace-2', spanID: 'root', name: 'root-trace-2', startNs: BigInt(2) }),
+      makeSpan({
+        selectionID: 'child-trace-2',
+        traceID: 'trace-2',
+        spanID: 'child',
+        parentSpanID: 'root',
+        name: 'child-trace-2',
+        startNs: BigInt(3),
+      }),
+    ];
+
+    render(<SigilSpanTree spans={spans} />);
+
+    expect(screen.queryByRole('button', { name: 'expand span root-trace-1' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'expand span root-trace-2' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'select span child-trace-2' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'expand span root-trace-2' }));
+
+    expect(screen.getByRole('button', { name: 'select span child-trace-2' })).toBeInTheDocument();
+  });
 });

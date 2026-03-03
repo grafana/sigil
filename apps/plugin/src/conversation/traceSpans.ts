@@ -23,8 +23,10 @@ type AttrKV = {
 
 type TempoSpan = {
   spanId?: string;
+  spanID?: string;
   span_id?: string;
   parentSpanId?: string;
+  parentSpanID?: string;
   parent_span_id?: string;
   name?: string;
   completed_at?: string | number;
@@ -220,8 +222,8 @@ export function buildTraceSpans(traceID: string, payload: unknown): ParsedTraceS
             continue;
           }
           const safeEnd = endNs != null && endNs >= startNs ? endNs : startNs;
-          const spanID = span.spanId ?? span.span_id ?? '';
-          const parentSpanID = span.parentSpanId ?? span.parent_span_id ?? '';
+          const spanID = span.spanId ?? span.spanID ?? span.span_id ?? '';
+          const parentSpanID = span.parentSpanId ?? span.parentSpanID ?? span.parent_span_id ?? '';
           const name = span.name?.trim() ?? '';
           spans.push({
             traceID,

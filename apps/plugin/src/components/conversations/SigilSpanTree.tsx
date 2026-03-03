@@ -13,6 +13,7 @@ type SigilSpanTreeProps = {
 
 type TreeRow = {
   span: SigilSpan;
+  spanTreeKey: string;
   depth: number;
   hasChildren: boolean;
   isExpanded: boolean;
@@ -33,46 +34,62 @@ function sortSpanRows(left: SigilSpan, right: SigilSpan): number {
 
 type SpanTree = {
   roots: SigilSpan[];
-  childrenByParentID: Map<string, SigilSpan[]>;
+  childrenByParentTreeKey: Map<string, SigilSpan[]>;
 };
 
+function toSpanTreeKey(traceID: string, spanID: string): string {
+  return `${traceID}:${spanID}`;
+}
+
+function getSpanTreeKey(span: SigilSpan): string {
+  if (span.spanID.length > 0) {
+    return toSpanTreeKey(span.traceID, span.spanID);
+  }
+  return span.selectionID;
+}
+
 function buildSpanTree(spans: SigilSpan[]): SpanTree {
-  const bySpanID = new Map<string, SigilSpan>();
-  const childrenByParentID = new Map<string, SigilSpan[]>();
+  const bySpanTreeKey = new Map<string, SigilSpan>();
+  const childrenByParentTreeKey = new Map<string, SigilSpan[]>();
   for (const span of spans) {
     if (span.spanID.length > 0) {
-      bySpanID.set(span.spanID, span);
+      bySpanTreeKey.set(toSpanTreeKey(span.traceID, span.spanID), span);
     }
   }
   for (const span of spans) {
     const parentID = span.parentSpanID;
-    if (parentID.length === 0 || !bySpanID.has(parentID)) {
+    if (parentID.length === 0) {
       continue;
     }
-    const children = childrenByParentID.get(parentID);
+    const parentTreeKey = toSpanTreeKey(span.traceID, parentID);
+    if (!bySpanTreeKey.has(parentTreeKey)) {
+      continue;
+    }
+    const children = childrenByParentTreeKey.get(parentTreeKey);
     if (children != null) {
       children.push(span);
     } else {
-      childrenByParentID.set(parentID, [span]);
+      childrenByParentTreeKey.set(parentTreeKey, [span]);
     }
   }
-  for (const [parentID, children] of childrenByParentID) {
-    childrenByParentID.set(parentID, [...children].sort(sortSpanRows));
+  for (const [parentTreeKey, children] of childrenByParentTreeKey) {
+    childrenByParentTreeKey.set(parentTreeKey, [...children].sort(sortSpanRows));
   }
   const roots = spans
-    .filter((span) => span.parentSpanID.length === 0 || !bySpanID.has(span.parentSpanID))
+    .filter((span) => span.parentSpanID.length === 0 || !bySpanTreeKey.has(toSpanTreeKey(span.traceID, span.parentSpanID)))
     .sort(sortSpanRows);
-  return { roots, childrenByParentID };
+  return { roots, childrenByParentTreeKey };
 }
 
-function buildVisibleRows(tree: SpanTree, expandedSpanIDs: Set<string>): TreeRow[] {
+function buildVisibleRows(tree: SpanTree, expandedSpanTreeKeys: Set<string>): TreeRow[] {
   const rows: TreeRow[] = [];
   const visited = new Set<string>();
 
   const walk = (span: SigilSpan, depth: number) => {
-    const hasChildren = (tree.childrenByParentID.get(span.spanID)?.length ?? 0) > 0;
-    const isExpanded = hasChildren && expandedSpanIDs.has(span.spanID);
-    rows.push({ span, depth, hasChildren, isExpanded });
+    const spanTreeKey = getSpanTreeKey(span);
+    const hasChildren = (tree.childrenByParentTreeKey.get(spanTreeKey)?.length ?? 0) > 0;
+    const isExpanded = hasChildren && expandedSpanTreeKeys.has(spanTreeKey);
+    rows.push({ span, spanTreeKey, depth, hasChildren, isExpanded });
     if (!isExpanded) {
       return;
     }
@@ -81,7 +98,7 @@ function buildVisibleRows(tree: SpanTree, expandedSpanIDs: Set<string>): TreeRow
       return;
     }
     visited.add(visitKey);
-    const children = tree.childrenByParentID.get(span.spanID) ?? [];
+    const children = tree.childrenByParentTreeKey.get(spanTreeKey) ?? [];
     for (const child of children) {
       walk(child, depth + 1);
     }
@@ -180,26 +197,26 @@ export default function SigilSpanTree({
 }: SigilSpanTreeProps) {
   const styles = useStyles2(getStyles);
   const tree = useMemo(() => buildSpanTree(spans), [spans]);
-  const [expandedSpanIDs, setExpandedSpanIDs] = useState<Set<string>>(new Set());
+  const [expandedSpanTreeKeys, setExpandedSpanTreeKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    const availableSpanIDs = new Set(spans.map((span) => span.spanID).filter((spanID) => spanID.length > 0));
-    setExpandedSpanIDs((current) => {
+    const availableSpanTreeKeys = new Set(spans.map((span) => getSpanTreeKey(span)));
+    setExpandedSpanTreeKeys((current) => {
       const next = new Set<string>();
-      for (const spanID of current) {
-        if (availableSpanIDs.has(spanID)) {
-          next.add(spanID);
+      for (const spanTreeKey of current) {
+        if (availableSpanTreeKeys.has(spanTreeKey)) {
+          next.add(spanTreeKey);
         }
       }
       return next;
     });
   }, [spans]);
 
-  const rows = useMemo(() => buildVisibleRows(tree, expandedSpanIDs), [tree, expandedSpanIDs]);
+  const rows = useMemo(() => buildVisibleRows(tree, expandedSpanTreeKeys), [tree, expandedSpanTreeKeys]);
 
   return (
     <div className={styles.list}>
-      {rows.map(({ span, depth, hasChildren, isExpanded }) => {
+      {rows.map(({ span, spanTreeKey, depth, hasChildren, isExpanded }) => {
         const isSelected = selectedSpanSelectionID === span.selectionID;
         return (
           <div key={span.selectionID} className={styles.rowWrap}>
@@ -210,12 +227,12 @@ export default function SigilSpanTree({
                 aria-label={`${isExpanded ? 'collapse' : 'expand'} span ${span.name}`}
                 aria-expanded={isExpanded}
                 onClick={() => {
-                  setExpandedSpanIDs((current) => {
+                  setExpandedSpanTreeKeys((current) => {
                     const next = new Set(current);
-                    if (next.has(span.spanID)) {
-                      next.delete(span.spanID);
+                    if (next.has(spanTreeKey)) {
+                      next.delete(spanTreeKey);
                     } else {
-                      next.add(span.spanID);
+                      next.add(spanTreeKey);
                     }
                     return next;
                   });
@@ -236,7 +253,7 @@ export default function SigilSpanTree({
               onClick={() => {
                 onSelectSpan?.(span);
                 if (depth === 0 && hasChildren && !isExpanded) {
-                  setExpandedSpanIDs((current) => new Set(current).add(span.spanID));
+                  setExpandedSpanTreeKeys((current) => new Set(current).add(spanTreeKey));
                 }
               }}
               style={{ paddingLeft: `${depth * INDENT_PX}px` }}

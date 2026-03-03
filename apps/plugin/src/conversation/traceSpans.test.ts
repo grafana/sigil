@@ -302,4 +302,43 @@ describe('traceSpans', () => {
     expect(byID.get('child-ai')?.parentSpanID).toBe('root-other');
     expect(byID.has('child-other')).toBe(false);
   });
+
+  it('parses parentSpanID field for hierarchy links', () => {
+    const spans = buildTraceSpans('trace-parent-id', {
+      trace: {
+        resourceSpans: [
+          {
+            resource: {
+              attributes: [{ key: 'service.name', value: { stringValue: 'svc' } }],
+            },
+            scopeSpans: [
+              {
+                spans: [
+                  {
+                    spanID: 'root',
+                    name: 'sigil.generation.prompt',
+                    startTimeUnixNano: '1772480417578390317',
+                    endTimeUnixNano: '1772480417752390317',
+                    attributes: [{ key: 'sigil.generation.id', value: { stringValue: 'gen-1' } }],
+                  },
+                  {
+                    spanID: 'child',
+                    parentSpanID: 'root',
+                    name: 'sigil.tool.call',
+                    startTimeUnixNano: '1772480417578390318',
+                    endTimeUnixNano: '1772480417752390318',
+                    attributes: [{ key: 'sigil.tool.name', value: { stringValue: 'search' } }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    const all = selectSpansForMode(spans, 'all');
+    const byID = new Map(all.map((span) => [span.spanID, span]));
+    expect(byID.get('child')?.parentSpanID).toBe('root');
+  });
 });
