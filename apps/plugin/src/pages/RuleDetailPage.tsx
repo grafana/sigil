@@ -407,6 +407,7 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
             onToggle={(_, v) => setEnabled(v)}
           />
           <RuleForm
+            key={ruleID ?? 'new'}
             ruleID={ruleIDInput}
             isNew={isNew}
             selector={selector}
