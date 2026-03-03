@@ -24,6 +24,8 @@ type AttrKV = {
 type TempoSpan = {
   spanId?: string;
   span_id?: string;
+  parentSpanId?: string;
+  parent_span_id?: string;
   name?: string;
   completed_at?: string | number;
   completedAt?: string | number;
@@ -58,6 +60,7 @@ type TempoTrace = {
 export type ParsedTraceSpan = {
   traceID: string;
   spanID: string;
+  parentSpanID: string;
   name: string;
   serviceName: string;
   startNs: bigint;
@@ -218,10 +221,12 @@ export function buildTraceSpans(traceID: string, payload: unknown): ParsedTraceS
           }
           const safeEnd = endNs != null && endNs >= startNs ? endNs : startNs;
           const spanID = span.spanId ?? span.span_id ?? '';
+          const parentSpanID = span.parentSpanId ?? span.parent_span_id ?? '';
           const name = span.name?.trim() ?? '';
           spans.push({
             traceID,
             spanID,
+            parentSpanID,
             name: name.length > 0 ? name : '(unnamed span)',
             serviceName,
             startNs,
@@ -341,12 +346,49 @@ export function groupSigilSpansByGenerationID(
 }
 
 export function selectSpansForMode(spans: ParsedTraceSpan[], mode: SpanSelectionMode): SigilSpan[] {
-  if (mode === 'sigil-only') {
-    return extractSigilSpans(spans);
-  }
-  return spans.map((span) => ({
+  const allWithKinds = spans.map((span) => ({
     ...span,
-    sigilKind: isSigilSpan(span) ? classifySigilSpanKind(span) : 'other',
+    sigilKind: classifySigilSpanKind(span),
+  }));
+
+  if (mode === 'all') {
+    return allWithKinds;
+  }
+
+  const byTraceAndSpanID = new Map<string, SigilSpan>();
+  for (const span of allWithKinds) {
+    if (span.spanID.length > 0) {
+      byTraceAndSpanID.set(`${span.traceID}:${span.spanID}`, span);
+    }
+  }
+  const isRootSpan = (span: SigilSpan): boolean => {
+    if (span.parentSpanID.length === 0) {
+      return true;
+    }
+    return !byTraceAndSpanID.has(`${span.traceID}:${span.parentSpanID}`);
+  };
+
+  const selectedWithRoots = allWithKinds.filter((span) => span.sigilKind !== 'other' || isRootSpan(span));
+  const selectedWithRootsBySelectionID = new Set(selectedWithRoots.map((span) => span.selectionID));
+
+  const nearestSelectedParentSpanID = (span: SigilSpan): string => {
+    let parentSpanID = span.parentSpanID;
+    while (parentSpanID.length > 0) {
+      const parent = byTraceAndSpanID.get(`${span.traceID}:${parentSpanID}`);
+      if (parent == null) {
+        return '';
+      }
+      if (selectedWithRootsBySelectionID.has(parent.selectionID)) {
+        return parent.spanID;
+      }
+      parentSpanID = parent.parentSpanID;
+    }
+    return '';
+  };
+
+  return selectedWithRoots.map((span) => ({
+    ...span,
+    parentSpanID: nearestSelectedParentSpanID(span),
   }));
 }
 

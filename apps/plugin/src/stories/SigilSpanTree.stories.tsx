@@ -5,6 +5,7 @@ const demoSpans: SigilSpan[] = [
   {
     traceID: 'trace-1',
     spanID: 'span-1',
+    parentSpanID: '',
     name: 'sigil.generation.prompt',
     serviceName: 'llm-gateway',
     startNs: BigInt('1772480417578390317'),
@@ -17,6 +18,7 @@ const demoSpans: SigilSpan[] = [
   {
     traceID: 'trace-1',
     spanID: 'span-2',
+    parentSpanID: 'span-1',
     name: 'sigil.tool.call',
     serviceName: 'llm-gateway',
     startNs: BigInt('1772480417752390318'),
@@ -29,6 +31,7 @@ const demoSpans: SigilSpan[] = [
   {
     traceID: 'trace-1',
     spanID: 'span-3',
+    parentSpanID: 'span-2',
     name: 'sigil.eval.score',
     serviceName: 'eval-worker',
     startNs: BigInt('1772480417852390318'),
@@ -41,6 +44,7 @@ const demoSpans: SigilSpan[] = [
   {
     traceID: 'trace-1',
     spanID: 'span-4',
+    parentSpanID: 'span-1',
     name: 'embeddings text-embedding-3-small',
     serviceName: 'llm-gateway',
     startNs: BigInt('1772480417952390318'),
@@ -53,6 +57,7 @@ const demoSpans: SigilSpan[] = [
   {
     traceID: 'trace-1',
     spanID: 'span-5',
+    parentSpanID: '',
     name: 'sigil.framework.chain chat-openai',
     serviceName: 'framework-worker',
     startNs: BigInt('1772480418052390318'),

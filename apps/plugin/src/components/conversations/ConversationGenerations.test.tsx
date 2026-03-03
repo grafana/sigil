@@ -72,7 +72,7 @@ describe('ConversationGenerations', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('shows all spans when All toggle is enabled', async () => {
+  it('shows all spans (including OTHER) when All toggle is enabled', async () => {
     fetchMock.mockReturnValue(
       of({
         data: {
@@ -131,7 +131,63 @@ describe('ConversationGenerations', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('shows Sigil-empty state by default and all-empty state when toggle is on', async () => {
+  it('applies All filter for collapsed roots and shows OTHER after manual expand', async () => {
+    fetchMock.mockReturnValue(
+      of({
+        data: {
+          trace: {
+            resourceSpans: [
+              {
+                resource: {
+                  attributes: [{ key: 'service.name', value: { stringValue: 'llm-service' } }],
+                },
+                scopeSpans: [
+                  {
+                    spans: [
+                      {
+                        spanId: 'span-root',
+                        name: 'sigil.generation.prompt',
+                        startTimeUnixNano: '1772480417578390317',
+                        endTimeUnixNano: '1772480417752390317',
+                        attributes: [{ key: 'sigil.generation.id', value: { stringValue: 'gen-1' } }],
+                      },
+                      {
+                        spanId: 'span-child-other',
+                        parentSpanId: 'span-root',
+                        name: 'db.query',
+                        startTimeUnixNano: '1772480417578390318',
+                        endTimeUnixNano: '1772480417752390318',
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      })
+    );
+
+    const generations: GenerationDetail[] = [
+      {
+        generation_id: 'gen-1',
+        conversation_id: 'conv-1',
+        trace_id: 'trace-1',
+      },
+    ];
+
+    render(<ConversationGenerations generations={generations} />);
+
+    expect(await screen.findByText('sigil.generation.prompt')).toBeInTheDocument();
+    expect(screen.queryByText('db.query')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('switch', { name: 'toggle all spans' }));
+    expect(screen.queryByText('db.query')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'expand span sigil.generation.prompt' }));
+    expect(await screen.findByText('db.query')).toBeInTheDocument();
+  });
+
+  it('shows Sigil-empty state by default and reveals OTHER spans when toggle is on', async () => {
     fetchMock.mockReturnValue(
       of({
         data: {

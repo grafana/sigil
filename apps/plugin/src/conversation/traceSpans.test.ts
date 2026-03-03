@@ -203,7 +203,103 @@ describe('traceSpans', () => {
     const sigilOnly = selectSpansForMode(spans, 'sigil-only');
     const all = selectSpansForMode(spans, 'all');
 
-    expect(sigilOnly).toHaveLength(0);
+    expect(sigilOnly.map((span) => span.spanID).sort()).toEqual(['span-sigil']);
     expect(all.map((span) => span.spanID).sort()).toEqual(['span-http', 'span-sigil']);
+  });
+
+  it('keeps filtered hierarchy for Sigil-only spans', () => {
+    const spans = buildTraceSpans('trace-hierarchy', {
+      trace: {
+        resourceSpans: [
+          {
+            resource: {
+              attributes: [{ key: 'service.name', value: { stringValue: 'llm-service' } }],
+            },
+            scopeSpans: [
+              {
+                spans: [
+                  {
+                    spanId: 'root-sigil',
+                    name: 'sigil.generation.prompt',
+                    startTimeUnixNano: '1772480417578390317',
+                    endTimeUnixNano: '1772480417752390317',
+                    attributes: [{ key: 'sigil.generation.id', value: { stringValue: 'gen-1' } }],
+                  },
+                  {
+                    spanId: 'middle-other',
+                    parentSpanId: 'root-sigil',
+                    name: 'db.query',
+                    startTimeUnixNano: '1772480417578390318',
+                    endTimeUnixNano: '1772480417752390318',
+                  },
+                  {
+                    spanId: 'leaf-sigil',
+                    parentSpanId: 'middle-other',
+                    name: 'sigil.tool.call',
+                    startTimeUnixNano: '1772480417578390319',
+                    endTimeUnixNano: '1772480417752390319',
+                    attributes: [{ key: 'sigil.tool.name', value: { stringValue: 'search' } }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    const sigilOnly = selectSpansForMode(spans, 'sigil-only');
+    const byID = new Map(sigilOnly.map((span) => [span.spanID, span]));
+
+    expect(byID.get('root-sigil')?.parentSpanID).toBe('');
+    expect(byID.get('leaf-sigil')?.parentSpanID).toBe('root-sigil');
+  });
+
+  it('keeps root OTHER spans visible in filtered mode', () => {
+    const spans = buildTraceSpans('trace-root-other', {
+      trace: {
+        resourceSpans: [
+          {
+            resource: {
+              attributes: [{ key: 'service.name', value: { stringValue: 'svc' } }],
+            },
+            scopeSpans: [
+              {
+                spans: [
+                  {
+                    spanId: 'root-other',
+                    name: 'http.server',
+                    startTimeUnixNano: '1772480417578390317',
+                    endTimeUnixNano: '1772480417752390317',
+                  },
+                  {
+                    spanId: 'child-ai',
+                    parentSpanId: 'root-other',
+                    name: 'streamText gpt-4o-mini',
+                    startTimeUnixNano: '1772480417578390318',
+                    endTimeUnixNano: '1772480417752390318',
+                    attributes: [{ key: 'gen_ai.operation.name', value: { stringValue: 'streamText' } }],
+                  },
+                  {
+                    spanId: 'child-other',
+                    parentSpanId: 'root-other',
+                    name: 'db.query',
+                    startTimeUnixNano: '1772480417578390319',
+                    endTimeUnixNano: '1772480417752390319',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    const sigilOnly = selectSpansForMode(spans, 'sigil-only');
+    const byID = new Map(sigilOnly.map((span) => [span.spanID, span]));
+
+    expect(byID.get('root-other')?.sigilKind).toBe('other');
+    expect(byID.get('child-ai')?.parentSpanID).toBe('root-other');
+    expect(byID.has('child-other')).toBe(false);
   });
 });
