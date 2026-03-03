@@ -18,7 +18,6 @@ import (
 	"github.com/grafana/sigil/sigil/internal/feedback"
 	"github.com/grafana/sigil/sigil/internal/modelcards"
 	"github.com/grafana/sigil/sigil/internal/query"
-	"github.com/grafana/sigil/sigil/internal/queryproxy"
 	"github.com/grafana/sigil/sigil/internal/server"
 	"github.com/grafana/sigil/sigil/internal/storage"
 	"github.com/grafana/sigil/sigil/internal/tenantsettings"
@@ -102,15 +101,6 @@ func newQuerierModule(
 		querySvc.SetTempoClient(tempoClient)
 	}
 
-	queryProxy, err := queryproxy.New(queryproxy.Config{
-		PrometheusBaseURL: cfg.QueryProxy.PrometheusBaseURL,
-		TempoBaseURL:      cfg.QueryProxy.TempoBaseURL,
-		Timeout:           cfg.QueryProxy.Timeout,
-	})
-	if err != nil {
-		return nil, err
-	}
-
 	var tenantSettingsSvc *tenantsettings.Service
 	if tenantSettingsStore, ok := generationStore.(tenantsettings.Store); ok {
 		tenantSettingsSvc = tenantsettings.NewService(tenantSettingsStore)
@@ -190,7 +180,7 @@ func newQuerierModule(
 
 	if registry != nil {
 		registry.RegisterHTTP(func(mux *http.ServeMux, protectedMiddleware func(http.Handler) http.Handler) {
-			server.RegisterQueryRoutesWithQueryProxy(
+			server.RegisterQueryRoutes(
 				mux,
 				querySvc,
 				feedbackSvc,
@@ -198,7 +188,6 @@ func newQuerierModule(
 				cfg.ConversationAnnotationsEnabled,
 				modelCardSvc,
 				protectedMiddleware,
-				queryProxy,
 			)
 			server.RegisterSettingsRoutes(mux, tenantSettingsSvc, protectedMiddleware)
 			evalcontrol.RegisterHTTPRoutes(mux, controlSvc, templateSvc, protectedMiddleware)

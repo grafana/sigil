@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-17
+last_reviewed: 2026-03-03
 source_of_truth: true
 audience: contributors
 ---
@@ -51,20 +51,16 @@ Current plugin query contract:
   - `GET /api/plugins/grafana-sigil-app/resources/eval/judge/providers`
   - `GET /api/plugins/grafana-sigil-app/resources/eval/judge/models?provider={id}`
 - Plugin backend forwards to Sigil API query endpoints:
-  - `POST /api/v1/conversations/search`
+  - `POST /api/v1/conversations:batch-metadata` (search hydration only)
   - `GET /api/v1/conversations`
   - `GET /api/v1/conversations/{conversation_id}`
   - `GET /api/v1/generations/{generation_id}`
-  - `GET /api/v1/search/tags`
-  - `GET /api/v1/search/tag/{tag}/values`
   - `GET /api/v1/conversations/{conversation_id}/ratings`
   - `POST /api/v1/conversations/{conversation_id}/ratings`
   - `GET /api/v1/conversations/{conversation_id}/annotations`
   - `POST /api/v1/conversations/{conversation_id}/annotations`
   - `GET /api/v1/model-cards` (list mode and `resolve_pair` mode)
   - `GET /api/v1/model-cards:lookup`
-  - `/api/v1/proxy/prometheus/...`
-  - `/api/v1/proxy/tempo/...`
   - `GET /api/v1/eval/evaluators`
   - `POST /api/v1/eval/evaluators`
   - `GET /api/v1/eval/evaluators/{evaluator_id}`
@@ -80,6 +76,11 @@ Current plugin query contract:
   - `GET /api/v1/eval/judge/providers`
   - `GET /api/v1/eval/judge/models?provider={id}`
 
+Conversation search and search-tag discovery are plugin-owned orchestration flows:
+
+- plugin backend queries Tempo directly through Grafana datasource proxy (`/api/datasources/proxy/uid/{tempo_uid}/...`)
+- plugin backend hydrates conversation metadata via Sigil `POST /api/v1/conversations:batch-metadata`
+
 Legacy placeholders removed:
 
 - `/api/v1/completions`
@@ -89,7 +90,7 @@ Tenant headers are applied/forwarded by plugin backend proxy logic, not by page 
 
 ## Plugin RBAC
 
-Sigil plugin routes enforce action-based RBAC in the plugin backend:
+Sigil plugin query routes enforce action-based RBAC in the plugin backend:
 
 - `grafana-sigil-app.data:read`
   - `GET /query/conversations`
