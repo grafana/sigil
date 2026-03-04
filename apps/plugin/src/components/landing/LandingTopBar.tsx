@@ -233,48 +233,56 @@ export function LandingTopBar({ assistantOrigin }: LandingTopBarProps) {
     const previousTo = new Date(now - METRIC_WINDOW_MS);
 
     const loadStats = async () => {
-      const [conversationCurrent, conversationPrevious, agentsCurrent, agentsPrevious, evalCurrent, evalPrevious] =
-        await Promise.all([
-          countConversationsInRange(currentFrom, currentTo),
-          countConversationsInRange(previousFrom, previousTo),
-          countAgentsSeenInRange(currentFrom, currentTo),
-          countAgentsSeenInRange(previousFrom, previousTo),
-          countEvaluatorsUpdatedInRange(currentFrom, currentTo),
-          countEvaluatorsUpdatedInRange(previousFrom, previousTo),
-        ]);
+      try {
+        const [conversationCurrent, conversationPrevious, agentsCurrent, agentsPrevious, evalCurrent, evalPrevious] =
+          await Promise.all([
+            countConversationsInRange(currentFrom, currentTo),
+            countConversationsInRange(previousFrom, previousTo),
+            countAgentsSeenInRange(currentFrom, currentTo),
+            countAgentsSeenInRange(previousFrom, previousTo),
+            countEvaluatorsUpdatedInRange(currentFrom, currentTo),
+            countEvaluatorsUpdatedInRange(previousFrom, previousTo),
+          ]);
 
-      if (cancelled) {
-        return;
+        if (cancelled) {
+          return;
+        }
+
+        const next = [
+          {
+            label: 'Conversations',
+            route: ROUTES.Conversations,
+            cta: 'View conversations',
+            current: conversationCurrent,
+            previous: conversationPrevious,
+            loading: false,
+          },
+          {
+            label: 'Agents',
+            route: ROUTES.Agents,
+            cta: 'Inspect agents',
+            current: agentsCurrent,
+            previous: agentsPrevious,
+            loading: false,
+          },
+          {
+            label: 'Evaluations',
+            route: ROUTES.Evaluation,
+            cta: 'Manage evals',
+            current: evalCurrent,
+            previous: evalPrevious,
+            loading: false,
+          },
+        ];
+        setHeroStats(next);
+        saveHeroStatsToStorage(next);
+      } catch {
+        if (cancelled) {
+          return;
+        }
+        // Fall back to the existing values so the hero stats do not stay in a loading state forever.
+        setHeroStats((prev) => prev.map((item) => ({ ...item, loading: false })));
       }
-
-      const next = [
-        {
-          label: 'Conversations',
-          route: ROUTES.Conversations,
-          cta: 'View conversations',
-          current: conversationCurrent,
-          previous: conversationPrevious,
-          loading: false,
-        },
-        {
-          label: 'Agents',
-          route: ROUTES.Agents,
-          cta: 'Inspect agents',
-          current: agentsCurrent,
-          previous: agentsPrevious,
-          loading: false,
-        },
-        {
-          label: 'Evaluations',
-          route: ROUTES.Evaluation,
-          cta: 'Manage evals',
-          current: evalCurrent,
-          previous: evalPrevious,
-          loading: false,
-        },
-      ];
-      setHeroStats(next);
-      saveHeroStatsToStorage(next);
     };
 
     void loadStats();
@@ -477,7 +485,7 @@ function ComparisonBadge({
 
   const pctChange = ((current - previous) / Math.abs(previous)) * 100;
   const isUp = pctChange > 0;
-  const arrow = isUp ? '↑' : '↓';
+  const arrow = pctChange === 0 ? '→' : isUp ? '↑' : '↓';
   const sign = isUp ? '+' : '';
   const badgeClass =
     pctChange === 0 ? styles.changeBadgeNeutral : isUp ? styles.changeBadgeGood : styles.changeBadgeWarn;
