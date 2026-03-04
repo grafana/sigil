@@ -45,7 +45,7 @@ func (e *LLMJudgeEvaluator) Evaluate(ctx context.Context, input EvalInput, defin
 		return nil, evalpkg.Permanent(fmt.Errorf("judge provider %q is not configured", providerID))
 	}
 
-	systemPrompt := renderTemplate(configString(definition.Config, "system_prompt", "You are an evaluator."), input)
+	systemPrompt := renderTemplate(configString(definition.Config, "system_prompt", "You are an evaluation judge. For number scores, use a 1-10 integer scale (1 = very poor, 10 = excellent) unless the output key description specifies otherwise."), input)
 	userPrompt := renderTemplate(configString(definition.Config, "user_prompt", "User input:\n{{input}}\n\nAssistant output:\n{{output}}"), input)
 	maxTokens, _ := configInt(definition.Config, "max_tokens")
 	if maxTokens <= 0 {
