@@ -60,7 +60,7 @@ type HeroStatItem = {
 
 const METRIC_WINDOW_MS = 24 * 60 * 60 * 1000;
 const PAGE_SIZE = 200;
-const MAX_PAGES = 50;
+const MAX_PAGES = 10;
 const HERO_STATS_STORAGE_KEY = 'grafana-sigil-hero-stats';
 const HERO_STATS_CACHE_TTL_MS = 5 * 60 * 1000;
 
