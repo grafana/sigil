@@ -571,12 +571,21 @@ func (a *App) handleEvalRules(w http.ResponseWriter, req *http.Request) {
 }
 
 func (a *App) handleEvalRuleByID(w http.ResponseWriter, req *http.Request) {
-	id := strings.TrimPrefix(req.URL.Path, "/eval/rules/")
-	if id == "" || strings.Contains(id, "/") {
+	pathForID := req.URL.RawPath
+	if pathForID == "" {
+		pathForID = req.URL.Path
+	}
+	idEncoded := strings.TrimPrefix(pathForID, "/eval/rules/")
+	if idEncoded == "" {
 		http.Error(w, "invalid rule path", http.StatusBadRequest)
 		return
 	}
-	path := fmt.Sprintf("/api/v1/eval/rules/%s", id)
+	id, err := url.PathUnescape(idEncoded)
+	if err != nil || id == "" {
+		http.Error(w, "invalid rule path", http.StatusBadRequest)
+		return
+	}
+	path := fmt.Sprintf("/api/v1/eval/rules/%s", url.PathEscape(id))
 	switch req.Method {
 	case http.MethodGet:
 		a.handleProxy(w, req, path, http.MethodGet)

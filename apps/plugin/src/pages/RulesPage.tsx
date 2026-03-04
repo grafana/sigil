@@ -113,7 +113,7 @@ export default function RulesPage(props: RulesPageProps) {
   const { rules, evaluators, loading, errorMessage, setErrorMessage, handleToggle } = useEvalRulesData(dataSource);
 
   const handleClick = (ruleID: string) => {
-    navigate(`${EVAL_RULES_BASE}/${ruleID}`);
+    navigate(`${EVAL_RULES_BASE}/${encodeURIComponent(ruleID)}`);
   };
 
   if (loading) {
@@ -193,7 +193,7 @@ export default function RulesPage(props: RulesPageProps) {
                 <Icon name="check-circle" size="sm" /> Run evaluators
               </span>
             </div>
-            <Button variant="primary" icon="plus" size="lg" onClick={() => navigate(`${EVAL_RULES_BASE}/new`)}>
+            <Button variant="primary" icon="plus"  onClick={() => navigate(`${EVAL_RULES_BASE}/new`)}>
               Create your first rule
             </Button>
           </div>

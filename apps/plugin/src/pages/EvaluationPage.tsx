@@ -1,8 +1,10 @@
 import React, { Suspense } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes, useLocation } from 'react-router-dom';
 import { LoadingPlaceholder, Stack, Text } from '@grafana/ui';
 import EvalPipelineBanner from '../components/evaluation/EvalPipelineBanner';
 import EvalTabBar from '../components/evaluation/EvalTabBar';
+import { defaultEvaluationDataSource } from '../evaluation/api';
+import { useEvalRulesData } from '../hooks/useEvalRulesData';
 
 const EvaluationOverviewPage = React.lazy(() => import('./EvaluationOverviewPage'));
 const EvaluatorsPage = React.lazy(() => import('./EvaluatorsPage'));
@@ -13,11 +15,20 @@ const RulesPage = React.lazy(() => import('./RulesPage'));
 const RuleDetailPage = React.lazy(() => import('./RuleDetailPage'));
 const TemplateDetailPage = React.lazy(() => import('./TemplateDetailPage'));
 
+function isOverviewTab(pathname: string): boolean {
+  return !pathname.includes('/evaluators') && !pathname.includes('/templates') && !pathname.includes('/rules');
+}
+
 export default function EvaluationPage() {
+  const location = useLocation();
+  const { rules, loading } = useEvalRulesData(defaultEvaluationDataSource);
+  // Hide banner on overview when no rules (onboarding); show everywhere else
+  const showBanner = !isOverviewTab(location.pathname) || (!loading && rules.length > 0);
+
   return (
     <Stack direction="column" gap={2}>
       <Text element="h2">Evaluation</Text>
-      <EvalPipelineBanner />
+      {showBanner && <EvalPipelineBanner />}
       <EvalTabBar />
       <Suspense fallback={<LoadingPlaceholder text="Loading..." />}>
         <Routes>

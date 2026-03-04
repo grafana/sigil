@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -267,7 +268,7 @@ func (s *Service) handleRuleByID(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	ruleID, valid := pathID(req.URL.Path, "/api/v1/eval/rules/")
+	ruleID, valid := pathIDEscaped(req, "/api/v1/eval/rules/")
 	if !valid {
 		http.Error(w, "invalid rule id", http.StatusBadRequest)
 		return
@@ -437,6 +438,29 @@ func pathID(path string, prefix string) (string, bool) {
 		return "", false
 	}
 	return trimmed, true
+}
+
+// pathIDEscaped extracts a path segment ID from req, supporting URL-encoded
+// characters (e.g. %2F for slashes in rule IDs). Uses RawPath when available.
+func pathIDEscaped(req *http.Request, prefix string) (string, bool) {
+	path := req.URL.RawPath
+	if path == "" {
+		path = req.URL.Path
+	}
+	trimmed := strings.TrimPrefix(path, prefix)
+	if trimmed == "" {
+		return "", false
+	}
+	// When using RawPath, trimmed may contain %2F (encoded slash) but no literal /.
+	// When using Path only, trimmed must not contain / (ambiguous with subpaths).
+	if path == req.URL.Path && strings.Contains(trimmed, "/") {
+		return "", false
+	}
+	id, err := url.PathUnescape(trimmed)
+	if err != nil || id == "" {
+		return "", false
+	}
+	return id, true
 }
 
 func pathIDAction(path string, prefix string) (string, string, bool) {

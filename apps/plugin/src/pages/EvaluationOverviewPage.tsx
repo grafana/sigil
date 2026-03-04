@@ -40,7 +40,7 @@ export default function EvaluationOverviewPage(props: EvaluationOverviewPageProp
     useEvalRulesData(dataSource);
 
   const handleRuleClick = (ruleID: string) => {
-    navigate(`${EVAL_BASE}/rules/${ruleID}`);
+    navigate(`${EVAL_BASE}/rules/${encodeURIComponent(ruleID)}`);
   };
 
   if (loading) {

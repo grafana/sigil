@@ -518,6 +518,13 @@ func TestCallResource(t *testing.T) {
 			default:
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}
+		case "/api/v1/eval/rules/dsodsjodss/doidsnoids":
+			// Rule ID contains slash; plugin forwards with path-encoded segment
+			if r.Method != http.MethodDelete {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
 		case "/api/v1/eval/rules:preview":
 			if r.Method != http.MethodPost {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -745,6 +752,12 @@ func TestCallResource(t *testing.T) {
 			name:      "delete rule",
 			method:    http.MethodDelete,
 			path:      "eval/rules/rule-1",
+			expStatus: http.StatusNoContent,
+		},
+		{
+			name:      "delete rule with id containing slash",
+			method:    http.MethodDelete,
+			path:      "eval/rules/dsodsjodss%2Fdoidsnoids",
 			expStatus: http.StatusNoContent,
 		},
 		{
