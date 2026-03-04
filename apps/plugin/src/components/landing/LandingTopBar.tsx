@@ -564,7 +564,7 @@ function getStyles(theme: GrafanaTheme2) {
       label: 'landingTopBar-pageFlow',
       display: 'grid',
       gridTemplateColumns: 'minmax(0, 1fr) minmax(400px, 480px)',
-      alignItems: 'start',
+      alignItems: 'stretch',
       gap: theme.spacing(3),
       boxSizing: 'border-box',
       '@media (max-width: 1200px)': {
@@ -574,6 +574,8 @@ function getStyles(theme: GrafanaTheme2) {
     heroBlock: css({
       label: 'landingTopBar-heroBlock',
       minWidth: 0,
+      display: 'flex',
+      flexDirection: 'column',
     }),
     heroSideHeaderBlock: css({
       label: 'landingTopBar-heroSideHeaderBlock',
@@ -581,7 +583,9 @@ function getStyles(theme: GrafanaTheme2) {
       top: theme.spacing(2),
       alignSelf: 'stretch',
       display: 'grid',
+      gridTemplateRows: 'auto 1fr',
       gap: theme.spacing(3),
+      minHeight: 0,
       '@media (max-width: 1200px)': {
         position: 'static',
       },
@@ -593,6 +597,7 @@ function getStyles(theme: GrafanaTheme2) {
     heroSideCard: css({
       label: 'landingTopBar-heroSideCard',
       height: '100%',
+      minHeight: 0,
     }),
     sideCardMutedHeading: css({
       label: 'landingTopBar-sideCardMutedHeading',
@@ -606,6 +611,8 @@ function getStyles(theme: GrafanaTheme2) {
     heroCard: css({
       label: 'landingTopBar-heroCard',
       position: 'relative',
+      flex: 1,
+      minHeight: 0,
       borderRadius: theme.shape.radius.default,
       overflow: 'hidden',
       paddingTop: theme.spacing(2),
