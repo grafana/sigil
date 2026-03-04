@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { dateTime, makeTimeRange, type TimeRange } from '@grafana/data';
+import React from 'react';
+import { dateTime, makeTimeRange } from '@grafana/data';
 import {
   ConversationTimelineHistogram,
   type ConversationTimelineHistogramProps,
@@ -44,19 +44,11 @@ const meta = {
 export default meta;
 
 export const Default = {
-  render: () => {
-    const [range, setRange] = useState<TimeRange>(defaultRange);
-    return (
-      <div style={{ width: '100%', maxWidth: 1200, margin: '0 auto' }}>
-        <ConversationTimelineHistogram
-          conversations={mockConversations}
-          timeRange={range}
-          loading={false}
-          onTimeRangeChange={setRange}
-        />
-      </div>
-    );
-  },
+  args: {
+    conversations: mockConversations,
+    timeRange: defaultRange,
+    loading: false,
+  } satisfies ConversationTimelineHistogramProps,
 };
 
 export const Loading = {
@@ -64,7 +56,6 @@ export const Loading = {
     conversations: [],
     timeRange: defaultRange,
     loading: true,
-    onTimeRangeChange: () => {},
   } satisfies ConversationTimelineHistogramProps,
 };
 
@@ -73,7 +64,6 @@ export const Empty = {
     conversations: [],
     timeRange: defaultRange,
     loading: false,
-    onTimeRangeChange: () => {},
   } satisfies ConversationTimelineHistogramProps,
 };
 
@@ -86,7 +76,6 @@ export const FewConversations = {
           conversations={fewConvs}
           timeRange={defaultRange}
           loading={false}
-          onTimeRangeChange={() => {}}
         />
       </div>
     );

@@ -3,6 +3,7 @@ import { css, cx } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, Button, Icon, Spinner, Stack, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import type { ConversationSearchResult } from '../../conversation/types';
+import { inferProviderFromModelName } from '../../modelcard/resolve';
 import type { ModelCard } from '../../modelcard/types';
 import { getProviderColor, getProviderMeta, inferProvider, stripProviderPrefix } from './providerMeta';
 
@@ -358,19 +359,20 @@ function resolveModelDisplay(
   modelProviders?: Record<string, string>,
   modelCards?: Map<string, ModelCard>
 ): { displayName: string; color: string } {
-  const provider = modelProviders?.[model] || inferProvider(model);
-
   if (modelCards && modelCards.size > 0) {
-    const key = `${provider}::${model}`;
-    const card = modelCards.get(key);
-    if (card) {
-      const cleanName = stripProviderPrefix(card.name || card.source_model_id, getProviderMeta(card.provider).label);
-      return { displayName: cleanName, color: getProviderColor(card.provider) };
+    const resolveProvider = modelProviders?.[model] || inferProviderFromModelName(model);
+    if (resolveProvider) {
+      const card = modelCards.get(`${resolveProvider}::${model}`);
+      if (card) {
+        const cleanName = stripProviderPrefix(card.name || card.source_model_id, getProviderMeta(card.provider).label);
+        return { displayName: cleanName, color: getProviderColor(card.provider) };
+      }
     }
   }
 
-  const meta = getProviderMeta(provider);
-  return { displayName: stripProviderPrefix(model, meta.label), color: getProviderColor(provider) };
+  const displayProvider = modelProviders?.[model] || inferProvider(model);
+  const meta = getProviderMeta(displayProvider);
+  return { displayName: stripProviderPrefix(model, meta.label), color: getProviderColor(displayProvider) };
 }
 
 function ModelPillList({
@@ -429,14 +431,6 @@ export default function ConversationListPanel({
 }: ConversationListPanelProps) {
   const styles = useStyles2(getStyles);
 
-  if (loading) {
-    return (
-      <div className={styles.emptyState}>
-        <Spinner aria-label="loading conversations" />
-      </div>
-    );
-  }
-
   const handleRowClick = useCallback(
     (e: React.MouseEvent, conversationId: string) => {
       if ((e.metaKey || e.ctrlKey) && getConversationHref) {
@@ -447,6 +441,14 @@ export default function ConversationListPanel({
     },
     [getConversationHref, onSelectConversation]
   );
+
+  if (loading) {
+    return (
+      <div className={styles.emptyState}>
+        <Spinner aria-label="loading conversations" />
+      </div>
+    );
+  }
 
   if (conversations.length === 0) {
     return (

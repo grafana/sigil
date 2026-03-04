@@ -142,7 +142,6 @@ export type ConversationTimelineHistogramProps = {
   conversations: ConversationSearchResult[];
   timeRange: TimeRange;
   loading: boolean;
-  onTimeRangeChange: (range: TimeRange) => void;
 };
 
 export function ConversationTimelineHistogram({

@@ -501,7 +501,6 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
         conversations={conversations}
         timeRange={timeRange}
         loading={loading}
-        onTimeRangeChange={setTimeRangeState}
       />
 
       <div className={styles.listPanel}>
