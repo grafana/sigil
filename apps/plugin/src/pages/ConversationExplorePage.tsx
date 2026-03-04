@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
+import { useInlineAssistant } from '@grafana/assistant';
 import { Alert, useStyles2 } from '@grafana/ui';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
@@ -18,7 +19,11 @@ import FlowTree from '../components/conversation-explore/FlowTree';
 import MiniTimeline from '../components/conversation-explore/MiniTimeline';
 import DetailPanel from '../components/conversation-explore/DetailPanel';
 import type { FlowNode } from '../components/conversation-explore/types';
+import type { GenerationCostResult } from '../generation/types';
 import { Loader } from '../components/Loader';
+import ExploreAssistantInsightsPanel, {
+  type AssistantInsightDisplayItem,
+} from '../components/conversation-explore/ExploreAssistantInsightsPanel';
 
 export type ConversationExplorePageProps = {
   dataSource?: ConversationsDataSource;
@@ -79,7 +84,44 @@ const getStyles = (theme: GrafanaTheme2) => ({
     minWidth: 0,
     overflow: 'hidden',
   }),
+  rightPanelContent: css({
+    flex: 1,
+    display: 'flex',
+    minWidth: 0,
+    minHeight: 0,
+    overflow: 'hidden',
+  }),
+  detailPanelWrap: css({
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
+    overflow: 'hidden',
+  }),
+  insightsWrap: css({
+    width: 320,
+    flexShrink: 0,
+    minHeight: 0,
+    background: theme.colors.background.primary,
+  }),
 });
+
+type HighlightedSidebarItem = {
+  itemId: string;
+  label: string;
+  kind: FlowNode['kind'];
+  node: FlowNode;
+  reasons: string[];
+  durationMs: number;
+  tokenCount: number;
+  costUsd: number;
+  status: FlowNode['status'];
+};
+
+type AssistantInsightItem = {
+  itemId: string;
+  focus: string;
+  tip: string;
+};
 
 export default function ConversationExplorePage(props: ConversationExplorePageProps) {
   const styles = useStyles2(getStyles);
@@ -209,6 +251,138 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   }, [allGenerations]);
 
   const errorCount = useMemo(() => allGenerations.filter((g) => Boolean(g.error?.message)).length, [allGenerations]);
+  const totalTokensForInsights = useMemo(() => {
+    if (tokenSummary) {
+      return tokenSummary.totalTokens;
+    }
+    return allGenerations.reduce((sum, generation) => sum + (generation.usage?.total_tokens ?? 0), 0);
+  }, [allGenerations, tokenSummary]);
+  const totalCostUsdForInsights = useMemo(() => {
+    if (costSummary) {
+      return costSummary.totalCost;
+    }
+    let total = 0;
+    for (const [, cost] of generationCosts) {
+      total += cost.breakdown.totalCost;
+    }
+    return total;
+  }, [costSummary, generationCosts]);
+  const assistant = useInlineAssistant();
+  const [assistantResultText, setAssistantResultText] = useState('');
+  const [assistantInsightItems, setAssistantInsightItems] = useState<AssistantInsightItem[]>([]);
+  const lastInsightContextRef = useRef<string>('');
+
+  const highlightedSidebarItems = useMemo(
+    () => getHighlightedSidebarItems(flowNodes, generationCosts),
+    [flowNodes, generationCosts]
+  );
+
+  const highlightedSidebarItemMap = useMemo(() => {
+    const map = new Map<string, HighlightedSidebarItem>();
+    for (const item of highlightedSidebarItems) {
+      map.set(item.itemId, item);
+    }
+    return map;
+  }, [highlightedSidebarItems]);
+
+  const insightsDataContext = useMemo(() => {
+    if (highlightedSidebarItems.length === 0) {
+      return null;
+    }
+    const lines: string[] = [
+      `Conversation ID: ${conversationID}`,
+      `Generations: ${conversationData?.generationCount ?? allGenerations.length}`,
+      `Total duration (ms): ${Math.round(totalDurationMs)}`,
+      `Total tokens: ${totalTokensForInsights}`,
+      `Total cost USD: ${totalCostUsdForInsights.toFixed(6)}`,
+      `Error count: ${errorCount}`,
+      '',
+      'Selectable sidebar items (use itemId exactly):',
+    ];
+    for (const item of highlightedSidebarItems) {
+      lines.push(
+        `- itemId=${item.itemId}; label=${item.label}; kind=${item.kind}; reasons=${item.reasons.join(',')}; durationMs=${Math.round(item.durationMs)}; tokenCount=${item.tokenCount}; costUsd=${item.costUsd.toFixed(6)}; status=${item.status}`
+      );
+    }
+    return lines.join('\n');
+  }, [
+    allGenerations.length,
+    conversationData?.generationCount,
+    conversationID,
+    errorCount,
+    highlightedSidebarItems,
+    totalCostUsdForInsights,
+    totalDurationMs,
+    totalTokensForInsights,
+  ]);
+
+  const runAssistantInsights = useCallback(
+    (context: string) => {
+      const prompt =
+        'Review this conversation flow and identify what to pay attention to. Prioritize anomalies and practical operator tips. Use only selectable item IDs from the provided list.';
+      assistant.generate({
+        prompt: `${prompt}\n\n${context}`,
+        origin: 'sigil-plugin/conversation-explore-assistant-insights',
+        systemPrompt:
+          'You are a concise GenAI observability analyst. Return JSON only, no markdown. Format exactly as: {"items":[{"itemId":"<exact item id>","focus":"<what to pay attention to>","tip":"<practical tip>"}]}. Return 2-5 items. itemId must be one of the provided selectable IDs. Keep focus and tip under 24 words each.',
+        onComplete: (result: string) => {
+          setAssistantResultText(result);
+          setAssistantInsightItems(parseAssistantInsightItems(result));
+        },
+        onError: (err: Error) => {
+          console.error('Conversation explore insights failed:', err);
+          setAssistantResultText('');
+          setAssistantInsightItems([]);
+        },
+      });
+    },
+    [assistant]
+  );
+
+  React.useEffect(() => {
+    if (!insightsDataContext) {
+      setAssistantResultText('');
+      setAssistantInsightItems([]);
+      lastInsightContextRef.current = '';
+      return;
+    }
+    if (assistant.isGenerating) {
+      return;
+    }
+    if (lastInsightContextRef.current === insightsDataContext) {
+      return;
+    }
+    lastInsightContextRef.current = insightsDataContext;
+    runAssistantInsights(insightsDataContext);
+  }, [assistant.isGenerating, insightsDataContext, runAssistantInsights]);
+
+  const displayInsightItems = useMemo<AssistantInsightDisplayItem[]>(() => {
+    const items: AssistantInsightDisplayItem[] = [];
+    for (const item of assistantInsightItems) {
+      const sidebarItem = highlightedSidebarItemMap.get(item.itemId);
+      if (!sidebarItem) {
+        continue;
+      }
+      items.push({
+        itemId: item.itemId,
+        sidebarLabel: sidebarItem.label,
+        focus: item.focus,
+        tip: item.tip,
+      });
+    }
+    return items;
+  }, [assistantInsightItems, highlightedSidebarItemMap]);
+
+  const handleSelectInsightItem = useCallback(
+    (itemId: string) => {
+      const node = highlightedSidebarItemMap.get(itemId)?.node;
+      if (!node) {
+        return;
+      }
+      handleSelectNode(node);
+    },
+    [handleSelectNode, highlightedSidebarItemMap]
+  );
 
   if (loading) {
     return (
@@ -278,19 +452,135 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
           aria-label="Resize flow panel"
         />
         <div className={styles.rightPanel}>
-          <DetailPanel
-            selectedNode={selectedNode}
-            allGenerations={allGenerations}
-            flowNodes={flowNodes}
-            generationCosts={generationCosts}
-            onDeselectNode={handleDeselectNode}
-            onNavigateToGeneration={handleNavigateToGeneration}
-            scrollToToolCallId={scrollToToolCallId}
-          />
+          <div className={styles.rightPanelContent}>
+            <div className={styles.detailPanelWrap}>
+              <DetailPanel
+                selectedNode={selectedNode}
+                allGenerations={allGenerations}
+                flowNodes={flowNodes}
+                generationCosts={generationCosts}
+                onDeselectNode={handleDeselectNode}
+                onNavigateToGeneration={handleNavigateToGeneration}
+                scrollToToolCallId={scrollToToolCallId}
+              />
+            </div>
+            <div className={styles.insightsWrap}>
+              <ExploreAssistantInsightsPanel
+                isGenerating={assistant.isGenerating}
+                rawAssistantText={assistant.isGenerating ? assistant.content : assistantResultText}
+                items={displayInsightItems}
+                onSelectItem={handleSelectInsightItem}
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
+}
+
+function parseAssistantInsightItems(raw: string): AssistantInsightItem[] {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return [];
+  }
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const jsonText = fenced?.[1] ?? trimmed;
+  try {
+    const parsed = JSON.parse(jsonText) as { items?: Array<Partial<AssistantInsightItem>> };
+    if (!Array.isArray(parsed.items)) {
+      return [];
+    }
+    return parsed.items
+      .map((item) => ({
+        itemId: (item.itemId ?? '').trim(),
+        focus: (item.focus ?? '').trim(),
+        tip: (item.tip ?? '').trim(),
+      }))
+      .filter((item) => item.itemId.length > 0 && item.focus.length > 0 && item.tip.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+function flattenNodes(nodes: FlowNode[]): FlowNode[] {
+  const out: FlowNode[] = [];
+  for (const node of nodes) {
+    out.push(node);
+    if (node.children.length > 0) {
+      out.push(...flattenNodes(node.children));
+    }
+  }
+  return out;
+}
+
+function getGenerationCostUsd(node: FlowNode, generationCosts?: Map<string, GenerationCostResult>): number {
+  if (!node.generation) {
+    return 0;
+  }
+  return generationCosts?.get(node.generation.generation_id)?.breakdown.totalCost ?? 0;
+}
+
+function getHighlightedSidebarItems(
+  nodes: FlowNode[],
+  generationCosts?: Map<string, GenerationCostResult>
+): HighlightedSidebarItem[] {
+  const all = flattenNodes(nodes).filter((n) => n.kind !== 'agent');
+  if (all.length === 0) {
+    return [];
+  }
+  const generationNodes = all.filter((n) => n.kind === 'generation');
+  const maxDurationMs = generationNodes.reduce((max, n) => Math.max(max, n.durationMs), 0);
+  const maxTokens = generationNodes.reduce((max, n) => Math.max(max, n.tokenCount ?? 0), 0);
+  const maxCostUsd = generationNodes.reduce((max, n) => Math.max(max, getGenerationCostUsd(n, generationCosts)), 0);
+
+  const items: HighlightedSidebarItem[] = [];
+  for (const node of all) {
+    const reasons: string[] = [];
+    const tokenCount = node.tokenCount ?? 0;
+    const costUsd = getGenerationCostUsd(node, generationCosts);
+
+    if (node.status === 'error') {
+      reasons.push('error');
+    }
+    if (node.kind === 'generation' && maxDurationMs > 0 && node.durationMs >= maxDurationMs) {
+      reasons.push('high_latency');
+    }
+    if (node.kind === 'generation' && maxTokens > 0 && tokenCount >= maxTokens) {
+      reasons.push('high_tokens');
+    }
+    if (node.kind === 'generation' && maxCostUsd > 0 && costUsd >= maxCostUsd) {
+      reasons.push('high_cost');
+    }
+    if (reasons.length === 0) {
+      continue;
+    }
+
+    items.push({
+      itemId: node.id,
+      label: node.label,
+      kind: node.kind,
+      node,
+      reasons,
+      durationMs: node.durationMs,
+      tokenCount,
+      costUsd,
+      status: node.status,
+    });
+  }
+
+  items.sort((a, b) => {
+    const aError = a.reasons.includes('error') ? 1 : 0;
+    const bError = b.reasons.includes('error') ? 1 : 0;
+    if (bError !== aError) {
+      return bError - aError;
+    }
+    if (b.reasons.length !== a.reasons.length) {
+      return b.reasons.length - a.reasons.length;
+    }
+    return b.durationMs - a.durationMs;
+  });
+  return items.slice(0, 10);
 }
 
 function findNodeById(nodes: FlowNode[], id: string): FlowNode | null {

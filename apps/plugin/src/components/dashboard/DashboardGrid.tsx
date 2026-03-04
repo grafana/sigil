@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { ThresholdsMode, type GrafanaTheme2, type TimeRange } from '@grafana/data';
-import { Button, Icon, IconButton, Select, Spinner, useStyles2 } from '@grafana/ui';
+import { Select, Spinner, useStyles2 } from '@grafana/ui';
 import { useInlineAssistant } from '@grafana/assistant';
 import type { DashboardDataSource } from '../../dashboard/api';
 import {
@@ -782,8 +782,7 @@ function InsightPanel({ prompt, origin, dataContext }: InsightPanelProps) {
   const styles = useStyles2(getStyles);
   const gen = useInlineAssistant();
   const [text, setText] = useState('');
-  const isDevelopment = process.env.NODE_ENV === 'development';
-  const hasAutoRun = useRef(isDevelopment);
+  const lastDataContextRef = useRef<string | null>(null);
 
   const latestRef = useRef({ prompt, origin, dataContext, gen });
   useEffect(() => {
@@ -804,34 +803,33 @@ function InsightPanel({ prompt, origin, dataContext }: InsightPanelProps) {
   }, []);
 
   useEffect(() => {
-    if (!dataContext || hasAutoRun.current) {
+    if (!dataContext) {
+      lastDataContextRef.current = null;
+      setText('');
       return;
     }
-    hasAutoRun.current = true;
-    runGenerate(dataContext);
-  }, [dataContext, runGenerate]);
-
-  const doGenerate = useCallback(() => {
-    const { dataContext: ctx, gen: g } = latestRef.current;
-    if (ctx && !g.isGenerating) {
-      setText('');
-      runGenerate(ctx);
+    if (gen.isGenerating) {
+      return;
     }
-  }, [runGenerate]);
+    if (lastDataContextRef.current === dataContext) {
+      return;
+    }
+    lastDataContextRef.current = dataContext;
+    setText('');
+    runGenerate(dataContext);
+  }, [dataContext, gen.isGenerating, runGenerate]);
 
-  const displayText = gen.isGenerating ? gen.content : text;
+  const displayText: string = gen.isGenerating ? String(gen.content ?? '') : text;
   const initialWaiting = !dataContext && !text && !gen.isGenerating;
-  const hasResult = Boolean(text) || gen.isGenerating;
-  const showRegenerate = !gen.isGenerating && hasResult;
 
   const renderedBullets = useMemo(() => {
     if (!displayText) {
       return null;
     }
-    const lines = displayText.split('\n').filter((l) => l.trim().length > 0);
+    const lines = displayText.split('\n').filter((line: string) => line.trim().length > 0);
     return (
       <ul>
-        {lines.map((line, i) => {
+        {lines.map((line: string, i: number) => {
           const content = line.replace(/^[-•*]\s*/, '');
           return (
             <li key={i}>
@@ -846,15 +844,8 @@ function InsightPanel({ prompt, origin, dataContext }: InsightPanelProps) {
   return (
     <div className={styles.insightPanel}>
       <div className={styles.insightPanelHeader}>
-        <span className={styles.insightTitle}>
-          <Icon name="ai" size="md" />
-          Assistant Insight
-        </span>
         <div className={styles.insightActions}>
           {(gen.isGenerating || initialWaiting) && <Spinner size="sm" />}
-          {showRegenerate && (
-            <IconButton name="repeat" aria-label="Rerun insight" tooltip="Rerun" size="md" onClick={doGenerate} />
-          )}
         </div>
       </div>
       <div className={styles.insightPanelBody}>
@@ -862,14 +853,8 @@ function InsightPanel({ prompt, origin, dataContext }: InsightPanelProps) {
           <span className={styles.insightPlaceholder}>Waiting for data...</span>
         ) : renderedBullets ? (
           <div>{renderedBullets}</div>
-        ) : gen.isGenerating ? (
-          <span className={styles.insightPlaceholder}>Generating insight...</span>
-        ) : isDevelopment ? (
-          <Button icon="ai" size="sm" variant="secondary" fill="outline" onClick={doGenerate} disabled={!dataContext}>
-            Generate Insight
-          </Button>
         ) : (
-          <span className={styles.insightPlaceholder}>Generating insight...</span>
+          null
         )}
       </div>
     </div>
@@ -979,7 +964,6 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'flex',
       flexDirection: 'column',
       background: theme.colors.background.primary,
-      border: `1px solid ${theme.colors.border.weak}`,
       borderRadius: theme.shape.radius.default,
       overflow: 'hidden',
     }),
