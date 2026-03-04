@@ -582,7 +582,13 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
   }, [dataSource, loadingMore, namePrefix, nextCursor]);
 
   useEffect(() => {
-    if (loading || loadingMore || nextCursor.length === 0 || typeof IntersectionObserver === 'undefined') {
+    if (
+      activeTab !== 'table' ||
+      loading ||
+      loadingMore ||
+      nextCursor.length === 0 ||
+      typeof IntersectionObserver === 'undefined'
+    ) {
       return;
     }
     const sentinel = loadMoreSentinelRef.current;
@@ -605,7 +611,7 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [loadMore, loading, loadingMore, nextCursor]);
+  }, [activeTab, loadMore, loading, loadingMore, nextCursor]);
 
   return (
     <div className={styles.page}>
