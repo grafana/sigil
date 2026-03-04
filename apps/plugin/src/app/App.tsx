@@ -80,6 +80,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
 });
 
 export default function App(props: AppRootProps) {
+  const { basename, onNavChanged } = props;
   const styles = useStyles2(getStyles);
   const location = useLocation();
   const grafanaTitleSuffix = useRef('');
@@ -87,8 +88,8 @@ export default function App(props: AppRootProps) {
     if (location.pathname.startsWith(PLUGIN_BASE)) {
       return PLUGIN_BASE;
     }
-    return props.basename;
-  }, [location.pathname, props.basename]);
+    return basename;
+  }, [basename, location.pathname]);
   const pluginRelativePath = useMemo(() => {
     if (location.pathname.startsWith(PLUGIN_BASE)) {
       return location.pathname.slice(PLUGIN_BASE.length).replace(/^\/+/, '');
@@ -111,8 +112,8 @@ export default function App(props: AppRootProps) {
       parentItem: main,
     };
     const navModel: NavModel = { main, node };
-    props.onNavChanged(navModel);
-  }, [appBaseUrl, props]);
+    onNavChanged(navModel);
+  }, [appBaseUrl, onNavChanged]);
 
   useEffect(() => {
     if (grafanaTitleSuffix.current.length === 0 && document.title.endsWith(GRAFANA_TITLE_SUFFIX)) {
