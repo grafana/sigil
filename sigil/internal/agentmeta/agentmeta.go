@@ -63,7 +63,7 @@ func BuildDescriptor(generation *sigilv1.Generation) (Descriptor, error) {
 
 	agentName := strings.TrimSpace(generation.GetAgentName())
 	declaredVersion := strings.TrimSpace(generation.GetAgentVersion())
-	systemPrompt := normalizeText(generation.GetSystemPrompt())
+	systemPrompt := normalizeSystemPrompt(generation.GetSystemPrompt())
 	systemPromptPrefix := ClampRunes(systemPrompt, systemPromptPrefixMax)
 	systemPromptTokens := estimateTokens(systemPrompt)
 
@@ -150,6 +150,23 @@ func normalizeText(value string) string {
 		return ""
 	}
 	return strings.Join(fields, " ")
+}
+
+// normalizeSystemPrompt preserves newline structure (paragraph breaks) while
+// collapsing horizontal whitespace within each line. This is intentionally
+// different from normalizeText, which is appropriate for single-line fields
+// like tool names and descriptions.
+func normalizeSystemPrompt(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ""
+	}
+	lines := strings.Split(trimmed, "\n")
+	for i, line := range lines {
+		fields := strings.Fields(line)
+		lines[i] = strings.Join(fields, " ")
+	}
+	return strings.Join(lines, "\n")
 }
 
 func estimateTokens(value string) int {

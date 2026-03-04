@@ -32,7 +32,7 @@ func TestBuildDescriptorNormalizesWhitespaceAndToolOrder(t *testing.T) {
 	sameSemantics := &sigilv1.Generation{
 		AgentName:    "assistant",
 		AgentVersion: "v2",
-		SystemPrompt: "You   are concise.",
+		SystemPrompt: "  You are  \n  concise.  ",
 		Model:        &sigilv1.ModelRef{Provider: "openai", Name: "gpt-5"},
 		Tools: []*sigilv1.ToolDefinition{
 			{
@@ -68,7 +68,7 @@ func TestBuildDescriptorNormalizesWhitespaceAndToolOrder(t *testing.T) {
 	if left.EffectiveVersion != right.EffectiveVersion {
 		t.Fatalf("expected same effective version for semantically-equal inputs: left=%s right=%s", left.EffectiveVersion, right.EffectiveVersion)
 	}
-	if left.SystemPrompt != "You are concise." {
+	if left.SystemPrompt != "You are\nconcise." {
 		t.Fatalf("unexpected normalized prompt: %q", left.SystemPrompt)
 	}
 	if left.ToolCount != 2 {
@@ -110,6 +110,34 @@ func TestBuildDescriptorHandlesNonJSONSchemaDeterministically(t *testing.T) {
 	}
 	if !strings.HasPrefix(first.Tools[0].InputSchemaJSON, "__base64__:") {
 		t.Fatalf("expected base64 schema fallback, got %q", first.Tools[0].InputSchemaJSON)
+	}
+}
+
+func TestNormalizeSystemPrompt(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "empty", input: "", want: ""},
+		{name: "whitespace_only", input: "   \n  \t  ", want: ""},
+		{name: "single_line", input: "  hello world  ", want: "hello world"},
+		{name: "collapses_spaces_within_line", input: "You   are   helpful.", want: "You are helpful."},
+		{name: "preserves_newline", input: "You are\nconcise.", want: "You are\nconcise."},
+		{name: "trims_and_preserves_newline", input: "  You are  \n  concise.  ", want: "You are\nconcise."},
+		{name: "preserves_multiple_newlines", input: "Line one.\nLine two.\nLine three.", want: "Line one.\nLine two.\nLine three."},
+		{name: "collapses_spaces_each_line", input: "  hello   world  \n  foo   bar  ", want: "hello world\nfoo bar"},
+		{name: "leading_trailing_newlines_trimmed", input: "\n\nHello.\n\n", want: "Hello."},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			got := normalizeSystemPrompt(tc.input)
+			if got != tc.want {
+				t.Fatalf("normalizeSystemPrompt(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
 	}
 }
 

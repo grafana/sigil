@@ -2,15 +2,22 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Badge, Button, Spinner, Stack, Text, useStyles2 } from '@grafana/ui';
+import { Alert, Badge, Button, Select, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../agents/api';
 import type { AgentDetail, AgentVersionListItem } from '../agents/types';
+import ModelCardPopover from '../components/conversations/ModelCardPopover';
+import { getProviderColor, getProviderMeta, stripProviderPrefix } from '../components/conversations/providerMeta';
+import ToolsPanel from '../components/agents/ToolsPanel';
+import { defaultModelCardClient, type ModelCardClient } from '../modelcard/api';
+import type { ModelCard } from '../modelcard/types';
+import { resolveModelCardsFromNames } from '../modelcard/resolve';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 
 const VERSION_PAGE_SIZE = 50;
 
 export type AgentDetailPageProps = {
   dataSource?: AgentsDataSource;
+  modelCardClient?: ModelCardClient;
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -20,111 +27,138 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: theme.spacing(2),
     minHeight: 0,
   }),
-  hero: css({
-    padding: theme.spacing(2.5),
-    borderRadius: theme.shape.radius.default,
-    border: `1px solid ${theme.colors.border.weak}`,
-    background: `linear-gradient(150deg, ${theme.colors.background.secondary}, ${theme.colors.background.primary})`,
-  }),
-  heroHeader: css({
+  titleRow: css({
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    gap: theme.spacing(1.5),
+    gap: theme.spacing(2),
     flexWrap: 'wrap' as const,
   }),
-  heroTitle: css({
-    margin: 0,
-    fontSize: theme.typography.size.xxl,
-    lineHeight: 1.2,
-    fontFamily: '"IBM Plex Serif", "Palatino Linotype", "Book Antiqua", Palatino, serif',
+  titleMeta: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.5),
   }),
-  warningBar: css({
+  badgeRow: css({
+    display: 'flex',
+    gap: theme.spacing(0.5),
+    flexWrap: 'wrap' as const,
+  }),
+  anonymousBanner: css({
     borderRadius: theme.shape.radius.default,
     border: `1px solid ${theme.colors.warning.border}`,
     background: theme.colors.warning.transparent,
-    padding: theme.spacing(1),
+    padding: `${theme.spacing(0.75)} ${theme.spacing(1.5)}`,
   }),
   statsGrid: css({
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
     gap: theme.spacing(1),
   }),
-  statCard: css({
+  statCell: css({
     borderRadius: theme.shape.radius.default,
     border: `1px solid ${theme.colors.border.weak}`,
-    background: theme.colors.background.canvas,
-    padding: theme.spacing(1.25),
+    background: theme.colors.background.secondary,
+    padding: `${theme.spacing(1)} ${theme.spacing(1.5)}`,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.25),
+  }),
+  statLabel: css({
+    fontSize: theme.typography.bodySmall.fontSize,
+    color: theme.colors.text.secondary,
+    lineHeight: 1.3,
+  }),
+  statValue: css({
+    fontSize: theme.typography.h4.fontSize,
+    fontWeight: theme.typography.fontWeightMedium,
+    color: theme.colors.text.primary,
+    lineHeight: 1.2,
+    fontVariantNumeric: 'tabular-nums',
   }),
   panel: css({
     borderRadius: theme.shape.radius.default,
     border: `1px solid ${theme.colors.border.weak}`,
     background: theme.colors.background.secondary,
-    padding: theme.spacing(1.5),
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: theme.spacing(1),
+    overflow: 'hidden',
   }),
-  versionRow: css({
-    display: 'grid',
-    gridTemplateColumns: 'minmax(220px, 1fr) auto auto',
+  panelHeader: css({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: `${theme.spacing(1)} ${theme.spacing(1.5)}`,
+    borderBottom: `1px solid ${theme.colors.border.weak}`,
+  }),
+  panelBody: css({
+    padding: theme.spacing(1.5),
+  }),
+  versionControls: css({
+    display: 'flex',
     gap: theme.spacing(1),
     alignItems: 'center',
-    [`@media (max-width: 900px)`]: {
-      gridTemplateColumns: '1fr',
+    [`@media (max-width: 640px)`]: {
+      flexDirection: 'column' as const,
+      alignItems: 'stretch',
     },
   }),
-  select: css({
-    width: '100%',
-    borderRadius: theme.shape.radius.default,
-    border: `1px solid ${theme.colors.border.weak}`,
-    background: theme.colors.background.canvas,
-    color: theme.colors.text.primary,
-    padding: theme.spacing(1),
-    fontSize: theme.typography.size.sm,
+  versionSelect: css({
+    flex: 1,
+    minWidth: 0,
   }),
-  codeBlock: css({
+  systemPrompt: css({
     margin: 0,
-    maxHeight: 280,
+    maxHeight: 400,
     overflow: 'auto',
     whiteSpace: 'pre-wrap' as const,
     borderRadius: theme.shape.radius.default,
     border: `1px solid ${theme.colors.border.weak}`,
     background: theme.colors.background.canvas,
-    padding: theme.spacing(1.25),
+    padding: theme.spacing(1.5),
     fontFamily: theme.typography.fontFamilyMonospace,
     fontSize: theme.typography.size.sm,
-    lineHeight: 1.5,
+    lineHeight: 1.6,
+    color: theme.colors.text.primary,
   }),
-  toolsGrid: css({
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-    gap: theme.spacing(1),
-  }),
-  toolCard: css({
-    borderRadius: theme.shape.radius.default,
-    border: `1px solid ${theme.colors.border.weak}`,
-    background: theme.colors.background.canvas,
-    padding: theme.spacing(1),
+  modelChipsRow: css({
     display: 'flex',
-    flexDirection: 'column' as const,
-    gap: theme.spacing(0.75),
+    flexWrap: 'wrap' as const,
+    gap: theme.spacing(0.5),
+    marginTop: theme.spacing(1),
   }),
-  modelList: css({
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-    gap: theme.spacing(0.75),
+  modelChipAnchor: css({
+    position: 'relative' as const,
+    display: 'inline-flex',
   }),
-  modelCard: css({
-    borderRadius: theme.shape.radius.default,
-    border: `1px solid ${theme.colors.border.weak}`,
-    background: theme.colors.background.canvas,
-    padding: theme.spacing(1),
+  modelChip: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    padding: `${theme.spacing(0.25)} ${theme.spacing(0.75)}`,
+    borderRadius: '12px',
+    border: `1px solid ${theme.colors.border.medium}`,
+    background: theme.colors.background.secondary,
+    fontSize: theme.typography.bodySmall.fontSize,
+    cursor: 'pointer',
+    transition: 'border-color 0.15s, background 0.15s',
+    '&:hover': {
+      borderColor: theme.colors.text.secondary,
+      background: theme.colors.action.hover,
+    },
+  }),
+  modelChipActive: css({
+    borderColor: theme.colors.primary.border,
+    background: theme.colors.primary.transparent,
+  }),
+  modelChipDot: css({
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    flexShrink: 0,
   }),
   loading: css({
     display: 'flex',
     justifyContent: 'center',
-    padding: theme.spacing(3),
+    padding: theme.spacing(4),
   }),
 });
 
@@ -136,6 +170,14 @@ function formatDate(iso: string): string {
   return parsed.toLocaleString();
 }
 
+function formatDateShort(iso: string): string {
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) {
+    return 'n/a';
+  }
+  return parsed.toLocaleDateString();
+}
+
 function buildAgentNameFromRoute(pathname: string, routeParam?: string): string {
   if (new RegExp(`(^|/)${ROUTES.Agents}/anonymous/?$`).test(pathname)) {
     return '';
@@ -143,7 +185,28 @@ function buildAgentNameFromRoute(pathname: string, routeParam?: string): string 
   return routeParam?.trim() ?? '';
 }
 
-export default function AgentDetailPage({ dataSource = defaultAgentsDataSource }: AgentDetailPageProps) {
+type StatCellProps = {
+  label: string;
+  value: string | number;
+  tooltip: string;
+};
+
+function StatCell({ label, value, tooltip }: StatCellProps) {
+  const styles = useStyles2(getStyles);
+  return (
+    <Tooltip content={tooltip} placement="top">
+      <div className={styles.statCell}>
+        <span className={styles.statLabel}>{label}</span>
+        <span className={styles.statValue}>{typeof value === 'number' ? value.toLocaleString() : value}</span>
+      </div>
+    </Tooltip>
+  );
+}
+
+export default function AgentDetailPage({
+  dataSource = defaultAgentsDataSource,
+  modelCardClient = defaultModelCardClient,
+}: AgentDetailPageProps) {
   const styles = useStyles2(getStyles);
   const navigate = useNavigate();
   const location = useLocation();
@@ -156,6 +219,8 @@ export default function AgentDetailPage({ dataSource = defaultAgentsDataSource }
   const [loading, setLoading] = useState(true);
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [modelCards, setModelCards] = useState<Map<string, ModelCard>>(new Map());
+  const [openModel, setOpenModel] = useState<{ key: string; anchorRect: DOMRect } | null>(null);
   const detailRequestVersion = useRef(0);
   const versionsRequestVersion = useRef(0);
 
@@ -234,6 +299,24 @@ export default function AgentDetailPage({ dataSource = defaultAgentsDataSource }
       });
   }, [agentName, dataSource]);
 
+  useEffect(() => {
+    if (!detail || detail.models.length === 0) {
+      setModelCards(new Map());
+      return;
+    }
+    const providerMap: Record<string, string> = {};
+    for (const m of detail.models) {
+      providerMap[m.name] = m.provider;
+    }
+    resolveModelCardsFromNames(
+      detail.models.map((m) => m.name),
+      modelCardClient,
+      providerMap
+    )
+      .then((cards) => setModelCards(cards))
+      .catch(() => setModelCards(new Map()));
+  }, [detail, modelCardClient]);
+
   const versionOptions = useMemo(() => {
     const deduped = new Map<string, AgentVersionListItem>();
     for (const item of versions) {
@@ -258,6 +341,14 @@ export default function AgentDetailPage({ dataSource = defaultAgentsDataSource }
       return t2 - t1;
     });
   }, [detail, versions]);
+
+  const versionSelectOptions = useMemo(() => {
+    return versionOptions.map((v) => ({
+      label: `${v.effective_version.slice(0, 12)}…  ·  ${formatDateShort(v.last_seen_at)}  ·  ${v.generation_count.toLocaleString()} gen`,
+      value: v.effective_version,
+      description: v.declared_version_latest ? `Declared: ${v.declared_version_latest}` : undefined,
+    }));
+  }, [versionOptions]);
 
   const selectVersion = (nextVersion: string) => {
     const next = new URLSearchParams(searchParams);
@@ -301,12 +392,14 @@ export default function AgentDetailPage({ dataSource = defaultAgentsDataSource }
         <Alert severity="error" title="Agent not found">
           <Text>The selected agent detail could not be loaded.</Text>
         </Alert>
-        <Button variant="secondary" onClick={() => navigate(`${PLUGIN_BASE}/${ROUTES.Agents}`)}>
+        <Button variant="secondary" icon="arrow-left" onClick={() => navigate(`${PLUGIN_BASE}/${ROUTES.Agents}`)}>
           Back to agents
         </Button>
       </div>
     );
   }
+
+  const activeVersion = selectedVersion.length > 0 ? selectedVersion : detail.effective_version;
 
   return (
     <div className={styles.page}>
@@ -316,130 +409,142 @@ export default function AgentDetailPage({ dataSource = defaultAgentsDataSource }
         </Alert>
       )}
 
-      <div className={styles.hero}>
-        <div className={styles.heroHeader}>
-          <div>
-            <Text variant="bodySmall" color="secondary">
-              Agent detail
-            </Text>
-            <h2 className={styles.heroTitle}>{isAnonymous ? 'Unnamed agent bucket' : detail.agent_name}</h2>
-            <Stack direction="row" gap={1}>
-              <Badge text={`Effective ${detail.effective_version.slice(0, 18)}...`} color="purple" />
-              <Badge text={`${detail.generation_count.toLocaleString()} generations`} color="blue" />
-            </Stack>
-          </div>
-          <Button variant="secondary" onClick={() => navigate(`${PLUGIN_BASE}/${ROUTES.Agents}`)}>
-            Back to agents
-          </Button>
-        </div>
-
-        {isAnonymous && (
-          <div className={styles.warningBar}>
-            <Text>
-              This bucket aggregates generations where `gen_ai.agent.name` was missing. Treat versions here as diagnostic clusters.
-            </Text>
-          </div>
-        )}
-
-        <div className={styles.statsGrid}>
-          <div className={styles.statCard}>
-            <Text variant="bodySmall" color="secondary">
-              Last seen
-            </Text>
-            <Text>{formatDate(detail.last_seen_at)}</Text>
-          </div>
-          <div className={styles.statCard}>
-            <Text variant="bodySmall" color="secondary">
-              First seen
-            </Text>
-            <Text>{formatDate(detail.first_seen_at)}</Text>
-          </div>
-          <div className={styles.statCard}>
-            <Text variant="bodySmall" color="secondary">
-              Tool count
-            </Text>
-            <Text>{detail.tool_count.toLocaleString()}</Text>
-          </div>
-          <div className={styles.statCard}>
-            <Text variant="bodySmall" color="secondary">
-              Token estimate
-            </Text>
-            <Text>{detail.token_estimate.total.toLocaleString()}</Text>
-          </div>
-        </div>
-      </div>
-
-      <div className={styles.panel}>
-        <Text element="h4">Version selector</Text>
-        <div className={styles.versionRow}>
-          <select
-            aria-label="agent version selector"
-            className={styles.select}
-            value={selectedVersion.length > 0 ? selectedVersion : detail.effective_version}
-            onChange={(event) => selectVersion(event.currentTarget.value)}
+      <div className={styles.titleRow}>
+        <div className={styles.titleMeta}>
+          <Button
+            variant="secondary"
+            fill="text"
+            size="sm"
+            icon="arrow-left"
+            onClick={() => navigate(`${PLUGIN_BASE}/${ROUTES.Agents}`)}
           >
-            {versionOptions.map((version) => (
-              <option key={version.effective_version} value={version.effective_version}>
-                {version.effective_version.slice(0, 24)}... · {formatDate(version.last_seen_at)} · {version.generation_count.toLocaleString()} gen
-              </option>
-            ))}
-          </select>
-          <Button variant="secondary" onClick={() => selectVersion('')} disabled={selectedVersion.length === 0}>
-            View latest
+            All agents
           </Button>
-          <Button variant="secondary" onClick={() => void loadMoreVersions()} disabled={loadingVersions || versionsCursor.length === 0}>
-            {loadingVersions ? 'Loading…' : 'Load more versions'}
-          </Button>
+          <Text element="h2">{isAnonymous ? 'Unnamed agent bucket' : detail.agent_name}</Text>
+          <div className={styles.badgeRow}>
+            <Badge text={isAnonymous ? 'Anonymous' : 'Named'} color={isAnonymous ? 'orange' : 'green'} />
+            <Badge text={`${detail.generation_count.toLocaleString()} generations`} color="blue" />
+            <Badge text={`${detail.tool_count} tools`} color="purple" />
+          </div>
+          {detail.models.length > 0 && (
+            <div className={styles.modelChipsRow}>
+              {detail.models.map((model) => {
+                const cardKey = `${model.provider}::${model.name}`;
+                const card = modelCards.get(cardKey) ?? null;
+                const meta = getProviderMeta(model.provider);
+                const chipLabel = card
+                  ? stripProviderPrefix(card.name || card.source_model_id, meta.label)
+                  : stripProviderPrefix(model.name, meta.label);
+                const dotColor = getProviderColor(model.provider);
+                const isOpen = openModel?.key === cardKey;
+                return (
+                  <div key={cardKey} className={styles.modelChipAnchor}>
+                    <button
+                      type="button"
+                      className={`${styles.modelChip} ${isOpen ? styles.modelChipActive : ''}`}
+                      onClick={(event) => {
+                        if (isOpen) {
+                          setOpenModel(null);
+                          return;
+                        }
+                        setOpenModel({ key: cardKey, anchorRect: event.currentTarget.getBoundingClientRect() });
+                      }}
+                      aria-label={`model card ${chipLabel}`}
+                    >
+                      <span className={styles.modelChipDot} style={{ background: dotColor }} />
+                      <span>{chipLabel}</span>
+                    </button>
+                    {isOpen && card && (
+                      <ModelCardPopover
+                        card={card}
+                        anchorRect={openModel?.anchorRect ?? null}
+                        onClose={() => setOpenModel(null)}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {isAnonymous && (
+        <div className={styles.anonymousBanner}>
+          <Text variant="bodySmall" color="secondary">
+            This bucket aggregates generations where <code>gen_ai.agent.name</code> was missing.
+            Treat versions here as diagnostic clusters.
+          </Text>
+        </div>
+      )}
+
+      <div className={styles.statsGrid}>
+        <StatCell
+          label="Last seen"
+          value={formatDate(detail.last_seen_at)}
+          tooltip="The most recent time any generation was recorded for this agent version."
+        />
+        <StatCell
+          label="First seen"
+          value={formatDate(detail.first_seen_at)}
+          tooltip="The earliest time a generation was recorded for this agent version."
+        />
+        <StatCell
+          label="Prompt tokens"
+          value={detail.token_estimate.system_prompt}
+          tooltip="Estimated tokens consumed by the system prompt in this version."
+        />
+        <StatCell
+          label="Tools tokens"
+          value={detail.token_estimate.tools_total}
+          tooltip="Estimated tokens consumed by all tool schemas combined in this version."
+        />
+        <StatCell
+          label="Total tokens"
+          value={detail.token_estimate.total}
+          tooltip="Sum of system prompt and tool tokens — the baseline context cost per generation."
+        />
+      </div>
+
+      <div className={styles.panel}>
+        <div className={styles.panelHeader}>
+          <Text weight="medium">Version</Text>
+        </div>
+        <div className={styles.panelBody}>
+          <div className={styles.versionControls}>
+            <div className={styles.versionSelect}>
+              <Select
+                options={versionSelectOptions}
+                value={activeVersion}
+                onChange={(selected) => selectVersion(selected?.value ?? '')}
+                isLoading={loadingVersions}
+                placeholder="Select a version…"
+              />
+            </div>
+            <Button variant="secondary" onClick={() => selectVersion('')} disabled={selectedVersion.length === 0}>
+              Latest
+            </Button>
+            <Button variant="secondary" onClick={() => void loadMoreVersions()} disabled={loadingVersions || versionsCursor.length === 0}>
+              {loadingVersions ? <Spinner size={14} /> : 'Load more'}
+            </Button>
+          </div>
         </div>
       </div>
 
       <div className={styles.panel}>
-        <Text element="h4">System prompt</Text>
-        <pre className={styles.codeBlock}>{detail.system_prompt.length > 0 ? detail.system_prompt : 'No system prompt recorded.'}</pre>
+        <div className={styles.panelHeader}>
+          <Text weight="medium">System prompt</Text>
+        </div>
+        <div className={styles.panelBody}>
+          <pre className={styles.systemPrompt}>
+            {detail.system_prompt.length > 0
+              ? detail.system_prompt.replace(/\\n/g, '\n')
+              : 'No system prompt recorded.'}
+          </pre>
+        </div>
       </div>
 
-      <div className={styles.panel}>
-        <Text element="h4">Tools</Text>
-        {detail.tools.length === 0 ? (
-          <Text color="secondary">No tools captured for this version.</Text>
-        ) : (
-          <div className={styles.toolsGrid}>
-            {detail.tools.map((tool) => (
-              <div className={styles.toolCard} key={tool.name}>
-                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                  <Text weight="medium">{tool.name}</Text>
-                  <Badge text={`${tool.token_estimate.toLocaleString()} tok`} color="green" />
-                </Stack>
-                <Text variant="bodySmall" color="secondary">
-                  {tool.type} · {tool.description || 'No description'}
-                </Text>
-                <pre className={styles.codeBlock}>{tool.input_schema_json || '{}'}</pre>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className={styles.panel}>
-        <Text element="h4">Model usage</Text>
-        {detail.models.length === 0 ? (
-          <Text color="secondary">No model usage rows available.</Text>
-        ) : (
-          <div className={styles.modelList}>
-            {detail.models.map((model) => (
-              <div key={`${model.provider}:${model.name}`} className={styles.modelCard}>
-                <Text weight="medium">{model.provider} / {model.name}</Text>
-                <Text variant="bodySmall" color="secondary">
-                  {model.generation_count.toLocaleString()} generations
-                </Text>
-                <Text variant="bodySmall" color="secondary">
-                  Last seen {formatDate(model.last_seen_at)}
-                </Text>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <ToolsPanel tools={detail.tools} />
     </div>
   );
 }
