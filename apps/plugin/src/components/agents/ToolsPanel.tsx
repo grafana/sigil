@@ -325,12 +325,16 @@ function parseSchema(raw: string): object {
   }
 }
 
+function buildToolKey(tool: AgentTool): string {
+  return [tool.name, tool.type, tool.input_schema_json].join('\u0000');
+}
+
 export default function ToolsPanel({ tools }: ToolsPanelProps) {
   const styles = useStyles2(getStyles);
   const theme = useTheme2();
   const jsonStyle = useMemo(() => buildJsonViewStyle(theme), [theme]);
 
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedToolKey, setSelectedToolKey] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
   const [sortField, setSortField] = useState<'name' | 'tokens'>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -362,7 +366,18 @@ export default function ToolsPanel({ tools }: ToolsPanelProps) {
     return items;
   }, [tools, filter, sortField, sortDir]);
 
-  const selected = tools[selectedIndex] ?? null;
+  const selectedIndex = useMemo(() => {
+    if (tools.length === 0) {
+      return -1;
+    }
+    if (selectedToolKey === null) {
+      return 0;
+    }
+    const index = tools.findIndex((tool) => buildToolKey(tool) === selectedToolKey);
+    return index >= 0 ? index : 0;
+  }, [tools, selectedToolKey]);
+
+  const selected = selectedIndex >= 0 ? tools[selectedIndex] : null;
 
   const parsedSchema = useMemo(() => {
     if (!selected) {
@@ -382,7 +397,9 @@ export default function ToolsPanel({ tools }: ToolsPanelProps) {
         </div>
         <div className={styles.empty}>
           <Icon name="brackets-curly" size="xl" />
-          <Text color="secondary" variant="bodySmall">No tools captured for this version.</Text>
+          <Text color="secondary" variant="bodySmall">
+            No tools captured for this version.
+          </Text>
         </div>
       </div>
     );
@@ -417,9 +434,7 @@ export default function ToolsPanel({ tools }: ToolsPanelProps) {
               aria-label={`sort by name ${sortField === 'name' ? sortDir : ''}`}
             >
               Name
-              {sortField === 'name' && (
-                <Icon name={sortDir === 'asc' ? 'arrow-up' : 'arrow-down'} size="xs" />
-              )}
+              {sortField === 'name' && <Icon name={sortDir === 'asc' ? 'arrow-up' : 'arrow-down'} size="xs" />}
             </button>
             <button
               type="button"
@@ -428,18 +443,16 @@ export default function ToolsPanel({ tools }: ToolsPanelProps) {
               aria-label={`sort by tokens ${sortField === 'tokens' ? sortDir : ''}`}
             >
               Tokens
-              {sortField === 'tokens' && (
-                <Icon name={sortDir === 'asc' ? 'arrow-up' : 'arrow-down'} size="xs" />
-              )}
+              {sortField === 'tokens' && <Icon name={sortDir === 'asc' ? 'arrow-up' : 'arrow-down'} size="xs" />}
             </button>
           </div>
           <div className={styles.sidebarList}>
             {filteredTools.map(({ tool, originalIndex }) => (
               <button
-                key={tool.name}
+                key={`${buildToolKey(tool)}:${originalIndex}`}
                 type="button"
                 className={cx(styles.toolRow, originalIndex === selectedIndex && styles.toolRowActive)}
-                onClick={() => setSelectedIndex(originalIndex)}
+                onClick={() => setSelectedToolKey(buildToolKey(tool))}
                 aria-label={`select tool ${tool.name}`}
                 aria-pressed={originalIndex === selectedIndex}
               >
@@ -449,7 +462,9 @@ export default function ToolsPanel({ tools }: ToolsPanelProps) {
             ))}
             {filteredTools.length === 0 && (
               <div className={styles.empty}>
-                <Text color="secondary" variant="bodySmall">No tools match &ldquo;{filter}&rdquo;</Text>
+                <Text color="secondary" variant="bodySmall">
+                  No tools match &ldquo;{filter}&rdquo;
+                </Text>
               </div>
             )}
           </div>
@@ -482,12 +497,7 @@ export default function ToolsPanel({ tools }: ToolsPanelProps) {
             <div>
               <div className={styles.sectionLabel}>Input schema</div>
               <div className={styles.schemaContainer}>
-                <JsonView
-                  data={parsedSchema}
-                  style={jsonStyle}
-                  shouldExpandNode={shouldExpandNode}
-                  clickToExpandNode
-                />
+                <JsonView data={parsedSchema} style={jsonStyle} shouldExpandNode={shouldExpandNode} clickToExpandNode />
               </div>
             </div>
           </div>

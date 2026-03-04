@@ -104,10 +104,10 @@ func upsertAgentVersionTx(tx *gorm.DB, tenantID string, projection agentCatalogP
 					existingDeclaredLatest = strings.TrimSpace(*existing.DeclaredVersionLatest)
 				}
 
-				if existingDeclaredFirst == "" || projection.SeenAt.Before(existing.FirstSeenAt) {
+				if existingDeclaredFirst == "" || !projection.SeenAt.After(existing.FirstSeenAt) {
 					updateValues["declared_version_first"] = declaredVersion
 				}
-				if existingDeclaredLatest == "" || projection.SeenAt.After(existing.LastSeenAt) {
+				if existingDeclaredLatest == "" || !projection.SeenAt.Before(existing.LastSeenAt) {
 					updateValues["declared_version_latest"] = declaredVersion
 					declaredLatest = stringPtr(declaredVersion)
 				}

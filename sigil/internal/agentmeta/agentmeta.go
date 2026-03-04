@@ -2,7 +2,6 @@ package agentmeta
 
 import (
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -63,7 +62,8 @@ func BuildDescriptor(generation *sigilv1.Generation) (Descriptor, error) {
 
 	agentName := strings.TrimSpace(generation.GetAgentName())
 	declaredVersion := strings.TrimSpace(generation.GetAgentVersion())
-	systemPrompt := normalizeSystemPrompt(generation.GetSystemPrompt())
+	// Preserve raw system prompt bytes for API display and effective-version hashing.
+	systemPrompt := generation.GetSystemPrompt()
 	systemPromptPrefix := ClampRunes(systemPrompt, systemPromptPrefixMax)
 	systemPromptTokens := estimateTokens(systemPrompt)
 
@@ -74,23 +74,18 @@ func BuildDescriptor(generation *sigilv1.Generation) (Descriptor, error) {
 			continue
 		}
 
-		canonicalSchema, err := canonicalizeSchema(definition.GetInputSchemaJson())
-		if err != nil {
-			return Descriptor{}, err
-		}
-
 		tool := Tool{
-			Name:            normalizeText(definition.GetName()),
-			Description:     normalizeText(definition.GetDescription()),
-			Type:            normalizeText(definition.GetType()),
-			InputSchemaJSON: canonicalSchema,
+			Name:            definition.GetName(),
+			Description:     definition.GetDescription(),
+			Type:            definition.GetType(),
+			InputSchemaJSON: string(definition.GetInputSchemaJson()),
 		}
-		tool.TokenEstimate = estimateTokens(strings.TrimSpace(strings.Join([]string{
+		tool.TokenEstimate = estimateTokens(strings.Join([]string{
 			tool.Name,
 			tool.Description,
 			tool.Type,
 			tool.InputSchemaJSON,
-		}, " ")))
+		}, " "))
 		toolTokenTotal += tool.TokenEstimate
 
 		tools = append(tools, tool)
@@ -144,52 +139,12 @@ func BuildDescriptor(generation *sigilv1.Generation) (Descriptor, error) {
 	}, nil
 }
 
-func normalizeText(value string) string {
-	fields := strings.Fields(value)
-	if len(fields) == 0 {
-		return ""
-	}
-	return strings.Join(fields, " ")
-}
-
-// normalizeSystemPrompt preserves newline structure (paragraph breaks) while
-// collapsing horizontal whitespace within each line. This is intentionally
-// different from normalizeText, which is appropriate for single-line fields
-// like tool names and descriptions.
-func normalizeSystemPrompt(value string) string {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return ""
-	}
-	lines := strings.Split(trimmed, "\n")
-	for i, line := range lines {
-		fields := strings.Fields(line)
-		lines[i] = strings.Join(fields, " ")
-	}
-	return strings.Join(lines, "\n")
-}
-
 func estimateTokens(value string) int {
 	if strings.TrimSpace(value) == "" {
 		return 0
 	}
 	charCount := utf8.RuneCountInString(value)
 	return (charCount + 3) / 4
-}
-
-func canonicalizeSchema(raw []byte) (string, error) {
-	if len(raw) == 0 {
-		return "", nil
-	}
-	var value any
-	if err := json.Unmarshal(raw, &value); err != nil {
-		return "__base64__:" + base64.StdEncoding.EncodeToString(raw), nil
-	}
-	normalized, err := json.Marshal(value)
-	if err != nil {
-		return "", fmt.Errorf("marshal canonical schema: %w", err)
-	}
-	return string(normalized), nil
 }
 
 func ClampRunes(value string, limit int) string {

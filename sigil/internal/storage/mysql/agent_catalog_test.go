@@ -40,8 +40,8 @@ func TestSaveBatchAgentCatalogNamedVersions(t *testing.T) {
 	if head.GenerationCount != 3 {
 		t.Fatalf("expected generation_count=3, got %d", head.GenerationCount)
 	}
-	if head.VersionCount != 2 {
-		t.Fatalf("expected version_count=2, got %d", head.VersionCount)
+	if head.VersionCount != 3 {
+		t.Fatalf("expected version_count=3, got %d", head.VersionCount)
 	}
 	if head.LatestEffectiveVersion == "" {
 		t.Fatalf("expected latest effective version")
@@ -51,8 +51,8 @@ func TestSaveBatchAgentCatalogNamedVersions(t *testing.T) {
 	if err := store.DB().Where("tenant_id = ? AND agent_name = ?", "tenant-a", "assistant").Find(&versions).Error; err != nil {
 		t.Fatalf("list versions: %v", err)
 	}
-	if len(versions) != 2 {
-		t.Fatalf("expected 2 versions, got %d", len(versions))
+	if len(versions) != 3 {
+		t.Fatalf("expected 3 versions, got %d", len(versions))
 	}
 
 	var modelRows []AgentVersionModelUsageModel
@@ -61,8 +61,8 @@ func TestSaveBatchAgentCatalogNamedVersions(t *testing.T) {
 		Find(&modelRows).Error; err != nil {
 		t.Fatalf("list model usage rows: %v", err)
 	}
-	if len(modelRows) != 2 {
-		t.Fatalf("expected 2 model usage rows (one per effective version), got %d", len(modelRows))
+	if len(modelRows) != 3 {
+		t.Fatalf("expected 3 model usage rows (one per effective version), got %d", len(modelRows))
 	}
 }
 
@@ -149,6 +149,39 @@ func TestSaveBatchAgentCatalogDeclaredVersionsFollowSeenAtOrdering(t *testing.T)
 	}
 	if summaries[0].DeclaredVersionLatest == nil || *summaries[0].DeclaredVersionLatest != "v2" {
 		t.Fatalf("expected summary declared_version_latest=v2, got %v", summaries[0].DeclaredVersionLatest)
+	}
+}
+
+func TestSaveBatchAgentCatalogDeclaredVersionEqualTimestamp(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	base := time.Date(2026, 3, 4, 13, 0, 0, 0, time.UTC)
+	first := generationForAgentCatalog("gen-eq-1", "conv-eq", "assistant", "v1", "Prompt stable", base, "openai", "gpt-5", nil)
+	second := generationForAgentCatalog("gen-eq-2", "conv-eq", "assistant", "v2", "Prompt stable", base, "openai", "gpt-5", nil)
+
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{first}))
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{second}))
+
+	var versions []AgentVersionModel
+	if err := store.DB().
+		Where("tenant_id = ? AND agent_name = ?", "tenant-a", "assistant").
+		Find(&versions).Error; err != nil {
+		t.Fatalf("list versions: %v", err)
+	}
+	if len(versions) != 1 {
+		t.Fatalf("expected 1 version row, got %d", len(versions))
+	}
+	version := versions[0]
+	if version.DeclaredVersionLatest == nil || *version.DeclaredVersionLatest == "" {
+		t.Fatalf("expected declared_version_latest to be set for equal-timestamp generation, got %v", version.DeclaredVersionLatest)
+	}
+	if version.DeclaredVersionFirst == nil || *version.DeclaredVersionFirst == "" {
+		t.Fatalf("expected declared_version_first to be set for equal-timestamp generation, got %v", version.DeclaredVersionFirst)
 	}
 }
 

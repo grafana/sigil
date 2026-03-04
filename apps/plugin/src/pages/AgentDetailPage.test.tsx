@@ -114,7 +114,9 @@ describe('AgentDetailPage', () => {
 
     await waitFor(() => {
       const locationSearch = decodeURIComponent(screen.getByTestId('location-search').textContent ?? '');
-      expect(locationSearch).toContain('version=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
+      expect(locationSearch).toContain(
+        'version=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+      );
     });
     await waitFor(() =>
       expect(dataSource.lookupAgent).toHaveBeenCalledWith(
