@@ -78,6 +78,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
     fontWeight: theme.typography.fontWeightMedium,
     whiteSpace: 'nowrap' as const,
   }),
+  centeredColumn: css({
+    textAlign: 'center' as const,
+  }),
   tr: css({
     borderBottom: `1px solid ${theme.colors.border.weak}`,
     '&:last-child': {
@@ -358,9 +361,9 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
                 <tr>
                   <th className={styles.th}>Agent</th>
                   <th className={styles.th}>Latest seen</th>
-                  <th className={styles.th}>Versions</th>
-                  <th className={styles.th}>Tools</th>
-                  <th className={styles.th}>Generations</th>
+                  <th className={cx(styles.th, styles.centeredColumn)}>Versions</th>
+                  <th className={cx(styles.th, styles.centeredColumn)}>Tools</th>
+                  <th className={cx(styles.th, styles.centeredColumn)}>Generations</th>
                   <th className={styles.th}>Prompt prefix</th>
                 </tr>
               </thead>
@@ -383,9 +386,9 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
                         </button>
                       </td>
                       <td className={styles.td}>{formatDateShort(item.latest_seen_at)}</td>
-                      <td className={styles.td}>{item.version_count}</td>
-                      <td className={styles.td}>{item.tool_count}</td>
-                      <td className={styles.td}>{item.generation_count.toLocaleString()}</td>
+                      <td className={cx(styles.td, styles.centeredColumn)}>{item.version_count}</td>
+                      <td className={cx(styles.td, styles.centeredColumn)}>{item.tool_count}</td>
+                      <td className={cx(styles.td, styles.centeredColumn)}>{item.generation_count.toLocaleString()}</td>
                       <td className={cx(styles.td, styles.promptCell)}>
                         {item.system_prompt_prefix.length > 0 ? item.system_prompt_prefix : '-'}
                       </td>
