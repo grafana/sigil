@@ -360,7 +360,7 @@ func TestListAgentHeadsFiltersByCaseInsensitiveContains(t *testing.T) {
 
 	base := time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC)
 	generations := []*sigilv1.Generation{
-		generationForAgentCatalog("gen-head-1", "conv-head", "assistant-prod", "v1", "Prompt A", base, "openai", "gpt-5", nil),
+		generationForAgentCatalog("gen-head-1", "conv-head", "assistant-agent", "v1", "Prompt A", base, "openai", "gpt-5", nil),
 		generationForAgentCatalog("gen-head-2", "conv-head", "my-agent", "v1", "Prompt B", base.Add(1*time.Minute), "openai", "gpt-5", nil),
 		generationForAgentCatalog("gen-head-3", "conv-head", "orchestrator", "v1", "Prompt C", base.Add(2*time.Minute), "openai", "gpt-5", nil),
 	}
@@ -381,8 +381,8 @@ func TestListAgentHeadsFiltersByCaseInsensitiveContains(t *testing.T) {
 	for _, item := range items {
 		gotNames[item.AgentName] = true
 	}
-	if !gotNames["assistant-prod"] {
-		t.Fatalf("expected assistant-prod in results")
+	if !gotNames["assistant-agent"] {
+		t.Fatalf("expected assistant-agent in results")
 	}
 	if !gotNames["my-agent"] {
 		t.Fatalf("expected my-agent in results")
