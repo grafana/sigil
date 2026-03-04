@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { css } from '@emotion/css';
 import { useAssistant } from '@grafana/assistant';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Button, Card, HorizontalGroup, Icon, IconButton, Input, Link, LinkButton, Stack, Text, useStyles2 } from '@grafana/ui';
+import { Button, Card, HorizontalGroup, IconButton, Link, LinkButton, Stack, Text, useStyles2 } from '@grafana/ui';
 import { AssistantMenu } from '../components/landing/AssistantMenu';
 import { CURSOR_PROMPT_FILENAME, cursorInstrumentationPrompt } from '../content/cursorInstrumentationPrompt';
 import { ClaudeCodeLogo, CopilotLogo, CursorLogo } from '../components/landing/IdeLogos';
@@ -169,12 +169,12 @@ export default function Landing1Page() {
                 openAssistant();
               }}
             >
-              <Icon name="minus" size="lg" className={styles.dashIcon} />
-              <Input
+              <textarea
                 value={assistantInput}
                 onChange={(event) => setAssistantInput(event.currentTarget.value)}
                 placeholder="Ask me anything about Sigil"
                 className={styles.assistantInput}
+                rows={3}
               />
               <IconButton
                 name="enter"
@@ -229,7 +229,7 @@ export default function Landing1Page() {
           <Card className={styles.fullBleedCard}>
             <div className={styles.videoPlaceholder}>
               <Text element="h4">Product walkthrough video</Text>
-              <Text color="secondary">Placeholder for video</Text>
+              <Text color="secondary">Coming soon</Text>
             </div>
           </Card>
         </div>
@@ -435,7 +435,7 @@ function getStyles(theme: GrafanaTheme2) {
     }),
     assistantRowDash: css({
       display: 'grid',
-      gridTemplateColumns: 'auto 1fr auto',
+      gridTemplateColumns: '1fr auto',
       gap: theme.spacing(1),
       width: `calc(100% + ${theme.spacing(6)})`,
       marginLeft: theme.spacing(-3),
@@ -445,28 +445,33 @@ function getStyles(theme: GrafanaTheme2) {
       alignItems: 'start',
       minHeight: 96,
       borderTop: `1px solid ${theme.colors.border.medium}`,
-      padding: theme.spacing(3.25, 3),
+      paddingTop: theme.spacing(0.75),
+      paddingRight: theme.spacing(3),
+      paddingBottom: theme.spacing(4.5),
+      paddingLeft: theme.spacing(3),
       background: theme.colors.background.secondary,
     }),
-    dashIcon: css({
-      color: '#B877D9',
-    }),
     assistantInput: css({
-      minHeight: 40,
-      display: 'flex',
-      alignItems: 'flex-start',
-      '& input': {
-        border: 'none',
-        background: 'transparent',
-        boxShadow: 'none',
-        paddingLeft: 0,
-        paddingTop: 0,
-        paddingBottom: 0,
-        height: 40,
-        fontSize: theme.typography.h6.fontSize,
-        lineHeight: theme.typography.h6.lineHeight,
+      width: '100%',
+      border: 'none',
+      background: 'transparent',
+      boxShadow: 'none',
+      paddingLeft: 0,
+      paddingTop: theme.spacing(2),
+      paddingBottom: 0,
+      minHeight: 56,
+      maxHeight: 128,
+      resize: 'none',
+      overflowY: 'auto',
+      fontFamily: theme.typography.fontFamily,
+      fontSize: theme.typography.h6.fontSize,
+      lineHeight: theme.typography.h6.lineHeight,
+      color: theme.colors.text.primary,
+      '&::placeholder': {
+        color: theme.colors.text.secondary,
       },
-      '& input:focus': {
+      '&:focus': {
+        outline: 'none',
         boxShadow: 'none',
       },
     }),
@@ -474,7 +479,7 @@ function getStyles(theme: GrafanaTheme2) {
       backgroundColor: theme.colors.action.hover,
       padding: theme.spacing(0.5),
       borderRadius: theme.shape.radius.circle,
-      alignSelf: 'flex-start',
+      alignSelf: 'end',
       '&:hover::before': {
         borderRadius: theme.shape.radius.circle,
       },
