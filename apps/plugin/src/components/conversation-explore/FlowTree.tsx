@@ -228,7 +228,7 @@ export default function FlowTree({
                 aria-label="Search in messages"
                 aria-pressed={searchScope.messages}
               >
-                Aa
+                <Icon name="comment-alt" size="sm" />
               </button>
             </Tooltip>
             <Tooltip content="Search in tool calls" placement="top">

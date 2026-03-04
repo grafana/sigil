@@ -500,7 +500,7 @@ export default function GenerationView({
     if (!scrollToToolCallId || !contentRef.current) {
       return;
     }
-    const el = contentRef.current.querySelector(`[data-tool-call-id="${scrollToToolCallId}"]`);
+    const el = contentRef.current.querySelector(`[data-tool-call-id="${CSS.escape(scrollToToolCallId)}"]`);
     if (!el) {
       return;
     }
