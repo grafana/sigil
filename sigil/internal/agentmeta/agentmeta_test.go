@@ -2,6 +2,7 @@ package agentmeta
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
