@@ -14,7 +14,7 @@ import {
   breakdownToPromLabel,
   tokenDrilldownTypes,
 } from '../../dashboard/types';
-import { formatStatValue, extractResolvePairs, BreakdownStatPanel, ProviderMappingBadgeRow } from './dashboardShared';
+import { extractResolvePairs, BreakdownStatPanel, ProviderMappingBadgeRow } from './dashboardShared';
 import { TopStat } from '../TopStat';
 import { calculateTotalCost, calculateTotalCostByGroup, calculateCostTimeSeries } from '../../dashboard/cost';
 import {
