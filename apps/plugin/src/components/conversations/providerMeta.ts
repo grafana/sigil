@@ -25,6 +25,16 @@ export function getProviderColor(provider: string): string {
   return getProviderMeta(provider).color;
 }
 
+const API_TO_DISPLAY_PROVIDER: Record<string, string> = {
+  'meta-llama': 'meta',
+  mistralai: 'mistral',
+};
+
+export function toDisplayProvider(apiProvider: string): string {
+  const normalized = apiProvider.trim().toLowerCase();
+  return API_TO_DISPLAY_PROVIDER[normalized] || normalized;
+}
+
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

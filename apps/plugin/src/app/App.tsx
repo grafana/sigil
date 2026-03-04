@@ -6,6 +6,7 @@ import { Route, Routes, useLocation } from 'react-router-dom';
 import { ROUTES } from '../constants';
 
 const DashboardPage = React.lazy(() => import('../pages/DashboardPage'));
+const Landing1Page = React.lazy(() => import('../pages/Landing1Page'));
 const ConversationsBrowserPage = React.lazy(() => import('../pages/ConversationsBrowserPage'));
 const ConversationPage = React.lazy(() => import('../pages/ConversationPage'));
 const ConversationDetailPage = React.lazy(() => import('../pages/ConversationDetailPage'));
@@ -47,11 +48,13 @@ export default function App(_props: AppRootProps) {
   const styles = useStyles2(getStyles);
   const location = useLocation();
   const isConversationsRoute = new RegExp(`(^|/)${ROUTES.Conversations}(/[^/]+/view)?/?$`).test(location.pathname);
+  const isLanding1Route = /\/landing1\/?$/.test(location.pathname);
 
   return (
     <div className={cx(styles.pageWrapper, isConversationsRoute && styles.pageWrapperNoPadding)}>
       <div className={styles.routesContainer}>
         <Routes>
+          <Route path={ROUTES.Landing1} element={<Landing1Page />} />
           <Route path={ROUTES.Dashboard} element={<DashboardPage />} />
           <Route
             path={ROUTES.Conversations}
@@ -75,7 +78,7 @@ export default function App(_props: AppRootProps) {
           <Route path={ROUTES.AgentDetailByName} element={<AgentDetailPage />} />
           <Route path={ROUTES.AgentDetailAnonymous} element={<AgentDetailPage />} />
           <Route path={`${ROUTES.Evaluation}/*`} element={<EvaluationPage />} />
-          <Route path="*" element={<DashboardPage />} />
+          <Route path="*" element={isLanding1Route ? <Landing1Page /> : <DashboardPage />} />
         </Routes>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import {
+  buildCascadingSelector,
   buildLabelSelector,
   computeStep,
   computeRateInterval,
@@ -25,11 +26,49 @@ import {
 import type { DashboardFilters } from './types';
 
 const empty: DashboardFilters = {
-  provider: '',
-  model: '',
-  agentName: '',
+  providers: [],
+  models: [],
+  agentNames: [],
   labelFilters: [],
 };
+
+describe('buildCascadingSelector', () => {
+  it('returns undefined when all label arrays are empty', () => {
+    expect(buildCascadingSelector({ gen_ai_provider_name: [] })).toBeUndefined();
+  });
+
+  it('uses exact match for a single value', () => {
+    expect(buildCascadingSelector({ gen_ai_provider_name: ['openai'] })).toBe('{gen_ai_provider_name="openai"}');
+  });
+
+  it('joins multiple values with =~ and escapes regex metacharacters', () => {
+    expect(buildCascadingSelector({ gen_ai_provider_name: ['us.anthropic', 'openai'] })).toBe(
+      '{gen_ai_provider_name=~"us[.]anthropic|openai"}'
+    );
+  });
+
+  it('combines multiple labels', () => {
+    expect(
+      buildCascadingSelector({
+        gen_ai_provider_name: ['openai'],
+        gen_ai_request_model: ['gpt-4o', 'gpt-4o(mini)'],
+      })
+    ).toBe('{gen_ai_provider_name="openai",gen_ai_request_model=~"gpt-4o|gpt-4o\\(mini\\)"}');
+  });
+
+  it('skips empty arrays in multi-label input', () => {
+    expect(
+      buildCascadingSelector({
+        gen_ai_provider_name: ['openai'],
+        gen_ai_request_model: [],
+      })
+    ).toBe('{gen_ai_provider_name="openai"}');
+  });
+
+  it('escapes pipe characters in values', () => {
+    expect(buildCascadingSelector({ gen_ai_provider_name: ['a|b', 'c'] })).toBe('{gen_ai_provider_name=~"a\\|b|c"}');
+  });
+});
 
 describe('buildLabelSelector', () => {
   it('returns empty string for empty filters', () => {
@@ -37,51 +76,85 @@ describe('buildLabelSelector', () => {
   });
 
   it('builds fuzzy selector for single filter', () => {
-    expect(buildLabelSelector({ ...empty, provider: 'openai' })).toBe('gen_ai_provider_name=~"(?i).*openai.*"');
+    expect(buildLabelSelector({ ...empty, providers: ['openai'] })).toBe('gen_ai_provider_name=~"(?i).*openai.*"');
   });
 
   it('builds fuzzy selector for multiple filters', () => {
-    expect(buildLabelSelector({ ...empty, provider: 'openai', model: 'gpt-4o', agentName: 'my-agent' })).toBe(
+    expect(buildLabelSelector({ ...empty, providers: ['openai'], models: ['gpt-4o'], agentNames: ['my-agent'] })).toBe(
       'gen_ai_provider_name=~"(?i).*openai.*",gen_ai_request_model=~"(?i).*gpt-4o.*",gen_ai_agent_name=~"(?i).*my-agent.*"'
     );
   });
 
   it('escapes regex metacharacters in filter values', () => {
-    expect(buildLabelSelector({ ...empty, provider: 'openai(v2)+' })).toBe(
+    expect(buildLabelSelector({ ...empty, providers: ['openai(v2)+'] })).toBe(
       'gen_ai_provider_name=~"(?i).*openai\\(v2\\)\\+.*"'
     );
   });
 
+  it('builds fuzzy selector for multiple values in one dimension', () => {
+    expect(buildLabelSelector({ ...empty, providers: ['openai', 'anthropic'] })).toBe(
+      'gen_ai_provider_name=~"(?i).*openai.*|.*anthropic.*"'
+    );
+  });
+
+  it('builds fuzzy selector for multiple values with special characters', () => {
+    expect(buildLabelSelector({ ...empty, models: ['gpt-4o', 'claude-3.5'] })).toBe(
+      'gen_ai_request_model=~"(?i).*gpt-4o.*|.*claude-3[.]5.*"'
+    );
+  });
+
   it('escapes dots as [.] for RE2 compatibility (Prometheus rejects \\.)', () => {
-    expect(buildLabelSelector({ ...empty, model: 'us.anthropic.claude-haiku-4-5-20251001-v1:0' })).toBe(
+    expect(buildLabelSelector({ ...empty, models: ['us.anthropic.claude-haiku-4-5-20251001-v1:0'] })).toBe(
       'gen_ai_request_model=~"(?i).*us[.]anthropic[.]claude-haiku-4-5-20251001-v1:0.*"'
     );
   });
 
-  it('supports fuzzy matching on arbitrary label key and value', () => {
-    expect(buildLabelSelector({ ...empty, labelFilters: [{ key: 'service_name', value: 'sigil-api' }] })).toBe(
-      'service_name=~"(?i).*sigil-api.*"'
+  it('supports exact matching on arbitrary label key with = operator', () => {
+    expect(
+      buildLabelSelector({ ...empty, labelFilters: [{ key: 'service_name', operator: '=', value: 'sigil-api' }] })
+    ).toBe('service_name="sigil-api"');
+  });
+
+  it('supports regex matching with =~ operator', () => {
+    expect(
+      buildLabelSelector({ ...empty, labelFilters: [{ key: 'service_name', operator: '=~', value: 'sigil.*' }] })
+    ).toBe('service_name=~"sigil.*"');
+  });
+
+  it('supports != operator', () => {
+    expect(buildLabelSelector({ ...empty, labelFilters: [{ key: 'env', operator: '!=', value: 'dev' }] })).toBe(
+      'env!="dev"'
     );
   });
 
-  it('supports multiple label filters', () => {
+  it('supports multiple label filters with different operators', () => {
     expect(
       buildLabelSelector({
         ...empty,
         labelFilters: [
-          { key: 'service_name', value: 'sigil-api' },
-          { key: 'env', value: 'prod' },
+          { key: 'service_name', operator: '=', value: 'sigil-api' },
+          { key: 'env', operator: '!=', value: 'dev' },
         ],
       })
-    ).toBe('service_name=~"(?i).*sigil-api.*",env=~"(?i).*prod.*"');
+    ).toBe('service_name="sigil-api",env!="dev"');
+  });
+
+  it('falls back to fuzzy match for numeric comparison operators', () => {
+    expect(
+      buildLabelSelector({ ...empty, labelFilters: [{ key: 'service_name', operator: '<', value: 'sigil-api' }] })
+    ).toBe('service_name=~"(?i).*sigil-api.*"');
   });
 
   it('ignores invalid arbitrary label keys', () => {
-    expect(buildLabelSelector({ ...empty, labelFilters: [{ key: 'service.name', value: 'sigil-api' }] })).toBe('');
+    expect(
+      buildLabelSelector({ ...empty, labelFilters: [{ key: 'service.name', operator: '=', value: 'sigil-api' }] })
+    ).toBe('');
   });
 
   it('ignores label key without label value', () => {
-    expect(buildLabelSelector({ ...empty, labelFilters: [{ key: 'service_name', value: '' }] })).toBe('');
+    expect(buildLabelSelector({ ...empty, labelFilters: [{ key: 'service_name', operator: '=', value: '' }] })).toBe(
+      ''
+    );
   });
 });
 
@@ -114,7 +187,7 @@ describe('computeRangeDuration', () => {
 
 describe('stat query builders', () => {
   const noFilters: DashboardFilters = empty;
-  const withFilters: DashboardFilters = { ...empty, provider: 'openai' };
+  const withFilters: DashboardFilters = { ...empty, providers: ['openai'] };
 
   it('totalOpsQuery without filters', () => {
     expect(totalOpsQuery(noFilters, '3600s')).toBe(

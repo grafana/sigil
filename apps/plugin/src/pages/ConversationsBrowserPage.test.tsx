@@ -4,7 +4,17 @@ import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import ConversationsBrowserPage from './ConversationsBrowserPage';
 import ConversationPage from './ConversationPage';
 import type { ConversationsDataSource } from '../conversation/api';
+import type { DashboardDataSource } from '../dashboard/api';
 import type { TraceFetcher } from '../conversation/loader';
+
+jest.mock('@grafana/ui', () => {
+  const actual = jest.requireActual('@grafana/ui');
+  return {
+    ...actual,
+    TimeRangeInput: () => <div data-testid="time-range-input" />,
+    TimeRangePicker: () => <div data-testid="time-range-picker" />,
+  };
+});
 
 type MockConversationsDataSource = {
   [Key in keyof ConversationsDataSource as NonNullable<ConversationsDataSource[Key]> extends (...args: any[]) => any
@@ -13,6 +23,21 @@ type MockConversationsDataSource = {
 };
 
 beforeAll(() => {
+  global.ResizeObserver = class {
+    private cb: ResizeObserverCallback;
+    constructor(cb: ResizeObserverCallback) {
+      this.cb = cb;
+    }
+    observe(target: Element) {
+      this.cb(
+        [{ target, contentRect: { width: 800, height: 200 } } as unknown as ResizeObserverEntry],
+        this as unknown as ResizeObserver
+      );
+    }
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+
   if (typeof globalThis.Request === 'undefined') {
     class RequestMock {
       method: string;
@@ -105,6 +130,23 @@ function createDataSource(): MockConversationsDataSource {
   };
 }
 
+const mockDashboardDataSource: DashboardDataSource = {
+  queryRange: jest.fn().mockResolvedValue({ status: 'success', data: { resultType: 'matrix', result: [] } }),
+  queryInstant: jest.fn().mockResolvedValue({ status: 'success', data: { resultType: 'vector', result: [] } }),
+  labels: jest.fn().mockResolvedValue([]),
+  labelValues: jest.fn().mockResolvedValue([]),
+  resolveModelCards: jest.fn().mockResolvedValue({
+    resolved: [],
+    freshness: {
+      catalog_last_refreshed_at: null,
+      stale: false,
+      soft_stale: false,
+      hard_stale: false,
+      source_path: 'memory_live',
+    },
+  }),
+};
+
 describe('ConversationsBrowserPage', () => {
   function renderPage(dataSource: ConversationsDataSource, initialEntry = '/conversations') {
     const router = createMemoryRouter(
@@ -115,7 +157,7 @@ describe('ConversationsBrowserPage', () => {
         },
         {
           path: '/conversations',
-          element: <ConversationsBrowserPage dataSource={dataSource} />,
+          element: <ConversationsBrowserPage dataSource={dataSource} dashboardDataSource={mockDashboardDataSource} />,
         },
       ],
       { initialEntries: [initialEntry] }
@@ -137,7 +179,7 @@ describe('ConversationsBrowserPage', () => {
 
     expect(await screen.findByLabelText('select conversation conv-a')).toBeInTheDocument();
     expect(screen.queryByText('Conversation ID')).not.toBeInTheDocument();
-    expect(screen.getByText('LLM calls')).toBeInTheDocument();
+    expect(screen.getByText('Agents')).toBeInTheDocument();
     expect(screen.queryByText(/^Generations \(\d+\)$/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('select conversation conv-b'));

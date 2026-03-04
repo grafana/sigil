@@ -1,21 +1,76 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
-import { dateTime, makeTimeRange, type GrafanaTheme2, type TimeRange } from '@grafana/data';
-import { Alert, TimeRangePicker, useStyles2 } from '@grafana/ui';
+import { dateTime, type GrafanaTheme2 } from '@grafana/data';
+import { Alert, useStyles2 } from '@grafana/ui';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
 import type { ConversationSearchResult } from '../conversation/types';
+import { type DashboardDataSource, defaultDashboardDataSource } from '../dashboard/api';
+import type { DashboardFilters } from '../dashboard/types';
+import { useFilterUrlState } from '../hooks/useFilterUrlState';
+import { useCascadingFilterOptions } from '../hooks/useCascadingFilterOptions';
+import { FilterToolbar } from '../components/filters/FilterToolbar';
+import { defaultModelCardClient, type ModelCardClient } from '../modelcard/api';
+import type { ModelCard } from '../modelcard/types';
+import { resolveModelCardsFromNames } from '../modelcard/resolve';
 import ConversationListPanel from '../components/conversations/ConversationListPanel';
+import { ConversationTimelineHistogram } from '../components/conversations/ConversationTimelineHistogram';
 import { buildConversationViewRoute, ROUTES } from '../constants';
 
 export type ConversationsBrowserPageProps = {
   dataSource?: ConversationsDataSource;
+  dashboardDataSource?: DashboardDataSource;
+  modelCardClient?: ModelCardClient;
 };
 
-const DEFAULT_TIME_RANGE_HOURS = 1;
 const SDK_NAME_SELECT_KEY = 'span.sigil.sdk.name';
 const TOTAL_TOKENS_SELECT_KEY = 'span.gen_ai.usage.total_tokens';
 const DEFAULT_SEARCH_SELECT_FIELDS = [SDK_NAME_SELECT_KEY];
+
+// Maps Prometheus metric labels to the backend's well-known filter short names
+// which resolve to the correct Tempo span attributes (e.g. provider -> span.gen_ai.provider.name).
+const promLabelToFilterKey: Record<string, string> = {
+  gen_ai_provider_name: 'provider',
+  gen_ai_request_model: 'model',
+  gen_ai_agent_name: 'agent',
+};
+
+function buildFilterClause(key: string, values: string[]): string | null {
+  if (values.length === 0) {
+    return null;
+  }
+  if (values.length === 1) {
+    return `${key} = "${values[0]}"`;
+  }
+  return `${key} =~ "${values.join('|')}"`;
+}
+
+function buildConversationSearchFilter(filters: DashboardFilters): string {
+  const parts: string[] = [];
+
+  const providerClause = buildFilterClause('provider', filters.providers);
+  if (providerClause) {
+    parts.push(providerClause);
+  }
+
+  const modelClause = buildFilterClause('model', filters.models);
+  if (modelClause) {
+    parts.push(modelClause);
+  }
+
+  const agentClause = buildFilterClause('agent', filters.agentNames);
+  if (agentClause) {
+    parts.push(agentClause);
+  }
+
+  for (const lf of filters.labelFilters) {
+    if (lf.key && lf.value) {
+      const resolvedKey = promLabelToFilterKey[lf.key] ?? lf.key;
+      parts.push(`${resolvedKey} ${lf.operator} "${lf.value}"`);
+    }
+  }
+  return parts.join(' ');
+}
 
 type StatTrendDirection = 'up' | 'down' | 'neutral';
 type ConversationStats = {
@@ -27,11 +82,6 @@ type ConversationStats = {
   badRatedPct: number;
 };
 
-function defaultTimeRange(): TimeRange {
-  const now = dateTime();
-  return makeTimeRange(dateTime(now).subtract(DEFAULT_TIME_RANGE_HOURS, 'hours'), now);
-}
-
 function sortConversations(conversations: ConversationSearchResult[]): ConversationSearchResult[] {
   return [...conversations].sort((a, b) => Date.parse(b.last_generation_at) - Date.parse(a.last_generation_at));
 }
@@ -39,7 +89,8 @@ function sortConversations(conversations: ConversationSearchResult[]): Conversat
 async function fetchRangeConversations(
   dataSource: ConversationsDataSource,
   fromISO: string,
-  toISO: string
+  toISO: string,
+  filterString: string
 ): Promise<ConversationSearchResult[]> {
   let cursor = '';
   let hasMore = true;
@@ -47,7 +98,7 @@ async function fetchRangeConversations(
 
   while (hasMore) {
     const response = await dataSource.searchConversations({
-      filters: '',
+      filters: filterString,
       select: DEFAULT_SEARCH_SELECT_FIELDS,
       time_range: {
         from: fromISO,
@@ -134,10 +185,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
     position: 'absolute',
     inset: 0,
     display: 'grid',
-    gridTemplateRows: 'auto minmax(0, 1fr)',
+    gridTemplateRows: 'auto auto minmax(0, 1fr)',
     gap: theme.spacing(1),
     minHeight: 0,
     overflow: 'hidden',
+    overscrollBehavior: 'none' as const,
   }),
   summarySection: css({
     label: 'conversationsBrowserPage-summarySection',
@@ -149,8 +201,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   controlsRow: css({
     label: 'conversationsBrowserPage-controlsRow',
-    display: 'flex',
-    justifyContent: 'flex-end',
     margin: theme.spacing(0.5, 0, 0, 0),
     width: '100%',
     padding: theme.spacing(1, 0),
@@ -158,17 +208,14 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   statsGrid: css({
     label: 'conversationsBrowserPage-statsGrid',
-    display: 'flex',
-    flexWrap: 'wrap' as const,
-    justifyContent: 'center',
+    display: 'grid',
+    gridTemplateColumns: 'repeat(6, 1fr)',
     width: '100%',
     gap: theme.spacing(0.5),
   }),
   statTile: css({
     label: 'conversationsBrowserPage-statTile',
-    padding: theme.spacing(1.25, 1.5),
-    minHeight: 84,
-    minWidth: 180,
+    padding: theme.spacing(1, 1.5),
     display: 'flex',
     flexDirection: 'column' as const,
     justifyContent: 'center',
@@ -227,8 +274,22 @@ const getStyles = (theme: GrafanaTheme2) => ({
 export default function ConversationsBrowserPage(props: ConversationsBrowserPageProps) {
   const styles = useStyles2(getStyles);
   const dataSource = props.dataSource ?? defaultConversationsDataSource;
+  const dashboardDS = props.dashboardDataSource ?? defaultDashboardDataSource;
+  const modelCardClient = props.modelCardClient ?? defaultModelCardClient;
   const location = useLocation();
   const navigate = useNavigate();
+
+  const { timeRange, filters, setTimeRange, setFilters } = useFilterUrlState();
+
+  const from = useMemo(() => Math.floor(timeRange.from.valueOf() / 1000), [timeRange]);
+  const to = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);
+
+  const { providerOptions, modelOptions, agentOptions, labelKeyOptions, labelsLoading } = useCascadingFilterOptions(
+    dashboardDS,
+    filters,
+    from,
+    to
+  );
 
   const conversationsSegment = `/${ROUTES.Conversations}`;
   const conversationsSegmentIndex = location.pathname.indexOf(conversationsSegment);
@@ -246,8 +307,9 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   const [previousConversations, setPreviousConversations] = useState<ConversationSearchResult[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string>('');
-  const [timeRange, setTimeRangeState] = useState<TimeRange>(() => defaultTimeRange());
   const requestVersionRef = useRef<number>(0);
+
+  const filterString = useMemo(() => buildConversationSearchFilter(filters), [filters]);
 
   const loadConversations = useCallback(async (): Promise<void> => {
     requestVersionRef.current += 1;
@@ -261,8 +323,8 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
       const previousFromISO = dateTime(currentFromMs - windowMs).toISOString();
       const previousToISO = dateTime(currentToMs - windowMs).toISOString();
       const [results, previousRangeConversations] = await Promise.all([
-        fetchRangeConversations(dataSource, timeRange.from.toISOString(), timeRange.to.toISOString()),
-        fetchRangeConversations(dataSource, previousFromISO, previousToISO),
+        fetchRangeConversations(dataSource, timeRange.from.toISOString(), timeRange.to.toISOString(), filterString),
+        fetchRangeConversations(dataSource, previousFromISO, previousToISO, filterString),
       ]);
       if (requestVersionRef.current !== requestVersion) {
         return;
@@ -282,7 +344,7 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
       }
       setLoading(false);
     }
-  }, [dataSource, timeRange]);
+  }, [dataSource, timeRange, filterString]);
 
   useEffect(() => {
     void loadConversations();
@@ -297,46 +359,61 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
     [previousConversations, timeRange]
   );
 
-  const onMoveBackward = useCallback(() => {
-    const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
-    setTimeRangeState(
-      makeTimeRange(dateTime(timeRange.from.valueOf() - diff), dateTime(timeRange.to.valueOf() - diff))
-    );
-  }, [timeRange]);
+  const [modelCards, setModelCards] = useState<Map<string, ModelCard>>(new Map());
 
-  const onMoveForward = useCallback(() => {
-    const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
-    setTimeRangeState(
-      makeTimeRange(dateTime(timeRange.from.valueOf() + diff), dateTime(timeRange.to.valueOf() + diff))
-    );
-  }, [timeRange]);
+  useEffect(() => {
+    let stale = false;
+    const allModels = Array.from(new Set(conversations.flatMap((c) => c.models)));
+    if (allModels.length === 0) {
+      setModelCards(new Map());
+      return;
+    }
+    void resolveModelCardsFromNames(allModels, modelCardClient)
+      .then((cards) => {
+        if (!stale) {
+          setModelCards(cards);
+        }
+      })
+      .catch(() => {
+        if (!stale) {
+          setModelCards(new Map());
+        }
+      });
+    return () => {
+      stale = true;
+    };
+  }, [conversations, modelCardClient]);
 
-  const onZoom = useCallback(() => {
-    const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
-    const half = Math.round(diff / 2);
-    setTimeRangeState(
-      makeTimeRange(dateTime(timeRange.from.valueOf() - half), dateTime(timeRange.to.valueOf() + half))
-    );
-  }, [timeRange]);
+  const getConversationHref = useCallback(
+    (conversationID: string) => buildAppPath(buildConversationViewRoute(conversationID)),
+    [buildAppPath]
+  );
 
   const onSelectConversation = useCallback(
     (conversationID: string) => {
-      void navigate(buildAppPath(buildConversationViewRoute(conversationID)), { replace: true });
+      void navigate(getConversationHref(conversationID), { replace: true });
     },
-    [buildAppPath, navigate]
+    [getConversationHref, navigate]
   );
 
   return (
     <div className={styles.pageContainer}>
       <div className={styles.summarySection}>
         <div className={styles.controlsRow}>
-          <TimeRangePicker
-            value={timeRange}
-            onChange={setTimeRangeState}
-            onChangeTimeZone={() => {}}
-            onMoveBackward={onMoveBackward}
-            onMoveForward={onMoveForward}
-            onZoom={onZoom}
+          <FilterToolbar
+            timeRange={timeRange}
+            filters={filters}
+            providerOptions={providerOptions}
+            modelOptions={modelOptions}
+            agentOptions={agentOptions}
+            labelKeyOptions={labelKeyOptions}
+            labelsLoading={labelsLoading}
+            dataSource={dashboardDS}
+            from={from}
+            to={to}
+            onTimeRangeChange={setTimeRange}
+            onFiltersChange={setFilters}
+            hideLabelFilters
           />
         </div>
         <div className={styles.statsGrid}>
@@ -477,6 +554,8 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
         )}
       </div>
 
+      <ConversationTimelineHistogram conversations={conversations} timeRange={timeRange} loading={loading} />
+
       <div className={styles.listPanel}>
         <ConversationListPanel
           conversations={conversations}
@@ -485,6 +564,8 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
           hasMore={false}
           loadingMore={false}
           showExtendedColumns
+          modelCards={modelCards}
+          getConversationHref={getConversationHref}
           onSelectConversation={onSelectConversation}
           onLoadMore={() => undefined}
         />

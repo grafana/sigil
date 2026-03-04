@@ -30,6 +30,13 @@
     },
     {
       "type": "page",
+      "name": "Landing 1",
+      "path": "/a/grafana-sigil-app/landing1",
+      "action": "grafana-sigil-app.data:read",
+      "addToNav": false
+    },
+    {
+      "type": "page",
       "name": "Conversations",
       "path": "/a/grafana-sigil-app/conversations",
       "action": "grafana-sigil-app.data:read",
