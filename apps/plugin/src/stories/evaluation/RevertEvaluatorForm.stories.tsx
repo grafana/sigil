@@ -28,7 +28,7 @@ function RevertEvaluatorFormWrapper() {
   return (
     <RevertEvaluatorForm
       evaluator={mockEvaluator}
-      latestVersion="1.0.0"
+      existingVersions={['2026-03-01', '2026-03-04', '2026-03-04.1']}
       onSubmit={handleSubmit}
       onCancel={handleCancel}
     />

@@ -6,22 +6,11 @@ import { Alert, Button, Icon, Select, Spinner, Text, useStyles2, type IconName }
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
 import type { Evaluator, TemplateDefinition, TemplateScope } from '../evaluation/types';
+import { pickLatestVersionPerEvaluator } from '../evaluation/utils';
 import EvaluatorTable from '../components/evaluation/EvaluatorTable';
 import TemplateTable from '../components/evaluation/TemplateTable';
 
 const EVAL_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}`;
-
-/** Returns one evaluator per evaluator_id, keeping the one with the latest updated_at. */
-function pickLatestVersionPerEvaluator(evaluators: Evaluator[]): Evaluator[] {
-  const byId = new Map<string, Evaluator>();
-  for (const e of evaluators) {
-    const existing = byId.get(e.evaluator_id);
-    if (existing == null || new Date(e.updated_at).getTime() > new Date(existing.updated_at).getTime()) {
-      byId.set(e.evaluator_id, e);
-    }
-  }
-  return Array.from(byId.values()).sort((a, b) => a.evaluator_id.localeCompare(b.evaluator_id));
-}
 
 const SCOPE_OPTIONS: Array<SelectableValue<string>> = [
   { label: 'All scopes', value: '' },

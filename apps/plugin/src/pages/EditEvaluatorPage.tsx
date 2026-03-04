@@ -155,11 +155,15 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
       });
       return;
     }
+    let cancelled = false;
     const targetId = evaluator.evaluator_id;
     let cursor: string | undefined;
     const all: Evaluator[] = [];
     const fetchPage = (): Promise<void> =>
       dataSource.listEvaluators(200, cursor).then((res) => {
+        if (cancelled) {
+          return;
+        }
         for (const e of res.items) {
           if (e.evaluator_id === targetId) {
             all.push(e);
@@ -168,6 +172,9 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
         if (res.next_cursor) {
           cursor = res.next_cursor;
           return fetchPage();
+        }
+        if (cancelled) {
+          return;
         }
         all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         setVersionDetails(all);
@@ -181,9 +188,14 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
         return;
       });
     fetchPage().catch(() => {
-      setVersions([]);
-      setVersionDetails([]);
+      if (!cancelled) {
+        setVersions([]);
+        setVersionDetails([]);
+      }
     });
+    return () => {
+      cancelled = true;
+    };
   }, [dataSource, evaluator]);
 
   const handleToggleVersionSelect = (version: string) => {
@@ -306,7 +318,7 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
             {rollbackEvaluator ? (
               <RevertEvaluatorForm
                 evaluator={rollbackEvaluator}
-                latestVersion={evaluator.version}
+                existingVersions={versions.map((v) => v.version)}
                 onSubmit={handleRevertSubmit}
                 onCancel={() => setRollbackEvaluator(null)}
               />

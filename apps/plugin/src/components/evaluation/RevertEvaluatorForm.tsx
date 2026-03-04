@@ -5,18 +5,19 @@ import { nextVersion } from '../../evaluation/versionUtils';
 
 export type RevertEvaluatorFormProps = {
   evaluator: Evaluator;
-  latestVersion: string;
+  /** All existing versions; used to suggest a unique next version. */
+  existingVersions?: string[];
   onSubmit: (req: CreateEvaluatorRequest) => void;
   onCancel: () => void;
 };
 
 export default function RevertEvaluatorForm({
   evaluator,
-  latestVersion,
+  existingVersions,
   onSubmit,
   onCancel,
 }: RevertEvaluatorFormProps) {
-  const [version, setVersion] = useState(() => nextVersion([latestVersion]));
+  const [version, setVersion] = useState(() => nextVersion(existingVersions));
   const [touched, setTouched] = useState(false);
 
   const isVersionEmpty = version.trim() === '';

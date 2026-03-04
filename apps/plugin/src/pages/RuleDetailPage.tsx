@@ -6,6 +6,7 @@ import { Alert, Badge, Button, Spinner, Text, Tooltip, useStyles2 } from '@grafa
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { useOptionalEvalRulesDataContext } from '../contexts/EvalRulesDataContext';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
+import { pickLatestVersionPerEvaluator } from '../evaluation/utils';
 import type {
   CreateRuleRequest,
   Evaluator,
@@ -176,7 +177,7 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
         setSampleRate(rule.sample_rate);
         setEvaluatorIDs(rule.evaluator_ids);
         setEnabled(rule.enabled);
-        setAvailableEvaluators(evaluatorsRes.items);
+        setAvailableEvaluators(pickLatestVersionPerEvaluator(evaluatorsRes.items));
       })
       .catch((err) => {
         if (requestVersion.current !== version) {
@@ -196,7 +197,7 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
     if (isNew) {
       void dataSource
         .listEvaluators()
-        .then((res) => setAvailableEvaluators(res.items))
+        .then((res) => setAvailableEvaluators(pickLatestVersionPerEvaluator(res.items)))
         .catch((err) => {
           setErrorMessage(err instanceof Error ? err.message : 'Failed to load evaluators');
         });
