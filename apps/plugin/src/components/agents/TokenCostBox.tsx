@@ -5,7 +5,8 @@ import { useStyles2 } from '@grafana/ui';
 
 export type TokenCostMode = 'tokens' | 'usd';
 
-const DEFAULT_STORAGE_KEY = 'sigil.tokenCostBox.mode';
+export const TOKEN_COST_MODE_CHANGE_EVENT = 'sigil:token-cost-mode-change';
+export const TOKEN_COST_MODE_STORAGE_KEY = 'sigil.tokenCostBox.mode';
 const numberFormatter = new Intl.NumberFormat('en-US');
 
 function formatCost(usd: number): string {
@@ -31,6 +32,21 @@ function readInitialMode(storageKey: string): TokenCostMode {
   }
 }
 
+function writeMode(storageKey: string, mode: TokenCostMode) {
+  try {
+    window.localStorage.setItem(storageKey, mode);
+  } catch {
+    // Ignore storage write errors in restricted environments.
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent(TOKEN_COST_MODE_CHANGE_EVENT, {
+        detail: { storageKey, mode },
+      })
+    );
+  }
+}
+
 export type TokenCostBoxProps = {
   tokenCount: number;
   costUSD: number;
@@ -42,7 +58,7 @@ export type TokenCostBoxProps = {
 export default function TokenCostBox({
   tokenCount,
   costUSD,
-  storageKey = DEFAULT_STORAGE_KEY,
+  storageKey = TOKEN_COST_MODE_STORAGE_KEY,
   className,
   ariaLabel = 'Token cost display mode',
 }: TokenCostBoxProps) {
@@ -50,12 +66,34 @@ export default function TokenCostBox({
   const [mode, setMode] = useState<TokenCostMode>(() => readInitialMode(storageKey));
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(storageKey, mode);
-    } catch {
-      // Ignore storage write errors in restricted environments.
-    }
+    writeMode(storageKey, mode);
   }, [mode, storageKey]);
+
+  useEffect(() => {
+    function onModeChange(event: Event) {
+      const customEvent = event as CustomEvent<{ storageKey?: string; mode?: TokenCostMode }>;
+      if (customEvent.detail?.storageKey !== storageKey) {
+        return;
+      }
+      if (customEvent.detail.mode === 'tokens' || customEvent.detail.mode === 'usd') {
+        setMode(customEvent.detail.mode);
+      }
+    }
+
+    function onStorage(event: StorageEvent) {
+      if (event.key !== storageKey) {
+        return;
+      }
+      setMode(event.newValue === 'usd' ? 'usd' : 'tokens');
+    }
+
+    window.addEventListener(TOKEN_COST_MODE_CHANGE_EVENT, onModeChange as EventListener);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener(TOKEN_COST_MODE_CHANGE_EVENT, onModeChange as EventListener);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, [storageKey]);
 
   const tokenLabel = useMemo(() => `${numberFormatter.format(tokenCount)} tokens`, [tokenCount]);
   const costLabel = useMemo(() => formatCost(costUSD), [costUSD]);
@@ -87,7 +125,7 @@ function getStyles(theme: GrafanaTheme2) {
       border: `1px solid ${theme.colors.border.weak}`,
       borderRadius: theme.shape.radius.default,
       padding: `0 ${theme.spacing(0.5)}`,
-      fontSize: theme.typography.bodySmall.fontSize,
+      fontSize: theme.typography.body.fontSize,
       fontVariantNumeric: 'tabular-nums',
       lineHeight: '24px',
       cursor: 'pointer',

@@ -8,7 +8,12 @@ import type { AgentListItem } from '../agents/types';
 import { buildAgentDetailByNameRoute, buildAnonymousAgentDetailRoute, PLUGIN_BASE } from '../constants';
 import { formatDateShort } from '../utils/date';
 import { AgentActivityTimeline } from '../components/agents/AgentActivityTimeline';
-import TokenCostBox from '../components/agents/TokenCostBox';
+import {
+  default as TokenCostBox,
+  TOKEN_COST_MODE_CHANGE_EVENT,
+  TOKEN_COST_MODE_STORAGE_KEY,
+  type TokenCostMode,
+} from '../components/agents/TokenCostBox';
 
 const PAGE_SIZE = 24;
 const STALE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -117,6 +122,27 @@ const getStyles = (theme: GrafanaTheme2) => ({
     fontWeight: theme.typography.fontWeightMedium,
     color: theme.colors.text.primary,
   }),
+  heroSectionHeading: css({
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+  }),
+  footprintModeSelect: css({
+    boxSizing: 'border-box',
+    minHeight: 28,
+    height: 28,
+    background: theme.colors.background.primary,
+    color: theme.colors.text.secondary,
+    border: `1px solid ${theme.colors.border.weak}`,
+    borderRadius: theme.shape.radius.default,
+    padding: `0 ${theme.spacing(0.5)}`,
+    fontSize: theme.typography.body.fontSize,
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: '24px',
+    cursor: 'pointer',
+    width: 96,
+  }),
   rankList: css({
     margin: 0,
     padding: 0,
@@ -152,9 +178,17 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   rankValue: css({
     fontVariantNumeric: 'tabular-nums',
+    color: theme.colors.text.primary,
+    fontSize: theme.typography.body.fontSize,
+    whiteSpace: 'nowrap' as const,
+  }),
+  rankValueNumber: css({
+    color: theme.colors.text.primary,
+    fontWeight: theme.typography.fontWeightMedium,
+  }),
+  rankValueAffix: css({
     color: theme.colors.text.secondary,
     fontSize: theme.typography.bodySmall.fontSize,
-    whiteSpace: 'nowrap' as const,
   }),
   riskList: css({
     margin: 0,
@@ -275,6 +309,29 @@ function formatCompactNumber(value: number): string {
   return compactNumberFormatter.format(value);
 }
 
+function formatUSD(value: number): string {
+  const absValue = Math.abs(value);
+  if (absValue < 0.01) {
+    return `$${value.toFixed(6)}`;
+  }
+  if (absValue < 1) {
+    return `$${value.toFixed(4)}`;
+  }
+  return `$${value.toFixed(2)}`;
+}
+
+function readInitialTopFootprintMode(): TokenCostMode {
+  if (typeof window === 'undefined') {
+    return 'tokens';
+  }
+  try {
+    const stored = window.localStorage.getItem(TOKEN_COST_MODE_STORAGE_KEY);
+    return stored === 'usd' ? 'usd' : 'tokens';
+  } catch {
+    return 'tokens';
+  }
+}
+
 function LabelWithHelp({
   label,
   help,
@@ -309,6 +366,7 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
   const [searchInput, setSearchInput] = useState('');
   const [namePrefix, setNamePrefix] = useState('');
   const [activeTab, setActiveTab] = useState<AgentsPageTab>('info');
+  const [topFootprintMode, setTopFootprintMode] = useState<TokenCostMode>(() => readInitialTopFootprintMode());
   const [timeRange, setTimeRange] = useState<TimeRange>(() => {
     const now = dateTime();
     return makeTimeRange(dateTime(now).subtract(24, 'hours'), now);
@@ -323,6 +381,45 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
     }, 250);
     return () => clearTimeout(timeout);
   }, [searchInput]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(TOKEN_COST_MODE_STORAGE_KEY, topFootprintMode);
+      window.dispatchEvent(
+        new CustomEvent(TOKEN_COST_MODE_CHANGE_EVENT, {
+          detail: { storageKey: TOKEN_COST_MODE_STORAGE_KEY, mode: topFootprintMode },
+        })
+      );
+    } catch {
+      // Ignore storage write errors in restricted environments.
+    }
+  }, [topFootprintMode]);
+
+  useEffect(() => {
+    function onModeChange(event: Event) {
+      const customEvent = event as CustomEvent<{ storageKey?: string; mode?: TokenCostMode }>;
+      if (customEvent.detail?.storageKey !== TOKEN_COST_MODE_STORAGE_KEY) {
+        return;
+      }
+      if (customEvent.detail.mode === 'tokens' || customEvent.detail.mode === 'usd') {
+        setTopFootprintMode(customEvent.detail.mode);
+      }
+    }
+
+    function onStorage(event: StorageEvent) {
+      if (event.key !== TOKEN_COST_MODE_STORAGE_KEY) {
+        return;
+      }
+      setTopFootprintMode(event.newValue === 'usd' ? 'usd' : 'tokens');
+    }
+
+    window.addEventListener(TOKEN_COST_MODE_CHANGE_EVENT, onModeChange as EventListener);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener(TOKEN_COST_MODE_CHANGE_EVENT, onModeChange as EventListener);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
 
   useEffect(() => {
     requestVersion.current += 1;
@@ -617,12 +714,23 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
                     </div>
 
                     <div className={styles.heroSection}>
-                      <Text element="h4" className={styles.heroSectionTitle}>
-                        <LabelWithHelp
-                          label="Top by footprint"
-                          help="Top loaded agents ranked by token_estimate.total (system prompt + tools footprint)."
-                        />
-                      </Text>
+                      <div className={styles.heroSectionHeading}>
+                        <Text element="h4" className={styles.heroSectionTitle}>
+                          <LabelWithHelp
+                            label="Footprint"
+                            help="Top loaded agents ranked by token_estimate.total (system prompt + tools footprint)."
+                          />
+                        </Text>
+                        <select
+                          aria-label="Top prompt and tools display mode"
+                          value={topFootprintMode}
+                          onChange={(event) => setTopFootprintMode(event.currentTarget.value as TokenCostMode)}
+                          className={styles.footprintModeSelect}
+                        >
+                          <option value="tokens">tokens</option>
+                          <option value="usd">USD</option>
+                        </select>
+                      </div>
                       <ul className={styles.rankList}>
                         {summary.topByTokenFootprint.map((item) => (
                           <li key={`tok:${item.agent_name}:${item.latest_effective_version}`} className={styles.rankItem}>
@@ -634,12 +742,23 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
                             >
                               {item.agent_name.trim().length > 0 ? item.agent_name : 'Unnamed agent bucket'}
                             </button>
-                            <TokenCostBox
-                              tokenCount={item.token_estimate.total}
-                              costUSD={item.token_estimate.total * ESTIMATED_USD_PER_TOKEN}
-                              className={styles.rankValue}
-                              ariaLabel={`Token footprint for ${cardLabel(item)}`}
-                            />
+                            <span className={styles.rankValue}>
+                              {topFootprintMode === 'usd'
+                                ? (
+                                    <>
+                                      <span className={styles.rankValueAffix}>$</span>
+                                      <span className={styles.rankValueNumber}>
+                                        {formatUSD(item.token_estimate.total * ESTIMATED_USD_PER_TOKEN).slice(1)}
+                                      </span>
+                                    </>
+                                  )
+                                : (
+                                    <>
+                                      <span className={styles.rankValueNumber}>{item.token_estimate.total.toLocaleString()}</span>{' '}
+                                      <span className={styles.rankValueAffix}>tokens</span>
+                                    </>
+                                  )}
+                            </span>
                           </li>
                         ))}
                       </ul>

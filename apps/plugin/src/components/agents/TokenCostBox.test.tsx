@@ -33,4 +33,23 @@ describe('TokenCostBox', () => {
 
     expect(window.localStorage.getItem('sigil.tokenCostBox.mode')).toBe('usd');
   });
+
+  it('syncs mode across all TokenCostBox instances', () => {
+    render(
+      <>
+        <TokenCostBox tokenCount={500} costUSD={0.02} ariaLabel="mode one" />
+        <TokenCostBox tokenCount={600} costUSD={0.03} ariaLabel="mode two" />
+      </>
+    );
+
+    const first = screen.getByRole('combobox', { name: 'mode one' });
+    const second = screen.getByRole('combobox', { name: 'mode two' });
+    expect(first).toHaveValue('tokens');
+    expect(second).toHaveValue('tokens');
+
+    fireEvent.change(first, { target: { value: 'usd' } });
+
+    expect(first).toHaveValue('usd');
+    expect(second).toHaveValue('usd');
+  });
 });

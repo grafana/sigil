@@ -205,7 +205,7 @@ describe('AgentsPage', () => {
     const generationButtons = within(topByGenerationsSection as HTMLElement).getAllByRole('button');
     expect(generationButtons.map((button) => button.textContent)).toEqual(['assistant', 'Unnamed agent bucket']);
 
-    const topByTokenSection = screen.getByRole('heading', { name: 'Top by footprint' }).parentElement;
+    const topByTokenSection = screen.getByRole('heading', { name: 'Footprint' }).parentElement?.parentElement;
     expect(topByTokenSection).toBeTruthy();
     const tokenButtons = within(topByTokenSection as HTMLElement).getAllByRole('button');
     expect(tokenButtons.map((button) => button.textContent)).toEqual(['assistant', 'Unnamed agent bucket']);
