@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-03-03
+last_reviewed: 2026-03-04
 source_of_truth: true
 audience: contributors
 ---
@@ -90,6 +90,19 @@ Contract notes:
 - default table fields follow Tempo conventions:
   - `traceID`, `startTime`, `traceService`, `traceName`, `traceDuration`
 - nested span lists use `FieldType.nestedFrames` when returning span drill-down data
+
+### Conversation search payload
+
+`POST /query/conversations/search` returns JSON rows (not Grafana frames) with:
+
+- `conversation_id` (required)
+- `conversation_title` (optional, derived from latest matching span `sigil.conversation.title`)
+- `generation_count`, `first_generation_at`, `last_generation_at`
+- `models`, `model_providers`, `agents`
+- `error_count`, `has_errors`
+- `trace_ids`
+- `rating_summary`, `annotation_count`, `eval_summary`
+- `selected` (optional map of requested select keys to aggregated values)
 
 ## Plugin Proxy Contract
 

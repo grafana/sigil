@@ -55,10 +55,15 @@ func TestSearchConversationsForTenantAppliesTempoAndMySQLFilters(t *testing.T) {
 	}
 
 	service := NewServiceWithStores(conversationStore, feedbackStore)
+	traceWithTitle := newTempoTrace("trace-1", base.Add(-2*time.Minute), "conv-1", "gen-1", "gpt-4o", "assistant", "provider_error")
+	traceWithTitle.SpanSets[0].Spans[0].Attributes = append(
+		traceWithTitle.SpanSets[0].Spans[0].Attributes,
+		TempoAttribute{Key: "sigil.conversation.title", Value: tempoStringValue("Escalation: billing outage")},
+	)
 	service.tempoClient = &stubTempoClient{
 		searchResponses: []*TempoSearchResponse{{
 			Traces: []TempoTrace{
-				newTempoTrace("trace-1", base.Add(-2*time.Minute), "conv-1", "gen-1", "gpt-4o", "assistant", "provider_error"),
+				traceWithTitle,
 				newTempoTrace("trace-2", base.Add(-1*time.Minute), "conv-2", "gen-2", "gpt-4o", "assistant", ""),
 			},
 		}},
@@ -82,6 +87,9 @@ func TestSearchConversationsForTenantAppliesTempoAndMySQLFilters(t *testing.T) {
 	item := response.Conversations[0]
 	if item.ConversationID != "conv-1" {
 		t.Fatalf("expected conv-1, got %q", item.ConversationID)
+	}
+	if item.ConversationTitle != "Escalation: billing outage" {
+		t.Fatalf("expected conversation title from tempo span, got %q", item.ConversationTitle)
 	}
 	if item.GenerationCount != 5 {
 		t.Fatalf("expected generation_count=5, got %d", item.GenerationCount)

@@ -385,13 +385,22 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   }, [conversations, modelCardClient]);
 
   const getConversationHref = useCallback(
-    (conversationID: string) => buildAppPath(buildConversationViewRoute(conversationID)),
+    (conversationID: string, conversationTitle?: string) => {
+      const basePath = buildAppPath(buildConversationViewRoute(conversationID));
+      const normalizedTitle = conversationTitle?.trim() ?? '';
+      if (normalizedTitle.length === 0) {
+        return basePath;
+      }
+      const params = new URLSearchParams();
+      params.set('conversationTitle', normalizedTitle);
+      return `${basePath}?${params.toString()}`;
+    },
     [buildAppPath]
   );
 
   const onSelectConversation = useCallback(
-    (conversationID: string) => {
-      void navigate(getConversationHref(conversationID), { replace: true });
+    (conversationID: string, conversationTitle?: string) => {
+      void navigate(getConversationHref(conversationID, conversationTitle), { replace: true });
     },
     [getConversationHref, navigate]
   );

@@ -56,6 +56,7 @@ type ConversationSearchRequest struct {
 
 type ConversationSearchResult struct {
 	ConversationID    string                              `json:"conversation_id"`
+	ConversationTitle string                              `json:"conversation_title,omitempty"`
 	GenerationCount   int                                 `json:"generation_count"`
 	FirstGenerationAt time.Time                           `json:"first_generation_at"`
 	LastGenerationAt  time.Time                           `json:"last_generation_at"`
@@ -696,6 +697,7 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 			aggregate := grouped.Conversations[conversationID]
 			result := ConversationSearchResult{
 				ConversationID:    conversationID,
+				ConversationTitle: aggregate.ConversationTitle,
 				GenerationCount:   conversationMetadata.GenerationCount,
 				FirstGenerationAt: conversationMetadata.CreatedAt.UTC(),
 				LastGenerationAt:  conversationMetadata.LastGenerationAt.UTC(),

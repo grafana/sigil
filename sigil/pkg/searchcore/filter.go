@@ -151,6 +151,7 @@ var (
 	defaultSelectFields = []string{
 		"span.sigil.generation.id",
 		"span.gen_ai.conversation.id",
+		"span.sigil.conversation.title",
 		"span.gen_ai.request.model",
 		"span.gen_ai.agent.name",
 		"span.error.type",
