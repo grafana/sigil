@@ -49,7 +49,7 @@ export function TopStat({
       const pctChange = ((value - prevValue) / Math.abs(prevValue)) * 100;
       const isUp = pctChange > 0;
       const isGood = invertChange ? !isUp : isUp;
-      const arrow = isUp ? '↑' : '↓';
+      const arrow = pctChange === 0 ? '→' : isUp ? '↑' : '↓';
       const sign = isUp ? '+' : '';
       const badgeClass =
         pctChange === 0 ? styles.changeBadgeNeutral : isGood ? styles.changeBadgeGood : styles.changeBadgeWarn;
