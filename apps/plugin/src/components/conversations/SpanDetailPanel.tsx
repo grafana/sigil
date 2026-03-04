@@ -4,6 +4,7 @@ import type { GrafanaTheme2 } from '@grafana/data';
 import { useStyles2 } from '@grafana/ui';
 import type { ConversationSpan, SpanAttributes, SpanAttributeValue } from '../../conversation/types';
 import type { GenerationDetail, Message, Part } from '../../generation/types';
+import { ATTR_GENERATION_ID, getStringAttr } from '../../conversation/attributes';
 
 export type SpanDetailPanelProps = {
   span: ConversationSpan;
@@ -465,13 +466,26 @@ function resolveGeneration(
   span: ConversationSpan,
   allGenerations: GenerationDetail[] | undefined
 ): GenerationDetail | null {
+  // Direct match: buildSpanTree already attached the generation via trace_id + span_id.
   if (span.generation) {
     return span.generation;
   }
   if (!allGenerations) {
     return null;
   }
-  return allGenerations.find((g) => g.trace_id === span.traceID && g.span_id === span.spanID) ?? null;
+  // Exact trace_id + span_id match for orphan generations that do have span_id set.
+  const bySpanID = allGenerations.find((g) => g.trace_id === span.traceID && g.span_id === span.spanID);
+  if (bySpanID) {
+    return bySpanID;
+  }
+  // Match via the sigil.generation.id span attribute. This handles orphan generations
+  // where the backend did not populate span_id, but the OTLP span carries the generation
+  // ID as an attribute. Only generation spans carry this attribute, so this is safe.
+  const generationID = getStringAttr(span.attributes, ATTR_GENERATION_ID);
+  if (generationID) {
+    return allGenerations.find((g) => g.generation_id === generationID) ?? null;
+  }
+  return null;
 }
 
 export default function SpanDetailPanel({ span, allGenerations }: SpanDetailPanelProps) {

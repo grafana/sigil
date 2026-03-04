@@ -51,6 +51,27 @@ describe('SpanDetailPanel', () => {
     expect(screen.getByText('Generation')).toBeInTheDocument();
   });
 
+  it('shows generation via sigil.generation.id attribute when gen has no span_id (orphan)', () => {
+    const orphanGen: GenerationDetail = {
+      generation_id: 'gen-orphan',
+      conversation_id: 'conv-1',
+      trace_id: 'trace-1',
+      // span_id intentionally absent — simulates backend not setting it
+      mode: 'SYNC',
+      model: { provider: 'anthropic', name: 'claude-3' },
+      created_at: '2026-03-04T10:00:00Z',
+    };
+    // The OTLP span carries sigil.generation.id pointing to the orphan generation
+    const genSpan = makeSpan({
+      spanID: 'span-gen-orphan',
+      attributes: makeAttrs([['sigil.generation.id', 'gen-orphan']]),
+      generation: null,
+    });
+    render(<SpanDetailPanel span={genSpan} allGenerations={[orphanGen]} />);
+    expect(screen.getByText('Generation')).toBeInTheDocument();
+    expect(screen.getByText('Token Usage')).toBeInTheDocument();
+  });
+
   it('does not show generation sections when span has no generation and span_id does not match', () => {
     const toolSpan = makeSpan({
       spanID: 'span-tool-1',
