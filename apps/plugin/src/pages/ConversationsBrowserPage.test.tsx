@@ -4,7 +4,17 @@ import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import ConversationsBrowserPage from './ConversationsBrowserPage';
 import ConversationPage from './ConversationPage';
 import type { ConversationsDataSource } from '../conversation/api';
+import type { DashboardDataSource } from '../dashboard/api';
 import type { TraceFetcher } from '../conversation/loader';
+
+jest.mock('@grafana/ui', () => {
+  const actual = jest.requireActual('@grafana/ui');
+  return {
+    ...actual,
+    TimeRangeInput: () => <div data-testid="time-range-input" />,
+    TimeRangePicker: () => <div data-testid="time-range-picker" />,
+  };
+});
 
 type MockConversationsDataSource = {
   [Key in keyof ConversationsDataSource as NonNullable<ConversationsDataSource[Key]> extends (...args: any[]) => any
@@ -120,6 +130,23 @@ function createDataSource(): MockConversationsDataSource {
   };
 }
 
+const mockDashboardDataSource: DashboardDataSource = {
+  queryRange: jest.fn().mockResolvedValue({ status: 'success', data: { resultType: 'matrix', result: [] } }),
+  queryInstant: jest.fn().mockResolvedValue({ status: 'success', data: { resultType: 'vector', result: [] } }),
+  labels: jest.fn().mockResolvedValue([]),
+  labelValues: jest.fn().mockResolvedValue([]),
+  resolveModelCards: jest.fn().mockResolvedValue({
+    resolved: [],
+    freshness: {
+      catalog_last_refreshed_at: null,
+      stale: false,
+      soft_stale: false,
+      hard_stale: false,
+      source_path: 'memory_live',
+    },
+  }),
+};
+
 describe('ConversationsBrowserPage', () => {
   function renderPage(dataSource: ConversationsDataSource, initialEntry = '/conversations') {
     const router = createMemoryRouter(
@@ -130,7 +157,7 @@ describe('ConversationsBrowserPage', () => {
         },
         {
           path: '/conversations',
-          element: <ConversationsBrowserPage dataSource={dataSource} />,
+          element: <ConversationsBrowserPage dataSource={dataSource} dashboardDataSource={mockDashboardDataSource} />,
         },
       ],
       { initialEntries: [initialEntry] }

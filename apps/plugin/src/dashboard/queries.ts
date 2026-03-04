@@ -1,4 +1,4 @@
-import { breakdownToPromLabel, type BreakdownDimension, type DashboardFilters } from './types';
+import { breakdownToPromLabel, type BreakdownDimension, type DashboardFilters, type FilterOperator } from './types';
 
 // OTel metric names converted to Prometheus format (dots → underscores).
 const TOKEN_USAGE = 'gen_ai_client_token_usage';
@@ -11,7 +11,7 @@ const PROMETHEUS_LABEL_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
  * Uses [.] for literal dots because RE2 (used by Prometheus) rejects \. as
  * "unknown escape sequence"; other metacharacters are escaped with backslash.
  */
-function escapePrometheusRegex(value: string): string {
+export function escapePrometheusRegex(value: string): string {
   return value.replace(/[\\^$.*+?()[\]{}|]/g, (c) => (c === '.' ? '[.]' : `\\${c}`));
 }
 
@@ -23,20 +23,67 @@ function fuzzyMatcher(label: string, value: string): string {
   return `${label}=~"(?i).*${escapePrometheusRegex(trimmed)}.*"`;
 }
 
+const PROM_MATCH_OPERATORS = new Set<FilterOperator>(['=', '!=', '=~', '!~']);
+
+function labelMatcher(label: string, operator: FilterOperator, value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || !PROMETHEUS_LABEL_NAME.test(label)) {
+    return '';
+  }
+  if (PROM_MATCH_OPERATORS.has(operator)) {
+    return `${label}${operator}"${trimmed}"`;
+  }
+  // Numeric comparison operators (<, >, <=, >=) are not native PromQL label
+  // matchers. Fall back to fuzzy regex match so the selector is still valid.
+  return fuzzyMatcher(label, trimmed);
+}
+
+function multiMatcher(label: string, values: string[]): string {
+  const trimmed = values.map((v) => v.trim()).filter(Boolean);
+  if (trimmed.length === 0 || !PROMETHEUS_LABEL_NAME.test(label)) {
+    return '';
+  }
+  if (trimmed.length === 1) {
+    return fuzzyMatcher(label, trimmed[0]);
+  }
+  const pattern = trimmed.map((v) => `.*${escapePrometheusRegex(v)}.*`).join('|');
+  return `${label}=~"(?i)${pattern}"`;
+}
+
+/**
+ * Build a `{label="v1",label2=~"v2|v3"}` selector for cascading label-value
+ * lookups (e.g. restricting model options by selected providers).
+ * Values are escaped for safe use in `=~` regex matchers.
+ */
+export function buildCascadingSelector(labelValues: Record<string, string[]>): string | undefined {
+  const parts: string[] = [];
+  for (const [label, values] of Object.entries(labelValues)) {
+    if (values.length === 0) {
+      continue;
+    }
+    if (values.length === 1) {
+      parts.push(`${label}="${values[0]}"`);
+    } else {
+      parts.push(`${label}=~"${values.map(escapePrometheusRegex).join('|')}"`);
+    }
+  }
+  return parts.length > 0 ? `{${parts.join(',')}}` : undefined;
+}
+
 export function buildLabelSelector(filters: DashboardFilters): string {
   const parts: string[] = [];
-  if (filters.provider) {
-    parts.push(fuzzyMatcher('gen_ai_provider_name', filters.provider));
+  if (filters.providers.length > 0) {
+    parts.push(multiMatcher('gen_ai_provider_name', filters.providers));
   }
-  if (filters.model) {
-    parts.push(fuzzyMatcher('gen_ai_request_model', filters.model));
+  if (filters.models.length > 0) {
+    parts.push(multiMatcher('gen_ai_request_model', filters.models));
   }
-  if (filters.agentName) {
-    parts.push(fuzzyMatcher('gen_ai_agent_name', filters.agentName));
+  if (filters.agentNames.length > 0) {
+    parts.push(multiMatcher('gen_ai_agent_name', filters.agentNames));
   }
   for (const lf of filters.labelFilters) {
     if (lf.key && lf.value) {
-      parts.push(fuzzyMatcher(lf.key.trim(), lf.value));
+      parts.push(labelMatcher(lf.key.trim(), lf.operator, lf.value));
     }
   }
   return parts.filter(Boolean).join(',');

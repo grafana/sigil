@@ -97,7 +97,7 @@ describe('DashboardPage', () => {
       renderWithRouter(ds);
     });
 
-    expect(screen.getByTestId('time-range-input')).toBeInTheDocument();
+    expect(screen.getByTestId('time-range-picker')).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getAllByTestId('renderer-timeseries')).toHaveLength(5);

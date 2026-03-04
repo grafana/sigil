@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { makeTimeRange, type TimeRange } from '@grafana/data';
-import { DashboardFilterBar } from '../components/dashboard/DashboardFilterBar';
-import { type BreakdownDimension, type DashboardFilters, emptyFilters } from '../dashboard/types';
+import { FilterToolbar } from '../components/filters/FilterToolbar';
+import { type DashboardFilters, emptyFilters } from '../dashboard/types';
 import type { DashboardDataSource } from '../dashboard/api';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -19,7 +19,7 @@ const mockDataSource: DashboardDataSource = {
     return { status: 'success', data: { resultType: 'vector', result: [] } };
   },
   async labels() {
-    return ['gen_ai_operation_name', 'service_name', 'job'];
+    return Object.keys(mockLabelValues);
   },
   async labelValues(label) {
     return mockLabelValues[label] ?? [];
@@ -41,18 +41,16 @@ const mockDataSource: DashboardDataSource = {
 const now = Math.floor(Date.now() / 1000);
 const oneHourAgo = now - 3600;
 
-function DashboardFilterBarWrapper() {
+function DefaultWrapper() {
   const [timeRange, setTimeRange] = useState<TimeRange>(() =>
     makeTimeRange('2026-02-15T08:00:00.000Z', '2026-02-15T12:00:00.000Z')
   );
   const [filters, setFilters] = useState<DashboardFilters>(emptyFilters);
-  const [breakdownBy, setBreakdownBy] = useState<BreakdownDimension>('none');
 
   return (
-    <DashboardFilterBar
+    <FilterToolbar
       timeRange={timeRange}
       filters={filters}
-      breakdownBy={breakdownBy}
       providerOptions={['openai', 'anthropic', 'google']}
       modelOptions={['gpt-4o', 'gpt-4o-mini', 'claude-sonnet-4-20250514']}
       agentOptions={['my-chatbot', 'code-assistant', 'data-analyzer']}
@@ -63,7 +61,6 @@ function DashboardFilterBarWrapper() {
       to={now}
       onTimeRangeChange={setTimeRange}
       onFiltersChange={setFilters}
-      onBreakdownChange={setBreakdownBy}
     />
   );
 }
@@ -75,16 +72,14 @@ function WithActiveFiltersWrapper() {
   const [filters, setFilters] = useState<DashboardFilters>({
     providers: ['openai'],
     models: ['gpt-4o'],
-    agentNames: [],
-    labelFilters: [{ key: 'service_name', operator: '=', value: 'sigil-api' }],
+    agentNames: ['my-chatbot'],
+    labelFilters: [{ key: 'service_name', operator: '=~', value: 'sigil.*' }],
   });
-  const [breakdownBy, setBreakdownBy] = useState<BreakdownDimension>('provider');
 
   return (
-    <DashboardFilterBar
+    <FilterToolbar
       timeRange={timeRange}
       filters={filters}
-      breakdownBy={breakdownBy}
       providerOptions={['openai', 'anthropic', 'google']}
       modelOptions={['gpt-4o', 'gpt-4o-mini']}
       agentOptions={['my-chatbot', 'code-assistant']}
@@ -95,14 +90,13 @@ function WithActiveFiltersWrapper() {
       to={now}
       onTimeRangeChange={setTimeRange}
       onFiltersChange={setFilters}
-      onBreakdownChange={setBreakdownBy}
     />
   );
 }
 
 const meta = {
-  title: 'Dashboard/DashboardFilterBar',
-  component: DashboardFilterBar,
+  title: 'Filters/FilterToolbar',
+  component: FilterToolbar,
   decorators: [
     (Story: React.ComponentType) => (
       <MemoryRouter>
@@ -115,7 +109,7 @@ const meta = {
 export default meta;
 
 export const Default = {
-  render: () => <DashboardFilterBarWrapper />,
+  render: () => <DefaultWrapper />,
 };
 
 export const WithActiveFilters = {
