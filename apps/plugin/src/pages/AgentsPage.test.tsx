@@ -177,7 +177,7 @@ describe('AgentsPage', () => {
     const { router } = renderPage(dataSource);
 
     await waitFor(() => expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', ''));
-    fireEvent.click(screen.getByText('Agents'));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Agents' }));
 
     fireEvent.click(await screen.findByRole('button', { name: 'open agent assistant' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/a/grafana-sigil-app/agents/name/assistant'));
@@ -187,18 +187,19 @@ describe('AgentsPage', () => {
     const dataSource = createDataSource();
     renderPage(dataSource);
 
-    expect(await screen.findByRole('region', { name: 'agents hero summary' })).toBeInTheDocument();
-    expect(screen.getByText('Agents')).toBeInTheDocument();
-    expect(screen.getByText('Total generations')).toBeInTheDocument();
-    expect(screen.getByText('Estimated prompt+tools footprint')).toBeInTheDocument();
-    expect(screen.getByText('Avg footprint per generation')).toBeInTheDocument();
+    const heroRegion = await screen.findByRole('region', { name: 'agents hero summary' });
+    expect(heroRegion).toBeInTheDocument();
+    expect(within(heroRegion).getByText('Agents')).toBeInTheDocument();
+    expect(within(heroRegion).getByText('Total generations')).toBeInTheDocument();
+    expect(within(heroRegion).getByText('Estimated prompt+tools footprint')).toBeInTheDocument();
+    expect(within(heroRegion).getByText('Avg footprint per generation')).toBeInTheDocument();
     expect(screen.getByText('Agent activity over time')).toBeInTheDocument();
 
     // 2 loaded agents: total generations=5, total tokens=11, avg=2
-    expect(screen.getByText('Agents').parentElement).toHaveTextContent('2');
-    expect(screen.getByText('Total generations').parentElement).toHaveTextContent('5');
-    expect(screen.getByText('Estimated prompt+tools footprint').parentElement).toHaveTextContent('11');
-    expect(screen.getByText('Avg footprint per generation').parentElement).toHaveTextContent('2');
+    expect(within(heroRegion).getByText('Agents').parentElement).toHaveTextContent('2');
+    expect(within(heroRegion).getByText('Total generations').parentElement).toHaveTextContent('5');
+    expect(within(heroRegion).getByText('Estimated prompt+tools footprint').parentElement).toHaveTextContent('11');
+    expect(within(heroRegion).getByText('Avg footprint per generation').parentElement).toHaveTextContent('2');
 
     const topByGenerationsSection = screen.getByRole('heading', { name: 'Top by generations' }).parentElement;
     expect(topByGenerationsSection).toBeTruthy();
@@ -219,7 +220,7 @@ describe('AgentsPage', () => {
     const dataSource = createDataSource();
     const { router } = renderPage(dataSource);
 
-    fireEvent.click(await screen.findByText('Agents'));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Agents' }));
     fireEvent.click(await screen.findByRole('button', { name: 'open agent anonymous' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/a/grafana-sigil-app/agents/anonymous'));
   });
@@ -230,7 +231,7 @@ describe('AgentsPage', () => {
 
     await waitFor(() => expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', ''));
     expect(observerCallbacks).toHaveLength(0);
-    fireEvent.click(screen.getByText('Agents'));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Agents' }));
     expect(observerCallbacks.length).toBeGreaterThan(0);
 
     triggerLoadMoreIntersection();
@@ -244,11 +245,12 @@ describe('AgentsPage', () => {
     renderPage(dataSource);
 
     await waitFor(() => expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', ''));
-    fireEvent.click(screen.getByText('Agents'));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Agents' }));
 
     fireEvent.change(screen.getByPlaceholderText('Search by agent name…'), { target: { value: 'assist' } });
 
     await waitFor(() => expect(dataSource.listAgents).toHaveBeenLastCalledWith(24, '', 'assist'));
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     await waitFor(() => expect(screen.getByText('Total generations').parentElement).toHaveTextContent('1'));
     expect(screen.getByRole('button', { name: 'open top generation agent assistant-beta' })).toBeInTheDocument();
   });
