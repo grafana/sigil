@@ -700,6 +700,16 @@ func TestFromStreamPreservesWhitespaceOnlyParts(t *testing.T) {
 	}
 }
 
+func TestMapSystemPromptPreservesEmptySegments(t *testing.T) {
+	got := mapSystemPrompt([]asdk.BetaTextBlockParam{
+		{Text: "", Type: "text"},
+		{Text: "second", Type: "text"},
+	})
+	if got != "\n\nsecond" {
+		t.Fatalf("expected preserved empty segment separator, got %q", got)
+	}
+}
+
 func testRequest() asdk.BetaMessageNewParams {
 	toolResult := asdk.NewBetaToolResultBlock("toolu_1", "", false)
 	toolResult.OfToolResult.Content = []asdk.BetaToolResultBlockParamContentUnion{

@@ -250,7 +250,7 @@ func mapResponsesRequestInput(payload map[string]any) ([]sigil.Message, string) 
 	systemPrompts := make([]string, 0, 2)
 
 	if instructions, ok := payload["instructions"].(string); ok {
-		systemPrompts = appendNonEmpty(systemPrompts, instructions)
+		systemPrompts = append(systemPrompts, instructions)
 	}
 
 	rawInput, hasInput := payload["input"]
@@ -274,7 +274,7 @@ func mapResponsesRequestInput(payload map[string]any) ([]sigil.Message, string) 
 			role := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", item["role"])))
 
 			if itemType == "message" && (role == "system" || role == "developer") {
-				systemPrompts = appendNonEmpty(systemPrompts, extractResponsesText(item["content"]))
+				systemPrompts = append(systemPrompts, extractResponsesText(item["content"]))
 				continue
 			}
 

@@ -700,6 +700,53 @@ func TestResponsesFromStreamPreservesWhitespaceOnlyOutput(t *testing.T) {
 	}
 }
 
+func TestMapRequestMessagesPreservesEmptySystemEntries(t *testing.T) {
+	system := osdk.ChatCompletionSystemMessageParam{
+		Content: osdk.ChatCompletionSystemMessageParamContentUnion{
+			OfString: param.NewOpt(""),
+		},
+	}
+	developer := osdk.ChatCompletionDeveloperMessageParam{
+		Content: osdk.ChatCompletionDeveloperMessageParamContentUnion{
+			OfString: param.NewOpt("developer instruction"),
+		},
+	}
+
+	input, systemPrompt := mapRequestMessages([]osdk.ChatCompletionMessageParamUnion{
+		{OfSystem: &system},
+		{OfDeveloper: &developer},
+	})
+
+	if len(input) != 0 {
+		t.Fatalf("expected no mapped user/assistant/tool input messages, got %#v", input)
+	}
+	if systemPrompt != "\n\ndeveloper instruction" {
+		t.Fatalf("expected preserved empty system entry before developer prompt, got %q", systemPrompt)
+	}
+}
+
+func TestMapToolMessagePreservesEmptyParts(t *testing.T) {
+	part := mapToolMessage(&osdk.ChatCompletionToolMessageParam{
+		ToolCallID: "call_1",
+		Content: osdk.ChatCompletionToolMessageParamContentUnion{
+			OfArrayOfContentParts: []osdk.ChatCompletionContentPartTextParam{
+				{Text: ""},
+				{Text: ""},
+			},
+		},
+	})
+
+	if part == nil {
+		t.Fatalf("expected tool result part for empty text segments")
+	}
+	if part.ToolResult == nil {
+		t.Fatalf("expected tool result payload, got %#v", part)
+	}
+	if part.ToolResult.Content != "\n" {
+		t.Fatalf("expected newline-preserved content, got %q", part.ToolResult.Content)
+	}
+}
+
 func TestParseJSONOrStringPreservesWhitespace(t *testing.T) {
 	if got := string(parseJSONOrString("  {\"city\":\"Paris\"}  ")); got != "  {\"city\":\"Paris\"}  " {
 		t.Fatalf("expected JSON bytes to preserve whitespace, got %q", got)

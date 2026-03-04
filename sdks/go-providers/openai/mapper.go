@@ -119,9 +119,9 @@ func mapRequestMessages(messages []osdk.ChatCompletionMessageParamUnion) ([]sigi
 	for i := range messages {
 		switch {
 		case messages[i].OfSystem != nil:
-			systemPrompts = appendNonEmpty(systemPrompts, extractTextFromSystem(messages[i].OfSystem))
+			systemPrompts = append(systemPrompts, extractTextFromSystem(messages[i].OfSystem))
 		case messages[i].OfDeveloper != nil:
-			systemPrompts = appendNonEmpty(systemPrompts, extractTextFromDeveloper(messages[i].OfDeveloper))
+			systemPrompts = append(systemPrompts, extractTextFromDeveloper(messages[i].OfDeveloper))
 		case messages[i].OfUser != nil:
 			parts := mapUserParts(messages[i].OfUser)
 			if len(parts) > 0 {
@@ -519,13 +519,6 @@ func extractTextFromDeveloper(message *osdk.ChatCompletionDeveloperMessageParam)
 		parts = append(parts, part.Text)
 	}
 	return strings.Join(parts, "\n")
-}
-
-func appendNonEmpty(values []string, value string) []string {
-	if value == "" {
-		return values
-	}
-	return append(values, value)
 }
 
 func parseJSONOrString(value string) []byte {

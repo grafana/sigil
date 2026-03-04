@@ -479,3 +479,15 @@ func TestFromStreamPreservesWhitespaceOnlyOutput(t *testing.T) {
 		t.Fatalf("unexpected output text %q", generation.Output[0].Parts[0].Text)
 	}
 }
+
+func TestExtractSystemPromptPreservesEmptySegments(t *testing.T) {
+	config := &genai.GenerateContentConfig{
+		SystemInstruction: genai.NewContentFromParts([]*genai.Part{
+			genai.NewPartFromText(""),
+			genai.NewPartFromText("second"),
+		}, genai.RoleUser),
+	}
+	if got := extractSystemPrompt(config); got != "\n\nsecond" {
+		t.Fatalf("expected preserved empty segment separator, got %q", got)
+	}
+}
