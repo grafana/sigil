@@ -31,6 +31,7 @@ export type UseConversationDataResult = {
   errorMessage: string;
   tokenSummary: TokenSummary | null;
   costSummary: CostSummary | null;
+  generationCosts: Map<string, GenerationCostResult>;
   modelCards: Map<string, ModelCard>;
   allGenerations: GenerationDetail[];
 };
@@ -162,6 +163,7 @@ export function useConversationData({
     errorMessage,
     tokenSummary,
     costSummary,
+    generationCosts: conversationCosts,
     modelCards,
     allGenerations,
   };

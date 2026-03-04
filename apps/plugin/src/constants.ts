@@ -6,6 +6,7 @@ export const ROUTES = {
   Landing1: 'landing1',
   Conversations: 'conversations',
   ConversationsView: 'conversations/:conversationID/view',
+  ConversationsExplore: 'conversations/:conversationID/explore',
   ConversationsOld: 'conversations-old',
   ConversationsDetail: 'conversations/:conversationID/detail',
   Agents: 'agents',
@@ -19,6 +20,7 @@ export const PAGE_TITLES = {
   [ROUTES.Landing1]: 'Landing 1',
   [ROUTES.Conversations]: 'Conversations',
   [ROUTES.ConversationsView]: 'Conversation view',
+  [ROUTES.ConversationsExplore]: 'Conversation explore',
   [ROUTES.ConversationsOld]: 'Conversations (old)',
   [ROUTES.ConversationsDetail]: 'Conversation detail',
   [ROUTES.Agents]: 'Agents',
@@ -33,6 +35,10 @@ export function buildConversationDetailRoute(conversationID: string): string {
 
 export function buildConversationViewRoute(conversationID: string): string {
   return `${ROUTES.Conversations}/${encodeURIComponent(conversationID)}/view`;
+}
+
+export function buildConversationExploreRoute(conversationID: string): string {
+  return `${ROUTES.Conversations}/${encodeURIComponent(conversationID)}/explore`;
 }
 
 export function buildAgentDetailByNameRoute(agentName: string): string {
