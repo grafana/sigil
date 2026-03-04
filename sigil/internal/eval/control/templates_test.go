@@ -693,6 +693,18 @@ func (s *memoryTemplateStore) UpdateTemplateLatestVersion(_ context.Context, ten
 	return nil
 }
 
+func (s *memoryTemplateStore) UpdateTemplateDescription(_ context.Context, tenantID, templateID, description string) error {
+	key := templateKey(tenantID, templateID)
+	tmpl, ok := s.templates[key]
+	if !ok || tmpl.DeletedAt != nil {
+		return evalpkg.ErrNotFound
+	}
+	tmpl.Description = description
+	tmpl.UpdatedAt = time.Now().UTC()
+	s.templates[key] = tmpl
+	return nil
+}
+
 func templateKey(tenantID, templateID string) string {
 	return tenantID + "|" + templateID
 }

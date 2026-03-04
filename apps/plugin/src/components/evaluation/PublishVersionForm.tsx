@@ -71,6 +71,7 @@ export default function PublishVersionForm({
   const [outputType, setOutputType] = useState<ScoreType>(initialOutputKeys?.[0]?.type ?? 'number');
   const [outputDescription, setOutputDescription] = useState(initialOutputKeys?.[0]?.description ?? '');
   const [outputEnum, setOutputEnum] = useState(initialOutputKeys?.[0]?.enum?.join(', ') ?? '');
+
   const [changelog, setChangelog] = useState(rollbackVersion ? `Rollback to version ${rollbackVersion}` : '');
   const [touched, setTouched] = useState(false);
 
@@ -90,7 +91,7 @@ export default function PublishVersionForm({
   }, [kind, configJson, outputKey, outputType, outputDescription, outputEnum]);
 
   const isVersionEmpty = version.trim() === '';
-  const isOutputKeyEmpty = outputKey.trim() === '';
+
   let configParseError = '';
   try {
     JSON.parse(configJson);
@@ -98,12 +99,12 @@ export default function PublishVersionForm({
     configParseError = 'Invalid JSON';
   }
   const showVersionError = touched && isVersionEmpty;
-  const showOutputKeyError = touched && isOutputKeyEmpty;
+
   const showConfigError = touched && configParseError !== '';
 
   const handleSubmit = () => {
     setTouched(true);
-    if (isVersionEmpty || isOutputKeyEmpty || configParseError) {
+    if (isVersionEmpty || configParseError) {
       return;
     }
 
@@ -152,18 +153,12 @@ export default function PublishVersionForm({
         />
       </Field>
 
-      <Field
-        label="Output key"
-        description="Key and type for the evaluation result."
-        required
-        invalid={showOutputKeyError}
-        error={showOutputKeyError ? 'Output key is required' : undefined}
-      >
+      <Field label="Output key" description="Key and type for the evaluation result.">
         <div className={styles.outputKeyRow}>
           <Input
             value={outputKey}
             onChange={(e) => setOutputKey(e.currentTarget.value)}
-            placeholder="e.g. score"
+            placeholder="score"
             width={20}
           />
           <Select<ScoreType>
@@ -178,33 +173,26 @@ export default function PublishVersionForm({
           />
         </div>
       </Field>
-      {kind === 'llm_judge' && (
-        <>
-          <Field
-            label="Output description"
-            description="Optional description for the output key. Helps the judge model understand what to produce."
-          >
-            <Input
-              value={outputDescription}
-              onChange={(e) => setOutputDescription(e.currentTarget.value)}
-              placeholder="e.g. How helpful the response is on a 0-1 scale"
-              width={60}
-            />
-          </Field>
-          {outputType === 'string' && (
-            <Field
-              label="Allowed values"
-              description="Comma-separated list of allowed string values. Enforced via structured output."
-            >
-              <Input
-                value={outputEnum}
-                onChange={(e) => setOutputEnum(e.currentTarget.value)}
-                placeholder="e.g. none, mild, moderate, severe"
-                width={60}
-              />
-            </Field>
-          )}
-        </>
+      <Field label="Output description" description="Optional description for the output key.">
+        <Input
+          value={outputDescription}
+          onChange={(e) => setOutputDescription(e.currentTarget.value)}
+          placeholder="e.g. How helpful the response is on a 1-10 scale"
+          width={60}
+        />
+      </Field>
+      {kind === 'llm_judge' && outputType === 'string' && (
+        <Field
+          label="Allowed values"
+          description="Comma-separated list of allowed string values. Enforced via structured output."
+        >
+          <Input
+            value={outputEnum}
+            onChange={(e) => setOutputEnum(e.currentTarget.value)}
+            placeholder="e.g. none, mild, moderate, severe"
+            width={60}
+          />
+        </Field>
       )}
 
       <Field label="Changelog" description="Description of changes in this version.">

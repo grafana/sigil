@@ -2,11 +2,13 @@ import React from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Text, useStyles2 } from '@grafana/ui';
+import type { EvalOutputKey } from '../../evaluation/types';
 
 export type VersionCompareItem = {
   version: string;
   changelog?: string;
   config: Record<string, unknown>;
+  outputKeys?: EvalOutputKey[];
 };
 
 export type VersionCompareProps = {
@@ -24,6 +26,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     gap: theme.spacing(1),
+    minWidth: 0,
   }),
   header: css({
     display: 'flex',
@@ -49,8 +52,15 @@ const getStyles = (theme: GrafanaTheme2) => ({
 export default function VersionCompare({ left, right }: VersionCompareProps) {
   const styles = useStyles2(getStyles);
 
-  const leftJson = JSON.stringify(left.config, null, 2);
-  const rightJson = JSON.stringify(right.config, null, 2);
+  const toDisplay = (item: VersionCompareItem) => {
+    const obj: Record<string, unknown> = { config: item.config };
+    if (item.outputKeys?.length) {
+      obj.output_keys = item.outputKeys;
+    }
+    return JSON.stringify(obj, null, 2);
+  };
+  const leftJson = toDisplay(left);
+  const rightJson = toDisplay(right);
 
   return (
     <div className={styles.container}>
