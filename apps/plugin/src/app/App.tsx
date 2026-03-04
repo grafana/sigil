@@ -71,6 +71,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     flex: 1,
+    height: '100%',
     minHeight: 0,
     overflow: 'hidden',
     position: 'relative',
@@ -146,7 +147,7 @@ export default function App(props: AppRootProps) {
           <Route
             path={ROUTES.Conversations}
             element={
-              <PageRoot>
+              <PageRoot fullBleed>
                 <div className={styles.conversationsRouteContainer}>
                   <ConversationsBrowserPage />
                 </div>
@@ -156,7 +157,7 @@ export default function App(props: AppRootProps) {
           <Route
             path={ROUTES.ConversationsView}
             element={
-              <PageRoot>
+              <PageRoot fullBleed>
                 <div className={styles.conversationsRouteContainer}>
                   <ConversationPage />
                 </div>
