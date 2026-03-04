@@ -129,16 +129,18 @@ export default function Landing1Page() {
 
   const openAssistantWithPrompt = (message: string) => {
     const prompt = message.trim();
-    if (prompt.length === 0) {
-      return;
-    }
-
     if (assistant.openAssistant) {
-      assistant.openAssistant({
-        origin: ASSISTANT_ORIGIN,
-        prompt,
-        autoSend: true,
-      });
+      if (prompt.length > 0) {
+        assistant.openAssistant({
+          origin: ASSISTANT_ORIGIN,
+          prompt,
+          autoSend: true,
+        });
+      } else {
+        assistant.openAssistant({
+          origin: ASSISTANT_ORIGIN,
+        });
+      }
       return;
     }
 
@@ -211,6 +213,14 @@ export default function Landing1Page() {
         </div>
 
         <div className={styles.heroSideHeaderBlock}>
+          <HorizontalGroup className={styles.heroSideActions}>
+            <LinkButton href={buildFakeDocUrl('/sigil/get-started')} icon="book-open" target="_blank" rel="noreferrer">
+              Read docs
+            </LinkButton>
+            <LinkButton href={buildFakeDocUrl('/sigil/overview')} variant="secondary" target="_blank" rel="noreferrer">
+              Learn more
+            </LinkButton>
+          </HorizontalGroup>
           <Card className={styles.heroSideCard}>
             <Stack direction="column" gap={2}>
               <div className={styles.sideCardMutedHeading}>
@@ -219,14 +229,6 @@ export default function Landing1Page() {
               <Text color="secondary">
                 Use our coding agent skill to instrument your codebase. Then select coding agent.
               </Text>
-              <HorizontalGroup>
-                <LinkButton href={buildFakeDocUrl('/sigil/get-started')} icon="book-open" target="_blank" rel="noreferrer">
-                  Read docs
-                </LinkButton>
-                <LinkButton href={buildFakeDocUrl('/sigil/overview')} variant="secondary" target="_blank" rel="noreferrer">
-                  Learn more
-                </LinkButton>
-              </HorizontalGroup>
               <div className={styles.ideTabs}>
                 {ideTabs.map((ide) => (
                   <button
@@ -270,7 +272,7 @@ export default function Landing1Page() {
             <Card className={styles.lowerSectionCard}>
               <Stack direction="column" gap={2}>
                 <Text element="h3">What is Sigil?</Text>
-                <ul className={styles.bulletList}>
+                <ul className={styles.featureBulletList}>
                   <li>New telemetry signal for AI</li>
                   <li>New database to efficiently work with the new signal</li>
                   <li>New UX</li>
@@ -404,9 +406,14 @@ function getStyles(theme: GrafanaTheme2) {
       position: 'sticky',
       top: theme.spacing(2),
       alignSelf: 'stretch',
+      display: 'grid',
+      gap: theme.spacing(1),
       '@media (max-width: 1200px)': {
         position: 'static',
       },
+    }),
+    heroSideActions: css({
+      margin: 0,
     }),
     heroSideCard: css({
       height: '100%',
@@ -573,6 +580,13 @@ function getStyles(theme: GrafanaTheme2) {
       paddingLeft: theme.spacing(3),
       display: 'grid',
       gap: theme.spacing(1),
+    }),
+    featureBulletList: css({
+      margin: 0,
+      paddingLeft: theme.spacing(3),
+      display: 'grid',
+      gap: theme.spacing(1),
+      fontSize: theme.typography.body.fontSize,
     }),
     ideBody: css({
       border: `1px solid ${theme.colors.border.medium}`,

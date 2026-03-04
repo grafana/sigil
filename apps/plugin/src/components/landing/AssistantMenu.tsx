@@ -35,6 +35,11 @@ export function AssistantMenu({ title = 'Learn more', questions, onAsk, classNam
             </Button>
           </li>
         ))}
+        <li className={styles.questionItem}>
+          <Button variant="secondary" size="sm" fill="text" className={styles.questionButton} onClick={() => onAsk('')}>
+            Something else
+          </Button>
+        </li>
       </ul>
     </div>
   );
@@ -75,32 +80,37 @@ function getStyles(theme: GrafanaTheme2) {
     }),
     questionList: css({
       margin: 0,
-      padding: 0,
+      paddingLeft: theme.spacing(3),
       display: 'grid',
       gap: theme.spacing(1),
       paddingRight: theme.spacing(0.5),
-      listStyle: 'none',
+      listStyle: 'disc',
     }),
     questionItem: css({
-      display: 'block',
+      display: 'list-item',
     }),
     questionButton: css({
       justifyContent: 'flex-start',
       textAlign: 'left',
-      width: '100%',
+      width: 'auto',
       height: 'auto',
       whiteSpace: 'normal',
       overflowWrap: 'break-word',
       fontSize: theme.typography.body.fontSize,
       lineHeight: 1.4,
-      borderRadius: theme.shape.radius.default,
-      border: '1px solid transparent',
-      background: theme.colors.background.secondary,
-      color: theme.colors.text.primary,
-      padding: theme.spacing(1, 1.25),
+      border: 0,
+      background: 'transparent',
+      color: theme.colors.text.link,
+      padding: 0,
       '&:hover': {
-        borderColor: theme.colors.border.medium,
-        background: theme.colors.action.hover,
+        background: 'transparent',
+        textDecoration: 'underline',
+      },
+      '&:focus, &:focus-visible, &:active': {
+        background: 'transparent',
+      },
+      '&::before': {
+        background: 'transparent',
       },
       '& > span': {
         width: '100%',
