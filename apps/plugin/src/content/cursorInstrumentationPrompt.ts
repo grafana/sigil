@@ -1,6 +1,10 @@
-export const CURSOR_PROMPT_FILENAME = 'sigil-cursor-instrumentation-prompt.md';
+export type InstrumentationPromptIde = 'cursor' | 'claudecode' | 'copilot';
 
-export const cursorInstrumentationPrompt = `# Sigil Agent-First Instrumentation Brief
+export const CURSOR_PROMPT_FILENAME = 'sigil-cursor-instrumentation-prompt.md';
+export const CLAUDE_CODE_PROMPT_FILENAME = 'sigil-claude-code-instrumentation-prompt.md';
+export const COPILOT_PROMPT_FILENAME = 'sigil-copilot-instrumentation-prompt.md';
+
+const BASE_INSTRUMENTATION_PROMPT = `## Sigil Agent-First Instrumentation Brief
 
 You are acting as a coding agent inside this repository. Your goal is to add or improve Grafana Sigil instrumentation with minimal, safe changes.
 
@@ -145,3 +149,56 @@ Provide:
 
 If no safe opportunities are found, explain exactly why and list what evidence you checked.
 `;
+
+const CURSOR_PROMPT_PREAMBLE = `# Cursor Prompt: Sigil Instrumentation
+
+You are running in Cursor with full repository context.
+- Keep edits surgical and grouped by opportunity.
+- Run focused checks after each opportunity and include results.
+`;
+
+const CLAUDE_CODE_PROMPT_PREAMBLE = `# Claude Code Prompt: Sigil Instrumentation
+
+You are running in Claude Code with repository files and shell access.
+- Prefer direct file edits over speculative refactors.
+- Before proposing broad changes, confirm impact scope with quick evidence.
+`;
+
+const COPILOT_PROMPT_PREAMBLE = `# GitHub Copilot Prompt: Sigil Instrumentation
+
+You are running in GitHub Copilot Chat / Agent mode.
+- Keep patches easy to review and maintain.
+- Add concise rationale comments only where logic is non-obvious.
+`;
+
+export const cursorInstrumentationPrompt = `${CURSOR_PROMPT_PREAMBLE}
+
+${BASE_INSTRUMENTATION_PROMPT}`;
+
+export const claudeCodeInstrumentationPrompt = `${CLAUDE_CODE_PROMPT_PREAMBLE}
+
+${BASE_INSTRUMENTATION_PROMPT}`;
+
+export const copilotInstrumentationPrompt = `${COPILOT_PROMPT_PREAMBLE}
+
+${BASE_INSTRUMENTATION_PROMPT}`;
+
+const instrumentationPrompts: Record<InstrumentationPromptIde, string> = {
+  cursor: cursorInstrumentationPrompt,
+  claudecode: claudeCodeInstrumentationPrompt,
+  copilot: copilotInstrumentationPrompt,
+};
+
+const instrumentationPromptFilenames: Record<InstrumentationPromptIde, string> = {
+  cursor: CURSOR_PROMPT_FILENAME,
+  claudecode: CLAUDE_CODE_PROMPT_FILENAME,
+  copilot: COPILOT_PROMPT_FILENAME,
+};
+
+export function getInstrumentationPrompt(ide: InstrumentationPromptIde): string {
+  return instrumentationPrompts[ide];
+}
+
+export function getInstrumentationPromptFilename(ide: InstrumentationPromptIde): string {
+  return instrumentationPromptFilenames[ide];
+}

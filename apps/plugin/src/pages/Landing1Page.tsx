@@ -4,10 +4,14 @@ import { useAssistant } from '@grafana/assistant';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Button, Card, HorizontalGroup, IconButton, Link, LinkButton, Stack, Text, useStyles2 } from '@grafana/ui';
 import { AssistantMenu } from '../components/landing/AssistantMenu';
-import { CURSOR_PROMPT_FILENAME, cursorInstrumentationPrompt } from '../content/cursorInstrumentationPrompt';
+import {
+  getInstrumentationPrompt,
+  getInstrumentationPromptFilename,
+  type InstrumentationPromptIde,
+} from '../content/cursorInstrumentationPrompt';
 import { ClaudeCodeLogo, CopilotLogo, CursorLogo } from '../components/landing/IdeLogos';
 
-type IdeKey = 'cursor' | 'claudecode' | 'copilot';
+type IdeKey = InstrumentationPromptIde;
 
 type IdeTab = {
   key: IdeKey;
@@ -100,13 +104,6 @@ function downloadTextFile(filename: string, content: string): void {
   URL.revokeObjectURL(objectUrl);
 }
 
-function getPromptFilename(ide: IdeKey): string {
-  if (ide === 'cursor') {
-    return CURSOR_PROMPT_FILENAME;
-  }
-  return `${ide}-instrumentation-prompt.md`;
-}
-
 function renderIdeActionLogo(ide: IdeKey): React.ReactNode {
   if (ide === 'cursor') {
     return <CursorLogo size={20} withBackground={false} />;
@@ -124,8 +121,9 @@ export default function Landing1Page() {
   const [selectedIde, setSelectedIde] = useState<IdeKey>('cursor');
   const [isAgentModalOpen, setIsAgentModalOpen] = useState(false);
   const selectedIdeConfig = useMemo(() => ideTabs.find((ide) => ide.key === selectedIde) ?? ideTabs[0], [selectedIde]);
+  const selectedPrompt = useMemo(() => getInstrumentationPrompt(selectedIde), [selectedIde]);
 
-  const cursorDeeplink = useMemo(() => buildCursorPromptDeeplink(cursorInstrumentationPrompt), []);
+  const cursorDeeplink = useMemo(() => buildCursorPromptDeeplink(selectedPrompt), [selectedPrompt]);
 
   const openAssistantWithPrompt = (message: string) => {
     const prompt = message.trim();
@@ -329,7 +327,7 @@ export default function Landing1Page() {
               <div className={styles.promptSummaryRow}>
                 <div className={styles.promptContent}>
                   <pre className={styles.promptPreview}>
-                    <code>{cursorInstrumentationPrompt}</code>
+                    <code>{selectedPrompt}</code>
                   </pre>
                 </div>
                 <div className={styles.promptIconActions}>
@@ -339,7 +337,7 @@ export default function Landing1Page() {
                     aria-label="Download prompt file"
                     tooltip="Download prompt as a markdown file"
                     className={styles.promptIconButton}
-                    onClick={() => downloadTextFile(getPromptFilename(selectedIde), cursorInstrumentationPrompt)}
+                    onClick={() => downloadTextFile(getInstrumentationPromptFilename(selectedIde), selectedPrompt)}
                   />
                   <IconButton
                     name="copy"
@@ -347,7 +345,7 @@ export default function Landing1Page() {
                     aria-label="Copy prompt to clipboard"
                     tooltip="Copy prompt to your clipboard"
                     className={styles.promptIconButton}
-                    onClick={() => void navigator.clipboard.writeText(cursorInstrumentationPrompt)}
+                    onClick={() => void navigator.clipboard.writeText(selectedPrompt)}
                   />
                 </div>
               </div>
@@ -359,7 +357,7 @@ export default function Landing1Page() {
                       window.open(cursorDeeplink, '_blank', 'noopener');
                       return;
                     }
-                    void navigator.clipboard.writeText(cursorInstrumentationPrompt);
+                    void navigator.clipboard.writeText(selectedPrompt);
                   }}
                 >
                   <span className={styles.instrumentButtonLogo}>{renderIdeActionLogo(selectedIde)}</span>
