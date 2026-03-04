@@ -2,14 +2,24 @@ import React from 'react';
 
 type LogoProps = {
   size?: number;
+  withBackground?: boolean;
 };
 
-export function CursorLogo({ size = 28 }: LogoProps) {
+export function CursorLogo({ size = 28, withBackground = true }: LogoProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 28 28" role="img" aria-label="Cursor logo">
-      <rect x="1.5" y="1.5" width="25" height="25" rx="7" fill="#111217" stroke="#2E3440" />
-      <path d="M14 6L21 14L14 22L7 14L14 6Z" fill="#F9FAFC" />
-      <path d="M14 9.8L18.2 14L14 18.2L9.8 14L14 9.8Z" fill="#111217" />
+      {withBackground ? (
+        <>
+          <rect x="1.5" y="1.5" width="25" height="25" rx="7" fill="#111217" stroke="#2E3440" />
+          <path d="M14 6L21 14L14 22L7 14L14 6Z" fill="#F9FAFC" />
+          <path d="M14 9.8L18.2 14L14 18.2L9.8 14L14 9.8Z" fill="#111217" />
+        </>
+      ) : (
+        <>
+          <path d="M14 6L21 14L14 22L7 14L14 6Z" fill="currentColor" />
+          <path d="M14 9.8L18.2 14L14 18.2L9.8 14L14 9.8Z" fill="none" stroke="currentColor" strokeWidth="1.8" />
+        </>
+      )}
     </svg>
   );
 }

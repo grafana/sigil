@@ -10,16 +10,16 @@ export type AssistantMenuProps = {
   className?: string;
 };
 
-export function AssistantMenu({ title = 'Ask Assistant', questions, onAsk, className }: AssistantMenuProps) {
+export function AssistantMenu({ title = 'Learn more', questions, onAsk, className }: AssistantMenuProps) {
   const styles = useStyles2(getStyles);
 
   return (
     <div className={`${styles.menu} ${className ?? ''}`}>
       <div className={styles.headingRow}>
+        <Text element="h3">{title}</Text>
         <span className={styles.headingIconCircle}>
           <Icon name="ai" />
         </span>
-        <Text element="h6">{title}</Text>
       </div>
       <ul className={styles.questionList}>
         {questions.map((question) => (
@@ -43,64 +43,46 @@ export function AssistantMenu({ title = 'Ask Assistant', questions, onAsk, class
 function getStyles(theme: GrafanaTheme2) {
   return {
     menu: css({
-      position: 'relative',
-      width: 'min(100%, 340px)',
-      padding: theme.spacing(0.5, 0.5, 0.5, 0),
+      width: '100%',
+      minWidth: 0,
+      padding: 0,
       display: 'grid',
-      gap: theme.spacing(1),
-      '&::after': {
-        content: '""',
-        position: 'absolute',
-        left: 12,
-        top: 28,
-        bottom: 6,
-        width: 4,
-        borderRadius: 999,
-        background: 'linear-gradient(180deg, rgba(168, 85, 247, 0.9) 0%, rgba(168, 85, 247, 0.45) 100%)',
-      },
+      gap: theme.spacing(1.25),
     }),
     headingRow: css({
-      display: 'inline-flex',
+      display: 'flex',
       gap: theme.spacing(1),
-      alignItems: 'center',
-      color: theme.colors.text.secondary,
-      zIndex: 1,
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      width: '100%',
+      paddingRight: theme.spacing(0.5),
+      color: theme.colors.text.primary,
+      marginBottom: theme.spacing(0.25),
     }),
     headingIconCircle: css({
-      width: 28,
-      height: 28,
-      borderRadius: '50%',
+      width: 32,
+      height: 32,
       display: 'inline-flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: '#A855F7',
+      flexShrink: 0,
+      marginTop: theme.spacing(0.25),
       color: theme.colors.text.primary,
-      boxShadow: '0 0 0 3px rgba(168, 85, 247, 0.22), 0 0 18px rgba(168, 85, 247, 0.42)',
+      '& svg': {
+        width: 18,
+        height: 18,
+      },
     }),
     questionList: css({
-      position: 'relative',
-      zIndex: 1,
       margin: 0,
       padding: 0,
       display: 'grid',
-      gap: theme.spacing(0.75),
+      gap: theme.spacing(1),
+      paddingRight: theme.spacing(0.5),
       listStyle: 'none',
     }),
     questionItem: css({
-      position: 'relative',
-      paddingLeft: theme.spacing(3.25),
-      '&::before': {
-        content: '""',
-        position: 'absolute',
-        left: 8,
-        top: '50%',
-        transform: 'translateY(-50%)',
-        width: 12,
-        height: 12,
-        borderRadius: '50%',
-        border: '2px solid rgba(168, 85, 247, 0.95)',
-        background: theme.colors.background.primary,
-      },
+      display: 'block',
     }),
     questionButton: css({
       justifyContent: 'flex-start',
@@ -109,8 +91,23 @@ function getStyles(theme: GrafanaTheme2) {
       height: 'auto',
       whiteSpace: 'normal',
       overflowWrap: 'break-word',
+      fontSize: theme.typography.body.fontSize,
       lineHeight: 1.4,
-      padding: theme.spacing(0.75, 1.25),
+      borderRadius: theme.shape.radius.default,
+      border: '1px solid transparent',
+      background: theme.colors.background.secondary,
+      color: theme.colors.text.primary,
+      padding: theme.spacing(1, 1.25),
+      '&:hover': {
+        borderColor: theme.colors.border.medium,
+        background: theme.colors.action.hover,
+      },
+      '& > span': {
+        width: '100%',
+        whiteSpace: 'normal',
+        overflowWrap: 'anywhere',
+        textAlign: 'left',
+      },
     }),
   };
 }
