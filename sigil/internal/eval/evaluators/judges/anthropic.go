@@ -69,6 +69,13 @@ func (c *AnthropicClient) Judge(ctx context.Context, req JudgeRequest) (JudgeRes
 	if system := strings.TrimSpace(req.SystemPrompt); system != "" {
 		params.System = []anthropic.TextBlockParam{{Text: system}}
 	}
+	if len(req.OutputSchema) > 0 {
+		params.OutputConfig = anthropic.OutputConfigParam{
+			Format: anthropic.JSONOutputFormatParam{
+				Schema: req.OutputSchema,
+			},
+		}
+	}
 
 	start := time.Now()
 	response, err := c.messages.New(ctx, params)

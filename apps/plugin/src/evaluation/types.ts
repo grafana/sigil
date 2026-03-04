@@ -12,9 +12,31 @@ export type ScoreType = 'number' | 'bool' | 'string';
 export type EvalOutputKey = {
   key: string;
   type: ScoreType;
+  description?: string;
   unit?: string;
   pass_threshold?: number;
+  enum?: string[];
 };
+
+/** Build an EvalOutputKey from form state, applying trim and enum parsing. */
+export function buildOutputKeyFromForm(
+  key: string,
+  type: ScoreType,
+  description: string,
+  enumValue: string
+): EvalOutputKey {
+  const ok: EvalOutputKey = { key: key.trim() || 'score', type };
+  if (description.trim()) {
+    ok.description = description.trim();
+  }
+  if (type === 'string' && enumValue.trim()) {
+    ok.enum = enumValue
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean);
+  }
+  return ok;
+}
 
 export type Evaluator = {
   evaluator_id: string;

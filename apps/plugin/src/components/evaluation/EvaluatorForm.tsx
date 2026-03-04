@@ -4,6 +4,7 @@ import { Button, Field, FieldSet, Input, Select, Stack, Switch, useStyles2 } fro
 import { css } from '@emotion/css';
 import {
   EVALUATOR_KIND_LABELS,
+  buildOutputKeyFromForm,
   type CreateEvaluatorRequest,
   type EvalFormState,
   type EvalOutputKey,
@@ -80,6 +81,8 @@ export default function EvaluatorForm({ onSubmit, onCancel, onConfigChange }: Ev
   // output key
   const [outputKey, setOutputKey] = useState('');
   const [outputType, setOutputType] = useState<ScoreType>('number');
+  const [outputDescription, setOutputDescription] = useState('');
+  const [outputEnum, setOutputEnum] = useState('');
 
   const buildConfig = (): Record<string, unknown> => {
     switch (kind) {
@@ -113,7 +116,7 @@ export default function EvaluatorForm({ onSubmit, onCancel, onConfigChange }: Ev
     onConfigChange?.({
       kind,
       config: buildConfig(),
-      outputKeys: [{ key: outputKey.trim() || 'score', type: outputType }],
+      outputKeys: [buildOutputKeyFromForm(outputKey, outputType, outputDescription, outputEnum)],
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -129,6 +132,8 @@ export default function EvaluatorForm({ onSubmit, onCancel, onConfigChange }: Ev
     maxLength,
     outputKey,
     outputType,
+    outputDescription,
+    outputEnum,
   ]);
 
   const isIdEmpty = evaluatorId.trim() === '';
@@ -142,7 +147,7 @@ export default function EvaluatorForm({ onSubmit, onCancel, onConfigChange }: Ev
       return;
     }
 
-    const outputKeys: EvalOutputKey[] = [{ key: outputKey.trim(), type: outputType }];
+    const outputKeys: EvalOutputKey[] = [buildOutputKeyFromForm(outputKey, outputType, outputDescription, outputEnum)];
 
     const req: CreateEvaluatorRequest = {
       evaluator_id: evaluatorId.trim(),
@@ -316,6 +321,34 @@ export default function EvaluatorForm({ onSubmit, onCancel, onConfigChange }: Ev
           />
         </div>
       </Field>
+      {kind === 'llm_judge' && (
+        <>
+          <Field
+            label="Output description"
+            description="Optional description for the output key. Helps the judge model understand what to produce."
+          >
+            <Input
+              value={outputDescription}
+              onChange={(e) => setOutputDescription(e.currentTarget.value)}
+              placeholder="e.g. How helpful the response is on a 0-1 scale"
+              width={60}
+            />
+          </Field>
+          {outputType === 'string' && (
+            <Field
+              label="Allowed values"
+              description="Comma-separated list of allowed string values. Enforced via structured output."
+            >
+              <Input
+                value={outputEnum}
+                onChange={(e) => setOutputEnum(e.currentTarget.value)}
+                placeholder="e.g. none, mild, moderate, severe"
+                width={60}
+              />
+            </Field>
+          )}
+        </>
+      )}
 
       <Stack direction="row" gap={1}>
         <Button onClick={handleSubmit}>Create</Button>

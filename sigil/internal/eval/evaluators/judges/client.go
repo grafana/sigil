@@ -16,6 +16,10 @@ type JudgeRequest struct {
 	Model        string
 	MaxTokens    int
 	Temperature  float64
+	// OutputSchema is a JSON Schema object for structured output.
+	// When set, providers that support it will use constrained decoding
+	// to guarantee the response matches this schema.
+	OutputSchema map[string]any
 }
 
 type JudgeUsage struct {

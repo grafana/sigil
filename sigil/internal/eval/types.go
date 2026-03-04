@@ -72,8 +72,10 @@ func (v ScoreValue) Type() ScoreType {
 type OutputKey struct {
 	Key           string    `json:"key"`
 	Type          ScoreType `json:"type"`
+	Description   string    `json:"description,omitempty"`
 	Unit          string    `json:"unit,omitempty"`
 	PassThreshold *float64  `json:"pass_threshold,omitempty"`
+	Enum          []string  `json:"enum,omitempty"`
 }
 
 type EvaluatorDefinition struct {
