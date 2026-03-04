@@ -42,25 +42,34 @@ export const Loader = () => {
     const atLineEnd = charCount >= currentLine.length;
     const atLineStart = charCount === 0;
 
-    const timeout = window.setTimeout(() => {
-      if (!isDeleting && !atLineEnd) {
-        setCharCount((count) => count + 1);
-        return;
-      }
+    const timeout = window.setTimeout(
+      () => {
+        if (!isDeleting && !atLineEnd) {
+          setCharCount((count) => count + 1);
+          return;
+        }
 
-      if (!isDeleting && atLineEnd) {
-        setIsDeleting(true);
-        return;
-      }
+        if (!isDeleting && atLineEnd) {
+          setIsDeleting(true);
+          return;
+        }
 
-      if (isDeleting && !atLineStart) {
-        setCharCount((count) => Math.max(0, count - 1));
-        return;
-      }
+        if (isDeleting && !atLineStart) {
+          setCharCount((count) => Math.max(0, count - 1));
+          return;
+        }
 
-      setIsDeleting(false);
-      setLineIndex((index) => (index + 1) % TYPEWRITER_LINES.length);
-    }, atLineEnd && !isDeleting ? FULL_LINE_PAUSE_MS : atLineStart && isDeleting ? EMPTY_LINE_PAUSE_MS : isDeleting ? DELETE_STEP_MS : TYPE_STEP_MS);
+        setIsDeleting(false);
+        setLineIndex((index) => (index + 1) % TYPEWRITER_LINES.length);
+      },
+      atLineEnd && !isDeleting
+        ? FULL_LINE_PAUSE_MS
+        : atLineStart && isDeleting
+          ? EMPTY_LINE_PAUSE_MS
+          : isDeleting
+            ? DELETE_STEP_MS
+            : TYPE_STEP_MS
+    );
 
     return () => {
       window.clearTimeout(timeout);
