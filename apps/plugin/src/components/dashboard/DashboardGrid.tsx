@@ -747,7 +747,6 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
   );
 }
 
-
 function formatInlineMarkup(text: string): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
   const pattern = /\*\*(.+?)\*\*|`(.+?)`/g;

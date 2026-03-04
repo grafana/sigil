@@ -383,7 +383,10 @@ function LabelWithHelp({ label, help, className }: { label: string; help: string
   );
 }
 
-function aggregateAgentUsageByName(response: PrometheusQueryResponse | null | undefined, pricingMap: ReturnType<typeof useResolvedModelPricing>['pricingMap']) {
+function aggregateAgentUsageByName(
+  response: PrometheusQueryResponse | null | undefined,
+  pricingMap: ReturnType<typeof useResolvedModelPricing>['pricingMap']
+) {
   const usageByName = new Map<string, { tokens: number; costUSD: number }>();
   if (!response || response.data.resultType !== 'vector') {
     return usageByName;
@@ -853,7 +856,8 @@ export default function AgentsPage({
                       </div>
                       <ul className={styles.rankList}>
                         {summary.topByTokenFootprint.map((item) => {
-                          const usage = summary.usageByName.get(item.agent_name) ?? summary.usageByName.get(item.agent_name.trim());
+                          const usage =
+                            summary.usageByName.get(item.agent_name) ?? summary.usageByName.get(item.agent_name.trim());
                           const tokenValue = usage ? usage.tokens : item.token_estimate.total;
                           const costValue = usage ? usage.costUSD : item.token_estimate.total * ESTIMATED_USD_PER_TOKEN;
                           const usdValue = formatUSD(costValue).slice(1);

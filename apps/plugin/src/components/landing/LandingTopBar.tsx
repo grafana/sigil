@@ -306,8 +306,12 @@ export function LandingTopBar({ assistantOrigin }: LandingTopBarProps) {
                       >
                         <span className={styles.heroStatLabel}>{item.label}</span>
                         <span className={styles.heroStatRow}>
-                          <span className={styles.heroStatValue}>{item.loading ? '...' : item.current.toLocaleString()}</span>
-                          {!item.loading && <ComparisonBadge current={item.current} previous={item.previous} styles={styles} />}
+                          <span className={styles.heroStatValue}>
+                            {item.loading ? '...' : item.current.toLocaleString()}
+                          </span>
+                          {!item.loading && (
+                            <ComparisonBadge current={item.current} previous={item.previous} styles={styles} />
+                          )}
                         </span>
                         <span className={styles.heroStatCta}>{item.cta}</span>
                       </button>
@@ -475,7 +479,8 @@ function ComparisonBadge({
   const isUp = pctChange > 0;
   const arrow = isUp ? '↑' : '↓';
   const sign = isUp ? '+' : '';
-  const badgeClass = pctChange === 0 ? styles.changeBadgeNeutral : isUp ? styles.changeBadgeGood : styles.changeBadgeWarn;
+  const badgeClass =
+    pctChange === 0 ? styles.changeBadgeNeutral : isUp ? styles.changeBadgeGood : styles.changeBadgeWarn;
   const tooltipText = `${previous.toLocaleString()} in previous window`;
   return (
     <Tooltip content={tooltipText} placement="bottom">

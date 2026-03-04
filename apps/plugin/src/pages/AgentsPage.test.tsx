@@ -208,7 +208,10 @@ function createDashboardDataSource(): DashboardDataSource {
 }
 
 describe('AgentsPage', () => {
-  function renderPage(dataSource: AgentsDataSource, dashboardDataSource: DashboardDataSource = createDashboardDataSource()) {
+  function renderPage(
+    dataSource: AgentsDataSource,
+    dashboardDataSource: DashboardDataSource = createDashboardDataSource()
+  ) {
     const router = createMemoryRouter(
       [
         {

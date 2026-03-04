@@ -212,12 +212,7 @@ export default function App(props: AppRootProps) {
               </PageRoot>
             }
           />
-          <Route
-            path="*"
-            element={
-              <PageRoot>{isLanding1Route ? <Landing1Page /> : <DashboardPage />}</PageRoot>
-            }
-          />
+          <Route path="*" element={<PageRoot>{isLanding1Route ? <Landing1Page /> : <DashboardPage />}</PageRoot>} />
         </Routes>
       </div>
     </div>

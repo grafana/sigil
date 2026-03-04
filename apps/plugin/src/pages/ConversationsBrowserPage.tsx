@@ -152,7 +152,6 @@ function buildConversationStats(conversations: ConversationSearchResult[], windo
   return { totalConversations, totalTokens, avgCallsPerConversation, activeLast7d, ratedConversations, badRatedPct };
 }
 
-
 const getStyles = (theme: GrafanaTheme2) => ({
   pageContainer: css({
     label: 'conversationsBrowserPage-pageContainer',
