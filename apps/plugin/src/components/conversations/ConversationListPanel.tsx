@@ -496,7 +496,15 @@ export default function ConversationListPanel({
                     <td className={cx(styles.cell, styles.idCellTruncated)}>
                       <Tooltip
                         content={
-                          hasTitle ? `${displayTitle}\n${conversation.conversation_id}` : conversation.conversation_id
+                          hasTitle ? (
+                            <>
+                              {displayTitle}
+                              <br />
+                              {conversation.conversation_id}
+                            </>
+                          ) : (
+                            conversation.conversation_id
+                          )
                         }
                       >
                         <span>{displayTitle}</span>
