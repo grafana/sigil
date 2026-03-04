@@ -23,6 +23,8 @@ services:
       GF_SESSION_PROVIDER_CONFIG: sigil:sigil@tcp(mysql:3306)/grafana
       GF_APP_URL: http://grafana:3000
       GF_SERVER_ROOT_URL: http://grafana:3000
+      SIGIL_API_URL: ${SIGIL_API_URL:-http://sigil:8080}
+      SIGIL_TENANT_ID: ${SIGIL_TENANT_ID:-fake}
       SIGIL_PROM_DS_UID: ${SIGIL_PROM_DS_UID:-prometheus}
       SIGIL_TEMPO_DS_UID: ${SIGIL_TEMPO_DS_UID:-tempo}
       GF_AUTH_MANAGED_SERVICE_ACCOUNTS_ENABLED: "true"

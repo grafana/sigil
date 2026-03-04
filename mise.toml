@@ -80,7 +80,11 @@ run = "DEVELOPMENT=true docker compose --profile core --profile traffic up --wat
 
 [tasks."up:dev"]
 description = "Start local stack without sdk-traffic, pointing to dev datasources"
-run = "DEVELOPMENT=true SIGIL_PROM_DS_UID=cortex-dev-01 SIGIL_TEMPO_DS_UID=tempo-dev-01 docker compose --profile core up --watch --build --remove-orphans"
+run = "DEVELOPMENT=true SIGIL_API_URL=https://sigil-dev-001.grafana-dev.net/ SIGIL_TENANT_ID=13 SIGIL_PROM_DS_UID=cortex-dev-01 SIGIL_TEMPO_DS_UID=tempo-dev-01 docker compose --profile core up --watch --build --remove-orphans"
+
+[tasks."up:ops"]
+description = "Start local stack without sdk-traffic, pointing to ops datasources"
+run = "DEVELOPMENT=true SIGIL_API_URL=https://sigil-ops-001.grafana-ops.net/ SIGIL_TENANT_ID=27821 SIGIL_API_AUTH_TOKEN=$SIGIL_API_AUTH_TOKEN_OPS SIGIL_PROM_DS_UID=grafanacloud-prom SIGIL_TEMPO_DS_UID=grafanacloud-traces docker compose --profile core up --watch --build --remove-orphans"
 
 [tasks."up:build"]
 description = "Start local stack and force image rebuilds"
