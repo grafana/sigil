@@ -82,29 +82,33 @@ export function inferProviderFromModelName(model: string): string {
   return '';
 }
 
+export type ModelInput = string | { name: string; provider: string };
+
 /**
- * Resolves model cards from raw model name strings (e.g., from conversation.models).
- * Uses known providers from the optional providerMap when available,
- * falling back to inference from model name patterns.
+ * Resolves model cards from model names or {name, provider} pairs.
+ * When items carry an explicit provider, that provider is used directly.
+ * For plain strings, uses the optional providerMap or falls back to inference.
  * Returns a map of "provider::model" → ModelCard for resolved models.
  */
 export async function resolveModelCardsFromNames(
-  modelNames: string[],
+  models: ModelInput[],
   client: ModelCardClient,
   providerMap?: Record<string, string>
 ): Promise<Map<string, ModelCard>> {
   const cards = new Map<string, ModelCard>();
-  if (modelNames.length === 0) {
+  if (models.length === 0) {
     return cards;
   }
 
   const pairs: Array<{ provider: string; model: string; originalName: string }> = [];
-  for (const name of modelNames) {
+  for (const input of models) {
+    const isObj = typeof input === 'object';
+    const name = isObj ? input.name : input;
     const trimmed = name.trim();
     if (trimmed.length === 0) {
       continue;
     }
-    const provider = providerMap?.[trimmed] ?? inferProviderFromModelName(trimmed);
+    const provider = isObj ? input.provider : (providerMap?.[trimmed] ?? inferProviderFromModelName(trimmed));
     if (provider.length === 0) {
       continue;
     }

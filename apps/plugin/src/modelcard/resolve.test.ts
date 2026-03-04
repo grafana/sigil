@@ -242,6 +242,63 @@ describe('resolveModelCardsFromNames', () => {
     expect(cards.size).toBe(1);
   });
 
+  it('accepts {name, provider} objects and preserves per-model provider', async () => {
+    const resolveResponse: ModelCardResolveResponse = {
+      resolved: [
+        {
+          provider: 'openai',
+          model: 'gpt-5',
+          status: 'resolved',
+          match_strategy: 'exact',
+          card: {
+            model_key: 'openrouter:openai/gpt-5',
+            source_model_id: 'openai/gpt-5',
+            pricing: basePricing,
+          },
+        },
+        {
+          provider: 'azure',
+          model: 'gpt-5',
+          status: 'resolved',
+          match_strategy: 'exact',
+          card: {
+            model_key: 'openrouter:azure/gpt-5',
+            source_model_id: 'azure/gpt-5',
+            pricing: basePricing,
+          },
+        },
+      ],
+      freshness: {
+        catalog_last_refreshed_at: null,
+        stale: false,
+        soft_stale: false,
+        hard_stale: false,
+        source_path: 'memory_live',
+      },
+    };
+
+    const client = mockClient({
+      resolve: jest.fn().mockResolvedValue(resolveResponse),
+      lookup: jest.fn().mockRejectedValue(new Error('not found')),
+    });
+
+    const cards = await resolveModelCardsFromNames(
+      [
+        { name: 'gpt-5', provider: 'openai' },
+        { name: 'gpt-5', provider: 'azure' },
+      ],
+      client
+    );
+
+    expect(client.resolve).toHaveBeenCalledWith([
+      { provider: 'openai', model: 'gpt-5' },
+      { provider: 'azure', model: 'gpt-5' },
+    ]);
+    expect(cards.size).toBe(2);
+    expect(cards.has('openai::gpt-5')).toBe(true);
+    expect(cards.has('azure::gpt-5')).toBe(true);
+  });
+
   it('skips model names where provider cannot be inferred', async () => {
     const resolveResponse: ModelCardResolveResponse = {
       resolved: [

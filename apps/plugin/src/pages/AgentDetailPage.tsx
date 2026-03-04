@@ -297,14 +297,9 @@ export default function AgentDetailPage({
       setModelCards(new Map());
       return;
     }
-    const providerMap: Record<string, string> = {};
-    for (const m of detail.models) {
-      providerMap[m.name] = m.provider;
-    }
     resolveModelCardsFromNames(
-      detail.models.map((m) => m.name),
-      modelCardClient,
-      providerMap
+      detail.models.map((m) => ({ name: m.name, provider: m.provider })),
+      modelCardClient
     )
       .then((cards) => setModelCards(cards))
       .catch(() => setModelCards(new Map()));
