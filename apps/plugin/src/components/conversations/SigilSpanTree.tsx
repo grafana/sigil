@@ -2,7 +2,6 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { useStyles2 } from '@grafana/ui';
-import type { SpanType } from '../../conversation/spans';
 import type { ConversationSpan } from '../../conversation/types';
 import { buildSigilSpanTreeRows } from './jaegerTree/adapter';
 import { collapseAll, collapseOne, expandAll, expandOne, filterVisibleRows } from './jaegerTree/collapseState';
@@ -14,22 +13,6 @@ type SigilSpanTreeProps = {
   spans: ConversationSpan[];
   selectedSpanSelectionID?: string;
   onSelectSpan?: (span: ConversationSpan) => void;
-  renderNode?: (context: SigilSpanTreeNodeRenderContext) => React.ReactNode;
-};
-
-export type SigilSpanTreeNodeRenderContext = {
-  span: ConversationSpan;
-  selectionID: string;
-  depth: number;
-  isSelected: boolean;
-  isExpanded: boolean;
-  hasChildren: boolean;
-  spanType: SpanType;
-  serviceName: string;
-  operationName: string;
-  durationLabel: string;
-  hasError: boolean;
-  showServiceName: boolean;
 };
 
 const ROW_HEIGHT_PX = 28;
