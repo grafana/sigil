@@ -156,7 +156,7 @@ func TestParseJudgeResponseBoolFallback(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			value, passed, _, err := parseJudgeResponse(tc.raw, evalpkg.ScoreTypeBool)
+			value, passed, _, err := parseJudgeResponse(tc.raw, "score", evalpkg.ScoreTypeBool)
 			if tc.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 					t.Fatalf("expected error containing %q, got %v", tc.wantErr, err)
@@ -177,12 +177,216 @@ func TestParseJudgeResponseBoolFallback(t *testing.T) {
 }
 
 func TestParseJudgeResponseRejectsMalformedJSONSchemaWithoutFallback(t *testing.T) {
-	_, _, _, err := parseJudgeResponse(`{"explanation":"score looked like 0.7"}`, evalpkg.ScoreTypeNumber)
+	_, _, _, err := parseJudgeResponse(`{"explanation":"score looked like 0.7"}`, "score", evalpkg.ScoreTypeNumber)
 	if err == nil {
 		t.Fatalf("expected malformed JSON schema response to fail")
 	}
 	if !strings.Contains(err.Error(), "did not include score") {
 		t.Fatalf("expected missing score error, got %v", err)
+	}
+}
+
+func TestBuildJudgeSchema(t *testing.T) {
+	tests := []struct {
+		name string
+		keys []evalpkg.OutputKey
+		want map[string]any
+	}{
+		{
+			name: "nil_keys_returns_nil",
+			keys: nil,
+			want: nil,
+		},
+		{
+			name: "empty_keys_returns_nil",
+			keys: []evalpkg.OutputKey{},
+			want: nil,
+		},
+		{
+			name: "number_score",
+			keys: []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeNumber}},
+			want: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"explanation": map[string]any{"type": "string"},
+					"helpfulness": map[string]any{"type": "number"},
+				},
+				"required":             []string{"explanation", "helpfulness"},
+				"additionalProperties": false,
+			},
+		},
+		{
+			name: "bool_score",
+			keys: []evalpkg.OutputKey{{Key: "toxic", Type: evalpkg.ScoreTypeBool}},
+			want: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"explanation": map[string]any{"type": "string"},
+					"toxic":       map[string]any{"type": "boolean"},
+				},
+				"required":             []string{"explanation", "toxic"},
+				"additionalProperties": false,
+			},
+		},
+		{
+			name: "string_with_enum",
+			keys: []evalpkg.OutputKey{{Key: "severity", Type: evalpkg.ScoreTypeString, Enum: []string{"none", "mild", "severe"}}},
+			want: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"explanation": map[string]any{"type": "string"},
+					"severity":    map[string]any{"type": "string", "enum": []string{"none", "mild", "severe"}},
+				},
+				"required":             []string{"explanation", "severity"},
+				"additionalProperties": false,
+			},
+		},
+		{
+			name: "explanation_key_is_reserved",
+			keys: []evalpkg.OutputKey{{Key: "explanation", Type: evalpkg.ScoreTypeNumber}},
+			want: nil,
+		},
+		{
+			name: "with_description",
+			keys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber, Description: "Helpfulness score from 0 to 1"}},
+			want: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"explanation": map[string]any{"type": "string"},
+					"score":       map[string]any{"type": "number", "description": "Helpfulness score from 0 to 1"},
+				},
+				"required":             []string{"explanation", "score"},
+				"additionalProperties": false,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := BuildJudgeSchema(tc.keys)
+			if tc.want == nil {
+				if got != nil {
+					t.Fatalf("expected nil schema, got %v", got)
+				}
+				return
+			}
+			gotJSON, _ := json.Marshal(got)
+			wantJSON, _ := json.Marshal(tc.want)
+			if string(gotJSON) != string(wantJSON) {
+				t.Fatalf("schema mismatch:\ngot:  %s\nwant: %s", gotJSON, wantJSON)
+			}
+		})
+	}
+}
+
+func TestLLMJudgeEvaluatorSendsResponseFormat(t *testing.T) {
+	var gotResponseFormat map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(body, &payload); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if rf, ok := payload["response_format"]; ok {
+			if rfMap, ok := rf.(map[string]any); ok {
+				gotResponseFormat = rfMap
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"helpfulness\":0.9,\"explanation\":\"great\"}"}}],"model":"judge-model","usage":{"prompt_tokens":12,"completion_tokens":8}}`))
+	}))
+	defer server.Close()
+
+	t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_BASE_URL", server.URL)
+	t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_API_KEY", "test")
+	t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_ENABLED", "true")
+	discovery := judges.DiscoverFromEnv()
+	evaluator := NewLLMJudgeEvaluator(discovery, "openai-compat/judge-model")
+
+	_, err := evaluator.Evaluate(context.Background(), EvalInput{
+		InputText:    "What is two plus two?",
+		ResponseText: "It is four.",
+	}, evalpkg.EvaluatorDefinition{
+		Kind: evalpkg.EvaluatorKindLLMJudge,
+		Config: map[string]any{
+			"provider": "openai-compat",
+			"model":    "judge-model",
+		},
+		OutputKeys: []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeNumber}},
+	})
+	if err != nil {
+		t.Fatalf("evaluate llm judge: %v", err)
+	}
+	if gotResponseFormat == nil {
+		t.Fatal("expected response_format to be sent in request")
+	}
+	if gotResponseFormat["type"] != "json_schema" {
+		t.Fatalf("expected response_format.type=json_schema, got %v", gotResponseFormat["type"])
+	}
+	jsonSchema, ok := gotResponseFormat["json_schema"].(map[string]any)
+	if !ok {
+		t.Fatal("expected response_format.json_schema to be an object")
+	}
+	if jsonSchema["strict"] != true {
+		t.Fatalf("expected strict=true, got %v", jsonSchema["strict"])
+	}
+}
+
+func TestParseJudgeResponseStructuredOutputKeyLookup(t *testing.T) {
+	tests := []struct {
+		name      string
+		raw       string
+		scoreKey  string
+		scoreType evalpkg.ScoreType
+		wantScore float64
+		wantExpl  string
+	}{
+		{
+			name:      "key_name_instead_of_score",
+			raw:       `{"helpfulness": 0.85, "explanation": "very clear"}`,
+			scoreKey:  "helpfulness",
+			scoreType: evalpkg.ScoreTypeNumber,
+			wantScore: 0.85,
+			wantExpl:  "very clear",
+		},
+		{
+			name:      "legacy_score_field_still_works",
+			raw:       `{"score": 0.72, "explanation": "ok"}`,
+			scoreKey:  "helpfulness",
+			scoreType: evalpkg.ScoreTypeNumber,
+			wantScore: 0.72,
+			wantExpl:  "ok",
+		},
+		{
+			name:      "score_field_takes_precedence",
+			raw:       `{"score": 0.5, "helpfulness": 0.9, "explanation": "both present"}`,
+			scoreKey:  "helpfulness",
+			scoreType: evalpkg.ScoreTypeNumber,
+			wantScore: 0.5,
+			wantExpl:  "both present",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			value, _, explanation, err := parseJudgeResponse(tc.raw, tc.scoreKey, tc.scoreType)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if value.Number == nil || *value.Number != tc.wantScore {
+				t.Fatalf("expected score %v, got %v", tc.wantScore, value)
+			}
+			if explanation != tc.wantExpl {
+				t.Fatalf("expected explanation %q, got %q", tc.wantExpl, explanation)
+			}
+		})
 	}
 }
 
