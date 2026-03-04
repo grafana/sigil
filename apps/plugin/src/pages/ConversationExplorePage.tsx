@@ -282,9 +282,17 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     if (highlightedSidebarItems.length === 0) {
       return null;
     }
+    const modelList = models.length > 0 ? models.join(', ') : 'unknown';
+    const providerValues = Array.from(new Set(Object.values(modelProviders)));
+    const providerList = providerValues.length > 0 ? providerValues.join(', ') : 'unknown';
     const lines: string[] = [
+      'Conversation metadata:',
       `Conversation ID: ${conversationID}`,
+      `First generation at (UTC): ${conversationData?.firstGenerationAt ?? 'unknown'}`,
+      `Last generation at (UTC): ${conversationData?.lastGenerationAt ?? 'unknown'}`,
       `Generations: ${conversationData?.generationCount ?? allGenerations.length}`,
+      `Models: ${modelList}`,
+      `Providers: ${providerList}`,
       `Total duration (ms): ${Math.round(totalDurationMs)}`,
       `Total tokens: ${totalTokensForInsights}`,
       `Total cost USD: ${totalCostUsdForInsights.toFixed(6)}`,
@@ -301,9 +309,13 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   }, [
     allGenerations.length,
     conversationData?.generationCount,
+    conversationData?.firstGenerationAt,
+    conversationData?.lastGenerationAt,
     conversationID,
     errorCount,
     highlightedSidebarItems,
+    modelProviders,
+    models,
     totalCostUsdForInsights,
     totalDurationMs,
     totalTokensForInsights,

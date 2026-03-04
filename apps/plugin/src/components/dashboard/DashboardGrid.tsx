@@ -440,13 +440,21 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
       return null;
     }
     const parts = [
+      'Dashboard context:',
+      `Time range (raw): from=${String(timeRange.raw.from)}; to=${String(timeRange.raw.to)}`,
+      `Time range (UTC): from=${formatUtcMillis(from)}; to=${formatUtcMillis(to)}`,
+      `Breakdown: ${breakdownBy}`,
+      `Latency percentile: ${latencyPercentile}`,
+      `Cost mode: ${costMode}`,
+      costMode === 'tokens' ? `Token drilldown: ${tokenDrilldown}` : null,
+      '',
       summarizeVector(topTotalOps.data, 'Total Requests'),
       summarizeVector(topErrRate.data, 'Error Rate (%)'),
       summarizeMatrix(requestsSource, 'Requests over time'),
       summarizeMatrix(errorsTimeseries.data, 'Errors over time'),
       summarizeVector(topLatency.data, `Latency ${latencyPercentile} (seconds)`),
       summarizeMatrix(latencyTimeseries.data, 'Latency over time'),
-    ];
+    ].filter((part): part is string => Boolean(part));
     if (costMode === 'tokens' && tokenDrilldown === 'all') {
       parts.push(summarizeVector(tokensTotalStat.data, 'Total tokens'));
       parts.push(summarizeVector(tokensTotalByBreakdown.data, 'Total tokens by breakdown'));
@@ -461,6 +469,9 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
     return parts.join('\n');
   }, [
     allDataLoading,
+    breakdownBy,
+    from,
+    to,
     topTotalOps.data,
     topErrRate.data,
     hasBreakdown,
@@ -472,6 +483,8 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
     latencyTimeseries.data,
     costMode,
     tokenDrilldown,
+    timeRange.raw.from,
+    timeRange.raw.to,
     tokensTotalStat.data,
     tokensTotalByBreakdown.data,
     tokensTotalTimeseries.data,
@@ -806,6 +819,14 @@ function summarizeMatrix(response: PrometheusQueryResponse | null | undefined, l
     return `  ${tags || 'total'}: first=${first}, last=${last}, points=${vals.length}`;
   });
   return `${label} (${results.length} series):\n${lines.join('\n')}`;
+}
+
+function formatUtcMillis(ms: number): string {
+  const dt = new Date(ms);
+  if (Number.isNaN(dt.getTime())) {
+    return 'invalid';
+  }
+  return dt.toISOString();
 }
 
 function getStyles(theme: GrafanaTheme2) {

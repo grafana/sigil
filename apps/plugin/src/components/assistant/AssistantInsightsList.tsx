@@ -66,7 +66,12 @@ export default function AssistantInsightsList({
   const runGenerate = useCallback((context: string) => {
     const { prompt: currentPrompt, origin: currentOrigin, systemPrompt: currentSystemPrompt, assistant: currentAssistant } =
       latestRef.current;
-    const fullPrompt = `${currentPrompt}\n\n${context}`;
+    const fullPrompt = [
+      currentPrompt.trim(),
+      '',
+      'Use the following context as ground truth:',
+      context,
+    ].join('\n');
     currentAssistant.generate({
       prompt: fullPrompt,
       origin: currentOrigin,
@@ -310,7 +315,7 @@ export default function AssistantInsightsList({
           </ul>
         ) : assistant.isGenerating ? (
           <div className={styles.loaderWrap}>
-            <Loader />
+            <Loader showText={false} />
           </div>
         ) : dataContext === null ? (
           <div className={styles.placeholder}>{waitingText}</div>
@@ -408,8 +413,14 @@ function getStyles(theme: GrafanaTheme2) {
       position: 'relative',
       borderRadius: theme.shape.radius.default,
       background: theme.colors.background.secondary,
+      border: `1px solid ${theme.colors.primary.main}2d`,
+      boxShadow: `0 0 0 1px ${theme.colors.primary.main}14, 0 0 10px ${theme.colors.primary.main}1f`,
       padding: theme.spacing(1.5),
-      transition: 'opacity 220ms ease, transform 220ms ease',
+      transition: 'opacity 220ms ease, transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease',
+      '&:hover, &:focus-within': {
+        borderColor: `${theme.colors.primary.main}4d`,
+        boxShadow: `0 0 0 1px ${theme.colors.primary.main}24, 0 0 14px ${theme.colors.primary.main}2b`,
+      },
     }),
     listItemDismissing: css({
       opacity: 0,
