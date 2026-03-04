@@ -37,10 +37,8 @@ function buildThread(generations: GenerationDetail[]): ThreadEntry[] {
       entries.push({
         key: `sys-${gen.generation_id}`,
         kind: 'message',
-        role: 'MESSAGE_ROLE_USER',
         parts: [{ text: gen.system_prompt }],
       });
-      entries[entries.length - 1].role = undefined;
     }
 
     const allMessages: Message[] = [...(gen.input ?? []), ...(gen.output ?? [])];
