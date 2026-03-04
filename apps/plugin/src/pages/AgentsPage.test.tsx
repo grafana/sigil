@@ -287,6 +287,23 @@ describe('AgentsPage', () => {
     expect(screen.getByText('high churn (5+ versions)').parentElement).toHaveTextContent('0');
   });
 
+  it('keeps runtime usage KPIs based on agents with runtime metrics after loading more', async () => {
+    const dataSource = createDataSource();
+    renderPage(dataSource);
+
+    await waitFor(() => expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', ''));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Agents' }));
+    triggerLoadMoreIntersection();
+    await waitFor(() => expect(dataSource.listAgents).toHaveBeenNthCalledWith(2, 24, 'cursor-1', ''));
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+
+    const heroRegion = await screen.findByRole('region', { name: 'agents hero summary' });
+    expect(within(heroRegion).getByText('Total generations').parentElement).toHaveTextContent('5');
+    expect(within(heroRegion).getByLabelText('Total runtime token usage')).toHaveTextContent('150 tokens');
+    expect(within(heroRegion).getByText('Avg usage per generation').parentElement).toHaveTextContent('30');
+  });
+
   it('opens anonymous route', async () => {
     const dataSource = createDataSource();
     const { router } = renderPage(dataSource);
@@ -322,7 +339,7 @@ describe('AgentsPage', () => {
 
     await waitFor(() => expect(dataSource.listAgents).toHaveBeenLastCalledWith(24, '', 'assist'));
     fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
-    await waitFor(() => expect(screen.getByText('Total generations').parentElement).toHaveTextContent('1'));
+    await waitFor(() => expect(screen.getByText('Total generations').parentElement).toHaveTextContent('0'));
     expect(screen.getByRole('button', { name: 'open top generation agent assistant-beta' })).toBeInTheDocument();
   });
 

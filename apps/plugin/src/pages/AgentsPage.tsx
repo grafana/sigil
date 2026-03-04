@@ -564,11 +564,9 @@ export default function AgentsPage({
     let seenInRangeCount = 0;
     let staleCount = 0;
     let highChurnCount = 0;
-    let totalGenerations = 0;
+    let totalGenerationsWithRuntime = 0;
     let totalRuntimeTokens = 0;
     let totalRuntimeCostUSD = 0;
-    let totalFallbackTokens = 0;
-    let totalFallbackCostUSD = 0;
     for (const item of items) {
       if (item.agent_name.trim() === '') {
         anonymousCount += 1;
@@ -585,14 +583,11 @@ export default function AgentsPage({
       if (item.version_count >= HIGH_CHURN_THRESHOLD) {
         highChurnCount += 1;
       }
-      totalGenerations += item.generation_count;
       const usage = usageByName.get(item.agent_name) ?? usageByName.get(item.agent_name.trim()) ?? null;
       if (usage) {
+        totalGenerationsWithRuntime += item.generation_count;
         totalRuntimeTokens += usage.tokens;
         totalRuntimeCostUSD += usage.costUSD;
-      } else {
-        totalFallbackTokens += item.token_estimate.total;
-        totalFallbackCostUSD += item.token_estimate.total * ESTIMATED_USD_PER_TOKEN;
       }
     }
     const topByGenerations = [...items]
@@ -615,8 +610,8 @@ export default function AgentsPage({
         return bTokens - aTokens || cardLabel(a).localeCompare(cardLabel(b));
       })
       .slice(0, HERO_TOP_LIMIT);
-    const totalTokens = totalRuntimeTokens + totalFallbackTokens;
-    const totalCostUSD = totalRuntimeCostUSD + totalFallbackCostUSD;
+    const totalTokens = totalRuntimeTokens;
+    const totalCostUSD = totalRuntimeCostUSD;
     return {
       loadedAgents: items.length,
       namedAgents: items.length - anonymousCount,
@@ -624,11 +619,12 @@ export default function AgentsPage({
       seenInRangeCount,
       staleCount,
       highChurnCount,
-      totalGenerations,
+      totalGenerations: totalGenerationsWithRuntime,
       totalTokens,
       totalCostUSD,
-      averageTokensPerGeneration: totalGenerations > 0 ? Math.round(totalTokens / totalGenerations) : 0,
-      averageCostPerGenerationUSD: totalGenerations > 0 ? totalCostUSD / totalGenerations : 0,
+      averageTokensPerGeneration:
+        totalGenerationsWithRuntime > 0 ? Math.round(totalTokens / totalGenerationsWithRuntime) : 0,
+      averageCostPerGenerationUSD: totalGenerationsWithRuntime > 0 ? totalCostUSD / totalGenerationsWithRuntime : 0,
       topByGenerations,
       topByTokenFootprint,
       usageByName,
@@ -773,7 +769,7 @@ export default function AgentsPage({
                     <div className={styles.heroKpiCard}>
                       <LabelWithHelp
                         label="Total generations"
-                        help="Sum of generation_count across currently loaded agents."
+                        help="Sum of generation_count for loaded agents with runtime token usage in the selected time range."
                         className={styles.heroKpiLabel}
                       />
                       <span className={styles.heroKpiValue}>{summary.totalGenerations.toLocaleString()}</span>
@@ -795,7 +791,7 @@ export default function AgentsPage({
                     <div className={styles.heroKpiCard}>
                       <LabelWithHelp
                         label="Avg usage per generation"
-                        help="Runtime tokens divided by total generations for loaded agents in the selected time range."
+                        help="Runtime tokens divided by generations from loaded agents with runtime usage in the selected time range."
                         className={styles.heroKpiLabel}
                       />
                       <span className={styles.heroKpiValue}>
