@@ -444,6 +444,31 @@ func (s *WALStore) UpdateTemplateLatestVersion(ctx context.Context, tenantID, te
 	return nil
 }
 
+func (s *WALStore) UpdateTemplateDescription(ctx context.Context, tenantID, templateID, description string) error {
+	if strings.TrimSpace(tenantID) == "" {
+		return errors.New("tenant id is required")
+	}
+	if strings.TrimSpace(templateID) == "" {
+		return errors.New("template id is required")
+	}
+
+	now := time.Now().UTC()
+	result := s.db.WithContext(ctx).
+		Model(&EvalTemplateModel{}).
+		Where("tenant_id = ? AND template_id = ? AND deleted_at IS NULL", tenantID, templateID).
+		Updates(map[string]any{
+			"description": description,
+			"updated_at":  now,
+		})
+	if result.Error != nil {
+		return fmt.Errorf("update template description: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return evalpkg.ErrNotFound
+	}
+	return nil
+}
+
 func modelToTemplate(row EvalTemplateModel) evalpkg.TemplateDefinition {
 	def := evalpkg.TemplateDefinition{
 		TenantID:      row.TenantID,

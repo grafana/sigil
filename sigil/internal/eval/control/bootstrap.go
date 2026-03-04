@@ -78,6 +78,13 @@ func BootstrapPredefinedTemplates(ctx context.Context, store evalpkg.TemplateSto
 				return fmt.Errorf("update latest version for template %s: %w", def.EvaluatorID, err)
 			}
 		}
+
+		// Sync description in case it changed between releases.
+		if existing.Description != def.Description {
+			if err := store.UpdateTemplateDescription(ctx, GlobalTenantID, def.EvaluatorID, def.Description); err != nil {
+				return fmt.Errorf("update description for template %s: %w", def.EvaluatorID, err)
+			}
+		}
 	}
 	return nil
 }
