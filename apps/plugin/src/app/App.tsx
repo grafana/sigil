@@ -29,7 +29,8 @@ export default function App(_props: AppRootProps) {
   const styles = useStyles2(getStyles);
 
   return (
-    <PluginPage>
+    // hide the title
+    <PluginPage renderTitle={() => <></>} background="canvas">
       <Routes>
         <Route path={ROUTES.Root} element={<Landing1Page />} />
         <Route path={ROUTES.Analytics} element={<DashboardPage />} />
