@@ -6,6 +6,7 @@ import { Alert, Badge, Button, Icon, Input, Spinner, Stack, Text, Tooltip, useSt
 import { defaultAgentsDataSource, type AgentsDataSource } from '../agents/api';
 import type { AgentListItem } from '../agents/types';
 import { buildAgentDetailByNameRoute, buildAnonymousAgentDetailRoute, PLUGIN_BASE } from '../constants';
+import { formatDateShort } from '../utils/date';
 
 const PAGE_SIZE = 24;
 
@@ -126,14 +127,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-function formatDateShort(iso: string): string {
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) {
-    return 'n/a';
-  }
-  return parsed.toLocaleDateString();
-}
-
 function cardLabel(item: AgentListItem): string {
   if (item.agent_name.trim().length > 0) {
     return item.agent_name;
@@ -216,7 +209,10 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
   }, [items]);
 
   const handleOpenAgent = (item: AgentListItem) => {
-    const route = item.agent_name.trim().length > 0 ? buildAgentDetailByNameRoute(item.agent_name) : buildAnonymousAgentDetailRoute();
+    const route =
+      item.agent_name.trim().length > 0
+        ? buildAgentDetailByNameRoute(item.agent_name)
+        : buildAnonymousAgentDetailRoute();
     void navigate(`${PLUGIN_BASE}/${route}`);
   };
 
@@ -285,7 +281,11 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
         <div className={styles.searchInput}>
           <Input
             prefix={<Icon name="search" />}
-            suffix={searchInput.length > 0 ? <Icon name="times" style={{ cursor: 'pointer' }} onClick={() => setSearchInput('')} /> : undefined}
+            suffix={
+              searchInput.length > 0 ? (
+                <Icon name="times" style={{ cursor: 'pointer' }} onClick={() => setSearchInput('')} />
+              ) : undefined
+            }
             value={searchInput}
             placeholder="Search by agent name…"
             onChange={(event) => setSearchInput(event.currentTarget.value)}

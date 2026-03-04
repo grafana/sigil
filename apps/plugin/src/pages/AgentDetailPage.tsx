@@ -12,6 +12,7 @@ import { defaultModelCardClient, type ModelCardClient } from '../modelcard/api';
 import type { ModelCard } from '../modelcard/types';
 import { resolveModelCardsFromNames } from '../modelcard/resolve';
 import { PLUGIN_BASE, ROUTES } from '../constants';
+import { formatDateShort } from '../utils/date';
 
 const VERSION_PAGE_SIZE = 50;
 
@@ -168,14 +169,6 @@ function formatDate(iso: string): string {
     return 'n/a';
   }
   return parsed.toLocaleString();
-}
-
-function formatDateShort(iso: string): string {
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) {
-    return 'n/a';
-  }
-  return parsed.toLocaleDateString();
 }
 
 function buildAgentNameFromRoute(pathname: string, routeParam?: string): string {
@@ -472,8 +465,8 @@ export default function AgentDetailPage({
       {isAnonymous && (
         <div className={styles.anonymousBanner}>
           <Text variant="bodySmall" color="secondary">
-            This bucket aggregates generations where <code>gen_ai.agent.name</code> was missing.
-            Treat versions here as diagnostic clusters.
+            This bucket aggregates generations where <code>gen_ai.agent.name</code> was missing. Treat versions here as
+            diagnostic clusters.
           </Text>
         </div>
       )}
@@ -524,7 +517,11 @@ export default function AgentDetailPage({
             <Button variant="secondary" onClick={() => selectVersion('')} disabled={selectedVersion.length === 0}>
               Latest
             </Button>
-            <Button variant="secondary" onClick={() => void loadMoreVersions()} disabled={loadingVersions || versionsCursor.length === 0}>
+            <Button
+              variant="secondary"
+              onClick={() => void loadMoreVersions()}
+              disabled={loadingVersions || versionsCursor.length === 0}
+            >
               {loadingVersions ? <Spinner size={14} /> : 'Load more'}
             </Button>
           </div>

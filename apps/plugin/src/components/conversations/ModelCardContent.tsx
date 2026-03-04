@@ -4,6 +4,7 @@ import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, IconButton, useStyles2 } from '@grafana/ui';
 import type { ModelCard } from '../../modelcard/types';
 import { getProviderMeta, stripProviderPrefix } from './providerMeta';
+import { formatDateShort } from '../../utils/date';
 
 export type ModelCardContentProps = {
   card: ModelCard;
@@ -41,14 +42,6 @@ export function buildSourceURL(card: ModelCard): string | null {
     return `https://openrouter.ai/models/${encodeURIComponent(card.source_model_id)}`;
   }
   return null;
-}
-
-function formatDateShort(iso: string): string {
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) {
-    return 'n/a';
-  }
-  return parsed.toLocaleDateString();
 }
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -330,17 +323,13 @@ export default function ModelCardContent({ card, onClose, generationCount, lastS
             {pricing.input_cache_read_usd_per_token != null && pricing.input_cache_read_usd_per_token > 0 && (
               <>
                 <span className={styles.pricingLabel}>Cache read</span>
-                <span className={styles.pricingValue}>
-                  {formatPricePer1M(pricing.input_cache_read_usd_per_token)}
-                </span>
+                <span className={styles.pricingValue}>{formatPricePer1M(pricing.input_cache_read_usd_per_token)}</span>
               </>
             )}
             {pricing.input_cache_write_usd_per_token != null && pricing.input_cache_write_usd_per_token > 0 && (
               <>
                 <span className={styles.pricingLabel}>Cache write</span>
-                <span className={styles.pricingValue}>
-                  {formatPricePer1M(pricing.input_cache_write_usd_per_token)}
-                </span>
+                <span className={styles.pricingValue}>{formatPricePer1M(pricing.input_cache_write_usd_per_token)}</span>
               </>
             )}
           </div>
@@ -350,9 +339,7 @@ export default function ModelCardContent({ card, onClose, generationCount, lastS
       <div className={styles.footer}>
         <div className={styles.badgeRow}>
           {card.is_free && <Badge text="Free" color="green" />}
-          {generationCount != null && (
-            <Badge text={`${generationCount.toLocaleString()} gen`} color="purple" />
-          )}
+          {generationCount != null && <Badge text={`${generationCount.toLocaleString()} gen`} color="purple" />}
         </div>
         <div className={styles.footerRight}>
           {lastSeenAt && <span className={styles.lastSeen}>Last seen {formatDateShort(lastSeenAt)}</span>}
