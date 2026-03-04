@@ -224,6 +224,16 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
     }
   };
 
+  // When rollback form is shown, use rollback evaluator's config for the test panel.
+  // When editing, use formState from EvaluatorForm's onConfigChange.
+  const testPanelState: EvalFormState = rollbackEvaluator
+    ? {
+        kind: rollbackEvaluator.kind,
+        config: rollbackEvaluator.config ?? {},
+        outputKeys: rollbackEvaluator.output_keys ?? [],
+      }
+    : formState;
+
   const handleRevertSubmit = async (req: CreateEvaluatorRequest) => {
     if (!evaluator) {
       return;
@@ -324,6 +334,7 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
               />
             ) : (
               <EvaluatorForm
+                key={evaluator.evaluator_id}
                 initialEvaluator={evaluator}
                 existingVersions={
                   versions.length > 0 ? versions.map((v) => v.version) : evaluator ? [evaluator.version] : []
@@ -370,9 +381,9 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
         <div className={styles.right}>
           <div className={styles.rightInner}>
             <EvalTestPanel
-              kind={formState.kind}
-              config={formState.config}
-              outputKeys={formState.outputKeys}
+              kind={testPanelState.kind}
+              config={testPanelState.config}
+              outputKeys={testPanelState.outputKeys}
               dataSource={dataSource}
             />
           </div>
