@@ -26,8 +26,8 @@ func (s *WALStore) ListAgentHeads(ctx context.Context, tenantID string, limit in
 	query := s.db.WithContext(ctx).Model(&AgentHeadModel{}).Where("tenant_id = ?", tenantID)
 	trimmedPrefix := strings.TrimSpace(namePrefix)
 	if trimmedPrefix != "" {
-		escaped := escapeLikePattern(trimmedPrefix)
-		query = query.Where("agent_name LIKE ?", escaped+"%")
+		escaped := strings.ToLower(escapeLikePattern(trimmedPrefix))
+		query = query.Where("LOWER(agent_name) LIKE ?", "%"+escaped+"%")
 	}
 	if cursor != nil && !cursor.LatestSeenAt.IsZero() {
 		query = query.Where(

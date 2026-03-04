@@ -350,6 +350,48 @@ func TestListAgentVersionsCursorPagination(t *testing.T) {
 	}
 }
 
+func TestListAgentHeadsFiltersByCaseInsensitiveContains(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	base := time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC)
+	generations := []*sigilv1.Generation{
+		generationForAgentCatalog("gen-head-1", "conv-head", "assistant-prod", "v1", "Prompt A", base, "openai", "gpt-5", nil),
+		generationForAgentCatalog("gen-head-2", "conv-head", "my-agent", "v1", "Prompt B", base.Add(1*time.Minute), "openai", "gpt-5", nil),
+		generationForAgentCatalog("gen-head-3", "conv-head", "orchestrator", "v1", "Prompt C", base.Add(2*time.Minute), "openai", "gpt-5", nil),
+	}
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", generations))
+
+	items, cursor, err := store.ListAgentHeads(context.Background(), "tenant-a", 10, nil, "AGENT")
+	if err != nil {
+		t.Fatalf("list agent heads: %v", err)
+	}
+	if cursor != nil {
+		t.Fatalf("expected no continuation cursor, got %+v", cursor)
+	}
+	if len(items) != 2 {
+		t.Fatalf("expected 2 matching heads, got %d", len(items))
+	}
+
+	gotNames := map[string]bool{}
+	for _, item := range items {
+		gotNames[item.AgentName] = true
+	}
+	if !gotNames["assistant-prod"] {
+		t.Fatalf("expected assistant-prod in results")
+	}
+	if !gotNames["my-agent"] {
+		t.Fatalf("expected my-agent in results")
+	}
+	if gotNames["orchestrator"] {
+		t.Fatalf("did not expect orchestrator in filtered results")
+	}
+}
+
 func generationForAgentCatalog(
 	id string,
 	conversationID string,
