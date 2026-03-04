@@ -302,6 +302,7 @@ type TemplateStore interface {
 	ListTemplateVersions(ctx context.Context, tenantID, templateID string) ([]TemplateVersion, error)
 
 	UpdateTemplateLatestVersion(ctx context.Context, tenantID, templateID, version string) error
+	UpdateTemplateDescription(ctx context.Context, tenantID, templateID, description string) error
 
 	// PublishTemplateVersion atomically creates a version and updates the
 	// template's latest_version pointer. Implementations must wrap both

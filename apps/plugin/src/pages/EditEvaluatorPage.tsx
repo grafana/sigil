@@ -368,11 +368,13 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
                   version: compareLeft.version,
                   changelog: '',
                   config: compareLeft.config ?? {},
+                  outputKeys: compareLeft.output_keys,
                 }}
                 right={{
                   version: compareRight.version,
                   changelog: '',
                   config: compareRight.config ?? {},
+                  outputKeys: compareRight.output_keys,
                 }}
               />
             </div>

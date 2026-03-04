@@ -115,7 +115,7 @@ export default function TemplateTable({ templates, onSelect, onDelete, onFork }:
             {formatDate(template.created_at)}
           </Text>
           <div className={styles.actions}>
-            {onFork && template.scope === 'global' && (
+            {onFork && (
               <Button
                 variant="secondary"
                 size="sm"
