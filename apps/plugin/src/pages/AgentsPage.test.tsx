@@ -4,6 +4,13 @@ import { RouterProvider, createMemoryRouter, useLocation } from 'react-router-do
 import AgentsPage from './AgentsPage';
 import type { AgentsDataSource } from '../agents/api';
 
+type IntersectionObserverCallbackLike = (
+  entries: Array<Pick<IntersectionObserverEntry, 'isIntersecting'>>,
+  observer: IntersectionObserver
+) => void;
+
+const observerCallbacks: IntersectionObserverCallbackLike[] = [];
+
 beforeAll(() => {
   if (typeof globalThis.Request === 'undefined') {
     class RequestMock {
@@ -19,7 +26,38 @@ beforeAll(() => {
       value: RequestMock,
     });
   }
+
+  class IntersectionObserverMock {
+    constructor(callback: IntersectionObserverCallbackLike) {
+      observerCallbacks.push(callback);
+    }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords(): IntersectionObserverEntry[] {
+      return [];
+    }
+    root = null;
+    rootMargin = '';
+    thresholds = [];
+  }
+
+  Object.defineProperty(globalThis, 'IntersectionObserver', {
+    writable: true,
+    configurable: true,
+    value: IntersectionObserverMock,
+  });
 });
+
+beforeEach(() => {
+  observerCallbacks.length = 0;
+});
+
+function triggerLoadMoreIntersection() {
+  for (const callback of observerCallbacks) {
+    callback([{ isIntersecting: true }], {} as IntersectionObserver);
+  }
+}
 
 function LocationProbe() {
   const location = useLocation();
@@ -132,14 +170,13 @@ describe('AgentsPage', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/a/grafana-sigil-app/agents/anonymous'));
   });
 
-  it('supports load more', async () => {
+  it('auto-loads more when scrolling near the end', async () => {
     const dataSource = createDataSource();
     renderPage(dataSource);
 
     await waitFor(() => expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', ''));
 
-    const loadMore = await screen.findByRole('button', { name: 'Load more' });
-    fireEvent.click(loadMore);
+    triggerLoadMoreIntersection();
 
     await waitFor(() => expect(dataSource.listAgents).toHaveBeenNthCalledWith(2, 24, 'cursor-1', ''));
     expect(await screen.findByRole('button', { name: 'open agent assistant-beta' })).toBeInTheDocument();

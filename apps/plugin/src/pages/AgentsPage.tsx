@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { css, cx } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Badge, Button, Icon, Input, Spinner, Stack, Text, Tooltip, useStyles2 } from '@grafana/ui';
+import { Alert, Badge, Icon, Input, Spinner, Stack, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../agents/api';
 import type { AgentListItem } from '../agents/types';
 import { buildAgentDetailByNameRoute, buildAnonymousAgentDetailRoute, PLUGIN_BASE } from '../constants';
@@ -58,54 +58,60 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flex: 1,
     maxWidth: 400,
   }),
-  cardsGrid: css({
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-    gap: theme.spacing(1.5),
-  }),
-  card: css({
-    width: '100%',
-    textAlign: 'left' as const,
-    borderRadius: theme.shape.radius.default,
+  tableWrap: css({
     border: `1px solid ${theme.colors.border.medium}`,
+    borderRadius: theme.shape.radius.default,
+    overflowX: 'auto',
     background: theme.colors.background.secondary,
-    padding: theme.spacing(1.5),
+  }),
+  table: css({
+    width: '100%',
+    borderCollapse: 'collapse' as const,
+    minWidth: 880,
+  }),
+  th: css({
+    textAlign: 'left' as const,
+    padding: `${theme.spacing(1)} ${theme.spacing(1.5)}`,
+    borderBottom: `1px solid ${theme.colors.border.weak}`,
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.bodySmall.fontSize,
+    fontWeight: theme.typography.fontWeightMedium,
+    whiteSpace: 'nowrap' as const,
+  }),
+  tr: css({
+    borderBottom: `1px solid ${theme.colors.border.weak}`,
+    '&:last-child': {
+      borderBottom: 'none',
+    },
+  }),
+  anonymousRow: css({
+    background: theme.colors.warning.transparent,
+  }),
+  td: css({
+    padding: `${theme.spacing(1)} ${theme.spacing(1.5)}`,
+    verticalAlign: 'top' as const,
+    whiteSpace: 'nowrap' as const,
+  }),
+  promptCell: css({
+    maxWidth: 360,
+    whiteSpace: 'normal' as const,
+    color: theme.colors.text.secondary,
+  }),
+  openButton: css({
+    padding: 0,
+    border: 0,
+    background: 'none',
+    color: theme.colors.text.link,
     cursor: 'pointer',
-    minHeight: '120px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    transition: 'border-color 120ms ease, box-shadow 120ms ease',
+    textAlign: 'left' as const,
     '&:hover': {
-      borderColor: theme.colors.primary.border,
-      boxShadow: theme.shadows.z1,
+      textDecoration: 'underline',
     },
     '&:focus-visible': {
       outline: `2px solid ${theme.colors.primary.main}`,
       outlineOffset: 2,
+      borderRadius: theme.shape.radius.default,
     },
-  }),
-  anonymousCard: css({
-    borderColor: theme.colors.warning.border,
-    background: `linear-gradient(160deg, ${theme.colors.warning.transparent}, ${theme.colors.background.secondary})`,
-  }),
-  cardHeader: css({
-    marginBottom: theme.spacing(0.75),
-  }),
-  cardDescription: css({
-    flex: 1,
-    overflow: 'hidden',
-    display: '-webkit-box',
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: 'vertical' as const,
-    marginBottom: theme.spacing(1),
-  }),
-  cardFooter: css({
-    marginTop: 'auto',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: theme.spacing(0.75),
-    borderTop: `1px solid ${theme.colors.border.weak}`,
   }),
   loading: css({
     display: 'flex',
@@ -115,6 +121,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
   center: css({
     display: 'flex',
     justifyContent: 'center',
+  }),
+  loadMoreSentinel: css({
+    height: 1,
   }),
   empty: css({
     display: 'flex',
@@ -146,6 +155,8 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
   const [searchInput, setSearchInput] = useState('');
   const [namePrefix, setNamePrefix] = useState('');
   const requestVersion = useRef(0);
+  const inFlightLoadMore = useRef(false);
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -163,6 +174,8 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
         return;
       }
       setLoading(true);
+      setLoadingMore(false);
+      inFlightLoadMore.current = false;
       setErrorMessage('');
     });
 
@@ -216,21 +229,56 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
     void navigate(`${PLUGIN_BASE}/${route}`);
   };
 
-  const loadMore = async () => {
-    if (loadingMore || nextCursor.length === 0) {
+  const loadMore = useCallback(async () => {
+    if (inFlightLoadMore.current || loadingMore || nextCursor.length === 0) {
       return;
     }
+    inFlightLoadMore.current = true;
+    const version = requestVersion.current;
     setLoadingMore(true);
     try {
       const response = await dataSource.listAgents(PAGE_SIZE, nextCursor, namePrefix);
+      if (requestVersion.current !== version) {
+        return;
+      }
       setItems((prev) => [...prev, ...(response.items ?? [])]);
       setNextCursor(response.next_cursor ?? '');
     } catch (err) {
+      if (requestVersion.current !== version) {
+        return;
+      }
       setErrorMessage(err instanceof Error ? err.message : 'Failed to load more agents');
     } finally {
+      inFlightLoadMore.current = false;
       setLoadingMore(false);
     }
-  };
+  }, [dataSource, loadingMore, namePrefix, nextCursor]);
+
+  useEffect(() => {
+    if (loading || loadingMore || nextCursor.length === 0 || typeof IntersectionObserver === 'undefined') {
+      return;
+    }
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) {
+          return;
+        }
+        void loadMore();
+      },
+      {
+        root: null,
+        // Start loading before the sentinel reaches the viewport edge.
+        rootMargin: '200px 0px',
+      }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadMore, loading, loadingMore, nextCursor]);
 
   return (
     <div className={styles.page}>
@@ -304,51 +352,60 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
         </div>
       ) : (
         <>
-          <div className={styles.cardsGrid}>
-            {items.map((item) => {
-              const isAnonymous = item.agent_name.trim().length === 0;
-              return (
-                <button
-                  key={`${item.agent_name}:${item.latest_effective_version}`}
-                  type="button"
-                  className={cx(styles.card, isAnonymous && styles.anonymousCard)}
-                  onClick={() => handleOpenAgent(item)}
-                  aria-label={`open agent ${cardLabel(item)}`}
-                >
-                  <div className={styles.cardHeader}>
-                    <Stack direction="row" gap={1} alignItems="center" wrap="wrap">
-                      <Text weight="medium">{isAnonymous ? 'Unnamed agent bucket' : item.agent_name}</Text>
-                      <Badge text={isAnonymous ? 'Anonymous' : 'Named'} color={isAnonymous ? 'orange' : 'green'} />
-                    </Stack>
-                  </div>
-
-                  {item.system_prompt_prefix.length > 0 && (
-                    <div className={styles.cardDescription}>
-                      <Text variant="bodySmall" color="secondary">
-                        {item.system_prompt_prefix}
-                      </Text>
-                    </div>
-                  )}
-
-                  <div className={styles.cardFooter}>
-                    <Text variant="bodySmall" color="secondary">
-                      {formatDateShort(item.latest_seen_at)} · {item.version_count} ver · {item.tool_count} tools
-                    </Text>
-                    <Badge text={`${item.generation_count.toLocaleString()} gen`} color="purple" />
-                  </div>
-                </button>
-              );
-            })}
+          <div className={styles.tableWrap}>
+            <table className={styles.table} aria-label="agents index table">
+              <thead>
+                <tr>
+                  <th className={styles.th}>Agent</th>
+                  <th className={styles.th}>Type</th>
+                  <th className={styles.th}>Latest seen</th>
+                  <th className={styles.th}>Versions</th>
+                  <th className={styles.th}>Tools</th>
+                  <th className={styles.th}>Generations</th>
+                  <th className={styles.th}>Prompt prefix</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => {
+                  const isAnonymous = item.agent_name.trim().length === 0;
+                  return (
+                    <tr
+                      key={`${item.agent_name}:${item.latest_effective_version}`}
+                      className={cx(styles.tr, isAnonymous && styles.anonymousRow)}
+                    >
+                      <td className={styles.td}>
+                        <button
+                          type="button"
+                          className={styles.openButton}
+                          onClick={() => handleOpenAgent(item)}
+                          aria-label={`open agent ${cardLabel(item)}`}
+                        >
+                          {isAnonymous ? 'Unnamed agent bucket' : item.agent_name}
+                        </button>
+                      </td>
+                      <td className={styles.td}>
+                        {isAnonymous ? <Badge text="Anonymous" color="orange" /> : <Text variant="bodySmall">Named</Text>}
+                      </td>
+                      <td className={styles.td}>{formatDateShort(item.latest_seen_at)}</td>
+                      <td className={styles.td}>{item.version_count}</td>
+                      <td className={styles.td}>{item.tool_count}</td>
+                      <td className={styles.td}>{item.generation_count.toLocaleString()}</td>
+                      <td className={cx(styles.td, styles.promptCell)}>
+                        {item.system_prompt_prefix.length > 0 ? item.system_prompt_prefix : '-'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
 
           {nextCursor.length > 0 && (
             <div className={styles.center}>
               <Stack direction="row" alignItems="center" gap={1}>
-                <Button variant="secondary" onClick={() => void loadMore()} disabled={loadingMore}>
-                  Load more
-                </Button>
                 {loadingMore && <Spinner size={18} />}
               </Stack>
+              <div ref={loadMoreSentinelRef} className={styles.loadMoreSentinel} aria-hidden />
             </div>
           )}
         </>
