@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import * as Assistant from '@grafana/assistant';
-import { ConfirmModal, Icon, useStyles2 } from '@grafana/ui';
+import { Icon, useStyles2 } from '@grafana/ui';
 import { Loader } from '../Loader';
 
 export type AssistantInsightDisplayItem = {
@@ -43,7 +43,7 @@ export default function AssistantInsightsList({
   const [rawAssistantText, setRawAssistantText] = useState('');
   const [items, setItems] = useState<AssistantInsightDisplayItem[]>([]);
   const [openMenuItemKey, setOpenMenuItemKey] = useState<string | null>(null);
-  const [reportItemKey, setReportItemKey] = useState<string | null>(null);
+  const [likedItemKeys, setLikedItemKeys] = useState<Record<string, true>>({});
   const [dismissedItemKeys, setDismissedItemKeys] = useState<Record<string, true>>({});
   const [dismissingItemKeys, setDismissingItemKeys] = useState<Record<string, true>>({});
   const [collapsingItemKeys, setCollapsingItemKeys] = useState<Record<string, true>>({});
@@ -58,7 +58,7 @@ export default function AssistantInsightsList({
     setRawAssistantText('');
     setItems([]);
     setOpenMenuItemKey(null);
-    setReportItemKey(null);
+    setLikedItemKeys({});
     setDismissedItemKeys({});
     setDismissingItemKeys({});
     setCollapsingItemKeys({});
@@ -211,11 +211,6 @@ export default function AssistantInsightsList({
     [openAssistantPrompt]
   );
 
-  const onReportIrrelevant = useCallback((itemKey: string) => {
-    setOpenMenuItemKey(null);
-    setReportItemKey(itemKey);
-  }, []);
-
   const onDismiss = useCallback((itemKey: string) => {
     if (dismissedItemKeys[itemKey] || dismissingItemKeys[itemKey]) {
       return;
@@ -249,6 +244,18 @@ export default function AssistantInsightsList({
     dismissalTimeoutsRef.current.push(timeoutId);
   }, [dismissedItemKeys, dismissingItemKeys]);
 
+  const onFeedbackUp = useCallback((itemKey: string) => {
+    setLikedItemKeys((prev) => ({ ...prev, [itemKey]: true }));
+    setOpenMenuItemKey(null);
+  }, []);
+
+  const onFeedbackDown = useCallback(
+    (itemKey: string) => {
+      onDismiss(itemKey);
+    },
+    [onDismiss]
+  );
+
   const onRefreshAll = useCallback(() => {
     if (!dataContext || assistant.isGenerating) {
       return;
@@ -269,6 +276,7 @@ export default function AssistantInsightsList({
               {visibleItems.map((item) => {
                 const itemKey = toItemKey(item);
                 const isMenuOpen = openMenuItemKey === itemKey;
+                const hasThumbsUp = Boolean(likedItemKeys[itemKey]);
                 const isDismissing = Boolean(dismissingItemKeys[itemKey]);
                 const isCollapsing = Boolean(collapsingItemKeys[itemKey]);
                 const dismissHeight = dismissHeightByItemKey[itemKey];
@@ -315,27 +323,36 @@ export default function AssistantInsightsList({
                             Investigate
                           </button>
                           <div className={styles.menuDivider} />
-                          <button
-                            type="button"
-                            className={styles.menuItem}
-                            role="menuitem"
-                            onClick={() => onReportIrrelevant(itemKey)}
-                          >
-                            Report as incorrect
-                          </button>
-                          <button
-                            type="button"
-                            className={styles.menuItem}
-                            role="menuitem"
-                            onClick={() => onDismiss(itemKey)}
-                          >
-                            Dismiss
-                          </button>
+                          <div className={styles.feedbackSection}>
+                            <div className={styles.feedbackLabel}>Feedback</div>
+                            <div className={styles.feedbackButtons}>
+                              <button
+                                type="button"
+                                className={styles.feedbackButton}
+                                role="menuitem"
+                                aria-label="Mark insight as helpful"
+                                onClick={() => onFeedbackUp(itemKey)}
+                              >
+                                <Icon name="thumbs-up" size="sm" />
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.feedbackButton}
+                                role="menuitem"
+                                aria-label="Mark insight as incorrect"
+                                onClick={() => onFeedbackDown(itemKey)}
+                              >
+                                <Icon name="thumbs-down" size="sm" />
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       ) : null}
                     </div>
                     <div className={styles.itemContentRow}>
-                      <span className={styles.itemArrow}>→</span>
+                      <span className={styles.itemArrow}>
+                        {hasThumbsUp ? <Icon name="thumbs-up" size="sm" /> : '→'}
+                      </span>
                       <div className={styles.itemContent}>
                         {item.sidebarLabel ? (
                           onSelectItem ? (
@@ -377,20 +394,6 @@ export default function AssistantInsightsList({
           <div className={styles.placeholder}>{emptyText}</div>
         )}
       </div>
-      {reportItemKey ? (
-        <ConfirmModal
-          isOpen
-          title="Report this insight as incorrect?"
-          body="This will be wired up soon. For now this action is a no-op."
-          confirmText="Report"
-          onConfirm={() => {
-            const itemKey = reportItemKey;
-            setReportItemKey(null);
-            onDismiss(itemKey);
-          }}
-          onDismiss={() => setReportItemKey(null)}
-        />
-      ) : null}
     </aside>
   );
 }
@@ -622,6 +625,36 @@ function getStyles(theme: GrafanaTheme2) {
       height: 1,
       background: theme.colors.border.weak,
       margin: `${theme.spacing(0.25)} ${theme.spacing(0.5)}`,
+    }),
+    feedbackSection: css({
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: theme.spacing(1),
+      padding: `${theme.spacing(0.5)} ${theme.spacing(0.75)}`,
+    }),
+    feedbackLabel: css({
+      color: theme.colors.text.secondary,
+      fontSize: theme.typography.bodySmall.fontSize,
+    }),
+    feedbackButtons: css({
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: theme.spacing(0.5),
+    }),
+    feedbackButton: css({
+      border: 'none',
+      background: 'transparent',
+      color: theme.colors.text.primary,
+      borderRadius: theme.shape.radius.default,
+      padding: theme.spacing(0.5),
+      cursor: 'pointer',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      '&:hover': {
+        background: theme.colors.action.hover,
+      },
     }),
     placeholder: css({
       color: theme.colors.text.secondary,

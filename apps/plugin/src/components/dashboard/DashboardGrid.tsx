@@ -454,7 +454,7 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
       summarizeMatrix(errorsTimeseries.data, 'Errors over time'),
       summarizeVector(topLatency.data, `Latency ${latencyPercentile} (seconds)`),
       summarizeMatrix(latencyTimeseries.data, 'Latency over time'),
-    ].filter((part): part is string => Boolean(part));
+    ].filter((part): part is string => part !== null);
     if (costMode === 'tokens' && tokenDrilldown === 'all') {
       parts.push(summarizeVector(tokensTotalStat.data, 'Total tokens'));
       parts.push(summarizeVector(tokensTotalByBreakdown.data, 'Total tokens by breakdown'));

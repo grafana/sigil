@@ -6,7 +6,7 @@ import { useStyles2 } from '@grafana/ui';
 const TYPEWRITER_LINES = [
   'Crunching telemetry data...',
   'Analyzing AI traces...',
-  'Trying to decypher French...',
+  'Decoding telemetry patterns...',
   'Sifting through span events...',
   'Correlating logs and traces...',
   'Mapping service dependencies...',
