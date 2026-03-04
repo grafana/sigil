@@ -584,14 +584,6 @@ function getStyles(theme: GrafanaTheme2) {
       gap: theme.spacing(1),
       fontSize: theme.typography.body.fontSize,
     }),
-    ideBody: css({
-      border: `1px solid ${theme.colors.border.medium}`,
-      borderLeft: '3px solid #5794F2',
-      borderRadius: theme.shape.radius.default,
-      padding: theme.spacing(2),
-      display: 'grid',
-      gap: theme.spacing(2),
-    }),
     ideTabs: css({
       display: 'grid',
       gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
