@@ -265,7 +265,8 @@ function getStyles(theme: GrafanaTheme2) {
       background: theme.colors.border.medium,
     }),
     multiSelect: css({
-      minWidth: 192,
+      minWidth: 150,
+      ...theme.typography.bodySmall,
     }),
     clearButton: css({
       color: theme.colors.text.secondary,

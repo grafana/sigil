@@ -10,12 +10,17 @@ import type { DashboardFilters } from '../dashboard/types';
 import { useFilterUrlState } from '../hooks/useFilterUrlState';
 import { useCascadingFilterOptions } from '../hooks/useCascadingFilterOptions';
 import { FilterToolbar } from '../components/filters/FilterToolbar';
+import { defaultModelCardClient, type ModelCardClient } from '../modelcard/api';
+import type { ModelCard } from '../modelcard/types';
+import { resolveModelCardsFromNames } from '../modelcard/resolve';
 import ConversationListPanel from '../components/conversations/ConversationListPanel';
+import { ConversationTimelineHistogram } from '../components/conversations/ConversationTimelineHistogram';
 import { buildConversationViewRoute, ROUTES } from '../constants';
 
 export type ConversationsBrowserPageProps = {
   dataSource?: ConversationsDataSource;
   dashboardDataSource?: DashboardDataSource;
+  modelCardClient?: ModelCardClient;
 };
 
 const SDK_NAME_SELECT_KEY = 'span.sigil.sdk.name';
@@ -180,10 +185,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
     position: 'absolute',
     inset: 0,
     display: 'grid',
-    gridTemplateRows: 'auto minmax(0, 1fr)',
+    gridTemplateRows: 'auto auto minmax(0, 1fr)',
     gap: theme.spacing(1),
     minHeight: 0,
     overflow: 'hidden',
+    overscrollBehavior: 'none' as const,
   }),
   summarySection: css({
     label: 'conversationsBrowserPage-summarySection',
@@ -202,17 +208,14 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   statsGrid: css({
     label: 'conversationsBrowserPage-statsGrid',
-    display: 'flex',
-    flexWrap: 'wrap' as const,
-    justifyContent: 'center',
+    display: 'grid',
+    gridTemplateColumns: 'repeat(6, 1fr)',
     width: '100%',
     gap: theme.spacing(0.5),
   }),
   statTile: css({
     label: 'conversationsBrowserPage-statTile',
-    padding: theme.spacing(1.25, 1.5),
-    minHeight: 84,
-    minWidth: 180,
+    padding: theme.spacing(1, 1.5),
     display: 'flex',
     flexDirection: 'column' as const,
     justifyContent: 'center',
@@ -272,6 +275,7 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   const styles = useStyles2(getStyles);
   const dataSource = props.dataSource ?? defaultConversationsDataSource;
   const dashboardDS = props.dashboardDataSource ?? defaultDashboardDataSource;
+  const modelCardClient = props.modelCardClient ?? defaultModelCardClient;
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -351,11 +355,41 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
     [previousConversations, timeRange]
   );
 
+  const [modelCards, setModelCards] = useState<Map<string, ModelCard>>(new Map());
+
+  useEffect(() => {
+    let stale = false;
+    const allModels = Array.from(new Set(conversations.flatMap((c) => c.models)));
+    if (allModels.length === 0) {
+      setModelCards(new Map());
+      return;
+    }
+    void resolveModelCardsFromNames(allModels, modelCardClient)
+      .then((cards) => {
+        if (!stale) {
+          setModelCards(cards);
+        }
+      })
+      .catch(() => {
+        if (!stale) {
+          setModelCards(new Map());
+        }
+      });
+    return () => {
+      stale = true;
+    };
+  }, [conversations, modelCardClient]);
+
+  const getConversationHref = useCallback(
+    (conversationID: string) => buildAppPath(buildConversationViewRoute(conversationID)),
+    [buildAppPath]
+  );
+
   const onSelectConversation = useCallback(
     (conversationID: string) => {
-      void navigate(buildAppPath(buildConversationViewRoute(conversationID)), { replace: true });
+      void navigate(getConversationHref(conversationID), { replace: true });
     },
-    [buildAppPath, navigate]
+    [getConversationHref, navigate]
   );
 
   return (
@@ -516,6 +550,8 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
         )}
       </div>
 
+      <ConversationTimelineHistogram conversations={conversations} timeRange={timeRange} loading={loading} />
+
       <div className={styles.listPanel}>
         <ConversationListPanel
           conversations={conversations}
@@ -524,6 +560,8 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
           hasMore={false}
           loadingMore={false}
           showExtendedColumns
+          modelCards={modelCards}
+          getConversationHref={getConversationHref}
           onSelectConversation={onSelectConversation}
           onLoadMore={() => undefined}
         />

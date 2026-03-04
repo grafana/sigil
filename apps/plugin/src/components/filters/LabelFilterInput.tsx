@@ -314,7 +314,7 @@ function getContainerStyles(theme: GrafanaTheme2) {
       border: `1px solid ${theme.colors.border.weak}`,
       borderRadius: theme.shape.radius.default,
       minHeight: 32,
-      padding: theme.spacing(0, 0.5),
+      padding: theme.spacing(0, 0, 0, 0.5),
     }),
     filterIcon: css({
       color: theme.colors.text.secondary,
@@ -390,10 +390,16 @@ function getWipStyles(theme: GrafanaTheme2) {
       borderRadius: 0,
     }),
     inlineSelect: css({
+      // Remove Select's built-in border to avoid double border with container
       '& > div': {
         border: 'none',
         background: 'transparent',
         minHeight: 28,
+        boxShadow: 'none',
+        outline: 'none',
+      },
+      '& > div > div:first-of-type': {
+        border: 'none',
         boxShadow: 'none',
       },
     }),
