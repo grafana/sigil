@@ -26,7 +26,8 @@ func (s *WALStore) ListAgentHeads(ctx context.Context, tenantID string, limit in
 	query := s.db.WithContext(ctx).Model(&AgentHeadModel{}).Where("tenant_id = ?", tenantID)
 	trimmedPrefix := strings.TrimSpace(namePrefix)
 	if trimmedPrefix != "" {
-		query = query.Where("agent_name LIKE ?", trimmedPrefix+"%")
+		escaped := escapeLikePattern(trimmedPrefix)
+		query = query.Where("agent_name LIKE ?", escaped+"%")
 	}
 	if cursor != nil && !cursor.LatestSeenAt.IsZero() {
 		query = query.Where(
@@ -164,6 +165,12 @@ func toStorageAgentVersion(row AgentVersionModel) *storage.AgentVersion {
 		FirstSeenAt:               row.FirstSeenAt.UTC(),
 		LastSeenAt:                row.LastSeenAt.UTC(),
 	}
+}
+
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+func escapeLikePattern(s string) string {
+	return likeEscaper.Replace(s)
 }
 
 func stringPtrValue(value *string) *string {

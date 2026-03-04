@@ -68,7 +68,6 @@ func BuildDescriptor(generation *sigilv1.Generation) (Descriptor, error) {
 	systemPromptTokens := estimateTokens(systemPrompt)
 
 	tools := make([]Tool, 0, len(generation.GetTools()))
-	hashTools := make([]hashTool, 0, len(generation.GetTools()))
 	toolTokenTotal := 0
 	for _, definition := range generation.GetTools() {
 		if definition == nil {
@@ -95,20 +94,21 @@ func BuildDescriptor(generation *sigilv1.Generation) (Descriptor, error) {
 		toolTokenTotal += tool.TokenEstimate
 
 		tools = append(tools, tool)
-		hashTools = append(hashTools, hashTool{
-			Name:            tool.Name,
-			Description:     tool.Description,
-			Type:            tool.Type,
-			InputSchemaJSON: tool.InputSchemaJSON,
-		})
 	}
 
 	sort.Slice(tools, func(i, j int) bool {
 		return compareTools(tools[i], tools[j]) < 0
 	})
-	sort.Slice(hashTools, func(i, j int) bool {
-		return compareHashTools(hashTools[i], hashTools[j]) < 0
-	})
+
+	hashTools := make([]hashTool, len(tools))
+	for i, t := range tools {
+		hashTools[i] = hashTool{
+			Name:            t.Name,
+			Description:     t.Description,
+			Type:            t.Type,
+			InputSchemaJSON: t.InputSchemaJSON,
+		}
+	}
 
 	toolsJSONBytes, err := json.Marshal(tools)
 	if err != nil {
@@ -187,19 +187,6 @@ func prefixRunes(value string, limit int) string {
 }
 
 func compareTools(left, right Tool) int {
-	if diff := strings.Compare(left.Name, right.Name); diff != 0 {
-		return diff
-	}
-	if diff := strings.Compare(left.Type, right.Type); diff != 0 {
-		return diff
-	}
-	if diff := strings.Compare(left.Description, right.Description); diff != 0 {
-		return diff
-	}
-	return strings.Compare(left.InputSchemaJSON, right.InputSchemaJSON)
-}
-
-func compareHashTools(left, right hashTool) int {
 	if diff := strings.Compare(left.Name, right.Name); diff != 0 {
 		return diff
 	}
