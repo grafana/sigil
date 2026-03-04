@@ -6,6 +6,7 @@ import (
 	"time"
 
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
+	"github.com/grafana/sigil/sigil/internal/storage"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -39,8 +40,8 @@ func TestSaveBatchAgentCatalogNamedVersions(t *testing.T) {
 	if head.GenerationCount != 3 {
 		t.Fatalf("expected generation_count=3, got %d", head.GenerationCount)
 	}
-	if head.VersionCount != 2 {
-		t.Fatalf("expected version_count=2, got %d", head.VersionCount)
+	if head.VersionCount != 3 {
+		t.Fatalf("expected version_count=3, got %d", head.VersionCount)
 	}
 	if head.LatestEffectiveVersion == "" {
 		t.Fatalf("expected latest effective version")
@@ -50,8 +51,8 @@ func TestSaveBatchAgentCatalogNamedVersions(t *testing.T) {
 	if err := store.DB().Where("tenant_id = ? AND agent_name = ?", "tenant-a", "assistant").Find(&versions).Error; err != nil {
 		t.Fatalf("list versions: %v", err)
 	}
-	if len(versions) != 2 {
-		t.Fatalf("expected 2 versions, got %d", len(versions))
+	if len(versions) != 3 {
+		t.Fatalf("expected 3 versions, got %d", len(versions))
 	}
 
 	var modelRows []AgentVersionModelUsageModel
@@ -60,8 +61,8 @@ func TestSaveBatchAgentCatalogNamedVersions(t *testing.T) {
 		Find(&modelRows).Error; err != nil {
 		t.Fatalf("list model usage rows: %v", err)
 	}
-	if len(modelRows) != 2 {
-		t.Fatalf("expected 2 model usage rows (one per effective version), got %d", len(modelRows))
+	if len(modelRows) != 3 {
+		t.Fatalf("expected 3 model usage rows (one per effective version), got %d", len(modelRows))
 	}
 }
 
@@ -94,6 +95,93 @@ func TestSaveBatchAgentCatalogAnonymousBucket(t *testing.T) {
 	}
 	if heads[0].GenerationCount != 2 {
 		t.Fatalf("expected anonymous bucket generation_count=2, got %d", heads[0].GenerationCount)
+	}
+}
+
+func TestSaveBatchAgentCatalogDeclaredVersionsFollowSeenAtOrdering(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	base := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
+	newer := generationForAgentCatalog("gen-order-2", "conv-order", "assistant", "v2", "Prompt stable", base.Add(2*time.Minute), "openai", "gpt-5", nil)
+	older := generationForAgentCatalog("gen-order-1", "conv-order", "assistant", "v1", "Prompt stable", base.Add(1*time.Minute), "openai", "gpt-5", nil)
+
+	// Intentionally ingest out of time order.
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{newer}))
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{older}))
+
+	var versions []AgentVersionModel
+	if err := store.DB().
+		Where("tenant_id = ? AND agent_name = ?", "tenant-a", "assistant").
+		Find(&versions).Error; err != nil {
+		t.Fatalf("list versions: %v", err)
+	}
+	if len(versions) != 1 {
+		t.Fatalf("expected 1 version row, got %d", len(versions))
+	}
+	version := versions[0]
+	if version.DeclaredVersionFirst == nil || *version.DeclaredVersionFirst != "v1" {
+		t.Fatalf("expected declared_version_first=v1, got %v", version.DeclaredVersionFirst)
+	}
+	if version.DeclaredVersionLatest == nil || *version.DeclaredVersionLatest != "v2" {
+		t.Fatalf("expected declared_version_latest=v2, got %v", version.DeclaredVersionLatest)
+	}
+	if !version.FirstSeenAt.UTC().Equal(base.Add(1 * time.Minute)) {
+		t.Fatalf("expected first_seen_at=%s, got %s", base.Add(1*time.Minute).UTC(), version.FirstSeenAt.UTC())
+	}
+	if !version.LastSeenAt.UTC().Equal(base.Add(2 * time.Minute)) {
+		t.Fatalf("expected last_seen_at=%s, got %s", base.Add(2*time.Minute).UTC(), version.LastSeenAt.UTC())
+	}
+
+	summaries, _, err := store.ListAgentVersions(context.Background(), "tenant-a", "assistant", 10, nil)
+	if err != nil {
+		t.Fatalf("list agent versions summary: %v", err)
+	}
+	if len(summaries) != 1 {
+		t.Fatalf("expected 1 version summary, got %d", len(summaries))
+	}
+	if summaries[0].DeclaredVersionFirst == nil || *summaries[0].DeclaredVersionFirst != "v1" {
+		t.Fatalf("expected summary declared_version_first=v1, got %v", summaries[0].DeclaredVersionFirst)
+	}
+	if summaries[0].DeclaredVersionLatest == nil || *summaries[0].DeclaredVersionLatest != "v2" {
+		t.Fatalf("expected summary declared_version_latest=v2, got %v", summaries[0].DeclaredVersionLatest)
+	}
+}
+
+func TestSaveBatchAgentCatalogDeclaredVersionEqualTimestamp(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	base := time.Date(2026, 3, 4, 13, 0, 0, 0, time.UTC)
+	first := generationForAgentCatalog("gen-eq-1", "conv-eq", "assistant", "v1", "Prompt stable", base, "openai", "gpt-5", nil)
+	second := generationForAgentCatalog("gen-eq-2", "conv-eq", "assistant", "v2", "Prompt stable", base, "openai", "gpt-5", nil)
+
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{first}))
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{second}))
+
+	var versions []AgentVersionModel
+	if err := store.DB().
+		Where("tenant_id = ? AND agent_name = ?", "tenant-a", "assistant").
+		Find(&versions).Error; err != nil {
+		t.Fatalf("list versions: %v", err)
+	}
+	if len(versions) != 1 {
+		t.Fatalf("expected 1 version row, got %d", len(versions))
+	}
+	version := versions[0]
+	if version.DeclaredVersionLatest == nil || *version.DeclaredVersionLatest == "" {
+		t.Fatalf("expected declared_version_latest to be set for equal-timestamp generation, got %v", version.DeclaredVersionLatest)
+	}
+	if version.DeclaredVersionFirst == nil || *version.DeclaredVersionFirst == "" {
+		t.Fatalf("expected declared_version_first to be set for equal-timestamp generation, got %v", version.DeclaredVersionFirst)
 	}
 }
 
@@ -213,6 +301,52 @@ func TestUpsertAgentHeadTxConcurrentWritersKeepNewestLatestFields(t *testing.T) 
 	}
 	if head.LatestSystemPromptPrefix != newerProjection.SystemPromptPrefix {
 		t.Fatalf("expected latest system prompt prefix %q, got %q", newerProjection.SystemPromptPrefix, head.LatestSystemPromptPrefix)
+	}
+}
+
+func TestListAgentVersionsCursorPagination(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	base := time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC)
+	generationA := generationForAgentCatalog("gen-version-1", "conv-version", "assistant", "v1", "Prompt A", base, "openai", "gpt-5", nil)
+	generationB := generationForAgentCatalog("gen-version-2", "conv-version", "assistant", "v2", "Prompt B", base.Add(1*time.Minute), "openai", "gpt-5", nil)
+	generationC := generationForAgentCatalog("gen-version-3", "conv-version", "assistant", "v3", "Prompt C", base.Add(2*time.Minute), "openai", "gpt-5", nil)
+
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{generationA}))
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{generationB}))
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{generationC}))
+
+	page1, cursor, err := store.ListAgentVersions(context.Background(), "tenant-a", "assistant", 2, nil)
+	if err != nil {
+		t.Fatalf("list versions page1: %v", err)
+	}
+	if len(page1) != 2 {
+		t.Fatalf("expected 2 items on first page, got %d", len(page1))
+	}
+	if cursor == nil || cursor.ID == 0 {
+		t.Fatalf("expected non-empty cursor")
+	}
+	if !page1[0].LastSeenAt.After(page1[1].LastSeenAt) {
+		t.Fatalf("expected descending last_seen ordering")
+	}
+
+	page2, cursor2, err := store.ListAgentVersions(context.Background(), "tenant-a", "assistant", 2, &storage.AgentVersionCursor{
+		LastSeenAt: cursor.LastSeenAt,
+		ID:         cursor.ID,
+	})
+	if err != nil {
+		t.Fatalf("list versions page2: %v", err)
+	}
+	if len(page2) != 1 {
+		t.Fatalf("expected 1 item on second page, got %d", len(page2))
+	}
+	if cursor2 != nil {
+		t.Fatalf("expected no further cursor, got %+v", cursor2)
 	}
 }
 

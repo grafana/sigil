@@ -86,6 +86,7 @@
     "@grafana/ui": "^12.3.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-json-view-lite": "^2.5.0",
     "react-router-dom": "^7.0.0",
     "rxjs": "7.8.2"
   }

@@ -11,6 +11,8 @@ const ConversationsBrowserPage = React.lazy(() => import('../pages/Conversations
 const ConversationPage = React.lazy(() => import('../pages/ConversationPage'));
 const ConversationDetailPage = React.lazy(() => import('../pages/ConversationDetailPage'));
 const ConversationsPage = React.lazy(() => import('../pages/ConversationsPage'));
+const AgentsPage = React.lazy(() => import('../pages/AgentsPage'));
+const AgentDetailPage = React.lazy(() => import('../pages/AgentDetailPage'));
 const EvaluationPage = React.lazy(() => import('../pages/EvaluationPage'));
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -72,6 +74,9 @@ export default function App(_props: AppRootProps) {
           />
           <Route path={ROUTES.ConversationsDetail} element={<ConversationDetailPage />} />
           <Route path={ROUTES.ConversationsOld} element={<ConversationsPage />} />
+          <Route path={ROUTES.Agents} element={<AgentsPage />} />
+          <Route path={ROUTES.AgentDetailByName} element={<AgentDetailPage />} />
+          <Route path={ROUTES.AgentDetailAnonymous} element={<AgentDetailPage />} />
           <Route path={`${ROUTES.Evaluation}/*`} element={<EvaluationPage />} />
           <Route path="*" element={isLanding1Route ? <Landing1Page /> : <DashboardPage />} />
         </Routes>

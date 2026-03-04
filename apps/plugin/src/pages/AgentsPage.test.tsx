@@ -1,0 +1,147 @@
+import React from 'react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { RouterProvider, createMemoryRouter, useLocation } from 'react-router-dom';
+import AgentsPage from './AgentsPage';
+import type { AgentsDataSource } from '../agents/api';
+
+beforeAll(() => {
+  if (typeof globalThis.Request === 'undefined') {
+    class RequestMock {
+      method: string;
+
+      constructor(_input: unknown, init?: { method?: string }) {
+        this.method = String(init?.method ?? 'GET').toUpperCase();
+      }
+    }
+    Object.defineProperty(globalThis, 'Request', {
+      writable: true,
+      configurable: true,
+      value: RequestMock,
+    });
+  }
+});
+
+function LocationProbe() {
+  const location = useLocation();
+  return <div data-testid="location-probe">{location.pathname}</div>;
+}
+
+function createDataSource(): AgentsDataSource {
+  return {
+    listAgents: jest
+      .fn()
+      .mockResolvedValueOnce({
+        items: [
+          {
+            agent_name: 'assistant',
+            latest_effective_version: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            latest_declared_version: '1.2.0',
+            first_seen_at: '2026-03-04T10:00:00Z',
+            latest_seen_at: '2026-03-04T11:00:00Z',
+            generation_count: 3,
+            version_count: 2,
+            tool_count: 1,
+            system_prompt_prefix: 'You are concise',
+            token_estimate: { system_prompt: 4, tools_total: 5, total: 9 },
+          },
+          {
+            agent_name: '',
+            latest_effective_version: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+            first_seen_at: '2026-03-04T09:00:00Z',
+            latest_seen_at: '2026-03-04T11:00:00Z',
+            generation_count: 2,
+            version_count: 2,
+            tool_count: 0,
+            system_prompt_prefix: 'anonymous prompt',
+            token_estimate: { system_prompt: 2, tools_total: 0, total: 2 },
+          },
+        ],
+        next_cursor: 'cursor-1',
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            agent_name: 'assistant-beta',
+            latest_effective_version: 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+            first_seen_at: '2026-03-04T08:00:00Z',
+            latest_seen_at: '2026-03-04T11:10:00Z',
+            generation_count: 1,
+            version_count: 1,
+            tool_count: 2,
+            system_prompt_prefix: 'beta prompt',
+            token_estimate: { system_prompt: 3, tools_total: 4, total: 7 },
+          },
+        ],
+        next_cursor: '',
+      }),
+    lookupAgent: jest.fn(async () => {
+      throw new Error('not used in AgentsPage tests');
+    }),
+    listAgentVersions: jest.fn(async () => ({ items: [], next_cursor: '' })),
+  };
+}
+
+describe('AgentsPage', () => {
+  function renderPage(dataSource: AgentsDataSource) {
+    const router = createMemoryRouter(
+      [
+        {
+          path: '/a/grafana-sigil-app/agents',
+          element: (
+            <>
+              <AgentsPage dataSource={dataSource} />
+              <LocationProbe />
+            </>
+          ),
+        },
+        {
+          path: '/a/grafana-sigil-app/agents/name/:agentName',
+          element: <LocationProbe />,
+        },
+        {
+          path: '/a/grafana-sigil-app/agents/anonymous',
+          element: <LocationProbe />,
+        },
+      ],
+      {
+        initialEntries: ['/a/grafana-sigil-app/agents'],
+      }
+    );
+
+    return {
+      router,
+      ...render(<RouterProvider router={router} />),
+    };
+  }
+
+  it('loads agents and opens named detail route', async () => {
+    const dataSource = createDataSource();
+    const { router } = renderPage(dataSource);
+
+    await waitFor(() => expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', ''));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'open agent assistant' }));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/a/grafana-sigil-app/agents/name/assistant'));
+  });
+
+  it('opens anonymous route', async () => {
+    const dataSource = createDataSource();
+    const { router } = renderPage(dataSource);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'open agent anonymous' }));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/a/grafana-sigil-app/agents/anonymous'));
+  });
+
+  it('supports load more', async () => {
+    const dataSource = createDataSource();
+    renderPage(dataSource);
+
+    await waitFor(() => expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', ''));
+
+    const loadMore = await screen.findByRole('button', { name: 'Load more' });
+    fireEvent.click(loadMore);
+
+    await waitFor(() => expect(dataSource.listAgents).toHaveBeenNthCalledWith(2, 24, 'cursor-1', ''));
+    expect(await screen.findByRole('button', { name: 'open agent assistant-beta' })).toBeInTheDocument();
+  });
+});

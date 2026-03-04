@@ -76,6 +76,7 @@ func RegisterQueryRoutes(
 	mux.Handle("/api/v1/generations/", protectedMiddleware(http.HandlerFunc(getGeneration(querySvc))))
 	mux.Handle("/api/v1/agents", protectedMiddleware(http.HandlerFunc(listAgents(querySvc))))
 	mux.Handle("/api/v1/agents:lookup", protectedMiddleware(http.HandlerFunc(lookupAgent(querySvc))))
+	mux.Handle("/api/v1/agents:versions", protectedMiddleware(http.HandlerFunc(listAgentVersions(querySvc))))
 	mux.Handle("/api/v1/conversations:batch-metadata", protectedMiddleware(http.HandlerFunc(batchConversationMetadata(querySvc))))
 	mux.Handle("/api/v1/conversations", protectedMiddleware(http.HandlerFunc(listConversations(querySvc))))
 	mux.Handle("/api/v1/conversations/", protectedMiddleware(http.HandlerFunc(conversationRoutes(querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled))))
@@ -394,6 +395,68 @@ func lookupAgent(querySvc *query.Service) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, item)
+	}
+}
+
+func listAgentVersions(querySvc *query.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		tenantID, err := tenant.TenantID(req.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		rawNames, hasName := req.URL.Query()["name"]
+		if !hasName {
+			http.Error(w, "name query param is required", http.StatusBadRequest)
+			return
+		}
+
+		agentName := ""
+		if len(rawNames) > 0 {
+			agentName = rawNames[0]
+		}
+
+		limit := 50
+		if rawLimit := strings.TrimSpace(req.URL.Query().Get("limit")); rawLimit != "" {
+			value, err := strconv.Atoi(rawLimit)
+			if err != nil || value <= 0 {
+				http.Error(w, "invalid limit", http.StatusBadRequest)
+				return
+			}
+			if value > 200 {
+				value = 200
+			}
+			limit = value
+		}
+
+		items, nextCursor, err := querySvc.ListAgentVersionsForTenant(
+			req.Context(),
+			tenantID,
+			agentName,
+			limit,
+			req.URL.Query().Get("cursor"),
+		)
+		if err != nil {
+			if query.IsValidationError(err) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if items == nil {
+			items = []query.AgentVersionListItem{}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"items":       items,
+			"next_cursor": nextCursor,
+		})
 	}
 }
 

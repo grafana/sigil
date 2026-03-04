@@ -74,11 +74,29 @@ type AgentDetail struct {
 	Models                []AgentModelUsage  `json:"models"`
 }
 
+type AgentVersionListItem struct {
+	EffectiveVersion      string             `json:"effective_version"`
+	DeclaredVersionFirst  *string            `json:"declared_version_first,omitempty"`
+	DeclaredVersionLatest *string            `json:"declared_version_latest,omitempty"`
+	FirstSeenAt           time.Time          `json:"first_seen_at"`
+	LastSeenAt            time.Time          `json:"last_seen_at"`
+	GenerationCount       int64              `json:"generation_count"`
+	ToolCount             int                `json:"tool_count"`
+	SystemPromptPrefix    string             `json:"system_prompt_prefix"`
+	TokenEstimate         AgentTokenEstimate `json:"token_estimate"`
+}
+
 type agentListCursor struct {
 	LatestSeenNanos int64  `json:"latest_seen_nanos"`
 	AgentName       string `json:"agent_name"`
 	HeadID          uint64 `json:"head_id"`
 	FilterHash      string `json:"filter_hash"`
+}
+
+type agentVersionListCursor struct {
+	LastSeenNanos int64  `json:"last_seen_nanos"`
+	VersionID     uint64 `json:"version_id"`
+	FilterHash    string `json:"filter_hash"`
 }
 
 func (s *Service) ListAgentsForTenant(ctx context.Context, tenantID string, limit int, cursor, namePrefix string) ([]AgentListItem, string, error) {
@@ -285,6 +303,99 @@ func (s *Service) GetAgentDetailForTenant(ctx context.Context, tenantID, agentNa
 	return detail, true, nil
 }
 
+func (s *Service) ListAgentVersionsForTenant(ctx context.Context, tenantID, agentName string, limit int, cursor string) ([]AgentVersionListItem, string, error) {
+	ctx, span := queryServiceTracer.Start(ctx, "sigil.query.list_agent_versions")
+	defer span.End()
+
+	trimmedTenantID := strings.TrimSpace(tenantID)
+	trimmedAgentName := strings.TrimSpace(agentName)
+	if trimmedTenantID == "" {
+		err := NewValidationError("tenant id is required")
+		recordQuerySpanError(span, err)
+		return nil, "", err
+	}
+	if s.agentCatalogStore == nil {
+		err := fmt.Errorf("agent catalog store is not configured")
+		recordQuerySpanError(span, err)
+		return nil, "", err
+	}
+
+	pageSize := normalizeAgentListPageSize(limit)
+	filterHash := buildAgentVersionsFilterHash(trimmedAgentName)
+	cursorState, err := decodeAgentVersionListCursor(cursor)
+	if err != nil {
+		validationErr := NewValidationError("invalid cursor")
+		recordQuerySpanError(span, validationErr)
+		return nil, "", validationErr
+	}
+	if strings.TrimSpace(cursor) != "" && cursorState.FilterHash != filterHash {
+		validationErr := NewValidationError("cursor no longer matches current filters")
+		recordQuerySpanError(span, validationErr)
+		return nil, "", validationErr
+	}
+
+	span.SetAttributes(
+		attribute.String("sigil.tenant.id", trimmedTenantID),
+		attribute.String("sigil.agent.name", trimmedAgentName),
+		attribute.Int("sigil.query.limit", pageSize),
+		attribute.Bool("sigil.query.cursor_provided", strings.TrimSpace(cursor) != ""),
+	)
+
+	var storeCursor *storage.AgentVersionCursor
+	if cursorState.LastSeenNanos > 0 {
+		storeCursor = &storage.AgentVersionCursor{
+			LastSeenAt: time.Unix(0, cursorState.LastSeenNanos).UTC(),
+			ID:         cursorState.VersionID,
+		}
+	}
+
+	versions, nextStoreCursor, err := s.agentCatalogStore.ListAgentVersions(ctx, trimmedTenantID, trimmedAgentName, pageSize, storeCursor)
+	if err != nil {
+		recordQuerySpanError(span, err)
+		return nil, "", err
+	}
+
+	items := make([]AgentVersionListItem, 0, len(versions))
+	for _, version := range versions {
+		items = append(items, AgentVersionListItem{
+			EffectiveVersion:      version.EffectiveVersion,
+			DeclaredVersionFirst:  version.DeclaredVersionFirst,
+			DeclaredVersionLatest: version.DeclaredVersionLatest,
+			FirstSeenAt:           version.FirstSeenAt.UTC(),
+			LastSeenAt:            version.LastSeenAt.UTC(),
+			GenerationCount:       version.GenerationCount,
+			ToolCount:             version.ToolCount,
+			SystemPromptPrefix:    version.SystemPromptPrefix,
+			TokenEstimate: AgentTokenEstimate{
+				SystemPrompt: version.TokenEstimateSystemPrompt,
+				ToolsTotal:   version.TokenEstimateToolsTotal,
+				Total:        version.TokenEstimateTotal,
+			},
+		})
+	}
+
+	nextCursor := ""
+	if nextStoreCursor != nil {
+		encoded, err := encodeAgentVersionListCursor(agentVersionListCursor{
+			LastSeenNanos: nextStoreCursor.LastSeenAt.UTC().UnixNano(),
+			VersionID:     nextStoreCursor.ID,
+			FilterHash:    filterHash,
+		})
+		if err != nil {
+			recordQuerySpanError(span, err)
+			return nil, "", err
+		}
+		nextCursor = encoded
+	}
+
+	span.SetAttributes(
+		attribute.Int("sigil.query.result_count", len(items)),
+		attribute.Bool("sigil.query.next_cursor_present", nextCursor != ""),
+	)
+
+	return items, nextCursor, nil
+}
+
 func normalizeAgentListPageSize(value int) int {
 	if value <= 0 {
 		return defaultAgentListPageSize
@@ -297,6 +408,11 @@ func normalizeAgentListPageSize(value int) int {
 
 func buildAgentListFilterHash(namePrefix string) string {
 	sum := sha256.Sum256([]byte(strings.TrimSpace(namePrefix)))
+	return hex.EncodeToString(sum[:])
+}
+
+func buildAgentVersionsFilterHash(agentName string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(agentName)))
 	return hex.EncodeToString(sum[:])
 }
 
@@ -335,6 +451,48 @@ func decodeAgentListCursor(raw string) (agentListCursor, error) {
 	}
 	if cursor.HeadID == 0 {
 		return agentListCursor{}, fmt.Errorf("cursor head_id must be positive")
+	}
+	return cursor, nil
+}
+
+func encodeAgentVersionListCursor(cursor agentVersionListCursor) (string, error) {
+	if cursor.LastSeenNanos <= 0 {
+		return "", fmt.Errorf("cursor last_seen_nanos must be positive")
+	}
+	if cursor.VersionID == 0 {
+		return "", fmt.Errorf("cursor version_id must be positive")
+	}
+	if strings.TrimSpace(cursor.FilterHash) == "" {
+		return "", fmt.Errorf("cursor filter_hash is required")
+	}
+	payload, err := json.Marshal(cursor)
+	if err != nil {
+		return "", fmt.Errorf("marshal cursor: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(payload), nil
+}
+
+func decodeAgentVersionListCursor(raw string) (agentVersionListCursor, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return agentVersionListCursor{}, nil
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(trimmed)
+	if err != nil {
+		return agentVersionListCursor{}, fmt.Errorf("decode cursor: %w", err)
+	}
+	var cursor agentVersionListCursor
+	if err := json.Unmarshal(payload, &cursor); err != nil {
+		return agentVersionListCursor{}, fmt.Errorf("parse cursor: %w", err)
+	}
+	if cursor.LastSeenNanos <= 0 {
+		return agentVersionListCursor{}, fmt.Errorf("cursor last_seen_nanos must be positive")
+	}
+	if cursor.VersionID == 0 {
+		return agentVersionListCursor{}, fmt.Errorf("cursor version_id must be positive")
+	}
+	if strings.TrimSpace(cursor.FilterHash) == "" {
+		return agentVersionListCursor{}, fmt.Errorf("cursor filter_hash is required")
 	}
 	return cursor, nil
 }

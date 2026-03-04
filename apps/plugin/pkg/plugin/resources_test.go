@@ -97,6 +97,7 @@ func TestRequiredPermissionAction(t *testing.T) {
 			{method: http.MethodGet, path: "/query/model-cards/lookup"},
 			{method: http.MethodGet, path: "/query/agents"},
 			{method: http.MethodGet, path: "/query/agents/lookup"},
+			{method: http.MethodGet, path: "/query/agents/versions"},
 			// Eval read routes
 			{method: http.MethodGet, path: "/eval/evaluators"},
 			{method: http.MethodGet, path: "/eval/evaluators/prod.helpfulness.v1"},
@@ -468,6 +469,12 @@ func TestCallResource(t *testing.T) {
 				return
 			}
 			_, _ = io.WriteString(w, `{"agent_name":"assistant","effective_version":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`)
+		case "/api/v1/agents:versions":
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			_, _ = io.WriteString(w, `{"items":[{"effective_version":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"next_cursor":""}`)
 		case "/api/v1/eval/evaluators":
 			switch r.Method {
 			case http.MethodGet:
@@ -693,6 +700,13 @@ func TestCallResource(t *testing.T) {
 			path:      "query/agents/lookup?name=assistant",
 			expStatus: http.StatusOK,
 			expBody:   []byte(`{"agent_name":"assistant","effective_version":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`),
+		},
+		{
+			name:      "list agent versions",
+			method:    http.MethodGet,
+			path:      "query/agents/versions?name=assistant",
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"items":[{"effective_version":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"next_cursor":""}`),
 		},
 		{
 			name:      "model cards post not allowed",

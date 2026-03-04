@@ -114,6 +114,8 @@ func requiredPermissionAction(method string, path string) (string, bool) {
 		return permissionDataRead, true
 	case method == http.MethodGet && path == "/query/agents/lookup":
 		return permissionDataRead, true
+	case method == http.MethodGet && path == "/query/agents/versions":
+		return permissionDataRead, true
 	case strings.HasPrefix(path, "/eval/") || path == "/eval:test":
 		return permissionForEvalRoute(method, path)
 	default:
@@ -509,6 +511,10 @@ func (a *App) handleLookupAgent(w http.ResponseWriter, req *http.Request) {
 	a.handleProxy(w, req, "/api/v1/agents:lookup", http.MethodGet)
 }
 
+func (a *App) handleListAgentVersions(w http.ResponseWriter, req *http.Request) {
+	a.handleProxy(w, req, "/api/v1/agents:versions", http.MethodGet)
+}
+
 func (a *App) handleEvalEvaluators(w http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case http.MethodGet:
@@ -691,6 +697,7 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/query/model-cards/lookup", a.withAuthorization(a.handleLookupModelCard))
 	mux.HandleFunc("/query/agents", a.withAuthorization(a.handleListAgents))
 	mux.HandleFunc("/query/agents/lookup", a.withAuthorization(a.handleLookupAgent))
+	mux.HandleFunc("/query/agents/versions", a.withAuthorization(a.handleListAgentVersions))
 
 	mux.HandleFunc("/eval/evaluators", a.withAuthorization(a.handleEvalEvaluators))
 	mux.HandleFunc("/eval/evaluators/", a.withAuthorization(a.handleEvalEvaluatorByID))

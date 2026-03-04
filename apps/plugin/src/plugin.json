@@ -52,6 +52,28 @@
     },
     {
       "type": "page",
+      "name": "Agents",
+      "path": "/a/grafana-sigil-app/agents",
+      "action": "grafana-sigil-app.data:read",
+      "addToNav": true,
+      "defaultNav": false
+    },
+    {
+      "type": "page",
+      "name": "Agent detail",
+      "path": "/a/grafana-sigil-app/agents/name/:agentName",
+      "action": "grafana-sigil-app.data:read",
+      "addToNav": false
+    },
+    {
+      "type": "page",
+      "name": "Agent detail (anonymous)",
+      "path": "/a/grafana-sigil-app/agents/anonymous",
+      "action": "grafana-sigil-app.data:read",
+      "addToNav": false
+    },
+    {
+      "type": "page",
       "name": "Evaluation",
       "path": "/a/grafana-sigil-app/evaluation",
       "action": "grafana-sigil-app.data:read",

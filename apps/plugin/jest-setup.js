@@ -7,5 +7,8 @@ if (typeof global.IntersectionObserver === 'undefined') {
     observe() {}
     unobserve() {}
     disconnect() {}
+    takeRecords() {
+      return [];
+    }
   };
 }

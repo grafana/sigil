@@ -95,9 +95,22 @@ func upsertAgentVersionTx(tx *gorm.DB, tenantID string, projection agentCatalogP
 			}
 			declaredLatest := existing.DeclaredVersionLatest
 			if declaredVersion != "" {
-				updateValues["declared_version_latest"] = declaredVersion
-				updateValues["declared_version_first"] = gorm.Expr("CASE WHEN declared_version_first IS NULL OR declared_version_first = '' THEN ? ELSE declared_version_first END", declaredVersion)
-				declaredLatest = stringPtr(declaredVersion)
+				existingDeclaredFirst := ""
+				if existing.DeclaredVersionFirst != nil {
+					existingDeclaredFirst = strings.TrimSpace(*existing.DeclaredVersionFirst)
+				}
+				existingDeclaredLatest := ""
+				if existing.DeclaredVersionLatest != nil {
+					existingDeclaredLatest = strings.TrimSpace(*existing.DeclaredVersionLatest)
+				}
+
+				if existingDeclaredFirst == "" || !projection.SeenAt.After(existing.FirstSeenAt) {
+					updateValues["declared_version_first"] = declaredVersion
+				}
+				if existingDeclaredLatest == "" || !projection.SeenAt.Before(existing.LastSeenAt) {
+					updateValues["declared_version_latest"] = declaredVersion
+					declaredLatest = stringPtr(declaredVersion)
+				}
 			}
 			if err := tx.Model(&AgentVersionModel{}).
 				Where("tenant_id = ? AND agent_name = ? AND effective_version = ?", tenantID, projection.AgentName, projection.EffectiveVersion).

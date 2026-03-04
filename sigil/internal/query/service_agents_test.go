@@ -140,13 +140,84 @@ func TestGetAgentDetailForTenantRejectsInvalidVersion(t *testing.T) {
 	}
 }
 
+func TestListAgentVersionsForTenantWithCursor(t *testing.T) {
+	store := &stubAgentCatalogStore{
+		versions: []storage.AgentVersionSummary{
+			{
+				EffectiveVersion:          "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+				DeclaredVersionFirst:      stringPtr("1.0.0"),
+				DeclaredVersionLatest:     stringPtr("1.0.2"),
+				SystemPromptPrefix:        "You are concise.",
+				ToolCount:                 2,
+				TokenEstimateSystemPrompt: 6,
+				TokenEstimateToolsTotal:   4,
+				TokenEstimateTotal:        10,
+				GenerationCount:           7,
+				FirstSeenAt:               time.Date(2026, 3, 4, 9, 0, 0, 0, time.UTC),
+				LastSeenAt:                time.Date(2026, 3, 4, 11, 0, 0, 0, time.UTC),
+			},
+		},
+		nextVersionCursor: &storage.AgentVersionCursor{
+			LastSeenAt: time.Date(2026, 3, 4, 11, 0, 0, 0, time.UTC),
+			ID:         99,
+		},
+	}
+	svc, err := NewServiceWithDependencies(ServiceDependencies{AgentCatalogStore: store})
+	if err != nil {
+		t.Fatalf("new service: %v", err)
+	}
+
+	items, nextCursor, err := svc.ListAgentVersionsForTenant(context.Background(), "tenant-a", "assistant", 25, "")
+	if err != nil {
+		t.Fatalf("list agent versions: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected one version item, got %d", len(items))
+	}
+	if items[0].EffectiveVersion == "" {
+		t.Fatalf("expected effective version")
+	}
+	if nextCursor == "" {
+		t.Fatalf("expected continuation cursor")
+	}
+	if store.lastVersionsLimit != 25 {
+		t.Fatalf("expected version list limit=25, got %d", store.lastVersionsLimit)
+	}
+}
+
+func TestListAgentVersionsForTenantRejectsCursorFilterMismatch(t *testing.T) {
+	store := &stubAgentCatalogStore{}
+	svc, err := NewServiceWithDependencies(ServiceDependencies{AgentCatalogStore: store})
+	if err != nil {
+		t.Fatalf("new service: %v", err)
+	}
+
+	cursor, err := encodeAgentVersionListCursor(agentVersionListCursor{
+		LastSeenNanos: time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC).UnixNano(),
+		VersionID:     42,
+		FilterHash:    buildAgentVersionsFilterHash("different"),
+	})
+	if err != nil {
+		t.Fatalf("encode cursor: %v", err)
+	}
+
+	_, _, err = svc.ListAgentVersionsForTenant(context.Background(), "tenant-a", "assistant", 10, cursor)
+	if err == nil || !IsValidationError(err) {
+		t.Fatalf("expected validation error for mismatched cursor filter, got %v", err)
+	}
+}
+
 type stubAgentCatalogStore struct {
 	heads         []storage.AgentHead
 	nextCursor    *storage.AgentHeadCursor
 	latestVersion *storage.AgentVersion
 	version       *storage.AgentVersion
 	models        []storage.AgentVersionModel
-	lastLimit     int
+	versions      []storage.AgentVersionSummary
+
+	nextVersionCursor *storage.AgentVersionCursor
+	lastLimit         int
+	lastVersionsLimit int
 }
 
 func (s *stubAgentCatalogStore) ListAgentHeads(_ context.Context, _ string, limit int, _ *storage.AgentHeadCursor, _ string) ([]storage.AgentHead, *storage.AgentHeadCursor, error) {
@@ -164,4 +235,14 @@ func (s *stubAgentCatalogStore) GetLatestAgentVersion(_ context.Context, _, _ st
 
 func (s *stubAgentCatalogStore) ListAgentVersionModels(_ context.Context, _, _, _ string) ([]storage.AgentVersionModel, error) {
 	return s.models, nil
+}
+
+func (s *stubAgentCatalogStore) ListAgentVersions(_ context.Context, _, _ string, limit int, _ *storage.AgentVersionCursor) ([]storage.AgentVersionSummary, *storage.AgentVersionCursor, error) {
+	s.lastVersionsLimit = limit
+	return s.versions, s.nextVersionCursor, nil
+}
+
+func stringPtr(value string) *string {
+	v := value
+	return &v
 }

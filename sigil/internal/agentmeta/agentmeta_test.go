@@ -1,13 +1,13 @@
 package agentmeta
 
 import (
-	"strings"
+	"bytes"
 	"testing"
 
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 )
 
-func TestBuildDescriptorNormalizesWhitespaceAndToolOrder(t *testing.T) {
+func TestBuildDescriptorPreservesPromptTokensAndToolOrder(t *testing.T) {
 	base := &sigilv1.Generation{
 		AgentName:    " assistant ",
 		AgentVersion: " v1 ",
@@ -32,7 +32,7 @@ func TestBuildDescriptorNormalizesWhitespaceAndToolOrder(t *testing.T) {
 	sameSemantics := &sigilv1.Generation{
 		AgentName:    "assistant",
 		AgentVersion: "v2",
-		SystemPrompt: "You   are concise.",
+		SystemPrompt: "  You are  \n  concise.  ",
 		Model:        &sigilv1.ModelRef{Provider: "openai", Name: "gpt-5"},
 		Tools: []*sigilv1.ToolDefinition{
 			{
@@ -65,14 +65,26 @@ func TestBuildDescriptorNormalizesWhitespaceAndToolOrder(t *testing.T) {
 	if left.DeclaredVersion != "v1" {
 		t.Fatalf("expected trimmed declared version, got %q", left.DeclaredVersion)
 	}
-	if left.EffectiveVersion != right.EffectiveVersion {
-		t.Fatalf("expected same effective version for semantically-equal inputs: left=%s right=%s", left.EffectiveVersion, right.EffectiveVersion)
+	if left.EffectiveVersion == right.EffectiveVersion {
+		t.Fatalf("expected different effective versions when prompt whitespace differs: left=%s right=%s", left.EffectiveVersion, right.EffectiveVersion)
 	}
-	if left.SystemPrompt != "You are concise." {
-		t.Fatalf("unexpected normalized prompt: %q", left.SystemPrompt)
+	if left.SystemPrompt != "You are\n  concise." {
+		t.Fatalf("expected raw system prompt to be preserved, got %q", left.SystemPrompt)
 	}
 	if left.ToolCount != 2 {
 		t.Fatalf("expected tool_count=2, got %d", left.ToolCount)
+	}
+	if left.Tools[0].Name != " weather " {
+		t.Fatalf("expected tool name spacing to be preserved, got %q", left.Tools[0].Name)
+	}
+	if left.Tools[0].Description != "  Fetch weather " {
+		t.Fatalf("expected tool description spacing to be preserved, got %q", left.Tools[0].Description)
+	}
+	if left.Tools[0].Type != " function " {
+		t.Fatalf("expected tool type spacing to be preserved, got %q", left.Tools[0].Type)
+	}
+	if left.Tools[0].InputSchemaJSON != `{"b":2,"a":1}` {
+		t.Fatalf("expected tool schema to be preserved as-is, got %q", left.Tools[0].InputSchemaJSON)
 	}
 	if left.TokenEstimateTotal <= 0 {
 		t.Fatalf("expected non-zero token estimate total")
@@ -108,8 +120,8 @@ func TestBuildDescriptorHandlesNonJSONSchemaDeterministically(t *testing.T) {
 	if len(first.Tools) != 1 {
 		t.Fatalf("expected one tool")
 	}
-	if !strings.HasPrefix(first.Tools[0].InputSchemaJSON, "__base64__:") {
-		t.Fatalf("expected base64 schema fallback, got %q", first.Tools[0].InputSchemaJSON)
+	if !bytes.Equal([]byte(first.Tools[0].InputSchemaJSON), []byte{0x01, 0x02, 0x03}) {
+		t.Fatalf("expected raw schema bytes to be preserved, got %#v", []byte(first.Tools[0].InputSchemaJSON))
 	}
 }
 
