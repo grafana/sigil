@@ -725,12 +725,12 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
 
                   <div className={styles.heroBody}>
                     <div className={styles.heroSection}>
-                      <Text element="h4" className={styles.heroSectionTitle}>
+                      <h4 className={styles.heroSectionTitle}>
                         <LabelWithHelp
                           label="Top by generations"
                           help="Top loaded agents ranked by generation_count in descending order."
                         />
-                      </Text>
+                      </h4>
                       <ul className={styles.rankList}>
                         {summary.topByGenerations.map((item) => (
                           <li
@@ -753,12 +753,12 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
 
                     <div className={styles.heroSection}>
                       <div className={styles.heroSectionHeading}>
-                        <Text element="h4" className={styles.heroSectionTitle}>
+                        <h4 className={styles.heroSectionTitle}>
                           <LabelWithHelp
                             label="Footprint"
                             help="Top loaded agents ranked by token_estimate.total (system prompt + tools footprint)."
                           />
-                        </Text>
+                        </h4>
                         <select
                           aria-label="Top prompt and tools display mode"
                           value={topFootprintMode}
@@ -813,12 +813,12 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
                     </div>
 
                     <div className={styles.heroSection}>
-                      <Text element="h4" className={styles.heroSectionTitle}>
+                      <h4 className={styles.heroSectionTitle}>
                         <LabelWithHelp
                           label="Risk and health"
                           help="Quick risk signals derived from loaded agents: anonymous naming, stale recency, and version churn."
                         />
-                      </Text>
+                      </h4>
                       <ul className={styles.riskList}>
                         <li className={styles.riskItem}>
                           <span className={styles.riskValue}>{summary.anonymousCount.toLocaleString()}</span>
