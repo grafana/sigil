@@ -31,9 +31,26 @@ describe('ConversationSummaryHeader', () => {
     expect(screen.getByText('conv-1')).toBeInTheDocument();
   });
 
+  it('uses "Conversation" label when title is present', () => {
+    render(
+      <ConversationSummaryHeader
+        conversation={makeConversation({ conversation_title: 'Incident: authentication failures' })}
+      />
+    );
+
+    expect(screen.getByText('Conversation')).toBeInTheDocument();
+    expect(screen.queryByText('Conversation ID')).not.toBeInTheDocument();
+  });
+
   it('falls back to conversation id when title is empty', () => {
     render(<ConversationSummaryHeader conversation={makeConversation()} />);
 
     expect(screen.getByText('conv-1')).toBeInTheDocument();
+  });
+
+  it('uses "Conversation ID" label when no title is present', () => {
+    render(<ConversationSummaryHeader conversation={makeConversation()} />);
+
+    expect(screen.getByText('Conversation ID')).toBeInTheDocument();
   });
 });

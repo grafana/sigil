@@ -153,7 +153,7 @@ export default function ConversationSummaryHeader({
     <div className={styles.header}>
       <div className={styles.grid}>
         <div className={styles.item}>
-          <div className={styles.label}>Conversation ID</div>
+          <div className={styles.label}>{hasConversationTitle ? 'Conversation' : 'Conversation ID'}</div>
           <div className={styles.value}>{hasConversationTitle ? conversationTitle : conversation.conversation_id}</div>
           {hasConversationTitle && <div className={styles.valueSecondary}>{conversation.conversation_id}</div>}
         </div>
