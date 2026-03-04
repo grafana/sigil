@@ -34,7 +34,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     width: '100%',
     minHeight: 180,
     padding: theme.spacing(1, 2),
-    fontFamily: theme.typography.fontFamilyMonospace,
+    fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace",
     fontSize: theme.typography.size.sm,
     borderRadius: theme.shape.radius.default,
     border: `1px solid ${theme.colors.border.medium}`,

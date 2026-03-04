@@ -218,9 +218,7 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
     }
     try {
       await dataSource.createEvaluator(req);
-      setRollbackEvaluator(null);
-      const updated = await dataSource.getEvaluator(evaluator.evaluator_id);
-      setEvaluator(updated);
+      navigate(`${EVAL_BASE}/evaluators`);
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Failed to revert');
     }
