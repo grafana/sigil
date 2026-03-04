@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import * as Assistant from '@grafana/assistant';
-import { ConfirmModal, Spinner, useStyles2 } from '@grafana/ui';
+import { ConfirmModal, useStyles2 } from '@grafana/ui';
+import { Loader } from '../Loader';
 
 export type AssistantInsightDisplayItem = {
   itemId: string;
@@ -39,7 +40,6 @@ export default function AssistantInsightsList({
   const styles = useStyles2(getStyles);
   const assistant = Assistant.useInlineAssistant();
   const fullAssistant = Assistant.useAssistant();
-  const AssistantLoader = (Assistant as { Loader?: React.ComponentType }).Loader;
   const [rawAssistantText, setRawAssistantText] = useState('');
   const [items, setItems] = useState<AssistantInsightDisplayItem[]>([]);
   const [openMenuItemKey, setOpenMenuItemKey] = useState<string | null>(null);
@@ -211,6 +211,19 @@ export default function AssistantInsightsList({
     dismissalTimeoutsRef.current.push(timeoutId);
   }, []);
 
+  const onRefreshAll = useCallback(() => {
+    if (!dataContext || assistant.isGenerating) {
+      return;
+    }
+    setOpenMenuItemKey(null);
+    setReportItemKey(null);
+    setDismissedItemKeys({});
+    setDismissingItemKeys({});
+    setRawAssistantText('');
+    setItems([]);
+    runGenerate(dataContext);
+  }, [assistant.isGenerating, dataContext, runGenerate]);
+
   const displayRawText = assistant.isGenerating ? String(assistant.content ?? '') : rawAssistantText;
   const hasItems = visibleItems.length > 0;
 
@@ -268,6 +281,10 @@ export default function AssistantInsightsList({
                         <button type="button" className={styles.menuItem} role="menuitem" onClick={() => onDismiss(itemKey)}>
                           Dismiss
                         </button>
+                        <div className={styles.menuDivider} />
+                        <button type="button" className={styles.menuItem} role="menuitem" onClick={onRefreshAll}>
+                          Refresh all
+                        </button>
                       </div>
                     ) : null}
                   </div>
@@ -293,7 +310,7 @@ export default function AssistantInsightsList({
           </ul>
         ) : assistant.isGenerating ? (
           <div className={styles.loaderWrap}>
-            {AssistantLoader ? <AssistantLoader /> : <Spinner size="sm" />}
+            <Loader />
           </div>
         ) : dataContext === null ? (
           <div className={styles.placeholder}>{waitingText}</div>
