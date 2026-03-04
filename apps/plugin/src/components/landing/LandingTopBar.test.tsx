@@ -1,4 +1,5 @@
 import { defaultAgentsDataSource } from '../../agents/api';
+import type { AgentListItem } from '../../agents/types';
 import { countAgentsSeenInWindows } from './LandingTopBar';
 
 describe('countAgentsSeenInWindows', () => {
@@ -7,8 +8,24 @@ describe('countAgentsSeenInWindows', () => {
   });
 
   it('paginates agents once for both windows', async () => {
+    const agent: AgentListItem = {
+      agent_name: 'agent-1',
+      latest_effective_version: 'v1',
+      first_seen_at: '2026-03-01T11:00:00Z',
+      latest_seen_at: '2026-03-04T11:00:00Z',
+      generation_count: 1,
+      version_count: 1,
+      tool_count: 0,
+      system_prompt_prefix: '',
+      token_estimate: {
+        system_prompt: 0,
+        tools_total: 0,
+        total: 0,
+      },
+    };
+
     const listAgents = jest.spyOn(defaultAgentsDataSource, 'listAgents').mockImplementation(async () => ({
-      items: [{ latest_seen_at: '2026-03-04T11:00:00Z' }],
+      items: [agent],
       next_cursor: 'cursor-next',
     }));
 
