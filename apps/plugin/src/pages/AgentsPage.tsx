@@ -383,9 +383,7 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
                           {isAnonymous ? 'Unnamed agent bucket' : item.agent_name}
                         </button>
                       </td>
-                      <td className={styles.td}>
-                        {isAnonymous ? <Badge text="Anonymous" color="orange" /> : <Text variant="bodySmall">Named</Text>}
-                      </td>
+                      <td className={styles.td}>{isAnonymous ? <Badge text="Unnamed" color="orange" /> : null}</td>
                       <td className={styles.td}>{formatDateShort(item.latest_seen_at)}</td>
                       <td className={styles.td}>{item.version_count}</td>
                       <td className={styles.td}>{item.tool_count}</td>
