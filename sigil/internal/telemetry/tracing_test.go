@@ -48,6 +48,8 @@ func TestTraceExportEnabledFromEnv(t *testing.T) {
 	})
 
 	t.Run("otlp endpoint only", func(t *testing.T) {
+		t.Setenv("OTEL_SDK_DISABLED", "")
+		t.Setenv("OTEL_TRACES_EXPORTER", "")
 		t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
 		enabled, reason := traceExportEnabledFromEnv()
 		if !enabled {
@@ -59,6 +61,10 @@ func TestTraceExportEnabledFromEnv(t *testing.T) {
 	})
 
 	t.Run("not configured", func(t *testing.T) {
+		t.Setenv("OTEL_SDK_DISABLED", "")
+		t.Setenv("OTEL_TRACES_EXPORTER", "")
+		t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+		t.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "")
 		enabled, reason := traceExportEnabledFromEnv()
 		if enabled {
 			t.Fatalf("expected disabled tracing export")
