@@ -108,13 +108,12 @@ const getStyles = (theme: GrafanaTheme2) => ({
     top: 0,
     background: theme.colors.background.primary,
     zIndex: 2,
-    borderBottom: `2px solid ${theme.colors.border.medium}`,
   }),
   row: css({
     label: 'conversationListPanel-row',
-    borderBottom: `1px solid ${theme.colors.border.weak}`,
     cursor: 'pointer',
-    transition: 'background 0.1s ease',
+    transition: 'background 0.15s ease',
+    borderRadius: theme.shape.radius.default,
     '&:hover': {
       background: theme.colors.action.hover,
     },
@@ -122,7 +121,17 @@ const getStyles = (theme: GrafanaTheme2) => ({
   rowError: css({
     label: 'conversationListPanel-rowError',
     '& td:first-child': {
-      boxShadow: `inset 3px 0 0 0 ${theme.colors.error.main}`,
+      position: 'relative',
+      '&::before': {
+        content: '""',
+        position: 'absolute',
+        left: 0,
+        top: '20%',
+        bottom: '20%',
+        width: 3,
+        borderRadius: 2,
+        background: theme.colors.error.main,
+      },
     },
   }),
   rowSelected: css({

@@ -181,7 +181,6 @@ function getStyles(theme: GrafanaTheme2) {
   return {
     container: css({
       width: '100%',
-      borderBottom: `1px solid ${theme.colors.border.weak}`,
       // hacky way to show barchart which i don't know why it works but it does
       label: 'conversationTimelineHistogram-container',
       '[data-testid="data-testid panel content"] > div > div:nth-child(2)': {
