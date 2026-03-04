@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { css } from '@emotion/css';
 import { ThresholdsMode, type GrafanaTheme2, type TimeRange } from '@grafana/data';
 import { Badge, Button, Icon, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
-import { StatItem, BreakdownStatPanel, getBreakdownStatPanelStyles } from './dashboardShared';
+import { StatItem, BreakdownStatPanel, getBreakdownStatPanelStyles, formatRelativeTime } from './dashboardShared';
 import type { DashboardDataSource } from '../../dashboard/api';
 import { type BreakdownDimension, type DashboardFilters, breakdownToPromLabel } from '../../dashboard/types';
 import {
@@ -387,25 +387,6 @@ function ErrorConversationsTable({ conversationsDataSource, timeRange }: ErrorCo
       )}
     </div>
   );
-}
-
-function formatRelativeTime(dateStr: string): string {
-  const now = Date.now();
-  const then = new Date(dateStr).getTime();
-  const diffSeconds = Math.floor((now - then) / 1000);
-  if (diffSeconds < 60) {
-    return `${diffSeconds}s ago`;
-  }
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  if (diffMinutes < 60) {
-    return `${diffMinutes}m ago`;
-  }
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) {
-    return `${diffHours}h ago`;
-  }
-  const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays}d ago`;
 }
 
 function getStyles(theme: GrafanaTheme2) {
