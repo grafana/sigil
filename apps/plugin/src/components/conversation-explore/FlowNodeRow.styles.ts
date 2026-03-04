@@ -146,6 +146,19 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.isDark ? 'oklch(0.75 0.15 25)' : 'oklch(0.50 0.18 25)',
     fontWeight: 600,
   }),
+  searchHighlight: css({
+    background: theme.isDark ? 'oklch(0.70 0.18 85 / 0.35)' : 'oklch(0.85 0.18 85 / 0.5)',
+    color: 'inherit',
+    borderRadius: 2,
+    padding: '0 1px',
+  }),
+  contentMatchBadge: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    flexShrink: 0,
+    color: theme.isDark ? 'oklch(0.75 0.12 85)' : 'oklch(0.55 0.12 85)',
+    opacity: 0.8,
+  }),
   childrenContainer: css({
     paddingLeft: theme.spacing(2),
   }),

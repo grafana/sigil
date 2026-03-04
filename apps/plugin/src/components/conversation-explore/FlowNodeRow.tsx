@@ -13,6 +13,7 @@ export type FlowNodeRowProps = {
   generationIndex?: number;
   generationCosts?: Map<string, GenerationCostResult>;
   siblingHighlights?: SiblingHighlights;
+  searchQuery?: string;
 };
 
 function formatDuration(ms: number): string {
@@ -52,6 +53,52 @@ const BADGE_LABELS: Record<FlowNodeKind, string> = {
   tool_call: 'Call',
   embedding: 'Embed',
 };
+
+function HighlightMatch({ text, query }: { text: string; query: string }) {
+  const styles = useStyles2(getStyles);
+  if (!query) {
+    return <>{text}</>;
+  }
+  const lower = text.toLowerCase();
+  const idx = lower.indexOf(query);
+  if (idx === -1) {
+    return <>{text}</>;
+  }
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className={styles.searchHighlight}>{text.slice(idx, idx + query.length)}</mark>
+      {text.slice(idx + query.length)}
+    </>
+  );
+}
+
+function hasContentMatch(node: FlowNode, query: string): boolean {
+  if (!query || !node.generation) {
+    return false;
+  }
+  if (node.label.toLowerCase().includes(query)) {
+    return false;
+  }
+  const messages = [...(node.generation.input ?? []), ...(node.generation.output ?? [])];
+  for (const msg of messages) {
+    for (const part of msg.parts) {
+      if (part.text?.toLowerCase().includes(query)) {
+        return true;
+      }
+      if (part.tool_call?.name?.toLowerCase().includes(query)) {
+        return true;
+      }
+      if (part.tool_result?.name?.toLowerCase().includes(query)) {
+        return true;
+      }
+      if (part.tool_result?.content?.toLowerCase().includes(query)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
 
 function shortenModelName(name: string): string {
   let short = name;
@@ -113,6 +160,7 @@ export default function FlowNodeRow({
   generationIndex,
   generationCosts,
   siblingHighlights,
+  searchQuery = '',
 }: FlowNodeRowProps) {
   const styles = useStyles2(getStyles);
   const [expanded, setExpanded] = useState(true);
@@ -127,10 +175,8 @@ export default function FlowNodeRow({
     [hasChildren, spanChildren]
   );
 
-  const childHighlights = useMemo(
-    () => (hasChildren ? computeSiblingHighlights(spanChildren, generationCosts) : undefined),
-    [hasChildren, spanChildren, generationCosts]
-  );
+  // Reuse the parent-level highlights so the "max" is always global, not per-group.
+  const childHighlights = siblingHighlights;
 
   const handleClick = useCallback(() => {
     if (isAgent) {
@@ -158,6 +204,7 @@ export default function FlowNodeRow({
       embedding: styles.badgeEmbedding,
     }[node.kind as string]
   );
+  const showContentBadge = searchQuery ? hasContentMatch(node, searchQuery) : false;
 
   if (isAgent) {
     return (
@@ -174,7 +221,9 @@ export default function FlowNodeRow({
             size="md"
             className={cx(styles.chevron, expanded && styles.chevronExpanded)}
           />
-          <span className={cx(styles.label, styles.agentLabel)}>{node.label}</span>
+          <span className={cx(styles.label, styles.agentLabel)}>
+            <HighlightMatch text={node.label} query={searchQuery} />
+          </span>
           <span className={styles.duration}>{formatDuration(node.durationMs)}</span>
           {node.status === 'error' && (
             <span className={cx(styles.statusDot, styles.statusError)} />
@@ -192,6 +241,7 @@ export default function FlowNodeRow({
                 generationIndex={childGenIndices[i]}
                 generationCosts={generationCosts}
                 siblingHighlights={childHighlights}
+                searchQuery={searchQuery}
               />
             ))}
           </div>
@@ -227,7 +277,14 @@ export default function FlowNodeRow({
           </>
         )}
         {badgeLabel && <span className={badgeClass}>{badgeLabel}</span>}
-        <span className={styles.label}>{displayLabel}</span>
+        <span className={styles.label}>
+          <HighlightMatch text={displayLabel} query={searchQuery} />
+        </span>
+        {showContentBadge && (
+          <span className={styles.contentMatchBadge} title="Match in message content">
+            <Icon name="file-alt" size="xs" />
+          </span>
+        )}
         {!isToolCall && node.tokenCount !== undefined && node.tokenCount > 0 && (
           <span className={cx(
             styles.tokenCount,
@@ -271,6 +328,7 @@ export default function FlowNodeRow({
               generationIndex={childGenIndices[i]}
               generationCosts={generationCosts}
               siblingHighlights={childHighlights}
+              searchQuery={searchQuery}
             />
           ))}
         </div>
@@ -284,6 +342,7 @@ export default function FlowNodeRow({
               selectedNodeId={selectedNodeId}
               onSelectNode={onSelectNode}
               depth={depth + 1}
+              searchQuery={searchQuery}
             />
           ))}
         </div>

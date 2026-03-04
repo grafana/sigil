@@ -8,7 +8,7 @@ import { createTempoTraceFetcher } from '../conversation/fetchTrace';
 import type { TraceFetcher } from '../conversation/loader';
 import { defaultModelCardClient, type ModelCardClient } from '../modelcard/api';
 import { useConversationData } from '../hooks/useConversationData';
-import { useConversationFlow } from '../components/conversation-explore/useConversationFlow';
+import { useConversationFlow, type FlowGroupBy, type FlowSortBy } from '../components/conversation-explore/useConversationFlow';
 import MetricsBar from '../components/conversation-explore/MetricsBar';
 import FlowTree from '../components/conversation-explore/FlowTree';
 import MiniTimeline from '../components/conversation-explore/MiniTimeline';
@@ -91,7 +91,12 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     modelCardClient,
   });
 
-  const { flowNodes, totalDurationMs } = useConversationFlow(conversationData, allGenerations);
+  const [flowGroupBy, setFlowGroupBy] = useState<FlowGroupBy>('agent');
+  const [flowSortBy, setFlowSortBy] = useState<FlowSortBy>('time');
+  const [flowSearchQuery, setFlowSearchQuery] = useState('');
+
+  const flowOptions = useMemo(() => ({ groupBy: flowGroupBy, sortBy: flowSortBy }), [flowGroupBy, flowSortBy]);
+  const { flowNodes, totalDurationMs } = useConversationFlow(conversationData, allGenerations, flowOptions, generationCosts);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedNodeId = searchParams.get('node');
@@ -246,6 +251,12 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
             selectedNodeId={selectedNodeId}
             onSelectNode={handleSelectNode}
             generationCosts={generationCosts}
+            groupBy={flowGroupBy}
+            onGroupByChange={setFlowGroupBy}
+            sortBy={flowSortBy}
+            onSortByChange={setFlowSortBy}
+            searchQuery={flowSearchQuery}
+            onSearchQueryChange={setFlowSearchQuery}
           />
         </div>
         <div

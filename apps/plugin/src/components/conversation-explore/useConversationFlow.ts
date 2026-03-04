@@ -1,9 +1,17 @@
 import { useMemo } from 'react';
 import type { ConversationData, ConversationSpan } from '../../conversation/types';
-import type { GenerationDetail } from '../../generation/types';
+import type { GenerationCostResult, GenerationDetail } from '../../generation/types';
 import { getSpanType, getSelectionID, hasError } from '../../conversation/spans';
 import { getStringAttr } from '../../conversation/attributes';
 import type { FlowNode, FlowNodeKind } from './types';
+
+export type FlowGroupBy = 'none' | 'agent' | 'model' | 'provider';
+export type FlowSortBy = 'time' | 'duration' | 'tokens' | 'cost';
+
+export type FlowOptions = {
+  groupBy: FlowGroupBy;
+  sortBy: FlowSortBy;
+};
 
 const ATTR_AGENT_NAME = 'gen_ai.agent.name';
 const ATTR_GENERATION_ID = 'sigil.generation.id';
@@ -167,25 +175,42 @@ function getAgentName(node: FlowNode): string {
   return 'default';
 }
 
-function groupByAgent(nodes: FlowNode[]): FlowNode[] {
-  const agentOrder: string[] = [];
-  const byAgent = new Map<string, FlowNode[]>();
-
-  for (const node of nodes) {
-    const name = getAgentName(node);
-    if (!byAgent.has(name)) {
-      agentOrder.push(name);
-      byAgent.set(name, []);
-    }
-    byAgent.get(name)!.push(node);
+function getGroupKey(node: FlowNode, groupBy: FlowGroupBy): string {
+  switch (groupBy) {
+    case 'agent':
+      return getAgentName(node);
+    case 'model':
+      return node.model ?? 'unknown';
+    case 'provider':
+      return node.provider ?? 'unknown';
+    default:
+      return 'default';
   }
+}
 
-  if (byAgent.size <= 1 && agentOrder[0] === 'default') {
+function groupNodesBy(nodes: FlowNode[], groupBy: FlowGroupBy): FlowNode[] {
+  if (groupBy === 'none') {
     return nodes;
   }
 
-  return agentOrder.map((name) => {
-    const children = byAgent.get(name)!;
+  const groupOrder: string[] = [];
+  const byGroup = new Map<string, FlowNode[]>();
+
+  for (const node of nodes) {
+    const key = getGroupKey(node, groupBy);
+    if (!byGroup.has(key)) {
+      groupOrder.push(key);
+      byGroup.set(key, []);
+    }
+    byGroup.get(key)!.push(node);
+  }
+
+  if (byGroup.size <= 1 && groupOrder[0] === 'default') {
+    return nodes;
+  }
+
+  return groupOrder.map((name) => {
+    const children = byGroup.get(name)!;
     const minStart = Math.min(...children.map((c) => c.startMs));
     const maxEnd = Math.max(...children.map((c) => c.startMs + c.durationMs));
     const hasErrors = children.some((c) => c.status === 'error');
@@ -200,6 +225,32 @@ function groupByAgent(nodes: FlowNode[]): FlowNode[] {
       children,
     };
   });
+}
+
+function sortNodes(
+  nodes: FlowNode[],
+  sortBy: FlowSortBy,
+  generationCosts?: Map<string, GenerationCostResult>
+): FlowNode[] {
+  const sorted = [...nodes];
+  switch (sortBy) {
+    case 'time':
+      sorted.sort((a, b) => a.startMs - b.startMs);
+      break;
+    case 'duration':
+      sorted.sort((a, b) => b.durationMs - a.durationMs);
+      break;
+    case 'tokens':
+      sorted.sort((a, b) => (b.tokenCount ?? 0) - (a.tokenCount ?? 0));
+      break;
+    case 'cost': {
+      const getCost = (n: FlowNode) =>
+        n.generation ? (generationCosts?.get(n.generation.generation_id)?.breakdown.totalCost ?? 0) : 0;
+      sorted.sort((a, b) => getCost(b) - getCost(a));
+      break;
+    }
+  }
+  return sorted;
 }
 
 function findConversationStartNs(spans: ConversationSpan[]): bigint {
@@ -223,10 +274,16 @@ export type UseConversationFlowResult = {
   totalDurationMs: number;
 };
 
+const DEFAULT_OPTIONS: FlowOptions = { groupBy: 'agent', sortBy: 'time' };
+
 export function useConversationFlow(
   data: ConversationData | null,
-  allGenerations: GenerationDetail[]
+  allGenerations: GenerationDetail[],
+  options?: FlowOptions,
+  generationCosts?: Map<string, GenerationCostResult>
 ): UseConversationFlowResult {
+  const { groupBy, sortBy } = options ?? DEFAULT_OPTIONS;
+
   return useMemo(() => {
     if (!data || data.spans.length === 0) {
       return { flowNodes: [], totalDurationMs: 0 };
@@ -235,14 +292,14 @@ export function useConversationFlow(
     const genIndex = buildGenerationIndex(allGenerations);
     const startNs = findConversationStartNs(data.spans);
     const flatNodes = extractFlowNodes(data.spans, startNs, genIndex);
-    flatNodes.sort((a, b) => a.startMs - b.startMs);
-    const flowNodes = groupByAgent(flatNodes);
+    const sorted = sortNodes(flatNodes, sortBy, generationCosts);
+    const flowNodes = groupNodesBy(sorted, groupBy);
 
     const allLeaves = flattenFlowNodes(flowNodes);
     const maxEnd = allLeaves.reduce((max, n) => Math.max(max, n.startMs + n.durationMs), 0);
 
     return { flowNodes, totalDurationMs: maxEnd };
-  }, [data, allGenerations]);
+  }, [data, allGenerations, groupBy, sortBy, generationCosts]);
 }
 
 function flattenFlowNodes(nodes: FlowNode[]): FlowNode[] {
