@@ -35,6 +35,11 @@ import (
 	"google.golang.org/grpc"
 )
 
+const (
+	defaultGRPCMaxReceiveMessageBytes = 16 << 20
+	defaultGRPCMaxSendMessageBytes    = 16 << 20
+)
+
 // serverModule owns transport listeners only. Runtime role modules register
 // route/service handlers through serverTransportRegistry.
 type serverModule struct {
@@ -80,17 +85,7 @@ func (m *serverModule) start(_ context.Context) error {
 
 	startGRPC := shouldStartGRPCServer(m.registry)
 	if startGRPC {
-		m.grpcServer = grpc.NewServer(
-			grpc.StatsHandler(otelgrpc.NewServerHandler()),
-			grpc.ChainUnaryInterceptor(
-				grpcMetricsUnaryInterceptor(),
-				tenantauth.UnaryServerInterceptor(tenantAuthCfg),
-			),
-			grpc.ChainStreamInterceptor(
-				grpcMetricsStreamInterceptor(),
-				tenantauth.StreamServerInterceptor(tenantAuthCfg),
-			),
-		)
+		m.grpcServer = newGRPCServer(tenantAuthCfg)
 		if m.registry != nil {
 			m.registry.ApplyGRPC(m.grpcServer)
 		}
@@ -107,6 +102,22 @@ func (m *serverModule) start(_ context.Context) error {
 		go m.serveGRPC()
 	}
 	return nil
+}
+
+func newGRPCServer(tenantAuthCfg tenantauth.Config) *grpc.Server {
+	return grpc.NewServer(
+		grpc.MaxRecvMsgSize(defaultGRPCMaxReceiveMessageBytes),
+		grpc.MaxSendMsgSize(defaultGRPCMaxSendMessageBytes),
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+		grpc.ChainUnaryInterceptor(
+			grpcMetricsUnaryInterceptor(),
+			tenantauth.UnaryServerInterceptor(tenantAuthCfg),
+		),
+		grpc.ChainStreamInterceptor(
+			grpcMetricsStreamInterceptor(),
+			tenantauth.StreamServerInterceptor(tenantAuthCfg),
+		),
+	)
 }
 
 func (m *serverModule) run(ctx context.Context) error {

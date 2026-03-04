@@ -23,6 +23,7 @@ type Tool struct {
 	Description     string `json:"description"`
 	Type            string `json:"type"`
 	InputSchemaJSON string `json:"input_schema_json"`
+	Deferred        bool   `json:"deferred,omitempty"`
 	TokenEstimate   int    `json:"token_estimate"`
 }
 
@@ -53,6 +54,7 @@ type hashTool struct {
 	Description     string `json:"description"`
 	Type            string `json:"type"`
 	InputSchemaJSON string `json:"input_schema_json"`
+	Deferred        bool   `json:"deferred,omitempty"`
 }
 
 func BuildDescriptor(generation *sigilv1.Generation) (Descriptor, error) {
@@ -79,6 +81,7 @@ func BuildDescriptor(generation *sigilv1.Generation) (Descriptor, error) {
 			Description:     definition.GetDescription(),
 			Type:            definition.GetType(),
 			InputSchemaJSON: string(definition.GetInputSchemaJson()),
+			Deferred:        definition.GetDeferred(),
 		}
 		tool.TokenEstimate = estimateTokens(strings.Join([]string{
 			tool.Name,
@@ -102,6 +105,7 @@ func BuildDescriptor(generation *sigilv1.Generation) (Descriptor, error) {
 			Description:     t.Description,
 			Type:            t.Type,
 			InputSchemaJSON: t.InputSchemaJSON,
+			Deferred:        t.Deferred,
 		}
 	}
 
@@ -167,6 +171,12 @@ func compareTools(left, right Tool) int {
 	}
 	if diff := strings.Compare(left.Description, right.Description); diff != 0 {
 		return diff
+	}
+	if left.Deferred != right.Deferred {
+		if !left.Deferred {
+			return -1
+		}
+		return 1
 	}
 	return strings.Compare(left.InputSchemaJSON, right.InputSchemaJSON)
 }
