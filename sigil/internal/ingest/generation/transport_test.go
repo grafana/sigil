@@ -189,7 +189,7 @@ func requestFromSeed(seed uint64) *sigilv1.ExportGenerationsRequest {
 			},
 		},
 		Tools: []*sigilv1.ToolDefinition{
-			{Name: "tool-" + randomASCII(rnd, 6), Description: "desc-" + randomASCII(rnd, 8), Type: "function", InputSchemaJson: []byte(`{"type":"object"}`)},
+			{Name: "tool-" + randomASCII(rnd, 6), Description: "desc-" + randomASCII(rnd, 8), Type: "function", InputSchemaJson: []byte(`{"type":"object"}`), Deferred: seed%2 == 0},
 		},
 		Usage:       &sigilv1.TokenUsage{InputTokens: int64(rnd.Intn(1000)), OutputTokens: int64(rnd.Intn(1000)), TotalTokens: int64(rnd.Intn(2000) + 1), CacheReadInputTokens: int64(rnd.Intn(100)), CacheWriteInputTokens: int64(rnd.Intn(100)), ReasoningTokens: int64(rnd.Intn(100))},
 		StopReason:  "stop-" + randomASCII(rnd, 4),

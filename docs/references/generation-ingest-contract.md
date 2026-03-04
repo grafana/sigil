@@ -59,6 +59,9 @@ audience: both
   - request controls: `max_tokens`, `temperature`, `top_p`, `tool_choice`, `thinking_enabled`
   - prompts/messages/tools/usage/metadata/timestamps/tags
   - optional `raw_artifacts[]` for debug payloads
+- `Generation.tools[]` entries include:
+  - `name`, `description`, `type`, `input_schema_json`
+  - `deferred` (`false` by default when omitted)
 
 ## Agent Version Projection Semantics
 

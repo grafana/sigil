@@ -47,6 +47,7 @@ type AgentTool struct {
 	Description     string `json:"description"`
 	Type            string `json:"type"`
 	InputSchemaJSON string `json:"input_schema_json"`
+	Deferred        bool   `json:"deferred,omitempty"`
 	TokenEstimate   int    `json:"token_estimate"`
 }
 

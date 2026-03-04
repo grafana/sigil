@@ -149,3 +149,49 @@ func TestClampRunes(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildDescriptorDeferredChangesEffectiveVersion(t *testing.T) {
+	base := &sigilv1.Generation{
+		SystemPrompt: "You are concise.",
+		Tools: []*sigilv1.ToolDefinition{
+			{
+				Name:            "weather",
+				Description:     "fetch weather",
+				Type:            "function",
+				InputSchemaJson: []byte(`{"city":{"type":"string"}}`),
+				Deferred:        false,
+			},
+		},
+	}
+	deferred := &sigilv1.Generation{
+		SystemPrompt: "You are concise.",
+		Tools: []*sigilv1.ToolDefinition{
+			{
+				Name:            "weather",
+				Description:     "fetch weather",
+				Type:            "function",
+				InputSchemaJson: []byte(`{"city":{"type":"string"}}`),
+				Deferred:        true,
+			},
+		},
+	}
+
+	baseDescriptor, err := BuildDescriptor(base)
+	if err != nil {
+		t.Fatalf("build descriptor base: %v", err)
+	}
+	deferredDescriptor, err := BuildDescriptor(deferred)
+	if err != nil {
+		t.Fatalf("build descriptor deferred: %v", err)
+	}
+
+	if baseDescriptor.EffectiveVersion == deferredDescriptor.EffectiveVersion {
+		t.Fatalf("expected deferred tool config to change effective version")
+	}
+	if len(deferredDescriptor.Tools) != 1 || !deferredDescriptor.Tools[0].Deferred {
+		t.Fatalf("expected deferred tool to be reflected in descriptor tools")
+	}
+	if !strings.Contains(deferredDescriptor.ToolsJSON, `"deferred":true`) {
+		t.Fatalf("expected tools_json to include deferred=true, got %q", deferredDescriptor.ToolsJSON)
+	}
+}

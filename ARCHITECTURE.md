@@ -476,7 +476,7 @@ See `docs/references/grafana-query-response-shapes.md`.
   - `thinking_enabled`
 - Provider-specific thinking budget is preserved when available via metadata key:
   - `sigil.gen_ai.request.thinking.budget_tokens`
-- Tool definitions support optional input schema JSON for transport parity (`input_schema_json` over gRPC).
+- Tool definitions support optional input schema JSON for transport parity (`input_schema_json` over gRPC) and a `deferred` flag for provider/tool-loading semantics.
 - Optional identity fields are supported end-to-end:
   - `conversation_id`
   - `agent_name`

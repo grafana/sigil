@@ -91,7 +91,7 @@ func TestGetAgentDetailForTenantLatestVersion(t *testing.T) {
 		GenerationCount:           10,
 		FirstSeenAt:               time.Date(2026, 3, 4, 9, 0, 0, 0, time.UTC),
 		LastSeenAt:                time.Date(2026, 3, 4, 11, 0, 0, 0, time.UTC),
-		ToolsJSON:                 `[{"name":"weather","description":"get weather","type":"function","input_schema_json":"{\"city\":{\"type\":\"string\"}}","token_estimate":3}]`,
+		ToolsJSON:                 `[{"name":"weather","description":"get weather","type":"function","input_schema_json":"{\"city\":{\"type\":\"string\"}}","deferred":true,"token_estimate":3}]`,
 	}
 	store := &stubAgentCatalogStore{
 		latestVersion: version,
@@ -117,6 +117,9 @@ func TestGetAgentDetailForTenantLatestVersion(t *testing.T) {
 	}
 	if len(detail.Tools) != 1 {
 		t.Fatalf("expected one tool, got %d", len(detail.Tools))
+	}
+	if !detail.Tools[0].Deferred {
+		t.Fatalf("expected deferred=true on decoded agent tool")
 	}
 	if len(detail.Models) != 2 {
 		t.Fatalf("expected two models, got %d", len(detail.Models))
