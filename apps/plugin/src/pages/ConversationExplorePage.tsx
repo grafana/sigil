@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { useInlineAssistant } from '@grafana/assistant';
 import { Alert, useStyles2 } from '@grafana/ui';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
@@ -21,9 +20,9 @@ import DetailPanel from '../components/conversation-explore/DetailPanel';
 import type { FlowNode } from '../components/conversation-explore/types';
 import type { GenerationCostResult } from '../generation/types';
 import { Loader } from '../components/Loader';
-import ExploreAssistantInsightsPanel, {
+import AssistantInsightsList, {
   type AssistantInsightDisplayItem,
-} from '../components/conversation-explore/ExploreAssistantInsightsPanel';
+} from '../components/assistant/AssistantInsightsList';
 
 export type ConversationExplorePageProps = {
   dataSource?: ConversationsDataSource;
@@ -120,7 +119,6 @@ type HighlightedSidebarItem = {
 type AssistantInsightItem = {
   itemId: string;
   focus: string;
-  tip: string;
 };
 
 export default function ConversationExplorePage(props: ConversationExplorePageProps) {
@@ -267,11 +265,6 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     }
     return total;
   }, [costSummary, generationCosts]);
-  const assistant = useInlineAssistant();
-  const [assistantResultText, setAssistantResultText] = useState('');
-  const [assistantInsightItems, setAssistantInsightItems] = useState<AssistantInsightItem[]>([]);
-  const lastInsightContextRef = useRef<string>('');
-
   const highlightedSidebarItems = useMemo(
     () => getHighlightedSidebarItems(flowNodes, generationCosts),
     [flowNodes, generationCosts]
@@ -316,49 +309,9 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     totalTokensForInsights,
   ]);
 
-  const runAssistantInsights = useCallback(
-    (context: string) => {
-      const prompt =
-        'Review this conversation flow and identify what to pay attention to. Prioritize anomalies and practical operator tips. Use only selectable item IDs from the provided list.';
-      assistant.generate({
-        prompt: `${prompt}\n\n${context}`,
-        origin: 'sigil-plugin/conversation-explore-assistant-insights',
-        systemPrompt:
-          'You are a concise GenAI observability analyst. Return JSON only, no markdown. Format exactly as: {"items":[{"itemId":"<exact item id>","focus":"<what to pay attention to>","tip":"<practical tip>"}]}. Return 2-5 items. itemId must be one of the provided selectable IDs. Keep focus and tip under 24 words each.',
-        onComplete: (result: string) => {
-          setAssistantResultText(result);
-          setAssistantInsightItems(parseAssistantInsightItems(result));
-        },
-        onError: (err: Error) => {
-          console.error('Conversation explore insights failed:', err);
-          setAssistantResultText('');
-          setAssistantInsightItems([]);
-        },
-      });
-    },
-    [assistant]
-  );
-
-  React.useEffect(() => {
-    if (!insightsDataContext) {
-      setAssistantResultText('');
-      setAssistantInsightItems([]);
-      lastInsightContextRef.current = '';
-      return;
-    }
-    if (assistant.isGenerating) {
-      return;
-    }
-    if (lastInsightContextRef.current === insightsDataContext) {
-      return;
-    }
-    lastInsightContextRef.current = insightsDataContext;
-    runAssistantInsights(insightsDataContext);
-  }, [assistant.isGenerating, insightsDataContext, runAssistantInsights]);
-
-  const displayInsightItems = useMemo<AssistantInsightDisplayItem[]>(() => {
+  const parseAssistantDisplayItems = useCallback((raw: string): AssistantInsightDisplayItem[] => {
     const items: AssistantInsightDisplayItem[] = [];
-    for (const item of assistantInsightItems) {
+    for (const item of parseAssistantInsightItems(raw)) {
       const sidebarItem = highlightedSidebarItemMap.get(item.itemId);
       if (!sidebarItem) {
         continue;
@@ -367,11 +320,10 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
         itemId: item.itemId,
         sidebarLabel: sidebarItem.label,
         focus: item.focus,
-        tip: item.tip,
       });
     }
     return items;
-  }, [assistantInsightItems, highlightedSidebarItemMap]);
+  }, [highlightedSidebarItemMap]);
 
   const handleSelectInsightItem = useCallback(
     (itemId: string) => {
@@ -465,11 +417,16 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
               />
             </div>
             <div className={styles.insightsWrap}>
-              <ExploreAssistantInsightsPanel
-                isGenerating={assistant.isGenerating}
-                rawAssistantText={assistant.isGenerating ? assistant.content : assistantResultText}
-                items={displayInsightItems}
+              <AssistantInsightsList
+                prompt="Review this conversation flow and identify what to pay attention to. Prioritize anomalies. Use only selectable item IDs from the provided list."
+                origin="sigil-plugin/conversation-explore-assistant-insights"
+                systemPrompt='You are a concise GenAI observability analyst. Return JSON only, no markdown. Format exactly as: {"items":[{"itemId":"<exact item id>","focus":"<what to pay attention to>"}]}. Return 2-5 items. itemId must be one of the provided selectable IDs. Keep focus under 24 words.'
+                dataContext={insightsDataContext}
+                parseItems={parseAssistantDisplayItems}
                 onSelectItem={handleSelectInsightItem}
+                waitingText="Waiting for highlighted sidebar items."
+                emptyText="Waiting for highlighted sidebar items."
+                invalidText="Could not map assistant output to selectable sidebar items."
               />
             </div>
           </div>
@@ -495,9 +452,8 @@ function parseAssistantInsightItems(raw: string): AssistantInsightItem[] {
       .map((item) => ({
         itemId: (item.itemId ?? '').trim(),
         focus: (item.focus ?? '').trim(),
-        tip: (item.tip ?? '').trim(),
       }))
-      .filter((item) => item.itemId.length > 0 && item.focus.length > 0 && item.tip.length > 0);
+      .filter((item) => item.itemId.length > 0 && item.focus.length > 0);
   } catch {
     return [];
   }

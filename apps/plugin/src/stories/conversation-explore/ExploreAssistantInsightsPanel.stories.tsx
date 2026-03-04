@@ -1,6 +1,6 @@
-import ExploreAssistantInsightsPanel, {
+import AssistantInsightsList, {
   type AssistantInsightDisplayItem,
-} from '../../components/conversation-explore/ExploreAssistantInsightsPanel';
+} from '../../components/assistant/AssistantInsightsList';
 
 const sampleItems: AssistantInsightDisplayItem[] = [
   {
@@ -19,25 +19,35 @@ const sampleItems: AssistantInsightDisplayItem[] = [
 
 const meta = {
   title: 'Sigil/Conversation Explore/AssistantInsightsPanel',
-  component: ExploreAssistantInsightsPanel,
+  component: AssistantInsightsList,
 };
 
 export default meta;
 
 export const Default = {
   args: {
-    isGenerating: false,
-    rawAssistantText: '{"items":[]}',
-    items: sampleItems,
+    prompt: 'Test prompt',
+    origin: 'storybook/assistant-insights',
+    systemPrompt: 'Test system prompt',
+    dataContext: null,
+    parseItems: () => sampleItems,
     onSelectItem: () => {},
+    waitingText: 'Waiting for highlighted sidebar items.',
+    emptyText: 'No notable insights.',
+    invalidText: 'Could not parse assistant insights.',
   },
 };
 
 export const Loading = {
   args: {
-    isGenerating: true,
-    rawAssistantText: '',
-    items: [],
+    prompt: 'Test prompt',
+    origin: 'storybook/assistant-insights',
+    systemPrompt: 'Test system prompt',
+    dataContext: null,
+    parseItems: () => [],
     onSelectItem: () => {},
+    waitingText: 'Waiting for highlighted sidebar items.',
+    emptyText: 'No notable insights.',
+    invalidText: 'Could not parse assistant insights.',
   },
 };
