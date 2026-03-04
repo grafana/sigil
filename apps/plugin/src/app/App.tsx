@@ -136,6 +136,11 @@ export default function App(props: AppRootProps) {
       grafanaTitleSuffix.current = GRAFANA_TITLE_SUFFIX;
     }
 
+    if (currentTitle === APP_TITLE) {
+      document.title = `${APP_TITLE}${grafanaTitleSuffix.current}`;
+      return;
+    }
+
     document.title = `${currentTitle} - ${APP_TITLE}${grafanaTitleSuffix.current}`;
   }, [currentTitle]);
 
