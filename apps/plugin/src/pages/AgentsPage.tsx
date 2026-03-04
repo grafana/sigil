@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { css, cx } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Badge, Button, Icon, Input, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
+import { Alert, Badge, Button, Icon, Input, Spinner, Stack, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../agents/api';
 import type { AgentListItem } from '../agents/types';
 import { buildAgentDetailByNameRoute, buildAnonymousAgentDetailRoute, PLUGIN_BASE } from '../constants';
@@ -57,87 +57,63 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flex: 1,
     maxWidth: 400,
   }),
-  tableWrapper: css({
-    borderRadius: theme.shape.radius.default,
-    border: `1px solid ${theme.colors.border.weak}`,
-    background: theme.colors.background.secondary,
-    overflow: 'hidden',
+  cardsGrid: css({
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+    gap: theme.spacing(1.5),
   }),
-  table: css({
+  card: css({
     width: '100%',
-    borderCollapse: 'collapse' as const,
-  }),
-  thead: css({
-    borderBottom: `2px solid ${theme.colors.border.medium}`,
-  }),
-  th: css({
-    padding: theme.spacing(1, 1.5),
     textAlign: 'left' as const,
-    fontSize: theme.typography.bodySmall.fontSize,
-    fontWeight: theme.typography.fontWeightMedium,
-    color: theme.colors.text.secondary,
-    whiteSpace: 'nowrap' as const,
-  }),
-  thRight: css({
-    textAlign: 'right' as const,
-  }),
-  tr: css({
-    borderBottom: `1px solid ${theme.colors.border.weak}`,
+    borderRadius: theme.shape.radius.default,
+    border: `1px solid ${theme.colors.border.medium}`,
+    background: theme.colors.background.secondary,
+    padding: theme.spacing(1.5),
     cursor: 'pointer',
-    transition: 'background 80ms ease',
-    '&:hover': {
-      background: theme.colors.action.hover,
-    },
-    '&:last-child': {
-      borderBottom: 'none',
-    },
-  }),
-  td: css({
-    padding: theme.spacing(1, 1.5),
-    fontSize: theme.typography.body.fontSize,
-    verticalAlign: 'middle' as const,
-  }),
-  tdRight: css({
-    textAlign: 'right' as const,
-  }),
-  tdMono: css({
-    fontFamily: theme.typography.fontFamilyMonospace,
-    fontSize: theme.typography.bodySmall.fontSize,
-  }),
-  nameCell: css({
+    minHeight: '120px',
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: theme.spacing(0.25),
+    transition: 'border-color 120ms ease, box-shadow 120ms ease',
+    '&:hover': {
+      borderColor: theme.colors.primary.border,
+      boxShadow: theme.shadows.z1,
+    },
+    '&:focus-visible': {
+      outline: `2px solid ${theme.colors.primary.main}`,
+      outlineOffset: 2,
+    },
   }),
-  nameLabel: css({
-    fontWeight: theme.typography.fontWeightMedium,
-    color: theme.colors.text.primary,
+  anonymousCard: css({
+    borderColor: theme.colors.warning.border,
+    background: `linear-gradient(160deg, ${theme.colors.warning.transparent}, ${theme.colors.background.secondary})`,
   }),
-  nameDescription: css({
-    color: theme.colors.text.secondary,
-    fontSize: theme.typography.bodySmall.fontSize,
+  cardHeader: css({
+    marginBottom: theme.spacing(0.75),
+  }),
+  cardDescription: css({
+    flex: 1,
     overflow: 'hidden',
     display: '-webkit-box',
-    WebkitLineClamp: 1,
+    WebkitLineClamp: 2,
     WebkitBoxOrient: 'vertical' as const,
-    maxWidth: 400,
+    marginBottom: theme.spacing(1),
   }),
-  numericCell: css({
-    fontVariantNumeric: 'tabular-nums',
-  }),
-  dateCell: css({
-    color: theme.colors.text.secondary,
-    whiteSpace: 'nowrap' as const,
+  cardFooter: css({
+    marginTop: 'auto',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: theme.spacing(0.75),
+    borderTop: `1px solid ${theme.colors.border.weak}`,
   }),
   loading: css({
     display: 'flex',
     justifyContent: 'center',
     padding: theme.spacing(4),
   }),
-  loadMoreRow: css({
+  center: css({
     display: 'flex',
     justifyContent: 'center',
-    padding: theme.spacing(2),
   }),
   empty: css({
     display: 'flex',
@@ -156,6 +132,13 @@ function formatDateShort(iso: string): string {
     return 'n/a';
   }
   return parsed.toLocaleDateString();
+}
+
+function cardLabel(item: AgentListItem): string {
+  if (item.agent_name.trim().length > 0) {
+    return item.agent_name;
+  }
+  return 'anonymous';
 }
 
 export default function AgentsPage({ dataSource = defaultAgentsDataSource }: AgentsPageProps) {
@@ -320,68 +303,55 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
           <Text color="secondary">No agents matched this prefix in the current tenant.</Text>
         </div>
       ) : (
-        <div className={styles.tableWrapper}>
-          <table className={styles.table}>
-            <thead className={styles.thead}>
-              <tr>
-                <th className={styles.th}>Agent</th>
-                <th className={styles.th}>Status</th>
-                <th className={cx(styles.th, styles.thRight)}>Versions</th>
-                <th className={cx(styles.th, styles.thRight)}>Tools</th>
-                <th className={cx(styles.th, styles.thRight)}>Generations</th>
-                <th className={styles.th}>Last seen</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => {
-                const isAnonymous = item.agent_name.trim().length === 0;
-                return (
-                  <tr
-                    key={`${item.agent_name}:${item.latest_effective_version}`}
-                    className={styles.tr}
-                    onClick={() => handleOpenAgent(item)}
-                    role="button"
-                    aria-label={`open agent ${isAnonymous ? 'anonymous' : item.agent_name}`}
-                  >
-                    <td className={styles.td}>
-                      <div className={styles.nameCell}>
-                        <span className={styles.nameLabel}>
-                          {isAnonymous ? 'Unnamed agent bucket' : item.agent_name}
-                        </span>
-                        {item.system_prompt_prefix.length > 0 && (
-                          <span className={styles.nameDescription}>{item.system_prompt_prefix}</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className={styles.td}>
+        <>
+          <div className={styles.cardsGrid}>
+            {items.map((item) => {
+              const isAnonymous = item.agent_name.trim().length === 0;
+              return (
+                <button
+                  key={`${item.agent_name}:${item.latest_effective_version}`}
+                  type="button"
+                  className={cx(styles.card, isAnonymous && styles.anonymousCard)}
+                  onClick={() => handleOpenAgent(item)}
+                  aria-label={`open agent ${cardLabel(item)}`}
+                >
+                  <div className={styles.cardHeader}>
+                    <Stack direction="row" gap={1} alignItems="center" wrap="wrap">
+                      <Text weight="medium">{isAnonymous ? 'Unnamed agent bucket' : item.agent_name}</Text>
                       <Badge text={isAnonymous ? 'Anonymous' : 'Named'} color={isAnonymous ? 'orange' : 'green'} />
-                    </td>
-                    <td className={cx(styles.td, styles.tdRight, styles.numericCell)}>
-                      {item.version_count}
-                    </td>
-                    <td className={cx(styles.td, styles.tdRight, styles.numericCell)}>
-                      {item.tool_count}
-                    </td>
-                    <td className={cx(styles.td, styles.tdRight, styles.numericCell)}>
-                      {item.generation_count.toLocaleString()}
-                    </td>
-                    <td className={cx(styles.td, styles.dateCell)}>
-                      {formatDateShort(item.latest_seen_at)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </Stack>
+                  </div>
+
+                  {item.system_prompt_prefix.length > 0 && (
+                    <div className={styles.cardDescription}>
+                      <Text variant="bodySmall" color="secondary">
+                        {item.system_prompt_prefix}
+                      </Text>
+                    </div>
+                  )}
+
+                  <div className={styles.cardFooter}>
+                    <Text variant="bodySmall" color="secondary">
+                      {formatDateShort(item.latest_seen_at)} · {item.version_count} ver · {item.tool_count} tools
+                    </Text>
+                    <Badge text={`${item.generation_count.toLocaleString()} gen`} color="purple" />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
 
           {nextCursor.length > 0 && (
-            <div className={styles.loadMoreRow}>
-              <Button variant="secondary" onClick={() => void loadMore()} disabled={loadingMore}>
-                {loadingMore ? <Spinner size={14} /> : 'Load more'}
-              </Button>
+            <div className={styles.center}>
+              <Stack direction="row" alignItems="center" gap={1}>
+                <Button variant="secondary" onClick={() => void loadMore()} disabled={loadingMore}>
+                  Load more
+                </Button>
+                {loadingMore && <Spinner size={18} />}
+              </Stack>
             </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );
