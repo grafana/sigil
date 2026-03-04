@@ -4,15 +4,10 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Alert, Spinner, Text, useStyles2 } from '@grafana/ui';
 import { PLUGIN_BASE, ROUTES } from '../constants';
-import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
 import EvalOnboarding from '../components/evaluation/EvalOnboarding';
 import RuleTable from '../components/evaluation/RuleTable';
 import SummaryCards from '../components/evaluation/SummaryCards';
-import { useEvalRulesData } from '../hooks/useEvalRulesData';
-
-export type EvaluationOverviewPageProps = {
-  dataSource?: EvaluationDataSource;
-};
+import { useEvalRulesDataContext } from '../contexts/EvalRulesDataContext';
 
 const EVAL_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}`;
 
@@ -31,13 +26,12 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function EvaluationOverviewPage(props: EvaluationOverviewPageProps) {
-  const dataSource = props.dataSource ?? defaultEvaluationDataSource;
+export default function EvaluationOverviewPage() {
   const styles = useStyles2(getStyles);
   const navigate = useNavigate();
 
   const { rules, evaluators, predefinedCount, loading, errorMessage, setErrorMessage, handleToggle } =
-    useEvalRulesData(dataSource);
+    useEvalRulesDataContext();
 
   const handleRuleClick = (ruleID: string) => {
     navigate(`${EVAL_BASE}/rules/${encodeURIComponent(ruleID)}`);

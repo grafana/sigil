@@ -4,15 +4,10 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Alert, Button, Icon, Spinner, Text, useStyles2 } from '@grafana/ui';
 import { PLUGIN_BASE, ROUTES } from '../constants';
-import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
 import RuleTable from '../components/evaluation/RuleTable';
-import { useEvalRulesData } from '../hooks/useEvalRulesData';
+import { useEvalRulesDataContext } from '../contexts/EvalRulesDataContext';
 
 const EVAL_RULES_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}/rules`;
-
-export type RulesPageProps = {
-  dataSource?: EvaluationDataSource;
-};
 
 const getStyles = (theme: GrafanaTheme2) => ({
   pageContainer: css({
@@ -105,12 +100,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function RulesPage(props: RulesPageProps) {
-  const dataSource = props.dataSource ?? defaultEvaluationDataSource;
+export default function RulesPage() {
   const styles = useStyles2(getStyles);
   const navigate = useNavigate();
 
-  const { rules, evaluators, loading, errorMessage, setErrorMessage, handleToggle } = useEvalRulesData(dataSource);
+  const { rules, evaluators, loading, errorMessage, setErrorMessage, handleToggle } = useEvalRulesDataContext();
 
   const handleClick = (ruleID: string) => {
     navigate(`${EVAL_RULES_BASE}/${encodeURIComponent(ruleID)}`);

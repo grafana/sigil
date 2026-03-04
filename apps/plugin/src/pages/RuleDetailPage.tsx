@@ -4,6 +4,7 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Alert, Badge, Button, Icon, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import { PLUGIN_BASE, ROUTES } from '../constants';
+import { useOptionalEvalRulesDataContext } from '../contexts/EvalRulesDataContext';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
 import type {
   CreateRuleRequest,
@@ -106,6 +107,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
 export default function RuleDetailPage(props: RuleDetailPageProps) {
   const { ruleID: propRuleID, onNavigateBack } = props;
   const dataSource = props.dataSource ?? defaultEvaluationDataSource;
+  const evalRulesContext = useOptionalEvalRulesDataContext();
   const styles = useStyles2(getStyles);
   const navigate = useNavigate();
   const params = useParams<{ ruleID?: string }>();
@@ -258,6 +260,7 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
         const req: UpdateRuleRequest = { enabled };
         await dataSource.updateRule(ruleID!, req);
       }
+      evalRulesContext?.refetch();
       goBack();
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Failed to save rule');
@@ -281,6 +284,7 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
     setErrorMessage('');
     try {
       await dataSource.deleteRule(ruleID);
+      evalRulesContext?.refetch();
       goBack();
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Failed to delete rule');

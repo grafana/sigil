@@ -10,6 +10,7 @@ export type EvalRulesData = {
   errorMessage: string;
   setErrorMessage: (msg: string) => void;
   handleToggle: (ruleID: string, enabled: boolean) => Promise<void>;
+  refetch: () => void;
 };
 
 export function useEvalRulesData(dataSource: EvaluationDataSource): EvalRulesData {
@@ -18,7 +19,10 @@ export function useEvalRulesData(dataSource: EvaluationDataSource): EvalRulesDat
   const [predefinedCount, setPredefinedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+  const [refetchTrigger, setRefetchTrigger] = useState(0);
   const requestVersion = useRef(0);
+
+  const refetch = useCallback(() => setRefetchTrigger((t) => t + 1), []);
 
   useEffect(() => {
     requestVersion.current += 1;
@@ -55,7 +59,7 @@ export function useEvalRulesData(dataSource: EvaluationDataSource): EvalRulesDat
         }
         setLoading(false);
       });
-  }, [dataSource]);
+  }, [dataSource, refetchTrigger]);
 
   const handleToggle = useCallback(
     async (ruleID: string, enabled: boolean) => {
@@ -69,5 +73,5 @@ export function useEvalRulesData(dataSource: EvaluationDataSource): EvalRulesDat
     [dataSource]
   );
 
-  return { rules, evaluators, predefinedCount, loading, errorMessage, setErrorMessage, handleToggle };
+  return { rules, evaluators, predefinedCount, loading, errorMessage, setErrorMessage, handleToggle, refetch };
 }
