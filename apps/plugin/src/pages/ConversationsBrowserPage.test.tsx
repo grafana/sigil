@@ -228,6 +228,6 @@ describe('ConversationsBrowserPage', () => {
     expect(router.state.location.pathname).toBe('/conversations/conv-b/explore');
     expect(router.state.location.search).toContain('conversationTitle=Incident%3A+authentication+failures');
     expect(await screen.findByText('Incident: authentication failures')).toBeInTheDocument();
-    expect(screen.getByText('Conversation ID').parentElement).toHaveTextContent('conv-b');
+    expect(screen.getByText('Conversation').parentElement).toHaveTextContent('conv-b');
   });
 });
