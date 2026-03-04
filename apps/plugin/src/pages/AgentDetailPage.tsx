@@ -537,9 +537,7 @@ export default function AgentDetailPage({
         </div>
         <div className={styles.panelBody}>
           <pre className={styles.systemPrompt}>
-            {detail.system_prompt.length > 0
-              ? detail.system_prompt.replace(/\\n/g, '\n')
-              : 'No system prompt recorded.'}
+            {detail.system_prompt.length > 0 ? detail.system_prompt : 'No system prompt recorded.'}
           </pre>
         </div>
       </div>
