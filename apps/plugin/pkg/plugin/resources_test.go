@@ -519,7 +519,11 @@ func TestCallResource(t *testing.T) {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}
 		case "/api/v1/eval/rules/dsodsjodss/doidsnoids":
-			// Rule ID contains slash; plugin forwards with path-encoded segment
+			// Rule ID contains slash; backend uses RawPath. Plugin must forward with %2F encoded.
+			if !strings.Contains(r.RequestURI, "dsodsjodss%2Fdoidsnoids") {
+				http.Error(w, "rule id with slash must be path-encoded in upstream request", http.StatusBadRequest)
+				return
+			}
 			if r.Method != http.MethodDelete {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 				return
