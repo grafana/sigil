@@ -108,15 +108,14 @@ describe('AgentDetailPage', () => {
     );
     await waitFor(() => expect(dataSource.listAgentVersions).toHaveBeenCalledWith('assistant', 50));
 
-    fireEvent.change(await screen.findByLabelText('agent version selector'), {
-      target: { value: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' },
-    });
+    const versionSelector = await screen.findByLabelText('agent version selector');
+    fireEvent.keyDown(versionSelector, { key: 'ArrowDown', code: 'ArrowDown' });
+    fireEvent.click(await screen.findByText(/sha256:bbbbb/i));
 
-    await waitFor(() =>
-      expect(screen.getByTestId('location-search').textContent).toContain(
-        'version=sha256%3Abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
-      )
-    );
+    await waitFor(() => {
+      const locationSearch = decodeURIComponent(screen.getByTestId('location-search').textContent ?? '');
+      expect(locationSearch).toContain('version=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
+    });
     await waitFor(() =>
       expect(dataSource.lookupAgent).toHaveBeenCalledWith(
         'assistant',
@@ -137,6 +136,7 @@ describe('AgentDetailPage', () => {
     );
 
     await waitFor(() => expect(dataSource.lookupAgent).toHaveBeenCalledWith('', undefined));
-    expect(await screen.findByText(/aggregates generations where `gen_ai.agent.name` was missing/i)).toBeInTheDocument();
+    expect(await screen.findByText(/aggregates generations where/i)).toBeInTheDocument();
+    expect(screen.getByText('gen_ai.agent.name')).toBeInTheDocument();
   });
 });

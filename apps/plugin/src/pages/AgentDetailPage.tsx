@@ -512,6 +512,7 @@ export default function AgentDetailPage({
                 onChange={(selected) => selectVersion(selected?.value ?? '')}
                 isLoading={loadingVersions}
                 placeholder="Select a version…"
+                aria-label="agent version selector"
               />
             </div>
             <Button variant="secondary" onClick={() => selectVersion('')} disabled={selectedVersion.length === 0}>
