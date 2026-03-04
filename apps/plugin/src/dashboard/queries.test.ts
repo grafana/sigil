@@ -66,9 +66,7 @@ describe('buildCascadingSelector', () => {
   });
 
   it('escapes pipe characters in values', () => {
-    expect(buildCascadingSelector({ gen_ai_provider_name: ['a|b', 'c'] })).toBe(
-      '{gen_ai_provider_name=~"a\\|b|c"}'
-    );
+    expect(buildCascadingSelector({ gen_ai_provider_name: ['a|b', 'c'] })).toBe('{gen_ai_provider_name=~"a\\|b|c"}');
   });
 });
 

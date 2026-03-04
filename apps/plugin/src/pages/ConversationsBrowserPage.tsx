@@ -284,8 +284,12 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   const from = useMemo(() => Math.floor(timeRange.from.valueOf() / 1000), [timeRange]);
   const to = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);
 
-  const { providerOptions, modelOptions, agentOptions, labelKeyOptions, labelsLoading } =
-    useCascadingFilterOptions(dashboardDS, filters, from, to);
+  const { providerOptions, modelOptions, agentOptions, labelKeyOptions, labelsLoading } = useCascadingFilterOptions(
+    dashboardDS,
+    filters,
+    from,
+    to
+  );
 
   const conversationsSegment = `/${ROUTES.Conversations}`;
   const conversationsSegmentIndex = location.pathname.indexOf(conversationsSegment);

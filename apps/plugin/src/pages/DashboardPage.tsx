@@ -32,8 +32,12 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
   const from = useMemo(() => Math.floor(timeRange.from.valueOf() / 1000), [timeRange]);
   const to = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);
 
-  const { providerOptions, modelOptions, agentOptions, labelKeyOptions, labelsLoading } =
-    useCascadingFilterOptions(dataSource, filters, from, to);
+  const { providerOptions, modelOptions, agentOptions, labelKeyOptions, labelsLoading } = useCascadingFilterOptions(
+    dataSource,
+    filters,
+    from,
+    to
+  );
 
   return (
     <div className={styles.container}>
