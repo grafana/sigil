@@ -32,10 +32,10 @@ const mockDataSource: AgentsDataSource = {
       {
         agent_name: 'data-analyst',
         latest_effective_version: 'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
-        first_seen_at: '2026-03-01T09:00:00Z',
-        latest_seen_at: '2026-03-04T09:30:00Z',
+        first_seen_at: '2026-02-01T09:00:00Z',
+        latest_seen_at: '2026-02-20T09:30:00Z',
         generation_count: 89,
-        version_count: 2,
+        version_count: 6,
         tool_count: 4,
         system_prompt_prefix: 'You are a data analyst agent that queries metrics and builds dashboards.',
         token_estimate: { system_prompt: 150, tools_total: 400, total: 550 },

@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { RouterProvider, createMemoryRouter, useLocation } from 'react-router-dom';
 import AgentsPage from './AgentsPage';
 import type { AgentsDataSource } from '../agents/api';
@@ -51,6 +51,11 @@ beforeAll(() => {
 
 beforeEach(() => {
   observerCallbacks.length = 0;
+  jest.spyOn(Date, 'now').mockReturnValue(new Date('2026-03-04T12:00:00Z').getTime());
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
 });
 
 function triggerLoadMoreIntersection() {
@@ -162,6 +167,37 @@ describe('AgentsPage', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/a/grafana-sigil-app/agents/name/assistant'));
   });
 
+  it('renders hero KPIs, rankings, and risk counts from loaded agents', async () => {
+    const dataSource = createDataSource();
+    renderPage(dataSource);
+
+    expect(await screen.findByRole('region', { name: 'agents hero summary' })).toBeInTheDocument();
+    expect(screen.getByText('Seen in selected range')).toBeInTheDocument();
+    expect(screen.getByText('Total generations')).toBeInTheDocument();
+    expect(screen.getByText('Estimated prompt+tools tokens')).toBeInTheDocument();
+    expect(screen.getByText('Avg tokens per generation')).toBeInTheDocument();
+
+    // 2 loaded agents: total generations=5, total tokens=11, avg=2
+    expect(screen.getByText('Seen in selected range').parentElement).toHaveTextContent('2');
+    expect(screen.getByText('Total generations').parentElement).toHaveTextContent('5');
+    expect(screen.getByText('Estimated prompt+tools tokens').parentElement).toHaveTextContent('11');
+    expect(screen.getByText('Avg tokens per generation').parentElement).toHaveTextContent('2');
+
+    const topByGenerationsSection = screen.getByRole('heading', { name: 'Top by generations' }).parentElement;
+    expect(topByGenerationsSection).toBeTruthy();
+    const generationButtons = within(topByGenerationsSection as HTMLElement).getAllByRole('button');
+    expect(generationButtons.map((button) => button.textContent)).toEqual(['assistant', 'Unnamed agent bucket']);
+
+    const topByTokenSection = screen.getByRole('heading', { name: 'Top by token footprint' }).parentElement;
+    expect(topByTokenSection).toBeTruthy();
+    const tokenButtons = within(topByTokenSection as HTMLElement).getAllByRole('button');
+    expect(tokenButtons.map((button) => button.textContent)).toEqual(['assistant', 'Unnamed agent bucket']);
+
+    expect(screen.getByText('anonymous buckets').parentElement).toHaveTextContent('1');
+    expect(screen.getByText('stale (> 7 days)').parentElement).toHaveTextContent('0');
+    expect(screen.getByText('high churn (5+ versions)').parentElement).toHaveTextContent('0');
+  });
+
   it('opens anonymous route', async () => {
     const dataSource = createDataSource();
     const { router } = renderPage(dataSource);
@@ -191,5 +227,7 @@ describe('AgentsPage', () => {
     fireEvent.change(screen.getByPlaceholderText('Search by agent name…'), { target: { value: 'assist' } });
 
     await waitFor(() => expect(dataSource.listAgents).toHaveBeenLastCalledWith(24, '', 'assist'));
+    await waitFor(() => expect(screen.getByText('Total generations').parentElement).toHaveTextContent('1'));
+    expect(screen.getByRole('button', { name: 'open top generation agent assistant-beta' })).toBeInTheDocument();
   });
 });
