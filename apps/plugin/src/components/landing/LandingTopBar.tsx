@@ -62,14 +62,21 @@ const METRIC_WINDOW_MS = 24 * 60 * 60 * 1000;
 const PAGE_SIZE = 200;
 const MAX_PAGES = 50;
 const HERO_STATS_STORAGE_KEY = 'grafana-sigil-hero-stats';
+const HERO_STATS_CACHE_TTL_MS = 5 * 60 * 1000;
 
 type StoredHeroStats = {
+  fetched_at?: number;
   conversations: { current: number; previous: number };
   agents: { current: number; previous: number };
   evaluations: { current: number; previous: number };
 };
 
-function loadHeroStatsFromStorage(): HeroStatItem[] | null {
+type HeroStatsCache = {
+  stats: HeroStatItem[];
+  fetchedAt?: number;
+};
+
+function readHeroStatsCache(): HeroStatsCache | null {
   try {
     const raw = localStorage.getItem(HERO_STATS_STORAGE_KEY);
     if (!raw) {
@@ -77,34 +84,53 @@ function loadHeroStatsFromStorage(): HeroStatItem[] | null {
     }
     const parsed = JSON.parse(raw) as StoredHeroStats;
     if (parsed?.conversations && parsed?.agents && parsed?.evaluations) {
-      return [
-        {
-          label: 'Conversations',
-          route: ROUTES.Conversations,
-          cta: 'View conversations',
-          ...parsed.conversations,
-          loading: false,
-        },
-        {
-          label: 'Agents',
-          route: ROUTES.Agents,
-          cta: 'Inspect agents',
-          ...parsed.agents,
-          loading: false,
-        },
-        {
-          label: 'Evaluations',
-          route: ROUTES.Evaluation,
-          cta: 'Manage evals',
-          ...parsed.evaluations,
-          loading: false,
-        },
-      ];
+      return {
+        fetchedAt: parsed.fetched_at,
+        stats: [
+          {
+            label: 'Conversations',
+            route: ROUTES.Conversations,
+            cta: 'View conversations',
+            ...parsed.conversations,
+            loading: false,
+          },
+          {
+            label: 'Agents',
+            route: ROUTES.Agents,
+            cta: 'Inspect agents',
+            ...parsed.agents,
+            loading: false,
+          },
+          {
+            label: 'Evaluations',
+            route: ROUTES.Evaluation,
+            cta: 'Manage evals',
+            ...parsed.evaluations,
+            loading: false,
+          },
+        ],
+      };
     }
     return null;
   } catch {
     return null;
   }
+}
+
+function loadHeroStatsFromStorage(): HeroStatItem[] | null {
+  const cached = readHeroStatsCache();
+  if (!cached) {
+    return null;
+  }
+  return cached.stats;
+}
+
+export function shouldFetchHeroStats(now = Date.now()): boolean {
+  const cached = readHeroStatsCache();
+  if (!cached?.fetchedAt) {
+    return true;
+  }
+  return now - cached.fetchedAt > HERO_STATS_CACHE_TTL_MS;
 }
 
 function saveHeroStatsToStorage(stats: HeroStatItem[]): void {
@@ -114,6 +140,7 @@ function saveHeroStatsToStorage(stats: HeroStatItem[]): void {
       return;
     }
     const stored: StoredHeroStats = {
+      fetched_at: Date.now(),
       conversations: { current: conv.current, previous: conv.previous },
       agents: { current: agents.current, previous: agents.previous },
       evaluations: { current: evals.current, previous: evals.previous },
@@ -225,8 +252,12 @@ export function LandingTopBar({ assistantOrigin }: LandingTopBarProps) {
 
   useEffect(() => {
     let cancelled = false;
-
     const now = Date.now();
+
+    if (!shouldFetchHeroStats(now)) {
+      return;
+    }
+
     const currentFrom = new Date(now - METRIC_WINDOW_MS);
     const currentTo = new Date(now);
     const previousFrom = new Date(now - 2 * METRIC_WINDOW_MS);
