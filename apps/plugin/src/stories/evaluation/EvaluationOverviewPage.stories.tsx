@@ -1,6 +1,7 @@
 import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import EvaluationOverviewPage from '../../pages/EvaluationOverviewPage';
+import { EvalRulesDataProvider } from '../../contexts/EvalRulesDataContext';
 import { type EvaluationDataSource } from '../../evaluation/api';
 import type {
   CreateEvaluatorRequest,
@@ -166,9 +167,11 @@ const meta = {
   title: 'Sigil/Evaluation/EvaluationOverviewPage',
   component: EvaluationOverviewPage,
   decorators: [
-    (Story: React.ComponentType) => (
+    (Story: React.ComponentType, context: { args: { dataSource?: EvaluationDataSource } }) => (
       <MemoryRouter>
-        <Story />
+        <EvalRulesDataProvider dataSource={context.args.dataSource ?? mockDataSource}>
+          <Story />
+        </EvalRulesDataProvider>
       </MemoryRouter>
     ),
   ],
@@ -189,6 +192,15 @@ export const Empty = {
       listRules: async () => ({ items: [], next_cursor: '' }),
       listEvaluators: async () => ({ items: [], next_cursor: '' }),
       listPredefinedEvaluators: async () => ({ items: [], next_cursor: '' }),
+    },
+  },
+};
+
+export const HasEvaluatorsNoRules = {
+  args: {
+    dataSource: {
+      ...mockDataSource,
+      listRules: async () => ({ items: [], next_cursor: '' }),
     },
   },
 };

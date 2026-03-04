@@ -525,6 +525,17 @@ func TestCallResource(t *testing.T) {
 			default:
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}
+		case "/api/v1/eval/rules/dsodsjodss/doidsnoids":
+			// Rule ID contains slash; backend uses RawPath. Plugin must forward with %2F encoded.
+			if !strings.Contains(r.RequestURI, "dsodsjodss%2Fdoidsnoids") {
+				http.Error(w, "rule id with slash must be path-encoded in upstream request", http.StatusBadRequest)
+				return
+			}
+			if r.Method != http.MethodDelete {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
 		case "/api/v1/eval/rules:preview":
 			if r.Method != http.MethodPost {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -760,6 +771,18 @@ func TestCallResource(t *testing.T) {
 			method:    http.MethodDelete,
 			path:      "eval/rules/rule-1",
 			expStatus: http.StatusNoContent,
+		},
+		{
+			name:      "delete rule with id containing slash",
+			method:    http.MethodDelete,
+			path:      "eval/rules/dsodsjodss%2Fdoidsnoids",
+			expStatus: http.StatusNoContent,
+		},
+		{
+			name:      "reject rule path with literal slash",
+			method:    http.MethodGet,
+			path:      "eval/rules/foo/bar",
+			expStatus: http.StatusBadRequest,
 		},
 		{
 			name:      "list judge providers",

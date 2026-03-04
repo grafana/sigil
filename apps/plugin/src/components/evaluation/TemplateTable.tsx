@@ -1,13 +1,14 @@
 import React from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Badge, Icon, IconButton, Text, useStyles2 } from '@grafana/ui';
+import { Badge, Button, IconButton, Text, useStyles2 } from '@grafana/ui';
 import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type TemplateDefinition } from '../../evaluation/types';
 
 export type TemplateTableProps = {
   templates: TemplateDefinition[];
   onSelect?: (templateID: string) => void;
   onDelete?: (templateID: string) => void;
+  onFork?: (templateID: string) => void;
 };
 
 function formatDate(iso: string): string {
@@ -23,28 +24,27 @@ const getStyles = (theme: GrafanaTheme2) => ({
   table: css({
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: theme.spacing(1),
+    gap: 0,
   }),
   header: css({
     display: 'grid',
-    gridTemplateColumns: '2fr 100px 80px 110px 3fr 100px 40px',
+    gridTemplateColumns: '2fr 100px 80px 100px 3fr 100px 80px',
     gap: theme.spacing(2),
-    padding: theme.spacing(0.5, 2),
+    padding: theme.spacing(1, 2),
+    background: theme.colors.background.secondary,
+    borderBottom: `1px solid ${theme.colors.border.medium}`,
     alignItems: 'center',
   }),
   row: css({
     display: 'grid',
-    gridTemplateColumns: '2fr 100px 80px 110px 3fr 100px 40px',
+    gridTemplateColumns: '2fr 100px 80px 100px 3fr 100px 80px',
     gap: theme.spacing(2),
-    padding: theme.spacing(1.5, 2),
+    padding: theme.spacing(1, 2),
     alignItems: 'center',
-    borderRadius: theme.shape.radius.default,
-    background: theme.colors.background.primary,
-    boxShadow: theme.shadows.z1,
+    borderBottom: `1px solid ${theme.colors.border.weak}`,
     cursor: 'pointer',
-    transition: 'box-shadow 0.15s ease-in-out',
     '&:hover': {
-      boxShadow: theme.shadows.z2,
+      background: theme.colors.action.hover,
     },
   }),
   templateId: css({
@@ -53,41 +53,36 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: theme.spacing(1),
     minWidth: 0,
   }),
-  templateIcon: css({
+  actions: css({
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    width: 28,
-    height: 28,
-    borderRadius: theme.shape.radius.sm,
-    background: theme.isDark ? 'rgba(138, 109, 245, 0.15)' : 'rgba(138, 109, 245, 0.12)',
-    color: 'rgb(138, 109, 245)',
-    flexShrink: 0,
+    justifyContent: 'flex-end',
+    gap: theme.spacing(0.5),
   }),
 });
 
-export default function TemplateTable({ templates, onSelect, onDelete }: TemplateTableProps) {
+export default function TemplateTable({ templates, onSelect, onDelete, onFork }: TemplateTableProps) {
   const styles = useStyles2(getStyles);
 
   return (
     <div className={styles.table}>
       <div className={styles.header}>
-        <Text weight="medium" variant="bodySmall" color="secondary">
+        <Text weight="medium" variant="bodySmall">
           Template
         </Text>
-        <Text weight="medium" variant="bodySmall" color="secondary">
+        <Text weight="medium" variant="bodySmall">
           Kind
         </Text>
-        <Text weight="medium" variant="bodySmall" color="secondary">
+        <Text weight="medium" variant="bodySmall">
           Scope
         </Text>
-        <Text weight="medium" variant="bodySmall" color="secondary">
+        <Text weight="medium" variant="bodySmall">
           Version
         </Text>
-        <Text weight="medium" variant="bodySmall" color="secondary">
+        <Text weight="medium" variant="bodySmall">
           Description
         </Text>
-        <Text weight="medium" variant="bodySmall" color="secondary">
+        <Text weight="medium" variant="bodySmall">
           Created
         </Text>
         <div />
@@ -100,9 +95,6 @@ export default function TemplateTable({ templates, onSelect, onDelete }: Templat
           role="row"
         >
           <div className={styles.templateId}>
-            <span className={styles.templateIcon}>
-              <Icon name="document-info" size="md" />
-            </span>
             <Text weight="medium" truncate>
               {template.template_id}
             </Text>
@@ -122,18 +114,34 @@ export default function TemplateTable({ templates, onSelect, onDelete }: Templat
           <Text color="secondary" variant="bodySmall">
             {formatDate(template.created_at)}
           </Text>
-          {onDelete && template.scope === 'tenant' ? (
-            <IconButton
-              name="trash-alt"
-              tooltip="Delete"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(template.template_id);
-              }}
-            />
-          ) : (
-            <div />
-          )}
+          <div className={styles.actions}>
+            {onFork && template.scope === 'global' && (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon="code-branch"
+                fill="text"
+                tooltip="Fork as evaluator"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFork(template.template_id);
+                }}
+              >
+                Fork
+              </Button>
+            )}
+            {onDelete && template.scope === 'tenant' && (
+              <IconButton
+                name="trash-alt"
+                size="sm"
+                tooltip="Delete"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(template.template_id);
+                }}
+              />
+            )}
+          </div>
         </div>
       ))}
     </div>

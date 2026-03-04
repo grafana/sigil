@@ -237,6 +237,30 @@ func TestRuleCRUDHTTP(t *testing.T) {
 	}
 }
 
+func TestRuleByIDAcceptsEscapedSlashInRuleID(t *testing.T) {
+	store := newMemoryControlStore()
+	if err := store.CreateEvaluator(context.Background(), evalpkg.EvaluatorDefinition{
+		TenantID: "fake", EvaluatorID: "e1", Version: "v1", Kind: evalpkg.EvaluatorKindHeuristic,
+		Config: map[string]any{}, OutputKeys: []evalpkg.OutputKey{{Key: "ok", Type: evalpkg.ScoreTypeBool}},
+	}); err != nil {
+		t.Fatalf("seed evaluator: %v", err)
+	}
+	createPayload := `{"rule_id":"ns/rule-name","selector":"user_visible_turn","sample_rate":1.0,"evaluator_ids":["e1"]}`
+	service := NewService(store, nil)
+	mux := newEvalMux(service)
+
+	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/rules", createPayload)
+	if createResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 create rule, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+
+	// Delete using URL-encoded slash (%2F) in path
+	deleteResp := doRequest(mux, http.MethodDelete, "/api/v1/eval/rules/ns%2Frule-name", "")
+	if deleteResp.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 delete rule with slash in id, got %d body=%s", deleteResp.Code, deleteResp.Body.String())
+	}
+}
+
 func TestEnableRuleRejectsMissingEvaluators(t *testing.T) {
 	store := newMemoryControlStore()
 	if err := store.CreateEvaluator(context.Background(), evalpkg.EvaluatorDefinition{

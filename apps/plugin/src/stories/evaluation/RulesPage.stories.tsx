@@ -1,6 +1,7 @@
 import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import RulesPage from '../../pages/RulesPage';
+import { EvalRulesDataProvider } from '../../contexts/EvalRulesDataContext';
 import { type EvaluationDataSource } from '../../evaluation/api';
 import type {
   CreateEvaluatorRequest,
@@ -145,9 +146,11 @@ const meta = {
   title: 'Sigil/Evaluation/RulesPage',
   component: RulesPage,
   decorators: [
-    (Story: React.ComponentType) => (
+    (Story: React.ComponentType, context: { args: { dataSource?: EvaluationDataSource } }) => (
       <MemoryRouter>
-        <Story />
+        <EvalRulesDataProvider dataSource={context.args.dataSource ?? mockDataSource}>
+          <Story />
+        </EvalRulesDataProvider>
       </MemoryRouter>
     ),
   ],
