@@ -11,9 +11,7 @@ export type EvalRulesDataProviderProps = {
 
 export function EvalRulesDataProvider({ dataSource, children }: EvalRulesDataProviderProps) {
   const value = useEvalRulesData(dataSource);
-  return (
-    <EvalRulesDataContext.Provider value={value}>{children}</EvalRulesDataContext.Provider>
-  );
+  return <EvalRulesDataContext.Provider value={value}>{children}</EvalRulesDataContext.Provider>;
 }
 
 export function useEvalRulesDataContext(): EvalRulesData {

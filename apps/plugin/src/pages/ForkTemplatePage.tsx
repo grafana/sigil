@@ -28,17 +28,16 @@ export default function ForkTemplatePage(props: ForkTemplatePageProps) {
   const styles = useStyles2(getStyles);
   const navigate = useNavigate();
   const { templateID } = useParams<{ templateID: string }>();
+  const effectiveTemplateID = templateID ?? '';
 
   const [errorMessage, setErrorMessage] = useState('');
 
-  const decodedTemplateID = templateID ? decodeURIComponent(templateID) : '';
-
   const handleSubmit = async (req: ForkTemplateRequest) => {
-    if (!decodedTemplateID) {
+    if (!effectiveTemplateID) {
       return;
     }
     try {
-      await dataSource.forkTemplate(decodedTemplateID, req);
+      await dataSource.forkTemplate(effectiveTemplateID, req);
       navigate(`${EVAL_BASE}/evaluators`);
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Failed to fork template');
@@ -58,7 +57,7 @@ export default function ForkTemplatePage(props: ForkTemplatePageProps) {
       )}
 
       <ForkTemplateForm
-        templateID={decodedTemplateID}
+        templateID={effectiveTemplateID}
         onSubmit={handleSubmit}
         onCancel={handleCancel}
         dataSource={dataSource}
