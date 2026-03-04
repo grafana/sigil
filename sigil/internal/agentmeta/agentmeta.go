@@ -64,7 +64,7 @@ func BuildDescriptor(generation *sigilv1.Generation) (Descriptor, error) {
 	agentName := strings.TrimSpace(generation.GetAgentName())
 	declaredVersion := strings.TrimSpace(generation.GetAgentVersion())
 	systemPrompt := normalizeText(generation.GetSystemPrompt())
-	systemPromptPrefix := prefixRunes(systemPrompt, systemPromptPrefixMax)
+	systemPromptPrefix := ClampRunes(systemPrompt, systemPromptPrefixMax)
 	systemPromptTokens := estimateTokens(systemPrompt)
 
 	tools := make([]Tool, 0, len(generation.GetTools()))
@@ -175,7 +175,7 @@ func canonicalizeSchema(raw []byte) (string, error) {
 	return string(normalized), nil
 }
 
-func prefixRunes(value string, limit int) string {
+func ClampRunes(value string, limit int) string {
 	if limit <= 0 || value == "" {
 		return ""
 	}

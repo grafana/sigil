@@ -97,6 +97,125 @@ func TestSaveBatchAgentCatalogAnonymousBucket(t *testing.T) {
 	}
 }
 
+func TestUpsertAgentHeadTxConcurrentWritersKeepNewestLatestFields(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	tenantID := "tenant-race"
+	agentName := "assistant"
+	baseSeenAt := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
+	if err := store.DB().Create(&AgentHeadModel{
+		TenantID:                 tenantID,
+		AgentName:                agentName,
+		LatestEffectiveVersion:   "sha256:base",
+		LatestDeclaredVersion:    stringPtr("base"),
+		LatestSeenAt:             baseSeenAt,
+		FirstSeenAt:              baseSeenAt,
+		GenerationCount:          1,
+		VersionCount:             1,
+		LatestToolCount:          1,
+		LatestSystemPromptPrefix: "base",
+	}).Error; err != nil {
+		t.Fatalf("seed agent head: %v", err)
+	}
+
+	newerSeenAt := baseSeenAt.Add(2 * time.Minute)
+	olderSeenAt := baseSeenAt.Add(1 * time.Minute)
+	newerProjection := agentCatalogProjection{
+		AgentName:                 agentName,
+		DeclaredVersion:           "v-new",
+		EffectiveVersion:          "sha256:new",
+		SystemPromptPrefix:        "new-prefix",
+		ToolCount:                 4,
+		TokenEstimateSystemPrompt: 12,
+		TokenEstimateToolsTotal:   34,
+		TokenEstimateTotal:        46,
+		SeenAt:                    newerSeenAt,
+	}
+	olderProjection := agentCatalogProjection{
+		AgentName:                 agentName,
+		DeclaredVersion:           "v-old",
+		EffectiveVersion:          "sha256:old",
+		SystemPromptPrefix:        "old-prefix",
+		ToolCount:                 2,
+		TokenEstimateSystemPrompt: 9,
+		TokenEstimateToolsTotal:   11,
+		TokenEstimateTotal:        20,
+		SeenAt:                    olderSeenAt,
+	}
+
+	txNew := store.DB().Begin()
+	if txNew.Error != nil {
+		t.Fatalf("begin newer transaction: %v", txNew.Error)
+	}
+	if err := upsertAgentHeadTx(txNew, tenantID, newerProjection, stringPtr("v-new")); err != nil {
+		_ = txNew.Rollback().Error
+		t.Fatalf("upsert newer projection: %v", err)
+	}
+
+	startedOld := make(chan struct{}, 1)
+	doneOld := make(chan error, 1)
+	go func() {
+		startedOld <- struct{}{}
+		txOld := store.DB().Begin()
+		if txOld.Error != nil {
+			doneOld <- txOld.Error
+			return
+		}
+		if err := upsertAgentHeadTx(txOld, tenantID, olderProjection, stringPtr("v-old")); err != nil {
+			_ = txOld.Rollback().Error
+			doneOld <- err
+			return
+		}
+		doneOld <- txOld.Commit().Error
+	}()
+
+	select {
+	case <-startedOld:
+	case <-time.After(2 * time.Second):
+		_ = txNew.Rollback().Error
+		t.Fatalf("old writer did not start")
+	}
+	// Give the old writer time to reach the lock boundary while the newer transaction is still open.
+	time.Sleep(200 * time.Millisecond)
+
+	if err := txNew.Commit().Error; err != nil {
+		t.Fatalf("commit newer transaction: %v", err)
+	}
+	select {
+	case err := <-doneOld:
+		if err != nil {
+			t.Fatalf("commit older transaction: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("timed out waiting for older transaction")
+	}
+
+	var head AgentHeadModel
+	if err := store.DB().
+		Where("tenant_id = ? AND agent_name = ?", tenantID, agentName).
+		Take(&head).Error; err != nil {
+		t.Fatalf("load updated agent head: %v", err)
+	}
+
+	if head.LatestEffectiveVersion != newerProjection.EffectiveVersion {
+		t.Fatalf("expected latest effective version %q, got %q", newerProjection.EffectiveVersion, head.LatestEffectiveVersion)
+	}
+	if head.LatestDeclaredVersion == nil || *head.LatestDeclaredVersion != "v-new" {
+		t.Fatalf("expected latest declared version v-new, got %v", head.LatestDeclaredVersion)
+	}
+	if !head.LatestSeenAt.UTC().Equal(newerSeenAt) {
+		t.Fatalf("expected latest seen at %s, got %s", newerSeenAt.UTC(), head.LatestSeenAt.UTC())
+	}
+	if head.LatestSystemPromptPrefix != newerProjection.SystemPromptPrefix {
+		t.Fatalf("expected latest system prompt prefix %q, got %q", newerProjection.SystemPromptPrefix, head.LatestSystemPromptPrefix)
+	}
+}
+
 func generationForAgentCatalog(
 	id string,
 	conversationID string,

@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/grafana/sigil/sigil/internal/agentmeta"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type agentCatalogProjection struct {
@@ -47,8 +47,8 @@ func buildAgentCatalogProjection(createdAt time.Time, generation *sigilv1.Genera
 	}
 
 	return agentCatalogProjection{
-		AgentName:                 clampRunes(descriptor.AgentName, agentCatalogNameMaxLen),
-		DeclaredVersion:           clampRunes(descriptor.DeclaredVersion, agentCatalogDeclaredVersionLen),
+		AgentName:                 agentmeta.ClampRunes(descriptor.AgentName, agentCatalogNameMaxLen),
+		DeclaredVersion:           agentmeta.ClampRunes(descriptor.DeclaredVersion, agentCatalogDeclaredVersionLen),
 		EffectiveVersion:          descriptor.EffectiveVersion,
 		SystemPrompt:              descriptor.SystemPrompt,
 		SystemPromptPrefix:        descriptor.SystemPromptPrefix,
@@ -57,8 +57,8 @@ func buildAgentCatalogProjection(createdAt time.Time, generation *sigilv1.Genera
 		TokenEstimateSystemPrompt: descriptor.TokenEstimateSystemPrompt,
 		TokenEstimateToolsTotal:   descriptor.TokenEstimateToolsTotal,
 		TokenEstimateTotal:        descriptor.TokenEstimateTotal,
-		ModelProvider:             clampRunes(descriptor.ModelProvider, agentCatalogModelProviderMaxLen),
-		ModelName:                 clampRunes(descriptor.ModelName, agentCatalogModelNameMaxLen),
+		ModelProvider:             agentmeta.ClampRunes(descriptor.ModelProvider, agentCatalogModelProviderMaxLen),
+		ModelName:                 agentmeta.ClampRunes(descriptor.ModelName, agentCatalogModelNameMaxLen),
 		SeenAt:                    seenAt,
 	}, nil
 }
@@ -205,6 +205,7 @@ func upsertAgentHeadTx(tx *gorm.DB, tenantID string, projection agentCatalogProj
 	for attempt := 0; attempt < 2; attempt++ {
 		var existing AgentHeadModel
 		err := tx.
+			Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("tenant_id = ? AND agent_name = ?", tenantID, projection.AgentName).
 			Take(&existing).Error
 		if err == nil {
@@ -279,15 +280,4 @@ func countAgentVersionsTx(tx *gorm.DB, tenantID, agentName string) (int, error) 
 
 func isRecordNotFound(err error) bool {
 	return errors.Is(err, gorm.ErrRecordNotFound)
-}
-
-func clampRunes(value string, maxLen int) string {
-	trimmed := strings.TrimSpace(value)
-	if maxLen <= 0 || trimmed == "" {
-		return ""
-	}
-	if utf8.RuneCountInString(trimmed) <= maxLen {
-		return trimmed
-	}
-	return string([]rune(trimmed)[:maxLen])
 }

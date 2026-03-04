@@ -112,3 +112,28 @@ func TestBuildDescriptorHandlesNonJSONSchemaDeterministically(t *testing.T) {
 		t.Fatalf("expected base64 schema fallback, got %q", first.Tools[0].InputSchemaJSON)
 	}
 }
+
+func TestClampRunes(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		limit int
+		want  string
+	}{
+		{name: "empty", value: "", limit: 3, want: ""},
+		{name: "zero_limit", value: "abc", limit: 0, want: ""},
+		{name: "short_ascii", value: "abc", limit: 5, want: "abc"},
+		{name: "truncate_ascii", value: "abcdef", limit: 3, want: "abc"},
+		{name: "truncate_unicode", value: "åß∂ƒ", limit: 2, want: "åß"},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			got := ClampRunes(tc.value, tc.limit)
+			if got != tc.want {
+				t.Fatalf("ClampRunes(%q, %d) = %q, want %q", tc.value, tc.limit, got, tc.want)
+			}
+		})
+	}
+}
