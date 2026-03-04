@@ -23,6 +23,7 @@ export type ParsedSpan = {
   endTimeUnixNano: bigint;
   durationNano: bigint;
   attributes: SpanAttributes;
+  resourceAttributes: SpanAttributes;
 };
 
 // ── OTLP parsing ──
@@ -164,6 +165,7 @@ export function parseOTLPTrace(traceID: string, payload: unknown): ParsedSpan[] 
     const resourceSpans = candidate.resourceSpans ?? candidate.resource_spans ?? candidate.batches ?? [];
     for (const resourceSpan of resourceSpans) {
       const serviceName = findServiceName(resourceSpan.resource);
+      const resAttrs = buildAttributeMap(resourceSpan.resource?.attributes);
       const scopeSpans =
         resourceSpan.scopeSpans ?? resourceSpan.scope_spans ?? resourceSpan.instrumentationLibrarySpans ?? [];
       for (const scopeSpan of scopeSpans) {
@@ -192,6 +194,7 @@ export function parseOTLPTrace(traceID: string, payload: unknown): ParsedSpan[] 
             endTimeUnixNano: safeEnd,
             durationNano: safeEnd > startNs ? safeEnd - startNs : BIGINT_ONE,
             attributes: buildAttributeMap(span.attributes),
+            resourceAttributes: resAttrs,
           });
         }
       }
