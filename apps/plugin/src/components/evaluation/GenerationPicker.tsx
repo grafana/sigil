@@ -3,13 +3,16 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Button, Icon, Input, Spinner, Text, useStyles2 } from '@grafana/ui';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../../conversation/api';
+import { defaultEvaluationDataSource, type EvaluationDataSource } from '../../evaluation/api';
 import type { ConversationDetail } from '../../conversation/types';
 import type { GenerationDetail } from '../../generation/types';
+import type { SavedConversation } from '../../evaluation/types';
 
 export type GenerationPickerProps = {
   onSelect: (generationId: string | undefined) => void;
   selectedGenerationId?: string;
   conversationsDataSource?: ConversationsDataSource;
+  evaluationDataSource?: EvaluationDataSource;
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -72,6 +75,43 @@ const getStyles = (theme: GrafanaTheme2) => ({
     border: `1px solid ${theme.colors.success.border}`,
     borderRadius: theme.shape.radius.default,
   }),
+  tabBar: css({
+    display: 'flex',
+    gap: theme.spacing(0.5),
+    padding: theme.spacing(0.5, 1),
+    borderBottom: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.secondary,
+  }),
+  tabButton: css({
+    padding: theme.spacing(0.5, 1),
+    border: 'none',
+    background: 'transparent',
+    cursor: 'pointer',
+    borderRadius: theme.shape.radius.default,
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.bodySmall.fontSize,
+    '&:hover': {
+      background: theme.colors.action.hover,
+    },
+  }),
+  tabButtonActive: css({
+    padding: theme.spacing(0.5, 1),
+    border: 'none',
+    background: theme.colors.action.selected,
+    cursor: 'pointer',
+    borderRadius: theme.shape.radius.default,
+    color: theme.colors.text.primary,
+    fontSize: theme.typography.bodySmall.fontSize,
+    fontWeight: theme.typography.fontWeightMedium,
+  }),
+  sourceBadge: css({
+    display: 'inline-block',
+    padding: theme.spacing(0, 0.5),
+    borderRadius: theme.shape.radius.default,
+    fontSize: theme.typography.bodySmall.fontSize,
+    background: theme.colors.background.secondary,
+    color: theme.colors.text.secondary,
+  }),
 });
 
 type ConversationRow = {
@@ -85,15 +125,21 @@ export default function GenerationPicker({
   onSelect,
   selectedGenerationId,
   conversationsDataSource,
+  evaluationDataSource,
 }: GenerationPickerProps) {
   const styles = useStyles2(getStyles);
   const convDs = conversationsDataSource ?? defaultConversationsDataSource;
+  const evalDs = evaluationDataSource ?? defaultEvaluationDataSource;
   const [query, setQuery] = useState('');
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [tab, setTab] = useState<'saved' | 'recent'>('saved');
+  const [savedConversations, setSavedConversations] = useState<SavedConversation[]>([]);
+  const [loadingSaved, setLoadingSaved] = useState(false);
+
   const loadList = useCallback(async () => {
     setLoading(true);
     try {
@@ -150,6 +196,35 @@ export default function GenerationPicker({
     }, 300);
     return () => clearTimeout(timer);
   }, [query, loadList, convDs]);
+
+  // Load saved conversations when the saved tab is active
+  useEffect(() => {
+    if (tab !== 'saved') {
+      return;
+    }
+    let cancelled = false;
+    setLoadingSaved(true);
+    evalDs
+      .listSavedConversations(undefined, 50)
+      .then((resp) => {
+        if (!cancelled) {
+          setSavedConversations(resp.items ?? []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSavedConversations([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingSaved(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, evalDs]);
 
   const handleConversationClick = async (conversationId: string) => {
     setLoadingDetail(true);
@@ -249,49 +324,95 @@ export default function GenerationPicker({
   // Step 1: Pick a conversation
   return (
     <div className={styles.container}>
-      <div className={styles.stepHeader}>
-        <Text variant="bodySmall" weight="medium">
-          Pick a conversation
-        </Text>
-        <Text variant="bodySmall" color="secondary">
-          (recent)
-        </Text>
+      <div className={styles.tabBar}>
+        <button className={tab === 'saved' ? styles.tabButtonActive : styles.tabButton} onClick={() => setTab('saved')}>
+          Saved
+        </button>
+        <button
+          className={tab === 'recent' ? styles.tabButtonActive : styles.tabButton}
+          onClick={() => setTab('recent')}
+        >
+          Recent
+        </button>
       </div>
-      <div className={styles.searchBox}>
-        <Input
-          placeholder="Filter by conversation ID, model, or agent..."
-          value={query}
-          onChange={(e) => setQuery(e.currentTarget.value)}
-          prefix={loading ? <Spinner inline /> : undefined}
-        />
-      </div>
-      <div className={styles.list}>
-        {conversations.map((conv) => (
-          <div
-            key={conv.conversation_id}
-            className={styles.row}
-            onClick={() => handleConversationClick(conv.conversation_id)}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => e.key === 'Enter' && handleConversationClick(conv.conversation_id)}
-          >
-            <Text variant="bodySmall" weight="medium" truncate>
-              {conv.conversation_id}
-            </Text>
-            <Text variant="bodySmall" color="secondary">
-              {`${conv.generation_count} generations`} &middot; {conv.models?.join(', ') || '\u2014'} &middot;{' '}
-              {conv.last_generation_at ? new Date(conv.last_generation_at).toLocaleString() : '\u2014'}
-            </Text>
+
+      {tab === 'saved' && (
+        <>
+          <div className={styles.list}>
+            {loadingSaved && (
+              <div className={styles.empty}>
+                <Spinner />
+              </div>
+            )}
+            {!loadingSaved &&
+              savedConversations.map((sc) => (
+                <div
+                  key={sc.saved_id}
+                  className={styles.row}
+                  onClick={() => handleConversationClick(sc.conversation_id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === 'Enter' && handleConversationClick(sc.conversation_id)}
+                >
+                  <Text variant="bodySmall" weight="medium" truncate>
+                    {sc.name}
+                  </Text>
+                  <Text variant="bodySmall" color="secondary">
+                    <span className={styles.sourceBadge}>{sc.source}</span> &middot; {sc.saved_by} &middot;{' '}
+                    {sc.created_at ? new Date(sc.created_at).toLocaleString() : '\u2014'}
+                  </Text>
+                </div>
+              ))}
+            {!loadingSaved && savedConversations.length === 0 && (
+              <div className={styles.empty}>
+                <Text variant="bodySmall" color="secondary">
+                  No saved conversations.
+                </Text>
+              </div>
+            )}
           </div>
-        ))}
-        {!loading && conversations.length === 0 && (
-          <div className={styles.empty}>
-            <Text variant="bodySmall" color="secondary">
-              No conversations found.
-            </Text>
+        </>
+      )}
+
+      {tab === 'recent' && (
+        <>
+          <div className={styles.searchBox}>
+            <Input
+              placeholder="Filter by conversation ID, model, or agent..."
+              value={query}
+              onChange={(e) => setQuery(e.currentTarget.value)}
+              prefix={loading ? <Spinner inline /> : undefined}
+            />
           </div>
-        )}
-      </div>
+          <div className={styles.list}>
+            {conversations.map((conv) => (
+              <div
+                key={conv.conversation_id}
+                className={styles.row}
+                onClick={() => handleConversationClick(conv.conversation_id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && handleConversationClick(conv.conversation_id)}
+              >
+                <Text variant="bodySmall" weight="medium" truncate>
+                  {conv.conversation_id}
+                </Text>
+                <Text variant="bodySmall" color="secondary">
+                  {`${conv.generation_count} generations`} &middot; {conv.models?.join(', ') || '\u2014'} &middot;{' '}
+                  {conv.last_generation_at ? new Date(conv.last_generation_at).toLocaleString() : '\u2014'}
+                </Text>
+              </div>
+            ))}
+            {!loading && conversations.length === 0 && (
+              <div className={styles.empty}>
+                <Text variant="bodySmall" color="secondary">
+                  No conversations found.
+                </Text>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

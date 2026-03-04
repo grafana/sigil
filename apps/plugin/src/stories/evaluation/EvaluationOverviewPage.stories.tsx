@@ -161,6 +161,11 @@ const mockDataSource: EvaluationDataSource = {
     created_at: '',
   }),
   forkTemplate: async () => mockEvaluators[0],
+  listSavedConversations: async () => ({ items: [], next_cursor: '' }),
+  saveConversation: async () => ({}) as never,
+  getSavedConversation: async () => ({}) as never,
+  deleteSavedConversation: async () => {},
+  createManualConversation: async () => ({}) as never,
 };
 
 const meta = {

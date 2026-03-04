@@ -69,6 +69,7 @@ This is the canonical navigation map for repository documentation.
   - Sigil image and plugin artifact publish delivery: `exec-plans/completed/2026-03-02-sigil-image-and-plugin-publish.md`
   - Runtime role split and distributed Helm topology delivery: `exec-plans/completed/2026-03-02-runtime-role-split.md`
   - Conversation details Jaeger-style tree port: `exec-plans/completed/2026-03-03-conversation-jaeger-tree.md`
+  - Eval saved conversations: `exec-plans/completed/2026-03-04-eval-saved-conversations.md`
   - Completed: `exec-plans/completed/`
     - `exec-plans/completed/2026-02-11-bootstrap-phase-1.md` (superseded)
     - `exec-plans/completed/2026-02-12-model-card-catalog-refresh.md`
