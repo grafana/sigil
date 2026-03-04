@@ -157,6 +157,7 @@ See `docs/references/grafana-query-response-shapes.md`.
   - when resolve maps cloud-provider model IDs to catalog IDs (for example Bedrock IDs mapping to `anthropic/*` cards), keep original provider/model labels in UI and show mapping as supplemental context
 - Conversations:
   - query conversations with expression filters and selectable attributes
+  - display optional `conversation_title` labels from Tempo span attribute `sigil.conversation.title` (latest matching span wins; fallback to conversation id)
   - support cursor pagination in list view
   - open conversation detail with hydrated generations, ratings, and annotations
   - open generation detail with trace/span identifiers

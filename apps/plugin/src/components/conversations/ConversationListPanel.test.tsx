@@ -46,7 +46,20 @@ describe('ConversationListPanel', () => {
       />
     );
     fireEvent.click(screen.getByLabelText('select conversation conv-1'));
-    expect(onSelect).toHaveBeenCalledWith('conv-1');
+    expect(onSelect).toHaveBeenCalledWith('conv-1', undefined);
+  });
+
+  it('passes conversation title to onSelectConversation when available', () => {
+    const onSelect = jest.fn();
+    render(
+      <ConversationListPanel
+        {...defaultProps}
+        conversations={[makeConversation('conv-1', { conversation_title: 'Incident triage' })]}
+        onSelectConversation={onSelect}
+      />
+    );
+    fireEvent.click(screen.getByLabelText('select conversation conv-1'));
+    expect(onSelect).toHaveBeenCalledWith('conv-1', 'Incident triage');
   });
 
   it('shows relative time and conversation ID for each row', () => {
@@ -58,6 +71,17 @@ describe('ConversationListPanel', () => {
     );
     expect(screen.getByText('conv-1')).toBeInTheDocument();
     expect(screen.getByText(/ago|just now|Feb|Mar|Jan/)).toBeInTheDocument();
+  });
+
+  it('prefers conversation title when present', () => {
+    render(
+      <ConversationListPanel
+        {...defaultProps}
+        conversations={[makeConversation('conv-1', { conversation_title: 'Incident triage: payment webhook' })]}
+      />
+    );
+    expect(screen.getByText('Incident triage: payment webhook')).toBeInTheDocument();
+    expect(screen.queryByText(/^conv-1$/)).not.toBeInTheDocument();
   });
 
   it('does not render day header rows in compact mode', () => {
@@ -129,6 +153,22 @@ describe('ConversationListPanel', () => {
     );
     expect(screen.getByText('conv-abc...')).toBeInTheDocument();
     expect(screen.getByLabelText('copy conversation id')).toBeInTheDocument();
+  });
+
+  it('shows title plus truncated ID in extended mode when title is present', () => {
+    render(
+      <ConversationListPanel
+        {...defaultProps}
+        conversations={[
+          makeConversation('conv-abcdef-1234567890', {
+            conversation_title: 'Follow-up: outage postmortem',
+          }),
+        ]}
+        showExtendedColumns
+      />
+    );
+    expect(screen.getByText('Follow-up: outage postmortem')).toBeInTheDocument();
+    expect(screen.getByText('conv-abc...')).toBeInTheDocument();
   });
 
   it('applies error border class for rows with errors', () => {

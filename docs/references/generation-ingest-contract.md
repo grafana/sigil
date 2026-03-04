@@ -128,6 +128,7 @@ audience: both
 - Conditionally present when value exists:
   - `sigil.generation.id`
   - `gen_ai.conversation.id`
+  - `sigil.conversation.title` (Sigil extension)
   - `gen_ai.agent.name`
   - `gen_ai.agent.version` (Sigil extension; OTel-style naming)
   - `gen_ai.provider.name`
@@ -159,6 +160,7 @@ audience: both
   "attributes": {
     "sigil.generation.id": "gen_01K2...",
     "gen_ai.conversation.id": "conv-7",
+    "sigil.conversation.title": "Weather follow-up",
     "gen_ai.agent.name": "assistant-anthropic",
     "gen_ai.agent.version": "1.0.0",
     "gen_ai.operation.name": "generateText",
@@ -207,6 +209,7 @@ The normalized payload keeps provider-only details in `metadata` with a stable S
   - `gen_ai.tool.type` (if set)
   - `gen_ai.tool.description` (if set)
   - `gen_ai.conversation.id` (if set)
+  - `sigil.conversation.title` (if set)
   - `gen_ai.agent.name` (if set)
   - `gen_ai.agent.version` (if set)
   - `gen_ai.tool.call.arguments` and `gen_ai.tool.call.result` only when content capture is enabled
