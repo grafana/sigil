@@ -8,11 +8,13 @@ import type { AgentListItem } from '../agents/types';
 import { buildAgentDetailByNameRoute, buildAnonymousAgentDetailRoute, PLUGIN_BASE } from '../constants';
 import { formatDateShort } from '../utils/date';
 import { AgentActivityTimeline } from '../components/agents/AgentActivityTimeline';
+import TokenCostBox from '../components/agents/TokenCostBox';
 
 const PAGE_SIZE = 24;
 const STALE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const HIGH_CHURN_THRESHOLD = 5;
 const HERO_TOP_LIMIT = 3;
+const ESTIMATED_USD_PER_TOKEN = 2.5 / 1_000_000;
 const compactNumberFormatter = new Intl.NumberFormat('en-US', {
   notation: 'compact',
   maximumFractionDigits: 1,
@@ -49,7 +51,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   heroWrap: css({
     display: 'flex',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
   }),
   hero: css({
     width: '100%',
@@ -404,7 +406,10 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
       highChurnCount,
       totalGenerations,
       totalEstimatedTokens,
+      totalEstimatedCostUSD: totalEstimatedTokens * ESTIMATED_USD_PER_TOKEN,
       averageTokensPerGeneration: totalGenerations > 0 ? Math.round(totalEstimatedTokens / totalGenerations) : 0,
+      averageCostPerGenerationUSD:
+        totalGenerations > 0 ? (totalEstimatedTokens / totalGenerations) * ESTIMATED_USD_PER_TOKEN : 0,
       topByGenerations,
       topByTokenFootprint,
     };
@@ -560,7 +565,13 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
                         help="Sum of token_estimate.total across loaded agents. This is prompt and tool footprint, not runtime token usage."
                         className={styles.heroKpiLabel}
                       />
-                      <span className={styles.heroKpiValue}>{summary.totalEstimatedTokens.toLocaleString()}</span>
+                      <span className={styles.heroKpiValue}>
+                        <TokenCostBox
+                          tokenCount={summary.totalEstimatedTokens}
+                          costUSD={summary.totalEstimatedCostUSD}
+                          ariaLabel="Total prompt and tools footprint"
+                        />
+                      </span>
                     </div>
                     <div className={styles.heroKpiCard}>
                       <LabelWithHelp
@@ -568,7 +579,13 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
                         help="Computed as total estimated prompt+tools tokens divided by total generations for loaded agents."
                         className={styles.heroKpiLabel}
                       />
-                      <span className={styles.heroKpiValue}>{summary.averageTokensPerGeneration.toLocaleString()}</span>
+                      <span className={styles.heroKpiValue}>
+                        <TokenCostBox
+                          tokenCount={summary.averageTokensPerGeneration}
+                          costUSD={summary.averageCostPerGenerationUSD}
+                          ariaLabel="Average prompt and tools footprint per generation"
+                        />
+                      </span>
                     </div>
                   </div>
 
@@ -617,7 +634,12 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
                             >
                               {item.agent_name.trim().length > 0 ? item.agent_name : 'Unnamed agent bucket'}
                             </button>
-                            <span className={styles.rankValue}>{formatCompactNumber(item.token_estimate.total)}</span>
+                            <TokenCostBox
+                              tokenCount={item.token_estimate.total}
+                              costUSD={item.token_estimate.total * ESTIMATED_USD_PER_TOKEN}
+                              className={styles.rankValue}
+                              ariaLabel={`Token footprint for ${cardLabel(item)}`}
+                            />
                           </li>
                         ))}
                       </ul>
