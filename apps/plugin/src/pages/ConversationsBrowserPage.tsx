@@ -16,7 +16,7 @@ import type { ModelCard } from '../modelcard/types';
 import { resolveModelCardsFromNames } from '../modelcard/resolve';
 import ConversationListPanel from '../components/conversations/ConversationListPanel';
 import { ConversationTimelineHistogram } from '../components/conversations/ConversationTimelineHistogram';
-import { buildConversationViewRoute, ROUTES } from '../constants';
+import { buildConversationExploreRoute, ROUTES } from '../constants';
 
 export type ConversationsBrowserPageProps = {
   dataSource?: ConversationsDataSource;
@@ -316,7 +316,7 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   }, [conversations, modelCardClient]);
 
   const getConversationHref = useCallback(
-    (conversationID: string) => buildAppPath(buildConversationViewRoute(conversationID)),
+    (conversationID: string) => buildAppPath(buildConversationExploreRoute(conversationID)),
     [buildAppPath]
   );
 

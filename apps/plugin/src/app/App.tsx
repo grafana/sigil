@@ -10,6 +10,7 @@ const DashboardPage = React.lazy(() => import('../pages/DashboardPage'));
 const Landing1Page = React.lazy(() => import('../pages/Landing1Page'));
 const ConversationsBrowserPage = React.lazy(() => import('../pages/ConversationsBrowserPage'));
 const ConversationPage = React.lazy(() => import('../pages/ConversationPage'));
+const ConversationExplorePage = React.lazy(() => import('../pages/ConversationExplorePage'));
 const ConversationDetailPage = React.lazy(() => import('../pages/ConversationDetailPage'));
 const ConversationsPage = React.lazy(() => import('../pages/ConversationsPage'));
 const AgentsPage = React.lazy(() => import('../pages/AgentsPage'));
@@ -121,7 +122,9 @@ export default function App(props: AppRootProps) {
     document.title = `${currentTitle} - ${APP_TITLE}${grafanaTitleSuffix.current}`;
   }, [currentTitle]);
 
-  const isConversationsRoute = new RegExp(`(^|/)${ROUTES.Conversations}(/[^/]+/view)?/?$`).test(location.pathname);
+  const isConversationsRoute = new RegExp(`(^|/)${ROUTES.Conversations}(/[^/]+/(view|explore))?/?$`).test(
+    location.pathname
+  );
   const isLanding1Route = /\/landing1\/?$/.test(location.pathname);
 
   return (
@@ -165,54 +168,20 @@ export default function App(props: AppRootProps) {
             }
           />
           <Route
-            path={ROUTES.ConversationsDetail}
+            path={ROUTES.ConversationsExplore}
             element={
-              <PageRoot>
-                <ConversationDetailPage />
-              </PageRoot>
+              <div className={styles.conversationsRouteContainer}>
+                <ConversationExplorePage />
+              </div>
             }
           />
-          <Route
-            path={ROUTES.ConversationsOld}
-            element={
-              <PageRoot>
-                <ConversationsPage />
-              </PageRoot>
-            }
-          />
-          <Route
-            path={ROUTES.Agents}
-            element={
-              <PageRoot>
-                <AgentsPage />
-              </PageRoot>
-            }
-          />
-          <Route
-            path={ROUTES.AgentDetailByName}
-            element={
-              <PageRoot>
-                <AgentDetailPage />
-              </PageRoot>
-            }
-          />
-          <Route
-            path={ROUTES.AgentDetailAnonymous}
-            element={
-              <PageRoot>
-                <AgentDetailPage />
-              </PageRoot>
-            }
-          />
-          <Route
-            path={`${ROUTES.Evaluation}/*`}
-            element={
-              <PageRoot>
-                <EvaluationPage />
-              </PageRoot>
-            }
-          />
-          <Route path="*" element={<PageRoot>{isLanding1Route ? <Landing1Page /> : <DashboardPage />}</PageRoot>} />
+          <Route path={ROUTES.ConversationsDetail} element={<ConversationDetailPage />} />
+          <Route path={ROUTES.ConversationsOld} element={<ConversationsPage />} />
+          <Route path={ROUTES.Agents} element={<AgentsPage />} />
+          <Route path={ROUTES.AgentDetailByName} element={<AgentDetailPage />} />
+          <Route path={ROUTES.AgentDetailAnonymous} element={<AgentDetailPage />} />
+          <Route path={`${ROUTES.Evaluation}/*`} element={<EvaluationPage />} />
+          <Route path="*" element={isLanding1Route ? <Landing1Page /> : <DashboardPage />} />
         </Routes>
       </div>
     </div>

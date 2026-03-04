@@ -1,0 +1,85 @@
+import { css } from '@emotion/css';
+import type { GrafanaTheme2 } from '@grafana/data';
+
+export const getStyles = (theme: GrafanaTheme2) => ({
+  container: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(2),
+    padding: `${theme.spacing(1.5)} ${theme.spacing(2)}`,
+    borderBottom: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.primary,
+    flexShrink: 0,
+    flexWrap: 'wrap' as const,
+  }),
+  conversationId: css({
+    fontFamily: theme.typography.fontFamilyMonospace,
+    fontSize: theme.typography.bodySmall.fontSize,
+    color: theme.colors.text.secondary,
+    maxWidth: 260,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  }),
+  separator: css({
+    width: 1,
+    height: 20,
+    background: theme.colors.border.weak,
+    flexShrink: 0,
+  }),
+  metric: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    fontSize: theme.typography.bodySmall.fontSize,
+    color: theme.colors.text.secondary,
+    whiteSpace: 'nowrap',
+  }),
+  metricValue: css({
+    color: theme.colors.text.primary,
+    fontWeight: theme.typography.fontWeightMedium,
+    fontVariantNumeric: 'tabular-nums',
+  }),
+  modelChips: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    marginLeft: 'auto',
+    flexWrap: 'wrap' as const,
+  }),
+  modelChip: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    padding: `${theme.spacing(0.25)} ${theme.spacing(1)}`,
+    borderRadius: theme.shape.radius.pill,
+    fontSize: theme.typography.bodySmall.fontSize,
+    fontWeight: theme.typography.fontWeightMedium,
+    background: theme.colors.background.secondary,
+    color: theme.colors.text.primary,
+    border: `1px solid ${theme.colors.border.weak}`,
+  }),
+  providerDot: css({
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    flexShrink: 0,
+  }),
+  statusBadge: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    padding: `${theme.spacing(0.25)} ${theme.spacing(1)}`,
+    borderRadius: theme.shape.radius.pill,
+    fontSize: theme.typography.bodySmall.fontSize,
+    fontWeight: theme.typography.fontWeightMedium,
+  }),
+  statusSuccess: css({
+    background: theme.colors.success.transparent,
+    color: theme.colors.success.text,
+  }),
+  statusError: css({
+    background: theme.colors.error.transparent,
+    color: theme.colors.error.text,
+  }),
+});

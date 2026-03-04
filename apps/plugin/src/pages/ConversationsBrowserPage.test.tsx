@@ -152,7 +152,7 @@ describe('ConversationsBrowserPage', () => {
     const router = createMemoryRouter(
       [
         {
-          path: '/conversations/:conversationID/view',
+          path: '/conversations/:conversationID/explore',
           element: <ConversationPage dataSource={dataSource} traceFetcher={noopTraceFetcher} />,
         },
         {
@@ -186,7 +186,7 @@ describe('ConversationsBrowserPage', () => {
     expect(await screen.findByText('Conversation ID')).toBeInTheDocument();
     expect(await screen.findByText(/^Generations \(\d+\)$/)).toBeInTheDocument();
     expect(screen.getByText('Conversation ID').parentElement).toHaveTextContent('conv-b');
-    expect(router.state.location.pathname).toBe('/conversations/conv-b/view');
+    expect(router.state.location.pathname).toBe('/conversations/conv-b/explore');
     expect(screen.queryByLabelText('select conversation conv-b')).not.toBeInTheDocument();
     expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-b');
   });
