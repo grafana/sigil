@@ -118,6 +118,29 @@ describe('parseOTLPTrace', () => {
     expect(spans[0].attributes.get('gen_ai.usage.input_tokens')).toEqual({ intValue: '500' });
   });
 
+  it('extracts resource attributes', () => {
+    const payload = {
+      resourceSpans: [
+        {
+          resource: {
+            attributes: [
+              { key: 'service.name', value: { stringValue: 'my-svc' } },
+              { key: 'deployment.environment', value: { stringValue: 'production' } },
+              { key: 'telemetry.sdk.language', value: { stringValue: 'go' } },
+            ],
+          },
+          scopeSpans: [{ spans: [makeOTLPSpan()] }],
+        },
+      ],
+    };
+    const spans = parseOTLPTrace('t1', payload);
+    expect(spans).toHaveLength(1);
+    expect(spans[0].serviceName).toBe('my-svc');
+    expect(spans[0].resourceAttributes.get('service.name')).toEqual({ stringValue: 'my-svc' });
+    expect(spans[0].resourceAttributes.get('deployment.environment')).toEqual({ stringValue: 'production' });
+    expect(spans[0].resourceAttributes.get('telemetry.sdk.language')).toEqual({ stringValue: 'go' });
+  });
+
   it('skips spans without startTimeUnixNano', () => {
     const payload = makeOTLPPayload([makeOTLPSpan({ startTimeUnixNano: undefined, start_time_unix_nano: undefined })]);
     expect(parseOTLPTrace('t1', payload)).toHaveLength(0);
@@ -203,6 +226,7 @@ describe('span classifiers', () => {
       endTimeUnixNano: BigInt(1),
       durationNano: BigInt(1),
       attributes: new Map(entries),
+      resourceAttributes: new Map(),
       generation: null,
       children: [],
     };

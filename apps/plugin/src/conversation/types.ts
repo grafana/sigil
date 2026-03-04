@@ -161,6 +161,7 @@ export type ConversationSpan = {
   endTimeUnixNano: bigint;
   durationNano: bigint;
   attributes: SpanAttributes;
+  resourceAttributes: SpanAttributes;
   generation: GenerationDetail | null;
   children: ConversationSpan[];
 };

@@ -33,6 +33,7 @@ function makeSpan({
     endTimeUnixNano: BigInt(2),
     durationNano: BigInt(1),
     attributes: new Map(),
+    resourceAttributes: new Map(),
     generation: null,
     children: [],
     ...overrides,

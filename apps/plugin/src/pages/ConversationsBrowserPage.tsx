@@ -1,35 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { dateTime, makeTimeRange, type GrafanaTheme2, type TimeRange } from '@grafana/data';
-import { Alert, Spinner, TimeRangePicker, useStyles2 } from '@grafana/ui';
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Alert, TimeRangePicker, useStyles2 } from '@grafana/ui';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
-import { loadConversation as loadConversationData, type TraceFetcher } from '../conversation/loader';
-import { createTempoTraceFetcher } from '../conversation/fetchTrace';
-import { findSpanBySelectionID, getSelectionID } from '../conversation/spans';
-import {
-  getTokenSummary,
-  getCostSummary,
-  getAllGenerations,
-  type TokenSummary,
-  type CostSummary,
-} from '../conversation/aggregates';
-import { resolveGenerationCosts } from '../generation/cost';
-import { defaultModelCardClient, type ModelCardClient } from '../modelcard/api';
-import { resolveModelCardsFromNames } from '../modelcard/resolve';
-import type { GenerationCostResult } from '../generation/types';
-import type { ConversationData, ConversationSearchResult, ConversationSpan } from '../conversation/types';
-import ConversationColumn from '../components/conversations/ConversationColumn';
+import type { ConversationSearchResult } from '../conversation/types';
 import ConversationListPanel from '../components/conversations/ConversationListPanel';
 import { buildConversationViewRoute, ROUTES } from '../constants';
 
 export type ConversationsBrowserPageProps = {
   dataSource?: ConversationsDataSource;
-  traceFetcher?: TraceFetcher;
-  modelCardClient?: ModelCardClient;
 };
-
-const defaultTraceFetcher = createTempoTraceFetcher();
 
 const DEFAULT_TIME_RANGE_HOURS = 1;
 const SDK_NAME_SELECT_KEY = 'span.sigil.sdk.name';
@@ -85,8 +66,7 @@ async function fetchRangeConversations(
 
 function buildConversationStats(conversations: ConversationSearchResult[], windowEndMs: number): ConversationStats {
   const totalConversations = conversations.length;
-  const dayMs = 24 * 60 * 60 * 1000;
-  const weekMs = 7 * dayMs;
+  const weekMs = 7 * 24 * 60 * 60 * 1000;
   let totalLLMCalls = 0;
   let totalTokens = 0;
   let activeLast7d = 0;
@@ -235,154 +215,21 @@ const getStyles = (theme: GrafanaTheme2) => ({
     borderBottom: `1px solid ${theme.colors.error.main}`,
     borderRadius: 0,
   }),
-  layout: css({
-    label: 'conversationsBrowserPage-layout',
-    display: 'grid',
-    gridTemplateColumns: 'minmax(340px, 1fr)',
-    gap: theme.spacing(2),
-    minHeight: 0,
-    overflow: 'hidden',
-  }),
-  layoutWithSelection: css({
-    label: 'conversationsBrowserPage-layoutWithSelection',
-    display: 'flex',
-    flexDirection: 'row' as const,
-    minHeight: 0,
-    overflow: 'hidden',
-  }),
-  leftPanel: css({
-    label: 'conversationsBrowserPage-leftPanel',
+  listPanel: css({
+    label: 'conversationsBrowserPage-listPanel',
     minHeight: 0,
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column' as const,
   }),
-  middlePanel: css({
-    label: 'conversationsBrowserPage-middlePanel',
-    minHeight: 0,
-    overflow: 'hidden',
-    minWidth: 0,
-  }),
-  detailPanel: css({
-    label: 'conversationsBrowserPage-detailPanel',
-    minHeight: 0,
-    overflowY: 'auto' as const,
-    minWidth: 0,
-    borderLeft: `1px solid ${theme.colors.border.weak}`,
-    paddingLeft: theme.spacing(2),
-  }),
-  splitterHandle: css({
-    label: 'conversationsBrowserPage-splitterHandle',
-    width: '6px',
-    flexShrink: 0,
-    cursor: 'col-resize',
-    position: 'relative',
-    zIndex: 2,
-    '&::before': {
-      content: '""',
-      position: 'absolute',
-      top: 0,
-      bottom: 0,
-      left: '2px',
-      width: '2px',
-      background: theme.colors.border.weak,
-      transition: 'background 150ms ease',
-    },
-    '&:hover::before': {
-      background: theme.colors.primary.main,
-    },
-  }),
-  splitterHandleDragging: css({
-    label: 'conversationsBrowserPage-splitterHandleDragging',
-    '&::before': {
-      background: theme.colors.primary.main,
-    },
-  }),
-  emptySelection: css({
-    label: 'conversationsBrowserPage-emptySelection',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100%',
-    color: theme.colors.text.secondary,
-    padding: theme.spacing(2),
-  }),
-  detailPlaceholder: css({
-    label: 'conversationsBrowserPage-detailPlaceholder',
-    flex: 1,
-    minHeight: 0,
-    border: `1px dashed ${theme.colors.border.medium}`,
-    borderRadius: theme.shape.radius.default,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: theme.colors.text.secondary,
-    padding: theme.spacing(2),
-  }),
-  detailJson: css({
-    label: 'conversationsBrowserPage-detailJson',
-    margin: 0,
-    padding: theme.spacing(1.5),
-    borderRadius: theme.shape.radius.default,
-    border: `1px solid ${theme.colors.border.weak}`,
-    background: theme.colors.background.secondary,
-    whiteSpace: 'pre-wrap' as const,
-    overflowWrap: 'anywhere' as const,
-    fontFamily: theme.typography.fontFamilyMonospace,
-    fontSize: theme.typography.bodySmall.fontSize,
-  }),
-  pageSpinner: css({
-    label: 'conversationsBrowserPage-pageSpinner',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    minHeight: 280,
-  }),
 });
-
-function serializeSpanToJSON(span: ConversationSpan): string {
-  const attrs: Record<string, string> = {};
-  for (const [key, value] of span.attributes) {
-    if (value.stringValue !== undefined) {
-      attrs[key] = value.stringValue;
-    } else if (value.intValue !== undefined) {
-      attrs[key] = value.intValue;
-    } else if (value.doubleValue !== undefined) {
-      attrs[key] = value.doubleValue;
-    } else if (value.boolValue !== undefined) {
-      attrs[key] = String(value.boolValue);
-    }
-  }
-  return JSON.stringify(
-    {
-      traceID: span.traceID,
-      spanID: span.spanID,
-      parentSpanID: span.parentSpanID,
-      name: span.name,
-      kind: span.kind,
-      serviceName: span.serviceName,
-      startTimeUnixNano: span.startTimeUnixNano.toString(),
-      endTimeUnixNano: span.endTimeUnixNano.toString(),
-      durationNano: span.durationNano.toString(),
-      attributes: attrs,
-      generation: span.generation,
-    },
-    null,
-    2
-  );
-}
 
 export default function ConversationsBrowserPage(props: ConversationsBrowserPageProps) {
   const styles = useStyles2(getStyles);
   const dataSource = props.dataSource ?? defaultConversationsDataSource;
-  const traceFetcher = props.traceFetcher ?? defaultTraceFetcher;
-  const modelCardClient = props.modelCardClient ?? defaultModelCardClient;
   const location = useLocation();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const { conversationID: selectedConversationParam = '' } = useParams<{ conversationID?: string }>();
-  const hasSelection = selectedConversationParam.length > 0;
+
   const conversationsSegment = `/${ROUTES.Conversations}`;
   const conversationsSegmentIndex = location.pathname.indexOf(conversationsSegment);
   const appBasePath = conversationsSegmentIndex >= 0 ? location.pathname.slice(0, conversationsSegmentIndex) : '';
@@ -397,61 +244,10 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
 
   const [conversations, setConversations] = useState<ConversationSearchResult[]>([]);
   const [previousConversations, setPreviousConversations] = useState<ConversationSearchResult[]>([]);
-  const [conversationData, setConversationData] = useState<ConversationData | null>(null);
-  const [conversationCosts, setConversationCosts] = useState<Map<string, GenerationCostResult>>(new Map());
-  const [selectedConversationLoading, setSelectedConversationLoading] = useState<boolean>(false);
-  const [selectedConversationErrorMessage, setSelectedConversationErrorMessage] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [timeRange, setTimeRangeState] = useState<TimeRange>(() => defaultTimeRange());
   const requestVersionRef = useRef<number>(0);
-  const selectedConversationRequestVersionRef = useRef<number>(0);
-
-  const [splitterRatio, setSplitterRatio] = useState(0.55);
-  const [isSplitterDragging, setIsSplitterDragging] = useState(false);
-  const layoutRef = useRef<HTMLDivElement>(null);
-
-  const handleSplitterMouseDown = useCallback(
-    (event: React.MouseEvent) => {
-      event.preventDefault();
-      setIsSplitterDragging(true);
-      const startX = event.clientX;
-      const startRatio = splitterRatio;
-      const layoutEl = layoutRef.current;
-      if (!layoutEl) {
-        return;
-      }
-      const layoutWidth = layoutEl.getBoundingClientRect().width;
-
-      const handleMouseMove = (moveEvent: MouseEvent) => {
-        const delta = moveEvent.clientX - startX;
-        const newRatio = startRatio + delta / layoutWidth;
-        setSplitterRatio(Math.max(0.25, Math.min(0.75, newRatio)));
-      };
-
-      const handleMouseUp = () => {
-        setIsSplitterDragging(false);
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-        document.body.style.userSelect = '';
-        document.body.style.cursor = '';
-      };
-
-      document.body.style.userSelect = 'none';
-      document.body.style.cursor = 'col-resize';
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-    },
-    [splitterRatio]
-  );
-
-  const selectedSpanSelectionID = searchParams.get('span') ?? '';
-  const selectedSpan = useMemo(() => {
-    if (selectedSpanSelectionID.length === 0 || !conversationData) {
-      return null;
-    }
-    return findSpanBySelectionID(conversationData.spans, selectedSpanSelectionID);
-  }, [selectedSpanSelectionID, conversationData]);
 
   const loadConversations = useCallback(async (): Promise<void> => {
     requestVersionRef.current += 1;
@@ -492,33 +288,6 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
     void loadConversations();
   }, [loadConversations]);
 
-  const resolvedSelectedConversationID = selectedConversationParam;
-  const previousConversationIDRef = useRef<string>(resolvedSelectedConversationID);
-
-  const selectedConversation = useMemo(() => {
-    const selectedFromList = conversations.find(
-      (conversation) => conversation.conversation_id === resolvedSelectedConversationID
-    );
-    if (selectedFromList) {
-      return selectedFromList;
-    }
-    if (!conversationData || conversationData.conversationID !== resolvedSelectedConversationID) {
-      return undefined;
-    }
-    return {
-      conversation_id: conversationData.conversationID,
-      generation_count: conversationData.generationCount,
-      first_generation_at: conversationData.firstGenerationAt,
-      last_generation_at: conversationData.lastGenerationAt,
-      models: [],
-      agents: [],
-      error_count: 0,
-      has_errors: false,
-      trace_ids: [],
-      rating_summary: conversationData.ratingSummary ?? undefined,
-      annotation_count: conversationData.annotations.length,
-    };
-  }, [conversations, resolvedSelectedConversationID, conversationData]);
   const conversationStats = useMemo(
     () => buildConversationStats(conversations, timeRange.to.valueOf()),
     [conversations, timeRange]
@@ -552,153 +321,10 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
 
   const onSelectConversation = useCallback(
     (conversationID: string) => {
-      if (conversationID.length === 0) {
-        void navigate(buildAppPath(ROUTES.Conversations), { replace: true });
-      } else {
-        void navigate(buildAppPath(buildConversationViewRoute(conversationID)), { replace: true });
-      }
+      void navigate(buildAppPath(buildConversationViewRoute(conversationID)), { replace: true });
     },
     [buildAppPath, navigate]
   );
-
-  useEffect(() => {
-    selectedConversationRequestVersionRef.current += 1;
-    const requestVersion = selectedConversationRequestVersionRef.current;
-
-    if (resolvedSelectedConversationID.length === 0) {
-      setConversationData(null);
-      setSelectedConversationLoading(false);
-      setSelectedConversationErrorMessage('');
-      return;
-    }
-
-    setSelectedConversationLoading(true);
-    setSelectedConversationErrorMessage('');
-    setConversationData(null);
-
-    void loadConversationData(dataSource, resolvedSelectedConversationID, traceFetcher)
-      .then((data) => {
-        if (selectedConversationRequestVersionRef.current !== requestVersion) {
-          return;
-        }
-        setConversationData(data);
-      })
-      .catch((error) => {
-        if (selectedConversationRequestVersionRef.current !== requestVersion) {
-          return;
-        }
-        setSelectedConversationErrorMessage(
-          error instanceof Error ? error.message : 'failed to load conversation detail'
-        );
-      })
-      .finally(() => {
-        if (selectedConversationRequestVersionRef.current !== requestVersion) {
-          return;
-        }
-        setSelectedConversationLoading(false);
-      });
-  }, [dataSource, resolvedSelectedConversationID, traceFetcher]);
-
-  useEffect(() => {
-    if (!conversationData) {
-      setConversationCosts(new Map());
-      return;
-    }
-    const gens = getAllGenerations(conversationData);
-    if (gens.length === 0) {
-      return;
-    }
-    void resolveGenerationCosts(gens, modelCardClient)
-      .then(setConversationCosts)
-      .catch(() => {
-        setConversationCosts(new Map());
-      });
-  }, [conversationData, modelCardClient]);
-
-  const tokenSummary = useMemo<TokenSummary | null>(() => {
-    if (!conversationData) {
-      return null;
-    }
-    return getTokenSummary(conversationData);
-  }, [conversationData]);
-
-  const costSummary = useMemo<CostSummary | null>(() => {
-    if (conversationCosts.size === 0) {
-      return null;
-    }
-    return getCostSummary(conversationCosts);
-  }, [conversationCosts]);
-
-  const costModelCards = useMemo(() => {
-    const cards = new Map<string, import('../modelcard/types').ModelCard>();
-    for (const [, cost] of conversationCosts) {
-      const key = `${cost.provider}::${cost.model}`;
-      if (!cards.has(key)) {
-        cards.set(key, cost.card);
-      }
-    }
-    return cards;
-  }, [conversationCosts]);
-
-  const [nameResolvedModelCards, setNameResolvedModelCards] = useState<
-    Map<string, import('../modelcard/types').ModelCard>
-  >(new Map());
-
-  useEffect(() => {
-    if (costModelCards.size > 0) {
-      setNameResolvedModelCards(new Map());
-      return;
-    }
-    const models = selectedConversation?.models ?? [];
-    if (models.length === 0) {
-      setNameResolvedModelCards(new Map());
-      return;
-    }
-    void resolveModelCardsFromNames(models, modelCardClient, selectedConversation?.model_providers)
-      .then(setNameResolvedModelCards)
-      .catch(() => {
-        setNameResolvedModelCards(new Map());
-      });
-  }, [costModelCards, selectedConversation?.models, selectedConversation?.model_providers, modelCardClient]);
-
-  const modelCards = costModelCards.size > 0 ? costModelCards : nameResolvedModelCards;
-
-  useEffect(() => {
-    if (previousConversationIDRef.current === resolvedSelectedConversationID) {
-      return;
-    }
-    previousConversationIDRef.current = resolvedSelectedConversationID;
-
-    const next = new URLSearchParams(location.search);
-    if (!next.has('span') && !next.has('trace')) {
-      return;
-    }
-    next.delete('span');
-    next.delete('trace');
-    setSearchParams(next, { replace: true });
-  }, [location.search, resolvedSelectedConversationID, setSearchParams]);
-
-  const onSelectSpan = useCallback(
-    (span: ConversationSpan | null) => {
-      const next = new URLSearchParams(searchParams);
-      if (span == null) {
-        next.delete('span');
-        next.delete('trace');
-      } else {
-        next.set('span', getSelectionID(span));
-        next.set('trace', span.traceID);
-      }
-      setSearchParams(next, { replace: true });
-    },
-    [searchParams, setSearchParams]
-  );
-
-  const selectedSpanDebugJSON = useMemo(() => {
-    if (selectedSpan == null) {
-      return '';
-    }
-    return serializeSpanToJSON(selectedSpan);
-  }, [selectedSpan]);
 
   return (
     <div className={styles.pageContainer}>
@@ -851,74 +477,17 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
         )}
       </div>
 
-      <div
-        ref={layoutRef}
-        className={`${styles.layout} ${hasSelection ? styles.layoutWithSelection : ''}`}
-      >
-        {!hasSelection && (
-          <div className={styles.leftPanel}>
-            <ConversationListPanel
-              conversations={conversations}
-              selectedConversationId={resolvedSelectedConversationID}
-              loading={loading}
-              hasMore={false}
-              loadingMore={false}
-              showExtendedColumns
-              onSelectConversation={onSelectConversation}
-              onLoadMore={() => undefined}
-            />
-          </div>
-        )}
-
-        {hasSelection && (
-          <>
-            <div className={styles.middlePanel} style={{ flexBasis: `${splitterRatio * 100}%`, maxWidth: `${splitterRatio * 100}%` }}>
-              {selectedConversationLoading ||
-              (!selectedConversation && selectedConversationErrorMessage.length === 0) ? (
-                <div className={styles.pageSpinner}>
-                  <Spinner aria-label="loading selected conversation" />
-                </div>
-              ) : selectedConversationErrorMessage.length > 0 ? (
-                <Alert severity="error" title="Conversation detail query failed">
-                  {selectedConversationErrorMessage}
-                </Alert>
-              ) : (
-                <ConversationColumn
-                  conversation={selectedConversation!}
-                  data={conversationData}
-                  modelCards={modelCards}
-                  tokenSummary={tokenSummary}
-                  costSummary={costSummary}
-                  loading={selectedConversationLoading}
-                  errorMessage={selectedConversationErrorMessage}
-                  selectedSpanSelectionID={selectedSpanSelectionID}
-                  onSelectSpan={onSelectSpan}
-                />
-              )}
-            </div>
-
-            <div
-              className={`${styles.splitterHandle} ${isSplitterDragging ? styles.splitterHandleDragging : ''}`}
-              onMouseDown={handleSplitterMouseDown}
-              role="separator"
-              aria-label="resize panels"
-            />
-
-            <div className={styles.detailPanel} style={{ flex: 1 }}>
-              {selectedConversationLoading ? (
-                <div className={styles.pageSpinner}>
-                  <Spinner aria-label="loading conversation details" />
-                </div>
-              ) : selectedConversationErrorMessage.length > 0 ? (
-                <div className={styles.detailPlaceholder}>Unable to load conversation details.</div>
-              ) : selectedSpan != null ? (
-                <pre className={styles.detailJson}>{selectedSpanDebugJSON}</pre>
-              ) : (
-                <div className={styles.detailPlaceholder}>Select a span to inspect raw JSON.</div>
-              )}
-            </div>
-          </>
-        )}
+      <div className={styles.listPanel}>
+        <ConversationListPanel
+          conversations={conversations}
+          selectedConversationId=""
+          loading={loading}
+          hasMore={false}
+          loadingMore={false}
+          showExtendedColumns
+          onSelectConversation={onSelectConversation}
+          onLoadMore={() => undefined}
+        />
       </div>
     </div>
   );

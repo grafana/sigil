@@ -23,6 +23,7 @@ function makeSpan({
     endTimeUnixNano: BigInt('1772480417752390317'),
     durationNano: BigInt('173999000'),
     attributes: new Map(),
+    resourceAttributes: new Map(),
     generation: null,
     children: [],
     ...overrides,

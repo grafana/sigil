@@ -7,6 +7,7 @@ import { ROUTES } from '../constants';
 
 const DashboardPage = React.lazy(() => import('../pages/DashboardPage'));
 const ConversationsBrowserPage = React.lazy(() => import('../pages/ConversationsBrowserPage'));
+const ConversationPage = React.lazy(() => import('../pages/ConversationPage'));
 const ConversationDetailPage = React.lazy(() => import('../pages/ConversationDetailPage'));
 const ConversationsPage = React.lazy(() => import('../pages/ConversationsPage'));
 const CompletionsPage = React.lazy(() => import('../pages/CompletionsPage'));
@@ -46,12 +47,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
 export default function App(_props: AppRootProps) {
   const styles = useStyles2(getStyles);
   const location = useLocation();
-  const isConversationsBrowserRoute = new RegExp(`(^|/)${ROUTES.Conversations}(/[^/]+/view)?/?$`).test(
-    location.pathname
-  );
+  const isConversationsRoute = new RegExp(`(^|/)${ROUTES.Conversations}(/[^/]+/view)?/?$`).test(location.pathname);
 
   return (
-    <div className={cx(styles.pageWrapper, isConversationsBrowserRoute && styles.pageWrapperNoPadding)}>
+    <div className={cx(styles.pageWrapper, isConversationsRoute && styles.pageWrapperNoPadding)}>
       <div className={styles.routesContainer}>
         <Routes>
           <Route path={ROUTES.Dashboard} element={<DashboardPage />} />
@@ -67,7 +66,7 @@ export default function App(_props: AppRootProps) {
             path={ROUTES.ConversationsView}
             element={
               <div className={styles.conversationsRouteContainer}>
-                <ConversationsBrowserPage />
+                <ConversationPage />
               </div>
             }
           />

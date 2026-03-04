@@ -18,6 +18,7 @@ function makeSpan({
     endTimeUnixNano: BigInt(2),
     durationNano: BigInt(1),
     attributes: new Map<string, SpanAttributeValue>(),
+    resourceAttributes: new Map<string, SpanAttributeValue>(),
     generation: null,
     children: [],
     ...overrides,

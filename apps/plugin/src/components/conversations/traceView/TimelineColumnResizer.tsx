@@ -3,8 +3,7 @@
 import { css, cx } from '@emotion/css';
 import React from 'react';
 
-import DraggableManager from './DraggableManager';
-import type { DraggableBounds, DraggingUpdate } from './DraggableManager';
+import DraggableManager, { type DraggableBounds, type DraggingUpdate } from './DraggableManager';
 import type { TNil } from './types';
 
 const getStyles = () => ({

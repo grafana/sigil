@@ -33,7 +33,6 @@ export type SigilSpanTreeNodeRenderContext = {
 };
 
 const ROW_HEIGHT_PX = 28;
-const VIEWPORT_HEIGHT_PX = 460;
 const DEFAULT_SERVICE_COLOR = '#447EBC';
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -42,9 +41,15 @@ const getStyles = (theme: GrafanaTheme2) => ({
     borderRadius: theme.shape.radius.default,
     background: theme.colors.background.primary,
     overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: 0,
+    flex: 1,
   }),
   viewport: css({
-    height: `${VIEWPORT_HEIGHT_PX}px`,
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
   }),
   rowsWrapper: css({
     width: '100%',
