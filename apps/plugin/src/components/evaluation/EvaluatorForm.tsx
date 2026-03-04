@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
 import { Button, Field, Input, Select, Stack, Switch, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
@@ -146,6 +146,20 @@ export default function EvaluatorForm({
   const [outputDescription, setOutputDescription] = useState(initialState?.outputDescription ?? '');
   const [outputEnum, setOutputEnum] = useState(initialState?.outputEnum ?? '');
 
+  const versionManuallyEdited = useRef(false);
+  const prevExistingVersionsKey = useRef<string>('');
+
+  useEffect(() => {
+    if (!isEdit || existingVersions == null || versionManuallyEdited.current) {
+      return;
+    }
+    const key = existingVersions.join(',');
+    if (prevExistingVersionsKey.current !== key) {
+      prevExistingVersionsKey.current = key;
+      setVersion(nextVersion(existingVersions));
+    }
+  }, [isEdit, existingVersions]);
+
   const buildConfig = (): Record<string, unknown> => {
     switch (kind) {
       case 'llm_judge':
@@ -242,7 +256,10 @@ export default function EvaluatorForm({
       <Field label="Version" description="Initial version in YYYY-MM-DD or YYYY-MM-DD.N format.">
         <Input
           value={version}
-          onChange={(e) => setVersion(e.currentTarget.value)}
+          onChange={(e) => {
+            setVersion(e.currentTarget.value);
+            versionManuallyEdited.current = true;
+          }}
           placeholder="YYYY-MM-DD"
           width={20}
         />
