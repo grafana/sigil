@@ -351,7 +351,7 @@ export default function FlowNodeRow({
           ))}
         </div>
       )}
-      {toolCallChildren.length > 0 && (
+      {expanded && toolCallChildren.length > 0 && (
         <div className={styles.childrenContainer}>
           {toolCallChildren.map((child) => (
             <FlowNodeRow
