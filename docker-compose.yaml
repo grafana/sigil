@@ -27,6 +27,8 @@ services:
       SIGIL_TENANT_ID: ${SIGIL_TENANT_ID:-fake}
       SIGIL_PROM_DS_UID: ${SIGIL_PROM_DS_UID:-prometheus}
       SIGIL_TEMPO_DS_UID: ${SIGIL_TEMPO_DS_UID:-tempo}
+      GRAFANA_OPS_PROM_KEY: ${GRAFANA_OPS_PROM_KEY:-}
+      GRAFANA_OPS_TRACES_KEY: ${GRAFANA_OPS_TRACES_KEY:-}
       GF_AUTH_MANAGED_SERVICE_ACCOUNTS_ENABLED: "true"
       GF_FEATURE_TOGGLES_ENABLE: extensionSidebar,externalServiceAccounts,grafanaAssistantLoop,accessControlOnCall,assistantStreaming,dashboardNewLayouts,collectorApp,k8sAlloyInstructions,fleetManagement,instrumentationHub,k8sAlloyHelmInstructions,otelSupport,alertEnrichment,alertingEnrichmentAssistantInvestigations,alertingEnrichmentPerRule,grafanaAPIServer,kubeAPIServer,assistantPlaybooks,infinityAssistantTools,assistantTunnel,investigationMemorySearch,restrictedPluginApis,dashboardTemplates,suggestedDashboards,dashboardLibrary
       SIGIL_API_AUTH_TOKEN: ${SIGIL_API_AUTH_TOKEN:-}

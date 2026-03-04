@@ -71,6 +71,7 @@ func allowAllSigilActions() map[string]bool {
 		permissionDataRead:      true,
 		permissionFeedbackWrite: true,
 		permissionSettingsWrite: true,
+		permissionEvalWrite:     true,
 	}
 }
 
@@ -96,6 +97,16 @@ func TestRequiredPermissionAction(t *testing.T) {
 			{method: http.MethodGet, path: "/query/model-cards/lookup"},
 			{method: http.MethodGet, path: "/query/agents"},
 			{method: http.MethodGet, path: "/query/agents/lookup"},
+			// Eval read routes
+			{method: http.MethodGet, path: "/eval/evaluators"},
+			{method: http.MethodGet, path: "/eval/evaluators/prod.helpfulness.v1"},
+			{method: http.MethodGet, path: "/eval/predefined/evaluators"},
+			{method: http.MethodGet, path: "/eval/rules"},
+			{method: http.MethodGet, path: "/eval/rules/online.helpfulness"},
+			{method: http.MethodGet, path: "/eval/judge/providers"},
+			{method: http.MethodGet, path: "/eval/judge/models"},
+			{method: http.MethodGet, path: "/eval/templates"},
+			{method: http.MethodGet, path: "/eval/templates/my-template"},
 		}
 
 		for _, tc := range testCases {
@@ -131,6 +142,34 @@ func TestRequiredPermissionAction(t *testing.T) {
 		}
 		if action != permissionSettingsWrite {
 			t.Fatalf("expected %s, got %s", permissionSettingsWrite, action)
+		}
+	})
+
+	t.Run("eval write routes", func(t *testing.T) {
+		testCases := []struct {
+			method string
+			path   string
+		}{
+			{method: http.MethodPost, path: "/eval/evaluators"},
+			{method: http.MethodPost, path: "/eval/predefined/evaluators/sigil.helpfulness"},
+			{method: http.MethodPost, path: "/eval/rules:preview"},
+			{method: http.MethodPost, path: "/eval:test"},
+			{method: http.MethodPost, path: "/eval/rules"},
+			{method: http.MethodDelete, path: "/eval/evaluators/prod.helpfulness.v1"},
+			{method: http.MethodDelete, path: "/eval/rules/online.helpfulness"},
+			{method: http.MethodPost, path: "/eval/templates"},
+			{method: http.MethodPost, path: "/eval/templates/my-template/versions"},
+			{method: http.MethodDelete, path: "/eval/templates/my-template"},
+		}
+
+		for _, tc := range testCases {
+			action, ok := requiredPermissionAction(tc.method, tc.path)
+			if !ok {
+				t.Fatalf("expected permission action for %s %s", tc.method, tc.path)
+			}
+			if action != permissionEvalWrite {
+				t.Fatalf("expected %s for %s %s, got %s", permissionEvalWrite, tc.method, tc.path, action)
+			}
 		}
 	})
 
@@ -1375,6 +1414,7 @@ func TestCallResourceSupportsEvalWriteOperations(t *testing.T) {
 	}
 	app := inst.(*App)
 	app.apiURL = upstream.URL
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
 
 	testCases := []struct {
 		name      string
@@ -1428,23 +1468,16 @@ func TestCallResourceSupportsEvalWriteOperations(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			var sender mockCallResourceResponseSender
-			err := app.CallResource(context.Background(), &backend.CallResourceRequest{
+			resp := callResourceWithAuth(t, app, &backend.CallResourceRequest{
 				Method: tc.method,
 				Path:   tc.path,
 				Body:   tc.body,
-			}, &sender)
-			if err != nil {
-				t.Fatalf("CallResource error: %s", err)
-			}
-			if sender.response == nil {
-				t.Fatal("no response received from CallResource")
-			}
-			if sender.response.Status != tc.expStatus {
-				t.Fatalf("expected status %d, got %d body=%s", tc.expStatus, sender.response.Status, sender.response.Body)
+			})
+			if resp.Status != tc.expStatus {
+				t.Fatalf("expected status %d, got %d body=%s", tc.expStatus, resp.Status, resp.Body)
 			}
 			if len(tc.expBody) > 0 {
-				if tb := bytes.TrimSpace(sender.response.Body); !bytes.Equal(tb, tc.expBody) {
+				if tb := bytes.TrimSpace(resp.Body); !bytes.Equal(tb, tc.expBody) {
 					t.Fatalf("response body should be %s, got %s", tc.expBody, tb)
 				}
 			}
@@ -1584,6 +1617,29 @@ func TestNewAppReadsApiAuthTokenFromSecureJsonData(t *testing.T) {
 	}
 	if app.tenantID != "42" {
 		t.Fatalf("expected tenant id %q, got %q", "42", app.tenantID)
+	}
+	if app.apiAuthToken != "secret-token" {
+		t.Fatalf("expected api auth token %q, got %q", "secret-token", app.apiAuthToken)
+	}
+}
+
+func TestNewAppHandlesNumericTenantID(t *testing.T) {
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{
+		JSONData: []byte(`{"sigilApiUrl":"https://remote.example.com","tenantId":13}`),
+		DecryptedSecureJSONData: map[string]string{
+			"sigilApiAuthToken": "secret-token",
+		},
+	})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+
+	app := inst.(*App)
+	if app.apiURL != "https://remote.example.com" {
+		t.Fatalf("expected api URL %q, got %q", "https://remote.example.com", app.apiURL)
+	}
+	if app.tenantID != "13" {
+		t.Fatalf("expected tenant id %q, got %q", "13", app.tenantID)
 	}
 	if app.apiAuthToken != "secret-token" {
 		t.Fatalf("expected api auth token %q, got %q", "secret-token", app.apiAuthToken)

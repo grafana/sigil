@@ -81,6 +81,7 @@ const mockDataSource: EvaluationDataSource = {
   previewRule: async (_req: RulePreviewRequest) => mockPreview,
   listJudgeProviders: async (): Promise<JudgeProviderListResponse> => ({ providers: [] }),
   listJudgeModels: async (): Promise<JudgeModelListResponse> => ({ models: [] }),
+  testEval: async () => ({ generation_id: '', conversation_id: '', scores: [], execution_time_ms: 0 }),
   listTemplates: async () => ({ items: [], next_cursor: '' }),
   createTemplate: async () => ({
     tenant_id: '',

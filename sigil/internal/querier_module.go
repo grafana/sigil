@@ -13,8 +13,10 @@ import (
 	"github.com/grafana/sigil/sigil/internal/config"
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	evalcontrol "github.com/grafana/sigil/sigil/internal/eval/control"
+	"github.com/grafana/sigil/sigil/internal/eval/evaluators"
 	"github.com/grafana/sigil/sigil/internal/eval/evaluators/judges"
 	evalingest "github.com/grafana/sigil/sigil/internal/eval/ingest"
+	evalworker "github.com/grafana/sigil/sigil/internal/eval/worker"
 	"github.com/grafana/sigil/sigil/internal/feedback"
 	"github.com/grafana/sigil/sigil/internal/modelcards"
 	"github.com/grafana/sigil/sigil/internal/query"
@@ -109,8 +111,23 @@ func newQuerierModule(
 	var controlSvc *evalcontrol.Service
 	var templateSvc *evalcontrol.TemplateService
 	var ingestScoreSvc *evalingest.Service
+	var testSvc *evalcontrol.TestService
 	if evalStore, ok := generationStore.(evalpkg.EvalStore); ok && evalStore != nil {
 		discovery := judges.DiscoverFromEnv()
+
+		// Build generation reader and evaluator registry for the test service.
+		if genReader, ok := generationStore.(evalworker.GenerationReader); ok {
+			hotColdReader := evalworker.NewHotColdGenerationReader(genReader, blockMetadataStore, blockReader)
+			if hotColdReader != nil {
+				evalRegistry := map[evalpkg.EvaluatorKind]evaluators.Evaluator{
+					evalpkg.EvaluatorKindRegex:      evaluators.NewRegexEvaluator(),
+					evalpkg.EvaluatorKindJSONSchema: evaluators.NewJSONSchemaEvaluator(),
+					evalpkg.EvaluatorKindHeuristic:  evaluators.NewHeuristicEvaluator(),
+					evalpkg.EvaluatorKindLLMJudge:   evaluators.NewLLMJudgeEvaluator(discovery, cfg.EvalDefaultJudgeModel),
+				}
+				testSvc = evalcontrol.NewTestService(hotColdReader, evalRegistry)
+			}
+		}
 
 		// Wire optional stores supported by the active backend.
 		var controlOpts []evalcontrol.ServiceOption
@@ -190,7 +207,7 @@ func newQuerierModule(
 				protectedMiddleware,
 			)
 			server.RegisterSettingsRoutes(mux, tenantSettingsSvc, protectedMiddleware)
-			evalcontrol.RegisterHTTPRoutes(mux, controlSvc, templateSvc, protectedMiddleware)
+			evalcontrol.RegisterHTTPRoutes(mux, controlSvc, templateSvc, testSvc, protectedMiddleware)
 			evalingest.RegisterHTTPRoutes(mux, ingestScoreSvc, protectedMiddleware)
 		})
 	}

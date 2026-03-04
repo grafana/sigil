@@ -1,220 +1,228 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Icon, useStyles2 } from '@grafana/ui';
+import { useStyles2 } from '@grafana/ui';
+import type { SpanType } from '../../conversation/spans';
 import type { ConversationSpan } from '../../conversation/types';
-import { getSelectionID, getSpanType } from '../../conversation/spans';
-import SigilSpanNodeIcon from './SigilSpanNodeIcon';
+import { buildSigilSpanTreeRows } from './jaegerTree/adapter';
+import { collapseAll, collapseOne, expandAll, expandOne, filterVisibleRows } from './jaegerTree/collapseState';
+import ListView from './jaegerTree/list/ListView';
+import { buildServiceColorMap } from './jaegerTree/serviceColors';
+import { SpanBarRow, TimelineHeaderRow } from './traceView';
 
 type SigilSpanTreeProps = {
   spans: ConversationSpan[];
   selectedSpanSelectionID?: string;
   onSelectSpan?: (span: ConversationSpan) => void;
+  renderNode?: (context: SigilSpanTreeNodeRenderContext) => React.ReactNode;
 };
 
-type TreeRow = {
+export type SigilSpanTreeNodeRenderContext = {
   span: ConversationSpan;
   selectionID: string;
   depth: number;
-  hasChildren: boolean;
+  isSelected: boolean;
   isExpanded: boolean;
+  hasChildren: boolean;
+  spanType: SpanType;
+  serviceName: string;
+  operationName: string;
+  durationLabel: string;
+  hasError: boolean;
+  showServiceName: boolean;
 };
 
-const INDENT_PX = 14;
-const TOGGLE_COL_WIDTH_PX = 18;
-
-function buildVisibleRows(roots: ConversationSpan[], expandedKeys: Set<string>): TreeRow[] {
-  const rows: TreeRow[] = [];
-  const visited = new Set<string>();
-
-  function walk(span: ConversationSpan, depth: number): void {
-    const selID = getSelectionID(span);
-    const hasChildren = span.children.length > 0;
-    const isExpanded = hasChildren && expandedKeys.has(selID);
-    rows.push({ span, selectionID: selID, depth, hasChildren, isExpanded });
-    if (!isExpanded) {
-      return;
-    }
-    if (visited.has(selID)) {
-      return;
-    }
-    visited.add(selID);
-    for (const child of span.children) {
-      walk(child, depth + 1);
-    }
-  }
-
-  for (const root of roots) {
-    walk(root, 0);
-  }
-  return rows;
-}
+const ROW_HEIGHT_PX = 28;
+const DEFAULT_SERVICE_COLOR = '#447EBC';
 
 const getStyles = (theme: GrafanaTheme2) => ({
-  list: css({
-    display: 'grid',
-    gap: theme.spacing(0.5),
-  }),
-  rowWrap: css({
-    display: 'grid',
-    gridTemplateColumns: `${TOGGLE_COL_WIDTH_PX}px minmax(0, 1fr) auto`,
-    alignItems: 'center',
-    gap: theme.spacing(0.5),
-    minWidth: 0,
-  }),
-  toggleButton: css({
-    border: 0,
-    background: 'transparent',
-    padding: 0,
-    width: `${TOGGLE_COL_WIDTH_PX}px`,
-    height: `${TOGGLE_COL_WIDTH_PX}px`,
-    color: theme.colors.text.secondary,
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
+  root: css({
+    border: `1px solid ${theme.colors.border.weak}`,
     borderRadius: theme.shape.radius.default,
-    '&:hover': {
-      background: theme.colors.action.hover,
-    },
-  }),
-  toggleSpacer: css({
-    width: `${TOGGLE_COL_WIDTH_PX}px`,
-    height: `${TOGGLE_COL_WIDTH_PX}px`,
-  }),
-  row: css({
-    border: 0,
-    background: 'transparent',
-    padding: theme.spacing(0.25, 0.5),
-    textAlign: 'left' as const,
-    cursor: 'pointer',
-    width: '100%',
-    minWidth: 0,
-    borderRadius: '2px',
-    '&:hover': {
-      background: theme.colors.action.hover,
-    },
-  }),
-  rowSelected: css({
-    color: theme.colors.text.primary,
-  }),
-  rowMain: css({
-    minWidth: 0,
-  }),
-  rowName: css({
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: theme.spacing(0.5),
-    minWidth: 0,
+    background: theme.colors.background.primary,
     overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap' as const,
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: 0,
+    flex: 1,
   }),
-  rowNameSelected: css({
-    color: theme.colors.primary.text,
-    fontWeight: theme.typography.fontWeightMedium,
+  viewport: css({
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
   }),
-  rowMeta: css({
-    marginLeft: theme.spacing(0.5),
+  rowsWrapper: css({
+    width: '100%',
+  }),
+  rowWrapper: css({
+    width: '100%',
+    position: 'relative',
+    cursor: 'pointer',
+  }),
+  emptyState: css({
     color: theme.colors.text.secondary,
-    fontSize: theme.typography.bodySmall.fontSize,
-  }),
-  icon: css({
-    color: theme.colors.text.secondary,
-  }),
-  kindLabel: css({
-    color: theme.colors.text.secondary,
-    textTransform: 'uppercase' as const,
-    letterSpacing: '0.02em',
-    fontSize: theme.typography.bodySmall.fontSize,
+    padding: theme.spacing(1.5),
   }),
 });
 
 export default function SigilSpanTree({ spans, selectedSpanSelectionID = '', onSelectSpan }: SigilSpanTreeProps) {
   const styles = useStyles2(getStyles);
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+  const [childrenHiddenIDs, setChildrenHiddenIDs] = useState<Set<string>>(expandAll());
+  const [hoverIndentGuideIDs, setHoverIndentGuideIDs] = useState<Set<string>>(new Set());
+  const rootRef = useRef<HTMLDivElement>(null);
 
-  const allKeys = useMemo(() => {
-    const next = new Set<string>();
-    function collectKeys(list: ConversationSpan[]): void {
-      for (const span of list) {
-        next.add(getSelectionID(span));
-        collectKeys(span.children);
-      }
-    }
-    collectKeys(spans);
-    return next;
-  }, [spans]);
+  const { rows } = useMemo(() => buildSigilSpanTreeRows(spans), [spans]);
 
-  const visibleExpandedKeys = useMemo(() => {
+  const effectiveChildrenHiddenIDs = useMemo(() => {
+    const validCollapsibleIDs = new Set(rows.filter((row) => row.hasChildren).map((row) => row.selectionID));
     const next = new Set<string>();
-    for (const key of expandedKeys) {
-      if (allKeys.has(key)) {
-        next.add(key);
+    for (const selectionID of childrenHiddenIDs) {
+      if (validCollapsibleIDs.has(selectionID)) {
+        next.add(selectionID);
       }
     }
     return next;
-  }, [allKeys, expandedKeys]);
+  }, [childrenHiddenIDs, rows]);
 
-  const rows = useMemo(() => buildVisibleRows(spans, visibleExpandedKeys), [spans, visibleExpandedKeys]);
+  const visibleRows = useMemo(
+    () => filterVisibleRows(rows, effectiveChildrenHiddenIDs),
+    [rows, effectiveChildrenHiddenIDs]
+  );
+  const serviceColorMap = useMemo(() => buildServiceColorMap(rows.map((row) => row.serviceName)), [rows]);
+
+  const indexByKey = useMemo(() => {
+    const indexMap = new Map<string, number>();
+    for (let index = 0; index < visibleRows.length; index += 1) {
+      indexMap.set(visibleRows[index].selectionID, index);
+    }
+    return indexMap;
+  }, [visibleRows]);
+
+  const redraw = useMemo(
+    () => ({
+      rowCount: visibleRows.length,
+      selectedSpanSelectionID,
+      collapsed: Array.from(effectiveChildrenHiddenIDs).join(','),
+    }),
+    [visibleRows.length, selectedSpanSelectionID, effectiveChildrenHiddenIDs]
+  );
+
+  const addHoverIndentGuideID = useCallback((spanID: string) => {
+    setHoverIndentGuideIDs((current) => {
+      const next = new Set(current);
+      next.add(spanID);
+      return next;
+    });
+  }, []);
+
+  const removeHoverIndentGuideID = useCallback((spanID: string) => {
+    setHoverIndentGuideIDs((current) => {
+      const next = new Set(current);
+      next.delete(spanID);
+      return next;
+    });
+  }, []);
+
+  const handleChildrenToggle = useCallback((spanID: string) => {
+    setChildrenHiddenIDs((current) => {
+      const next = new Set(current);
+      if (next.has(spanID)) {
+        next.delete(spanID);
+      } else {
+        next.add(spanID);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleDetailToggle = useCallback(
+    (spanID: string) => {
+      const row = rows.find((r) => r.selectionID === spanID);
+      if (row) {
+        onSelectSpan?.(row.span);
+      }
+    },
+    [rows, onSelectSpan]
+  );
 
   return (
-    <div className={styles.list}>
-      {rows.map(({ span, selectionID, depth, hasChildren, isExpanded }) => {
-        const isSelected = selectedSpanSelectionID === selectionID;
-        const spanType = getSpanType(span);
-        return (
-          <div key={selectionID} className={styles.rowWrap}>
-            {hasChildren ? (
-              <button
-                type="button"
-                className={styles.toggleButton}
-                aria-label={`${isExpanded ? 'collapse' : 'expand'} span ${span.name}`}
-                aria-expanded={isExpanded}
-                onClick={() => {
-                  setExpandedKeys((current) => {
-                    const next = new Set(current);
-                    if (next.has(selectionID)) {
-                      next.delete(selectionID);
-                    } else {
-                      next.add(selectionID);
-                    }
-                    return next;
-                  });
-                }}
-              >
-                <Icon name={isExpanded ? 'angle-down' : 'angle-right'} size="sm" />
-              </button>
-            ) : (
-              <span className={styles.toggleSpacer} />
-            )}
-            <button
-              type="button"
-              className={`${styles.row} ${isSelected ? styles.rowSelected : ''}`}
-              aria-pressed={isSelected}
-              aria-level={depth + 1}
-              aria-expanded={hasChildren ? isExpanded : undefined}
-              aria-label={`select span ${span.name}`}
-              onClick={() => {
-                onSelectSpan?.(span);
-                if (depth === 0 && hasChildren && !isExpanded) {
-                  setExpandedKeys((current) => new Set(current).add(selectionID));
-                }
-              }}
-              style={{ paddingLeft: `${depth * INDENT_PX}px` }}
-            >
-              <div className={styles.rowMain}>
-                <div className={`${styles.rowName} ${isSelected ? styles.rowNameSelected : ''}`}>
-                  <SigilSpanNodeIcon type={spanType} className={styles.icon} />
-                  <span>{span.name}</span>
-                  <span className={styles.rowMeta}>({span.serviceName})</span>
+    <div className={styles.root} ref={rootRef}>
+      <TimelineHeaderRow
+        onCollapseAll={() => {
+          setChildrenHiddenIDs(collapseAll(rows));
+        }}
+        onCollapseOne={() => {
+          setChildrenHiddenIDs((current) => collapseOne(rows, current));
+        }}
+        onExpandAll={() => {
+          setChildrenHiddenIDs(expandAll());
+        }}
+        onExpandOne={() => {
+          setChildrenHiddenIDs((current) => expandOne(rows, current));
+        }}
+      />
+
+      {visibleRows.length === 0 ? (
+        <div className={styles.emptyState}>No spans to display.</div>
+      ) : (
+        <div className={styles.viewport}>
+          <ListView
+            dataLength={visibleRows.length}
+            getIndexFromKey={(key) => indexByKey.get(key) ?? -1}
+            getKeyFromIndex={(index) => visibleRows[index]?.selectionID ?? `row-${index}`}
+            itemHeightGetter={() => ROW_HEIGHT_PX}
+            viewBuffer={300}
+            viewBufferMin={100}
+            redraw={redraw}
+            itemsWrapperClassName={styles.rowsWrapper}
+            itemRenderer={(itemKey, style, index, attrs) => {
+              const row = visibleRows[index];
+              if (!row) {
+                return null;
+              }
+
+              const previousRow = index > 0 ? visibleRows[index - 1] : null;
+              const showServiceName = previousRow == null || previousRow.serviceName !== row.serviceName;
+              const isSelected = selectedSpanSelectionID === row.selectionID;
+              const isExpanded = row.hasChildren && !effectiveChildrenHiddenIDs.has(row.selectionID);
+              const serviceColor = serviceColorMap.get(row.serviceName) ?? DEFAULT_SERVICE_COLOR;
+
+              return (
+                <div
+                  key={itemKey}
+                  {...attrs}
+                  className={styles.rowWrapper}
+                  style={{
+                    ...style,
+                    left: 0,
+                    right: 0,
+                    width: '100%',
+                  }}
+                >
+                  <SpanBarRow
+                    color={serviceColor}
+                    isChildrenExpanded={isExpanded}
+                    isSelected={isSelected}
+                    onDetailToggled={handleDetailToggle}
+                    onChildrenToggled={handleChildrenToggle}
+                    showServiceName={showServiceName}
+                    showErrorIcon={row.hasError}
+                    spanID={row.selectionID}
+                    operationName={row.operationName}
+                    serviceName={row.serviceName}
+                    hasChildren={row.hasChildren}
+                    ancestorIDs={row.ancestorSelectionIDs}
+                    hoverIndentGuideIDs={hoverIndentGuideIDs}
+                    addHoverIndentGuideID={addHoverIndentGuideID}
+                    removeHoverIndentGuideID={removeHoverIndentGuideID}
+                    durationLabel={row.durationLabel}
+                  />
                 </div>
-              </div>
-            </button>
-            <span className={styles.kindLabel}>{spanType === 'unknown' ? '' : spanType}</span>
-          </div>
-        );
-      })}
+              );
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

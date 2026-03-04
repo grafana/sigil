@@ -42,6 +42,7 @@ function makeSpan(entries: Array<[string, SpanAttributeValue]>): ConversationSpa
     endTimeUnixNano: BigInt(1000000),
     durationNano: BigInt(1000000),
     attributes: makeAttrs(entries),
+    resourceAttributes: new Map(),
     generation: null,
     children: [],
   };

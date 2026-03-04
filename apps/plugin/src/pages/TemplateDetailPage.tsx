@@ -8,11 +8,13 @@ import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evalu
 import {
   EVALUATOR_KIND_LABELS,
   getKindBadgeColor,
+  type EvalFormState,
   type ForkTemplateRequest,
   type PublishVersionRequest,
   type TemplateDefinition,
   type TemplateVersion,
 } from '../evaluation/types';
+import EvalTestPanel from '../components/evaluation/EvalTestPanel';
 import VersionHistoryTable from '../components/evaluation/VersionHistoryTable';
 import PublishVersionForm from '../components/evaluation/PublishVersionForm';
 import VersionCompare from '../components/evaluation/VersionCompare';
@@ -65,6 +67,18 @@ const getStyles = (theme: GrafanaTheme2) => ({
     alignItems: 'center',
     padding: theme.spacing(4),
   }),
+  formWithTest: css({
+    display: 'grid',
+    gridTemplateColumns: '3fr 2fr',
+    gap: theme.spacing(3),
+  }),
+  formColumn: css({
+    minWidth: 0,
+  }),
+  testColumn: css({
+    position: 'relative' as const,
+    minHeight: 0,
+  }),
 });
 
 type ActiveForm = 'none' | 'publish' | 'fork';
@@ -79,6 +93,7 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [activeForm, setActiveForm] = useState<ActiveForm>('none');
+  const [formState, setFormState] = useState<EvalFormState | null>(null);
   const [rollbackVersion, setRollbackVersion] = useState<string | undefined>(undefined);
   const [rollbackConfig, setRollbackConfig] = useState<Record<string, unknown> | undefined>(undefined);
   const [rollbackOutputKeys, setRollbackOutputKeys] = useState<
@@ -308,19 +323,35 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
       </div>
 
       {activeForm === 'publish' && (
-        <PublishVersionForm
-          initialConfig={rollbackConfig}
-          initialOutputKeys={rollbackOutputKeys}
-          rollbackVersion={rollbackVersion}
-          existingVersions={template?.versions?.map((v) => v.version)}
-          onSubmit={handlePublishSubmit}
-          onCancel={() => {
-            setActiveForm('none');
-            setRollbackVersion(undefined);
-            setRollbackConfig(undefined);
-            setRollbackOutputKeys(undefined);
-          }}
-        />
+        <div className={styles.formWithTest}>
+          <div className={styles.formColumn}>
+            <PublishVersionForm
+              kind={template.kind}
+              initialConfig={rollbackConfig}
+              initialOutputKeys={rollbackOutputKeys}
+              rollbackVersion={rollbackVersion}
+              existingVersions={template?.versions?.map((v) => v.version)}
+              onSubmit={handlePublishSubmit}
+              onCancel={() => {
+                setActiveForm('none');
+                setRollbackVersion(undefined);
+                setRollbackConfig(undefined);
+                setRollbackOutputKeys(undefined);
+              }}
+              onConfigChange={setFormState}
+            />
+          </div>
+          <div className={styles.testColumn}>
+            {formState && (
+              <EvalTestPanel
+                kind={formState.kind}
+                config={formState.config}
+                outputKeys={formState.outputKeys}
+                dataSource={dataSource}
+              />
+            )}
+          </div>
+        </div>
       )}
 
       {activeForm === 'fork' && (

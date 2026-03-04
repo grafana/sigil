@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
 import { Button, Field, FieldSet, Input, Select, Stack, Switch, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
 import {
   EVALUATOR_KIND_LABELS,
   type CreateEvaluatorRequest,
+  type EvalFormState,
   type EvalOutputKey,
   type EvaluatorKind,
   type ScoreType,
@@ -13,6 +14,7 @@ import {
 export type EvaluatorFormProps = {
   onSubmit: (req: CreateEvaluatorRequest) => void;
   onCancel: () => void;
+  onConfigChange?: (state: EvalFormState) => void;
 };
 
 const KIND_OPTIONS: Array<SelectableValue<EvaluatorKind>> = (
@@ -50,7 +52,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function EvaluatorForm({ onSubmit, onCancel }: EvaluatorFormProps) {
+export default function EvaluatorForm({ onSubmit, onCancel, onConfigChange }: EvaluatorFormProps) {
   const styles = useStyles2(getStyles);
 
   const [evaluatorId, setEvaluatorId] = useState('');
@@ -106,6 +108,28 @@ export default function EvaluatorForm({ onSubmit, onCancel }: EvaluatorFormProps
         return {};
     }
   };
+
+  useEffect(() => {
+    onConfigChange?.({
+      kind,
+      config: buildConfig(),
+      outputKeys: [{ key: outputKey.trim() || 'score', type: outputType }],
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    kind,
+    systemPrompt,
+    userPrompt,
+    maxTokens,
+    temperature,
+    schemaJson,
+    pattern,
+    notEmpty,
+    minLength,
+    maxLength,
+    outputKey,
+    outputType,
+  ]);
 
   const isIdEmpty = evaluatorId.trim() === '';
   const isOutputKeyEmpty = outputKey.trim() === '';
@@ -170,16 +194,21 @@ export default function EvaluatorForm({ onSubmit, onCancel }: EvaluatorFormProps
               className={styles.textarea}
               value={systemPrompt}
               onChange={(e) => setSystemPrompt(e.currentTarget.value)}
-              placeholder="You are an evaluation judge..."
+              placeholder="You are an expert evaluator assessing the helpfulness of AI assistant responses. Consider accuracy, relevance, completeness, and clarity."
               rows={4}
             />
           </Field>
-          <Field label="User prompt" description="Required. Template with {{ generation }} placeholder.">
+          <Field
+            label="User prompt"
+            description="Supports {{input}}, {{output}}, {{generation_id}}, {{conversation_id}}."
+          >
             <textarea
               className={styles.textarea}
               value={userPrompt}
               onChange={(e) => setUserPrompt(e.currentTarget.value)}
-              placeholder="Score the following on 1-10: {{ generation }}"
+              placeholder={
+                'Score the assistant output on a scale of 1-10.\n\nUser input:\n{{input}}\n\nAssistant output:\n{{output}}\n\nRespond with only a number from 1 to 10.'
+              }
               rows={4}
             />
           </Field>

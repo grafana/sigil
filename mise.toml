@@ -2,6 +2,7 @@
 experimental = true
 
 [env]
+_.file = ".env"
 GOTOOLCHAIN = "go1.25.7+auto"
 
 [tools]

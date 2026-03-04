@@ -2,6 +2,8 @@ package evaluators
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -48,6 +50,91 @@ func TestLLMJudgeEvaluatorParsesNumericJSON(t *testing.T) {
 	}
 	if outputs[0].Passed == nil || !*outputs[0].Passed {
 		t.Fatalf("expected passed=true")
+	}
+}
+
+func TestLLMJudgeEvaluatorUsesLegacyDefaultPrompts(t *testing.T) {
+	tests := []struct {
+		name   string
+		config map[string]any
+	}{
+		{
+			name: "missing_prompts_use_defaults",
+			config: map[string]any{
+				"provider": "openai-compat",
+				"model":    "judge-model",
+			},
+		},
+		{
+			name: "empty_prompts_use_defaults",
+			config: map[string]any{
+				"provider":      "openai-compat",
+				"model":         "judge-model",
+				"system_prompt": "   ",
+				"user_prompt":   "",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotSystemPrompt string
+			var gotUserPrompt string
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				body, err := io.ReadAll(req.Body)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				var payload struct {
+					Messages []struct {
+						Role    string `json:"role"`
+						Content string `json:"content"`
+					} `json:"messages"`
+				}
+				if err := json.Unmarshal(body, &payload); err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				if len(payload.Messages) > 0 {
+					gotSystemPrompt = payload.Messages[0].Content
+				}
+				if len(payload.Messages) > 1 {
+					gotUserPrompt = payload.Messages[1].Content
+				}
+
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"1"}}],"model":"judge-model","usage":{"prompt_tokens":12,"completion_tokens":8}}`))
+			}))
+			defer server.Close()
+
+			t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_BASE_URL", server.URL)
+			t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_API_KEY", "test")
+			t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_ENABLED", "true")
+			discovery := judges.DiscoverFromEnv()
+			evaluator := NewLLMJudgeEvaluator(discovery, "openai-compat/judge-model")
+
+			_, err := evaluator.Evaluate(context.Background(), EvalInput{
+				InputText:    "What is two plus two?",
+				ResponseText: "It is four.",
+			}, evalpkg.EvaluatorDefinition{
+				Kind:       evalpkg.EvaluatorKindLLMJudge,
+				Config:     tc.config,
+				OutputKeys: []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeNumber}},
+			})
+			if err != nil {
+				t.Fatalf("evaluate llm judge: %v", err)
+			}
+
+			if gotSystemPrompt != "You are an evaluator." {
+				t.Fatalf("expected default system prompt, got %q", gotSystemPrompt)
+			}
+			wantUserPrompt := "User input:\nWhat is two plus two?\n\nAssistant output:\nIt is four."
+			if gotUserPrompt != wantUserPrompt {
+				t.Fatalf("expected default user prompt %q, got %q", wantUserPrompt, gotUserPrompt)
+			}
+		})
 	}
 }
 

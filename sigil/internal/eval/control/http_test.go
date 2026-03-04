@@ -610,7 +610,7 @@ func TestJudgeDiscoveryHTTPRequiresTenantContext(t *testing.T) {
 	store := newMemoryControlStore()
 	service := NewService(store, staticJudgeDiscovery{})
 	mux := http.NewServeMux()
-	RegisterHTTPRoutes(mux, service, nil, nil)
+	RegisterHTTPRoutes(mux, service, nil, nil, nil)
 
 	providersResp := doRequest(mux, http.MethodGet, "/api/v1/eval/judge/providers", "")
 	if providersResp.Code != http.StatusUnauthorized {
@@ -893,7 +893,7 @@ func newEvalHTTPEnv(t *testing.T) (*http.ServeMux, *Service, *memoryControlStore
 func newEvalMux(service *Service) *http.ServeMux {
 	mux := http.NewServeMux()
 	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
-	RegisterHTTPRoutes(mux, service, nil, protected)
+	RegisterHTTPRoutes(mux, service, nil, nil, protected)
 	return mux
 }
 

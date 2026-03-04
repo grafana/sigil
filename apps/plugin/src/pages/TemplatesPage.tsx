@@ -5,7 +5,8 @@ import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
 import { Alert, Button, Select, Spinner, Stack, Text, useStyles2 } from '@grafana/ui';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
-import type { CreateTemplateRequest, TemplateDefinition, TemplateScope } from '../evaluation/types';
+import type { CreateTemplateRequest, EvalFormState, TemplateDefinition, TemplateScope } from '../evaluation/types';
+import EvalTestPanel from '../components/evaluation/EvalTestPanel';
 import TemplateTable from '../components/evaluation/TemplateTable';
 import TemplateForm from '../components/evaluation/TemplateForm';
 
@@ -51,6 +52,18 @@ const getStyles = (theme: GrafanaTheme2) => ({
     alignItems: 'center',
     padding: theme.spacing(4),
   }),
+  formWithTest: css({
+    display: 'grid',
+    gridTemplateColumns: '3fr 2fr',
+    gap: theme.spacing(3),
+  }),
+  formColumn: css({
+    minWidth: 0,
+  }),
+  testColumn: css({
+    position: 'relative' as const,
+    minHeight: 0,
+  }),
 });
 
 export default function TemplatesPage(props: TemplatesPageProps) {
@@ -61,6 +74,11 @@ export default function TemplatesPage(props: TemplatesPageProps) {
   const [templates, setTemplates] = useState<TemplateDefinition[]>([]);
   const [scopeFilter, setScopeFilter] = useState<string>('');
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [formState, setFormState] = useState<EvalFormState>({
+    kind: 'llm_judge',
+    config: {},
+    outputKeys: [{ key: 'score', type: 'number' }],
+  });
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const requestVersion = useRef(0);
@@ -161,7 +179,23 @@ export default function TemplatesPage(props: TemplatesPageProps) {
       )}
 
       {showCreateForm ? (
-        <TemplateForm onSubmit={handleCreateSubmit} onCancel={() => setShowCreateForm(false)} />
+        <div className={styles.formWithTest}>
+          <div className={styles.formColumn}>
+            <TemplateForm
+              onSubmit={handleCreateSubmit}
+              onCancel={() => setShowCreateForm(false)}
+              onConfigChange={setFormState}
+            />
+          </div>
+          <div className={styles.testColumn}>
+            <EvalTestPanel
+              kind={formState.kind}
+              config={formState.config}
+              outputKeys={formState.outputKeys}
+              dataSource={dataSource}
+            />
+          </div>
+        </div>
       ) : templates.length === 0 ? (
         <div className={styles.empty}>
           <Stack direction="column" gap={2} alignItems="center">

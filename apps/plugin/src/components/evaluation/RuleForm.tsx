@@ -1,7 +1,7 @@
 import React from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Field, FieldSet, Input, Stack, useStyles2 } from '@grafana/ui';
+import { Field, Icon, Input, Text, useStyles2 } from '@grafana/ui';
 import type { Evaluator, RuleSelector } from '../../evaluation/types';
 import EvaluatorPicker from './EvaluatorPicker';
 import MatchCriteriaEditor from './MatchCriteriaEditor';
@@ -34,6 +34,17 @@ const getStyles = (theme: GrafanaTheme2) => ({
   fieldWidth: css({
     width: 'var(--rule-form-field-width)',
   }),
+  section: css({
+    padding: theme.spacing(2),
+    background: theme.colors.background.primary,
+    boxShadow: theme.shadows.z1,
+  }),
+  sectionHeader: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+    marginBottom: theme.spacing(1),
+  }),
 });
 
 export default function RuleForm({
@@ -55,40 +66,58 @@ export default function RuleForm({
 
   return (
     <div className={styles.stack}>
-      <Stack direction="column" gap={2}>
-        <FieldSet label="Rule ID">
-          <Field label="Rule ID" description="Unique identifier for this rule.">
-            <Input
-              className={styles.fieldWidth}
-              value={ruleID}
-              onChange={(e) => onRuleIDChange?.(e.currentTarget.value)}
-              placeholder="e.g. online.helpfulness.user_visible"
-              disabled={!isNew}
-            />
-          </Field>
-        </FieldSet>
-
-        <FieldSet label="Selector">
-          <SelectorPicker value={selector} onChange={onSelectorChange} disabled={disabled} />
-        </FieldSet>
-
-        <FieldSet label="Match criteria">
-          <MatchCriteriaEditor value={match} onChange={onMatchChange} disabled={disabled} />
-        </FieldSet>
-
-        <FieldSet label="Sample rate">
-          <SampleRateInput value={sampleRate} onChange={onSampleRateChange} disabled={disabled} />
-        </FieldSet>
-
-        <FieldSet label="Evaluators">
-          <EvaluatorPicker
-            value={evaluatorIDs}
-            evaluators={availableEvaluators}
-            onChange={onEvaluatorIDsChange}
-            disabled={disabled}
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <Icon name="file-alt" size="md" />
+          <Text weight="medium">Rule ID</Text>
+        </div>
+        <Field label="Rule ID" description="Unique identifier for this rule.">
+          <Input
+            className={styles.fieldWidth}
+            value={ruleID}
+            onChange={(e) => onRuleIDChange?.(e.currentTarget.value)}
+            placeholder="e.g. online.helpfulness.user_visible"
+            disabled={!isNew}
           />
-        </FieldSet>
-      </Stack>
+        </Field>
+      </div>
+
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <Icon name="filter" size="md" />
+          <Text weight="medium">Selector</Text>
+        </div>
+        <SelectorPicker value={selector} onChange={onSelectorChange} disabled={disabled} />
+      </div>
+
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <Icon name="search" size="md" />
+          <Text weight="medium">Match criteria</Text>
+        </div>
+        <MatchCriteriaEditor value={match} onChange={onMatchChange} disabled={disabled} />
+      </div>
+
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <Icon name="percentage" size="md" />
+          <Text weight="medium">Sample rate</Text>
+        </div>
+        <SampleRateInput value={sampleRate} onChange={onSampleRateChange} disabled={disabled} />
+      </div>
+
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <Icon name="check-circle" size="md" />
+          <Text weight="medium">Evaluators</Text>
+        </div>
+        <EvaluatorPicker
+          value={evaluatorIDs}
+          evaluators={availableEvaluators}
+          onChange={onEvaluatorIDsChange}
+          disabled={disabled}
+        />
+      </div>
     </div>
   );
 }

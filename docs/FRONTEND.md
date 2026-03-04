@@ -157,6 +157,10 @@ See `docs/references/grafana-query-response-shapes.md`.
   - support cursor pagination in list view
   - open conversation detail with hydrated generations, ratings, and annotations
   - open generation detail with trace/span identifiers
+  - render conversation span tree with the local Jaeger-style tree component (`SigilSpanTree`) backed by:
+    - `components/conversations/jaegerTree/adapter.ts` for flattening and row metadata
+    - `components/conversations/jaegerTree/collapseState.ts` for collapse/expand behavior parity
+  - keep the tree customization surface plugin-owned via `renderNode` callback on `SigilSpanTree`
 - Evaluation:
   - manage evaluators: browse predefined templates, fork/customize, create custom, list and delete tenant evaluators
   - manage rules: create with selector/match/sample-rate/evaluator config, enable/disable, list and delete

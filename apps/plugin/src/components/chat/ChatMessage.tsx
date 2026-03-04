@@ -117,7 +117,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
       <div className={contentClass}>
         <span className={styles.roleLabel}>{message.name ?? humanizeRole(role)}</span>
         <Stack direction="column" gap={1}>
-          {message.parts.map((part, i) => {
+          {(message.parts ?? []).map((part, i) => {
             if (part.thinking != null) {
               return <ThinkingBlock key={i} content={part.thinking} />;
             }

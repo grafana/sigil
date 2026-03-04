@@ -1,8 +1,10 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import ConversationsBrowserPage from './ConversationsBrowserPage';
+import ConversationPage from './ConversationPage';
 import type { ConversationsDataSource } from '../conversation/api';
+import type { TraceFetcher } from '../conversation/loader';
 
 type MockConversationsDataSource = {
   [Key in keyof ConversationsDataSource as NonNullable<ConversationsDataSource[Key]> extends (...args: any[]) => any
@@ -26,6 +28,8 @@ beforeAll(() => {
     });
   }
 });
+
+const noopTraceFetcher: TraceFetcher = async () => null;
 
 function createDataSource(): MockConversationsDataSource {
   const currentConversations = [
@@ -107,7 +111,7 @@ describe('ConversationsBrowserPage', () => {
       [
         {
           path: '/conversations/:conversationID/view',
-          element: <ConversationsBrowserPage dataSource={dataSource} />,
+          element: <ConversationPage dataSource={dataSource} traceFetcher={noopTraceFetcher} />,
         },
         {
           path: '/conversations',
@@ -143,44 +147,5 @@ describe('ConversationsBrowserPage', () => {
     expect(router.state.location.pathname).toBe('/conversations/conv-b/view');
     expect(screen.queryByLabelText('select conversation conv-b')).not.toBeInTheDocument();
     expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-b');
-  });
-
-  it('uses selected conversation from URL param when present', async () => {
-    const dataSource = createDataSource();
-    const { router } = renderPage(dataSource, '/conversations/conv-b/view');
-
-    await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalledTimes(2));
-    expect((await screen.findByText('Conversation ID')).parentElement).toHaveTextContent('conv-b');
-    expect(await screen.findByText(/^Generations \(\d+\)$/)).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe('/conversations/conv-b/view');
-    expect(screen.queryByLabelText('select conversation conv-b')).not.toBeInTheDocument();
-    expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-b');
-  });
-
-  it('resets selection when URL is set to /conversations', async () => {
-    const dataSource = createDataSource();
-    const { router } = renderPage(dataSource, '/conversations/conv-b/view');
-
-    await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText('Conversation ID')).toBeInTheDocument();
-
-    await act(async () => {
-      await router.navigate('/conversations');
-    });
-
-    await waitFor(() => {
-      expect(screen.queryByText('Conversation ID')).not.toBeInTheDocument();
-    });
-    expect(screen.queryByText(/^Generations \(\d+\)$/)).not.toBeInTheDocument();
-  });
-
-  it('keeps selected route for deep links outside the current list range', async () => {
-    const dataSource = createDataSource();
-    const { router } = renderPage(dataSource, '/conversations/does-not-exist/view');
-
-    await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalledTimes(2));
-    expect((await screen.findByText('Conversation ID')).parentElement).toHaveTextContent('does-not-exist');
-    expect(router.state.location.pathname).toBe('/conversations/does-not-exist/view');
-    expect(dataSource.getConversationDetail).toHaveBeenCalledWith('does-not-exist');
   });
 });

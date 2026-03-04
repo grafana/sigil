@@ -1,7 +1,7 @@
 import React from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Badge, IconButton, Text, useStyles2 } from '@grafana/ui';
+import { Badge, Icon, IconButton, Text, useStyles2 } from '@grafana/ui';
 import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type TemplateDefinition } from '../../evaluation/types';
 
 export type TemplateTableProps = {
@@ -23,28 +23,46 @@ const getStyles = (theme: GrafanaTheme2) => ({
   table: css({
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: 0,
+    gap: theme.spacing(1),
   }),
   header: css({
     display: 'grid',
-    gridTemplateColumns: '2fr 100px 80px 120px 3fr 120px 40px',
+    gridTemplateColumns: '2fr 100px 80px 110px 3fr 100px 40px',
     gap: theme.spacing(2),
-    padding: theme.spacing(1, 2),
-    background: theme.colors.background.secondary,
-    borderBottom: `1px solid ${theme.colors.border.medium}`,
+    padding: theme.spacing(0.5, 2),
     alignItems: 'center',
   }),
   row: css({
     display: 'grid',
-    gridTemplateColumns: '2fr 100px 80px 120px 3fr 120px 40px',
+    gridTemplateColumns: '2fr 100px 80px 110px 3fr 100px 40px',
     gap: theme.spacing(2),
-    padding: theme.spacing(1, 2),
+    padding: theme.spacing(1.5, 2),
     alignItems: 'center',
-    borderBottom: `1px solid ${theme.colors.border.weak}`,
+    borderRadius: theme.shape.radius.default,
+    background: theme.colors.background.primary,
+    boxShadow: theme.shadows.z1,
     cursor: 'pointer',
+    transition: 'box-shadow 0.15s ease-in-out',
     '&:hover': {
-      background: theme.colors.action.hover,
+      boxShadow: theme.shadows.z2,
     },
+  }),
+  templateId: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+    minWidth: 0,
+  }),
+  templateIcon: css({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 28,
+    height: 28,
+    borderRadius: theme.shape.radius.sm,
+    background: theme.isDark ? 'rgba(138, 109, 245, 0.15)' : 'rgba(138, 109, 245, 0.12)',
+    color: 'rgb(138, 109, 245)',
+    flexShrink: 0,
   }),
 });
 
@@ -54,22 +72,22 @@ export default function TemplateTable({ templates, onSelect, onDelete }: Templat
   return (
     <div className={styles.table}>
       <div className={styles.header}>
-        <Text weight="medium" variant="bodySmall">
-          Template ID
+        <Text weight="medium" variant="bodySmall" color="secondary">
+          Template
         </Text>
-        <Text weight="medium" variant="bodySmall">
+        <Text weight="medium" variant="bodySmall" color="secondary">
           Kind
         </Text>
-        <Text weight="medium" variant="bodySmall">
+        <Text weight="medium" variant="bodySmall" color="secondary">
           Scope
         </Text>
-        <Text weight="medium" variant="bodySmall">
-          Latest Version
+        <Text weight="medium" variant="bodySmall" color="secondary">
+          Version
         </Text>
-        <Text weight="medium" variant="bodySmall">
+        <Text weight="medium" variant="bodySmall" color="secondary">
           Description
         </Text>
-        <Text weight="medium" variant="bodySmall">
+        <Text weight="medium" variant="bodySmall" color="secondary">
           Created
         </Text>
         <div />
@@ -81,7 +99,14 @@ export default function TemplateTable({ templates, onSelect, onDelete }: Templat
           onClick={() => onSelect?.(template.template_id)}
           role="row"
         >
-          <Text truncate>{template.template_id}</Text>
+          <div className={styles.templateId}>
+            <span className={styles.templateIcon}>
+              <Icon name="document-info" size="md" />
+            </span>
+            <Text weight="medium" truncate>
+              {template.template_id}
+            </Text>
+          </div>
           <div>
             <Badge text={EVALUATOR_KIND_LABELS[template.kind]} color={getKindBadgeColor(template.kind)} />
           </div>

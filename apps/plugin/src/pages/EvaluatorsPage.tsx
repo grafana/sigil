@@ -7,11 +7,13 @@ import { PLUGIN_BASE, ROUTES } from '../constants';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
 import type {
   CreateEvaluatorRequest,
+  EvalFormState,
   Evaluator,
   ForkTemplateRequest,
   TemplateDefinition,
   TemplateScope,
 } from '../evaluation/types';
+import EvalTestPanel from '../components/evaluation/EvalTestPanel';
 import EvaluatorDetail from '../components/evaluation/EvaluatorDetail';
 import EvaluatorForm from '../components/evaluation/EvaluatorForm';
 import EvaluatorTable from '../components/evaluation/EvaluatorTable';
@@ -58,6 +60,18 @@ const getStyles = (theme: GrafanaTheme2) => ({
     alignItems: 'center',
     padding: theme.spacing(4),
   }),
+  formWithTest: css({
+    display: 'grid',
+    gridTemplateColumns: '3fr 2fr',
+    gap: theme.spacing(3),
+  }),
+  formColumn: css({
+    minWidth: 0,
+  }),
+  testColumn: css({
+    position: 'relative' as const,
+    minHeight: 0,
+  }),
 });
 
 export default function EvaluatorsPage(props: EvaluatorsPageProps) {
@@ -71,6 +85,11 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
   const [selectedEvaluator, setSelectedEvaluator] = useState<Evaluator | null>(null);
   const [forkTemplateID, setForkTemplateID] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [formState, setFormState] = useState<EvalFormState>({
+    kind: 'llm_judge',
+    config: {},
+    outputKeys: [{ key: 'score', type: 'number' }],
+  });
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [scopeFilter, setScopeFilter] = useState<string>('');
@@ -246,7 +265,23 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
         </div>
 
         {showCreateForm ? (
-          <EvaluatorForm onSubmit={handleCreateSubmit} onCancel={handleCreateCancel} />
+          <div className={styles.formWithTest}>
+            <div className={styles.formColumn}>
+              <EvaluatorForm
+                onSubmit={handleCreateSubmit}
+                onCancel={handleCreateCancel}
+                onConfigChange={setFormState}
+              />
+            </div>
+            <div className={styles.testColumn}>
+              <EvalTestPanel
+                kind={formState.kind}
+                config={formState.config}
+                outputKeys={formState.outputKeys}
+                dataSource={dataSource}
+              />
+            </div>
+          </div>
         ) : (
           <>
             <EvaluatorTable

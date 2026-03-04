@@ -39,8 +39,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   list: css({
     label: 'conversationGenerations-list',
-    display: 'grid',
+    display: 'flex',
+    flexDirection: 'column',
     gap: theme.spacing(0.5),
+    flex: 1,
+    minHeight: 0,
   }),
   controls: css({
     label: 'conversationGenerations-controls',

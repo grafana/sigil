@@ -16,7 +16,7 @@ import (
 func newTemplateMux(tmplSvc *TemplateService, evalSvc *Service) *http.ServeMux {
 	mux := http.NewServeMux()
 	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
-	RegisterHTTPRoutes(mux, evalSvc, tmplSvc, protected)
+	RegisterHTTPRoutes(mux, evalSvc, tmplSvc, nil, protected)
 	return mux
 }
 

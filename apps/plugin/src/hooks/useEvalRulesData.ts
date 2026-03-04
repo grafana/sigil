@@ -10,7 +10,6 @@ export type EvalRulesData = {
   errorMessage: string;
   setErrorMessage: (msg: string) => void;
   handleToggle: (ruleID: string, enabled: boolean) => Promise<void>;
-  handleDelete: (ruleID: string) => Promise<void>;
 };
 
 export function useEvalRulesData(dataSource: EvaluationDataSource): EvalRulesData {
@@ -70,17 +69,5 @@ export function useEvalRulesData(dataSource: EvaluationDataSource): EvalRulesDat
     [dataSource]
   );
 
-  const handleDelete = useCallback(
-    async (ruleID: string) => {
-      try {
-        await dataSource.deleteRule(ruleID);
-        setRules((prev) => prev.filter((r) => r.rule_id !== ruleID));
-      } catch (err) {
-        setErrorMessage(err instanceof Error ? err.message : 'Failed to delete rule');
-      }
-    },
-    [dataSource]
-  );
-
-  return { rules, evaluators, predefinedCount, loading, errorMessage, setErrorMessage, handleToggle, handleDelete };
+  return { rules, evaluators, predefinedCount, loading, errorMessage, setErrorMessage, handleToggle };
 }

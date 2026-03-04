@@ -1,16 +1,24 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
 import { Button, Field, FieldSet, Input, Select, Stack, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
-import type { EvalOutputKey, PublishVersionRequest, ScoreType } from '../../evaluation/types';
+import type {
+  EvalFormState,
+  EvalOutputKey,
+  EvaluatorKind,
+  PublishVersionRequest,
+  ScoreType,
+} from '../../evaluation/types';
 
 export type PublishVersionFormProps = {
+  kind: EvaluatorKind;
   initialConfig?: Record<string, unknown>;
   initialOutputKeys?: EvalOutputKey[];
   rollbackVersion?: string;
   existingVersions?: string[];
   onSubmit: (req: PublishVersionRequest) => void;
   onCancel: () => void;
+  onConfigChange?: (state: EvalFormState) => void;
 };
 
 const SCORE_TYPE_OPTIONS: Array<SelectableValue<ScoreType>> = [
@@ -69,12 +77,14 @@ function nextVersion(existingVersions?: string[]): string {
 }
 
 export default function PublishVersionForm({
+  kind,
   initialConfig,
   initialOutputKeys,
   rollbackVersion,
   existingVersions,
   onSubmit,
   onCancel,
+  onConfigChange,
 }: PublishVersionFormProps) {
   const styles = useStyles2(getStyles);
 
@@ -84,6 +94,21 @@ export default function PublishVersionForm({
   const [outputType, setOutputType] = useState<ScoreType>(initialOutputKeys?.[0]?.type ?? 'number');
   const [changelog, setChangelog] = useState(rollbackVersion ? `Rollback to version ${rollbackVersion}` : '');
   const [touched, setTouched] = useState(false);
+
+  useEffect(() => {
+    let parsedConfig: Record<string, unknown> = {};
+    try {
+      parsedConfig = JSON.parse(configJson);
+    } catch {
+      /* ignore parse errors */
+    }
+    onConfigChange?.({
+      kind,
+      config: parsedConfig,
+      outputKeys: [{ key: outputKey.trim() || 'score', type: outputType }],
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, configJson, outputKey, outputType]);
 
   const isVersionEmpty = version.trim() === '';
   const isOutputKeyEmpty = outputKey.trim() === '';

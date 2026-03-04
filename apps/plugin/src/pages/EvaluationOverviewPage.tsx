@@ -60,7 +60,7 @@ export default function EvaluationOverviewPage(props: EvaluationOverviewPageProp
   const navigate = useNavigate();
 
   const [viewMode, setViewMode] = useState<ViewMode>('pipeline');
-  const { rules, evaluators, predefinedCount, loading, errorMessage, setErrorMessage, handleToggle, handleDelete } =
+  const { rules, evaluators, predefinedCount, loading, errorMessage, setErrorMessage, handleToggle } =
     useEvalRulesData(dataSource);
 
   const handleRuleClick = (ruleID: string) => {
@@ -129,7 +129,6 @@ export default function EvaluationOverviewPage(props: EvaluationOverviewPageProp
                 evaluators={evaluators}
                 onToggle={handleToggle}
                 onClick={handleRuleClick}
-                onDelete={handleDelete}
               />
             ))
           )}

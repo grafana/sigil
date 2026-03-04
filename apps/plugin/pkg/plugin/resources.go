@@ -114,6 +114,8 @@ func requiredPermissionAction(method string, path string) (string, bool) {
 		return permissionDataRead, true
 	case method == http.MethodGet && path == "/query/agents/lookup":
 		return permissionDataRead, true
+	case strings.HasPrefix(path, "/eval/") || path == "/eval:test":
+		return permissionForEvalRoute(method, path)
 	default:
 		return "", false
 	}
@@ -144,6 +146,17 @@ func permissionForConversationRoute(method string, path string) (string, bool) {
 	}
 
 	return "", false
+}
+
+func permissionForEvalRoute(method string, path string) (string, bool) {
+	switch method {
+	case http.MethodGet:
+		return permissionDataRead, true
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		return permissionEvalWrite, true
+	default:
+		return "", false
+	}
 }
 
 func (a *App) handleListConversations(w http.ResponseWriter, req *http.Request) {
@@ -542,6 +555,10 @@ func (a *App) handleEvalRulesPreview(w http.ResponseWriter, req *http.Request) {
 	a.handleProxy(w, req, "/api/v1/eval/rules:preview", http.MethodPost)
 }
 
+func (a *App) handleEvalTest(w http.ResponseWriter, req *http.Request) {
+	a.handleProxy(w, req, "/api/v1/eval:test", http.MethodPost)
+}
+
 func (a *App) handleEvalRules(w http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case http.MethodGet:
@@ -659,6 +676,7 @@ func (a *App) handleEvalTemplateRoutes(w http.ResponseWriter, req *http.Request)
 }
 
 func (a *App) registerRoutes(mux *http.ServeMux) {
+	backend.Logger.Info("registering routes")
 	mux.HandleFunc("/query/conversations/search", a.withAuthorization(a.handleSearchConversations))
 	mux.HandleFunc("/query/conversations", a.withAuthorization(a.handleListConversations))
 	mux.HandleFunc("/query/conversations/", a.withAuthorization(a.handleConversationRoutes))
@@ -674,17 +692,18 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/query/agents", a.withAuthorization(a.handleListAgents))
 	mux.HandleFunc("/query/agents/lookup", a.withAuthorization(a.handleLookupAgent))
 
-	mux.HandleFunc("/eval/evaluators", a.handleEvalEvaluators)
-	mux.HandleFunc("/eval/evaluators/", a.handleEvalEvaluatorByID)
-	mux.HandleFunc("/eval/predefined/evaluators", a.handleEvalPredefinedEvaluators)
-	mux.HandleFunc("/eval/predefined/evaluators/", a.handleEvalPredefinedFork)
-	mux.HandleFunc("/eval/rules:preview", a.handleEvalRulesPreview)
-	mux.HandleFunc("/eval/rules", a.handleEvalRules)
-	mux.HandleFunc("/eval/rules/", a.handleEvalRuleByID)
-	mux.HandleFunc("/eval/judge/providers", a.handleEvalJudgeProviders)
-	mux.HandleFunc("/eval/judge/models", a.handleEvalJudgeModels)
-	mux.HandleFunc("/eval/templates", a.handleEvalTemplates)
-	mux.HandleFunc("/eval/templates/", a.handleEvalTemplateRoutes)
+	mux.HandleFunc("/eval/evaluators", a.withAuthorization(a.handleEvalEvaluators))
+	mux.HandleFunc("/eval/evaluators/", a.withAuthorization(a.handleEvalEvaluatorByID))
+	mux.HandleFunc("/eval/predefined/evaluators", a.withAuthorization(a.handleEvalPredefinedEvaluators))
+	mux.HandleFunc("/eval/predefined/evaluators/", a.withAuthorization(a.handleEvalPredefinedFork))
+	mux.HandleFunc("/eval/rules:preview", a.withAuthorization(a.handleEvalRulesPreview))
+	mux.HandleFunc("/eval:test", a.withAuthorization(a.handleEvalTest))
+	mux.HandleFunc("/eval/rules", a.withAuthorization(a.handleEvalRules))
+	mux.HandleFunc("/eval/rules/", a.withAuthorization(a.handleEvalRuleByID))
+	mux.HandleFunc("/eval/judge/providers", a.withAuthorization(a.handleEvalJudgeProviders))
+	mux.HandleFunc("/eval/judge/models", a.withAuthorization(a.handleEvalJudgeModels))
+	mux.HandleFunc("/eval/templates", a.withAuthorization(a.handleEvalTemplates))
+	mux.HandleFunc("/eval/templates/", a.withAuthorization(a.handleEvalTemplateRoutes))
 }
 
 type conversationSearchTimeRange struct {
@@ -1262,6 +1281,15 @@ func (a *App) doSigilRequest(
 		upstream += "?" + encodedQuery
 	}
 
+	backend.Logger.Debug("sigil proxy request",
+		"method", method,
+		"path", path,
+		"upstream", upstream,
+		"tenantID", a.tenantID,
+		"hasAuthToken", a.apiAuthToken != "",
+		"hasBody", body != nil,
+	)
+
 	var bodyReader io.Reader
 	if body != nil {
 		bodyReader = bytes.NewReader(body)
@@ -1269,6 +1297,7 @@ func (a *App) doSigilRequest(
 
 	proxyReq, err := http.NewRequestWithContext(req.Context(), method, upstream, bodyReader)
 	if err != nil {
+		backend.Logger.Error("sigil proxy request build failed", "path", path, "error", err)
 		return nil, fmt.Errorf("build sigil request: %w", err)
 	}
 	proxyReq.Header = req.Header.Clone()
@@ -1281,7 +1310,17 @@ func (a *App) doSigilRequest(
 	}
 	injectTenantHeaders(proxyReq, a.tenantID)
 
-	return a.executeUpstreamRequest(proxyReq)
+	payload, err := a.executeUpstreamRequest(proxyReq)
+	if err != nil {
+		backend.Logger.Warn("sigil proxy request failed",
+			"method", method,
+			"path", path,
+			"upstream", upstream,
+			"error", err,
+		)
+		return nil, err
+	}
+	return payload, nil
 }
 
 func (a *App) doGrafanaRequest(

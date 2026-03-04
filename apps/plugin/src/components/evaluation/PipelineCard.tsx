@@ -1,7 +1,7 @@
 import React from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Icon, IconButton, Switch, Text, useStyles2 } from '@grafana/ui';
+import { Icon, Switch, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import { SELECTOR_OPTIONS, type Evaluator, type Rule } from '../../evaluation/types';
 import PipelineNode from './PipelineNode';
 
@@ -10,20 +10,23 @@ export type PipelineCardProps = {
   evaluators: Evaluator[];
   onToggle?: (ruleID: string, enabled: boolean) => void;
   onClick?: (ruleID: string) => void;
-  onDelete?: (ruleID: string) => void;
 };
 
-function formatMatchSummary(match: Record<string, string | string[]>): string {
-  const entries = Object.entries(match);
-  if (entries.length === 0) {
+function getMatchEntries(match: Record<string, string | string[]>): string[] {
+  return Object.entries(match).map(([key, val]) => {
+    const v = Array.isArray(val) ? val.join(', ') : val;
+    return `${key}: ${v}`;
+  });
+}
+
+function summarize(items: string[]): string {
+  if (items.length === 0) {
     return '—';
   }
-  return entries
-    .map(([key, val]) => {
-      const v = Array.isArray(val) ? val.join(', ') : val;
-      return `${key}: ${v}`;
-    })
-    .join('; ');
+  if (items.length === 1) {
+    return items[0];
+  }
+  return `${items[0]} +${items.length - 1}`;
 }
 
 function getSelectorLabel(selector: Rule['selector']): string {
@@ -33,52 +36,64 @@ function getSelectorLabel(selector: Rule['selector']): string {
 
 const getStyles = (theme: GrafanaTheme2) => ({
   card: css({
-    border: `1px solid ${theme.colors.border.medium}`,
-    borderRadius: '8px',
+    borderRadius: theme.shape.radius.default,
     overflow: 'hidden',
     background: theme.colors.background.primary,
+    border: `1px solid ${theme.colors.border.weak}`,
+    boxShadow: 'none',
+    transition: 'border-color 0.15s, box-shadow 0.15s',
+    '&:hover': {
+      borderColor: theme.colors.border.medium,
+      boxShadow: theme.shadows.z1,
+    },
   }),
-  header: css({
-    display: 'flex',
+  row: css({
+    display: 'grid',
+    gridTemplateColumns: '40px 300px 2fr 20px 3fr 20px 90px 20px 2fr',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: theme.spacing(1),
-    padding: theme.spacing(1, 1.5),
-    background: theme.colors.background.secondary,
-    borderBottom: `1px solid ${theme.colors.border.weak}`,
-  }),
-  headerLeft: css({
-    display: 'flex',
-    alignItems: 'center',
-    gap: theme.spacing(1),
-    flex: 1,
-    minWidth: 0,
+    gap: theme.spacing(0.75),
+    padding: theme.spacing(1.25, 1.25),
   }),
   ruleId: css({
+    background: 'none',
+    border: 'none',
+    padding: 0,
+    font: 'inherit',
+    color: 'inherit',
+    textAlign: 'left' as const,
     cursor: 'pointer',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+    '&:hover': {
+      textDecoration: 'underline',
+    },
   }),
-  pipeline: css({
-    padding: theme.spacing(1.5),
-    display: 'flex',
-    alignItems: 'center',
-    gap: theme.spacing(0.5),
-    flexWrap: 'wrap' as const,
+  ruleName: css({
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+  }),
+  step: css({
+    minWidth: 0,
+    overflow: 'hidden',
   }),
   arrow: css({
     color: theme.colors.text.secondary,
-    flexShrink: 0,
+    opacity: 0.6,
+    justifySelf: 'center',
   }),
 });
 
-export default function PipelineCard({ rule, evaluators, onToggle, onClick, onDelete }: PipelineCardProps) {
+export default function PipelineCard({ rule, evaluators, onToggle, onClick }: PipelineCardProps) {
   const styles = useStyles2(getStyles);
 
   const selectorLabel = getSelectorLabel(rule.selector);
-  const matchSummary = formatMatchSummary(rule.match);
+  const matchEntries = getMatchEntries(rule.match);
   const sampleLabel = `${Math.round(rule.sample_rate * 100)}%`;
-  const evaluatorLabels = rule.evaluator_ids
-    .map((id) => evaluators.find((e) => e.evaluator_id === id)?.evaluator_id ?? id)
-    .join(', ');
+  const evaluatorList = rule.evaluator_ids.map(
+    (id) => evaluators.find((e) => e.evaluator_id === id)?.evaluator_id ?? id
+  );
 
   const handleToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (onToggle != null) {
@@ -92,57 +107,77 @@ export default function PipelineCard({ rule, evaluators, onToggle, onClick, onDe
     }
   };
 
-  const handleDelete = () => {
-    if (onDelete != null && window.confirm(`Delete rule "${rule.rule_id}"?`)) {
-      onDelete(rule.rule_id);
-    }
-  };
-
   return (
     <div className={styles.card}>
-      <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <Switch
-            value={rule.enabled}
-            onChange={handleToggle}
-            disabled={onToggle == null}
-            aria-label={`Toggle rule ${rule.rule_id}`}
-          />
-          {onClick != null ? (
-            <button
-              type="button"
-              className={styles.ruleId}
-              onClick={handleCardClick}
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: 0,
-                font: 'inherit',
-                color: 'inherit',
-                textAlign: 'left',
-                cursor: 'pointer',
-              }}
-            >
-              <Text weight="medium" truncate>
-                {rule.rule_id}
-              </Text>
-            </button>
-          ) : (
+      <div className={styles.row}>
+        <Switch
+          value={rule.enabled}
+          onChange={handleToggle}
+          disabled={onToggle == null}
+          aria-label={`Toggle rule ${rule.rule_id}`}
+        />
+        {onClick != null ? (
+          <button type="button" className={styles.ruleId} onClick={handleCardClick}>
             <Text weight="medium" truncate>
               {rule.rule_id}
             </Text>
+          </button>
+        ) : (
+          <span className={styles.ruleName}>
+            <Text weight="medium" truncate>
+              {rule.rule_id}
+            </Text>
+          </span>
+        )}
+        <div className={styles.step}>
+          <PipelineNode kind="selector" label={selectorLabel} />
+        </div>
+        <Icon name="arrow-right" size="xs" className={styles.arrow} />
+        <div className={styles.step}>
+          {matchEntries.length > 1 ? (
+            <Tooltip
+              content={
+                <div>
+                  {matchEntries.map((entry) => (
+                    <div key={entry}>{entry}</div>
+                  ))}
+                </div>
+              }
+              placement="top"
+            >
+              <span>
+                <PipelineNode kind="match" label={summarize(matchEntries)} />
+              </span>
+            </Tooltip>
+          ) : (
+            <PipelineNode kind="match" label={summarize(matchEntries)} />
           )}
         </div>
-        {onDelete != null && <IconButton name="trash-alt" size="md" tooltip="Delete rule" onClick={handleDelete} />}
-      </div>
-      <div className={styles.pipeline}>
-        <PipelineNode kind="selector" label={selectorLabel} />
-        <Icon name="arrow-right" size="sm" className={styles.arrow} />
-        <PipelineNode kind="match" label={matchSummary} />
-        <Icon name="arrow-right" size="sm" className={styles.arrow} />
-        <PipelineNode kind="sample" label={sampleLabel} />
-        <Icon name="arrow-right" size="sm" className={styles.arrow} />
-        <PipelineNode kind="evaluator" label={evaluatorLabels} />
+        <Icon name="arrow-right" size="xs" className={styles.arrow} />
+        <div className={styles.step}>
+          <PipelineNode kind="sample" label={sampleLabel} />
+        </div>
+        <Icon name="arrow-right" size="xs" className={styles.arrow} />
+        <div className={styles.step}>
+          {evaluatorList.length > 1 ? (
+            <Tooltip
+              content={
+                <div>
+                  {evaluatorList.map((name) => (
+                    <div key={name}>{name}</div>
+                  ))}
+                </div>
+              }
+              placement="top"
+            >
+              <span>
+                <PipelineNode kind="evaluator" label={summarize(evaluatorList)} />
+              </span>
+            </Tooltip>
+          ) : (
+            <PipelineNode kind="evaluator" label={summarize(evaluatorList)} />
+          )}
+        </div>
       </div>
     </div>
   );
