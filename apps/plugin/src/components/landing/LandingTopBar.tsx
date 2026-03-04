@@ -493,7 +493,7 @@ function getStyles(theme: GrafanaTheme2) {
     pageFlow: css({
       label: 'landingTopBar-pageFlow',
       display: 'grid',
-      gridTemplateColumns: 'minmax(0, 1fr) minmax(320px, 380px)',
+      gridTemplateColumns: 'minmax(0, 1fr) minmax(400px, 480px)',
       alignItems: 'start',
       gap: theme.spacing(3),
       boxSizing: 'border-box',
@@ -511,7 +511,7 @@ function getStyles(theme: GrafanaTheme2) {
       top: theme.spacing(2),
       alignSelf: 'stretch',
       display: 'grid',
-      gap: theme.spacing(1),
+      gap: theme.spacing(3),
       '@media (max-width: 1200px)': {
         position: 'static',
       },
@@ -581,7 +581,7 @@ function getStyles(theme: GrafanaTheme2) {
       listStyle: 'none',
       display: 'grid',
       gridTemplateColumns: 'repeat(3, minmax(160px, 1fr))',
-      gap: theme.spacing(0.75),
+      gap: theme.spacing(0.5),
       justifySelf: 'end',
       alignSelf: 'center',
       width: '100%',
@@ -599,7 +599,7 @@ function getStyles(theme: GrafanaTheme2) {
       background: 'none',
       padding: theme.spacing(0.5, 0.75),
       borderRadius: theme.shape.radius.default,
-      textAlign: 'left',
+      textAlign: 'right',
       cursor: 'pointer',
       '&:hover': {
         background: theme.colors.action.hover,
@@ -618,6 +618,7 @@ function getStyles(theme: GrafanaTheme2) {
     heroStatRow: css({
       display: 'flex',
       alignItems: 'center',
+      justifyContent: 'flex-end',
       gap: theme.spacing(1),
     }),
     heroStatValue: css({
@@ -667,6 +668,7 @@ function getStyles(theme: GrafanaTheme2) {
       fontSize: '2.2rem',
       lineHeight: 1.1,
       color: theme.colors.text.primary,
+      whiteSpace: 'nowrap',
     }),
     assistantRowDash: css({
       label: 'landingTopBar-assistantRowDash',
