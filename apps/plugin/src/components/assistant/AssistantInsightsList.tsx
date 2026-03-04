@@ -54,6 +54,17 @@ export default function AssistantInsightsList({
   const listItemRefs = useRef<Record<string, HTMLLIElement | null>>({});
   const latestRef = useRef({ prompt, origin, systemPrompt, dataContext, assistant, parseItems });
 
+  const resetInsightsState = useCallback(() => {
+    setRawAssistantText('');
+    setItems([]);
+    setOpenMenuItemKey(null);
+    setReportItemKey(null);
+    setDismissedItemKeys({});
+    setDismissingItemKeys({});
+    setCollapsingItemKeys({});
+    setDismissHeightByItemKey({});
+  }, []);
+
   useEffect(() => {
     latestRef.current = { prompt, origin, systemPrompt, dataContext, assistant, parseItems };
   });
@@ -102,16 +113,14 @@ export default function AssistantInsightsList({
   }, []);
 
   useEffect(() => {
+    const scheduleReset = () => {
+      window.setTimeout(() => {
+        resetInsightsState();
+      }, 0);
+    };
     if (!dataContext) {
       lastDataContextRef.current = null;
-      setRawAssistantText('');
-      setItems([]);
-      setOpenMenuItemKey(null);
-      setReportItemKey(null);
-      setDismissedItemKeys({});
-      setDismissingItemKeys({});
-      setCollapsingItemKeys({});
-      setDismissHeightByItemKey({});
+      scheduleReset();
       return;
     }
     if (assistant.isGenerating) {
@@ -121,16 +130,9 @@ export default function AssistantInsightsList({
       return;
     }
     lastDataContextRef.current = dataContext;
-    setRawAssistantText('');
-    setItems([]);
-    setOpenMenuItemKey(null);
-    setReportItemKey(null);
-    setDismissedItemKeys({});
-    setDismissingItemKeys({});
-    setCollapsingItemKeys({});
-    setDismissHeightByItemKey({});
+    scheduleReset();
     runGenerate(dataContext);
-  }, [assistant.isGenerating, dataContext, runGenerate]);
+  }, [assistant.isGenerating, dataContext, resetInsightsState, runGenerate]);
 
   useEffect(() => {
     if (!openMenuItemKey) {
@@ -251,16 +253,9 @@ export default function AssistantInsightsList({
     if (!dataContext || assistant.isGenerating) {
       return;
     }
-    setOpenMenuItemKey(null);
-    setReportItemKey(null);
-    setDismissedItemKeys({});
-    setDismissingItemKeys({});
-    setCollapsingItemKeys({});
-    setDismissHeightByItemKey({});
-    setRawAssistantText('');
-    setItems([]);
+    resetInsightsState();
     runGenerate(dataContext);
-  }, [assistant.isGenerating, dataContext, runGenerate]);
+  }, [assistant.isGenerating, dataContext, resetInsightsState, runGenerate]);
 
   const displayRawText = assistant.isGenerating ? String(assistant.content ?? '') : rawAssistantText;
   const hasItems = visibleItems.length > 0;
