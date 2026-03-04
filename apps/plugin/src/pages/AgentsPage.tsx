@@ -524,8 +524,8 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
       ) : (
         <>
           <TabsBar>
-            <Tab label="Info panel" active={activeTab === 'info'} onChangeTab={handleTabChange('info')} />
-            <Tab label="Agents table" active={activeTab === 'table'} onChangeTab={handleTabChange('table')} />
+            <Tab label="Overview" active={activeTab === 'info'} onChangeTab={handleTabChange('info')} />
+            <Tab label="Agents" active={activeTab === 'table'} onChangeTab={handleTabChange('table')} />
           </TabsBar>
 
           {activeTab === 'info' ? (

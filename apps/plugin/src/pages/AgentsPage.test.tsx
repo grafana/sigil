@@ -176,7 +176,7 @@ describe('AgentsPage', () => {
     const { router } = renderPage(dataSource);
 
     await waitFor(() => expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', ''));
-    fireEvent.click(screen.getByText('Agents table'));
+    fireEvent.click(screen.getByText('Agents'));
 
     fireEvent.click(await screen.findByRole('button', { name: 'open agent assistant' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/a/grafana-sigil-app/agents/name/assistant'));
@@ -218,7 +218,7 @@ describe('AgentsPage', () => {
     const dataSource = createDataSource();
     const { router } = renderPage(dataSource);
 
-    fireEvent.click(await screen.findByText('Agents table'));
+    fireEvent.click(await screen.findByText('Agents'));
     fireEvent.click(await screen.findByRole('button', { name: 'open agent anonymous' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/a/grafana-sigil-app/agents/anonymous'));
   });
@@ -228,7 +228,7 @@ describe('AgentsPage', () => {
     renderPage(dataSource);
 
     await waitFor(() => expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', ''));
-    fireEvent.click(screen.getByText('Agents table'));
+    fireEvent.click(screen.getByText('Agents'));
 
     triggerLoadMoreIntersection();
 
@@ -241,7 +241,7 @@ describe('AgentsPage', () => {
     renderPage(dataSource);
 
     await waitFor(() => expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', ''));
-    fireEvent.click(screen.getByText('Agents table'));
+    fireEvent.click(screen.getByText('Agents'));
 
     fireEvent.change(screen.getByPlaceholderText('Search by agent name…'), { target: { value: 'assist' } });
 
