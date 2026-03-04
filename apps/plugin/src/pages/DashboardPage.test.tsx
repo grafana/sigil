@@ -24,6 +24,16 @@ jest.mock('@grafana/ui', () => {
   const actual = jest.requireActual('@grafana/ui');
   return {
     ...actual,
+    Link: ({ href, children, ...props }: React.ComponentProps<'a'>) => (
+      <a href={href} {...props}>
+        {children}
+      </a>
+    ),
+    LinkButton: ({ href, children, ...props }: React.ComponentProps<'a'>) => (
+      <a href={href} {...props}>
+        {children}
+      </a>
+    ),
     TimeRangePicker: () => <div data-testid="time-range-picker" />,
     TimeRangeInput: (props: { value: unknown; onChange: unknown }) => <div data-testid="time-range-input" />,
     PanelChrome: ({
@@ -46,6 +56,9 @@ jest.mock('@grafana/assistant', () => ({
     isGenerating: false,
     content: '',
     generate: jest.fn(),
+  }),
+  useAssistant: () => ({
+    openAssistant: jest.fn(),
   }),
 }));
 
