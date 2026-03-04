@@ -66,7 +66,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   pageWrapperNoPadding: css({
     padding: 0,
-    overflow: 'hidden',
   }),
   conversationsRouteContainer: css({
     display: 'flex',
@@ -74,6 +73,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flex: 1,
     height: '100%',
     minHeight: 0,
+    marginTop: theme.spacing(-2),
     overflow: 'hidden',
     position: 'relative',
   }),

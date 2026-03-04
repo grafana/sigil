@@ -57,6 +57,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexDirection: 'column' as const,
     gap: theme.spacing(2),
     minHeight: 0,
+    marginTop: theme.spacing(-4),
   }),
   tabsRow: css({
     display: 'flex',

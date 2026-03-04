@@ -234,15 +234,17 @@ export function LandingTopBar({ assistantOrigin }: LandingTopBarProps) {
 
     const loadStats = async () => {
       try {
-        const [conversationCurrent, conversationPrevious, agentsCurrent, agentsPrevious, evalCurrent, evalPrevious] =
-          await Promise.all([
-            countConversationsInRange(currentFrom, currentTo),
-            countConversationsInRange(previousFrom, previousTo),
-            countAgentsSeenInRange(currentFrom, currentTo),
-            countAgentsSeenInRange(previousFrom, previousTo),
-            countEvaluatorsUpdatedInRange(currentFrom, currentTo),
-            countEvaluatorsUpdatedInRange(previousFrom, previousTo),
-          ]);
+        const [
+          conversationCurrent,
+          conversationPrevious,
+          agentCounts,
+          evaluatorCounts,
+        ] = await Promise.all([
+          countConversationsInRange(currentFrom, currentTo),
+          countConversationsInRange(previousFrom, previousTo),
+          countAgentsSeenInWindows(currentFrom, currentTo, previousFrom, previousTo),
+          countEvaluatorsUpdatedInWindows(currentFrom, currentTo, previousFrom, previousTo),
+        ]);
 
         if (cancelled) {
           return;
@@ -261,16 +263,16 @@ export function LandingTopBar({ assistantOrigin }: LandingTopBarProps) {
             label: 'Agents',
             route: ROUTES.Agents,
             cta: 'Inspect agents',
-            current: agentsCurrent,
-            previous: agentsPrevious,
+            current: agentCounts.current,
+            previous: agentCounts.previous,
             loading: false,
           },
           {
             label: 'Evaluations',
             route: ROUTES.Evaluation,
             cta: 'Manage evals',
-            current: evalCurrent,
-            previous: evalPrevious,
+            current: evaluatorCounts.current,
+            previous: evaluatorCounts.previous,
             loading: false,
           },
         ];
@@ -525,19 +527,49 @@ async function countConversationsInRange(from: Date, to: Date): Promise<number> 
   return total;
 }
 
-async function countAgentsSeenInRange(from: Date, to: Date): Promise<number> {
+type WindowCounts = {
+  current: number;
+  previous: number;
+};
+
+function countInWindows(
+  timestamps: number[],
+  currentFrom: Date,
+  currentTo: Date,
+  previousFrom: Date,
+  previousTo: Date
+): WindowCounts {
+  const currentMin = currentFrom.getTime();
+  const currentMax = currentTo.getTime();
+  const previousMin = previousFrom.getTime();
+  const previousMax = previousTo.getTime();
+  let current = 0;
+  let previous = 0;
+
+  for (const timestamp of timestamps) {
+    if (!Number.isFinite(timestamp)) {
+      continue;
+    }
+    if (timestamp >= currentMin && timestamp <= currentMax) {
+      current += 1;
+      continue;
+    }
+    if (timestamp >= previousMin && timestamp <= previousMax) {
+      previous += 1;
+    }
+  }
+
+  return { current, previous };
+}
+
+async function listAgentSeenTimestamps(): Promise<number[]> {
   let cursor = '';
-  let count = 0;
   let pages = 0;
-  const min = from.getTime();
-  const max = to.getTime();
+  const timestamps: number[] = [];
   while (pages < MAX_PAGES) {
     const response = await defaultAgentsDataSource.listAgents(PAGE_SIZE, cursor);
     for (const item of response.items ?? []) {
-      const seenAt = Date.parse(item.latest_seen_at);
-      if (Number.isFinite(seenAt) && seenAt >= min && seenAt <= max) {
-        count += 1;
-      }
+      timestamps.push(Date.parse(item.latest_seen_at));
     }
     if (!response.next_cursor) {
       break;
@@ -545,22 +577,17 @@ async function countAgentsSeenInRange(from: Date, to: Date): Promise<number> {
     cursor = response.next_cursor;
     pages += 1;
   }
-  return count;
+  return timestamps;
 }
 
-async function countEvaluatorsUpdatedInRange(from: Date, to: Date): Promise<number> {
+async function listEvaluatorUpdatedTimestamps(): Promise<number[]> {
   let cursor = '';
-  let count = 0;
   let pages = 0;
-  const min = from.getTime();
-  const max = to.getTime();
+  const timestamps: number[] = [];
   while (pages < MAX_PAGES) {
     const response = await defaultEvaluationDataSource.listEvaluators(PAGE_SIZE, cursor);
     for (const item of response.items ?? []) {
-      const updatedAt = Date.parse(item.updated_at);
-      if (Number.isFinite(updatedAt) && updatedAt >= min && updatedAt <= max) {
-        count += 1;
-      }
+      timestamps.push(Date.parse(item.updated_at));
     }
     if (!response.next_cursor) {
       break;
@@ -568,7 +595,27 @@ async function countEvaluatorsUpdatedInRange(from: Date, to: Date): Promise<numb
     cursor = response.next_cursor;
     pages += 1;
   }
-  return count;
+  return timestamps;
+}
+
+export async function countAgentsSeenInWindows(
+  currentFrom: Date,
+  currentTo: Date,
+  previousFrom: Date,
+  previousTo: Date
+): Promise<WindowCounts> {
+  const timestamps = await listAgentSeenTimestamps();
+  return countInWindows(timestamps, currentFrom, currentTo, previousFrom, previousTo);
+}
+
+async function countEvaluatorsUpdatedInWindows(
+  currentFrom: Date,
+  currentTo: Date,
+  previousFrom: Date,
+  previousTo: Date
+): Promise<WindowCounts> {
+  const timestamps = await listEvaluatorUpdatedTimestamps();
+  return countInWindows(timestamps, currentFrom, currentTo, previousFrom, previousTo);
 }
 
 function getStyles(theme: GrafanaTheme2) {
