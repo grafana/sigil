@@ -49,7 +49,6 @@ export const Default = {
     evaluators: mockEvaluators,
     onToggle: () => {},
     onClick: () => {},
-    onDelete: () => {},
   },
 };
 
@@ -59,7 +58,6 @@ export const Disabled = {
     evaluators: mockEvaluators,
     onToggle: () => {},
     onClick: () => {},
-    onDelete: () => {},
   },
 };
 
@@ -69,7 +67,6 @@ export const NoMatch = {
     evaluators: mockEvaluators,
     onToggle: () => {},
     onClick: () => {},
-    onDelete: () => {},
   },
 };
 
@@ -106,8 +103,69 @@ export const ManyEvaluators = {
     evaluators: manyEvaluators,
     onToggle: () => {},
     onClick: () => {},
-    onDelete: () => {},
   },
+};
+
+export const LongMatchCriteria = {
+  args: {
+    rule: {
+      ...mockRule,
+      rule_id: 'long-match-test',
+      match: {
+        agent_name: ['devex-go-openai-planner'],
+        'model.name': ['gpt-5'],
+        'model.provider': ['openai'],
+      },
+    },
+    evaluators: mockEvaluators,
+    onToggle: () => {},
+    onClick: () => {},
+  },
+};
+
+export const ShortContent = {
+  args: {
+    rule: {
+      ...mockRule,
+      rule_id: 'minimal',
+      match: {},
+      evaluator_ids: ['fff'],
+    },
+    evaluators: [{ ...mockEvaluators[0], evaluator_id: 'fff' }],
+    onToggle: () => {},
+    onClick: () => {},
+  },
+};
+
+export const MultipleRulesStacked = {
+  render: () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <PipelineCard
+        rule={{
+          ...mockRule,
+          rule_id: 'online.helpfulnes',
+          match: {
+            agent_name: ['devex-go-openai-planner'],
+            'model.name': ['gpt-5'],
+            'model.provider': ['openai'],
+          },
+        }}
+        evaluators={mockEvaluators}
+        onToggle={() => {}}
+        onClick={() => {}}
+      />
+      <PipelineCard
+        rule={{
+          ...mockRule,
+          rule_id: 'dcddsc',
+          match: {},
+        }}
+        evaluators={mockEvaluators}
+        onToggle={() => {}}
+        onClick={() => {}}
+      />
+    </div>
+  ),
 };
 
 export const Interactive = {
@@ -121,7 +179,6 @@ export const Interactive = {
           setRule((r) => ({ ...r, enabled }));
         }}
         onClick={() => {}}
-        onDelete={() => {}}
       />
     );
   },

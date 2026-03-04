@@ -6,7 +6,8 @@ apps:
     org_name: 'Main Org.'
     disabled: false
     jsonData:
-      sigilApiUrl: http://sigil:8080
+      sigilApiUrl: $SIGIL_API_URL
+      tenantId: $SIGIL_TENANT_ID
       prometheusDatasourceUID: $SIGIL_PROM_DS_UID
       tempoDatasourceUID: $SIGIL_TEMPO_DS_UID
     secureJsonData:

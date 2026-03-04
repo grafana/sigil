@@ -697,6 +697,15 @@ func TestResolveBatch(t *testing.T) {
 			expectedSourcePath: SourcePathMemoryLive,
 		},
 		{
+			name:               "anthropic provider with bedrock regional model ID resolves via candidate generation",
+			input:              ResolveInput{Provider: "anthropic", Model: "us.anthropic.claude-haiku-4-5-20251001-v1:0"},
+			expectedStatus:     ResolveStatusResolved,
+			expectedStrategy:   ResolveMatchStrategyExact,
+			expectedModelKey:   "openrouter:anthropic/claude-haiku-4.5",
+			expectedSourceID:   "anthropic/claude-haiku-4.5",
+			expectedSourcePath: SourcePathMemoryLive,
+		},
+		{
 			name:               "bedrock amazon model resolves",
 			input:              ResolveInput{Provider: "bedrock", Model: "amazon.nova-pro-v1:0"},
 			expectedStatus:     ResolveStatusResolved,

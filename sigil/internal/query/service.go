@@ -60,6 +60,7 @@ type ConversationSearchResult struct {
 	FirstGenerationAt time.Time                           `json:"first_generation_at"`
 	LastGenerationAt  time.Time                           `json:"last_generation_at"`
 	Models            []string                            `json:"models"`
+	ModelProviders    map[string]string                   `json:"model_providers,omitempty"`
 	Agents            []string                            `json:"agents"`
 	ErrorCount        int                                 `json:"error_count"`
 	HasErrors         bool                                `json:"has_errors"`
@@ -680,6 +681,7 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 				FirstGenerationAt: conversationMetadata.CreatedAt.UTC(),
 				LastGenerationAt:  conversationMetadata.LastGenerationAt.UTC(),
 				Models:            sortedKeysFromSet(aggregate.Models),
+				ModelProviders:    aggregate.ModelProviders,
 				Agents:            sortedKeysFromSet(aggregate.Agents),
 				ErrorCount:        aggregate.ErrorCount,
 				HasErrors:         aggregate.ErrorCount > 0,

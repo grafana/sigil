@@ -80,6 +80,7 @@ export type ConversationSearchResult = {
   first_generation_at: string;
   last_generation_at: string;
   models: string[];
+  model_providers?: Record<string, string>;
   agents: string[];
   error_count: number;
   has_errors: boolean;
@@ -160,6 +161,7 @@ export type ConversationSpan = {
   endTimeUnixNano: bigint;
   durationNano: bigint;
   attributes: SpanAttributes;
+  resourceAttributes: SpanAttributes;
   generation: GenerationDetail | null;
   children: ConversationSpan[];
 };

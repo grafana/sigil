@@ -52,3 +52,35 @@ export const Clickable = {
     },
   },
 };
+
+export const TrackStop = {
+  args: {
+    kind: 'selector',
+    label: 'User-visible turn',
+    trackStop: true,
+  },
+};
+
+export const TrackStopLongLabel = {
+  args: {
+    kind: 'match',
+    label: 'agent_name: devex-go-openai-planner',
+    trackStop: true,
+  },
+};
+
+export const Cell = {
+  args: {
+    kind: 'selector',
+    label: 'User-visible turn',
+    cell: true,
+  },
+};
+
+export const CellLongLabel = {
+  args: {
+    kind: 'match',
+    label: 'agent_name: devex-go-openai-planner · +2',
+    cell: true,
+  },
+};

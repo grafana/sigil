@@ -23,6 +23,7 @@ function makeSpan({
     endTimeUnixNano: BigInt('1772480417752390317'),
     durationNano: BigInt('173999000'),
     attributes: new Map(),
+    resourceAttributes: new Map(),
     generation: null,
     children: [],
     ...overrides,
@@ -86,7 +87,6 @@ describe('ConversationGenerations', () => {
     render(<ConversationGenerations data={data} />);
 
     fireEvent.click(screen.getByRole('switch', { name: 'toggle all spans' }));
-    fireEvent.click(screen.getByRole('button', { name: 'expand span streamText gpt-4o-mini' }));
 
     expect(screen.getByText('db.query')).toBeInTheDocument();
   });

@@ -23,6 +23,7 @@ function makeSpan(overrides: Partial<ConversationSpan> = {}): ConversationSpan {
     endTimeUnixNano: BigInt(5000),
     durationNano: BigInt(4000),
     attributes: new Map<string, SpanAttributeValue>(),
+    resourceAttributes: new Map<string, SpanAttributeValue>(),
     generation: null,
     children: [],
     ...overrides,

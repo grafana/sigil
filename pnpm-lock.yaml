@@ -214,7 +214,7 @@ importers:
         version: 0.78.0(zod@4.3.6)
       '@google/adk':
         specifier: ^0.4.0
-        version: 0.4.0(e63fffb06bfbc39986623b1c8129ccb8)
+        version: 0.4.0(0ad303674ec540eefc54fa900dd3cd21)
       '@google/genai':
         specifier: ^1.41.0
         version: 1.43.0(@modelcontextprotocol/sdk@1.26.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))
@@ -261,6 +261,9 @@ importers:
         specifier: ^6.21.0
         version: 6.25.0(ws@8.19.0)(zod@4.3.6)
     devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.19.13
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -2443,11 +2446,11 @@ packages:
   '@types/mdx@2.0.13':
     resolution: {integrity: sha512-+OWZQfAYyio6YkJb3HLxDrvnx6SWWDbC0zVPfBRzUk0/nqoDyf6dNxQi3eArPe8rJ473nobTMQ/8Zk+LxJ+Yuw==}
 
+  '@types/node@22.19.13':
+    resolution: {integrity: sha512-akNQMv0wW5uyRpD2v2IEyRSZiR+BeGuoB6L310EgGObO44HSMNT8z1xzio28V8qOrgYaopIDNA18YgdXd+qTiw==}
+
   '@types/node@24.11.0':
     resolution: {integrity: sha512-fPxQqz4VTgPI/IQ+lj9r0h+fDR66bzoeMGHp8ASee+32OSGIkeASsoZuJixsQoVef1QJbeubcPBxKk22QVoWdw==}
-
-  '@types/node@25.3.3':
-    resolution: {integrity: sha512-DpzbrH7wIcBaJibpKo9nnSQL0MTRdnWttGyE5haGwK86xgMOkFLp7vEyfQPGLOJh5wNYiJ3V9PmUMDhV9u8kkQ==}
 
   '@types/parse-json@4.0.2':
     resolution: {integrity: sha512-dISoDXWWQwUquiKsyZ4Ng+HX2KsPL7LyHKHQwgGFEA3IaKac4Obd+h2a/a6waisAoepJlBcx9paWqjA8/HVjCw==}
@@ -7159,11 +7162,11 @@ packages:
     resolution: {integrity: sha512-nWJ91DjeOkej/TA8pXQ3myruKpKEYgqvpw9lz4OPHj/NWFNluYrjbz9j01CJ8yKQd2g4jFoOkINCTW2I5LEEyw==}
     engines: {node: '>= 0.4'}
 
+  undici-types@6.21.0:
+    resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
+
   undici-types@7.16.0:
     resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
-
-  undici-types@7.18.2:
-    resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
 
   unique-filename@1.1.1:
     resolution: {integrity: sha512-Vmp0jIp2ln35UTXuryvjzkjGdRyf9b2lTXuSYUiPmzRcl3FDtYqAwOnTJkAngD9SWhnoJzDbTKwaOrZ+STtxNQ==}
@@ -8315,7 +8318,7 @@ snapshots:
       - encoding
       - supports-color
 
-  '@google/adk@0.4.0(e63fffb06bfbc39986623b1c8129ccb8)':
+  '@google/adk@0.4.0(0ad303674ec540eefc54fa900dd3cd21)':
     dependencies:
       '@a2a-js/sdk': 0.3.10(@grpc/grpc-js@1.14.3)(express@5.2.1)
       '@google-cloud/opentelemetry-cloud-monitoring-exporter': 0.21.0(@opentelemetry/api@1.9.0)(@opentelemetry/core@2.5.1(@opentelemetry/api@1.9.0))(@opentelemetry/resources@2.5.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.5.1(@opentelemetry/api@1.9.0))(encoding@0.1.13)
@@ -8325,7 +8328,7 @@ snapshots:
       '@mikro-orm/core': 6.6.8
       '@mikro-orm/mariadb': 6.6.8(@mikro-orm/core@6.6.8)(pg@8.19.0)
       '@mikro-orm/mssql': 6.6.8(@azure/core-client@1.10.1)(@mikro-orm/core@6.6.8)(mariadb@3.4.5)(pg@8.19.0)
-      '@mikro-orm/mysql': 6.6.8(@mikro-orm/core@6.6.8)(@types/node@25.3.3)(mariadb@3.4.5)(pg@8.19.0)
+      '@mikro-orm/mysql': 6.6.8(@mikro-orm/core@6.6.8)(@types/node@22.19.13)(mariadb@3.4.5)(pg@8.19.0)
       '@mikro-orm/postgresql': 6.6.8(@mikro-orm/core@6.6.8)(mariadb@3.4.5)
       '@mikro-orm/reflection': 6.6.8(@mikro-orm/core@6.6.8)
       '@mikro-orm/sqlite': 6.6.8(@mikro-orm/core@6.6.8)(mariadb@3.4.5)(pg@8.19.0)
@@ -9050,11 +9053,11 @@ snapshots:
       mikro-orm: 6.6.8
       reflect-metadata: 0.2.2
 
-  '@mikro-orm/knex@6.6.8(@mikro-orm/core@6.6.8)(mariadb@3.4.5)(mysql2@3.18.2(@types/node@25.3.3))(pg@8.19.0)':
+  '@mikro-orm/knex@6.6.8(@mikro-orm/core@6.6.8)(mariadb@3.4.5)(mysql2@3.18.2(@types/node@22.19.13))(pg@8.19.0)':
     dependencies:
       '@mikro-orm/core': 6.6.8
       fs-extra: 11.3.3
-      knex: 3.1.0(mysql2@3.18.2(@types/node@25.3.3))(pg@8.19.0)
+      knex: 3.1.0(mysql2@3.18.2(@types/node@22.19.13))(pg@8.19.0)
       sqlstring: 2.3.3
     optionalDependencies:
       mariadb: 3.4.5
@@ -9152,11 +9155,11 @@ snapshots:
       - sqlite3
       - supports-color
 
-  '@mikro-orm/mysql@6.6.8(@mikro-orm/core@6.6.8)(@types/node@25.3.3)(mariadb@3.4.5)(pg@8.19.0)':
+  '@mikro-orm/mysql@6.6.8(@mikro-orm/core@6.6.8)(@types/node@22.19.13)(mariadb@3.4.5)(pg@8.19.0)':
     dependencies:
       '@mikro-orm/core': 6.6.8
-      '@mikro-orm/knex': 6.6.8(@mikro-orm/core@6.6.8)(mariadb@3.4.5)(mysql2@3.18.2(@types/node@25.3.3))(pg@8.19.0)
-      mysql2: 3.18.2(@types/node@25.3.3)
+      '@mikro-orm/knex': 6.6.8(@mikro-orm/core@6.6.8)(mariadb@3.4.5)(mysql2@3.18.2(@types/node@22.19.13))(pg@8.19.0)
+      mysql2: 3.18.2(@types/node@22.19.13)
     transitivePeerDependencies:
       - '@types/node'
       - better-sqlite3
@@ -10367,13 +10370,13 @@ snapshots:
 
   '@types/mdx@2.0.13': {}
 
+  '@types/node@22.19.13':
+    dependencies:
+      undici-types: 6.21.0
+
   '@types/node@24.11.0':
     dependencies:
       undici-types: 7.16.0
-
-  '@types/node@25.3.3':
-    dependencies:
-      undici-types: 7.18.2
 
   '@types/parse-json@4.0.2': {}
 
@@ -10431,7 +10434,7 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 24.11.0
+      '@types/node': 22.19.13
 
   '@types/yargs-parser@21.0.3': {}
 
@@ -13594,7 +13597,7 @@ snapshots:
 
   kind-of@6.0.3: {}
 
-  knex@3.1.0(mysql2@3.18.2(@types/node@25.3.3))(pg@8.19.0):
+  knex@3.1.0(mysql2@3.18.2(@types/node@22.19.13))(pg@8.19.0):
     dependencies:
       colorette: 2.0.19
       commander: 10.0.1
@@ -13611,7 +13614,7 @@ snapshots:
       tarn: 3.0.2
       tildify: 2.0.0
     optionalDependencies:
-      mysql2: 3.18.2(@types/node@25.3.3)
+      mysql2: 3.18.2(@types/node@22.19.13)
       pg: 8.19.0
     transitivePeerDependencies:
       - supports-color
@@ -13986,9 +13989,9 @@ snapshots:
 
   mustache@4.2.0: {}
 
-  mysql2@3.18.2(@types/node@25.3.3):
+  mysql2@3.18.2(@types/node@22.19.13):
     dependencies:
-      '@types/node': 25.3.3
+      '@types/node': 22.19.13
       aws-ssl-profiles: 1.1.2
       denque: 2.1.0
       generate-function: 2.3.1
@@ -14526,7 +14529,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.0
-      '@types/node': 24.11.0
+      '@types/node': 22.19.13
       long: 5.3.2
 
   protobufjs@8.0.0:
@@ -14541,7 +14544,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.0
-      '@types/node': 24.11.0
+      '@types/node': 22.19.13
       long: 5.3.2
 
   protocol-buffers-schema@3.6.0: {}
@@ -15855,9 +15858,9 @@ snapshots:
       has-symbols: 1.1.0
       which-boxed-primitive: 1.1.1
 
-  undici-types@7.16.0: {}
+  undici-types@6.21.0: {}
 
-  undici-types@7.18.2: {}
+  undici-types@7.16.0: {}
 
   unique-filename@1.1.1:
     dependencies:

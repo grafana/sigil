@@ -654,6 +654,7 @@ func (a *App) handleEvalTemplateRoutes(w http.ResponseWriter, req *http.Request)
 }
 
 func (a *App) registerRoutes(mux *http.ServeMux) {
+	backend.Logger.Info("registering routes")
 	mux.HandleFunc("/query/conversations/search", a.withAuthorization(a.handleSearchConversations))
 	mux.HandleFunc("/query/conversations", a.withAuthorization(a.handleListConversations))
 	mux.HandleFunc("/query/conversations/", a.withAuthorization(a.handleConversationRoutes))
@@ -1256,6 +1257,15 @@ func (a *App) doSigilRequest(
 		upstream += "?" + encodedQuery
 	}
 
+	backend.Logger.Debug("sigil proxy request",
+		"method", method,
+		"path", path,
+		"upstream", upstream,
+		"tenantID", a.tenantID,
+		"hasAuthToken", a.apiAuthToken != "",
+		"hasBody", body != nil,
+	)
+
 	var bodyReader io.Reader
 	if body != nil {
 		bodyReader = bytes.NewReader(body)
@@ -1263,6 +1273,7 @@ func (a *App) doSigilRequest(
 
 	proxyReq, err := http.NewRequestWithContext(req.Context(), method, upstream, bodyReader)
 	if err != nil {
+		backend.Logger.Error("sigil proxy request build failed", "path", path, "error", err)
 		return nil, fmt.Errorf("build sigil request: %w", err)
 	}
 	proxyReq.Header = req.Header.Clone()
@@ -1275,7 +1286,17 @@ func (a *App) doSigilRequest(
 	}
 	injectTenantHeaders(proxyReq, a.tenantID)
 
-	return a.executeUpstreamRequest(proxyReq)
+	payload, err := a.executeUpstreamRequest(proxyReq)
+	if err != nil {
+		backend.Logger.Warn("sigil proxy request failed",
+			"method", method,
+			"path", path,
+			"upstream", upstream,
+			"error", err,
+		)
+		return nil, err
+	}
+	return payload, nil
 }
 
 func (a *App) doGrafanaRequest(

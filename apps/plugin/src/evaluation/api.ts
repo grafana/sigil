@@ -94,6 +94,7 @@ export const defaultEvaluationDataSource: EvaluationDataSource = {
       getBackendSrv().fetch<void>({
         method: 'DELETE',
         url: `${evalBasePath}/evaluators/${encodeURIComponent(evaluatorID)}`,
+        responseType: 'text',
       })
     );
   },
@@ -170,6 +171,7 @@ export const defaultEvaluationDataSource: EvaluationDataSource = {
       getBackendSrv().fetch<void>({
         method: 'DELETE',
         url: `${evalBasePath}/rules/${encodeURIComponent(ruleID)}`,
+        responseType: 'text',
       })
     );
   },

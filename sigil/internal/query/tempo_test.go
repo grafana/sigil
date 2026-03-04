@@ -86,6 +86,62 @@ func TestGroupTempoSearchResponseAggregatesConversations(t *testing.T) {
 	}
 }
 
+func TestGroupTempoSearchResponseTracksModelProviders(t *testing.T) {
+	response := &TempoSearchResponse{
+		Traces: []TempoTrace{
+			{
+				TraceID:           "trace-1",
+				StartTimeUnixNano: "1739606400000000000",
+				SpanSets: []TempoSpanSet{{
+					Spans: []TempoSpan{
+						{
+							SpanID: "span-1",
+							Attributes: []TempoAttribute{
+								{Key: "gen_ai.conversation.id", Value: tempoStringValue("conv-1")},
+								{Key: "gen_ai.request.model", Value: tempoStringValue("us.anthropic.claude-haiku-4-5-20251001-v1:0")},
+								{Key: "gen_ai.provider.name", Value: tempoStringValue("bedrock")},
+							},
+						},
+						{
+							SpanID: "span-2",
+							Attributes: []TempoAttribute{
+								{Key: "gen_ai.conversation.id", Value: tempoStringValue("conv-1")},
+								{Key: "gen_ai.request.model", Value: tempoStringValue("claude-sonnet-4-5")},
+								{Key: "gen_ai.provider.name", Value: tempoStringValue("anthropic")},
+							},
+						},
+						{
+							SpanID: "span-3",
+							Attributes: []TempoAttribute{
+								{Key: "gen_ai.conversation.id", Value: tempoStringValue("conv-1")},
+								{Key: "gen_ai.request.model", Value: tempoStringValue("model-no-provider")},
+							},
+						},
+					},
+				}},
+			},
+		},
+	}
+
+	grouped := groupTempoSearchResponse(response, nil)
+	aggregate := grouped.Conversations["conv-1"]
+	if aggregate == nil {
+		t.Fatalf("expected conv-1 aggregate")
+	}
+	if len(aggregate.Models) != 3 {
+		t.Fatalf("expected 3 models, got %d", len(aggregate.Models))
+	}
+	if provider, ok := aggregate.ModelProviders["us.anthropic.claude-haiku-4-5-20251001-v1:0"]; !ok || provider != "bedrock" {
+		t.Fatalf("expected bedrock provider for haiku model, got %q (present=%v)", provider, ok)
+	}
+	if provider, ok := aggregate.ModelProviders["claude-sonnet-4-5"]; !ok || provider != "anthropic" {
+		t.Fatalf("expected anthropic provider for sonnet model, got %q (present=%v)", provider, ok)
+	}
+	if _, ok := aggregate.ModelProviders["model-no-provider"]; ok {
+		t.Fatalf("expected no provider entry for model without gen_ai.provider.name")
+	}
+}
+
 func TestTempoHTTPClientSearchAndTagEndpoints(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if req.Header.Get("X-Scope-OrgID") != "tenant-a" {
