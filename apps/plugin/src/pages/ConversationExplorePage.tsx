@@ -20,9 +20,7 @@ import DetailPanel from '../components/conversation-explore/DetailPanel';
 import type { FlowNode } from '../components/conversation-explore/types';
 import type { GenerationCostResult } from '../generation/types';
 import { Loader } from '../components/Loader';
-import AssistantInsightsList, {
-  type AssistantInsightDisplayItem,
-} from '../components/assistant/AssistantInsightsList';
+import AssistantInsightsList, { type AssistantInsightDisplayItem } from '../components/assistant/AssistantInsightsList';
 
 export type ConversationExplorePageProps = {
   dataSource?: ConversationsDataSource;
@@ -321,21 +319,24 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     totalTokensForInsights,
   ]);
 
-  const parseAssistantDisplayItems = useCallback((raw: string): AssistantInsightDisplayItem[] => {
-    const items: AssistantInsightDisplayItem[] = [];
-    for (const item of parseAssistantInsightItems(raw)) {
-      const sidebarItem = highlightedSidebarItemMap.get(item.itemId);
-      if (!sidebarItem) {
-        continue;
+  const parseAssistantDisplayItems = useCallback(
+    (raw: string): AssistantInsightDisplayItem[] => {
+      const items: AssistantInsightDisplayItem[] = [];
+      for (const item of parseAssistantInsightItems(raw)) {
+        const sidebarItem = highlightedSidebarItemMap.get(item.itemId);
+        if (!sidebarItem) {
+          continue;
+        }
+        items.push({
+          itemId: item.itemId,
+          sidebarLabel: sidebarItem.label,
+          focus: item.focus,
+        });
       }
-      items.push({
-        itemId: item.itemId,
-        sidebarLabel: sidebarItem.label,
-        focus: item.focus,
-      });
-    }
-    return items;
-  }, [highlightedSidebarItemMap]);
+      return items;
+    },
+    [highlightedSidebarItemMap]
+  );
 
   const handleSelectInsightItem = useCallback(
     (itemId: string) => {

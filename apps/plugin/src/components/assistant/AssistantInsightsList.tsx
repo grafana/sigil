@@ -83,14 +83,13 @@ export default function AssistantInsightsList({
   }, []);
 
   const runGenerate = useCallback((context: string) => {
-    const { prompt: currentPrompt, origin: currentOrigin, systemPrompt: currentSystemPrompt, assistant: currentAssistant } =
-      latestRef.current;
-    const fullPrompt = [
-      currentPrompt.trim(),
-      '',
-      'Use the following context as ground truth:',
-      context,
-    ].join('\n');
+    const {
+      prompt: currentPrompt,
+      origin: currentOrigin,
+      systemPrompt: currentSystemPrompt,
+      assistant: currentAssistant,
+    } = latestRef.current;
+    const fullPrompt = [currentPrompt.trim(), '', 'Use the following context as ground truth:', context].join('\n');
     currentAssistant.generate({
       prompt: fullPrompt,
       origin: currentOrigin,
@@ -211,38 +210,41 @@ export default function AssistantInsightsList({
     [openAssistantPrompt]
   );
 
-  const onDismiss = useCallback((itemKey: string) => {
-    if (dismissedItemKeys[itemKey] || dismissingItemKeys[itemKey]) {
-      return;
-    }
-    setOpenMenuItemKey(null);
-    const measuredHeight = Math.ceil(listItemRefs.current[itemKey]?.getBoundingClientRect().height ?? 0);
-    setDismissHeightByItemKey((prev) => ({ ...prev, [itemKey]: measuredHeight }));
-    setDismissingItemKeys((prev) => ({ ...prev, [itemKey]: true }));
-    const rafId = window.requestAnimationFrame(() => {
-      setCollapsingItemKeys((prev) => ({ ...prev, [itemKey]: true }));
-    });
-    dismissalRafIdsRef.current.push(rafId);
-    const timeoutId = window.setTimeout(() => {
-      setDismissedItemKeys((prev) => ({ ...prev, [itemKey]: true }));
-      setDismissingItemKeys((prev) => {
-        const next = { ...prev };
-        delete next[itemKey];
-        return next;
+  const onDismiss = useCallback(
+    (itemKey: string) => {
+      if (dismissedItemKeys[itemKey] || dismissingItemKeys[itemKey]) {
+        return;
+      }
+      setOpenMenuItemKey(null);
+      const measuredHeight = Math.ceil(listItemRefs.current[itemKey]?.getBoundingClientRect().height ?? 0);
+      setDismissHeightByItemKey((prev) => ({ ...prev, [itemKey]: measuredHeight }));
+      setDismissingItemKeys((prev) => ({ ...prev, [itemKey]: true }));
+      const rafId = window.requestAnimationFrame(() => {
+        setCollapsingItemKeys((prev) => ({ ...prev, [itemKey]: true }));
       });
-      setCollapsingItemKeys((prev) => {
-        const next = { ...prev };
-        delete next[itemKey];
-        return next;
-      });
-      setDismissHeightByItemKey((prev) => {
-        const next = { ...prev };
-        delete next[itemKey];
-        return next;
-      });
-    }, 220);
-    dismissalTimeoutsRef.current.push(timeoutId);
-  }, [dismissedItemKeys, dismissingItemKeys]);
+      dismissalRafIdsRef.current.push(rafId);
+      const timeoutId = window.setTimeout(() => {
+        setDismissedItemKeys((prev) => ({ ...prev, [itemKey]: true }));
+        setDismissingItemKeys((prev) => {
+          const next = { ...prev };
+          delete next[itemKey];
+          return next;
+        });
+        setCollapsingItemKeys((prev) => {
+          const next = { ...prev };
+          delete next[itemKey];
+          return next;
+        });
+        setDismissHeightByItemKey((prev) => {
+          const next = { ...prev };
+          delete next[itemKey];
+          return next;
+        });
+      }, 220);
+      dismissalTimeoutsRef.current.push(timeoutId);
+    },
+    [dismissedItemKeys, dismissingItemKeys]
+  );
 
   const onFeedbackUp = useCallback((itemKey: string) => {
     setLikedItemKeys((prev) => ({ ...prev, [itemKey]: true }));
@@ -311,7 +313,12 @@ export default function AssistantInsightsList({
                       </button>
                       {isMenuOpen ? (
                         <div className={styles.menuPanel} role="menu">
-                          <button type="button" className={styles.menuItem} role="menuitem" onClick={() => onExplain(item)}>
+                          <button
+                            type="button"
+                            className={styles.menuItem}
+                            role="menuitem"
+                            onClick={() => onExplain(item)}
+                          >
                             Explain
                           </button>
                           <button
@@ -356,7 +363,11 @@ export default function AssistantInsightsList({
                       <div className={styles.itemContent}>
                         {item.sidebarLabel ? (
                           onSelectItem ? (
-                            <button type="button" className={styles.linkButton} onClick={() => onSelectItem(item.itemId)}>
+                            <button
+                              type="button"
+                              className={styles.linkButton}
+                              onClick={() => onSelectItem(item.itemId)}
+                            >
                               {item.sidebarLabel}
                             </button>
                           ) : (
@@ -376,7 +387,12 @@ export default function AssistantInsightsList({
                 <Icon name="ai" size="sm" />
                 <span>AI generated</span>
               </span>
-              <button type="button" className={styles.refreshButton} onClick={onRefreshAll} disabled={assistant.isGenerating}>
+              <button
+                type="button"
+                className={styles.refreshButton}
+                onClick={onRefreshAll}
+                disabled={assistant.isGenerating}
+              >
                 <Icon name="sync" size="sm" />
                 <span>Refresh</span>
               </button>
