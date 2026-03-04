@@ -351,7 +351,7 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
       ) : items.length === 0 ? (
         <div className={styles.empty}>
           <Icon name="search" size="xl" />
-          <Text color="secondary">No agents matched this prefix in the current tenant.</Text>
+          <Text color="secondary">No agents matched this search in the current tenant.</Text>
         </div>
       ) : (
         <>
