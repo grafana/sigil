@@ -2,6 +2,7 @@ import { lastValueFrom } from 'rxjs';
 import { getBackendSrv } from '@grafana/runtime';
 import type {
   CreateEvaluatorRequest,
+  CreateManualConversationRequest,
   CreateRuleRequest,
   CreateTemplateRequest,
   EvalTestRequest,
@@ -17,6 +18,9 @@ import type {
   RuleListResponse,
   RulePreviewRequest,
   RulePreviewResponse,
+  SaveConversationRequest,
+  SavedConversation,
+  SavedConversationListResponse,
   TemplateDefinition,
   TemplateListResponse,
   TemplateScope,
@@ -51,6 +55,11 @@ export type EvaluationDataSource = {
   publishVersion: (templateID: string, request: PublishVersionRequest) => Promise<TemplateVersion>;
   getTemplateVersion: (templateID: string, version: string) => Promise<TemplateVersion>;
   forkTemplate: (templateID: string, request: ForkTemplateRequest) => Promise<Evaluator>;
+  listSavedConversations: (source?: string, limit?: number, cursor?: string) => Promise<SavedConversationListResponse>;
+  saveConversation: (request: SaveConversationRequest) => Promise<SavedConversation>;
+  getSavedConversation: (savedID: string) => Promise<SavedConversation>;
+  deleteSavedConversation: (savedID: string) => Promise<void>;
+  createManualConversation: (request: CreateManualConversationRequest) => Promise<SavedConversation>;
 };
 
 export const defaultEvaluationDataSource: EvaluationDataSource = {
@@ -304,6 +313,65 @@ export const defaultEvaluationDataSource: EvaluationDataSource = {
       getBackendSrv().fetch<Evaluator>({
         method: 'POST',
         url: `${evalBasePath}/templates/${encodeURIComponent(templateID)}:fork`,
+        data: request,
+      })
+    );
+    return response.data;
+  },
+
+  async listSavedConversations(source?: string, limit?: number, cursor?: string) {
+    const params = new URLSearchParams();
+    if (source) {
+      params.set('source', source);
+    }
+    if (limit != null) {
+      params.set('limit', String(limit));
+    }
+    if (cursor) {
+      params.set('cursor', cursor);
+    }
+    const qs = params.toString();
+    const url = qs.length > 0 ? `${evalBasePath}/saved-conversations?${qs}` : `${evalBasePath}/saved-conversations`;
+    const response = await lastValueFrom(getBackendSrv().fetch<SavedConversationListResponse>({ method: 'GET', url }));
+    return response.data;
+  },
+
+  async saveConversation(request) {
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<SavedConversation>({
+        method: 'POST',
+        url: `${evalBasePath}/saved-conversations`,
+        data: request,
+      })
+    );
+    return response.data;
+  },
+
+  async getSavedConversation(savedID) {
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<SavedConversation>({
+        method: 'GET',
+        url: `${evalBasePath}/saved-conversations/${encodeURIComponent(savedID)}`,
+      })
+    );
+    return response.data;
+  },
+
+  async deleteSavedConversation(savedID) {
+    await lastValueFrom(
+      getBackendSrv().fetch<void>({
+        method: 'DELETE',
+        url: `${evalBasePath}/saved-conversations/${encodeURIComponent(savedID)}`,
+        responseType: 'text',
+      })
+    );
+  },
+
+  async createManualConversation(request) {
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<SavedConversation>({
+        method: 'POST',
+        url: `${evalBasePath}/saved-conversations:manual`,
         data: request,
       })
     );

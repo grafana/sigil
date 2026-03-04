@@ -244,6 +244,7 @@ export default function EvalTestPanel({
           onSelect={setGenerationId}
           selectedGenerationId={generationId}
           conversationsDataSource={convDs}
+          evaluationDataSource={ds}
         />
 
         {generation && (

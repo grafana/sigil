@@ -14,6 +14,7 @@ type GenerationModel struct {
 	ClaimedBy        *string    `gorm:"size:255;index:idx_generations_tenant_compacted_claimed_created,priority:3"`
 	ClaimedAt        *time.Time `gorm:"type:datetime(6)"`
 	CompactedAt      *time.Time `gorm:"type:datetime(6);index:idx_generations_tenant_compacted_compacted_at_id,priority:3"`
+	Source           string     `gorm:"size:16;not null;default:telemetry"`
 }
 
 func (GenerationModel) TableName() string {
@@ -169,6 +170,23 @@ type ConversationModel struct {
 
 func (ConversationModel) TableName() string {
 	return "conversations"
+}
+
+type EvalSavedConversationModel struct {
+	ID             uint64    `gorm:"primaryKey;autoIncrement"`
+	TenantID       string    `gorm:"size:128;not null;uniqueIndex:ux_eval_saved_conversations_tenant_saved,priority:1;uniqueIndex:ux_eval_saved_conversations_tenant_conversation,priority:1;index:idx_eval_saved_conversations_tenant_source_updated,priority:1"`
+	SavedID        string    `gorm:"size:128;not null;uniqueIndex:ux_eval_saved_conversations_tenant_saved,priority:2"`
+	ConversationID string    `gorm:"size:255;not null;uniqueIndex:ux_eval_saved_conversations_tenant_conversation,priority:2"`
+	Name           string    `gorm:"size:255;not null"`
+	Source         string    `gorm:"size:16;not null;index:idx_eval_saved_conversations_tenant_source_updated,priority:2"`
+	TagsJSON       []byte    `gorm:"type:json;not null"`
+	SavedBy        string    `gorm:"size:255;not null"`
+	CreatedAt      time.Time `gorm:"type:datetime(6);not null;autoCreateTime"`
+	UpdatedAt      time.Time `gorm:"type:datetime(6);not null;autoUpdateTime;index:idx_eval_saved_conversations_tenant_source_updated,priority:3"`
+}
+
+func (EvalSavedConversationModel) TableName() string {
+	return "eval_saved_conversations"
 }
 
 type AgentVersionModel struct {

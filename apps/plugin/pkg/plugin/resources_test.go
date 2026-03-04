@@ -108,6 +108,8 @@ func TestRequiredPermissionAction(t *testing.T) {
 			{method: http.MethodGet, path: "/eval/judge/models"},
 			{method: http.MethodGet, path: "/eval/templates"},
 			{method: http.MethodGet, path: "/eval/templates/my-template"},
+			{method: http.MethodGet, path: "/eval/saved-conversations"},
+			{method: http.MethodGet, path: "/eval/saved-conversations/sc-1"},
 		}
 
 		for _, tc := range testCases {
@@ -161,6 +163,9 @@ func TestRequiredPermissionAction(t *testing.T) {
 			{method: http.MethodPost, path: "/eval/templates"},
 			{method: http.MethodPost, path: "/eval/templates/my-template/versions"},
 			{method: http.MethodDelete, path: "/eval/templates/my-template"},
+			{method: http.MethodPost, path: "/eval/saved-conversations"},
+			{method: http.MethodPost, path: "/eval/saved-conversations:manual"},
+			{method: http.MethodDelete, path: "/eval/saved-conversations/sc-1"},
 		}
 
 		for _, tc := range testCases {
