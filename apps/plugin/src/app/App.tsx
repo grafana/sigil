@@ -185,9 +185,11 @@ export default function App(props: AppRootProps) {
           <Route
             path={ROUTES.ConversationsExplore}
             element={
-              <div className={styles.conversationsRouteContainer}>
-                <ConversationExplorePage />
-              </div>
+              <PageRoot fullBleed>
+                <div className={styles.conversationsRouteContainer}>
+                  <ConversationExplorePage />
+                </div>
+              </PageRoot>
             }
           />
           <Route path={ROUTES.ConversationsDetail} element={<ConversationDetailPage />} />
