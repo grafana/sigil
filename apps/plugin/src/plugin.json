@@ -135,12 +135,13 @@
       "grants": ["Admin"],
       "role": {
         "name": "Sigil Admin",
-        "description": "Full Sigil plugin access, including feedback and datasource settings writes.",
+        "description": "Full Sigil plugin access, including feedback, evaluation, and datasource settings writes.",
         "permissions": [
           { "action": "plugins.app:access", "scope": "plugins:id:grafana-sigil-app" },
           { "action": "grafana-sigil-app.data:read" },
           { "action": "grafana-sigil-app.feedback:write" },
-          { "action": "grafana-sigil-app.settings:write" }
+          { "action": "grafana-sigil-app.settings:write" },
+          { "action": "grafana-sigil-app.eval:write" }
         ]
       }
     }

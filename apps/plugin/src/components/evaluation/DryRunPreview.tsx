@@ -151,7 +151,11 @@ export default function DryRunPreview({ preview, loading, onAddMatchCriteria }: 
       <div className={styles.list}>
         {samples.length === 0 ? (
           <div className={styles.empty}>
-            <Text color="secondary">No matching generations in the window.</Text>
+            <Text color="secondary">
+              {matching_generations > 0
+                ? 'Matching generations exist but none were sampled. Try increasing the sample rate.'
+                : 'No matching generations in the window.'}
+            </Text>
           </div>
         ) : (
           samples.map((sample) => (
