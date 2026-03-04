@@ -146,7 +146,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     label: 'conversationListPanel-cell',
     padding: theme.spacing(1, 1.5),
     fontSize: theme.typography.bodySmall.fontSize,
-    verticalAlign: 'middle' as const,
+    verticalAlign: 'top' as const,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap' as const,
@@ -249,6 +249,18 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: theme.spacing(0.5),
     fontSize: theme.typography.bodySmall.fontSize,
   }),
+  groupedCell: css({
+    label: 'conversationListPanel-groupedCell',
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.75),
+    whiteSpace: 'nowrap' as const,
+    fontSize: theme.typography.bodySmall.fontSize,
+  }),
+  groupedSeparator: css({
+    label: 'conversationListPanel-groupedSeparator',
+    color: theme.colors.text.disabled,
+  }),
   timeCell: css({
     label: 'conversationListPanel-timeCell',
     color: theme.colors.text.secondary,
@@ -262,6 +274,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   durationCell: css({
     label: 'conversationListPanel-durationCell',
+    display: 'inline-block',
+    minWidth: 40,
+    textAlign: 'right' as const,
     color: theme.colors.text.secondary,
     fontFamily: theme.typography.fontFamilyMonospace,
   }),
@@ -294,12 +309,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   colLastActivity: css({ width: 100 }),
   colConversation: css({ width: 180 }),
-  colDuration: css({ width: 80 }),
-  colLLMCalls: css({ width: 80 }),
+  colActivity: css({ width: 140 }),
   colAgents: css({ width: '20%' }),
-  colModels: css({ width: '20%' }),
-  colErrors: css({ width: 70 }),
-  colRating: css({ width: 80 }),
+  colModels: css({ width: '25%' }),
+  colQuality: css({ width: 130 }),
 });
 
 function CopyIdButton({ id }: { id: string }) {
@@ -519,23 +532,19 @@ export default function ConversationListPanel({
           <colgroup>
             <col className={styles.colLastActivity} />
             <col className={styles.colConversation} />
-            <col className={styles.colDuration} />
-            <col className={styles.colLLMCalls} />
+            <col className={styles.colActivity} />
             <col className={styles.colAgents} />
             <col className={styles.colModels} />
-            <col className={styles.colErrors} />
-            <col className={styles.colRating} />
+            <col className={styles.colQuality} />
           </colgroup>
           <thead>
             <tr className={styles.headerRow}>
               <th className={styles.headerCell}>Last activity</th>
               <th className={styles.headerCell}>Conversation</th>
-              <th className={styles.headerCell}>Duration</th>
-              <th className={styles.headerCell}>LLM calls</th>
+              <th className={styles.headerCell}>Activity</th>
               <th className={styles.headerCell}>Agents</th>
               <th className={styles.headerCell}>Models</th>
-              <th className={styles.headerCell}>Errors</th>
-              <th className={styles.headerCell}>Rating</th>
+              <th className={styles.headerCell}>Quality</th>
             </tr>
           </thead>
           <tbody>
@@ -571,13 +580,15 @@ export default function ConversationListPanel({
                       <CopyIdButton id={conversation.conversation_id} />
                     </div>
                   </td>
-                  <td className={cx(styles.cell, styles.durationCell)}>
-                    {formatDuration(
-                      conversation.first_generation_at,
-                      conversation.last_generation_at
-                    )}
+                  <td className={styles.cell}>
+                    <div className={styles.groupedCell}>
+                      <span className={styles.durationCell}>
+                        {formatDuration(conversation.first_generation_at, conversation.last_generation_at)}
+                      </span>
+                      <span className={styles.groupedSeparator}>·</span>
+                      <span>{conversation.generation_count} calls</span>
+                    </div>
                   </td>
-                  <td className={styles.cell}>{conversation.generation_count}</td>
                   <td className={styles.cell}>
                     <AgentPillList items={conversation.agents} />
                   </td>
@@ -589,31 +600,32 @@ export default function ConversationListPanel({
                     />
                   </td>
                   <td className={styles.cell}>
-                    {conversation.error_count > 0 ? (
-                      <Badge text={String(conversation.error_count)} color="red" />
-                    ) : (
-                      <Text color="secondary">0</Text>
-                    )}
-                  </td>
-                  <td className={styles.cell}>
-                    {rating != null && rating.total_count > 0 ? (
-                      <div className={styles.ratingGroup}>
-                        {rating.good_count > 0 && (
-                          <Stack direction="row" gap={0.25} alignItems="center">
-                            <Icon name="thumbs-up" size="sm" />
-                            <span>{rating.good_count}</span>
-                          </Stack>
-                        )}
-                        {rating.bad_count > 0 && (
-                          <Stack direction="row" gap={0.25} alignItems="center">
-                            <Icon name="thumbs-down" size="sm" />
-                            <span>{rating.bad_count}</span>
-                          </Stack>
-                        )}
-                      </div>
-                    ) : (
-                      <Text color="secondary">-</Text>
-                    )}
+                    <div className={styles.groupedCell}>
+                      {conversation.error_count > 0 ? (
+                        <Badge text={String(conversation.error_count)} color="red" />
+                      ) : (
+                        <Text color="secondary">0 errors</Text>
+                      )}
+                      {rating != null && rating.total_count > 0 && (
+                        <>
+                          <span className={styles.groupedSeparator}>·</span>
+                          <div className={styles.ratingGroup}>
+                            {rating.good_count > 0 && (
+                              <Stack direction="row" gap={0.25} alignItems="center">
+                                <Icon name="thumbs-up" size="sm" />
+                                <span>{rating.good_count}</span>
+                              </Stack>
+                            )}
+                            {rating.bad_count > 0 && (
+                              <Stack direction="row" gap={0.25} alignItems="center">
+                                <Icon name="thumbs-down" size="sm" />
+                                <span>{rating.bad_count}</span>
+                              </Stack>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );

@@ -117,9 +117,10 @@ describe('ConversationListPanel', () => {
       />
     );
     expect(screen.getByText('Last activity')).toBeInTheDocument();
-    expect(screen.getByText('Duration')).toBeInTheDocument();
+    expect(screen.getByText('Activity')).toBeInTheDocument();
     expect(screen.getByText('Agents')).toBeInTheDocument();
     expect(screen.getByText('Models')).toBeInTheDocument();
+    expect(screen.getByText('Quality')).toBeInTheDocument();
   });
 
   it('shows truncated conversation ID with copy button in extended mode', () => {
