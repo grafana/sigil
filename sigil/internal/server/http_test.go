@@ -329,6 +329,119 @@ func TestGenerationScoresEndpoint(t *testing.T) {
 	}
 }
 
+func TestListAgentsEndpoint(t *testing.T) {
+	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
+		AgentCatalogStore: &testAgentCatalogStore{
+			heads: []storage.AgentHead{
+				{
+					AgentName:                       "assistant",
+					LatestEffectiveVersion:          "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+					LatestSeenAt:                    time.Date(2026, 3, 4, 11, 0, 0, 0, time.UTC),
+					FirstSeenAt:                     time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC),
+					GenerationCount:                 3,
+					VersionCount:                    2,
+					LatestToolCount:                 1,
+					LatestSystemPromptPrefix:        "You are concise.",
+					LatestTokenEstimateSystemPrompt: 4,
+					LatestTokenEstimateToolsTotal:   5,
+					LatestTokenEstimateTotal:        9,
+				},
+			},
+			nextCursor: &storage.AgentHeadCursor{
+				LatestSeenAt: time.Date(2026, 3, 4, 11, 0, 0, 0, time.UTC),
+				AgentName:    "assistant",
+				ID:           123,
+			},
+		},
+		FeedbackStore: feedback.NewMemoryStore(),
+	})
+	if err != nil {
+		t.Fatalf("new query service: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterRoutes(
+		mux,
+		querySvc,
+		generationingest.NewService(generationingest.NewMemoryStore()),
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		protected,
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/agents?limit=10", nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"agent_name":"assistant"`) {
+		t.Fatalf("expected agent payload, body=%s", resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"next_cursor":"`) {
+		t.Fatalf("expected next cursor in response, body=%s", resp.Body.String())
+	}
+}
+
+func TestLookupAgentEndpoint(t *testing.T) {
+	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
+		AgentCatalogStore: &testAgentCatalogStore{
+			latestVersion: &storage.AgentVersion{
+				AgentName:             "",
+				EffectiveVersion:      "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				SystemPrompt:          "anonymous prompt",
+				SystemPromptPrefix:    "anonymous prompt",
+				ToolCount:             0,
+				TokenEstimateTotal:    4,
+				GenerationCount:       2,
+				FirstSeenAt:           time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC),
+				LastSeenAt:            time.Date(2026, 3, 4, 11, 0, 0, 0, time.UTC),
+				DeclaredVersionFirst:  nil,
+				DeclaredVersionLatest: nil,
+				ToolsJSON:             "[]",
+			},
+		},
+		FeedbackStore: feedback.NewMemoryStore(),
+	})
+	if err != nil {
+		t.Fatalf("new query service: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterRoutes(
+		mux,
+		querySvc,
+		generationingest.NewService(generationingest.NewMemoryStore()),
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		protected,
+	)
+
+	missingNameReq := httptest.NewRequest(http.MethodGet, "/api/v1/agents:lookup", nil)
+	missingNameResp := httptest.NewRecorder()
+	mux.ServeHTTP(missingNameResp, missingNameReq)
+	if missingNameResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing name query key, got %d", missingNameResp.Code)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/agents:lookup?name=", nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200 for anonymous lookup, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"effective_version":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"`) {
+		t.Fatalf("expected effective version in response, body=%s", resp.Body.String())
+	}
+}
+
 func TestProtectedRoutesRequireTenantHeaderWhenAuthEnabled(t *testing.T) {
 	mux := http.NewServeMux()
 	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: true, FakeTenantID: "fake"})
@@ -961,4 +1074,28 @@ func (s *testScoreStore) GetLatestScoresByGeneration(_ context.Context, _ string
 
 func (s *testScoreStore) GetLatestScoresByConversation(_ context.Context, _ string, _ string) (map[string]map[string]evalpkg.LatestScore, error) {
 	return map[string]map[string]evalpkg.LatestScore{}, nil
+}
+
+type testAgentCatalogStore struct {
+	heads         []storage.AgentHead
+	nextCursor    *storage.AgentHeadCursor
+	version       *storage.AgentVersion
+	latestVersion *storage.AgentVersion
+	models        []storage.AgentVersionModel
+}
+
+func (s *testAgentCatalogStore) ListAgentHeads(_ context.Context, _ string, _ int, _ *storage.AgentHeadCursor, _ string) ([]storage.AgentHead, *storage.AgentHeadCursor, error) {
+	return s.heads, s.nextCursor, nil
+}
+
+func (s *testAgentCatalogStore) GetAgentVersion(_ context.Context, _ string, _ string, _ string) (*storage.AgentVersion, error) {
+	return s.version, nil
+}
+
+func (s *testAgentCatalogStore) GetLatestAgentVersion(_ context.Context, _ string, _ string) (*storage.AgentVersion, error) {
+	return s.latestVersion, nil
+}
+
+func (s *testAgentCatalogStore) ListAgentVersionModels(_ context.Context, _ string, _ string, _ string) ([]storage.AgentVersionModel, error) {
+	return s.models, nil
 }

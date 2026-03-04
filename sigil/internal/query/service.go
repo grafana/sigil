@@ -140,6 +140,13 @@ type evalSummaryStore interface {
 	ListConversationEvalSummaries(ctx context.Context, tenantID string, conversationIDs []string) (map[string]evalpkg.ConversationEvalSummary, error)
 }
 
+type agentCatalogStore interface {
+	ListAgentHeads(ctx context.Context, tenantID string, limit int, cursor *storage.AgentHeadCursor, namePrefix string) ([]storage.AgentHead, *storage.AgentHeadCursor, error)
+	GetAgentVersion(ctx context.Context, tenantID, agentName, effectiveVersion string) (*storage.AgentVersion, error)
+	GetLatestAgentVersion(ctx context.Context, tenantID, agentName string) (*storage.AgentVersion, error)
+	ListAgentVersionModels(ctx context.Context, tenantID, agentName, effectiveVersion string) ([]storage.AgentVersionModel, error)
+}
+
 type batchConversationStore interface {
 	GetConversations(ctx context.Context, tenantID string, conversationIDs []string) ([]storage.Conversation, error)
 }
@@ -154,6 +161,7 @@ type ServiceDependencies struct {
 	BlockMetadataStore  storage.BlockMetadataStore
 	BlockReader         storage.BlockReader
 	FanOutStore         storage.GenerationFanOutReader
+	AgentCatalogStore   storage.AgentCatalogStore
 	FeedbackStore       feedback.Store
 	ScoreStore          scoreStore
 	EvalSummaryStore    evalSummaryStore
@@ -172,6 +180,7 @@ type Service struct {
 	annotationEventStore   annotationEventStore
 	scoreStore             scoreStore
 	evalSummaryStore       evalSummaryStore
+	agentCatalogStore      agentCatalogStore
 	tempoClient            TempoClient
 	nowFn                  func() time.Time
 	overfetchMultiplier    int
@@ -212,6 +221,9 @@ func NewServiceWithStores(conversationStore storage.ConversationStore, feedbackS
 	if store, ok := conversationStore.(evalSummaryStore); ok {
 		service.evalSummaryStore = store
 	}
+	if store, ok := conversationStore.(agentCatalogStore); ok {
+		service.agentCatalogStore = store
+	}
 	if metadataStore, ok := conversationStore.(storage.BlockMetadataStore); ok {
 		blockMetadataStore = metadataStore
 	}
@@ -236,6 +248,9 @@ func NewServiceWithDependencies(dependencies ServiceDependencies) (*Service, err
 		if store, ok := dependencies.WALReader.(evalSummaryStore); ok {
 			service.evalSummaryStore = store
 		}
+		if store, ok := dependencies.WALReader.(agentCatalogStore); ok {
+			service.agentCatalogStore = store
+		}
 	}
 	if dependencies.BlockMetadataStore != nil {
 		blockMetadataStore = dependencies.BlockMetadataStore
@@ -245,6 +260,9 @@ func NewServiceWithDependencies(dependencies ServiceDependencies) (*Service, err
 	}
 	if dependencies.EvalSummaryStore != nil {
 		service.evalSummaryStore = dependencies.EvalSummaryStore
+	}
+	if dependencies.AgentCatalogStore != nil {
+		service.agentCatalogStore = dependencies.AgentCatalogStore
 	}
 	if dependencies.FanOutStore != nil {
 		service.fanOutStore = dependencies.FanOutStore

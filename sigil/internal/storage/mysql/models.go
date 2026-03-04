@@ -171,6 +171,72 @@ func (ConversationModel) TableName() string {
 	return "conversations"
 }
 
+type AgentVersionModel struct {
+	ID                        uint64    `gorm:"primaryKey;autoIncrement"`
+	TenantID                  string    `gorm:"size:128;not null;uniqueIndex:ux_agent_versions_tenant_name_version,priority:1;index:idx_agent_versions_tenant_name_last_seen,priority:1"`
+	AgentName                 string    `gorm:"size:191;not null;default:'';uniqueIndex:ux_agent_versions_tenant_name_version,priority:2;index:idx_agent_versions_tenant_name_last_seen,priority:2"`
+	EffectiveVersion          string    `gorm:"size:71;not null;uniqueIndex:ux_agent_versions_tenant_name_version,priority:3"`
+	DeclaredVersionFirst      *string   `gorm:"size:255"`
+	DeclaredVersionLatest     *string   `gorm:"size:255"`
+	SystemPrompt              string    `gorm:"type:mediumtext;not null"`
+	SystemPromptPrefix        string    `gorm:"size:160;not null"`
+	ToolsJSON                 string    `gorm:"type:json;not null"`
+	ToolCount                 int       `gorm:"not null;default:0"`
+	TokenEstimateSystemPrompt int       `gorm:"not null;default:0"`
+	TokenEstimateToolsTotal   int       `gorm:"not null;default:0"`
+	TokenEstimateTotal        int       `gorm:"not null;default:0"`
+	GenerationCount           int64     `gorm:"not null;default:0"`
+	FirstSeenAt               time.Time `gorm:"type:datetime(6);not null"`
+	LastSeenAt                time.Time `gorm:"type:datetime(6);not null;index:idx_agent_versions_tenant_name_last_seen,priority:3"`
+	CreatedAt                 time.Time `gorm:"type:datetime(6);not null;autoCreateTime"`
+	UpdatedAt                 time.Time `gorm:"type:datetime(6);not null;autoUpdateTime"`
+}
+
+func (AgentVersionModel) TableName() string {
+	return "agent_versions"
+}
+
+type AgentVersionModelUsageModel struct {
+	ID               uint64    `gorm:"primaryKey;autoIncrement"`
+	TenantID         string    `gorm:"size:128;not null;uniqueIndex:ux_agent_version_models_tenant_name_version_model,priority:1;index:idx_agent_version_models_tenant_name_version_generation_count,priority:1"`
+	AgentName        string    `gorm:"size:191;not null;default:'';uniqueIndex:ux_agent_version_models_tenant_name_version_model,priority:2;index:idx_agent_version_models_tenant_name_version_generation_count,priority:2"`
+	EffectiveVersion string    `gorm:"size:71;not null;uniqueIndex:ux_agent_version_models_tenant_name_version_model,priority:3;index:idx_agent_version_models_tenant_name_version_generation_count,priority:3"`
+	ModelProvider    string    `gorm:"size:128;not null;uniqueIndex:ux_agent_version_models_tenant_name_version_model,priority:4"`
+	ModelName        string    `gorm:"size:191;not null;uniqueIndex:ux_agent_version_models_tenant_name_version_model,priority:5"`
+	GenerationCount  int64     `gorm:"not null;default:0;index:idx_agent_version_models_tenant_name_version_generation_count,priority:4"`
+	FirstSeenAt      time.Time `gorm:"type:datetime(6);not null"`
+	LastSeenAt       time.Time `gorm:"type:datetime(6);not null"`
+	CreatedAt        time.Time `gorm:"type:datetime(6);not null;autoCreateTime"`
+	UpdatedAt        time.Time `gorm:"type:datetime(6);not null;autoUpdateTime"`
+}
+
+func (AgentVersionModelUsageModel) TableName() string {
+	return "agent_version_models"
+}
+
+type AgentHeadModel struct {
+	ID                              uint64    `gorm:"primaryKey;autoIncrement;index:idx_agent_heads_tenant_latest_seen_name,priority:4"`
+	TenantID                        string    `gorm:"size:128;not null;uniqueIndex:ux_agent_heads_tenant_name,priority:1;index:idx_agent_heads_tenant_latest_seen_name,priority:1"`
+	AgentName                       string    `gorm:"size:191;not null;default:'';uniqueIndex:ux_agent_heads_tenant_name,priority:2;index:idx_agent_heads_tenant_latest_seen_name,priority:3"`
+	LatestEffectiveVersion          string    `gorm:"size:71;not null"`
+	LatestDeclaredVersion           *string   `gorm:"size:255"`
+	LatestSeenAt                    time.Time `gorm:"type:datetime(6);not null;index:idx_agent_heads_tenant_latest_seen_name,priority:2"`
+	FirstSeenAt                     time.Time `gorm:"type:datetime(6);not null"`
+	GenerationCount                 int64     `gorm:"not null;default:0"`
+	VersionCount                    int       `gorm:"not null;default:0"`
+	LatestToolCount                 int       `gorm:"not null;default:0"`
+	LatestSystemPromptPrefix        string    `gorm:"size:160;not null"`
+	LatestTokenEstimateSystemPrompt int       `gorm:"not null;default:0"`
+	LatestTokenEstimateToolsTotal   int       `gorm:"not null;default:0"`
+	LatestTokenEstimateTotal        int       `gorm:"not null;default:0"`
+	CreatedAt                       time.Time `gorm:"type:datetime(6);not null;autoCreateTime"`
+	UpdatedAt                       time.Time `gorm:"type:datetime(6);not null;autoUpdateTime"`
+}
+
+func (AgentHeadModel) TableName() string {
+	return "agent_heads"
+}
+
 type ConversationRatingModel struct {
 	ID             uint64    `gorm:"primaryKey;autoIncrement"`
 	TenantID       string    `gorm:"size:128;not null;uniqueIndex:ux_conversation_ratings_tenant_rating,priority:1;index:idx_conversation_ratings_tenant_conv_created,priority:1;index:idx_conversation_ratings_tenant_conv_rating_created,priority:1;index:idx_conversation_ratings_tenant_rating_created,priority:1"`

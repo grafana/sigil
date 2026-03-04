@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-03-03
+last_reviewed: 2026-03-04
 source_of_truth: true
 audience: contributors
 ---
@@ -26,6 +26,8 @@ Current plugin query contract:
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}`
   - `GET /api/plugins/grafana-sigil-app/resources/query/generations/{generation_id}`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/agents`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/agents/lookup`
   - `GET /api/plugins/grafana-sigil-app/resources/query/search/tags`
   - `GET /api/plugins/grafana-sigil-app/resources/query/search/tag/{tag}/values`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/ratings`
@@ -55,6 +57,8 @@ Current plugin query contract:
   - `GET /api/v1/conversations`
   - `GET /api/v1/conversations/{conversation_id}`
   - `GET /api/v1/generations/{generation_id}`
+  - `GET /api/v1/agents`
+  - `GET /api/v1/agents:lookup`
   - `GET /api/v1/conversations/{conversation_id}/ratings`
   - `POST /api/v1/conversations/{conversation_id}/ratings`
   - `GET /api/v1/conversations/{conversation_id}/annotations`
@@ -99,6 +103,8 @@ Sigil plugin query routes enforce action-based RBAC in the plugin backend:
   - `GET /query/conversations/{conversation_id}/ratings`
   - `GET /query/conversations/{conversation_id}/annotations`
   - `GET /query/generations/{generation_id}`
+  - `GET /query/agents`
+  - `GET /query/agents/lookup`
   - `GET /query/search/tags`
   - `GET /query/search/tag/{tag}/values`
   - `GET /query/model-cards`

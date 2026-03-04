@@ -74,6 +74,8 @@ func RegisterQueryRoutes(
 	}
 
 	mux.Handle("/api/v1/generations/", protectedMiddleware(http.HandlerFunc(getGeneration(querySvc))))
+	mux.Handle("/api/v1/agents", protectedMiddleware(http.HandlerFunc(listAgents(querySvc))))
+	mux.Handle("/api/v1/agents:lookup", protectedMiddleware(http.HandlerFunc(lookupAgent(querySvc))))
 	mux.Handle("/api/v1/conversations:batch-metadata", protectedMiddleware(http.HandlerFunc(batchConversationMetadata(querySvc))))
 	mux.Handle("/api/v1/conversations", protectedMiddleware(http.HandlerFunc(listConversations(querySvc))))
 	mux.Handle("/api/v1/conversations/", protectedMiddleware(http.HandlerFunc(conversationRoutes(querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled))))
@@ -282,6 +284,103 @@ func getGeneration(querySvc *query.Service) http.HandlerFunc {
 		}
 
 		item, found, err := querySvc.GetGenerationDetailForTenant(req.Context(), tenantID, id)
+		if err != nil {
+			if query.IsValidationError(err) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if !found {
+			http.NotFound(w, req)
+			return
+		}
+		writeJSON(w, http.StatusOK, item)
+	}
+}
+
+func listAgents(querySvc *query.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		tenantID, err := tenant.TenantID(req.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		limit := 50
+		if rawLimit := strings.TrimSpace(req.URL.Query().Get("limit")); rawLimit != "" {
+			value, err := strconv.Atoi(rawLimit)
+			if err != nil || value <= 0 {
+				http.Error(w, "invalid limit", http.StatusBadRequest)
+				return
+			}
+			if value > 200 {
+				value = 200
+			}
+			limit = value
+		}
+
+		items, nextCursor, err := querySvc.ListAgentsForTenant(
+			req.Context(),
+			tenantID,
+			limit,
+			req.URL.Query().Get("cursor"),
+			req.URL.Query().Get("name_prefix"),
+		)
+		if err != nil {
+			if query.IsValidationError(err) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if items == nil {
+			items = []query.AgentListItem{}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"items":       items,
+			"next_cursor": nextCursor,
+		})
+	}
+}
+
+func lookupAgent(querySvc *query.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		tenantID, err := tenant.TenantID(req.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		rawNames, hasName := req.URL.Query()["name"]
+		if !hasName {
+			http.Error(w, "name query param is required", http.StatusBadRequest)
+			return
+		}
+
+		agentName := ""
+		if len(rawNames) > 0 {
+			agentName = rawNames[0]
+		}
+
+		item, found, err := querySvc.GetAgentDetailForTenant(
+			req.Context(),
+			tenantID,
+			agentName,
+			req.URL.Query().Get("version"),
+		)
 		if err != nil {
 			if query.IsValidationError(err) {
 				http.Error(w, err.Error(), http.StatusBadRequest)
