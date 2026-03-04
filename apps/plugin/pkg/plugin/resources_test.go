@@ -1562,6 +1562,29 @@ func TestNewAppReadsApiAuthTokenFromSecureJsonData(t *testing.T) {
 	}
 }
 
+func TestNewAppHandlesNumericTenantID(t *testing.T) {
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{
+		JSONData: []byte(`{"sigilApiUrl":"https://remote.example.com","tenantId":13}`),
+		DecryptedSecureJSONData: map[string]string{
+			"sigilApiAuthToken": "secret-token",
+		},
+	})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+
+	app := inst.(*App)
+	if app.apiURL != "https://remote.example.com" {
+		t.Fatalf("expected api URL %q, got %q", "https://remote.example.com", app.apiURL)
+	}
+	if app.tenantID != "13" {
+		t.Fatalf("expected tenant id %q, got %q", "13", app.tenantID)
+	}
+	if app.apiAuthToken != "secret-token" {
+		t.Fatalf("expected api auth token %q, got %q", "secret-token", app.apiAuthToken)
+	}
+}
+
 func TestCallResourceSettingsRoutesProxyToSigil(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/settings" {

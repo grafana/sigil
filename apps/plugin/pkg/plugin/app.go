@@ -38,10 +38,37 @@ type App struct {
 }
 
 type appJSONData struct {
-	SigilAPIURL             string `json:"sigilApiUrl"`
-	TenantID                string `json:"tenantId"`
-	PrometheusDatasourceUID string `json:"prometheusDatasourceUID"`
-	TempoDatasourceUID      string `json:"tempoDatasourceUID"`
+	SigilAPIURL             string       `json:"sigilApiUrl"`
+	TenantID                flexString   `json:"tenantId"`
+	PrometheusDatasourceUID string       `json:"prometheusDatasourceUID"`
+	TempoDatasourceUID      string       `json:"tempoDatasourceUID"`
+}
+
+// flexString unmarshals both JSON strings and numbers into a Go string.
+// Grafana's plugin config UI may store numeric tenant IDs as JSON numbers
+// rather than strings, which would cause a standard string field to fail
+// unmarshalling and zero out the entire config struct.
+type flexString string
+
+func (f *flexString) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
+		return nil
+	}
+	if data[0] == '"' {
+		var s string
+		if err := json.Unmarshal(data, &s); err != nil {
+			return err
+		}
+		*f = flexString(s)
+		return nil
+	}
+	// Accept bare numbers (integer or float) and convert to string.
+	var n json.Number
+	if err := json.Unmarshal(data, &n); err != nil {
+		return err
+	}
+	*f = flexString(n.String())
+	return nil
 }
 
 const defaultSigilAPIURL = "http://sigil:8080"
@@ -63,7 +90,7 @@ type authorizationClient interface {
 func NewApp(ctx context.Context, settings backend.AppInstanceSettings) (instancemgmt.Instance, error) {
 	cfg := appJSONData{
 		SigilAPIURL: defaultSigilAPIURL,
-		TenantID:    defaultTenantID,
+		TenantID:    flexString(defaultTenantID),
 	}
 	if len(settings.JSONData) > 0 {
 		_ = json.Unmarshal(settings.JSONData, &cfg)
@@ -71,8 +98,9 @@ func NewApp(ctx context.Context, settings backend.AppInstanceSettings) (instance
 	if cfg.SigilAPIURL == "" {
 		cfg.SigilAPIURL = defaultSigilAPIURL
 	}
-	if cfg.TenantID == "" {
-		cfg.TenantID = defaultTenantID
+	tenantID := strings.TrimSpace(string(cfg.TenantID))
+	if tenantID == "" {
+		tenantID = defaultTenantID
 	}
 
 	var grafanaAppURL string
@@ -93,7 +121,7 @@ func NewApp(ctx context.Context, settings backend.AppInstanceSettings) (instance
 	app := App{
 		apiURL:                     cfg.SigilAPIURL,
 		apiAuthToken:               apiAuthToken,
-		tenantID:                   cfg.TenantID,
+		tenantID:                   tenantID,
 		prometheusDatasourceUID:    strings.TrimSpace(cfg.PrometheusDatasourceUID),
 		tempoDatasourceUID:         strings.TrimSpace(cfg.TempoDatasourceUID),
 		grafanaAppURL:              strings.TrimSuffix(strings.TrimSpace(grafanaAppURL), "/"),
