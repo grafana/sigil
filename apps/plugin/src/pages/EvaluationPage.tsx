@@ -1,6 +1,7 @@
 import React, { Suspense } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { LoadingPlaceholder, Stack, Text } from '@grafana/ui';
+import EvalPipelineBanner from '../components/evaluation/EvalPipelineBanner';
 import EvalTabBar from '../components/evaluation/EvalTabBar';
 
 const EvaluationOverviewPage = React.lazy(() => import('./EvaluationOverviewPage'));
@@ -16,6 +17,7 @@ export default function EvaluationPage() {
   return (
     <Stack direction="column" gap={2}>
       <Text element="h2">Evaluation</Text>
+      <EvalPipelineBanner />
       <EvalTabBar />
       <Suspense fallback={<LoadingPlaceholder text="Loading..." />}>
         <Routes>

@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { css, keyframes } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Icon, Text, useStyles2, type IconName } from '@grafana/ui';
+import { Icon, IconButton, Text, useStyles2, type IconName } from '@grafana/ui';
+
+const STORAGE_KEY = 'sigil.eval.pipeline-banner-dismissed';
 
 const pulseGlow = keyframes({
   '0%, 100%': { opacity: 0.5 },
@@ -21,6 +23,14 @@ const PIPELINE_STEPS: PipelineStepConfig[] = [
   { icon: 'graph-bar', label: 'Score & alert', styleKey: 'iconScore' },
 ];
 
+function isDismissed(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 const getStyles = (theme: GrafanaTheme2) => {
   const isDark = theme.isDark;
 
@@ -28,7 +38,6 @@ const getStyles = (theme: GrafanaTheme2) => {
     banner: css({
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'space-between',
       gap: theme.spacing(5),
       padding: theme.spacing(2.5, 3),
       borderRadius: theme.shape.radius.default,
@@ -36,6 +45,7 @@ const getStyles = (theme: GrafanaTheme2) => {
         ? 'linear-gradient(135deg, rgba(61, 113, 217, 0.06), rgba(138, 109, 245, 0.06))'
         : 'linear-gradient(135deg, rgba(61, 113, 217, 0.04), rgba(138, 109, 245, 0.04))',
       border: `1px solid ${theme.colors.border.weak}`,
+      position: 'relative' as const,
     }),
 
     left: css({
@@ -84,6 +94,12 @@ const getStyles = (theme: GrafanaTheme2) => {
       animation: `${pulseGlow} 2.5s ease-in-out infinite`,
     }),
 
+    close: css({
+      position: 'absolute' as const,
+      top: theme.spacing(1),
+      right: theme.spacing(1),
+    }),
+
     iconIngest: css({
       background: isDark ? 'rgba(115, 191, 105, 0.12)' : 'rgba(115, 191, 105, 0.1)',
       color: 'rgb(115, 191, 105)',
@@ -108,6 +124,20 @@ const getStyles = (theme: GrafanaTheme2) => {
 
 export default function EvalPipelineBanner() {
   const styles = useStyles2(getStyles);
+  const [visible, setVisible] = useState(() => !isDismissed());
+
+  const handleDismiss = useCallback(() => {
+    setVisible(false);
+    try {
+      localStorage.setItem(STORAGE_KEY, '1');
+    } catch {
+      // storage full or disabled
+    }
+  }, []);
+
+  if (!visible) {
+    return null;
+  }
 
   return (
     <div className={styles.banner}>
@@ -133,6 +163,14 @@ export default function EvalPipelineBanner() {
           </React.Fragment>
         ))}
       </div>
+      <IconButton
+        name="times"
+        size="md"
+        tooltip="Dismiss"
+        className={styles.close}
+        onClick={handleDismiss}
+        aria-label="Dismiss banner"
+      />
     </div>
   );
 }

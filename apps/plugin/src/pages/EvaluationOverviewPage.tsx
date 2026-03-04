@@ -6,7 +6,6 @@ import { Alert, Spinner, Text, useStyles2 } from '@grafana/ui';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
 import EvalOnboarding from '../components/evaluation/EvalOnboarding';
-import EvalPipelineBanner from '../components/evaluation/EvalPipelineBanner';
 import RuleTable from '../components/evaluation/RuleTable';
 import SummaryCards from '../components/evaluation/SummaryCards';
 import { useEvalRulesData } from '../hooks/useEvalRulesData';
@@ -82,8 +81,6 @@ export default function EvaluationOverviewPage(props: EvaluationOverviewPageProp
           <Text>{errorMessage}</Text>
         </Alert>
       )}
-
-      <EvalPipelineBanner />
 
       <SummaryCards
         activeRules={activeRuleCount}
