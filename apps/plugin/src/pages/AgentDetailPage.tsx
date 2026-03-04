@@ -332,7 +332,7 @@ export default function AgentDetailPage({
 
   const versionSelectOptions = useMemo(() => {
     return versionOptions.map((v) => ({
-      label: `${v.effective_version.slice(0, 12)}…  ·  ${formatDateShort(v.last_seen_at)}  ·  ${v.generation_count.toLocaleString()} gen`,
+      label: `${v.effective_version.replace(/^sha256:/, '').slice(0, 12)}…  ·  ${formatDateShort(v.last_seen_at)}  ·  ${v.generation_count.toLocaleString()} gen`,
       value: v.effective_version,
       description: v.declared_version_latest ? `Declared: ${v.declared_version_latest}` : undefined,
     }));

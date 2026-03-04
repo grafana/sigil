@@ -371,11 +371,11 @@ export default function ToolsPanel({ tools }: ToolsPanelProps) {
       return -1;
     }
     if (selectedToolKey === null) {
-      return 0;
+      return filteredTools.length > 0 ? filteredTools[0].originalIndex : -1;
     }
     const index = tools.findIndex((tool) => buildToolKey(tool) === selectedToolKey);
     return index >= 0 ? index : 0;
-  }, [tools, selectedToolKey]);
+  }, [tools, filteredTools, selectedToolKey]);
 
   const selected = selectedIndex >= 0 ? tools[selectedIndex] : null;
 
