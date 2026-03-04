@@ -4,6 +4,7 @@ import { dateTime, type GrafanaTheme2 } from '@grafana/data';
 import { Alert, useStyles2 } from '@grafana/ui';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
+import { escapePrometheusRegex } from '../dashboard/queries';
 import type { ConversationSearchResult } from '../conversation/types';
 import { type DashboardDataSource, defaultDashboardDataSource } from '../dashboard/api';
 import type { DashboardFilters } from '../dashboard/types';
@@ -37,7 +38,7 @@ function buildFilterClause(key: string, values: string[]): string | null {
   if (values.length === 1) {
     return `${key} = "${values[0]}"`;
   }
-  return `${key} =~ "${values.join('|')}"`;
+  return `${key} =~ "${values.map(escapePrometheusRegex).join('|')}"`;
 }
 
 function buildConversationSearchFilter(filters: DashboardFilters): string {

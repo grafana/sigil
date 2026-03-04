@@ -175,4 +175,16 @@ describe('ConversationsBrowserPage', () => {
     expect(screen.queryByLabelText('select conversation conv-b')).not.toBeInTheDocument();
     expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-b');
   });
+
+  it('escapes regex metacharacters in multi-value filters', async () => {
+    const dataSource = createDataSource();
+    renderPage(dataSource, '/conversations?model=claude-3.5-sonnet&model=gpt-4o');
+
+    await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalled());
+
+    const filterArg = dataSource.searchConversations.mock.calls[0][0].filters;
+    expect(filterArg).toContain('model =~');
+    expect(filterArg).toContain('claude-3[.]5-sonnet');
+    expect(filterArg).not.toContain('claude-3.5-sonnet|');
+  });
 });
