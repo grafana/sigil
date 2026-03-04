@@ -110,7 +110,12 @@ describe('AgentDetailPage', () => {
 
     const versionSelector = await screen.findByLabelText('agent version selector');
     fireEvent.keyDown(versionSelector, { key: 'ArrowDown', code: 'ArrowDown' });
-    fireEvent.click(await screen.findByText(/sha256:bbbbb/i));
+    const nextVersionDescription = await screen.findByText('Declared: 1.1.0');
+    const nextVersionOption = nextVersionDescription.closest('[role="option"]');
+    if (!nextVersionOption) {
+      throw new Error('expected to find version option for declared version 1.1.0');
+    }
+    fireEvent.click(nextVersionOption);
 
     await waitFor(() => {
       const locationSearch = decodeURIComponent(screen.getByTestId('location-search').textContent ?? '');
