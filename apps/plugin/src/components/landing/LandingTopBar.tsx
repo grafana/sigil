@@ -61,6 +61,68 @@ type HeroStatItem = {
 const METRIC_WINDOW_MS = 24 * 60 * 60 * 1000;
 const PAGE_SIZE = 200;
 const MAX_PAGES = 50;
+const HERO_STATS_STORAGE_KEY = 'grafana-sigil-hero-stats';
+
+type StoredHeroStats = {
+  conversations: { current: number; previous: number };
+  agents: { current: number; previous: number };
+  evaluations: { current: number; previous: number };
+};
+
+function loadHeroStatsFromStorage(): HeroStatItem[] | null {
+  try {
+    const raw = localStorage.getItem(HERO_STATS_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as StoredHeroStats;
+    if (parsed?.conversations && parsed?.agents && parsed?.evaluations) {
+      return [
+        {
+          label: 'Conversations',
+          route: ROUTES.Conversations,
+          cta: 'View conversations',
+          ...parsed.conversations,
+          loading: false,
+        },
+        {
+          label: 'Agents',
+          route: ROUTES.Agents,
+          cta: 'Inspect agents',
+          ...parsed.agents,
+          loading: false,
+        },
+        {
+          label: 'Evaluations',
+          route: ROUTES.Evaluation,
+          cta: 'Manage evals',
+          ...parsed.evaluations,
+          loading: false,
+        },
+      ];
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function saveHeroStatsToStorage(stats: HeroStatItem[]): void {
+  try {
+    const [conv, agents, evals] = stats;
+    if (conv?.loading || agents?.loading || evals?.loading) {
+      return;
+    }
+    const stored: StoredHeroStats = {
+      conversations: { current: conv.current, previous: conv.previous },
+      agents: { current: agents.current, previous: agents.previous },
+      evaluations: { current: evals.current, previous: evals.previous },
+    };
+    localStorage.setItem(HERO_STATS_STORAGE_KEY, JSON.stringify(stored));
+  } catch {
+    // ignore
+  }
+}
 
 function buildFakeDocUrl(pathname: string): string {
   return new URL(pathname, 'https://docs.example.com').toString();
@@ -114,18 +176,24 @@ export function LandingTopBar({ assistantOrigin }: LandingTopBarProps) {
   const [assistantInput, setAssistantInput] = useState('');
   const [selectedIde, setSelectedIde] = useState<IdeKey>('cursor');
   const [isAgentModalOpen, setIsAgentModalOpen] = useState(false);
-  const [heroStats, setHeroStats] = useState<HeroStatItem[]>([
-    {
-      label: 'Conversations',
-      route: ROUTES.Conversations,
-      cta: 'View conversations',
-      current: 0,
-      previous: 0,
-      loading: true,
-    },
-    { label: 'Agents', route: ROUTES.Agents, cta: 'Inspect agents', current: 0, previous: 0, loading: true },
-    { label: 'Evaluations', route: ROUTES.Evaluation, cta: 'Manage evals', current: 0, previous: 0, loading: true },
-  ]);
+  const [heroStats, setHeroStats] = useState<HeroStatItem[]>(() => {
+    const stored = loadHeroStatsFromStorage();
+    if (stored) {
+      return stored;
+    }
+    return [
+      {
+        label: 'Conversations',
+        route: ROUTES.Conversations,
+        cta: 'View conversations',
+        current: 0,
+        previous: 0,
+        loading: true,
+      },
+      { label: 'Agents', route: ROUTES.Agents, cta: 'Inspect agents', current: 0, previous: 0, loading: true },
+      { label: 'Evaluations', route: ROUTES.Evaluation, cta: 'Manage evals', current: 0, previous: 0, loading: true },
+    ];
+  });
 
   const selectedIdeConfig = useMemo(() => ideTabs.find((ide) => ide.key === selectedIde) ?? ideTabs[0], [selectedIde]);
   const selectedPrompt = useMemo(() => getInstrumentationPrompt(selectedIde), [selectedIde]);
@@ -179,7 +247,7 @@ export function LandingTopBar({ assistantOrigin }: LandingTopBarProps) {
         return;
       }
 
-      setHeroStats([
+      const next = [
         {
           label: 'Conversations',
           route: ROUTES.Conversations,
@@ -204,7 +272,9 @@ export function LandingTopBar({ assistantOrigin }: LandingTopBarProps) {
           previous: evalPrevious,
           loading: false,
         },
-      ]);
+      ];
+      setHeroStats(next);
+      saveHeroStatsToStorage(next);
     };
 
     void loadStats();
