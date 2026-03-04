@@ -10,12 +10,13 @@ import type { DashboardFilters } from '../dashboard/types';
 import { useFilterUrlState } from '../hooks/useFilterUrlState';
 import { useCascadingFilterOptions } from '../hooks/useCascadingFilterOptions';
 import { FilterToolbar } from '../components/filters/FilterToolbar';
+import { TopStat } from '../components/TopStat';
 import { defaultModelCardClient, type ModelCardClient } from '../modelcard/api';
 import type { ModelCard } from '../modelcard/types';
 import { resolveModelCardsFromNames } from '../modelcard/resolve';
 import ConversationListPanel from '../components/conversations/ConversationListPanel';
 import { ConversationTimelineHistogram } from '../components/conversations/ConversationTimelineHistogram';
-import { buildConversationViewRoute, ROUTES } from '../constants';
+import { buildConversationExploreRoute, ROUTES } from '../constants';
 
 export type ConversationsBrowserPageProps = {
   dataSource?: ConversationsDataSource;
@@ -72,7 +73,6 @@ function buildConversationSearchFilter(filters: DashboardFilters): string {
   return parts.join(' ');
 }
 
-type StatTrendDirection = 'up' | 'down' | 'neutral';
 type ConversationStats = {
   totalConversations: number;
   totalTokens: number;
@@ -152,33 +152,6 @@ function buildConversationStats(conversations: ConversationSearchResult[], windo
   return { totalConversations, totalTokens, avgCallsPerConversation, activeLast7d, ratedConversations, badRatedPct };
 }
 
-function buildTrendLabel(
-  currentValue: number,
-  previousValue: number
-): { direction: StatTrendDirection; label: string } | null {
-  if (currentValue === previousValue) {
-    return { direction: 'neutral', label: '→ 0%' };
-  }
-  if (previousValue === 0) {
-    return null;
-  }
-  const percentageChange = ((currentValue - previousValue) / previousValue) * 100;
-  if (percentageChange > 0) {
-    return { direction: 'up', label: `↗ ${Math.abs(percentageChange).toFixed(1)}%` };
-  }
-  if (percentageChange < 0) {
-    return { direction: 'down', label: `↘ ${Math.abs(percentageChange).toFixed(1)}%` };
-  }
-  return { direction: 'neutral', label: '→ 0%' };
-}
-
-function formatTrendComparisonValue(value: number, fractionDigits = 0, suffix = ''): string {
-  return `${value.toLocaleString(undefined, {
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
-  })}${suffix}`;
-}
-
 const getStyles = (theme: GrafanaTheme2) => ({
   pageContainer: css({
     label: 'conversationsBrowserPage-pageContainer',
@@ -212,48 +185,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gridTemplateColumns: 'repeat(6, 1fr)',
     width: '100%',
     gap: theme.spacing(0.5),
-  }),
-  statTile: css({
-    label: 'conversationsBrowserPage-statTile',
-    padding: theme.spacing(1, 1.5),
-    display: 'flex',
-    flexDirection: 'column' as const,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    textAlign: 'left' as const,
-  }),
-  statLabel: css({
-    label: 'conversationsBrowserPage-statLabel',
-    color: theme.colors.text.secondary,
-    marginBottom: theme.spacing(0.25),
-    fontSize: theme.typography.bodySmall.fontSize,
-    textTransform: 'uppercase' as const,
-  }),
-  statValue: css({
-    label: 'conversationsBrowserPage-statValue',
-    fontSize: theme.typography.h3.fontSize,
-    fontWeight: theme.typography.fontWeightMedium,
-  }),
-  statValueRow: css({
-    label: 'conversationsBrowserPage-statValueRow',
-    display: 'flex',
-    alignItems: 'baseline',
-    justifyContent: 'flex-start',
-    gap: theme.spacing(0.75),
-    flexWrap: 'wrap' as const,
-  }),
-  statTrend: css({
-    label: 'conversationsBrowserPage-statTrend',
-    fontSize: theme.typography.bodySmall.fontSize,
-    color: theme.colors.text.secondary,
-  }),
-  statTrendUp: css({
-    label: 'conversationsBrowserPage-statTrendUp',
-    color: theme.colors.success.main,
-  }),
-  statTrendDown: css({
-    label: 'conversationsBrowserPage-statTrendDown',
-    color: theme.colors.error.main,
   }),
   errorAlert: css({
     label: 'conversationsBrowserPage-errorAlert',
@@ -385,13 +316,22 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   }, [conversations, modelCardClient]);
 
   const getConversationHref = useCallback(
-    (conversationID: string) => buildAppPath(buildConversationViewRoute(conversationID)),
+    (conversationID: string, conversationTitle?: string) => {
+      const basePath = buildAppPath(buildConversationExploreRoute(conversationID));
+      const normalizedTitle = conversationTitle?.trim() ?? '';
+      if (normalizedTitle.length === 0) {
+        return basePath;
+      }
+      const params = new URLSearchParams();
+      params.set('conversationTitle', normalizedTitle);
+      return `${basePath}?${params.toString()}`;
+    },
     [buildAppPath]
   );
 
   const onSelectConversation = useCallback(
-    (conversationID: string) => {
-      void navigate(getConversationHref(conversationID), { replace: true });
+    (conversationID: string, conversationTitle?: string) => {
+      void navigate(getConversationHref(conversationID, conversationTitle), { replace: true });
     },
     [getConversationHref, navigate]
   );
@@ -417,135 +357,56 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
           />
         </div>
         <div className={styles.statsGrid}>
-          <div className={styles.statTile}>
-            <div className={styles.statLabel}>Conversations</div>
-            <div className={styles.statValueRow}>
-              <div className={styles.statValue}>{conversationStats.totalConversations.toLocaleString()}</div>
-              {(() => {
-                const trend = buildTrendLabel(
-                  conversationStats.totalConversations,
-                  previousConversationStats.totalConversations
-                );
-                if (!trend) {
-                  return null;
-                }
-                return (
-                  <div
-                    className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}
-                    title={`Compared to previous window: ${formatTrendComparisonValue(previousConversationStats.totalConversations)}`}
-                  >
-                    {trend.label}
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
-          <div className={styles.statTile}>
-            <div className={styles.statLabel}>Tokens</div>
-            <div className={styles.statValueRow}>
-              <div className={styles.statValue}>{conversationStats.totalTokens.toLocaleString()}</div>
-              {(() => {
-                const trend = buildTrendLabel(conversationStats.totalTokens, previousConversationStats.totalTokens);
-                if (!trend) {
-                  return null;
-                }
-                return (
-                  <div
-                    className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}
-                    title={`Compared to previous window: ${formatTrendComparisonValue(previousConversationStats.totalTokens)}`}
-                  >
-                    {trend.label}
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
-          <div className={styles.statTile}>
-            <div className={styles.statLabel}>Avg Calls / Conversation</div>
-            <div className={styles.statValueRow}>
-              <div className={styles.statValue}>{conversationStats.avgCallsPerConversation.toFixed(1)}</div>
-              {(() => {
-                const trend = buildTrendLabel(
-                  conversationStats.avgCallsPerConversation,
-                  previousConversationStats.avgCallsPerConversation
-                );
-                if (!trend) {
-                  return null;
-                }
-                return (
-                  <div
-                    className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}
-                    title={`Compared to previous window: ${formatTrendComparisonValue(previousConversationStats.avgCallsPerConversation, 1)}`}
-                  >
-                    {trend.label}
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
-          <div className={styles.statTile}>
-            <div className={styles.statLabel}>Active Conversations (7d)</div>
-            <div className={styles.statValueRow}>
-              <div className={styles.statValue}>{conversationStats.activeLast7d.toLocaleString()}</div>
-              {(() => {
-                const trend = buildTrendLabel(conversationStats.activeLast7d, previousConversationStats.activeLast7d);
-                if (!trend) {
-                  return null;
-                }
-                return (
-                  <div
-                    className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}
-                    title={`Compared to previous window: ${formatTrendComparisonValue(previousConversationStats.activeLast7d)}`}
-                  >
-                    {trend.label}
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
-          <div className={styles.statTile}>
-            <div className={styles.statLabel}>Rated Conversations</div>
-            <div className={styles.statValueRow}>
-              <div className={styles.statValue}>{conversationStats.ratedConversations.toLocaleString()}</div>
-              {(() => {
-                const trend = buildTrendLabel(
-                  conversationStats.ratedConversations,
-                  previousConversationStats.ratedConversations
-                );
-                if (!trend) {
-                  return null;
-                }
-                return (
-                  <div
-                    className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}
-                    title={`Compared to previous window: ${formatTrendComparisonValue(previousConversationStats.ratedConversations)}`}
-                  >
-                    {trend.label}
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
-          <div className={styles.statTile}>
-            <div className={styles.statLabel}>Bad-Rated %</div>
-            <div className={styles.statValueRow}>
-              <div className={styles.statValue}>{conversationStats.badRatedPct.toFixed(1)}%</div>
-              {(() => {
-                const trend = buildTrendLabel(conversationStats.badRatedPct, previousConversationStats.badRatedPct);
-                if (!trend) {
-                  return null;
-                }
-                return (
-                  <div
-                    className={`${styles.statTrend} ${trend.direction === 'up' ? styles.statTrendUp : trend.direction === 'down' ? styles.statTrendDown : ''}`}
-                    title={`Compared to previous window: ${formatTrendComparisonValue(previousConversationStats.badRatedPct, 1, '%')}`}
-                  >
-                    {trend.label}
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
+          <TopStat
+            label="Conversations"
+            value={conversationStats.totalConversations}
+            loading={loading}
+            prevValue={previousConversationStats.totalConversations}
+            prevLoading={loading}
+            comparisonLabel="in previous window"
+          />
+          <TopStat
+            label="Tokens"
+            value={conversationStats.totalTokens}
+            loading={loading}
+            prevValue={previousConversationStats.totalTokens}
+            prevLoading={loading}
+            comparisonLabel="in previous window"
+          />
+          <TopStat
+            label="Avg Calls / Conversation"
+            value={conversationStats.avgCallsPerConversation}
+            loading={loading}
+            prevValue={previousConversationStats.avgCallsPerConversation}
+            prevLoading={loading}
+            comparisonLabel="in previous window"
+          />
+          <TopStat
+            label="Active Conversations (7d)"
+            value={conversationStats.activeLast7d}
+            loading={loading}
+            prevValue={previousConversationStats.activeLast7d}
+            prevLoading={loading}
+            comparisonLabel="in previous window"
+          />
+          <TopStat
+            label="Rated Conversations"
+            value={conversationStats.ratedConversations}
+            loading={loading}
+            prevValue={previousConversationStats.ratedConversations}
+            prevLoading={loading}
+            comparisonLabel="in previous window"
+          />
+          <TopStat
+            label="Bad-Rated %"
+            value={conversationStats.badRatedPct}
+            unit="percent"
+            loading={loading}
+            prevValue={previousConversationStats.badRatedPct}
+            prevLoading={loading}
+            invertChange
+            comparisonLabel="in previous window"
+          />
         </div>
         {errorMessage.length > 0 && (
           <Alert className={styles.errorAlert} severity="error" title="Conversation query failed">

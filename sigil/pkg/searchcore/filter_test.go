@@ -128,6 +128,9 @@ func TestBuildTraceQL(t *testing.T) {
 	if !strings.Contains(query, `span.sigil.sdk.name != ""`) {
 		t.Fatalf("expected sdk-name guard in mysql-only query, got %q", query)
 	}
+	if !strings.Contains(query, "span.sigil.conversation.title") {
+		t.Fatalf("expected default select to include span.sigil.conversation.title, got %q", query)
+	}
 
 	statusFilters, err := ParseFilterExpression(`status = error`)
 	if err != nil {

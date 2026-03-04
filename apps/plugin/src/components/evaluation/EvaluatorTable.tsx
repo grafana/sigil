@@ -6,6 +6,7 @@ import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type Evaluator } from '../../
 
 export type EvaluatorTableProps = {
   evaluators: Evaluator[];
+  selectedEvaluatorID?: string | null;
   onSelect?: (evaluatorID: string) => void;
   onDelete?: (evaluatorID: string) => void;
 };
@@ -46,6 +47,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
       background: theme.colors.action.hover,
     },
   }),
+  rowSelected: css({
+    background: theme.colors.action.hover,
+  }),
   outputKeys: css({
     display: 'flex',
     flexWrap: 'wrap' as const,
@@ -53,7 +57,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function EvaluatorTable({ evaluators, onSelect, onDelete }: EvaluatorTableProps) {
+export default function EvaluatorTable({ evaluators, selectedEvaluatorID, onSelect, onDelete }: EvaluatorTableProps) {
   const styles = useStyles2(getStyles);
 
   return (
@@ -79,7 +83,9 @@ export default function EvaluatorTable({ evaluators, onSelect, onDelete }: Evalu
       {evaluators.map((evaluator) => (
         <div
           key={evaluator.evaluator_id}
-          className={styles.row}
+          className={
+            selectedEvaluatorID === evaluator.evaluator_id ? `${styles.row} ${styles.rowSelected}` : styles.row
+          }
           onClick={() => onSelect?.(evaluator.evaluator_id)}
           role="row"
         >

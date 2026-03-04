@@ -62,6 +62,10 @@ jest.mock('@grafana/assistant', () => ({
   }),
 }));
 
+jest.mock('../components/landing/LandingTopBar', () => ({
+  LandingTopBar: () => <div data-testid="landing-top-bar" />,
+}));
+
 const emptyVector: PrometheusQueryResponse = {
   status: 'success',
   data: { resultType: 'vector', result: [] },

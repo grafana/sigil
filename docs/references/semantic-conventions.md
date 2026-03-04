@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-03-02
+last_reviewed: 2026-03-04
 source_of_truth: true
 audience: both
 ---
@@ -21,6 +21,7 @@ Canonical reference for all OTel span attributes, metrics, span naming, and even
 | `gen_ai.operation.name` | string | always (`generateText`, `streamText`, `embeddings`, `execute_tool`) |
 | `gen_ai.provider.name` | string | when non-empty |
 | `gen_ai.conversation.id` | string | when present |
+| `sigil.conversation.title` | string | when present |
 | `gen_ai.agent.name` | string | when present |
 | `gen_ai.agent.version` | string | when present |
 

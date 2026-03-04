@@ -13,6 +13,7 @@ import (
 	"time"
 
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
+	"github.com/grafana/sigil/sigil/internal/eval/predefined"
 	"github.com/grafana/sigil/sigil/internal/tenantauth"
 )
 
@@ -781,8 +782,8 @@ func TestPredefinedEndpoints_BackwardsCompatible_WithTemplateStore(t *testing.T)
 	if forked.SourceTemplateID != "sigil.helpfulness" {
 		t.Errorf("expected source_template_id=sigil.helpfulness, got %q", forked.SourceTemplateID)
 	}
-	if forked.SourceTemplateVersion != "2026-02-17" {
-		t.Errorf("expected source_template_version=2026-02-17, got %q", forked.SourceTemplateVersion)
+	if forked.SourceTemplateVersion != predefined.DefaultTemplateVersion {
+		t.Errorf("expected source_template_version=%s, got %q", predefined.DefaultTemplateVersion, forked.SourceTemplateVersion)
 	}
 	if forked.Config["provider"] != "google" {
 		t.Errorf("expected config.provider=google, got %v", forked.Config["provider"])

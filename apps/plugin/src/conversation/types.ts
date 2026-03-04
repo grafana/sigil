@@ -76,6 +76,7 @@ export type ConversationListResponse = {
 
 export type ConversationSearchResult = {
   conversation_id: string;
+  conversation_title?: string;
   generation_count: number;
   first_generation_at: string;
   last_generation_at: string;

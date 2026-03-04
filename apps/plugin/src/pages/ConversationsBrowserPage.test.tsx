@@ -152,7 +152,7 @@ describe('ConversationsBrowserPage', () => {
     const router = createMemoryRouter(
       [
         {
-          path: '/conversations/:conversationID/view',
+          path: '/conversations/:conversationID/explore',
           element: <ConversationPage dataSource={dataSource} traceFetcher={noopTraceFetcher} />,
         },
         {
@@ -186,8 +186,48 @@ describe('ConversationsBrowserPage', () => {
     expect(await screen.findByText('Conversation ID')).toBeInTheDocument();
     expect(await screen.findByText(/^Generations \(\d+\)$/)).toBeInTheDocument();
     expect(screen.getByText('Conversation ID').parentElement).toHaveTextContent('conv-b');
-    expect(router.state.location.pathname).toBe('/conversations/conv-b/view');
+    expect(router.state.location.pathname).toBe('/conversations/conv-b/explore');
     expect(screen.queryByLabelText('select conversation conv-b')).not.toBeInTheDocument();
     expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-b');
+  });
+
+  it('propagates conversation title to conversation explore URL and header', async () => {
+    const dataSource = createDataSource();
+    dataSource.searchConversations = jest
+      .fn()
+      .mockResolvedValueOnce({
+        conversations: [
+          {
+            conversation_id: 'conv-b',
+            conversation_title: 'Incident: authentication failures',
+            generation_count: 3,
+            first_generation_at: '2026-02-01T10:00:00Z',
+            last_generation_at: '2026-02-01T10:00:00Z',
+            models: [],
+            agents: [],
+            error_count: 0,
+            has_errors: false,
+            trace_ids: [],
+            annotation_count: 0,
+          },
+        ],
+        next_cursor: '',
+        has_more: false,
+      })
+      .mockResolvedValueOnce({
+        conversations: [],
+        next_cursor: '',
+        has_more: false,
+      });
+
+    const { router } = renderPage(dataSource);
+
+    expect(await screen.findByLabelText('select conversation conv-b')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('select conversation conv-b'));
+
+    expect(router.state.location.pathname).toBe('/conversations/conv-b/explore');
+    expect(router.state.location.search).toContain('conversationTitle=Incident%3A+authentication+failures');
+    expect(await screen.findByText('Incident: authentication failures')).toBeInTheDocument();
+    expect(screen.getByText('Conversation').parentElement).toHaveTextContent('conv-b');
   });
 });

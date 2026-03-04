@@ -62,3 +62,16 @@ export const WithoutActions = {
     evaluators: mockTenantEvaluators,
   },
 };
+
+export const WithSelection = {
+  args: {
+    evaluators: mockTenantEvaluators,
+    selectedEvaluatorID: 'my-company.toxicity-check',
+    onSelect: (id: string) => {
+      console.log('Select:', id);
+    },
+    onDelete: (id: string) => {
+      console.log('Delete:', id);
+    },
+  },
+};

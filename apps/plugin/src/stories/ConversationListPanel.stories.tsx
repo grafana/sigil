@@ -11,10 +11,13 @@ export default meta;
 
 export const WithResults = {
   render: () => {
-    const [selected, setSelected] = useState(mockSearchResults[0].conversation_id);
+    const conversations = mockSearchResults.map((conversation, index) =>
+      index === 0 ? { ...conversation, conversation_title: 'Incident: payment retries in EU region' } : conversation
+    );
+    const [selected, setSelected] = useState(conversations[0].conversation_id);
     return (
       <ConversationListPanel
-        conversations={mockSearchResults}
+        conversations={conversations}
         selectedConversationId={selected}
         loading={false}
         hasMore={true}
@@ -28,11 +31,14 @@ export const WithResults = {
 
 export const ExtendedColumns = {
   render: () => {
+    const conversations = mockSearchResults.map((conversation, index) =>
+      index === 0 ? { ...conversation, conversation_title: 'Incident: payment retries in EU region' } : conversation
+    );
     const [selected, setSelected] = useState('');
     return (
       <div style={{ height: 600 }}>
         <ConversationListPanel
-          conversations={mockSearchResults}
+          conversations={conversations}
           selectedConversationId={selected}
           loading={false}
           hasMore={false}

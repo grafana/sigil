@@ -15,8 +15,8 @@ export type ConversationListPanelProps = {
   loadingMore: boolean;
   showExtendedColumns?: boolean;
   modelCards?: Map<string, ModelCard>;
-  getConversationHref?: (conversationId: string) => string;
-  onSelectConversation: (conversationId: string) => void;
+  getConversationHref?: (conversationId: string, conversationTitle?: string) => string;
+  onSelectConversation: (conversationId: string, conversationTitle?: string) => void;
   onLoadMore: () => void;
 };
 
@@ -56,6 +56,14 @@ function truncateId(id: string, length = 8): string {
     return id;
   }
   return `${id.slice(0, length)}...`;
+}
+
+function conversationTitleForDisplay(conversation: ConversationSearchResult): string {
+  const title = conversation.conversation_title?.trim() ?? '';
+  if (title.length > 0) {
+    return title;
+  }
+  return conversation.conversation_id;
 }
 
 const MAX_VISIBLE_PILLS = 3;
@@ -132,6 +140,29 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     alignItems: 'center',
     gap: theme.spacing(0.5),
+    minWidth: 0,
+  }),
+  idCellStack: css({
+    label: 'conversationListPanel-idCellStack',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    minWidth: 0,
+    lineHeight: 1.2,
+    gap: theme.spacing(0.25),
+  }),
+  idCellPrimary: css({
+    label: 'conversationListPanel-idCellPrimary',
+    fontFamily: theme.typography.fontFamily,
+    whiteSpace: 'nowrap' as const,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  }),
+  idCellSecondary: css({
+    label: 'conversationListPanel-idCellSecondary',
+    whiteSpace: 'nowrap' as const,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    color: theme.colors.text.secondary,
   }),
   idCellTruncated: css({
     label: 'conversationListPanel-idCellTruncated',
@@ -407,12 +438,12 @@ export default function ConversationListPanel({
   const styles = useStyles2(getStyles);
 
   const handleRowClick = useCallback(
-    (e: React.MouseEvent, conversationId: string) => {
+    (e: React.MouseEvent, conversationId: string, conversationTitle?: string) => {
       if ((e.metaKey || e.ctrlKey) && getConversationHref) {
-        window.open(getConversationHref(conversationId), '_blank');
+        window.open(getConversationHref(conversationId, conversationTitle), '_blank');
         return;
       }
-      onSelectConversation(conversationId);
+      onSelectConversation(conversationId, conversationTitle);
     },
     [getConversationHref, onSelectConversation]
   );
@@ -442,6 +473,8 @@ export default function ConversationListPanel({
             <tbody>
               {conversations.map((conversation) => {
                 const selected = conversation.conversation_id === selectedConversationId;
+                const displayTitle = conversationTitleForDisplay(conversation);
+                const hasTitle = displayTitle !== conversation.conversation_id;
                 return (
                   <tr
                     key={conversation.conversation_id}
@@ -450,7 +483,7 @@ export default function ConversationListPanel({
                       selected && styles.rowSelected,
                       conversation.has_errors && styles.rowError
                     )}
-                    onClick={(e) => handleRowClick(e, conversation.conversation_id)}
+                    onClick={(e) => handleRowClick(e, conversation.conversation_id, conversation.conversation_title)}
                     role="button"
                     aria-label={`select conversation ${conversation.conversation_id}`}
                     aria-selected={selected}
@@ -461,7 +494,21 @@ export default function ConversationListPanel({
                       </Tooltip>
                     </td>
                     <td className={cx(styles.cell, styles.idCellTruncated)}>
-                      <span>{conversation.conversation_id}</span>
+                      <Tooltip
+                        content={
+                          hasTitle ? (
+                            <>
+                              {displayTitle}
+                              <br />
+                              {conversation.conversation_id}
+                            </>
+                          ) : (
+                            conversation.conversation_id
+                          )
+                        }
+                      >
+                        <span>{displayTitle}</span>
+                      </Tooltip>
                     </td>
                   </tr>
                 );
@@ -509,12 +556,14 @@ export default function ConversationListPanel({
           <tbody>
             {conversations.map((conversation) => {
               const selected = conversation.conversation_id === selectedConversationId;
+              const displayTitle = conversationTitleForDisplay(conversation);
+              const hasTitle = displayTitle !== conversation.conversation_id;
               const rating = conversation.rating_summary;
               return (
                 <tr
                   key={conversation.conversation_id}
                   className={cx(styles.row, selected && styles.rowSelected, conversation.has_errors && styles.rowError)}
-                  onClick={(e) => handleRowClick(e, conversation.conversation_id)}
+                  onClick={(e) => handleRowClick(e, conversation.conversation_id, conversation.conversation_title)}
                   role="button"
                   aria-label={`select conversation ${conversation.conversation_id}`}
                   aria-selected={selected}
@@ -526,9 +575,18 @@ export default function ConversationListPanel({
                   </td>
                   <td className={styles.cell}>
                     <div className={styles.idCell}>
-                      <Tooltip content={conversation.conversation_id}>
-                        <span>{truncateId(conversation.conversation_id)}</span>
-                      </Tooltip>
+                      <div className={styles.idCellStack}>
+                        <Tooltip content={displayTitle}>
+                          <span className={styles.idCellPrimary}>
+                            {hasTitle ? displayTitle : truncateId(conversation.conversation_id)}
+                          </span>
+                        </Tooltip>
+                        {hasTitle && (
+                          <Tooltip content={conversation.conversation_id}>
+                            <span className={styles.idCellSecondary}>{truncateId(conversation.conversation_id)}</span>
+                          </Tooltip>
+                        )}
+                      </div>
                       <CopyIdButton id={conversation.conversation_id} />
                     </div>
                   </td>

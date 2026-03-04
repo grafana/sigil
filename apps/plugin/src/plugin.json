@@ -46,8 +46,22 @@
     },
     {
       "type": "page",
-      "name": "Conversation view",
+      "name": "Conversations",
       "path": "/a/grafana-sigil-app/conversations/:conversationID/view",
+      "action": "grafana-sigil-app.data:read",
+      "addToNav": false
+    },
+    {
+      "type": "page",
+      "name": "Conversations",
+      "path": "/a/grafana-sigil-app/conversations/:conversationID/detail",
+      "action": "grafana-sigil-app.data:read",
+      "addToNav": false
+    },
+    {
+      "type": "page",
+      "name": "Conversation explore",
+      "path": "/a/grafana-sigil-app/conversations/:conversationID/explore",
       "action": "grafana-sigil-app.data:read",
       "addToNav": false
     },
@@ -61,14 +75,14 @@
     },
     {
       "type": "page",
-      "name": "Agent detail",
+      "name": "Agents",
       "path": "/a/grafana-sigil-app/agents/name/:agentName",
       "action": "grafana-sigil-app.data:read",
       "addToNav": false
     },
     {
       "type": "page",
-      "name": "Agent detail (anonymous)",
+      "name": "Agents",
       "path": "/a/grafana-sigil-app/agents/anonymous",
       "action": "grafana-sigil-app.data:read",
       "addToNav": false

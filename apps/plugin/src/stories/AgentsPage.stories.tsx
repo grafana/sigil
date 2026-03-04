@@ -2,6 +2,7 @@ import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import AgentsPage, { type AgentsPageProps } from '../pages/AgentsPage';
 import type { AgentsDataSource } from '../agents/api';
+import type { DashboardDataSource } from '../dashboard/api';
 
 const mockDataSource: AgentsDataSource = {
   listAgents: async () => ({
@@ -60,11 +61,45 @@ const mockDataSource: AgentsDataSource = {
   listAgentVersions: async () => ({ items: [], next_cursor: '' }),
 };
 
+const mockDashboardDataSource: DashboardDataSource = {
+  queryRange: async () => ({ status: 'success', data: { resultType: 'matrix', result: [] } }),
+  queryInstant: async () => ({
+    status: 'success',
+    data: {
+      resultType: 'vector',
+      result: [
+        {
+          metric: {
+            gen_ai_agent_name: 'support-assistant',
+            gen_ai_provider_name: 'openai',
+            gen_ai_request_model: 'gpt-4o-mini',
+            gen_ai_token_type: 'input',
+          },
+          value: [0, '120000'],
+        },
+      ],
+    },
+  }),
+  labels: async () => [],
+  labelValues: async () => [],
+  resolveModelCards: async () => ({
+    resolved: [],
+    freshness: {
+      catalog_last_refreshed_at: null,
+      stale: false,
+      soft_stale: false,
+      hard_stale: false,
+      source_path: '',
+    },
+  }),
+};
+
 const meta = {
   title: 'Sigil/Agents/Agents Page',
   component: AgentsPage,
   args: {
     dataSource: mockDataSource,
+    dashboardDataSource: mockDashboardDataSource,
   },
   render: (args: AgentsPageProps) => (
     <MemoryRouter initialEntries={['/agents']}>

@@ -6,7 +6,7 @@ import { Alert, Button, Icon, Select, Spinner, Text, useStyles2, type IconName }
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
 import type { Evaluator, TemplateDefinition, TemplateScope } from '../evaluation/types';
-import EvaluatorDetail from '../components/evaluation/EvaluatorDetail';
+import { pickLatestVersionPerEvaluator } from '../evaluation/utils';
 import EvaluatorTable from '../components/evaluation/EvaluatorTable';
 import TemplateTable from '../components/evaluation/TemplateTable';
 
@@ -117,10 +117,6 @@ const getStyles = (theme: GrafanaTheme2) => {
       flexShrink: 0,
       color: theme.colors.text.disabled,
     }),
-    divider: css({
-      borderTop: `1px solid ${theme.colors.border.weak}`,
-      margin: theme.spacing(1, 0),
-    }),
   };
 };
 
@@ -131,8 +127,6 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
 
   const [allTemplates, setAllTemplates] = useState<TemplateDefinition[]>([]);
   const [tenantEvaluators, setTenantEvaluators] = useState<Evaluator[]>([]);
-  const [selectedEvaluatorID, setSelectedEvaluatorID] = useState<string | null>(null);
-  const [selectedEvaluator, setSelectedEvaluator] = useState<Evaluator | null>(null);
   const [templateScopeFilter, setTemplateScopeFilter] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
@@ -156,7 +150,7 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
         if (requestVersion.current !== version) {
           return;
         }
-        setTenantEvaluators(tenantRes.items.filter((e) => !e.is_predefined));
+        setTenantEvaluators(pickLatestVersionPerEvaluator(tenantRes.items.filter((e) => !e.is_predefined)));
         setAllTemplates(templatesRes.items ?? []);
       })
       .catch((err) => {
@@ -174,24 +168,6 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
         setLoading(false);
       });
   }, [dataSource, templateScopeFilter]);
-
-  useEffect(() => {
-    if (selectedEvaluatorID == null) {
-      queueMicrotask(() => setSelectedEvaluator(null));
-      return;
-    }
-    const found = tenantEvaluators.find((e) => e.evaluator_id === selectedEvaluatorID);
-    if (found != null) {
-      queueMicrotask(() => setSelectedEvaluator(found));
-      return;
-    }
-    void dataSource
-      .getEvaluator(selectedEvaluatorID)
-      .then((e) => setSelectedEvaluator(e))
-      .catch((err) => {
-        setErrorMessage(err instanceof Error ? err.message : 'Failed to load evaluator');
-      });
-  }, [dataSource, selectedEvaluatorID, tenantEvaluators]);
 
   const sortedTemplates = [...allTemplates].sort((a, b) => {
     if (a.scope !== b.scope) {
@@ -262,25 +238,19 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
           <>
             <EvaluatorTable
               evaluators={tenantEvaluators}
-              onSelect={setSelectedEvaluatorID}
+              onSelect={(id) => navigate(`${EVAL_BASE}/evaluators/${encodeURIComponent(id)}/edit`)}
               onDelete={async (id) => {
                 try {
                   await dataSource.deleteEvaluator(id);
                   setTenantEvaluators((prev) => prev.filter((e) => e.evaluator_id !== id));
-                  if (selectedEvaluatorID === id) {
-                    setSelectedEvaluatorID(null);
-                  }
                 } catch (err) {
                   setErrorMessage(err instanceof Error ? err.message : 'Failed to delete evaluator');
                 }
               }}
             />
-            {selectedEvaluator != null && <EvaluatorDetail evaluator={selectedEvaluator} />}
           </>
         )}
       </div>
-
-      <div className={styles.divider} />
 
       {/* Templates */}
       <div className={styles.section}>

@@ -159,6 +159,7 @@ export default function ConversationPage(props: ConversationPageProps) {
   );
 
   const selectedSpanSelectionID = searchParams.get('span') ?? '';
+  const conversationTitleFromURL = (searchParams.get('conversationTitle') ?? '').trim();
   const selectedSpan = useMemo(() => {
     if (selectedSpanSelectionID.length === 0 || !conversationData) {
       return null;
@@ -204,6 +205,7 @@ export default function ConversationPage(props: ConversationPageProps) {
     const errorCount = allGenerations.filter((g) => Boolean(g.error?.message)).length;
     return {
       conversation_id: conversationData.conversationID,
+      conversation_title: conversationTitleFromURL.length > 0 ? conversationTitleFromURL : undefined,
       generation_count: conversationData.generationCount,
       first_generation_at: conversationData.firstGenerationAt,
       last_generation_at: conversationData.lastGenerationAt,
@@ -215,7 +217,7 @@ export default function ConversationPage(props: ConversationPageProps) {
       rating_summary: conversationData.ratingSummary ?? undefined,
       annotation_count: conversationData.annotations.length,
     };
-  }, [conversationData, allGenerations]);
+  }, [conversationData, allGenerations, conversationTitleFromURL]);
 
   return (
     <div className={styles.pageContainer}>

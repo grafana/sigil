@@ -21,6 +21,7 @@ import VersionCompare from '../components/evaluation/VersionCompare';
 import ForkTemplateForm from '../components/evaluation/ForkTemplateForm';
 
 const EVAL_TEMPLATES_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}/templates`;
+const EVAL_EVALUATORS_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}/evaluators`;
 
 export type TemplateDetailPageProps = {
   dataSource?: EvaluationDataSource;
@@ -226,7 +227,7 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
     }
     try {
       await dataSource.forkTemplate(templateID, req);
-      setActiveForm('none');
+      navigate(EVAL_EVALUATORS_BASE);
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Failed to fork template');
     }
@@ -277,7 +278,7 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
 
       <div className={styles.header}>
         <div className={styles.titleRow}>
-          <Text element="h2">{template.template_id}</Text>
+          <Text element="h2">Template {template.template_id}</Text>
           <Badge text={EVALUATOR_KIND_LABELS[template.kind]} color={getKindBadgeColor(template.kind)} />
           <Badge text={template.scope} color={template.scope === 'global' ? 'orange' : 'blue'} />
         </div>
@@ -319,7 +320,18 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
         <Text element="h3" weight="medium">
           Current Version: {template.latest_version}
         </Text>
-        {template.config && <div className={styles.code}>{JSON.stringify(template.config, null, 2)}</div>}
+        {template.config && (
+          <div className={styles.code}>
+            {JSON.stringify(
+              {
+                config: template.config,
+                ...(template.output_keys?.length ? { output_keys: template.output_keys } : {}),
+              },
+              null,
+              2
+            )}
+          </div>
+        )}
       </div>
 
       {activeForm === 'publish' && (
@@ -380,7 +392,20 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
           <Text element="h3" weight="medium">
             Version Compare
           </Text>
-          <VersionCompare left={compareLeft} right={compareRight} />
+          <VersionCompare
+            left={{
+              version: compareLeft.version,
+              changelog: compareLeft.changelog,
+              config: compareLeft.config,
+              outputKeys: compareLeft.output_keys,
+            }}
+            right={{
+              version: compareRight.version,
+              changelog: compareRight.changelog,
+              config: compareRight.config,
+              outputKeys: compareRight.output_keys,
+            }}
+          />
         </div>
       )}
     </div>

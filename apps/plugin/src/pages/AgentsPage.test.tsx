@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { RouterProvider, createMemoryRouter, useLocation } from 'react-router-dom';
 import AgentsPage from './AgentsPage';
 import type { AgentsDataSource } from '../agents/api';
+import type { DashboardDataSource } from '../dashboard/api';
 
 type IntersectionObserverCallbackLike = (
   entries: Array<Pick<IntersectionObserverEntry, 'isIntersecting'>>,
@@ -139,15 +140,85 @@ function createDataSource(): AgentsDataSource {
   };
 }
 
+function createDashboardDataSource(): DashboardDataSource {
+  return {
+    queryRange: jest.fn(async () => ({
+      status: 'success' as const,
+      data: { resultType: 'matrix' as const, result: [] },
+    })),
+    queryInstant: jest.fn(async () => ({
+      status: 'success' as const,
+      data: {
+        resultType: 'vector' as const,
+        result: [
+          {
+            metric: {
+              gen_ai_agent_name: 'assistant',
+              gen_ai_provider_name: 'openai',
+              gen_ai_request_model: 'gpt-4o-mini',
+              gen_ai_token_type: 'input',
+            },
+            value: [0, '120'] as [number, string],
+          },
+          {
+            metric: {
+              gen_ai_agent_name: '',
+              gen_ai_provider_name: 'openai',
+              gen_ai_request_model: 'gpt-4o-mini',
+              gen_ai_token_type: 'input',
+            },
+            value: [0, '30'] as [number, string],
+          },
+        ],
+      },
+    })),
+    labels: jest.fn(async () => []),
+    labelValues: jest.fn(async () => []),
+    resolveModelCards: jest.fn(async () => ({
+      resolved: [
+        {
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          status: 'resolved' as const,
+          match_strategy: 'exact' as const,
+          card: {
+            model_key: 'openai/gpt-4o-mini',
+            source_model_id: 'openai/gpt-4o-mini',
+            pricing: {
+              prompt_usd_per_token: 0.000001,
+              completion_usd_per_token: 0.000002,
+              request_usd: null,
+              image_usd: null,
+              web_search_usd: null,
+              input_cache_read_usd_per_token: 0,
+              input_cache_write_usd_per_token: 0,
+            },
+          },
+        },
+      ],
+      freshness: {
+        catalog_last_refreshed_at: null,
+        stale: false,
+        soft_stale: false,
+        hard_stale: false,
+        source_path: '',
+      },
+    })),
+  };
+}
+
 describe('AgentsPage', () => {
-  function renderPage(dataSource: AgentsDataSource) {
+  function renderPage(
+    dataSource: AgentsDataSource,
+    dashboardDataSource: DashboardDataSource = createDashboardDataSource()
+  ) {
     const router = createMemoryRouter(
       [
         {
           path: '/a/grafana-sigil-app/agents',
           element: (
             <>
-              <AgentsPage dataSource={dataSource} />
+              <AgentsPage dataSource={dataSource} dashboardDataSource={dashboardDataSource} />
               <LocationProbe />
             </>
           ),
@@ -191,20 +262,22 @@ describe('AgentsPage', () => {
     expect(heroRegion).toBeInTheDocument();
     expect(within(heroRegion).getByText('Agents')).toBeInTheDocument();
     expect(within(heroRegion).getByText('Total generations')).toBeInTheDocument();
-    expect(within(heroRegion).getByText('Estimated prompt+tools footprint')).toBeInTheDocument();
-    expect(within(heroRegion).getByText('Avg footprint per generation')).toBeInTheDocument();
-    // 2 loaded agents: total generations=5, total tokens=11, avg=2
+    expect(within(heroRegion).getAllByText('Token usage')).toHaveLength(1);
+    expect(within(heroRegion).getByText('Agent footprint')).toBeInTheDocument();
+    expect(within(heroRegion).getByText('Avg usage per generation')).toBeInTheDocument();
+    // Only the first page is loaded in this test (2 agents): generations=5, runtime tokens=150, avg=30
     expect(within(heroRegion).getByText('Agents').parentElement).toHaveTextContent('2');
     expect(within(heroRegion).getByText('Total generations').parentElement).toHaveTextContent('5');
-    expect(within(heroRegion).getByText('Estimated prompt+tools footprint').parentElement).toHaveTextContent('11');
-    expect(within(heroRegion).getByText('Avg footprint per generation').parentElement).toHaveTextContent('2');
+    expect(within(heroRegion).getByLabelText('Total runtime token usage')).toHaveTextContent('150 tokens');
+    expect(within(heroRegion).getByText('Avg usage per generation').parentElement).toHaveTextContent('30');
 
     const topByGenerationsSection = screen.getByText('Top by generations').closest('div');
     expect(topByGenerationsSection).toBeTruthy();
     const generationButtons = within(topByGenerationsSection as HTMLElement).getAllByRole('button');
     expect(generationButtons.map((button) => button.textContent)).toEqual(['assistant', 'Unnamed agent bucket']);
 
-    const topByTokenSection = screen.getByText('Footprint').closest('div')?.parentElement;
+    const topByTokenHeading = within(heroRegion).getByText('Agent footprint');
+    const topByTokenSection = topByTokenHeading.closest('div')?.parentElement;
     expect(topByTokenSection).toBeTruthy();
     const tokenButtons = within(topByTokenSection as HTMLElement).getAllByRole('button');
     expect(tokenButtons.map((button) => button.textContent)).toEqual(['assistant', 'Unnamed agent bucket']);
@@ -212,6 +285,23 @@ describe('AgentsPage', () => {
     expect(screen.getByText('anonymous buckets').parentElement).toHaveTextContent('1');
     expect(screen.getByText('stale (> 7 days)').parentElement).toHaveTextContent('0');
     expect(screen.getByText('high churn (5+ versions)').parentElement).toHaveTextContent('0');
+  });
+
+  it('keeps runtime usage KPIs based on agents with runtime metrics after loading more', async () => {
+    const dataSource = createDataSource();
+    renderPage(dataSource);
+
+    await waitFor(() => expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', ''));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Agents' }));
+    triggerLoadMoreIntersection();
+    await waitFor(() => expect(dataSource.listAgents).toHaveBeenNthCalledWith(2, 24, 'cursor-1', ''));
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+
+    const heroRegion = await screen.findByRole('region', { name: 'agents hero summary' });
+    expect(within(heroRegion).getByText('Total generations').parentElement).toHaveTextContent('5');
+    expect(within(heroRegion).getByLabelText('Total runtime token usage')).toHaveTextContent('150 tokens');
+    expect(within(heroRegion).getByText('Avg usage per generation').parentElement).toHaveTextContent('30');
   });
 
   it('opens anonymous route', async () => {
@@ -249,7 +339,22 @@ describe('AgentsPage', () => {
 
     await waitFor(() => expect(dataSource.listAgents).toHaveBeenLastCalledWith(24, '', 'assist'));
     fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
-    await waitFor(() => expect(screen.getByText('Total generations').parentElement).toHaveTextContent('1'));
+    await waitFor(() => expect(screen.getByText('Total generations').parentElement).toHaveTextContent('0'));
     expect(screen.getByRole('button', { name: 'open top generation agent assistant-beta' })).toBeInTheDocument();
+  });
+
+  it('shows sub-cent USD precision for tiny footprint values', async () => {
+    const dataSource = createDataSource();
+    renderPage(dataSource);
+
+    const modeSelect = await screen.findByLabelText('Top prompt and tools display mode');
+    fireEvent.change(modeSelect, { target: { value: 'usd' } });
+
+    await waitFor(() => {
+      const anonymousTopTokenButton = screen.getByRole('button', { name: 'open top token agent anonymous' });
+      const anonymousListItem = anonymousTopTokenButton.closest('li');
+      expect(anonymousListItem).toHaveTextContent('$0.000030');
+      expect(anonymousListItem).not.toHaveTextContent('$0.000000');
+    });
   });
 });

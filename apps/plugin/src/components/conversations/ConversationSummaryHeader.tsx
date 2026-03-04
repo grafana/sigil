@@ -73,6 +73,14 @@ const getStyles = (theme: GrafanaTheme2) => ({
     fontFamily: theme.typography.fontFamilyMonospace,
     overflowWrap: 'anywhere' as const,
   }),
+  valueSecondary: css({
+    label: 'conversationSummaryHeader-valueSecondary',
+    color: theme.colors.text.secondary,
+    fontFamily: theme.typography.fontFamilyMonospace,
+    fontSize: theme.typography.bodySmall.fontSize,
+    marginTop: theme.spacing(0.25),
+    overflowWrap: 'anywhere' as const,
+  }),
   tooltipTarget: css({
     label: 'conversationSummaryHeader-tooltipTarget',
     cursor: 'default',
@@ -138,13 +146,16 @@ export default function ConversationSummaryHeader({
   const modelNames = conversation.models;
   const hasModelCards = modelCards && modelCards.size > 0;
   const ratingSummary = conversation.rating_summary;
+  const conversationTitle = conversation.conversation_title?.trim() ?? '';
+  const hasConversationTitle = conversationTitle.length > 0;
 
   return (
     <div className={styles.header}>
       <div className={styles.grid}>
         <div className={styles.item}>
-          <div className={styles.label}>Conversation ID</div>
-          <div className={styles.value}>{conversation.conversation_id}</div>
+          <div className={styles.label}>{hasConversationTitle ? 'Conversation' : 'Conversation ID'}</div>
+          <div className={styles.value}>{hasConversationTitle ? conversationTitle : conversation.conversation_id}</div>
+          {hasConversationTitle && <div className={styles.valueSecondary}>{conversation.conversation_id}</div>}
         </div>
         <div className={styles.item}>
           <div className={styles.label}>LLM calls</div>

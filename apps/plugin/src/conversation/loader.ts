@@ -4,6 +4,35 @@ import type { ConversationData } from './types';
 
 export type TraceFetcher = (traceID: string) => Promise<unknown>;
 
+const TRACE_FETCH_CONCURRENCY = 5;
+
+type TraceResult = { traceID: string; payload: unknown };
+
+async function fetchTracesWithConcurrency(
+  traceIDs: string[],
+  fetchTrace: TraceFetcher,
+  concurrency: number = TRACE_FETCH_CONCURRENCY
+): Promise<TraceResult[]> {
+  const results: TraceResult[] = new Array(traceIDs.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < traceIDs.length) {
+      const i = nextIndex++;
+      try {
+        const payload = await fetchTrace(traceIDs[i]);
+        results[i] = { traceID: traceIDs[i], payload };
+      } catch {
+        results[i] = { traceID: traceIDs[i], payload: null };
+      }
+    }
+  }
+
+  const workerCount = Math.min(concurrency, traceIDs.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
+}
+
 export async function loadConversation(
   dataSource: ConversationsDataSource,
   conversationID: string,
@@ -19,16 +48,7 @@ export async function loadConversation(
   }
 
   const traceIDs = Array.from(traceIDSet);
-  const tracePayloads = await Promise.all(
-    traceIDs.map(async (traceID) => {
-      try {
-        const payload = await fetchTrace(traceID);
-        return { traceID, payload };
-      } catch {
-        return { traceID, payload: null };
-      }
-    })
-  );
+  const tracePayloads = await fetchTracesWithConcurrency(traceIDs, fetchTrace);
 
   const allParsedSpans = tracePayloads.flatMap(({ traceID, payload }) => {
     if (payload === null) {

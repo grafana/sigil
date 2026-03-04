@@ -498,6 +498,7 @@ type tempoSelectedAggregation struct {
 
 type tempoConversationAggregate struct {
 	ConversationID        string
+	ConversationTitle     string
 	GenerationIDs         map[string]struct{}
 	TraceIDs              map[string]struct{}
 	Models                map[string]struct{}
@@ -506,6 +507,7 @@ type tempoConversationAggregate struct {
 	ErrorCount            int
 	Selected              map[string]*tempoSelectedAggregation
 	LatestTraceStartNanos int64
+	LatestTitleAtNanos    int64
 }
 
 type tempoGroupResult struct {
@@ -531,6 +533,10 @@ func groupTempoSearchResponse(response *TempoSearchResponse, selectFields []Sele
 
 		for _, spanSet := range trace.SpanSets {
 			for _, span := range spanSet.Spans {
+				spanStartNanos := parseUnixNanos(span.StartTimeUnixNano)
+				if spanStartNanos <= 0 {
+					spanStartNanos = traceStartNanos
+				}
 				attributes := buildTempoAttributeLookup(span.Attributes)
 				conversationID := firstAttributeString(attributes,
 					"gen_ai.conversation.id",
@@ -574,6 +580,12 @@ func groupTempoSearchResponse(response *TempoSearchResponse, selectFields []Sele
 				}
 				if agent := firstAttributeString(attributes, "gen_ai.agent.name", "span.gen_ai.agent.name"); agent != "" {
 					aggregate.Agents[agent] = struct{}{}
+				}
+				if conversationTitle := firstAttributeString(attributes, "sigil.conversation.title", "span.sigil.conversation.title"); conversationTitle != "" {
+					if spanStartNanos >= aggregate.LatestTitleAtNanos {
+						aggregate.ConversationTitle = conversationTitle
+						aggregate.LatestTitleAtNanos = spanStartNanos
+					}
 				}
 				if errorType := firstAttributeString(attributes, "error.type", "span.error.type"); errorType != "" {
 					aggregate.ErrorCount++

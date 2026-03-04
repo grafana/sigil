@@ -5,6 +5,7 @@ export const ROUTES = {
   Analytics: 'analytics',
   Conversations: 'conversations',
   ConversationsView: 'conversations/:conversationID/view',
+  ConversationsExplore: 'conversations/:conversationID/explore',
   ConversationsOld: 'conversations-old',
   ConversationsDetail: 'conversations/:conversationID/detail',
   Agents: 'agents',
@@ -17,11 +18,12 @@ export const PAGE_TITLES = {
   [ROUTES.Analytics]: 'Analytics',
   [ROUTES.Conversations]: 'Conversations',
   [ROUTES.ConversationsView]: 'Conversation view',
+  [ROUTES.ConversationsExplore]: 'Conversation explore',
   [ROUTES.ConversationsOld]: 'Conversations (old)',
-  [ROUTES.ConversationsDetail]: 'Conversation detail',
+  [ROUTES.ConversationsDetail]: 'Conversations',
   [ROUTES.Agents]: 'Agents',
-  [ROUTES.AgentDetailByName]: 'Agent detail',
-  [ROUTES.AgentDetailAnonymous]: 'Agent detail',
+  [ROUTES.AgentDetailByName]: 'Agents',
+  [ROUTES.AgentDetailAnonymous]: 'Agents',
   [ROUTES.Evaluation]: 'Evaluation',
 } as const;
 
@@ -31,6 +33,10 @@ export function buildConversationDetailRoute(conversationID: string): string {
 
 export function buildConversationViewRoute(conversationID: string): string {
   return `${ROUTES.Conversations}/${encodeURIComponent(conversationID)}/view`;
+}
+
+export function buildConversationExploreRoute(conversationID: string): string {
+  return `${ROUTES.Conversations}/${encodeURIComponent(conversationID)}/explore`;
 }
 
 export function buildAgentDetailByNameRoute(agentName: string): string {

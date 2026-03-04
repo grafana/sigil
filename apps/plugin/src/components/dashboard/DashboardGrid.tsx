@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { ThresholdsMode, type GrafanaTheme2, type TimeRange } from '@grafana/data';
-import { Button, Icon, IconButton, Select, Spinner, Tooltip, useStyles2 } from '@grafana/ui';
+import { Button, Icon, IconButton, Select, Spinner, useStyles2 } from '@grafana/ui';
 import { useInlineAssistant } from '@grafana/assistant';
 import type { DashboardDataSource } from '../../dashboard/api';
 import {
@@ -14,7 +14,8 @@ import {
   breakdownToPromLabel,
   tokenDrilldownTypes,
 } from '../../dashboard/types';
-import { formatStatValue, extractResolvePairs, BreakdownStatPanel } from './dashboardShared';
+import { extractResolvePairs, BreakdownStatPanel } from './dashboardShared';
+import { TopStat } from '../TopStat';
 import { calculateTotalCost, calculateTotalCostByGroup, calculateCostTimeSeries } from '../../dashboard/cost';
 import {
   computeStep,
@@ -502,7 +503,6 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
           loading={topTotalOps.loading}
           prevValue={prevRequestsValue}
           prevLoading={prevTotalOps.loading}
-          styles={styles}
         />
         <TopStat
           label="Avg Latency (P95)"
@@ -512,7 +512,6 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
           prevValue={prevLatencyValue}
           prevLoading={prevLatency.loading}
           invertChange
-          styles={styles}
         />
         <TopStat
           label="Error Rate"
@@ -522,7 +521,6 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
           prevValue={prevErrRateValue}
           prevLoading={prevErrRate.loading}
           invertChange
-          styles={styles}
         />
         <TopStat
           label="Total Tokens"
@@ -531,7 +529,6 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
           loading={tokensTotalStat.loading}
           prevValue={prevTokensValue}
           prevLoading={prevTokensTotal.loading}
-          styles={styles}
         />
         <TopStat
           label="Total Cost"
@@ -541,7 +538,6 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
           prevValue={prevTotalCost.totalCost}
           prevLoading={prevCostTokens.loading}
           invertChange
-          styles={styles}
         />
       </div>
       <div className={styles.gridOuter}>
@@ -744,65 +740,6 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
         </div>
 
         <InsightPanel prompt={insightPrompt} origin="sigil-plugin/dashboard-insight" dataContext={insightDataContext} />
-      </div>
-    </div>
-  );
-}
-
-type TopStatProps = {
-  label: string;
-  value: number;
-  unit?: string;
-  loading: boolean;
-  prevValue?: number;
-  prevLoading?: boolean;
-  invertChange?: boolean;
-  styles: ReturnType<typeof getStyles>;
-};
-
-function TopStat({ label, value, unit, loading, prevValue, prevLoading, invertChange, styles }: TopStatProps) {
-  let changeBadge: React.ReactNode = null;
-  if (!loading && !prevLoading && prevValue !== undefined) {
-    if (prevValue === 0 && value === 0) {
-      changeBadge = (
-        <Tooltip content="Zero one hour ago" placement="bottom">
-          <span className={`${styles.changeBadge} ${styles.changeBadgeNeutral}`}>→ 0%</span>
-        </Tooltip>
-      );
-    } else if (prevValue === 0) {
-      const isGood = !invertChange;
-      const badgeClass = isGood ? styles.changeBadgeGood : styles.changeBadgeWarn;
-      changeBadge = (
-        <Tooltip content="Zero one hour ago" placement="bottom">
-          <span className={`${styles.changeBadge} ${badgeClass}`}>new</span>
-        </Tooltip>
-      );
-    } else {
-      const pctChange = ((value - prevValue) / Math.abs(prevValue)) * 100;
-      const isUp = pctChange > 0;
-      const isGood = invertChange ? !isUp : isUp;
-      const arrow = isUp ? '↑' : '↓';
-      const sign = isUp ? '+' : '';
-      const badgeClass =
-        pctChange === 0 ? styles.changeBadgeNeutral : isGood ? styles.changeBadgeGood : styles.changeBadgeWarn;
-      const tooltipText = `${formatStatValue(prevValue, unit)} one hour ago`;
-      changeBadge = (
-        <Tooltip content={tooltipText} placement="bottom">
-          <span className={`${styles.changeBadge} ${badgeClass}`}>
-            {arrow} {sign}
-            {pctChange.toFixed(1)}%
-          </span>
-        </Tooltip>
-      );
-    }
-  }
-
-  return (
-    <div className={styles.topStat}>
-      <span className={styles.topStatLabel}>{label}</span>
-      <div className={styles.topStatRow}>
-        <span className={styles.topStatValue}>{loading ? '–' : formatStatValue(value, unit)}</span>
-        {changeBadge}
       </div>
     </div>
   );
@@ -1013,53 +950,6 @@ function getStyles(theme: GrafanaTheme2) {
       gap: theme.spacing(4),
       padding: theme.spacing(1.5, 0),
       borderBottom: `1px solid ${theme.colors.border.weak}`,
-    }),
-    topStat: css({
-      display: 'flex',
-      flexDirection: 'column',
-      gap: theme.spacing(0.5),
-    }),
-    topStatLabel: css({
-      fontSize: theme.typography.bodySmall.fontSize,
-      color: theme.colors.text.secondary,
-      lineHeight: 1.2,
-    }),
-    topStatRow: css({
-      display: 'flex',
-      alignItems: 'center',
-      gap: theme.spacing(1),
-    }),
-    topStatValue: css({
-      fontSize: theme.typography.h3.fontSize,
-      fontWeight: theme.typography.fontWeightMedium,
-      color: theme.colors.text.primary,
-      lineHeight: 1.2,
-    }),
-    changeBadge: css({
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: theme.spacing(0.25),
-      fontSize: theme.typography.bodySmall.fontSize,
-      fontWeight: theme.typography.fontWeightMedium,
-      padding: theme.spacing(0.25, 1),
-      borderRadius: 999,
-      lineHeight: 1.4,
-      whiteSpace: 'nowrap',
-    }),
-    changeBadgeGood: css({
-      color: theme.colors.success.text,
-      border: `1px solid ${theme.colors.success.border}`,
-      background: theme.colors.success.transparent,
-    }),
-    changeBadgeWarn: css({
-      color: theme.colors.warning.text,
-      border: `1px solid ${theme.colors.warning.border}`,
-      background: theme.colors.warning.transparent,
-    }),
-    changeBadgeNeutral: css({
-      color: theme.colors.text.secondary,
-      border: `1px solid ${theme.colors.border.weak}`,
-      background: 'transparent',
     }),
     panelRowFirstStat: css({
       display: 'grid',

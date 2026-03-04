@@ -20,6 +20,13 @@ import type { AgentListItem } from '../agents/types';
 import { buildAgentDetailByNameRoute, buildAnonymousAgentDetailRoute, PLUGIN_BASE } from '../constants';
 import { formatDateShort } from '../utils/date';
 import { AgentActivityTimeline } from '../components/agents/AgentActivityTimeline';
+import { defaultDashboardDataSource, type DashboardDataSource } from '../dashboard/api';
+import { computeRangeDuration, tokensByModelAndTypeQuery } from '../dashboard/queries';
+import { emptyFilters, type PrometheusQueryResponse } from '../dashboard/types';
+import { extractResolvePairs } from '../components/dashboard/dashboardShared';
+import { useResolvedModelPricing } from '../components/dashboard/useResolvedModelPricing';
+import { usePrometheusQuery } from '../components/dashboard/usePrometheusQuery';
+import { lookupPricing } from '../dashboard/cost';
 import {
   default as TokenCostBox,
   TOKEN_COST_MODE_CHANGE_EVENT,
@@ -39,6 +46,7 @@ const compactNumberFormatter = new Intl.NumberFormat('en-US', {
 
 export type AgentsPageProps = {
   dataSource?: AgentsDataSource;
+  dashboardDataSource?: DashboardDataSource;
 };
 
 type AgentsPageTab = 'info' | 'table';
@@ -49,11 +57,12 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexDirection: 'column' as const,
     gap: theme.spacing(2),
     minHeight: 0,
+    marginTop: theme.spacing(-4),
   }),
-  titleRow: css({
+  tabsRow: css({
     display: 'flex',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
     gap: theme.spacing(2),
     flexWrap: 'wrap' as const,
   }),
@@ -68,11 +77,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   heroWrap: css({
     display: 'flex',
-    justifyContent: 'flex-start',
+    justifyContent: 'stretch',
+    width: '100%',
   }),
   hero: css({
     width: '100%',
-    maxWidth: 1120,
     border: `1px solid ${theme.colors.border.medium}`,
     borderRadius: theme.shape.radius.default,
     background: theme.colors.background.secondary,
@@ -326,13 +335,8 @@ function formatCompactNumber(value: number): string {
 
 function formatUSD(value: number): string {
   const absValue = Math.abs(value);
-  if (absValue < 0.01) {
-    return `$${value.toFixed(6)}`;
-  }
-  if (absValue < 1) {
-    return `$${value.toFixed(4)}`;
-  }
-  return `$${value.toFixed(2)}`;
+  const decimals = absValue < 0.01 ? 6 : absValue < 1 ? 4 : 2;
+  return `$${value.toFixed(decimals)}`;
 }
 
 function splitMutedZeroPrefix(value: string): { leading: string; rest: string } {
@@ -381,7 +385,52 @@ function LabelWithHelp({ label, help, className }: { label: string; help: string
   );
 }
 
-export default function AgentsPage({ dataSource = defaultAgentsDataSource }: AgentsPageProps) {
+function aggregateAgentUsageByName(
+  response: PrometheusQueryResponse | null | undefined,
+  pricingMap: ReturnType<typeof useResolvedModelPricing>['pricingMap']
+) {
+  const usageByName = new Map<string, { tokens: number; costUSD: number }>();
+  if (!response || response.data.resultType !== 'vector') {
+    return usageByName;
+  }
+  const results = response.data.result as Array<{ metric: Record<string, string>; value: [number, string] }>;
+  for (const result of results) {
+    const metric = result.metric;
+    const agentName = metric.gen_ai_agent_name ?? '';
+    const tokenType = metric.gen_ai_token_type ?? '';
+    const tokenCount = parseFloat(result.value[1]);
+    if (!Number.isFinite(tokenCount)) {
+      continue;
+    }
+    const current = usageByName.get(agentName) ?? { tokens: 0, costUSD: 0 };
+    current.tokens += tokenCount;
+    const pricing = lookupPricing(pricingMap, metric.gen_ai_request_model ?? '', metric.gen_ai_provider_name);
+    if (pricing) {
+      switch (tokenType) {
+        case 'input':
+          current.costUSD += tokenCount * (pricing.prompt_usd_per_token ?? 0);
+          break;
+        case 'output':
+          current.costUSD += tokenCount * (pricing.completion_usd_per_token ?? 0);
+          break;
+        case 'cache_read':
+          current.costUSD += tokenCount * (pricing.input_cache_read_usd_per_token ?? 0);
+          break;
+        case 'cache_write':
+        case 'cache_creation':
+          current.costUSD += tokenCount * (pricing.input_cache_write_usd_per_token ?? 0);
+          break;
+      }
+    }
+    usageByName.set(agentName, current);
+  }
+  return usageByName;
+}
+
+export default function AgentsPage({
+  dataSource = defaultAgentsDataSource,
+  dashboardDataSource = defaultDashboardDataSource,
+}: AgentsPageProps) {
   const styles = useStyles2(getStyles);
   const navigate = useNavigate();
 
@@ -394,14 +443,33 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
   const [namePrefix, setNamePrefix] = useState('');
   const [activeTab, setActiveTab] = useState<AgentsPageTab>('info');
   const [topFootprintMode, setTopFootprintMode] = useState<TokenCostMode>(() => readInitialTopFootprintMode());
-  const [timeRange, setTimeRange] = useState<TimeRange>(() => ({
-    from: dateTimeParse('now-24h'),
-    to: dateTimeParse('now'),
-    raw: { from: 'now-24h', to: 'now' },
-  }));
+  const [timeRange, setTimeRange] = useState<TimeRange>(() => {
+    const rawFrom = 'now-1h';
+    const rawTo = 'now';
+    return {
+      from: dateTimeParse(rawFrom),
+      to: dateTimeParse(rawTo),
+      raw: { from: rawFrom, to: rawTo },
+    };
+  });
   const requestVersion = useRef(0);
   const inFlightLoadMore = useRef(false);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  const telemetryFromSec = Math.floor(timeRange.from.valueOf() / 1000);
+  const telemetryToSec = Math.floor(timeRange.to.valueOf() / 1000);
+  const telemetryRangeDuration = useMemo(
+    () => computeRangeDuration(telemetryFromSec, telemetryToSec),
+    [telemetryFromSec, telemetryToSec]
+  );
+  const usageByModelAndType = usePrometheusQuery(
+    dashboardDataSource,
+    tokensByModelAndTypeQuery(emptyFilters, telemetryRangeDuration, 'agent'),
+    telemetryFromSec,
+    telemetryToSec,
+    'instant'
+  );
+  const resolvePairs = useMemo(() => extractResolvePairs(usageByModelAndType.data), [usageByModelAndType.data]);
+  const resolvedPricing = useResolvedModelPricing(dashboardDataSource, resolvePairs);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -491,12 +559,14 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
   const summary = useMemo(() => {
     const rangeFrom = timeRange.from.valueOf();
     const rangeTo = timeRange.to.valueOf();
+    const usageByName = aggregateAgentUsageByName(usageByModelAndType.data, resolvedPricing.pricingMap);
     let anonymousCount = 0;
     let seenInRangeCount = 0;
     let staleCount = 0;
     let highChurnCount = 0;
-    let totalGenerations = 0;
-    let totalEstimatedTokens = 0;
+    let totalGenerationsWithRuntime = 0;
+    let totalRuntimeTokens = 0;
+    let totalRuntimeCostUSD = 0;
     for (const item of items) {
       if (item.agent_name.trim() === '') {
         anonymousCount += 1;
@@ -513,17 +583,35 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
       if (item.version_count >= HIGH_CHURN_THRESHOLD) {
         highChurnCount += 1;
       }
-      totalGenerations += item.generation_count;
-      totalEstimatedTokens += item.token_estimate.total;
+      const usage = usageByName.get(item.agent_name) ?? usageByName.get(item.agent_name.trim()) ?? null;
+      if (usage) {
+        totalGenerationsWithRuntime += item.generation_count;
+        totalRuntimeTokens += usage.tokens;
+        totalRuntimeCostUSD += usage.costUSD;
+      }
     }
     const topByGenerations = [...items]
       .filter((item) => item.generation_count > 0)
       .sort((a, b) => b.generation_count - a.generation_count || cardLabel(a).localeCompare(cardLabel(b)))
       .slice(0, HERO_TOP_LIMIT);
     const topByTokenFootprint = [...items]
-      .filter((item) => item.token_estimate.total > 0)
-      .sort((a, b) => b.token_estimate.total - a.token_estimate.total || cardLabel(a).localeCompare(cardLabel(b)))
+      .filter((item) => {
+        const usage = usageByName.get(item.agent_name) ?? usageByName.get(item.agent_name.trim()) ?? null;
+        if (usage) {
+          return usage.tokens > 0;
+        }
+        return item.token_estimate.total > 0;
+      })
+      .sort((a, b) => {
+        const aUsage = usageByName.get(a.agent_name) ?? usageByName.get(a.agent_name.trim()) ?? null;
+        const bUsage = usageByName.get(b.agent_name) ?? usageByName.get(b.agent_name.trim()) ?? null;
+        const aTokens = aUsage ? aUsage.tokens : a.token_estimate.total;
+        const bTokens = bUsage ? bUsage.tokens : b.token_estimate.total;
+        return bTokens - aTokens || cardLabel(a).localeCompare(cardLabel(b));
+      })
       .slice(0, HERO_TOP_LIMIT);
+    const totalTokens = totalRuntimeTokens;
+    const totalCostUSD = totalRuntimeCostUSD;
     return {
       loadedAgents: items.length,
       namedAgents: items.length - anonymousCount,
@@ -531,16 +619,17 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
       seenInRangeCount,
       staleCount,
       highChurnCount,
-      totalGenerations,
-      totalEstimatedTokens,
-      totalEstimatedCostUSD: totalEstimatedTokens * ESTIMATED_USD_PER_TOKEN,
-      averageTokensPerGeneration: totalGenerations > 0 ? Math.round(totalEstimatedTokens / totalGenerations) : 0,
-      averageCostPerGenerationUSD:
-        totalGenerations > 0 ? (totalEstimatedTokens / totalGenerations) * ESTIMATED_USD_PER_TOKEN : 0,
+      totalGenerations: totalGenerationsWithRuntime,
+      totalTokens,
+      totalCostUSD,
+      averageTokensPerGeneration:
+        totalGenerationsWithRuntime > 0 ? Math.round(totalTokens / totalGenerationsWithRuntime) : 0,
+      averageCostPerGenerationUSD: totalGenerationsWithRuntime > 0 ? totalCostUSD / totalGenerationsWithRuntime : 0,
       topByGenerations,
       topByTokenFootprint,
+      usageByName,
     };
-  }, [items, timeRange]);
+  }, [items, resolvedPricing.pricingMap, timeRange, usageByModelAndType.data]);
 
   const handleOpenAgent = (item: AgentListItem) => {
     const route =
@@ -616,36 +705,6 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
 
   return (
     <div className={styles.page}>
-      <div className={styles.titleRow}>
-      <Text color="secondary" variant="bodySmall">
-            Catalog of tenant agents with version health, prompt footprint, and tool surface.
-          </Text>
-        <TimeRangePicker
-          value={timeRange}
-          onChange={setTimeRange}
-          onChangeTimeZone={() => {}}
-          onMoveBackward={() => {
-            const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
-            const from = dateTime(timeRange.from.valueOf() - diff);
-            const to = dateTime(timeRange.to.valueOf() - diff);
-            setTimeRange({ from, to, raw: { from, to } });
-          }}
-          onMoveForward={() => {
-            const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
-            const from = dateTime(timeRange.from.valueOf() + diff);
-            const to = dateTime(timeRange.to.valueOf() + diff);
-            setTimeRange({ from, to, raw: { from, to } });
-          }}
-          onZoom={() => {
-            const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
-            const from = dateTime(timeRange.from.valueOf() - diff / 2);
-            const to = dateTime(timeRange.to.valueOf() + diff / 2);
-            setTimeRange({ from, to, raw: { from, to } });
-          }}
-          isOnCanvas
-        />
-      </div>
-
       {errorMessage.length > 0 && (
         <Alert severity="error" title="Error" onRemove={() => setErrorMessage('')}>
           <Text>{errorMessage}</Text>
@@ -658,10 +717,36 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
         </div>
       ) : (
         <>
-          <TabsBar>
-            <Tab label="Overview" active={activeTab === 'info'} onChangeTab={handleTabChange('info')} />
-            <Tab label="Agents" active={activeTab === 'table'} onChangeTab={handleTabChange('table')} />
-          </TabsBar>
+          <div className={styles.tabsRow}>
+            <TabsBar>
+              <Tab label="Overview" active={activeTab === 'info'} onChangeTab={handleTabChange('info')} />
+              <Tab label="Agents" active={activeTab === 'table'} onChangeTab={handleTabChange('table')} />
+            </TabsBar>
+            <TimeRangePicker
+              value={timeRange}
+              onChange={setTimeRange}
+              onChangeTimeZone={() => {}}
+              onMoveBackward={() => {
+                const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
+                const from = dateTime(timeRange.from.valueOf() - diff);
+                const to = dateTime(timeRange.to.valueOf() - diff);
+                setTimeRange({ from, to, raw: { from, to } });
+              }}
+              onMoveForward={() => {
+                const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
+                const from = dateTime(timeRange.from.valueOf() + diff);
+                const to = dateTime(timeRange.to.valueOf() + diff);
+                setTimeRange({ from, to, raw: { from, to } });
+              }}
+              onZoom={() => {
+                const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
+                const from = dateTime(timeRange.from.valueOf() - diff / 2);
+                const to = dateTime(timeRange.to.valueOf() + diff / 2);
+                setTimeRange({ from, to, raw: { from, to } });
+              }}
+              isOnCanvas
+            />
+          </div>
 
           {activeTab === 'info' ? (
             items.length === 0 ? (
@@ -684,29 +769,29 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
                     <div className={styles.heroKpiCard}>
                       <LabelWithHelp
                         label="Total generations"
-                        help="Sum of generation_count across currently loaded agents."
+                        help="Sum of generation_count for loaded agents with runtime token usage in the selected time range."
                         className={styles.heroKpiLabel}
                       />
                       <span className={styles.heroKpiValue}>{summary.totalGenerations.toLocaleString()}</span>
                     </div>
                     <div className={styles.heroKpiCard}>
                       <LabelWithHelp
-                        label="Estimated prompt+tools footprint"
-                        help="Sum of token_estimate.total across loaded agents. This is prompt and tool footprint, not runtime token usage."
+                        label="Token usage"
+                        help="Runtime token usage across loaded agents in the selected time range, grouped by agent name."
                         className={styles.heroKpiLabel}
                       />
                       <span className={styles.heroKpiValue}>
                         <TokenCostBox
-                          tokenCount={summary.totalEstimatedTokens}
-                          costUSD={summary.totalEstimatedCostUSD}
-                          ariaLabel="Total prompt and tools footprint"
+                          tokenCount={summary.totalTokens}
+                          costUSD={summary.totalCostUSD}
+                          ariaLabel="Total runtime token usage"
                         />
                       </span>
                     </div>
                     <div className={styles.heroKpiCard}>
                       <LabelWithHelp
-                        label="Avg footprint per generation"
-                        help="Computed as total estimated prompt+tools tokens divided by total generations for loaded agents."
+                        label="Avg usage per generation"
+                        help="Runtime tokens divided by generations from loaded agents with runtime usage in the selected time range."
                         className={styles.heroKpiLabel}
                       />
                       <span className={styles.heroKpiValue}>
@@ -753,8 +838,8 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
                       <div className={styles.heroSectionHeading}>
                         <h4 className={styles.heroSectionTitle}>
                           <LabelWithHelp
-                            label="Footprint"
-                            help="Top loaded agents ranked by token_estimate.total (system prompt + tools footprint)."
+                            label="Agent footprint"
+                            help="Top loaded agents ranked by runtime token usage in the selected time range."
                           />
                         </h4>
                         <select
@@ -769,7 +854,11 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
                       </div>
                       <ul className={styles.rankList}>
                         {summary.topByTokenFootprint.map((item) => {
-                          const usdValue = formatUSD(item.token_estimate.total * ESTIMATED_USD_PER_TOKEN).slice(1);
+                          const usage =
+                            summary.usageByName.get(item.agent_name) ?? summary.usageByName.get(item.agent_name.trim());
+                          const tokenValue = usage ? usage.tokens : item.token_estimate.total;
+                          const costValue = usage ? usage.costUSD : item.token_estimate.total * ESTIMATED_USD_PER_TOKEN;
+                          const usdValue = formatUSD(costValue).slice(1);
                           const usdParts = splitMutedZeroPrefix(usdValue);
                           return (
                             <li
@@ -798,7 +887,7 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
                                 ) : (
                                   <>
                                     <span className={styles.rankValueNumber}>
-                                      {item.token_estimate.total.toLocaleString()}
+                                      {Math.round(tokenValue).toLocaleString()}
                                     </span>{' '}
                                     <span className={styles.rankValueAffix}>tokens</span>
                                   </>

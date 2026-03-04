@@ -1,0 +1,130 @@
+import { css } from '@emotion/css';
+import type { GrafanaTheme2 } from '@grafana/data';
+
+export const getStyles = (theme: GrafanaTheme2) => ({
+  container: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(1),
+    padding: theme.spacing(2),
+    overflowY: 'auto' as const,
+    flex: 1,
+    minHeight: 0,
+  }),
+  header: css({
+    fontSize: theme.typography.bodySmall.fontSize,
+    fontWeight: theme.typography.fontWeightMedium,
+    color: theme.colors.text.secondary,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.05em',
+    padding: `0 ${theme.spacing(0.5)}`,
+    marginBottom: theme.spacing(0.5),
+    flexShrink: 0,
+  }),
+  message: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.5),
+    padding: theme.spacing(1.5),
+    borderRadius: theme.shape.radius.default,
+    fontSize: theme.typography.bodySmall.fontSize,
+    lineHeight: 1.6,
+    whiteSpace: 'pre-wrap' as const,
+    wordBreak: 'break-word' as const,
+  }),
+  systemMessage: css({
+    background: theme.colors.background.secondary,
+    border: `1px solid ${theme.colors.border.weak}`,
+    fontFamily: theme.typography.fontFamilyMonospace,
+    fontSize: 11,
+    color: theme.colors.text.secondary,
+  }),
+  userMessage: css({
+    background: theme.isDark ? 'oklch(0.30 0.02 260 / 0.5)' : 'oklch(0.95 0.02 260)',
+    border: `1px solid ${theme.isDark ? 'oklch(0.40 0.04 260 / 0.3)' : 'oklch(0.85 0.04 260)'}`,
+  }),
+  assistantMessage: css({
+    background: theme.colors.background.primary,
+    border: `1px solid ${theme.colors.border.weak}`,
+  }),
+  toolMessage: css({
+    background: theme.isDark ? 'oklch(0.30 0.02 180 / 0.4)' : 'oklch(0.96 0.02 180)',
+    border: `1px solid ${theme.isDark ? 'oklch(0.40 0.04 180 / 0.3)' : 'oklch(0.88 0.04 180)'}`,
+    fontFamily: theme.typography.fontFamilyMonospace,
+    fontSize: 11,
+  }),
+  roleLabel: css({
+    fontSize: 10,
+    fontWeight: 600,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.04em',
+    color: theme.colors.text.secondary,
+    marginBottom: theme.spacing(0.25),
+  }),
+  roleLabelSystem: css({
+    color: theme.colors.text.disabled,
+  }),
+  roleLabelUser: css({
+    color: theme.isDark ? 'oklch(0.75 0.12 260)' : 'oklch(0.50 0.15 260)',
+  }),
+  roleLabelAssistant: css({
+    color: theme.isDark ? 'oklch(0.75 0.10 140)' : 'oklch(0.45 0.12 140)',
+  }),
+  roleLabelTool: css({
+    color: theme.isDark ? 'oklch(0.75 0.10 180)' : 'oklch(0.45 0.12 180)',
+  }),
+  messageContent: css({
+    color: theme.colors.text.primary,
+  }),
+  toolCallBlock: css({
+    padding: theme.spacing(1),
+    borderRadius: theme.shape.radius.default,
+    background: theme.colors.background.secondary,
+    border: `1px dashed ${theme.colors.border.medium}`,
+    fontFamily: theme.typography.fontFamilyMonospace,
+    fontSize: 11,
+    marginTop: theme.spacing(0.5),
+  }),
+  toolCallName: css({
+    fontWeight: theme.typography.fontWeightMedium,
+    color: theme.isDark ? 'oklch(0.75 0.10 180)' : 'oklch(0.45 0.12 180)',
+    marginBottom: theme.spacing(0.5),
+  }),
+  toolCallArgs: css({
+    color: theme.colors.text.secondary,
+    maxHeight: 120,
+    overflow: 'auto',
+    whiteSpace: 'pre-wrap' as const,
+  }),
+  thinkingBlock: css({
+    padding: theme.spacing(1),
+    borderRadius: theme.shape.radius.default,
+    background: theme.isDark ? 'oklch(0.25 0.02 50 / 0.4)' : 'oklch(0.96 0.02 50)',
+    border: `1px solid ${theme.isDark ? 'oklch(0.40 0.04 50 / 0.3)' : 'oklch(0.88 0.04 50)'}`,
+    fontSize: 11,
+    color: theme.colors.text.secondary,
+    fontStyle: 'italic',
+    marginTop: theme.spacing(0.5),
+  }),
+  generationDivider: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+    padding: `${theme.spacing(0.5)} 0`,
+    color: theme.colors.text.disabled,
+    fontSize: 10,
+    '&::before, &::after': {
+      content: '""',
+      flex: 1,
+      borderTop: `1px dashed ${theme.colors.border.weak}`,
+    },
+  }),
+  emptyState: css({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    color: theme.colors.text.disabled,
+    fontSize: theme.typography.bodySmall.fontSize,
+  }),
+});
