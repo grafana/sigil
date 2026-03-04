@@ -21,6 +21,22 @@ const GRAFANA_TITLE_SUFFIX = ' - Grafana';
 
 type RouteTitle = { title: string; sectionPath: string; navTitle?: string };
 
+const CONVERSATIONS_CHROME_LIGHT_ROUTE = new RegExp(`^${ROUTES.Conversations}(?:/[^/]+/(view|explore))?$`);
+
+export function isChromeLightRoute(path: string): boolean {
+  const normalizedPath = path.replace(/^\/+/, '').replace(/\/+$/, '');
+
+  if (CONVERSATIONS_CHROME_LIGHT_ROUTE.test(normalizedPath)) {
+    return true;
+  }
+
+  if (normalizedPath === ROUTES.Agents) {
+    return true;
+  }
+
+  return normalizedPath === ROUTES.Evaluation || normalizedPath.startsWith(`${ROUTES.Evaluation}/`);
+}
+
 function resolveRouteTitle(path: string): RouteTitle {
   if (path === '' || path === ROUTES.Root || path === ROUTES.Dashboard) {
     return { title: APP_TITLE, navTitle: '', sectionPath: ROUTES.Root };
@@ -123,16 +139,11 @@ export default function App(props: AppRootProps) {
     document.title = `${currentTitle} - ${APP_TITLE}${grafanaTitleSuffix.current}`;
   }, [currentTitle]);
 
-  const isConversationsRoute =
-    pluginRelativePath === ROUTES.Conversations || pluginRelativePath.startsWith(`${ROUTES.Conversations}/`);
-  const isAgentsRoute = pluginRelativePath === ROUTES.Agents || pluginRelativePath.startsWith(`${ROUTES.Agents}/`);
-  const isEvaluationRoute =
-    pluginRelativePath === ROUTES.Evaluation || pluginRelativePath.startsWith(`${ROUTES.Evaluation}/`);
-  const isChromeLightRoute = isConversationsRoute || isAgentsRoute || isEvaluationRoute;
+  const chromeLightRoute = isChromeLightRoute(pluginRelativePath);
   const isLanding1Route = /\/landing1\/?$/.test(location.pathname);
 
   return (
-    <div className={cx(styles.pageWrapper, isChromeLightRoute && styles.pageWrapperNoPadding)}>
+    <div className={cx(styles.pageWrapper, chromeLightRoute && styles.pageWrapperNoPadding)}>
       <div className={styles.routesContainer}>
         <Routes>
           <Route
