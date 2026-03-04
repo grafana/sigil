@@ -234,12 +234,7 @@ export function LandingTopBar({ assistantOrigin }: LandingTopBarProps) {
 
     const loadStats = async () => {
       try {
-        const [
-          conversationCurrent,
-          conversationPrevious,
-          agentCounts,
-          evaluatorCounts,
-        ] = await Promise.all([
+        const [conversationCurrent, conversationPrevious, agentCounts, evaluatorCounts] = await Promise.all([
           countConversationsInRange(currentFrom, currentTo),
           countConversationsInRange(previousFrom, previousTo),
           countAgentsSeenInWindows(currentFrom, currentTo, previousFrom, previousTo),
