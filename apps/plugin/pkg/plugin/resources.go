@@ -647,7 +647,7 @@ func (a *App) handleEvalTemplateRoutes(w http.ResponseWriter, req *http.Request)
 }
 
 func (a *App) registerRoutes(mux *http.ServeMux) {
-	backend.Logger.Info("registering routes")
+	backend.Logger.Debug("registering routes")
 	mux.HandleFunc("/query/conversations/search", a.withAuthorization(a.handleSearchConversations))
 	mux.HandleFunc("/query/conversations", a.withAuthorization(a.handleListConversations))
 	mux.HandleFunc("/query/conversations/", a.withAuthorization(a.handleConversationRoutes))
