@@ -2,11 +2,13 @@ package mysql
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	evalcontrol "github.com/grafana/sigil/sigil/internal/eval/control"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	"google.golang.org/protobuf/proto"
@@ -18,25 +20,44 @@ var _ evalcontrol.ManualConversationWriter = (*WALStore)(nil)
 var _ evalcontrol.ManualConversationDeleter = (*WALStore)(nil)
 
 // CreateManualConversation creates a conversation row and generation rows in a
-// single transaction for user-authored test data. Each generation payload is
-// protobuf-encoded with source=manual.
-func (s *WALStore) CreateManualConversation(ctx context.Context, tenantID, conversationID string, generations []evalcontrol.ManualGeneration) error {
-	if strings.TrimSpace(tenantID) == "" {
+// single transaction for user-authored test data, along with the corresponding
+// eval_saved_conversations row. Each generation payload is protobuf-encoded
+// with source=manual.
+func (s *WALStore) CreateManualConversation(ctx context.Context, sc evalpkg.SavedConversation, generations []evalcontrol.ManualGeneration) error {
+	trimmedTenantID := strings.TrimSpace(sc.TenantID)
+	trimmedSavedID := strings.TrimSpace(sc.SavedID)
+	trimmedConversationID := strings.TrimSpace(sc.ConversationID)
+	if trimmedTenantID == "" {
 		return errors.New("tenant id is required")
 	}
-	if strings.TrimSpace(conversationID) == "" {
+	if trimmedSavedID == "" {
+		return errors.New("saved id is required")
+	}
+	if trimmedConversationID == "" {
 		return errors.New("conversation id is required")
 	}
 	if len(generations) == 0 {
 		return errors.New("at least one generation is required")
+	}
+	if sc.Source != evalpkg.SavedConversationSourceManual {
+		return errors.New("saved conversation source must be manual")
+	}
+
+	tags := sc.Tags
+	if tags == nil {
+		tags = map[string]string{}
+	}
+	tagsJSON, err := json.Marshal(tags)
+	if err != nil {
+		return fmt.Errorf("marshal tags: %w", err)
 	}
 
 	now := time.Now()
 
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		convRow := ConversationModel{
-			TenantID:         tenantID,
-			ConversationID:   conversationID,
+			TenantID:         trimmedTenantID,
+			ConversationID:   trimmedConversationID,
 			GenerationCount:  len(generations),
 			LastGenerationAt: now,
 		}
@@ -45,15 +66,15 @@ func (s *WALStore) CreateManualConversation(ctx context.Context, tenantID, conve
 		}
 
 		for i, gen := range generations {
-			pb := manualGenerationToProto(gen, conversationID, now)
+			pb := manualGenerationToProto(gen, trimmedConversationID, now)
 			payload, err := proto.Marshal(pb)
 			if err != nil {
 				return fmt.Errorf("marshal generation[%d]: %w", i, err)
 			}
 
-			convID := conversationID
+			convID := trimmedConversationID
 			genRow := GenerationModel{
-				TenantID:         tenantID,
+				TenantID:         trimmedTenantID,
 				GenerationID:     gen.GenerationID,
 				ConversationID:   &convID,
 				Payload:          payload,
@@ -64,6 +85,21 @@ func (s *WALStore) CreateManualConversation(ctx context.Context, tenantID, conve
 			if err := tx.Create(&genRow).Error; err != nil {
 				return fmt.Errorf("create generation[%d]: %w", i, err)
 			}
+		}
+
+		savedRow := EvalSavedConversationModel{
+			TenantID:       trimmedTenantID,
+			SavedID:        trimmedSavedID,
+			ConversationID: trimmedConversationID,
+			Name:           strings.TrimSpace(sc.Name),
+			Source:         string(sc.Source),
+			TagsJSON:       tagsJSON,
+			SavedBy:        strings.TrimSpace(sc.SavedBy),
+			CreatedAt:      now.UTC(),
+			UpdatedAt:      now.UTC(),
+		}
+		if err := tx.Create(&savedRow).Error; err != nil {
+			return fmt.Errorf("create saved conversation: %w", err)
 		}
 
 		return nil

@@ -102,16 +102,23 @@ func (m *mockConversationLookup) GetConversation(_ context.Context, tenantID, co
 type mockManualConversationWriter struct {
 	mu    sync.Mutex
 	calls map[string]bool // key: tenantID + "/" + conversationID
+	store *mockSavedConversationStore
 }
 
-func newMockManualConversationWriter() *mockManualConversationWriter {
-	return &mockManualConversationWriter{calls: make(map[string]bool)}
+func newMockManualConversationWriter(store *mockSavedConversationStore) *mockManualConversationWriter {
+	return &mockManualConversationWriter{
+		calls: make(map[string]bool),
+		store: store,
+	}
 }
 
-func (m *mockManualConversationWriter) CreateManualConversation(_ context.Context, tenantID, conversationID string, _ []ManualGeneration) error {
+func (m *mockManualConversationWriter) CreateManualConversation(ctx context.Context, sc evalpkg.SavedConversation, _ []ManualGeneration) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.calls[tenantID+"/"+conversationID] = true
+	m.calls[sc.TenantID+"/"+sc.ConversationID] = true
+	if m.store != nil {
+		return m.store.CreateSavedConversation(ctx, sc)
+	}
 	return nil
 }
 
@@ -248,7 +255,7 @@ func TestSavedConversationServiceBookmark(t *testing.T) {
 func TestSavedConversationServiceManualCreate(t *testing.T) {
 	store := newMockSavedConversationStore()
 	lookup := newMockConversationLookup()
-	writer := newMockManualConversationWriter()
+	writer := newMockManualConversationWriter(store)
 
 	svc := NewSavedConversationService(store, lookup, WithManualWriter(writer))
 
@@ -367,7 +374,7 @@ func TestSavedConversationServiceManualCreate(t *testing.T) {
 func TestSavedConversationServiceDeleteManualCascade(t *testing.T) {
 	store := newMockSavedConversationStore()
 	lookup := newMockConversationLookup()
-	writer := newMockManualConversationWriter()
+	writer := newMockManualConversationWriter(store)
 	deleter := newMockManualConversationDeleter()
 
 	svc := NewSavedConversationService(store, lookup,
@@ -436,7 +443,7 @@ func TestSavedConversationServiceListAndGet(t *testing.T) {
 	lookup := newMockConversationLookup()
 	lookup.Add("tenant-1", "conv-1")
 	lookup.Add("tenant-1", "conv-2")
-	writer := newMockManualConversationWriter()
+	writer := newMockManualConversationWriter(store)
 
 	svc := NewSavedConversationService(store, lookup, WithManualWriter(writer))
 

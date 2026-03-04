@@ -128,7 +128,16 @@ func TestManualConversationWriter(t *testing.T) {
 		},
 	}
 
-	if err := store.CreateManualConversation(ctx, tenant, convID, gens); err != nil {
+	sc := evalpkg.SavedConversation{
+		TenantID:       tenant,
+		SavedID:        "sc-manual-1",
+		ConversationID: convID,
+		Name:           "Manual test conversation",
+		Source:         evalpkg.SavedConversationSourceManual,
+		Tags:           map[string]string{"suite": "manual-writer"},
+		SavedBy:        "operator-jane",
+	}
+	if err := store.CreateManualConversation(ctx, sc, gens); err != nil {
 		t.Fatalf("create manual conversation: %v", err)
 	}
 
@@ -168,6 +177,17 @@ func TestManualConversationWriter(t *testing.T) {
 	if gen.Model.Provider != "openai" || gen.Model.Name != "gpt-4" {
 		t.Errorf("unexpected model %v", gen.Model)
 	}
+
+	gotSaved, err := store.GetSavedConversation(ctx, tenant, "sc-manual-1")
+	if err != nil {
+		t.Fatalf("get saved conversation: %v", err)
+	}
+	if gotSaved == nil {
+		t.Fatal("expected saved conversation to exist")
+	}
+	if gotSaved.ConversationID != convID {
+		t.Errorf("unexpected saved conversation id %q", gotSaved.ConversationID)
+	}
 }
 
 func TestDeleteManualConversationData(t *testing.T) {
@@ -190,7 +210,16 @@ func TestDeleteManualConversationData(t *testing.T) {
 			Output:        []evalcontrol.ManualMessage{{Role: "assistant", Content: "Hi"}},
 		},
 	}
-	if err := store.CreateManualConversation(ctx, tenant, "conv_del_test", gens); err != nil {
+	sc := evalpkg.SavedConversation{
+		TenantID:       tenant,
+		SavedID:        "sc-manual-del",
+		ConversationID: "conv_del_test",
+		Name:           "Manual delete test",
+		Source:         evalpkg.SavedConversationSourceManual,
+		Tags:           map[string]string{},
+		SavedBy:        "operator-jane",
+	}
+	if err := store.CreateManualConversation(ctx, sc, gens); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
@@ -207,5 +236,67 @@ func TestDeleteManualConversationData(t *testing.T) {
 	store.db.Model(&GenerationModel{}).Where("tenant_id = ? AND conversation_id = ?", tenant, "conv_del_test").Count(&count)
 	if count != 0 {
 		t.Errorf("expected 0 generations, got %d", count)
+	}
+}
+
+func TestManualConversationWriterRollsBackOnSavedConversationConflict(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	ctx := context.Background()
+	tenant := "tenant-a"
+	if err := store.CreateSavedConversation(ctx, evalpkg.SavedConversation{
+		TenantID:       tenant,
+		SavedID:        "sc-conflict",
+		ConversationID: "conv-existing",
+		Name:           "Existing",
+		Source:         evalpkg.SavedConversationSourceManual,
+		Tags:           map[string]string{},
+		SavedBy:        "seed",
+	}); err != nil {
+		t.Fatalf("seed saved conversation: %v", err)
+	}
+
+	gens := []evalcontrol.ManualGeneration{
+		{
+			GenerationID:  "gen-conflict-001",
+			OperationName: "chat",
+			Mode:          "SYNC",
+			Model:         evalcontrol.ManualModelRef{Provider: "openai", Name: "gpt-4"},
+			Input:         []evalcontrol.ManualMessage{{Role: "user", Content: "Hello"}},
+			Output:        []evalcontrol.ManualMessage{{Role: "assistant", Content: "Hi"}},
+		},
+	}
+
+	err := store.CreateManualConversation(ctx, evalpkg.SavedConversation{
+		TenantID:       tenant,
+		SavedID:        "sc-conflict",
+		ConversationID: "conv_manual_sc-conflict",
+		Name:           "Should Fail",
+		Source:         evalpkg.SavedConversationSourceManual,
+		Tags:           map[string]string{},
+		SavedBy:        "operator-jane",
+	}, gens)
+	if err == nil {
+		t.Fatal("expected conflict error")
+	}
+
+	conv, err := store.GetConversation(ctx, tenant, "conv_manual_sc-conflict")
+	if err != nil {
+		t.Fatalf("get conversation after failed create: %v", err)
+	}
+	if conv != nil {
+		t.Fatal("expected manual conversation row to be rolled back")
+	}
+
+	var generationCount int64
+	store.db.Model(&GenerationModel{}).
+		Where("tenant_id = ? AND generation_id = ?", tenant, "gen-conflict-001").
+		Count(&generationCount)
+	if generationCount != 0 {
+		t.Fatalf("expected no generation rows after rollback, got %d", generationCount)
 	}
 }

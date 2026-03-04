@@ -16,9 +16,10 @@ type ConversationLookup interface {
 	GetConversation(ctx context.Context, tenantID, conversationID string) (*storage.Conversation, error)
 }
 
-// ManualConversationWriter creates conversation and generation rows for manual test data.
+// ManualConversationWriter creates manual conversation data and the saved
+// conversation entry in one atomic operation.
 type ManualConversationWriter interface {
-	CreateManualConversation(ctx context.Context, tenantID, conversationID string, generations []ManualGeneration) error
+	CreateManualConversation(ctx context.Context, sc evalpkg.SavedConversation, generations []ManualGeneration) error
 }
 
 // ManualConversationDeleter removes conversation and generation rows for manual test data.
@@ -202,16 +203,10 @@ func (s *SavedConversationService) CreateManualConversation(ctx context.Context,
 	}
 
 	conversationID := fmt.Sprintf("conv_manual_%s", trimmedSavedID)
-
-	if err := s.manualWriter.CreateManualConversation(ctx, trimmedTenantID, conversationID, req.Generations); err != nil {
-		return nil, fmt.Errorf("create manual conversation data: %w", err)
-	}
-
 	tags := req.Tags
 	if tags == nil {
 		tags = map[string]string{}
 	}
-
 	sc := evalpkg.SavedConversation{
 		TenantID:       trimmedTenantID,
 		SavedID:        trimmedSavedID,
@@ -222,8 +217,8 @@ func (s *SavedConversationService) CreateManualConversation(ctx context.Context,
 		SavedBy:        trimmedSavedBy,
 	}
 
-	if err := s.store.CreateSavedConversation(ctx, sc); err != nil {
-		return nil, err
+	if err := s.manualWriter.CreateManualConversation(ctx, sc, req.Generations); err != nil {
+		return nil, fmt.Errorf("create manual conversation: %w", err)
 	}
 
 	created, err := s.store.GetSavedConversation(ctx, trimmedTenantID, trimmedSavedID)

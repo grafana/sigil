@@ -85,7 +85,7 @@ func TestHTTPSavedConversationsRoundtrip(t *testing.T) {
 func TestHTTPSavedConversationsManualCreate(t *testing.T) {
 	store := newMockSavedConversationStore()
 	convLookup := newMockConversationLookup()
-	writer := newMockManualConversationWriter()
+	writer := newMockManualConversationWriter(store)
 
 	svc := NewSavedConversationService(store, convLookup, WithManualWriter(writer))
 	mux := newSavedConversationMux(svc)
