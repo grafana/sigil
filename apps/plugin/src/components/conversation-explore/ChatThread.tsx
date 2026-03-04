@@ -4,6 +4,7 @@ import { useStyles2 } from '@grafana/ui';
 import type { GenerationDetail, Message, MessageRole, Part } from '../../generation/types';
 import { getStyles } from './ChatThread.styles';
 import { renderTextWithXml } from './CollapsibleXml';
+import { formatToolContent } from './formatContent';
 
 export type ChatThreadProps = {
   generations: GenerationDetail[];
@@ -72,7 +73,8 @@ function partToText(part: Part): string | null {
     return null;
   }
   if (part.tool_result) {
-    return part.tool_result.content ?? part.tool_result.content_json ?? null;
+    const raw = part.tool_result.content ?? part.tool_result.content_json ?? null;
+    return raw ? formatToolContent(raw) : null;
   }
   return null;
 }
@@ -124,12 +126,7 @@ function MessageBubble({ entry }: { entry: ThreadEntry }) {
         }
 
         if (part.tool_call) {
-          let formattedArgs = part.tool_call.input_json ?? '';
-          try {
-            formattedArgs = JSON.stringify(JSON.parse(formattedArgs), null, 2);
-          } catch {
-            // keep as-is
-          }
+          const formattedArgs = part.tool_call.input_json ? formatToolContent(part.tool_call.input_json) : '';
           return (
             <div key={i} className={styles.toolCallBlock}>
               <div className={styles.toolCallName}>{part.tool_call.name}</div>

@@ -6,6 +6,7 @@ import type { ConversationSpan } from '../../conversation/types';
 import type { FlowNode } from './types';
 import { getStyles } from './GenerationView.styles';
 import { renderTextWithXml } from './CollapsibleXml';
+import { formatToolContent } from './formatContent';
 
 export type GenerationViewProps = {
   node: FlowNode;
@@ -27,26 +28,6 @@ function formatNumber(n: number): string {
   return numberFmt.format(n);
 }
 
-function tryDecodeBase64(value: string): string {
-  try {
-    const decoded = atob(value);
-    if (/^[\x20-\x7E\s]*$/.test(decoded)) {
-      return decoded;
-    }
-  } catch {
-    // not valid base64
-  }
-  return value;
-}
-
-function tryFormatJSON(value: string): string {
-  const decoded = tryDecodeBase64(value);
-  try {
-    return JSON.stringify(JSON.parse(decoded), null, 2);
-  } catch {
-    return decoded;
-  }
-}
 
 function roleToLabel(role: string): string {
   switch (role) {
@@ -127,7 +108,7 @@ function PartContent({ part }: { part: Part }) {
   }
 
   if (part.tool_call) {
-    const formattedArgs = part.tool_call.input_json ? tryFormatJSON(part.tool_call.input_json) : '';
+    const formattedArgs = part.tool_call.input_json ? formatToolContent(part.tool_call.input_json) : '';
     return (
       <div data-tool-call-id={part.tool_call.id} className={styles.toolCallInline}>
         <div className={styles.toolCallInlineName}>{part.tool_call.name}</div>
@@ -138,7 +119,7 @@ function PartContent({ part }: { part: Part }) {
 
   if (part.tool_result) {
     const raw = part.tool_result.content ?? part.tool_result.content_json ?? '';
-    const formatted = raw ? tryFormatJSON(raw) : '';
+    const formatted = raw ? formatToolContent(raw) : '';
     return (
       <div className={styles.toolCallInline}>
         <div className={styles.toolCallInlineName}>
