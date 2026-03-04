@@ -14,7 +14,7 @@ import (
 
 const (
 	effectiveVersionPrefix = "sha256:"
-	canonicalVersion       = 1
+	canonicalVersion       = 2
 	systemPromptPrefixMax  = 160
 )
 

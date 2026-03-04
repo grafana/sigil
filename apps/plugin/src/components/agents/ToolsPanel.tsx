@@ -370,11 +370,15 @@ export default function ToolsPanel({ tools }: ToolsPanelProps) {
     if (tools.length === 0) {
       return -1;
     }
+    const filteredDefault = filteredTools.length > 0 ? filteredTools[0].originalIndex : -1;
     if (selectedToolKey === null) {
-      return filteredTools.length > 0 ? filteredTools[0].originalIndex : -1;
+      return filteredDefault;
     }
     const index = tools.findIndex((tool) => buildToolKey(tool) === selectedToolKey);
-    return index >= 0 ? index : 0;
+    if (index < 0 || !filteredTools.some(({ originalIndex }) => originalIndex === index)) {
+      return filteredDefault;
+    }
+    return index;
   }, [tools, filteredTools, selectedToolKey]);
 
   const selected = selectedIndex >= 0 ? tools[selectedIndex] : null;
