@@ -14,19 +14,6 @@ export const ROUTES = {
   Evaluation: 'evaluation',
 } as const;
 
-export const PAGE_TITLES = {
-  [ROUTES.Analytics]: 'Analytics',
-  [ROUTES.Conversations]: 'Conversations',
-  [ROUTES.ConversationsView]: 'Conversation view',
-  [ROUTES.ConversationsExplore]: 'Conversation explore',
-  [ROUTES.ConversationsOld]: 'Conversations (old)',
-  [ROUTES.ConversationsDetail]: 'Conversations',
-  [ROUTES.Agents]: 'Agents',
-  [ROUTES.AgentDetailByName]: 'Agents',
-  [ROUTES.AgentDetailAnonymous]: 'Agents',
-  [ROUTES.Evaluation]: 'Evaluation',
-} as const;
-
 export function buildConversationViewRoute(conversationID: string): string {
   return `${ROUTES.Conversations}/${encodeURIComponent(conversationID)}/view`;
 }
