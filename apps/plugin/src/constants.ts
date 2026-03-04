@@ -7,6 +7,9 @@ export const ROUTES = {
   ConversationsView: 'conversations/:conversationID/view',
   ConversationsOld: 'conversations-old',
   ConversationsDetail: 'conversations/:conversationID/detail',
+  Agents: 'agents',
+  AgentDetailByName: 'agents/name/:agentName',
+  AgentDetailAnonymous: 'agents/anonymous',
   Completions: 'completions',
   Traces: 'traces',
   Evaluation: 'evaluation',
@@ -19,6 +22,9 @@ export const PAGE_TITLES = {
   [ROUTES.ConversationsView]: 'Conversation view',
   [ROUTES.ConversationsOld]: 'Conversations (old)',
   [ROUTES.ConversationsDetail]: 'Conversation detail',
+  [ROUTES.Agents]: 'Agents',
+  [ROUTES.AgentDetailByName]: 'Agent detail',
+  [ROUTES.AgentDetailAnonymous]: 'Agent detail',
   [ROUTES.Completions]: 'Completions',
   [ROUTES.Traces]: 'Traces',
   [ROUTES.Evaluation]: 'Evaluation',
@@ -31,4 +37,12 @@ export function buildConversationDetailRoute(conversationID: string): string {
 
 export function buildConversationViewRoute(conversationID: string): string {
   return `${ROUTES.Conversations}/${encodeURIComponent(conversationID)}/view`;
+}
+
+export function buildAgentDetailByNameRoute(agentName: string): string {
+  return `${ROUTES.Agents}/name/${encodeURIComponent(agentName)}`;
+}
+
+export function buildAnonymousAgentDetailRoute(): string {
+  return ROUTES.AgentDetailAnonymous;
 }

@@ -120,6 +120,68 @@ func (s *WALStore) GetLatestAgentVersion(ctx context.Context, tenantID, agentNam
 	return toStorageAgentVersion(row), nil
 }
 
+func (s *WALStore) ListAgentVersions(ctx context.Context, tenantID, agentName string, limit int, cursor *storage.AgentVersionCursor) ([]storage.AgentVersionSummary, *storage.AgentVersionCursor, error) {
+	if strings.TrimSpace(tenantID) == "" {
+		return nil, nil, errors.New("tenant id is required")
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	query := s.db.WithContext(ctx).Model(&AgentVersionModel{}).Where("tenant_id = ? AND agent_name = ?", tenantID, agentName)
+	if cursor != nil && !cursor.LastSeenAt.IsZero() {
+		query = query.Where(
+			"(last_seen_at < ?) OR (last_seen_at = ? AND id < ?)",
+			cursor.LastSeenAt.UTC(),
+			cursor.LastSeenAt.UTC(),
+			cursor.ID,
+		)
+	}
+
+	var rows []AgentVersionModel
+	if err := query.
+		Order("last_seen_at DESC").
+		Order("id DESC").
+		Limit(limit + 1).
+		Find(&rows).Error; err != nil {
+		return nil, nil, fmt.Errorf("list agent versions: %w", err)
+	}
+
+	var nextCursor *storage.AgentVersionCursor
+	if len(rows) > limit {
+		last := rows[limit-1]
+		nextCursor = &storage.AgentVersionCursor{
+			LastSeenAt: last.LastSeenAt.UTC(),
+			ID:         last.ID,
+		}
+		rows = rows[:limit]
+	}
+
+	items := make([]storage.AgentVersionSummary, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, storage.AgentVersionSummary{
+			ID:                        row.ID,
+			TenantID:                  row.TenantID,
+			AgentName:                 row.AgentName,
+			EffectiveVersion:          row.EffectiveVersion,
+			DeclaredVersionFirst:      stringPtrValue(row.DeclaredVersionFirst),
+			DeclaredVersionLatest:     stringPtrValue(row.DeclaredVersionLatest),
+			SystemPromptPrefix:        row.SystemPromptPrefix,
+			ToolCount:                 row.ToolCount,
+			TokenEstimateSystemPrompt: row.TokenEstimateSystemPrompt,
+			TokenEstimateToolsTotal:   row.TokenEstimateToolsTotal,
+			TokenEstimateTotal:        row.TokenEstimateTotal,
+			GenerationCount:           row.GenerationCount,
+			FirstSeenAt:               row.FirstSeenAt.UTC(),
+			LastSeenAt:                row.LastSeenAt.UTC(),
+		})
+	}
+	return items, nextCursor, nil
+}
+
 func (s *WALStore) ListAgentVersionModels(ctx context.Context, tenantID, agentName, effectiveVersion string) ([]storage.AgentVersionModel, error) {
 	if strings.TrimSpace(tenantID) == "" {
 		return nil, errors.New("tenant id is required")

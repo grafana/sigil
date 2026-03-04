@@ -54,9 +54,32 @@ type AgentVersionModel struct {
 	LastSeenAt      time.Time
 }
 
+type AgentVersionSummary struct {
+	ID                        uint64
+	TenantID                  string
+	AgentName                 string
+	EffectiveVersion          string
+	DeclaredVersionFirst      *string
+	DeclaredVersionLatest     *string
+	SystemPromptPrefix        string
+	ToolCount                 int
+	TokenEstimateSystemPrompt int
+	TokenEstimateToolsTotal   int
+	TokenEstimateTotal        int
+	GenerationCount           int64
+	FirstSeenAt               time.Time
+	LastSeenAt                time.Time
+}
+
+type AgentVersionCursor struct {
+	LastSeenAt time.Time
+	ID         uint64
+}
+
 type AgentCatalogStore interface {
 	ListAgentHeads(ctx context.Context, tenantID string, limit int, cursor *AgentHeadCursor, namePrefix string) ([]AgentHead, *AgentHeadCursor, error)
 	GetAgentVersion(ctx context.Context, tenantID, agentName, effectiveVersion string) (*AgentVersion, error)
 	GetLatestAgentVersion(ctx context.Context, tenantID, agentName string) (*AgentVersion, error)
+	ListAgentVersions(ctx context.Context, tenantID, agentName string, limit int, cursor *AgentVersionCursor) ([]AgentVersionSummary, *AgentVersionCursor, error)
 	ListAgentVersionModels(ctx context.Context, tenantID, agentName, effectiveVersion string) ([]AgentVersionModel, error)
 }

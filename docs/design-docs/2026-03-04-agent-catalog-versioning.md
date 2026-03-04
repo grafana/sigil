@@ -18,10 +18,11 @@ Generation ingest already carries `agent_name`, `agent_version`, `system_prompt`
 
 ## Decision Summary
 
-Sigil adds a MySQL agent catalog projection, written at ingest time, with two new query endpoints:
+Sigil adds a MySQL agent catalog projection, written at ingest time, with agent query endpoints:
 
 - `GET /api/v1/agents`
 - `GET /api/v1/agents:lookup`
+- `GET /api/v1/agents:versions`
 
 Effective agent version is computed as `sha256:<digest>` from canonicalized `system_prompt + tools` and used as the internal identity for version lookup and dedupe.
 
@@ -76,6 +77,18 @@ Returns full detail for one bucket version:
 - canonical tool definitions (with per-tool token estimate)
 - declared version first/latest
 - provider/model usage distribution for that version
+
+### Version History (`GET /api/v1/agents:versions`)
+
+Returns paginated version summaries for one name bucket:
+
+- effective version identity
+- declared version first/latest
+- first/last seen timestamps and generation count
+- tool count and token estimate breakdown
+- prompt prefix for quick scanning
+
+Frontend uses this endpoint for a route-deep-linkable version selector in agent detail pages.
 
 ## Consequences
 

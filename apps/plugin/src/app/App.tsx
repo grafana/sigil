@@ -10,6 +10,8 @@ const ConversationsBrowserPage = React.lazy(() => import('../pages/Conversations
 const ConversationPage = React.lazy(() => import('../pages/ConversationPage'));
 const ConversationDetailPage = React.lazy(() => import('../pages/ConversationDetailPage'));
 const ConversationsPage = React.lazy(() => import('../pages/ConversationsPage'));
+const AgentsPage = React.lazy(() => import('../pages/AgentsPage'));
+const AgentDetailPage = React.lazy(() => import('../pages/AgentDetailPage'));
 const CompletionsPage = React.lazy(() => import('../pages/CompletionsPage'));
 const TracesPage = React.lazy(() => import('../pages/TracesPage'));
 const EvaluationPage = React.lazy(() => import('../pages/EvaluationPage'));
@@ -72,6 +74,9 @@ export default function App(_props: AppRootProps) {
           />
           <Route path={ROUTES.ConversationsDetail} element={<ConversationDetailPage />} />
           <Route path={ROUTES.ConversationsOld} element={<ConversationsPage />} />
+          <Route path={ROUTES.Agents} element={<AgentsPage />} />
+          <Route path={ROUTES.AgentDetailByName} element={<AgentDetailPage />} />
+          <Route path={ROUTES.AgentDetailAnonymous} element={<AgentDetailPage />} />
           <Route path={ROUTES.Completions} element={<CompletionsPage />} />
           <Route path={ROUTES.Traces} element={<TracesPage />} />
           <Route path={`${ROUTES.Evaluation}/*`} element={<EvaluationPage />} />

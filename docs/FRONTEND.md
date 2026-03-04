@@ -28,6 +28,7 @@ Current plugin query contract:
   - `GET /api/plugins/grafana-sigil-app/resources/query/generations/{generation_id}`
   - `GET /api/plugins/grafana-sigil-app/resources/query/agents`
   - `GET /api/plugins/grafana-sigil-app/resources/query/agents/lookup`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/agents/versions`
   - `GET /api/plugins/grafana-sigil-app/resources/query/search/tags`
   - `GET /api/plugins/grafana-sigil-app/resources/query/search/tag/{tag}/values`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/ratings`
@@ -59,6 +60,7 @@ Current plugin query contract:
   - `GET /api/v1/generations/{generation_id}`
   - `GET /api/v1/agents`
   - `GET /api/v1/agents:lookup`
+  - `GET /api/v1/agents:versions`
   - `GET /api/v1/conversations/{conversation_id}/ratings`
   - `POST /api/v1/conversations/{conversation_id}/ratings`
   - `GET /api/v1/conversations/{conversation_id}/annotations`
@@ -105,6 +107,7 @@ Sigil plugin query routes enforce action-based RBAC in the plugin backend:
   - `GET /query/generations/{generation_id}`
   - `GET /query/agents`
   - `GET /query/agents/lookup`
+  - `GET /query/agents/versions`
   - `GET /query/search/tags`
   - `GET /query/search/tag/{tag}/values`
   - `GET /query/model-cards`
@@ -167,6 +170,11 @@ See `docs/references/grafana-query-response-shapes.md`.
   - visualize evaluation pipeline: render each rule as a horizontal flow (selector → match → sample → evaluators)
   - preview rule matching: dry-run rule criteria against recent traffic to show matching generation counts and samples
   - support two-level navigation: overview, evaluators, and rules sub-pages under a single Evaluation nav entry
+- Agents:
+  - list tenant agent heads with prefix search and cursor pagination
+  - surface unnamed-agent bucket explicitly with warning treatment
+  - open detail view for named and anonymous buckets
+  - support effective-version selection via query param deep-linking and version history lookup
 - Traces:
   - use Tempo proxy links for trace drilldown from generation/conversation views
 - Settings: connection and runtime preferences, including query/tenant validation visibility.

@@ -144,6 +144,7 @@ type agentCatalogStore interface {
 	ListAgentHeads(ctx context.Context, tenantID string, limit int, cursor *storage.AgentHeadCursor, namePrefix string) ([]storage.AgentHead, *storage.AgentHeadCursor, error)
 	GetAgentVersion(ctx context.Context, tenantID, agentName, effectiveVersion string) (*storage.AgentVersion, error)
 	GetLatestAgentVersion(ctx context.Context, tenantID, agentName string) (*storage.AgentVersion, error)
+	ListAgentVersions(ctx context.Context, tenantID, agentName string, limit int, cursor *storage.AgentVersionCursor) ([]storage.AgentVersionSummary, *storage.AgentVersionCursor, error)
 	ListAgentVersionModels(ctx context.Context, tenantID, agentName, effectiveVersion string) ([]storage.AgentVersionModel, error)
 }
 

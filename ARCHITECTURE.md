@@ -131,6 +131,7 @@ Design doc: `docs/design-docs/2026-02-15-conversation-query-path.md`
 - `GET /api/v1/generations/{id}` -- single generation detail (MySQL/object storage).
 - `GET /api/v1/agents` -- paginated agent catalog summaries grouped by agent name.
 - `GET /api/v1/agents:lookup` -- full agent definition for a name bucket and effective version (or latest).
+- `GET /api/v1/agents:versions` -- paginated effective-version history for one name bucket (named or anonymous).
 - `GET /api/v1/model-cards` -- model-card list and provider+model resolve mode for dashboard pricing joins.
 - `GET /api/v1/model-cards:lookup` -- model-card lookup by identity.
 - `GET /api/v1/model-cards:sources` -- model-card source freshness/status metadata.
@@ -145,7 +146,7 @@ Design doc: `docs/design-docs/2026-02-15-conversation-query-path.md`
    - conversation batch metadata: hydrate conversation summaries (`generation_count`, timestamps, feedback summary, eval summary) for plugin-provided IDs.
    - conversation detail: direct MySQL/object storage fan-out read by conversation ID, return all hydrated generations.
    - generation detail: direct MySQL/object storage read by generation ID.
-   - agent catalog list/lookup: direct MySQL projection reads from `agent_heads`, `agent_versions`, and `agent_version_models`.
+  - agent catalog list/lookup/version-history: direct MySQL projection reads from `agent_heads`, `agent_versions`, and `agent_version_models`.
    - model cards: read model-card catalog from DB/snapshot fallback and optionally resolve `(provider, model)` pairs for deterministic pricing joins.
 4. Sigil API returns JSON responses (hydration payloads and full detail payloads).
 
@@ -401,6 +402,9 @@ Conversation query path (design doc: `docs/design-docs/2026-02-15-conversation-q
   - `POST /api/v1/conversations:batch-metadata` -- batch conversation metadata hydration for plugin search
   - `GET /api/v1/conversations/{conversation_id}` -- full conversation with hydrated generations
   - `GET /api/v1/generations/{generation_id}` -- single generation detail
+  - `GET /api/v1/agents` -- tenant agent heads grouped by name
+  - `GET /api/v1/agents:lookup` -- one agent bucket detail for selected/latest effective version
+  - `GET /api/v1/agents:versions` -- paginated version history for one agent bucket
 - Feedback endpoints (unchanged):
   - `GET /api/v1/conversations/{conversation_id}/ratings`
   - `POST /api/v1/conversations/{conversation_id}/ratings`
@@ -412,6 +416,9 @@ Conversation query path (design doc: `docs/design-docs/2026-02-15-conversation-q
   - `GET /api/plugins/grafana-sigil-app/resources/query/generations/{generation_id}`
   - `GET /api/plugins/grafana-sigil-app/resources/query/search/tags`
   - `GET /api/plugins/grafana-sigil-app/resources/query/search/tag/{tag}/values`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/agents`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/agents/lookup`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/agents/versions`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/ratings`
   - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/ratings`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`
