@@ -147,6 +147,7 @@ func upsertAgentVersionModelUsageTx(tx *gorm.DB, tenantID string, projection age
 	for attempt := 0; attempt < 2; attempt++ {
 		var existing AgentVersionModelUsageModel
 		err := tx.
+			Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where(
 				"tenant_id = ? AND agent_name = ? AND effective_version = ? AND model_provider = ? AND model_name = ?",
 				tenantID,
