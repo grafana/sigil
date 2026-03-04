@@ -95,11 +95,7 @@ function SpanTreeOffset({
   const icon =
     showChildrenIcon &&
     hasChildren &&
-    (childrenVisible ? (
-      <Icon name="angle-down" size="sm" />
-    ) : (
-      <Icon name="angle-right" size="sm" />
-    ));
+    (childrenVisible ? <Icon name="angle-down" size="sm" /> : <Icon name="angle-right" size="sm" />);
 
   return (
     <span className={cx(styles.SpanTreeOffset, hasChildren && styles.SpanTreeOffsetParent)} {...wrapperProps}>

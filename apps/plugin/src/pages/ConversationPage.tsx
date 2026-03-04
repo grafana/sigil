@@ -207,12 +207,8 @@ export default function ConversationPage(props: ConversationPageProps) {
       generation_count: conversationData.generationCount,
       first_generation_at: conversationData.firstGenerationAt,
       last_generation_at: conversationData.lastGenerationAt,
-      models: Array.from(
-        new Set(allGenerations.map((g) => g.model?.name).filter((n): n is string => Boolean(n)))
-      ),
-      agents: Array.from(
-        new Set(allGenerations.map((g) => g.agent_name).filter((n): n is string => Boolean(n)))
-      ),
+      models: Array.from(new Set(allGenerations.map((g) => g.model?.name).filter((n): n is string => Boolean(n)))),
+      agents: Array.from(new Set(allGenerations.map((g) => g.agent_name).filter((n): n is string => Boolean(n)))),
       error_count: errorCount,
       has_errors: errorCount > 0,
       trace_ids: [],

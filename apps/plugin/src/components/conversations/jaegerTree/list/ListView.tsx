@@ -102,7 +102,8 @@ export default class ListView extends React.Component<ListViewProps> {
 
   getTopVisibleIndex = (): number => this.yPositions.findFloorIndex(this.scrollTop, this.getHeight);
 
-  getRowPosition = (index: number): { height: number; y: number } => this.yPositions.getRowPosition(index, this.getHeight);
+  getRowPosition = (index: number): { height: number; y: number } =>
+    this.yPositions.getRowPosition(index, this.getHeight);
 
   onScroll = () => {
     if (!this.isScrolledOrResized) {

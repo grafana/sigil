@@ -54,11 +54,7 @@ export default function Ticks({ endTime = null, numTicks, showLabels = null, sta
   for (let i = 0; i < numTicks; i++) {
     const portion = i / (numTicks - 1);
     ticks.push(
-      <div
-        key={portion}
-        className={styles.TicksTick}
-        style={{ left: `${portion * 100}%` }}
-      >
+      <div key={portion} className={styles.TicksTick} style={{ left: `${portion * 100}%` }}>
         {labels && (
           <span className={cx(styles.TicksTickLabel, { [styles.TicksTickLabelEndAnchor]: portion >= 1 })}>
             {labels[i]}

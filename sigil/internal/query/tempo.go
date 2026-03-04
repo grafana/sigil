@@ -542,15 +542,15 @@ func groupTempoSearchResponse(response *TempoSearchResponse, selectFields []Sele
 
 				aggregate, ok := result.Conversations[conversationID]
 				if !ok {
-				aggregate = &tempoConversationAggregate{
-					ConversationID: conversationID,
-					GenerationIDs:  make(map[string]struct{}),
-					TraceIDs:       make(map[string]struct{}),
-					Models:         make(map[string]struct{}),
-					ModelProviders: make(map[string]string),
-					Agents:         make(map[string]struct{}),
-					Selected:       make(map[string]*tempoSelectedAggregation),
-				}
+					aggregate = &tempoConversationAggregate{
+						ConversationID: conversationID,
+						GenerationIDs:  make(map[string]struct{}),
+						TraceIDs:       make(map[string]struct{}),
+						Models:         make(map[string]struct{}),
+						ModelProviders: make(map[string]string),
+						Agents:         make(map[string]struct{}),
+						Selected:       make(map[string]*tempoSelectedAggregation),
+					}
 					result.Conversations[conversationID] = aggregate
 				}
 
@@ -564,14 +564,14 @@ func groupTempoSearchResponse(response *TempoSearchResponse, selectFields []Sele
 				if generationID := firstAttributeString(attributes, "sigil.generation.id", "span.sigil.generation.id"); generationID != "" {
 					aggregate.GenerationIDs[generationID] = struct{}{}
 				}
-			if model := firstAttributeString(attributes, "gen_ai.request.model", "span.gen_ai.request.model"); model != "" {
-				aggregate.Models[model] = struct{}{}
-				if _, exists := aggregate.ModelProviders[model]; !exists {
-					if provider := firstAttributeString(attributes, "gen_ai.provider.name", "span.gen_ai.provider.name"); provider != "" {
-						aggregate.ModelProviders[model] = provider
+				if model := firstAttributeString(attributes, "gen_ai.request.model", "span.gen_ai.request.model"); model != "" {
+					aggregate.Models[model] = struct{}{}
+					if _, exists := aggregate.ModelProviders[model]; !exists {
+						if provider := firstAttributeString(attributes, "gen_ai.provider.name", "span.gen_ai.provider.name"); provider != "" {
+							aggregate.ModelProviders[model] = provider
+						}
 					}
 				}
-			}
 				if agent := firstAttributeString(attributes, "gen_ai.agent.name", "span.gen_ai.agent.name"); agent != "" {
 					aggregate.Agents[agent] = struct{}{}
 				}

@@ -55,7 +55,12 @@ export function inferProviderFromModelName(model: string): string {
   if (normalized.startsWith('claude')) {
     return 'anthropic';
   }
-  if (normalized.startsWith('gpt-') || normalized.startsWith('o1') || normalized.startsWith('o3') || normalized.startsWith('o4')) {
+  if (
+    normalized.startsWith('gpt-') ||
+    normalized.startsWith('o1') ||
+    normalized.startsWith('o3') ||
+    normalized.startsWith('o4')
+  ) {
     return 'openai';
   }
   if (normalized.startsWith('grok')) {
@@ -109,9 +114,7 @@ export async function resolveModelCardsFromNames(
     return cards;
   }
 
-  const resolveResp = await client.resolve(
-    pairs.map((p) => ({ provider: p.provider, model: p.model }))
-  );
+  const resolveResp = await client.resolve(pairs.map((p) => ({ provider: p.provider, model: p.model })));
 
   const lookupPromises: Array<Promise<void>> = [];
 

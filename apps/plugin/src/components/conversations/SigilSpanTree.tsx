@@ -65,11 +65,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function SigilSpanTree({
-  spans,
-  selectedSpanSelectionID = '',
-  onSelectSpan,
-}: SigilSpanTreeProps) {
+export default function SigilSpanTree({ spans, selectedSpanSelectionID = '', onSelectSpan }: SigilSpanTreeProps) {
   const styles = useStyles2(getStyles);
   const [childrenHiddenIDs, setChildrenHiddenIDs] = useState<Set<string>>(expandAll());
   const [hoverIndentGuideIDs, setHoverIndentGuideIDs] = useState<Set<string>>(new Set());
@@ -88,7 +84,10 @@ export default function SigilSpanTree({
     return next;
   }, [childrenHiddenIDs, rows]);
 
-  const visibleRows = useMemo(() => filterVisibleRows(rows, effectiveChildrenHiddenIDs), [rows, effectiveChildrenHiddenIDs]);
+  const visibleRows = useMemo(
+    () => filterVisibleRows(rows, effectiveChildrenHiddenIDs),
+    [rows, effectiveChildrenHiddenIDs]
+  );
   const serviceColorMap = useMemo(() => buildServiceColorMap(rows.map((row) => row.serviceName)), [rows]);
 
   const indexByKey = useMemo(() => {
@@ -124,20 +123,17 @@ export default function SigilSpanTree({
     });
   }, []);
 
-  const handleChildrenToggle = useCallback(
-    (spanID: string) => {
-      setChildrenHiddenIDs((current) => {
-        const next = new Set(current);
-        if (next.has(spanID)) {
-          next.delete(spanID);
-        } else {
-          next.add(spanID);
-        }
-        return next;
-      });
-    },
-    []
-  );
+  const handleChildrenToggle = useCallback((spanID: string) => {
+    setChildrenHiddenIDs((current) => {
+      const next = new Set(current);
+      if (next.has(spanID)) {
+        next.delete(spanID);
+      } else {
+        next.add(spanID);
+      }
+      return next;
+    });
+  }, []);
 
   const handleDetailToggle = useCallback(
     (spanID: string) => {

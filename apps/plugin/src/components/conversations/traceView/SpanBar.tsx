@@ -98,9 +98,7 @@ function SpanBar({
           width: toPercent(viewEnd - viewStart),
         }}
       >
-        <span className={`${styles.label} ${hintClassName} ${labelClassName ?? ''}`}>
-          {label}
-        </span>
+        <span className={`${styles.label} ${hintClassName} ${labelClassName ?? ''}`}>{label}</span>
       </div>
     </div>
   );

@@ -199,13 +199,13 @@ function SpanBarRow(props: SpanBarRowProps) {
               <Icon name="exclamation-circle" style={{ background: '#db2828' }} className={styles.errorIcon} />
             )}
             {showServiceName && (
-              <span className={cx(styles.svcName, !isChildrenExpanded && hasChildren && styles.svcNameChildrenCollapsed)}>
+              <span
+                className={cx(styles.svcName, !isChildrenExpanded && hasChildren && styles.svcNameChildrenCollapsed)}
+              >
                 {serviceName}{' '}
               </span>
             )}
-            <span className={styles.endpointName}>{operationName}</span>
-            {' '}
-            <small>({durationLabel})</small>
+            <span className={styles.endpointName}>{operationName}</span> <small>({durationLabel})</small>
           </button>
         </div>
       </div>

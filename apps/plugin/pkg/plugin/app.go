@@ -38,10 +38,10 @@ type App struct {
 }
 
 type appJSONData struct {
-	SigilAPIURL             string       `json:"sigilApiUrl"`
-	TenantID                flexString   `json:"tenantId"`
-	PrometheusDatasourceUID string       `json:"prometheusDatasourceUID"`
-	TempoDatasourceUID      string       `json:"tempoDatasourceUID"`
+	SigilAPIURL             string     `json:"sigilApiUrl"`
+	TenantID                flexString `json:"tenantId"`
+	PrometheusDatasourceUID string     `json:"prometheusDatasourceUID"`
+	TempoDatasourceUID      string     `json:"tempoDatasourceUID"`
 }
 
 // flexString unmarshals both JSON strings and numbers into a Go string.
@@ -81,6 +81,8 @@ const (
 	permissionFeedbackWrite = "grafana-sigil-app.feedback:write"
 	// permissionSettingsWrite grants datasource settings write access.
 	permissionSettingsWrite = "grafana-sigil-app.settings:write"
+	// permissionEvalWrite grants write access to evaluation routes.
+	permissionEvalWrite = "grafana-sigil-app.eval:write"
 )
 
 type authorizationClient interface {

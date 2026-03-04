@@ -423,15 +423,11 @@ function ConversationThread({
       {sorted.map((gen) => {
         const isHighlighted = gen.generation_id === highlightedGenerationID;
         const allMessages: Message[] = [...(gen.input ?? []), ...(gen.output ?? [])];
-        const modelLabel = gen.model?.name
-          ? `${gen.model.provider ?? ''}/${gen.model.name}`
-          : gen.generation_id;
+        const modelLabel = gen.model?.name ? `${gen.model.provider ?? ''}/${gen.model.name}` : gen.generation_id;
 
         return (
           <React.Fragment key={gen.generation_id}>
-            <div
-              className={`${styles.threadGenLabel} ${isHighlighted ? styles.threadGenLabelHighlighted : ''}`}
-            >
+            <div className={`${styles.threadGenLabel} ${isHighlighted ? styles.threadGenLabelHighlighted : ''}`}>
               {isHighlighted ? '>> ' : ''}
               {modelLabel}
               {gen.created_at ? ` - ${new Date(gen.created_at).toLocaleString()}` : ''}

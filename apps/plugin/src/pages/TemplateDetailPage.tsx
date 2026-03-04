@@ -93,11 +93,7 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [activeForm, setActiveForm] = useState<ActiveForm>('none');
-  const [formState, setFormState] = useState<EvalFormState>({
-    kind: 'llm_judge',
-    config: {},
-    outputKeys: [{ key: 'score', type: 'number' }],
-  });
+  const [formState, setFormState] = useState<EvalFormState | null>(null);
   const [rollbackVersion, setRollbackVersion] = useState<string | undefined>(undefined);
   const [rollbackConfig, setRollbackConfig] = useState<Record<string, unknown> | undefined>(undefined);
   const [rollbackOutputKeys, setRollbackOutputKeys] = useState<
@@ -346,12 +342,14 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
             />
           </div>
           <div className={styles.testColumn}>
-            <EvalTestPanel
-              kind={formState.kind}
-              config={formState.config}
-              outputKeys={formState.outputKeys}
-              dataSource={dataSource}
-            />
+            {formState && (
+              <EvalTestPanel
+                kind={formState.kind}
+                config={formState.config}
+                outputKeys={formState.outputKeys}
+                dataSource={dataSource}
+              />
+            )}
           </div>
         </div>
       )}

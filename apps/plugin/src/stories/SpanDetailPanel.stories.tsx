@@ -101,9 +101,7 @@ const secondGeneration: GenerationDetail = {
   stop_reason: 'end_turn',
   created_at: '2025-06-15T10:31:00.000Z',
   usage: { input_tokens: 2100, output_tokens: 580, total_tokens: 2680 },
-  input: [
-    { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Can you show error handling too?' }] },
-  ],
+  input: [{ role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Can you show error handling too?' }] }],
   output: [
     {
       role: 'MESSAGE_ROLE_ASSISTANT',
@@ -159,10 +157,7 @@ export const ToolExecution = () => (
 );
 
 export const NoGenerationFallback = () => (
-  <SpanDetailPanel
-    span={makeSpan({ generation: null })}
-    allGenerations={allGens}
-  />
+  <SpanDetailPanel span={makeSpan({ generation: null })} allGenerations={allGens} />
 );
 
 export const MinimalSpan = () => (
@@ -214,7 +209,9 @@ export const WithToolMessages = () => (
         output: [
           {
             role: 'MESSAGE_ROLE_ASSISTANT',
-            parts: [{ text: 'Based on the documentation, Go handles errors explicitly using the `error` interface...' }],
+            parts: [
+              { text: 'Based on the documentation, Go handles errors explicitly using the `error` interface...' },
+            ],
           },
         ],
       },

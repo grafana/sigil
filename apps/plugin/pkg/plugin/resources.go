@@ -110,9 +110,8 @@ func requiredPermissionAction(method string, path string) (string, bool) {
 		return permissionDataRead, true
 	case method == http.MethodGet && path == "/query/model-cards/lookup":
 		return permissionDataRead, true
-	// Eval routes — all require data read.
 	case strings.HasPrefix(path, "/eval/") || path == "/eval:test":
-		return permissionDataRead, true
+		return permissionForEvalRoute(method, path)
 	default:
 		return "", false
 	}
@@ -143,6 +142,17 @@ func permissionForConversationRoute(method string, path string) (string, bool) {
 	}
 
 	return "", false
+}
+
+func permissionForEvalRoute(method string, path string) (string, bool) {
+	switch method {
+	case http.MethodGet:
+		return permissionDataRead, true
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		return permissionEvalWrite, true
+	default:
+		return "", false
+	}
 }
 
 func (a *App) handleListConversations(w http.ResponseWriter, req *http.Request) {

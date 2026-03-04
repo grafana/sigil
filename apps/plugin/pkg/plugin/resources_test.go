@@ -71,6 +71,7 @@ func allowAllSigilActions() map[string]bool {
 		permissionDataRead:      true,
 		permissionFeedbackWrite: true,
 		permissionSettingsWrite: true,
+		permissionEvalWrite:     true,
 	}
 }
 
@@ -94,14 +95,10 @@ func TestRequiredPermissionAction(t *testing.T) {
 			{method: http.MethodGet, path: "/query/proxy/tempo/api/search"},
 			{method: http.MethodGet, path: "/query/model-cards"},
 			{method: http.MethodGet, path: "/query/model-cards/lookup"},
-			// Eval routes
+			// Eval read routes
 			{method: http.MethodGet, path: "/eval/evaluators"},
-			{method: http.MethodPost, path: "/eval/evaluators"},
 			{method: http.MethodGet, path: "/eval/evaluators/prod.helpfulness.v1"},
 			{method: http.MethodGet, path: "/eval/predefined/evaluators"},
-			{method: http.MethodPost, path: "/eval/predefined/evaluators/sigil.helpfulness"},
-			{method: http.MethodPost, path: "/eval/rules:preview"},
-			{method: http.MethodPost, path: "/eval:test"},
 			{method: http.MethodGet, path: "/eval/rules"},
 			{method: http.MethodGet, path: "/eval/rules/online.helpfulness"},
 			{method: http.MethodGet, path: "/eval/judge/providers"},
@@ -143,6 +140,34 @@ func TestRequiredPermissionAction(t *testing.T) {
 		}
 		if action != permissionSettingsWrite {
 			t.Fatalf("expected %s, got %s", permissionSettingsWrite, action)
+		}
+	})
+
+	t.Run("eval write routes", func(t *testing.T) {
+		testCases := []struct {
+			method string
+			path   string
+		}{
+			{method: http.MethodPost, path: "/eval/evaluators"},
+			{method: http.MethodPost, path: "/eval/predefined/evaluators/sigil.helpfulness"},
+			{method: http.MethodPost, path: "/eval/rules:preview"},
+			{method: http.MethodPost, path: "/eval:test"},
+			{method: http.MethodPost, path: "/eval/rules"},
+			{method: http.MethodDelete, path: "/eval/evaluators/prod.helpfulness.v1"},
+			{method: http.MethodDelete, path: "/eval/rules/online.helpfulness"},
+			{method: http.MethodPost, path: "/eval/templates"},
+			{method: http.MethodPost, path: "/eval/templates/my-template/versions"},
+			{method: http.MethodDelete, path: "/eval/templates/my-template"},
+		}
+
+		for _, tc := range testCases {
+			action, ok := requiredPermissionAction(tc.method, tc.path)
+			if !ok {
+				t.Fatalf("expected permission action for %s %s", tc.method, tc.path)
+			}
+			if action != permissionEvalWrite {
+				t.Fatalf("expected %s for %s %s, got %s", permissionEvalWrite, tc.method, tc.path, action)
+			}
 		}
 	})
 

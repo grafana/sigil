@@ -64,6 +64,7 @@ const getStyles = (theme: GrafanaTheme2) => {
       flexDirection: 'column' as const,
       flex: 1,
       minHeight: 0,
+      overflowY: 'auto' as const,
       gap: theme.spacing(1.5),
       padding: theme.spacing(1.5),
       borderTop: `1px solid ${theme.colors.border.weak}`,

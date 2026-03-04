@@ -125,9 +125,7 @@ export function useConversationData({
     if (costModelCards.size > 0) {
       return [];
     }
-    return Array.from(
-      new Set(allGenerations.map((g) => g.model?.name).filter((n): n is string => Boolean(n)))
-    );
+    return Array.from(new Set(allGenerations.map((g) => g.model?.name).filter((n): n is string => Boolean(n))));
   }, [costModelCards, allGenerations]);
 
   useEffect(() => {

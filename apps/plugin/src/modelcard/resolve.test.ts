@@ -111,10 +111,7 @@ describe('resolveModelCardsFromNames', () => {
       lookup: jest.fn().mockResolvedValue(lookupResponse),
     });
 
-    const cards = await resolveModelCardsFromNames(
-      ['us.anthropic.claude-haiku-4-5-20251001-v1:0'],
-      client
-    );
+    const cards = await resolveModelCardsFromNames(['us.anthropic.claude-haiku-4-5-20251001-v1:0'], client);
 
     expect(cards.size).toBe(1);
     const card = cards.values().next().value;
@@ -155,10 +152,7 @@ describe('resolveModelCardsFromNames', () => {
       lookup: jest.fn().mockRejectedValue(new Error('not found')),
     });
 
-    const cards = await resolveModelCardsFromNames(
-      ['us.anthropic.claude-sonnet-4-6'],
-      client
-    );
+    const cards = await resolveModelCardsFromNames(['us.anthropic.claude-sonnet-4-6'], client);
 
     expect(cards.size).toBe(1);
     const card = cards.values().next().value;
@@ -190,10 +184,7 @@ describe('resolveModelCardsFromNames', () => {
       lookup: jest.fn(),
     });
 
-    const cards = await resolveModelCardsFromNames(
-      ['us.anthropic.claude-sonnet-4-6'],
-      client
-    );
+    const cards = await resolveModelCardsFromNames(['us.anthropic.claude-sonnet-4-6'], client);
 
     expect(cards.size).toBe(0);
     expect(client.lookup).not.toHaveBeenCalled();
@@ -280,14 +271,9 @@ describe('resolveModelCardsFromNames', () => {
       lookup: jest.fn().mockRejectedValue(new Error('not found')),
     });
 
-    const cards = await resolveModelCardsFromNames(
-      ['unknown-xyz-model', 'claude-sonnet-4-5'],
-      client
-    );
+    const cards = await resolveModelCardsFromNames(['unknown-xyz-model', 'claude-sonnet-4-5'], client);
 
-    expect(client.resolve).toHaveBeenCalledWith([
-      { provider: 'anthropic', model: 'claude-sonnet-4-5' },
-    ]);
+    expect(client.resolve).toHaveBeenCalledWith([{ provider: 'anthropic', model: 'claude-sonnet-4-5' }]);
     expect(cards.size).toBe(1);
   });
 });
