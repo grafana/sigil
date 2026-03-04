@@ -1,6 +1,6 @@
 import React from 'react';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
-import { RadioButtonGroup, Text, useStyles2 } from '@grafana/ui';
+import { Select, Text, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
 import { SELECTOR_OPTIONS, type RuleSelector } from '../../evaluation/types';
 
@@ -14,6 +14,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
   description: css({
     marginTop: theme.spacing(1),
     color: theme.colors.text.secondary,
+  }),
+  select: css({
+    width: '100%',
   }),
 });
 
@@ -30,7 +33,13 @@ export default function SelectorPicker({ value, onChange, disabled }: SelectorPi
 
   return (
     <>
-      <RadioButtonGroup<RuleSelector> options={options} value={value} onChange={onChange} disabled={disabled} />
+      <Select<RuleSelector>
+        className={styles.select}
+        options={options}
+        value={value}
+        onChange={(v) => v?.value != null && onChange(v.value)}
+        disabled={disabled}
+      />
       {description && (
         <div className={styles.description}>
           <Text variant="bodySmall" color="secondary">

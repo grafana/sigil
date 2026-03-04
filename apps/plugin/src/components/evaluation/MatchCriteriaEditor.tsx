@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
 import { Button, IconButton, Input, Select, Stack, Text, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
@@ -13,23 +13,33 @@ export type MatchCriteriaEditorProps = {
 type CriteriaRow = { key: string; value: string };
 
 function toRows(match: Record<string, string | string[]>): CriteriaRow[] {
+  if (!match || typeof match !== 'object') {
+    return [];
+  }
   return Object.entries(match).map(([key, val]) => ({
     key,
-    value: Array.isArray(val) ? val.join(', ') : val,
+    value: Array.isArray(val) ? val.join(', ') : String(val ?? ''),
   }));
 }
 
 function fromRows(rows: CriteriaRow[]): Record<string, string | string[]> {
   const result: Record<string, string | string[]> = {};
   for (const row of rows) {
-    if (row.key) {
-      const val = row.value.trim();
-      result[row.key] = val.includes(',')
-        ? val
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean)
-        : val;
+    if (!row || !row.key) {
+      continue;
+    }
+    const val = row.value.trim();
+    if (!val) {
+      continue;
+    }
+    const values = val.includes(',')
+      ? val
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [val];
+    if (values.length > 0) {
+      result[row.key] = values.length === 1 ? values[0] : values;
     }
   }
   return result;
@@ -54,8 +64,15 @@ const getStyles = (theme: GrafanaTheme2) => ({
 
 export default function MatchCriteriaEditor({ value, onChange, disabled }: MatchCriteriaEditorProps) {
   const styles = useStyles2(getStyles);
-  const rows = toRows(value);
 
+  const committedRows = toRows(value);
+  const [pendingKeys, setPendingKeys] = useState<string[]>([]);
+  const [draft, setDraft] = useState<{ index: number; text: string } | null>(null);
+
+  const pendingRows: CriteriaRow[] = pendingKeys
+    .filter((k) => !Object.prototype.hasOwnProperty.call(value, k))
+    .map((k) => ({ key: k, value: '' }));
+  const rows = [...committedRows, ...pendingRows];
   const usedKeys = new Set(rows.map((r) => r.key));
 
   const keyOptionsForRow = (currentKey: string): Array<SelectableValue<string>> =>
@@ -66,20 +83,50 @@ export default function MatchCriteriaEditor({ value, onChange, disabled }: Match
       isDisabled: opt.value !== currentKey && usedKeys.has(opt.value),
     }));
 
-  const updateRow = (index: number, updates: Partial<CriteriaRow>) => {
-    const next = [...rows];
-    next[index] = { ...next[index], ...updates };
-    onChange(fromRows(next));
+  const commitRows = (nextRows: CriteriaRow[]) => {
+    onChange(fromRows(nextRows));
+    setPendingKeys(nextRows.filter((r) => !r.value.trim()).map((r) => r.key));
   };
 
   const addRow = () => {
-    const firstUnused = MATCH_KEY_OPTIONS.find((o) => !usedKeys.has(o.value))?.value ?? MATCH_KEY_OPTIONS[0].value;
-    onChange(fromRows([...rows, { key: firstUnused, value: '' }]));
+    const firstUnused =
+      MATCH_KEY_OPTIONS.find((o) => !usedKeys.has(o.value))?.value ?? MATCH_KEY_OPTIONS[0]?.value ?? 'agent_name';
+    setPendingKeys((prev) => [...prev, firstUnused]);
   };
 
   const removeRow = (index: number) => {
     const next = rows.filter((_, i) => i !== index);
-    onChange(fromRows(next));
+    setDraft(null);
+    commitRows(next);
+  };
+
+  const updateRowKey = (index: number, newKey: string) => {
+    const next = [...rows];
+    next[index] = { ...next[index], key: newKey };
+    commitRows(next);
+  };
+
+  const getDisplayValue = (index: number): string => {
+    if (draft != null && draft.index === index) {
+      return draft.text;
+    }
+    return rows[index]?.value ?? '';
+  };
+
+  const handleFocus = (index: number) => {
+    setDraft({ index, text: rows[index]?.value ?? '' });
+  };
+
+  const handleChange = (index: number, val: string) => {
+    setDraft({ index, text: val });
+  };
+
+  const handleBlur = (index: number) => {
+    const finalValue = (draft != null && draft.index === index ? draft.text : (rows[index]?.value ?? '')).trim();
+    setDraft(null);
+    const next = [...rows];
+    next[index] = { ...next[index], value: finalValue };
+    commitRows(next);
   };
 
   return (
@@ -96,15 +143,17 @@ export default function MatchCriteriaEditor({ value, onChange, disabled }: Match
                   value={row.key}
                   onChange={(v) => {
                     if (v?.value) {
-                      updateRow(index, { key: v.value });
+                      updateRowKey(index, v.value);
                     }
                   }}
                   disabled={disabled}
                 />
               </div>
               <Input
-                value={row.value}
-                onChange={(e) => updateRow(index, { value: e.currentTarget.value })}
+                value={getDisplayValue(index)}
+                onFocus={() => handleFocus(index)}
+                onChange={(e) => handleChange(index, e.currentTarget.value)}
+                onBlur={() => handleBlur(index)}
                 placeholder={supportsGlob ? 'e.g. assistant-* or exact value' : 'Value'}
                 disabled={disabled}
                 style={{ flex: '1 1 0', minWidth: 0 }}
