@@ -27,23 +27,25 @@ jest.mock('@grafana/assistant', () => ({
   }),
 }));
 
+jest.mock('../components/landing/LandingTopBar', () => ({
+  LandingTopBar: () => <div data-testid="landing-top-bar" />,
+}));
+
 describe('Landing1Page', () => {
   beforeEach(() => {
     mockOpenAssistant.mockReset();
   });
 
-  it('opens assistant only once when submit button is clicked', () => {
+  it('opens assistant once when a suggested question is clicked', () => {
     render(<Landing1Page />);
 
-    fireEvent.change(screen.getByPlaceholderText('Ask me anything about Sigil'), {
-      target: { value: 'How does Sigil work?' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    const question = 'What additional information does Sigil contain?';
+    fireEvent.click(screen.getByRole('button', { name: question }));
 
     expect(mockOpenAssistant).toHaveBeenCalledTimes(1);
     expect(mockOpenAssistant).toHaveBeenCalledWith({
       origin: 'grafana/sigil-plugin/landing1',
-      prompt: 'How does Sigil work?',
+      prompt: question,
       autoSend: true,
     });
   });
