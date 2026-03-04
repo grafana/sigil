@@ -580,6 +580,12 @@ func (a *App) handleEvalRuleByID(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "invalid rule path", http.StatusBadRequest)
 		return
 	}
+	// When using Path only, reject literal slashes (ambiguous with subpaths).
+	// Mirrors backend pathIDEscaped guard.
+	if pathForID == req.URL.Path && strings.Contains(idEncoded, "/") {
+		http.Error(w, "invalid rule path", http.StatusBadRequest)
+		return
+	}
 	id, err := url.PathUnescape(idEncoded)
 	if err != nil || id == "" {
 		http.Error(w, "invalid rule path", http.StatusBadRequest)

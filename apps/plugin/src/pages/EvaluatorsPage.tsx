@@ -322,7 +322,6 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
             onFork={handleForkTemplate}
           />
         )}
-
       </div>
     </div>
   );

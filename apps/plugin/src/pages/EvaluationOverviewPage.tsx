@@ -91,12 +91,7 @@ export default function EvaluationOverviewPage(props: EvaluationOverviewPageProp
         onBrowseEvaluators={() => navigate(`${EVAL_BASE}/evaluators`)}
       />
 
-      <RuleTable
-        rules={rules}
-        evaluators={evaluators}
-        onToggle={handleToggle}
-        onClick={handleRuleClick}
-      />
+      <RuleTable rules={rules} evaluators={evaluators} onToggle={handleToggle} onClick={handleRuleClick} />
     </div>
   );
 }

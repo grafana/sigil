@@ -193,17 +193,12 @@ export default function RulesPage(props: RulesPageProps) {
                 <Icon name="check-circle" size="sm" /> Run evaluators
               </span>
             </div>
-            <Button variant="primary" icon="plus"  onClick={() => navigate(`${EVAL_RULES_BASE}/new`)}>
+            <Button variant="primary" icon="plus" onClick={() => navigate(`${EVAL_RULES_BASE}/new`)}>
               Create your first rule
             </Button>
           </div>
         ) : (
-          <RuleTable
-            rules={rules}
-            evaluators={evaluators}
-            onToggle={handleToggle}
-            onClick={handleClick}
-          />
+          <RuleTable rules={rules} evaluators={evaluators} onToggle={handleToggle} onClick={handleClick} />
         )}
       </div>
     </div>

@@ -761,6 +761,12 @@ func TestCallResource(t *testing.T) {
 			expStatus: http.StatusNoContent,
 		},
 		{
+			name:      "reject rule path with literal slash",
+			method:    http.MethodGet,
+			path:      "eval/rules/foo/bar",
+			expStatus: http.StatusBadRequest,
+		},
+		{
 			name:      "list judge providers",
 			method:    http.MethodGet,
 			path:      "eval/judge/providers",

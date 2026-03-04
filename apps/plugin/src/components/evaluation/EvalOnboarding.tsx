@@ -288,9 +288,7 @@ export default function EvalOnboarding({ hasEvaluators, onGoToEvaluators, onGoTo
       <div className={styles.stepsContainer}>
         <div className={`${styles.stepCard} ${hasEvaluators ? '' : styles.stepCardActive}`}>
           <div className={styles.stepHeader}>
-            <span
-              className={`${styles.stepNumber} ${hasEvaluators ? styles.stepNumberDone : styles.stepNumberActive}`}
-            >
+            <span className={`${styles.stepNumber} ${hasEvaluators ? styles.stepNumberDone : styles.stepNumberActive}`}>
               {hasEvaluators ? <Icon name="check" size="sm" /> : '1'}
             </span>
             <span className={styles.stepTitle}>Set up evaluators</span>
@@ -317,9 +315,7 @@ export default function EvalOnboarding({ hasEvaluators, onGoToEvaluators, onGoTo
           </div>
         </div>
 
-        <div
-          className={`${styles.stepCard} ${hasEvaluators ? styles.stepCardActive : styles.stepCardMuted}`}
-        >
+        <div className={`${styles.stepCard} ${hasEvaluators ? styles.stepCardActive : styles.stepCardMuted}`}>
           <div className={styles.stepHeader}>
             <span
               className={`${styles.stepNumber} ${hasEvaluators ? styles.stepNumberActive : styles.stepNumberPending}`}
