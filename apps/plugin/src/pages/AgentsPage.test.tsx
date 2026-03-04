@@ -229,7 +229,9 @@ describe('AgentsPage', () => {
     renderPage(dataSource);
 
     await waitFor(() => expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', ''));
+    expect(observerCallbacks).toHaveLength(0);
     fireEvent.click(screen.getByText('Agents'));
+    expect(observerCallbacks.length).toBeGreaterThan(0);
 
     triggerLoadMoreIntersection();
 
