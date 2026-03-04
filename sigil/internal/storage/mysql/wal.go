@@ -65,6 +65,11 @@ func (s *WALStore) SaveBatch(ctx context.Context, tenantID string, generations [
 			errs[i] = err
 			continue
 		}
+		agentProjection, err := buildAgentCatalogProjection(generationRow.CreatedAt, generation)
+		if err != nil {
+			errs[i] = err
+			continue
+		}
 
 		txErr := runWithRetryableLockError(ctx, func() error {
 			generationRow.ID = 0
@@ -80,6 +85,9 @@ func (s *WALStore) SaveBatch(ctx context.Context, tenantID string, generations [
 					if err := upsertConversation(tx, convRow); err != nil {
 						return err
 					}
+				}
+				if err := upsertAgentCatalogTx(tx, tenantID, agentProjection); err != nil {
+					return err
 				}
 
 				if !s.evalEnqueueEnable {

@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-15
+last_reviewed: 2026-03-04
 source_of_truth: true
 audience: both
 ---
@@ -59,6 +59,17 @@ audience: both
   - request controls: `max_tokens`, `temperature`, `top_p`, `tool_choice`, `thinking_enabled`
   - prompts/messages/tools/usage/metadata/timestamps/tags
   - optional `raw_artifacts[]` for debug payloads
+
+## Agent Version Projection Semantics
+
+- Ingest accepts producer-provided `agent_name` and `agent_version` as-is.
+- Sigil computes an internal **effective version** for catalog/query projection when writing MySQL agent metadata:
+  - format: `sha256:<hex>`
+  - hash input: canonicalized `system_prompt + tools`
+- Effective version is projection-only:
+  - generation payload stored in `generations.payload` is **not** rewritten
+  - producer `agent_version` remains informational metadata
+- Agent catalog endpoints (`/api/v1/agents`, `/api/v1/agents:lookup`) use effective version as lookup identity.
 
 ## Response
 

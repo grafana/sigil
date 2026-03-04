@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-03-02
+last_reviewed: 2026-03-04
 source_of_truth: true
 audience: both
 ---
@@ -129,6 +129,8 @@ Design doc: `docs/design-docs/2026-02-15-conversation-query-path.md`
 - `POST /api/v1/conversations:batch-metadata` -- batch conversation metadata hydration for plugin-owned search results.
 - `GET /api/v1/conversations/{id}` -- full conversation with all hydrated generations (MySQL/object storage).
 - `GET /api/v1/generations/{id}` -- single generation detail (MySQL/object storage).
+- `GET /api/v1/agents` -- paginated agent catalog summaries grouped by agent name.
+- `GET /api/v1/agents:lookup` -- full agent definition for a name bucket and effective version (or latest).
 - `GET /api/v1/model-cards` -- model-card list and provider+model resolve mode for dashboard pricing joins.
 - `GET /api/v1/model-cards:lookup` -- model-card lookup by identity.
 - `GET /api/v1/model-cards:sources` -- model-card source freshness/status metadata.
@@ -143,6 +145,7 @@ Design doc: `docs/design-docs/2026-02-15-conversation-query-path.md`
    - conversation batch metadata: hydrate conversation summaries (`generation_count`, timestamps, feedback summary, eval summary) for plugin-provided IDs.
    - conversation detail: direct MySQL/object storage fan-out read by conversation ID, return all hydrated generations.
    - generation detail: direct MySQL/object storage read by generation ID.
+   - agent catalog list/lookup: direct MySQL projection reads from `agent_heads`, `agent_versions`, and `agent_version_models`.
    - model cards: read model-card catalog from DB/snapshot fallback and optionally resolve `(provider, model)` pairs for deterministic pricing joins.
 4. Sigil API returns JSON responses (hydration payloads and full detail payloads).
 
@@ -162,6 +165,7 @@ Write path components:
 3. Generation ingest service validates payloads and writes:
    - `generations` rows (hot payload + compaction cursor state)
    - `conversations` projection rows.
+   - agent catalog projection rows (`agent_heads`, `agent_versions`, `agent_version_models`) keyed by effective agent version.
 4. Client SDKs export OTLP traces and metrics to Alloy / OTel Collector.
 5. Alloy enriches telemetry with infrastructure metadata and forwards traces to Tempo and metrics to Prometheus.
 6. Compactor target reads MySQL generations, writes object blocks + metadata, then marks/truncates compacted rows.
@@ -239,6 +243,7 @@ MySQL is not only an ingest log. It stores:
 
 - generation metadata and indexes used by application queries
 - conversation metadata
+- agent catalog metadata (name-grouped heads, versioned prompt/tool definitions, and per-version provider/model usage)
 - hot payload rows used for recent reads and overlap resolution
 - compaction state and bookkeeping
 

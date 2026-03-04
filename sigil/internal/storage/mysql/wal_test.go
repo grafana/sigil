@@ -57,6 +57,15 @@ func TestAutoMigrateCreatesSchema(t *testing.T) {
 	if !migrator.HasTable(&ConversationModel{}) {
 		t.Fatalf("expected conversations table")
 	}
+	if !migrator.HasTable(&AgentVersionModel{}) {
+		t.Fatalf("expected agent_versions table")
+	}
+	if !migrator.HasTable(&AgentVersionModelUsageModel{}) {
+		t.Fatalf("expected agent_version_models table")
+	}
+	if !migrator.HasTable(&AgentHeadModel{}) {
+		t.Fatalf("expected agent_heads table")
+	}
 	if !migrator.HasTable(&EvalEnqueueEventModel{}) {
 		t.Fatalf("expected eval_enqueue_events table")
 	}
@@ -83,6 +92,12 @@ func TestAutoMigrateCreatesSchema(t *testing.T) {
 	}
 	if !migrator.HasIndex(&ConversationModel{}, "ux_conversations_tenant_conversation") {
 		t.Fatalf("expected unique conversation index")
+	}
+	if !migrator.HasIndex(&AgentVersionModel{}, "ux_agent_versions_tenant_name_version") {
+		t.Fatalf("expected unique agent version index")
+	}
+	if !migrator.HasIndex(&AgentHeadModel{}, "ux_agent_heads_tenant_name") {
+		t.Fatalf("expected unique agent head index")
 	}
 	if !migrator.HasIndex(&GenerationModel{}, "idx_generations_tenant_compacted_compacted_at_id") {
 		t.Fatalf("expected truncate-supporting compacted_at index")
