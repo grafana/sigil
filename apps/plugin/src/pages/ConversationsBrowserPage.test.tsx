@@ -13,6 +13,21 @@ type MockConversationsDataSource = {
 };
 
 beforeAll(() => {
+  global.ResizeObserver = class {
+    private cb: ResizeObserverCallback;
+    constructor(cb: ResizeObserverCallback) {
+      this.cb = cb;
+    }
+    observe(target: Element) {
+      this.cb(
+        [{ target, contentRect: { width: 800, height: 200 } } as unknown as ResizeObserverEntry],
+        this as unknown as ResizeObserver
+      );
+    }
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+
   if (typeof globalThis.Request === 'undefined') {
     class RequestMock {
       method: string;
@@ -137,7 +152,7 @@ describe('ConversationsBrowserPage', () => {
 
     expect(await screen.findByLabelText('select conversation conv-a')).toBeInTheDocument();
     expect(screen.queryByText('Conversation ID')).not.toBeInTheDocument();
-    expect(screen.getByText('LLM calls')).toBeInTheDocument();
+    expect(screen.getByText('Agents')).toBeInTheDocument();
     expect(screen.queryByText(/^Generations \(\d+\)$/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('select conversation conv-b'));

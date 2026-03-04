@@ -26,6 +26,26 @@ export const WithResults = {
   },
 };
 
+export const ExtendedColumns = {
+  render: () => {
+    const [selected, setSelected] = useState('');
+    return (
+      <div style={{ height: 600 }}>
+        <ConversationListPanel
+          conversations={mockSearchResults}
+          selectedConversationId={selected}
+          loading={false}
+          hasMore={false}
+          loadingMore={false}
+          showExtendedColumns
+          onSelectConversation={setSelected}
+          onLoadMore={() => {}}
+        />
+      </div>
+    );
+  },
+};
+
 export const Empty = {
   args: {
     conversations: [],
