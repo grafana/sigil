@@ -25,23 +25,14 @@ export function getProviderColor(provider: string): string {
   return getProviderMeta(provider).color;
 }
 
-const MODEL_NAME_PATTERNS: [RegExp, string][] = [
-  [/^claude/i, 'anthropic'],
-  [/^gpt|^o[1-9]|^chatgpt/i, 'openai'],
-  [/^gemini|^palm/i, 'google'],
-  [/^llama|^codellama/i, 'meta'],
-  [/^mistral|^mixtral|^codestral|^pixtral/i, 'mistral'],
-  [/^command|^embed.*cohere/i, 'cohere'],
-  [/^deepseek/i, 'deepseek'],
-];
+const API_TO_DISPLAY_PROVIDER: Record<string, string> = {
+  'meta-llama': 'meta',
+  mistralai: 'mistral',
+};
 
-export function inferProvider(modelName: string): string {
-  for (const [pattern, provider] of MODEL_NAME_PATTERNS) {
-    if (pattern.test(modelName)) {
-      return provider;
-    }
-  }
-  return '';
+export function toDisplayProvider(apiProvider: string): string {
+  const normalized = apiProvider.trim().toLowerCase();
+  return API_TO_DISPLAY_PROVIDER[normalized] || normalized;
 }
 
 function escapeRegExp(s: string): string {

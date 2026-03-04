@@ -5,7 +5,7 @@ import { Badge, Button, Icon, Spinner, Stack, Text, Tooltip, useStyles2 } from '
 import type { ConversationSearchResult } from '../../conversation/types';
 import { inferProviderFromModelName } from '../../modelcard/resolve';
 import type { ModelCard } from '../../modelcard/types';
-import { getProviderColor, getProviderMeta, inferProvider, stripProviderPrefix } from './providerMeta';
+import { getProviderColor, getProviderMeta, stripProviderPrefix, toDisplayProvider } from './providerMeta';
 
 export type ConversationListPanelProps = {
   conversations: ConversationSearchResult[];
@@ -369,34 +369,25 @@ function AgentPillList({ items }: { items: string[] }) {
 
 function resolveModelDisplay(
   model: string,
-  modelProviders?: Record<string, string>,
   modelCards?: Map<string, ModelCard>
 ): { displayName: string; color: string } {
-  if (modelCards && modelCards.size > 0) {
-    const resolveProvider = modelProviders?.[model] || inferProviderFromModelName(model);
-    if (resolveProvider) {
-      const card = modelCards.get(`${resolveProvider}::${model}`);
-      if (card) {
-        const cleanName = stripProviderPrefix(card.name || card.source_model_id, getProviderMeta(card.provider).label);
-        return { displayName: cleanName, color: getProviderColor(card.provider) };
-      }
+  const apiProvider = inferProviderFromModelName(model);
+
+  if (modelCards && modelCards.size > 0 && apiProvider) {
+    const card = modelCards.get(`${apiProvider}::${model}`);
+    if (card) {
+      const displayProv = toDisplayProvider(card.provider);
+      const cleanName = stripProviderPrefix(card.name || card.source_model_id, getProviderMeta(displayProv).label);
+      return { displayName: cleanName, color: getProviderColor(displayProv) };
     }
   }
 
-  const displayProvider = modelProviders?.[model] || inferProvider(model);
-  const meta = getProviderMeta(displayProvider);
-  return { displayName: stripProviderPrefix(model, meta.label), color: getProviderColor(displayProvider) };
+  const displayProv = toDisplayProvider(apiProvider);
+  const meta = getProviderMeta(displayProv);
+  return { displayName: stripProviderPrefix(model, meta.label), color: getProviderColor(displayProv) };
 }
 
-function ModelPillList({
-  models,
-  modelProviders,
-  modelCards,
-}: {
-  models: string[];
-  modelProviders?: Record<string, string>;
-  modelCards?: Map<string, ModelCard>;
-}) {
+function ModelPillList({ models, modelCards }: { models: string[]; modelCards?: Map<string, ModelCard> }) {
   const styles = useStyles2(getStyles);
   if (models.length === 0) {
     return <Text color="secondary">-</Text>;
@@ -408,14 +399,11 @@ function ModelPillList({
   return (
     <div className={styles.pillList}>
       {visible.map((model) => {
-        const { displayName, color } = resolveModelDisplay(model, modelProviders, modelCards);
+        const { displayName, color } = resolveModelDisplay(model, modelCards);
         return (
           <Tooltip key={model} content={model}>
             <span className={styles.modelChip}>
-              <span
-                className={styles.modelChipDot}
-                style={{ background: color }}
-              />
+              <span className={styles.modelChipDot} style={{ background: color }} />
               {displayName}
             </span>
           </Tooltip>
@@ -494,10 +482,7 @@ export default function ConversationListPanel({
                     aria-selected={selected}
                   >
                     <td className={cx(styles.cell, styles.timeCell, styles.timeCellCompact)}>
-                      <Tooltip
-                        content={new Date(conversation.last_generation_at).toLocaleString()}
-                        placement="left"
-                      >
+                      <Tooltip content={new Date(conversation.last_generation_at).toLocaleString()} placement="left">
                         <span>{formatRelativeTime(conversation.last_generation_at)}</span>
                       </Tooltip>
                     </td>
@@ -554,21 +539,14 @@ export default function ConversationListPanel({
               return (
                 <tr
                   key={conversation.conversation_id}
-                  className={cx(
-                    styles.row,
-                    selected && styles.rowSelected,
-                    conversation.has_errors && styles.rowError
-                  )}
+                  className={cx(styles.row, selected && styles.rowSelected, conversation.has_errors && styles.rowError)}
                   onClick={(e) => handleRowClick(e, conversation.conversation_id)}
                   role="button"
                   aria-label={`select conversation ${conversation.conversation_id}`}
                   aria-selected={selected}
                 >
                   <td className={cx(styles.cell, styles.timeCell)}>
-                    <Tooltip
-                      content={new Date(conversation.last_generation_at).toLocaleString()}
-                      placement="left"
-                    >
+                    <Tooltip content={new Date(conversation.last_generation_at).toLocaleString()} placement="left">
                       <span>{formatRelativeTime(conversation.last_generation_at)}</span>
                     </Tooltip>
                   </td>
@@ -593,11 +571,7 @@ export default function ConversationListPanel({
                     <AgentPillList items={conversation.agents} />
                   </td>
                   <td className={styles.cell}>
-                    <ModelPillList
-                      models={conversation.models}
-                      modelProviders={conversation.model_providers}
-                      modelCards={modelCards}
-                    />
+                    <ModelPillList models={conversation.models} modelCards={modelCards} />
                   </td>
                   <td className={styles.cell}>
                     <div className={styles.groupedCell}>

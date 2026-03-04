@@ -1,10 +1,7 @@
 import type { ConversationSearchResult } from '../../conversation/types';
 import { bucketConversations, computeBucketCount } from './ConversationTimelineHistogram';
 
-function makeConv(
-  lastGenerationAt: string,
-  hasErrors = false
-): ConversationSearchResult {
+function makeConv(lastGenerationAt: string): ConversationSearchResult {
   return {
     conversation_id: `conv-${lastGenerationAt}`,
     generation_count: 1,
@@ -12,8 +9,8 @@ function makeConv(
     last_generation_at: lastGenerationAt,
     models: [],
     agents: [],
-    error_count: hasErrors ? 1 : 0,
-    has_errors: hasErrors,
+    error_count: 0,
+    has_errors: false,
     trace_ids: [],
     annotation_count: 0,
   };
@@ -24,14 +21,12 @@ describe('bucketConversations', () => {
     const result = bucketConversations([], 0, 60_000, 5);
     expect(result.times).toHaveLength(5);
     expect(result.counts).toEqual([0, 0, 0, 0, 0]);
-    expect(result.errorCounts).toEqual([0, 0, 0, 0, 0]);
   });
 
   it('returns empty arrays when bucketCount is 0', () => {
     const result = bucketConversations([], 0, 60_000, 0);
     expect(result.times).toHaveLength(0);
     expect(result.counts).toHaveLength(0);
-    expect(result.errorCounts).toHaveLength(0);
   });
 
   it('returns empty arrays when range is invalid', () => {
@@ -62,27 +57,23 @@ describe('bucketConversations', () => {
     expect(result.counts).toEqual([2, 0, 1, 1]);
   });
 
-  it('tracks error conversations separately', () => {
+  it('counts error conversations in totals', () => {
     const from = Date.parse('2026-03-04T12:00:00Z');
     const to = Date.parse('2026-03-04T13:00:00Z');
     const convs = [
-      makeConv('2026-03-04T12:05:00Z', false),
-      makeConv('2026-03-04T12:10:00Z', true),
-      makeConv('2026-03-04T12:35:00Z', true),
+      makeConv('2026-03-04T12:05:00Z'),
+      makeConv('2026-03-04T12:10:00Z'),
+      makeConv('2026-03-04T12:35:00Z'),
     ];
 
     const result = bucketConversations(convs, from, to, 4);
     expect(result.counts).toEqual([2, 0, 1, 0]);
-    expect(result.errorCounts).toEqual([1, 0, 1, 0]);
   });
 
   it('clamps conversations at range boundaries', () => {
     const from = Date.parse('2026-03-04T12:00:00Z');
     const to = Date.parse('2026-03-04T13:00:00Z');
-    const convs = [
-      makeConv('2026-03-04T11:00:00Z'),
-      makeConv('2026-03-04T14:00:00Z'),
-    ];
+    const convs = [makeConv('2026-03-04T11:00:00Z'), makeConv('2026-03-04T14:00:00Z')];
 
     const result = bucketConversations(convs, from, to, 4);
     expect(result.counts).toEqual([1, 0, 0, 1]);

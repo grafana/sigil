@@ -304,12 +304,26 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   const [modelCards, setModelCards] = useState<Map<string, ModelCard>>(new Map());
 
   useEffect(() => {
+    let stale = false;
     const allModels = Array.from(new Set(conversations.flatMap((c) => c.models)));
     if (allModels.length === 0) {
       setModelCards(new Map());
       return;
     }
-    void resolveModelCardsFromNames(allModels, modelCardClient).then(setModelCards).catch(() => setModelCards(new Map()));
+    void resolveModelCardsFromNames(allModels, modelCardClient)
+      .then((cards) => {
+        if (!stale) {
+          setModelCards(cards);
+        }
+      })
+      .catch(() => {
+        if (!stale) {
+          setModelCards(new Map());
+        }
+      });
+    return () => {
+      stale = true;
+    };
   }, [conversations, modelCardClient]);
 
   const onMoveBackward = useCallback(() => {
@@ -497,11 +511,7 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
         )}
       </div>
 
-      <ConversationTimelineHistogram
-        conversations={conversations}
-        timeRange={timeRange}
-        loading={loading}
-      />
+      <ConversationTimelineHistogram conversations={conversations} timeRange={timeRange} loading={loading} />
 
       <div className={styles.listPanel}>
         <ConversationListPanel

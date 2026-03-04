@@ -15,7 +15,6 @@ import { MetricPanel } from '../dashboard/MetricPanel';
 export type BucketResult = {
   times: number[];
   counts: number[];
-  errorCounts: number[];
 };
 
 const MIN_BUCKETS = 12;
@@ -49,13 +48,12 @@ export function bucketConversations(
 ): BucketResult {
   const rangeMs = toMs - fromMs;
   if (rangeMs <= 0 || bucketCount <= 0) {
-    return { times: [], counts: [], errorCounts: [] };
+    return { times: [], counts: [] };
   }
 
   const bucketWidth = rangeMs / bucketCount;
   const times = new Array<number>(bucketCount);
   const counts = new Array<number>(bucketCount).fill(0);
-  const errorCounts = new Array<number>(bucketCount).fill(0);
 
   for (let i = 0; i < bucketCount; i++) {
     times[i] = fromMs + i * bucketWidth + bucketWidth / 2;
@@ -74,12 +72,9 @@ export function bucketConversations(
       idx = bucketCount - 1;
     }
     counts[idx]++;
-    if (conv.has_errors) {
-      errorCounts[idx]++;
-    }
   }
 
-  return { times, counts, errorCounts };
+  return { times, counts };
 }
 
 function buildDataFrames(buckets: BucketResult): DataFrame[] {
@@ -184,7 +179,7 @@ function getStyles(theme: GrafanaTheme2) {
       label: 'conversationTimelineHistogram-container',
       '[data-testid="data-testid panel content"] > div > div:nth-child(2)': {
         height: '1px',
-      }
+      },
     }),
   };
 }

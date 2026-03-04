@@ -6,11 +6,7 @@ import {
 } from '../components/conversations/ConversationTimelineHistogram';
 import type { ConversationSearchResult } from '../conversation/types';
 
-function generateMockConversations(
-  count: number,
-  fromMs: number,
-  toMs: number
-): ConversationSearchResult[] {
+function generateMockConversations(count: number, fromMs: number, toMs: number): ConversationSearchResult[] {
   const results: ConversationSearchResult[] = [];
   for (let i = 0; i < count; i++) {
     const ts = fromMs + Math.random() * (toMs - fromMs);
@@ -72,11 +68,7 @@ export const FewConversations = {
     const fewConvs = generateMockConversations(5, oneHourAgo, now);
     return (
       <div style={{ width: '100%', maxWidth: 1200, margin: '0 auto' }}>
-        <ConversationTimelineHistogram
-          conversations={fewConvs}
-          timeRange={defaultRange}
-          loading={false}
-        />
+        <ConversationTimelineHistogram conversations={fewConvs} timeRange={defaultRange} loading={false} />
       </div>
     );
   },
