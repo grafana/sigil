@@ -66,6 +66,7 @@ func (e *LLMJudgeEvaluator) Evaluate(ctx context.Context, input EvalInput, defin
 		Model:        modelName,
 		MaxTokens:    maxTokens,
 		Temperature:  temperature,
+		OutputSchema: BuildJudgeSchema(definition.OutputKeys),
 	})
 	if err != nil {
 		if judgeCtx.Err() != nil {
@@ -75,7 +76,7 @@ func (e *LLMJudgeEvaluator) Evaluate(ctx context.Context, input EvalInput, defin
 	}
 
 	key, scoreType, unit, passThreshold := firstOutputKey(definition, "judge_score", evalpkg.ScoreTypeNumber)
-	value, parsedPassed, explanation, err := parseJudgeResponse(response.Text, scoreType)
+	value, parsedPassed, explanation, err := parseJudgeResponse(response.Text, key, scoreType)
 	if err != nil {
 		return nil, evalpkg.Permanent(err)
 	}
@@ -154,7 +155,7 @@ func renderTemplate(template string, input EvalInput) string {
 	return output
 }
 
-func parseJudgeResponse(raw string, scoreType evalpkg.ScoreType) (evalpkg.ScoreValue, *bool, string, error) {
+func parseJudgeResponse(raw string, scoreKey string, scoreType evalpkg.ScoreType) (evalpkg.ScoreValue, *bool, string, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
 		return evalpkg.ScoreValue{}, nil, "", fmt.Errorf("judge response was empty")
@@ -162,7 +163,7 @@ func parseJudgeResponse(raw string, scoreType evalpkg.ScoreType) (evalpkg.ScoreV
 
 	parsed := map[string]any{}
 	if err := json.Unmarshal([]byte(trimmed), &parsed); err == nil {
-		return parseJudgeJSON(parsed, scoreType)
+		return parseJudgeJSON(parsed, scoreKey, scoreType)
 	}
 
 	switch scoreType {
@@ -233,7 +234,7 @@ func parseJudgeBoolLiteral(raw string) (bool, bool) {
 	}
 }
 
-func parseJudgeJSON(parsed map[string]any, scoreType evalpkg.ScoreType) (evalpkg.ScoreValue, *bool, string, error) {
+func parseJudgeJSON(parsed map[string]any, scoreKey string, scoreType evalpkg.ScoreType) (evalpkg.ScoreValue, *bool, string, error) {
 	explanation := ""
 	if value, ok := parsed["explanation"].(string); ok {
 		explanation = strings.TrimSpace(value)
@@ -243,7 +244,12 @@ func parseJudgeJSON(parsed map[string]any, scoreType evalpkg.ScoreType) (evalpkg
 		passed = boolPointer(value)
 	}
 
+	// Look for the score value: try "score" first (legacy format), then the
+	// output key name (structured output format), then "value" for bools.
 	scoreRaw, ok := parsed["score"]
+	if !ok && scoreKey != "" && scoreKey != "score" {
+		scoreRaw, ok = parsed[scoreKey]
+	}
 	if !ok {
 		if scoreType == evalpkg.ScoreTypeBool {
 			if boolScore, ok := parsed["value"].(bool); ok {
@@ -301,6 +307,68 @@ func configString(config map[string]any, key, defaultValue string) string {
 		return defaultValue
 	}
 	return trimmed
+}
+
+// BuildJudgeSchema dynamically constructs a JSON Schema from OutputKeys.
+// The schema always includes an "explanation" string field alongside the
+// score fields derived from the output key definitions.
+func BuildJudgeSchema(keys []evalpkg.OutputKey) map[string]any {
+	if len(keys) == 0 {
+		return nil
+	}
+
+	// Collect valid keys first; return nil if none survive trimming.
+	type validKey struct {
+		name string
+		def  evalpkg.OutputKey
+	}
+	valid := make([]validKey, 0, len(keys))
+	for _, k := range keys {
+		name := strings.TrimSpace(k.Key)
+		// "explanation" is reserved for the judge's reasoning text.
+		if name != "" && name != "explanation" {
+			valid = append(valid, validKey{name: name, def: k})
+		}
+	}
+	if len(valid) == 0 {
+		return nil
+	}
+
+	props := map[string]any{
+		"explanation": map[string]any{"type": "string"},
+	}
+	required := []string{"explanation"}
+
+	for _, vk := range valid {
+		k := vk.def
+		key := vk.name
+		prop := map[string]any{}
+		switch k.Type {
+		case evalpkg.ScoreTypeNumber:
+			prop["type"] = "number"
+		case evalpkg.ScoreTypeBool:
+			prop["type"] = "boolean"
+		case evalpkg.ScoreTypeString:
+			prop["type"] = "string"
+			if len(k.Enum) > 0 {
+				prop["enum"] = k.Enum
+			}
+		default:
+			prop["type"] = "string"
+		}
+		if k.Description != "" {
+			prop["description"] = k.Description
+		}
+		props[key] = prop
+		required = append(required, key)
+	}
+
+	return map[string]any{
+		"type":                 "object",
+		"properties":           props,
+		"required":             required,
+		"additionalProperties": false,
+	}
 }
 
 func configFloat(config map[string]any, key string, defaultValue float64) float64 {

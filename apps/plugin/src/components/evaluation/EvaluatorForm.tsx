@@ -4,6 +4,7 @@ import { Button, Field, Input, Select, Stack, Switch, useStyles2 } from '@grafan
 import { css } from '@emotion/css';
 import {
   EVALUATOR_KIND_LABELS,
+  buildOutputKeyFromForm,
   type CreateEvaluatorRequest,
   type EvalFormState,
   type EvalOutputKey,
@@ -69,6 +70,8 @@ function parseEvaluatorToFormState(e: Evaluator): {
   maxLength: number | '';
   outputKey: string;
   outputType: ScoreType;
+  outputDescription: string;
+  outputEnum: string;
 } {
   const cfg = e.config ?? {};
   const firstOk = e.output_keys?.[0];
@@ -87,6 +90,8 @@ function parseEvaluatorToFormState(e: Evaluator): {
     maxLength: cfg.max_length != null ? (cfg.max_length as number) : '',
     outputKey: firstOk?.key ?? '',
     outputType: (firstOk?.type as ScoreType) ?? 'number',
+    outputDescription: firstOk?.description ?? '',
+    outputEnum: firstOk?.enum?.join(', ') ?? '',
   };
 }
 
@@ -120,6 +125,8 @@ export default function EvaluatorForm({ initialEvaluator, onSubmit, onCancel, on
   // output key
   const [outputKey, setOutputKey] = useState(initialState?.outputKey ?? '');
   const [outputType, setOutputType] = useState<ScoreType>(initialState?.outputType ?? 'number');
+  const [outputDescription, setOutputDescription] = useState(initialState?.outputDescription ?? '');
+  const [outputEnum, setOutputEnum] = useState(initialState?.outputEnum ?? '');
 
   const buildConfig = (): Record<string, unknown> => {
     switch (kind) {
@@ -153,7 +160,7 @@ export default function EvaluatorForm({ initialEvaluator, onSubmit, onCancel, on
     onConfigChange?.({
       kind,
       config: buildConfig(),
-      outputKeys: [{ key: outputKey.trim() || 'score', type: outputType }],
+      outputKeys: [buildOutputKeyFromForm(outputKey, outputType, outputDescription, outputEnum)],
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -169,6 +176,8 @@ export default function EvaluatorForm({ initialEvaluator, onSubmit, onCancel, on
     maxLength,
     outputKey,
     outputType,
+    outputDescription,
+    outputEnum,
   ]);
 
   const isIdEmpty = evaluatorId.trim() === '';
@@ -182,7 +191,7 @@ export default function EvaluatorForm({ initialEvaluator, onSubmit, onCancel, on
       return;
     }
 
-    const outputKeys: EvalOutputKey[] = [{ key: outputKey.trim(), type: outputType }];
+    const outputKeys: EvalOutputKey[] = [buildOutputKeyFromForm(outputKey, outputType, outputDescription, outputEnum)];
 
     const req: CreateEvaluatorRequest = {
       evaluator_id: evaluatorId.trim(),
@@ -357,6 +366,34 @@ export default function EvaluatorForm({ initialEvaluator, onSubmit, onCancel, on
           />
         </div>
       </Field>
+      {kind === 'llm_judge' && (
+        <>
+          <Field
+            label="Output description"
+            description="Optional description for the output key. Helps the judge model understand what to produce."
+          >
+            <Input
+              value={outputDescription}
+              onChange={(e) => setOutputDescription(e.currentTarget.value)}
+              placeholder="e.g. How helpful the response is on a 0-1 scale"
+              width={60}
+            />
+          </Field>
+          {outputType === 'string' && (
+            <Field
+              label="Allowed values"
+              description="Comma-separated list of allowed string values. Enforced via structured output."
+            >
+              <Input
+                value={outputEnum}
+                onChange={(e) => setOutputEnum(e.currentTarget.value)}
+                placeholder="e.g. none, mild, moderate, severe"
+                width={60}
+              />
+            </Field>
+          )}
+        </>
+      )}
 
       <Stack direction="row" gap={1}>
         <Button onClick={handleSubmit}>{isEdit ? 'Update' : 'Create'}</Button>

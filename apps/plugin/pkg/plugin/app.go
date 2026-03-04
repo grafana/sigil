@@ -128,7 +128,7 @@ func NewApp(ctx context.Context, settings backend.AppInstanceSettings) (instance
 		tempoDatasourceUID:         strings.TrimSpace(cfg.TempoDatasourceUID),
 		grafanaAppURL:              strings.TrimSuffix(strings.TrimSpace(grafanaAppURL), "/"),
 		grafanaServiceAccountToken: grafanaServiceAccountToken,
-		client:                     &http.Client{Timeout: 10 * time.Second},
+		client:                     &http.Client{Timeout: 5 * time.Minute},
 	}
 
 	mux := http.NewServeMux()

@@ -195,6 +195,18 @@ func newQuerierModule(
 		}
 	}
 
+	var savedConvSvc *evalcontrol.SavedConversationService
+	if scStore, ok := generationStore.(evalpkg.SavedConversationStore); ok {
+		var scOpts []evalcontrol.SavedConversationServiceOption
+		if mw, ok := generationStore.(evalcontrol.ManualConversationWriter); ok {
+			scOpts = append(scOpts, evalcontrol.WithManualWriter(mw))
+		}
+		if md, ok := generationStore.(evalcontrol.ManualConversationDeleter); ok {
+			scOpts = append(scOpts, evalcontrol.WithManualDeleter(md))
+		}
+		savedConvSvc = evalcontrol.NewSavedConversationService(scStore, conversationStore, scOpts...)
+	}
+
 	if registry != nil {
 		registry.RegisterHTTP(func(mux *http.ServeMux, protectedMiddleware func(http.Handler) http.Handler) {
 			server.RegisterQueryRoutes(
@@ -208,6 +220,7 @@ func newQuerierModule(
 			)
 			server.RegisterSettingsRoutes(mux, tenantSettingsSvc, protectedMiddleware)
 			evalcontrol.RegisterHTTPRoutes(mux, controlSvc, templateSvc, testSvc, protectedMiddleware)
+			evalcontrol.RegisterSavedConversationRoutes(mux, savedConvSvc, protectedMiddleware)
 			evalingest.RegisterHTTPRoutes(mux, ingestScoreSvc, protectedMiddleware)
 		})
 	}

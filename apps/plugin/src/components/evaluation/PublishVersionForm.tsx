@@ -2,12 +2,13 @@ import React, { useEffect, useState } from 'react';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
 import { Button, Field, FieldSet, Input, Select, Stack, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
-import type {
-  EvalFormState,
-  EvalOutputKey,
-  EvaluatorKind,
-  PublishVersionRequest,
-  ScoreType,
+import {
+  buildOutputKeyFromForm,
+  type EvalFormState,
+  type EvalOutputKey,
+  type EvaluatorKind,
+  type PublishVersionRequest,
+  type ScoreType,
 } from '../../evaluation/types';
 import { nextVersion } from '../../evaluation/versionUtils';
 
@@ -68,6 +69,8 @@ export default function PublishVersionForm({
   const [configJson, setConfigJson] = useState(initialConfig ? JSON.stringify(initialConfig, null, 2) : '{}');
   const [outputKey, setOutputKey] = useState(initialOutputKeys?.[0]?.key ?? '');
   const [outputType, setOutputType] = useState<ScoreType>(initialOutputKeys?.[0]?.type ?? 'number');
+  const [outputDescription, setOutputDescription] = useState(initialOutputKeys?.[0]?.description ?? '');
+  const [outputEnum, setOutputEnum] = useState(initialOutputKeys?.[0]?.enum?.join(', ') ?? '');
   const [changelog, setChangelog] = useState(rollbackVersion ? `Rollback to version ${rollbackVersion}` : '');
   const [touched, setTouched] = useState(false);
 
@@ -81,10 +84,10 @@ export default function PublishVersionForm({
     onConfigChange?.({
       kind,
       config: parsedConfig,
-      outputKeys: [{ key: outputKey.trim() || 'score', type: outputType }],
+      outputKeys: [buildOutputKeyFromForm(outputKey, outputType, outputDescription, outputEnum)],
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kind, configJson, outputKey, outputType]);
+  }, [kind, configJson, outputKey, outputType, outputDescription, outputEnum]);
 
   const isVersionEmpty = version.trim() === '';
   const isOutputKeyEmpty = outputKey.trim() === '';
@@ -106,7 +109,7 @@ export default function PublishVersionForm({
 
     const config: Record<string, unknown> = JSON.parse(configJson);
 
-    const outputKeys: EvalOutputKey[] = [{ key: outputKey.trim(), type: outputType }];
+    const outputKeys: EvalOutputKey[] = [buildOutputKeyFromForm(outputKey, outputType, outputDescription, outputEnum)];
 
     onSubmit({
       version: version.trim(),
@@ -175,6 +178,34 @@ export default function PublishVersionForm({
           />
         </div>
       </Field>
+      {kind === 'llm_judge' && (
+        <>
+          <Field
+            label="Output description"
+            description="Optional description for the output key. Helps the judge model understand what to produce."
+          >
+            <Input
+              value={outputDescription}
+              onChange={(e) => setOutputDescription(e.currentTarget.value)}
+              placeholder="e.g. How helpful the response is on a 0-1 scale"
+              width={60}
+            />
+          </Field>
+          {outputType === 'string' && (
+            <Field
+              label="Allowed values"
+              description="Comma-separated list of allowed string values. Enforced via structured output."
+            >
+              <Input
+                value={outputEnum}
+                onChange={(e) => setOutputEnum(e.currentTarget.value)}
+                placeholder="e.g. none, mild, moderate, severe"
+                width={60}
+              />
+            </Field>
+          )}
+        </>
+      )}
 
       <Field label="Changelog" description="Description of changes in this version.">
         <Input

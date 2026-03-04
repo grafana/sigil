@@ -122,6 +122,10 @@ func (c *GoogleClient) Judge(ctx context.Context, req JudgeRequest) (JudgeRespon
 	if system := strings.TrimSpace(req.SystemPrompt); system != "" {
 		cfg.SystemInstruction = genai.NewContentFromText(system, genai.RoleUser)
 	}
+	if len(req.OutputSchema) > 0 {
+		cfg.ResponseMIMEType = "application/json"
+		cfg.ResponseJsonSchema = req.OutputSchema
+	}
 
 	start := time.Now()
 	response, err := c.client.Models.GenerateContent(ctx, model, genai.Text(req.UserPrompt), cfg)

@@ -19,6 +19,7 @@ import (
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
 	"github.com/grafana/sigil/sigil/internal/storage"
+	"github.com/grafana/sigil/sigil/internal/tenantauth"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
@@ -26,6 +27,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
@@ -376,6 +378,78 @@ func TestServerModuleStartSkipsGRPCWithoutRegistrars(t *testing.T) {
 	}
 	if module.grpcListener != nil {
 		t.Fatalf("expected grpc listener to be nil when no grpc registrars are present")
+	}
+}
+
+func TestNewGRPCServerAcceptsGenerationPayloadAboveDefaultLimit(t *testing.T) {
+	grpcServer := newGRPCServer(tenantauth.Config{Enabled: false})
+	generationService := generationingest.NewService(generationingest.NewMemoryStore())
+	sigilv1.RegisterGenerationIngestServiceServer(grpcServer, generationingest.NewGRPCServer(generationService))
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen grpc: %v", err)
+	}
+	go func() {
+		_ = grpcServer.Serve(listener)
+	}()
+	t.Cleanup(func() {
+		grpcServer.Stop()
+		_ = listener.Close()
+	})
+
+	conn, err := grpc.NewClient(
+		listener.Addr().String(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallSendMsgSize(defaultGRPCMaxSendMessageBytes),
+			grpc.MaxCallRecvMsgSize(defaultGRPCMaxReceiveMessageBytes),
+		),
+	)
+	if err != nil {
+		t.Fatalf("dial grpc: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = conn.Close()
+	})
+
+	largeText := strings.Repeat("x", 5<<20)
+	request := &sigilv1.ExportGenerationsRequest{
+		Generations: []*sigilv1.Generation{
+			{
+				Id:    "gen-large",
+				Mode:  sigilv1.GenerationMode_GENERATION_MODE_SYNC,
+				Model: &sigilv1.ModelRef{Provider: "openai", Name: "gpt-5"},
+				Input: []*sigilv1.Message{
+					{
+						Role: sigilv1.MessageRole_MESSAGE_ROLE_USER,
+						Parts: []*sigilv1.Part{
+							{Payload: &sigilv1.Part_Text{Text: largeText}},
+						},
+					},
+				},
+				Output: []*sigilv1.Message{
+					{
+						Role: sigilv1.MessageRole_MESSAGE_ROLE_ASSISTANT,
+						Parts: []*sigilv1.Part{
+							{Payload: &sigilv1.Part_Text{Text: "ok"}},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	client := sigilv1.NewGenerationIngestServiceClient(conn)
+	response, err := client.ExportGenerations(context.Background(), request)
+	if err != nil {
+		t.Fatalf("export generations: %v", err)
+	}
+	if len(response.GetResults()) != 1 {
+		t.Fatalf("expected one result, got %d", len(response.GetResults()))
+	}
+	if !response.GetResults()[0].GetAccepted() {
+		t.Fatalf("expected accepted result, got %#v", response.GetResults()[0])
 	}
 }
 

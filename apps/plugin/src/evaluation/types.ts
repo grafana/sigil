@@ -12,9 +12,31 @@ export type ScoreType = 'number' | 'bool' | 'string';
 export type EvalOutputKey = {
   key: string;
   type: ScoreType;
+  description?: string;
   unit?: string;
   pass_threshold?: number;
+  enum?: string[];
 };
+
+/** Build an EvalOutputKey from form state, applying trim and enum parsing. */
+export function buildOutputKeyFromForm(
+  key: string,
+  type: ScoreType,
+  description: string,
+  enumValue: string
+): EvalOutputKey {
+  const ok: EvalOutputKey = { key: key.trim() || 'score', type };
+  if (description.trim()) {
+    ok.description = description.trim();
+  }
+  if (type === 'string' && enumValue.trim()) {
+    ok.enum = enumValue
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean);
+  }
+  return ok;
+}
 
 export type Evaluator = {
   evaluator_id: string;
@@ -260,6 +282,55 @@ export function formatEvaluatorId(id: string): string {
   }
   return id;
 }
+
+export type SavedConversation = {
+  tenant_id: string;
+  saved_id: string;
+  conversation_id: string;
+  name: string;
+  source: 'telemetry' | 'manual';
+  tags: Record<string, string>;
+  saved_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SavedConversationListResponse = {
+  items: SavedConversation[];
+  next_cursor: string;
+};
+
+export type SaveConversationRequest = {
+  saved_id: string;
+  conversation_id: string;
+  name: string;
+  tags?: Record<string, string>;
+  saved_by: string;
+};
+
+export type CreateManualConversationRequest = {
+  saved_id: string;
+  name: string;
+  tags?: Record<string, string>;
+  saved_by: string;
+  generations: ManualGeneration[];
+};
+
+export type ManualGeneration = {
+  generation_id: string;
+  operation_name: string;
+  mode: 'SYNC' | 'STREAM';
+  model: { provider: string; name: string };
+  input: ManualMessage[];
+  output: ManualMessage[];
+  started_at?: string;
+  completed_at?: string;
+};
+
+export type ManualMessage = {
+  role: string;
+  content: string;
+};
 
 export function getKindBadgeColor(kind: EvaluatorKind): 'blue' | 'green' | 'orange' | 'purple' {
   switch (kind) {

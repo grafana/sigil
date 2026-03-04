@@ -696,8 +696,43 @@ func (a *App) handleEvalTemplateRoutes(w http.ResponseWriter, req *http.Request)
 	}
 }
 
+func (a *App) handleEvalSavedConversations(w http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case http.MethodGet:
+		a.handleProxy(w, req, "/api/v1/eval/saved-conversations", http.MethodGet)
+	case http.MethodPost:
+		a.handleProxy(w, req, "/api/v1/eval/saved-conversations", http.MethodPost)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (a *App) handleEvalSavedConversationByID(w http.ResponseWriter, req *http.Request) {
+	id := strings.TrimPrefix(req.URL.Path, "/eval/saved-conversations/")
+	if id == "" || strings.Contains(id, "/") {
+		http.Error(w, "invalid saved conversation path", http.StatusBadRequest)
+		return
+	}
+	path := fmt.Sprintf("/api/v1/eval/saved-conversations/%s", id)
+	switch req.Method {
+	case http.MethodGet:
+		a.handleProxy(w, req, path, http.MethodGet)
+	case http.MethodDelete:
+		a.handleProxy(w, req, path, http.MethodDelete)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (a *App) handleEvalSavedConversationsManual(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	a.handleProxy(w, req, "/api/v1/eval/saved-conversations:manual", http.MethodPost)
+}
+
 func (a *App) registerRoutes(mux *http.ServeMux) {
-	backend.Logger.Info("registering routes")
 	mux.HandleFunc("/query/conversations/search", a.withAuthorization(a.handleSearchConversations))
 	mux.HandleFunc("/query/conversations", a.withAuthorization(a.handleListConversations))
 	mux.HandleFunc("/query/conversations/", a.withAuthorization(a.handleConversationRoutes))
@@ -726,6 +761,9 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/eval/judge/models", a.withAuthorization(a.handleEvalJudgeModels))
 	mux.HandleFunc("/eval/templates", a.withAuthorization(a.handleEvalTemplates))
 	mux.HandleFunc("/eval/templates/", a.withAuthorization(a.handleEvalTemplateRoutes))
+	mux.HandleFunc("/eval/saved-conversations", a.withAuthorization(a.handleEvalSavedConversations))
+	mux.HandleFunc("/eval/saved-conversations/", a.withAuthorization(a.handleEvalSavedConversationByID))
+	mux.HandleFunc("/eval/saved-conversations:manual", a.withAuthorization(a.handleEvalSavedConversationsManual))
 }
 
 type conversationSearchTimeRange struct {

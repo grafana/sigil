@@ -72,8 +72,10 @@ func (v ScoreValue) Type() ScoreType {
 type OutputKey struct {
 	Key           string    `json:"key"`
 	Type          ScoreType `json:"type"`
+	Description   string    `json:"description,omitempty"`
 	Unit          string    `json:"unit,omitempty"`
 	PassThreshold *float64  `json:"pass_threshold,omitempty"`
+	Enum          []string  `json:"enum,omitempty"`
 }
 
 type EvaluatorDefinition struct {
@@ -248,6 +250,41 @@ type EvalStore interface {
 	CompleteWorkItem(ctx context.Context, tenantID, workID string) error
 	FailWorkItem(ctx context.Context, tenantID, workID, lastError string, retryAt time.Time, maxAttempts int, permanent bool) (bool, error)
 	CountWorkItemsByStatus(ctx context.Context, status WorkItemStatus) (map[string]int64, error)
+}
+
+type SavedConversationSource string
+
+const (
+	SavedConversationSourceTelemetry SavedConversationSource = "telemetry"
+	SavedConversationSourceManual    SavedConversationSource = "manual"
+)
+
+func IsValidSavedConversationSource(s string) bool {
+	switch SavedConversationSource(s) {
+	case SavedConversationSourceTelemetry, SavedConversationSourceManual:
+		return true
+	default:
+		return false
+	}
+}
+
+type SavedConversation struct {
+	TenantID       string                  `json:"tenant_id"`
+	SavedID        string                  `json:"saved_id"`
+	ConversationID string                  `json:"conversation_id"`
+	Name           string                  `json:"name"`
+	Source         SavedConversationSource `json:"source"`
+	Tags           map[string]string       `json:"tags"`
+	SavedBy        string                  `json:"saved_by"`
+	CreatedAt      time.Time               `json:"created_at"`
+	UpdatedAt      time.Time               `json:"updated_at"`
+}
+
+type SavedConversationStore interface {
+	CreateSavedConversation(ctx context.Context, sc SavedConversation) error
+	GetSavedConversation(ctx context.Context, tenantID, savedID string) (*SavedConversation, error)
+	ListSavedConversations(ctx context.Context, tenantID string, source string, limit int, cursor uint64) ([]SavedConversation, uint64, error)
+	DeleteSavedConversation(ctx context.Context, tenantID, savedID string) error
 }
 
 // TemplateStore manages evaluator template CRUD and versioning.
