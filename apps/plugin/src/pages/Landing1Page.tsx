@@ -180,13 +180,7 @@ export default function Landing1Page() {
                   ))}
                 </ul>
               </div>
-              <form
-                className={styles.assistantRowDash}
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  openAssistant();
-                }}
-              >
+              <form className={styles.assistantRowDash}>
                 <textarea
                   value={assistantInput}
                   onChange={(event) => setAssistantInput(event.currentTarget.value)}
@@ -203,7 +197,7 @@ export default function Landing1Page() {
                   className={styles.askSubmitButton}
                   disabled={assistantInput.trim().length === 0}
                   onClick={openAssistant}
-                  type="submit"
+                  type="button"
                 />
               </form>
             </Stack>
