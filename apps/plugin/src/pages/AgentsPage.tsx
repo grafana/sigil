@@ -49,11 +49,12 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexDirection: 'column' as const,
     gap: theme.spacing(2),
     minHeight: 0,
+    marginTop: theme.spacing(-2),
   }),
-  titleRow: css({
+  tabsRow: css({
     display: 'flex',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
     gap: theme.spacing(2),
     flexWrap: 'wrap' as const,
   }),
@@ -68,11 +69,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   heroWrap: css({
     display: 'flex',
-    justifyContent: 'flex-start',
+    justifyContent: 'stretch',
+    width: '100%',
   }),
   hero: css({
     width: '100%',
-    maxWidth: 1120,
     border: `1px solid ${theme.colors.border.medium}`,
     borderRadius: theme.shape.radius.default,
     background: theme.colors.background.secondary,
@@ -615,39 +616,6 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
 
   return (
     <div className={styles.page}>
-      <div className={styles.titleRow}>
-        <div>
-          <Text element="h2">Agents</Text>
-          <Text color="secondary" variant="bodySmall">
-            Catalog of tenant agents with version health, prompt footprint, and tool surface.
-          </Text>
-        </div>
-        <TimeRangePicker
-          value={timeRange}
-          onChange={setTimeRange}
-          onChangeTimeZone={() => {}}
-          onMoveBackward={() => {
-            const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
-            const from = dateTime(timeRange.from.valueOf() - diff);
-            const to = dateTime(timeRange.to.valueOf() - diff);
-            setTimeRange({ from, to, raw: { from, to } });
-          }}
-          onMoveForward={() => {
-            const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
-            const from = dateTime(timeRange.from.valueOf() + diff);
-            const to = dateTime(timeRange.to.valueOf() + diff);
-            setTimeRange({ from, to, raw: { from, to } });
-          }}
-          onZoom={() => {
-            const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
-            const from = dateTime(timeRange.from.valueOf() - diff / 2);
-            const to = dateTime(timeRange.to.valueOf() + diff / 2);
-            setTimeRange({ from, to, raw: { from, to } });
-          }}
-          isOnCanvas
-        />
-      </div>
-
       {errorMessage.length > 0 && (
         <Alert severity="error" title="Error" onRemove={() => setErrorMessage('')}>
           <Text>{errorMessage}</Text>
@@ -660,10 +628,36 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
         </div>
       ) : (
         <>
-          <TabsBar>
-            <Tab label="Overview" active={activeTab === 'info'} onChangeTab={handleTabChange('info')} />
-            <Tab label="Agents" active={activeTab === 'table'} onChangeTab={handleTabChange('table')} />
-          </TabsBar>
+          <div className={styles.tabsRow}>
+            <TabsBar>
+              <Tab label="Overview" active={activeTab === 'info'} onChangeTab={handleTabChange('info')} />
+              <Tab label="Agents" active={activeTab === 'table'} onChangeTab={handleTabChange('table')} />
+            </TabsBar>
+            <TimeRangePicker
+              value={timeRange}
+              onChange={setTimeRange}
+              onChangeTimeZone={() => {}}
+              onMoveBackward={() => {
+                const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
+                const from = dateTime(timeRange.from.valueOf() - diff);
+                const to = dateTime(timeRange.to.valueOf() - diff);
+                setTimeRange({ from, to, raw: { from, to } });
+              }}
+              onMoveForward={() => {
+                const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
+                const from = dateTime(timeRange.from.valueOf() + diff);
+                const to = dateTime(timeRange.to.valueOf() + diff);
+                setTimeRange({ from, to, raw: { from, to } });
+              }}
+              onZoom={() => {
+                const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
+                const from = dateTime(timeRange.from.valueOf() - diff / 2);
+                const to = dateTime(timeRange.to.valueOf() + diff / 2);
+                setTimeRange({ from, to, raw: { from, to } });
+              }}
+              isOnCanvas
+            />
+          </div>
 
           {activeTab === 'info' ? (
             items.length === 0 ? (

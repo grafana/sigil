@@ -18,12 +18,12 @@ export const PAGE_TITLES = {
   [ROUTES.Dashboard]: 'Dashboard',
   [ROUTES.Landing1]: 'Landing 1',
   [ROUTES.Conversations]: 'Conversations',
-  [ROUTES.ConversationsView]: 'Conversation view',
+  [ROUTES.ConversationsView]: 'Conversations',
   [ROUTES.ConversationsOld]: 'Conversations (old)',
-  [ROUTES.ConversationsDetail]: 'Conversation detail',
+  [ROUTES.ConversationsDetail]: 'Conversations',
   [ROUTES.Agents]: 'Agents',
-  [ROUTES.AgentDetailByName]: 'Agent detail',
-  [ROUTES.AgentDetailAnonymous]: 'Agent detail',
+  [ROUTES.AgentDetailByName]: 'Agents',
+  [ROUTES.AgentDetailAnonymous]: 'Agents',
   [ROUTES.Evaluation]: 'Evaluation',
 } as const;
 

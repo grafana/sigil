@@ -1,13 +1,18 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { css } from '@emotion/css';
 import { useAssistant } from '@grafana/assistant';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Button, Card, HorizontalGroup, IconButton, Link, LinkButton, Stack, Text, useStyles2 } from '@grafana/ui';
+import { Button, Card, HorizontalGroup, IconButton, LinkButton, Stack, Text, Tooltip, useStyles2 } from '@grafana/ui';
+import { useNavigate } from 'react-router-dom';
+import { defaultAgentsDataSource } from '../../agents/api';
+import { defaultConversationsDataSource } from '../../conversation/api';
+import { PLUGIN_BASE, ROUTES } from '../../constants';
 import {
   getInstrumentationPrompt,
   getInstrumentationPromptFilename,
   type InstrumentationPromptIde,
 } from '../../content/cursorInstrumentationPrompt';
+import { defaultEvaluationDataSource } from '../../evaluation/api';
 import { ClaudeCodeLogo, CopilotLogo, CursorLogo } from './IdeLogos';
 
 type IdeKey = InstrumentationPromptIde;
@@ -44,17 +49,18 @@ const ideTabs: IdeTab[] = [
   },
 ];
 
-type HeroLearnMoreItem = {
+type HeroStatItem = {
   label: string;
-  href: string;
+  route: string;
+  cta: string;
+  current: number;
+  previous: number;
+  loading: boolean;
 };
 
-const heroLearnMoreItems: HeroLearnMoreItem[] = [
-  { label: 'New telemetry signal', href: '/sigil/concepts/telemetry-signal' },
-  { label: 'New OSS and Cloud database', href: '/sigil/concepts/database' },
-  { label: 'New experience', href: '/sigil/overview' },
-  { label: 'Agent native', href: '/sigil/concepts/agent-experience' },
-];
+const METRIC_WINDOW_MS = 24 * 60 * 60 * 1000;
+const PAGE_SIZE = 200;
+const MAX_PAGES = 50;
 
 function buildFakeDocUrl(pathname: string): string {
   return new URL(pathname, 'https://docs.example.com').toString();
@@ -104,9 +110,22 @@ type LandingTopBarProps = {
 export function LandingTopBar({ assistantOrigin }: LandingTopBarProps) {
   const styles = useStyles2(getStyles);
   const assistant = useAssistant();
+  const navigate = useNavigate();
   const [assistantInput, setAssistantInput] = useState('');
   const [selectedIde, setSelectedIde] = useState<IdeKey>('cursor');
   const [isAgentModalOpen, setIsAgentModalOpen] = useState(false);
+  const [heroStats, setHeroStats] = useState<HeroStatItem[]>([
+    {
+      label: 'Conversations',
+      route: ROUTES.Conversations,
+      cta: 'View conversations',
+      current: 0,
+      previous: 0,
+      loading: true,
+    },
+    { label: 'Agents', route: ROUTES.Agents, cta: 'Inspect agents', current: 0, previous: 0, loading: true },
+    { label: 'Evaluations', route: ROUTES.Evaluation, cta: 'Manage evals', current: 0, previous: 0, loading: true },
+  ]);
 
   const selectedIdeConfig = useMemo(() => ideTabs.find((ide) => ide.key === selectedIde) ?? ideTabs[0], [selectedIde]);
   const selectedPrompt = useMemo(() => getInstrumentationPrompt(selectedIde), [selectedIde]);
@@ -136,6 +155,65 @@ export function LandingTopBar({ assistantOrigin }: LandingTopBarProps) {
     openAssistantWithPrompt(assistantInput);
   };
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const now = Date.now();
+    const currentFrom = new Date(now - METRIC_WINDOW_MS);
+    const currentTo = new Date(now);
+    const previousFrom = new Date(now - 2 * METRIC_WINDOW_MS);
+    const previousTo = new Date(now - METRIC_WINDOW_MS);
+
+    const loadStats = async () => {
+      const [conversationCurrent, conversationPrevious, agentsCurrent, agentsPrevious, evalCurrent, evalPrevious] =
+        await Promise.all([
+          countConversationsInRange(currentFrom, currentTo),
+          countConversationsInRange(previousFrom, previousTo),
+          countAgentsSeenInRange(currentFrom, currentTo),
+          countAgentsSeenInRange(previousFrom, previousTo),
+          countEvaluatorsUpdatedInRange(currentFrom, currentTo),
+          countEvaluatorsUpdatedInRange(previousFrom, previousTo),
+        ]);
+
+      if (cancelled) {
+        return;
+      }
+
+      setHeroStats([
+        {
+          label: 'Conversations',
+          route: ROUTES.Conversations,
+          cta: 'View conversations',
+          current: conversationCurrent,
+          previous: conversationPrevious,
+          loading: false,
+        },
+        {
+          label: 'Agents',
+          route: ROUTES.Agents,
+          cta: 'Inspect agents',
+          current: agentsCurrent,
+          previous: agentsPrevious,
+          loading: false,
+        },
+        {
+          label: 'Evaluations',
+          route: ROUTES.Evaluation,
+          cta: 'Manage evals',
+          current: evalCurrent,
+          previous: evalPrevious,
+          loading: false,
+        },
+      ]);
+    };
+
+    void loadStats();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <>
       <div className={styles.pageFlow}>
@@ -149,16 +227,20 @@ export function LandingTopBar({ assistantOrigin }: LandingTopBarProps) {
                   <Text color="secondary">Actually useful AI O11y</Text>
                 </div>
                 <ul className={styles.heroLearnMoreList}>
-                  {heroLearnMoreItems.map((item) => (
+                  {heroStats.map((item) => (
                     <li key={item.label}>
-                      <Link
-                        href={buildFakeDocUrl(item.href)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className={styles.heroLearnMoreLink}
+                      <button
+                        type="button"
+                        className={styles.heroStatLink}
+                        onClick={() => void navigate(`${PLUGIN_BASE}/${item.route}`)}
                       >
-                        {item.label}
-                      </Link>
+                        <span className={styles.heroStatLabel}>{item.label}</span>
+                        <span className={styles.heroStatRow}>
+                          <span className={styles.heroStatValue}>{item.loading ? '...' : item.current.toLocaleString()}</span>
+                          {!item.loading && <ComparisonBadge current={item.current} previous={item.previous} styles={styles} />}
+                        </span>
+                        <span className={styles.heroStatCta}>{item.cta}</span>
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -298,6 +380,114 @@ export function LandingTopBar({ assistantOrigin }: LandingTopBarProps) {
   );
 }
 
+function ComparisonBadge({
+  current,
+  previous,
+  styles,
+}: {
+  current: number;
+  previous: number;
+  styles: ReturnType<typeof getStyles>;
+}) {
+  if (previous === 0 && current === 0) {
+    return (
+      <Tooltip content="No change from previous window" placement="bottom">
+        <span className={`${styles.changeBadge} ${styles.changeBadgeNeutral}`}>→ 0%</span>
+      </Tooltip>
+    );
+  }
+
+  if (previous === 0) {
+    return null;
+  }
+
+  const pctChange = ((current - previous) / Math.abs(previous)) * 100;
+  const isUp = pctChange > 0;
+  const arrow = isUp ? '↑' : '↓';
+  const sign = isUp ? '+' : '';
+  const badgeClass = pctChange === 0 ? styles.changeBadgeNeutral : isUp ? styles.changeBadgeGood : styles.changeBadgeWarn;
+  const tooltipText = `${previous.toLocaleString()} in previous window`;
+  return (
+    <Tooltip content={tooltipText} placement="bottom">
+      <span className={`${styles.changeBadge} ${badgeClass}`}>
+        {arrow} {sign}
+        {pctChange.toFixed(1)}%
+      </span>
+    </Tooltip>
+  );
+}
+
+async function countConversationsInRange(from: Date, to: Date): Promise<number> {
+  let cursor = '';
+  let total = 0;
+  let pages = 0;
+  while (pages < MAX_PAGES) {
+    const response = await defaultConversationsDataSource.searchConversations({
+      filters: '',
+      select: [],
+      time_range: {
+        from: from.toISOString(),
+        to: to.toISOString(),
+      },
+      page_size: PAGE_SIZE,
+      cursor: cursor.length > 0 ? cursor : undefined,
+    });
+    total += response.conversations.length;
+    if (!response.has_more || !response.next_cursor) {
+      break;
+    }
+    cursor = response.next_cursor;
+    pages += 1;
+  }
+  return total;
+}
+
+async function countAgentsSeenInRange(from: Date, to: Date): Promise<number> {
+  let cursor = '';
+  let count = 0;
+  let pages = 0;
+  const min = from.getTime();
+  const max = to.getTime();
+  while (pages < MAX_PAGES) {
+    const response = await defaultAgentsDataSource.listAgents(PAGE_SIZE, cursor);
+    for (const item of response.items ?? []) {
+      const seenAt = Date.parse(item.latest_seen_at);
+      if (Number.isFinite(seenAt) && seenAt >= min && seenAt <= max) {
+        count += 1;
+      }
+    }
+    if (!response.next_cursor) {
+      break;
+    }
+    cursor = response.next_cursor;
+    pages += 1;
+  }
+  return count;
+}
+
+async function countEvaluatorsUpdatedInRange(from: Date, to: Date): Promise<number> {
+  let cursor = '';
+  let count = 0;
+  let pages = 0;
+  const min = from.getTime();
+  const max = to.getTime();
+  while (pages < MAX_PAGES) {
+    const response = await defaultEvaluationDataSource.listEvaluators(PAGE_SIZE, cursor);
+    for (const item of response.items ?? []) {
+      const updatedAt = Date.parse(item.updated_at);
+      if (Number.isFinite(updatedAt) && updatedAt >= min && updatedAt <= max) {
+        count += 1;
+      }
+    }
+    if (!response.next_cursor) {
+      break;
+    }
+    cursor = response.next_cursor;
+    pages += 1;
+  }
+  return count;
+}
+
 function getStyles(theme: GrafanaTheme2) {
   return {
     pageFlow: css({
@@ -387,35 +577,87 @@ function getStyles(theme: GrafanaTheme2) {
     heroLearnMoreList: css({
       label: 'landingTopBar-heroLearnMoreList',
       margin: 0,
-      paddingLeft: theme.spacing(3),
+      paddingLeft: 0,
+      listStyle: 'none',
       display: 'grid',
-      gap: theme.spacing(0.5),
+      gridTemplateColumns: 'repeat(3, minmax(160px, 1fr))',
+      gap: theme.spacing(0.75),
       justifySelf: 'end',
       alignSelf: 'center',
-      '& li::marker': {
-        color: '#5794F2',
-        fontSize: '1.15em',
-      },
-      '& li:nth-of-type(2)::marker': {
-        color: '#7D86EA',
-      },
-      '& li:nth-of-type(3)::marker': {
-        color: '#B877D9',
-      },
-      '& li:nth-of-type(4)::marker': {
-        color: '#FF9830',
-      },
+      width: '100%',
       '@media (max-width: 900px)': {
+        gridTemplateColumns: '1fr',
         justifySelf: 'start',
       },
     }),
-    heroLearnMoreLink: css({
-      label: 'landingTopBar-heroLearnMoreLink',
+    heroStatLink: css({
+      display: 'flex',
+      flexDirection: 'column',
+      gap: theme.spacing(0.5),
+      width: '100%',
+      border: 0,
+      background: 'none',
+      padding: theme.spacing(0.5, 0.75),
+      borderRadius: theme.shape.radius.default,
+      textAlign: 'left',
+      cursor: 'pointer',
+      '&:hover': {
+        background: theme.colors.action.hover,
+      },
+      '&:focus-visible': {
+        outline: `2px solid ${theme.colors.primary.main}`,
+        outlineOffset: 2,
+      },
+    }),
+    heroStatLabel: css({
+      color: theme.colors.text.secondary,
+      fontSize: theme.typography.bodySmall.fontSize,
+      fontWeight: theme.typography.fontWeightRegular,
+      lineHeight: 1.2,
+    }),
+    heroStatRow: css({
+      display: 'flex',
+      alignItems: 'center',
+      gap: theme.spacing(1),
+    }),
+    heroStatValue: css({
+      color: theme.colors.text.primary,
+      fontVariantNumeric: 'tabular-nums',
+      fontWeight: theme.typography.fontWeightMedium,
+      fontSize: theme.typography.h3.fontSize,
+      lineHeight: 1.2,
+    }),
+    heroStatCta: css({
       color: theme.colors.text.link,
       fontSize: theme.typography.bodySmall.fontSize,
-      '&:hover': {
-        textDecoration: 'underline',
-      },
+      lineHeight: 1.2,
+    }),
+    changeBadge: css({
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: theme.spacing(0.25),
+      fontSize: theme.typography.bodySmall.fontSize,
+      fontWeight: theme.typography.fontWeightMedium,
+      padding: theme.spacing(0.25, 1),
+      borderRadius: 999,
+      lineHeight: 1.4,
+      whiteSpace: 'nowrap',
+      textDecoration: 'none',
+    }),
+    changeBadgeGood: css({
+      color: theme.colors.success.text,
+      border: `1px solid ${theme.colors.success.border}`,
+      background: theme.colors.success.transparent,
+    }),
+    changeBadgeWarn: css({
+      color: theme.colors.warning.text,
+      border: `1px solid ${theme.colors.warning.border}`,
+      background: theme.colors.warning.transparent,
+    }),
+    changeBadgeNeutral: css({
+      color: theme.colors.text.secondary,
+      border: `1px solid ${theme.colors.border.weak}`,
+      background: 'transparent',
     }),
     productHeading: css({
       label: 'landingTopBar-productHeading',
