@@ -1,8 +1,7 @@
 import React from 'react';
 import ConversationMetricsStrip from '../../components/conversation-explore/ConversationMetricsStrip';
 import { mockGenerations, mockFlowNodes, mockGenerationCosts } from './fixtures';
-import type { GenerationDetail } from '../../generation/types';
-import type { GenerationCostResult } from '../../generation/types';
+import type { GenerationDetail, GenerationCostResult } from '../../generation/types';
 import type { FlowNode } from '../../components/conversation-explore/types';
 
 const meta = {
@@ -30,21 +29,12 @@ function Wrapper(props: {
 
 export const Default = {
   render: () => (
-    <Wrapper
-      allGenerations={mockGenerations}
-      flowNodes={mockFlowNodes}
-      generationCosts={mockGenerationCosts}
-    />
+    <Wrapper allGenerations={mockGenerations} flowNodes={mockFlowNodes} generationCosts={mockGenerationCosts} />
   ),
 };
 
 export const NoCost = {
-  render: () => (
-    <Wrapper
-      allGenerations={mockGenerations}
-      flowNodes={mockFlowNodes}
-    />
-  ),
+  render: () => <Wrapper allGenerations={mockGenerations} flowNodes={mockFlowNodes} />,
 };
 
 function seededRandom(seed: number): number {
@@ -86,12 +76,7 @@ const manyFlowNodes: FlowNode[] = manyGenerations.map((gen, i) => ({
 }));
 
 export const ManyGenerations = {
-  render: () => (
-    <Wrapper
-      allGenerations={manyGenerations}
-      flowNodes={manyFlowNodes}
-    />
-  ),
+  render: () => <Wrapper allGenerations={manyGenerations} flowNodes={manyFlowNodes} />,
 };
 
 export const Screenshot = Default;

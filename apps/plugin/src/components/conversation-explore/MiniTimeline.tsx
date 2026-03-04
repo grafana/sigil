@@ -108,16 +108,9 @@ export default function MiniTimeline({
           const color = barColor(node);
 
           return (
-            <Tooltip
-              key={node.id}
-              content={buildTooltip(node, generationCosts)}
-              placement="top"
-            >
+            <Tooltip key={node.id} content={buildTooltip(node, generationCosts)} placement="top">
               <div
-                className={cx(
-                  styles.bar,
-                  node.id === selectedNodeId && styles.barSelected
-                )}
+                className={cx(styles.bar, node.id === selectedNodeId && styles.barSelected)}
                 style={{
                   left: `${left}%`,
                   width: `${width}%`,

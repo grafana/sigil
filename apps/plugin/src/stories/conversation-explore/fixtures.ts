@@ -11,12 +11,15 @@ export const mockGenerations: GenerationDetail[] = [
     mode: 'SYNC',
     model: { provider: 'anthropic', name: 'claude-sonnet-4-5' },
     agent_name: 'travel-planner',
-    system_prompt: 'You are an expert travel itinerary planner. Cover all essential aspects for a smooth travel experience.',
+    system_prompt:
+      'You are an expert travel itinerary planner. Cover all essential aspects for a smooth travel experience.',
     input: [
       {
         role: 'MESSAGE_ROLE_USER',
         parts: [
-          { text: 'I want to travel to Costa Rica from June 10 to June 15. I\'m interested in sightseeing and local cuisine.' },
+          {
+            text: "I want to travel to Costa Rica from June 10 to June 15. I'm interested in sightseeing and local cuisine.",
+          },
         ],
       },
     ],
@@ -25,7 +28,7 @@ export const mockGenerations: GenerationDetail[] = [
         role: 'MESSAGE_ROLE_ASSISTANT',
         parts: [
           {
-            text: 'Great choice! Costa Rica in June is a fantastic time to experience its breathtaking landscapes and vibrant local flavors. I\'ll start crafting a personalized itinerary for your trip.',
+            text: "Great choice! Costa Rica in June is a fantastic time to experience its breathtaking landscapes and vibrant local flavors. I'll start crafting a personalized itinerary for your trip.",
           },
           {
             tool_call: {
@@ -312,15 +315,25 @@ export const mockCostSummary: CostSummary = {
   cacheWriteCost: 0,
 };
 
-export const mockGenerationCosts: Map<string, import('../../generation/types').GenerationCostResult> = new Map([
+export const mockGenerationCosts = new Map<string, import('../../generation/types').GenerationCostResult>([
   [
     'gen-1',
     {
       generationID: 'gen-1',
       model: 'claude-sonnet-4-5',
       provider: 'anthropic',
-      card: { model: 'claude-sonnet-4-5', provider: 'anthropic', pricing: { inputPer1k: 0.003, outputPer1k: 0.015, cacheReadPer1k: 0.0003, cacheWritePer1k: 0.00375 } },
-      breakdown: { inputCost: 0.01163, outputCost: 0.00791, cacheReadCost: 0.00036, cacheWriteCost: 0, totalCost: 0.0199 },
+      card: {
+        model: 'claude-sonnet-4-5',
+        provider: 'anthropic',
+        pricing: { inputPer1k: 0.003, outputPer1k: 0.015, cacheReadPer1k: 0.0003, cacheWritePer1k: 0.00375 },
+      } as unknown as import('../../generation/types').GenerationCostResult['card'],
+      breakdown: {
+        inputCost: 0.01163,
+        outputCost: 0.00791,
+        cacheReadCost: 0.00036,
+        cacheWriteCost: 0,
+        totalCost: 0.0199,
+      },
     },
   ],
   [
@@ -329,7 +342,11 @@ export const mockGenerationCosts: Map<string, import('../../generation/types').G
       generationID: 'gen-2',
       model: 'claude-sonnet-4-5',
       provider: 'anthropic',
-      card: { model: 'claude-sonnet-4-5', provider: 'anthropic', pricing: { inputPer1k: 0.003, outputPer1k: 0.015, cacheReadPer1k: 0.0003, cacheWritePer1k: 0.00375 } },
+      card: {
+        model: 'claude-sonnet-4-5',
+        provider: 'anthropic',
+        pricing: { inputPer1k: 0.003, outputPer1k: 0.015, cacheReadPer1k: 0.0003, cacheWritePer1k: 0.00375 },
+      } as unknown as import('../../generation/types').GenerationCostResult['card'],
       breakdown: { inputCost: 0.0063, outputCost: 0.01335, cacheReadCost: 0, cacheWriteCost: 0, totalCost: 0.01965 },
     },
   ],
@@ -339,7 +356,11 @@ export const mockGenerationCosts: Map<string, import('../../generation/types').G
       generationID: 'gen-3',
       model: 'gpt-4o',
       provider: 'openai',
-      card: { model: 'gpt-4o', provider: 'openai', pricing: { inputPer1k: 0.005, outputPer1k: 0.015 } },
+      card: {
+        model: 'gpt-4o',
+        provider: 'openai',
+        pricing: { inputPer1k: 0.005, outputPer1k: 0.015 },
+      } as unknown as import('../../generation/types').GenerationCostResult['card'],
       breakdown: { inputCost: 0.0075, outputCost: 0.0048, cacheReadCost: 0, cacheWriteCost: 0, totalCost: 0.0123 },
     },
   ],

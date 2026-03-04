@@ -8,7 +8,11 @@ import { createTempoTraceFetcher } from '../conversation/fetchTrace';
 import type { TraceFetcher } from '../conversation/loader';
 import { defaultModelCardClient, type ModelCardClient } from '../modelcard/api';
 import { useConversationData } from '../hooks/useConversationData';
-import { useConversationFlow, type FlowGroupBy, type FlowSortBy } from '../components/conversation-explore/useConversationFlow';
+import {
+  useConversationFlow,
+  type FlowGroupBy,
+  type FlowSortBy,
+} from '../components/conversation-explore/useConversationFlow';
 import MetricsBar from '../components/conversation-explore/MetricsBar';
 import FlowTree from '../components/conversation-explore/FlowTree';
 import MiniTimeline from '../components/conversation-explore/MiniTimeline';
@@ -84,19 +88,25 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   const traceFetcher = props.traceFetcher ?? defaultTraceFetcher;
   const modelCardClient = props.modelCardClient ?? defaultModelCardClient;
 
-  const { conversationData, loading, errorMessage, tokenSummary, costSummary, generationCosts, allGenerations } = useConversationData({
-    conversationID,
-    dataSource,
-    traceFetcher,
-    modelCardClient,
-  });
+  const { conversationData, loading, errorMessage, tokenSummary, costSummary, generationCosts, allGenerations } =
+    useConversationData({
+      conversationID,
+      dataSource,
+      traceFetcher,
+      modelCardClient,
+    });
 
   const [flowGroupBy, setFlowGroupBy] = useState<FlowGroupBy>('agent');
   const [flowSortBy, setFlowSortBy] = useState<FlowSortBy>('time');
   const [flowSearchQuery, setFlowSearchQuery] = useState('');
 
   const flowOptions = useMemo(() => ({ groupBy: flowGroupBy, sortBy: flowSortBy }), [flowGroupBy, flowSortBy]);
-  const { flowNodes, totalDurationMs } = useConversationFlow(conversationData, allGenerations, flowOptions, generationCosts);
+  const { flowNodes, totalDurationMs } = useConversationFlow(
+    conversationData,
+    allGenerations,
+    flowOptions,
+    generationCosts
+  );
 
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedNodeId = searchParams.get('node');
@@ -106,27 +116,30 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   const [panelWidth, setPanelWidth] = useState(340);
   const dragging = useRef(false);
 
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    dragging.current = true;
-    const startX = e.clientX;
-    const startWidth = panelWidth;
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      dragging.current = true;
+      const startX = e.clientX;
+      const startWidth = panelWidth;
 
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      const delta = moveEvent.clientX - startX;
-      const newWidth = Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, startWidth + delta));
-      setPanelWidth(newWidth);
-    };
+      const onMouseMove = (moveEvent: MouseEvent) => {
+        const delta = moveEvent.clientX - startX;
+        const newWidth = Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, startWidth + delta));
+        setPanelWidth(newWidth);
+      };
 
-    const onMouseUp = () => {
-      dragging.current = false;
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-    };
+      const onMouseUp = () => {
+        dragging.current = false;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+      };
 
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-  }, [panelWidth]);
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    },
+    [panelWidth]
+  );
 
   const selectedNode = useMemo<FlowNode | null>(() => {
     if (selectedNodeId === null) {
@@ -194,10 +207,7 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     return map;
   }, [allGenerations]);
 
-  const errorCount = useMemo(
-    () => allGenerations.filter((g) => Boolean(g.error?.message)).length,
-    [allGenerations]
-  );
+  const errorCount = useMemo(() => allGenerations.filter((g) => Boolean(g.error?.message)).length, [allGenerations]);
 
   if (loading) {
     return (

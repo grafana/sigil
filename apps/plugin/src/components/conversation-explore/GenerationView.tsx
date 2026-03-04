@@ -28,7 +28,6 @@ function formatNumber(n: number): string {
   return numberFmt.format(n);
 }
 
-
 function roleToLabel(role: string): string {
   switch (role) {
     case 'MESSAGE_ROLE_USER':
@@ -167,13 +166,7 @@ function UsageChips({ generation }: { generation: GenerationDetail }) {
   );
 }
 
-function AgentContextLabel({
-  generation,
-  fallbackModel,
-}: {
-  generation: GenerationDetail;
-  fallbackModel?: string;
-}) {
+function AgentContextLabel({ generation, fallbackModel }: { generation: GenerationDetail; fallbackModel?: string }) {
   const styles = useStyles2(getStyles);
 
   const agentName = generation.agent_name;
@@ -266,13 +259,7 @@ function buildTracesDrilldownUrl(span: ConversationSpan, generationId: string): 
   return url.pathname + url.search;
 }
 
-function SpanAttributesSection({
-  span,
-  drilldownUrl,
-}: {
-  span: ConversationSpan;
-  drilldownUrl: string | undefined;
-}) {
+function SpanAttributesSection({ span, drilldownUrl }: { span: ConversationSpan; drilldownUrl: string | undefined }) {
   const styles = useStyles2(getStyles);
   const entries: Array<{ key: string; value: string }> = [];
 
@@ -303,7 +290,9 @@ function SpanAttributesSection({
       {entries.map(({ key, value }) => (
         <div key={key} className={styles.attrItem}>
           <span className={styles.attrLabel}>{key}</span>
-          <span className={styles.messageText} style={{ fontSize: 12 }}>{value}</span>
+          <span className={styles.messageText} style={{ fontSize: 12 }}>
+            {value}
+          </span>
         </div>
       ))}
     </div>
@@ -450,7 +439,7 @@ export default function GenerationView({
   const gen = useMemo(() => resolveGeneration(node, allGenerations), [node, allGenerations]);
   const modelName = gen?.model?.name ?? node.model ?? undefined;
 
-  const inputMessages = gen?.input ?? [];
+  const inputMessages = useMemo(() => gen?.input ?? [], [gen?.input]);
   const outputMessages = gen?.output ?? [];
   const inputTokens = gen?.usage?.input_tokens ?? 0;
   const outputTokens = gen?.usage?.output_tokens ?? 0;
@@ -470,8 +459,7 @@ export default function GenerationView({
     if (!node.span) {
       return undefined;
     }
-    const generationId =
-      gen?.generation_id ?? node.span.attributes.get('sigil.generation.id')?.stringValue;
+    const generationId = gen?.generation_id ?? node.span.attributes.get('sigil.generation.id')?.stringValue;
     if (!generationId) {
       return undefined;
     }
@@ -482,13 +470,13 @@ export default function GenerationView({
     if (adjacent?.previous) {
       onNavigateToGeneration?.(adjacent.previous.generation_id);
     }
-  }, [adjacent?.previous, onNavigateToGeneration]);
+  }, [adjacent, onNavigateToGeneration]);
 
   const navigateNext = useCallback(() => {
     if (adjacent?.next) {
       onNavigateToGeneration?.(adjacent.next.generation_id);
     }
-  }, [adjacent?.next, onNavigateToGeneration]);
+  }, [adjacent, onNavigateToGeneration]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -570,10 +558,7 @@ export default function GenerationView({
               index={adjacent.currentIndex + 1}
               timeDelta={
                 gen?.created_at && adjacent.next.created_at
-                  ? formatTimeDelta(
-                      new Date(gen.created_at).getTime(),
-                      new Date(adjacent.next.created_at).getTime()
-                    )
+                  ? formatTimeDelta(new Date(gen.created_at).getTime(), new Date(adjacent.next.created_at).getTime())
                   : undefined
               }
               shortcut="D"

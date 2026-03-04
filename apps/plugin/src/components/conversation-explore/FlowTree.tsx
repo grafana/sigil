@@ -147,10 +147,7 @@ function flattenGenerations(nodes: FlowNode[]): FlowNode[] {
   return result;
 }
 
-function computeGlobalHighlights(
-  nodes: FlowNode[],
-  costs?: Map<string, GenerationCostResult>
-): SiblingHighlights {
+function computeGlobalHighlights(nodes: FlowNode[], costs?: Map<string, GenerationCostResult>): SiblingHighlights {
   const allGenerations = flattenGenerations(nodes);
   return computeSiblingHighlights(allGenerations, costs);
 }
@@ -255,9 +252,7 @@ export default function FlowTree({
       </div>
       <div className={styles.treeContainer} role="tree" aria-label="conversation flow">
         {filteredNodes.length === 0 ? (
-          <div className={styles.emptyState}>
-            {nodes.length === 0 ? 'No operations found' : 'No matches'}
-          </div>
+          <div className={styles.emptyState}>{nodes.length === 0 ? 'No operations found' : 'No matches'}</div>
         ) : (
           filteredNodes.map((node, i) => (
             <FlowNodeRow

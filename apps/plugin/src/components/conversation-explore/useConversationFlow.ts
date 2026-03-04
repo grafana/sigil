@@ -133,9 +133,7 @@ function extractFlowNodes(
       const startMs = Number((span.startTimeUnixNano - conversationStartNs) / NS_PER_MS);
 
       const nodeId = getSelectionID(span);
-      const toolCallChildren = kind === 'generation' && gen
-        ? extractToolCallChildren(gen, nodeId, startMs)
-        : [];
+      const toolCallChildren = kind === 'generation' && gen ? extractToolCallChildren(gen, nodeId, startMs) : [];
 
       result.push({
         id: nodeId,
@@ -146,7 +144,7 @@ function extractFlowNodes(
         status: hasError(span) || gen?.error?.message ? 'error' : 'success',
         model: gen?.model?.name,
         provider: gen?.model?.provider,
-        tokenCount: totalTokens ?? ((inputTokens + outputTokens) || undefined),
+        tokenCount: totalTokens ?? (inputTokens + outputTokens || undefined),
         generation: gen,
         span,
         children: [...childNodes, ...toolCallChildren],

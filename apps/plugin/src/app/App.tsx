@@ -48,7 +48,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
 export default function App(_props: AppRootProps) {
   const styles = useStyles2(getStyles);
   const location = useLocation();
-  const isConversationsRoute = new RegExp(`(^|/)${ROUTES.Conversations}(/[^/]+/(view|explore))?/?$`).test(location.pathname);
+  const isConversationsRoute = new RegExp(`(^|/)${ROUTES.Conversations}(/[^/]+/(view|explore))?/?$`).test(
+    location.pathname
+  );
   const isLanding1Route = /\/landing1\/?$/.test(location.pathname);
 
   return (

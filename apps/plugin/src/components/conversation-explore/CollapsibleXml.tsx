@@ -8,8 +8,23 @@ type TextSegment =
   | { kind: 'xml'; tagName: string; attributes: string; content: string };
 
 const HTML_INLINE_TAGS = new Set([
-  'b', 'i', 'u', 'em', 'strong', 'a', 'span', 'code',
-  'br', 'hr', 'img', 'sub', 'sup', 's', 'small', 'mark', 'p',
+  'b',
+  'i',
+  'u',
+  'em',
+  'strong',
+  'a',
+  'span',
+  'code',
+  'br',
+  'hr',
+  'img',
+  'sub',
+  'sup',
+  's',
+  'small',
+  'mark',
+  'p',
 ]);
 
 function findMatchingClose(text: string, tagName: string, searchFrom: number): number {
@@ -105,30 +120,31 @@ function contentPreview(content: string, maxLines = 6, maxLen = 500): string {
   return preview.length > maxLen ? preview.slice(0, maxLen) + '\u2026' : preview;
 }
 
-function HoverPreview({ content, anchorRef }: { content: string; anchorRef: React.RefObject<HTMLElement | null> }) {
+function HoverPreview({ content, anchorRect }: { content: string; anchorRect: DOMRect }) {
   const styles = useStyles2(getStyles);
-  const rect = anchorRef.current?.getBoundingClientRect();
-  if (!rect) {
-    return null;
-  }
 
   return (
     <Portal>
-      <div
-        className={styles.hoverPopup}
-        style={{ top: rect.bottom + 4, left: rect.left }}
-      >
+      <div className={styles.hoverPopup} style={{ top: anchorRect.bottom + 4, left: anchorRect.left }}>
         <pre className={styles.hoverPre}>{contentPreview(content)}</pre>
       </div>
     </Portal>
   );
 }
 
-function CollapsibleXmlBlock({ tagName, attributes, content }: { tagName: string; attributes: string; content: string }) {
+function CollapsibleXmlBlock({
+  tagName,
+  attributes,
+  content,
+}: {
+  tagName: string;
+  attributes: string;
+  content: string;
+}) {
   const styles = useStyles2(getStyles);
   const label = attributes ? `<${tagName} ${attributes}>` : `<${tagName}>`;
   const [open, setOpen] = useState(false);
-  const [hovered, setHovered] = useState(false);
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const summaryRef = useRef<HTMLElement>(null);
   const innerSegments = parseXmlBlocks(content);
 
@@ -136,18 +152,28 @@ function CollapsibleXmlBlock({ tagName, attributes, content }: { tagName: string
     setOpen((e.target as HTMLDetailsElement).open);
   }, []);
 
+  const handleMouseEnter = useCallback(() => {
+    if (!open && summaryRef.current) {
+      setAnchorRect(summaryRef.current.getBoundingClientRect());
+    }
+  }, [open]);
+
+  const handleMouseLeave = useCallback(() => {
+    setAnchorRect(null);
+  }, []);
+
   return (
     <details className={styles.xmlDetails} onToggle={handleToggle}>
       <summary
         ref={summaryRef}
         className={styles.xmlSummary}
-        onMouseEnter={() => !open && setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
         <span className={styles.xmlSummaryArrow}>&#9654;</span>
         {label}
       </summary>
-      {hovered && !open && <HoverPreview content={content} anchorRef={summaryRef} />}
+      {anchorRect && !open && <HoverPreview content={content} anchorRect={anchorRect} />}
       <div className={styles.xmlContent}>
         {innerSegments.map((seg, i) =>
           seg.kind === 'xml' ? (

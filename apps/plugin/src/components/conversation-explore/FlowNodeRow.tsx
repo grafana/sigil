@@ -190,9 +190,7 @@ export default function FlowNodeRow({
   const modelKey = resolveModelKey(node);
   const displayLabel = isGeneration ? shortenModelName(extractModelFromLabel(node.label)) : node.label;
   const accentColor = modelKey ? modelAccentColor(modelKey) : undefined;
-  const costResult = isGeneration && node.generation
-    ? generationCosts?.get(node.generation.generation_id)
-    : undefined;
+  const costResult = isGeneration && node.generation ? generationCosts?.get(node.generation.generation_id) : undefined;
 
   const isToolCall = node.kind === 'tool_call';
   const badgeLabel = BADGE_LABELS[node.kind];
@@ -216,22 +214,16 @@ export default function FlowNodeRow({
           aria-expanded={expanded}
           aria-label={`agent ${node.label}`}
         >
-          <Icon
-            name="angle-right"
-            size="md"
-            className={cx(styles.chevron, expanded && styles.chevronExpanded)}
-          />
+          <Icon name="angle-right" size="md" className={cx(styles.chevron, expanded && styles.chevronExpanded)} />
           <span className={cx(styles.label, styles.agentLabel)}>
             <HighlightMatch text={node.label} query={searchQuery} />
           </span>
           <span className={styles.duration}>{formatDuration(node.durationMs)}</span>
-          {node.status === 'error' && (
-            <span className={cx(styles.statusDot, styles.statusError)} />
-          )}
+          {node.status === 'error' && <span className={cx(styles.statusDot, styles.statusError)} />}
         </div>
         {expanded && hasChildren && (
           <div className={styles.childrenContainer}>
-            {node.children.map((child, i) => (
+            {spanChildren.map((child, i) => (
               <FlowNodeRow
                 key={child.id}
                 node={child}
@@ -241,6 +233,20 @@ export default function FlowNodeRow({
                 generationIndex={childGenIndices[i]}
                 generationCosts={generationCosts}
                 siblingHighlights={childHighlights}
+                searchQuery={searchQuery}
+              />
+            ))}
+          </div>
+        )}
+        {expanded && toolCallChildren.length > 0 && (
+          <div className={styles.childrenContainer}>
+            {toolCallChildren.map((child) => (
+              <FlowNodeRow
+                key={child.id}
+                node={child}
+                selectedNodeId={selectedNodeId}
+                onSelectNode={onSelectNode}
+                depth={depth + 1}
                 searchQuery={searchQuery}
               />
             ))}
@@ -286,35 +292,47 @@ export default function FlowNodeRow({
           </span>
         )}
         {!isToolCall && node.tokenCount !== undefined && node.tokenCount > 0 && (
-          <span className={cx(
-            styles.tokenCount,
-            isGeneration && siblingHighlights && node.tokenCount >= siblingHighlights.maxTokens && styles.valueHighlight
-          )}>
+          <span
+            className={cx(
+              styles.tokenCount,
+              isGeneration &&
+                siblingHighlights &&
+                node.tokenCount >= siblingHighlights.maxTokens &&
+                styles.valueHighlight
+            )}
+          >
             {formatTokens(node.tokenCount)}
           </span>
         )}
         {!isToolCall && costResult && (
-          <span className={cx(
-            styles.costLabel,
-            siblingHighlights && costResult.breakdown.totalCost >= siblingHighlights.maxCostUsd && styles.valueHighlight
-          )}>
+          <span
+            className={cx(
+              styles.costLabel,
+              siblingHighlights &&
+                costResult.breakdown.totalCost >= siblingHighlights.maxCostUsd &&
+                styles.valueHighlight
+            )}
+          >
             {formatCostUsd(costResult.breakdown.totalCost)}
           </span>
         )}
         {!isToolCall && (
-          <span className={cx(
-            styles.duration,
-            isGeneration && siblingHighlights && node.durationMs >= siblingHighlights.maxDurationMs && styles.valueHighlight
-          )}>
+          <span
+            className={cx(
+              styles.duration,
+              isGeneration &&
+                siblingHighlights &&
+                node.durationMs >= siblingHighlights.maxDurationMs &&
+                styles.valueHighlight
+            )}
+          >
             {formatDuration(node.durationMs)}
           </span>
         )}
         {!isToolCall && (
           <span className={cx(styles.statusDot, node.status === 'error' ? styles.statusError : styles.statusSuccess)} />
         )}
-        {isToolCall && node.status === 'error' && (
-          <span className={cx(styles.statusDot, styles.statusError)} />
-        )}
+        {isToolCall && node.status === 'error' && <span className={cx(styles.statusDot, styles.statusError)} />}
       </div>
       {expanded && hasChildren && (
         <div className={styles.childrenContainer}>

@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { cx } from '@emotion/css';
-import { MutableDataFrame, FieldType, dateTime } from '@grafana/data';
-import type { TimeRange } from '@grafana/data';
+import { MutableDataFrame, FieldType, dateTime, type TimeRange } from '@grafana/data';
 import { Icon, useStyles2 } from '@grafana/ui';
 import type { GenerationCostResult, GenerationDetail } from '../../generation/types';
 import type { FlowNode } from './types';
@@ -142,11 +141,7 @@ export default function ConversationMetricsStrip({
   return (
     <div className={styles.container}>
       <div className={styles.header} onClick={() => setExpanded((p) => !p)}>
-        <Icon
-          name="angle-right"
-          size="sm"
-          className={cx(styles.chevron, expanded && styles.chevronExpanded)}
-        />
+        <Icon name="angle-right" size="sm" className={cx(styles.chevron, expanded && styles.chevronExpanded)} />
         <span className={styles.headerLabel}>Metrics</span>
         <span className={styles.headerSummary}>
           {dataPoints.length} calls · peak {formatMs(maxDuration)}
