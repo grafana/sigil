@@ -229,6 +229,20 @@ func TestSavedConversationServiceBookmark(t *testing.T) {
 		require.Error(t, err)
 		assert.True(t, isValidationError(err), "expected validation error, got: %v", err)
 	})
+
+	t.Run("nil conversation lookup returns error instead of panic", func(t *testing.T) {
+		svcNoLookup := NewSavedConversationService(store, nil)
+		assert.NotPanics(t, func() {
+			_, err := svcNoLookup.SaveConversation(context.Background(), "tenant-1", SaveConversationRequest{
+				SavedID:        "saved-no-lookup",
+				ConversationID: "conv-abc",
+				Name:           "No Lookup",
+				SavedBy:        "user-1",
+			})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "conversation lookup is not configured")
+		})
+	})
 }
 
 func TestSavedConversationServiceManualCreate(t *testing.T) {

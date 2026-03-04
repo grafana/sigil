@@ -123,6 +123,9 @@ func (s *SavedConversationService) SaveConversation(ctx context.Context, tenantI
 	if trimmedSavedBy == "" {
 		return nil, newValidationError(errors.New("saved_by is required"))
 	}
+	if s.convLookup == nil {
+		return nil, errors.New("conversation lookup is not configured")
+	}
 
 	conv, err := s.convLookup.GetConversation(ctx, trimmedTenantID, trimmedConvID)
 	if err != nil {
