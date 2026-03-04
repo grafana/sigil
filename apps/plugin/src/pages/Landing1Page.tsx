@@ -278,7 +278,12 @@ export default function Landing1Page() {
                   <li>New UX</li>
                   <li>AX (Agent eXperience) native - works with AI agents out of the box</li>
                 </ul>
-                <LinkButton href={buildFakeDocUrl('/sigil/concepts')} variant="secondary" target="_blank" rel="noreferrer">
+                <LinkButton
+                  href={buildFakeDocUrl('/sigil/concepts')}
+                  variant="secondary"
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   Explore concepts
                 </LinkButton>
               </Stack>
@@ -295,7 +300,6 @@ export default function Landing1Page() {
             </Card>
           </div>
         </div>
-
       </div>
 
       {isAgentModalOpen && (
