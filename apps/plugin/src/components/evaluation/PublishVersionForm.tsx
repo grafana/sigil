@@ -153,10 +153,7 @@ export default function PublishVersionForm({
         />
       </Field>
 
-      <Field
-        label="Output key"
-        description="Key and type for the evaluation result."
-      >
+      <Field label="Output key" description="Key and type for the evaluation result.">
         <div className={styles.outputKeyRow}>
           <Input
             value={outputKey}
