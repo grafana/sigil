@@ -181,4 +181,15 @@ describe('AgentsPage', () => {
     await waitFor(() => expect(dataSource.listAgents).toHaveBeenNthCalledWith(2, 24, 'cursor-1', ''));
     expect(await screen.findByRole('button', { name: 'open agent assistant-beta' })).toBeInTheDocument();
   });
+
+  it('filters agents by search text', async () => {
+    const dataSource = createDataSource();
+    renderPage(dataSource);
+
+    await waitFor(() => expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', ''));
+
+    fireEvent.change(screen.getByPlaceholderText('Search by agent name…'), { target: { value: 'assist' } });
+
+    await waitFor(() => expect(dataSource.listAgents).toHaveBeenLastCalledWith(24, '', 'assist'));
+  });
 });
