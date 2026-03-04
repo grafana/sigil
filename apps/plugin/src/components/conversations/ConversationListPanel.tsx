@@ -152,6 +152,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   idCellPrimary: css({
     label: 'conversationListPanel-idCellPrimary',
+    fontFamily: theme.typography.fontFamily,
     whiteSpace: 'nowrap' as const,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
@@ -494,7 +495,9 @@ export default function ConversationListPanel({
                     </td>
                     <td className={cx(styles.cell, styles.idCellTruncated)}>
                       <Tooltip
-                        content={hasTitle ? `${displayTitle}\n${conversation.conversation_id}` : conversation.conversation_id}
+                        content={
+                          hasTitle ? `${displayTitle}\n${conversation.conversation_id}` : conversation.conversation_id
+                        }
                       >
                         <span>{displayTitle}</span>
                       </Tooltip>
