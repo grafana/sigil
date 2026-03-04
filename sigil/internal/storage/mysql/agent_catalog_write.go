@@ -83,6 +83,7 @@ func upsertAgentVersionTx(tx *gorm.DB, tenantID string, projection agentCatalogP
 	for attempt := 0; attempt < 2; attempt++ {
 		var existing AgentVersionModel
 		err := tx.
+			Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("tenant_id = ? AND agent_name = ? AND effective_version = ?", tenantID, projection.AgentName, projection.EffectiveVersion).
 			Take(&existing).Error
 		if err == nil {
