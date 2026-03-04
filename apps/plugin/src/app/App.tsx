@@ -12,10 +12,7 @@ const ConversationDetailPage = React.lazy(() => import('../pages/ConversationDet
 const ConversationsPage = React.lazy(() => import('../pages/ConversationsPage'));
 const AgentsPage = React.lazy(() => import('../pages/AgentsPage'));
 const AgentDetailPage = React.lazy(() => import('../pages/AgentDetailPage'));
-const CompletionsPage = React.lazy(() => import('../pages/CompletionsPage'));
-const TracesPage = React.lazy(() => import('../pages/TracesPage'));
 const EvaluationPage = React.lazy(() => import('../pages/EvaluationPage'));
-const SettingsPage = React.lazy(() => import('../pages/SettingsPage'));
 
 const getStyles = (theme: GrafanaTheme2) => ({
   pageWrapper: css({
@@ -77,10 +74,7 @@ export default function App(_props: AppRootProps) {
           <Route path={ROUTES.Agents} element={<AgentsPage />} />
           <Route path={ROUTES.AgentDetailByName} element={<AgentDetailPage />} />
           <Route path={ROUTES.AgentDetailAnonymous} element={<AgentDetailPage />} />
-          <Route path={ROUTES.Completions} element={<CompletionsPage />} />
-          <Route path={ROUTES.Traces} element={<TracesPage />} />
           <Route path={`${ROUTES.Evaluation}/*`} element={<EvaluationPage />} />
-          <Route path={ROUTES.Settings} element={<SettingsPage />} />
           <Route path="*" element={<DashboardPage />} />
         </Routes>
       </div>

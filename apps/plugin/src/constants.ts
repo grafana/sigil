@@ -10,10 +10,7 @@ export const ROUTES = {
   Agents: 'agents',
   AgentDetailByName: 'agents/name/:agentName',
   AgentDetailAnonymous: 'agents/anonymous',
-  Completions: 'completions',
-  Traces: 'traces',
   Evaluation: 'evaluation',
-  Settings: 'settings',
 } as const;
 
 export const PAGE_TITLES = {
@@ -25,10 +22,7 @@ export const PAGE_TITLES = {
   [ROUTES.Agents]: 'Agents',
   [ROUTES.AgentDetailByName]: 'Agent detail',
   [ROUTES.AgentDetailAnonymous]: 'Agent detail',
-  [ROUTES.Completions]: 'Completions',
-  [ROUTES.Traces]: 'Traces',
   [ROUTES.Evaluation]: 'Evaluation',
-  [ROUTES.Settings]: 'Settings',
 } as const;
 
 export function buildConversationDetailRoute(conversationID: string): string {
