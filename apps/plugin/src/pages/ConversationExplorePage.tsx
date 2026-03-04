@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Spinner, useStyles2 } from '@grafana/ui';
+import { Alert, useStyles2 } from '@grafana/ui';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
 import { createTempoTraceFetcher } from '../conversation/fetchTrace';
@@ -18,6 +18,7 @@ import FlowTree from '../components/conversation-explore/FlowTree';
 import MiniTimeline from '../components/conversation-explore/MiniTimeline';
 import DetailPanel from '../components/conversation-explore/DetailPanel';
 import type { FlowNode } from '../components/conversation-explore/types';
+import { Loader } from '../components/Loader';
 
 export type ConversationExplorePageProps = {
   dataSource?: ConversationsDataSource;
@@ -213,7 +214,7 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     return (
       <div className={styles.pageContainer}>
         <div className={styles.spinnerWrap}>
-          <Spinner aria-label="loading conversation" />
+          <Loader />
         </div>
       </div>
     );
