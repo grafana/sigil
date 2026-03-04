@@ -90,7 +90,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     minHeight: 0,
     marginTop: theme.spacing(-2),
     position: 'relative',
-    height: 'calc(100vh - 180px)',
+    height: '100%',
     overflow: 'hidden',
   }),
 });
@@ -140,7 +140,6 @@ export default function App(props: AppRootProps) {
   }, [currentTitle]);
 
   const chromeLightRoute = isChromeLightRoute(pluginRelativePath);
-  const isLanding1Route = /\/landing1\/?$/.test(location.pathname);
 
   return (
     <div className={cx(styles.pageWrapper, chromeLightRoute && styles.pageWrapperNoPadding)}>
@@ -212,7 +211,7 @@ export default function App(props: AppRootProps) {
               </PageRoot>
             }
           />
-          <Route path="*" element={isLanding1Route ? <Landing1Page /> : <DashboardPage />} />
+          <Route path="*" element={<Landing1Page />} />
         </Routes>
       </div>
     </div>
