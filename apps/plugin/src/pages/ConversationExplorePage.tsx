@@ -18,7 +18,10 @@ import FlowTree from '../components/conversation-explore/FlowTree';
 import MiniTimeline from '../components/conversation-explore/MiniTimeline';
 import DetailPanel from '../components/conversation-explore/DetailPanel';
 import type { FlowNode } from '../components/conversation-explore/types';
-import type { GenerationCostResult } from '../generation/types';
+import {
+  getHighlightedSidebarItems,
+  type HighlightedSidebarItem,
+} from '../components/conversation-explore/getHighlightedSidebarItems';
 import { Loader } from '../components/Loader';
 import AssistantInsightsList, { type AssistantInsightDisplayItem } from '../components/assistant/AssistantInsightsList';
 
@@ -101,18 +104,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     background: theme.colors.background.primary,
   }),
 });
-
-type HighlightedSidebarItem = {
-  itemId: string;
-  label: string;
-  kind: FlowNode['kind'];
-  node: FlowNode;
-  reasons: string[];
-  durationMs: number;
-  tokenCount: number;
-  costUsd: number;
-  status: FlowNode['status'];
-};
 
 type AssistantInsightItem = {
   itemId: string;
@@ -470,86 +461,6 @@ function parseAssistantInsightItems(raw: string): AssistantInsightItem[] {
   } catch {
     return [];
   }
-}
-
-function flattenNodes(nodes: FlowNode[]): FlowNode[] {
-  const out: FlowNode[] = [];
-  for (const node of nodes) {
-    out.push(node);
-    if (node.children.length > 0) {
-      out.push(...flattenNodes(node.children));
-    }
-  }
-  return out;
-}
-
-function getGenerationCostUsd(node: FlowNode, generationCosts?: Map<string, GenerationCostResult>): number {
-  if (!node.generation) {
-    return 0;
-  }
-  return generationCosts?.get(node.generation.generation_id)?.breakdown.totalCost ?? 0;
-}
-
-function getHighlightedSidebarItems(
-  nodes: FlowNode[],
-  generationCosts?: Map<string, GenerationCostResult>
-): HighlightedSidebarItem[] {
-  const all = flattenNodes(nodes).filter((n) => n.kind !== 'agent');
-  if (all.length === 0) {
-    return [];
-  }
-  const generationNodes = all.filter((n) => n.kind === 'generation');
-  const maxDurationMs = generationNodes.reduce((max, n) => Math.max(max, n.durationMs), 0);
-  const maxTokens = generationNodes.reduce((max, n) => Math.max(max, n.tokenCount ?? 0), 0);
-  const maxCostUsd = generationNodes.reduce((max, n) => Math.max(max, getGenerationCostUsd(n, generationCosts)), 0);
-
-  const items: HighlightedSidebarItem[] = [];
-  for (const node of all) {
-    const reasons: string[] = [];
-    const tokenCount = node.tokenCount ?? 0;
-    const costUsd = getGenerationCostUsd(node, generationCosts);
-
-    if (node.status === 'error') {
-      reasons.push('error');
-    }
-    if (node.kind === 'generation' && maxDurationMs > 0 && node.durationMs >= maxDurationMs) {
-      reasons.push('high_latency');
-    }
-    if (node.kind === 'generation' && maxTokens > 0 && tokenCount >= maxTokens) {
-      reasons.push('high_tokens');
-    }
-    if (node.kind === 'generation' && maxCostUsd > 0 && costUsd >= maxCostUsd) {
-      reasons.push('high_cost');
-    }
-    if (reasons.length === 0) {
-      continue;
-    }
-
-    items.push({
-      itemId: node.id,
-      label: node.label,
-      kind: node.kind,
-      node,
-      reasons,
-      durationMs: node.durationMs,
-      tokenCount,
-      costUsd,
-      status: node.status,
-    });
-  }
-
-  items.sort((a, b) => {
-    const aError = a.reasons.includes('error') ? 1 : 0;
-    const bError = b.reasons.includes('error') ? 1 : 0;
-    if (bError !== aError) {
-      return bError - aError;
-    }
-    if (b.reasons.length !== a.reasons.length) {
-      return b.reasons.length - a.reasons.length;
-    }
-    return b.durationMs - a.durationMs;
-  });
-  return items.slice(0, 10);
 }
 
 function findNodeById(nodes: FlowNode[], id: string): FlowNode | null {
