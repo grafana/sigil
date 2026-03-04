@@ -156,15 +156,12 @@ export default function PublishVersionForm({
       <Field
         label="Output key"
         description="Key and type for the evaluation result."
-        required
-        invalid={showOutputKeyError}
-        error={showOutputKeyError ? 'Output key is required' : undefined}
       >
         <div className={styles.outputKeyRow}>
           <Input
             value={outputKey}
             onChange={(e) => setOutputKey(e.currentTarget.value)}
-            placeholder="e.g. score"
+            placeholder="score"
             width={20}
           />
           <Select<ScoreType>
