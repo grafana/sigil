@@ -2,20 +2,27 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { css, cx } from '@emotion/css';
 import { dateTime, type GrafanaTheme2, makeTimeRange, type TimeRange } from '@grafana/data';
-import { Alert, Icon, Input, Spinner, Stack, Text, TimeRangePicker, useStyles2 } from '@grafana/ui';
+import { Alert, Icon, Input, Spinner, Stack, Tab, TabsBar, Text, TimeRangePicker, Tooltip, useStyles2 } from '@grafana/ui';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../agents/api';
 import type { AgentListItem } from '../agents/types';
 import { buildAgentDetailByNameRoute, buildAnonymousAgentDetailRoute, PLUGIN_BASE } from '../constants';
 import { formatDateShort } from '../utils/date';
+import { AgentActivityTimeline } from '../components/agents/AgentActivityTimeline';
 
 const PAGE_SIZE = 24;
 const STALE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const HIGH_CHURN_THRESHOLD = 5;
 const HERO_TOP_LIMIT = 3;
+const compactNumberFormatter = new Intl.NumberFormat('en-US', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
 
 export type AgentsPageProps = {
   dataSource?: AgentsDataSource;
 };
+
+type AgentsPageTab = 'info' | 'table';
 
 const getStyles = (theme: GrafanaTheme2) => ({
   page: css({
@@ -71,6 +78,14 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   heroKpiLabel: css({
     fontSize: theme.typography.bodySmall.fontSize,
+    color: theme.colors.text.secondary,
+  }),
+  labelWithHelp: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+  }),
+  helpIcon: css({
     color: theme.colors.text.secondary,
   }),
   heroKpiValue: css({
@@ -254,6 +269,32 @@ function cardLabel(item: AgentListItem): string {
   return 'anonymous';
 }
 
+function formatCompactNumber(value: number): string {
+  return compactNumberFormatter.format(value);
+}
+
+function LabelWithHelp({
+  label,
+  help,
+  className,
+}: {
+  label: string;
+  help: string;
+  className?: string;
+}) {
+  const styles = useStyles2(getStyles);
+  return (
+    <span className={cx(styles.labelWithHelp, className)}>
+      {label}
+      <Tooltip content={help}>
+        <span aria-label={`${label} help`}>
+          <Icon name="info-circle" size="sm" className={styles.helpIcon} />
+        </span>
+      </Tooltip>
+    </span>
+  );
+}
+
 export default function AgentsPage({ dataSource = defaultAgentsDataSource }: AgentsPageProps) {
   const styles = useStyles2(getStyles);
   const navigate = useNavigate();
@@ -265,6 +306,7 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
   const [errorMessage, setErrorMessage] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [namePrefix, setNamePrefix] = useState('');
+  const [activeTab, setActiveTab] = useState<AgentsPageTab>('info');
   const [timeRange, setTimeRange] = useState<TimeRange>(() => {
     const now = dateTime();
     return makeTimeRange(dateTime(now).subtract(24, 'hours'), now);
@@ -376,6 +418,13 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
     void navigate(`${PLUGIN_BASE}/${route}`);
   };
 
+  const handleTabChange = useCallback(
+    (tab: AgentsPageTab) => () => {
+      setActiveTab(tab);
+    },
+    []
+  );
+
   const loadMore = useCallback(async () => {
     if (inFlightLoadMore.current || loadingMore || nextCursor.length === 0) {
       return;
@@ -468,171 +517,232 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
         </Alert>
       )}
 
-      <div className={styles.searchRow}>
-        <div className={styles.searchInput}>
-          <Input
-            prefix={<Icon name="search" />}
-            suffix={
-              searchInput.length > 0 ? (
-                <Icon name="times" style={{ cursor: 'pointer' }} onClick={() => setSearchInput('')} />
-              ) : undefined
-            }
-            value={searchInput}
-            placeholder="Search by agent name…"
-            onChange={(event: React.FormEvent<HTMLInputElement>) => setSearchInput(event.currentTarget.value)}
-          />
-        </div>
-      </div>
-
       {loading ? (
         <div className={styles.loading}>
           <Spinner />
         </div>
-      ) : items.length === 0 ? (
-        <div className={styles.empty}>
-          <Icon name="search" size="xl" />
-          <Text color="secondary">No agents matched this search in the current tenant.</Text>
-        </div>
       ) : (
         <>
-          <div className={styles.heroWrap}>
-            <section className={styles.hero} aria-label="agents hero summary">
-              <div className={styles.heroKpis}>
-                <div className={styles.heroKpiCard}>
-                  <span className={styles.heroKpiLabel}>Seen in selected range</span>
-                  <span className={styles.heroKpiValue}>{summary.seenInRangeCount.toLocaleString()}</span>
-                </div>
-                <div className={styles.heroKpiCard}>
-                  <span className={styles.heroKpiLabel}>Total generations</span>
-                  <span className={styles.heroKpiValue}>{summary.totalGenerations.toLocaleString()}</span>
-                </div>
-                <div className={styles.heroKpiCard}>
-                  <span className={styles.heroKpiLabel}>Estimated prompt+tools tokens</span>
-                  <span className={styles.heroKpiValue}>{summary.totalEstimatedTokens.toLocaleString()}</span>
-                </div>
-                <div className={styles.heroKpiCard}>
-                  <span className={styles.heroKpiLabel}>Avg tokens per generation</span>
-                  <span className={styles.heroKpiValue}>{summary.averageTokensPerGeneration.toLocaleString()}</span>
+          <TabsBar>
+            <Tab label="Info panel" active={activeTab === 'info'} onChangeTab={handleTabChange('info')} />
+            <Tab label="Agents table" active={activeTab === 'table'} onChangeTab={handleTabChange('table')} />
+          </TabsBar>
+
+          {activeTab === 'info' ? (
+            items.length === 0 ? (
+              <div className={styles.empty}>
+                <Icon name="search" size="xl" />
+                <Text color="secondary">No agents matched this search in the current tenant.</Text>
+              </div>
+            ) : (
+              <div className={styles.heroWrap}>
+                <section className={styles.hero} aria-label="agents hero summary">
+                  <div className={styles.heroKpis}>
+                    <div className={styles.heroKpiCard}>
+                      <LabelWithHelp
+                        label="Agents"
+                        help="Number of loaded agents with latest_seen_at inside the selected time range."
+                        className={styles.heroKpiLabel}
+                      />
+                      <span className={styles.heroKpiValue}>{summary.seenInRangeCount.toLocaleString()}</span>
+                    </div>
+                    <div className={styles.heroKpiCard}>
+                      <LabelWithHelp
+                        label="Total generations"
+                        help="Sum of generation_count across currently loaded agents."
+                        className={styles.heroKpiLabel}
+                      />
+                      <span className={styles.heroKpiValue}>{summary.totalGenerations.toLocaleString()}</span>
+                    </div>
+                    <div className={styles.heroKpiCard}>
+                      <LabelWithHelp
+                        label="Estimated prompt+tools tokens"
+                        help="Sum of token_estimate.total across loaded agents. This is prompt and tool footprint, not runtime token usage."
+                        className={styles.heroKpiLabel}
+                      />
+                      <span className={styles.heroKpiValue}>{summary.totalEstimatedTokens.toLocaleString()}</span>
+                    </div>
+                    <div className={styles.heroKpiCard}>
+                      <LabelWithHelp
+                        label="Avg tokens per generation"
+                        help="Computed as total estimated prompt+tools tokens divided by total generations for loaded agents."
+                        className={styles.heroKpiLabel}
+                      />
+                      <span className={styles.heroKpiValue}>{summary.averageTokensPerGeneration.toLocaleString()}</span>
+                    </div>
+                  </div>
+
+                  <AgentActivityTimeline items={items} timeRange={timeRange} loading={loading} />
+
+                  <div className={styles.heroBody}>
+                    <div className={styles.heroSection}>
+                      <Text element="h4" className={styles.heroSectionTitle}>
+                        <LabelWithHelp
+                          label="Top by generations"
+                          help="Top loaded agents ranked by generation_count in descending order."
+                        />
+                      </Text>
+                      <ul className={styles.rankList}>
+                        {summary.topByGenerations.map((item) => (
+                          <li key={`gen:${item.agent_name}:${item.latest_effective_version}`} className={styles.rankItem}>
+                            <button
+                              type="button"
+                              className={styles.rankButton}
+                              onClick={() => handleOpenAgent(item)}
+                              aria-label={`open top generation agent ${cardLabel(item)}`}
+                            >
+                              {item.agent_name.trim().length > 0 ? item.agent_name : 'Unnamed agent bucket'}
+                            </button>
+                            <span className={styles.rankValue}>{formatCompactNumber(item.generation_count)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className={styles.heroSection}>
+                      <Text element="h4" className={styles.heroSectionTitle}>
+                        <LabelWithHelp
+                          label="Top by token footprint"
+                          help="Top loaded agents ranked by token_estimate.total (system prompt + tools footprint)."
+                        />
+                      </Text>
+                      <ul className={styles.rankList}>
+                        {summary.topByTokenFootprint.map((item) => (
+                          <li key={`tok:${item.agent_name}:${item.latest_effective_version}`} className={styles.rankItem}>
+                            <button
+                              type="button"
+                              className={styles.rankButton}
+                              onClick={() => handleOpenAgent(item)}
+                              aria-label={`open top token agent ${cardLabel(item)}`}
+                            >
+                              {item.agent_name.trim().length > 0 ? item.agent_name : 'Unnamed agent bucket'}
+                            </button>
+                            <span className={styles.rankValue}>{formatCompactNumber(item.token_estimate.total)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className={styles.heroSection}>
+                      <Text element="h4" className={styles.heroSectionTitle}>
+                        <LabelWithHelp
+                          label="Risk and health"
+                          help="Quick risk signals derived from loaded agents: anonymous naming, stale recency, and version churn."
+                        />
+                      </Text>
+                      <ul className={styles.riskList}>
+                        <li className={styles.riskItem}>
+                          <span className={styles.riskValue}>{summary.anonymousCount.toLocaleString()}</span>
+                          <LabelWithHelp
+                            label="anonymous buckets"
+                            help="Count of loaded rows where agent_name is empty and grouped as unnamed bucket."
+                            className={styles.riskLabel}
+                          />
+                        </li>
+                        <li className={styles.riskItem}>
+                          <span className={styles.riskValue}>{summary.staleCount.toLocaleString()}</span>
+                          <LabelWithHelp
+                            label="stale (> 7 days)"
+                            help="Count of loaded agents whose latest_seen_at is more than 7 days older than the selected range end."
+                            className={styles.riskLabel}
+                          />
+                        </li>
+                        <li className={styles.riskItem}>
+                          <span className={styles.riskValue}>{summary.highChurnCount.toLocaleString()}</span>
+                          <LabelWithHelp
+                            label={`high churn (${HIGH_CHURN_THRESHOLD}+ versions)`}
+                            help={`Count of loaded agents with version_count >= ${HIGH_CHURN_THRESHOLD}.`}
+                            className={styles.riskLabel}
+                          />
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            )
+          ) : (
+            <>
+              <div className={styles.searchRow}>
+                <div className={styles.searchInput}>
+                  <Input
+                    prefix={<Icon name="search" />}
+                    suffix={
+                      searchInput.length > 0 ? (
+                        <Icon name="times" style={{ cursor: 'pointer' }} onClick={() => setSearchInput('')} />
+                      ) : undefined
+                    }
+                    value={searchInput}
+                    placeholder="Search by agent name…"
+                    onChange={(event: React.FormEvent<HTMLInputElement>) => setSearchInput(event.currentTarget.value)}
+                  />
                 </div>
               </div>
 
-              <div className={styles.heroBody}>
-                <div className={styles.heroSection}>
-                  <Text element="h4" className={styles.heroSectionTitle}>
-                    Top by generations
-                  </Text>
-                  <ul className={styles.rankList}>
-                    {summary.topByGenerations.map((item) => (
-                      <li key={`gen:${item.agent_name}:${item.latest_effective_version}`} className={styles.rankItem}>
-                        <button
-                          type="button"
-                          className={styles.rankButton}
-                          onClick={() => handleOpenAgent(item)}
-                          aria-label={`open top generation agent ${cardLabel(item)}`}
-                        >
-                          {item.agent_name.trim().length > 0 ? item.agent_name : 'Unnamed agent bucket'}
-                        </button>
-                        <span className={styles.rankValue}>{item.generation_count.toLocaleString()} generations</span>
-                      </li>
-                    ))}
-                  </ul>
+              {items.length === 0 ? (
+                <div className={styles.empty}>
+                  <Icon name="search" size="xl" />
+                  <Text color="secondary">No agents matched this search in the current tenant.</Text>
                 </div>
+              ) : (
+                <>
+                  <div className={styles.tableWrap}>
+                    <table className={styles.table} aria-label="agents index table">
+                      <thead>
+                        <tr>
+                          <th className={styles.th}>Agent</th>
+                          <th className={styles.th}>Latest seen</th>
+                          <th className={cx(styles.th, styles.centeredColumn)}>Versions</th>
+                          <th className={cx(styles.th, styles.centeredColumn)}>Tools</th>
+                          <th className={cx(styles.th, styles.centeredColumn)}>Generations</th>
+                          <th className={styles.th}>Prompt prefix</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {items.map((item) => {
+                          const isAnonymous = item.agent_name.trim().length === 0;
+                          return (
+                            <tr
+                              key={`${item.agent_name}:${item.latest_effective_version}`}
+                              className={cx(styles.tr, isAnonymous && styles.anonymousRow)}
+                            >
+                              <td className={styles.td}>
+                                <button
+                                  type="button"
+                                  className={styles.openButton}
+                                  onClick={() => handleOpenAgent(item)}
+                                  aria-label={`open agent ${cardLabel(item)}`}
+                                >
+                                  {isAnonymous ? 'Unnamed agent bucket' : item.agent_name}
+                                </button>
+                              </td>
+                              <td className={styles.td}>{formatDateShort(item.latest_seen_at)}</td>
+                              <td className={cx(styles.td, styles.centeredColumn)}>{item.version_count}</td>
+                              <td className={cx(styles.td, styles.centeredColumn)}>{item.tool_count}</td>
+                              <td className={cx(styles.td, styles.centeredColumn)}>
+                                {item.generation_count.toLocaleString()}
+                              </td>
+                              <td className={cx(styles.td, styles.promptCell)}>
+                                {item.system_prompt_prefix.length > 0 ? item.system_prompt_prefix : '-'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
 
-                <div className={styles.heroSection}>
-                  <Text element="h4" className={styles.heroSectionTitle}>
-                    Top by token footprint
-                  </Text>
-                  <ul className={styles.rankList}>
-                    {summary.topByTokenFootprint.map((item) => (
-                      <li key={`tok:${item.agent_name}:${item.latest_effective_version}`} className={styles.rankItem}>
-                        <button
-                          type="button"
-                          className={styles.rankButton}
-                          onClick={() => handleOpenAgent(item)}
-                          aria-label={`open top token agent ${cardLabel(item)}`}
-                        >
-                          {item.agent_name.trim().length > 0 ? item.agent_name : 'Unnamed agent bucket'}
-                        </button>
-                        <span className={styles.rankValue}>{item.token_estimate.total.toLocaleString()} tokens</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className={styles.heroSection}>
-                  <Text element="h4" className={styles.heroSectionTitle}>
-                    Risk and health
-                  </Text>
-                  <ul className={styles.riskList}>
-                    <li className={styles.riskItem}>
-                      <span className={styles.riskValue}>{summary.anonymousCount.toLocaleString()}</span>
-                      <span className={styles.riskLabel}>anonymous buckets</span>
-                    </li>
-                    <li className={styles.riskItem}>
-                      <span className={styles.riskValue}>{summary.staleCount.toLocaleString()}</span>
-                      <span className={styles.riskLabel}>stale (&gt; 7 days)</span>
-                    </li>
-                    <li className={styles.riskItem}>
-                      <span className={styles.riskValue}>{summary.highChurnCount.toLocaleString()}</span>
-                      <span className={styles.riskLabel}>high churn ({HIGH_CHURN_THRESHOLD}+ versions)</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </section>
-          </div>
-
-          <div className={styles.tableWrap}>
-            <table className={styles.table} aria-label="agents index table">
-              <thead>
-                <tr>
-                  <th className={styles.th}>Agent</th>
-                  <th className={styles.th}>Latest seen</th>
-                  <th className={cx(styles.th, styles.centeredColumn)}>Versions</th>
-                  <th className={cx(styles.th, styles.centeredColumn)}>Tools</th>
-                  <th className={cx(styles.th, styles.centeredColumn)}>Generations</th>
-                  <th className={styles.th}>Prompt prefix</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item) => {
-                  const isAnonymous = item.agent_name.trim().length === 0;
-                  return (
-                    <tr
-                      key={`${item.agent_name}:${item.latest_effective_version}`}
-                      className={cx(styles.tr, isAnonymous && styles.anonymousRow)}
-                    >
-                      <td className={styles.td}>
-                        <button
-                          type="button"
-                          className={styles.openButton}
-                          onClick={() => handleOpenAgent(item)}
-                          aria-label={`open agent ${cardLabel(item)}`}
-                        >
-                          {isAnonymous ? 'Unnamed agent bucket' : item.agent_name}
-                        </button>
-                      </td>
-                      <td className={styles.td}>{formatDateShort(item.latest_seen_at)}</td>
-                      <td className={cx(styles.td, styles.centeredColumn)}>{item.version_count}</td>
-                      <td className={cx(styles.td, styles.centeredColumn)}>{item.tool_count}</td>
-                      <td className={cx(styles.td, styles.centeredColumn)}>{item.generation_count.toLocaleString()}</td>
-                      <td className={cx(styles.td, styles.promptCell)}>
-                        {item.system_prompt_prefix.length > 0 ? item.system_prompt_prefix : '-'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {nextCursor.length > 0 && (
-            <div className={styles.center}>
-              <Stack direction="row" alignItems="center" gap={1}>
-                {loadingMore && <Spinner size={18} />}
-              </Stack>
-              <div ref={loadMoreSentinelRef} className={styles.loadMoreSentinel} aria-hidden />
-            </div>
+                  {nextCursor.length > 0 && (
+                    <div className={styles.center}>
+                      <Stack direction="row" alignItems="center" gap={1}>
+                        {loadingMore && <Spinner size={18} />}
+                      </Stack>
+                      <div ref={loadMoreSentinelRef} className={styles.loadMoreSentinel} aria-hidden />
+                    </div>
+                  )}
+                </>
+              )}
+            </>
           )}
         </>
       )}

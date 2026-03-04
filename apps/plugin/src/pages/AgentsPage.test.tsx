@@ -47,6 +47,20 @@ beforeAll(() => {
     configurable: true,
     value: IntersectionObserverMock,
   });
+
+  if (typeof globalThis.ResizeObserver === 'undefined') {
+    class ResizeObserverMock {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+
+    Object.defineProperty(globalThis, 'ResizeObserver', {
+      writable: true,
+      configurable: true,
+      value: ResizeObserverMock,
+    });
+  }
 });
 
 beforeEach(() => {
@@ -162,6 +176,7 @@ describe('AgentsPage', () => {
     const { router } = renderPage(dataSource);
 
     await waitFor(() => expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', ''));
+    fireEvent.click(screen.getByText('Agents table'));
 
     fireEvent.click(await screen.findByRole('button', { name: 'open agent assistant' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/a/grafana-sigil-app/agents/name/assistant'));
@@ -172,13 +187,14 @@ describe('AgentsPage', () => {
     renderPage(dataSource);
 
     expect(await screen.findByRole('region', { name: 'agents hero summary' })).toBeInTheDocument();
-    expect(screen.getByText('Seen in selected range')).toBeInTheDocument();
+    expect(screen.getByText('Agents')).toBeInTheDocument();
     expect(screen.getByText('Total generations')).toBeInTheDocument();
     expect(screen.getByText('Estimated prompt+tools tokens')).toBeInTheDocument();
     expect(screen.getByText('Avg tokens per generation')).toBeInTheDocument();
+    expect(screen.getByText('Agent activity over time')).toBeInTheDocument();
 
     // 2 loaded agents: total generations=5, total tokens=11, avg=2
-    expect(screen.getByText('Seen in selected range').parentElement).toHaveTextContent('2');
+    expect(screen.getByText('Agents').parentElement).toHaveTextContent('2');
     expect(screen.getByText('Total generations').parentElement).toHaveTextContent('5');
     expect(screen.getByText('Estimated prompt+tools tokens').parentElement).toHaveTextContent('11');
     expect(screen.getByText('Avg tokens per generation').parentElement).toHaveTextContent('2');
@@ -202,6 +218,7 @@ describe('AgentsPage', () => {
     const dataSource = createDataSource();
     const { router } = renderPage(dataSource);
 
+    fireEvent.click(await screen.findByText('Agents table'));
     fireEvent.click(await screen.findByRole('button', { name: 'open agent anonymous' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/a/grafana-sigil-app/agents/anonymous'));
   });
@@ -211,6 +228,7 @@ describe('AgentsPage', () => {
     renderPage(dataSource);
 
     await waitFor(() => expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', ''));
+    fireEvent.click(screen.getByText('Agents table'));
 
     triggerLoadMoreIntersection();
 
@@ -223,6 +241,7 @@ describe('AgentsPage', () => {
     renderPage(dataSource);
 
     await waitFor(() => expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', ''));
+    fireEvent.click(screen.getByText('Agents table'));
 
     fireEvent.change(screen.getByPlaceholderText('Search by agent name…'), { target: { value: 'assist' } });
 
