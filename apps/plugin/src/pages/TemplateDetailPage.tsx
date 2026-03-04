@@ -323,9 +323,7 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
         {template.config && (
           <div className={styles.code}>
             {JSON.stringify(
-              template.output_keys?.length
-                ? { config: template.config, output_keys: template.output_keys }
-                : template.config,
+              { config: template.config, ...(template.output_keys?.length ? { output_keys: template.output_keys } : {}) },
               null,
               2
             )}

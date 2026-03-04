@@ -52,12 +52,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
 export default function VersionCompare({ left, right }: VersionCompareProps) {
   const styles = useStyles2(getStyles);
 
-  const toDisplay = (item: VersionCompareItem) =>
-    JSON.stringify(
-      item.outputKeys?.length ? { config: item.config, output_keys: item.outputKeys } : item.config,
-      null,
-      2
-    );
+  const toDisplay = (item: VersionCompareItem) => {
+    const obj: Record<string, unknown> = { config: item.config };
+    if (item.outputKeys?.length) {
+      obj.output_keys = item.outputKeys;
+    }
+    return JSON.stringify(obj, null, 2);
+  };
   const leftJson = toDisplay(left);
   const rightJson = toDisplay(right);
 
