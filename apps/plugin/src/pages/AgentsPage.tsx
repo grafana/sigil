@@ -186,6 +186,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.primary,
     fontWeight: theme.typography.fontWeightMedium,
   }),
+  rankValueMuted: css({
+    color: theme.colors.text.secondary,
+  }),
   rankValueAffix: css({
     color: theme.colors.text.secondary,
     fontSize: theme.typography.bodySmall.fontSize,
@@ -318,6 +321,26 @@ function formatUSD(value: number): string {
     return `$${value.toFixed(4)}`;
   }
   return `$${value.toFixed(2)}`;
+}
+
+function splitMutedZeroPrefix(value: string): { leading: string; rest: string } {
+  const isNegative = value.startsWith('-');
+  const unsigned = isNegative ? value.slice(1) : value;
+  if (!unsigned.startsWith('0.')) {
+    return { leading: '', rest: value };
+  }
+
+  let firstSignificantIndex = 2;
+  while (firstSignificantIndex < unsigned.length && unsigned[firstSignificantIndex] === '0') {
+    firstSignificantIndex += 1;
+  }
+  if (firstSignificantIndex === 2) {
+    return { leading: '', rest: value };
+  }
+
+  const leading = `${isNegative ? '-' : ''}${unsigned.slice(0, firstSignificantIndex)}`;
+  const rest = unsigned.slice(firstSignificantIndex);
+  return { leading, rest };
 }
 
 function readInitialTopFootprintMode(): TokenCostMode {
@@ -489,9 +512,11 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
       totalEstimatedTokens += item.token_estimate.total;
     }
     const topByGenerations = [...items]
+      .filter((item) => item.generation_count > 0)
       .sort((a, b) => b.generation_count - a.generation_count || cardLabel(a).localeCompare(cardLabel(b)))
       .slice(0, HERO_TOP_LIMIT);
     const topByTokenFootprint = [...items]
+      .filter((item) => item.token_estimate.total > 0)
       .sort((a, b) => b.token_estimate.total - a.token_estimate.total || cardLabel(a).localeCompare(cardLabel(b)))
       .slice(0, HERO_TOP_LIMIT);
     return {
@@ -732,35 +757,44 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
                         </select>
                       </div>
                       <ul className={styles.rankList}>
-                        {summary.topByTokenFootprint.map((item) => (
-                          <li key={`tok:${item.agent_name}:${item.latest_effective_version}`} className={styles.rankItem}>
-                            <button
-                              type="button"
-                              className={styles.rankButton}
-                              onClick={() => handleOpenAgent(item)}
-                              aria-label={`open top token agent ${cardLabel(item)}`}
-                            >
-                              {item.agent_name.trim().length > 0 ? item.agent_name : 'Unnamed agent bucket'}
-                            </button>
-                            <span className={styles.rankValue}>
-                              {topFootprintMode === 'usd'
-                                ? (
-                                    <>
-                                      <span className={styles.rankValueAffix}>$</span>
-                                      <span className={styles.rankValueNumber}>
-                                        {formatUSD(item.token_estimate.total * ESTIMATED_USD_PER_TOKEN).slice(1)}
-                                      </span>
-                                    </>
-                                  )
-                                : (
-                                    <>
-                                      <span className={styles.rankValueNumber}>{item.token_estimate.total.toLocaleString()}</span>{' '}
-                                      <span className={styles.rankValueAffix}>tokens</span>
-                                    </>
-                                  )}
-                            </span>
-                          </li>
-                        ))}
+                        {summary.topByTokenFootprint.map((item) => {
+                          const usdValue = formatUSD(item.token_estimate.total * ESTIMATED_USD_PER_TOKEN).slice(1);
+                          const usdParts = splitMutedZeroPrefix(usdValue);
+                          return (
+                            <li key={`tok:${item.agent_name}:${item.latest_effective_version}`} className={styles.rankItem}>
+                              <button
+                                type="button"
+                                className={styles.rankButton}
+                                onClick={() => handleOpenAgent(item)}
+                                aria-label={`open top token agent ${cardLabel(item)}`}
+                              >
+                                {item.agent_name.trim().length > 0 ? item.agent_name : 'Unnamed agent bucket'}
+                              </button>
+                              <span className={styles.rankValue}>
+                                {topFootprintMode === 'usd'
+                                  ? (
+                                      <>
+                                        <span className={styles.rankValueAffix}>$</span>
+                                        {usdParts.leading.length > 0 && (
+                                          <span className={styles.rankValueMuted}>{usdParts.leading}</span>
+                                        )}
+                                        <span className={styles.rankValueNumber}>
+                                          {usdParts.rest.length > 0 ? usdParts.rest : '0'}
+                                        </span>
+                                      </>
+                                    )
+                                  : (
+                                      <>
+                                        <span className={styles.rankValueNumber}>
+                                          {item.token_estimate.total.toLocaleString()}
+                                        </span>{' '}
+                                        <span className={styles.rankValueAffix}>tokens</span>
+                                      </>
+                                    )}
+                              </span>
+                            </li>
+                          );
+                        })}
                       </ul>
                     </div>
 
