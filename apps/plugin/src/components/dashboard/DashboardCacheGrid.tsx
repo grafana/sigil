@@ -17,7 +17,6 @@ import {
   getBreakdownStatPanelStyles,
   stringHash,
   getBarPalette,
-  ProviderMappingBadgeRow,
   formatRelativeTime,
 } from './dashboardShared';
 import { lookupPricing, pricingKey, type PricingMap } from '../../dashboard/cost';
@@ -210,8 +209,6 @@ export function DashboardCacheGrid({
           loading={cacheByModelData.loading || resolvedPricing.loading}
         />
       </div>
-      <ProviderMappingBadgeRow mapped={resolvedPricing.mapped} />
-
       <div className={styles.grid}>
         {/* Row 1: Cache hit rate over time + cache hit rate by model */}
         <div className={styles.panelRow}>

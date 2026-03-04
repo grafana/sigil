@@ -42,7 +42,7 @@ describe('Landing1Page', () => {
 
     expect(mockOpenAssistant).toHaveBeenCalledTimes(1);
     expect(mockOpenAssistant).toHaveBeenCalledWith({
-      origin: 'grafana/sigil-plugin/landing1',
+      origin: 'grafana/sigil-plugin/landing',
       prompt: 'How does Sigil work?',
       autoSend: true,
     });

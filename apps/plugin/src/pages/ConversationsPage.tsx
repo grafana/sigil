@@ -302,8 +302,6 @@ export default function ConversationsPage(props: ConversationsPageProps) {
 
   return (
     <div className={styles.pageContainer}>
-      <Text element="h2">Conversations</Text>
-
       <FilterBar
         filter={filterText}
         timeRange={timeRange}

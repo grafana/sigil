@@ -145,7 +145,6 @@ export default function TemplatesPage(props: TemplatesPageProps) {
   if (loading) {
     return (
       <div className={styles.pageContainer}>
-        <Text element="h2">Templates</Text>
         <div className={styles.loading}>
           <Spinner />
         </div>
@@ -156,7 +155,6 @@ export default function TemplatesPage(props: TemplatesPageProps) {
   return (
     <div className={styles.pageContainer}>
       <div className={styles.header}>
-        <Text element="h2">Templates</Text>
         <div className={styles.controls}>
           <Select
             options={SCOPE_OPTIONS}

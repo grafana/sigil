@@ -1,8 +1,9 @@
 import React from 'react';
-import { css, cx } from '@emotion/css';
+import { css } from '@emotion/css';
 import type { AppRootProps, GrafanaTheme2 } from '@grafana/data';
-import { useStyles2 } from '@grafana/ui';
-import { Route, Routes, useLocation } from 'react-router-dom';
+import { PluginPage } from '@grafana/runtime';
+import { Text, useStyles2 } from '@grafana/ui';
+import { Route, Routes } from 'react-router-dom';
 import { ROUTES } from '../constants';
 
 const DashboardPage = React.lazy(() => import('../pages/DashboardPage'));
@@ -16,71 +17,48 @@ const AgentDetailPage = React.lazy(() => import('../pages/AgentDetailPage'));
 const EvaluationPage = React.lazy(() => import('../pages/EvaluationPage'));
 
 const getStyles = (theme: GrafanaTheme2) => ({
-  pageWrapper: css({
-    padding: theme.spacing(3),
-    display: 'flex',
-    flexDirection: 'column' as const,
-    flex: 1,
-    height: '100%',
-    minHeight: 0,
-  }),
-  routesContainer: css({
-    display: 'flex',
-    flexDirection: 'column' as const,
-    flex: 1,
-    minHeight: 0,
-  }),
-  pageWrapperNoPadding: css({
-    padding: 0,
-    overflow: 'hidden',
-  }),
   conversationsRouteContainer: css({
-    display: 'flex',
-    flexDirection: 'column' as const,
-    flex: 1,
-    minHeight: 0,
-    overflow: 'hidden',
     position: 'relative',
+    height: 'calc(100vh - 180px)',
+    overflow: 'hidden',
   }),
 });
 
 export default function App(_props: AppRootProps) {
   const styles = useStyles2(getStyles);
-  const location = useLocation();
-  const isConversationsRoute = new RegExp(`(^|/)${ROUTES.Conversations}(/[^/]+/view)?/?$`).test(location.pathname);
-  const isLanding1Route = /\/landing1\/?$/.test(location.pathname);
 
   return (
-    <div className={cx(styles.pageWrapper, isConversationsRoute && styles.pageWrapperNoPadding)}>
-      <div className={styles.routesContainer}>
-        <Routes>
-          <Route path={ROUTES.Landing1} element={<Landing1Page />} />
-          <Route path={ROUTES.Dashboard} element={<DashboardPage />} />
-          <Route
-            path={ROUTES.Conversations}
-            element={
-              <div className={styles.conversationsRouteContainer}>
-                <ConversationsBrowserPage />
-              </div>
-            }
-          />
-          <Route
-            path={ROUTES.ConversationsView}
-            element={
-              <div className={styles.conversationsRouteContainer}>
-                <ConversationPage />
-              </div>
-            }
-          />
-          <Route path={ROUTES.ConversationsDetail} element={<ConversationDetailPage />} />
-          <Route path={ROUTES.ConversationsOld} element={<ConversationsPage />} />
-          <Route path={ROUTES.Agents} element={<AgentsPage />} />
-          <Route path={ROUTES.AgentDetailByName} element={<AgentDetailPage />} />
-          <Route path={ROUTES.AgentDetailAnonymous} element={<AgentDetailPage />} />
-          <Route path={`${ROUTES.Evaluation}/*`} element={<EvaluationPage />} />
-          <Route path="*" element={isLanding1Route ? <Landing1Page /> : <DashboardPage />} />
-        </Routes>
-      </div>
-    </div>
+    <PluginPage
+      renderTitle={(title) => <Text element="h3">{title}</Text>}
+      background="canvas"
+    >
+      <Routes>
+        <Route path={ROUTES.Root} element={<Landing1Page />} />
+        <Route path={ROUTES.Analytics} element={<DashboardPage />} />
+        <Route
+          path={ROUTES.Conversations}
+          element={
+            <div className={styles.conversationsRouteContainer}>
+              <ConversationsBrowserPage />
+            </div>
+          }
+        />
+        <Route
+          path={ROUTES.ConversationsView}
+          element={
+            <div className={styles.conversationsRouteContainer}>
+              <ConversationPage />
+            </div>
+          }
+        />
+        <Route path={ROUTES.ConversationsDetail} element={<ConversationDetailPage />} />
+        <Route path={ROUTES.ConversationsOld} element={<ConversationsPage />} />
+        <Route path={ROUTES.Agents} element={<AgentsPage />} />
+        <Route path={ROUTES.AgentDetailByName} element={<AgentDetailPage />} />
+        <Route path={ROUTES.AgentDetailAnonymous} element={<AgentDetailPage />} />
+        <Route path={`${ROUTES.Evaluation}/*`} element={<EvaluationPage />} />
+        <Route path="*" element={<Landing1Page />} />
+      </Routes>
+    </PluginPage>
   );
 }
