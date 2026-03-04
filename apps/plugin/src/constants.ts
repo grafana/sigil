@@ -7,10 +7,7 @@ export const ROUTES = {
   ConversationsView: 'conversations/:conversationID/view',
   ConversationsOld: 'conversations-old',
   ConversationsDetail: 'conversations/:conversationID/detail',
-  Completions: 'completions',
-  Traces: 'traces',
   Evaluation: 'evaluation',
-  Settings: 'settings',
 } as const;
 
 export const PAGE_TITLES = {
@@ -19,10 +16,7 @@ export const PAGE_TITLES = {
   [ROUTES.ConversationsView]: 'Conversation view',
   [ROUTES.ConversationsOld]: 'Conversations (old)',
   [ROUTES.ConversationsDetail]: 'Conversation detail',
-  [ROUTES.Completions]: 'Completions',
-  [ROUTES.Traces]: 'Traces',
   [ROUTES.Evaluation]: 'Evaluation',
-  [ROUTES.Settings]: 'Settings',
 } as const;
 
 export function buildConversationDetailRoute(conversationID: string): string {
