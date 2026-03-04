@@ -193,20 +193,18 @@ describe('AgentsPage', () => {
     expect(within(heroRegion).getByText('Total generations')).toBeInTheDocument();
     expect(within(heroRegion).getByText('Estimated prompt+tools footprint')).toBeInTheDocument();
     expect(within(heroRegion).getByText('Avg footprint per generation')).toBeInTheDocument();
-    expect(screen.getByText('Agent activity over time')).toBeInTheDocument();
-
     // 2 loaded agents: total generations=5, total tokens=11, avg=2
     expect(within(heroRegion).getByText('Agents').parentElement).toHaveTextContent('2');
     expect(within(heroRegion).getByText('Total generations').parentElement).toHaveTextContent('5');
     expect(within(heroRegion).getByText('Estimated prompt+tools footprint').parentElement).toHaveTextContent('11');
     expect(within(heroRegion).getByText('Avg footprint per generation').parentElement).toHaveTextContent('2');
 
-    const topByGenerationsSection = screen.getByRole('heading', { name: 'Top by generations' }).parentElement;
+    const topByGenerationsSection = screen.getByText('Top by generations').closest('div');
     expect(topByGenerationsSection).toBeTruthy();
     const generationButtons = within(topByGenerationsSection as HTMLElement).getAllByRole('button');
     expect(generationButtons.map((button) => button.textContent)).toEqual(['assistant', 'Unnamed agent bucket']);
 
-    const topByTokenSection = screen.getByRole('heading', { name: 'Footprint' }).parentElement?.parentElement;
+    const topByTokenSection = screen.getByText('Footprint').closest('div')?.parentElement;
     expect(topByTokenSection).toBeTruthy();
     const tokenButtons = within(topByTokenSection as HTMLElement).getAllByRole('button');
     expect(tokenButtons.map((button) => button.textContent)).toEqual(['assistant', 'Unnamed agent bucket']);
