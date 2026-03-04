@@ -19,6 +19,7 @@ Workflow:
    - Commit with a clear Conventional Commit message explaining what changed and why.
    - Push to the same branch.
 6. Resume watching checks with sleeps after each push.
+8. While waiting, look for cursorbot issues, and see if any are worth quick fixing. Anything very complicated, leave.
 7. Repeat until CI is fully green.
 
 Rules:
