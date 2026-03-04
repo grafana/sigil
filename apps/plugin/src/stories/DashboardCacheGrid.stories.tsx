@@ -2,6 +2,7 @@ import React from 'react';
 import { dateTimeParse, type TimeRange } from '@grafana/data';
 import { DashboardCacheGrid } from '../components/dashboard/DashboardCacheGrid';
 import type { DashboardDataSource } from '../dashboard/api';
+import type { ConversationsDataSource } from '../conversation/api';
 import { emptyFilters, type PrometheusQueryResponse } from '../dashboard/types';
 
 function makeMatrixResponse(
@@ -197,6 +198,99 @@ const mockDataSource: DashboardDataSource = {
   },
 };
 
+const mockConversationsDataSource: ConversationsDataSource = {
+  async searchConversations() {
+    return {
+      conversations: [
+        {
+          conversation_id: 'conv-cache-001',
+          generation_count: 8,
+          first_generation_at: '2026-03-03T08:00:00Z',
+          last_generation_at: '2026-03-03T09:30:00Z',
+          models: ['gpt-4o'],
+          agents: ['assistant'],
+          error_count: 0,
+          has_errors: false,
+          trace_ids: ['trace-1'],
+          annotation_count: 0,
+          selected: {
+            'span.gen_ai.usage.input_tokens': 48200,
+            'span.gen_ai.usage.cache_read_input_tokens': 0,
+          },
+        },
+        {
+          conversation_id: 'conv-cache-002',
+          generation_count: 15,
+          first_generation_at: '2026-03-03T07:00:00Z',
+          last_generation_at: '2026-03-03T09:15:00Z',
+          models: ['gpt-4o', 'claude-sonnet-4-20250514'],
+          agents: ['code-assistant'],
+          error_count: 0,
+          has_errors: false,
+          trace_ids: ['trace-2'],
+          annotation_count: 0,
+          selected: {
+            'span.gen_ai.usage.input_tokens': 125000,
+            'span.gen_ai.usage.cache_read_input_tokens': 82000,
+          },
+        },
+        {
+          conversation_id: 'conv-cache-003',
+          generation_count: 3,
+          first_generation_at: '2026-03-03T09:00:00Z',
+          last_generation_at: '2026-03-03T09:05:00Z',
+          models: ['claude-sonnet-4-20250514'],
+          agents: [],
+          error_count: 0,
+          has_errors: false,
+          trace_ids: ['trace-3'],
+          annotation_count: 0,
+          selected: {
+            'span.gen_ai.usage.input_tokens': 9500,
+            'span.gen_ai.usage.cache_read_input_tokens': 1200,
+          },
+        },
+        {
+          conversation_id: 'conv-cache-004',
+          generation_count: 22,
+          first_generation_at: '2026-03-03T06:00:00Z',
+          last_generation_at: '2026-03-03T08:45:00Z',
+          models: ['gpt-4o'],
+          agents: ['data-analyst'],
+          error_count: 0,
+          has_errors: false,
+          trace_ids: ['trace-4'],
+          annotation_count: 0,
+          selected: {
+            'span.gen_ai.usage.input_tokens': 310000,
+            'span.gen_ai.usage.cache_read_input_tokens': 0,
+          },
+        },
+      ],
+      has_more: false,
+    };
+  },
+  async getConversationDetail() {
+    return {
+      conversation_id: '',
+      generation_count: 0,
+      first_generation_at: '',
+      last_generation_at: '',
+      generations: [],
+      annotations: [],
+    };
+  },
+  async getGeneration() {
+    return { generation_id: '', conversation_id: '' };
+  },
+  async getSearchTags() {
+    return [];
+  },
+  async getSearchTagValues() {
+    return [];
+  },
+};
+
 const meta = {
   title: 'Dashboard/DashboardCacheGrid',
   component: DashboardCacheGrid,
@@ -208,6 +302,7 @@ export const Default = {
   render: () => (
     <DashboardCacheGrid
       dataSource={mockDataSource}
+      conversationsDataSource={mockConversationsDataSource}
       filters={emptyFilters}
       breakdownBy="none"
       from={from}
@@ -221,6 +316,7 @@ export const BreakdownByProvider = {
   render: () => (
     <DashboardCacheGrid
       dataSource={mockDataSource}
+      conversationsDataSource={mockConversationsDataSource}
       filters={emptyFilters}
       breakdownBy="provider"
       from={from}
