@@ -21,7 +21,6 @@ const (
 	reasonOTLPEndpointSet   = "otlp_endpoint_set"
 	reasonExporterUnset     = "traces_exporter_not_configured"
 	reasonExporterInitError = "tracing_init_failed"
-	reasonEnabled           = "enabled"
 )
 
 var spanExporterFactory = autoexport.NewSpanExporter
@@ -68,7 +67,7 @@ func InitTracing(ctx context.Context, logger log.Logger) (func(context.Context) 
 			shutdownCtx = context.Background()
 		}
 		return tracerProvider.Shutdown(shutdownCtx)
-	}, TracingState{Enabled: true, Reason: reasonEnabled}
+	}, TracingState{Enabled: true, Reason: reason}
 }
 
 func traceExportEnabledFromEnv() (bool, string) {

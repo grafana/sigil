@@ -26,6 +26,7 @@ func TestTraceExportEnabledFromEnv(t *testing.T) {
 	})
 
 	t.Run("none exporter", func(t *testing.T) {
+		t.Setenv("OTEL_SDK_DISABLED", "")
 		t.Setenv("OTEL_TRACES_EXPORTER", "none")
 		enabled, reason := traceExportEnabledFromEnv()
 		if enabled {
@@ -37,6 +38,7 @@ func TestTraceExportEnabledFromEnv(t *testing.T) {
 	})
 
 	t.Run("explicit exporter", func(t *testing.T) {
+		t.Setenv("OTEL_SDK_DISABLED", "")
 		t.Setenv("OTEL_TRACES_EXPORTER", "otlp")
 		enabled, reason := traceExportEnabledFromEnv()
 		if !enabled {
@@ -76,6 +78,7 @@ func TestTraceExportEnabledFromEnv(t *testing.T) {
 }
 
 func TestInitTracingDisabledSkipsFactory(t *testing.T) {
+	t.Setenv("OTEL_SDK_DISABLED", "")
 	t.Setenv("OTEL_TRACES_EXPORTER", "none")
 
 	previousFactory := spanExporterFactory
@@ -102,6 +105,7 @@ func TestInitTracingDisabledSkipsFactory(t *testing.T) {
 }
 
 func TestInitTracingFailOpenOnExporterInitError(t *testing.T) {
+	t.Setenv("OTEL_SDK_DISABLED", "")
 	t.Setenv("OTEL_TRACES_EXPORTER", "otlp")
 
 	previousFactory := spanExporterFactory
@@ -125,6 +129,7 @@ func TestInitTracingFailOpenOnExporterInitError(t *testing.T) {
 }
 
 func TestInitTracingSetsGlobalProviderAndPropagator(t *testing.T) {
+	t.Setenv("OTEL_SDK_DISABLED", "")
 	t.Setenv("OTEL_TRACES_EXPORTER", "otlp")
 
 	previousFactory := spanExporterFactory
