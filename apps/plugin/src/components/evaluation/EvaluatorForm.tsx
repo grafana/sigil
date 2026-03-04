@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
-import { Button, Field, FieldSet, Input, Select, Stack, Switch, useStyles2 } from '@grafana/ui';
+import { Button, Field, Input, Select, Stack, Switch, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
 import {
   EVALUATOR_KIND_LABELS,
@@ -8,11 +8,16 @@ import {
   type CreateEvaluatorRequest,
   type EvalFormState,
   type EvalOutputKey,
+  type Evaluator,
   type EvaluatorKind,
   type ScoreType,
 } from '../../evaluation/types';
+import { nextVersion } from '../../evaluation/versionUtils';
 
 export type EvaluatorFormProps = {
+  initialEvaluator?: Evaluator;
+  /** When editing, pass existing versions so the form suggests a new unique version. */
+  existingVersions?: string[];
   onSubmit: (req: CreateEvaluatorRequest) => void;
   onCancel: () => void;
   onConfigChange?: (state: EvalFormState) => void;
@@ -31,9 +36,9 @@ const SCORE_TYPE_OPTIONS: Array<SelectableValue<ScoreType>> = [
 const getStyles = (theme: GrafanaTheme2) => ({
   textarea: css({
     width: '100%',
-    minHeight: 120,
+    minHeight: 180,
     padding: theme.spacing(1, 2),
-    fontFamily: theme.typography.fontFamilyMonospace,
+    fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace",
     fontSize: theme.typography.size.sm,
     borderRadius: theme.shape.radius.default,
     border: `1px solid ${theme.colors.border.medium}`,
@@ -53,36 +58,107 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function EvaluatorForm({ onSubmit, onCancel, onConfigChange }: EvaluatorFormProps) {
-  const styles = useStyles2(getStyles);
+function parseEvaluatorToFormState(
+  e: Evaluator,
+  existingVersions?: string[]
+): {
+  evaluatorId: string;
+  version: string;
+  kind: EvaluatorKind;
+  systemPrompt: string;
+  userPrompt: string;
+  maxTokens: number;
+  temperature: number;
+  schemaJson: string;
+  pattern: string;
+  notEmpty: boolean;
+  minLength: number | '';
+  maxLength: number | '';
+  outputKey: string;
+  outputType: ScoreType;
+  outputDescription: string;
+  outputEnum: string;
+} {
+  const cfg = e.config ?? {};
+  const firstOk = e.output_keys?.[0];
+  const versionsToAvoid = existingVersions ?? (e.version ? [e.version] : []);
+  return {
+    evaluatorId: e.evaluator_id ?? '',
+    version: nextVersion(versionsToAvoid.length > 0 ? versionsToAvoid : undefined),
+    kind: e.kind ?? 'llm_judge',
+    systemPrompt: (cfg.system_prompt as string) ?? '',
+    userPrompt: (cfg.user_prompt as string) ?? '',
+    maxTokens: (cfg.max_tokens as number) ?? 256,
+    temperature: (cfg.temperature as number) ?? 0,
+    schemaJson: typeof cfg.schema === 'object' ? JSON.stringify(cfg.schema, null, 2) : '{}',
+    pattern: (cfg.pattern as string) ?? '',
+    notEmpty: (cfg.not_empty as boolean) ?? false,
+    minLength: cfg.min_length != null ? (cfg.min_length as number) : '',
+    maxLength: cfg.max_length != null ? (cfg.max_length as number) : '',
+    outputKey: firstOk?.key ?? '',
+    outputType: (firstOk?.type as ScoreType) ?? 'number',
+    outputDescription: firstOk?.description ?? '',
+    outputEnum: firstOk?.enum?.join(', ') ?? '',
+  };
+}
 
-  const [evaluatorId, setEvaluatorId] = useState('');
-  const [version, setVersion] = useState('1.0.0');
-  const [kind, setKind] = useState<EvaluatorKind>('llm_judge');
+export default function EvaluatorForm({
+  initialEvaluator,
+  existingVersions,
+  onSubmit,
+  onCancel,
+  onConfigChange,
+}: EvaluatorFormProps) {
+  const styles = useStyles2(getStyles);
+  const isEdit = initialEvaluator != null;
+  const initialState = useMemo(
+    () => (initialEvaluator != null ? parseEvaluatorToFormState(initialEvaluator, existingVersions) : null),
+    // Only needed for initial mount; initialEvaluator/existingVersions are stable for the component lifecycle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  const [evaluatorId, setEvaluatorId] = useState(() => initialState?.evaluatorId ?? '');
+  const [version, setVersion] = useState(() => initialState?.version ?? nextVersion());
+  const [kind, setKind] = useState<EvaluatorKind>(initialState?.kind ?? 'llm_judge');
   const [touched, setTouched] = useState(false);
 
   // llm_judge: system_prompt, user_prompt, max_tokens, temperature
-  const [systemPrompt, setSystemPrompt] = useState('');
-  const [userPrompt, setUserPrompt] = useState('');
-  const [maxTokens, setMaxTokens] = useState(256);
-  const [temperature, setTemperature] = useState(0);
+  const [systemPrompt, setSystemPrompt] = useState(initialState?.systemPrompt ?? '');
+  const [userPrompt, setUserPrompt] = useState(initialState?.userPrompt ?? '');
+  const [maxTokens, setMaxTokens] = useState(initialState?.maxTokens ?? 256);
+  const [temperature, setTemperature] = useState(initialState?.temperature ?? 0);
 
   // json_schema: schema
-  const [schemaJson, setSchemaJson] = useState('{}');
+  const [schemaJson, setSchemaJson] = useState(initialState?.schemaJson ?? '{}');
 
   // regex: pattern
-  const [pattern, setPattern] = useState('');
+  const [pattern, setPattern] = useState(initialState?.pattern ?? '');
 
   // heuristic: not_empty, min_length, max_length
-  const [notEmpty, setNotEmpty] = useState(false);
-  const [minLength, setMinLength] = useState<number | ''>('');
-  const [maxLength, setMaxLength] = useState<number | ''>('');
+  const [notEmpty, setNotEmpty] = useState(initialState?.notEmpty ?? false);
+  const [minLength, setMinLength] = useState<number | ''>(initialState?.minLength ?? '');
+  const [maxLength, setMaxLength] = useState<number | ''>(initialState?.maxLength ?? '');
 
   // output key
-  const [outputKey, setOutputKey] = useState('');
-  const [outputType, setOutputType] = useState<ScoreType>('number');
-  const [outputDescription, setOutputDescription] = useState('');
-  const [outputEnum, setOutputEnum] = useState('');
+  const [outputKey, setOutputKey] = useState(initialState?.outputKey ?? '');
+  const [outputType, setOutputType] = useState<ScoreType>(initialState?.outputType ?? 'number');
+  const [outputDescription, setOutputDescription] = useState(initialState?.outputDescription ?? '');
+  const [outputEnum, setOutputEnum] = useState(initialState?.outputEnum ?? '');
+
+  const versionManuallyEdited = useRef(false);
+  const prevExistingVersionsKey = useRef<string>('');
+
+  useEffect(() => {
+    if (!isEdit || existingVersions == null || versionManuallyEdited.current) {
+      return;
+    }
+    const key = existingVersions.join(',');
+    if (prevExistingVersionsKey.current !== key) {
+      prevExistingVersionsKey.current = key;
+      setVersion(nextVersion(existingVersions));
+    }
+  }, [isEdit, existingVersions]);
 
   const buildConfig = (): Record<string, unknown> => {
     switch (kind) {
@@ -151,7 +227,7 @@ export default function EvaluatorForm({ onSubmit, onCancel, onConfigChange }: Ev
 
     const req: CreateEvaluatorRequest = {
       evaluator_id: evaluatorId.trim(),
-      version: version.trim() || '1.0.0',
+      version: version.trim() || nextVersion(),
       kind,
       config: buildConfig(),
       output_keys: outputKeys,
@@ -160,7 +236,7 @@ export default function EvaluatorForm({ onSubmit, onCancel, onConfigChange }: Ev
   };
 
   return (
-    <FieldSet label="Create evaluator">
+    <>
       <Field
         label="Evaluator ID"
         description="Unique identifier for this evaluator."
@@ -174,10 +250,19 @@ export default function EvaluatorForm({ onSubmit, onCancel, onConfigChange }: Ev
           onBlur={() => setTouched(true)}
           placeholder="e.g. custom.helpfulness"
           width={40}
+          disabled={isEdit}
         />
       </Field>
-      <Field label="Version" description="Semantic version.">
-        <Input value={version} onChange={(e) => setVersion(e.currentTarget.value)} placeholder="1.0.0" width={20} />
+      <Field label="Version" description="Initial version in YYYY-MM-DD or YYYY-MM-DD.N format.">
+        <Input
+          value={version}
+          onChange={(e) => {
+            setVersion(e.currentTarget.value);
+            versionManuallyEdited.current = true;
+          }}
+          placeholder="YYYY-MM-DD"
+          width={20}
+        />
       </Field>
       <Field label="Kind" description="Evaluator type.">
         <Select<EvaluatorKind>
@@ -351,11 +436,11 @@ export default function EvaluatorForm({ onSubmit, onCancel, onConfigChange }: Ev
       )}
 
       <Stack direction="row" gap={1}>
-        <Button onClick={handleSubmit}>Create</Button>
+        <Button onClick={handleSubmit}>{isEdit ? 'Update' : 'Create'}</Button>
         <Button variant="secondary" onClick={onCancel}>
           Cancel
         </Button>
       </Stack>
-    </FieldSet>
+    </>
   );
 }

@@ -26,7 +26,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
   container: css({
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: theme.spacing(2),
+    gap: theme.spacing(1.5),
+    padding: theme.spacing(2),
+    background: theme.colors.background.primary,
+    boxShadow: theme.shadows.z1,
+    borderRadius: theme.shape.radius.default,
   }),
   header: css({
     display: 'flex',
@@ -35,17 +39,15 @@ const getStyles = (theme: GrafanaTheme2) => ({
     alignItems: 'center',
   }),
   section: css({
-    border: `1px solid ${theme.colors.border.weak}`,
-    borderRadius: '8px',
-    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.5),
   }),
   sectionHeader: css({
-    padding: theme.spacing(1, 1.5),
-    background: theme.colors.background.secondary,
-    borderBottom: `1px solid ${theme.colors.border.weak}`,
+    paddingBottom: theme.spacing(0.5),
   }),
   sectionBody: css({
-    padding: theme.spacing(1.5),
+    padding: theme.spacing(1, 0),
     fontFamily: theme.typography.fontFamilyMonospace,
     fontSize: theme.typography.bodySmall.fontSize,
     whiteSpace: 'pre-wrap' as const,
@@ -67,8 +69,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
 export default function EvaluatorDetail({ evaluator }: EvaluatorDetailProps) {
   const styles = useStyles2(getStyles);
 
-  const systemPrompt = evaluator.config.system_prompt as string | undefined;
-  const userPrompt = evaluator.config.user_prompt as string | undefined;
+  const systemPrompt = evaluator.config?.system_prompt as string | undefined;
+  const userPrompt = evaluator.config?.user_prompt as string | undefined;
 
   return (
     <div className={styles.container}>
@@ -137,7 +139,7 @@ export default function EvaluatorDetail({ evaluator }: EvaluatorDetailProps) {
         </>
       )}
 
-      {Object.keys(evaluator.config).length > 0 && (
+      {Object.keys(evaluator.config ?? {}).length > 0 && (
         <div className={styles.section}>
           <div className={styles.sectionHeader}>
             <Text weight="medium" variant="bodySmall">

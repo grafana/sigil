@@ -1,6 +1,6 @@
 import React from 'react';
-import { MemoryRouter } from 'react-router-dom';
-import CreateEvaluatorPage from '../../pages/CreateEvaluatorPage';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import EditEvaluatorPage from '../../pages/EditEvaluatorPage';
 import { type EvaluationDataSource } from '../../evaluation/api';
 import type {
   CreateEvaluatorRequest,
@@ -15,14 +15,37 @@ import type {
 
 const mockEvaluator: Evaluator = {
   evaluator_id: 'custom.helpfulness',
-  version: '2026-03-01',
+  version: '2026-03-03',
   kind: 'llm_judge',
-  config: {},
+  config: {
+    system_prompt: 'You are an expert evaluator.',
+    user_prompt: 'Score from 1-10.\n\nInput: {{input}}\nOutput: {{output}}',
+    max_tokens: 256,
+    temperature: 0,
+  },
   output_keys: [{ key: 'score', type: 'number' }],
   is_predefined: false,
-  created_at: '2026-03-01T00:00:00Z',
-  updated_at: '2026-03-01T00:00:00Z',
+  created_at: '2026-03-03T12:00:00Z',
+  updated_at: '2026-03-03T12:00:00Z',
 };
+
+const mockEvaluatorVersions: Evaluator[] = [
+  { ...mockEvaluator, version: '2026-03-03', created_at: '2026-03-03T12:00:00Z', updated_at: '2026-03-03T12:00:00Z' },
+  {
+    ...mockEvaluator,
+    version: '2026-03-02',
+    config: { ...mockEvaluator.config, temperature: 0.2 },
+    created_at: '2026-03-02T10:00:00Z',
+    updated_at: '2026-03-02T10:00:00Z',
+  },
+  {
+    ...mockEvaluator,
+    version: '2026-03-01',
+    config: { ...mockEvaluator.config, max_tokens: 128 },
+    created_at: '2026-03-01T08:00:00Z',
+    updated_at: '2026-03-01T08:00:00Z',
+  },
+];
 
 const mockRule: Rule = {
   rule_id: 'stub',
@@ -37,10 +60,13 @@ const mockRule: Rule = {
 
 const mockDataSource: EvaluationDataSource = {
   listRules: async () => ({ items: [], next_cursor: '' }),
-  listEvaluators: async () => ({ items: [], next_cursor: '' }),
+  listEvaluators: async () => ({ items: mockEvaluatorVersions, next_cursor: '' }),
   listPredefinedEvaluators: async () => ({ items: [], next_cursor: '' }),
   createEvaluator: async (_req: CreateEvaluatorRequest) => mockEvaluator,
-  getEvaluator: async () => mockEvaluator,
+  getEvaluator: async (id: string) =>
+    id === 'custom.helpfulness'
+      ? mockEvaluator
+      : { ...mockEvaluator, evaluator_id: id, config: {}, output_keys: [{ key: 'score', type: 'number' }] },
   deleteEvaluator: async () => {},
   forkPredefinedEvaluator: async (_id: string, _req: ForkEvaluatorRequest) => mockEvaluator,
   createRule: async () => mockRule,
@@ -102,49 +128,21 @@ const mockDataSource: EvaluationDataSource = {
   }),
   forkTemplate: async () => mockEvaluator,
   listSavedConversations: async () => ({ items: [], next_cursor: '' }),
-  saveConversation: async () => ({
-    tenant_id: '',
-    saved_id: '',
-    conversation_id: '',
-    name: '',
-    source: 'telemetry' as const,
-    tags: {},
-    saved_by: '',
-    created_at: '',
-    updated_at: '',
-  }),
-  getSavedConversation: async () => ({
-    tenant_id: '',
-    saved_id: '',
-    conversation_id: '',
-    name: '',
-    source: 'telemetry' as const,
-    tags: {},
-    saved_by: '',
-    created_at: '',
-    updated_at: '',
-  }),
+  saveConversation: async () => ({}) as never,
+  getSavedConversation: async () => ({}) as never,
   deleteSavedConversation: async () => {},
-  createManualConversation: async () => ({
-    tenant_id: '',
-    saved_id: '',
-    conversation_id: '',
-    name: '',
-    source: 'manual' as const,
-    tags: {},
-    saved_by: '',
-    created_at: '',
-    updated_at: '',
-  }),
+  createManualConversation: async () => ({}) as never,
 };
 
 const meta = {
-  title: 'Sigil/Evaluation/CreateEvaluatorPage',
-  component: CreateEvaluatorPage,
+  title: 'Sigil/Evaluation/EditEvaluatorPage',
+  component: EditEvaluatorPage,
   decorators: [
     (Story: React.ComponentType) => (
-      <MemoryRouter>
-        <Story />
+      <MemoryRouter initialEntries={['/a/grafana-sigil-app/evaluation/evaluators/custom.helpfulness/edit']}>
+        <Routes>
+          <Route path="/a/grafana-sigil-app/evaluation/evaluators/:evaluatorID/edit" element={<Story />} />
+        </Routes>
       </MemoryRouter>
     ),
   ],

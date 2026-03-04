@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Text, useStyles2 } from '@grafana/ui';
+import { Alert, Badge, Text, useStyles2 } from '@grafana/ui';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
 import type { CreateTemplateRequest, EvalFormState } from '../evaluation/types';
@@ -19,19 +19,73 @@ const getStyles = (theme: GrafanaTheme2) => ({
   page: css({
     display: 'flex',
     flexDirection: 'column' as const,
+    height: '100%',
     gap: theme.spacing(3),
   }),
-  formWithTest: css({
+  layout: css({
     display: 'grid',
-    gridTemplateColumns: '3fr 2fr',
+    gridTemplateColumns: '1fr 1fr',
+    gridTemplateRows: '1fr',
     gap: theme.spacing(3),
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
   }),
-  formColumn: css({
+  left: css({
+    overflow: 'auto',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    minHeight: 0,
+    padding: theme.spacing(0.5),
+    paddingLeft: 0,
+  }),
+  formCard: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(1.5),
+    padding: theme.spacing(2),
+    background: theme.colors.background.primary,
+    boxShadow: theme.shadows.z1,
+    borderRadius: theme.shape.radius.default,
+  }),
+  right: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    minHeight: 0,
+    overflow: 'hidden',
+  }),
+  rightInner: css({
+    flex: 1,
+    minHeight: 0,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    overflow: 'hidden',
+    padding: theme.spacing(0.5, 0, 2, 2),
+  }),
+  header: css({
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: theme.spacing(2),
+    flexWrap: 'wrap' as const,
+  }),
+  headerLeft: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+    flex: 1,
     minWidth: 0,
   }),
-  testColumn: css({
-    position: 'relative' as const,
-    minHeight: 0,
+  headerTitleRow: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+    flexWrap: 'wrap' as const,
+  }),
+  headerSubtitle: css({
+    marginTop: theme.spacing(0.5),
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.bodySmall.fontSize,
   }),
 });
 
@@ -68,17 +122,37 @@ export default function CreateTemplatePage(props: CreateTemplatePageProps) {
         </Alert>
       )}
 
-      <div className={styles.formWithTest}>
-        <div className={styles.formColumn}>
-          <TemplateForm onSubmit={handleSubmit} onCancel={handleCancel} onConfigChange={setFormState} />
+      <div className={styles.header}>
+        <div className={styles.headerLeft}>
+          <div>
+            <div className={styles.headerTitleRow}>
+              <Text element="h3" weight="bold">
+                Create template
+              </Text>
+              <Badge text="New" color="blue" />
+            </div>
+            <div className={styles.headerSubtitle}>
+              Define a reusable evaluator template and test it against recent generations.
+            </div>
+          </div>
         </div>
-        <div className={styles.testColumn}>
-          <EvalTestPanel
-            kind={formState.kind}
-            config={formState.config}
-            outputKeys={formState.outputKeys}
-            dataSource={dataSource}
-          />
+      </div>
+
+      <div className={styles.layout}>
+        <div className={styles.left}>
+          <div className={styles.formCard}>
+            <TemplateForm onSubmit={handleSubmit} onCancel={handleCancel} onConfigChange={setFormState} />
+          </div>
+        </div>
+        <div className={styles.right}>
+          <div className={styles.rightInner}>
+            <EvalTestPanel
+              kind={formState.kind}
+              config={formState.config}
+              outputKeys={formState.outputKeys}
+              dataSource={dataSource}
+            />
+          </div>
         </div>
       </div>
     </div>

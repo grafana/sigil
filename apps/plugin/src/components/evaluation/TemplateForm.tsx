@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
-import { Button, Field, FieldSet, Input, Select, Stack, Switch, useStyles2 } from '@grafana/ui';
+import { Button, Field, Input, Select, Stack, Switch, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
 import {
   EVALUATOR_KIND_LABELS,
@@ -31,9 +31,10 @@ const SCORE_TYPE_OPTIONS: Array<SelectableValue<ScoreType>> = [
 const getStyles = (theme: GrafanaTheme2) => ({
   textarea: css({
     width: '100%',
-    minHeight: 120,
+    minWidth: 180,
+    minHeight: 180,
     padding: theme.spacing(1, 2),
-    fontFamily: theme.typography.fontFamilyMonospace,
+    fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace",
     fontSize: theme.typography.size.sm,
     borderRadius: theme.shape.radius.default,
     border: `1px solid ${theme.colors.border.medium}`,
@@ -178,7 +179,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange }: Tem
   };
 
   return (
-    <FieldSet label="Create template">
+    <>
       <Field
         label="Template ID"
         description="Unique identifier for this template."
@@ -407,6 +408,6 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange }: Tem
           Cancel
         </Button>
       </Stack>
-    </FieldSet>
+    </>
   );
 }

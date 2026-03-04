@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { css, cx } from '@emotion/css';
-import { dateTime, type GrafanaTheme2, makeTimeRange, type TimeRange } from '@grafana/data';
+import { dateTime, dateTimeParse, type GrafanaTheme2, type TimeRange } from '@grafana/data';
 import {
   Alert,
   Icon,
@@ -396,8 +396,13 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
   const [activeTab, setActiveTab] = useState<AgentsPageTab>('info');
   const [topFootprintMode, setTopFootprintMode] = useState<TokenCostMode>(() => readInitialTopFootprintMode());
   const [timeRange, setTimeRange] = useState<TimeRange>(() => {
-    const now = dateTime();
-    return makeTimeRange(dateTime(now).subtract(24, 'hours'), now);
+    const rawFrom = 'now-1h';
+    const rawTo = 'now';
+    return {
+      from: dateTimeParse(rawFrom),
+      to: dateTimeParse(rawTo),
+      raw: { from: rawFrom, to: rawTo },
+    };
   });
   const requestVersion = useRef(0);
   const inFlightLoadMore = useRef(false);

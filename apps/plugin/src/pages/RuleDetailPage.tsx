@@ -2,10 +2,11 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Badge, Button, Icon, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
+import { Alert, Badge, Button, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { useOptionalEvalRulesDataContext } from '../contexts/EvalRulesDataContext';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
+import { pickLatestVersionPerEvaluator } from '../evaluation/utils';
 import type {
   CreateRuleRequest,
   Evaluator,
@@ -70,10 +71,18 @@ const getStyles = (theme: GrafanaTheme2) => ({
     overflow: 'auto',
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: theme.spacing(2),
-    padding: theme.spacing(0.5),
-    paddingLeft: theme.spacing(2),
     minHeight: 0,
+    padding: theme.spacing(0.5),
+    paddingLeft: 0,
+  }),
+  formCard: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(1.5),
+    padding: theme.spacing(2),
+    background: theme.colors.background.primary,
+    boxShadow: theme.shadows.z1,
+    borderRadius: theme.shape.radius.default,
   }),
   right: css({
     display: 'flex',
@@ -87,7 +96,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     overflow: 'hidden',
-    padding: theme.spacing(0.5, 2, 2, 2),
+    padding: theme.spacing(0.5, 0, 2, 2),
   }),
   actions: css({
     display: 'flex',
@@ -168,7 +177,7 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
         setSampleRate(rule.sample_rate);
         setEvaluatorIDs(rule.evaluator_ids);
         setEnabled(rule.enabled);
-        setAvailableEvaluators(evaluatorsRes.items);
+        setAvailableEvaluators(pickLatestVersionPerEvaluator(evaluatorsRes.items));
       })
       .catch((err) => {
         if (requestVersion.current !== version) {
@@ -188,7 +197,7 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
     if (isNew) {
       void dataSource
         .listEvaluators()
-        .then((res) => setAvailableEvaluators(res.items))
+        .then((res) => setAvailableEvaluators(pickLatestVersionPerEvaluator(res.items)))
         .catch((err) => {
           setErrorMessage(err instanceof Error ? err.message : 'Failed to load evaluators');
         });
@@ -325,18 +334,15 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
       <div className={styles.pageContainer}>
         <div className={styles.header}>
           <div className={styles.headerLeft}>
-            <Icon name="sliders-v-alt" size="xl" />
             <div>
               <div className={styles.headerTitleRow}>
-                <Text element="h2" weight="bold">
+                <Text element="h3" weight="bold">
                   {isNew ? 'Create Rule' : 'Edit Rule'}
                 </Text>
                 {isNew && <Badge text="New" color="blue" />}
               </div>
               {isNew && (
-                <div className={styles.headerSubtitle}>
-                  Define which generations to evaluate and how. Configure selectors, match criteria, and evaluators.
-                </div>
+                <div className={styles.headerSubtitle}>Configure selectors, match criteria, and evaluators.</div>
               )}
             </div>
           </div>
@@ -352,19 +358,14 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
     <div className={styles.pageContainer}>
       <div className={styles.header}>
         <div className={styles.headerLeft}>
-          <Icon name="sliders-v-alt" size="xl" />
           <div>
             <div className={styles.headerTitleRow}>
-              <Text element="h2" weight="bold">
+              <Text element="h3" weight="bold">
                 {isNew ? 'Create Rule' : 'Edit Rule'}
               </Text>
               {isNew && <Badge text="New" color="blue" />}
             </div>
-            {isNew && (
-              <div className={styles.headerSubtitle}>
-                Define which generations to evaluate and how. Configure selectors, match criteria, and evaluators.
-              </div>
-            )}
+            {isNew && <div className={styles.headerSubtitle}>Configure selectors, match criteria, and evaluators.</div>}
           </div>
         </div>
         <div className={styles.actions}>
@@ -405,27 +406,29 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
 
       <div className={styles.layout}>
         <div className={styles.left}>
-          <RuleEnableToggle
-            ruleID={(ruleID ?? ruleIDInput) || 'new-rule'}
-            enabled={enabled}
-            onToggle={(_, v) => setEnabled(v)}
-          />
-          <RuleForm
-            key={ruleID ?? 'new'}
-            ruleID={ruleIDInput}
-            isNew={isNew}
-            selector={selector}
-            match={match}
-            sampleRate={sampleRate}
-            evaluatorIDs={evaluatorIDs}
-            availableEvaluators={availableEvaluators}
-            onSelectorChange={setSelector}
-            onMatchChange={setMatch}
-            onSampleRateChange={setSampleRate}
-            onEvaluatorIDsChange={setEvaluatorIDs}
-            onRuleIDChange={setRuleIDInput}
-            disabled={!isNew}
-          />
+          <div className={styles.formCard}>
+            <RuleEnableToggle
+              ruleID={(ruleID ?? ruleIDInput) || 'new-rule'}
+              enabled={enabled}
+              onToggle={(_, v) => setEnabled(v)}
+            />
+            <RuleForm
+              key={ruleID ?? 'new'}
+              ruleID={ruleIDInput}
+              isNew={isNew}
+              selector={selector}
+              match={match}
+              sampleRate={sampleRate}
+              evaluatorIDs={evaluatorIDs}
+              availableEvaluators={availableEvaluators}
+              onSelectorChange={setSelector}
+              onMatchChange={setMatch}
+              onSampleRateChange={setSampleRate}
+              onEvaluatorIDsChange={setEvaluatorIDs}
+              onRuleIDChange={setRuleIDInput}
+              disabled={!isNew}
+            />
+          </div>
         </div>
         <div className={styles.right}>
           <div className={styles.rightInner}>

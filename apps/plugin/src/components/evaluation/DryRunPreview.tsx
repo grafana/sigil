@@ -19,6 +19,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     overflow: 'hidden',
     background: theme.colors.background.primary,
     boxShadow: theme.shadows.z1,
+    borderRadius: '6px',
   }),
   header: css({
     flexShrink: 0,
