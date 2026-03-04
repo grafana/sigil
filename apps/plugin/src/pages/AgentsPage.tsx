@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { css, cx } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Badge, Icon, Input, Spinner, Stack, Text, Tooltip, useStyles2 } from '@grafana/ui';
+import { Alert, Icon, Input, Spinner, Stack, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../agents/api';
 import type { AgentListItem } from '../agents/types';
 import { buildAgentDetailByNameRoute, buildAnonymousAgentDetailRoute, PLUGIN_BASE } from '../constants';
@@ -357,7 +357,6 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
               <thead>
                 <tr>
                   <th className={styles.th}>Agent</th>
-                  <th className={styles.th}>Type</th>
                   <th className={styles.th}>Latest seen</th>
                   <th className={styles.th}>Versions</th>
                   <th className={styles.th}>Tools</th>
@@ -383,7 +382,6 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
                           {isAnonymous ? 'Unnamed agent bucket' : item.agent_name}
                         </button>
                       </td>
-                      <td className={styles.td}>{isAnonymous ? <Badge text="Unnamed" color="orange" /> : null}</td>
                       <td className={styles.td}>{formatDateShort(item.latest_seen_at)}</td>
                       <td className={styles.td}>{item.version_count}</td>
                       <td className={styles.td}>{item.tool_count}</td>
