@@ -9,7 +9,7 @@ describe('countAgentsSeenInWindows', () => {
     jest.restoreAllMocks();
   });
 
-  it('paginates agents once for both windows', async () => {
+  it('caps agent pagination when counting both windows', async () => {
     const agent: AgentListItem = {
       agent_name: 'agent-1',
       latest_effective_version: 'v1',
@@ -39,7 +39,7 @@ describe('countAgentsSeenInWindows', () => {
     const counts = await countAgentsSeenInWindows(currentFrom, now, previousFrom, previousTo);
 
     expect(counts.current).toBeGreaterThan(0);
-    expect(listAgents).toHaveBeenCalledTimes(50);
+    expect(listAgents).toHaveBeenCalledTimes(10);
   });
 });
 
