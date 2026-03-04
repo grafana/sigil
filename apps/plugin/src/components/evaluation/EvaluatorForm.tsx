@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
 import { Button, Field, Input, Select, Stack, Switch, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
@@ -16,6 +16,8 @@ import { nextVersion } from '../../evaluation/versionUtils';
 
 export type EvaluatorFormProps = {
   initialEvaluator?: Evaluator;
+  /** When editing, pass existing versions so the form suggests a new unique version. */
+  existingVersions?: string[];
   onSubmit: (req: CreateEvaluatorRequest) => void;
   onCancel: () => void;
   onConfigChange?: (state: EvalFormState) => void;
@@ -56,7 +58,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-function parseEvaluatorToFormState(e: Evaluator): {
+function parseEvaluatorToFormState(
+  e: Evaluator,
+  existingVersions?: string[]
+): {
   evaluatorId: string;
   version: string;
   kind: EvaluatorKind;
@@ -76,9 +81,10 @@ function parseEvaluatorToFormState(e: Evaluator): {
 } {
   const cfg = e.config ?? {};
   const firstOk = e.output_keys?.[0];
+  const versionsToAvoid = existingVersions ?? (e.version ? [e.version] : []);
   return {
     evaluatorId: e.evaluator_id ?? '',
-    version: e.version ?? nextVersion(),
+    version: nextVersion(versionsToAvoid.length > 0 ? versionsToAvoid : undefined),
     kind: e.kind ?? 'llm_judge',
     systemPrompt: (cfg.system_prompt as string) ?? '',
     userPrompt: (cfg.user_prompt as string) ?? '',
@@ -96,13 +102,24 @@ function parseEvaluatorToFormState(e: Evaluator): {
   };
 }
 
-export default function EvaluatorForm({ initialEvaluator, onSubmit, onCancel, onConfigChange }: EvaluatorFormProps) {
+export default function EvaluatorForm({
+  initialEvaluator,
+  existingVersions,
+  onSubmit,
+  onCancel,
+  onConfigChange,
+}: EvaluatorFormProps) {
   const styles = useStyles2(getStyles);
   const isEdit = initialEvaluator != null;
-  const initialState = initialEvaluator != null ? parseEvaluatorToFormState(initialEvaluator) : null;
+  const initialState = useMemo(
+    () => (initialEvaluator != null ? parseEvaluatorToFormState(initialEvaluator, existingVersions) : null),
+    // Only needed for initial mount; initialEvaluator/existingVersions are stable for the component lifecycle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
-  const [evaluatorId, setEvaluatorId] = useState(initialState?.evaluatorId ?? '');
-  const [version, setVersion] = useState(initialState?.version ?? nextVersion());
+  const [evaluatorId, setEvaluatorId] = useState(() => initialState?.evaluatorId ?? '');
+  const [version, setVersion] = useState(() => initialState?.version ?? nextVersion());
   const [kind, setKind] = useState<EvaluatorKind>(initialState?.kind ?? 'llm_judge');
   const [touched, setTouched] = useState(false);
 

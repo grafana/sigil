@@ -313,6 +313,9 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
             ) : (
               <EvaluatorForm
                 initialEvaluator={evaluator}
+                existingVersions={
+                  versions.length > 0 ? versions.map((v) => v.version) : evaluator ? [evaluator.version] : []
+                }
                 onSubmit={handleSubmit}
                 onCancel={handleCancel}
                 onConfigChange={setFormState}
