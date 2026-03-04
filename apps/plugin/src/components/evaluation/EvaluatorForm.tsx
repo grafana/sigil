@@ -12,6 +12,7 @@ import {
   type EvaluatorKind,
   type ScoreType,
 } from '../../evaluation/types';
+import { nextVersion } from '../../evaluation/versionUtils';
 
 export type EvaluatorFormProps = {
   initialEvaluator?: Evaluator;
@@ -77,7 +78,7 @@ function parseEvaluatorToFormState(e: Evaluator): {
   const firstOk = e.output_keys?.[0];
   return {
     evaluatorId: e.evaluator_id ?? '',
-    version: e.version ?? '1.0.0',
+    version: e.version ?? nextVersion(),
     kind: e.kind ?? 'llm_judge',
     systemPrompt: (cfg.system_prompt as string) ?? '',
     userPrompt: (cfg.user_prompt as string) ?? '',
@@ -101,7 +102,7 @@ export default function EvaluatorForm({ initialEvaluator, onSubmit, onCancel, on
   const initialState = initialEvaluator != null ? parseEvaluatorToFormState(initialEvaluator) : null;
 
   const [evaluatorId, setEvaluatorId] = useState(initialState?.evaluatorId ?? '');
-  const [version, setVersion] = useState(initialState?.version ?? '1.0.0');
+  const [version, setVersion] = useState(initialState?.version ?? nextVersion());
   const [kind, setKind] = useState<EvaluatorKind>(initialState?.kind ?? 'llm_judge');
   const [touched, setTouched] = useState(false);
 
@@ -195,7 +196,7 @@ export default function EvaluatorForm({ initialEvaluator, onSubmit, onCancel, on
 
     const req: CreateEvaluatorRequest = {
       evaluator_id: evaluatorId.trim(),
-      version: version.trim() || '1.0.0',
+      version: version.trim() || nextVersion(),
       kind,
       config: buildConfig(),
       output_keys: outputKeys,
@@ -221,8 +222,13 @@ export default function EvaluatorForm({ initialEvaluator, onSubmit, onCancel, on
           disabled={isEdit}
         />
       </Field>
-      <Field label="Version" description="Semantic version.">
-        <Input value={version} onChange={(e) => setVersion(e.currentTarget.value)} placeholder="1.0.0" width={20} />
+      <Field label="Version" description="Initial version in YYYY-MM-DD or YYYY-MM-DD.N format.">
+        <Input
+          value={version}
+          onChange={(e) => setVersion(e.currentTarget.value)}
+          placeholder="YYYY-MM-DD"
+          width={20}
+        />
       </Field>
       <Field label="Kind" description="Evaluator type.">
         <Select<EvaluatorKind>

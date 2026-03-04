@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button, Field, FieldSet, Input, Stack } from '@grafana/ui';
 import type { CreateEvaluatorRequest, Evaluator } from '../../evaluation/types';
-import { nextPatchVersion } from '../../evaluation/versionUtils';
+import { nextVersion } from '../../evaluation/versionUtils';
 
 export type RevertEvaluatorFormProps = {
   evaluator: Evaluator;
@@ -16,7 +16,7 @@ export default function RevertEvaluatorForm({
   onSubmit,
   onCancel,
 }: RevertEvaluatorFormProps) {
-  const [version, setVersion] = useState(() => nextPatchVersion(latestVersion));
+  const [version, setVersion] = useState(() => nextVersion([latestVersion]));
   const [touched, setTouched] = useState(false);
 
   const isVersionEmpty = version.trim() === '';
@@ -47,7 +47,12 @@ export default function RevertEvaluatorForm({
         invalid={showVersionError}
         error={showVersionError ? 'Version is required' : undefined}
       >
-        <Input value={version} onChange={(e) => setVersion(e.currentTarget.value)} placeholder="1.0.1" width={20} />
+        <Input
+          value={version}
+          onChange={(e) => setVersion(e.currentTarget.value)}
+          placeholder="YYYY-MM-DD"
+          width={20}
+        />
       </Field>
 
       <Stack direction="row" gap={1}>

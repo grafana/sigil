@@ -15,7 +15,7 @@ import type {
 
 const mockEvaluator: Evaluator = {
   evaluator_id: 'custom.helpfulness',
-  version: '1.0.0',
+  version: '2026-03-01',
   kind: 'llm_judge',
   config: {},
   output_keys: [{ key: 'score', type: 'number' }],

@@ -15,7 +15,7 @@ import type {
 
 const mockEvaluator: Evaluator = {
   evaluator_id: 'custom.helpfulness',
-  version: '1.0.0',
+  version: '2026-03-03',
   kind: 'llm_judge',
   config: {
     system_prompt: 'You are an expert evaluator.',
@@ -30,7 +30,7 @@ const mockEvaluator: Evaluator = {
 };
 
 const mockEvaluatorVersions: Evaluator[] = [
-  { ...mockEvaluator, version: '1.0.0', created_at: '2026-03-03T12:00:00Z', updated_at: '2026-03-03T12:00:00Z' },
+  { ...mockEvaluator, version: '2026-03-03', created_at: '2026-03-03T12:00:00Z', updated_at: '2026-03-03T12:00:00Z' },
   {
     ...mockEvaluator,
     version: '2026-03-02',
@@ -127,6 +127,11 @@ const mockDataSource: EvaluationDataSource = {
     created_at: '',
   }),
   forkTemplate: async () => mockEvaluator,
+  listSavedConversations: async () => ({ items: [], next_cursor: '' }),
+  saveConversation: async () => ({}) as never,
+  getSavedConversation: async () => ({}) as never,
+  deleteSavedConversation: async () => {},
+  createManualConversation: async () => ({}) as never,
 };
 
 const meta = {
