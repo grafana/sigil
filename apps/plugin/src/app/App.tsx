@@ -9,6 +9,7 @@ const DashboardPage = React.lazy(() => import('../pages/DashboardPage'));
 const Landing1Page = React.lazy(() => import('../pages/Landing1Page'));
 const ConversationsBrowserPage = React.lazy(() => import('../pages/ConversationsBrowserPage'));
 const ConversationPage = React.lazy(() => import('../pages/ConversationPage'));
+const ConversationExplorePage = React.lazy(() => import('../pages/ConversationExplorePage'));
 const ConversationDetailPage = React.lazy(() => import('../pages/ConversationDetailPage'));
 const ConversationsPage = React.lazy(() => import('../pages/ConversationsPage'));
 const AgentsPage = React.lazy(() => import('../pages/AgentsPage'));
@@ -47,7 +48,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
 export default function App(_props: AppRootProps) {
   const styles = useStyles2(getStyles);
   const location = useLocation();
-  const isConversationsRoute = new RegExp(`(^|/)${ROUTES.Conversations}(/[^/]+/view)?/?$`).test(location.pathname);
+  const isConversationsRoute = new RegExp(`(^|/)${ROUTES.Conversations}(/[^/]+/(view|explore))?/?$`).test(
+    location.pathname
+  );
   const isLanding1Route = /\/landing1\/?$/.test(location.pathname);
 
   return (
@@ -69,6 +72,14 @@ export default function App(_props: AppRootProps) {
             element={
               <div className={styles.conversationsRouteContainer}>
                 <ConversationPage />
+              </div>
+            }
+          />
+          <Route
+            path={ROUTES.ConversationsExplore}
+            element={
+              <div className={styles.conversationsRouteContainer}>
+                <ConversationExplorePage />
               </div>
             }
           />

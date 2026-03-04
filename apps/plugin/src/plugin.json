@@ -52,6 +52,13 @@
     },
     {
       "type": "page",
+      "name": "Conversation explore",
+      "path": "/a/grafana-sigil-app/conversations/:conversationID/explore",
+      "action": "grafana-sigil-app.data:read",
+      "addToNav": false
+    },
+    {
+      "type": "page",
       "name": "Agents",
       "path": "/a/grafana-sigil-app/agents",
       "action": "grafana-sigil-app.data:read",

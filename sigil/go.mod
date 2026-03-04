@@ -1,6 +1,6 @@
 module github.com/grafana/sigil/sigil
 
-go 1.25.6
+go 1.25.7
 
 require (
 	cloud.google.com/go/auth v0.18.2
@@ -9,10 +9,11 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.32.10
 	github.com/go-kit/log v0.2.1
 	github.com/go-sql-driver/mysql v1.9.3
-	github.com/grafana/dskit v0.0.0-20260228091820-49ab18c8ab1e
+	github.com/grafana/dskit v0.0.0-20260304175301-5f643207fdbc
 	github.com/minio/minio-go/v7 v7.0.98
 	github.com/openai/openai-go/v3 v3.24.0
 	github.com/prometheus/client_golang v1.23.2
+	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.40.0
 	github.com/thanos-io/objstore v0.0.0-20250813080715-4e5fd4289b50
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.65.0
@@ -142,7 +143,6 @@ require (
 	github.com/shirou/gopsutil/v4 v4.25.6 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // indirect
-	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
