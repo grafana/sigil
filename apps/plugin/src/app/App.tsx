@@ -123,13 +123,16 @@ export default function App(props: AppRootProps) {
     document.title = `${currentTitle} - ${APP_TITLE}${grafanaTitleSuffix.current}`;
   }, [currentTitle]);
 
-  const isConversationsRoute = new RegExp(`(^|/)${ROUTES.Conversations}(/[^/]+/(view|explore))?/?$`).test(
-    location.pathname
-  );
+  const isConversationsRoute =
+    pluginRelativePath === ROUTES.Conversations || pluginRelativePath.startsWith(`${ROUTES.Conversations}/`);
+  const isAgentsRoute = pluginRelativePath === ROUTES.Agents || pluginRelativePath.startsWith(`${ROUTES.Agents}/`);
+  const isEvaluationRoute =
+    pluginRelativePath === ROUTES.Evaluation || pluginRelativePath.startsWith(`${ROUTES.Evaluation}/`);
+  const isChromeLightRoute = isConversationsRoute || isAgentsRoute || isEvaluationRoute;
   const isLanding1Route = /\/landing1\/?$/.test(location.pathname);
 
   return (
-    <div className={cx(styles.pageWrapper, isConversationsRoute && styles.pageWrapperNoPadding)}>
+    <div className={cx(styles.pageWrapper, isChromeLightRoute && styles.pageWrapperNoPadding)}>
       <div className={styles.routesContainer}>
         <Routes>
           <Route
@@ -178,10 +181,24 @@ export default function App(props: AppRootProps) {
           />
           <Route path={ROUTES.ConversationsDetail} element={<ConversationDetailPage />} />
           <Route path={ROUTES.ConversationsOld} element={<ConversationsPage />} />
-          <Route path={ROUTES.Agents} element={<AgentsPage />} />
+          <Route
+            path={ROUTES.Agents}
+            element={
+              <PageRoot fullBleed>
+                <AgentsPage />
+              </PageRoot>
+            }
+          />
           <Route path={ROUTES.AgentDetailByName} element={<AgentDetailPage />} />
           <Route path={ROUTES.AgentDetailAnonymous} element={<AgentDetailPage />} />
-          <Route path={`${ROUTES.Evaluation}/*`} element={<EvaluationPage />} />
+          <Route
+            path={`${ROUTES.Evaluation}/*`}
+            element={
+              <PageRoot fullBleed>
+                <EvaluationPage />
+              </PageRoot>
+            }
+          />
           <Route path="*" element={isLanding1Route ? <Landing1Page /> : <DashboardPage />} />
         </Routes>
       </div>

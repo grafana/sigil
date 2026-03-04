@@ -325,4 +325,19 @@ describe('AgentsPage', () => {
     await waitFor(() => expect(screen.getByText('Total generations').parentElement).toHaveTextContent('1'));
     expect(screen.getByRole('button', { name: 'open top generation agent assistant-beta' })).toBeInTheDocument();
   });
+
+  it('shows sub-cent USD precision for tiny footprint values', async () => {
+    const dataSource = createDataSource();
+    renderPage(dataSource);
+
+    const modeSelect = await screen.findByLabelText('Top prompt and tools display mode');
+    fireEvent.change(modeSelect, { target: { value: 'usd' } });
+
+    await waitFor(() => {
+      const anonymousTopTokenButton = screen.getByRole('button', { name: 'open top token agent anonymous' });
+      const anonymousListItem = anonymousTopTokenButton.closest('li');
+      expect(anonymousListItem).toHaveTextContent('$0.000030');
+      expect(anonymousListItem).not.toHaveTextContent('$0.000000');
+    });
+  });
 });

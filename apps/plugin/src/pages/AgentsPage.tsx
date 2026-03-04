@@ -57,7 +57,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexDirection: 'column' as const,
     gap: theme.spacing(2),
     minHeight: 0,
-    marginTop: theme.spacing(-2),
   }),
   tabsRow: css({
     display: 'flex',
@@ -334,7 +333,9 @@ function formatCompactNumber(value: number): string {
 }
 
 function formatUSD(value: number): string {
-  return `$${value.toFixed(4)}`;
+  const absValue = Math.abs(value);
+  const decimals = absValue < 0.01 ? 6 : absValue < 1 ? 4 : 2;
+  return `$${value.toFixed(decimals)}`;
 }
 
 function splitMutedZeroPrefix(value: string): { leading: string; rest: string } {
