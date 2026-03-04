@@ -265,7 +265,7 @@ describe('AgentsPage', () => {
     expect(within(heroRegion).getAllByText('Token usage')).toHaveLength(1);
     expect(within(heroRegion).getByText('Agent footprint')).toBeInTheDocument();
     expect(within(heroRegion).getByText('Avg usage per generation')).toBeInTheDocument();
-    // 2 loaded agents: total generations=5, runtime tokens=150, avg=30
+    // Only the first page is loaded in this test (2 agents): generations=5, runtime tokens=150, avg=30
     expect(within(heroRegion).getByText('Agents').parentElement).toHaveTextContent('2');
     expect(within(heroRegion).getByText('Total generations').parentElement).toHaveTextContent('5');
     expect(within(heroRegion).getByLabelText('Total runtime token usage')).toHaveTextContent('150 tokens');
