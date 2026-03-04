@@ -500,10 +500,7 @@ function SavingsTable({ items, height }: SavingsTableProps) {
 
 // --- Conversations with low cache utilization ---
 
-const CACHE_SELECT_FIELDS = [
-  'span.gen_ai.usage.input_tokens',
-  'span.gen_ai.usage.cache_read_input_tokens',
-];
+const CACHE_SELECT_FIELDS = ['span.gen_ai.usage.input_tokens', 'span.gen_ai.usage.cache_read_input_tokens'];
 
 type CacheMissConversationsTableProps = {
   conversationsDataSource: ConversationsDataSource;
@@ -671,11 +668,7 @@ function CacheMissConversationsTable({ conversationsDataSource, timeRange }: Cac
               </td>
               <td className={styles.tableCell}>{formatStatValue(c.inputTokens)}</td>
               <td className={styles.tableCell}>
-                {c.cacheReadTokens > 0 ? (
-                  formatStatValue(c.cacheReadTokens)
-                ) : (
-                  <Text color="secondary">0</Text>
-                )}
+                {c.cacheReadTokens > 0 ? formatStatValue(c.cacheReadTokens) : <Text color="secondary">0</Text>}
               </td>
               <td className={styles.tableCell}>
                 <CacheHitRateBadge rate={c.cacheHitRate} />
