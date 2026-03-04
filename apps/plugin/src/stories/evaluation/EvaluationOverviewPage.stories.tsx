@@ -192,3 +192,12 @@ export const Empty = {
     },
   },
 };
+
+export const HasEvaluatorsNoRules = {
+  args: {
+    dataSource: {
+      ...mockDataSource,
+      listRules: async () => ({ items: [], next_cursor: '' }),
+    },
+  },
+};

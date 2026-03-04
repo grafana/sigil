@@ -12,17 +12,14 @@ const hideScrollbar = css({
 
 const EVAL_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}`;
 
-type EvalTab = 'overview' | 'evaluators' | 'rules' | 'templates';
+type EvalTab = 'overview' | 'evaluators' | 'rules';
 
 function getActiveTab(pathname: string): EvalTab {
-  if (pathname.includes('/evaluators')) {
+  if (pathname.includes('/evaluators') || pathname.includes('/templates')) {
     return 'evaluators';
   }
   if (pathname.includes('/rules')) {
     return 'rules';
-  }
-  if (pathname.includes('/templates')) {
-    return 'templates';
   }
   return 'overview';
 }
@@ -37,7 +34,6 @@ export default function EvalTabBar() {
         <Tab label="Overview" active={activeTab === 'overview'} href={EVAL_BASE} />
         <Tab label="Evaluators" active={activeTab === 'evaluators'} href={`${EVAL_BASE}/evaluators`} />
         <Tab label="Rules" active={activeTab === 'rules'} href={`${EVAL_BASE}/rules`} />
-        <Tab label="Templates" active={activeTab === 'templates'} href={`${EVAL_BASE}/templates`} />
       </TabsBar>
     </div>
   );

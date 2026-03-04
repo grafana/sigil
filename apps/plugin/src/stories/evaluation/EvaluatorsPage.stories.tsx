@@ -1,3 +1,5 @@
+import React from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import EvaluatorsPage from '../../pages/EvaluatorsPage';
 import { type EvaluationDataSource } from '../../evaluation/api';
 import type {
@@ -94,7 +96,83 @@ const mockDataSource: EvaluationDataSource = {
   listJudgeProviders: async (): Promise<JudgeProviderListResponse> => ({ providers: [] }),
   listJudgeModels: async (): Promise<JudgeModelListResponse> => ({ models: [] }),
   testEval: async () => ({ generation_id: '', conversation_id: '', scores: [], execution_time_ms: 0 }),
-  listTemplates: async () => ({ items: [], next_cursor: '' }),
+  listTemplates: async () => ({
+    items: [
+      {
+        tenant_id: 'tenant-1',
+        template_id: 'my-org.custom-helpfulness',
+        scope: 'tenant' as const,
+        kind: 'llm_judge' as const,
+        description: 'Custom helpfulness evaluator tuned for our product domain.',
+        latest_version: '2026-03-01',
+        output_keys: [{ key: 'score', type: 'number' as const }],
+        versions: [],
+        created_at: '2026-03-01T00:00:00Z',
+        updated_at: '2026-03-01T00:00:00Z',
+      },
+      {
+        tenant_id: 'tenant-1',
+        template_id: 'my-org.brand-voice',
+        scope: 'tenant' as const,
+        kind: 'llm_judge' as const,
+        description: 'Checks if the response matches our brand voice guidelines.',
+        latest_version: '2026-03-02',
+        output_keys: [{ key: 'on_brand', type: 'bool' as const }],
+        versions: [],
+        created_at: '2026-03-02T00:00:00Z',
+        updated_at: '2026-03-02T00:00:00Z',
+      },
+      {
+        tenant_id: '',
+        template_id: 'sigil.helpfulness',
+        scope: 'global' as const,
+        kind: 'llm_judge' as const,
+        description: 'Score how helpful and complete the assistant response is for the user request.',
+        latest_version: '2026-02-17',
+        output_keys: [{ key: 'score', type: 'number' as const }],
+        versions: [],
+        created_at: '2026-03-03T00:00:00Z',
+        updated_at: '2026-03-03T00:00:00Z',
+      },
+      {
+        tenant_id: '',
+        template_id: 'sigil.toxicity',
+        scope: 'global' as const,
+        kind: 'llm_judge' as const,
+        description: 'Return true when the response includes toxic, hateful, abusive, or offensive content.',
+        latest_version: '2026-02-17',
+        output_keys: [{ key: 'is_toxic', type: 'bool' as const }],
+        versions: [],
+        created_at: '2026-03-03T00:00:00Z',
+        updated_at: '2026-03-03T00:00:00Z',
+      },
+      {
+        tenant_id: '',
+        template_id: 'sigil.json_valid',
+        scope: 'global' as const,
+        kind: 'json_schema' as const,
+        description: 'Return true when the response is valid JSON matching the provided schema.',
+        latest_version: '2026-02-17',
+        output_keys: [{ key: 'is_valid', type: 'bool' as const }],
+        versions: [],
+        created_at: '2026-03-03T00:00:00Z',
+        updated_at: '2026-03-03T00:00:00Z',
+      },
+      {
+        tenant_id: '',
+        template_id: 'sigil.response_not_empty',
+        scope: 'global' as const,
+        kind: 'heuristic' as const,
+        description: 'Return true when the assistant response is non-empty.',
+        latest_version: '2026-02-17',
+        output_keys: [{ key: 'not_empty', type: 'bool' as const }],
+        versions: [],
+        created_at: '2026-03-03T00:00:00Z',
+        updated_at: '2026-03-03T00:00:00Z',
+      },
+    ],
+    next_cursor: '',
+  }),
   createTemplate: async () => ({
     tenant_id: '',
     template_id: '',
@@ -143,6 +221,13 @@ const mockDataSource: EvaluationDataSource = {
 const meta = {
   title: 'Sigil/Evaluation/EvaluatorsPage',
   component: EvaluatorsPage,
+  decorators: [
+    (Story: React.ComponentType) => (
+      <MemoryRouter>
+        <Story />
+      </MemoryRouter>
+    ),
+  ],
 };
 
 export default meta;

@@ -5,7 +5,7 @@ import type { GrafanaTheme2 } from '@grafana/data';
 import { Alert, Button, Icon, Spinner, Text, useStyles2 } from '@grafana/ui';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
-import PipelineCard from '../components/evaluation/PipelineCard';
+import RuleTable from '../components/evaluation/RuleTable';
 import { useEvalRulesData } from '../hooks/useEvalRulesData';
 
 const EVAL_RULES_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}/rules`;
@@ -19,30 +19,35 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     height: '100%',
+    gap: theme.spacing(3),
+  }),
+  section: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
     gap: theme.spacing(2),
   }),
-  header: css({
+  sectionHeader: css({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: theme.spacing(2),
-    flexWrap: 'wrap' as const,
   }),
-  ruleList: css({
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: theme.spacing(2),
+  sectionDescription: css({
+    color: theme.colors.text.secondary,
+    marginTop: theme.spacing(-1),
   }),
   empty: css({
     display: 'flex',
     flexDirection: 'column' as const,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing(10, 4),
-    gap: theme.spacing(4),
+    padding: theme.spacing(6, 4),
+    gap: theme.spacing(3),
+    borderRadius: theme.shape.radius.default,
+    border: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.primary,
   }),
   emptyVisual: css({
-    position: 'relative' as const,
     display: 'flex',
     alignItems: 'center',
     gap: theme.spacing(1),
@@ -57,7 +62,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     background: theme.colors.background.secondary,
     border: `1px solid ${theme.colors.border.weak}`,
     color: theme.colors.text.disabled,
-    transition: 'all 0.2s',
   }),
   emptyNodeCenter: css({
     display: 'flex',
@@ -115,7 +119,6 @@ export default function RulesPage(props: RulesPageProps) {
   if (loading) {
     return (
       <div className={styles.pageContainer}>
-        <Text element="h2">Rules</Text>
         <div className={styles.loading}>
           <Spinner />
         </div>
@@ -125,27 +128,35 @@ export default function RulesPage(props: RulesPageProps) {
 
   return (
     <div className={styles.pageContainer}>
-      <div className={styles.header}>
-        <Text element="h2">Rules</Text>
-        {rules.length > 0 && (
-          <Button
-            variant="primary"
-            icon="plus"
-            onClick={() => navigate(`${EVAL_RULES_BASE}/new`)}
-            aria-label="Create rule"
-          >
-            Create Rule
-          </Button>
-        )}
-      </div>
-
       {errorMessage.length > 0 && (
         <Alert severity="error" title="Error" onRemove={() => setErrorMessage('')}>
           <Text>{errorMessage}</Text>
         </Alert>
       )}
 
-      <div className={styles.ruleList}>
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <Text element="h3" weight="medium">
+            Rules
+          </Text>
+          {rules.length > 0 && (
+            <Button
+              variant="primary"
+              icon="plus"
+              onClick={() => navigate(`${EVAL_RULES_BASE}/new`)}
+              aria-label="Create rule"
+            >
+              Create new rule
+            </Button>
+          )}
+        </div>
+        <div className={styles.sectionDescription}>
+          <Text variant="bodySmall" color="secondary">
+            Rules connect selectors, match criteria, and evaluators into an automated pipeline that scores your LLM
+            generations.
+          </Text>
+        </div>
+
         {rules.length === 0 ? (
           <div className={styles.empty}>
             <div className={styles.emptyVisual}>
@@ -167,8 +178,7 @@ export default function RulesPage(props: RulesPageProps) {
               </Text>
               <div style={{ marginTop: 8 }}>
                 <Text color="secondary" variant="body">
-                  Rules connect selectors, match criteria, and evaluators into an automated pipeline that scores your
-                  LLM generations in real time.
+                  Define which generations to evaluate and how they are scored in real time.
                 </Text>
               </div>
             </div>
@@ -188,15 +198,12 @@ export default function RulesPage(props: RulesPageProps) {
             </Button>
           </div>
         ) : (
-          rules.map((rule) => (
-            <PipelineCard
-              key={rule.rule_id}
-              rule={rule}
-              evaluators={evaluators}
-              onToggle={handleToggle}
-              onClick={handleClick}
-            />
-          ))
+          <RuleTable
+            rules={rules}
+            evaluators={evaluators}
+            onToggle={handleToggle}
+            onClick={handleClick}
+          />
         )}
       </div>
     </div>
