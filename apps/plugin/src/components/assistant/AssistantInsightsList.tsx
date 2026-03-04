@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import * as Assistant from '@grafana/assistant';
-import { ConfirmModal, useStyles2 } from '@grafana/ui';
+import { ConfirmModal, Icon, useStyles2 } from '@grafana/ui';
 import { Loader } from '../Loader';
 
 export type AssistantInsightDisplayItem = {
@@ -46,8 +46,12 @@ export default function AssistantInsightsList({
   const [reportItemKey, setReportItemKey] = useState<string | null>(null);
   const [dismissedItemKeys, setDismissedItemKeys] = useState<Record<string, true>>({});
   const [dismissingItemKeys, setDismissingItemKeys] = useState<Record<string, true>>({});
+  const [collapsingItemKeys, setCollapsingItemKeys] = useState<Record<string, true>>({});
+  const [dismissHeightByItemKey, setDismissHeightByItemKey] = useState<Record<string, number>>({});
   const lastDataContextRef = useRef<string | null>(null);
   const dismissalTimeoutsRef = useRef<number[]>([]);
+  const dismissalRafIdsRef = useRef<number[]>([]);
+  const listItemRefs = useRef<Record<string, HTMLLIElement | null>>({});
   const latestRef = useRef({ prompt, origin, systemPrompt, dataContext, assistant, parseItems });
 
   useEffect(() => {
@@ -60,6 +64,10 @@ export default function AssistantInsightsList({
         window.clearTimeout(timeoutId);
       }
       dismissalTimeoutsRef.current = [];
+      for (const rafId of dismissalRafIdsRef.current) {
+        window.cancelAnimationFrame(rafId);
+      }
+      dismissalRafIdsRef.current = [];
     };
   }, []);
 
@@ -102,6 +110,8 @@ export default function AssistantInsightsList({
       setReportItemKey(null);
       setDismissedItemKeys({});
       setDismissingItemKeys({});
+      setCollapsingItemKeys({});
+      setDismissHeightByItemKey({});
       return;
     }
     if (assistant.isGenerating) {
@@ -117,6 +127,8 @@ export default function AssistantInsightsList({
     setReportItemKey(null);
     setDismissedItemKeys({});
     setDismissingItemKeys({});
+    setCollapsingItemKeys({});
+    setDismissHeightByItemKey({});
     runGenerate(dataContext);
   }, [assistant.isGenerating, dataContext, runGenerate]);
 
@@ -203,8 +215,17 @@ export default function AssistantInsightsList({
   }, []);
 
   const onDismiss = useCallback((itemKey: string) => {
+    if (dismissedItemKeys[itemKey] || dismissingItemKeys[itemKey]) {
+      return;
+    }
     setOpenMenuItemKey(null);
+    const measuredHeight = Math.ceil(listItemRefs.current[itemKey]?.getBoundingClientRect().height ?? 0);
+    setDismissHeightByItemKey((prev) => ({ ...prev, [itemKey]: measuredHeight }));
     setDismissingItemKeys((prev) => ({ ...prev, [itemKey]: true }));
+    const rafId = window.requestAnimationFrame(() => {
+      setCollapsingItemKeys((prev) => ({ ...prev, [itemKey]: true }));
+    });
+    dismissalRafIdsRef.current.push(rafId);
     const timeoutId = window.setTimeout(() => {
       setDismissedItemKeys((prev) => ({ ...prev, [itemKey]: true }));
       setDismissingItemKeys((prev) => {
@@ -212,9 +233,19 @@ export default function AssistantInsightsList({
         delete next[itemKey];
         return next;
       });
+      setCollapsingItemKeys((prev) => {
+        const next = { ...prev };
+        delete next[itemKey];
+        return next;
+      });
+      setDismissHeightByItemKey((prev) => {
+        const next = { ...prev };
+        delete next[itemKey];
+        return next;
+      });
     }, 220);
     dismissalTimeoutsRef.current.push(timeoutId);
-  }, []);
+  }, [dismissedItemKeys, dismissingItemKeys]);
 
   const onRefreshAll = useCallback(() => {
     if (!dataContext || assistant.isGenerating) {
@@ -224,6 +255,8 @@ export default function AssistantInsightsList({
     setReportItemKey(null);
     setDismissedItemKeys({});
     setDismissingItemKeys({});
+    setCollapsingItemKeys({});
+    setDismissHeightByItemKey({});
     setRawAssistantText('');
     setItems([]);
     runGenerate(dataContext);
@@ -236,83 +269,111 @@ export default function AssistantInsightsList({
     <aside className={cx(styles.container, className)} aria-label="assistant insights">
       <div className={styles.body}>
         {hasItems ? (
-          <ul className={styles.list}>
-            {visibleItems.map((item) => {
-              const itemKey = toItemKey(item);
-              const isMenuOpen = openMenuItemKey === itemKey;
-              const isDismissing = Boolean(dismissingItemKeys[itemKey]);
-              return (
-                <li
-                  key={itemKey}
-                  className={cx(
-                    styles.listItem,
-                    isDismissing ? styles.listItemDismissing : undefined,
-                    isMenuOpen ? styles.listItemMenuOpen : undefined
-                  )}
-                  data-insight-menu-scope={itemKey}
-                >
-                  <div className={styles.menuWrap}>
-                    <button
-                      type="button"
-                      className={styles.menuButton}
-                      aria-label="Insight actions"
-                      aria-expanded={isMenuOpen}
-                      onClick={() => setOpenMenuItemKey(isMenuOpen ? null : itemKey)}
-                    >
-                      ...
-                    </button>
-                    {isMenuOpen ? (
-                      <div className={styles.menuPanel} role="menu">
-                        <button type="button" className={styles.menuItem} role="menuitem" onClick={() => onExplain(item)}>
-                          Explain
-                        </button>
-                        <button
-                          type="button"
-                          className={styles.menuItem}
-                          role="menuitem"
-                          onClick={() => onInvestigate(item)}
-                        >
-                          Investigate
-                        </button>
-                        <div className={styles.menuDivider} />
-                        <button
-                          type="button"
-                          className={styles.menuItem}
-                          role="menuitem"
-                          onClick={() => onReportIrrelevant(itemKey)}
-                        >
-                          Report as irrelevant
-                        </button>
-                        <button type="button" className={styles.menuItem} role="menuitem" onClick={() => onDismiss(itemKey)}>
-                          Dismiss
-                        </button>
-                        <div className={styles.menuDivider} />
-                        <button type="button" className={styles.menuItem} role="menuitem" onClick={onRefreshAll}>
-                          Refresh all
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className={styles.itemContentRow}>
-                    <span className={styles.itemArrow}>→</span>
-                    <div className={styles.itemContent}>
-                      {item.sidebarLabel ? (
-                        onSelectItem ? (
-                          <button type="button" className={styles.linkButton} onClick={() => onSelectItem(item.itemId)}>
-                            {item.sidebarLabel}
+          <>
+            <ul className={styles.list}>
+              {visibleItems.map((item) => {
+                const itemKey = toItemKey(item);
+                const isMenuOpen = openMenuItemKey === itemKey;
+                const isDismissing = Boolean(dismissingItemKeys[itemKey]);
+                const isCollapsing = Boolean(collapsingItemKeys[itemKey]);
+                const dismissHeight = dismissHeightByItemKey[itemKey];
+                return (
+                  <li
+                    key={itemKey}
+                    ref={(element) => {
+                      listItemRefs.current[itemKey] = element;
+                    }}
+                    className={cx(
+                      styles.listItem,
+                      isDismissing ? styles.listItemDismissing : undefined,
+                      isCollapsing ? styles.listItemCollapsing : undefined,
+                      isMenuOpen ? styles.listItemMenuOpen : undefined
+                    )}
+                    style={
+                      isDismissing && dismissHeight > 0
+                        ? ({ '--dismiss-height': `${dismissHeight}px` } as React.CSSProperties)
+                        : undefined
+                    }
+                    data-insight-menu-scope={itemKey}
+                  >
+                    <div className={styles.menuWrap}>
+                      <button
+                        type="button"
+                        className={styles.menuButton}
+                        aria-label="Insight actions"
+                        aria-expanded={isMenuOpen}
+                        onClick={() => setOpenMenuItemKey(isMenuOpen ? null : itemKey)}
+                      >
+                        ...
+                      </button>
+                      {isMenuOpen ? (
+                        <div className={styles.menuPanel} role="menu">
+                          <button type="button" className={styles.menuItem} role="menuitem" onClick={() => onExplain(item)}>
+                            Explain
                           </button>
-                        ) : (
-                          <div className={styles.sidebarLabel}>{item.sidebarLabel}</div>
-                        )
+                          <button
+                            type="button"
+                            className={styles.menuItem}
+                            role="menuitem"
+                            onClick={() => onInvestigate(item)}
+                          >
+                            Investigate
+                          </button>
+                          <div className={styles.menuDivider} />
+                          <button
+                            type="button"
+                            className={styles.menuItem}
+                            role="menuitem"
+                            onClick={() => onReportIrrelevant(itemKey)}
+                          >
+                            Report as irrelevant
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.menuItem}
+                            role="menuitem"
+                            onClick={() => onDismiss(itemKey)}
+                          >
+                            Dismiss
+                          </button>
+                          <div className={styles.menuDivider} />
+                          <button type="button" className={styles.menuItem} role="menuitem" onClick={onRefreshAll}>
+                            Refresh all
+                          </button>
+                        </div>
                       ) : null}
-                      <div className={styles.focusText}>{formatInlineMarkup(item.focus)}</div>
-                      {item.tip ? <div className={styles.tipText}>Tip: {formatInlineMarkup(item.tip)}</div> : null}
                     </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                    <div className={styles.itemContentRow}>
+                      <span className={styles.itemArrow}>→</span>
+                      <div className={styles.itemContent}>
+                        {item.sidebarLabel ? (
+                          onSelectItem ? (
+                            <button type="button" className={styles.linkButton} onClick={() => onSelectItem(item.itemId)}>
+                              {item.sidebarLabel}
+                            </button>
+                          ) : (
+                            <div className={styles.sidebarLabel}>{item.sidebarLabel}</div>
+                          )
+                        ) : null}
+                        <div className={styles.focusText}>{formatInlineMarkup(item.focus)}</div>
+                        {item.tip ? <div className={styles.tipText}>Tip: {formatInlineMarkup(item.tip)}</div> : null}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className={styles.generatedMeta}>
+              <span className={styles.generatedLabel}>
+                <Icon name="ai" size="sm" />
+                <span>AI generated</span>
+              </span>
+              <button type="button" className={styles.refreshButton} onClick={onRefreshAll} disabled={assistant.isGenerating}>
+                <Icon name="sync" size="sm" />
+                <span>Refresh</span>
+              </button>
+            </div>
+          </>
         ) : assistant.isGenerating ? (
           <div className={styles.loaderWrap}>
             <Loader showText={false} />
@@ -407,7 +468,6 @@ function getStyles(theme: GrafanaTheme2) {
       padding: 0,
       display: 'flex',
       flexDirection: 'column',
-      gap: theme.spacing(1.5),
     }),
     listItem: css({
       position: 'relative',
@@ -416,15 +476,29 @@ function getStyles(theme: GrafanaTheme2) {
       border: `1px solid ${theme.colors.primary.main}2d`,
       boxShadow: `0 0 0 1px ${theme.colors.primary.main}14, 0 0 10px ${theme.colors.primary.main}1f`,
       padding: theme.spacing(1.5),
-      transition: 'opacity 220ms ease, transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease',
+      marginBottom: theme.spacing(1.5),
+      overflow: 'hidden',
+      transition:
+        'height 220ms ease, margin-bottom 220ms ease, padding-top 220ms ease, padding-bottom 220ms ease, border-width 220ms ease, opacity 220ms ease, transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease',
+      '&:last-child': {
+        marginBottom: 0,
+      },
       '&:hover, &:focus-within': {
         borderColor: `${theme.colors.primary.main}4d`,
         boxShadow: `0 0 0 1px ${theme.colors.primary.main}24, 0 0 14px ${theme.colors.primary.main}2b`,
       },
     }),
     listItemDismissing: css({
+      height: 'var(--dismiss-height)',
+    }),
+    listItemCollapsing: css({
       opacity: 0,
       transform: 'translateY(-2px)',
+      height: 0,
+      marginBottom: 0,
+      paddingTop: 0,
+      paddingBottom: 0,
+      borderWidth: 0,
     }),
     listItemMenuOpen: css({
       zIndex: 5,
@@ -562,6 +636,38 @@ function getStyles(theme: GrafanaTheme2) {
       fontSize: theme.typography.bodySmall.fontSize,
       lineHeight: 1.5,
       fontStyle: 'italic',
+    }),
+    generatedMeta: css({
+      marginTop: theme.spacing(1),
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: theme.spacing(1),
+      color: theme.colors.text.disabled,
+      fontSize: theme.typography.bodySmall.fontSize,
+    }),
+    generatedLabel: css({
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: theme.spacing(0.5),
+    }),
+    refreshButton: css({
+      border: 'none',
+      background: 'transparent',
+      color: theme.colors.primary.text,
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: theme.spacing(0.5),
+      padding: 0,
+      cursor: 'pointer',
+      fontSize: theme.typography.bodySmall.fontSize,
+      '&:hover': {
+        color: theme.colors.primary.main,
+      },
+      '&:disabled': {
+        color: theme.colors.text.disabled,
+        cursor: 'default',
+      },
     }),
   };
 }
