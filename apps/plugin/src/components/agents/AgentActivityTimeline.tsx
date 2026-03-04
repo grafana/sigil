@@ -139,7 +139,10 @@ export function AgentActivityTimeline({ items, timeRange, loading }: AgentActivi
   const toMs = timeRange.to.valueOf();
   const bucketCount = useMemo(() => computeBucketCount(toMs - fromMs), [fromMs, toMs]);
 
-  const dataFrames = useMemo(() => buildDataFrames(items, fromMs, toMs, bucketCount), [items, fromMs, toMs, bucketCount]);
+  const dataFrames = useMemo(
+    () => buildDataFrames(items, fromMs, toMs, bucketCount),
+    [items, fromMs, toMs, bucketCount]
+  );
 
   return (
     <div className={styles.container}>

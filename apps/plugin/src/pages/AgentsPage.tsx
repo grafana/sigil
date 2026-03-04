@@ -2,7 +2,19 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { css, cx } from '@emotion/css';
 import { dateTime, type GrafanaTheme2, makeTimeRange, type TimeRange } from '@grafana/data';
-import { Alert, Icon, Input, Spinner, Stack, Tab, TabsBar, Text, TimeRangePicker, Tooltip, useStyles2 } from '@grafana/ui';
+import {
+  Alert,
+  Icon,
+  Input,
+  Spinner,
+  Stack,
+  Tab,
+  TabsBar,
+  Text,
+  TimeRangePicker,
+  Tooltip,
+  useStyles2,
+} from '@grafana/ui';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../agents/api';
 import type { AgentListItem } from '../agents/types';
 import { buildAgentDetailByNameRoute, buildAnonymousAgentDetailRoute, PLUGIN_BASE } from '../constants';
@@ -355,15 +367,7 @@ function readInitialTopFootprintMode(): TokenCostMode {
   }
 }
 
-function LabelWithHelp({
-  label,
-  help,
-  className,
-}: {
-  label: string;
-  help: string;
-  className?: string;
-}) {
+function LabelWithHelp({ label, help, className }: { label: string; help: string; className?: string }) {
   const styles = useStyles2(getStyles);
   return (
     <span className={cx(styles.labelWithHelp, className)}>
@@ -723,7 +727,10 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
                       </Text>
                       <ul className={styles.rankList}>
                         {summary.topByGenerations.map((item) => (
-                          <li key={`gen:${item.agent_name}:${item.latest_effective_version}`} className={styles.rankItem}>
+                          <li
+                            key={`gen:${item.agent_name}:${item.latest_effective_version}`}
+                            className={styles.rankItem}
+                          >
                             <button
                               type="button"
                               className={styles.rankButton}
@@ -761,7 +768,10 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
                           const usdValue = formatUSD(item.token_estimate.total * ESTIMATED_USD_PER_TOKEN).slice(1);
                           const usdParts = splitMutedZeroPrefix(usdValue);
                           return (
-                            <li key={`tok:${item.agent_name}:${item.latest_effective_version}`} className={styles.rankItem}>
+                            <li
+                              key={`tok:${item.agent_name}:${item.latest_effective_version}`}
+                              className={styles.rankItem}
+                            >
                               <button
                                 type="button"
                                 className={styles.rankButton}
@@ -771,26 +781,24 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
                                 {item.agent_name.trim().length > 0 ? item.agent_name : 'Unnamed agent bucket'}
                               </button>
                               <span className={styles.rankValue}>
-                                {topFootprintMode === 'usd'
-                                  ? (
-                                      <>
-                                        <span className={styles.rankValueAffix}>$</span>
-                                        {usdParts.leading.length > 0 && (
-                                          <span className={styles.rankValueMuted}>{usdParts.leading}</span>
-                                        )}
-                                        <span className={styles.rankValueNumber}>
-                                          {usdParts.rest.length > 0 ? usdParts.rest : '0'}
-                                        </span>
-                                      </>
-                                    )
-                                  : (
-                                      <>
-                                        <span className={styles.rankValueNumber}>
-                                          {item.token_estimate.total.toLocaleString()}
-                                        </span>{' '}
-                                        <span className={styles.rankValueAffix}>tokens</span>
-                                      </>
+                                {topFootprintMode === 'usd' ? (
+                                  <>
+                                    <span className={styles.rankValueAffix}>$</span>
+                                    {usdParts.leading.length > 0 && (
+                                      <span className={styles.rankValueMuted}>{usdParts.leading}</span>
                                     )}
+                                    <span className={styles.rankValueNumber}>
+                                      {usdParts.rest.length > 0 ? usdParts.rest : '0'}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className={styles.rankValueNumber}>
+                                      {item.token_estimate.total.toLocaleString()}
+                                    </span>{' '}
+                                    <span className={styles.rankValueAffix}>tokens</span>
+                                  </>
+                                )}
                               </span>
                             </li>
                           );
