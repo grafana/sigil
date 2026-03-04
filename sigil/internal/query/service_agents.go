@@ -74,14 +74,6 @@ type AgentDetail struct {
 	Models                []AgentModelUsage  `json:"models"`
 }
 
-type storedAgentTool struct {
-	Name            string `json:"name"`
-	Description     string `json:"description"`
-	Type            string `json:"type"`
-	InputSchemaJSON string `json:"input_schema_json"`
-	TokenEstimate   int    `json:"token_estimate"`
-}
-
 type agentListCursor struct {
 	LatestSeenNanos int64  `json:"latest_seen_nanos"`
 	AgentName       string `json:"agent_name"`
@@ -254,17 +246,16 @@ func (s *Service) GetAgentDetailForTenant(ctx context.Context, tenantID, agentNa
 		})
 	}
 
-	tools := make([]storedAgentTool, 0)
+	var outTools []AgentTool
 	if strings.TrimSpace(versionRow.ToolsJSON) != "" {
-		if err := json.Unmarshal([]byte(versionRow.ToolsJSON), &tools); err != nil {
+		if err := json.Unmarshal([]byte(versionRow.ToolsJSON), &outTools); err != nil {
 			parseErr := fmt.Errorf("decode stored tools json: %w", err)
 			recordQuerySpanError(span, parseErr)
 			return AgentDetail{}, false, parseErr
 		}
 	}
-	outTools := make([]AgentTool, 0, len(tools))
-	for _, tool := range tools {
-		outTools = append(outTools, AgentTool(tool))
+	if outTools == nil {
+		outTools = []AgentTool{}
 	}
 
 	detail := AgentDetail{
