@@ -23,7 +23,7 @@ const GRADIENT_ORANGE = 'rgb(249, 115, 22)';
 
 function createBorderAnimation(backgroundColor: string): Record<string, { backgroundImage: string }> {
   const frames: Record<string, { backgroundImage: string }> = {};
-  for (let i = 0; i <= 100; i++) {
+  for (let i = 0; i <= 100; i += 5) {
     frames[`${i}%`] = {
       backgroundImage: `
         linear-gradient(${backgroundColor}, ${backgroundColor}),
