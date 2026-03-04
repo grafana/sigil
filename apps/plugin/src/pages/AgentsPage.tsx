@@ -561,7 +561,7 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
                     </div>
                     <div className={styles.heroKpiCard}>
                       <LabelWithHelp
-                        label="Estimated prompt+tools tokens"
+                        label="Estimated prompt+tools footprint"
                         help="Sum of token_estimate.total across loaded agents. This is prompt and tool footprint, not runtime token usage."
                         className={styles.heroKpiLabel}
                       />
@@ -575,7 +575,7 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
                     </div>
                     <div className={styles.heroKpiCard}>
                       <LabelWithHelp
-                        label="Avg tokens per generation"
+                        label="Avg footprint per generation"
                         help="Computed as total estimated prompt+tools tokens divided by total generations for loaded agents."
                         className={styles.heroKpiLabel}
                       />
@@ -619,7 +619,7 @@ export default function AgentsPage({ dataSource = defaultAgentsDataSource }: Age
                     <div className={styles.heroSection}>
                       <Text element="h4" className={styles.heroSectionTitle}>
                         <LabelWithHelp
-                          label="Top by token footprint"
+                          label="Top by footprint"
                           help="Top loaded agents ranked by token_estimate.total (system prompt + tools footprint)."
                         />
                       </Text>

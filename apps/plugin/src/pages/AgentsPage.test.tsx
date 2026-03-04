@@ -190,22 +190,22 @@ describe('AgentsPage', () => {
     expect(await screen.findByRole('region', { name: 'agents hero summary' })).toBeInTheDocument();
     expect(screen.getByText('Agents')).toBeInTheDocument();
     expect(screen.getByText('Total generations')).toBeInTheDocument();
-    expect(screen.getByText('Estimated prompt+tools tokens')).toBeInTheDocument();
-    expect(screen.getByText('Avg tokens per generation')).toBeInTheDocument();
+    expect(screen.getByText('Estimated prompt+tools footprint')).toBeInTheDocument();
+    expect(screen.getByText('Avg footprint per generation')).toBeInTheDocument();
     expect(screen.getByText('Agent activity over time')).toBeInTheDocument();
 
     // 2 loaded agents: total generations=5, total tokens=11, avg=2
     expect(screen.getByText('Agents').parentElement).toHaveTextContent('2');
     expect(screen.getByText('Total generations').parentElement).toHaveTextContent('5');
-    expect(screen.getByText('Estimated prompt+tools tokens').parentElement).toHaveTextContent('11');
-    expect(screen.getByText('Avg tokens per generation').parentElement).toHaveTextContent('2');
+    expect(screen.getByText('Estimated prompt+tools footprint').parentElement).toHaveTextContent('11');
+    expect(screen.getByText('Avg footprint per generation').parentElement).toHaveTextContent('2');
 
     const topByGenerationsSection = screen.getByRole('heading', { name: 'Top by generations' }).parentElement;
     expect(topByGenerationsSection).toBeTruthy();
     const generationButtons = within(topByGenerationsSection as HTMLElement).getAllByRole('button');
     expect(generationButtons.map((button) => button.textContent)).toEqual(['assistant', 'Unnamed agent bucket']);
 
-    const topByTokenSection = screen.getByRole('heading', { name: 'Top by token footprint' }).parentElement;
+    const topByTokenSection = screen.getByRole('heading', { name: 'Top by footprint' }).parentElement;
     expect(topByTokenSection).toBeTruthy();
     const tokenButtons = within(topByTokenSection as HTMLElement).getAllByRole('button');
     expect(tokenButtons.map((button) => button.textContent)).toEqual(['assistant', 'Unnamed agent bucket']);
