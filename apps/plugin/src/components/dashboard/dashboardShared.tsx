@@ -534,20 +534,30 @@ export function getBreakdownStatPanelStyles(theme: GrafanaTheme2) {
 }
 
 export function formatRelativeTime(dateStr: string): string {
-  const now = Date.now();
-  const then = new Date(dateStr).getTime();
-  const diffSeconds = Math.floor((now - then) / 1000);
-  if (diffSeconds < 60) {
-    return `${diffSeconds}s ago`;
+  const ts = Date.parse(dateStr);
+  if (!Number.isFinite(ts)) {
+    return '-';
   }
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  if (diffMinutes < 60) {
-    return `${diffMinutes}m ago`;
+  const diffMs = Date.now() - ts;
+  if (diffMs < 0) {
+    return 'just now';
   }
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) {
-    return `${diffHours}h ago`;
+  const seconds = Math.floor(diffMs / 1000);
+  if (seconds < 60) {
+    return 'just now';
   }
-  const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays}d ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) {
+    return `${minutes}m ago`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `${hours}h ago`;
+  }
+  const days = Math.floor(hours / 24);
+  if (days < 7) {
+    return `${days}d ago`;
+  }
+  const date = new Date(ts);
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }

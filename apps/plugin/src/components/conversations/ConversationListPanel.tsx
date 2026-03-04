@@ -20,34 +20,8 @@ export type ConversationListPanelProps = {
   onLoadMore: () => void;
 };
 
-export function formatRelativeTime(dateStr: string): string {
-  const ts = Date.parse(dateStr);
-  if (!Number.isFinite(ts)) {
-    return '-';
-  }
-  const diffMs = Date.now() - ts;
-  if (diffMs < 0) {
-    return 'just now';
-  }
-  const seconds = Math.floor(diffMs / 1000);
-  if (seconds < 60) {
-    return 'just now';
-  }
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) {
-    return `${minutes}m ago`;
-  }
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) {
-    return `${hours}h ago`;
-  }
-  const days = Math.floor(hours / 24);
-  if (days < 7) {
-    return `${days}d ago`;
-  }
-  const date = new Date(ts);
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
+import { formatRelativeTime } from '../dashboard/dashboardShared';
+export { formatRelativeTime };
 
 export function formatDuration(fromStr: string, toStr: string): string {
   const fromTs = Date.parse(fromStr);
@@ -578,7 +552,7 @@ export default function ConversationListPanel({
                       {conversation.error_count > 0 ? (
                         <Badge text={String(conversation.error_count)} color="red" />
                       ) : (
-                        <Text color="secondary">0 errors</Text>
+                        <Text color="secondary">-</Text>
                       )}
                       {rating != null && rating.total_count > 0 && (
                         <>

@@ -152,7 +152,7 @@ describe('ConversationsBrowserPage', () => {
 
     expect(await screen.findByLabelText('select conversation conv-a')).toBeInTheDocument();
     expect(screen.queryByText('Conversation ID')).not.toBeInTheDocument();
-    expect(screen.getByText('LLM calls')).toBeInTheDocument();
+    expect(screen.getByText('Agents')).toBeInTheDocument();
     expect(screen.queryByText(/^Generations \(\d+\)$/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('select conversation conv-b'));
