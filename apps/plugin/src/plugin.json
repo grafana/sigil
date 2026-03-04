@@ -60,30 +60,6 @@
     },
     {
       "type": "page",
-      "name": "Completions",
-      "path": "/a/grafana-sigil-app/completions",
-      "action": "grafana-sigil-app.data:read",
-      "addToNav": true,
-      "defaultNav": false
-    },
-    {
-      "type": "page",
-      "name": "Traces",
-      "path": "/a/grafana-sigil-app/traces",
-      "action": "grafana-sigil-app.data:read",
-      "addToNav": true,
-      "defaultNav": false
-    },
-    {
-      "type": "page",
-      "name": "Settings",
-      "path": "/a/grafana-sigil-app/settings",
-      "action": "grafana-sigil-app.data:read",
-      "addToNav": true,
-      "defaultNav": false
-    },
-    {
-      "type": "page",
       "icon": "cog",
       "name": "Configuration",
       "path": "/plugins/grafana-sigil-app",
