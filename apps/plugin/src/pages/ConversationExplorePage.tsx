@@ -418,9 +418,9 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
             </div>
             <div className={styles.insightsWrap}>
               <AssistantInsightsList
-                prompt="Review this conversation flow and identify what to pay attention to. Prioritize anomalies. Use only selectable item IDs from the provided list."
+                prompt="Review this conversation flow and suggest 3-5 high-confidence things to pay attention to. Prioritize anomalies. Use only selectable item IDs from the provided list."
                 origin="sigil-plugin/conversation-explore-assistant-insights"
-                systemPrompt='You are a concise GenAI observability analyst. Return JSON only, no markdown. Format exactly as: {"items":[{"itemId":"<exact item id>","focus":"<what to pay attention to>"}]}. Return 2-5 items. itemId must be one of the provided selectable IDs. Keep focus under 24 words.'
+                systemPrompt='You are a concise GenAI observability analyst. Return JSON only, no markdown. Format exactly as: {"items":[{"itemId":"<exact item id>","focus":"<high-confidence suggestion on what to pay attention to>"}]}. Return 3-5 items. Include only high-confidence suggestions that are clearly supported by the provided data; omit uncertain suggestions. itemId must be one of the provided selectable IDs. Keep focus under 24 words.'
                 dataContext={insightsDataContext}
                 parseItems={parseAssistantDisplayItems}
                 onSelectItem={handleSelectInsightItem}

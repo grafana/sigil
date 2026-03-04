@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import * as Assistant from '@grafana/assistant';
-import { Spinner, useStyles2 } from '@grafana/ui';
+import { ConfirmModal, Spinner, useStyles2 } from '@grafana/ui';
 
 export type AssistantInsightDisplayItem = {
   itemId: string;
@@ -38,15 +38,30 @@ export default function AssistantInsightsList({
 }: AssistantInsightsListProps) {
   const styles = useStyles2(getStyles);
   const assistant = Assistant.useInlineAssistant();
+  const fullAssistant = Assistant.useAssistant();
   const AssistantLoader = (Assistant as { Loader?: React.ComponentType }).Loader;
   const [rawAssistantText, setRawAssistantText] = useState('');
   const [items, setItems] = useState<AssistantInsightDisplayItem[]>([]);
+  const [openMenuItemKey, setOpenMenuItemKey] = useState<string | null>(null);
+  const [reportItemKey, setReportItemKey] = useState<string | null>(null);
+  const [dismissedItemKeys, setDismissedItemKeys] = useState<Record<string, true>>({});
+  const [dismissingItemKeys, setDismissingItemKeys] = useState<Record<string, true>>({});
   const lastDataContextRef = useRef<string | null>(null);
+  const dismissalTimeoutsRef = useRef<number[]>([]);
   const latestRef = useRef({ prompt, origin, systemPrompt, dataContext, assistant, parseItems });
 
   useEffect(() => {
     latestRef.current = { prompt, origin, systemPrompt, dataContext, assistant, parseItems };
   });
+
+  useEffect(() => {
+    return () => {
+      for (const timeoutId of dismissalTimeoutsRef.current) {
+        window.clearTimeout(timeoutId);
+      }
+      dismissalTimeoutsRef.current = [];
+    };
+  }, []);
 
   const runGenerate = useCallback((context: string) => {
     const { prompt: currentPrompt, origin: currentOrigin, systemPrompt: currentSystemPrompt, assistant: currentAssistant } =
@@ -78,6 +93,10 @@ export default function AssistantInsightsList({
       lastDataContextRef.current = null;
       setRawAssistantText('');
       setItems([]);
+      setOpenMenuItemKey(null);
+      setReportItemKey(null);
+      setDismissedItemKeys({});
+      setDismissingItemKeys({});
       return;
     }
     if (assistant.isGenerating) {
@@ -89,37 +108,188 @@ export default function AssistantInsightsList({
     lastDataContextRef.current = dataContext;
     setRawAssistantText('');
     setItems([]);
+    setOpenMenuItemKey(null);
+    setReportItemKey(null);
+    setDismissedItemKeys({});
+    setDismissingItemKeys({});
     runGenerate(dataContext);
   }, [assistant.isGenerating, dataContext, runGenerate]);
 
+  useEffect(() => {
+    if (!openMenuItemKey) {
+      return;
+    }
+    const onPointerDown = (event: MouseEvent) => {
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+      const scopedParent = event.target.closest('[data-insight-menu-scope]');
+      if (!(scopedParent instanceof HTMLElement)) {
+        setOpenMenuItemKey(null);
+        return;
+      }
+      if (scopedParent.dataset.insightMenuScope !== openMenuItemKey) {
+        setOpenMenuItemKey(null);
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+    };
+  }, [openMenuItemKey]);
+
+  const toItemKey = useCallback((item: AssistantInsightDisplayItem) => `${item.itemId}:${item.focus}`, []);
+
+  const visibleItems = useMemo(
+    () => items.filter((item) => !dismissedItemKeys[toItemKey(item)]),
+    [dismissedItemKeys, items, toItemKey]
+  );
+
+  const openAssistantPrompt = useCallback(
+    (promptText: string) => {
+      const prompt = promptText.trim();
+      if (!prompt.length || !fullAssistant.openAssistant) {
+        return;
+      }
+      fullAssistant.openAssistant({
+        origin,
+        prompt,
+        autoSend: true,
+      });
+    },
+    [fullAssistant, origin]
+  );
+
+  const onExplain = useCallback(
+    (item: AssistantInsightDisplayItem) => {
+      const prompt = [
+        'Explain this insight in simple terms for a non-expert.',
+        '',
+        `Insight: ${item.focus}`,
+        item.tip ? `Tip: ${item.tip}` : null,
+      ]
+        .filter(Boolean)
+        .join('\n');
+      openAssistantPrompt(prompt);
+      setOpenMenuItemKey(null);
+    },
+    [openAssistantPrompt]
+  );
+
+  const onInvestigate = useCallback(
+    (item: AssistantInsightDisplayItem) => {
+      const prompt = [
+        'Investigate this insight deeply. Explore possible causes, likely impact, and concrete next checks.',
+        '',
+        `Insight: ${item.focus}`,
+        item.tip ? `Tip: ${item.tip}` : null,
+      ]
+        .filter(Boolean)
+        .join('\n');
+      openAssistantPrompt(prompt);
+      setOpenMenuItemKey(null);
+    },
+    [openAssistantPrompt]
+  );
+
+  const onReportIrrelevant = useCallback((itemKey: string) => {
+    setOpenMenuItemKey(null);
+    setReportItemKey(itemKey);
+  }, []);
+
+  const onDismiss = useCallback((itemKey: string) => {
+    setOpenMenuItemKey(null);
+    setDismissingItemKeys((prev) => ({ ...prev, [itemKey]: true }));
+    const timeoutId = window.setTimeout(() => {
+      setDismissedItemKeys((prev) => ({ ...prev, [itemKey]: true }));
+      setDismissingItemKeys((prev) => {
+        const next = { ...prev };
+        delete next[itemKey];
+        return next;
+      });
+    }, 220);
+    dismissalTimeoutsRef.current.push(timeoutId);
+  }, []);
+
   const displayRawText = assistant.isGenerating ? String(assistant.content ?? '') : rawAssistantText;
-  const hasItems = items.length > 0;
+  const hasItems = visibleItems.length > 0;
 
   return (
     <aside className={cx(styles.container, className)} aria-label="assistant insights">
       <div className={styles.body}>
         {hasItems ? (
           <ul className={styles.list}>
-            {items.map((item) => (
-              <li key={`${item.itemId}:${item.focus}`} className={styles.listItem}>
-                <div className={styles.itemContentRow}>
-                  <span className={styles.itemArrow}>→</span>
-                  <div className={styles.itemContent}>
-                    {item.sidebarLabel ? (
-                      onSelectItem ? (
-                        <button type="button" className={styles.linkButton} onClick={() => onSelectItem(item.itemId)}>
-                          {item.sidebarLabel}
+            {visibleItems.map((item) => {
+              const itemKey = toItemKey(item);
+              const isMenuOpen = openMenuItemKey === itemKey;
+              const isDismissing = Boolean(dismissingItemKeys[itemKey]);
+              return (
+                <li
+                  key={itemKey}
+                  className={cx(
+                    styles.listItem,
+                    isDismissing ? styles.listItemDismissing : undefined,
+                    isMenuOpen ? styles.listItemMenuOpen : undefined
+                  )}
+                  data-insight-menu-scope={itemKey}
+                >
+                  <div className={styles.menuWrap}>
+                    <button
+                      type="button"
+                      className={styles.menuButton}
+                      aria-label="Insight actions"
+                      aria-expanded={isMenuOpen}
+                      onClick={() => setOpenMenuItemKey(isMenuOpen ? null : itemKey)}
+                    >
+                      ...
+                    </button>
+                    {isMenuOpen ? (
+                      <div className={styles.menuPanel} role="menu">
+                        <button type="button" className={styles.menuItem} role="menuitem" onClick={() => onExplain(item)}>
+                          Explain
                         </button>
-                      ) : (
-                        <div className={styles.sidebarLabel}>{item.sidebarLabel}</div>
-                      )
+                        <button
+                          type="button"
+                          className={styles.menuItem}
+                          role="menuitem"
+                          onClick={() => onInvestigate(item)}
+                        >
+                          Investigate
+                        </button>
+                        <div className={styles.menuDivider} />
+                        <button
+                          type="button"
+                          className={styles.menuItem}
+                          role="menuitem"
+                          onClick={() => onReportIrrelevant(itemKey)}
+                        >
+                          Report as irrelevant
+                        </button>
+                        <button type="button" className={styles.menuItem} role="menuitem" onClick={() => onDismiss(itemKey)}>
+                          Dismiss
+                        </button>
+                      </div>
                     ) : null}
-                    <div className={styles.focusText}>{formatInlineMarkup(item.focus)}</div>
-                    {item.tip ? <div className={styles.tipText}>Tip: {formatInlineMarkup(item.tip)}</div> : null}
                   </div>
-                </div>
-              </li>
-            ))}
+                  <div className={styles.itemContentRow}>
+                    <span className={styles.itemArrow}>→</span>
+                    <div className={styles.itemContent}>
+                      {item.sidebarLabel ? (
+                        onSelectItem ? (
+                          <button type="button" className={styles.linkButton} onClick={() => onSelectItem(item.itemId)}>
+                            {item.sidebarLabel}
+                          </button>
+                        ) : (
+                          <div className={styles.sidebarLabel}>{item.sidebarLabel}</div>
+                        )
+                      ) : null}
+                      <div className={styles.focusText}>{formatInlineMarkup(item.focus)}</div>
+                      {item.tip ? <div className={styles.tipText}>Tip: {formatInlineMarkup(item.tip)}</div> : null}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         ) : assistant.isGenerating ? (
           <div className={styles.loaderWrap}>
@@ -133,6 +303,20 @@ export default function AssistantInsightsList({
           <div className={styles.placeholder}>{emptyText}</div>
         )}
       </div>
+      {reportItemKey ? (
+        <ConfirmModal
+          isOpen
+          title="Report this insight as irrelevant?"
+          body="This will be wired up soon. For now this action is a no-op."
+          confirmText="Report"
+          onConfirm={() => {
+            const itemKey = reportItemKey;
+            setReportItemKey(null);
+            onDismiss(itemKey);
+          }}
+          onDismiss={() => setReportItemKey(null)}
+        />
+      ) : null}
     </aside>
   );
 }
@@ -208,11 +392,20 @@ function getStyles(theme: GrafanaTheme2) {
       borderRadius: theme.shape.radius.default,
       background: theme.colors.background.secondary,
       padding: theme.spacing(1.5),
+      transition: 'opacity 220ms ease, transform 220ms ease',
+    }),
+    listItemDismissing: css({
+      opacity: 0,
+      transform: 'translateY(-2px)',
+    }),
+    listItemMenuOpen: css({
+      zIndex: 5,
     }),
     itemContentRow: css({
       display: 'flex',
       alignItems: 'flex-start',
       gap: theme.spacing(1),
+      paddingRight: theme.spacing(3),
     }),
     itemArrow: css({
       flexShrink: 0,
@@ -283,6 +476,58 @@ function getStyles(theme: GrafanaTheme2) {
         background: theme.colors.background.primary,
         fontFamily: theme.typography.fontFamilyMonospace,
       },
+    }),
+    menuWrap: css({
+      position: 'absolute',
+      top: theme.spacing(1.25),
+      right: theme.spacing(1),
+      zIndex: 2,
+    }),
+    menuButton: css({
+      border: 'none',
+      background: 'transparent',
+      color: theme.colors.text.disabled,
+      cursor: 'pointer',
+      padding: `${theme.spacing(0.25)} ${theme.spacing(0.5)}`,
+      borderRadius: theme.shape.radius.default,
+      lineHeight: 1,
+      fontWeight: theme.typography.fontWeightBold,
+      '&:hover': {
+        background: theme.colors.action.hover,
+        color: theme.colors.text.primary,
+      },
+    }),
+    menuPanel: css({
+      position: 'absolute',
+      top: 'calc(100% + 4px)',
+      right: 0,
+      minWidth: 190,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 0,
+      borderRadius: theme.shape.radius.default,
+      border: `1px solid ${theme.colors.border.weak}`,
+      background: theme.colors.background.primary,
+      boxShadow: theme.shadows.z3,
+      padding: theme.spacing(0.5),
+    }),
+    menuItem: css({
+      border: 'none',
+      background: 'transparent',
+      color: theme.colors.text.primary,
+      textAlign: 'left',
+      fontSize: theme.typography.bodySmall.fontSize,
+      borderRadius: theme.shape.radius.default,
+      padding: `${theme.spacing(0.5)} ${theme.spacing(0.75)}`,
+      cursor: 'pointer',
+      '&:hover': {
+        background: theme.colors.action.hover,
+      },
+    }),
+    menuDivider: css({
+      height: 1,
+      background: theme.colors.border.weak,
+      margin: `${theme.spacing(0.25)} ${theme.spacing(0.5)}`,
     }),
     placeholder: css({
       color: theme.colors.text.secondary,
