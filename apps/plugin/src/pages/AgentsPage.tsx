@@ -18,7 +18,7 @@ import {
 const PAGE_SIZE = 24;
 const STALE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const HIGH_CHURN_THRESHOLD = 5;
-const HERO_TOP_LIMIT = 3;
+const HERO_TOP_LIMIT = 10;
 const ESTIMATED_USD_PER_TOKEN = 2.5 / 1_000_000;
 const compactNumberFormatter = new Intl.NumberFormat('en-US', {
   notation: 'compact',
