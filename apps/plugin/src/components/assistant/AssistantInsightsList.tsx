@@ -326,7 +326,7 @@ export default function AssistantInsightsList({
                             role="menuitem"
                             onClick={() => onReportIrrelevant(itemKey)}
                           >
-                            Report as irrelevant
+                            Report as incorrect
                           </button>
                           <button
                             type="button"
@@ -335,10 +335,6 @@ export default function AssistantInsightsList({
                             onClick={() => onDismiss(itemKey)}
                           >
                             Dismiss
-                          </button>
-                          <div className={styles.menuDivider} />
-                          <button type="button" className={styles.menuItem} role="menuitem" onClick={onRefreshAll}>
-                            Refresh all
                           </button>
                         </div>
                       ) : null}
@@ -389,7 +385,7 @@ export default function AssistantInsightsList({
       {reportItemKey ? (
         <ConfirmModal
           isOpen
-          title="Report this insight as irrelevant?"
+          title="Report this insight as incorrect?"
           body="This will be wired up soon. For now this action is a no-op."
           confirmText="Report"
           onConfirm={() => {
@@ -502,6 +498,7 @@ function getStyles(theme: GrafanaTheme2) {
     }),
     listItemMenuOpen: css({
       zIndex: 5,
+      overflow: 'visible',
     }),
     itemContentRow: css({
       display: 'flex',
