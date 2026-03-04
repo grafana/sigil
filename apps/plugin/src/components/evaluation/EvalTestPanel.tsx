@@ -43,19 +43,21 @@ const getStyles = (theme: GrafanaTheme2) => {
 
   return {
     card: css({
-      position: 'absolute' as const,
-      inset: 0,
+      flex: 1,
+      minHeight: 0,
       display: 'flex',
       flexDirection: 'column' as const,
-      border: `1px solid ${theme.colors.border.weak}`,
-      borderRadius: '8px',
       overflow: 'hidden',
+      background: theme.colors.background.primary,
+      boxShadow: theme.shadows.z1,
+      borderRadius: '6px',
     }),
     header: css({
       display: 'flex',
       alignItems: 'center',
       gap: theme.spacing(1),
-      padding: theme.spacing(1, 1.5),
+      padding: theme.spacing(2),
+      borderBottom: `1px solid ${theme.colors.border.medium}`,
       background: theme.colors.background.secondary,
       flexShrink: 0,
     }),
@@ -66,8 +68,7 @@ const getStyles = (theme: GrafanaTheme2) => {
       minHeight: 0,
       overflowY: 'auto' as const,
       gap: theme.spacing(1.5),
-      padding: theme.spacing(1.5),
-      borderTop: `1px solid ${theme.colors.border.weak}`,
+      padding: theme.spacing(2),
       background: theme.colors.background.primary,
     }),
     previewThread: css({

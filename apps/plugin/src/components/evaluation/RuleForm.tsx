@@ -1,7 +1,7 @@
 import React from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Field, Icon, Input, Text, useStyles2 } from '@grafana/ui';
+import { Field, Input, useStyles2 } from '@grafana/ui';
 import type { Evaluator, RuleSelector } from '../../evaluation/types';
 import EvaluatorPicker from './EvaluatorPicker';
 import MatchCriteriaEditor from './MatchCriteriaEditor';
@@ -28,22 +28,14 @@ const getStyles = (theme: GrafanaTheme2) => ({
   stack: css({
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: theme.spacing(2),
+    gap: theme.spacing(1.5),
     '--rule-form-field-width': `calc(50% - ${theme.spacing(0.5)})`,
   }),
   fieldWidth: css({
     width: 'var(--rule-form-field-width)',
   }),
-  section: css({
-    padding: theme.spacing(2),
-    background: theme.colors.background.primary,
-    boxShadow: theme.shadows.z1,
-  }),
-  sectionHeader: css({
-    display: 'flex',
-    alignItems: 'center',
-    gap: theme.spacing(1),
-    marginBottom: theme.spacing(1),
+  ruleIdInput: css({
+    fontFamily: theme.typography.fontFamilyMonospace,
   }),
 });
 
@@ -66,58 +58,34 @@ export default function RuleForm({
 
   return (
     <div className={styles.stack}>
-      <div className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <Icon name="file-alt" size="md" />
-          <Text weight="medium">Rule ID</Text>
-        </div>
-        <Field label="Rule ID" description="Unique identifier for this rule.">
-          <Input
-            className={styles.fieldWidth}
-            value={ruleID}
-            onChange={(e) => onRuleIDChange?.(e.currentTarget.value)}
-            placeholder="e.g. online.helpfulness.user_visible"
-            disabled={!isNew}
-          />
-        </Field>
-      </div>
+      <Field label="Rule ID" description="Unique identifier for this rule.">
+        <Input
+          className={`${styles.fieldWidth} ${styles.ruleIdInput}`}
+          value={ruleID}
+          onChange={(e) => onRuleIDChange?.(e.currentTarget.value)}
+          placeholder="e.g. online.helpfulness.user_visible"
+          disabled={!isNew}
+        />
+      </Field>
 
-      <div className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <Icon name="filter" size="md" />
-          <Text weight="medium">Selector</Text>
-        </div>
+      <Field label="Selector" description="Which generation turns to evaluate.">
         <SelectorPicker value={selector} onChange={onSelectorChange} disabled={disabled} />
-      </div>
+      </Field>
 
-      <div className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <Icon name="search" size="md" />
-          <Text weight="medium">Match criteria</Text>
-        </div>
+      <Field label="Match criteria" description="Filter generations by attribute values.">
         <MatchCriteriaEditor value={match} onChange={onMatchChange} disabled={disabled} />
-      </div>
+      </Field>
 
-      <div className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <Icon name="percentage" size="md" />
-          <Text weight="medium">Sample rate</Text>
-        </div>
-        <SampleRateInput value={sampleRate} onChange={onSampleRateChange} disabled={disabled} />
-      </div>
+      <SampleRateInput value={sampleRate} onChange={onSampleRateChange} disabled={disabled} />
 
-      <div className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <Icon name="check-circle" size="md" />
-          <Text weight="medium">Evaluators</Text>
-        </div>
+      <Field label="Evaluators" description="Evaluators to run on matching generations.">
         <EvaluatorPicker
           value={evaluatorIDs}
           evaluators={availableEvaluators}
           onChange={onEvaluatorIDsChange}
           disabled={disabled}
         />
-      </div>
+      </Field>
     </div>
   );
 }

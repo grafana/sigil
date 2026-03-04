@@ -9,6 +9,7 @@ import type {
   PublishVersionRequest,
   ScoreType,
 } from '../../evaluation/types';
+import { nextVersion } from '../../evaluation/versionUtils';
 
 export type PublishVersionFormProps = {
   kind: EvaluatorKind;
@@ -30,7 +31,7 @@ const SCORE_TYPE_OPTIONS: Array<SelectableValue<ScoreType>> = [
 const getStyles = (theme: GrafanaTheme2) => ({
   textarea: css({
     width: '100%',
-    minHeight: 120,
+    minHeight: 180,
     padding: theme.spacing(1, 2),
     fontFamily: theme.typography.fontFamilyMonospace,
     fontSize: theme.typography.size.sm,
@@ -50,31 +51,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: theme.spacing(1),
   }),
 });
-
-function nextVersion(existingVersions?: string[]): string {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  const base = `${yyyy}-${mm}-${dd}`;
-
-  if (!existingVersions?.length) {
-    return base;
-  }
-
-  const existing = new Set(existingVersions);
-  if (!existing.has(base)) {
-    return base;
-  }
-
-  for (let n = 1; n < 100; n++) {
-    const candidate = `${base}.${n}`;
-    if (!existing.has(candidate)) {
-      return candidate;
-    }
-  }
-  return `${base}.100`;
-}
 
 export default function PublishVersionForm({
   kind,

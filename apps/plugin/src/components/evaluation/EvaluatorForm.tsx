@@ -1,17 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
-import { Button, Field, FieldSet, Input, Select, Stack, Switch, useStyles2 } from '@grafana/ui';
+import { Button, Field, Input, Select, Stack, Switch, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
 import {
   EVALUATOR_KIND_LABELS,
   type CreateEvaluatorRequest,
   type EvalFormState,
   type EvalOutputKey,
+  type Evaluator,
   type EvaluatorKind,
   type ScoreType,
 } from '../../evaluation/types';
 
 export type EvaluatorFormProps = {
+  initialEvaluator?: Evaluator;
   onSubmit: (req: CreateEvaluatorRequest) => void;
   onCancel: () => void;
   onConfigChange?: (state: EvalFormState) => void;
@@ -30,7 +32,7 @@ const SCORE_TYPE_OPTIONS: Array<SelectableValue<ScoreType>> = [
 const getStyles = (theme: GrafanaTheme2) => ({
   textarea: css({
     width: '100%',
-    minHeight: 120,
+    minHeight: 180,
     padding: theme.spacing(1, 2),
     fontFamily: theme.typography.fontFamilyMonospace,
     fontSize: theme.typography.size.sm,
@@ -52,34 +54,72 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function EvaluatorForm({ onSubmit, onCancel, onConfigChange }: EvaluatorFormProps) {
-  const styles = useStyles2(getStyles);
+function parseEvaluatorToFormState(e: Evaluator): {
+  evaluatorId: string;
+  version: string;
+  kind: EvaluatorKind;
+  systemPrompt: string;
+  userPrompt: string;
+  maxTokens: number;
+  temperature: number;
+  schemaJson: string;
+  pattern: string;
+  notEmpty: boolean;
+  minLength: number | '';
+  maxLength: number | '';
+  outputKey: string;
+  outputType: ScoreType;
+} {
+  const cfg = e.config ?? {};
+  const firstOk = e.output_keys?.[0];
+  return {
+    evaluatorId: e.evaluator_id ?? '',
+    version: e.version ?? '1.0.0',
+    kind: e.kind ?? 'llm_judge',
+    systemPrompt: (cfg.system_prompt as string) ?? '',
+    userPrompt: (cfg.user_prompt as string) ?? '',
+    maxTokens: (cfg.max_tokens as number) ?? 256,
+    temperature: (cfg.temperature as number) ?? 0,
+    schemaJson: typeof cfg.schema === 'object' ? JSON.stringify(cfg.schema, null, 2) : '{}',
+    pattern: (cfg.pattern as string) ?? '',
+    notEmpty: (cfg.not_empty as boolean) ?? false,
+    minLength: cfg.min_length != null ? (cfg.min_length as number) : '',
+    maxLength: cfg.max_length != null ? (cfg.max_length as number) : '',
+    outputKey: firstOk?.key ?? '',
+    outputType: (firstOk?.type as ScoreType) ?? 'number',
+  };
+}
 
-  const [evaluatorId, setEvaluatorId] = useState('');
-  const [version, setVersion] = useState('1.0.0');
-  const [kind, setKind] = useState<EvaluatorKind>('llm_judge');
+export default function EvaluatorForm({ initialEvaluator, onSubmit, onCancel, onConfigChange }: EvaluatorFormProps) {
+  const styles = useStyles2(getStyles);
+  const isEdit = initialEvaluator != null;
+  const initialState = initialEvaluator != null ? parseEvaluatorToFormState(initialEvaluator) : null;
+
+  const [evaluatorId, setEvaluatorId] = useState(initialState?.evaluatorId ?? '');
+  const [version, setVersion] = useState(initialState?.version ?? '1.0.0');
+  const [kind, setKind] = useState<EvaluatorKind>(initialState?.kind ?? 'llm_judge');
   const [touched, setTouched] = useState(false);
 
   // llm_judge: system_prompt, user_prompt, max_tokens, temperature
-  const [systemPrompt, setSystemPrompt] = useState('');
-  const [userPrompt, setUserPrompt] = useState('');
-  const [maxTokens, setMaxTokens] = useState(256);
-  const [temperature, setTemperature] = useState(0);
+  const [systemPrompt, setSystemPrompt] = useState(initialState?.systemPrompt ?? '');
+  const [userPrompt, setUserPrompt] = useState(initialState?.userPrompt ?? '');
+  const [maxTokens, setMaxTokens] = useState(initialState?.maxTokens ?? 256);
+  const [temperature, setTemperature] = useState(initialState?.temperature ?? 0);
 
   // json_schema: schema
-  const [schemaJson, setSchemaJson] = useState('{}');
+  const [schemaJson, setSchemaJson] = useState(initialState?.schemaJson ?? '{}');
 
   // regex: pattern
-  const [pattern, setPattern] = useState('');
+  const [pattern, setPattern] = useState(initialState?.pattern ?? '');
 
   // heuristic: not_empty, min_length, max_length
-  const [notEmpty, setNotEmpty] = useState(false);
-  const [minLength, setMinLength] = useState<number | ''>('');
-  const [maxLength, setMaxLength] = useState<number | ''>('');
+  const [notEmpty, setNotEmpty] = useState(initialState?.notEmpty ?? false);
+  const [minLength, setMinLength] = useState<number | ''>(initialState?.minLength ?? '');
+  const [maxLength, setMaxLength] = useState<number | ''>(initialState?.maxLength ?? '');
 
   // output key
-  const [outputKey, setOutputKey] = useState('');
-  const [outputType, setOutputType] = useState<ScoreType>('number');
+  const [outputKey, setOutputKey] = useState(initialState?.outputKey ?? '');
+  const [outputType, setOutputType] = useState<ScoreType>(initialState?.outputType ?? 'number');
 
   const buildConfig = (): Record<string, unknown> => {
     switch (kind) {
@@ -155,7 +195,7 @@ export default function EvaluatorForm({ onSubmit, onCancel, onConfigChange }: Ev
   };
 
   return (
-    <FieldSet label="Create evaluator">
+    <>
       <Field
         label="Evaluator ID"
         description="Unique identifier for this evaluator."
@@ -169,6 +209,7 @@ export default function EvaluatorForm({ onSubmit, onCancel, onConfigChange }: Ev
           onBlur={() => setTouched(true)}
           placeholder="e.g. custom.helpfulness"
           width={40}
+          disabled={isEdit}
         />
       </Field>
       <Field label="Version" description="Semantic version.">
@@ -318,11 +359,11 @@ export default function EvaluatorForm({ onSubmit, onCancel, onConfigChange }: Ev
       </Field>
 
       <Stack direction="row" gap={1}>
-        <Button onClick={handleSubmit}>Create</Button>
+        <Button onClick={handleSubmit}>{isEdit ? 'Update' : 'Create'}</Button>
         <Button variant="secondary" onClick={onCancel}>
           Cancel
         </Button>
       </Stack>
-    </FieldSet>
+    </>
   );
 }

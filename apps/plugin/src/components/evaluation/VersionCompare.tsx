@@ -2,11 +2,16 @@ import React from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Text, useStyles2 } from '@grafana/ui';
-import type { TemplateVersion } from '../../evaluation/types';
+
+export type VersionCompareItem = {
+  version: string;
+  changelog?: string;
+  config: Record<string, unknown>;
+};
 
 export type VersionCompareProps = {
-  left: TemplateVersion;
-  right: TemplateVersion;
+  left: VersionCompareItem;
+  right: VersionCompareItem;
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({

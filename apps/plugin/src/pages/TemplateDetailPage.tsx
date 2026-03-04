@@ -277,7 +277,7 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
 
       <div className={styles.header}>
         <div className={styles.titleRow}>
-          <Text element="h2">{template.template_id}</Text>
+          <Text element="h2">Template {template.template_id}</Text>
           <Badge text={EVALUATOR_KIND_LABELS[template.kind]} color={getKindBadgeColor(template.kind)} />
           <Badge text={template.scope} color={template.scope === 'global' ? 'orange' : 'blue'} />
         </div>
