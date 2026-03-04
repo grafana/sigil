@@ -49,7 +49,7 @@ describe('ConversationListPanel', () => {
     expect(onSelect).toHaveBeenCalledWith('conv-1');
   });
 
-  it('shows time and conversation ID for each row', () => {
+  it('shows relative time and conversation ID for each row', () => {
     render(
       <ConversationListPanel
         {...defaultProps}
@@ -57,22 +57,10 @@ describe('ConversationListPanel', () => {
       />
     );
     expect(screen.getByText('conv-1')).toBeInTheDocument();
-    expect(screen.getByText(/\d{2}:\d{2}/)).toBeInTheDocument();
+    expect(screen.getByText(/ago|just now|Feb|Mar|Jan/)).toBeInTheDocument();
   });
 
-  it('renders a day header row with full date', () => {
-    const firstDateLabel = new Date('2026-02-15T10:00:00Z').toLocaleDateString(undefined, {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-    const secondDateLabel = new Date('2026-02-14T09:00:00Z').toLocaleDateString(undefined, {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
+  it('does not render day header rows in compact mode', () => {
     render(
       <ConversationListPanel
         {...defaultProps}
@@ -82,8 +70,8 @@ describe('ConversationListPanel', () => {
         ]}
       />
     );
-    expect(screen.getByText(firstDateLabel)).toBeInTheDocument();
-    expect(screen.getByText(secondDateLabel)).toBeInTheDocument();
+    const rows = screen.getAllByRole('button');
+    expect(rows).toHaveLength(2);
   });
 
   it('shows load more button when hasMore is true', () => {
@@ -115,8 +103,46 @@ describe('ConversationListPanel', () => {
     expect(screen.getByText(/no conversations found/i)).toBeInTheDocument();
   });
 
-  it('does not render a table header', () => {
+  it('does not render a table header in compact mode', () => {
     render(<ConversationListPanel {...defaultProps} conversations={[makeConversation('conv-1')]} />);
     expect(screen.queryByRole('columnheader')).not.toBeInTheDocument();
+  });
+
+  it('renders extended columns header when showExtendedColumns is true', () => {
+    render(
+      <ConversationListPanel
+        {...defaultProps}
+        conversations={[makeConversation('conv-1')]}
+        showExtendedColumns
+      />
+    );
+    expect(screen.getByText('Last activity')).toBeInTheDocument();
+    expect(screen.getByText('Duration')).toBeInTheDocument();
+    expect(screen.getByText('Agents')).toBeInTheDocument();
+    expect(screen.getByText('Models')).toBeInTheDocument();
+  });
+
+  it('shows truncated conversation ID with copy button in extended mode', () => {
+    render(
+      <ConversationListPanel
+        {...defaultProps}
+        conversations={[makeConversation('conv-abcdef-1234567890')]}
+        showExtendedColumns
+      />
+    );
+    expect(screen.getByText('conv-abc...')).toBeInTheDocument();
+    expect(screen.getByLabelText('copy conversation id')).toBeInTheDocument();
+  });
+
+  it('applies error border class for rows with errors', () => {
+    const { container } = render(
+      <ConversationListPanel
+        {...defaultProps}
+        conversations={[makeConversation('conv-err', { has_errors: true, error_count: 3 })]}
+        showExtendedColumns
+      />
+    );
+    const row = container.querySelector('tr[role="button"]');
+    expect(row?.className).toContain('rowError');
   });
 });
