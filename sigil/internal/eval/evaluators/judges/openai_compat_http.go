@@ -64,6 +64,16 @@ func (c *openAICompatHTTPClient) Judge(ctx context.Context, req JudgeRequest) (J
 	if req.MaxTokens > 0 {
 		payload["max_tokens"] = req.MaxTokens
 	}
+	if len(req.OutputSchema) > 0 {
+		payload["response_format"] = map[string]any{
+			"type": "json_schema",
+			"json_schema": map[string]any{
+				"name":   "judge_output",
+				"schema": req.OutputSchema,
+				"strict": true,
+			},
+		}
+	}
 
 	body, err := json.Marshal(payload)
 	if err != nil {

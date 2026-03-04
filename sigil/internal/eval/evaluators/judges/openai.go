@@ -10,6 +10,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/azure"
 	"github.com/openai/openai-go/v3/option"
+	"github.com/openai/openai-go/v3/shared"
 )
 
 type OpenAIClient struct {
@@ -70,6 +71,17 @@ func (c *OpenAIClient) Judge(ctx context.Context, req JudgeRequest) (JudgeRespon
 	}
 	if req.MaxTokens > 0 {
 		params.MaxCompletionTokens = openai.Int(int64(req.MaxTokens))
+	}
+	if len(req.OutputSchema) > 0 {
+		params.ResponseFormat = openai.ChatCompletionNewParamsResponseFormatUnion{
+			OfJSONSchema: &shared.ResponseFormatJSONSchemaParam{
+				JSONSchema: shared.ResponseFormatJSONSchemaJSONSchemaParam{
+					Name:   "judge_output",
+					Schema: req.OutputSchema,
+					Strict: openai.Bool(true),
+				},
+			},
+		}
 	}
 
 	start := time.Now()
