@@ -248,6 +248,9 @@ func NewServiceWithDependencies(dependencies ServiceDependencies) (*Service, err
 		if store, ok := dependencies.WALReader.(evalSummaryStore); ok {
 			service.evalSummaryStore = store
 		}
+		if store, ok := dependencies.WALReader.(agentCatalogStore); ok {
+			service.agentCatalogStore = store
+		}
 	}
 	if dependencies.BlockMetadataStore != nil {
 		blockMetadataStore = dependencies.BlockMetadataStore
