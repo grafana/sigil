@@ -67,6 +67,7 @@ func (c *AnthropicClient) Judge(ctx context.Context, req JudgeRequest) (JudgeRes
 		Temperature: anthropic.Float(req.Temperature),
 	}
 	if req.Thinking.IsEnabled() {
+		params.Temperature = anthropic.Float(1)
 		switch req.Thinking.AnthropicModeOrDefault() {
 		case AnthropicThinkingModeBudgeted:
 			budgetTokens := req.Thinking.BudgetTokens
