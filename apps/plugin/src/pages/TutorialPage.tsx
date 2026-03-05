@@ -198,14 +198,13 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
   {
     slug: 'about-the-telemetry-signal',
     title: 'A modern signal for modern software',
-    subtitle: 'High-level, generation-first telemetry for LLM applications.',
+    subtitle: 'Generation-first telemetry for LLM applications',
     subtitleBadge: 'Sigil Spec v0.1',
     renderGraphic: (props) => <TelemetrySignalGraphic {...props} />,
     body: (
       <>
         <p>
-          Sigil captures generation events with rich operational context so you can reason about quality, latency, cost,
-          and failures in one place. This schema follows the Sigil Spec v0.1.
+          Every LLM call becomes a structured event. Quality, latency, cost, and failures in one schema, one place.
         </p>
         <SignalFieldMosaic groups={SIGNAL_FIELD_GROUPS} />
       </>
@@ -214,14 +213,14 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
   {
     slug: 'autoinstrumentation',
     title: 'Autoinstrumentation',
-    subtitle: 'Get instrumented quickly with agentic coding workflows.',
+    subtitle: 'From zero to instrumented in minutes, not days.',
     renderGraphic: (props) => <AutoinstrumentationGraphic {...props} />,
     body: <AutoinstrumentationBody />,
   },
   {
     slug: 'next-steps',
     title: 'Next steps',
-    subtitle: 'Keep momentum with docs, local instrumentation, and assistant support.',
+    subtitle: 'Start instrumenting. The data speaks for itself.',
     renderGraphic: (props) => <NextStepsGraphic {...props} />,
     body: <NextStepsBody />,
   },
@@ -403,10 +402,10 @@ function AutoinstrumentationBody() {
   return (
     <>
       <ul>
-        <li>Agentic coding skills, tools, and prompts to get instrumented quickly.</li>
-        <li>An interactive agent that asks clarifying questions as you go.</li>
-        <li>Works for both improving existing instrumentation and greenfield setup.</li>
-        <li>See instrumentation results immediately in Sigil UX.</li>
+        <li>AI-powered tools that add instrumentation for you.</li>
+        <li>An interactive agent that asks what it needs as it goes.</li>
+        <li>Works for greenfield and existing codebases alike.</li>
+        <li>See results immediately in the Sigil UI.</li>
       </ul>
       <TryItNowPanel />
     </>
@@ -454,8 +453,8 @@ function NextStepsBody() {
   return (
     <>
       <ul>
-        <li>Learn more by reading the docs.</li>
-        <li>Use Cursor to start instrumenting locally.</li>
+        <li>Explore the docs to go deeper.</li>
+        <li>Use Cursor to instrument your own codebase.</li>
         <li>
           <button type="button" className={styles.askAssistantLink} onClick={openAssistant}>
             Ask Assistant about Sigil →
