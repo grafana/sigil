@@ -177,7 +177,7 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
         <li>Built for generations, not retrofitted spans.</li>
         <li>Fast queries by time, model, agent, and labels.</li>
         <li>Works seamlessly with metrics, logs, traces, and profiles.</li>
-        <li>Built on the same principles as Mimir, Loki, Tempo, and world-class databases.</li>
+        <li>Built on the same principles as Mimir, Loki, Tempo, and other world-class databases.</li>
       </ul>
     ),
   },
@@ -875,11 +875,11 @@ function getStyles(theme: GrafanaTheme2) {
         position: 'absolute',
         left: -0,
         right: 0,
-        bottom: -12,
-        height: 8,
+        bottom: -9,
+        height: 5,
         background: 'var(--tutorial-accent)',
         borderRadius: 2,
-        transform: 'rotate(-1.5deg)',
+        transform: 'rotate(0deg)',
         transformOrigin: 'left center',
       },
       '@media (max-width: 1024px)': {
