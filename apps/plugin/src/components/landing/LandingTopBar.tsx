@@ -334,32 +334,57 @@ export function LandingTopBar({ assistantOrigin }: LandingTopBarProps) {
   }, []);
 
   const gradientColors = ['#5794F2', '#B877D9', '#FF9830'] as const;
-  const barCount = 48;
-  const barHeights = useMemo(
+  const spineCount = 48;
+  const spineHeights = useMemo(
     () =>
-      Array.from({ length: barCount }, (_, i) => {
+      Array.from({ length: spineCount }, (_, i) => {
         const t = Math.sin(i * 0.35) * 0.4 + 0.55;
         return `${Math.max(20, t * 100)}%`;
       }),
     []
   );
 
+  const [hoveredSpineIndex, setHoveredSpineIndex] = useState<number | null>(null);
+
+  const getSpineScale = (index: number): number => {
+    if (hoveredSpineIndex === null) {
+      return 1;
+    }
+    const distance = Math.abs(index - hoveredSpineIndex);
+    if (distance === 0) {
+      return 1.2;
+    }
+    if (distance === 1) {
+      return 1.1;
+    }
+    if (distance === 2) {
+      return 1.05;
+    }
+    return 1;
+  };
+
   return (
     <>
       <div className={styles.pageFlow}>
         <div className={styles.heroBlock}>
-          <div className={styles.heroBars} aria-hidden>
-            {barHeights.map((height, i) => {
-              const t = i / (barCount - 1);
+          <div className={styles.heroSpines} aria-hidden onMouseLeave={() => setHoveredSpineIndex(null)}>
+            {spineHeights.map((height, i) => {
+              const t = i / (spineCount - 1);
               const color =
                 t <= 0.52
                   ? interpolateHex(gradientColors[0], gradientColors[1], t / 0.52)
                   : interpolateHex(gradientColors[1], gradientColors[2], (t - 0.52) / 0.48);
+              const scale = getSpineScale(i);
               return (
                 <div
                   key={i}
-                  className={styles.heroBar}
-                  style={{ height, backgroundColor: color }}
+                  className={styles.heroSpine}
+                  style={{
+                    height,
+                    backgroundColor: color,
+                    transform: `scaleY(${scale})`,
+                  }}
+                  onMouseEnter={() => setHoveredSpineIndex(i)}
                 />
               );
             })}
@@ -703,8 +728,8 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'flex',
       flexDirection: 'column',
     }),
-    heroBars: css({
-      label: 'landingTopBar-heroBars',
+    heroSpines: css({
+      label: 'landingTopBar-heroSpines',
       display: 'flex',
       alignItems: 'flex-end',
       justifyContent: 'stretch',
@@ -718,13 +743,14 @@ function getStyles(theme: GrafanaTheme2) {
       overflow: 'hidden',
       opacity: 0.75,
     }),
-    heroBar: css({
-      label: 'landingTopBar-heroBar',
+    heroSpine: css({
+      label: 'landingTopBar-heroSpine',
       flex: 1,
       minWidth: 2,
       borderTopLeftRadius: 1,
       borderTopRightRadius: 1,
-      transition: 'height 0.2s ease',
+      transformOrigin: 'bottom',
+      transition: 'transform 0.35s ease-out',
     }),
     heroSideHeaderBlock: css({
       label: 'landingTopBar-heroSideHeaderBlock',
