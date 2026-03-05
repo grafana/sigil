@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { cx } from '@emotion/css';
-import { Icon, Tooltip, useStyles2 } from '@grafana/ui';
+import { Icon, Spinner, Tooltip, useStyles2 } from '@grafana/ui';
 import type { GenerationCostResult } from '../../generation/types';
 import type { FlowNode } from './types';
 import type { FlowGroupBy, FlowSortBy } from './useConversationFlow';
@@ -9,6 +9,7 @@ import { getStyles } from './FlowTree.styles';
 
 export type FlowTreeProps = {
   nodes: FlowNode[];
+  loading?: boolean;
   selectedNodeId: string | null;
   onSelectNode: (node: FlowNode | null) => void;
   generationCosts?: Map<string, GenerationCostResult>;
@@ -154,6 +155,7 @@ function computeGlobalHighlights(nodes: FlowNode[], costs?: Map<string, Generati
 
 export default function FlowTree({
   nodes,
+  loading = false,
   selectedNodeId,
   onSelectNode,
   generationCosts,
@@ -251,7 +253,11 @@ export default function FlowTree({
         </div>
       </div>
       <div className={styles.treeContainer} role="tree" aria-label="conversation flow">
-        {filteredNodes.length === 0 ? (
+        {loading && nodes.length === 0 ? (
+          <div className={styles.emptyState}>
+            <Spinner inline size="sm" /> Loading traces…
+          </div>
+        ) : filteredNodes.length === 0 ? (
           <div className={styles.emptyState}>{nodes.length === 0 ? 'No operations found' : 'No matches'}</div>
         ) : (
           filteredNodes.map((node, i) => (
