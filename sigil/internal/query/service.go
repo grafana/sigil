@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
@@ -84,6 +85,13 @@ type ConversationSearchResponse struct {
 	Conversations []ConversationSearchResult `json:"conversations"`
 	NextCursor    string                     `json:"next_cursor"`
 	HasMore       bool                       `json:"has_more"`
+}
+
+type searchCandidate struct {
+	conversationID string
+	aggregate      *tempoConversationAggregate
+	metadata       storage.Conversation
+	traceTitle     string
 }
 
 // ConversationBatchMetadata contains conversation metadata enriched with
@@ -716,6 +724,8 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 		skippedMissingMetadata := 0
 		skippedMySQL := 0
 		addedThisIteration := 0
+
+		var candidates []searchCandidate
 		for _, conversationID := range orderedConversationIDs {
 			if _, seen := alreadyReturned[conversationID]; seen {
 				skippedAlreadyReturned++
@@ -736,60 +746,54 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 				continue
 			}
 
-			if len(results) >= pageSize {
+			if len(results)+len(candidates) >= pageSize {
 				foundAdditionalConversation = true
 				break
 			}
 
 			aggregate := grouped.Conversations[conversationID]
-			traceTitle := strings.TrimSpace(aggregate.ConversationTitle)
-			generationTitle := s.resolveLatestConversationTitleFromGenerations(
-				ctx,
-				trimmedTenantID,
-				conversationMetadata,
-				titleLookupReader,
-				generationTitleCache,
-			)
-			if generationTitle == "" {
-				generationTitle = s.resolveConversationTitleFromGenerationIDs(
-					ctx,
-					trimmedTenantID,
-					aggregate.GenerationIDs,
-					titleLookupReader,
-					generationTitleCache,
-				)
-			}
-			conversationTitle := traceTitle
-			if generationTitle != "" {
-				conversationTitle = generationTitle
+			candidates = append(candidates, searchCandidate{
+				conversationID: conversationID,
+				aggregate:      aggregate,
+				metadata:       conversationMetadata,
+				traceTitle:     strings.TrimSpace(aggregate.ConversationTitle),
+			})
+		}
+
+		generationTitles := s.batchResolveGenerationTitles(ctx, trimmedTenantID, candidates, titleLookupReader, generationTitleCache)
+
+		for i, candidate := range candidates {
+			conversationTitle := candidate.traceTitle
+			if generationTitles[i] != "" {
+				conversationTitle = generationTitles[i]
 			}
 			result := ConversationSearchResult{
-				ConversationID:    conversationID,
+				ConversationID:    candidate.conversationID,
 				ConversationTitle: conversationTitle,
-				UserID:            aggregate.UserID,
-				GenerationCount:   conversationMetadata.GenerationCount,
-				FirstGenerationAt: conversationMetadata.FirstGenerationAt.UTC(),
-				LastGenerationAt:  conversationMetadata.LastGenerationAt.UTC(),
-				Models:            sortedKeysFromSet(aggregate.Models),
-				ModelProviders:    aggregate.ModelProviders,
-				Agents:            sortedKeysFromSet(aggregate.Agents),
-				ErrorCount:        aggregate.ErrorCount,
-				HasErrors:         aggregate.ErrorCount > 0,
-				TraceIDs:          sortedKeysFromSet(aggregate.TraceIDs),
-				AnnotationCount:   annotationSummaries[conversationID].AnnotationCount,
+				UserID:            candidate.aggregate.UserID,
+				GenerationCount:   candidate.metadata.GenerationCount,
+				FirstGenerationAt: candidate.metadata.FirstGenerationAt.UTC(),
+				LastGenerationAt:  candidate.metadata.LastGenerationAt.UTC(),
+				Models:            sortedKeysFromSet(candidate.aggregate.Models),
+				ModelProviders:    candidate.aggregate.ModelProviders,
+				Agents:            sortedKeysFromSet(candidate.aggregate.Agents),
+				ErrorCount:        candidate.aggregate.ErrorCount,
+				HasErrors:         candidate.aggregate.ErrorCount > 0,
+				TraceIDs:          sortedKeysFromSet(candidate.aggregate.TraceIDs),
+				AnnotationCount:   annotationSummaries[candidate.conversationID].AnnotationCount,
 			}
-			if ratingSummary, ok := ratingSummaries[conversationID]; ok {
+			if ratingSummary, ok := ratingSummaries[candidate.conversationID]; ok {
 				copied := ratingSummary
 				result.RatingSummary = &copied
 			}
-			if evalSummary, ok := evalSummaries[conversationID]; ok {
+			if evalSummary, ok := evalSummaries[candidate.conversationID]; ok {
 				copied := evalSummary
 				result.EvalSummary = &copied
 			}
-			result.Selected = buildSelectedResultMap(aggregate.Selected)
+			result.Selected = buildSelectedResultMap(candidate.aggregate.Selected)
 
 			results = append(results, result)
-			currentPageIDs[conversationID] = struct{}{}
+			currentPageIDs[candidate.conversationID] = struct{}{}
 			addedThisIteration++
 		}
 		s.debugLog("search_iteration_candidates_applied",
@@ -1705,6 +1709,54 @@ func latestConversationUserID(generations []*sigilv1.Generation) string {
 		}
 	}
 	return userID
+}
+
+func (s *Service) batchResolveGenerationTitles(
+	ctx context.Context,
+	tenantID string,
+	candidates []searchCandidate,
+	reader storage.GenerationFanOutReader,
+	cache map[string]generationTitleSnapshot,
+) []string {
+	titles := make([]string, len(candidates))
+	if reader == nil || len(candidates) == 0 {
+		return titles
+	}
+
+	type titleResult struct {
+		index        int
+		title        string
+		cacheEntries map[string]generationTitleSnapshot
+	}
+
+	resultCh := make(chan titleResult, len(candidates))
+	var wg sync.WaitGroup
+	for i, candidate := range candidates {
+		wg.Add(1)
+		go func(idx int, c searchCandidate) {
+			defer wg.Done()
+			localCache := make(map[string]generationTitleSnapshot)
+			title := s.resolveLatestConversationTitleFromGenerations(ctx, tenantID, c.metadata, reader, localCache)
+			if title == "" {
+				title = s.resolveConversationTitleFromGenerationIDs(ctx, tenantID, c.aggregate.GenerationIDs, reader, localCache)
+			}
+			resultCh <- titleResult{index: idx, title: title, cacheEntries: localCache}
+		}(i, candidate)
+	}
+
+	go func() {
+		wg.Wait()
+		close(resultCh)
+	}()
+
+	for result := range resultCh {
+		titles[result.index] = result.title
+		for k, v := range result.cacheEntries {
+			cache[k] = v
+		}
+	}
+
+	return titles
 }
 
 func (s *Service) resolveConversationTitleFromGenerationIDs(

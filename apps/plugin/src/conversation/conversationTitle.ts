@@ -1,5 +1,5 @@
 import type { GenerationDetail } from '../generation/types';
-import { ATTR_CONVERSATION_TITLE, getStringAttr } from './attributes';
+import { ATTR_CONVERSATION_TITLE, ATTR_CONVERSATION_TITLE_LEGACY, getStringAttr } from './attributes';
 import type { ConversationSpan } from './types';
 
 function normalizeTitle(value: unknown): string | null {
@@ -29,12 +29,22 @@ function titleFromMetadata(metadata?: Record<string, unknown>): string | null {
     return direct;
   }
 
+  const legacyDirect = normalizeTitle(metadata[ATTR_CONVERSATION_TITLE_LEGACY]);
+  if (legacyDirect) {
+    return legacyDirect;
+  }
+
   const nestedAttributes = metadata.attributes;
   if (!nestedAttributes || typeof nestedAttributes !== 'object' || Array.isArray(nestedAttributes)) {
     return null;
   }
 
-  return normalizeTitle((nestedAttributes as Record<string, unknown>)[ATTR_CONVERSATION_TITLE]);
+  const nested = normalizeTitle((nestedAttributes as Record<string, unknown>)[ATTR_CONVERSATION_TITLE]);
+  if (nested) {
+    return nested;
+  }
+
+  return normalizeTitle((nestedAttributes as Record<string, unknown>)[ATTR_CONVERSATION_TITLE_LEGACY]);
 }
 
 function titleFromSpan(span: ConversationSpan): string | null {

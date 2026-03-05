@@ -106,6 +106,40 @@ describe('resolveConversationTitleFromTelemetry', () => {
     expect(title).toBe('Latest span title');
   });
 
+  it('reads title from legacy conversation_title metadata key', () => {
+    const title = resolveConversationTitleFromTelemetry(
+      [makeGeneration({ metadata: { conversation_title: 'Legacy title' } })],
+      []
+    );
+
+    expect(title).toBe('Legacy title');
+  });
+
+  it('prefers sigil.conversation.title over legacy conversation_title', () => {
+    const title = resolveConversationTitleFromTelemetry(
+      [
+        makeGeneration({
+          metadata: {
+            'sigil.conversation.title': 'New title',
+            conversation_title: 'Legacy title',
+          },
+        }),
+      ],
+      []
+    );
+
+    expect(title).toBe('New title');
+  });
+
+  it('reads legacy title from nested attributes', () => {
+    const title = resolveConversationTitleFromTelemetry(
+      [makeGeneration({ metadata: { attributes: { conversation_title: 'Nested legacy title' } } })],
+      []
+    );
+
+    expect(title).toBe('Nested legacy title');
+  });
+
   it('returns null when title is missing or blank', () => {
     const generation = makeGeneration({ metadata: { 'sigil.conversation.title': '   ' } });
     const span = makeSpan({
