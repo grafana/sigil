@@ -533,4 +533,36 @@ describe('AgentRatingPanel', () => {
     expect(onRerun).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(rateAgent).toHaveBeenCalledWith('assistant', 'sha256:test'));
   });
+
+  it('keeps rerun request alive when parent syncs onResultChange', async () => {
+    const initial = createCompletedRating('Existing report');
+    const pending = createPendingRating();
+    const refreshed = createCompletedRating('Fresh rerun result');
+    const rateAgent = jest.fn<Promise<AgentRatingResponse>, [string, string?]>().mockResolvedValue(pending);
+    const lookupAgentRating = jest
+      .fn<Promise<AgentRatingResponse | null>, [string, string?]>()
+      .mockResolvedValue(refreshed);
+    const dataSource = createDataSource({ rateAgent, lookupAgentRating });
+
+    function Harness() {
+      const [rating, setRating] = React.useState<AgentRatingResponse | null>(initial);
+      return (
+        <AgentRatingPanel
+          agentName="assistant"
+          version="sha256:test"
+          dataSource={dataSource}
+          initialResult={rating}
+          onResultChange={setRating}
+        />
+      );
+    }
+
+    renderPanel(<Harness />);
+
+    fireEvent.click(screen.getByRole('button', { name: /re-run/i }));
+
+    await waitFor(() => expect(rateAgent).toHaveBeenCalledWith('assistant', 'sha256:test'));
+    await waitFor(() => expect(lookupAgentRating).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Fresh rerun result')).toBeInTheDocument();
+  });
 });

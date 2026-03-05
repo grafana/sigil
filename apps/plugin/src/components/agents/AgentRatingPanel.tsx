@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { css } from '@emotion/css';
+import { css, cx } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Alert, Badge, Button, Icon, Text, useStyles2, useTheme2 } from '@grafana/ui';
 import { createAssistantContextItem, useAssistant, useInlineAssistant } from '@grafana/assistant';
@@ -746,7 +746,6 @@ export default function AgentRatingPanel({
     stopPolling();
     setRunning(true);
     setError('');
-    onResultChange?.(null);
     const resolvedVersion = version && version.length > 0 ? version : undefined;
 
     try {
@@ -938,8 +937,9 @@ export default function AgentRatingPanel({
       return;
     }
     const resolvedVersion = version && version.length > 0 ? version : 'latest';
-    const suggestionsText = completedResult.suggestions.length
-      ? completedResult.suggestions
+    const rewriteSuggestions = completedResult.suggestions ?? [];
+    const suggestionsText = rewriteSuggestions.length
+      ? rewriteSuggestions
           .map((suggestion, index) => {
             const severity = normalizeSeverity(suggestion.severity);
             return `${index + 1}. [${severity.toUpperCase()}] ${formatSuggestionCategory(suggestion.category)} - ${suggestion.title}\n${suggestion.description}`;
@@ -1277,10 +1277,6 @@ export default function AgentRatingPanel({
       )}
     </div>
   );
-}
-
-function cx(...classNames: Array<string | undefined>): string {
-  return classNames.filter((name): name is string => Boolean(name)).join(' ');
 }
 
 function buildAssistantUrl(message: string): string {
