@@ -99,6 +99,7 @@ describe('defaultAgentsDataSource', () => {
     expect(fetchMock).toHaveBeenCalledWith({
       method: 'GET',
       url: '/api/plugins/grafana-sigil-app/resources/query/agents/rating?name=assistant&version=sha256%3Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      showErrorAlert: false,
     });
     expect(result?.score).toBe(7);
   });

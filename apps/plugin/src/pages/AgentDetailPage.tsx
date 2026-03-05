@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { css, cx } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Badge, Button, Icon, Select, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
+import { Alert, Badge, Button, Icon, Select, Spinner, Text, Tooltip, useStyles2, useTheme2 } from '@grafana/ui';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../agents/api';
 import type { AgentDetail, AgentRatingResponse, AgentVersionListItem } from '../agents/types';
 import ModelCardPopover from '../components/conversations/ModelCardPopover';
@@ -261,6 +261,106 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flex: 1,
     minWidth: 0,
   }),
+  recentVersionsGrid: css({
+    display: 'flex',
+    flexWrap: 'nowrap' as const,
+    gap: theme.spacing(1),
+    marginTop: theme.spacing(0.75),
+  }),
+  recentVersionsHeading: css({
+    marginTop: theme.spacing(1.25),
+    marginBottom: theme.spacing(0.25),
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.bodySmall.fontSize,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.03em',
+  }),
+  recentVersionItem: css({
+    width: '100%',
+    minWidth: 0,
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.25),
+  }),
+  recentVersionBox: css({
+    width: '100%',
+    minWidth: 0,
+    textAlign: 'left' as const,
+    borderRadius: theme.shape.radius.default,
+    border: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.canvas,
+    padding: theme.spacing(0.75, 1),
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.25),
+    cursor: 'pointer',
+    transition: 'border-color 0.15s ease, background 0.15s ease',
+    '&:hover': {
+      borderColor: theme.colors.border.medium,
+      background: theme.colors.action.hover,
+    },
+  }),
+  recentVersionBoxActive: css({
+    borderColor: theme.colors.primary.border,
+    background: theme.colors.primary.transparent,
+  }),
+  recentVersionContent: css({
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: theme.spacing(0.5),
+    width: '100%',
+    minWidth: 0,
+  }),
+  recentVersionText: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    minWidth: 0,
+  }),
+  recentVersionNumber: css({
+    fontSize: theme.typography.bodySmall.fontSize,
+    color: theme.colors.text.primary,
+    fontWeight: theme.typography.fontWeightMedium,
+    lineHeight: 1.2,
+    whiteSpace: 'nowrap' as const,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  }),
+  recentVersionRelativeTime: css({
+    fontSize: theme.typography.size.sm,
+    color: theme.colors.text.secondary,
+    lineHeight: 1.2,
+    whiteSpace: 'nowrap' as const,
+    paddingLeft: theme.spacing(0.5),
+  }),
+  recentVersionScore: css({
+    fontWeight: theme.typography.fontWeightMedium,
+    fontVariantNumeric: 'tabular-nums',
+    fontSize: theme.typography.size.sm,
+    lineHeight: 1.2,
+  }),
+  versionTooltip: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.25),
+    minWidth: 180,
+  }),
+  versionTooltipTitle: css({
+    color: theme.colors.text.primary,
+    fontWeight: theme.typography.fontWeightMedium,
+    lineHeight: 1.25,
+  }),
+  versionTooltipMeta: css({
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.bodySmall.fontSize,
+    lineHeight: 1.25,
+  }),
+  versionTooltipStatus: css({
+    fontSize: theme.typography.bodySmall.fontSize,
+    lineHeight: 1.25,
+    fontWeight: theme.typography.fontWeightMedium,
+  }),
   systemPrompt: css({
     margin: 0,
     maxHeight: 400,
@@ -420,12 +520,44 @@ function normalizeValuesToHeights(values: number[], targetCount: number): number
   });
 }
 
+function scoreTone(theme: GrafanaTheme2, score: number): string {
+  if (score >= 9) {
+    return theme.colors.success.text;
+  }
+  if (score >= 7) {
+    return theme.colors.info.text;
+  }
+  if (score >= 5) {
+    return theme.colors.warning.text;
+  }
+  return theme.colors.error.text;
+}
+
+function formatRelativeDateCompact(iso: string): string {
+  const ts = Date.parse(iso);
+  if (Number.isNaN(ts)) {
+    return 'n/a';
+  }
+  const diffSec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (diffSec < 60) {
+    return `${diffSec}s`;
+  }
+  if (diffSec < 3600) {
+    return `${Math.floor(diffSec / 60)}m`;
+  }
+  if (diffSec < 86400) {
+    return `${Math.floor(diffSec / 3600)}h`;
+  }
+  return `${Math.floor(diffSec / 86400)}d`;
+}
+
 export default function AgentDetailPage({
   dataSource = defaultAgentsDataSource,
   modelCardClient = defaultModelCardClient,
   activityDataSource = defaultDashboardDataSource,
 }: AgentDetailPageProps) {
   const styles = useStyles2(getStyles);
+  const theme = useTheme2();
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams<{ agentName: string }>();
@@ -439,6 +571,7 @@ export default function AgentDetailPage({
   const [initialRatingLoading, setInitialRatingLoading] = useState(false);
   const [initialRating, setInitialRating] = useState<AgentRatingResponse | null>(null);
   const [initialRatingError, setInitialRatingError] = useState('');
+  const [recentVersionRatings, setRecentVersionRatings] = useState<Record<string, AgentRatingResponse | null>>({});
   const [errorMessage, setErrorMessage] = useState('');
   const [modelCards, setModelCards] = useState<Map<string, ModelCard>>(new Map());
   const [openModel, setOpenModel] = useState<{ key: string; anchorRect: DOMRect } | null>(null);
@@ -446,6 +579,7 @@ export default function AgentDetailPage({
   const detailRequestVersion = useRef(0);
   const versionsRequestVersion = useRef(0);
   const ratingRequestVersion = useRef(0);
+  const recentRatingsRequestVersion = useRef(0);
 
   const selectedVersion = searchParams.get('version')?.trim() ?? '';
   const agentName = buildAgentNameFromRoute(location.pathname, params.agentName);
@@ -663,6 +797,59 @@ export default function AgentDetailPage({
     }
     return options;
   }, [loadingVersions, versionOptions, versionsCursor]);
+
+  const recentVersions = useMemo(() => versionOptions.slice(0, 5).reverse(), [versionOptions]);
+
+  useEffect(() => {
+    setRecentVersionRatings({});
+  }, [agentName]);
+
+  useEffect(() => {
+    if (agentName.length === 0 || recentVersions.length === 0) {
+      return;
+    }
+    const unresolvedVersions = recentVersions
+      .map((versionItem) => versionItem.effective_version)
+      .filter((version) => recentVersionRatings[version] === undefined);
+    if (unresolvedVersions.length === 0) {
+      return;
+    }
+
+    recentRatingsRequestVersion.current += 1;
+    const requestVersion = recentRatingsRequestVersion.current;
+
+    Promise.all(
+      unresolvedVersions.map(async (version) => {
+        try {
+          const rating = await dataSource.lookupAgentRating(agentName, version);
+          return { version, rating };
+        } catch (err: unknown) {
+          if (isNotFoundError(err)) {
+            return { version, rating: null };
+          }
+          throw err;
+        }
+      })
+    )
+      .then((results) => {
+        if (recentRatingsRequestVersion.current !== requestVersion) {
+          return;
+        }
+        setRecentVersionRatings((prev) => {
+          const next = { ...prev };
+          for (const result of results) {
+            next[result.version] = result.rating;
+          }
+          return next;
+        });
+      })
+      .catch((err: unknown) => {
+        if (recentRatingsRequestVersion.current !== requestVersion) {
+          return;
+        }
+        setErrorMessage(err instanceof Error ? err.message : 'Failed to load version ratings');
+      });
+  }, [agentName, dataSource, recentVersionRatings, recentVersions]);
 
   const selectVersion = (nextVersion: string) => {
     const next = new URLSearchParams(searchParams);
@@ -991,7 +1178,7 @@ export default function AgentDetailPage({
       <div className={styles.primaryPanelsRow}>
         <div className={cx(styles.panel, styles.stretchPanel)}>
           <div className={styles.panelHeader}>
-            <Text weight="medium">Version</Text>
+            <Text weight="medium">Versions</Text>
           </div>
           <div className={cx(styles.panelBody, styles.stretchPanelBody)}>
             <div className={styles.versionControls}>
@@ -1015,6 +1202,63 @@ export default function AgentDetailPage({
                 Latest
               </Button>
             </div>
+            {recentVersions.length > 0 && (
+              <>
+                <div className={styles.recentVersionsHeading}>Recent versions</div>
+                <div className={styles.recentVersionsGrid}>
+                  {recentVersions.map((versionItem, index) => {
+                    const rating = recentVersionRatings[versionItem.effective_version];
+                    const isSelected = activeVersion === versionItem.effective_version;
+                    const completedRating = rating?.status === 'completed' ? rating : null;
+                    const versionNumber =
+                      versionItem.declared_version_latest || versionItem.declared_version_first || `#${index + 1}`;
+                    const tooltipContent = (
+                      <div className={styles.versionTooltip}>
+                        <div className={styles.versionTooltipTitle}>Version {versionNumber}</div>
+                        <div className={styles.versionTooltipMeta}>Last seen {formatDate(versionItem.last_seen_at)}</div>
+                        <div
+                          className={styles.versionTooltipStatus}
+                          style={{
+                            color: completedRating ? scoreTone(theme, completedRating.score) : theme.colors.text.secondary,
+                          }}
+                        >
+                          {completedRating ? `Rated ${completedRating.score}/10` : 'Unrated'}
+                        </div>
+                      </div>
+                    );
+                    return (
+                      <div key={versionItem.effective_version} className={styles.recentVersionItem}>
+                        <Tooltip content={tooltipContent} placement="top">
+                          <button
+                            type="button"
+                            className={cx(styles.recentVersionBox, isSelected && styles.recentVersionBoxActive)}
+                            onClick={() => selectVersion(versionItem.effective_version)}
+                            aria-label={`select version ${versionItem.effective_version}`}
+                          >
+                            <span className={styles.recentVersionContent}>
+                              <span className={styles.recentVersionText}>
+                                <span className={styles.recentVersionNumber}>{versionNumber}</span>
+                              </span>
+                              {completedRating && (
+                                <span
+                                  className={styles.recentVersionScore}
+                                  style={{ color: scoreTone(theme, completedRating.score) }}
+                                >
+                                  {completedRating.score}/10
+                                </span>
+                              )}
+                            </span>
+                          </button>
+                        </Tooltip>
+                        <span className={styles.recentVersionRelativeTime}>
+                          {formatRelativeDateCompact(versionItem.last_seen_at)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -1032,15 +1276,6 @@ export default function AgentDetailPage({
       </div>
 
       <div className={styles.promptPanelsRow}>
-        <AgentRatingPanel
-          agentName={agentName}
-          version={activeVersion}
-          dataSource={dataSource}
-          initialResult={initialRating}
-          initialLoading={initialRatingLoading || initialRating?.status === 'pending'}
-          initialError={initialRatingError}
-        />
-
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
             <Text weight="medium">System prompt</Text>
@@ -1090,6 +1325,15 @@ export default function AgentDetailPage({
             )}
           </div>
         </div>
+
+        <AgentRatingPanel
+          agentName={agentName}
+          version={activeVersion}
+          dataSource={dataSource}
+          initialResult={initialRating}
+          initialLoading={initialRatingLoading || initialRating?.status === 'pending'}
+          initialError={initialRatingError}
+        />
       </div>
 
     </div>
