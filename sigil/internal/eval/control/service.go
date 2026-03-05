@@ -24,7 +24,7 @@ var validIDPattern = regexp.MustCompile(`^[\w.]+$`)
 
 func validateID(field, value string) error {
 	if !validIDPattern.MatchString(value) {
-		return fmt.Errorf("%s contains invalid characters: only letters, digits, underscores, and dots are allowed", field)
+		return fmt.Errorf("%s %q is invalid: only letters, digits, _, and . are allowed", field, value)
 	}
 	return nil
 }

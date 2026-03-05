@@ -22,14 +22,14 @@ func TestValidateID(t *testing.T) {
 		{name: "single dot", id: "."},
 		{name: "leading dot", id: ".foo"},
 		{name: "trailing dot", id: "foo."},
-		{name: "space", id: "has space", wantErr: "invalid characters"},
-		{name: "slash", id: "ns/rule", wantErr: "invalid characters"},
-		{name: "hyphen", id: "my-evaluator", wantErr: "invalid characters"},
-		{name: "colon", id: "ns:rule", wantErr: "invalid characters"},
-		{name: "at sign", id: "user@org", wantErr: "invalid characters"},
-		{name: "unicode", id: "café", wantErr: "invalid characters"},
-		{name: "curly brace", id: "a{b}", wantErr: "invalid characters"},
-		{name: "empty", id: "", wantErr: "invalid characters"},
+		{name: "space", id: "has space", wantErr: "is invalid"},
+		{name: "slash", id: "ns/rule", wantErr: "is invalid"},
+		{name: "hyphen", id: "my-evaluator", wantErr: "is invalid"},
+		{name: "colon", id: "ns:rule", wantErr: "is invalid"},
+		{name: "at sign", id: "user@org", wantErr: "is invalid"},
+		{name: "unicode", id: "café", wantErr: "is invalid"},
+		{name: "curly brace", id: "a{b}", wantErr: "is invalid"},
+		{name: "empty", id: "", wantErr: "is invalid"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -64,8 +64,8 @@ func TestValidateEvaluator_IDCharacters(t *testing.T) {
 	}{
 		{name: "valid dotted", evaluatorID: "custom.helpfulness"},
 		{name: "valid underscored", evaluatorID: "my_evaluator"},
-		{name: "hyphen rejected", evaluatorID: "my-evaluator", wantErr: "invalid characters"},
-		{name: "slash rejected", evaluatorID: "ns/evaluator", wantErr: "invalid characters"},
+		{name: "hyphen rejected", evaluatorID: "my-evaluator", wantErr: "is invalid"},
+		{name: "slash rejected", evaluatorID: "ns/evaluator", wantErr: "is invalid"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -98,8 +98,8 @@ func TestValidateRule_IDCharacters(t *testing.T) {
 	}{
 		{name: "valid dotted", ruleID: "online.helpfulness"},
 		{name: "valid underscored", ruleID: "my_rule"},
-		{name: "hyphen rejected", ruleID: "my-rule", wantErr: "invalid characters"},
-		{name: "space rejected", ruleID: "my rule", wantErr: "invalid characters"},
+		{name: "hyphen rejected", ruleID: "my-rule", wantErr: "is invalid"},
+		{name: "space rejected", ruleID: "my rule", wantErr: "is invalid"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

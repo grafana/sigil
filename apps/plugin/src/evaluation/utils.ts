@@ -7,7 +7,7 @@ export function isValidResourceID(id: string): boolean {
   return VALID_ID_PATTERN.test(id);
 }
 
-export const INVALID_ID_MESSAGE = 'Only letters, digits, underscores, and dots are allowed.';
+export const INVALID_ID_MESSAGE = 'Only letters, digits, _, and . are allowed.';
 
 /** Returns one evaluator per evaluator_id, keeping the one with the latest updated_at. */
 export function pickLatestVersionPerEvaluator(evaluators: Evaluator[]): Evaluator[] {
