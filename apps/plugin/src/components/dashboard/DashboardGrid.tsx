@@ -43,6 +43,7 @@ import { MetricPanel } from './MetricPanel';
 import { useResolvedModelPricing } from './useResolvedModelPricing';
 import { PageInsightBar } from '../insight/PageInsightBar';
 import { summarizeVector, summarizeMatrix, hasResponseData } from '../insight/summarize';
+import { DashboardSummaryBar } from './DashboardSummaryBar';
 
 export type DashboardGridProps = {
   dataSource: DashboardDataSource;
@@ -531,7 +532,7 @@ export function DashboardGrid({
   return (
     <div className={styles.gridWrapper}>
       {/* Top-level stats row */}
-      <div className={styles.statsRow}>
+      <DashboardSummaryBar>
         <TopStat
           label="Total Requests"
           value={totalRequestsValue}
@@ -579,7 +580,7 @@ export function DashboardGrid({
           invertChange
           comparisonLabel={comparisonLabel}
         />
-      </div>
+      </DashboardSummaryBar>
       <PageInsightBar
         prompt={insightPrompt}
         origin="sigil-plugin/dashboard-insight"
@@ -803,12 +804,6 @@ function getStyles(theme: GrafanaTheme2) {
       gap: theme.spacing(3),
       flex: 1,
       minWidth: 0,
-    }),
-    statsRow: css({
-      display: 'flex',
-      gap: theme.spacing(4),
-      padding: theme.spacing(1.5, 0),
-      borderBottom: `1px solid ${theme.colors.border.weak}`,
     }),
     panelRowEqual: css({
       display: 'grid',
