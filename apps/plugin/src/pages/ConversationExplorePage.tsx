@@ -131,10 +131,11 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
       modelCardClient,
     });
 
-  const { isSaved, loading: saveLoading, toggleSave } = useSavedConversation(
-    conversationID,
-    conversationTitle || conversationID
-  );
+  const {
+    isSaved,
+    loading: saveLoading,
+    toggleSave,
+  } = useSavedConversation(conversationID, conversationTitle || conversationID);
 
   const handleToggleSave = useCallback(() => {
     void toggleSave()
