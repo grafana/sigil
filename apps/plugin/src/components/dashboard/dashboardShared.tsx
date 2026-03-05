@@ -533,6 +533,22 @@ export function getBreakdownStatPanelStyles(theme: GrafanaTheme2) {
   };
 }
 
+export function formatWindowLabel(seconds: number): string {
+  if (seconds < 120) {
+    return `${seconds}s`;
+  }
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 120) {
+    return `${minutes}m`;
+  }
+  const hours = Math.round(seconds / 3600);
+  if (hours < 48) {
+    return `${hours}h`;
+  }
+  const days = Math.round(seconds / 86400);
+  return `${days}d`;
+}
+
 export function formatRelativeTime(dateStr: string): string {
   const ts = Date.parse(dateStr);
   if (!Number.isFinite(ts)) {

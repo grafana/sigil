@@ -2,7 +2,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { css } from '@emotion/css';
 import { dateTime, ThresholdsMode, type AbsoluteTimeRange, type GrafanaTheme2, type TimeRange } from '@grafana/data';
 import { Badge, Button, Icon, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
-import { BreakdownStatPanel, getBreakdownStatPanelStyles, formatRelativeTime } from './dashboardShared';
+import {
+  BreakdownStatPanel,
+  getBreakdownStatPanelStyles,
+  formatRelativeTime,
+  formatWindowLabel,
+} from './dashboardShared';
 import { TopStat } from '../TopStat';
 import type { DashboardDataSource } from '../../dashboard/api';
 import { type BreakdownDimension, type DashboardFilters, breakdownToPromLabel } from '../../dashboard/types';
@@ -493,22 +498,6 @@ function ErrorConversationsTable({ conversationsDataSource, timeRange }: ErrorCo
       )}
     </div>
   );
-}
-
-function formatWindowLabel(seconds: number): string {
-  if (seconds < 120) {
-    return `${seconds}s`;
-  }
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 120) {
-    return `${minutes}m`;
-  }
-  const hours = Math.round(seconds / 3600);
-  if (hours < 48) {
-    return `${hours}h`;
-  }
-  const days = Math.round(seconds / 86400);
-  return `${days}d`;
 }
 
 function getStyles(theme: GrafanaTheme2) {

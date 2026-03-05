@@ -10,7 +10,7 @@ import {
   type PrometheusQueryResponse,
   breakdownToPromLabel,
 } from '../../dashboard/types';
-import { extractResolvePairs, BreakdownStatPanel } from './dashboardShared';
+import { extractResolvePairs, BreakdownStatPanel, formatWindowLabel } from './dashboardShared';
 import { TopStat } from '../TopStat';
 import { calculateTotalCost, calculateTotalCostByGroup, calculateCostTimeSeries } from '../../dashboard/cost';
 import {
@@ -514,22 +514,6 @@ export function DashboardConsumptionGrid({
       </div>
     </div>
   );
-}
-
-function formatWindowLabel(seconds: number): string {
-  if (seconds < 120) {
-    return `${seconds}s`;
-  }
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 120) {
-    return `${minutes}m`;
-  }
-  const hours = Math.round(seconds / 3600);
-  if (hours < 48) {
-    return `${hours}h`;
-  }
-  const days = Math.round(seconds / 86400);
-  return `${days}d`;
 }
 
 function getStyles(theme: GrafanaTheme2) {

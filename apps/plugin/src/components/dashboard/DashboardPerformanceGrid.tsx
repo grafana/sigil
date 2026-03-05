@@ -9,7 +9,7 @@ import {
   type LatencyPercentile,
   breakdownToPromLabel,
 } from '../../dashboard/types';
-import { BreakdownStatPanel } from './dashboardShared';
+import { BreakdownStatPanel, formatWindowLabel } from './dashboardShared';
 import { TopStat } from '../TopStat';
 import {
   computeStep,
@@ -377,22 +377,6 @@ export function DashboardPerformanceGrid({
       </div>
     </div>
   );
-}
-
-function formatWindowLabel(seconds: number): string {
-  if (seconds < 120) {
-    return `${seconds}s`;
-  }
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 120) {
-    return `${minutes}m`;
-  }
-  const hours = Math.round(seconds / 3600);
-  if (hours < 48) {
-    return `${hours}h`;
-  }
-  const days = Math.round(seconds / 86400);
-  return `${days}d`;
 }
 
 function getStyles(theme: GrafanaTheme2) {
