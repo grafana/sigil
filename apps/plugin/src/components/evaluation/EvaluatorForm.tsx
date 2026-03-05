@@ -217,15 +217,10 @@ export default function EvaluatorForm({
     }
   }, [isEdit, existingVersions]);
 
-  // Preserve unknown config fields (e.g. provider, model) from the initial/prefill evaluator
-  // by spreading them first, then overriding with form-managed fields.
-  const baseConfig = seedEvaluator?.config ?? {};
-
   const buildConfig = (): Record<string, unknown> => {
     switch (kind) {
       case 'llm_judge':
         return {
-          ...baseConfig,
           provider: provider || undefined,
           model: model || undefined,
           system_prompt: systemPrompt || undefined,
@@ -235,21 +230,20 @@ export default function EvaluatorForm({
         };
       case 'json_schema':
         try {
-          return { ...baseConfig, schema: JSON.parse(schemaJson || '{}') };
+          return { schema: JSON.parse(schemaJson || '{}') };
         } catch {
-          return { ...baseConfig, schema: {} };
+          return { schema: {} };
         }
       case 'regex':
-        return { ...baseConfig, pattern: pattern || '' };
+        return { pattern: pattern || '' };
       case 'heuristic':
         return {
-          ...baseConfig,
           not_empty: notEmpty,
           min_length: minLength === '' ? undefined : minLength,
           max_length: maxLength === '' ? undefined : maxLength,
         };
       default:
-        return { ...baseConfig };
+        return {};
     }
   };
 

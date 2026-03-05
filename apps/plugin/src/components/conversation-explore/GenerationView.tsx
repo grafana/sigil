@@ -448,7 +448,7 @@ function ScoreChips({ scores }: { scores: Record<string, LatestScore> }) {
       {chips.map(([key, score]) => {
         const passed = score.passed;
         const chipClass =
-          passed === undefined ? styles.scoreChipNeutral : passed ? styles.scoreChipPass : styles.scoreChipFail;
+          passed == null ? styles.scoreChipNeutral : passed ? styles.scoreChipPass : styles.scoreChipFail;
 
         return (
           <div key={key} className={`${styles.scoreChip} ${chipClass}`}>
@@ -456,7 +456,7 @@ function ScoreChips({ scores }: { scores: Record<string, LatestScore> }) {
             <span className={styles.scoreChipSep}>›</span>
             <span className={styles.scoreChipKey}>{key}:</span>
             <span className={styles.scoreChipValue}>{formatScoreValue(score.value)}</span>
-            {passed !== undefined && (
+            {passed != null && (
               <span className={passed ? styles.scoreChipPassIcon : styles.scoreChipFailIcon}>{passed ? '✓' : '✗'}</span>
             )}
           </div>

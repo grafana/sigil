@@ -387,7 +387,7 @@ function ScoresTable({ scores }: { scores: Record<string, LatestScore> }) {
             <td className={styles.scoreKey}>{key}</td>
             <td className={styles.scoreValue}>{formatScoreValue(score.value)}</td>
             <td>
-              {score.passed === undefined ? (
+              {score.passed == null ? (
                 <span className={styles.passedNa}>—</span>
               ) : score.passed ? (
                 <span className={styles.passedYes}>✓</span>

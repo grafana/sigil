@@ -61,7 +61,7 @@ export type LatestScore = {
   evaluator_id: string;
   evaluator_version: string;
   created_at: string;
-  passed?: boolean;
+  passed?: boolean | null;
 };
 
 export type GenerationDetail = {
