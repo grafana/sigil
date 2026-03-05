@@ -272,6 +272,7 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
           <Text element="h2">Template {template.template_id}</Text>
           <Badge text={EVALUATOR_KIND_LABELS[template.kind]} color={getKindBadgeColor(template.kind)} />
           <Badge text={template.scope} color={template.scope === 'global' ? 'orange' : 'blue'} />
+          <Badge text={`v${template.latest_version}`} color="green" />
         </div>
         <Stack direction="row" gap={1}>
           {template.scope === 'tenant' && (
@@ -303,9 +304,6 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
       {template.description && <Text color="secondary">{template.description}</Text>}
 
       <div className={styles.section}>
-        <Text element="h3" weight="medium">
-          Current Version: {template.latest_version}
-        </Text>
         <TemplateConfigSummary
           kind={template.kind}
           config={template.config ?? {}}
