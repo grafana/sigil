@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -966,6 +967,12 @@ func TestCallResourceStreamsConversationSearchResults(t *testing.T) {
 					{TraceID: "trace-4", StartTimeUnixNano: "1739609397000000000", ConversationID: "conv-1", GenerationID: "gen-1d", Model: "gpt-4o", Agent: "assistant", UserID: "user-1"},
 					{TraceID: "trace-5", StartTimeUnixNano: "1739609396000000000", ConversationID: "conv-1", GenerationID: "gen-1e", Model: "gpt-4o", Agent: "assistant", UserID: "user-1"},
 					{TraceID: "trace-6", StartTimeUnixNano: "1739609395000000000", ConversationID: "conv-1", GenerationID: "gen-1f", Model: "gpt-4o", Agent: "assistant", UserID: "user-1"},
+					{TraceID: "trace-7", StartTimeUnixNano: "1739609394000000000", ConversationID: "conv-1", GenerationID: "gen-1g", Model: "gpt-4o", Agent: "assistant", UserID: "user-1"},
+					{TraceID: "trace-8", StartTimeUnixNano: "1739609393000000000", ConversationID: "conv-1", GenerationID: "gen-1h", Model: "gpt-4o", Agent: "assistant", UserID: "user-1"},
+					{TraceID: "trace-9", StartTimeUnixNano: "1739609392000000000", ConversationID: "conv-1", GenerationID: "gen-1i", Model: "gpt-4o", Agent: "assistant", UserID: "user-1"},
+					{TraceID: "trace-10", StartTimeUnixNano: "1739609391000000000", ConversationID: "conv-1", GenerationID: "gen-1j", Model: "gpt-4o", Agent: "assistant", UserID: "user-1"},
+					{TraceID: "trace-11", StartTimeUnixNano: "1739609390000000000", ConversationID: "conv-1", GenerationID: "gen-1k", Model: "gpt-4o", Agent: "assistant", UserID: "user-1"},
+					{TraceID: "trace-12", StartTimeUnixNano: "1739609389000000000", ConversationID: "conv-1", GenerationID: "gen-1l", Model: "gpt-4o", Agent: "assistant", UserID: "user-1"},
 				}))
 			case 2:
 				_, _ = io.WriteString(w, buildTempoSearchResponse([]tempoSearchTraceFixture{
@@ -1047,6 +1054,101 @@ func TestCallResourceStreamsConversationSearchResults(t *testing.T) {
 	}
 }
 
+func TestCallResourceStreamsConversationSearchResultsAcrossMetadataChunks(t *testing.T) {
+	fixtures := make([]tempoSearchTraceFixture, 0, 11)
+	for i := 0; i < 11; i++ {
+		suffix := strconv.Itoa(i + 1)
+		fixtures = append(fixtures, tempoSearchTraceFixture{
+			TraceID:           "trace-" + suffix,
+			StartTimeUnixNano: strconv.FormatInt(1739609400000000000-int64(i), 10),
+			ConversationID:    "conv-" + suffix,
+			GenerationID:      "gen-" + suffix,
+			Model:             "gpt-4o",
+			Agent:             "assistant",
+			UserID:            "user-" + suffix,
+		})
+	}
+
+	metadataRequests := make([][]string, 0, 2)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/datasources/proxy/uid/tempo/api/search":
+			_, _ = io.WriteString(w, buildTempoSearchResponse(fixtures))
+		case "/api/v1/conversations:batch-metadata":
+			var payload struct {
+				ConversationIDs []string `json:"conversation_ids"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				http.Error(w, "invalid request body", http.StatusBadRequest)
+				return
+			}
+			metadataRequests = append(metadataRequests, append([]string(nil), payload.ConversationIDs...))
+			items := make([]string, 0, len(payload.ConversationIDs))
+			for _, id := range payload.ConversationIDs {
+				items = append(items, `{"conversation_id":"`+id+`","generation_count":1,"first_generation_at":"2025-02-15T08:00:00Z","last_generation_at":"2025-02-15T09:30:00Z","annotation_count":0}`)
+			}
+			_, _ = io.WriteString(w, `{"items":[`+strings.Join(items, ",")+`],"missing_conversation_ids":[]}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+	app.apiURL = upstream.URL
+	app.grafanaAppURL = upstream.URL
+	app.grafanaServiceAccountToken = "sa-token"
+	app.tempoDatasourceUID = "tempo"
+
+	responses := callResourceStreamWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodPost,
+		Path:   "query/conversations/search/stream",
+		Body:   []byte(`{"filters":"","select":[],"time_range":{"from":"2025-02-15T07:00:00Z","to":"2025-02-15T10:00:00Z"},"page_size":11}`),
+	})
+	if len(responses) != 3 {
+		t.Fatalf("expected 3 streamed responses, got %d", len(responses))
+	}
+	if len(metadataRequests) != 2 {
+		t.Fatalf("expected 2 metadata requests, got %d", len(metadataRequests))
+	}
+	if len(metadataRequests[0]) != conversationSearchMetadataChunkSize {
+		t.Fatalf("expected first metadata chunk size %d, got %d", conversationSearchMetadataChunkSize, len(metadataRequests[0]))
+	}
+	if len(metadataRequests[1]) != 1 {
+		t.Fatalf("expected second metadata chunk size 1, got %d", len(metadataRequests[1]))
+	}
+
+	var first conversationSearchStreamResultsEvent
+	if err := json.Unmarshal(bytes.TrimSpace(responses[0].Body), &first); err != nil {
+		t.Fatalf("decode first stream chunk: %v", err)
+	}
+	if first.Type != "results" || len(first.Conversations) != conversationSearchMetadataChunkSize {
+		t.Fatalf("unexpected first stream chunk: %+v", first)
+	}
+
+	var second conversationSearchStreamResultsEvent
+	if err := json.Unmarshal(bytes.TrimSpace(responses[1].Body), &second); err != nil {
+		t.Fatalf("decode second stream chunk: %v", err)
+	}
+	if second.Type != "results" || len(second.Conversations) != 1 {
+		t.Fatalf("unexpected second stream chunk: %+v", second)
+	}
+
+	var complete conversationSearchStreamCompleteEvent
+	if err := json.Unmarshal(bytes.TrimSpace(responses[2].Body), &complete); err != nil {
+		t.Fatalf("decode completion stream chunk: %v", err)
+	}
+	if complete.Type != "complete" || complete.HasMore {
+		t.Fatalf("unexpected completion chunk: %+v", complete)
+	}
+}
+
 func TestCallResourceStreamsConversationSearchErrorsAfterPartialResults(t *testing.T) {
 	searchRequests := 0
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1062,6 +1164,12 @@ func TestCallResourceStreamsConversationSearchErrorsAfterPartialResults(t *testi
 					{TraceID: "trace-4", StartTimeUnixNano: "1739609397000000000", ConversationID: "conv-1", GenerationID: "gen-1d"},
 					{TraceID: "trace-5", StartTimeUnixNano: "1739609396000000000", ConversationID: "conv-1", GenerationID: "gen-1e"},
 					{TraceID: "trace-6", StartTimeUnixNano: "1739609395000000000", ConversationID: "conv-1", GenerationID: "gen-1f"},
+					{TraceID: "trace-7", StartTimeUnixNano: "1739609394000000000", ConversationID: "conv-1", GenerationID: "gen-1g"},
+					{TraceID: "trace-8", StartTimeUnixNano: "1739609393000000000", ConversationID: "conv-1", GenerationID: "gen-1h"},
+					{TraceID: "trace-9", StartTimeUnixNano: "1739609392000000000", ConversationID: "conv-1", GenerationID: "gen-1i"},
+					{TraceID: "trace-10", StartTimeUnixNano: "1739609391000000000", ConversationID: "conv-1", GenerationID: "gen-1j"},
+					{TraceID: "trace-11", StartTimeUnixNano: "1739609390000000000", ConversationID: "conv-1", GenerationID: "gen-1k"},
+					{TraceID: "trace-12", StartTimeUnixNano: "1739609389000000000", ConversationID: "conv-1", GenerationID: "gen-1l"},
 				}))
 				return
 			}

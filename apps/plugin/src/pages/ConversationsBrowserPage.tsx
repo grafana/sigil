@@ -78,14 +78,14 @@ async function fetchRangeConversations(
   dataSource: ConversationsDataSource,
   fromISO: string,
   toISO: string,
-  filterString: string
+  filterString: string,
+  onBatch?: (batch: ConversationSearchResult[]) => void
 ): Promise<ConversationSearchResult[]> {
   let cursor = '';
-  let hasMore = true;
   const conversations: ConversationSearchResult[] = [];
 
-  while (hasMore) {
-    const response = await dataSource.searchConversations({
+  while (true) {
+    const request = {
       filters: filterString,
       select: DEFAULT_SEARCH_SELECT_FIELDS,
       time_range: {
@@ -94,10 +94,37 @@ async function fetchRangeConversations(
       },
       page_size: 100,
       cursor,
-    });
-    conversations.push(...(response.conversations ?? []));
+    };
+
+    if (dataSource.streamSearchConversations) {
+      let nextCursor = '';
+      let hasMore = false;
+      await dataSource.streamSearchConversations(request, {
+        onResults(batch) {
+          const safeBatch = batch ?? [];
+          conversations.push(...safeBatch);
+          onBatch?.(safeBatch);
+        },
+        onComplete(response) {
+          nextCursor = response.next_cursor ?? '';
+          hasMore = Boolean(response.has_more && nextCursor.length > 0);
+        },
+      });
+      if (!hasMore) {
+        break;
+      }
+      cursor = nextCursor;
+      continue;
+    }
+
+    const response = await dataSource.searchConversations(request);
+    const batch = response.conversations ?? [];
+    conversations.push(...batch);
+    onBatch?.(batch);
     cursor = response.next_cursor ?? '';
-    hasMore = Boolean(response.has_more && cursor.length > 0);
+    if (!response.has_more || cursor.length === 0) {
+      break;
+    }
   }
 
   return conversations;
@@ -246,7 +273,8 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
 
   const [rawConversations, setRawConversations] = useState<ConversationSearchResult[]>([]);
   const [previousConversations, setPreviousConversations] = useState<ConversationSearchResult[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loadingCurrent, setLoadingCurrent] = useState<boolean>(true);
+  const [loadingPrevious, setLoadingPrevious] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const requestVersionRef = useRef<number>(0);
 
@@ -257,36 +285,77 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   const loadConversations = useCallback(async (): Promise<void> => {
     requestVersionRef.current += 1;
     const requestVersion = requestVersionRef.current;
-    setLoading(true);
+    setLoadingCurrent(true);
+    setLoadingPrevious(true);
     setErrorMessage('');
-    try {
-      const currentFromMs = timeRange.from.valueOf();
-      const currentToMs = timeRange.to.valueOf();
-      const windowMs = currentToMs - currentFromMs;
-      const previousFromISO = dateTime(currentFromMs - windowMs).toISOString();
-      const previousToISO = dateTime(currentToMs - windowMs).toISOString();
-      const [results, previousRangeConversations] = await Promise.all([
-        fetchRangeConversations(dataSource, timeRange.from.toISOString(), timeRange.to.toISOString(), filterString),
-        fetchRangeConversations(dataSource, previousFromISO, previousToISO, filterString),
-      ]);
-      if (requestVersionRef.current !== requestVersion) {
-        return;
+    setRawConversations([]);
+    setPreviousConversations([]);
+
+    const currentFromMs = timeRange.from.valueOf();
+    const currentToMs = timeRange.to.valueOf();
+    const windowMs = currentToMs - currentFromMs;
+    const previousFromISO = dateTime(currentFromMs - windowMs).toISOString();
+    const previousToISO = dateTime(currentToMs - windowMs).toISOString();
+
+    void (async () => {
+      try {
+        let sawBatch = false;
+        const results = await fetchRangeConversations(
+          dataSource,
+          timeRange.from.toISOString(),
+          timeRange.to.toISOString(),
+          filterString,
+          (batch) => {
+            if (requestVersionRef.current !== requestVersion || batch.length === 0) {
+              return;
+            }
+            sawBatch = true;
+            setRawConversations((current) => [...current, ...batch]);
+            setLoadingCurrent(false);
+          }
+        );
+        if (requestVersionRef.current !== requestVersion) {
+          return;
+        }
+        if (!sawBatch) {
+          setRawConversations(results);
+        }
+      } catch (error) {
+        if (requestVersionRef.current !== requestVersion) {
+          return;
+        }
+        setErrorMessage(error instanceof Error ? error.message : 'failed to load conversations');
+        setRawConversations([]);
+      } finally {
+        if (requestVersionRef.current !== requestVersion) {
+          return;
+        }
+        setLoadingCurrent(false);
       }
-      setRawConversations(results);
-      setPreviousConversations(previousRangeConversations);
-    } catch (error) {
-      if (requestVersionRef.current !== requestVersion) {
-        return;
+    })();
+
+    void (async () => {
+      try {
+        const results = await fetchRangeConversations(dataSource, previousFromISO, previousToISO, filterString);
+        if (requestVersionRef.current !== requestVersion) {
+          return;
+        }
+        setPreviousConversations(results);
+      } catch (error) {
+        if (requestVersionRef.current !== requestVersion) {
+          return;
+        }
+        setErrorMessage((current) =>
+          current.length > 0 ? current : error instanceof Error ? error.message : 'failed to load conversations'
+        );
+        setPreviousConversations([]);
+      } finally {
+        if (requestVersionRef.current !== requestVersion) {
+          return;
+        }
+        setLoadingPrevious(false);
       }
-      setErrorMessage(error instanceof Error ? error.message : 'failed to load conversations');
-      setRawConversations([]);
-      setPreviousConversations([]);
-    } finally {
-      if (requestVersionRef.current !== requestVersion) {
-        return;
-      }
-      setLoading(false);
-    }
+    })();
   }, [dataSource, timeRange, filterString]);
 
   useEffect(() => {
@@ -303,7 +372,7 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   );
 
   const conversationInsightDataContext = useMemo(() => {
-    if (loading || conversations.length === 0) {
+    if (loadingCurrent || conversations.length === 0) {
       return null;
     }
     const s = conversationStats;
@@ -322,7 +391,7 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
       `Unique models: ${[...modelSet].join(', ') || 'none'}`,
       `Unique providers: ${[...providerSet].join(', ') || 'none'}`,
     ].join('\n');
-  }, [loading, conversations, conversationStats, previousConversationStats]);
+  }, [loadingCurrent, conversations, conversationStats, previousConversationStats]);
 
   const [modelCards, setModelCards] = useState<Map<string, ModelCard>>(new Map());
 
@@ -404,50 +473,50 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
           <TopStat
             label="Conversations"
             value={conversationStats.totalConversations}
-            loading={loading}
+            loading={loadingCurrent}
             prevValue={previousConversationStats.totalConversations}
-            prevLoading={loading}
+            prevLoading={loadingPrevious}
             comparisonLabel="in previous window"
           />
           <TopStat
             label="Tokens"
             value={conversationStats.totalTokens}
-            loading={loading}
+            loading={loadingCurrent}
             prevValue={previousConversationStats.totalTokens}
-            prevLoading={loading}
+            prevLoading={loadingPrevious}
             comparisonLabel="in previous window"
           />
           <TopStat
             label="Avg Calls / Conversation"
             value={conversationStats.avgCallsPerConversation}
-            loading={loading}
+            loading={loadingCurrent}
             prevValue={previousConversationStats.avgCallsPerConversation}
-            prevLoading={loading}
+            prevLoading={loadingPrevious}
             comparisonLabel="in previous window"
           />
           <TopStat
             label="Active Conversations (7d)"
             value={conversationStats.activeLast7d}
-            loading={loading}
+            loading={loadingCurrent}
             prevValue={previousConversationStats.activeLast7d}
-            prevLoading={loading}
+            prevLoading={loadingPrevious}
             comparisonLabel="in previous window"
           />
           <TopStat
             label="Rated Conversations"
             value={conversationStats.ratedConversations}
-            loading={loading}
+            loading={loadingCurrent}
             prevValue={previousConversationStats.ratedConversations}
-            prevLoading={loading}
+            prevLoading={loadingPrevious}
             comparisonLabel="in previous window"
           />
           <TopStat
             label="Bad-Rated %"
             value={conversationStats.badRatedPct}
             unit="percent"
-            loading={loading}
+            loading={loadingCurrent}
             prevValue={previousConversationStats.badRatedPct}
-            prevLoading={loading}
+            prevLoading={loadingPrevious}
             invertChange
             comparisonLabel="in previous window"
           />
@@ -467,18 +536,18 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
         />
       </div>
 
-      <ConversationTimelineHistogram
-        conversations={conversations}
-        timeRange={timeRange}
-        loading={loading}
-        onTimeRangeChange={setTimeRange}
-      />
+        <ConversationTimelineHistogram
+          conversations={conversations}
+          timeRange={timeRange}
+          loading={loadingCurrent}
+          onTimeRangeChange={setTimeRange}
+        />
 
       <div className={styles.listPanel}>
         <ConversationListPanel
           conversations={conversations}
           selectedConversationId=""
-          loading={loading}
+          loading={loadingCurrent}
           hasMore={false}
           loadingMore={false}
           showExtendedColumns

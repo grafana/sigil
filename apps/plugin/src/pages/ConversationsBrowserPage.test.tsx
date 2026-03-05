@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import ConversationsBrowserPage from './ConversationsBrowserPage';
 import ConversationPage from './ConversationPage';
@@ -130,6 +130,55 @@ function createDataSource(): MockConversationsDataSource {
   };
 }
 
+function createStreamingDataSource(): MockConversationsDataSource {
+  const currentConversations = [
+    {
+      conversation_id: 'conv-stream-b',
+      generation_count: 3,
+      first_generation_at: '2026-02-01T10:00:00Z',
+      last_generation_at: '2026-02-01T10:00:00Z',
+      models: [],
+      agents: [],
+      error_count: 0,
+      has_errors: false,
+      trace_ids: [],
+      annotation_count: 0,
+    },
+    {
+      conversation_id: 'conv-stream-a',
+      generation_count: 1,
+      first_generation_at: '2026-02-02T10:00:00Z',
+      last_generation_at: '2026-02-02T10:00:00Z',
+      models: [],
+      agents: [],
+      error_count: 0,
+      has_errors: false,
+      trace_ids: [],
+      annotation_count: 0,
+    },
+  ];
+
+  const dataSource = createDataSource();
+  dataSource.searchConversations.mockReset();
+  dataSource.searchConversations.mockResolvedValue({
+    conversations: [],
+    next_cursor: '',
+    has_more: false,
+  });
+  dataSource.streamSearchConversations = jest
+    .fn()
+    .mockImplementationOnce(async (_request, options) => {
+      options.onResults([currentConversations[0]]);
+      options.onResults([currentConversations[1]]);
+      options.onComplete({ next_cursor: '', has_more: false });
+    })
+    .mockImplementationOnce(async (_request, options) => {
+      options.onComplete({ next_cursor: '', has_more: false });
+    });
+
+  return dataSource;
+}
+
 const mockDashboardDataSource: DashboardDataSource = {
   queryRange: jest.fn().mockResolvedValue({ status: 'success', data: { resultType: 'matrix', result: [] } }),
   queryInstant: jest.fn().mockResolvedValue({ status: 'success', data: { resultType: 'vector', result: [] } }),
@@ -231,5 +280,68 @@ describe('ConversationsBrowserPage', () => {
     expect(router.state.location.search).toContain('conversationTitle=Incident%3A+authentication+failures');
     expect(await screen.findByText('Incident: authentication failures')).toBeInTheDocument();
     expect(screen.getByText('Conversation').parentElement).toHaveTextContent('conv-b');
+  });
+
+  it('uses streaming search when the data source provides it', async () => {
+    const dataSource = createStreamingDataSource();
+    renderPage(dataSource);
+
+    expect(await screen.findByLabelText('select conversation conv-stream-a')).toBeInTheDocument();
+    await waitFor(() => expect(dataSource.streamSearchConversations).toHaveBeenCalledTimes(2));
+    expect(dataSource.searchConversations).not.toHaveBeenCalled();
+  });
+
+  it('renders current results before previous-window streaming completes', async () => {
+    let resolveCurrent: (() => void) | undefined;
+    let resolvePrevious: (() => void) | undefined;
+    const currentDone = new Promise<void>((resolve) => {
+      resolveCurrent = resolve;
+    });
+    const previousDone = new Promise<void>((resolve) => {
+      resolvePrevious = resolve;
+    });
+
+    const dataSource = createDataSource();
+    dataSource.searchConversations.mockReset();
+    dataSource.searchConversations.mockResolvedValue({
+      conversations: [],
+      next_cursor: '',
+      has_more: false,
+    });
+    dataSource.streamSearchConversations = jest
+      .fn()
+      .mockImplementationOnce(async (_request, options) => {
+        options.onResults([
+          {
+            conversation_id: 'conv-live',
+            generation_count: 2,
+            first_generation_at: '2026-02-02T09:59:00Z',
+            last_generation_at: '2026-02-02T10:00:00Z',
+            models: [],
+            agents: [],
+            error_count: 0,
+            has_errors: false,
+            trace_ids: [],
+            annotation_count: 0,
+          },
+        ]);
+        await currentDone;
+        options.onComplete({ next_cursor: '', has_more: false });
+      })
+      .mockImplementationOnce(async (_request, options) => {
+        await previousDone;
+        options.onComplete({ next_cursor: '', has_more: false });
+      });
+
+    renderPage(dataSource);
+
+    expect(await screen.findByLabelText('select conversation conv-live')).toBeInTheDocument();
+    expect(screen.queryByLabelText('loading conversations')).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveCurrent?.();
+      resolvePrevious?.();
+      await Promise.resolve();
+    });
   });
 });
