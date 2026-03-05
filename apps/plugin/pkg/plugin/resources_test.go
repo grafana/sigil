@@ -153,6 +153,7 @@ func TestRequiredPermissionAction(t *testing.T) {
 			method string
 			path   string
 		}{
+			{method: http.MethodPost, path: "/query/agents/rate"},
 			{method: http.MethodPost, path: "/eval/evaluators"},
 			{method: http.MethodPost, path: "/eval/predefined/evaluators/sigil.helpfulness"},
 			{method: http.MethodPost, path: "/eval/rules:preview"},
@@ -480,6 +481,12 @@ func TestCallResource(t *testing.T) {
 				return
 			}
 			_, _ = io.WriteString(w, `{"items":[{"effective_version":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"next_cursor":""}`)
+		case "/api/v1/agents:rate":
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			_, _ = io.WriteString(w, `{"score":7,"summary":"Good baseline.","suggestions":[{"category":"tools","severity":"medium","title":"Clarify tools","description":"Tighten tool descriptions."}],"judge_model":"openai/gpt-4o-mini","judge_latency_ms":42}`)
 		case "/api/v1/eval/evaluators":
 			switch r.Method {
 			case http.MethodGet:
@@ -724,6 +731,14 @@ func TestCallResource(t *testing.T) {
 			path:      "query/agents/versions?name=assistant",
 			expStatus: http.StatusOK,
 			expBody:   []byte(`{"items":[{"effective_version":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"next_cursor":""}`),
+		},
+		{
+			name:      "rate agent",
+			method:    http.MethodPost,
+			path:      "query/agents/rate",
+			reqBody:   []byte(`{"agent_name":"assistant","version":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`),
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"score":7,"summary":"Good baseline.","suggestions":[{"category":"tools","severity":"medium","title":"Clarify tools","description":"Tighten tool descriptions."}],"judge_model":"openai/gpt-4o-mini","judge_latency_ms":42}`),
 		},
 		{
 			name:      "model cards post not allowed",

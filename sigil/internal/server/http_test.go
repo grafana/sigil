@@ -11,7 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/grafana/sigil/sigil/internal/agentrating"
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
+	"github.com/grafana/sigil/sigil/internal/eval/evaluators/judges"
 	"github.com/grafana/sigil/sigil/internal/feedback"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
@@ -130,6 +132,7 @@ func TestRegisterQueryRoutesOwnsQueryPaths(t *testing.T) {
 	RegisterQueryRoutes(
 		mux,
 		query.NewService(),
+		nil,
 		feedback.NewService(feedback.NewMemoryStore()),
 		true,
 		true,
@@ -502,6 +505,96 @@ func TestListAgentVersionsEndpoint(t *testing.T) {
 	}
 	if !strings.Contains(resp.Body.String(), `"next_cursor":"`) {
 		t.Fatalf("expected next cursor in response, body=%s", resp.Body.String())
+	}
+}
+
+func TestRateAgentEndpointValidatesRequestBody(t *testing.T) {
+	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
+		AgentCatalogStore: &testAgentCatalogStore{
+			latestVersion: &storage.AgentVersion{
+				AgentName:             "assistant",
+				EffectiveVersion:      "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				SystemPrompt:          "You are concise.",
+				SystemPromptPrefix:    "You are concise.",
+				ToolCount:             0,
+				TokenEstimateTotal:    40,
+				GenerationCount:       2,
+				FirstSeenAt:           time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC),
+				LastSeenAt:            time.Date(2026, 3, 4, 11, 0, 0, 0, time.UTC),
+				DeclaredVersionFirst:  nil,
+				DeclaredVersionLatest: nil,
+				ToolsJSON:             "[]",
+			},
+		},
+		FeedbackStore: feedback.NewMemoryStore(),
+	})
+	if err != nil {
+		t.Fatalf("new query service: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterQueryRoutes(
+		mux,
+		querySvc,
+		agentrating.NewRater(judges.NewDiscovery(), "openai/gpt-4o-mini"),
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		protected,
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents:rate", bytes.NewBufferString(`{"agent_name":"assistant","extra":true}`))
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid request body, got %d body=%s", resp.Code, resp.Body.String())
+	}
+}
+
+func TestRateAgentEndpointReturnsBadRequestWhenProviderUnavailable(t *testing.T) {
+	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
+		AgentCatalogStore: &testAgentCatalogStore{
+			latestVersion: &storage.AgentVersion{
+				AgentName:             "assistant",
+				EffectiveVersion:      "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				SystemPrompt:          "You are concise.",
+				SystemPromptPrefix:    "You are concise.",
+				ToolCount:             0,
+				TokenEstimateTotal:    40,
+				GenerationCount:       2,
+				FirstSeenAt:           time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC),
+				LastSeenAt:            time.Date(2026, 3, 4, 11, 0, 0, 0, time.UTC),
+				DeclaredVersionFirst:  nil,
+				DeclaredVersionLatest: nil,
+				ToolsJSON:             "[]",
+			},
+		},
+		FeedbackStore: feedback.NewMemoryStore(),
+	})
+	if err != nil {
+		t.Fatalf("new query service: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterQueryRoutes(
+		mux,
+		querySvc,
+		agentrating.NewRater(judges.NewDiscovery(), "openai/gpt-4o-mini"),
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		protected,
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents:rate", bytes.NewBufferString(`{"agent_name":"assistant"}`))
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for unavailable judge provider, got %d body=%s", resp.Code, resp.Body.String())
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/grafana/dskit/services"
+	"github.com/grafana/sigil/sigil/internal/agentrating"
 	"github.com/grafana/sigil/sigil/internal/config"
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	evalcontrol "github.com/grafana/sigil/sigil/internal/eval/control"
@@ -108,13 +109,14 @@ func newQuerierModule(
 		tenantSettingsSvc = tenantsettings.NewService(tenantSettingsStore)
 	}
 
+	discovery := judges.DiscoverFromEnv()
+	agentRater := agentrating.NewRater(discovery, cfg.EvalDefaultJudgeModel)
+
 	var controlSvc *evalcontrol.Service
 	var templateSvc *evalcontrol.TemplateService
 	var ingestScoreSvc *evalingest.Service
 	var testSvc *evalcontrol.TestService
 	if evalStore, ok := generationStore.(evalpkg.EvalStore); ok && evalStore != nil {
-		discovery := judges.DiscoverFromEnv()
-
 		// Build generation reader and evaluator registry for the test service.
 		if genReader, ok := generationStore.(evalworker.GenerationReader); ok {
 			hotColdReader := evalworker.NewHotColdGenerationReader(genReader, blockMetadataStore, blockReader)
@@ -212,6 +214,7 @@ func newQuerierModule(
 			server.RegisterQueryRoutes(
 				mux,
 				querySvc,
+				agentRater,
 				feedbackSvc,
 				cfg.ConversationRatingsEnabled,
 				cfg.ConversationAnnotationsEnabled,

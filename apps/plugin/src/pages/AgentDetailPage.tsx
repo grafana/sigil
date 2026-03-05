@@ -8,6 +8,7 @@ import type { AgentDetail, AgentVersionListItem } from '../agents/types';
 import ModelCardPopover from '../components/conversations/ModelCardPopover';
 import { getProviderColor, getProviderMeta, stripProviderPrefix } from '../components/conversations/providerMeta';
 import ToolsPanel from '../components/agents/ToolsPanel';
+import AgentRatingPanel from '../components/agents/AgentRatingPanel';
 import { defaultModelCardClient, type ModelCardClient } from '../modelcard/api';
 import type { ModelCard } from '../modelcard/types';
 import { resolveModelCardsFromNames } from '../modelcard/resolve';
@@ -493,6 +494,8 @@ export default function AgentDetailPage({
           tooltip="Sum of system prompt and tool tokens — the baseline context cost per generation."
         />
       </div>
+
+      <AgentRatingPanel agentName={agentName} version={activeVersion} dataSource={dataSource} />
 
       <div className={styles.panel}>
         <div className={styles.panelHeader}>

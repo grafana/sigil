@@ -1,6 +1,12 @@
 import { lastValueFrom } from 'rxjs';
 import { getBackendSrv } from '@grafana/runtime';
-import type { AgentDetail, AgentListResponse, AgentVersionListResponse } from './types';
+import type {
+  AgentDetail,
+  AgentListResponse,
+  AgentRatingRequest,
+  AgentRatingResponse,
+  AgentVersionListResponse,
+} from './types';
 
 const queryBasePath = '/api/plugins/grafana-sigil-app/resources/query';
 
@@ -8,6 +14,7 @@ export type AgentsDataSource = {
   listAgents: (limit?: number, cursor?: string, namePrefix?: string) => Promise<AgentListResponse>;
   lookupAgent: (name: string, version?: string) => Promise<AgentDetail>;
   listAgentVersions: (name: string, limit?: number, cursor?: string) => Promise<AgentVersionListResponse>;
+  rateAgent: (name: string, version?: string) => Promise<AgentRatingResponse>;
 };
 
 export const defaultAgentsDataSource: AgentsDataSource = {
@@ -59,6 +66,22 @@ export const defaultAgentsDataSource: AgentsDataSource = {
       getBackendSrv().fetch<AgentVersionListResponse>({
         method: 'GET',
         url: `${queryBasePath}/agents/versions?${params.toString()}`,
+      })
+    );
+    return response.data;
+  },
+
+  async rateAgent(name: string, version?: string) {
+    const payload: AgentRatingRequest = { agent_name: name };
+    if (version && version.length > 0) {
+      payload.version = version;
+    }
+
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<AgentRatingResponse>({
+        method: 'POST',
+        url: `${queryBasePath}/agents/rate`,
+        data: payload,
       })
     );
     return response.data;

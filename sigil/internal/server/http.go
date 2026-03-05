@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/grafana/dskit/tenant"
+	"github.com/grafana/sigil/sigil/internal/agentrating"
 	"github.com/grafana/sigil/sigil/internal/feedback"
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
 	"github.com/grafana/sigil/sigil/internal/modelcards"
@@ -29,7 +30,7 @@ func RegisterRoutes(
 ) {
 	RegisterCoreRoutes(mux)
 	RegisterIngestRoutes(mux, generationSvc, protectedMiddleware)
-	RegisterQueryRoutes(mux, querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled, modelCardSvc, protectedMiddleware)
+	RegisterQueryRoutes(mux, querySvc, nil, feedbackSvc, ratingsEnabled, annotationsEnabled, modelCardSvc, protectedMiddleware)
 }
 
 // RegisterCoreRoutes wires transport-level routes shared by every runtime role.
@@ -60,6 +61,7 @@ func RegisterIngestRoutes(
 func RegisterQueryRoutes(
 	mux *http.ServeMux,
 	querySvc *query.Service,
+	rater *agentrating.Rater,
 	feedbackSvc *feedback.Service,
 	ratingsEnabled bool,
 	annotationsEnabled bool,
@@ -77,6 +79,9 @@ func RegisterQueryRoutes(
 	mux.Handle("/api/v1/agents", protectedMiddleware(http.HandlerFunc(listAgents(querySvc))))
 	mux.Handle("/api/v1/agents:lookup", protectedMiddleware(http.HandlerFunc(lookupAgent(querySvc))))
 	mux.Handle("/api/v1/agents:versions", protectedMiddleware(http.HandlerFunc(listAgentVersions(querySvc))))
+	if rater != nil {
+		mux.Handle("POST /api/v1/agents:rate", protectedMiddleware(http.HandlerFunc(rateAgent(querySvc, rater))))
+	}
 	mux.Handle("/api/v1/conversations:batch-metadata", protectedMiddleware(http.HandlerFunc(batchConversationMetadata(querySvc))))
 	mux.Handle("/api/v1/conversations", protectedMiddleware(http.HandlerFunc(listConversations(querySvc))))
 	mux.Handle("/api/v1/conversations/", protectedMiddleware(http.HandlerFunc(conversationRoutes(querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled))))
@@ -457,6 +462,122 @@ func listAgentVersions(querySvc *query.Service) http.HandlerFunc {
 			"items":       items,
 			"next_cursor": nextCursor,
 		})
+	}
+}
+
+type rateAgentRequest struct {
+	AgentName string `json:"agent_name"`
+	Version   string `json:"version,omitempty"`
+	Model     string `json:"model,omitempty"`
+}
+
+func rateAgent(querySvc *query.Service, rater *agentrating.Rater) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if rater == nil {
+			http.Error(w, "agent rating is not configured", http.StatusServiceUnavailable)
+			return
+		}
+
+		tenantID, err := tenant.TenantID(req.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		var payload rateAgentRequest
+		if req.Body == nil {
+			http.Error(w, "request body is required", http.StatusBadRequest)
+			return
+		}
+		decoder := json.NewDecoder(req.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&payload); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+		if err := ensureBodyEOF(decoder); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		agentDetail, found, err := querySvc.GetAgentDetailForTenant(req.Context(), tenantID, payload.AgentName, payload.Version)
+		if err != nil {
+			if query.IsValidationError(err) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if !found {
+			http.NotFound(w, req)
+			return
+		}
+
+		ratingInput := mapAgentDetailToRatingAgent(agentDetail)
+		rating, err := rater.RateWithModel(req.Context(), ratingInput, payload.Model)
+		if err != nil {
+			if agentrating.IsValidationError(err) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "failed to evaluate agent", http.StatusBadGateway)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, rating)
+	}
+}
+
+func ensureBodyEOF(decoder *json.Decoder) error {
+	var extra json.RawMessage
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return errors.New("unexpected trailing JSON data")
+		}
+		return err
+	}
+	return nil
+}
+
+func mapAgentDetailToRatingAgent(item query.AgentDetail) agentrating.Agent {
+	models := make([]string, 0, len(item.Models))
+	for _, model := range item.Models {
+		provider := strings.TrimSpace(model.Provider)
+		name := strings.TrimSpace(model.Name)
+		switch {
+		case provider != "" && name != "":
+			models = append(models, provider+"/"+name)
+		case name != "":
+			models = append(models, name)
+		}
+	}
+
+	tools := make([]agentrating.Tool, 0, len(item.Tools))
+	for _, tool := range item.Tools {
+		tools = append(tools, agentrating.Tool{
+			Name:            tool.Name,
+			Description:     tool.Description,
+			Type:            tool.Type,
+			InputSchemaJSON: tool.InputSchemaJSON,
+			TokenEstimate:   tool.TokenEstimate,
+		})
+	}
+
+	return agentrating.Agent{
+		Name:         item.AgentName,
+		SystemPrompt: item.SystemPrompt,
+		Tools:        tools,
+		Models:       models,
+		TokenEstimate: agentrating.TokenEstimate{
+			SystemPrompt: item.TokenEstimate.SystemPrompt,
+			ToolsTotal:   item.TokenEstimate.ToolsTotal,
+			Total:        item.TokenEstimate.Total,
+		},
 	}
 }
 
