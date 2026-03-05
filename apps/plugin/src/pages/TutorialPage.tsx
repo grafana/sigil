@@ -229,7 +229,7 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
     body: (
       <ul>
         <li>Integrations focused on helping coding agents instrument and investigate quickly.</li>
-        <li>A super-charged, carefully prompted, and tested "Instrument in Cursor" flow.</li>
+        <li>A super-charged, carefully prompted, and tested &quot;Instrument in Cursor&quot; flow.</li>
         <li>Assistant integrations and Assistant CLI support for automated investigations.</li>
         <li>Claude Code can access Sigil data via the assistant tooling path as well.</li>
       </ul>
@@ -259,10 +259,10 @@ function TypewriterSubtitle({ text, className }: { text: string; className: stri
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setDisplayed(text);
+      queueMicrotask(() => setDisplayed(text));
       return;
     }
-    setDisplayed('');
+    queueMicrotask(() => setDisplayed(''));
     let i = 0;
     const id = setInterval(() => {
       if (i >= text.length) {

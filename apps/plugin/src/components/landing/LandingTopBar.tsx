@@ -588,10 +588,12 @@ export function LandingTopBar({
 
   useEffect(() => {
     if (!requestsDataSource || to <= from) {
-      setDisableSpineAnimation(false);
-      setRequestSpineHeights(null);
-      setRequestSpineValues(null);
-      setRequestSpineWaveReason(null);
+      queueMicrotask(() => {
+        setDisableSpineAnimation(false);
+        setRequestSpineHeights(null);
+        setRequestSpineValues(null);
+        setRequestSpineWaveReason(null);
+      });
       return;
     }
     let cancelled = false;
@@ -602,15 +604,17 @@ export function LandingTopBar({
     const cached = readRequestSpineFromStorage(cacheKey);
     const hasCached = cached != null && cached.heights.length > 0 && cached.values.length > 0;
 
-    if (hasCached) {
-      setDisableSpineAnimation(true);
-      setRequestSpineHeights(cached.heights);
-      setRequestSpineValues(cached.values);
-      setRequestSpineWaveReason(null);
-    } else {
-      setDisableSpineAnimation(false);
-      setRequestSpineWaveReason('loading');
-    }
+    queueMicrotask(() => {
+      if (hasCached) {
+        setDisableSpineAnimation(true);
+        setRequestSpineHeights(cached.heights);
+        setRequestSpineValues(cached.values);
+        setRequestSpineWaveReason(null);
+      } else {
+        setDisableSpineAnimation(false);
+        setRequestSpineWaveReason('loading');
+      }
+    });
 
     const loadRequestBars = async () => {
       try {
