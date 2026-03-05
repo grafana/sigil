@@ -105,6 +105,20 @@ export type ConversationSearchResponse = {
   has_more: boolean;
 };
 
+export type ConversationStatsRequest = {
+  filters: string;
+  time_range: ConversationSearchTimeRange;
+};
+
+export type ConversationStatsResponse = {
+  totalConversations: number;
+  totalTokens: number;
+  avgCallsPerConversation: number;
+  activeLast7d: number;
+  ratedConversations: number;
+  badRatedPct: number;
+};
+
 export type GenerationLookupHints = {
   conversation_id?: string;
   from?: string;

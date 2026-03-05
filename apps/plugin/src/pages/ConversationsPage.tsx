@@ -166,6 +166,9 @@ export default function ConversationsPage(props: ConversationsPageProps) {
       page_size: 20,
       cursor,
     };
+    const previousResults = append ? searchResults : [];
+    const previousCursor = append ? nextCursor : '';
+    const previousHasMore = append ? hasMore : false;
 
     if (append) {
       setLoadingMore(true);
@@ -224,8 +227,14 @@ export default function ConversationsPage(props: ConversationsPageProps) {
         return;
       }
       setErrorMessage(error instanceof Error ? error.message : 'failed to search conversations');
-      setNextCursor('');
-      setHasMore(false);
+      if (append) {
+        setSearchResults(previousResults);
+        setNextCursor(previousCursor);
+        setHasMore(previousHasMore);
+      } else {
+        setNextCursor('');
+        setHasMore(false);
+      }
     } finally {
       if (searchRequestVersion.current !== requestVersion) {
         return;

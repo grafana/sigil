@@ -6,6 +6,8 @@ import type {
   GenerationLookupHints,
   ConversationSearchRequest,
   ConversationSearchResponse,
+  ConversationStatsRequest,
+  ConversationStatsResponse,
   GenerationDetail,
   SearchTag,
   SearchTagValuesResponse,
@@ -38,6 +40,17 @@ async function searchConversationsRequest(request: ConversationSearchRequest): P
     getBackendSrv().fetch<ConversationSearchResponse>({
       method: 'POST',
       url: `${queryBasePath}/conversations/search`,
+      data: request,
+    })
+  );
+  return response.data;
+}
+
+async function getConversationStatsRequest(request: ConversationStatsRequest): Promise<ConversationStatsResponse> {
+  const response = await lastValueFrom(
+    getBackendSrv().fetch<ConversationStatsResponse>({
+      method: 'POST',
+      url: `${queryBasePath}/conversations/stats`,
       data: request,
     })
   );
@@ -162,6 +175,7 @@ export type ConversationsDataSource = {
     request: ConversationSearchRequest,
     options: ConversationSearchStreamOptions
   ) => Promise<void>;
+  getConversationStats?: (request: ConversationStatsRequest) => Promise<ConversationStatsResponse>;
   getConversationDetail: (conversationID: string) => Promise<ConversationDetail>;
   getGeneration: (generationID: string, hints?: GenerationLookupHints) => Promise<GenerationDetail>;
   getSearchTags: (from: string, to: string) => Promise<SearchTag[]>;
@@ -185,6 +199,10 @@ export const defaultConversationsDataSource: ConversationsDataSource = {
 
   async streamSearchConversations(request, options) {
     await streamSearchConversationsRequest(request, options);
+  },
+
+  async getConversationStats(request) {
+    return getConversationStatsRequest(request);
   },
 
   async getConversationDetail(conversationID) {

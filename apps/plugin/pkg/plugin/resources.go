@@ -92,6 +92,8 @@ func requiredPermissionAction(method string, path string) (string, bool) {
 		return permissionDataRead, true
 	case method == http.MethodPost && path == "/query/conversations/search/stream":
 		return permissionDataRead, true
+	case method == http.MethodPost && path == "/query/conversations/stats":
+		return permissionDataRead, true
 	case strings.HasPrefix(path, "/query/conversations/"):
 		return permissionForConversationRoute(method, path)
 	case method == http.MethodGet && strings.HasPrefix(path, "/query/generations/"):
@@ -173,6 +175,10 @@ func (a *App) handleListConversations(w http.ResponseWriter, req *http.Request) 
 
 func (a *App) handleConversationRoutes(w http.ResponseWriter, req *http.Request) {
 	id := strings.TrimPrefix(req.URL.Path, "/query/conversations/")
+	if id == "stats" {
+		a.handleConversationStats(w, req)
+		return
+	}
 	if id == "" || strings.Contains(id, "/") {
 		parts := strings.Split(id, "/")
 		if len(parts) != 2 || parts[0] == "" || (parts[1] != "ratings" && parts[1] != "annotations") {
@@ -779,6 +785,7 @@ func (a *App) handleEvalSavedConversationsManual(w http.ResponseWriter, req *htt
 func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/query/conversations/search", a.withAuthorization(a.handleSearchConversations))
 	mux.HandleFunc("/query/conversations/search/stream", a.withAuthorization(a.handleSearchConversationsStream))
+	mux.HandleFunc("/query/conversations/stats", a.withAuthorization(a.handleConversationStats))
 	mux.HandleFunc("/query/conversations", a.withAuthorization(a.handleListConversations))
 	mux.HandleFunc("/query/conversations/", a.withAuthorization(a.handleConversationRoutes))
 	mux.HandleFunc("/query/generations/", a.withAuthorization(a.handleGenerationRoutes))
@@ -865,6 +872,15 @@ type conversationSearchResponse struct {
 	HasMore       bool                       `json:"has_more"`
 }
 
+type conversationStatsResponse struct {
+	TotalConversations      int     `json:"totalConversations"`
+	TotalTokens             float64 `json:"totalTokens"`
+	AvgCallsPerConversation float64 `json:"avgCallsPerConversation"`
+	ActiveLast7d            int     `json:"activeLast7d"`
+	RatedConversations      int     `json:"ratedConversations"`
+	BadRatedPct             float64 `json:"badRatedPct"`
+}
+
 type conversationSearchStreamResultsEvent struct {
 	Type          string                     `json:"type"`
 	Conversations []conversationSearchResult `json:"conversations"`
@@ -887,8 +903,10 @@ type conversationSearchState struct {
 	HasMore    bool
 }
 
-const conversationSearchMetadataChunkSize = 10
+const conversationSearchMetadataChunkSize = 100
 const conversationSearchStreamOverfetchMultiplier = searchcore.DefaultTempoOverfetchMultiplier * 2
+const conversationSearchInputTokensSelectKey = "span.gen_ai.usage.input_tokens"
+const conversationSearchOutputTokensSelectKey = "span.gen_ai.usage.output_tokens"
 
 type conversationBatchMetadataRequest struct {
 	ConversationIDs []string `json:"conversation_ids"`
@@ -982,14 +1000,6 @@ func (a *App) handleSearchConversationsStream(w http.ResponseWriter, req *http.R
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	startTime := time.Now()
-	backend.Logger.Info("conversation search stream started",
-		"pageSize", payload.PageSize,
-		"cursor", strings.TrimSpace(payload.Cursor) != "",
-		"from", payload.TimeRange.From.UTC().Format(time.RFC3339),
-		"to", payload.TimeRange.To.UTC().Format(time.RFC3339),
-	)
-
 	started := false
 	state, err := a.runConversationSearch(req, payload, func(batch []conversationSearchResult) error {
 		if len(batch) == 0 {
@@ -1005,15 +1015,10 @@ func (a *App) handleSearchConversationsStream(w http.ResponseWriter, req *http.R
 		}); err != nil {
 			return err
 		}
-			flusher.Flush()
-			return nil
-		})
+		flusher.Flush()
+		return nil
+	})
 	if err != nil {
-		backend.Logger.Warn("conversation search stream failed",
-			"duration", time.Since(startTime),
-			"started", started,
-			"error", err,
-		)
 		if !started {
 			a.writeSearchError(w, "/query/conversations/search/stream", err)
 			return
@@ -1025,11 +1030,6 @@ func (a *App) handleSearchConversationsStream(w http.ResponseWriter, req *http.R
 		flusher.Flush()
 		return
 	}
-	backend.Logger.Info("conversation search stream completed",
-		"duration", time.Since(startTime),
-		"results", len(state.Results),
-		"hasMore", state.HasMore,
-	)
 
 	if !started {
 		prepareConversationSearchStreamResponse(w)
@@ -1041,6 +1041,29 @@ func (a *App) handleSearchConversationsStream(w http.ResponseWriter, req *http.R
 		HasMore:    state.HasMore,
 	})
 	flusher.Flush()
+}
+
+func (a *App) handleConversationStats(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !a.hasGrafanaDatasourceProxyTarget(a.tempoDatasourceUID) {
+		http.Error(w, "grafana tempo datasource proxy is not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	payload, err := decodeConversationSearchRequest(req)
+	if err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	stats, err := a.searchConversationStats(req, payload)
+	if err != nil {
+		a.writeSearchError(w, "/query/conversations/stats", err)
+		return
+	}
+	writeJSONResponse(w, http.StatusOK, stats)
 }
 
 func (a *App) handleSearchTags(w http.ResponseWriter, req *http.Request) {
@@ -1154,6 +1177,106 @@ func (a *App) searchConversations(req *http.Request, payload conversationSearchR
 	}, nil
 }
 
+func (a *App) searchConversationStats(req *http.Request, payload conversationSearchRequest) (conversationStatsResponse, error) {
+	_, to, err := normalizeConversationSearchTimeRange(payload.TimeRange)
+	if err != nil {
+		return conversationStatsResponse{}, err
+	}
+
+	stats := conversationStatsResponse{}
+	totalCalls := 0
+	badRatedConversations := 0
+	request := payload
+	request.Select = []string{conversationSearchInputTokensSelectKey, conversationSearchOutputTokensSelectKey}
+	request.PageSize = searchcore.MaxConversationSearchPageSize
+	request.Cursor = ""
+	pageIndex := 0
+
+	for {
+		response, err := a.searchConversations(req, request)
+		if err != nil {
+			return conversationStatsResponse{}, err
+		}
+		pageCalls, pageBadRated := accumulateConversationStats(&stats, response.Conversations, to)
+		totalCalls += pageCalls
+		badRatedConversations += pageBadRated
+		if !response.HasMore || strings.TrimSpace(response.NextCursor) == "" {
+			break
+		}
+		request.Cursor = response.NextCursor
+		pageIndex++
+	}
+
+	if stats.TotalConversations > 0 {
+		stats.AvgCallsPerConversation = float64(totalCalls) / float64(stats.TotalConversations)
+	}
+	if stats.RatedConversations > 0 {
+		stats.BadRatedPct = (float64(badRatedConversations) / float64(stats.RatedConversations)) * 100
+	}
+	return stats, nil
+}
+
+func accumulateConversationStats(
+	stats *conversationStatsResponse,
+	conversations []conversationSearchResult,
+	windowEnd time.Time,
+) (int, int) {
+	if stats == nil || len(conversations) == 0 {
+		return 0, 0
+	}
+
+	week := 7 * 24 * time.Hour
+	totalCalls := 0
+	badRatedConversations := 0
+	for _, conversation := range conversations {
+		stats.TotalConversations++
+		totalCalls += conversation.GenerationCount
+		stats.TotalTokens += conversationSelectedNumber(conversation.Selected, conversationSearchInputTokensSelectKey)
+		stats.TotalTokens += conversationSelectedNumber(conversation.Selected, conversationSearchOutputTokensSelectKey)
+
+		lastActivity := conversation.LastGenerationAt.UTC()
+		if !lastActivity.IsZero() {
+			age := windowEnd.Sub(lastActivity)
+			if age >= 0 && age <= week {
+				stats.ActiveLast7d++
+			}
+		}
+		if conversation.RatingSummary != nil && conversation.RatingSummary.TotalCount > 0 {
+			stats.RatedConversations++
+			if conversation.RatingSummary.HasBadRating {
+				badRatedConversations++
+			}
+		}
+	}
+	return totalCalls, badRatedConversations
+}
+
+func conversationSelectedNumber(selected map[string]any, key string) float64 {
+	if len(selected) == 0 {
+		return 0
+	}
+	value, ok := selected[key]
+	if !ok {
+		return 0
+	}
+	switch typed := value.(type) {
+	case float64:
+		return typed
+	case float32:
+		return float64(typed)
+	case int:
+		return float64(typed)
+	case int64:
+		return float64(typed)
+	case json.Number:
+		parsed, err := typed.Float64()
+		if err == nil {
+			return parsed
+		}
+	}
+	return 0
+}
+
 func (a *App) runConversationSearch(
 	req *http.Request,
 	payload conversationSearchRequest,
@@ -1179,14 +1302,14 @@ func (a *App) runConversationSearch(
 
 	pageSize := searchcore.NormalizeConversationSearchPageSize(payload.PageSize)
 	overfetchLimit := pageSize * searchcore.DefaultTempoOverfetchMultiplier
-	if overfetchLimit < pageSize {
-		overfetchLimit = pageSize
-	}
 	if emit != nil {
 		streamOverfetchLimit := pageSize * conversationSearchStreamOverfetchMultiplier
 		if streamOverfetchLimit > overfetchLimit {
 			overfetchLimit = streamOverfetchLimit
 		}
+	}
+	if overfetchLimit < pageSize {
+		overfetchLimit = pageSize
 	}
 
 	filterHash := searchcore.BuildConversationSearchFilterHash(parsedFilters, selectFields, from, to)
@@ -1222,123 +1345,98 @@ func (a *App) runConversationSearch(
 	terminatedByIterationLimit := searchcore.DefaultTempoSearchMaxIterations > 0
 
 	for iteration := 0; iteration < searchcore.DefaultTempoSearchMaxIterations; iteration++ {
-			windowEnd := time.Unix(0, searchEndNanos).UTC()
-			if !from.Before(windowEnd) {
+		windowEnd := time.Unix(0, searchEndNanos).UTC()
+		if !from.Before(windowEnd) {
 			terminatedByIterationLimit = false
 			break
 		}
 
-			tempoSearchStarted := time.Now()
-			tempoResponse, err := a.searchTempo(req, traceQL, overfetchLimit, from, windowEnd)
+		tempoResponse, err := a.searchTempo(req, traceQL, overfetchLimit, from, windowEnd)
+		if err != nil {
+			return conversationSearchState{}, err
+		}
+		if len(tempoResponse.Traces) == 0 {
+			terminatedByIterationLimit = false
+			break
+		}
+
+		grouped := searchcore.GroupTempoSearchResponse(tempoResponse, selectFields)
+		orderedConversationIDs := searchcore.OrderTempoConversationIDs(grouped.Conversations)
+
+		foundAdditionalConversation := false
+		for start := 0; start < len(orderedConversationIDs); start += conversationSearchMetadataChunkSize {
+			end := start + conversationSearchMetadataChunkSize
+			if end > len(orderedConversationIDs) {
+				end = len(orderedConversationIDs)
+			}
+			chunkIDs := orderedConversationIDs[start:end]
+			metadataByConversation, err := a.fetchConversationBatchMetadata(req, chunkIDs)
 			if err != nil {
 				return conversationSearchState{}, err
 			}
-			if emit != nil {
-				backend.Logger.Info("conversation search stream tempo window",
-					"iteration", iteration,
-					"windowFrom", from.Format(time.RFC3339),
-					"windowTo", windowEnd.Format(time.RFC3339),
-					"traceCount", len(tempoResponse.Traces),
-					"duration", time.Since(tempoSearchStarted),
-				)
-			}
-			if len(tempoResponse.Traces) == 0 {
-				terminatedByIterationLimit = false
-				break
-		}
 
-			grouped := searchcore.GroupTempoSearchResponse(tempoResponse, selectFields)
-			orderedConversationIDs := searchcore.OrderTempoConversationIDs(grouped.Conversations)
-
-			foundAdditionalConversation := false
-			for start := 0; start < len(orderedConversationIDs); start += conversationSearchMetadataChunkSize {
-				end := start + conversationSearchMetadataChunkSize
-				if end > len(orderedConversationIDs) {
-					end = len(orderedConversationIDs)
+			batch := make([]conversationSearchResult, 0, min(pageSize-len(results), len(chunkIDs)))
+			for _, conversationID := range chunkIDs {
+				if _, seen := alreadyReturned[conversationID]; seen {
+					continue
 				}
-				chunkIDs := orderedConversationIDs[start:end]
-				metadataStarted := time.Now()
-				metadataByConversation, err := a.fetchConversationBatchMetadata(req, chunkIDs)
-				if err != nil {
-					return conversationSearchState{}, err
-				}
-				if emit != nil {
-					backend.Logger.Info("conversation search stream metadata chunk",
-						"iteration", iteration,
-						"chunkIndex", start/conversationSearchMetadataChunkSize,
-						"conversationCount", len(chunkIDs),
-						"duration", time.Since(metadataStarted),
-					)
+				if _, seen := currentPageIDs[conversationID]; seen {
+					continue
 				}
 
-				batch := make([]conversationSearchResult, 0, min(pageSize-len(results), len(chunkIDs)))
-				for _, conversationID := range chunkIDs {
-					if _, seen := alreadyReturned[conversationID]; seen {
-						continue
-					}
-					if _, seen := currentPageIDs[conversationID]; seen {
-						continue
-					}
-
-					conversationMetadata, ok := metadataByConversation[conversationID]
-					if !ok {
-						continue
-					}
-					if !searchcore.MatchesGenerationCountFilters(conversationMetadata.GenerationCount, parsedFilters.MySQLTerms) {
-						continue
-					}
-
-					if len(results) >= pageSize {
-						foundAdditionalConversation = true
-						break
-					}
-
-					aggregate := grouped.Conversations[conversationID]
-					result := conversationSearchResult{
-						ConversationID:    conversationID,
-						UserID:            aggregate.UserID,
-						GenerationCount:   conversationMetadata.GenerationCount,
-						FirstGenerationAt: conversationMetadata.FirstGenerationAt.UTC(),
-						LastGenerationAt:  conversationMetadata.LastGenerationAt.UTC(),
-						Models:            searchcore.SortedKeysFromSet(aggregate.Models),
-						Agents:            searchcore.SortedKeysFromSet(aggregate.Agents),
-						ErrorCount:        aggregate.ErrorCount,
-						HasErrors:         aggregate.ErrorCount > 0,
-						TraceIDs:          searchcore.SortedKeysFromSet(aggregate.TraceIDs),
-						AnnotationCount:   conversationMetadata.AnnotationCount,
-						Selected:          searchcore.BuildSelectedResultMap(aggregate.Selected),
-					}
-					if conversationMetadata.RatingSummary != nil {
-						copied := *conversationMetadata.RatingSummary
-						result.RatingSummary = &copied
-					}
-					if conversationMetadata.EvalSummary != nil {
-						copied := *conversationMetadata.EvalSummary
-						result.EvalSummary = &copied
-					}
-					results = append(results, result)
-					batch = append(batch, result)
-					currentPageIDs[conversationID] = struct{}{}
+				conversationMetadata, ok := metadataByConversation[conversationID]
+				if !ok {
+					continue
+				}
+				if !searchcore.MatchesGenerationCountFilters(conversationMetadata.GenerationCount, parsedFilters.MySQLTerms) {
+					continue
 				}
 
-				if len(batch) > 0 && emit != nil {
-					backend.Logger.Info("conversation search stream emit batch",
-						"iteration", iteration,
-						"chunkIndex", start/conversationSearchMetadataChunkSize,
-						"batchSize", len(batch),
-						"accumulatedResults", len(results),
-					)
-					if err := emit(batch); err != nil {
-						return conversationSearchState{}, err
-					}
-				}
-				if foundAdditionalConversation {
+				if len(results) >= pageSize {
+					foundAdditionalConversation = true
 					break
 				}
+
+				aggregate := grouped.Conversations[conversationID]
+				result := conversationSearchResult{
+					ConversationID:    conversationID,
+					UserID:            aggregate.UserID,
+					GenerationCount:   conversationMetadata.GenerationCount,
+					FirstGenerationAt: conversationMetadata.FirstGenerationAt.UTC(),
+					LastGenerationAt:  conversationMetadata.LastGenerationAt.UTC(),
+					Models:            searchcore.SortedKeysFromSet(aggregate.Models),
+					Agents:            searchcore.SortedKeysFromSet(aggregate.Agents),
+					ErrorCount:        aggregate.ErrorCount,
+					HasErrors:         aggregate.ErrorCount > 0,
+					TraceIDs:          searchcore.SortedKeysFromSet(aggregate.TraceIDs),
+					AnnotationCount:   conversationMetadata.AnnotationCount,
+					Selected:          searchcore.BuildSelectedResultMap(aggregate.Selected),
+				}
+				if conversationMetadata.RatingSummary != nil {
+					copied := *conversationMetadata.RatingSummary
+					result.RatingSummary = &copied
+				}
+				if conversationMetadata.EvalSummary != nil {
+					copied := *conversationMetadata.EvalSummary
+					result.EvalSummary = &copied
+				}
+				results = append(results, result)
+				batch = append(batch, result)
+				currentPageIDs[conversationID] = struct{}{}
 			}
 
+			if len(batch) > 0 && emit != nil {
+				if err := emit(batch); err != nil {
+					return conversationSearchState{}, err
+				}
+			}
 			if foundAdditionalConversation {
-				hasMore = true
+				break
+			}
+		}
+
+		if foundAdditionalConversation {
+			hasMore = true
 			terminatedByIterationLimit = false
 			break
 		}

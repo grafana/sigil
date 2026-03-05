@@ -249,6 +249,48 @@ describe('ConversationsPage', () => {
     expect(await screen.findByLabelText('load more conversations')).toBeInTheDocument();
   });
 
+  it('rolls back partial append results and preserves pagination when streaming load-more fails', async () => {
+    const dataSource = createDataSource({
+      searchConversations: jest.fn(async (_request: ConversationSearchRequest) =>
+        buildSearchResponse([makeConversation('conv-1')], 'cursor-1', true)
+      ),
+      streamSearchConversations: jest
+        .fn()
+        .mockImplementationOnce(async (_request, options) => {
+          options.onResults([makeConversation('conv-1')]);
+          options.onComplete({ next_cursor: 'cursor-1', has_more: true });
+        })
+        .mockImplementationOnce(async (_request, options) => {
+          options.onResults([makeConversation('conv-2')]);
+          throw new Error('stream failed');
+        })
+        .mockImplementationOnce(async (_request, options) => {
+          options.onResults([makeConversation('conv-3')]);
+          options.onComplete({ next_cursor: '', has_more: false });
+        }),
+    });
+
+    render(
+      <MemoryRouter>
+        <ConversationsPage dataSource={dataSource} />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByLabelText('apply filters'));
+    expect(await screen.findByLabelText('select conversation conv-1')).toBeInTheDocument();
+    expect(await screen.findByLabelText('load more conversations')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('load more conversations'));
+
+    expect(await screen.findByText(/stream failed/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText('select conversation conv-2')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('load more conversations')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('load more conversations'));
+    expect(await screen.findByLabelText('select conversation conv-3')).toBeInTheDocument();
+    expect(screen.queryByLabelText('load more conversations')).not.toBeInTheDocument();
+  });
+
   it('keeps latest tag suggestions when older tag request resolves last', async () => {
     const slowTags = createDeferred<SearchTag[]>();
     const fastTags = createDeferred<SearchTag[]>();

@@ -1,7 +1,7 @@
 import { ReadableStream } from 'node:stream/web';
 import { of } from 'rxjs';
 import { defaultConversationsDataSource } from './api';
-import type { ConversationSearchRequest, ConversationSearchResponse } from './types';
+import type { ConversationSearchRequest, ConversationSearchResponse, ConversationStatsRequest } from './types';
 
 const backendFetchMock = jest.fn();
 const browserFetchMock = jest.fn();
@@ -38,6 +38,10 @@ describe('defaultConversationsDataSource', () => {
     ],
     next_cursor: '',
     has_more: false,
+  };
+  const statsRequest: ConversationStatsRequest = {
+    filters: request.filters,
+    time_range: request.time_range,
   };
 
   beforeEach(() => {
@@ -115,5 +119,28 @@ describe('defaultConversationsDataSource', () => {
     });
     expect(onResults).toHaveBeenCalledWith(response.conversations);
     expect(onComplete).toHaveBeenCalledWith({ next_cursor: '', has_more: false });
+  });
+
+  it('getConversationStats posts the stats route', async () => {
+    backendFetchMock.mockReturnValue(
+      of({
+        data: {
+          totalConversations: 2,
+          totalTokens: 120,
+          avgCallsPerConversation: 1.5,
+          activeLast7d: 2,
+          ratedConversations: 1,
+          badRatedPct: 0,
+        },
+      })
+    );
+
+    await defaultConversationsDataSource.getConversationStats!(statsRequest);
+
+    expect(backendFetchMock).toHaveBeenCalledWith({
+      method: 'POST',
+      url: '/api/plugins/grafana-sigil-app/resources/query/conversations/stats',
+      data: statsRequest,
+    });
   });
 });

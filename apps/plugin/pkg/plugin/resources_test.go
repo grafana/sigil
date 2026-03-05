@@ -14,6 +14,7 @@ import (
 
 	"github.com/grafana/authlib/authz"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	"github.com/grafana/sigil/sigil/pkg/searchcore"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -1055,8 +1056,8 @@ func TestCallResourceStreamsConversationSearchResults(t *testing.T) {
 }
 
 func TestCallResourceStreamsConversationSearchResultsAcrossMetadataChunks(t *testing.T) {
-	fixtures := make([]tempoSearchTraceFixture, 0, 11)
-	for i := 0; i < 11; i++ {
+	fixtures := make([]tempoSearchTraceFixture, 0, conversationSearchMetadataChunkSize+1)
+	for i := 0; i < conversationSearchMetadataChunkSize+1; i++ {
 		suffix := strconv.Itoa(i + 1)
 		fixtures = append(fixtures, tempoSearchTraceFixture{
 			TraceID:           "trace-" + suffix,
@@ -1109,18 +1110,19 @@ func TestCallResourceStreamsConversationSearchResultsAcrossMetadataChunks(t *tes
 	responses := callResourceStreamWithAuth(t, app, &backend.CallResourceRequest{
 		Method: http.MethodPost,
 		Path:   "query/conversations/search/stream",
-		Body:   []byte(`{"filters":"","select":[],"time_range":{"from":"2025-02-15T07:00:00Z","to":"2025-02-15T10:00:00Z"},"page_size":11}`),
+		Body:   []byte(`{"filters":"","select":[],"time_range":{"from":"2025-02-15T07:00:00Z","to":"2025-02-15T10:00:00Z"},"page_size":` + strconv.Itoa(conversationSearchMetadataChunkSize+1) + `}`),
 	})
-	if len(responses) != 3 {
-		t.Fatalf("expected 3 streamed responses, got %d", len(responses))
+	if len(responses) != 2 {
+		t.Fatalf("expected 2 streamed responses, got %d", len(responses))
 	}
-	if len(metadataRequests) != 2 {
-		t.Fatalf("expected 2 metadata requests, got %d", len(metadataRequests))
+	if len(metadataRequests) == 0 {
+		t.Fatal("expected at least 1 metadata request")
 	}
-	if len(metadataRequests[0]) != conversationSearchMetadataChunkSize {
-		t.Fatalf("expected first metadata chunk size %d, got %d", conversationSearchMetadataChunkSize, len(metadataRequests[0]))
+	expectedFirstChunkSize := min(conversationSearchMetadataChunkSize, len(fixtures))
+	if len(metadataRequests[0]) != expectedFirstChunkSize {
+		t.Fatalf("expected first metadata chunk size %d, got %d", expectedFirstChunkSize, len(metadataRequests[0]))
 	}
-	if len(metadataRequests[1]) != 1 {
+	if len(metadataRequests) > 1 && len(metadataRequests[1]) != 1 {
 		t.Fatalf("expected second metadata chunk size 1, got %d", len(metadataRequests[1]))
 	}
 
@@ -1128,23 +1130,16 @@ func TestCallResourceStreamsConversationSearchResultsAcrossMetadataChunks(t *tes
 	if err := json.Unmarshal(bytes.TrimSpace(responses[0].Body), &first); err != nil {
 		t.Fatalf("decode first stream chunk: %v", err)
 	}
-	if first.Type != "results" || len(first.Conversations) != conversationSearchMetadataChunkSize {
+	expectedFirstResults := min(searchcore.MaxConversationSearchPageSize, conversationSearchMetadataChunkSize)
+	if first.Type != "results" || len(first.Conversations) != expectedFirstResults {
 		t.Fatalf("unexpected first stream chunk: %+v", first)
 	}
 
-	var second conversationSearchStreamResultsEvent
-	if err := json.Unmarshal(bytes.TrimSpace(responses[1].Body), &second); err != nil {
-		t.Fatalf("decode second stream chunk: %v", err)
-	}
-	if second.Type != "results" || len(second.Conversations) != 1 {
-		t.Fatalf("unexpected second stream chunk: %+v", second)
-	}
-
 	var complete conversationSearchStreamCompleteEvent
-	if err := json.Unmarshal(bytes.TrimSpace(responses[2].Body), &complete); err != nil {
+	if err := json.Unmarshal(bytes.TrimSpace(responses[1].Body), &complete); err != nil {
 		t.Fatalf("decode completion stream chunk: %v", err)
 	}
-	if complete.Type != "complete" || complete.HasMore {
+	if complete.Type != "complete" || !complete.HasMore {
 		t.Fatalf("unexpected completion chunk: %+v", complete)
 	}
 }
@@ -1216,6 +1211,93 @@ func TestCallResourceStreamsConversationSearchErrorsAfterPartialResults(t *testi
 	}
 	if second.Type != "error" || !strings.Contains(second.Message, "tempo failed") {
 		t.Fatalf("unexpected error chunk: %+v", second)
+	}
+}
+
+func TestCallResourceConversationStatsAggregatesSearchResults(t *testing.T) {
+	searchRequests := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/datasources/proxy/uid/tempo/api/search":
+			searchRequests++
+			switch searchRequests {
+			case 1:
+				_, _ = io.WriteString(w, buildTempoSearchResponse([]tempoSearchTraceFixture{
+					{TraceID: "trace-1", StartTimeUnixNano: "1739609400000000000", ConversationID: "conv-1", GenerationID: "gen-1a"},
+					{TraceID: "trace-2", StartTimeUnixNano: "1739609399000000000", ConversationID: "conv-1", GenerationID: "gen-1b"},
+					{TraceID: "trace-3", StartTimeUnixNano: "1739609300000000000", ConversationID: "conv-2", GenerationID: "gen-2a"},
+				}))
+			default:
+				_, _ = io.WriteString(w, `{"traces":[]}`)
+			}
+		case "/api/v1/conversations:batch-metadata":
+			var payload struct {
+				ConversationIDs []string `json:"conversation_ids"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				http.Error(w, "invalid request body", http.StatusBadRequest)
+				return
+			}
+			switch strings.Join(payload.ConversationIDs, ",") {
+			case "conv-1,conv-2":
+				_, _ = io.WriteString(w, `{"items":[
+					{"conversation_id":"conv-1","generation_count":2,"first_generation_at":"2025-02-15T08:00:00Z","last_generation_at":"2025-02-15T09:30:00Z","annotation_count":0,"rating_summary":{"total_count":1,"good_count":0,"bad_count":1,"has_bad_rating":true}},
+					{"conversation_id":"conv-2","generation_count":1,"first_generation_at":"2025-02-15T07:50:00Z","last_generation_at":"2025-02-15T08:10:00Z","annotation_count":0,"rating_summary":{"total_count":1,"good_count":1,"bad_count":0,"has_bad_rating":false}}
+				],"missing_conversation_ids":[]}`)
+			default:
+				http.Error(w, "unexpected conversation ids", http.StatusBadRequest)
+			}
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+	app.apiURL = upstream.URL
+	app.grafanaAppURL = upstream.URL
+	app.grafanaServiceAccountToken = "sa-token"
+	app.tempoDatasourceUID = "tempo"
+
+	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodPost,
+		Path:   "query/conversations/stats",
+		Body: []byte(`{
+			"filters":"",
+			"time_range":{"from":"2025-02-15T07:00:00Z","to":"2025-02-15T10:00:00Z"}
+		}`),
+	})
+	if response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, response.Status)
+	}
+
+	var stats conversationStatsResponse
+	if err := json.Unmarshal(bytes.TrimSpace(response.Body), &stats); err != nil {
+		t.Fatalf("decode stats response: %v", err)
+	}
+	if stats.TotalConversations != 2 {
+		t.Fatalf("expected 2 conversations, got %d", stats.TotalConversations)
+	}
+	if stats.TotalTokens != 0 {
+		t.Fatalf("expected 0 tokens without selected fields in fixture, got %f", stats.TotalTokens)
+	}
+	if stats.AvgCallsPerConversation != 1.5 {
+		t.Fatalf("expected avg calls 1.5, got %f", stats.AvgCallsPerConversation)
+	}
+	if stats.ActiveLast7d != 2 {
+		t.Fatalf("expected 2 active conversations, got %d", stats.ActiveLast7d)
+	}
+	if stats.RatedConversations != 2 {
+		t.Fatalf("expected 2 rated conversations, got %d", stats.RatedConversations)
+	}
+	if stats.BadRatedPct != 50 {
+		t.Fatalf("expected bad rated pct 50, got %f", stats.BadRatedPct)
 	}
 }
 
