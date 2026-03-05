@@ -116,7 +116,7 @@ export function TryItNowPanel() {
 function getStyles(theme: GrafanaTheme2) {
   return {
     panel: css({
-      margin: theme.spacing(3, 0, 2),
+      margin: theme.spacing(5, 0, 2),
       width: 'fit-content',
       padding: theme.spacing(2),
       borderRadius: `calc(${theme.shape.radius.default} * 1.25)`,

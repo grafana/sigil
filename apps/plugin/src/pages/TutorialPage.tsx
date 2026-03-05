@@ -2,10 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { css, cx, keyframes } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { useStyles2 } from '@grafana/ui';
+import { useAssistant } from '@grafana/assistant';
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 import { getGradientColorAtIndex } from '../components/conversations/traceGradient';
 import { TryItNowPanel } from '../components/tutorial/TryItNowPanel';
-import { ROUTES } from '../constants';
+import { PLUGIN_BASE, ROUTES } from '../constants';
 
 type TutorialSlide = {
   slug: string;
@@ -223,13 +224,7 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
     title: 'Next steps',
     subtitle: 'Keep momentum with docs, local instrumentation, and assistant support.',
     renderGraphic: (props) => <NextStepsGraphic {...props} />,
-    body: (
-      <ul>
-        <li>Learn more by reading the docs.</li>
-        <li>Use Cursor to start instrumenting locally.</li>
-        <li>Ask Assistant about Sigil.</li>
-      </ul>
-    ),
+    body: <NextStepsBody />,
   },
 ];
 
@@ -401,6 +396,71 @@ function AutoinstrumentationBody() {
         <li>See instrumentation results immediately in Sigil UX.</li>
       </ul>
       <TryItNowPanel />
+    </>
+  );
+}
+
+const ASSISTANT_ORIGIN_TUTORIAL = 'grafana/sigil-plugin/tutorial';
+
+function buildAssistantUrl(message: string): string {
+  const url = new URL('/a/grafana-assistant-app', window.location.origin);
+  url.searchParams.set('command', 'useAssistant');
+  if (message.trim().length > 0) {
+    url.searchParams.set('text', message.trim());
+  }
+  return url.toString();
+}
+
+function NextStepsBody() {
+  const styles = useStyles2(getStyles);
+  const location = useLocation();
+  const assistant = useAssistant();
+  const tutorialBasePath = getTutorialBasePath(location.pathname);
+  const appBasePath = getClosePath(tutorialBasePath);
+  const base = appBasePath === '/' ? PLUGIN_BASE : appBasePath;
+
+  const links = [
+    { label: 'Drill into Conversations', route: ROUTES.Conversations },
+    { label: 'Monitor agents', route: ROUTES.Agents },
+    { label: 'Evaluate performance', route: ROUTES.Evaluation },
+  ] as const;
+
+  const openAssistant = () => {
+    const prompt = 'What is Sigil and how can I get started?';
+    if (assistant.openAssistant) {
+      assistant.openAssistant({
+        origin: ASSISTANT_ORIGIN_TUTORIAL,
+        prompt,
+        autoSend: true,
+      });
+    } else {
+      window.location.href = buildAssistantUrl(prompt);
+    }
+  };
+
+  return (
+    <>
+      <ul>
+        <li>Learn more by reading the docs.</li>
+        <li>Use Cursor to start instrumenting locally.</li>
+        <li>
+          <button type="button" className={styles.askAssistantLink} onClick={openAssistant}>
+            Ask Assistant about Sigil →
+          </button>
+        </li>
+      </ul>
+      <section className={styles.whereToGoNext}>
+        <h4 className={styles.whereToGoNextHeading}>Where to explore next</h4>
+        <ul className={styles.whereToGoNextList}>
+          {links.map(({ label, route }) => (
+            <li key={route}>
+              <Link to={`${base}/${route}`} className={styles.nextLink}>
+                {label} →
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
     </>
   );
 }
@@ -761,14 +821,14 @@ function getStyles(theme: GrafanaTheme2) {
     }),
     graphicBackgroundLayer: css({
       transformOrigin: 'center',
-      animation: `${backgroundDriftIn} 420ms cubic-bezier(0.22, 1, 0.36, 1) both`,
+      animation: `${backgroundDriftIn} 900ms cubic-bezier(0.22, 1, 0.36, 1) both`,
       '@media (prefers-reduced-motion: reduce)': {
         animation: 'none',
       },
     }),
     graphicForegroundLayer: css({
       transformOrigin: 'center',
-      animation: `${foregroundDriftIn} 480ms cubic-bezier(0.22, 1, 0.36, 1) 30ms both`,
+      animation: `${foregroundDriftIn} 1000ms cubic-bezier(0.22, 1, 0.36, 1) 60ms both`,
       '@media (prefers-reduced-motion: reduce)': {
         animation: 'none',
       },
@@ -802,7 +862,7 @@ function getStyles(theme: GrafanaTheme2) {
       lineHeight: theme.typography.h1.lineHeight,
       letterSpacing: '-0.02em',
       fontWeight: theme.typography.fontWeightBold,
-      borderBottom: '2px solid var(--tutorial-accent)',
+      borderBottom: '4px solid var(--tutorial-accent)',
       paddingBottom: theme.spacing(1),
       width: 'fit-content',
       '@media (max-width: 1024px)': {
@@ -845,8 +905,52 @@ function getStyles(theme: GrafanaTheme2) {
     }),
     contentFooter: css({
       marginTop: theme.spacing(1),
+      marginBottom: theme.spacing(3),
       display: 'flex',
-      justifyContent: 'flex-end',
+      justifyContent: 'flex-start',
+    }),
+    whereToGoNext: css({
+      marginTop: theme.spacing(4),
+      display: 'grid',
+      gap: theme.spacing(1.5),
+    }),
+    whereToGoNextHeading: css({
+      margin: 0,
+      marginBottom: theme.spacing(0.5),
+      fontSize: theme.typography.h5.fontSize,
+      fontWeight: theme.typography.fontWeightBold,
+      color: theme.colors.text.primary,
+    }),
+    whereToGoNextList: css({
+      margin: 0,
+      paddingLeft: theme.spacing(3),
+      display: 'grid',
+      gap: theme.spacing(1),
+      listStyleType: 'disc',
+      listStylePosition: 'outside',
+      '& li::marker': {
+        color: 'var(--tutorial-accent)',
+      },
+    }),
+    askAssistantLink: css({
+      border: 'none',
+      background: 'none',
+      cursor: 'pointer',
+      font: 'inherit',
+      padding: 0,
+      textDecoration: 'none',
+      color: 'var(--tutorial-accent)',
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: theme.typography.fontWeightMedium,
+      lineHeight: 1,
+      transition: `color ${theme.transitions.duration.short}ms ease`,
+      '&:hover': {
+        textDecoration: 'underline',
+      },
+      '&:focus-visible': {
+        outline: `2px solid ${theme.colors.primary.main}`,
+        outlineOffset: theme.spacing(0.5),
+      },
     }),
     nextLink: css({
       textDecoration: 'none',
