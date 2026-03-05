@@ -1,6 +1,6 @@
 import React from 'react';
 import { css } from '@emotion/css';
-import type { AppRootProps, GrafanaTheme2 } from '@grafana/data';
+import type { AppRootProps, GrafanaTheme2, NavModelItem } from '@grafana/data';
 import { PluginPage } from '@grafana/runtime';
 import { useStyles2 } from '@grafana/ui';
 import { Route, Routes } from 'react-router-dom';
@@ -27,9 +27,14 @@ const getStyles = (theme: GrafanaTheme2) => ({
 
 export default function App(_props: AppRootProps) {
   const styles = useStyles2(getStyles);
+  const hiddenPageNav: NavModelItem = {
+    text: '',
+    subTitle: '',
+    hideFromBreadcrumbs: true,
+  };
 
   return (
-    <PluginPage renderTitle={() => <></>} background="canvas">
+    <PluginPage renderTitle={() => null} subTitle={null} pageNav={hiddenPageNav} background="canvas">
       <Routes>
         <Route path={ROUTES.Root} element={<DashboardPage />} />
         <Route path={ROUTES.Analytics} element={<DashboardPage />} />
