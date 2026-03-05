@@ -32,7 +32,7 @@ export default function App(_props: AppRootProps) {
   return (
     <PluginPage renderTitle={() => <></>} background="canvas">
       <Routes>
-        <Route path={ROUTES.Root} element={<LandingPage />} />
+        <Route path={ROUTES.Root} element={<DashboardPage />} />
         <Route path={ROUTES.Analytics} element={<DashboardPage />} />
         <Route path={`${ROUTES.Tutorial}/*`} element={<TutorialPage />} />
         <Route
@@ -65,7 +65,7 @@ export default function App(_props: AppRootProps) {
         <Route path={ROUTES.AgentDetailByName} element={<AgentDetailPage />} />
         <Route path={ROUTES.AgentDetailAnonymous} element={<AgentDetailPage />} />
         <Route path={`${ROUTES.Evaluation}/*`} element={<EvaluationPage />} />
-        <Route path="*" element={<LandingPage />} />
+        <Route path="*" element={<DashboardPage />} />
       </Routes>
     </PluginPage>
   );
