@@ -164,7 +164,6 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
         <li>A new telemetry signal.</li>
         <li>A new database built for scale.</li>
         <li>Opinionated drilldown UX.</li>
-        <li>AX (agent experience): built for agents too.</li>
       </ul>
     ),
   },
@@ -218,20 +217,6 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
     subtitle: 'Get instrumented quickly with agentic coding workflows.',
     renderGraphic: (props) => <AutoinstrumentationGraphic {...props} />,
     body: <AutoinstrumentationBody />,
-  },
-  {
-    slug: 'agent-experience',
-    title: 'AX - agent experience',
-    subtitle: 'Sigil works directly with coding and assistant agents.',
-    renderGraphic: (props) => <AgentExperienceGraphic {...props} />,
-    body: (
-      <ul>
-        <li>Integrations focused on helping coding agents instrument and investigate quickly.</li>
-        <li>A super-charged, carefully prompted, and tested &quot;Instrument in Cursor&quot; flow.</li>
-        <li>Assistant integrations and Assistant CLI support for automated investigations.</li>
-        <li>Claude Code can access Sigil data via the assistant tooling path as well.</li>
-      </ul>
-    ),
   },
   {
     slug: 'next-steps',
@@ -591,36 +576,6 @@ function UiFeaturesGraphic({
         <rect x="58" y="138" width="54" height="54" rx="12" fill={accentColor} opacity={0.78} />
         <rect x="120" y="138" width="122" height="24" rx="12" fill={accentColor} opacity={0.6} />
         <rect x="120" y="170" width="92" height="22" rx="11" fill={accentColor} opacity={0.35} />
-      </g>
-    </svg>
-  );
-}
-
-function AgentExperienceGraphic({
-  accentColor,
-  secondaryColor,
-  backgroundClassName,
-  foregroundClassName,
-}: SlideGraphicProps) {
-  return (
-    <svg viewBox="0 0 300 240" width="100%" height="100%" focusable={false}>
-      <g className={backgroundClassName} style={{ filter: 'drop-shadow(0 6px 10px rgba(0, 0, 0, 0.35))' }}>
-        <rect
-          x="72"
-          y="48"
-          width="156"
-          height="120"
-          rx="28"
-          fill="#9aa0aa"
-          opacity={0.1}
-          transform="rotate(3.6 150 120)"
-        />
-      </g>
-      <g className={foregroundClassName} transform="rotate(-1.5 150 120)">
-        <rect x="98" y="74" width="104" height="74" rx="20" fill={accentColor} opacity={0.65} />
-        <line x1="114" y1="64" x2="92" y2="42" stroke={accentColor} strokeWidth="4" strokeLinecap="round" />
-        <line x1="186" y1="64" x2="208" y2="42" stroke={accentColor} strokeWidth="4" strokeLinecap="round" />
-        <rect x="96" y="172" width="108" height="14" rx="7" fill={accentColor} opacity={0.35} />
       </g>
     </svg>
   );
