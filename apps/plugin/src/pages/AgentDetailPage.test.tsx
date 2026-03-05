@@ -329,13 +329,17 @@ describe('AgentDetailPage', () => {
     );
 
     await waitFor(() => {
-      const versionedCalls = (dataSource.lookupAgentRating as jest.Mock).mock.calls.filter(([, version]) => Boolean(version));
+      const versionedCalls = (dataSource.lookupAgentRating as jest.Mock).mock.calls.filter(([, version]) =>
+        Boolean(version)
+      );
       expect(versionedCalls).toHaveLength(2);
     });
 
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    const versionedCalls = (dataSource.lookupAgentRating as jest.Mock).mock.calls.filter(([, version]) => Boolean(version));
+    const versionedCalls = (dataSource.lookupAgentRating as jest.Mock).mock.calls.filter(([, version]) =>
+      Boolean(version)
+    );
     expect(versionedCalls).toHaveLength(2);
   });
 
