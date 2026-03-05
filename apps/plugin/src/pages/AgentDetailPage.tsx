@@ -1407,7 +1407,11 @@ export default function AgentDetailPage({
                             aria-label="agent version selector"
                           />
                         </div>
-                        <Button variant="secondary" onClick={() => selectVersion('')} disabled={selectedVersion.length === 0}>
+                        <Button
+                          variant="secondary"
+                          onClick={() => selectVersion('')}
+                          disabled={selectedVersion.length === 0}
+                        >
                           Latest
                         </Button>
                       </div>
@@ -1420,15 +1424,21 @@ export default function AgentDetailPage({
                               const isSelected = activeVersion === versionItem.effective_version;
                               const completedRating = rating?.status === 'completed' ? rating : null;
                               const versionNumber =
-                                versionItem.declared_version_latest || versionItem.declared_version_first || `#${index + 1}`;
+                                versionItem.declared_version_latest ||
+                                versionItem.declared_version_first ||
+                                `#${index + 1}`;
                               const tooltipContent = (
                                 <div className={styles.versionTooltip}>
                                   <div className={styles.versionTooltipTitle}>Version {versionNumber}</div>
-                                  <div className={styles.versionTooltipMeta}>Last seen {formatDate(versionItem.last_seen_at)}</div>
+                                  <div className={styles.versionTooltipMeta}>
+                                    Last seen {formatDate(versionItem.last_seen_at)}
+                                  </div>
                                   <div
                                     className={styles.versionTooltipStatus}
                                     style={{
-                                      color: completedRating ? scoreTone(theme, completedRating.score) : theme.colors.text.secondary,
+                                      color: completedRating
+                                        ? scoreTone(theme, completedRating.score)
+                                        : theme.colors.text.secondary,
                                     }}
                                   >
                                     {completedRating ? `Rated ${completedRating.score}/10` : 'Unrated'}
@@ -1440,7 +1450,10 @@ export default function AgentDetailPage({
                                   <Tooltip content={tooltipContent} placement="top">
                                     <button
                                       type="button"
-                                      className={cx(styles.recentVersionBox, isSelected && styles.recentVersionBoxActive)}
+                                      className={cx(
+                                        styles.recentVersionBox,
+                                        isSelected && styles.recentVersionBoxActive
+                                      )}
                                       onClick={() => selectVersion(versionItem.effective_version)}
                                       aria-label={`select version ${versionItem.effective_version}`}
                                     >
@@ -1694,7 +1707,9 @@ export default function AgentDetailPage({
                           className={styles.encodingSelect}
                           aria-label="Tokenizer encoding"
                           value={encodingOverride ?? ''}
-                          onChange={(e) => setEncodingOverride(e.target.value ? (e.target.value as EncodingName) : null)}
+                          onChange={(e) =>
+                            setEncodingOverride(e.target.value ? (e.target.value as EncodingName) : null)
+                          }
                         >
                           <option value="">Auto ({autoEncoding.replace('_base', '')})</option>
                           {AVAILABLE_ENCODINGS.map((enc) => (
