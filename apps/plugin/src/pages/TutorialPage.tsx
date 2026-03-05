@@ -184,7 +184,7 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
   {
     slug: 'ui-features',
     title: 'Actually useful UX',
-    subtitle: 'See what matters. Drill into what doesn\'t look right.',
+    subtitle: "See what matters. Drill into what doesn't look right.",
     renderGraphic: (props) => <UiFeaturesGraphic {...props} />,
     body: (
       <ul>
@@ -203,9 +203,7 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
     renderGraphic: (props) => <TelemetrySignalGraphic {...props} />,
     body: (
       <>
-        <p>
-          Every LLM call becomes a structured event. Quality, latency, cost, and failures in one schema, one place.
-        </p>
+        <p>Every LLM call becomes a structured event. Quality, latency, cost, and failures in one schema, one place.</p>
         <SignalFieldMosaic groups={SIGNAL_FIELD_GROUPS} />
       </>
     ),
@@ -226,14 +224,7 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
   },
 ];
 
-const TUTORIAL_COLORS = [
-  '#5794F2',
-  '#8A7DEE',
-  '#B877D9',
-  '#DA7AAF',
-  '#F28B4E',
-  '#FF9830',
-];
+const TUTORIAL_COLORS = ['#5794F2', '#8A7DEE', '#B877D9', '#DA7AAF', '#F28B4E', '#FF9830'];
 
 function getTutorialColor(_total: number, index: number): string {
   const i = Math.min(Math.max(Math.round(index), 0), TUTORIAL_COLORS.length - 1);

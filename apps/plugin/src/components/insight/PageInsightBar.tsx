@@ -234,9 +234,7 @@ export function PageInsightBar({
           {collapsed && firstBullet && (
             <span className={styles.collapsedPreview}>{formatInlineMarkup(firstBullet)}</span>
           )}
-          {canExpand && (
-            <Icon name={collapsed ? 'angle-down' : 'angle-up'} size="md" className={styles.chevron} />
-          )}
+          {canExpand && <Icon name={collapsed ? 'angle-down' : 'angle-up'} size="md" className={styles.chevron} />}
         </button>
 
         <div className={styles.actions}>
