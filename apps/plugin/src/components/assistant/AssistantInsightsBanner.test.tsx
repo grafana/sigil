@@ -46,14 +46,16 @@ describe('AssistantInsightsBanner', () => {
 
   it('keeps the current insight visible when a background refresh fails', () => {
     let callCount = 0;
-    mockGenerate.mockImplementation(({ onComplete, onError }: { onComplete: (result: string) => void; onError: (err: Error) => void }) => {
-      callCount += 1;
-      if (callCount === 1) {
-        window.setTimeout(() => onComplete('- Existing insight remains visible'), 0);
-        return;
+    mockGenerate.mockImplementation(
+      ({ onComplete, onError }: { onComplete: (result: string) => void; onError: (err: Error) => void }) => {
+        callCount += 1;
+        if (callCount === 1) {
+          window.setTimeout(() => onComplete('- Existing insight remains visible'), 0);
+          return;
+        }
+        window.setTimeout(() => onError(new Error('refresh failed')), 0);
       }
-      window.setTimeout(() => onError(new Error('refresh failed')), 0);
-    });
+    );
 
     render(
       <AssistantInsightsBanner

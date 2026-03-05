@@ -39,7 +39,9 @@ describe('PageInsightBar', () => {
   });
 
   it('auto-generates again when data context changes', () => {
-    const { rerender } = render(<PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="initial data" />);
+    const { rerender } = render(
+      <PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="initial data" />
+    );
     expect(mockGenerate).toHaveBeenCalledTimes(1);
 
     rerender(<PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="updated data" />);
