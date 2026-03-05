@@ -686,9 +686,7 @@ export default function ConversationListPanel({
                           </Tooltip>
                         ) : conversation.conversation_id.length > 40 ? (
                           <Tooltip content={conversation.conversation_id}>
-                            <span className={styles.idCellPrimary}>
-                              {truncateId(conversation.conversation_id)}
-                            </span>
+                            <span className={styles.idCellPrimary}>{truncateId(conversation.conversation_id)}</span>
                           </Tooltip>
                         ) : (
                           <span className={styles.idCellPrimary}>{conversation.conversation_id}</span>
@@ -696,9 +694,7 @@ export default function ConversationListPanel({
                         {hasTitle &&
                           (conversation.conversation_id.length > 40 ? (
                             <Tooltip content={conversation.conversation_id}>
-                              <span className={styles.idCellSecondary}>
-                                {truncateId(conversation.conversation_id)}
-                              </span>
+                              <span className={styles.idCellSecondary}>{truncateId(conversation.conversation_id)}</span>
                             </Tooltip>
                           ) : (
                             <span className={styles.idCellSecondary}>{conversation.conversation_id}</span>
