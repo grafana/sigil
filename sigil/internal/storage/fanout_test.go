@@ -294,6 +294,42 @@ func TestFanOutStoreListConversationGenerationsWithPlanStopsAfterRemainingExpect
 	}
 }
 
+func TestFanOutStoreAcquireColdIndexSlotTracksInflightCounter(t *testing.T) {
+	store := NewFanOutStore(nil, nil, nil)
+
+	release1, err := store.acquireColdIndexSlot(context.Background())
+	if err != nil {
+		t.Fatalf("acquire first slot: %v", err)
+	}
+	release2, err := store.acquireColdIndexSlot(context.Background())
+	if err != nil {
+		t.Fatalf("acquire second slot: %v", err)
+	}
+
+	if inflight := atomic.LoadInt64(&store.coldIndexReads); inflight != 2 {
+		t.Fatalf("expected inflight counter=2 after two acquires, got %d", inflight)
+	}
+	if gauge := testutil.ToFloat64(queryColdIndexInflight); gauge != 2 {
+		t.Fatalf("expected inflight gauge=2 after two acquires, got %v", gauge)
+	}
+
+	release1()
+	if inflight := atomic.LoadInt64(&store.coldIndexReads); inflight != 1 {
+		t.Fatalf("expected inflight counter=1 after one release, got %d", inflight)
+	}
+	if gauge := testutil.ToFloat64(queryColdIndexInflight); gauge != 1 {
+		t.Fatalf("expected inflight gauge=1 after one release, got %v", gauge)
+	}
+
+	release2()
+	if inflight := atomic.LoadInt64(&store.coldIndexReads); inflight != 0 {
+		t.Fatalf("expected inflight counter=0 after releases, got %d", inflight)
+	}
+	if gauge := testutil.ToFloat64(queryColdIndexInflight); gauge != 0 {
+		t.Fatalf("expected inflight gauge=0 after releases, got %v", gauge)
+	}
+}
+
 func TestFanOutStoreGetGenerationByIDWithPlanUsesBoundedBlockRange(t *testing.T) {
 	var (
 		capturedFrom time.Time

@@ -292,7 +292,7 @@ func (s *Store) ReadIndex(ctx context.Context, tenantID, blockID string) (*stora
 		attribute.Int("sigil.query.cold_index.entries", len(index.Entries)),
 		attribute.Int64("sigil.query.cold_index.bytes", estimatedIndexBytes(index)),
 	)
-	return index, nil
+	return cloneBlockIndex(index), nil
 }
 
 func (s *Store) readIndexFromBucket(ctx context.Context, start time.Time, tenantID, blockID string) (*storage.BlockIndex, error) {
@@ -474,7 +474,7 @@ func (s *Store) getIndexCache(key string) (*storage.BlockIndex, bool, bool) {
 		return nil, false, false
 	}
 	s.indexCacheList.MoveToFront(element)
-	return entry.index, entry.notFound, true
+	return cloneBlockIndex(entry.index), entry.notFound, true
 }
 
 func (s *Store) putNotFoundCache(key string) {
@@ -493,10 +493,14 @@ func (s *Store) putIndexCache(key string, index *storage.BlockIndex) {
 	if s == nil || !s.indexCacheCfg.Enabled {
 		return
 	}
+	cloned := cloneBlockIndex(index)
+	if cloned == nil {
+		return
+	}
 	s.putCacheEntry(&indexCacheEntry{
 		key:       key,
-		index:     index,
-		bytes:     estimatedIndexBytes(index),
+		index:     cloned,
+		bytes:     estimatedIndexBytes(cloned),
 		expiresAt: time.Now().Add(s.indexCacheCfg.TTL),
 	})
 }
@@ -554,6 +558,17 @@ func estimatedIndexBytes(index *storage.BlockIndex) int64 {
 	}
 	// Approximate in-memory footprint by entry count plus a fixed overhead.
 	return int64((len(index.Entries) * 64) + 128)
+}
+
+func cloneBlockIndex(index *storage.BlockIndex) *storage.BlockIndex {
+	if index == nil {
+		return nil
+	}
+	cloned := &storage.BlockIndex{
+		Entries: make([]storage.IndexEntry, len(index.Entries)),
+	}
+	copy(cloned.Entries, index.Entries)
+	return cloned
 }
 
 func recordSpanError(span trace.Span, err error) {

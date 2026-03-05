@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
@@ -34,6 +35,7 @@ type FanOutStore struct {
 	coldReadConfig  ColdReadConfig
 	indexCacheCfg   IndexCacheConfig
 	coldIndexTokens chan struct{}
+	coldIndexReads  int64
 }
 
 type FanOutOption func(*FanOutStore)
@@ -716,10 +718,16 @@ func (s *FanOutStore) acquireColdIndexSlot(ctx context.Context) (func(), error) 
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case s.coldIndexTokens <- struct{}{}:
-		queryColdIndexInflight.Set(float64(len(s.coldIndexTokens)))
+		inflight := atomic.AddInt64(&s.coldIndexReads, 1)
+		queryColdIndexInflight.Set(float64(inflight))
 		return func() {
 			<-s.coldIndexTokens
-			queryColdIndexInflight.Set(float64(len(s.coldIndexTokens)))
+			updated := atomic.AddInt64(&s.coldIndexReads, -1)
+			if updated < 0 {
+				atomic.StoreInt64(&s.coldIndexReads, 0)
+				updated = 0
+			}
+			queryColdIndexInflight.Set(float64(updated))
 		}, nil
 	}
 }

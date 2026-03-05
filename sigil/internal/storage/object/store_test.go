@@ -200,6 +200,96 @@ func TestStoreReadIndexCoalescedReadIgnoresCanceledCallerContext(t *testing.T) {
 	}
 }
 
+func TestStoreReadIndexCacheHitReturnsDetachedCopy(t *testing.T) {
+	ctx := context.Background()
+	bucket := objstore.NewInMemBucket()
+	store := NewStoreWithBucket("sigil", bucket)
+
+	block := &storage.Block{
+		ID: "block-detached-cache",
+		Generations: []storage.GenerationRecord{
+			testRecord(t, "gen-1", "conv-1", time.Date(2026, 2, 12, 19, 0, 0, 0, time.UTC)),
+		},
+	}
+	if err := store.WriteBlock(ctx, "tenant-a", block); err != nil {
+		t.Fatalf("write block: %v", err)
+	}
+
+	first, err := store.ReadIndex(ctx, "tenant-a", block.ID)
+	if err != nil {
+		t.Fatalf("first read index: %v", err)
+	}
+	if len(first.Entries) != 1 {
+		t.Fatalf("expected first read entry count 1, got %d", len(first.Entries))
+	}
+	originalOffset := first.Entries[0].Offset
+	first.Entries[0].Offset = originalOffset + 1234
+
+	second, err := store.ReadIndex(ctx, "tenant-a", block.ID)
+	if err != nil {
+		t.Fatalf("second read index: %v", err)
+	}
+	if len(second.Entries) != 1 {
+		t.Fatalf("expected second read entry count 1, got %d", len(second.Entries))
+	}
+	if second.Entries[0].Offset != originalOffset {
+		t.Fatalf("expected cached index copy to remain unchanged, got offset %d (want %d)", second.Entries[0].Offset, originalOffset)
+	}
+}
+
+func TestStoreReadIndexCoalescedCallersReceiveDetachedCopies(t *testing.T) {
+	baseBucket := objstore.NewInMemBucket()
+	store := NewStoreWithBucket("sigil", &delayedGetBucket{
+		Bucket:   baseBucket,
+		getDelay: 40 * time.Millisecond,
+	})
+
+	block := &storage.Block{
+		ID: "block-detached-coalesced",
+		Generations: []storage.GenerationRecord{
+			testRecord(t, "gen-1", "conv-1", time.Date(2026, 2, 12, 19, 0, 0, 0, time.UTC)),
+		},
+	}
+	if err := store.WriteBlock(context.Background(), "tenant-a", block); err != nil {
+		t.Fatalf("write block: %v", err)
+	}
+
+	type readResult struct {
+		index *storage.BlockIndex
+		err   error
+	}
+	firstResultCh := make(chan readResult, 1)
+	secondResultCh := make(chan readResult, 1)
+
+	go func() {
+		index, err := store.ReadIndex(context.Background(), "tenant-a", block.ID)
+		firstResultCh <- readResult{index: index, err: err}
+	}()
+	time.Sleep(5 * time.Millisecond)
+	go func() {
+		index, err := store.ReadIndex(context.Background(), "tenant-a", block.ID)
+		secondResultCh <- readResult{index: index, err: err}
+	}()
+
+	firstResult := <-firstResultCh
+	secondResult := <-secondResultCh
+
+	if firstResult.err != nil || secondResult.err != nil {
+		t.Fatalf("expected coalesced reads to succeed, got first=%v second=%v", firstResult.err, secondResult.err)
+	}
+	if firstResult.index == nil || secondResult.index == nil {
+		t.Fatalf("expected both indexes to be non-nil, got first=%#v second=%#v", firstResult.index, secondResult.index)
+	}
+	if firstResult.index == secondResult.index {
+		t.Fatalf("expected detached index pointers for coalesced callers")
+	}
+	originalOffset := secondResult.index.Entries[0].Offset
+	firstResult.index.Entries[0].Offset = originalOffset + 4321
+	if secondResult.index.Entries[0].Offset != originalOffset {
+		t.Fatalf("expected coalesced caller mutation isolation, got offset %d (want %d)", secondResult.index.Entries[0].Offset, originalOffset)
+	}
+}
+
 func testRecord(t *testing.T, generationID, conversationID string, createdAt time.Time) storage.GenerationRecord {
 	t.Helper()
 
