@@ -37,7 +37,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     borderRadius: theme.shape.radius.default,
     border: `1px solid ${theme.colors.border.weak}`,
     background: theme.colors.background.secondary,
-    overflow: 'hidden',
+    overflow: 'visible',
   }),
   header: css({
     display: 'flex',
@@ -46,6 +46,27 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: theme.spacing(1),
     padding: `${theme.spacing(1)} ${theme.spacing(1.5)}`,
     borderBottom: `1px solid ${theme.colors.border.weak}`,
+  }),
+  headerRating: css({
+    display: 'inline-flex',
+    alignItems: 'baseline',
+    gap: theme.spacing(0.5),
+    padding: `${theme.spacing(0.25)} ${theme.spacing(0.75)}`,
+    borderRadius: theme.shape.radius.pill,
+    background: theme.colors.background.canvas,
+  }),
+  headerRatingValue: css({
+    fontSize: theme.typography.h4.fontSize,
+    lineHeight: 1,
+    fontWeight: theme.typography.fontWeightMedium,
+    color: theme.colors.text.primary,
+    fontVariantNumeric: 'tabular-nums',
+  }),
+  headerRatingSuffix: css({
+    fontSize: theme.typography.bodySmall.fontSize,
+    lineHeight: 1,
+    color: theme.colors.text.secondary,
+    fontWeight: theme.typography.fontWeightMedium,
   }),
   body: css({
     display: 'flex',
@@ -111,28 +132,42 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexDirection: 'column' as const,
     gap: theme.spacing(0.75),
   }),
-  suggestionGroupHeader: css({
-    display: 'flex',
-    alignItems: 'center',
-    gap: theme.spacing(0.5),
-  }),
   suggestionCard: css({
-    padding: theme.spacing(0.25, 0),
+    padding: theme.spacing(0.75, 0),
     display: 'flex',
     flexDirection: 'column' as const,
+    gap: theme.spacing(0.75),
+  }),
+  suggestionRow: css({
+    display: 'flex',
+    alignItems: 'flex-start',
     gap: theme.spacing(0.5),
   }),
-  suggestionMetaRow: css({
+  suggestionContent: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.25),
+    minWidth: 0,
+    flex: 1,
+  }),
+  suggestionTitleLine: css({
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: theme.spacing(1),
-    flexWrap: 'wrap' as const,
+    gap: theme.spacing(0.5),
+    minWidth: 0,
+    flexWrap: 'nowrap' as const,
   }),
-  suggestionTitleRow: css({
+  suggestionSeverityLabel: css({
     display: 'inline-flex',
     alignItems: 'center',
-    gap: theme.spacing(0.5),
+    borderRadius: theme.shape.radius.pill,
+    padding: `${theme.spacing(0.125)} ${theme.spacing(0.625)}`,
+    fontSize: theme.typography.bodySmall.fontSize,
+    fontWeight: theme.typography.fontWeightMedium,
+    letterSpacing: '0.02em',
+    textTransform: 'uppercase' as const,
+    lineHeight: 1.2,
+    flexShrink: 0,
   }),
   suggestionTitleButton: css({
     display: 'inline-flex',
@@ -144,9 +179,15 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: 'inherit',
     cursor: 'pointer',
     textAlign: 'left' as const,
+    minWidth: 0,
     '&:hover': {
       textDecoration: 'underline',
     },
+  }),
+  suggestionTitleText: css({
+    fontWeight: theme.typography.fontWeightMedium,
+    color: theme.colors.text.primary,
+    whiteSpace: 'nowrap' as const,
   }),
   suggestionSeverityDot: css({
     width: 8,
@@ -159,6 +200,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.secondary,
     textTransform: 'uppercase' as const,
     letterSpacing: '0.03em',
+    lineHeight: 1.2,
   }),
   suggestionDescription: css({
     color: theme.colors.text.secondary,
@@ -167,7 +209,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
   suggestionDescriptionRow: css({
     display: 'flex',
     alignItems: 'flex-start',
-    justifyContent: 'space-between',
     gap: theme.spacing(0.5),
   }),
   suggestionDescriptionText: css({
@@ -276,6 +317,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
     lineHeight: 1.5,
     whiteSpace: 'pre-wrap' as const,
   }),
+  modalActions: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.75),
+  }),
 });
 
 function scoreTone(theme: GrafanaTheme2, score: number): string {
@@ -324,6 +370,16 @@ function severityBadgeColor(severity: 'high' | 'medium' | 'low'): 'red' | 'orang
     return 'orange';
   }
   return 'blue';
+}
+
+function severityLabelStyle(theme: GrafanaTheme2, severity: 'high' | 'medium' | 'low'): React.CSSProperties {
+  if (severity === 'high') {
+    return { color: theme.colors.error.text, background: theme.colors.error.transparent };
+  }
+  if (severity === 'medium') {
+    return { color: theme.colors.warning.text, background: theme.colors.warning.transparent };
+  }
+  return { color: theme.colors.info.text, background: theme.colors.info.transparent };
 }
 
 function severityDotColor(theme: GrafanaTheme2, severity: 'high' | 'medium' | 'low'): string {
@@ -680,18 +736,10 @@ export default function AgentRatingPanel({
       <div className={styles.header}>
         <Text weight="medium">Prompt and context analysis</Text>
         {completedResult && (
-          <Badge
-            text={`${completedResult.score}/10`}
-            color={
-              completedResult.score >= 9
-                ? 'green'
-                : completedResult.score >= 7
-                  ? 'blue'
-                  : completedResult.score >= 5
-                    ? 'orange'
-                    : 'red'
-            }
-          />
+          <div className={styles.headerRating} aria-label={`Rating ${completedResult.score}/10`}>
+            <span className={styles.headerRatingValue}>{completedResult.score}</span>
+            <span className={styles.headerRatingSuffix}>/10</span>
+          </div>
         )}
       </div>
       <div className={styles.body}>
@@ -754,69 +802,72 @@ export default function AgentRatingPanel({
               }
               return (
                 <div key={severity} className={styles.suggestionGroup}>
-                  <div className={styles.suggestionGroupHeader}>
-                    <Badge text={severity.toUpperCase()} color={severityBadgeColor(severity)} />
-                  </div>
                   {suggestions.map((suggestion, index) => {
                     const suggestionKey = `${toSuggestionKey(suggestion)}:${index}`;
                     const isMenuOpen = openMenuSuggestionKey === suggestionKey;
+                    const normalizedSeverity = normalizeSeverity(suggestion.severity);
                     return (
                       <div
                         key={`${severity}-${index}-${suggestion.category}-${suggestion.title}`}
                         className={styles.suggestionCard}
                       >
-                        <div className={styles.suggestionMetaRow}>
-                          <span className={styles.suggestionTitleRow}>
-                            <span
-                              className={styles.suggestionSeverityDot}
-                              style={{ backgroundColor: severityDotColor(theme, normalizeSeverity(suggestion.severity)) }}
-                              aria-hidden
-                            />
-                            <button
-                              type="button"
-                              className={styles.suggestionTitleButton}
-                              onClick={() => openSuggestionModal(suggestion)}
-                              aria-label={`Open suggestion ${suggestion.title}`}
-                            >
-                              <Text weight="medium">{suggestion.title}</Text>
-                            </button>
-                          </span>
-                          <span className={styles.suggestionCategory}>{suggestion.category}</span>
-                        </div>
-                        <div className={styles.suggestionDescriptionRow}>
-                          <div className={cx(styles.suggestionDescription, styles.suggestionDescriptionText)}>
-                            {toSuccinctText(suggestion.description, SUGGESTION_MAX_CHARS)}
-                          </div>
-                          <div className={styles.menuWrap} data-suggestion-menu-scope={suggestionKey}>
-                            <button
-                              type="button"
-                              className={styles.menuButton}
-                              aria-label={`Suggestion actions for ${suggestion.title}`}
-                              aria-expanded={isMenuOpen}
-                              onClick={() => setOpenMenuSuggestionKey(isMenuOpen ? null : suggestionKey)}
-                            >
-                              ...
-                            </button>
-                            {isMenuOpen && (
-                              <div className={styles.menuPanel} role="menu">
+                        <div className={styles.suggestionRow}>
+                          <div className={styles.suggestionContent}>
+                            <span className={styles.suggestionCategory}>{suggestion.category}</span>
+                            <span className={styles.suggestionTitleLine}>
+                              <div className={styles.menuWrap} data-suggestion-menu-scope={suggestionKey}>
                                 <button
                                   type="button"
-                                  className={styles.menuItem}
-                                  role="menuitem"
-                                  onClick={() => onExplainSuggestion(suggestion)}
+                                  className={styles.menuButton}
+                                  aria-label={`Suggestion actions for ${suggestion.title}`}
+                                  aria-expanded={isMenuOpen}
+                                  onClick={() => setOpenMenuSuggestionKey(isMenuOpen ? null : suggestionKey)}
                                 >
-                                  Explain
+                                  ...
                                 </button>
-                                <button
-                                  type="button"
-                                  className={styles.menuItem}
-                                  role="menuitem"
-                                  onClick={() => onRejectSuggestion(suggestion)}
-                                >
-                                  Reject
-                                </button>
+                                {isMenuOpen && (
+                                  <div className={styles.menuPanel} role="menu">
+                                    <button
+                                      type="button"
+                                      className={styles.menuItem}
+                                      role="menuitem"
+                                      onClick={() => onExplainSuggestion(suggestion)}
+                                    >
+                                      Explain
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={styles.menuItem}
+                                      role="menuitem"
+                                      onClick={() => onRejectSuggestion(suggestion)}
+                                    >
+                                      Reject
+                                    </button>
+                                  </div>
+                                )}
                               </div>
-                            )}
+                              <span
+                                className={styles.suggestionSeverityDot}
+                                style={{ backgroundColor: severityDotColor(theme, normalizedSeverity) }}
+                                aria-hidden
+                              />
+                              <button
+                                type="button"
+                                className={styles.suggestionTitleButton}
+                                onClick={() => openSuggestionModal(suggestion)}
+                                aria-label={`Open suggestion ${suggestion.title}`}
+                              >
+                                <span className={styles.suggestionTitleText}>{suggestion.title}</span>
+                              </button>
+                              <span className={styles.suggestionSeverityLabel} style={severityLabelStyle(theme, normalizedSeverity)}>
+                                {normalizedSeverity}
+                              </span>
+                            </span>
+                            <div className={styles.suggestionDescriptionRow}>
+                              <div className={cx(styles.suggestionDescription, styles.suggestionDescriptionText)}>
+                                {toSuccinctText(suggestion.description, SUGGESTION_MAX_CHARS)}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -869,9 +920,12 @@ export default function AgentRatingPanel({
               {selectedSuggestion.category}
             </Text>
             <div className={styles.modalBody}>{selectedSuggestion.description}</div>
-            <div>
-              <Button variant="secondary" icon="sync" onClick={() => onExplainSuggestion(selectedSuggestion)}>
+            <div className={styles.modalActions}>
+              <Button variant="secondary" icon="ai" onClick={() => onExplainSuggestion(selectedSuggestion)}>
                 Explain
+              </Button>
+              <Button variant="destructive" onClick={() => onRejectSuggestion(selectedSuggestion)}>
+                Reject
               </Button>
             </div>
           </div>

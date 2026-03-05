@@ -250,5 +250,8 @@ describe('AgentRatingPanel', () => {
     const dialog = await screen.findByRole('dialog', { name: /suggestion constrain tool calls/i });
     expect(dialog).toBeInTheDocument();
     expect(within(dialog).getByText('Add explicit safety constraints for tool invocation.')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reject' }));
+    expect(screen.queryByRole('dialog', { name: /suggestion constrain tool calls/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('Constrain tool calls')).not.toBeInTheDocument();
   });
 });
