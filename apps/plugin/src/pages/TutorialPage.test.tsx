@@ -20,6 +20,8 @@ describe('TutorialPage', () => {
 
     render(<RouterProvider router={router} />);
 
-    expect(await screen.findByText('Top-level correlation key across app logs, traces, and Sigil.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Top-level correlation key across app logs, traces, and Sigil.')
+    ).toBeInTheDocument();
   });
 });
