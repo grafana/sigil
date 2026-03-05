@@ -303,13 +303,15 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
 
       {template.description && <Text color="secondary">{template.description}</Text>}
 
-      <div className={styles.section}>
-        <TemplateConfigSummary
-          kind={template.kind}
-          config={template.config ?? {}}
-          outputKeys={template.output_keys ?? []}
-        />
-      </div>
+      {activeForm === 'none' && (
+        <div className={styles.section}>
+          <TemplateConfigSummary
+            kind={template.kind}
+            config={template.config ?? {}}
+            outputKeys={template.output_keys ?? []}
+          />
+        </div>
+      )}
 
       {activeForm === 'publish' && (
         <div className={styles.formWithTest}>
