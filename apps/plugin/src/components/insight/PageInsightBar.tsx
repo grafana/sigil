@@ -169,7 +169,8 @@ export function PageInsightBar({
   const liveForCurrentContext = cacheKey && liveInsight?.cacheKey === cacheKey ? liveInsight : null;
   const insight = liveForCurrentContext ?? cachedInsight;
   const effectiveText = dataContext ? (insight?.text ?? '') : '';
-  const displayText = gen.isGenerating ? gen.content : effectiveText;
+  const hasStreamingText = gen.content.trim().length > 0;
+  const displayText = gen.isGenerating && hasStreamingText ? gen.content : effectiveText;
   const initialWaiting = !dataContext && !gen.isGenerating;
   const hasResult = Boolean(effectiveText) || gen.isGenerating;
   const showLoader = initialWaiting || gen.isGenerating;
