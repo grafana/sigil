@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -17,6 +18,16 @@ import (
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	"github.com/grafana/sigil/sigil/internal/storage"
 )
+
+// validIDPattern matches identifiers containing only word characters (\w) and dots.
+var validIDPattern = regexp.MustCompile(`^[\w.]+$`)
+
+func validateID(field, value string) error {
+	if !validIDPattern.MatchString(value) {
+		return fmt.Errorf("%s %q is invalid: only letters, digits, _, and . are allowed", field, value)
+	}
+	return nil
+}
 
 type JudgeProvider struct {
 	ID   string `json:"id"`
@@ -710,6 +721,9 @@ func validateEvaluator(evaluator *evalpkg.EvaluatorDefinition) error {
 	if evaluator.EvaluatorID == "" {
 		return errors.New("evaluator_id is required")
 	}
+	if err := validateID("evaluator_id", evaluator.EvaluatorID); err != nil {
+		return err
+	}
 	if evaluator.Version == "" {
 		return errors.New("version is required")
 	}
@@ -756,6 +770,9 @@ func validateRule(rule *evalpkg.RuleDefinition) error {
 	}
 	if rule.RuleID == "" {
 		return errors.New("rule_id is required")
+	}
+	if err := validateID("rule_id", rule.RuleID); err != nil {
+		return err
 	}
 	if len(rule.EvaluatorIDs) == 0 {
 		return errors.New("evaluator_ids must include at least one id")

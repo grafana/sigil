@@ -12,6 +12,7 @@ import {
   type ScoreType,
 } from '../../evaluation/types';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../../evaluation/api';
+import { isValidResourceID, INVALID_ID_MESSAGE } from '../../evaluation/utils';
 
 export type TemplateFormProps = {
   onSubmit: (req: CreateTemplateRequest) => void;
@@ -200,6 +201,8 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
   ]);
 
   const isIdEmpty = templateId.trim() === '';
+  const isIdInvalid = !isIdEmpty && !isValidResourceID(templateId.trim());
+  const templateIdError = isIdEmpty ? 'Template ID is required' : isIdInvalid ? INVALID_ID_MESSAGE : undefined;
   const isVersionEmpty = version.trim() === '';
   let schemaParseError = '';
   if (kind === 'json_schema') {
@@ -209,13 +212,13 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
       schemaParseError = 'Invalid JSON';
     }
   }
-  const showIdError = touched && isIdEmpty;
+  const showIdError = touched && (isIdEmpty || isIdInvalid);
   const showVersionError = touched && isVersionEmpty;
   const showSchemaError = touched && schemaParseError !== '';
 
   const handleSubmit = () => {
     setTouched(true);
-    if (isIdEmpty || isVersionEmpty || schemaParseError) {
+    if (isIdEmpty || isIdInvalid || isVersionEmpty || schemaParseError) {
       return;
     }
 
@@ -252,13 +255,13 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
         description="Unique identifier for this template."
         required
         invalid={showIdError}
-        error={showIdError ? 'Template ID is required' : undefined}
+        error={templateIdError}
       >
         <Input
           value={templateId}
           onChange={(e) => setTemplateId(e.currentTarget.value)}
           onBlur={() => setTouched(true)}
-          placeholder="e.g. my-org.helpfulness"
+          placeholder="e.g. my_org.helpfulness"
           width={40}
         />
       </Field>

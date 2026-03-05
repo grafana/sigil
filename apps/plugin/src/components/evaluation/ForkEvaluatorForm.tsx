@@ -3,6 +3,7 @@ import type { SelectableValue } from '@grafana/data';
 import { Button, Field, FieldSet, Input, Select, Stack } from '@grafana/ui';
 import type { EvaluationDataSource } from '../../evaluation/api';
 import type { ForkEvaluatorRequest } from '../../evaluation/types';
+import { isValidResourceID, INVALID_ID_MESSAGE } from '../../evaluation/utils';
 
 export type ForkEvaluatorFormProps = {
   templateID: string;
@@ -41,11 +42,13 @@ export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel, data
   }, [dataSource, provider]);
 
   const isIdEmpty = evaluatorId.trim() === '';
-  const showIdError = touched && isIdEmpty;
+  const isIdInvalid = !isIdEmpty && !isValidResourceID(evaluatorId.trim());
+  const idError = isIdEmpty ? 'Evaluator ID is required' : isIdInvalid ? INVALID_ID_MESSAGE : undefined;
+  const showIdError = touched && (isIdEmpty || isIdInvalid);
 
   const handleSubmit = () => {
     setTouched(true);
-    if (isIdEmpty) {
+    if (isIdEmpty || isIdInvalid) {
       return;
     }
     const req: ForkEvaluatorRequest = {
@@ -71,7 +74,7 @@ export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel, data
         description="Unique ID for your forked evaluator. Required."
         required
         invalid={showIdError}
-        error={showIdError ? 'Evaluator ID is required' : undefined}
+        error={idError}
       >
         <Input
           value={evaluatorId}

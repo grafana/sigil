@@ -6,7 +6,7 @@ import { Alert, Badge, Button, Spinner, Text, Tooltip, useStyles2 } from '@grafa
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { useOptionalEvalRulesDataContext } from '../contexts/EvalRulesDataContext';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
-import { pickLatestVersionPerEvaluator } from '../evaluation/utils';
+import { isValidResourceID, pickLatestVersionPerEvaluator } from '../evaluation/utils';
 import type {
   CreateRuleRequest,
   Evaluator,
@@ -327,6 +327,9 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
   const validationErrors: string[] = [];
   if (isNew && !ruleIDInput.trim()) {
     validationErrors.push('Rule ID');
+  }
+  if (isNew && ruleIDInput.trim() && !isValidResourceID(ruleIDInput.trim())) {
+    validationErrors.push('Rule ID (invalid characters)');
   }
   if (evaluatorIDs.length === 0) {
     validationErrors.push('Evaluators');

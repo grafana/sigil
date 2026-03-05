@@ -1,5 +1,14 @@
 import type { Evaluator } from './types';
 
+const VALID_ID_PATTERN = /^[\w.]+$/;
+
+/** Returns true if the given ID contains only word characters and dots. */
+export function isValidResourceID(id: string): boolean {
+  return VALID_ID_PATTERN.test(id);
+}
+
+export const INVALID_ID_MESSAGE = 'Only letters, digits, _, and . are allowed';
+
 /** Returns one evaluator per evaluator_id, keeping the one with the latest updated_at. */
 export function pickLatestVersionPerEvaluator(evaluators: Evaluator[]): Evaluator[] {
   const byId = new Map<string, Evaluator>();

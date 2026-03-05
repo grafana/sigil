@@ -34,7 +34,7 @@ func TestTemplateHTTPCreateAndGet(t *testing.T) {
 	mux, _, _ := newTemplateHTTPEnv(t)
 
 	createPayload := `{
-		"template_id":"my-team.policy-check",
+		"template_id":"my_team.policy_check",
 		"kind":"llm_judge",
 		"description":"Policy compliance evaluator",
 		"version":"2026-03-02",
@@ -51,8 +51,8 @@ func TestTemplateHTTPCreateAndGet(t *testing.T) {
 	if err := json.Unmarshal(createResp.Body.Bytes(), &createBody); err != nil {
 		t.Fatalf("decode create response: %v", err)
 	}
-	if createBody["template_id"] != "my-team.policy-check" {
-		t.Errorf("expected template_id=my-team.policy-check, got %v", createBody["template_id"])
+	if createBody["template_id"] != "my_team.policy_check" {
+		t.Errorf("expected template_id=my_team.policy_check, got %v", createBody["template_id"])
 	}
 	if createBody["scope"] != "tenant" {
 		t.Errorf("expected scope=tenant, got %v", createBody["scope"])
@@ -66,7 +66,7 @@ func TestTemplateHTTPCreateAndGet(t *testing.T) {
 	}
 
 	// GET by ID should include config and output_keys from latest version.
-	getResp := doRequest(mux, http.MethodGet, "/api/v1/eval/templates/my-team.policy-check", "")
+	getResp := doRequest(mux, http.MethodGet, "/api/v1/eval/templates/my_team.policy_check", "")
 	if getResp.Code != http.StatusOK {
 		t.Fatalf("expected 200 get template, got %d body=%s", getResp.Code, getResp.Body.String())
 	}
@@ -91,7 +91,7 @@ func TestTemplateHTTPCreateBadKind(t *testing.T) {
 	mux, _, _ := newTemplateHTTPEnv(t)
 
 	createPayload := `{
-		"template_id":"my-template",
+		"template_id":"my_template",
 		"kind":"unknown_kind",
 		"version":"2026-03-02",
 		"config":{"key":"value"},
@@ -110,7 +110,7 @@ func TestTemplateHTTPCreateBadVersionFormat(t *testing.T) {
 	mux, _, _ := newTemplateHTTPEnv(t)
 
 	createPayload := `{
-		"template_id":"my-template",
+		"template_id":"my_template",
 		"kind":"llm_judge",
 		"version":"v1.0.0",
 		"config":{"key":"value"},
@@ -129,7 +129,7 @@ func TestTemplateHTTPListAll(t *testing.T) {
 	mux, _, _ := newTemplateHTTPEnv(t)
 
 	// Create two templates.
-	for _, id := range []string{"template-a", "template-b"} {
+	for _, id := range []string{"template_a", "template_b"} {
 		payload := `{
 			"template_id":"` + id + `",
 			"kind":"heuristic",
@@ -163,7 +163,7 @@ func TestTemplateHTTPListWithScopeFilter(t *testing.T) {
 
 	// Create a tenant template.
 	payload := `{
-		"template_id":"tenant-template",
+		"template_id":"tenant_template",
 		"kind":"heuristic",
 		"version":"2026-03-02",
 		"config":{"key":"value"},
@@ -178,7 +178,7 @@ func TestTemplateHTTPListWithScopeFilter(t *testing.T) {
 	now := time.Now().UTC()
 	if err := ts.CreateTemplate(context.Background(), evalpkg.TemplateDefinition{
 		TenantID:      GlobalTenantID,
-		TemplateID:    "global-template",
+		TemplateID:    "global_template",
 		Scope:         evalpkg.TemplateScopeGlobal,
 		LatestVersion: "2026-01-01",
 		Kind:          evalpkg.EvaluatorKindLLMJudge,
@@ -186,7 +186,7 @@ func TestTemplateHTTPListWithScopeFilter(t *testing.T) {
 		UpdatedAt:     now,
 	}, evalpkg.TemplateVersion{
 		TenantID:   GlobalTenantID,
-		TemplateID: "global-template",
+		TemplateID: "global_template",
 		Version:    "2026-01-01",
 		Config:     map[string]any{"source": "global"},
 		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
@@ -210,8 +210,8 @@ func TestTemplateHTTPListWithScopeFilter(t *testing.T) {
 		t.Fatalf("expected exactly 1 tenant-scoped item, got %d items=%v", len(items), listBody["items"])
 	}
 	first := items[0].(map[string]any)
-	if first["template_id"] != "tenant-template" {
-		t.Errorf("expected tenant-template, got %v", first["template_id"])
+	if first["template_id"] != "tenant_template" {
+		t.Errorf("expected tenant_template, got %v", first["template_id"])
 	}
 }
 
@@ -259,7 +259,7 @@ func TestTemplateHTTPDeleteGlobalRejected(t *testing.T) {
 	now := time.Now().UTC()
 	if err := ts.CreateTemplate(context.Background(), evalpkg.TemplateDefinition{
 		TenantID:      GlobalTenantID,
-		TemplateID:    "global-template",
+		TemplateID:    "global_template",
 		Scope:         evalpkg.TemplateScopeGlobal,
 		LatestVersion: "2026-01-01",
 		Kind:          evalpkg.EvaluatorKindLLMJudge,
@@ -267,7 +267,7 @@ func TestTemplateHTTPDeleteGlobalRejected(t *testing.T) {
 		UpdatedAt:     now,
 	}, evalpkg.TemplateVersion{
 		TenantID:   GlobalTenantID,
-		TemplateID: "global-template",
+		TemplateID: "global_template",
 		Version:    "2026-01-01",
 		Config:     map[string]any{"provider": "openai"},
 		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
@@ -276,7 +276,7 @@ func TestTemplateHTTPDeleteGlobalRejected(t *testing.T) {
 		t.Fatalf("seed global template: %v", err)
 	}
 
-	deleteResp := doRequest(mux, http.MethodDelete, "/api/v1/eval/templates/global-template", "")
+	deleteResp := doRequest(mux, http.MethodDelete, "/api/v1/eval/templates/global_template", "")
 	if deleteResp.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 delete global template, got %d body=%s", deleteResp.Code, deleteResp.Body.String())
 	}
@@ -327,7 +327,7 @@ func TestTemplateHTTPListVersions(t *testing.T) {
 
 	// Create a template with initial version.
 	createPayload := `{
-		"template_id":"multi-ver",
+		"template_id":"multi_ver",
 		"kind":"heuristic",
 		"version":"2026-03-01",
 		"config":{"key":"v1"},
@@ -344,13 +344,13 @@ func TestTemplateHTTPListVersions(t *testing.T) {
 		"config":{"key":"v2"},
 		"output_keys":[{"key":"score","type":"bool"}]
 	}`
-	publishResp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates/multi-ver/versions", publishPayload)
+	publishResp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates/multi_ver/versions", publishPayload)
 	if publishResp.Code != http.StatusOK {
 		t.Fatalf("expected 200 publish, got %d body=%s", publishResp.Code, publishResp.Body.String())
 	}
 
 	// List versions.
-	listResp := doRequest(mux, http.MethodGet, "/api/v1/eval/templates/multi-ver/versions", "")
+	listResp := doRequest(mux, http.MethodGet, "/api/v1/eval/templates/multi_ver/versions", "")
 	if listResp.Code != http.StatusOK {
 		t.Fatalf("expected 200 list versions, got %d body=%s", listResp.Code, listResp.Body.String())
 	}
@@ -369,7 +369,7 @@ func TestTemplateHTTPGetVersion(t *testing.T) {
 	mux, _, _ := newTemplateHTTPEnv(t)
 
 	createPayload := `{
-		"template_id":"get-ver",
+		"template_id":"get_ver",
 		"kind":"llm_judge",
 		"version":"2026-03-01",
 		"config":{"provider":"openai"},
@@ -380,7 +380,7 @@ func TestTemplateHTTPGetVersion(t *testing.T) {
 		t.Fatalf("expected 200 create, got %d body=%s", createResp.Code, createResp.Body.String())
 	}
 
-	getResp := doRequest(mux, http.MethodGet, "/api/v1/eval/templates/get-ver/versions/2026-03-01", "")
+	getResp := doRequest(mux, http.MethodGet, "/api/v1/eval/templates/get_ver/versions/2026-03-01", "")
 	if getResp.Code != http.StatusOK {
 		t.Fatalf("expected 200 get version, got %d body=%s", getResp.Code, getResp.Body.String())
 	}
@@ -394,7 +394,7 @@ func TestTemplateHTTPGetVersion(t *testing.T) {
 	}
 
 	// Nonexistent version should 404.
-	missingResp := doRequest(mux, http.MethodGet, "/api/v1/eval/templates/get-ver/versions/2099-01-01", "")
+	missingResp := doRequest(mux, http.MethodGet, "/api/v1/eval/templates/get_ver/versions/2099-01-01", "")
 	if missingResp.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 for missing version, got %d body=%s", missingResp.Code, missingResp.Body.String())
 	}
@@ -451,7 +451,7 @@ func TestTemplateHTTPForkWithConfigOverrides(t *testing.T) {
 
 	// Create a template.
 	createPayload := `{
-		"template_id":"forkable-override",
+		"template_id":"forkable_override",
 		"kind":"llm_judge",
 		"version":"2026-03-01",
 		"config":{"provider":"openai","model":"gpt-4o-mini","temperature":0.5},
@@ -467,7 +467,7 @@ func TestTemplateHTTPForkWithConfigOverrides(t *testing.T) {
 		"evaluator_id":"custom.overridden",
 		"config":{"provider":"google","model":"gemini-2.0-flash"}
 	}`
-	forkResp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates/forkable-override:fork", forkPayload)
+	forkResp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates/forkable_override:fork", forkPayload)
 	if forkResp.Code != http.StatusOK {
 		t.Fatalf("expected 200 fork with overrides, got %d body=%s", forkResp.Code, forkResp.Body.String())
 	}
@@ -498,10 +498,10 @@ func TestTemplateHTTPMethodNotAllowed(t *testing.T) {
 		path   string
 	}{
 		{name: "PUT on collection", method: http.MethodPut, path: "/api/v1/eval/templates"},
-		{name: "GET on fork", method: http.MethodGet, path: "/api/v1/eval/templates/some-id:fork"},
-		{name: "DELETE on versions", method: http.MethodDelete, path: "/api/v1/eval/templates/some-id/versions"},
-		{name: "POST on version by ID", method: http.MethodPost, path: "/api/v1/eval/templates/some-id/versions/2026-01-01"},
-		{name: "PUT on template by ID", method: http.MethodPut, path: "/api/v1/eval/templates/some-id"},
+		{name: "GET on fork", method: http.MethodGet, path: "/api/v1/eval/templates/some_id:fork"},
+		{name: "DELETE on versions", method: http.MethodDelete, path: "/api/v1/eval/templates/some_id/versions"},
+		{name: "POST on version by ID", method: http.MethodPost, path: "/api/v1/eval/templates/some_id/versions/2026-01-01"},
+		{name: "PUT on template by ID", method: http.MethodPut, path: "/api/v1/eval/templates/some_id"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -525,7 +525,7 @@ func TestTemplateHTTPCreateBadJSON(t *testing.T) {
 func TestTemplateHTTPForkBadJSON(t *testing.T) {
 	mux, _, _ := newTemplateHTTPEnv(t)
 
-	resp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates/some-id:fork", `{bad`)
+	resp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates/some_id:fork", `{bad`)
 	if resp.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for bad JSON, got %d body=%s", resp.Code, resp.Body.String())
 	}
@@ -546,7 +546,7 @@ func TestTemplateHTTPForkNonexistent(t *testing.T) {
 func TestTemplateHTTPPublishVersionBadJSON(t *testing.T) {
 	mux, _, _ := newTemplateHTTPEnv(t)
 
-	resp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates/some-id/versions", `{bad`)
+	resp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates/some_id/versions", `{bad`)
 	if resp.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for bad JSON, got %d body=%s", resp.Code, resp.Body.String())
 	}
@@ -583,7 +583,7 @@ func TestTemplateHTTPGetStoreError(t *testing.T) {
 	mux, ts, _ := newTemplateHTTPEnv(t)
 	ts.getErr = errors.New("store unavailable")
 
-	resp := doRequest(mux, http.MethodGet, "/api/v1/eval/templates/some-id", "")
+	resp := doRequest(mux, http.MethodGet, "/api/v1/eval/templates/some_id", "")
 	if resp.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on store error, got %d body=%s", resp.Code, resp.Body.String())
 	}
@@ -597,8 +597,8 @@ func TestTemplateHTTPRoutingInvalidPaths(t *testing.T) {
 		path string
 		want int
 	}{
-		{name: "invalid second segment", path: "/api/v1/eval/templates/some-id/notversions", want: http.StatusBadRequest},
-		{name: "empty version in version path", path: "/api/v1/eval/templates/some-id/versions/", want: http.StatusBadRequest},
+		{name: "invalid second segment", path: "/api/v1/eval/templates/some_id/notversions", want: http.StatusBadRequest},
+		{name: "empty version in version path", path: "/api/v1/eval/templates/some_id/versions/", want: http.StatusBadRequest},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
