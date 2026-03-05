@@ -648,6 +648,7 @@ func TestRateAgentEndpointReusesExistingPendingRating(t *testing.T) {
 		rating: &agentrating.Rating{
 			Status:      agentrating.RatingStatusPending,
 			Suggestions: []agentrating.Suggestion{},
+			RatedAt:     time.Now().UTC(),
 		},
 	}
 	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
@@ -675,6 +676,70 @@ func TestRateAgentEndpointReusesExistingPendingRating(t *testing.T) {
 	}
 	if len(ratingStore.Upserts()) != 0 {
 		t.Fatalf("expected no upserts when rating is already pending")
+	}
+}
+
+func TestRateAgentEndpointRestartsEvaluationForStalePendingRating(t *testing.T) {
+	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
+		AgentCatalogStore: &testAgentCatalogStore{
+			latestVersion: &storage.AgentVersion{
+				AgentName:             "assistant",
+				EffectiveVersion:      "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				SystemPrompt:          "You are concise.",
+				SystemPromptPrefix:    "You are concise.",
+				ToolCount:             0,
+				TokenEstimateTotal:    40,
+				GenerationCount:       2,
+				FirstSeenAt:           time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC),
+				LastSeenAt:            time.Date(2026, 3, 4, 11, 0, 0, 0, time.UTC),
+				DeclaredVersionFirst:  nil,
+				DeclaredVersionLatest: nil,
+				ToolsJSON:             "[]",
+			},
+		},
+		FeedbackStore: feedback.NewMemoryStore(),
+	})
+	if err != nil {
+		t.Fatalf("new query service: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	ratingStore := &testAgentRatingStore{
+		rating: &agentrating.Rating{
+			Status:      agentrating.RatingStatusPending,
+			Suggestions: []agentrating.Suggestion{},
+			RatedAt:     time.Now().UTC().Add(-10 * time.Minute),
+		},
+	}
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterQueryRoutes(
+		mux,
+		querySvc,
+		agentrating.NewRater(judges.NewDiscovery(), "openai/gpt-4o-mini"),
+		ratingStore,
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		kitlog.NewNopLogger(),
+		protected,
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents:rate", bytes.NewBufferString(`{"agent_name":"assistant"}`))
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 for stale pending rating re-evaluation, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"status":"pending"`) {
+		t.Fatalf("expected pending status in response, body=%s", resp.Body.String())
+	}
+	upserts := ratingStore.Upserts()
+	if len(upserts) == 0 {
+		t.Fatalf("expected a new pending upsert for stale rating, got none")
+	}
+	if upserts[0].Status != agentrating.RatingStatusPending {
+		t.Fatalf("expected first upsert status=%q, got=%q", agentrating.RatingStatusPending, upserts[0].Status)
 	}
 }
 

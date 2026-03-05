@@ -26,6 +26,7 @@ import (
 const (
 	agentRatingEvaluationTimeout = 3 * time.Minute
 	agentRatingPersistTimeout    = 10 * time.Second
+	stalePendingRatingThreshold  = 5 * time.Minute
 )
 
 func RegisterRoutes(
@@ -559,9 +560,11 @@ func rateAgent(
 			return
 		}
 		if existingRating != nil && agentrating.NormalizeRatingStatus(existingRating.Status) == agentrating.RatingStatusPending {
-			existingRating.Status = agentrating.RatingStatusPending
-			writeJSON(w, http.StatusAccepted, existingRating)
-			return
+			if !existingRating.RatedAt.IsZero() && time.Since(existingRating.RatedAt) < stalePendingRatingThreshold {
+				existingRating.Status = agentrating.RatingStatusPending
+				writeJSON(w, http.StatusAccepted, existingRating)
+				return
+			}
 		}
 
 		pendingRating := agentrating.Rating{

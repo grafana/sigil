@@ -7,6 +7,7 @@ package agentrating
 import (
 	"errors"
 	"strings"
+	"time"
 )
 
 const tokenWarningThreshold = 30_000
@@ -51,6 +52,7 @@ type Rating struct {
 	TokenWarning   string       `json:"token_warning,omitempty"`
 	JudgeModel     string       `json:"judge_model"`
 	JudgeLatencyMs int64        `json:"judge_latency_ms"`
+	RatedAt        time.Time    `json:"rated_at"`
 }
 
 // NormalizeRatingStatus coerces status to a supported value.

@@ -105,6 +105,7 @@ func (s *WALStore) GetAgentVersionRating(ctx context.Context, tenantID, agentNam
 		TokenWarning:   derefOptionalString(row.TokenWarning),
 		JudgeModel:     row.JudgeModel,
 		JudgeLatencyMs: row.JudgeLatencyMs,
+		RatedAt:        row.RatedAt,
 	}
 	return &rating, nil
 }
