@@ -35,10 +35,11 @@ func (s *WALStore) CreateManualConversation(ctx context.Context, tenantID, conve
 
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		convRow := ConversationModel{
-			TenantID:         tenantID,
-			ConversationID:   conversationID,
-			GenerationCount:  len(generations),
-			LastGenerationAt: now,
+			TenantID:          tenantID,
+			ConversationID:    conversationID,
+			GenerationCount:   len(generations),
+			FirstGenerationAt: now,
+			LastGenerationAt:  now,
 		}
 		if err := tx.Create(&convRow).Error; err != nil {
 			return fmt.Errorf("create conversation: %w", err)
