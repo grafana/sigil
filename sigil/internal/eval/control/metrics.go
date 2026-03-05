@@ -30,6 +30,13 @@ type statusCapturingResponseWriter struct {
 	metricsCtx context.Context
 }
 
+func (w *statusCapturingResponseWriter) Unwrap() http.ResponseWriter {
+	if w == nil {
+		return nil
+	}
+	return w.ResponseWriter
+}
+
 func (w *statusCapturingResponseWriter) WriteHeader(statusCode int) {
 	w.statusCode = statusCode
 	w.ResponseWriter.WriteHeader(statusCode)
