@@ -8,9 +8,10 @@ const config = async (env: Env): Promise<Configuration> => {
     ...baseConfig,
     resolve: {
       ...baseConfig.resolve,
-      // Enable package.json "exports" field resolution so dynamic imports
-      // of gpt-tokenizer encoding sub-paths resolve correctly.
-      conditionNames: ['import', 'module', 'require', 'default'],
+      // Extend webpack's built-in conditionNames with 'import' so
+      // package.json "exports" field resolution works for dynamic imports
+      // of gpt-tokenizer encoding sub-paths.
+      conditionNames: [...(baseConfig.resolve?.conditionNames ?? []), 'import', 'module', 'require', 'default'],
     },
   };
 };
