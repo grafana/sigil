@@ -131,6 +131,9 @@ func TestBuildTraceQL(t *testing.T) {
 	if !strings.Contains(query, "span.sigil.conversation.title") {
 		t.Fatalf("expected default select to include span.sigil.conversation.title, got %q", query)
 	}
+	if !strings.Contains(query, "span.user.id") {
+		t.Fatalf("expected default select to include span.user.id, got %q", query)
+	}
 
 	statusFilters, err := ParseFilterExpression(`status = error`)
 	if err != nil {

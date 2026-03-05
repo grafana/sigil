@@ -214,6 +214,7 @@ export default function ConversationPage(props: ConversationPageProps) {
     return {
       conversation_id: conversationData.conversationID,
       conversation_title: conversationTitleFromURL.length > 0 ? conversationTitleFromURL : undefined,
+      user_id: conversationData.userID,
       generation_count: conversationData.generationCount,
       first_generation_at: conversationData.firstGenerationAt,
       last_generation_at: conversationData.lastGenerationAt,
