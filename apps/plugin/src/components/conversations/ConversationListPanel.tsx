@@ -15,6 +15,8 @@ export type ConversationListPanelProps = {
   loadingMore: boolean;
   showExtendedColumns?: boolean;
   modelCards?: Map<string, ModelCard>;
+  getConversationTokens?: (conversation: ConversationSearchResult) => number;
+  getConversationCacheHitRate?: (conversation: ConversationSearchResult) => number;
   getConversationHref?: (conversationId: string, conversationTitle?: string) => string;
   onSelectConversation: (conversationId: string, conversationTitle?: string) => void;
   onLoadMore: () => void;
@@ -49,6 +51,26 @@ export function formatDuration(fromStr: string, toStr: string): string {
   const days = Math.floor(hours / 24);
   const remainingHours = hours % 24;
   return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
+}
+
+function formatTokenCount(tokens: number): string {
+  if (tokens <= 0) {
+    return '-';
+  }
+  if (tokens >= 1_000_000) {
+    return `${(tokens / 1_000_000).toFixed(1)}M`;
+  }
+  if (tokens >= 1_000) {
+    return `${(tokens / 1_000).toFixed(1)}k`;
+  }
+  return String(tokens);
+}
+
+function formatCacheHitRate(rate: number): string {
+  if (rate <= 0) {
+    return '-';
+  }
+  return `${rate.toFixed(1)}%`;
 }
 
 function truncateId(id: string, length = 8): string {
@@ -321,12 +343,14 @@ const getStyles = (theme: GrafanaTheme2) => ({
     overscrollBehavior: 'none' as const,
   }),
   colLastActivity: css({ width: 100 }),
-  colConversation: css({ width: 180 }),
+  colConversation: css({ width: 240 }),
   colActivity: css({ width: 140 }),
   colAgents: css({ width: '20%' }),
   colModels: css({ width: '25%' }),
-  colQuality: css({ width: 130 }),
-  colEval: css({ width: 130 }),
+  colQuality: css({ width: 100 }),
+  colTokens: css({ width: 90 }),
+  colCacheHitRate: css({ width: 100 }),
+  colEval: css({ width: 90 }),
   evalBar: css({
     display: 'flex',
     flexDirection: 'column' as const,
@@ -469,6 +493,8 @@ export default function ConversationListPanel({
   loadingMore,
   showExtendedColumns = false,
   modelCards,
+  getConversationTokens,
+  getConversationCacheHitRate,
   getConversationHref,
   onSelectConversation,
   onLoadMore,
@@ -595,6 +621,8 @@ export default function ConversationListPanel({
             <col className={styles.colLastActivity} />
             <col className={styles.colConversation} />
             <col className={styles.colActivity} />
+            {getConversationTokens && <col className={styles.colTokens} />}
+            {getConversationCacheHitRate && <col className={styles.colCacheHitRate} />}
             <col className={styles.colAgents} />
             <col className={styles.colModels} />
             <col className={styles.colQuality} />
@@ -605,6 +633,8 @@ export default function ConversationListPanel({
               <th className={styles.headerCell}>Last activity</th>
               <th className={styles.headerCell}>Conversation</th>
               <th className={styles.headerCell}>Activity</th>
+              {getConversationTokens && <th className={styles.headerCell}>Tokens</th>}
+              {getConversationCacheHitRate && <th className={styles.headerCell}>Cache hit</th>}
               <th className={styles.headerCell}>Agents</th>
               <th className={styles.headerCell}>Models</th>
               <th className={styles.headerCell}>Quality</th>
@@ -663,6 +693,16 @@ export default function ConversationListPanel({
                       <span>{conversation.generation_count} calls</span>
                     </div>
                   </td>
+                  {getConversationTokens && (
+                    <td className={cx(styles.cell, styles.durationCell)}>
+                      {formatTokenCount(getConversationTokens(conversation))}
+                    </td>
+                  )}
+                  {getConversationCacheHitRate && (
+                    <td className={cx(styles.cell, styles.durationCell)}>
+                      {formatCacheHitRate(getConversationCacheHitRate(conversation))}
+                    </td>
+                  )}
                   <td className={styles.cell}>
                     <AgentPillList items={conversation.agents} />
                   </td>

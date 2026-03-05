@@ -284,6 +284,7 @@ export function PageInsightBar({
 }
 
 const COLLAPSED_HEIGHT = 40;
+const EXPANDED_HEIGHT = 140;
 
 function buildCacheKey(prompt: string, origin: string, systemPrompt: string, dataContext: string): string {
   const keySource = `${origin}|${prompt}|${systemPrompt}|${dataContext}`;
@@ -387,8 +388,9 @@ function getStyles(theme: GrafanaTheme2) {
   return {
     bar: css({
       ...barBase,
-      minHeight: COLLAPSED_HEIGHT,
-      height: 'auto',
+      height: EXPANDED_HEIGHT,
+      display: 'flex',
+      flexDirection: 'column',
     }),
     barCollapsed: css({
       ...barBase,
@@ -400,6 +402,7 @@ function getStyles(theme: GrafanaTheme2) {
       justifyContent: 'space-between',
       padding: theme.spacing(1, 1.5),
       height: COLLAPSED_HEIGHT,
+      flexShrink: 0,
     }),
     headerToggle: css({
       display: 'flex',
@@ -464,7 +467,9 @@ function getStyles(theme: GrafanaTheme2) {
     }),
     body: css({
       padding: theme.spacing(0, 1.5, 1.5),
-      overflow: 'visible',
+      flex: 1,
+      minHeight: 0,
+      overflow: 'hidden',
     }),
     placeholder: css({
       color: theme.colors.text.secondary,

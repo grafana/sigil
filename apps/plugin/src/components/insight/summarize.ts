@@ -1,5 +1,13 @@
 import type { PrometheusQueryResponse } from '../../dashboard/types';
 
+function formatPrometheusValue(raw: string): string {
+  const num = parseFloat(raw);
+  if (!Number.isFinite(num)) {
+    return 'no data';
+  }
+  return raw;
+}
+
 export function hasResponseData(response: PrometheusQueryResponse | null | undefined): boolean {
   if (!response) {
     return false;
@@ -19,14 +27,14 @@ export function summarizeVector(response: PrometheusQueryResponse | null | undef
     return `${label}: 0`;
   }
   if (results.length === 1) {
-    return `${label}: ${results[0].value[1]}`;
+    return `${label}: ${formatPrometheusValue(results[0].value[1])}`;
   }
   const lines = results.map((r) => {
     const tags = Object.entries(r.metric)
       .filter(([k]) => !k.startsWith('__'))
       .map(([k, v]) => `${k}=${v}`)
       .join(', ');
-    return `  ${tags || 'total'}: ${r.value[1]}`;
+    return `  ${tags || 'total'}: ${formatPrometheusValue(r.value[1])}`;
   });
   return `${label} (by series):\n${lines.join('\n')}`;
 }
@@ -39,15 +47,29 @@ export function summarizeMatrix(response: PrometheusQueryResponse | null | undef
   if (results.length === 0) {
     return `${label}: no series`;
   }
-  const lines = results.map((r) => {
+  const seriesLines: string[] = [];
+  for (const r of results) {
     const tags = Object.entries(r.metric)
       .filter(([k]) => !k.startsWith('__'))
       .map(([k, v]) => `${k}=${v}`)
       .join(', ');
-    const vals = r.values;
-    const last = vals.length > 0 ? vals[vals.length - 1][1] : 'N/A';
-    const first = vals.length > 0 ? vals[0][1] : 'N/A';
-    return `  ${tags || 'total'}: first=${first}, last=${last}, points=${vals.length}`;
-  });
-  return `${label} (${results.length} series):\n${lines.join('\n')}`;
+    const numericVals = r.values.map(([, v]) => parseFloat(v)).filter((n) => Number.isFinite(n));
+
+    if (numericVals.length === 0) {
+      continue;
+    }
+
+    const first = numericVals[0];
+    const last = numericVals[numericVals.length - 1];
+    const min = Math.min(...numericVals);
+    const max = Math.max(...numericVals);
+    const avg = numericVals.reduce((sum, v) => sum + v, 0) / numericVals.length;
+    seriesLines.push(
+      `  ${tags || 'total'}: first=${first}, last=${last}, min=${min}, max=${max}, avg=${avg.toFixed(4)}, points=${numericVals.length}`
+    );
+  }
+  if (seriesLines.length === 0) {
+    return `${label}: no data`;
+  }
+  return `${label} (${seriesLines.length} series):\n${seriesLines.join('\n')}`;
 }
