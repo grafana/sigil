@@ -154,6 +154,15 @@ export function latencyStatQuery(
   return `histogram_quantile(${quantile}, sum${byClause(breakdown, ['le'])}(increase(${OPERATION_DURATION}_bucket${sel(filters)}[${rangeDuration}])))`;
 }
 
+export function ttftStatQuery(
+  filters: DashboardFilters,
+  rangeDuration: string,
+  breakdown: BreakdownDimension = 'none',
+  quantile = 0.95
+): string {
+  return `histogram_quantile(${quantile}, sum${byClause(breakdown, ['le'])}(increase(${TIME_TO_FIRST_TOKEN}_bucket${sel(filters)}[${rangeDuration}])))`;
+}
+
 /** Token totals by model+type for client-side cost calculation. Optionally includes breakdown label. */
 export function tokensByModelAndTypeQuery(
   filters: DashboardFilters,

@@ -20,6 +20,7 @@ export type FilterToolbarProps = {
   onTimeRangeChange: (timeRange: TimeRange) => void;
   onFiltersChange: (filters: DashboardFilters) => void;
   hideLabelFilters?: boolean;
+  fillWidth?: boolean;
   children?: React.ReactNode;
 };
 
@@ -37,6 +38,7 @@ export function FilterToolbar({
   onTimeRangeChange,
   onFiltersChange,
   hideLabelFilters = false,
+  fillWidth = false,
   children,
 }: FilterToolbarProps) {
   const styles = useStyles2(getStyles);
@@ -152,10 +154,10 @@ export function FilterToolbar({
           <div className={styles.divider} />
         </>
       )}
-      <div className={styles.filtersSection}>
+      <div className={fillWidth ? styles.filtersSectionFill : styles.filtersSection}>
         <Stack direction="row" gap={1} alignItems="center" wrap="wrap">
           <MultiSelect<string>
-            className={styles.multiSelect}
+            className={fillWidth ? styles.multiSelectFill : styles.multiSelect}
             options={providerSelectOptions}
             value={filters.providers}
             onChange={handleProviderChange}
@@ -167,7 +169,7 @@ export function FilterToolbar({
             width="auto"
           />
           <MultiSelect<string>
-            className={styles.multiSelect}
+            className={fillWidth ? styles.multiSelectFill : styles.multiSelect}
             options={modelSelectOptions}
             value={filters.models}
             onChange={handleModelChange}
@@ -179,7 +181,7 @@ export function FilterToolbar({
             width="auto"
           />
           <MultiSelect<string>
-            className={styles.multiSelect}
+            className={fillWidth ? styles.multiSelectFill : styles.multiSelect}
             options={agentSelectOptions}
             value={filters.agentNames}
             onChange={handleAgentChange}
@@ -259,6 +261,14 @@ function getStyles(theme: GrafanaTheme2) {
       flex: '1 1 auto',
       minWidth: 0,
     }),
+    filtersSectionFill: css({
+      display: 'flex',
+      flex: '1 1 auto',
+      minWidth: 0,
+      '& > div': {
+        flex: 1,
+      },
+    }),
     divider: css({
       width: 1,
       alignSelf: 'stretch',
@@ -266,6 +276,11 @@ function getStyles(theme: GrafanaTheme2) {
     }),
     multiSelect: css({
       minWidth: 150,
+      ...theme.typography.body,
+    }),
+    multiSelectFill: css({
+      flex: '1 1 0%',
+      minWidth: 120,
       ...theme.typography.body,
     }),
     clearButton: css({

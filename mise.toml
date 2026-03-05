@@ -195,8 +195,8 @@ description = "Format .NET SDK code"
 run = "dotnet format sdks/dotnet/Sigil.DotNet.sln"
 
 [tasks.lint]
-description = "Run Go, TypeScript, Helm, and .NET linting"
-depends = ["lint:go", "lint:ts", "lint:helm", "lint:cs"]
+description = "Run formatting checks, Go, TypeScript, Helm, and .NET linting"
+depends = ["format:check", "lint:go", "lint:ts", "lint:helm", "lint:cs"]
 
 [tasks."lint:go"]
 description = "Lint Go code in all modules"
@@ -700,4 +700,4 @@ depends = ["lint", "typecheck", "test"]
 
 [tasks.ci]
 description = "Run CI quality checks"
-depends = ["format:check", "lint", "typecheck"]
+depends = ["lint", "typecheck"]

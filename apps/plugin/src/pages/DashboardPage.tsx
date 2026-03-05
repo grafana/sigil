@@ -7,9 +7,9 @@ import { type DashboardTab } from '../dashboard/types';
 import { useDashboardUrlState } from '../dashboard/useDashboardUrlState';
 import { DashboardFilterBar } from '../components/dashboard/DashboardFilterBar';
 import { DashboardGrid } from '../components/dashboard/DashboardGrid';
+import { DashboardPerformanceGrid } from '../components/dashboard/DashboardPerformanceGrid';
 import { DashboardErrorsGrid } from '../components/dashboard/DashboardErrorsGrid';
-import { DashboardConsumptionGrid } from '../components/dashboard/DashboardConsumptionGrid';
-import { DashboardCacheGrid } from '../components/dashboard/DashboardCacheGrid';
+import { DashboardUsageGrid } from '../components/dashboard/DashboardUsageGrid';
 import { useCascadingFilterOptions } from '../hooks/useCascadingFilterOptions';
 import { LandingTopBar } from '../components/landing/LandingTopBar';
 
@@ -65,54 +65,52 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         onFiltersChange={setFilters}
         onBreakdownChange={setBreakdownBy}
       />
-      <div className={styles.tabsContent}>
-        <TabsBar>
-          <Tab label="Overview" active={tab === 'overview'} onChangeTab={handleTabChange('overview')} />
-          <Tab label="Errors" active={tab === 'errors'} onChangeTab={handleTabChange('errors')} />
-          <Tab label="Consumption" active={tab === 'consumption'} onChangeTab={handleTabChange('consumption')} />
-          <Tab label="Cache" active={tab === 'cache'} onChangeTab={handleTabChange('cache')} />
-        </TabsBar>
-        {tab === 'overview' && (
-          <DashboardGrid
-            dataSource={dataSource}
-            filters={filters}
-            breakdownBy={breakdownBy}
-            from={from}
-            to={to}
-            timeRange={timeRange}
-          />
-        )}
-        {tab === 'errors' && (
-          <DashboardErrorsGrid
-            dataSource={dataSource}
-            filters={filters}
-            breakdownBy={breakdownBy}
-            from={from}
-            to={to}
-            timeRange={timeRange}
-          />
-        )}
-        {tab === 'consumption' && (
-          <DashboardConsumptionGrid
-            dataSource={dataSource}
-            filters={filters}
-            breakdownBy={breakdownBy}
-            from={from}
-            to={to}
-            timeRange={timeRange}
-          />
-        )}
-        {tab === 'cache' && (
-          <DashboardCacheGrid
-            dataSource={dataSource}
-            filters={filters}
-            breakdownBy={breakdownBy}
-            from={from}
-            to={to}
-            timeRange={timeRange}
-          />
-        )}
-      </div>
+      <TabsBar>
+        <Tab label="Overview" active={tab === 'overview'} onChangeTab={handleTabChange('overview')} />
+        <Tab label="Performance" active={tab === 'performance'} onChangeTab={handleTabChange('performance')} />
+        <Tab label="Errors" active={tab === 'errors'} onChangeTab={handleTabChange('errors')} />
+        <Tab label="Usage" active={tab === 'usage'} onChangeTab={handleTabChange('usage')} />
+      </TabsBar>
+      {tab === 'overview' && (
+        <DashboardGrid
+          dataSource={dataSource}
+          filters={filters}
+          breakdownBy={breakdownBy}
+          from={from}
+          to={to}
+          timeRange={timeRange}
+        />
+      )}
+      {tab === 'performance' && (
+        <DashboardPerformanceGrid
+          dataSource={dataSource}
+          filters={filters}
+          breakdownBy={breakdownBy}
+          from={from}
+          to={to}
+          timeRange={timeRange}
+        />
+      )}
+      {tab === 'errors' && (
+        <DashboardErrorsGrid
+          dataSource={dataSource}
+          filters={filters}
+          breakdownBy={breakdownBy}
+          from={from}
+          to={to}
+          timeRange={timeRange}
+        />
+      )}
+      {tab === 'usage' && (
+        <DashboardUsageGrid
+          dataSource={dataSource}
+          filters={filters}
+          breakdownBy={breakdownBy}
+          from={from}
+          to={to}
+          timeRange={timeRange}
+        />
+      )}
     </div>
   );
 }
@@ -124,11 +122,6 @@ function getStyles(theme: GrafanaTheme2) {
       flexDirection: 'column',
       gap: theme.spacing(3),
       marginTop: theme.spacing(-2),
-    }),
-    tabsContent: css({
-      display: 'flex',
-      flexDirection: 'column',
-      gap: theme.spacing(1),
     }),
   };
 }

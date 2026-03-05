@@ -63,6 +63,8 @@ export function DashboardFilterBar({
       to={to}
       onTimeRangeChange={onTimeRangeChange}
       onFiltersChange={onFiltersChange}
+      hideLabelFilters
+      fillWidth
     >
       <Select<BreakdownDimension>
         options={breakdownOptions}

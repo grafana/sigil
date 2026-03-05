@@ -4,7 +4,12 @@ import { type BreakdownDimension, type DashboardFilters, type DashboardTab } fro
 import { useFilterUrlState } from '../hooks/useFilterUrlState';
 
 const BREAKDOWN_VALUES = new Set<BreakdownDimension>(['none', 'provider', 'model', 'agent']);
-const TAB_VALUES = new Set<DashboardTab>(['overview', 'errors', 'consumption', 'cache']);
+const TAB_VALUES = new Set<DashboardTab>(['overview', 'performance', 'errors', 'usage']);
+
+const TAB_MIGRATION: Record<string, DashboardTab> = {
+  consumption: 'usage',
+  cache: 'usage',
+};
 
 function setOrDelete(params: URLSearchParams, key: string, value: string, defaultValue = ''): void {
   if (value === defaultValue) {
@@ -20,8 +25,14 @@ function parseBreakdown(params: URLSearchParams): BreakdownDimension {
 }
 
 function parseTab(params: URLSearchParams): DashboardTab {
-  const v = params.get('tab') as DashboardTab;
-  return TAB_VALUES.has(v) ? v : 'overview';
+  const raw = params.get('tab') ?? '';
+  if (TAB_VALUES.has(raw as DashboardTab)) {
+    return raw as DashboardTab;
+  }
+  if (raw in TAB_MIGRATION) {
+    return TAB_MIGRATION[raw];
+  }
+  return 'overview';
 }
 
 export type DashboardUrlState = {
