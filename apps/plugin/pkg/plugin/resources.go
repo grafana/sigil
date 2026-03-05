@@ -90,6 +90,8 @@ func requiredPermissionAction(method string, path string) (string, bool) {
 		return permissionDataRead, true
 	case method == http.MethodPost && path == "/query/conversations/search":
 		return permissionDataRead, true
+	case method == http.MethodPost && path == "/query/conversations/search/stream":
+		return permissionDataRead, true
 	case strings.HasPrefix(path, "/query/conversations/"):
 		return permissionForConversationRoute(method, path)
 	case method == http.MethodGet && strings.HasPrefix(path, "/query/generations/"):
@@ -776,6 +778,7 @@ func (a *App) handleEvalSavedConversationsManual(w http.ResponseWriter, req *htt
 
 func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/query/conversations/search", a.withAuthorization(a.handleSearchConversations))
+	mux.HandleFunc("/query/conversations/search/stream", a.withAuthorization(a.handleSearchConversationsStream))
 	mux.HandleFunc("/query/conversations", a.withAuthorization(a.handleListConversations))
 	mux.HandleFunc("/query/conversations/", a.withAuthorization(a.handleConversationRoutes))
 	mux.HandleFunc("/query/generations/", a.withAuthorization(a.handleGenerationRoutes))
@@ -862,6 +865,28 @@ type conversationSearchResponse struct {
 	HasMore       bool                       `json:"has_more"`
 }
 
+type conversationSearchStreamResultsEvent struct {
+	Type          string                     `json:"type"`
+	Conversations []conversationSearchResult `json:"conversations"`
+}
+
+type conversationSearchStreamCompleteEvent struct {
+	Type       string `json:"type"`
+	NextCursor string `json:"next_cursor,omitempty"`
+	HasMore    bool   `json:"has_more"`
+}
+
+type conversationSearchStreamErrorEvent struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
+}
+
+type conversationSearchState struct {
+	Results    []conversationSearchResult
+	NextCursor string
+	HasMore    bool
+}
+
 type conversationBatchMetadataRequest struct {
 	ConversationIDs []string `json:"conversation_ids"`
 }
@@ -931,6 +956,71 @@ func (a *App) handleSearchConversations(w http.ResponseWriter, req *http.Request
 		return
 	}
 	writeJSONResponse(w, http.StatusOK, response)
+}
+
+func (a *App) handleSearchConversationsStream(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !a.hasGrafanaDatasourceProxyTarget(a.tempoDatasourceUID) {
+		http.Error(w, "grafana tempo datasource proxy is not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming is not supported", http.StatusInternalServerError)
+		return
+	}
+
+	payload, err := decodeConversationSearchRequest(req)
+	if err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	started := false
+	state, err := a.runConversationSearch(req, payload, func(batch []conversationSearchResult) error {
+		if len(batch) == 0 {
+			return nil
+		}
+		if !started {
+			prepareConversationSearchStreamResponse(w)
+			started = true
+		}
+		if err := json.NewEncoder(w).Encode(conversationSearchStreamResultsEvent{
+			Type:          "results",
+			Conversations: batch,
+		}); err != nil {
+			return err
+		}
+		flusher.Flush()
+		return nil
+	})
+	if err != nil {
+		if !started {
+			a.writeSearchError(w, "/query/conversations/search/stream", err)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(conversationSearchStreamErrorEvent{
+			Type:    "error",
+			Message: err.Error(),
+		})
+		flusher.Flush()
+		return
+	}
+
+	if !started {
+		prepareConversationSearchStreamResponse(w)
+		started = true
+	}
+	_ = json.NewEncoder(w).Encode(conversationSearchStreamCompleteEvent{
+		Type:       "complete",
+		NextCursor: state.NextCursor,
+		HasMore:    state.HasMore,
+	})
+	flusher.Flush()
 }
 
 func (a *App) handleSearchTags(w http.ResponseWriter, req *http.Request) {
@@ -1033,22 +1123,38 @@ func (a *App) handleSearchTagValues(w http.ResponseWriter, req *http.Request) {
 }
 
 func (a *App) searchConversations(req *http.Request, payload conversationSearchRequest) (conversationSearchResponse, error) {
-	from, to, err := normalizeConversationSearchTimeRange(payload.TimeRange)
+	state, err := a.runConversationSearch(req, payload, nil)
 	if err != nil {
 		return conversationSearchResponse{}, err
+	}
+	return conversationSearchResponse{
+		Conversations: state.Results,
+		NextCursor:    state.NextCursor,
+		HasMore:       state.HasMore,
+	}, nil
+}
+
+func (a *App) runConversationSearch(
+	req *http.Request,
+	payload conversationSearchRequest,
+	emit func([]conversationSearchResult) error,
+) (conversationSearchState, error) {
+	from, to, err := normalizeConversationSearchTimeRange(payload.TimeRange)
+	if err != nil {
+		return conversationSearchState{}, err
 	}
 
 	parsedFilters, err := searchcore.ParseFilterExpression(payload.Filters)
 	if err != nil {
-		return conversationSearchResponse{}, newSearchValidationError(err.Error())
+		return conversationSearchState{}, newSearchValidationError(err.Error())
 	}
 	if err := searchcore.ValidateMySQLFilterTerms(parsedFilters.MySQLTerms); err != nil {
-		return conversationSearchResponse{}, newSearchValidationError(err.Error())
+		return conversationSearchState{}, newSearchValidationError(err.Error())
 	}
 
 	selectFields, err := searchcore.NormalizeSelectFields(payload.Select)
 	if err != nil {
-		return conversationSearchResponse{}, newSearchValidationError(err.Error())
+		return conversationSearchState{}, newSearchValidationError(err.Error())
 	}
 
 	pageSize := searchcore.NormalizeConversationSearchPageSize(payload.PageSize)
@@ -1060,15 +1166,15 @@ func (a *App) searchConversations(req *http.Request, payload conversationSearchR
 	filterHash := searchcore.BuildConversationSearchFilterHash(parsedFilters, selectFields, from, to)
 	cursor, err := searchcore.DecodeConversationSearchCursor(payload.Cursor)
 	if err != nil {
-		return conversationSearchResponse{}, newSearchValidationError("invalid cursor")
+		return conversationSearchState{}, newSearchValidationError("invalid cursor")
 	}
 	if strings.TrimSpace(payload.Cursor) != "" && cursor.FilterHash != filterHash {
-		return conversationSearchResponse{}, newSearchValidationError("cursor no longer matches current filters")
+		return conversationSearchState{}, newSearchValidationError("cursor no longer matches current filters")
 	}
 
 	traceQL, err := searchcore.BuildTraceQL(parsedFilters, selectFields)
 	if err != nil {
-		return conversationSearchResponse{}, newSearchValidationError(err.Error())
+		return conversationSearchState{}, newSearchValidationError(err.Error())
 	}
 
 	searchEndNanos := to.UnixNano()
@@ -1076,7 +1182,7 @@ func (a *App) searchConversations(req *http.Request, payload conversationSearchR
 		searchEndNanos = cursor.EndNanos
 	}
 	if searchEndNanos <= from.UnixNano() {
-		return conversationSearchResponse{Conversations: []conversationSearchResult{}, HasMore: false}, nil
+		return conversationSearchState{Results: []conversationSearchResult{}, HasMore: false}, nil
 	}
 
 	alreadyReturned := make(map[string]struct{}, len(cursor.ReturnedConversations))
@@ -1098,7 +1204,7 @@ func (a *App) searchConversations(req *http.Request, payload conversationSearchR
 
 		tempoResponse, err := a.searchTempo(req, traceQL, overfetchLimit, from, windowEnd)
 		if err != nil {
-			return conversationSearchResponse{}, err
+			return conversationSearchState{}, err
 		}
 		if len(tempoResponse.Traces) == 0 {
 			terminatedByIterationLimit = false
@@ -1109,10 +1215,11 @@ func (a *App) searchConversations(req *http.Request, payload conversationSearchR
 		orderedConversationIDs := searchcore.OrderTempoConversationIDs(grouped.Conversations)
 		metadataByConversation, err := a.fetchConversationBatchMetadata(req, orderedConversationIDs)
 		if err != nil {
-			return conversationSearchResponse{}, err
+			return conversationSearchState{}, err
 		}
 
 		foundAdditionalConversation := false
+		batch := make([]conversationSearchResult, 0, pageSize-len(results))
 		for _, conversationID := range orderedConversationIDs {
 			if _, seen := alreadyReturned[conversationID]; seen {
 				continue
@@ -1158,7 +1265,14 @@ func (a *App) searchConversations(req *http.Request, payload conversationSearchR
 				result.EvalSummary = &copied
 			}
 			results = append(results, result)
+			batch = append(batch, result)
 			currentPageIDs[conversationID] = struct{}{}
+		}
+
+		if len(batch) > 0 && emit != nil {
+			if err := emit(batch); err != nil {
+				return conversationSearchState{}, err
+			}
 		}
 
 		if foundAdditionalConversation {
@@ -1197,15 +1311,34 @@ func (a *App) searchConversations(req *http.Request, payload conversationSearchR
 			FilterHash:            filterHash,
 		})
 		if err != nil {
-			return conversationSearchResponse{}, err
+			return conversationSearchState{}, err
 		}
 	}
 
-	return conversationSearchResponse{
-		Conversations: results,
-		NextCursor:    nextCursor,
-		HasMore:       hasMore,
+	return conversationSearchState{
+		Results:    results,
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
 	}, nil
+}
+
+func decodeConversationSearchRequest(req *http.Request) (conversationSearchRequest, error) {
+	var payload conversationSearchRequest
+	if req.Body == nil {
+		return payload, nil
+	}
+
+	decoder := json.NewDecoder(req.Body)
+	if err := decoder.Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+		return conversationSearchRequest{}, err
+	}
+	return payload, nil
+}
+
+func prepareConversationSearchStreamResponse(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Accel-Buffering", "no")
 }
 
 func normalizeConversationSearchTimeRange(timeRange conversationSearchTimeRange) (time.Time, time.Time, error) {

@@ -143,12 +143,15 @@ Design doc: `docs/design-docs/2026-02-15-conversation-query-path.md`
 
 1. Frontend sends query request to plugin backend resource endpoint.
 2. Plugin backend applies tenant/header behavior, executes conversation search + search tag discovery directly against Tempo via Grafana datasource proxy, and calls Sigil only for metadata hydration.
+   - Main conversations page may use the plugin-owned streaming search route (`POST /query/conversations/search/stream`) which returns NDJSON result chunks followed by a final cursor payload.
 3. Sigil API query path:
    - conversation batch metadata: hydrate conversation summaries (`generation_count`, timestamps, feedback summary, eval summary) for plugin-provided IDs.
    - conversation detail: direct MySQL/object storage fan-out read by conversation ID, return all hydrated generations.
    - generation detail: direct MySQL/object storage read by generation ID.
-  - agent catalog list/lookup/version-history: direct MySQL projection reads from `agent_heads`, `agent_versions`, and `agent_version_models`.
-   - model cards: read model-card catalog from DB/snapshot fallback and optionally resolve `(provider, model)` pairs for deterministic pricing joins.
+
+- agent catalog list/lookup/version-history: direct MySQL projection reads from `agent_heads`, `agent_versions`, and `agent_version_models`.
+- model cards: read model-card catalog from DB/snapshot fallback and optionally resolve `(provider, model)` pairs for deterministic pricing joins.
+
 4. Sigil API returns JSON responses (hydration payloads and full detail payloads).
 
 For Grafana app plugin deployments:
@@ -195,12 +198,12 @@ flowchart LR
 Read path components:
 
 1. Grafana plugin frontend calls plugin backend resource routes.
-2. Plugin backend adds tenant context and forwards to Sigil query API.
+2. Plugin backend adds tenant context and forwards to Sigil query API where needed.
 3. Conversation search:
-   - Sigil translates user filter expression to TraceQL with `gen_ai.operation.name != ""` base predicate.
+   - Plugin backend translates user filter expression to TraceQL with `span.sigil.generation.id != ""` empty-filter guard and Tempo-routed predicates.
    - Tempo returns matching spans with `sigil.generation.id`, `gen_ai.conversation.id`, and optional `sigil.conversation.title` and `user.id` attributes.
-   - Sigil groups spans by conversation, enriches from MySQL metadata and feedback tables.
-   - Paginated conversation summaries returned to frontend.
+   - Plugin backend groups spans by conversation and hydrates conversation metadata from Sigil batch-metadata reads.
+   - Main conversations page may consume streamed result batches before the final cursor/`has_more` payload is known.
 4. Conversation/generation detail:
    - MySQL hot rows (`generations`, `conversations`) + object storage blocks.
    - Fan-out uses hot-first gating for conversation detail; cold reads are skipped when hot rows already satisfy expected conversation generation count.

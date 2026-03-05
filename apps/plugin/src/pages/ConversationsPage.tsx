@@ -7,6 +7,7 @@ import { defaultConversationsDataSource, type ConversationsDataSource } from '..
 import type {
   ConversationDetail,
   ConversationSearchRequest,
+  ConversationSearchResponse,
   ConversationSearchResult,
   GenerationDetail,
   SearchTag,
@@ -52,6 +53,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
 
 const DEFAULT_FROM = 'now-24h';
 const DEFAULT_TO = 'now';
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
 
 function parseTimeRange(params: URLSearchParams): TimeRange {
   const rawFrom = params.get('from') || DEFAULT_FROM;
@@ -140,6 +145,7 @@ export default function ConversationsPage(props: ConversationsPageProps) {
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   const searchRequestVersion = useRef<number>(0);
+  const searchAbortController = useRef<AbortController | null>(null);
   const conversationDetailRequestVersion = useRef<number>(0);
   const tagsRequestVersion = useRef<number>(0);
   const tagValuesRequestVersion = useRef<number>(0);
@@ -149,6 +155,9 @@ export default function ConversationsPage(props: ConversationsPageProps) {
   const runSearch = async (cursor?: string, append?: boolean): Promise<void> => {
     searchRequestVersion.current += 1;
     const requestVersion = searchRequestVersion.current;
+    searchAbortController.current?.abort();
+    const abortController = new AbortController();
+    searchAbortController.current = abortController;
 
     const payload: ConversationSearchRequest = {
       filters: filterText,
@@ -163,37 +172,66 @@ export default function ConversationsPage(props: ConversationsPageProps) {
     } else {
       setLoadingSearch(true);
       setErrorMessage('');
+      setSearchResults([]);
+      setNextCursor('');
+      setHasMore(false);
+      setSelectedConversationID('');
     }
 
     try {
-      const response = await dataSource.searchConversations(payload);
+      let selectedFirstConversation = false;
+      const handleBatch = (conversations: ConversationSearchResult[]) => {
+        if (searchRequestVersion.current !== requestVersion) {
+          return;
+        }
+        if (!append && conversations.length > 0) {
+          setLoadingSearch(false);
+        }
+        setSearchResults((current) => [...current, ...(conversations ?? [])]);
+        if (!append && !selectedFirstConversation && conversations.length > 0) {
+          selectedFirstConversation = true;
+          setSelectedConversationID(conversations[0].conversation_id);
+        }
+      };
+
+      const handleComplete = (response: Pick<ConversationSearchResponse, 'next_cursor' | 'has_more'>) => {
+        if (searchRequestVersion.current !== requestVersion) {
+          return;
+        }
+        setNextCursor(response.next_cursor ?? '');
+        setHasMore(Boolean(response.has_more));
+      };
+
+      if (dataSource.streamSearchConversations) {
+        await dataSource.streamSearchConversations(payload, {
+          signal: abortController.signal,
+          onResults: handleBatch,
+          onComplete: handleComplete,
+        });
+      } else {
+        const response = await dataSource.searchConversations(payload);
+        handleBatch(response.conversations ?? []);
+        handleComplete(response);
+      }
       if (searchRequestVersion.current !== requestVersion) {
         return;
       }
-      setSearchResults((current) =>
-        append ? [...current, ...(response.conversations ?? [])] : (response.conversations ?? [])
-      );
-      setNextCursor(response.next_cursor ?? '');
-      setHasMore(Boolean(response.has_more));
-
-      if (!append) {
-        const firstConversationID = response.conversations?.[0]?.conversation_id ?? '';
-        setSelectedConversationID(firstConversationID);
+      if (!append && !selectedFirstConversation) {
+        setSelectedConversationID('');
       }
     } catch (error) {
-      if (searchRequestVersion.current !== requestVersion) {
+      if (searchRequestVersion.current !== requestVersion || isAbortError(error)) {
         return;
       }
       setErrorMessage(error instanceof Error ? error.message : 'failed to search conversations');
-      if (!append) {
-        setSearchResults([]);
-        setNextCursor('');
-        setHasMore(false);
-        setSelectedConversationID('');
-      }
+      setNextCursor('');
+      setHasMore(false);
     } finally {
       if (searchRequestVersion.current !== requestVersion) {
         return;
+      }
+      if (searchAbortController.current === abortController) {
+        searchAbortController.current = null;
       }
       setLoadingSearch(false);
       setLoadingMore(false);
@@ -202,6 +240,12 @@ export default function ConversationsPage(props: ConversationsPageProps) {
 
   const rangeFrom = timeRange.from.toISOString();
   const rangeTo = timeRange.to.toISOString();
+
+  useEffect(() => {
+    return () => {
+      searchAbortController.current?.abort();
+    };
+  }, []);
 
   useEffect(() => {
     tagsRequestVersion.current += 1;
