@@ -67,6 +67,11 @@ export function buildOutputKeyFromForm(input: OutputKeyFormInput): EvalOutputKey
   return ok;
 }
 
+/** Backend defaults applied when config fields are omitted. */
+export const LLM_JUDGE_DEFAULT_SYSTEM_PROMPT =
+  'You are an evaluation judge. For number scores, use a 1-10 integer scale (1 = very poor, 10 = excellent) unless the output key description specifies otherwise.';
+export const LLM_JUDGE_DEFAULT_USER_PROMPT = 'User input:\n{{input}}\n\nAssistant output:\n{{output}}';
+
 export type Evaluator = {
   evaluator_id: string;
   version: string;

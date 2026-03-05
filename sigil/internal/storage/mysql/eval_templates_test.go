@@ -438,6 +438,85 @@ func TestTemplateStoreDuplicateVersion(t *testing.T) {
 	}
 }
 
+func TestTemplateStoreDeleteCleansVersions(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	// Create template with two versions.
+	err := store.CreateTemplate(context.Background(), evalpkg.TemplateDefinition{
+		TenantID:      "tenant-v",
+		TemplateID:    "tmpl.versioned",
+		Scope:         evalpkg.TemplateScopeTenant,
+		LatestVersion: "v1",
+		Kind:          evalpkg.EvaluatorKindLLMJudge,
+	}, evalpkg.TemplateVersion{
+		TenantID:   "tenant-v",
+		TemplateID: "tmpl.versioned",
+		Version:    "v1",
+		Config:     map[string]any{"system_prompt": "original"},
+		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
+	})
+	if err != nil {
+		t.Fatalf("create template: %v", err)
+	}
+	err = store.PublishTemplateVersion(context.Background(), evalpkg.TemplateVersion{
+		TenantID:   "tenant-v",
+		TemplateID: "tmpl.versioned",
+		Version:    "v2",
+		Config:     map[string]any{"system_prompt": "updated"},
+		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
+	})
+	if err != nil {
+		t.Fatalf("publish v2: %v", err)
+	}
+
+	// Delete should remove versions.
+	if err := store.DeleteTemplate(context.Background(), "tenant-v", "tmpl.versioned"); err != nil {
+		t.Fatalf("delete template: %v", err)
+	}
+
+	versions, err := store.ListTemplateVersions(context.Background(), "tenant-v", "tmpl.versioned")
+	if err != nil {
+		t.Fatalf("list versions after delete: %v", err)
+	}
+	if len(versions) != 0 {
+		t.Fatalf("expected 0 versions after delete, got %d", len(versions))
+	}
+
+	// Re-create with same ID should start fresh.
+	err = store.CreateTemplate(context.Background(), evalpkg.TemplateDefinition{
+		TenantID:      "tenant-v",
+		TemplateID:    "tmpl.versioned",
+		Scope:         evalpkg.TemplateScopeTenant,
+		LatestVersion: "v1",
+		Kind:          evalpkg.EvaluatorKindLLMJudge,
+	}, evalpkg.TemplateVersion{
+		TenantID:   "tenant-v",
+		TemplateID: "tmpl.versioned",
+		Version:    "v1",
+		Config:     map[string]any{"system_prompt": "fresh start"},
+		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
+	})
+	if err != nil {
+		t.Fatalf("re-create template: %v", err)
+	}
+
+	versions, err = store.ListTemplateVersions(context.Background(), "tenant-v", "tmpl.versioned")
+	if err != nil {
+		t.Fatalf("list versions after re-create: %v", err)
+	}
+	if len(versions) != 1 {
+		t.Fatalf("expected 1 version after re-create, got %d", len(versions))
+	}
+	if versions[0].Config["system_prompt"] != "fresh start" {
+		t.Errorf("expected fresh config, got %v", versions[0].Config)
+	}
+}
+
 func TestTemplateStoreDeleteNonexistent(t *testing.T) {
 	store, cleanup := newTestWALStore(t)
 	defer cleanup()
