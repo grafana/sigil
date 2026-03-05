@@ -20,8 +20,6 @@ export type FilterToolbarProps = {
   onTimeRangeChange: (timeRange: TimeRange) => void;
   onFiltersChange: (filters: DashboardFilters) => void;
   hideLabelFilters?: boolean;
-  /** When true, filters start collapsed with "Default view (click to change)". Click expands once (no collapse). */
-  collapsible?: boolean;
   children?: React.ReactNode;
 };
 
@@ -39,11 +37,9 @@ export function FilterToolbar({
   onTimeRangeChange,
   onFiltersChange,
   hideLabelFilters = false,
-  collapsible = false,
   children,
 }: FilterToolbarProps) {
   const styles = useStyles2(getStyles);
-  const [filtersExpanded, setFiltersExpanded] = useState(!collapsible);
 
   const [pendingRows, setPendingRows] = useState<LabelFilter[]>([]);
 
@@ -157,8 +153,7 @@ export function FilterToolbar({
         </>
       )}
       <div className={styles.filtersSection}>
-        {filtersExpanded ? (
-          <Stack direction="row" gap={1} alignItems="center" wrap="wrap">
+        <Stack direction="row" gap={1} alignItems="center" wrap="wrap">
             <MultiSelect<string>
               className={styles.multiSelect}
               options={providerSelectOptions}
@@ -217,12 +212,7 @@ export function FilterToolbar({
                 className={styles.clearButton}
               />
             )}
-          </Stack>
-        ) : (
-          <button type="button" className={styles.collapsedFilters} onClick={() => setFiltersExpanded(true)}>
-            Default view (click to change)
-          </button>
-        )}
+        </Stack>
       </div>
       <TimeRangePicker
         value={timeRange}
@@ -268,17 +258,6 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'flex',
       flex: '1 1 auto',
       minWidth: 0,
-    }),
-    collapsedFilters: css({
-      background: 'none',
-      border: 'none',
-      padding: theme.spacing(0.5, 1),
-      cursor: 'pointer',
-      color: theme.colors.text.secondary,
-      fontSize: theme.typography.body.fontSize,
-      '&:hover': {
-        color: theme.colors.text.primary,
-      },
     }),
     divider: css({
       width: 1,
