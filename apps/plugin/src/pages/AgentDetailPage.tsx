@@ -377,16 +377,44 @@ export default function AgentDetailPage({
     return getEncoding(firstModel?.provider, firstModel?.name);
   }, [detail]);
 
-  const [tokenizedSections, setTokenizedSections] = useState<Record<string, boolean>>({});
-  const [encodingOverride, setEncodingOverride] = useState<EncodingName | null>(null);
+  const versionKey = `${agentName}:${selectedVersion}`;
+  const [tokenizeState, setTokenizeState] = useState<{
+    versionKey: string;
+    sections: Record<string, boolean>;
+    encodingOverride: EncodingName | null;
+  }>({ versionKey, sections: {}, encodingOverride: null });
+
+  const tokenizedSections = tokenizeState.versionKey === versionKey ? tokenizeState.sections : {};
+  const encodingOverride = tokenizeState.versionKey === versionKey ? tokenizeState.encodingOverride : null;
 
   const activeEncoding = encodingOverride ?? autoEncoding;
   const anyTokenized = Object.values(tokenizedSections).some(Boolean);
   const { encode, decode, isLoading: tokenizerLoading } = useTokenizer(anyTokenized ? activeEncoding : null);
 
-  const toggleSection = useCallback((key: string) => {
-    setTokenizedSections((prev) => ({ ...prev, [key]: !prev[key] }));
-  }, []);
+  const setEncodingOverride = useCallback(
+    (enc: EncodingName | null) => {
+      setTokenizeState((prev) => ({
+        versionKey,
+        sections: prev.versionKey === versionKey ? prev.sections : {},
+        encodingOverride: enc,
+      }));
+    },
+    [versionKey]
+  );
+
+  const toggleSection = useCallback(
+    (key: string) => {
+      setTokenizeState((prev) => {
+        const sections = prev.versionKey === versionKey ? prev.sections : {};
+        return {
+          versionKey,
+          sections: { ...sections, [key]: !sections[key] },
+          encodingOverride: prev.versionKey === versionKey ? prev.encodingOverride : null,
+        };
+      });
+    },
+    [versionKey]
+  );
 
   if (loading) {
     return (

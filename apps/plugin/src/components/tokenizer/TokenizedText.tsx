@@ -81,7 +81,7 @@ export function TokenizedText({ text, encode, decode }: TokenizedTextProps) {
       )}
       {tip && (
         <span className={styles.tip} style={{ left: tip.x, top: tip.y }}>
-          {tip.id}
+          id: {tip.id}
         </span>
       )}
     </span>
