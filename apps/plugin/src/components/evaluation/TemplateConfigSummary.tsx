@@ -143,14 +143,14 @@ export default function TemplateConfigSummary({ kind, config, outputKeys }: Temp
               )}
             </Stack>
           )}
-          {ok.type === 'string' && ok.enum?.length && (
+          {ok.type === 'string' && (ok.enum?.length ?? 0) > 0 && (
             <Field label="Allowed values">
-              <Input value={ok.enum.join(', ')} readOnly disabled width={60} />
+              <Input value={ok.enum!.join(', ')} readOnly disabled width={60} />
             </Field>
           )}
-          {ok.type === 'string' && ok.pass_match?.length && (
+          {ok.type === 'string' && (ok.pass_match?.length ?? 0) > 0 && (
             <Field label="Pass values">
-              <Input value={ok.pass_match.join(', ')} readOnly disabled width={60} />
+              <Input value={ok.pass_match!.join(', ')} readOnly disabled width={60} />
             </Field>
           )}
           {ok.type === 'bool' && ok.pass_value != null && (
