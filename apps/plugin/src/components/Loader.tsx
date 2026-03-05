@@ -6,6 +6,7 @@ import { useStyles2 } from '@grafana/ui';
 const TYPEWRITER_LINES = [
   'Crunching telemetry data...',
   'Analyzing AI traces...',
+  'Decoding telemetry patterns...',
   'Sifting through span events...',
   'Correlating logs and traces...',
   'Mapping service dependencies...',
@@ -30,7 +31,11 @@ const DELETE_STEP_MS = 24;
 const FULL_LINE_PAUSE_MS = 1800;
 const EMPTY_LINE_PAUSE_MS = 260;
 
-export const Loader = () => {
+type LoaderProps = {
+  showText?: boolean;
+};
+
+export const Loader = ({ showText = true }: LoaderProps) => {
   const styles = useStyles2(getStyles);
   const [lineIndex, setLineIndex] = useState(0);
   const [charCount, setCharCount] = useState(0);
@@ -90,10 +95,12 @@ export const Loader = () => {
         <span className={styles.particle}></span>
         <span className={styles.particle}></span>
       </div>
-      <div className={styles.typewriterRow} aria-live="polite">
-        <span>{currentLine.slice(0, charCount)}</span>
-        <span className={styles.cursor}>|</span>
-      </div>
+      {showText ? (
+        <div className={styles.typewriterRow} aria-live="polite">
+          <span>{currentLine.slice(0, charCount)}</span>
+          <span className={styles.cursor}>|</span>
+        </div>
+      ) : null}
     </div>
   );
 };
