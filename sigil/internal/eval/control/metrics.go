@@ -102,10 +102,15 @@ func controlEndpoint(endpoint string) string {
 
 func controlMethod(method string) string {
 	trimmed := strings.ToUpper(strings.TrimSpace(method))
-	if trimmed == "" {
+	switch trimmed {
+	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut,
+		http.MethodPatch, http.MethodDelete, http.MethodOptions:
+		return trimmed
+	case "":
 		return "UNKNOWN"
+	default:
+		return "OTHER"
 	}
-	return trimmed
 }
 
 func controlStatusClass(statusCode int) string {
