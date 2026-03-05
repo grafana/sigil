@@ -299,6 +299,19 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     letterSpacing: '0.04em',
     color: theme.colors.text.secondary,
   }),
+  tipActionLink: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    width: 'fit-content',
+    fontSize: theme.typography.bodySmall.fontSize,
+    color: theme.colors.text.link,
+    textDecoration: 'none',
+    '&:hover': {
+      color: theme.colors.text.primary,
+      textDecoration: 'underline',
+    },
+  }),
   scoreChipsContainer: css({
     display: 'flex',
     flexWrap: 'wrap' as const,

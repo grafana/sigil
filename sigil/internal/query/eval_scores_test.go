@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -89,6 +90,55 @@ func TestGetGenerationDetailForTenantIgnoresLatestScoreErrors(t *testing.T) {
 	}
 	if _, hasLatest := payload["latest_scores"]; hasLatest {
 		t.Fatalf("expected latest_scores to be omitted when enrichment fails, got %#v", payload["latest_scores"])
+	}
+}
+
+func TestGetGenerationDetailForTenantIncludesAgentEffectiveVersion(t *testing.T) {
+	generation := &sigilv1.Generation{
+		Id:             "gen-1",
+		ConversationId: "conv-1",
+		Mode:           sigilv1.GenerationMode_GENERATION_MODE_SYNC,
+		Model:          &sigilv1.ModelRef{Provider: "openai", Name: "gpt-4o"},
+		AgentName:      "assistant",
+		AgentVersion:   "declared-v1",
+		SystemPrompt:   "You are currently operating in assistant mode.",
+		Tools: []*sigilv1.ToolDefinition{
+			{Name: "search_dashboards", Type: "tool"},
+		},
+	}
+
+	service, err := NewServiceWithDependencies(ServiceDependencies{
+		WALReader: &scoreTestWALReader{byID: map[string]*sigilv1.Generation{"gen-1": generation}},
+	})
+	if err != nil {
+		t.Fatalf("new service: %v", err)
+	}
+
+	payload, found, err := service.GetGenerationDetailForTenant(context.Background(), "tenant-a", "gen-1")
+	if err != nil {
+		t.Fatalf("get generation detail: %v", err)
+	}
+	if !found {
+		t.Fatalf("expected generation to be found")
+	}
+
+	agentID, ok := payload["agent_id"].(string)
+	if !ok || agentID == "" {
+		t.Fatalf("expected non-empty agent_id, got %#v", payload["agent_id"])
+	}
+	if !strings.HasPrefix(agentID, "sha256:") {
+		t.Fatalf("expected hash-style agent_id, got %q", agentID)
+	}
+	if agentID == generation.GetAgentVersion() {
+		t.Fatalf("expected agent_id to differ from declared agent_version, got %q", agentID)
+	}
+
+	agentEffectiveVersion, ok := payload["agent_effective_version"].(string)
+	if !ok || agentEffectiveVersion == "" {
+		t.Fatalf("expected non-empty agent_effective_version, got %#v", payload["agent_effective_version"])
+	}
+	if agentEffectiveVersion != agentID {
+		t.Fatalf("expected agent_effective_version to match agent_id, got %q vs %q", agentEffectiveVersion, agentID)
 	}
 }
 

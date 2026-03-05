@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { GenerationDetail } from '../../generation/types';
 import type { FlowNode } from './types';
 import GenerationView from './GenerationView';
@@ -37,5 +37,39 @@ describe('GenerationView', () => {
     expect(chip).not.toBeNull();
     expect(within(chip!).queryByText('✗')).not.toBeInTheDocument();
     expect(within(chip!).queryByText('✓')).not.toBeInTheDocument();
+  });
+
+  it('shows an agent detail link in the agent context popover', async () => {
+    const generation: GenerationDetail = {
+      generation_id: 'gen-1',
+      conversation_id: 'conv-1',
+      agent_name: 'assistant',
+      agent_effective_version: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      model: {
+        provider: 'openai',
+        name: 'gpt-4.1',
+      },
+      system_prompt: 'You are in assistant mode.',
+    };
+    const node: FlowNode = {
+      id: 'node-1',
+      kind: 'generation',
+      label: 'generation',
+      durationMs: 125,
+      startMs: 0,
+      status: 'success',
+      generation,
+      children: [],
+    };
+
+    render(<GenerationView node={node} allGenerations={[generation]} onClose={jest.fn()} />);
+
+    fireEvent.click(screen.getByLabelText('Agent context'));
+
+    const link = await screen.findByRole('link', { name: 'Open agent page' });
+    expect(link).toHaveAttribute(
+      'href',
+      '/a/grafana-sigil-app/agents/name/assistant?version=sha256%3Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    );
   });
 });

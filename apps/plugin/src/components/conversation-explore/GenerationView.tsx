@@ -9,6 +9,7 @@ import {
   type Part,
 } from '../../generation/types';
 import type { ConversationSpan } from '../../conversation/types';
+import { buildAgentDetailByNameRoute, buildAnonymousAgentDetailRoute, PLUGIN_BASE } from '../../constants';
 import type { FlowNode } from './types';
 import { getStyles } from './GenerationView.styles';
 import { renderTextWithXml } from './CollapsibleXml';
@@ -32,6 +33,22 @@ function formatDuration(ms: number): string {
 const numberFmt = new Intl.NumberFormat('en-US');
 function formatNumber(n: number): string {
   return numberFmt.format(n);
+}
+
+function buildAgentDetailUrl(generation: GenerationDetail): string | null {
+  const agentName = generation.agent_name?.trim() ?? '';
+  const effectiveVersion =
+    generation.agent_id?.trim() || generation.agent_effective_version?.trim() || generation.agent_version?.trim() || '';
+  const route = agentName.length > 0 ? buildAgentDetailByNameRoute(agentName) : buildAnonymousAgentDetailRoute();
+  if (!route) {
+    return null;
+  }
+
+  const url = new URL(`${PLUGIN_BASE}/${route}`, window.location.origin);
+  if (effectiveVersion.length > 0) {
+    url.searchParams.set('version', effectiveVersion);
+  }
+  return url.pathname + url.search;
 }
 
 function roleToLabel(role: string): string {
@@ -191,6 +208,7 @@ function AgentContextLabel({ generation, fallbackModel }: { generation: Generati
 
   const tools = generation.tools ?? [];
   const systemPrompt = generation.system_prompt;
+  const agentDetailUrl = buildAgentDetailUrl(generation);
   const extraTags: string[] = [];
   if (generation.model?.provider) {
     extraTags.push(generation.model.provider);
@@ -236,6 +254,13 @@ function AgentContextLabel({ generation, fallbackModel }: { generation: Generati
             ))}
           </div>
         </div>
+      )}
+
+      {agentDetailUrl && (
+        <a href={agentDetailUrl} className={styles.tipActionLink}>
+          <Icon name="external-link-alt" size="sm" />
+          Open agent page
+        </a>
       )}
     </div>
   );
