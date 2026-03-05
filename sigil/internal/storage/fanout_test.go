@@ -459,6 +459,70 @@ func TestFanOutStoreGetGenerationByIDWithPlanFallsBackWhenRangeHintMisses(t *tes
 	}
 }
 
+func TestFanOutStoreGetGenerationByIDWithPlanFallbackSharesColdBudget(t *testing.T) {
+	budget := 400 * time.Millisecond
+	firstScanSleep := 200 * time.Millisecond
+
+	generation := fanOutTestGeneration("gen-1", "conv-1", time.Date(2026, 2, 19, 10, 0, 0, 0, time.UTC))
+	index, generationsByOffset := buildFanOutTestBlock(t, []*sigilv1.Generation{generation})
+
+	var listCalls int32
+	var fallbackDeadlineRemaining time.Duration
+	store := NewFanOutStore(
+		&fanOutTestWALReader{
+			getByID: func(_ context.Context, _, _ string) (*sigilv1.Generation, error) {
+				return nil, nil
+			},
+		},
+		&fanOutTestBlockMetadataStore{
+			listBlocks: func(ctx context.Context, _ string, from, to time.Time) ([]BlockMeta, error) {
+				call := atomic.AddInt32(&listCalls, 1)
+				if call == 1 {
+					time.Sleep(firstScanSleep)
+					return []BlockMeta{}, nil
+				}
+				if dl, ok := ctx.Deadline(); ok {
+					fallbackDeadlineRemaining = time.Until(dl)
+				}
+				return []BlockMeta{{TenantID: "tenant-a", BlockID: "block-1"}}, nil
+			},
+		},
+		&fanOutTestBlockReader{
+			readIndex: func(_ context.Context, _, _ string) (*BlockIndex, error) {
+				return index, nil
+			},
+			readGenerations: func(_ context.Context, _, _ string, entries []IndexEntry) ([]*sigilv1.Generation, error) {
+				return fanOutGenerationsFromEntries(entries, generationsByOffset), nil
+			},
+		},
+		WithColdReadConfig(ColdReadConfig{
+			TotalBudget:      budget,
+			IndexReadTimeout: budget,
+			IndexRetries:     0,
+			IndexWorkers:     1,
+			IndexMaxInflight: 1,
+		}),
+	)
+
+	found, err := store.GetGenerationByIDWithPlan(context.Background(), "tenant-a", "gen-1", GenerationReadPlan{
+		From: time.Date(2026, 2, 19, 11, 0, 0, 0, time.UTC),
+		To:   time.Date(2026, 2, 19, 12, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("get generation by id with plan: %v", err)
+	}
+	if found == nil || found.GetId() != "gen-1" {
+		t.Fatalf("expected fallback to return generation, got %#v", found)
+	}
+	if fallbackDeadlineRemaining <= 0 {
+		t.Fatalf("expected fallback context deadline to be set")
+	}
+	if fallbackDeadlineRemaining > budget-firstScanSleep+50*time.Millisecond {
+		t.Fatalf("fallback context should share original cold budget, but had %s remaining (budget=%s, first scan slept %s)",
+			fallbackDeadlineRemaining, budget, firstScanSleep)
+	}
+}
+
 func TestFanOutStoreListConversationGenerationsWithPlanUsesBoundedBlockRange(t *testing.T) {
 	var (
 		capturedFrom time.Time

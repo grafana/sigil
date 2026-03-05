@@ -423,7 +423,7 @@ func (s *FanOutStore) readColdGenerationByIDWithPlan(
 
 	// Range/at hints are advisory; when the bounded pass misses, retry unbounded
 	// to preserve generation-id correctness.
-	fallbackCtx, fallbackCancel := withOptionalTimeout(ctx, s.coldReadConfig.TotalBudget)
+	fallbackCtx, fallbackCancel := withOptionalTimeout(coldCtx, s.coldReadConfig.TotalBudget)
 	defer fallbackCancel()
 	fallbackGeneration, _, fallbackScanned, err := s.scanColdGenerationByID(
 		fallbackCtx,
@@ -542,7 +542,12 @@ func (s *FanOutStore) readColdConversationGenerationsWithPlan(
 				if coldCtx.Err() != nil {
 					return
 				}
-				results <- s.scanConversationBlock(coldCtx, tenantID, conversationID, block)
+				result := s.scanConversationBlock(coldCtx, tenantID, conversationID, block)
+				select {
+				case results <- result:
+				case <-coldCtx.Done():
+					return
+				}
 			}
 		}()
 	}
