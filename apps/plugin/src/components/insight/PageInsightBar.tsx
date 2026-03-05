@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Icon, IconButton, useStyles2 } from '@grafana/ui';
-import { useInlineAssistant } from '@grafana/assistant';
+import { Icon, IconButton, Tooltip, useStyles2 } from '@grafana/ui';
+import { useAssistant, useInlineAssistant } from '@grafana/assistant';
 import { Loader } from '../Loader';
 import { formatInlineMarkup } from './formatInlineMarkup';
 
@@ -49,6 +49,7 @@ export function PageInsightBar({
   systemPrompt = DEFAULT_SYSTEM_PROMPT,
 }: PageInsightBarProps) {
   const styles = useStyles2(getStyles);
+  const assistant = useAssistant();
   const gen = useInlineAssistant();
   const [text, setText] = useState('');
   const [generatedAt, setGeneratedAt] = useState<number | null>(null);
@@ -146,6 +147,22 @@ export function PageInsightBar({
     }
   }, [runGenerate]);
 
+  const explainInsight = useCallback(
+    (insight: string) => {
+      const question = buildExplainPrompt(insight);
+      if (assistant.openAssistant) {
+        assistant.openAssistant({
+          origin,
+          prompt: question,
+          autoSend: true,
+        });
+        return;
+      }
+      window.location.href = buildAssistantUrl(question);
+    },
+    [assistant, origin]
+  );
+
   useEffect(() => {
     const intervalId = window.setInterval(() => {
       setAgeTick(Date.now());
@@ -158,6 +175,8 @@ export function PageInsightBar({
   const displayText = gen.isGenerating ? gen.content : text;
   const initialWaiting = !dataContext && !text && !gen.isGenerating;
   const hasResult = Boolean(text) || gen.isGenerating;
+  const showLoader = initialWaiting || gen.isGenerating;
+  const loaderTooltip = initialWaiting ? 'Waiting for data' : 'Generating insight...';
   const insightAgeLabel = generatedAt !== null ? formatAgeShort(Math.max(ageTick - generatedAt, 0)) : null;
 
   const bullets = useMemo(() => {
@@ -183,7 +202,7 @@ export function PageInsightBar({
           aria-label={collapsed ? 'Expand insights' : 'Collapse insights'}
         >
           <Icon name="ai" size="md" className={styles.aiIcon} />
-          <span className={styles.headerTitle}>AI analysis</span>
+           <span className={styles.headerTitle}>AI analysis</span>
           {collapsed && firstBullet && (
             <span className={styles.collapsedPreview}>{formatInlineMarkup(firstBullet)}</span>
           )}
@@ -191,7 +210,13 @@ export function PageInsightBar({
         </button>
 
         <div className={styles.actions}>
-          {gen.isGenerating && <Loader showText={false} />}
+          {showLoader && (
+            <Tooltip content={loaderTooltip} placement="top">
+              <span className={styles.loaderTooltipTarget}>
+                <Loader showText={false} />
+              </span>
+            </Tooltip>
+          )}
           {!gen.isGenerating && hasResult && (
             <>
               {insightAgeLabel && <span className={styles.generatedAtText}>{insightAgeLabel}</span>}
@@ -209,16 +234,17 @@ export function PageInsightBar({
 
       {!collapsed && (
         <div className={styles.body}>
-          {initialWaiting ? (
-            <span className={styles.placeholder}>Waiting for data...</span>
-          ) : gen.isGenerating && bullets.length === 0 ? (
-            <span className={styles.placeholder}>Generating insight...</span>
-          ) : bullets.length > 0 ? (
+          {initialWaiting || (gen.isGenerating && bullets.length === 0) ? null : bullets.length > 0 ? (
             <ul className={styles.bulletList}>
               {bullets.map((bullet, i) => (
                 <li key={i} className={styles.bulletItem}>
                   <span className={styles.bulletArrow}>→</span>
-                  <span className={styles.bulletText}>{formatInlineMarkup(bullet)}</span>
+                  <div className={styles.bulletContent}>
+                    <span className={styles.bulletText}>{formatInlineMarkup(bullet)}</span>
+                    <button type="button" className={styles.explainLink} onClick={() => explainInsight(bullet)}>
+                      Explain
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -231,7 +257,6 @@ export function PageInsightBar({
   );
 }
 
-const EXPANDED_HEIGHT = 132;
 const COLLAPSED_HEIGHT = 40;
 
 function buildCacheKey(prompt: string, origin: string, systemPrompt: string, dataContext: string): string {
@@ -298,6 +323,19 @@ function formatAgeShort(ageMs: number): string {
   return `${Math.floor(ageMs / day)}d`;
 }
 
+function buildExplainPrompt(insight: string): string {
+  return `Explain this insight briefly in plain language for a user:\n- ${insight}\n\nKeep it concise and specific. Include what it likely means and why it matters. If confidence is limited, add one optional follow-up investigation step.`;
+}
+
+function buildAssistantUrl(message: string): string {
+  const url = new URL('/a/grafana-assistant-app', window.location.origin);
+  url.searchParams.set('command', 'useAssistant');
+  if (message.trim().length > 0) {
+    url.searchParams.set('text', message.trim());
+  }
+  return url.toString();
+}
+
 function getStyles(theme: GrafanaTheme2) {
   const barBase = {
     width: '100%',
@@ -311,7 +349,8 @@ function getStyles(theme: GrafanaTheme2) {
   return {
     bar: css({
       ...barBase,
-      height: EXPANDED_HEIGHT,
+      minHeight: COLLAPSED_HEIGHT,
+      height: 'auto',
     }),
     barCollapsed: css({
       ...barBase,
@@ -375,6 +414,11 @@ function getStyles(theme: GrafanaTheme2) {
       gap: theme.spacing(0.5),
       flexShrink: 0,
     }),
+    loaderTooltipTarget: css({
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    }),
     generatedAtText: css({
       color: theme.colors.text.secondary,
       fontSize: theme.typography.bodySmall.fontSize,
@@ -382,8 +426,7 @@ function getStyles(theme: GrafanaTheme2) {
     }),
     body: css({
       padding: theme.spacing(0, 1.5, 1.5),
-      height: EXPANDED_HEIGHT - COLLAPSED_HEIGHT,
-      overflow: 'hidden',
+      overflow: 'visible',
     }),
     placeholder: css({
       color: theme.colors.text.secondary,
@@ -407,6 +450,12 @@ function getStyles(theme: GrafanaTheme2) {
       overflow: 'hidden',
       flex: '1 1 0%',
       minWidth: 0,
+    }),
+    bulletContent: css({
+      display: 'flex',
+      flexDirection: 'column',
+      minWidth: 0,
+      gap: theme.spacing(0.5),
     }),
     bulletArrow: css({
       flexShrink: 0,
@@ -432,6 +481,24 @@ function getStyles(theme: GrafanaTheme2) {
         borderRadius: theme.shape.radius.default,
         background: theme.colors.background.canvas,
         fontFamily: theme.typography.fontFamilyMonospace,
+      },
+    }),
+    explainLink: css({
+      alignSelf: 'flex-start',
+      border: 'none',
+      background: 'transparent',
+      color: theme.colors.primary.text,
+      padding: 0,
+      cursor: 'pointer',
+      fontSize: theme.typography.bodySmall.fontSize,
+      lineHeight: 1.2,
+      textDecoration: 'underline',
+      '&:hover': {
+        color: theme.colors.text.primary,
+      },
+      '&:focus-visible': {
+        outline: `2px solid ${theme.colors.primary.border}`,
+        outlineOffset: theme.spacing(0.25),
       },
     }),
   };
