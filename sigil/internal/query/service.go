@@ -1735,7 +1735,10 @@ func (s *Service) batchResolveGenerationTitles(
 		wg.Add(1)
 		go func(idx int, c searchCandidate) {
 			defer wg.Done()
-			localCache := make(map[string]generationTitleSnapshot)
+			localCache := make(map[string]generationTitleSnapshot, len(cache))
+			for k, v := range cache {
+				localCache[k] = v
+			}
 			title := s.resolveLatestConversationTitleFromGenerations(ctx, tenantID, c.metadata, reader, localCache)
 			if title == "" {
 				title = s.resolveConversationTitleFromGenerationIDs(ctx, tenantID, c.aggregate.GenerationIDs, reader, localCache)
