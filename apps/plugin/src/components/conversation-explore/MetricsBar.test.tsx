@@ -91,18 +91,26 @@ describe('MetricsBar model cards', () => {
 });
 
 describe('MetricsBar conversation title', () => {
+  let matchMediaSpy: jest.SpyInstance;
+
   beforeEach(() => {
     jest.useFakeTimers();
-    Object.defineProperty(window, 'matchMedia', {
-      writable: true,
-      configurable: true,
-      value: jest.fn().mockReturnValue({ matches: false, addListener: jest.fn(), removeListener: jest.fn() }),
+    matchMediaSpy = jest.spyOn(window, 'matchMedia').mockReturnValue({
+      matches: false,
+      media: '(prefers-reduced-motion: reduce)',
+      onchange: null,
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
     });
   });
 
   afterEach(() => {
     jest.runOnlyPendingTimers();
     jest.useRealTimers();
+    matchMediaSpy.mockRestore();
   });
 
   it('shows conversation id when title is not provided', () => {
