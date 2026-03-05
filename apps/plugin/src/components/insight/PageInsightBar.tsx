@@ -177,8 +177,7 @@ export function PageInsightBar({
   const hasResult = Boolean(effectiveText) || gen.isGenerating;
   const showLoader = initialWaiting || gen.isGenerating;
   const loaderTooltip = initialWaiting ? 'Waiting for data' : 'Generating insight...';
-  const insightAgeLabel =
-    dataContext && insight ? formatAgeShort(Math.max(ageTick - insight.generatedAt, 0)) : null;
+  const insightAgeLabel = dataContext && insight ? formatAgeShort(Math.max(ageTick - insight.generatedAt, 0)) : null;
 
   const bullets = useMemo(() => {
     if (!displayText) {
