@@ -126,6 +126,20 @@ func (c *GoogleClient) Judge(ctx context.Context, req JudgeRequest) (JudgeRespon
 		cfg.ResponseMIMEType = "application/json"
 		cfg.ResponseJsonSchema = req.OutputSchema
 	}
+	if req.Thinking.IsEnabled() {
+		thinkingConfig := &genai.ThinkingConfig{
+			ThinkingLevel: mapGoogleThinkingLevel(req.Thinking.LevelOrDefault()),
+		}
+		if req.Thinking.BudgetTokens > 0 {
+			budgetTokens := req.Thinking.BudgetTokens
+			if budgetTokens > 2147483647 {
+				budgetTokens = 2147483647
+			}
+			budget := int32(budgetTokens)
+			thinkingConfig.ThinkingBudget = &budget
+		}
+		cfg.ThinkingConfig = thinkingConfig
+	}
 
 	start := time.Now()
 	response, err := c.client.Models.GenerateContent(ctx, model, genai.Text(req.UserPrompt), cfg)
@@ -220,6 +234,19 @@ func normalizeGoogleModelID(raw string) string {
 
 	trimmed = strings.TrimPrefix(trimmed, "models/")
 	return strings.TrimSpace(trimmed)
+}
+
+func mapGoogleThinkingLevel(level ThinkingLevel) genai.ThinkingLevel {
+	switch level {
+	case ThinkingLevelMinimal:
+		return genai.ThinkingLevelMinimal
+	case ThinkingLevelLow:
+		return genai.ThinkingLevelLow
+	case ThinkingLevelHigh:
+		return genai.ThinkingLevelHigh
+	default:
+		return genai.ThinkingLevelMedium
+	}
 }
 
 func resolveVertexCredentials(credentialsFile, credentialsJSON string) (*cloudauth.Credentials, error) {

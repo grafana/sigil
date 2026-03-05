@@ -2,6 +2,7 @@ package judges
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -51,6 +52,50 @@ func TestGoogleClientJudgeAndListModels(t *testing.T) {
 	}
 	if len(models) != 1 || models[0].ID != "gemini-2.0-flash" {
 		t.Fatalf("unexpected models %+v", models)
+	}
+}
+
+func TestGoogleClientJudgeWithThinkingConfig(t *testing.T) {
+	var payload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if strings.Contains(req.URL.Path, ":generateContent") {
+			defer func() { _ = req.Body.Close() }()
+			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode payload: %v", err)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"candidates":[{"content":{"parts":[{"text":"judge output"}]}}],"usageMetadata":{"promptTokenCount":13,"candidatesTokenCount":6}}`))
+			return
+		}
+		http.NotFound(w, req)
+	}))
+	defer server.Close()
+
+	client := NewGoogleClient(server.Client(), server.URL, "key")
+	_, err := client.Judge(context.Background(), JudgeRequest{
+		SystemPrompt: "judge",
+		UserPrompt:   "answer",
+		Model:        "gemini-2.0-flash",
+		MaxTokens:    64,
+		Temperature:  0,
+		Thinking: ThinkingConfig{
+			Mode:  ThinkingModePrefer,
+			Level: ThinkingLevelHigh,
+		},
+	})
+	if err != nil {
+		t.Fatalf("judge: %v", err)
+	}
+	generationConfig, ok := payload["generationConfig"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected generationConfig in payload, got %#v", payload["generationConfig"])
+	}
+	thinkingConfig, ok := generationConfig["thinkingConfig"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected thinkingConfig in payload, got %#v", generationConfig["thinkingConfig"])
+	}
+	if gotLevel, ok := thinkingConfig["thinkingLevel"].(string); !ok || gotLevel != "HIGH" {
+		t.Fatalf("expected thinkingLevel HIGH, got %#v", thinkingConfig["thinkingLevel"])
 	}
 }
 

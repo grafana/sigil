@@ -25,6 +25,7 @@ type Rater struct {
 	resolver          providerResolver
 	defaultProviderID string
 	defaultModelName  string
+	thinking          judges.ThinkingConfig
 }
 
 // NewRater returns a Rater that resolves judge clients from discovery.
@@ -51,6 +52,7 @@ func NewRaterWithTarget(discovery *judges.Discovery, defaultProviderID string, d
 		resolver:          discovery,
 		defaultProviderID: providerID,
 		defaultModelName:  modelName,
+		thinking:          defaultThinkingConfig(),
 	}
 }
 
@@ -73,14 +75,20 @@ func (r *Rater) RateWithModel(ctx context.Context, agent Agent, modelOverride st
 		return nil, NewValidationError(fmt.Sprintf("judge provider %q is not configured", providerID))
 	}
 
-	judgeResponse, err := client.Judge(ctx, judges.JudgeRequest{
+	judgeRequest := judges.JudgeRequest{
 		SystemPrompt: evaluatorSystemPrompt,
 		UserPrompt:   buildUserPrompt(agent),
 		Model:        modelName,
 		MaxTokens:    1400,
 		Temperature:  0,
 		OutputSchema: ratingOutputSchema(),
-	})
+		Thinking:     r.thinkingConfig(),
+	}
+	judgeResponse, err := client.Judge(ctx, judgeRequest)
+	if err != nil && judgeRequest.Thinking.ModeOrDefault() == judges.ThinkingModePrefer && judges.IsThinkingUnsupportedError(err) {
+		judgeRequest.Thinking.Mode = judges.ThinkingModeOff
+		judgeResponse, err = client.Judge(ctx, judgeRequest)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("run agent rating judge: %w", err)
 	}
@@ -332,4 +340,20 @@ func ratingOutputSchema() map[string]any {
 		"required":             []string{"score", "summary", "suggestions"},
 		"additionalProperties": false,
 	}
+}
+
+func defaultThinkingConfig() judges.ThinkingConfig {
+	return judges.ThinkingConfig{
+		Mode:          judges.ThinkingModePrefer,
+		Level:         judges.ThinkingLevelMedium,
+		AnthropicMode: judges.AnthropicThinkingModeAdaptive,
+	}
+}
+
+func (r *Rater) thinkingConfig() judges.ThinkingConfig {
+	thinking := r.thinking
+	if thinking.Mode == "" && thinking.Level == "" && thinking.BudgetTokens == 0 && thinking.AnthropicMode == "" {
+		return defaultThinkingConfig()
+	}
+	return thinking
 }

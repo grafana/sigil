@@ -2,6 +2,7 @@ package judges
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -71,5 +72,40 @@ func TestNormalizeOpenAICompatBaseURL(t *testing.T) {
 				t.Fatalf("normalizeOpenAICompatBaseURL(%q)=%q want %q", tc.input, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestOpenAICompatHTTPClientJudgeWithThinkingSetsReasoningEffort(t *testing.T) {
+	var payload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path != "/v1/chat/completions" {
+			http.NotFound(w, req)
+			return
+		}
+		defer func() { _ = req.Body.Close() }()
+		if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"model":"judge-model","choices":[{"message":{"content":"judge output"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`))
+	}))
+	defer server.Close()
+
+	client := newOpenAICompatHTTPClient(server.Client(), "ollama", server.URL, "test-key")
+	_, err := client.Judge(context.Background(), JudgeRequest{
+		SystemPrompt: "judge",
+		UserPrompt:   "answer",
+		Model:        "judge-model",
+		MaxTokens:    16,
+		Thinking: ThinkingConfig{
+			Mode:  ThinkingModePrefer,
+			Level: ThinkingLevelLow,
+		},
+	})
+	if err != nil {
+		t.Fatalf("judge request failed: %v", err)
+	}
+	if got, ok := payload["reasoning_effort"].(string); !ok || got != "low" {
+		t.Fatalf("expected reasoning_effort=low, got %#v", payload["reasoning_effort"])
 	}
 }

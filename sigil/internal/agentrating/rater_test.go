@@ -10,13 +10,19 @@ import (
 )
 
 type mockJudgeClient struct {
-	response judges.JudgeResponse
-	err      error
-	lastReq  judges.JudgeRequest
+	response  judges.JudgeResponse
+	err       error
+	lastReq   judges.JudgeRequest
+	requests  []judges.JudgeRequest
+	judgeFunc func(req judges.JudgeRequest) (judges.JudgeResponse, error)
 }
 
 func (m *mockJudgeClient) Judge(_ context.Context, req judges.JudgeRequest) (judges.JudgeResponse, error) {
 	m.lastReq = req
+	m.requests = append(m.requests, req)
+	if m.judgeFunc != nil {
+		return m.judgeFunc(req)
+	}
 	if m.err != nil {
 		return judges.JudgeResponse{}, m.err
 	}
@@ -175,6 +181,12 @@ func TestRaterRateWithModel_TableDriven(t *testing.T) {
 			if client.lastReq.OutputSchema == nil {
 				t.Fatalf("expected OutputSchema to be set")
 			}
+			if client.lastReq.Thinking.ModeOrDefault() != judges.ThinkingModePrefer {
+				t.Fatalf("expected default thinking mode prefer, got %q", client.lastReq.Thinking.ModeOrDefault())
+			}
+			if client.lastReq.Thinking.AnthropicModeOrDefault() != judges.AnthropicThinkingModeAdaptive {
+				t.Fatalf("expected default anthropic thinking mode adaptive, got %q", client.lastReq.Thinking.AnthropicModeOrDefault())
+			}
 			if !strings.Contains(client.lastReq.UserPrompt, "<agent_profile>") {
 				t.Fatalf("expected user prompt to include <agent_profile>")
 			}
@@ -232,6 +244,55 @@ func TestRaterRateWithModel_OverrideProviderAndModel(t *testing.T) {
 	}
 }
 
+func TestRaterRateWithModel_FallbacksWhenThinkingIsUnsupported(t *testing.T) {
+	callCount := 0
+	client := &mockJudgeClient{
+		judgeFunc: func(req judges.JudgeRequest) (judges.JudgeResponse, error) {
+			callCount++
+			if callCount == 1 {
+				return judges.JudgeResponse{}, errors.New("invalid_request_error: reasoning_effort is not supported for this model")
+			}
+			return judges.JudgeResponse{
+				Text:      `{"score":7,"summary":"Good design with moderate improvements needed.","suggestions":[]}`,
+				Model:     "gpt-4o-mini",
+				LatencyMs: 45,
+			}, nil
+		},
+	}
+	rater := &Rater{
+		resolver:          mockResolver{clients: map[string]judges.JudgeClient{"openai": client}},
+		defaultProviderID: "openai",
+		defaultModelName:  "gpt-4o-mini",
+	}
+
+	rating, err := rater.RateWithModel(context.Background(), Agent{
+		Name:         "fallback-test",
+		SystemPrompt: "You are an assistant.",
+		Tools:        []Tool{},
+		Models:       []string{"openai/gpt-4o-mini"},
+		TokenEstimate: TokenEstimate{
+			SystemPrompt: 120,
+			ToolsTotal:   0,
+			Total:        120,
+		},
+	}, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rating == nil {
+		t.Fatalf("expected rating, got nil")
+	}
+	if len(client.requests) != 2 {
+		t.Fatalf("expected two judge calls after fallback, got %d", len(client.requests))
+	}
+	if client.requests[0].Thinking.ModeOrDefault() != judges.ThinkingModePrefer {
+		t.Fatalf("expected first call thinking mode prefer, got %q", client.requests[0].Thinking.ModeOrDefault())
+	}
+	if client.requests[1].Thinking.ModeOrDefault() != judges.ThinkingModeOff {
+		t.Fatalf("expected fallback call thinking mode off, got %q", client.requests[1].Thinking.ModeOrDefault())
+	}
+}
+
 func TestRaterRateWithModel_ReturnsValidationErrorForUnknownProvider(t *testing.T) {
 	rater := &Rater{
 		resolver:          mockResolver{clients: map[string]judges.JudgeClient{}},
@@ -260,6 +321,12 @@ func TestNewRaterWithTarget_DefaultFallback(t *testing.T) {
 	}
 	if rater.defaultModelName != "gpt-4o-mini" {
 		t.Fatalf("expected default model gpt-4o-mini, got %q", rater.defaultModelName)
+	}
+	if rater.thinking.ModeOrDefault() != judges.ThinkingModePrefer {
+		t.Fatalf("expected default thinking mode prefer, got %q", rater.thinking.ModeOrDefault())
+	}
+	if rater.thinking.AnthropicModeOrDefault() != judges.AnthropicThinkingModeAdaptive {
+		t.Fatalf("expected default anthropic thinking mode adaptive, got %q", rater.thinking.AnthropicModeOrDefault())
 	}
 }
 
