@@ -277,6 +277,40 @@ func TestGenerationDetailEndpoint(t *testing.T) {
 	}
 }
 
+func TestGenerationDetailEndpointRejectsInvalidReadPlanHints(t *testing.T) {
+	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
+		WALReader: &testWALReader{
+			byID: map[string]*sigilv1.Generation{
+				"gen-1": {Id: "gen-1", ConversationId: "conv-1"},
+			},
+		},
+		FeedbackStore: feedback.NewMemoryStore(),
+	})
+	if err != nil {
+		t.Fatalf("new query service: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterRoutes(
+		mux,
+		querySvc,
+		generationingest.NewService(generationingest.NewMemoryStore()),
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		protected,
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/generations/gen-1?from=not-a-timestamp&to=2026-03-05T10:00:00Z", nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", resp.Code, resp.Body.String())
+	}
+}
+
 func TestGenerationScoresEndpoint(t *testing.T) {
 	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
 		WALReader: &testWALReader{

@@ -668,6 +668,60 @@ func TestGetConversationDetailForTenantHotOnlyFanOut(t *testing.T) {
 	}
 }
 
+func TestGetConversationDetailForTenantDoesNotUseConversationCreatedAtAsLowerBound(t *testing.T) {
+	ingestTime := time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)
+	backfillTime := ingestTime.Add(-45 * time.Minute)
+	conversationStore := &stubConversationStore{
+		items: map[string]storage.Conversation{
+			"conv-backfill": {
+				TenantID:         "tenant-a",
+				ConversationID:   "conv-backfill",
+				GenerationCount:  1,
+				CreatedAt:        ingestTime,
+				LastGenerationAt: ingestTime,
+				UpdatedAt:        ingestTime,
+			},
+		},
+	}
+
+	coldGeneration := testGenerationPayload("gen-backfill", "conv-backfill", backfillTime)
+	blockID, index, generationsByOffset := buildIndexedBlock(t, []*sigilv1.Generation{coldGeneration})
+	blockMetadataStore := &boundedRangeBlockMetadataStore{
+		blocks: []storage.BlockMeta{{
+			TenantID: "tenant-a",
+			BlockID:  blockID,
+			MinTime:  backfillTime.Add(-time.Minute),
+			MaxTime:  backfillTime.Add(time.Minute),
+		}},
+	}
+	blockReader := &stubBlockReader{
+		indexes:             map[string]*storage.BlockIndex{blockID: index},
+		generationsByOffset: map[string]map[int64]*sigilv1.Generation{blockID: generationsByOffset},
+	}
+
+	service := NewServiceWithStores(conversationStore, feedback.NewMemoryStore())
+	service.walReader = &stubWALReader{
+		byConversationByTenant: map[string]map[string][]*sigilv1.Generation{
+			"tenant-a": {"conv-backfill": []*sigilv1.Generation{}},
+		},
+	}
+	service.fanOutStore = storage.NewFanOutStore(service.walReader, blockMetadataStore, blockReader)
+
+	detail, found, err := service.GetConversationDetailForTenant(context.Background(), "tenant-a", "conv-backfill")
+	if err != nil {
+		t.Fatalf("get conversation detail: %v", err)
+	}
+	if !found {
+		t.Fatalf("expected conversation detail to be found")
+	}
+	if len(detail.Generations) != 1 {
+		t.Fatalf("expected backfilled cold generation to be returned, got %d", len(detail.Generations))
+	}
+	if detail.Generations[0]["generation_id"] != "gen-backfill" {
+		t.Fatalf("unexpected generation payload: %#v", detail.Generations[0])
+	}
+}
+
 func TestGetConversationDetailForTenantFanOutTenantIsolation(t *testing.T) {
 	base := time.Date(2026, 2, 15, 9, 0, 0, 0, time.UTC)
 	conversationStore := &stubConversationStore{
@@ -1091,6 +1145,31 @@ func (s *stubBlockMetadataStore) ListBlocks(_ context.Context, tenantID string, 
 	out := make([]storage.BlockMeta, 0, len(s.blocks))
 	for _, block := range s.blocks {
 		if strings.TrimSpace(block.TenantID) != "" && block.TenantID != tenantID {
+			continue
+		}
+		out = append(out, block)
+	}
+	return out, nil
+}
+
+type boundedRangeBlockMetadataStore struct {
+	blocks []storage.BlockMeta
+}
+
+func (s *boundedRangeBlockMetadataStore) InsertBlock(_ context.Context, _ storage.BlockMeta) error {
+	return errors.New("not implemented")
+}
+
+func (s *boundedRangeBlockMetadataStore) ListBlocks(_ context.Context, tenantID string, from, to time.Time) ([]storage.BlockMeta, error) {
+	out := make([]storage.BlockMeta, 0, len(s.blocks))
+	for _, block := range s.blocks {
+		if strings.TrimSpace(block.TenantID) != "" && block.TenantID != tenantID {
+			continue
+		}
+		if !from.IsZero() && block.MaxTime.Before(from.UTC()) {
+			continue
+		}
+		if !to.IsZero() && block.MinTime.After(to.UTC()) {
 			continue
 		}
 		out = append(out, block)

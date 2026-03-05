@@ -7,7 +7,6 @@ import type {
   ConversationDetail,
   ConversationSearchRequest,
   ConversationSearchResponse,
-  GenerationDetail,
   SearchTag,
 } from '../conversation/types';
 
@@ -50,20 +49,14 @@ function createDataSource(overrides?: Partial<MockConversationsDataSource>): Moc
         generation_id: 'gen-1',
         conversation_id: 'conv-1',
         trace_id: 'trace-1',
+        mode: 'SYNC',
+        model: { provider: 'openai', name: 'gpt-4o' },
+        input: [{ role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Hello' }] }],
+        output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'Hi there!' }] }],
         created_at: '2026-02-15T10:00:00Z',
       },
     ],
     annotations: [],
-  };
-
-  const defaultGenerationDetail: GenerationDetail = {
-    generation_id: 'gen-1',
-    conversation_id: 'conv-1',
-    trace_id: 'trace-1',
-    mode: 'SYNC',
-    model: { provider: 'openai', name: 'gpt-4o' },
-    input: [{ role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Hello' }] }],
-    output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'Hi there!' }] }],
   };
 
   const defaultTags: SearchTag[] = [{ key: 'model', scope: 'well-known', description: 'Model name' }];
@@ -72,7 +65,7 @@ function createDataSource(overrides?: Partial<MockConversationsDataSource>): Moc
     listConversations: jest.fn(async () => ({ items: [] })),
     searchConversations: jest.fn(async (_request: ConversationSearchRequest) => buildSearchResponse([])),
     getConversationDetail: jest.fn(async (_conversationID: string) => defaultConversationDetail),
-    getGeneration: jest.fn(async (_generationID: string) => defaultGenerationDetail),
+    getGeneration: jest.fn(async (_generationID: string) => ({ generation_id: 'unused', conversation_id: 'unused' })),
     getSearchTags: jest.fn(async (_from: string, _to: string) => defaultTags),
     getSearchTagValues: jest.fn(async (_tag: string, _from: string, _to: string) => ['gpt-4o']),
     ...overrides,
@@ -125,7 +118,6 @@ describe('ConversationsPage', () => {
     await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalled());
     expect(await screen.findByLabelText('select conversation conv-1')).toBeInTheDocument();
     await waitFor(() => expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-1'));
-    await waitFor(() => expect(dataSource.getGeneration).toHaveBeenCalledWith('gen-1'));
     expect(await screen.findByText('Hi there!')).toBeInTheDocument();
   });
 
@@ -165,29 +157,22 @@ describe('ConversationsPage', () => {
         .fn<Promise<ConversationSearchResponse>, [ConversationSearchRequest]>()
         .mockImplementationOnce(async () => slowSearch.promise)
         .mockImplementationOnce(async () => fastSearch.promise),
-      getConversationDetail: jest.fn(async (conversationID: string) => ({
-        conversation_id: conversationID,
-        generation_count: 1,
-        first_generation_at: '2026-02-15T10:00:00Z',
-        last_generation_at: '2026-02-15T10:00:00Z',
-        generations: [
-          {
-            generation_id: `${conversationID}-gen`,
-            conversation_id: conversationID,
-            trace_id: `${conversationID}-trace`,
-            created_at: '2026-02-15T10:00:00Z',
-          },
-        ],
-        annotations: [],
-      })),
-      getGeneration: jest.fn(
-        async (generationID: string): Promise<GenerationDetail> => ({
-          generation_id: generationID,
-          conversation_id: generationID.replace(/-gen$/, ''),
-          trace_id: `${generationID}-trace`,
-          mode: 'SYNC',
-          input: [{ role: 'MESSAGE_ROLE_USER', parts: [{ text: 'test' }] }],
-          output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'response' }] }],
+      getConversationDetail: jest.fn(
+        async (conversationID: string): Promise<ConversationDetail> => ({
+          conversation_id: conversationID,
+          generation_count: 1,
+          first_generation_at: '2026-02-15T10:00:00Z',
+          last_generation_at: '2026-02-15T10:00:00Z',
+          generations: [
+            {
+              generation_id: `${conversationID}-gen`,
+              conversation_id: conversationID,
+              trace_id: `${conversationID}-trace`,
+              output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'response' }] }],
+              created_at: '2026-02-15T10:00:00Z',
+            },
+          ],
+          annotations: [],
         })
       ),
     });
@@ -332,7 +317,13 @@ describe('ConversationsPage', () => {
       first_generation_at: '2026-02-15T09:00:00Z',
       last_generation_at: '2026-02-15T09:00:00Z',
       generations: [
-        { generation_id: 'gen-1', conversation_id: 'conv-1', trace_id: 'trace-1', created_at: '2026-02-15T09:00:00Z' },
+        {
+          generation_id: 'gen-1',
+          conversation_id: 'conv-1',
+          trace_id: 'trace-1',
+          created_at: '2026-02-15T09:00:00Z',
+          output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'reply from gen-1' }] }],
+        },
       ],
       annotations: [],
     };
@@ -342,7 +333,13 @@ describe('ConversationsPage', () => {
       first_generation_at: '2026-02-15T09:05:00Z',
       last_generation_at: '2026-02-15T09:05:00Z',
       generations: [
-        { generation_id: 'gen-2', conversation_id: 'conv-2', trace_id: 'trace-2', created_at: '2026-02-15T09:05:00Z' },
+        {
+          generation_id: 'gen-2',
+          conversation_id: 'conv-2',
+          trace_id: 'trace-2',
+          created_at: '2026-02-15T09:05:00Z',
+          output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'reply from gen-2' }] }],
+        },
       ],
       annotations: [],
     };
@@ -360,17 +357,6 @@ describe('ConversationsPage', () => {
         }
         throw new Error(`unexpected conversation id ${conversationID}`);
       }),
-      getGeneration: jest.fn(
-        async (generationID: string): Promise<GenerationDetail> => ({
-          generation_id: generationID,
-          conversation_id: generationID === 'gen-1' ? 'conv-1' : 'conv-2',
-          trace_id: generationID === 'gen-1' ? 'trace-1' : 'trace-2',
-          mode: 'SYNC',
-          model: { provider: 'openai', name: 'gpt-4o' },
-          input: [{ role: 'MESSAGE_ROLE_USER', parts: [{ text: 'test' }] }],
-          output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: `reply from ${generationID}` }] }],
-        })
-      ),
     });
 
     render(
@@ -388,7 +374,6 @@ describe('ConversationsPage', () => {
       conv2Deferred.resolve(detailConv2);
       await Promise.resolve();
     });
-    await waitFor(() => expect(dataSource.getGeneration).toHaveBeenCalledWith('gen-2'));
     expect(await screen.findByText('reply from gen-2')).toBeInTheDocument();
 
     await act(async () => {
@@ -396,8 +381,6 @@ describe('ConversationsPage', () => {
       await Promise.resolve();
     });
 
-    expect(dataSource.getGeneration).toHaveBeenCalledTimes(1);
-    expect(dataSource.getGeneration).toHaveBeenLastCalledWith('gen-2');
     expect(screen.queryByText('reply from gen-1')).not.toBeInTheDocument();
   });
 
@@ -406,7 +389,7 @@ describe('ConversationsPage', () => {
       searchConversations: jest.fn(async (_request: ConversationSearchRequest) =>
         buildSearchResponse([makeConversation('conv-1'), makeConversation('conv-2')])
       ),
-      getConversationDetail: jest.fn(async (conversationID: string) => {
+      getConversationDetail: jest.fn(async (conversationID: string): Promise<ConversationDetail> => {
         if (conversationID === 'conv-1') {
           return {
             conversation_id: 'conv-1',
@@ -418,6 +401,7 @@ describe('ConversationsPage', () => {
                 generation_id: 'gen-1',
                 conversation_id: 'conv-1',
                 trace_id: 'trace-1',
+                output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'World' }] }],
                 created_at: '2026-02-15T09:00:00Z',
               },
             ],
@@ -426,17 +410,6 @@ describe('ConversationsPage', () => {
         }
         throw new Error('conversation detail failed');
       }),
-      getGeneration: jest.fn(
-        async (_generationID: string): Promise<GenerationDetail> => ({
-          generation_id: 'gen-1',
-          conversation_id: 'conv-1',
-          trace_id: 'trace-1',
-          mode: 'SYNC',
-          model: { provider: 'openai', name: 'gpt-4o' },
-          input: [{ role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Hello' }] }],
-          output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'World' }] }],
-        })
-      ),
     });
 
     render(
@@ -447,7 +420,6 @@ describe('ConversationsPage', () => {
     fireEvent.click(screen.getByLabelText('apply filters'));
 
     await waitFor(() => expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-1'));
-    await waitFor(() => expect(dataSource.getGeneration).toHaveBeenCalledWith('gen-1'));
     expect(await screen.findByText('World')).toBeInTheDocument();
 
     fireEvent.click(await screen.findByLabelText('select conversation conv-2'));

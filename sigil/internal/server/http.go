@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/grafana/dskit/tenant"
 	"github.com/grafana/sigil/sigil/internal/feedback"
@@ -284,7 +285,13 @@ func getGeneration(querySvc *query.Service) http.HandlerFunc {
 			return
 		}
 
-		item, found, err := querySvc.GetGenerationDetailForTenant(req.Context(), tenantID, id)
+		plan, err := parseGenerationDetailReadPlan(req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		item, found, err := querySvc.GetGenerationDetailForTenantWithPlan(req.Context(), tenantID, id, plan)
 		if err != nil {
 			if query.IsValidationError(err) {
 				http.Error(w, err.Error(), http.StatusBadRequest)
@@ -479,6 +486,52 @@ func parseGenerationSubPath(path string) (id string, childPath string, ok bool) 
 		return parts[0], parts[1], true
 	}
 	return "", "", false
+}
+
+func parseGenerationDetailReadPlan(req *http.Request) (query.GenerationDetailReadPlan, error) {
+	if req == nil {
+		return query.GenerationDetailReadPlan{}, nil
+	}
+	values := req.URL.Query()
+	plan := query.GenerationDetailReadPlan{
+		ConversationID: strings.TrimSpace(values.Get("conversation_id")),
+	}
+
+	var err error
+	if fromRaw := strings.TrimSpace(values.Get("from")); fromRaw != "" {
+		plan.From, err = parseRFC3339Timestamp(fromRaw)
+		if err != nil {
+			return query.GenerationDetailReadPlan{}, errors.New("invalid from")
+		}
+	}
+	if toRaw := strings.TrimSpace(values.Get("to")); toRaw != "" {
+		plan.To, err = parseRFC3339Timestamp(toRaw)
+		if err != nil {
+			return query.GenerationDetailReadPlan{}, errors.New("invalid to")
+		}
+	}
+	if atRaw := strings.TrimSpace(values.Get("at")); atRaw != "" {
+		plan.At, err = parseRFC3339Timestamp(atRaw)
+		if err != nil {
+			return query.GenerationDetailReadPlan{}, errors.New("invalid at")
+		}
+	}
+
+	if plan.From.IsZero() != plan.To.IsZero() {
+		return query.GenerationDetailReadPlan{}, errors.New("from and to must be provided together")
+	}
+	if !plan.From.IsZero() && !plan.To.IsZero() && plan.To.Before(plan.From) {
+		return query.GenerationDetailReadPlan{}, errors.New("from must be before to")
+	}
+	return plan, nil
+}
+
+func parseRFC3339Timestamp(raw string) (time.Time, error) {
+	parsed, err := time.Parse(time.RFC3339Nano, raw)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return parsed.UTC(), nil
 }
 
 func parseGenerationScorePagination(req *http.Request) (int, uint64, error) {

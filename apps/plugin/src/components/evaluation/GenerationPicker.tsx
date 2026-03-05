@@ -4,12 +4,12 @@ import type { GrafanaTheme2 } from '@grafana/data';
 import { Button, Icon, Input, Spinner, Text, useStyles2 } from '@grafana/ui';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../../conversation/api';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../../evaluation/api';
-import type { ConversationDetail } from '../../conversation/types';
+import type { ConversationDetail, GenerationLookupHints } from '../../conversation/types';
 import type { GenerationDetail } from '../../generation/types';
 import type { SavedConversation } from '../../evaluation/types';
 
 export type GenerationPickerProps = {
-  onSelect: (generationId: string | undefined) => void;
+  onSelect: (generationId: string | undefined, hints?: GenerationLookupHints) => void;
   selectedGenerationId?: string;
   conversationsDataSource?: ConversationsDataSource;
   evaluationDataSource?: EvaluationDataSource;
@@ -238,8 +238,17 @@ export default function GenerationPicker({
     }
   };
 
-  const handleGenerationSelect = (genId: string) => {
-    onSelect(genId);
+  const handleGenerationSelect = (generation: GenerationDetail) => {
+    const hints: GenerationLookupHints | undefined =
+      detail == null
+        ? undefined
+        : {
+            conversation_id: detail.conversation_id,
+            from: detail.first_generation_at,
+            to: detail.last_generation_at,
+            at: generation.created_at,
+          };
+    onSelect(generation.generation_id, hints);
     setConfirmed(true);
   };
 
@@ -295,10 +304,10 @@ export default function GenerationPicker({
               <div
                 key={gen.generation_id}
                 className={gen.generation_id === selectedGenerationId ? styles.selectedRow : styles.row}
-                onClick={() => handleGenerationSelect(gen.generation_id)}
+                onClick={() => handleGenerationSelect(gen)}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && handleGenerationSelect(gen.generation_id)}
+                onKeyDown={(e) => e.key === 'Enter' && handleGenerationSelect(gen)}
               >
                 <Text variant="bodySmall" weight="medium" truncate>
                   {gen.generation_id}
