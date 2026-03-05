@@ -44,11 +44,15 @@ export function useModelCardBreakdownPopover(
 
     let cancelled = false;
 
-    resolveModelCardsFromNames(modelNames, client).then((resolved) => {
-      if (!cancelled) {
-        setCards(resolved);
-      }
-    });
+    resolveModelCardsFromNames(modelNames, client)
+      .then((resolved) => {
+        if (!cancelled) {
+          setCards(resolved);
+        }
+      })
+      .catch(() => {
+        // Silently ignore resolution failures; cards remain stale or empty.
+      });
 
     return () => {
       cancelled = true;

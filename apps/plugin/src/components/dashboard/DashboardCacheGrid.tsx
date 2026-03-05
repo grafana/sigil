@@ -222,6 +222,8 @@ export function DashboardCacheGrid({
     breakdownBy,
     cacheTokensByBreakdownAndType.data
   );
+  const { onModelClick: onCacheReadModelClick, modelPopoverElement: cacheReadModelPopoverElement } =
+    useModelCardBreakdownPopover(breakdownBy, cacheReadByBreakdown.data);
 
   // --- Derived values ---
   const cacheReadValue = cacheReadStat.data ? vectorToStatValue(cacheReadStat.data) : 0;
@@ -492,7 +494,7 @@ export function DashboardCacheGrid({
               breakdownLabel={breakdownPromLabel}
               height={CHART_HEIGHT}
               getItemHref={agentItemHref}
-              onItemClick={onModelClick}
+              onItemClick={onCacheReadModelClick}
             />
           </div>
         )}
@@ -509,6 +511,7 @@ export function DashboardCacheGrid({
       />
       {cacheModelPopoverElement}
       {modelPopoverElement}
+      {cacheReadModelPopoverElement}
     </div>
   );
 }

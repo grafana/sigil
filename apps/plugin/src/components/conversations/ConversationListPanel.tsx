@@ -6,7 +6,7 @@ import type { ConversationSearchResult } from '../../conversation/types';
 import { inferProviderFromModelName } from '../../modelcard/resolve';
 import type { ModelCard } from '../../modelcard/types';
 import { getProviderColor, getProviderMeta, stripProviderPrefix, toDisplayProvider } from './providerMeta';
-import { PLUGIN_BASE, buildAgentDetailByNameRoute, buildAnonymousAgentDetailRoute } from '../../constants';
+import { buildAgentDetailHref } from '../dashboard/ViewAgentsLink';
 
 export type ConversationListPanelProps = {
   conversations: ConversationSearchResult[];
@@ -415,11 +415,6 @@ function CopyIdButton({ id }: { id: string }) {
   );
 }
 
-function agentDetailHref(name: string): string {
-  const route = name.trim().length > 0 ? buildAgentDetailByNameRoute(name) : buildAnonymousAgentDetailRoute();
-  return `${PLUGIN_BASE}/${route}`;
-}
-
 function AgentPillList({ items }: { items: string[] }) {
   const styles = useStyles2(getStyles);
   if (items.length === 0) {
@@ -434,7 +429,7 @@ function AgentPillList({ items }: { items: string[] }) {
       {visible.map((item) => (
         <a
           key={item}
-          href={agentDetailHref(item)}
+          href={buildAgentDetailHref(item)}
           target="_blank"
           rel="noopener noreferrer"
           className={styles.agentPill}
