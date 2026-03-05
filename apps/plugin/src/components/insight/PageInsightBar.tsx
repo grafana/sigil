@@ -93,11 +93,8 @@ export function PageInsightBar({
 
   const cacheKey = dataContext ? buildCacheKey(prompt, origin, systemPrompt, dataContext) : null;
   const fallbackCacheKey = dataContext ? buildFallbackCacheKey(prompt, origin, systemPrompt) : null;
-  const exactCachedInsight = useMemo(() => (cacheKey ? readCachedInsight(cacheKey) : null), [cacheKey]);
-  const fallbackCachedInsight = useMemo(
-    () => (fallbackCacheKey ? readCachedInsight(fallbackCacheKey) : null),
-    [dataContext, fallbackCacheKey]
-  );
+  const exactCachedInsight = cacheKey ? readCachedInsight(cacheKey) : null;
+  const fallbackCachedInsight = fallbackCacheKey ? readCachedInsight(fallbackCacheKey) : null;
 
   useEffect(() => {
     if (!dataContext || gen.isGenerating) {
