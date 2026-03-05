@@ -4,12 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 	"github.com/grafana/dskit/tenant"
 	"github.com/grafana/sigil/sigil/internal/agentrating"
 	"github.com/grafana/sigil/sigil/internal/feedback"
@@ -59,6 +63,20 @@ func RegisterIngestRoutes(
 	mux.Handle("/api/v1/generations:export", protectedMiddleware(http.HandlerFunc(generationingest.NewHTTPHandler(generationSvc))))
 }
 
+const agentRatingTimeout = 5 * time.Minute
+
+// QueryRoutesOption configures optional behaviour for RegisterQueryRoutes.
+type QueryRoutesOption func(*queryRoutesConfig)
+
+type queryRoutesConfig struct {
+	logger log.Logger
+}
+
+// WithLogger attaches a logger used by background goroutines (e.g. agent rating).
+func WithLogger(l log.Logger) QueryRoutesOption {
+	return func(c *queryRoutesConfig) { c.logger = l }
+}
+
 // RegisterQueryRoutes wires query/read HTTP routes without proxy endpoints.
 func RegisterQueryRoutes(
 	mux *http.ServeMux,
@@ -70,12 +88,20 @@ func RegisterQueryRoutes(
 	annotationsEnabled bool,
 	modelCardSvc *modelcards.Service,
 	protectedMiddleware func(http.Handler) http.Handler,
+	opts ...QueryRoutesOption,
 ) {
 	if mux == nil || querySvc == nil {
 		return
 	}
 	if protectedMiddleware == nil {
 		protectedMiddleware = func(next http.Handler) http.Handler { return next }
+	}
+	var cfg queryRoutesConfig
+	for _, o := range opts {
+		o(&cfg)
+	}
+	if cfg.logger == nil {
+		cfg.logger = log.NewNopLogger()
 	}
 
 	mux.Handle("/api/v1/generations/", protectedMiddleware(http.HandlerFunc(getGeneration(querySvc))))
@@ -86,7 +112,7 @@ func RegisterQueryRoutes(
 		mux.Handle("/api/v1/agents:rating", protectedMiddleware(http.HandlerFunc(lookupAgentRating(querySvc, ratingStore))))
 	}
 	if rater != nil && ratingStore != nil {
-		mux.Handle("/api/v1/agents:rate", protectedMiddleware(http.HandlerFunc(rateAgent(querySvc, rater, ratingStore))))
+		mux.Handle("/api/v1/agents:rate", protectedMiddleware(http.HandlerFunc(rateAgent(querySvc, rater, ratingStore, cfg.logger))))
 	}
 	mux.Handle("/api/v1/conversations:batch-metadata", protectedMiddleware(http.HandlerFunc(batchConversationMetadata(querySvc))))
 	mux.Handle("/api/v1/conversations", protectedMiddleware(http.HandlerFunc(listConversations(querySvc))))
@@ -477,7 +503,7 @@ type rateAgentRequest struct {
 	Model     string `json:"model,omitempty"`
 }
 
-func rateAgent(querySvc *query.Service, rater *agentrating.Rater, ratingStore agentrating.LatestStore) http.HandlerFunc {
+func rateAgent(querySvc *query.Service, rater *agentrating.Rater, ratingStore agentrating.LatestStore, logger log.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -555,6 +581,7 @@ func rateAgent(querySvc *query.Service, rater *agentrating.Rater, ratingStore ag
 
 		ratingInput := mapAgentDetailToRatingAgent(agentDetail)
 		go evaluateAgentRating(
+			logger,
 			rater,
 			ratingStore,
 			tenantID,
@@ -567,6 +594,7 @@ func rateAgent(querySvc *query.Service, rater *agentrating.Rater, ratingStore ag
 }
 
 func evaluateAgentRating(
+	logger log.Logger,
 	rater *agentrating.Rater,
 	ratingStore agentrating.LatestStore,
 	tenantID string,
@@ -575,9 +603,13 @@ func evaluateAgentRating(
 	ratingInput agentrating.Agent,
 	modelOverride string,
 ) {
+	ctx, cancel := context.WithTimeout(context.Background(), agentRatingTimeout)
+	defer cancel()
+
 	defer func() {
-		if recover() != nil {
-			_ = ratingStore.UpsertAgentVersionRating(
+		if r := recover(); r != nil {
+			_ = level.Error(logger).Log("msg", "agent rating panicked", "agent", agentName, "version", effectiveVersion, "panic", fmt.Sprint(r))
+			if err := ratingStore.UpsertAgentVersionRating(
 				context.Background(),
 				tenantID,
 				agentName,
@@ -586,13 +618,16 @@ func evaluateAgentRating(
 					Status:      agentrating.RatingStatusFailed,
 					Suggestions: []agentrating.Suggestion{},
 				},
-			)
+			); err != nil {
+				_ = level.Error(logger).Log("msg", "failed to persist failed rating after panic", "agent", agentName, "version", effectiveVersion, "err", err)
+			}
 		}
 	}()
 
-	rating, err := rater.RateWithModel(context.Background(), ratingInput, modelOverride)
+	rating, err := rater.RateWithModel(ctx, ratingInput, modelOverride)
 	if err != nil {
-		_ = ratingStore.UpsertAgentVersionRating(
+		_ = level.Error(logger).Log("msg", "agent rating judge failed", "agent", agentName, "version", effectiveVersion, "err", err)
+		if storeErr := ratingStore.UpsertAgentVersionRating(
 			context.Background(),
 			tenantID,
 			agentName,
@@ -601,11 +636,14 @@ func evaluateAgentRating(
 				Status:      agentrating.RatingStatusFailed,
 				Suggestions: []agentrating.Suggestion{},
 			},
-		)
+		); storeErr != nil {
+			_ = level.Error(logger).Log("msg", "failed to persist failed rating", "agent", agentName, "version", effectiveVersion, "err", storeErr)
+		}
 		return
 	}
 	if rating == nil {
-		_ = ratingStore.UpsertAgentVersionRating(
+		_ = level.Warn(logger).Log("msg", "agent rating judge returned nil", "agent", agentName, "version", effectiveVersion)
+		if storeErr := ratingStore.UpsertAgentVersionRating(
 			context.Background(),
 			tenantID,
 			agentName,
@@ -614,18 +652,22 @@ func evaluateAgentRating(
 				Status:      agentrating.RatingStatusFailed,
 				Suggestions: []agentrating.Suggestion{},
 			},
-		)
+		); storeErr != nil {
+			_ = level.Error(logger).Log("msg", "failed to persist failed rating", "agent", agentName, "version", effectiveVersion, "err", storeErr)
+		}
 		return
 	}
 
 	rating.Status = agentrating.RatingStatusCompleted
-	_ = ratingStore.UpsertAgentVersionRating(
+	if err := ratingStore.UpsertAgentVersionRating(
 		context.Background(),
 		tenantID,
 		agentName,
 		effectiveVersion,
 		*rating,
-	)
+	); err != nil {
+		_ = level.Error(logger).Log("msg", "failed to persist completed rating", "agent", agentName, "version", effectiveVersion, "err", err)
+	}
 }
 
 func lookupAgentRating(querySvc *query.Service, ratingStore agentrating.LatestStore) http.HandlerFunc {

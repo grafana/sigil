@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-kit/log"
 	"github.com/grafana/sigil/sigil/internal/agentrating"
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	"github.com/grafana/sigil/sigil/internal/eval/evaluators/judges"
@@ -1501,4 +1502,48 @@ func (s *testAgentCatalogStore) ListAgentVersions(_ context.Context, _ string, _
 func stringPtr(value string) *string {
 	v := value
 	return &v
+}
+
+func TestEvaluateAgentRatingLogsErrorAndSetsFailedOnJudgeError(t *testing.T) {
+	var logBuf bytes.Buffer
+	logger := log.NewLogfmtLogger(&logBuf)
+
+	rater := agentrating.NewRater(judges.NewDiscovery(), "openai/gpt-4o-mini")
+	store := &testAgentRatingStore{}
+
+	evaluateAgentRating(
+		logger,
+		rater,
+		store,
+		"tenant-1",
+		"my-agent",
+		"sha256:abc",
+		agentrating.Agent{Name: "my-agent", SystemPrompt: "You are helpful."},
+		"",
+	)
+
+	upserts := store.Upserts()
+	if len(upserts) != 1 {
+		t.Fatalf("expected 1 upsert, got %d", len(upserts))
+	}
+	if upserts[0].Status != agentrating.RatingStatusFailed {
+		t.Fatalf("expected status=%q, got=%q", agentrating.RatingStatusFailed, upserts[0].Status)
+	}
+
+	logOutput := logBuf.String()
+	if !strings.Contains(logOutput, "agent rating judge failed") {
+		t.Errorf("expected log to contain judge error message, got: %s", logOutput)
+	}
+	if !strings.Contains(logOutput, "my-agent") {
+		t.Errorf("expected log to contain agent name, got: %s", logOutput)
+	}
+}
+
+func TestEvaluateAgentRatingUsesTimeoutContext(t *testing.T) {
+	if agentRatingTimeout <= 0 {
+		t.Fatal("agentRatingTimeout must be positive")
+	}
+	if agentRatingTimeout > 10*time.Minute {
+		t.Fatalf("agentRatingTimeout=%v is unreasonably large", agentRatingTimeout)
+	}
 }

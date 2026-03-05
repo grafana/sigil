@@ -235,6 +235,7 @@ func newQuerierModule(
 				cfg.ConversationAnnotationsEnabled,
 				modelCardSvc,
 				protectedMiddleware,
+				server.WithLogger(logger),
 			)
 			server.RegisterSettingsRoutes(mux, tenantSettingsSvc, protectedMiddleware)
 			evalcontrol.RegisterHTTPRoutes(mux, controlSvc, templateSvc, testSvc, protectedMiddleware)
