@@ -23,7 +23,6 @@ import {
 import { defaultEvaluationDataSource } from '../../evaluation/api';
 import { useFilterUrlState } from '../../hooks/useFilterUrlState';
 import { ideTabs, buildCursorPromptDeeplink, downloadTextFile, renderIdeActionLogo } from '../../ide/ideUtils';
-import sigilLogoPng from '../../img/sigil-logo.png';
 
 type IdeKey = InstrumentationPromptIde;
 
@@ -689,9 +688,6 @@ export function LandingTopBar({
             })}
           </div>
         )}
-        <div className={styles.compactBrand}>
-          <img src={sigilLogoPng} alt="Sigil" className={styles.compactLogo} />
-        </div>
       </div>
     );
   }
@@ -1083,8 +1079,8 @@ function getStyles(theme: GrafanaTheme2) {
   return {
     compactBar: css({
       label: 'landingTopBar-compactBar',
-      position: 'relative',
       height: 28,
+      marginBottom: theme.spacing(-3),
     }),
     compactSpines: css({
       label: 'landingTopBar-compactSpines',
@@ -1096,35 +1092,6 @@ function getStyles(theme: GrafanaTheme2) {
       width: '100%',
       overflow: 'hidden',
       opacity: 0.75,
-      maskImage: `linear-gradient(to right, transparent 0px, transparent 16px, ${theme.colors.text.primary} 56px)`,
-      WebkitMaskImage: `linear-gradient(to right, transparent 0px, transparent 16px, ${theme.colors.text.primary} 56px)`,
-    }),
-    compactBrand: css({
-      label: 'landingTopBar-compactBrand',
-      position: 'absolute',
-      left: 0,
-      top: 0,
-      bottom: 0,
-      display: 'flex',
-      alignItems: 'center',
-      gap: theme.spacing(1),
-      pointerEvents: 'none',
-    }),
-    compactLogo: css({
-      label: 'landingTopBar-compactLogo',
-      width: 20,
-      height: 20,
-      flexShrink: 0,
-    }),
-    compactHeading: css({
-      label: 'landingTopBar-compactHeading',
-      margin: 0,
-      fontFamily: theme.typography.fontFamily,
-      fontWeight: theme.typography.fontWeightBold,
-      fontSize: '1.1rem',
-      lineHeight: 1,
-      color: theme.colors.text.primary,
-      whiteSpace: 'nowrap',
     }),
     pageFlow: css({
       label: 'landingTopBar-pageFlow',

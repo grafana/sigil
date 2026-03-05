@@ -120,7 +120,7 @@ function getStyles(theme: GrafanaTheme2) {
     container: css({
       display: 'flex',
       flexDirection: 'column',
-      gap: theme.spacing(1),
+      gap: theme.spacing(3),
       marginTop: theme.spacing(-2),
     }),
   };
