@@ -127,7 +127,7 @@ function getStyles(theme: GrafanaTheme2) {
     }),
     sectionBlock: css({
       minWidth: 0,
-      padding: theme.spacing(3, 0),    
+      padding: theme.spacing(3, 0),
     }),
     lowerSectionsGrid: css({
       display: 'grid',
