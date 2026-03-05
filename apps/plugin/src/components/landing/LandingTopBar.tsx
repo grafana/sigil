@@ -12,6 +12,11 @@ import {
   getInstrumentationPromptFilename,
   type InstrumentationPromptIde,
 } from '../../content/cursorInstrumentationPrompt';
+import {
+  buildSigilAssistantContextItems,
+  buildSigilAssistantPrompt,
+  withSigilProjectContextFallback,
+} from '../../content/assistantContext';
 import type { DashboardDataSource } from '../../dashboard/api';
 import { computeRateInterval, computeStep, requestsOverTimeQuery } from '../../dashboard/queries';
 import {
@@ -370,12 +375,13 @@ export function LandingTopBar({
   const cursorDeeplink = useMemo(() => buildCursorPromptDeeplink(selectedPrompt), [selectedPrompt]);
 
   const openAssistantWithPrompt = (message: string) => {
-    const prompt = message.trim();
+    const prompt = buildSigilAssistantPrompt(message);
     if (assistant.openAssistant) {
       if (prompt.length > 0) {
         assistant.openAssistant({
           origin: assistantOrigin,
           prompt,
+          context: buildSigilAssistantContextItems(),
           autoSend: true,
         });
       } else {
@@ -386,7 +392,7 @@ export function LandingTopBar({
       return;
     }
 
-    window.location.href = buildAssistantUrl(prompt);
+    window.location.href = buildAssistantUrl(withSigilProjectContextFallback(prompt));
   };
 
   const openAssistant = () => {

@@ -4,6 +4,11 @@ import type { GrafanaTheme2 } from '@grafana/data';
 import { Icon, IconButton, Tooltip, useStyles2 } from '@grafana/ui';
 import { useAssistant, useInlineAssistant } from '@grafana/assistant';
 import { Loader } from '../Loader';
+import {
+  buildSigilAssistantContextItems,
+  buildSigilAssistantPrompt,
+  withSigilProjectContextFallback,
+} from '../../content/assistantContext';
 import { formatInlineMarkup } from './formatInlineMarkup';
 
 export type PageInsightBarProps = {
@@ -170,16 +175,17 @@ export function PageInsightBar({
 
   const explainInsight = useCallback(
     (insight: string) => {
-      const question = buildExplainPrompt(insight);
+      const question = buildSigilAssistantPrompt(buildExplainPrompt(insight));
       if (assistant.openAssistant) {
         assistant.openAssistant({
           origin,
           prompt: question,
+          context: buildSigilAssistantContextItems(),
           autoSend: true,
         });
         return;
       }
-      window.location.href = buildAssistantUrl(question);
+      window.location.href = buildAssistantUrl(withSigilProjectContextFallback(question));
     },
     [assistant, origin]
   );

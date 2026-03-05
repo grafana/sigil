@@ -4,6 +4,7 @@ import type { GrafanaTheme2 } from '@grafana/data';
 import * as Assistant from '@grafana/assistant';
 import { Icon, useStyles2 } from '@grafana/ui';
 import { Loader } from '../Loader';
+import { buildSigilAssistantContextItems, buildSigilAssistantPrompt } from '../../content/assistantContext';
 
 export type AssistantInsightDisplayItem = {
   itemId: string;
@@ -165,13 +166,14 @@ export default function AssistantInsightsList({
 
   const openAssistantPrompt = useCallback(
     (promptText: string) => {
-      const prompt = promptText.trim();
+      const prompt = buildSigilAssistantPrompt(promptText);
       if (!prompt.length || !fullAssistant.openAssistant) {
         return;
       }
       fullAssistant.openAssistant({
         origin,
         prompt,
+        context: buildSigilAssistantContextItems(),
         autoSend: true,
       });
     },

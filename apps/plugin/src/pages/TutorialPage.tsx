@@ -5,6 +5,11 @@ import { useStyles2 } from '@grafana/ui';
 import { useAssistant } from '@grafana/assistant';
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 import { TryItNowPanel } from '../components/tutorial/TryItNowPanel';
+import {
+  buildSigilAssistantContextItems,
+  buildSigilAssistantPrompt,
+  withSigilProjectContextFallback,
+} from '../content/assistantContext';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 
 type TutorialSlide = {
@@ -429,15 +434,16 @@ function NextStepsBody() {
   ] as const;
 
   const openAssistant = () => {
-    const prompt = 'What is Sigil and how can I get started?';
+    const prompt = buildSigilAssistantPrompt('What is Sigil and how can I get started?');
     if (assistant.openAssistant) {
       assistant.openAssistant({
         origin: ASSISTANT_ORIGIN_TUTORIAL,
         prompt,
+        context: buildSigilAssistantContextItems(),
         autoSend: true,
       });
     } else {
-      window.location.href = buildAssistantUrl(prompt);
+      window.location.href = buildAssistantUrl(withSigilProjectContextFallback(prompt));
     }
   };
 
