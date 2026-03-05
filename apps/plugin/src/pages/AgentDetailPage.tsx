@@ -112,25 +112,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
       gridTemplateColumns: '1fr',
     },
   }),
-  heroStatsPanel: css({
-    display: 'flex',
-    alignItems: 'stretch',
-    justifyContent: 'flex-end',
-    minWidth: 340,
-    '@media (max-width: 1200px)': {
-      display: 'none',
-    },
-  }),
-  heroStatsGrid: css({
-    borderRadius: theme.shape.radius.default,
-    display: 'grid',
-    gridTemplateColumns: 'repeat(2, minmax(140px, 1fr))',
-    gap: theme.spacing(1.25, 2),
-    alignContent: 'start',
-    justifyItems: 'start',
-    width: 'min(100%, 440px)',
-    padding: theme.spacing(0.5, 0),
-  }),
   heroGlow: css({
     pointerEvents: 'none' as const,
     position: 'absolute' as const,
@@ -255,11 +236,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   stretchPanelBody: css({
     flex: 1,
-  }),
-  statsFallbackPanel: css({
-    '@media (min-width: 1201px)': {
-      display: 'none',
-    },
   }),
   promptPanelsRow: css({
     display: 'grid',
@@ -1401,66 +1377,6 @@ export default function AgentDetailPage({
                 </div>
               )}
             </div>
-            <div className={styles.heroStatsPanel}>
-              <div className={styles.heroStatsGrid}>
-                <Tooltip content="Total generations recorded for this agent version." placement="top">
-                  <div>
-                    <TopStat label="GENERATIONS" value={detail.generation_count} loading={false} />
-                  </div>
-                </Tooltip>
-                <Tooltip content="Estimated tokens consumed by the system prompt in this version." placement="top">
-                  <div>
-                    <TopStat label="PROMPT TOKENS" value={detail.token_estimate.system_prompt} loading={false} />
-                  </div>
-                </Tooltip>
-                <Tooltip content="Estimated tokens consumed by all tool schemas combined in this version." placement="top">
-                  <div>
-                    <TopStat label="TOOLS TOKENS" value={detail.token_estimate.tools_total} loading={false} />
-                  </div>
-                </Tooltip>
-                <Tooltip
-                  content="Sum of system prompt and tool tokens — the baseline context cost per generation."
-                  placement="top"
-                >
-                  <div>
-                    <TopStat label="TOTAL TOKENS" value={detail.token_estimate.total} loading={false} />
-                  </div>
-                </Tooltip>
-                <Tooltip content="Duration between first and last recorded generations for this version." placement="top">
-                  <div>
-                    <TopStat
-                      label="AGE"
-                      value={Math.max(0, toTimestampMs(detail.last_seen_at) - toTimestampMs(detail.first_seen_at))}
-                      displayValue={formatDurationCompact(detail.first_seen_at, detail.last_seen_at)}
-                      loading={false}
-                    />
-                  </div>
-                </Tooltip>
-                <Tooltip content="The earliest time a generation was recorded for this agent version." placement="top">
-                  <div>
-                    <TopStat
-                      label="FIRST SEEN"
-                      value={toTimestampMs(detail.first_seen_at)}
-                      displayValue={formatDate(detail.first_seen_at)}
-                      loading={false}
-                    />
-                  </div>
-                </Tooltip>
-                <Tooltip
-                  content="The most recent time any generation was recorded for this agent version."
-                  placement="top"
-                >
-                  <div>
-                    <TopStat
-                      label="LAST SEEN"
-                      value={toTimestampMs(detail.last_seen_at)}
-                      displayValue={formatDate(detail.last_seen_at)}
-                      loading={false}
-                    />
-                  </div>
-                </Tooltip>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -1600,7 +1516,7 @@ export default function AgentDetailPage({
           </div>
         </div>
 
-        <div className={cx(styles.stretchPanel, styles.stretchPanelBody, styles.statsFallbackPanel)}>
+        <div className={cx(styles.stretchPanel, styles.stretchPanelBody)}>
           <div className={styles.statsGrid}>
             <Tooltip content="Total generations recorded for this agent version." placement="top">
               <div>
