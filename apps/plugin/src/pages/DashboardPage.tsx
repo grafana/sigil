@@ -47,6 +47,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         requestsFilters={filters}
         requestsFrom={from}
         requestsTo={to}
+        compact
       />
       <DashboardFilterBar
         timeRange={timeRange}
@@ -119,7 +120,7 @@ function getStyles(theme: GrafanaTheme2) {
     container: css({
       display: 'flex',
       flexDirection: 'column',
-      gap: theme.spacing(3),
+      gap: theme.spacing(1),
       marginTop: theme.spacing(-2),
     }),
   };
