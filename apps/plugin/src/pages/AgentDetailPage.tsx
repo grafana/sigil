@@ -65,6 +65,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   heroPanel: css({
     position: 'relative' as const,
+    display: 'flex',
+    flexDirection: 'column' as const,
     borderRadius: theme.shape.radius.default,
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
@@ -259,14 +261,16 @@ const getStyles = (theme: GrafanaTheme2) => ({
     padding: `${theme.spacing(0.75)} ${theme.spacing(1.5)}`,
   }),
   statsGrid: css({
+    width: '100%',
     borderRadius: theme.shape.radius.default,
     display: 'flex',
     flexWrap: 'wrap' as const,
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
     alignContent: 'flex-start',
     alignItems: 'center',
     gap: theme.spacing(4),
     height: '100%',
+    borderTop: `1px solid ${theme.colors.border.weak}`,
     padding: theme.spacing(1.5),
   }),
   tabStatsStrip: css({
@@ -1529,6 +1533,61 @@ export default function AgentDetailPage({
               </div>
             </div>
           </div>
+          <div className={styles.statsGrid}>
+            <TopStat
+              label="VERSIONS"
+              value={versionOptions.length}
+              loading={false}
+              normalFontSize
+              helpTooltip="Total distinct effective versions recorded for this agent."
+            />
+            <TopStat
+              label="MODELS"
+              value={detail.models.length}
+              loading={false}
+              normalFontSize
+              helpTooltip="Distinct model variants recorded for this agent version."
+            />
+            <TopStat
+              label="PRIMARY MODEL"
+              value={0}
+              displayValue={primaryModelProvider ? `${primaryModelLabel} (${primaryModelProvider})` : primaryModelLabel}
+              loading={false}
+              normalFontSize
+              helpTooltip="Primary model name and provider in this version."
+            />
+            <TopStat
+              label="TOOLS"
+              value={detail.tool_count}
+              loading={false}
+              normalFontSize
+              helpTooltip="Declared tool definitions."
+            />
+            <TopStat
+              label="AGE"
+              value={Math.max(0, toTimestampMs(detail.last_seen_at) - toTimestampMs(detail.first_seen_at))}
+              displayValue={formatDurationCompact(detail.first_seen_at, detail.last_seen_at)}
+              loading={false}
+              normalFontSize
+              helpTooltip="Duration between first and last recorded generations for this version."
+            />
+            <TopStat
+              label="FIRST SEEN"
+              value={toTimestampMs(detail.first_seen_at)}
+              displayValue={formatDate(detail.first_seen_at)}
+              loading={false}
+              normalFontSize
+              helpTooltip="The earliest time a generation was recorded for this agent version."
+            />
+            <TopStat
+              label="LAST SEEN"
+              value={toTimestampMs(detail.last_seen_at)}
+              displayValue={formatDate(detail.last_seen_at)}
+              loading={false}
+              normalFontSize
+              helpTooltip="The most recent time any generation was recorded for this agent version."
+            />
+          </div>
         </div>
       </div>
 
@@ -1540,69 +1599,6 @@ export default function AgentDetailPage({
           </Text>
         </div>
       )}
-
-      <div className={styles.statsGrid}>
-        <TopStat
-          label="VERSIONS"
-          value={versionOptions.length}
-          loading={false}
-          normalFontSize
-          rightAlignContent
-          helpTooltip="Total distinct effective versions recorded for this agent."
-        />
-        <TopStat
-          label="MODELS"
-          value={detail.models.length}
-          loading={false}
-          normalFontSize
-          rightAlignContent
-          helpTooltip="Distinct model variants recorded for this agent version."
-        />
-        <TopStat
-          label="PRIMARY MODEL"
-          value={0}
-          displayValue={primaryModelProvider ? `${primaryModelLabel} (${primaryModelProvider})` : primaryModelLabel}
-          loading={false}
-          normalFontSize
-          rightAlignContent
-          helpTooltip="Primary model name and provider in this version."
-        />
-        <TopStat
-          label="TOOLS"
-          value={detail.tool_count}
-          loading={false}
-          normalFontSize
-          rightAlignContent
-          helpTooltip="Declared tool definitions."
-        />
-        <TopStat
-          label="AGE"
-          value={Math.max(0, toTimestampMs(detail.last_seen_at) - toTimestampMs(detail.first_seen_at))}
-          displayValue={formatDurationCompact(detail.first_seen_at, detail.last_seen_at)}
-          loading={false}
-          normalFontSize
-          rightAlignContent
-          helpTooltip="Duration between first and last recorded generations for this version."
-        />
-        <TopStat
-          label="FIRST SEEN"
-          value={toTimestampMs(detail.first_seen_at)}
-          displayValue={formatDate(detail.first_seen_at)}
-          loading={false}
-          normalFontSize
-          rightAlignContent
-          helpTooltip="The earliest time a generation was recorded for this agent version."
-        />
-        <TopStat
-          label="LAST SEEN"
-          value={toTimestampMs(detail.last_seen_at)}
-          displayValue={formatDate(detail.last_seen_at)}
-          loading={false}
-          normalFontSize
-          rightAlignContent
-          helpTooltip="The most recent time any generation was recorded for this agent version."
-        />
-      </div>
 
       <div className={styles.mainAreaTabs}>
         <TabsBar>
