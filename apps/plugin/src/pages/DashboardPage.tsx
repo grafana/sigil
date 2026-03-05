@@ -120,7 +120,7 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'flex',
       flexDirection: 'column',
       gap: theme.spacing(3),
-      marginTop: theme.spacing(-4),
+      marginTop: theme.spacing(-2),
     }),
   };
 }

@@ -14,7 +14,12 @@ import {
 } from '../../content/cursorInstrumentationPrompt';
 import type { DashboardDataSource } from '../../dashboard/api';
 import { computeRateInterval, computeStep, requestsOverTimeQuery } from '../../dashboard/queries';
-import { type DashboardFilters, type PrometheusMatrixResult, type PrometheusQueryResponse, emptyFilters } from '../../dashboard/types';
+import {
+  type DashboardFilters,
+  type PrometheusMatrixResult,
+  type PrometheusQueryResponse,
+  emptyFilters,
+} from '../../dashboard/types';
 import { defaultEvaluationDataSource } from '../../evaluation/api';
 import { useFilterUrlState } from '../../hooks/useFilterUrlState';
 import { ClaudeCodeLogo, CopilotLogo, CursorLogo } from './IdeLogos';
@@ -63,6 +68,7 @@ type HeroStatItem = {
 };
 
 const METRIC_WINDOW_MS = 24 * 60 * 60 * 1000;
+const TOP_BAR_REFRESH_INTERVAL_MS = 70 * 1000; // 1 min 10 sec
 const PAGE_SIZE = 200;
 const MAX_PAGES = 10;
 const HERO_STATS_STORAGE_KEY = 'grafana-sigil-hero-stats';
@@ -379,12 +385,8 @@ export function LandingTopBar({
   const { timeRange } = useFilterUrlState();
   const dashboardFrom = useMemo(() => Math.floor(timeRange.from.valueOf() / 1000), [timeRange]);
   const dashboardTo = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);
-  const from = requestsDataSource
-    ? (requestsFrom ?? dashboardFrom)
-    : (requestsFrom ?? 0);
-  const to = requestsDataSource
-    ? (requestsTo ?? dashboardTo)
-    : (requestsTo ?? 0);
+  const from = requestsDataSource ? (requestsFrom ?? dashboardFrom) : (requestsFrom ?? 0);
+  const to = requestsDataSource ? (requestsTo ?? dashboardTo) : (requestsTo ?? 0);
   const [assistantInput, setAssistantInput] = useState('');
   const [selectedIde, setSelectedIde] = useState<IdeKey>('cursor');
   const [isAgentModalOpen, setIsAgentModalOpen] = useState(false);
@@ -557,8 +559,13 @@ export function LandingTopBar({
 
     void loadStats();
 
+    const intervalId = setInterval(() => {
+      void loadStats();
+    }, TOP_BAR_REFRESH_INTERVAL_MS);
+
     return () => {
       cancelled = true;
+      clearInterval(intervalId);
     };
   }, []);
 
@@ -578,12 +585,16 @@ export function LandingTopBar({
     }
     return cached;
   }, [requestsDataSource, requestsFilters, from, to, spineCount]);
-  const [requestSpineHeights, setRequestSpineHeights] = useState<number[] | null>(() => initialRequestSpineCache?.heights ?? null);
-  const [requestSpineValues, setRequestSpineValues] = useState<number[] | null>(() => initialRequestSpineCache?.values ?? null);
+  const [requestSpineHeights, setRequestSpineHeights] = useState<number[] | null>(
+    () => initialRequestSpineCache?.heights ?? null
+  );
+  const [requestSpineValues, setRequestSpineValues] = useState<number[] | null>(
+    () => initialRequestSpineCache?.values ?? null
+  );
   const [disableSpineAnimation, setDisableSpineAnimation] = useState<boolean>(() => initialRequestSpineCache != null);
-  const [requestSpineWaveReason, setRequestSpineWaveReason] = useState<
-    null | 'loading' | 'no-data' | 'error'
-  >(() => (requestsDataSource && to > from && initialRequestSpineCache == null ? 'loading' : null));
+  const [requestSpineWaveReason, setRequestSpineWaveReason] = useState<null | 'loading' | 'no-data' | 'error'>(() =>
+    requestsDataSource && to > from && initialRequestSpineCache == null ? 'loading' : null
+  );
 
   useEffect(() => {
     if (!requestsDataSource || to <= from) {
@@ -658,8 +669,13 @@ export function LandingTopBar({
 
     void loadRequestBars();
 
+    const intervalId = setInterval(() => {
+      void loadRequestBars();
+    }, TOP_BAR_REFRESH_INTERVAL_MS);
+
     return () => {
       cancelled = true;
+      clearInterval(intervalId);
     };
   }, [requestsDataSource, requestsFilters, from, to, spineCount]);
 
@@ -680,7 +696,7 @@ export function LandingTopBar({
     <>
       <div className={styles.pageFlow}>
         <div className={styles.heroBlock}>
-          {showRequestSpines && (
+          {showRequestSpines ? (
             <div className={styles.heroSpines} aria-hidden>
               {displayHeights.map((height, i) => {
                 const t = i / (spineCount - 1);
@@ -692,30 +708,20 @@ export function LandingTopBar({
                   requestSpineValues != null && i < requestSpineValues.length
                     ? formatRequestStat(requestSpineValues[i])
                     : null;
-                const timeStr =
-                  stat != null && to > from ? formatBarTime(from, to, i, spineCount) : null;
-                const durationStr =
-                  stat != null && to > from ? formatBarDuration(from, to, spineCount) : null;
+                const timeStr = stat != null && to > from ? formatBarTime(from, to, i, spineCount) : null;
+                const durationStr = stat != null && to > from ? formatBarDuration(from, to, spineCount) : null;
                 const waveIssueTooltip =
-                  requestSpineHeights == null &&
-                  requestsDataSource != null &&
-                  requestSpineWaveReason === 'error'
+                  requestSpineHeights == null && requestsDataSource != null && requestSpineWaveReason === 'error'
                     ? 'Failed to load request data'
-                    : requestSpineHeights == null &&
-                        requestsDataSource != null &&
-                        requestSpineWaveReason === 'no-data'
+                    : requestSpineHeights == null && requestsDataSource != null && requestSpineWaveReason === 'no-data'
                       ? 'No data in this time range'
                       : null;
                 const tooltipContent =
                   stat != null ? (
                     <div className={styles.spineTooltipContent}>
                       <div>{stat}</div>
-                      {timeStr != null && (
-                        <div className={styles.spineTooltipTime}>{timeStr}</div>
-                      )}
-                      {durationStr != null && (
-                        <div className={styles.spineTooltipTime}>({durationStr})</div>
-                      )}
+                      {timeStr != null && <div className={styles.spineTooltipTime}>{timeStr}</div>}
+                      {durationStr != null && <div className={styles.spineTooltipTime}>({durationStr})</div>}
                     </div>
                   ) : waveIssueTooltip != null ? (
                     waveIssueTooltip
@@ -740,6 +746,8 @@ export function LandingTopBar({
                 );
               })}
             </div>
+          ) : (
+            <div className={styles.heroSpinesSpacer} aria-hidden />
           )}
           <div className={cx(styles.heroCard, showRequestSpines && styles.heroCardWithSpines)}>
             <div className={styles.heroCardContent}>
@@ -1099,6 +1107,11 @@ function getStyles(theme: GrafanaTheme2) {
       paddingRight: 0,
       overflow: 'hidden',
       opacity: 0.75,
+    }),
+    heroSpinesSpacer: css({
+      label: 'landingTopBar-heroSpinesSpacer',
+      height: 32,
+      flexShrink: 0,
     }),
     heroSpineSlot: css({
       label: 'landingTopBar-heroSpineSlot',
