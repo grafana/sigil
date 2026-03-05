@@ -74,7 +74,11 @@ export function TopStat({
     <div className={styles.topStat}>
       <div className={styles.topStatLabelRow}>
         <span className={styles.topStatLabel}>{label}</span>
-        {to && <Link to={to} className={styles.topStatDetailLink}>{linkLabel ?? 'View details'}</Link>}
+        {to && (
+          <Link to={to} className={styles.topStatDetailLink}>
+            {linkLabel ?? 'View details'}
+          </Link>
+        )}
       </div>
       <div className={styles.topStatRow}>
         <span className={styles.topStatValue}>{loading ? '–' : formatStatValue(value, unit)}</span>

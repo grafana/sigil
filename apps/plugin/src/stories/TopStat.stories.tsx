@@ -5,7 +5,13 @@ import { TopStat, type TopStatProps } from '../components/TopStat';
 export default {
   title: 'Components/TopStat',
   component: TopStat,
-  decorators: [(Story: React.ComponentType) => <MemoryRouter><Story /></MemoryRouter>],
+  decorators: [
+    (Story: React.ComponentType) => (
+      <MemoryRouter>
+        <Story />
+      </MemoryRouter>
+    ),
+  ],
 };
 
 const Template = (args: TopStatProps) => (
