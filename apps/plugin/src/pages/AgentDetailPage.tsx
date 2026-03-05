@@ -325,6 +325,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
   plainPanelBody: css({
     padding: theme.spacing(1.25),
   }),
+  versionsPanelBody: css({
+    paddingLeft: theme.spacing(2),
+    paddingRight: theme.spacing(2),
+  }),
   versionControls: css({
     display: 'flex',
     gap: theme.spacing(0.75),
@@ -337,15 +341,19 @@ const getStyles = (theme: GrafanaTheme2) => ({
   versionSelect: css({
     flex: 1,
     minWidth: 0,
+    '& [class*="singleValue"], & [class*="placeholder"], & [class*="option"], & input': {
+      fontSize: theme.typography.bodySmall.fontSize,
+    },
   }),
   recentVersionsGrid: css({
     display: 'flex',
     flexWrap: 'nowrap' as const,
-    gap: theme.spacing(0.75),
+    gap: 0,
     marginTop: theme.spacing(0.5),
+    overflowX: 'auto' as const,
   }),
   recentVersionsHeading: css({
-    marginTop: theme.spacing(1),
+    marginTop: theme.spacing(1.25),
     marginBottom: theme.spacing(0.25),
     color: theme.colors.text.secondary,
     fontSize: theme.typography.bodySmall.fontSize,
@@ -360,12 +368,15 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexDirection: 'column' as const,
     gap: theme.spacing(0.125),
   }),
+  recentVersionItemActive: css({}),
   recentVersionBox: css({
     width: '100%',
     minWidth: 0,
     textAlign: 'left' as const,
+    appearance: 'none' as const,
+    outline: 'none',
     borderRadius: theme.shape.radius.default,
-    border: `1px solid ${theme.colors.border.weak}`,
+    border: '1px solid transparent',
     background: theme.colors.background.canvas,
     padding: theme.spacing(0.5, 0.75),
     display: 'flex',
@@ -383,26 +394,37 @@ const getStyles = (theme: GrafanaTheme2) => ({
     background: theme.colors.primary.transparent,
   }),
   recentVersionContent: css({
-    display: 'flex',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+    alignItems: 'center',
     gap: theme.spacing(0.5),
     width: '100%',
     minWidth: 0,
   }),
+  recentVersionContentSingle: css({
+    gridTemplateColumns: '1fr',
+  }),
   recentVersionText: css({
     display: 'flex',
     flexDirection: 'column' as const,
+    alignItems: 'flex-end',
     minWidth: 0,
+  }),
+  recentVersionTextCentered: css({
+    alignItems: 'center',
   }),
   recentVersionNumber: css({
     fontSize: theme.typography.bodySmall.fontSize,
     color: theme.colors.text.primary,
     fontWeight: theme.typography.fontWeightMedium,
     lineHeight: 1.2,
+    textAlign: 'right' as const,
     whiteSpace: 'nowrap' as const,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
+  }),
+  recentVersionNumberCentered: css({
+    textAlign: 'center' as const,
   }),
   recentVersionRelativeTime: css({
     fontSize: theme.typography.size.sm,
@@ -412,7 +434,54 @@ const getStyles = (theme: GrafanaTheme2) => ({
     textAlign: 'center' as const,
     width: '100%',
   }),
+  recentVersionTimelineMarker: css({
+    position: 'relative' as const,
+    height: 14,
+    width: '100%',
+    '&::before': {
+      content: '""',
+      position: 'absolute' as const,
+      top: '50%',
+      left: 0,
+      right: 0,
+      borderTop: `2px solid ${theme.colors.border.medium}`,
+      transform: 'translateY(-50%)',
+      opacity: 0.95,
+    },
+    '&::after': {
+      content: '""',
+      position: 'absolute' as const,
+      top: '50%',
+      left: '50%',
+      width: 10,
+      height: 10,
+      borderRadius: '50%',
+      transform: 'translate(-50%, -50%)',
+      background: theme.colors.background.canvas,
+      border: `2px solid ${theme.colors.border.strong}`,
+      boxShadow: `0 0 0 1px ${theme.colors.background.primary}`,
+      zIndex: 1,
+    },
+  }),
+  recentVersionTimelineMarkerStart: css({
+    '&::before': {
+      left: '50%',
+    },
+  }),
+  recentVersionTimelineMarkerEnd: css({
+    '&::before': {
+      right: '50%',
+    },
+  }),
+  recentVersionTimelineMarkerActive: css({
+    '&::after': {
+      borderColor: theme.colors.primary.border,
+      background: theme.colors.primary.main,
+      boxShadow: `0 0 0 2px ${theme.colors.primary.transparent}`,
+    },
+  }),
   recentVersionScore: css({
+    justifySelf: 'start',
     fontWeight: theme.typography.fontWeightMedium,
     fontVariantNumeric: 'tabular-nums',
     fontSize: theme.typography.size.sm,
@@ -1301,7 +1370,7 @@ export default function AgentDetailPage({
 
       <div className={styles.primaryPanelsRow}>
         <div className={cx(styles.panel, styles.plainPanel, styles.stretchPanel)}>
-          <div className={cx(styles.panelBody, styles.plainPanelBody, styles.stretchPanelBody)}>
+          <div className={cx(styles.panelBody, styles.plainPanelBody, styles.versionsPanelBody, styles.stretchPanelBody)}>
             <span className={styles.statsHeaderLabel}>Versions</span>
             <div className={styles.versionControls}>
               <div className={styles.versionSelect}>
@@ -1353,7 +1422,10 @@ export default function AgentDetailPage({
                       </div>
                     );
                     return (
-                      <div key={versionItem.effective_version} className={styles.recentVersionItem}>
+                      <div
+                        key={versionItem.effective_version}
+                        className={cx(styles.recentVersionItem, isSelected && styles.recentVersionItemActive)}
+                      >
                         <Tooltip content={tooltipContent} placement="top">
                           <button
                             type="button"
@@ -1361,9 +1433,26 @@ export default function AgentDetailPage({
                             onClick={() => selectVersion(versionItem.effective_version)}
                             aria-label={`select version ${versionItem.effective_version}`}
                           >
-                            <span className={styles.recentVersionContent}>
-                              <span className={styles.recentVersionText}>
-                                <span className={styles.recentVersionNumber}>{versionNumber}</span>
+                            <span
+                              className={cx(
+                                styles.recentVersionContent,
+                                !completedRating && styles.recentVersionContentSingle
+                              )}
+                            >
+                              <span
+                                className={cx(
+                                  styles.recentVersionText,
+                                  !completedRating && styles.recentVersionTextCentered
+                                )}
+                              >
+                                <span
+                                  className={cx(
+                                    styles.recentVersionNumber,
+                                    !completedRating && styles.recentVersionNumberCentered
+                                  )}
+                                >
+                                  {versionNumber}
+                                </span>
                               </span>
                               {completedRating && (
                                 <span
@@ -1374,11 +1463,20 @@ export default function AgentDetailPage({
                                 </span>
                               )}
                             </span>
+                            <span
+                              className={cx(
+                                styles.recentVersionTimelineMarker,
+                                index === 0 && styles.recentVersionTimelineMarkerStart,
+                                index === recentVersions.length - 1 && styles.recentVersionTimelineMarkerEnd,
+                                isSelected && styles.recentVersionTimelineMarkerActive
+                              )}
+                              aria-hidden="true"
+                            />
+                            <span className={styles.recentVersionRelativeTime}>
+                              {formatRelativeDateCompact(versionItem.last_seen_at)}
+                            </span>
                           </button>
                         </Tooltip>
-                        <span className={styles.recentVersionRelativeTime}>
-                          {formatRelativeDateCompact(versionItem.last_seen_at)}
-                        </span>
                       </div>
                     );
                   })}
