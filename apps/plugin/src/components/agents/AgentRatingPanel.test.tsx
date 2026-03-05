@@ -199,6 +199,67 @@ describe('AgentRatingPanel', () => {
     expect(screen.getByText('Another low priority tweak')).toBeInTheDocument();
   });
 
+  it('opens summary modal with full summary text', async () => {
+    const longSummary =
+      'This is a very long summary that should be shortened for readability in the panel because users only need the key takeaway from the analysis and not every detail in one block of text.';
+    const dataSource = createDataSource({});
+
+    renderPanel(
+      <AgentRatingPanel
+        agentName="assistant"
+        version="sha256:test"
+        dataSource={dataSource}
+        initialResult={createCompletedRating(longSummary)}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /open full rating summary/i }));
+
+    const dialog = await screen.findByRole('dialog', { name: /rating summary/i });
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByText(longSummary)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: /close rating summary modal/i }));
+    expect(screen.queryByRole('dialog', { name: /rating summary/i })).not.toBeInTheDocument();
+  });
+
+  it('opens assistant from summary modal explain action', async () => {
+    const completed = createCompletedRating('Prompt is mostly clear but tool boundaries are vague.');
+    completed.suggestions = [
+      {
+        severity: 'high',
+        category: 'security_review',
+        title: 'Constrain tool calls',
+        description: 'Add strict allow/deny criteria and explicit fallback behavior.',
+      },
+    ];
+    const dataSource = createDataSource({});
+
+    renderPanel(
+      <AgentRatingPanel
+        agentName="assistant"
+        version="sha256:test"
+        dataSource={dataSource}
+        initialResult={completed}
+        agentStateContext="- Current prompt has broad tool permissions."
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /open full rating summary/i }));
+
+    const dialog = await screen.findByRole('dialog', { name: /rating summary/i });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Explain' }));
+
+    expect(mockOpenAssistant).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: /rating summary/i })).not.toBeInTheDocument();
+    expect(mockOpenAssistant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        origin: 'sigil-agent-rating',
+        autoSend: true,
+        prompt: expect.stringContaining('Start a collaborative discovery conversation about these findings.'),
+      })
+    );
+  });
+
   it('opens assistant from summary explain link with full report context', async () => {
     const completed = createCompletedRating('Prompt is mostly clear but tool boundaries are vague.');
     completed.suggestions = [

@@ -166,6 +166,22 @@ const getStyles = (theme: GrafanaTheme2) => ({
     marginRight: theme.spacing(0.5),
     verticalAlign: 'text-bottom',
   }),
+  summaryTextButton: css({
+    border: 'none',
+    background: 'transparent',
+    padding: 0,
+    margin: 0,
+    color: 'inherit',
+    cursor: 'pointer',
+    textAlign: 'left' as const,
+    textDecoration: 'none',
+    textDecorationColor: `${theme.colors.text.secondary}80`,
+    textUnderlineOffset: '0.12em',
+    '&:hover': {
+      textDecoration: 'underline',
+      textDecorationColor: theme.colors.text.primary,
+    },
+  }),
   summaryExplainLink: css({
     marginLeft: theme.spacing(0.75),
     border: 'none',
@@ -573,6 +589,7 @@ export default function AgentRatingPanel({
   const [result, setResult] = useState<AgentRatingResponse | null>(initialResult);
   const [error, setError] = useState<string>(initialError);
   const [rejectedSuggestionKeys, setRejectedSuggestionKeys] = useState<Record<string, true>>({});
+  const [summaryModalOpen, setSummaryModalOpen] = useState(false);
   const [rewriteModalOpen, setRewriteModalOpen] = useState(false);
   const [rewriteMarkdown, setRewriteMarkdown] = useState('');
   const [rewriteError, setRewriteError] = useState('');
@@ -680,6 +697,7 @@ export default function AgentRatingPanel({
 
   useEffect(() => {
     setRejectedSuggestionKeys({});
+    setSummaryModalOpen(false);
   }, [completedResult]);
 
   const groupedSuggestions = useMemo(() => {
@@ -899,6 +917,19 @@ export default function AgentRatingPanel({
     setSearchParams(next, { replace: false });
   }, [searchParams, setSearchParams]);
 
+  const openSummaryModal = useCallback(() => {
+    setSummaryModalOpen(true);
+  }, []);
+
+  const closeSummaryModal = useCallback(() => {
+    setSummaryModalOpen(false);
+  }, []);
+
+  const onExplainSummaryModal = useCallback(() => {
+    setSummaryModalOpen(false);
+    onExplainReport();
+  }, [onExplainReport]);
+
   const runRewritePrompt = useCallback(() => {
     if (!completedResult) {
       return;
@@ -1031,7 +1062,14 @@ export default function AgentRatingPanel({
                   style={{ color: summaryStatusTone(theme, completedResult.score) }}
                 />
               </span>
-              {succinctSummary}
+              <button
+                type="button"
+                className={styles.summaryTextButton}
+                onClick={openSummaryModal}
+                aria-label="Open full rating summary"
+              >
+                {succinctSummary}
+              </button>
               <button type="button" className={styles.summaryExplainLink} onClick={onExplainReport}>
                 Explain
               </button>
@@ -1134,6 +1172,38 @@ export default function AgentRatingPanel({
               </Button>
               <Button variant="destructive" onClick={() => onRejectSuggestion(selectedSuggestion)}>
                 Reject
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {summaryModalOpen && completedResult && (
+        <div className={styles.modalBackdrop} role="presentation" onClick={closeSummaryModal}>
+          <div
+            className={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Rating summary"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className={styles.modalHeader}>
+              <Text weight="medium">Rating summary</Text>
+              <button
+                type="button"
+                className={styles.modalCloseButton}
+                onClick={closeSummaryModal}
+                aria-label="Close rating summary modal"
+              >
+                x
+              </button>
+            </div>
+            <div className={styles.modalBody}>{completedResult.summary}</div>
+            <div className={styles.modalActions}>
+              <Button variant="secondary" icon="ai" onClick={onExplainSummaryModal}>
+                Explain
+              </Button>
+              <Button variant="secondary" onClick={closeSummaryModal}>
+                Close
               </Button>
             </div>
           </div>

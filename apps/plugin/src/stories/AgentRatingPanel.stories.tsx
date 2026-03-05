@@ -124,3 +124,24 @@ export const PoorScoreManySuggestions = {
     },
   },
 };
+
+export const LongSummaryClickable = {
+  args: {
+    initialResult: {
+      status: 'completed',
+      score: 7,
+      summary:
+        'The agent is directionally strong, but tool invocation criteria and fallback behavior remain too implicit. Tightening permission language, adding explicit refusal boundaries, and reducing duplicated instruction blocks would improve reliability, safety posture, and token efficiency without changing the user-facing workflow.',
+      suggestions: [
+        {
+          category: 'tools',
+          severity: 'medium',
+          title: 'Clarify tool eligibility checks',
+          description: 'Make preconditions explicit for each tool call and include default fallback paths.',
+        },
+      ],
+      judge_model: 'openai/gpt-4o-mini',
+      judge_latency_ms: 320,
+    },
+  },
+};
