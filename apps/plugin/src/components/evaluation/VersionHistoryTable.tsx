@@ -169,14 +169,14 @@ export default function VersionHistoryTable({
             {hasActions && (
               <div className={styles.actionsCell}>
                 {onRollback ? (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => onRollback(v.version)}
-                  tooltip="Publish a new version with this config"
-                >
-                  Rollback
-                </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => onRollback(v.version)}
+                    tooltip="Publish a new version with this config"
+                  >
+                    Rollback
+                  </Button>
                 ) : (
                   <div />
                 )}

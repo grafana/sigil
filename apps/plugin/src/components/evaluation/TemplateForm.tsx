@@ -79,15 +79,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
       margin: '0 !important',
     },
   }),
-  threeColumnGrid: css({
-    display: 'grid',
-    gridTemplateColumns: '1fr',
-    gap: theme.spacing(1.25),
-    alignItems: 'start',
-    '& > *': {
-      margin: '0 !important',
-    },
-  }),
   fullWidthControl: css({
     width: '100% !important',
     minWidth: 0,
@@ -715,7 +706,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
             </Text>
           </div>
           {outputType === 'number' && (
-            <div className={styles.threeColumnGrid}>
+            <div className={styles.twoColumnGrid}>
               <Field label="Pass threshold">
                 <Input
                   className={styles.numericControl}

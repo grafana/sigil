@@ -7,6 +7,7 @@ import type { GenerationLookupHints } from '../../conversation/types';
 import type { GenerationDetail, Message } from '../../generation/types';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../../evaluation/api';
 import type { EvalOutputKey, EvalTestResponse, EvaluatorKind } from '../../evaluation/types';
+import { buildConversationExploreRoute, PLUGIN_BASE } from '../../constants';
 import ChatMessage from '../chat/ChatMessage';
 import { getSectionTitleStyles } from './sectionStyles';
 import GenerationPicker from './GenerationPicker';
@@ -85,6 +86,13 @@ const getStyles = (theme: GrafanaTheme2) => {
       background: theme.colors.background.canvas,
       border: `1px solid ${theme.colors.border.weak}`,
       borderRadius: theme.shape.radius.default,
+    }),
+    generationMetaRow: css({
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: theme.spacing(1),
+      flexWrap: 'wrap' as const,
     }),
     runButtonWrapper: css({
       display: 'inline-block',
@@ -200,6 +208,7 @@ export default function EvalTestPanel({
   };
 
   const allMessages: Message[] = generation ? [...(generation.input ?? []), ...(generation.output ?? [])] : [];
+  const conversationId = generation?.conversation_id ?? generationLookupHintsRef.current?.conversation_id;
 
   return (
     <div className={styles.card}>
@@ -254,10 +263,25 @@ export default function EvalTestPanel({
 
         {generation && (
           <>
-            <Text variant="body" color="secondary">
-              {generation.model?.provider ?? ''} {generation.model?.name ?? '\u2014'} &middot;{' '}
-              {generation.created_at ? new Date(generation.created_at).toLocaleString() : ''}
-            </Text>
+            <div className={styles.generationMetaRow}>
+              <Text variant="body" color="secondary">
+                {generation.model?.provider ?? ''} {generation.model?.name ?? '\u2014'} &middot;{' '}
+                {generation.created_at ? new Date(generation.created_at).toLocaleString() : ''}
+              </Text>
+              {conversationId && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon="external-link-alt"
+                  onClick={() =>
+                    window.open(`${PLUGIN_BASE}/${buildConversationExploreRoute(conversationId)}`, '_blank', 'noopener')
+                  }
+                  aria-label={`open conversation ${conversationId}`}
+                >
+                  Open conversation
+                </Button>
+              )}
+            </div>
             <Text variant="body" weight="medium">
               Preview test
             </Text>

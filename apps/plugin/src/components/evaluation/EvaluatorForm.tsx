@@ -84,15 +84,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
       margin: '0 !important',
     },
   }),
-  threeColumnGrid: css({
-    display: 'grid',
-    gridTemplateColumns: '1fr',
-    gap: theme.spacing(1.25),
-    alignItems: 'start',
-    '& > *': {
-      margin: '0 !important',
-    },
-  }),
   fullWidthControl: css({
     width: '100% !important',
     minWidth: 0,
@@ -465,11 +456,7 @@ export default function EvaluatorForm({
             </Text>
           </div>
           <div className={styles.twoColumnGrid}>
-            <Field
-              label="Evaluator ID"
-              description="Unique identifier for this evaluator."
-              required
-            >
+            <Field label="Evaluator ID" description="Unique identifier for this evaluator." required>
               <>
                 <Input
                   className={styles.compactControl}
@@ -573,9 +560,7 @@ export default function EvaluatorForm({
               />
             </Field>
             <div className={styles.twoColumnGrid}>
-              <Field
-                label="Max tokens"
-              >
+              <Field label="Max tokens">
                 <>
                   <Input
                     className={styles.numericControl}
@@ -592,9 +577,7 @@ export default function EvaluatorForm({
                   )}
                 </>
               </Field>
-              <Field
-                label="Temperature"
-              >
+              <Field label="Temperature">
                 <>
                   <Input
                     className={styles.numericControl}
@@ -627,10 +610,7 @@ export default function EvaluatorForm({
                 Provide the JSON schema used to validate each generation result.
               </Text>
             </div>
-            <Field
-              label="Schema"
-              description="JSON schema for validation."
-            >
+            <Field label="Schema" description="JSON schema for validation.">
               <>
                 <textarea
                   className={`${styles.textarea} ${styles.codeTextarea}`}
@@ -663,10 +643,7 @@ export default function EvaluatorForm({
                 Provide the pattern used to check each generation result.
               </Text>
             </div>
-            <Field
-              label="Pattern"
-              description="Regex pattern to match."
-            >
+            <Field label="Pattern" description="Regex pattern to match.">
               <>
                 <Input
                   className={styles.compactControl}
@@ -698,11 +675,7 @@ export default function EvaluatorForm({
                 Define the simple rules used to check presence and length for each generation result.
               </Text>
             </div>
-            <Field
-              className={styles.switchField}
-              label="Not empty"
-              description="Require non-empty output."
-            >
+            <Field className={styles.switchField} label="Not empty" description="Require non-empty output.">
               <Switch value={notEmpty} onChange={(e) => setNotEmpty(e.currentTarget.checked)} />
             </Field>
             <div className={styles.twoColumnGrid}>
@@ -718,9 +691,7 @@ export default function EvaluatorForm({
                   placeholder="—"
                 />
               </Field>
-              <Field
-                label="Max length"
-              >
+              <Field label="Max length">
                 <>
                   <Input
                     className={styles.numericControl}
@@ -757,9 +728,7 @@ export default function EvaluatorForm({
             </Text>
           </div>
           <div className={styles.twoColumnGrid}>
-            <Field
-              label="Output key"
-            >
+            <Field label="Output key">
               <>
                 <Input
                   className={styles.compactControl}
@@ -831,9 +800,9 @@ export default function EvaluatorForm({
             </Text>
           </div>
           {outputType === 'number' && (
-            <div className={styles.threeColumnGrid}>
+            <div className={styles.twoColumnGrid}>
               <Field label="Pass threshold">
-                  <Input
+                <Input
                   className={styles.numericControl}
                   type="number"
                   value={passThreshold}
@@ -850,9 +819,7 @@ export default function EvaluatorForm({
                   placeholder="e.g. 1"
                 />
               </Field>
-              <Field
-                label="Max"
-              >
+              <Field label="Max">
                 <>
                   <Input
                     className={styles.numericControl}
