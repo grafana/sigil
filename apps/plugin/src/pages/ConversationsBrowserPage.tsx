@@ -17,6 +17,7 @@ import { resolveModelCardsFromNames } from '../modelcard/resolve';
 import ConversationListPanel from '../components/conversations/ConversationListPanel';
 import { ConversationTimelineHistogram } from '../components/conversations/ConversationTimelineHistogram';
 import { buildConversationExploreRoute, ROUTES } from '../constants';
+import { PageInsightBar } from '../components/insight/PageInsightBar';
 
 export type ConversationsBrowserPageProps = {
   dataSource?: ConversationsDataSource;
@@ -158,11 +159,14 @@ const getStyles = (theme: GrafanaTheme2) => ({
     position: 'absolute',
     inset: 0,
     display: 'grid',
-    gridTemplateRows: 'auto auto minmax(0, 1fr)',
+    gridTemplateRows: 'auto auto auto minmax(0, 1fr)',
     gap: theme.spacing(1),
     minHeight: 0,
     overflow: 'hidden',
     overscrollBehavior: 'none' as const,
+  }),
+  insightRow: css({
+    label: 'conversationsBrowserPage-insightRow',
   }),
   summarySection: css({
     label: 'conversationsBrowserPage-summarySection',
@@ -290,6 +294,28 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
     [previousConversations, timeRange]
   );
 
+  const conversationInsightDataContext = useMemo(() => {
+    if (loading || conversations.length === 0) {
+      return null;
+    }
+    const s = conversationStats;
+    const p = previousConversationStats;
+    const modelSet = new Set(conversations.flatMap((c) => c.models));
+    const providerSet = new Set(conversations.flatMap((c) => Object.keys(c.model_providers ?? {})));
+    const errCount = conversations.filter((c) => c.has_errors).length;
+    return [
+      `Conversations: ${s.totalConversations} (previous window: ${p.totalConversations})`,
+      `Total tokens: ${s.totalTokens.toLocaleString()} (previous: ${p.totalTokens.toLocaleString()})`,
+      `Avg calls per conversation: ${s.avgCallsPerConversation.toFixed(1)} (previous: ${p.avgCallsPerConversation.toFixed(1)})`,
+      `Active conversations (7d): ${s.activeLast7d} (previous: ${p.activeLast7d})`,
+      `Rated conversations: ${s.ratedConversations} (previous: ${p.ratedConversations})`,
+      `Bad-rated %: ${s.badRatedPct.toFixed(1)}% (previous: ${p.badRatedPct.toFixed(1)}%)`,
+      `Conversations with errors: ${errCount}`,
+      `Unique models: ${[...modelSet].join(', ') || 'none'}`,
+      `Unique providers: ${[...providerSet].join(', ') || 'none'}`,
+    ].join('\n');
+  }, [loading, conversations, conversationStats, previousConversationStats]);
+
   const [modelCards, setModelCards] = useState<Map<string, ModelCard>>(new Map());
 
   useEffect(() => {
@@ -413,6 +439,14 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
             {errorMessage}
           </Alert>
         )}
+      </div>
+
+      <div className={styles.insightRow}>
+        <PageInsightBar
+          prompt="Analyze these conversation metrics. Flag quality concerns, unusual patterns, or notable trends vs the previous period."
+          origin="sigil-plugin/conversations-browser-insight"
+          dataContext={conversationInsightDataContext}
+        />
       </div>
 
       <ConversationTimelineHistogram conversations={conversations} timeRange={timeRange} loading={loading} />

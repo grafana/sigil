@@ -21,6 +21,7 @@ import MiniTimeline from '../components/conversation-explore/MiniTimeline';
 import DetailPanel from '../components/conversation-explore/DetailPanel';
 import type { FlowNode } from '../components/conversation-explore/types';
 import { Loader } from '../components/Loader';
+import { PageInsightBar } from '../components/insight/PageInsightBar';
 
 export type ConversationExplorePageProps = {
   dataSource?: ConversationsDataSource;
@@ -49,6 +50,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   errorWrap: css({
     padding: theme.spacing(2),
+  }),
+  insightRow: css({
+    padding: theme.spacing(0, 1.5),
+    flexShrink: 0,
   }),
   contentArea: css({
     flex: 1,
@@ -261,6 +266,40 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   }, [allGenerations]);
 
   const errorCount = useMemo(() => allGenerations.filter((g) => Boolean(g.error?.message)).length, [allGenerations]);
+
+  const exploreInsightDataContext = useMemo(() => {
+    if (loading || !conversationData) {
+      return null;
+    }
+    const topCosts = [...generationCosts.entries()]
+      .sort((a, b) => (b[1].breakdown.totalCost ?? 0) - (a[1].breakdown.totalCost ?? 0))
+      .slice(0, 3)
+      .map(([id, cost]) => `  ${id}: $${(cost.breakdown.totalCost ?? 0).toFixed(6)}`)
+      .join('\n');
+    return [
+      `Conversation ID: ${conversationID}`,
+      `Total duration: ${totalDurationMs}ms`,
+      `Generation count: ${conversationData.generationCount}`,
+      `Token summary: input=${tokenSummary?.inputTokens ?? 0}, output=${tokenSummary?.outputTokens ?? 0}, total=${tokenSummary?.totalTokens ?? 0}`,
+      `Cost summary: $${(costSummary?.totalCost ?? 0).toFixed(6)}`,
+      `Errors: ${errorCount}`,
+      `Models: ${models.join(', ') || 'none'}`,
+      topCosts.length > 0 ? `Top generations by cost:\n${topCosts}` : '',
+    ]
+      .filter((l) => l.length > 0)
+      .join('\n');
+  }, [
+    loading,
+    conversationData,
+    conversationID,
+    totalDurationMs,
+    tokenSummary,
+    costSummary,
+    errorCount,
+    models,
+    generationCosts,
+  ]);
+
   if (loading) {
     return (
       <div className={styles.pageContainer}>
@@ -301,6 +340,13 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
         isSaved={isSaved}
         onToggleSave={saveLoading ? undefined : handleToggleSave}
       />
+      <div className={styles.insightRow}>
+        <PageInsightBar
+          prompt="Analyze this single conversation trace. Flag expensive operations, errors, unusual patterns, or optimization opportunities."
+          origin="sigil-plugin/conversation-explore-insight"
+          dataContext={exploreInsightDataContext}
+        />
+      </div>
       <div className={styles.contentArea}>
         <div className={styles.leftPanel} style={{ width: panelWidth }}>
           <MiniTimeline
