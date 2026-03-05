@@ -20,7 +20,7 @@ func TestGroupTempoSearchResponseAndOrdering(t *testing.T) {
 									attrString("sigil.generation.id", "gen-1"),
 									attrString("gen_ai.request.model", "gpt-4o"),
 									attrString("gen_ai.agent.name", "assistant"),
-									attrString("sigil.user.name", "Latest User"),
+									attrString("user.id", "user-latest"),
 									attrString("error.type", "provider_error"),
 									attrDouble("span.custom.score", 1.5),
 									attrBool("span.custom.flag", true),
@@ -60,7 +60,7 @@ func TestGroupTempoSearchResponseAndOrdering(t *testing.T) {
 									attrString("sigil.generation.id", "gen-3"),
 									attrString("gen_ai.request.model", "gpt-4o"),
 									attrString("gen_ai.agent.name", "copilot"),
-									attrString("sigil.user.name", "Older User"),
+									attrString("user.id", "user-older"),
 								},
 							},
 						},
@@ -101,8 +101,8 @@ func TestGroupTempoSearchResponseAndOrdering(t *testing.T) {
 	if conv1.LatestTraceStartNanos != 200 {
 		t.Fatalf("expected latest trace nanos 200, got %d", conv1.LatestTraceStartNanos)
 	}
-	if conv1.UserName != "Latest User" {
-		t.Fatalf("expected latest user name, got %q", conv1.UserName)
+	if conv1.UserID != "user-latest" {
+		t.Fatalf("expected latest user id, got %q", conv1.UserID)
 	}
 
 	selected := BuildSelectedResultMap(conv1.Selected)

@@ -155,11 +155,11 @@ type TempoConversationAggregate struct {
 	TraceIDs              map[string]struct{}
 	Models                map[string]struct{}
 	Agents                map[string]struct{}
-	UserName              string
+	UserID                string
 	ErrorCount            int
 	Selected              map[string]*TempoSelectedAggregation
 	LatestTraceStartNanos int64
-	LatestUserNameAtNanos int64
+	LatestUserIDAtNanos   int64
 }
 
 // TempoGroupResult is the grouped output of GroupTempoSearchResponse.
@@ -229,10 +229,10 @@ func GroupTempoSearchResponse(response *TempoSearchResponse, selectFields []Sele
 				if agent := firstAttributeString(attributes, "gen_ai.agent.name", "span.gen_ai.agent.name"); agent != "" {
 					aggregate.Agents[agent] = struct{}{}
 				}
-				if userName := firstAttributeString(attributes, "sigil.user.name", "span.sigil.user.name"); userName != "" {
-					if spanStartNanos >= aggregate.LatestUserNameAtNanos {
-						aggregate.UserName = userName
-						aggregate.LatestUserNameAtNanos = spanStartNanos
+				if userID := firstAttributeString(attributes, "user.id", "span.user.id"); userID != "" {
+					if spanStartNanos >= aggregate.LatestUserIDAtNanos {
+						aggregate.UserID = userID
+						aggregate.LatestUserIDAtNanos = spanStartNanos
 					}
 				}
 				if errorType := firstAttributeString(attributes, "error.type", "span.error.type"); errorType != "" {

@@ -13,7 +13,7 @@ export const WithResults = {
   render: () => {
     const conversations = mockSearchResults.map((conversation, index) =>
       index === 0
-        ? { ...conversation, conversation_title: 'Incident: payment retries in EU region', user_name: 'Taylor User' }
+        ? { ...conversation, conversation_title: 'Incident: payment retries in EU region', user_id: 'user-42' }
         : conversation
     );
     const [selected, setSelected] = useState(conversations[0].conversation_id);
@@ -35,7 +35,7 @@ export const ExtendedColumns = {
   render: () => {
     const conversations = mockSearchResults.map((conversation, index) =>
       index === 0
-        ? { ...conversation, conversation_title: 'Incident: payment retries in EU region', user_name: 'Taylor User' }
+        ? { ...conversation, conversation_title: 'Incident: payment retries in EU region', user_id: 'user-42' }
         : conversation
     );
     const [selected, setSelected] = useState('');

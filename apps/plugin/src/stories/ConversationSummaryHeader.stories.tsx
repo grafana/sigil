@@ -3,7 +3,7 @@ import type { ConversationSearchResult } from '../conversation/types';
 
 const baseConversation: ConversationSearchResult = {
   conversation_id: 'conv-3f8e9d42',
-  user_name: 'Taylor User',
+  user_id: 'user-42',
   generation_count: 12,
   first_generation_at: '2026-02-15T09:00:00Z',
   last_generation_at: '2026-02-15T10:30:00Z',

@@ -158,10 +158,10 @@ See `docs/references/grafana-query-response-shapes.md`.
 - Conversations:
   - query conversations with expression filters and selectable attributes
   - display optional `conversation_title` labels from Tempo span attribute `sigil.conversation.title` (latest matching span wins; fallback to conversation id)
-  - display optional conversation `user_name` labels from Tempo span attribute `sigil.user.name` (latest matching span wins)
+  - display optional conversation `user_id` labels from Tempo span attribute `user.id` (latest matching span wins)
   - support cursor pagination in list view
   - open conversation detail with hydrated generations, ratings, and annotations
-  - display optional conversation detail `user_name` from generation metadata key `sigil.user.name`
+  - display optional conversation detail `user_id` from generation metadata key `user.id`
   - open generation detail with trace/span identifiers
   - render conversation span tree with the local Jaeger-style tree component (`SigilSpanTree`) backed by:
     - `components/conversations/jaegerTree/adapter.ts` for flattening and row metadata

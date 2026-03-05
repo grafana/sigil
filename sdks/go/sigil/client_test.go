@@ -760,8 +760,8 @@ func TestStartGenerationNilContextUsesBackgroundContext(t *testing.T) {
 
 	span := onlyGenerationSpan(t, recorder.Ended())
 	attrs := spanAttributeMap(span)
-	if _, ok := attrs[spanAttrUserName]; ok {
-		t.Fatalf("did not expect %s attribute when user name is unset", spanAttrUserName)
+	if _, ok := attrs[spanAttrUserID]; ok {
+		t.Fatalf("did not expect %s attribute when user id is unset", spanAttrUserID)
 	}
 }
 
@@ -1210,10 +1210,10 @@ func TestConversationTitleFromContext(t *testing.T) {
 	}
 }
 
-func TestUserNameFromContext(t *testing.T) {
+func TestUserIDFromContext(t *testing.T) {
 	client, recorder, _ := newTestClient(t, Config{})
 
-	ctx := WithUserName(context.Background(), "Alex Person")
+	ctx := WithUserID(context.Background(), "user-ctx")
 	_, generationRecorder := client.StartGeneration(ctx, GenerationStart{
 		Model: ModelRef{
 			Provider: "anthropic",
@@ -1224,11 +1224,11 @@ func TestUserNameFromContext(t *testing.T) {
 
 	span := onlyGenerationSpan(t, recorder.Ended())
 	attrs := spanAttributeMap(span)
-	if attrs[spanAttrUserName].AsString() != "Alex Person" {
-		t.Fatalf("expected %s=Alex Person, got %q", spanAttrUserName, attrs[spanAttrUserName].AsString())
+	if attrs[spanAttrUserID].AsString() != "user-ctx" {
+		t.Fatalf("expected %s=user-ctx, got %q", spanAttrUserID, attrs[spanAttrUserID].AsString())
 	}
-	if got, ok := generationRecorder.lastGeneration.Metadata[spanAttrUserName]; !ok || got != "Alex Person" {
-		t.Fatalf("expected generation metadata %s=Alex Person, got %#v", spanAttrUserName, generationRecorder.lastGeneration.Metadata)
+	if got, ok := generationRecorder.lastGeneration.Metadata[spanAttrUserID]; !ok || got != "user-ctx" {
+		t.Fatalf("expected generation metadata %s=user-ctx, got %#v", spanAttrUserID, generationRecorder.lastGeneration.Metadata)
 	}
 }
 
@@ -1295,12 +1295,12 @@ func TestExplicitConversationTitleOverridesContext(t *testing.T) {
 	}
 }
 
-func TestExplicitUserNameOverridesContext(t *testing.T) {
+func TestExplicitUserIDOverridesContext(t *testing.T) {
 	client, recorder, _ := newTestClient(t, Config{})
 
-	ctx := WithUserName(context.Background(), "context-user")
+	ctx := WithUserID(context.Background(), "context-user")
 	_, generationRecorder := client.StartGeneration(ctx, GenerationStart{
-		UserName: "explicit-user",
+		UserID: "explicit-user",
 		Model: ModelRef{
 			Provider: "anthropic",
 			Name:     "claude-sonnet-4-5",
@@ -1310,8 +1310,8 @@ func TestExplicitUserNameOverridesContext(t *testing.T) {
 
 	span := onlyGenerationSpan(t, recorder.Ended())
 	attrs := spanAttributeMap(span)
-	if attrs[spanAttrUserName].AsString() != "explicit-user" {
-		t.Fatalf("expected %s=explicit-user, got %q", spanAttrUserName, attrs[spanAttrUserName].AsString())
+	if attrs[spanAttrUserID].AsString() != "explicit-user" {
+		t.Fatalf("expected %s=explicit-user, got %q", spanAttrUserID, attrs[spanAttrUserID].AsString())
 	}
 }
 
@@ -1447,12 +1447,12 @@ func TestGenerationResultAgentFieldsOverrideSeed(t *testing.T) {
 	}
 }
 
-func TestGenerationMetadataUserNameFallbackSetsSpanAttribute(t *testing.T) {
+func TestGenerationMetadataUserIDFallbackSetsSpanAttribute(t *testing.T) {
 	client, recorder, _ := newTestClient(t, Config{})
 
 	_, rec := client.StartGeneration(context.Background(), GenerationStart{
 		Metadata: map[string]any{
-			spanAttrUserName: "metadata-user",
+			spanAttrUserID: "metadata-user",
 		},
 		Model: ModelRef{
 			Provider: "anthropic",
@@ -1463,11 +1463,11 @@ func TestGenerationMetadataUserNameFallbackSetsSpanAttribute(t *testing.T) {
 
 	span := onlyGenerationSpan(t, recorder.Ended())
 	attrs := spanAttributeMap(span)
-	if attrs[spanAttrUserName].AsString() != "metadata-user" {
-		t.Fatalf("expected %s=metadata-user, got %q", spanAttrUserName, attrs[spanAttrUserName].AsString())
+	if attrs[spanAttrUserID].AsString() != "metadata-user" {
+		t.Fatalf("expected %s=metadata-user, got %q", spanAttrUserID, attrs[spanAttrUserID].AsString())
 	}
-	if got, ok := rec.lastGeneration.Metadata[spanAttrUserName]; !ok || got != "metadata-user" {
-		t.Fatalf("expected generation metadata %s=metadata-user, got %#v", spanAttrUserName, rec.lastGeneration.Metadata)
+	if got, ok := rec.lastGeneration.Metadata[spanAttrUserID]; !ok || got != "metadata-user" {
+		t.Fatalf("expected generation metadata %s=metadata-user, got %#v", spanAttrUserID, rec.lastGeneration.Metadata)
 	}
 }
 

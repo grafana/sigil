@@ -105,7 +105,7 @@ const (
 	spanAttrGenerationID           = "sigil.generation.id"
 	spanAttrConversationID         = "gen_ai.conversation.id"
 	spanAttrConversationTitle      = "sigil.conversation.title"
-	spanAttrUserName               = "sigil.user.name"
+	spanAttrUserID                 = "user.id"
 	spanAttrAgentName              = "gen_ai.agent.name"
 	spanAttrAgentVersion           = "gen_ai.agent.version"
 	spanAttrErrorType              = "error.type"
@@ -397,9 +397,9 @@ func (c *Client) startGeneration(ctx context.Context, start GenerationStart, def
 			seed.ConversationTitle = title
 		}
 	}
-	if seed.UserName == "" {
-		if userName, ok := UserNameFromContext(ctx); ok {
-			seed.UserName = userName
+	if seed.UserID == "" {
+		if userID, ok := UserIDFromContext(ctx); ok {
+			seed.UserID = userID
 		}
 	}
 	if seed.AgentName == "" {
@@ -425,7 +425,7 @@ func (c *Client) startGeneration(ctx context.Context, start GenerationStart, def
 		ID:                seed.ID,
 		ConversationID:    seed.ConversationID,
 		ConversationTitle: seed.ConversationTitle,
-		UserName:          seed.UserName,
+		UserID:            seed.UserID,
 		AgentName:         seed.AgentName,
 		AgentVersion:      seed.AgentVersion,
 		Mode:              seed.Mode,
@@ -441,7 +441,7 @@ func (c *Client) startGeneration(ctx context.Context, start GenerationStart, def
 		ID:                seed.ID,
 		ConversationID:    seed.ConversationID,
 		ConversationTitle: seed.ConversationTitle,
-		UserName:          seed.UserName,
+		UserID:            seed.UserID,
 		AgentName:         seed.AgentName,
 		AgentVersion:      seed.AgentVersion,
 		Mode:              seed.Mode,
@@ -946,8 +946,8 @@ func (r *GenerationRecorder) normalizeGeneration(raw Generation, completedAt tim
 	if g.ConversationTitle == "" {
 		g.ConversationTitle = r.seed.ConversationTitle
 	}
-	if g.UserName == "" {
-		g.UserName = r.seed.UserName
+	if g.UserID == "" {
+		g.UserID = r.seed.UserID
 	}
 	if g.AgentName == "" {
 		g.AgentName = r.seed.AgentName
@@ -999,12 +999,12 @@ func (r *GenerationRecorder) normalizeGeneration(raw Generation, completedAt tim
 	if g.Metadata == nil {
 		g.Metadata = map[string]any{}
 	}
-	if g.UserName == "" {
-		g.UserName = metadataString(g.Metadata, spanAttrUserName)
+	if g.UserID == "" {
+		g.UserID = metadataString(g.Metadata, spanAttrUserID)
 	}
-	if userName := strings.TrimSpace(g.UserName); userName != "" {
-		g.UserName = userName
-		g.Metadata[spanAttrUserName] = userName
+	if userID := strings.TrimSpace(g.UserID); userID != "" {
+		g.UserID = userID
+		g.Metadata[spanAttrUserID] = userID
 	}
 	g.Metadata[sdkMetadataKeyName] = sdkName
 
@@ -1172,8 +1172,8 @@ func generationSpanAttributes(g Generation) []attribute.KeyValue {
 	if conversationTitle := strings.TrimSpace(g.ConversationTitle); conversationTitle != "" {
 		attrs = append(attrs, attribute.String(spanAttrConversationTitle, conversationTitle))
 	}
-	if userName := strings.TrimSpace(g.UserName); userName != "" {
-		attrs = append(attrs, attribute.String(spanAttrUserName, userName))
+	if userID := strings.TrimSpace(g.UserID); userID != "" {
+		attrs = append(attrs, attribute.String(spanAttrUserID, userID))
 	}
 	if agentName := strings.TrimSpace(g.AgentName); agentName != "" {
 		attrs = append(attrs, attribute.String(spanAttrAgentName, agentName))

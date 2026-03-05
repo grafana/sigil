@@ -499,7 +499,7 @@ type tempoSelectedAggregation struct {
 type tempoConversationAggregate struct {
 	ConversationID        string
 	ConversationTitle     string
-	UserName              string
+	UserID                string
 	GenerationIDs         map[string]struct{}
 	TraceIDs              map[string]struct{}
 	Models                map[string]struct{}
@@ -509,7 +509,7 @@ type tempoConversationAggregate struct {
 	Selected              map[string]*tempoSelectedAggregation
 	LatestTraceStartNanos int64
 	LatestTitleAtNanos    int64
-	LatestUserNameAtNanos int64
+	LatestUserIDAtNanos   int64
 }
 
 type tempoGroupResult struct {
@@ -589,10 +589,10 @@ func groupTempoSearchResponse(response *TempoSearchResponse, selectFields []Sele
 						aggregate.LatestTitleAtNanos = spanStartNanos
 					}
 				}
-				if userName := firstAttributeString(attributes, "sigil.user.name", "span.sigil.user.name"); userName != "" {
-					if spanStartNanos >= aggregate.LatestUserNameAtNanos {
-						aggregate.UserName = userName
-						aggregate.LatestUserNameAtNanos = spanStartNanos
+				if userID := firstAttributeString(attributes, "user.id", "span.user.id"); userID != "" {
+					if spanStartNanos >= aggregate.LatestUserIDAtNanos {
+						aggregate.UserID = userID
+						aggregate.LatestUserIDAtNanos = spanStartNanos
 					}
 				}
 				if errorType := firstAttributeString(attributes, "error.type", "span.error.type"); errorType != "" {

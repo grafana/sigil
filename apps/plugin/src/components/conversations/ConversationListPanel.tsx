@@ -66,10 +66,10 @@ function conversationTitleForDisplay(conversation: ConversationSearchResult): st
   return conversation.conversation_id;
 }
 
-function conversationUserNameForDisplay(conversation: ConversationSearchResult): string {
-  const userName = conversation.user_name?.trim() ?? '';
-  if (userName.length > 0) {
-    return userName;
+function conversationUserIDForDisplay(conversation: ConversationSearchResult): string {
+  const userID = conversation.user_id?.trim() ?? '';
+  if (userID.length > 0) {
+    return userID;
   }
   return '';
 }
@@ -513,7 +513,7 @@ export default function ConversationListPanel({
                 const selected = conversation.conversation_id === selectedConversationId;
                 const displayTitle = conversationTitleForDisplay(conversation);
                 const hasTitle = displayTitle !== conversation.conversation_id;
-                const userName = conversationUserNameForDisplay(conversation);
+                const userID = conversationUserIDForDisplay(conversation);
                 return (
                   <tr
                     key={conversation.conversation_id}
@@ -540,20 +540,20 @@ export default function ConversationListPanel({
                               {displayTitle}
                               <br />
                               {conversation.conversation_id}
-                              {userName.length > 0 && (
+                              {userID.length > 0 && (
                                 <>
                                   <br />
-                                  {userName}
+                                  {userID}
                                 </>
                               )}
                             </>
                           ) : (
                             <>
                               {conversation.conversation_id}
-                              {userName.length > 0 && (
+                              {userID.length > 0 && (
                                 <>
                                   <br />
-                                  {userName}
+                                  {userID}
                                 </>
                               )}
                             </>
@@ -562,7 +562,7 @@ export default function ConversationListPanel({
                       >
                         <div className={styles.idCellStack}>
                           <span className={styles.idCellPrimary}>{displayTitle}</span>
-                          {userName.length > 0 && <span className={styles.idCellSecondary}>{userName}</span>}
+                          {userID.length > 0 && <span className={styles.idCellSecondary}>{userID}</span>}
                         </div>
                       </Tooltip>
                     </td>
@@ -616,7 +616,7 @@ export default function ConversationListPanel({
               const selected = conversation.conversation_id === selectedConversationId;
               const displayTitle = conversationTitleForDisplay(conversation);
               const hasTitle = displayTitle !== conversation.conversation_id;
-              const userName = conversationUserNameForDisplay(conversation);
+              const userID = conversationUserIDForDisplay(conversation);
               const rating = conversation.rating_summary;
               return (
                 <tr
@@ -645,9 +645,9 @@ export default function ConversationListPanel({
                             <span className={styles.idCellSecondary}>{truncateId(conversation.conversation_id)}</span>
                           </Tooltip>
                         )}
-                        {userName.length > 0 && (
-                          <Tooltip content={userName}>
-                            <span className={styles.idCellSecondary}>{userName}</span>
+                        {userID.length > 0 && (
+                          <Tooltip content={userID}>
+                            <span className={styles.idCellSecondary}>{userID}</span>
                           </Tooltip>
                         )}
                       </div>

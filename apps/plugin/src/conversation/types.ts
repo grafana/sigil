@@ -83,7 +83,7 @@ export type ConversationEvalSummary = {
 export type ConversationSearchResult = {
   conversation_id: string;
   conversation_title?: string;
-  user_name?: string;
+  user_id?: string;
   generation_count: number;
   first_generation_at: string;
   last_generation_at: string;
@@ -121,7 +121,7 @@ export type {
 
 export type ConversationDetail = {
   conversation_id: string;
-  user_name?: string;
+  user_id?: string;
   generation_count: number;
   first_generation_at: string;
   last_generation_at: string;
@@ -178,7 +178,7 @@ export type ConversationSpan = {
 
 export type ConversationData = {
   conversationID: string;
-  userName?: string;
+  userID?: string;
   generationCount: number;
   firstGenerationAt: string;
   lastGenerationAt: string;

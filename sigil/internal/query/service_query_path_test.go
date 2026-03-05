@@ -60,7 +60,7 @@ func TestSearchConversationsForTenantAppliesTempoAndMySQLFilters(t *testing.T) {
 	traceWithTitle.SpanSets[0].Spans[0].Attributes = append(
 		traceWithTitle.SpanSets[0].Spans[0].Attributes,
 		TempoAttribute{Key: "sigil.conversation.title", Value: tempoStringValue("Escalation: billing outage")},
-		TempoAttribute{Key: "sigil.user.name", Value: tempoStringValue("Responder Name")},
+		TempoAttribute{Key: "user.id", Value: tempoStringValue("user-responder")},
 	)
 	service.tempoClient = &stubTempoClient{
 		searchResponses: []*TempoSearchResponse{{
@@ -93,8 +93,8 @@ func TestSearchConversationsForTenantAppliesTempoAndMySQLFilters(t *testing.T) {
 	if item.ConversationTitle != "Escalation: billing outage" {
 		t.Fatalf("expected conversation title from tempo span, got %q", item.ConversationTitle)
 	}
-	if item.UserName != "Responder Name" {
-		t.Fatalf("expected user name from tempo span, got %q", item.UserName)
+	if item.UserID != "user-responder" {
+		t.Fatalf("expected user id from tempo span, got %q", item.UserID)
 	}
 	if item.GenerationCount != 5 {
 		t.Fatalf("expected generation_count=5, got %d", item.GenerationCount)
@@ -551,10 +551,10 @@ func TestGetConversationDetailForTenantMergesHotAndCold(t *testing.T) {
 	coldGeneration2 := testGenerationPayload("gen-2", "conv-1", base.Add(30*time.Second))
 	coldGeneration3 := testGenerationPayload("gen-3", "conv-1", base.Add(3*time.Minute))
 	hotGeneration1.Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{
-		generationMetadataUserNameKey: structpb.NewStringValue("Older User"),
+		generationMetadataUserIDKey: structpb.NewStringValue("user-older"),
 	}}
 	coldGeneration3.Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{
-		generationMetadataUserNameKey: structpb.NewStringValue("Final User"),
+		generationMetadataUserIDKey: structpb.NewStringValue("user-final"),
 	}}
 
 	walReader := &stubWALReader{
@@ -617,8 +617,8 @@ func TestGetConversationDetailForTenantMergesHotAndCold(t *testing.T) {
 	if detail.RatingSummary == nil || detail.RatingSummary.TotalCount != 1 {
 		t.Fatalf("expected rating summary total_count=1, got %#v", detail.RatingSummary)
 	}
-	if detail.UserName != "Final User" {
-		t.Fatalf("expected latest user name in detail, got %q", detail.UserName)
+	if detail.UserID != "user-final" {
+		t.Fatalf("expected latest user id in detail, got %q", detail.UserID)
 	}
 }
 

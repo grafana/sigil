@@ -254,7 +254,9 @@ export default function FlowTree({
       </div>
       <div className={styles.treeContainer} role="tree" aria-label="conversation flow">
         {loading && nodes.length === 0 ? (
-          <div className={styles.emptyState}><Spinner inline size="sm" /> Loading traces…</div>
+          <div className={styles.emptyState}>
+            <Spinner inline size="sm" /> Loading traces…
+          </div>
         ) : filteredNodes.length === 0 ? (
           <div className={styles.emptyState}>{nodes.length === 0 ? 'No operations found' : 'No matches'}</div>
         ) : (

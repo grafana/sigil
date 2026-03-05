@@ -152,7 +152,7 @@ var (
 		"span.sigil.generation.id",
 		"span.gen_ai.conversation.id",
 		"span.sigil.conversation.title",
-		"span.sigil.user.name",
+		"span.user.id",
 		"span.gen_ai.request.model",
 		"span.gen_ai.agent.name",
 		"span.error.type",
