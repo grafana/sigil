@@ -39,6 +39,8 @@ import { useResolvedModelPricing } from './useResolvedModelPricing';
 import { type ConversationsDataSource, defaultConversationsDataSource } from '../../conversation/api';
 import type { ConversationSearchResult } from '../../conversation/types';
 import { PLUGIN_BASE, buildConversationViewRoute } from '../../constants';
+import { PageInsightBar } from '../insight/PageInsightBar';
+import { summarizeVector, summarizeMatrix, hasResponseData } from '../insight/summarize';
 
 export type DashboardCacheGridProps = {
   dataSource: DashboardDataSource;
@@ -178,6 +180,73 @@ export function DashboardCacheGrid({
     [cacheByModelData.data]
   );
 
+  const allDataLoading =
+    cacheReadStat.loading ||
+    cacheWriteStat.loading ||
+    inputTokensStat.loading ||
+    cacheByModelData.loading ||
+    resolvedPricing.loading ||
+    cacheHitRateTimeseries.loading ||
+    cacheTokensTimeseries.loading ||
+    cacheReadByBreakdown.loading;
+
+  const insightDataContext = useMemo(() => {
+    if (allDataLoading) {
+      return null;
+    }
+    const hasAnyData =
+      hasResponseData(cacheReadStat.data) ||
+      hasResponseData(cacheWriteStat.data) ||
+      hasResponseData(inputTokensStat.data) ||
+      hasResponseData(cacheHitRateTimeseries.data);
+    if (!hasAnyData) {
+      return null;
+    }
+    const parts = [
+      'Cache dashboard context:',
+      `Breakdown: ${breakdownBy}`,
+      '',
+      `Cache hit rate: ${cacheHitRate.toFixed(2)}%`,
+      `Cache read tokens: ${cacheReadValue}`,
+      `Cache write tokens: ${cacheWriteValue}`,
+      `Input tokens: ${inputTokensValue}`,
+      `Estimated savings (USD): $${savings.savings.toFixed(4)}`,
+    ];
+    if (savings.byModel.length > 0) {
+      parts.push('');
+      parts.push('Savings by model:');
+      for (const m of savings.byModel) {
+        parts.push(
+          `  ${m.provider}/${m.model}: $${m.savings.toFixed(4)} saved, cache_hit_rate=${m.cacheHitRate.toFixed(1)}%`
+        );
+      }
+    }
+    parts.push('');
+    parts.push(summarizeMatrix(cacheHitRateTimeseries.data, 'Cache hit rate over time'));
+    parts.push(summarizeMatrix(cacheTokensTimeseries.data, 'Cache read vs write over time'));
+    if (hasBreakdown) {
+      parts.push(summarizeVector(cacheReadByBreakdown.data, `Cache read by ${breakdownBy}`));
+    }
+    return parts.join('\n');
+  }, [
+    allDataLoading,
+    breakdownBy,
+    cacheHitRate,
+    cacheReadValue,
+    cacheWriteValue,
+    inputTokensValue,
+    savings,
+    cacheReadStat.data,
+    cacheWriteStat.data,
+    inputTokensStat.data,
+    cacheHitRateTimeseries.data,
+    cacheTokensTimeseries.data,
+    hasBreakdown,
+    cacheReadByBreakdown.data,
+  ]);
+
+  const insightPrompt = `Analyze this GenAI cache dashboard. Breakdown: ${breakdownBy}. Only flag significant findings — low cache utilization, savings opportunities, model-specific inefficiencies, or actionable issues. Skip anything that looks normal.`;
+
   const timeseriesDefaults = { fillOpacity: 6, showPoints: 'never', lineWidth: 2 };
   const tooltipOptions = { mode: 'multi', sort: 'desc' };
   const chartOptions = {
@@ -209,6 +278,13 @@ export function DashboardCacheGrid({
           loading={cacheByModelData.loading || resolvedPricing.loading}
         />
       </div>
+      <PageInsightBar
+        prompt={insightPrompt}
+        origin="sigil-plugin/dashboard-cache-insight"
+        dataContext={insightDataContext}
+        systemPrompt="You are a concise observability analyst. Return exactly 3-5 high-confidence suggestions. Include only suggestions strongly supported by the provided data; omit uncertain ideas. Each suggestion is a single short sentence on its own line prefixed with '- '. Bold key numbers/metrics with **bold**. No headers, no paragraphs, no extra text. Keep each bullet under 20 words. Focus on anomalies, changes, or notable patterns only."
+      />
+
       <div className={styles.grid}>
         {/* Row 1: Cache hit rate over time + cache hit rate by model */}
         <div className={styles.panelRow}>

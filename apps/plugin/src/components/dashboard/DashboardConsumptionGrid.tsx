@@ -27,6 +27,8 @@ import { matrixToDataFrames, vectorToStatValue } from '../../dashboard/transform
 import { usePrometheusQuery } from './usePrometheusQuery';
 import { MetricPanel } from './MetricPanel';
 import { useResolvedModelPricing } from './useResolvedModelPricing';
+import { PageInsightBar } from '../insight/PageInsightBar';
+import { summarizeVector, summarizeMatrix, hasResponseData } from '../insight/summarize';
 
 export type DashboardConsumptionGridProps = {
   dataSource: DashboardDataSource;
@@ -210,6 +212,62 @@ export function DashboardConsumptionGrid({
   const cacheHitRate =
     inputTokensValue + cacheReadValue > 0 ? (cacheReadValue / (inputTokensValue + cacheReadValue)) * 100 : 0;
 
+  const allDataLoading =
+    tokensTotalStat.loading ||
+    inputTokensStat.loading ||
+    outputTokensStat.loading ||
+    cacheReadTokensStat.loading ||
+    costTokensData.loading ||
+    resolvedPricing.loading;
+
+  const insightDataContext = useMemo(() => {
+    if (allDataLoading) {
+      return null;
+    }
+    const hasAnyData =
+      hasResponseData(tokensTotalStat.data) ||
+      hasResponseData(tokensByTypeStat.data) ||
+      hasResponseData(tokensByTypeTimeseries.data) ||
+      hasResponseData(costTokensData.data);
+    if (!hasAnyData) {
+      return null;
+    }
+    return [
+      'Consumption dashboard context:',
+      `Breakdown: ${breakdownBy}`,
+      '',
+      `Total tokens: ${totalTokensValue}`,
+      `Input tokens: ${inputTokensValue}`,
+      `Output tokens: ${outputTokensValue}`,
+      `Cache read tokens: ${cacheReadValue}`,
+      `Cache hit rate: ${cacheHitRate.toFixed(2)}%`,
+      `Estimated total cost (USD): $${totalCost.totalCost.toFixed(4)}`,
+      '',
+      summarizeVector(tokensByTypeStat.data, 'Tokens by type'),
+      summarizeMatrix(tokensByTypeTimeseries.data, 'Tokens by type over time'),
+      summarizeMatrix(tokensTotalTimeseries.data, 'Total tokens over time'),
+      summarizeVector(tokensByBreakdown.data, `Tokens by ${breakdownBy}`),
+      summarizeVector(costTokensData.data, 'Token usage by model for cost'),
+    ].join('\n');
+  }, [
+    allDataLoading,
+    breakdownBy,
+    totalTokensValue,
+    inputTokensValue,
+    outputTokensValue,
+    cacheReadValue,
+    cacheHitRate,
+    totalCost.totalCost,
+    tokensTotalStat.data,
+    tokensByTypeStat.data,
+    tokensByTypeTimeseries.data,
+    tokensTotalTimeseries.data,
+    tokensByBreakdown.data,
+    costTokensData.data,
+  ]);
+
+  const insightPrompt = `Analyze this GenAI consumption dashboard. Breakdown: ${breakdownBy}. Only flag significant findings — cost anomalies, token usage imbalances, cache optimization opportunities, or actionable issues. Skip anything that looks normal.`;
+
   return (
     <div className={styles.gridWrapper}>
       {/* Top stats */}
@@ -231,6 +289,13 @@ export function DashboardConsumptionGrid({
           loading={costTokensData.loading || resolvedPricing.loading}
         />
       </div>
+      <PageInsightBar
+        prompt={insightPrompt}
+        origin="sigil-plugin/dashboard-consumption-insight"
+        dataContext={insightDataContext}
+        systemPrompt="You are a concise observability analyst. Return exactly 3-5 high-confidence suggestions. Include only suggestions strongly supported by the provided data; omit uncertain ideas. Each suggestion is a single short sentence on its own line prefixed with '- '. Bold key numbers/metrics with **bold**. No headers, no paragraphs, no extra text. Keep each bullet under 20 words. Focus on anomalies, changes, or notable patterns only."
+      />
+
       <div className={styles.grid}>
         {/* Row 1: Tokens by type over time + Tokens by type breakdown */}
         <div className={styles.panelRow}>

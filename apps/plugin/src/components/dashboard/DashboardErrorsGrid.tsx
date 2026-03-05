@@ -21,6 +21,8 @@ import { MetricPanel } from './MetricPanel';
 import { type ConversationsDataSource, defaultConversationsDataSource } from '../../conversation/api';
 import type { ConversationSearchResult } from '../../conversation/types';
 import { PLUGIN_BASE, buildConversationViewRoute } from '../../constants';
+import { PageInsightBar } from '../insight/PageInsightBar';
+import { summarizeVector, summarizeMatrix, hasResponseData } from '../insight/summarize';
 
 export type DashboardErrorsGridProps = {
   dataSource: DashboardDataSource;
@@ -114,6 +116,50 @@ export function DashboardErrorsGrid({
   const totalErrorsValue = topTotalErrors.data ? vectorToStatValue(topTotalErrors.data) : 0;
   const errorRateValue = topErrorRate.data ? vectorToStatValue(topErrorRate.data) : 0;
 
+  const allDataLoading =
+    topTotalErrors.loading ||
+    topErrorRate.loading ||
+    errorRateTimeseries.loading ||
+    errorsByCodeStat.loading ||
+    errorsByCodeTimeseries.loading ||
+    errorRateByBreakdown.loading;
+
+  const insightDataContext = useMemo(() => {
+    if (allDataLoading) {
+      return null;
+    }
+    const hasAnyData =
+      hasResponseData(topTotalErrors.data) ||
+      hasResponseData(topErrorRate.data) ||
+      hasResponseData(errorRateTimeseries.data) ||
+      hasResponseData(errorsByCodeStat.data);
+    if (!hasAnyData) {
+      return null;
+    }
+    return [
+      'Errors dashboard context:',
+      `Breakdown: ${breakdownBy}`,
+      '',
+      summarizeVector(topTotalErrors.data, 'Total Errors'),
+      summarizeVector(topErrorRate.data, 'Error Rate (%)'),
+      summarizeMatrix(errorRateTimeseries.data, 'Error rate over time'),
+      summarizeVector(errorsByCodeStat.data, 'Errors by code'),
+      summarizeMatrix(errorsByCodeTimeseries.data, 'Errors by code over time'),
+      summarizeVector(errorRateByBreakdown.data, `Error rate by ${breakdownBy}`),
+    ].join('\n');
+  }, [
+    allDataLoading,
+    breakdownBy,
+    topTotalErrors.data,
+    topErrorRate.data,
+    errorRateTimeseries.data,
+    errorsByCodeStat.data,
+    errorsByCodeTimeseries.data,
+    errorRateByBreakdown.data,
+  ]);
+
+  const insightPrompt = `Analyze this GenAI errors dashboard. Breakdown: ${breakdownBy}. Only flag significant findings — anomalies, outliers, error spikes, or actionable issues. Skip anything that looks normal.`;
+
   return (
     <div className={styles.gridWrapper}>
       {/* Top stats */}
@@ -121,6 +167,13 @@ export function DashboardErrorsGrid({
         <StatItem label="Total Errors" value={totalErrorsValue} loading={topTotalErrors.loading} />
         <StatItem label="Error Rate" value={errorRateValue} unit="percent" loading={topErrorRate.loading} />
       </div>
+
+      <PageInsightBar
+        prompt={insightPrompt}
+        origin="sigil-plugin/dashboard-errors-insight"
+        dataContext={insightDataContext}
+        systemPrompt="You are a concise observability analyst. Return exactly 3-5 high-confidence suggestions. Include only suggestions strongly supported by the provided data; omit uncertain ideas. Each suggestion is a single short sentence on its own line prefixed with '- '. Bold key numbers/metrics with **bold**. No headers, no paragraphs, no extra text. Keep each bullet under 20 words. Focus on anomalies, changes, or notable patterns only."
+      />
 
       {/* Visualizations */}
       <div className={styles.grid}>

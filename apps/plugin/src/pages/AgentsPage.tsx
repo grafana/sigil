@@ -33,6 +33,7 @@ import {
   TOKEN_COST_MODE_STORAGE_KEY,
   type TokenCostMode,
 } from '../components/agents/TokenCostBox';
+import { PageInsightBar } from '../components/insight/PageInsightBar';
 
 const PAGE_SIZE = 24;
 const STALE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -77,7 +78,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   heroWrap: css({
     display: 'flex',
-    justifyContent: 'stretch',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(2),
     width: '100%',
   }),
   hero: css({
@@ -631,6 +633,37 @@ export default function AgentsPage({
     };
   }, [items, resolvedPricing.pricingMap, timeRange, usageByModelAndType.data]);
 
+  const agentInsightDataContext = useMemo(() => {
+    if (loading || items.length === 0) {
+      return null;
+    }
+    const topGens = summary.topByGenerations
+      .slice(0, 5)
+      .map((a) => `  ${a.agent_name || 'anonymous'}: ${a.generation_count} generations`)
+      .join('\n');
+    const topFootprint = summary.topByTokenFootprint
+      .slice(0, 5)
+      .map((a) => {
+        const usage = summary.usageByName.get(a.agent_name) ?? summary.usageByName.get(a.agent_name.trim());
+        const tokens = usage ? usage.tokens : a.token_estimate.total;
+        return `  ${a.agent_name || 'anonymous'}: ${Math.round(tokens).toLocaleString()} tokens`;
+      })
+      .join('\n');
+    return [
+      `Agents in time range: ${summary.seenInRangeCount}`,
+      `Total loaded agents: ${summary.loadedAgents}`,
+      `Total generations (runtime): ${summary.totalGenerations}`,
+      `Total runtime tokens: ${Math.round(summary.totalTokens).toLocaleString()}`,
+      `Total runtime cost: $${summary.totalCostUSD.toFixed(4)}`,
+      `Avg tokens per generation: ${summary.averageTokensPerGeneration}`,
+      `Anonymous agent buckets: ${summary.anonymousCount}`,
+      `Stale agents (> 7 days): ${summary.staleCount}`,
+      `High churn agents (${HIGH_CHURN_THRESHOLD}+ versions): ${summary.highChurnCount}`,
+      `Top agents by generations:\n${topGens}`,
+      `Top agents by token footprint:\n${topFootprint}`,
+    ].join('\n');
+  }, [loading, items.length, summary]);
+
   const handleOpenAgent = (item: AgentListItem) => {
     const route =
       item.agent_name.trim().length > 0
@@ -756,6 +789,11 @@ export default function AgentsPage({
               </div>
             ) : (
               <div className={styles.heroWrap}>
+                <PageInsightBar
+                  prompt="Analyze this agent fleet overview. Flag concentration risks, anomalies in usage patterns, or agents that need attention."
+                  origin="sigil-plugin/agents-insight"
+                  dataContext={agentInsightDataContext}
+                />
                 <section className={styles.hero} aria-label="agents hero summary">
                   <div className={styles.heroKpis}>
                     <div className={styles.heroKpiCard}>
