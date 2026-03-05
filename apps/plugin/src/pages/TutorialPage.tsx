@@ -901,6 +901,11 @@ function getStyles(theme: GrafanaTheme2) {
       fontSize: theme.typography.h4.fontSize,
       lineHeight: theme.typography.h4.lineHeight,
       color: theme.colors.text.secondary,
+      '&::before': {
+        content: '">"',
+        color: 'var(--tutorial-accent)',
+        marginRight: theme.spacing(1),
+      },
     }),
     subtitleBadge: css({
       margin: 0,
