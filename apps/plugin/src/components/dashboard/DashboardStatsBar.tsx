@@ -37,7 +37,7 @@ function getStyles(theme: GrafanaTheme2) {
       flexWrap: 'nowrap',
       gap: theme.spacing(4),
       padding: theme.spacing(1.5, 2, 0),
-      width: 'fit-content',
+      width: '100%',
     }),
   };
 }
