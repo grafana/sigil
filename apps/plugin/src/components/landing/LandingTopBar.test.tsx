@@ -5,7 +5,12 @@ import { defaultAgentsDataSource } from '../../agents/api';
 import type { AgentListItem } from '../../agents/types';
 import { defaultConversationsDataSource } from '../../conversation/api';
 import { defaultEvaluationDataSource } from '../../evaluation/api';
-import { LandingTopBar, buildRequestSpineCacheKey, countAgentsSeenInWindows, shouldFetchHeroStats } from './LandingTopBar';
+import {
+  LandingTopBar,
+  buildRequestSpineCacheKey,
+  countAgentsSeenInWindows,
+  shouldFetchHeroStats,
+} from './LandingTopBar';
 
 jest.mock('@grafana/assistant', () => ({
   useAssistant: () => ({
