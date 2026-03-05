@@ -344,8 +344,7 @@ func ratingOutputSchema() map[string]any {
 
 func defaultThinkingConfig() judges.ThinkingConfig {
 	return judges.ThinkingConfig{
-		Mode:          judges.ThinkingModePrefer,
-		Level:         judges.ThinkingLevelMedium,
+		Mode:          judges.ThinkingModeOff,
 		AnthropicMode: judges.AnthropicThinkingModeAdaptive,
 	}
 }

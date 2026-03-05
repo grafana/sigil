@@ -181,9 +181,9 @@ func TestRaterRateWithModel_TableDriven(t *testing.T) {
 			if client.lastReq.OutputSchema == nil {
 				t.Fatalf("expected OutputSchema to be set")
 			}
-			if client.lastReq.Thinking.ModeOrDefault() != judges.ThinkingModePrefer {
-				t.Fatalf("expected default thinking mode prefer, got %q", client.lastReq.Thinking.ModeOrDefault())
-			}
+		if client.lastReq.Thinking.ModeOrDefault() != judges.ThinkingModeOff {
+			t.Fatalf("expected default thinking mode off, got %q", client.lastReq.Thinking.ModeOrDefault())
+		}
 			if client.lastReq.Thinking.AnthropicModeOrDefault() != judges.AnthropicThinkingModeAdaptive {
 				t.Fatalf("expected default anthropic thinking mode adaptive, got %q", client.lastReq.Thinking.AnthropicModeOrDefault())
 			}
@@ -263,6 +263,10 @@ func TestRaterRateWithModel_FallbacksWhenThinkingIsUnsupported(t *testing.T) {
 		resolver:          mockResolver{clients: map[string]judges.JudgeClient{"openai": client}},
 		defaultProviderID: "openai",
 		defaultModelName:  "gpt-4o-mini",
+		thinking: judges.ThinkingConfig{
+			Mode:  judges.ThinkingModePrefer,
+			Level: judges.ThinkingLevelMedium,
+		},
 	}
 
 	rating, err := rater.RateWithModel(context.Background(), Agent{
@@ -322,8 +326,8 @@ func TestNewRaterWithTarget_DefaultFallback(t *testing.T) {
 	if rater.defaultModelName != "gpt-4o-mini" {
 		t.Fatalf("expected default model gpt-4o-mini, got %q", rater.defaultModelName)
 	}
-	if rater.thinking.ModeOrDefault() != judges.ThinkingModePrefer {
-		t.Fatalf("expected default thinking mode prefer, got %q", rater.thinking.ModeOrDefault())
+	if rater.thinking.ModeOrDefault() != judges.ThinkingModeOff {
+		t.Fatalf("expected default thinking mode off, got %q", rater.thinking.ModeOrDefault())
 	}
 	if rater.thinking.AnthropicModeOrDefault() != judges.AnthropicThinkingModeAdaptive {
 		t.Fatalf("expected default anthropic thinking mode adaptive, got %q", rater.thinking.AnthropicModeOrDefault())
