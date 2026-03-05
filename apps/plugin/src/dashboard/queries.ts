@@ -104,9 +104,9 @@ function byClause(breakdown: BreakdownDimension, extraLabels?: string[]): string
   return labels.length > 0 ? ` by (${labels.join(', ')})` : '';
 }
 
-/** Compute step for query_range: target ~250 data points, min 15s. */
+/** Compute step for query_range: target ~250 data points, min 60s. */
 export function computeStep(from: number, to: number): number {
-  return Math.max(Math.floor((to - from) / 250), 15);
+  return Math.max(Math.floor((to - from) / 250), 60);
 }
 
 /** Compute rate interval: at least 4× step or 60s. */
