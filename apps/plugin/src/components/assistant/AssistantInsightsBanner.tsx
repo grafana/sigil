@@ -305,7 +305,7 @@ export default function AssistantInsightsBanner({
           <span className={styles.sparkleIcon} title="AI generated insights" aria-label="AI generated insights">
             ✨
           </span>
-          <p className={cx(styles.text, isHovered ? styles.textExpanded : undefined)}>
+          <p className={styles.text}>
             {showAgePrefix ? <span className={styles.agePrefix}>{agePrefixText}</span> : null}
             {typedInsight}
             <span className={styles.cursor} aria-hidden="true">
@@ -497,20 +497,15 @@ function getStyles(theme: GrafanaTheme2) {
       fontSize: theme.typography.body.fontSize,
       lineHeight: 1.5,
       color: theme.colors.text.primary,
-      whiteSpace: 'nowrap',
-      overflow: 'hidden',
-      textOverflow: 'ellipsis',
+      whiteSpace: 'normal',
+      overflow: 'visible',
+      textOverflow: 'clip',
       width: '100%',
     }),
     agePrefix: css({
       color: theme.colors.text.secondary,
       fontSize: theme.typography.bodySmall.fontSize,
       marginRight: theme.spacing(0.5),
-    }),
-    textExpanded: css({
-      whiteSpace: 'normal',
-      overflow: 'visible',
-      textOverflow: 'clip',
     }),
     controls: css({
       display: 'inline-flex',
