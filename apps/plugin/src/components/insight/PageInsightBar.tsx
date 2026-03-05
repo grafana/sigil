@@ -91,22 +91,31 @@ export function PageInsightBar({
     });
   }, []);
 
+  const cacheKey = dataContext ? buildCacheKey(prompt, origin, systemPrompt, dataContext) : null;
+  const fallbackCacheKey = dataContext ? buildFallbackCacheKey(prompt, origin, systemPrompt) : null;
+  const exactCachedInsight = useMemo(() => (cacheKey ? readCachedInsight(cacheKey) : null), [cacheKey]);
+  const fallbackCachedInsight = useMemo(
+    () => (fallbackCacheKey ? readCachedInsight(fallbackCacheKey) : null),
+    [fallbackCacheKey]
+  );
+
   useEffect(() => {
     if (!dataContext || gen.isGenerating) {
       return;
     }
-    const cacheKey = buildCacheKey(prompt, origin, systemPrompt, dataContext);
+    if (!cacheKey || !fallbackCacheKey) {
+      return;
+    }
     if (lastRequestKeyRef.current === cacheKey) {
       return;
     }
-    const fallbackCacheKey = buildFallbackCacheKey(prompt, origin, systemPrompt);
-    const exactCached = readCachedInsight(cacheKey);
+    const exactCached = exactCachedInsight;
     const cacheAgeMs = exactCached ? Date.now() - exactCached.generatedAt : Number.POSITIVE_INFINITY;
     lastRequestKeyRef.current = cacheKey;
     if (!exactCached || cacheAgeMs >= REFRESH_INTERVAL_MS) {
       runGenerate(dataContext, cacheKey, fallbackCacheKey);
     }
-  }, [dataContext, gen.isGenerating, origin, prompt, runGenerate, systemPrompt]);
+  }, [cacheKey, dataContext, exactCachedInsight, fallbackCacheKey, gen.isGenerating, runGenerate]);
 
   useEffect(() => {
     if (!dataContext) {
@@ -159,22 +168,17 @@ export function PageInsightBar({
     };
   }, []);
 
-  const cacheKey = dataContext ? buildCacheKey(prompt, origin, systemPrompt, dataContext) : null;
-  const fallbackCacheKey = dataContext ? buildFallbackCacheKey(prompt, origin, systemPrompt) : null;
-  const cachedInsight = useMemo(() => {
-    if (!cacheKey || !fallbackCacheKey) {
-      return null;
-    }
-    return readCachedInsight(cacheKey) ?? readCachedInsight(fallbackCacheKey);
-  }, [cacheKey, fallbackCacheKey]);
+  const cachedInsight = exactCachedInsight ?? fallbackCachedInsight;
   const liveForCurrentContext = cacheKey && liveInsight?.cacheKey === cacheKey ? liveInsight : null;
   const insight = liveForCurrentContext ?? cachedInsight;
-  const displayText = gen.isGenerating ? gen.content : (insight?.text ?? '');
-  const initialWaiting = !dataContext && !displayText && !gen.isGenerating;
-  const hasResult = Boolean(displayText) || gen.isGenerating;
+  const effectiveText = dataContext ? (insight?.text ?? '') : '';
+  const displayText = gen.isGenerating ? gen.content : effectiveText;
+  const initialWaiting = !dataContext && !gen.isGenerating;
+  const hasResult = Boolean(effectiveText) || gen.isGenerating;
   const showLoader = initialWaiting || gen.isGenerating;
   const loaderTooltip = initialWaiting ? 'Waiting for data' : 'Generating insight...';
-  const insightAgeLabel = insight ? formatAgeShort(Math.max(ageTick - insight.generatedAt, 0)) : null;
+  const insightAgeLabel =
+    dataContext && insight ? formatAgeShort(Math.max(ageTick - insight.generatedAt, 0)) : null;
 
   const bullets = useMemo(() => {
     if (!displayText) {
