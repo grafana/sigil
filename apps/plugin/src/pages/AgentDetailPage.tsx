@@ -26,13 +26,8 @@ import { TopStat } from '../components/TopStat';
 const VERSION_PAGE_SIZE = 50;
 const ACTIVITY_BAR_COUNT = 48;
 const ACTIVITY_REFRESH_MS = 70 * 1000;
-const DEFAULT_ACTIVITY_WAVE = Array.from({ length: ACTIVITY_BAR_COUNT }, (_, i) => {
-  const minHeight = 20;
-  const maxHeight = 100;
-  const t = i / (ACTIVITY_BAR_COUNT - 1);
-  const wave = 0.5 + 0.5 * Math.sin(2 * Math.PI * (t - 0.5));
-  return minHeight + (maxHeight - minHeight) * wave;
-});
+const EMPTY_ACTIVITY_BARS = Array.from({ length: ACTIVITY_BAR_COUNT }, () => 0);
+const LOAD_MORE_VERSIONS_VALUE = '__load_more_versions__';
 
 export type AgentDetailPageProps = {
   dataSource?: AgentsDataSource;
@@ -216,6 +211,26 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexWrap: 'wrap' as const,
     gap: theme.spacing(4),
     padding: theme.spacing(1.5, 1),
+  }),
+  primaryPanelsRow: css({
+    display: 'grid',
+    gap: theme.spacing(2),
+    gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+    alignItems: 'stretch',
+  }),
+  stretchPanel: css({
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column' as const,
+  }),
+  stretchPanelBody: css({
+    flex: 1,
+  }),
+  promptPanelsRow: css({
+    display: 'grid',
+    gap: theme.spacing(2),
+    gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
+    alignItems: 'start',
   }),
   panel: css({
     borderRadius: theme.shape.radius.default,
@@ -556,8 +571,14 @@ export default function AgentDetailPage({
     }
     let cancelled = false;
     const loadActivity = async () => {
-      const to = Math.floor(Date.now() / 1000);
-      const from = to - 3600;
+      const nowSec = Math.floor(Date.now() / 1000);
+      const detailLastSeenSec = detail ? Math.floor(Date.parse(detail.last_seen_at) / 1000) : 0;
+      const detailFirstSeenSec = detail ? Math.floor(Date.parse(detail.first_seen_at) / 1000) : 0;
+      const to = Number.isFinite(detailLastSeenSec) && detailLastSeenSec > 0 ? Math.min(nowSec, detailLastSeenSec) : nowSec;
+      const observedSpan =
+        Number.isFinite(detailFirstSeenSec) && detailFirstSeenSec > 0 && detailFirstSeenSec < to ? to - detailFirstSeenSec : 0;
+      const windowSec = Math.max(3600, Math.min(24 * 3600, observedSpan > 0 ? observedSpan : 3600));
+      const from = to - windowSec;
       const step = computeStep(from, to);
       const interval = computeRateInterval(step);
       const query = requestsOverTimeQuery(
@@ -587,7 +608,7 @@ export default function AgentDetailPage({
       cancelled = true;
       clearInterval(intervalId);
     };
-  }, [agentName, activityDataSource]);
+  }, [agentName, activityDataSource, detail]);
 
   useEffect(() => {
     if (!detail || detail.models.length === 0) {
@@ -628,12 +649,20 @@ export default function AgentDetailPage({
   }, [detail, versions]);
 
   const versionSelectOptions = useMemo(() => {
-    return versionOptions.map((v) => ({
+    const options = versionOptions.map((v) => ({
       label: `${v.effective_version.replace(/^sha256:/, '').slice(0, 12)}…  ·  ${formatDateShort(v.last_seen_at)}  ·  ${v.generation_count.toLocaleString()} gen`,
       value: v.effective_version,
       description: v.declared_version_latest ? `Declared: ${v.declared_version_latest}` : undefined,
     }));
-  }, [versionOptions]);
+    if (versionsCursor.length > 0) {
+      options.push({
+        label: loadingVersions ? 'Loading more versions…' : 'Load more versions…',
+        value: LOAD_MORE_VERSIONS_VALUE,
+        description: 'Fetch older versions',
+      });
+    }
+    return options;
+  }, [loadingVersions, versionOptions, versionsCursor]);
 
   const selectVersion = (nextVersion: string) => {
     const next = new URLSearchParams(searchParams);
@@ -737,7 +766,7 @@ export default function AgentDetailPage({
     primaryModel != null ? stripProviderPrefix(primaryModel.name, getProviderMeta(primaryModel.provider).label) : 'n/a';
   const primaryModelProvider = primaryModel != null ? getProviderMeta(primaryModel.provider).label : null;
   const gradientColors = ['#5794F2', '#B877D9', '#FF9830'] as const;
-  const displayActivityHeights = activityHeights && activityHeights.length > 0 ? activityHeights : DEFAULT_ACTIVITY_WAVE;
+  const displayActivityHeights = activityHeights && activityHeights.length > 0 ? activityHeights : EMPTY_ACTIVITY_BARS;
 
   return (
     <div className={styles.page}>
@@ -959,106 +988,110 @@ export default function AgentDetailPage({
         </Tooltip>
       </div>
 
-      <AgentRatingPanel
-        agentName={agentName}
-        version={activeVersion}
-        dataSource={dataSource}
-        initialResult={initialRating}
-        initialLoading={initialRatingLoading || initialRating?.status === 'pending'}
-        initialError={initialRatingError}
-      />
-
-      <div className={styles.panel}>
-        <div className={styles.panelHeader}>
-          <Text weight="medium">Version</Text>
-        </div>
-        <div className={styles.panelBody}>
-          <div className={styles.versionControls}>
-            <div className={styles.versionSelect}>
-              <Select
-                options={versionSelectOptions}
-                value={activeVersion}
-                onChange={(selected) => selectVersion(selected?.value ?? '')}
-                isLoading={loadingVersions}
-                placeholder="Select a version…"
-                aria-label="agent version selector"
-              />
+      <div className={styles.primaryPanelsRow}>
+        <div className={cx(styles.panel, styles.stretchPanel)}>
+          <div className={styles.panelHeader}>
+            <Text weight="medium">Version</Text>
+          </div>
+          <div className={cx(styles.panelBody, styles.stretchPanelBody)}>
+            <div className={styles.versionControls}>
+              <div className={styles.versionSelect}>
+                <Select
+                  options={versionSelectOptions}
+                  value={activeVersion}
+                  onChange={(selected) => {
+                    if (selected?.value === LOAD_MORE_VERSIONS_VALUE) {
+                      void loadMoreVersions();
+                      return;
+                    }
+                    selectVersion(selected?.value ?? '');
+                  }}
+                  isLoading={loadingVersions}
+                  placeholder="Select a version…"
+                  aria-label="agent version selector"
+                />
+              </div>
+              <Button variant="secondary" onClick={() => selectVersion('')} disabled={selectedVersion.length === 0}>
+                Latest
+              </Button>
             </div>
-            <Button variant="secondary" onClick={() => selectVersion('')} disabled={selectedVersion.length === 0}>
-              Latest
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => void loadMoreVersions()}
-              disabled={loadingVersions || versionsCursor.length === 0}
-            >
-              {loadingVersions ? <Spinner size={14} /> : 'Load more'}
-            </Button>
+          </div>
+        </div>
+
+        <ToolsPanel
+          tools={detail.tools}
+          tokenized={tokenizedSections['tools']}
+          onToggleTokenize={() => toggleSection('tools')}
+          tokenizerLoading={tokenizerLoading}
+          autoEncoding={autoEncoding}
+          encodingOverride={encodingOverride}
+          onEncodingChange={setEncodingOverride}
+          encode={encode}
+          decode={decode}
+        />
+      </div>
+
+      <div className={styles.promptPanelsRow}>
+        <AgentRatingPanel
+          agentName={agentName}
+          version={activeVersion}
+          dataSource={dataSource}
+          initialResult={initialRating}
+          initialLoading={initialRatingLoading || initialRating?.status === 'pending'}
+          initialError={initialRatingError}
+        />
+
+        <div className={styles.panel}>
+          <div className={styles.panelHeader}>
+            <Text weight="medium">System prompt</Text>
+            <span style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto' }}>
+              <span
+                className={cx(styles.tokenizeBtn, tokenizedSections['system'] && styles.tokenizeBtnActive)}
+                onClick={() => toggleSection('system')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    toggleSection('system');
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+              >
+                <Icon name="brackets-curly" size="xs" />
+                {tokenizerLoading ? 'Loading\u2026' : 'Tokenize'}
+              </span>
+              {tokenizedSections['system'] && (
+                <select
+                  className={styles.encodingSelect}
+                  aria-label="Tokenizer encoding"
+                  value={encodingOverride ?? ''}
+                  onChange={(e) => setEncodingOverride(e.target.value ? (e.target.value as EncodingName) : null)}
+                >
+                  <option value="">Auto ({autoEncoding.replace('_base', '')})</option>
+                  {AVAILABLE_ENCODINGS.map((enc) => (
+                    <option key={enc.value} value={enc.value}>
+                      {enc.value.replace('_base', '')}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </span>
+          </div>
+          <div className={styles.panelBody}>
+            {detail.system_prompt.length > 0 ? (
+              tokenizedSections['system'] && encode && decode ? (
+                <div className={styles.systemPrompt}>
+                  <TokenizedText text={detail.system_prompt} encode={encode} decode={decode} />
+                </div>
+              ) : (
+                <pre className={styles.systemPrompt}>{detail.system_prompt}</pre>
+              )
+            ) : (
+              <pre className={styles.systemPrompt}>No system prompt recorded.</pre>
+            )}
           </div>
         </div>
       </div>
 
-      <div className={styles.panel}>
-        <div className={styles.panelHeader}>
-          <Text weight="medium">System prompt</Text>
-          <span style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto' }}>
-            <span
-              className={cx(styles.tokenizeBtn, tokenizedSections['system'] && styles.tokenizeBtnActive)}
-              onClick={() => toggleSection('system')}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  toggleSection('system');
-                }
-              }}
-              role="button"
-              tabIndex={0}
-            >
-              <Icon name="brackets-curly" size="xs" />
-              {tokenizerLoading ? 'Loading\u2026' : 'Tokenize'}
-            </span>
-            {tokenizedSections['system'] && (
-              <select
-                className={styles.encodingSelect}
-                aria-label="Tokenizer encoding"
-                value={encodingOverride ?? ''}
-                onChange={(e) => setEncodingOverride(e.target.value ? (e.target.value as EncodingName) : null)}
-              >
-                <option value="">Auto ({autoEncoding.replace('_base', '')})</option>
-                {AVAILABLE_ENCODINGS.map((enc) => (
-                  <option key={enc.value} value={enc.value}>
-                    {enc.value.replace('_base', '')}
-                  </option>
-                ))}
-              </select>
-            )}
-          </span>
-        </div>
-        <div className={styles.panelBody}>
-          {detail.system_prompt.length > 0 ? (
-            tokenizedSections['system'] && encode && decode ? (
-              <div className={styles.systemPrompt}>
-                <TokenizedText text={detail.system_prompt} encode={encode} decode={decode} />
-              </div>
-            ) : (
-              <pre className={styles.systemPrompt}>{detail.system_prompt}</pre>
-            )
-          ) : (
-            <pre className={styles.systemPrompt}>No system prompt recorded.</pre>
-          )}
-        </div>
-      </div>
-
-      <ToolsPanel
-        tools={detail.tools}
-        tokenized={tokenizedSections['tools']}
-        onToggleTokenize={() => toggleSection('tools')}
-        tokenizerLoading={tokenizerLoading}
-        autoEncoding={autoEncoding}
-        encodingOverride={encodingOverride}
-        onEncodingChange={setEncodingOverride}
-        encode={encode}
-        decode={decode}
-      />
     </div>
   );
 }
