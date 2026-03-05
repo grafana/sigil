@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Badge, Button, Text, useStyles2, useTheme2 } from '@grafana/ui';
-import { useAssistant, useInlineAssistant } from '@grafana/assistant';
+import { Alert, Badge, Button, Icon, Text, useStyles2, useTheme2 } from '@grafana/ui';
+import { createAssistantContextItem, useAssistant, useInlineAssistant } from '@grafana/assistant';
 import { useSearchParams } from 'react-router-dom';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../../agents/api';
 import type { AgentRatingResponse, AgentRatingStatus, AgentRatingSuggestion } from '../../agents/types';
@@ -64,11 +64,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'inline-flex',
     alignItems: 'baseline',
     gap: theme.spacing(0.5),
-    padding: `${theme.spacing(0.25)} ${theme.spacing(0.75)}`,
-    borderRadius: theme.shape.radius.default,
+    padding: `${theme.spacing(0.25)} ${theme.spacing(0.5)}`,
+    borderBottom: '3px solid transparent',
   }),
   headerRatingValue: css({
-    fontSize: theme.typography.h4.fontSize,
+    fontSize: theme.typography.h5.fontSize,
     lineHeight: 1,
     fontWeight: theme.typography.fontWeightMedium,
     color: theme.colors.text.primary,
@@ -118,27 +118,36 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: theme.spacing(1),
     flexWrap: 'wrap' as const,
   }),
-  scorePill: css({
-    display: 'inline-flex',
-    alignItems: 'baseline',
-    gap: theme.spacing(0.5),
-    borderRadius: theme.shape.radius.pill,
-    padding: `${theme.spacing(0.25)} ${theme.spacing(1)}`,
-    border: `1px solid ${theme.colors.border.medium}`,
-    fontWeight: theme.typography.fontWeightMedium,
+  scoreMetaStat: css({
+    marginLeft: 'auto',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'flex-end',
+    gap: theme.spacing(0.125),
+    minWidth: 0,
+    [`@media (max-width: 640px)`]: {
+      width: '100%',
+      marginLeft: 0,
+      alignItems: 'flex-start',
+    },
   }),
-  scoreValue: css({
-    fontSize: theme.typography.h3.fontSize,
-    lineHeight: 1.1,
-    fontVariantNumeric: 'tabular-nums',
-  }),
-  scoreDenominator: css({
+  scoreMetaLabel: css({
     color: theme.colors.text.secondary,
+    fontSize: theme.typography.bodySmall.fontSize,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.03em',
+    lineHeight: 1.2,
+  }),
+  scoreMetaValue: css({
+    color: theme.colors.text.primary,
+    fontSize: theme.typography.bodySmall.fontSize,
+    lineHeight: 1.25,
+    fontVariantNumeric: 'tabular-nums',
   }),
   summary: css({
     color: theme.colors.text.primary,
     lineHeight: 1.5,
-    background: theme.colors.background.canvas,
+    background: `${theme.colors.background.canvas}40`,
     borderRadius: 0,
     padding: theme.spacing(1.5, 3.5),
     marginTop: theme.spacing(2),
@@ -150,6 +159,25 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.secondary,
     marginRight: theme.spacing(0.5),
     fontWeight: theme.typography.fontWeightMedium,
+  }),
+  summaryStatusIcon: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    marginRight: theme.spacing(0.5),
+    verticalAlign: 'text-bottom',
+  }),
+  summaryExplainLink: css({
+    marginLeft: theme.spacing(0.75),
+    border: 'none',
+    background: 'transparent',
+    padding: 0,
+    color: theme.colors.text.secondary,
+    cursor: 'pointer',
+    fontSize: theme.typography.bodySmall.fontSize,
+    textDecoration: 'underline',
+    '&:hover': {
+      color: theme.colors.text.primary,
+    },
   }),
   reportBody: css({
     paddingLeft: theme.spacing(0.5),
@@ -198,6 +226,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: theme.spacing(0.5),
     minWidth: 0,
     flex: '0 1 auto',
+  }),
+  suggestionOrdinal: css({
+    color: theme.colors.text.primary,
+    fontWeight: theme.typography.fontWeightBold,
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: 1.2,
+    minWidth: theme.spacing(1.5),
   }),
   suggestionSeverityLabel: css({
     display: 'inline-flex',
@@ -271,6 +306,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     alignItems: 'center',
     gap: theme.spacing(0.75),
     flexWrap: 'wrap' as const,
+    marginTop: theme.spacing(0.75),
+  }),
+  rerunButton: css({
+    marginLeft: 'auto',
   }),
   modalBackdrop: css({
     position: 'fixed' as const,
@@ -355,12 +394,22 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-function scoreTone(theme: GrafanaTheme2, score: number): string {
+function headerRatingStyle(theme: GrafanaTheme2, score: number): React.CSSProperties {
   if (score >= 9) {
-    return theme.colors.success.text;
+    return { borderBottomColor: theme.colors.success.text };
   }
   if (score >= 7) {
-    return theme.colors.info.text;
+    return { borderBottomColor: theme.colors.info.text };
+  }
+  if (score >= 5) {
+    return { borderBottomColor: theme.colors.warning.text };
+  }
+  return { borderBottomColor: theme.colors.error.text };
+}
+
+function summaryStatusTone(theme: GrafanaTheme2, score: number): string {
+  if (score >= 7) {
+    return theme.colors.text.primary;
   }
   if (score >= 5) {
     return theme.colors.warning.text;
@@ -368,17 +417,8 @@ function scoreTone(theme: GrafanaTheme2, score: number): string {
   return theme.colors.error.text;
 }
 
-function headerRatingStyle(theme: GrafanaTheme2, score: number): React.CSSProperties {
-  if (score >= 9) {
-    return { background: theme.colors.success.transparent };
-  }
-  if (score >= 7) {
-    return { background: theme.colors.info.transparent };
-  }
-  if (score >= 5) {
-    return { background: theme.colors.warning.transparent };
-  }
-  return { background: theme.colors.error.transparent };
+function summaryStatusIconName(score: number): 'check' | 'exclamation-triangle' {
+  return score >= 7 ? 'check' : 'exclamation-triangle';
 }
 
 function normalizeSeverity(rawSeverity: string): 'high' | 'medium' | 'low' {
@@ -732,26 +772,107 @@ export default function AgentRatingPanel({
       const next = new URLSearchParams(searchParams);
       next.delete(SUGGESTION_QUERY_PARAM);
       setSearchParams(next, { replace: false });
-      const prompt = [
-        'Explain this recommendation in concise, plain language and why it matters.',
-        '',
-        `Severity: ${normalizeSeverity(suggestion.severity)}`,
-        `Category: ${suggestion.category}`,
-        `Title: ${suggestion.title}`,
-        `Description: ${suggestion.description}`,
-      ].join('\n');
+      const prompt = 'Explain this recommendation in plain language and start a short discovery conversation.';
+      const contextItems = [
+        createAssistantContextItem('structured', {
+          title: 'Recommendation',
+          data: {
+            severity: normalizeSeverity(suggestion.severity),
+            category: formatSuggestionCategory(suggestion.category),
+            title: suggestion.title,
+            description: suggestion.description,
+          },
+        }),
+      ];
       if (!assistant.openAssistant) {
-        window.location.href = buildAssistantUrl(prompt);
+        const fallbackPrompt = [
+          prompt,
+          '',
+          'Recommendation',
+          `Severity: ${normalizeSeverity(suggestion.severity)}`,
+          `Category: ${formatSuggestionCategory(suggestion.category)}`,
+          `Title: ${suggestion.title}`,
+          `Description: ${suggestion.description}`,
+        ].join('\n');
+        window.location.href = buildAssistantUrl(fallbackPrompt);
         return;
       }
       assistant.openAssistant({
         origin: 'sigil-agent-rating',
         prompt,
         autoSend: true,
+        context: contextItems,
       });
     },
     [assistant, searchParams, setSearchParams]
   );
+
+  const onExplainReport = useCallback(() => {
+    if (!completedResult) {
+      return;
+    }
+    const resolvedVersion = version && version.length > 0 ? version : 'latest';
+    const suggestionsText = orderedSuggestions.length
+      ? orderedSuggestions
+          .map((suggestion, index) => {
+            const severity = normalizeSeverity(suggestion.severity);
+            return `${index + 1}. [${severity.toUpperCase()}] ${formatSuggestionCategory(suggestion.category)} - ${suggestion.title}\n${suggestion.description}`;
+          })
+          .join('\n\n')
+      : 'None.';
+    const prompt =
+      'Start a collaborative discovery conversation about these findings. Lead with 2-3 focused questions to validate assumptions and prioritize improvements.';
+    const contextItems = [
+      createAssistantContextItem('structured', {
+        title: 'Rating summary',
+        data: {
+          agent: agentName,
+          version: resolvedVersion,
+          score: `${completedResult.score}/10`,
+          summary: completedResult.summary,
+          token_warning: completedResult.token_warning ?? 'none',
+        },
+      }),
+      createAssistantContextItem('structured', {
+        title: 'Suggestions',
+        data: {
+          items: suggestionsText,
+        },
+      }),
+      createAssistantContextItem('structured', {
+        title: 'Additional agent state',
+        data: {
+          details: agentStateContext.trim().length > 0 ? agentStateContext.trim() : 'No additional state context provided.',
+        },
+      }),
+    ];
+    if (!assistant.openAssistant) {
+      const fallbackPrompt = [
+        prompt,
+        '',
+        'Rating summary',
+        `Agent: ${agentName}`,
+        `Version: ${resolvedVersion}`,
+        `Score: ${completedResult.score}/10`,
+        `Summary: ${completedResult.summary}`,
+        completedResult.token_warning ? `Token warning: ${completedResult.token_warning}` : 'Token warning: none',
+        '',
+        'Suggestions',
+        suggestionsText,
+        '',
+        'Additional agent state',
+        agentStateContext.trim().length > 0 ? agentStateContext.trim() : 'No additional state context provided.',
+      ].join('\n');
+      window.location.href = buildAssistantUrl(fallbackPrompt);
+      return;
+    }
+    assistant.openAssistant({
+      origin: 'sigil-agent-rating',
+      prompt,
+      autoSend: true,
+      context: contextItems,
+    });
+  }, [agentName, agentStateContext, assistant, completedResult, orderedSuggestions, version]);
 
   const onRejectSuggestion = useCallback((suggestion: AgentRatingSuggestion) => {
     const key = toSuggestionKey(suggestion);
@@ -893,20 +1014,27 @@ export default function AgentRatingPanel({
         {!running && completedResult && (
           <div className={styles.reportBody}>
             <div className={styles.scoreRow}>
-              <div className={styles.scorePill}>
-                <span className={styles.scoreValue} style={{ color: scoreTone(theme, completedResult.score) }}>
-                  {completedResult.score}
+              <div className={styles.scoreMetaStat}>
+                <span className={styles.scoreMetaLabel}>Evaluated by</span>
+                <span className={styles.scoreMetaValue}>
+                  {completedResult.judge_model} · {completedResult.judge_latency_ms}ms
                 </span>
-                <span className={styles.scoreDenominator}>/ 10</span>
               </div>
-              <Text variant="bodySmall" color="secondary">
-                Evaluated by {completedResult.judge_model} in {completedResult.judge_latency_ms}ms
-              </Text>
             </div>
 
             <div className={styles.summary}>
               <span className={styles.summaryPrefix}>tl;dr:</span>
+              <span className={styles.summaryStatusIcon}>
+                <Icon
+                  name={summaryStatusIconName(completedResult.score)}
+                  size="sm"
+                  style={{ color: summaryStatusTone(theme, completedResult.score) }}
+                />
+              </span>
               {succinctSummary}
+              <button type="button" className={styles.summaryExplainLink} onClick={onExplainReport}>
+                Explain
+              </button>
             </div>
 
             {completedResult.token_warning && completedResult.token_warning.length > 0 && (
@@ -927,11 +1055,9 @@ export default function AgentRatingPanel({
                       {showCategory && <span className={styles.suggestionCategory}>{categoryLabel}</span>}
                       <span className={styles.suggestionTitleLine}>
                         <span className={styles.suggestionTitleMain}>
-                          <span
-                            className={styles.suggestionSeverityDot}
-                            style={{ backgroundColor: severityDotColor(theme, normalizedSeverity) }}
-                            aria-hidden
-                          />
+                          <span className={styles.suggestionOrdinal} aria-hidden>
+                            {index + 1}.
+                          </span>
                           <button
                             type="button"
                             className={styles.suggestionTitleButton}
@@ -960,7 +1086,7 @@ export default function AgentRatingPanel({
               <Button variant="secondary" icon="ai" onClick={openRewriteModal}>
                 Rewrite prompt
               </Button>
-              <Button onClick={() => void runRating()} icon="sync" variant="secondary">
+              <Button onClick={() => void runRating()} icon="sync" variant="secondary" className={styles.rerunButton}>
                 Re-run
               </Button>
             </div>

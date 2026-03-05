@@ -11,6 +11,16 @@ let mockInlineIsGenerating = false;
 let mockInlineContent = '';
 
 jest.mock('@grafana/assistant', () => ({
+  createAssistantContextItem: (type: string, params: { title?: string; data?: unknown }) => ({
+    node: {
+      id: `${type}-${params.title ?? 'context'}`,
+      name: params.title ?? 'Context',
+      title: params.title ?? 'Context',
+      navigable: false,
+      data: params.data ?? {},
+    },
+    occurrences: [],
+  }),
   useAssistant: () => ({
     openAssistant: mockOpenAssistant,
   }),
@@ -181,12 +191,64 @@ describe('AgentRatingPanel', () => {
     await waitFor(() => expect(rateAgent).toHaveBeenCalledWith('assistant', 'sha256:test'));
 
     const summaryText = await screen.findByText(/This is a very long summary that should be shortened/i);
-    expect(summaryText.textContent?.length ?? 0).toBeLessThan(170);
     expect(summaryText.textContent).toContain('...');
+    expect(summaryText.textContent).not.toContain('not every detail in one block of text.');
     expect(screen.getByText('High priority fix')).toBeInTheDocument();
     expect(screen.getByText('Medium priority fix')).toBeInTheDocument();
     expect(screen.getByText('Low priority tweak')).toBeInTheDocument();
     expect(screen.getByText('Another low priority tweak')).toBeInTheDocument();
+  });
+
+  it('opens assistant from summary explain link with full report context', async () => {
+    const completed = createCompletedRating('Prompt is mostly clear but tool boundaries are vague.');
+    completed.suggestions = [
+      {
+        severity: 'high',
+        category: 'security_review',
+        title: 'Constrain tool calls',
+        description: 'Add strict allow/deny criteria and explicit fallback behavior.',
+      },
+    ];
+    const dataSource = createDataSource({});
+
+    renderPanel(
+      <AgentRatingPanel
+        agentName="assistant"
+        version="sha256:test"
+        dataSource={dataSource}
+        initialResult={completed}
+        agentStateContext="- Current prompt has broad tool permissions."
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Explain' }));
+
+    expect(mockOpenAssistant).toHaveBeenCalledTimes(1);
+    expect(mockOpenAssistant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        origin: 'sigil-agent-rating',
+        autoSend: true,
+        prompt: expect.stringContaining('Start a collaborative discovery conversation about these findings.'),
+      })
+    );
+    expect(mockOpenAssistant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.arrayContaining([
+          expect.objectContaining({
+            node: expect.objectContaining({ title: 'Rating summary' }),
+          }),
+        ]),
+      })
+    );
+    expect(mockOpenAssistant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.arrayContaining([
+          expect.objectContaining({
+            node: expect.objectContaining({ title: 'Suggestions' }),
+          }),
+        ]),
+      })
+    );
   });
 
   it('opens assistant from modal explain action', async () => {
