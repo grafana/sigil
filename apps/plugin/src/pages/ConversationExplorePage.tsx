@@ -140,6 +140,9 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   const handleToggleSave = useCallback(() => {
     void toggleSave()
       .then((nowSaved) => {
+        if (nowSaved === null) {
+          return;
+        }
         getAppEvents().publish({
           type: AppEvents.alertSuccess.name,
           payload: [nowSaved ? 'Conversation saved' : 'Conversation unsaved'],

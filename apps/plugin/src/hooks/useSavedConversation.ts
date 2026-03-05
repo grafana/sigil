@@ -9,6 +9,8 @@ import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evalu
  * back to paginating the full saved-conversations list to find entries created by other UI
  * surfaces (e.g. GenerationPicker) that may use different ID schemes.
  */
+export type ToggleSaveResult = boolean | null;
+
 export function useSavedConversation(
   conversationID: string,
   conversationName?: string,
@@ -58,9 +60,10 @@ export function useSavedConversation(
     };
   }, [conversationID, evalDataSource]);
 
-  const toggleSave = useCallback(async (): Promise<boolean> => {
+  const toggleSave = useCallback(async (): Promise<ToggleSaveResult> => {
     if (savingRef.current) {
-      return isSaved;
+      // A save/unsave request is already in flight; report explicit no-op.
+      return null;
     }
     savingRef.current = true;
     try {
