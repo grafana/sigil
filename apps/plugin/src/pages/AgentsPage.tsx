@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { css, cx } from '@emotion/css';
-import { dateTime, dateTimeParse, type GrafanaTheme2, type TimeRange } from '@grafana/data';
+import { dateTime, type GrafanaTheme2 } from '@grafana/data';
 import {
   Alert,
   Icon,
@@ -34,6 +34,7 @@ import {
   type TokenCostMode,
 } from '../components/agents/TokenCostBox';
 import { PageInsightBar } from '../components/insight/PageInsightBar';
+import { useFilterUrlState } from '../hooks/useFilterUrlState';
 
 const PAGE_SIZE = 24;
 const STALE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -436,24 +437,17 @@ export default function AgentsPage({
   const styles = useStyles2(getStyles);
   const navigate = useNavigate();
 
+  const { timeRange, setTimeRange, searchParams, setSearchParams: setUrlParams } = useFilterUrlState();
+
   const [items, setItems] = useState<AgentListItem[]>([]);
   const [nextCursor, setNextCursor] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [searchInput, setSearchInput] = useState('');
+  const searchInput = searchParams.get('search') ?? '';
   const [namePrefix, setNamePrefix] = useState('');
-  const [activeTab, setActiveTab] = useState<AgentsPageTab>('info');
+  const activeTab: AgentsPageTab = searchParams.get('tab') === 'table' ? 'table' : 'info';
   const [topFootprintMode, setTopFootprintMode] = useState<TokenCostMode>(() => readInitialTopFootprintMode());
-  const [timeRange, setTimeRange] = useState<TimeRange>(() => {
-    const rawFrom = 'now-1h';
-    const rawTo = 'now';
-    return {
-      from: dateTimeParse(rawFrom),
-      to: dateTimeParse(rawTo),
-      raw: { from: rawFrom, to: rawTo },
-    };
-  });
   const requestVersion = useRef(0);
   const inFlightLoadMore = useRef(false);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
@@ -672,11 +666,40 @@ export default function AgentsPage({
     void navigate(`${PLUGIN_BASE}/${route}`);
   };
 
+  const setSearchInput = useCallback(
+    (value: string) => {
+      setUrlParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (value === '') {
+            next.delete('search');
+          } else {
+            next.set('search', value);
+          }
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setUrlParams]
+  );
+
   const handleTabChange = useCallback(
     (tab: AgentsPageTab) => () => {
-      setActiveTab(tab);
+      setUrlParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (tab === 'info') {
+            next.delete('tab');
+          } else {
+            next.set('tab', tab);
+          }
+          return next;
+        },
+        { replace: true }
+      );
     },
-    []
+    [setUrlParams]
   );
 
   const loadMore = useCallback(async () => {

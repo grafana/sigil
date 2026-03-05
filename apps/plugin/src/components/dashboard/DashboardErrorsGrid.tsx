@@ -2,7 +2,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { css } from '@emotion/css';
 import { dateTime, ThresholdsMode, type AbsoluteTimeRange, type GrafanaTheme2, type TimeRange } from '@grafana/data';
 import { Badge, Button, Icon, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
-import { StatItem, BreakdownStatPanel, getBreakdownStatPanelStyles, formatRelativeTime } from './dashboardShared';
+import {
+  BreakdownStatPanel,
+  getBreakdownStatPanelStyles,
+  formatRelativeTime,
+  formatWindowLabel,
+} from './dashboardShared';
+import { TopStat } from '../TopStat';
 import type { DashboardDataSource } from '../../dashboard/api';
 import { type BreakdownDimension, type DashboardFilters, breakdownToPromLabel } from '../../dashboard/types';
 import {
@@ -75,6 +81,25 @@ export function DashboardErrorsGrid({
   const topTotalErrors = usePrometheusQuery(dataSource, totalErrorsQuery(filters, rangeDuration), from, to, 'instant');
   const topErrorRate = usePrometheusQuery(dataSource, errorRateQuery(filters, rangeDuration), from, to, 'instant');
 
+  // --- Previous period comparison ---
+  const windowSize = to - from;
+  const prevFrom = from - windowSize;
+  const prevTo = to - windowSize;
+  const prevTotalErrors = usePrometheusQuery(
+    dataSource,
+    totalErrorsQuery(filters, rangeDuration),
+    prevFrom,
+    prevTo,
+    'instant'
+  );
+  const prevErrorRate = usePrometheusQuery(
+    dataSource,
+    errorRateQuery(filters, rangeDuration),
+    prevFrom,
+    prevTo,
+    'instant'
+  );
+
   // --- Error rate over time ---
   const errorRateTimeseries = usePrometheusQuery(
     dataSource,
@@ -126,6 +151,9 @@ export function DashboardErrorsGrid({
 
   const totalErrorsValue = topTotalErrors.data ? vectorToStatValue(topTotalErrors.data) : 0;
   const errorRateValue = topErrorRate.data ? vectorToStatValue(topErrorRate.data) : 0;
+  const prevTotalErrorsValue = prevTotalErrors.data ? vectorToStatValue(prevTotalErrors.data) : 0;
+  const prevErrorRateValue = prevErrorRate.data ? vectorToStatValue(prevErrorRate.data) : 0;
+  const comparisonLabel = `previous ${formatWindowLabel(windowSize)}`;
 
   const allDataLoading =
     topTotalErrors.loading ||
@@ -175,8 +203,25 @@ export function DashboardErrorsGrid({
     <div className={styles.gridWrapper}>
       {/* Top stats */}
       <div className={styles.statsRow}>
-        <StatItem label="Total Errors" value={totalErrorsValue} loading={topTotalErrors.loading} />
-        <StatItem label="Error Rate" value={errorRateValue} unit="percent" loading={topErrorRate.loading} />
+        <TopStat
+          label="Total Errors"
+          value={totalErrorsValue}
+          loading={topTotalErrors.loading}
+          prevValue={prevTotalErrorsValue}
+          prevLoading={prevTotalErrors.loading}
+          invertChange
+          comparisonLabel={comparisonLabel}
+        />
+        <TopStat
+          label="Error Rate"
+          value={errorRateValue}
+          unit="percent"
+          loading={topErrorRate.loading}
+          prevValue={prevErrorRateValue}
+          prevLoading={prevErrorRate.loading}
+          invertChange
+          comparisonLabel={comparisonLabel}
+        />
       </div>
 
       <PageInsightBar

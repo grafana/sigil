@@ -155,9 +155,69 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
       });
   }, [toggleSave]);
 
-  const [flowGroupBy, setFlowGroupBy] = useState<FlowGroupBy>('agent');
-  const [flowSortBy, setFlowSortBy] = useState<FlowSortBy>('time');
-  const [flowSearchQuery, setFlowSearchQuery] = useState('');
+  const VALID_GROUP_BY = new Set<FlowGroupBy>(['none', 'agent', 'model', 'provider']);
+  const VALID_SORT_BY = new Set<FlowSortBy>(['time', 'duration', 'tokens', 'cost']);
+
+  const flowGroupByParam = searchParams.get('groupBy') as FlowGroupBy | null;
+  const flowGroupBy: FlowGroupBy =
+    flowGroupByParam && VALID_GROUP_BY.has(flowGroupByParam) ? flowGroupByParam : 'agent';
+  const flowSortByParam = searchParams.get('sortBy') as FlowSortBy | null;
+  const flowSortBy: FlowSortBy = flowSortByParam && VALID_SORT_BY.has(flowSortByParam) ? flowSortByParam : 'time';
+  const flowSearchQuery = searchParams.get('search') ?? '';
+
+  const setFlowGroupBy = useCallback(
+    (value: FlowGroupBy) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (value === 'agent') {
+            next.delete('groupBy');
+          } else {
+            next.set('groupBy', value);
+          }
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
+
+  const setFlowSortBy = useCallback(
+    (value: FlowSortBy) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (value === 'time') {
+            next.delete('sortBy');
+          } else {
+            next.set('sortBy', value);
+          }
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
+
+  const setFlowSearchQuery = useCallback(
+    (value: string) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (value === '') {
+            next.delete('search');
+          } else {
+            next.set('search', value);
+          }
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
 
   const flowOptions = useMemo(() => ({ groupBy: flowGroupBy, sortBy: flowSortBy }), [flowGroupBy, flowSortBy]);
   const { flowNodes, totalDurationMs } = useConversationFlow(

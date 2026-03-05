@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
 import { Alert, Button, Icon, Select, Spinner, Text, useStyles2, type IconName } from '@grafana/ui';
@@ -125,9 +125,28 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
   const styles = useStyles2(getStyles);
   const navigate = useNavigate();
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const templateScopeFilter = searchParams.get('scope') ?? '';
+  const setTemplateScopeFilter = useCallback(
+    (value: string) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (value === '') {
+            next.delete('scope');
+          } else {
+            next.set('scope', value);
+          }
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
+
   const [allTemplates, setAllTemplates] = useState<TemplateDefinition[]>([]);
   const [tenantEvaluators, setTenantEvaluators] = useState<Evaluator[]>([]);
-  const [templateScopeFilter, setTemplateScopeFilter] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const requestVersion = useRef(0);

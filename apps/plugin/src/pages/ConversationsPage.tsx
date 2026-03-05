@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { css } from '@emotion/css';
-import { dateTime, type GrafanaTheme2, makeTimeRange, type TimeRange } from '@grafana/data';
+import { dateTimeParse, type GrafanaTheme2, type TimeRange } from '@grafana/data';
 import { Alert, Text, useStyles2 } from '@grafana/ui';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
 import type {
@@ -49,15 +50,67 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
+const DEFAULT_FROM = 'now-24h';
+const DEFAULT_TO = 'now';
+
+function parseTimeRange(params: URLSearchParams): TimeRange {
+  const rawFrom = params.get('from') || DEFAULT_FROM;
+  const rawTo = params.get('to') || DEFAULT_TO;
+  return {
+    from: dateTimeParse(rawFrom),
+    to: dateTimeParse(rawTo),
+    raw: { from: rawFrom, to: rawTo },
+  };
+}
+
+function setOrDelete(params: URLSearchParams, key: string, value: string, defaultValue: string): void {
+  if (value === defaultValue) {
+    params.delete(key);
+  } else {
+    params.set(key, value);
+  }
+}
+
 export default function ConversationsPage(props: ConversationsPageProps) {
   const dataSource = props.dataSource ?? defaultConversationsDataSource;
   const styles = useStyles2(getStyles);
 
-  const [filterText, setFilterText] = useState<string>('');
-  const [timeRange, setTimeRange] = useState<TimeRange>(() => {
-    const now = dateTime();
-    return makeTimeRange(dateTime(now).subtract(24, 'hours'), now);
-  });
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filterText = searchParams.get('filter') ?? '';
+  const timeRange = useMemo(() => parseTimeRange(searchParams), [searchParams]);
+
+  const setFilterText = useCallback(
+    (value: string) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (value === '') {
+            next.delete('filter');
+          } else {
+            next.set('filter', value);
+          }
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
+
+  const setTimeRange = useCallback(
+    (tr: TimeRange) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          setOrDelete(next, 'from', String(tr.raw.from), DEFAULT_FROM);
+          setOrDelete(next, 'to', String(tr.raw.to), DEFAULT_TO);
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
 
   const [tags, setTags] = useState<SearchTag[]>([]);
   const [tagValues, setTagValues] = useState<string[]>([]);

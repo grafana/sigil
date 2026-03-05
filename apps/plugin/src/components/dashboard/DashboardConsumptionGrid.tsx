@@ -10,7 +10,8 @@ import {
   type PrometheusQueryResponse,
   breakdownToPromLabel,
 } from '../../dashboard/types';
-import { StatItem, extractResolvePairs, BreakdownStatPanel } from './dashboardShared';
+import { extractResolvePairs, BreakdownStatPanel, formatWindowLabel } from './dashboardShared';
+import { TopStat } from '../TopStat';
 import { calculateTotalCost, calculateTotalCostByGroup, calculateCostTimeSeries } from '../../dashboard/cost';
 import {
   computeStep,
@@ -99,12 +100,52 @@ export function DashboardConsumptionGrid({
     'instant'
   );
 
+  // --- Previous period comparison ---
+  const windowSize = to - from;
+  const prevFrom = from - windowSize;
+  const prevTo = to - windowSize;
+  const prevTokensTotalStat = usePrometheusQuery(
+    dataSource,
+    totalTokensQuery(filters, rangeDuration),
+    prevFrom,
+    prevTo,
+    'instant'
+  );
+  const prevInputTokensStat = usePrometheusQuery(
+    dataSource,
+    totalTokensQuery(filters, rangeDuration, 'none', ['input']),
+    prevFrom,
+    prevTo,
+    'instant'
+  );
+  const prevOutputTokensStat = usePrometheusQuery(
+    dataSource,
+    totalTokensQuery(filters, rangeDuration, 'none', ['output']),
+    prevFrom,
+    prevTo,
+    'instant'
+  );
+  const prevCacheReadTokensStat = usePrometheusQuery(
+    dataSource,
+    totalTokensQuery(filters, rangeDuration, 'none', ['cache_read']),
+    prevFrom,
+    prevTo,
+    'instant'
+  );
+
   // --- Cost calculation ---
   const costTokensData = usePrometheusQuery(
     dataSource,
     tokensByModelAndTypeQuery(filters, rangeDuration, breakdownBy),
     from,
     to,
+    'instant'
+  );
+  const prevCostTokensData = usePrometheusQuery(
+    dataSource,
+    tokensByModelAndTypeQuery(filters, rangeDuration, 'none'),
+    prevFrom,
+    prevTo,
     'instant'
   );
   const costOverTimeData = usePrometheusQuery(
@@ -124,13 +165,20 @@ export function DashboardConsumptionGrid({
     if (costOverTimeData.data) {
       pairs.push(...extractResolvePairs(costOverTimeData.data));
     }
+    if (prevCostTokensData.data) {
+      pairs.push(...extractResolvePairs(prevCostTokensData.data));
+    }
     return pairs;
-  }, [costTokensData.data, costOverTimeData.data]);
+  }, [costTokensData.data, costOverTimeData.data, prevCostTokensData.data]);
   const resolvedPricing = useResolvedModelPricing(dataSource, resolvePairs);
 
   const totalCost = useMemo(() => {
     return calculateTotalCost(costTokensData.data ?? undefined, resolvedPricing.pricingMap);
   }, [costTokensData.data, resolvedPricing.pricingMap]);
+
+  const prevTotalCost = useMemo(() => {
+    return calculateTotalCost(prevCostTokensData.data ?? undefined, resolvedPricing.pricingMap);
+  }, [prevCostTokensData.data, resolvedPricing.pricingMap]);
 
   // --- Tokens by type (instant breakdown for pie) ---
   const tokensByTypeStat = usePrometheusQuery(
@@ -223,6 +271,16 @@ export function DashboardConsumptionGrid({
   const cacheHitRate =
     inputTokensValue + cacheReadValue > 0 ? (cacheReadValue / (inputTokensValue + cacheReadValue)) * 100 : 0;
 
+  const prevTotalTokensValue = prevTokensTotalStat.data ? vectorToStatValue(prevTokensTotalStat.data) : 0;
+  const prevInputTokensValue = prevInputTokensStat.data ? vectorToStatValue(prevInputTokensStat.data) : 0;
+  const prevOutputTokensValue = prevOutputTokensStat.data ? vectorToStatValue(prevOutputTokensStat.data) : 0;
+  const prevCacheReadValue = prevCacheReadTokensStat.data ? vectorToStatValue(prevCacheReadTokensStat.data) : 0;
+  const prevCacheHitRate =
+    prevInputTokensValue + prevCacheReadValue > 0
+      ? (prevCacheReadValue / (prevInputTokensValue + prevCacheReadValue)) * 100
+      : 0;
+  const comparisonLabel = `previous ${formatWindowLabel(windowSize)}`;
+
   const allDataLoading =
     tokensTotalStat.loading ||
     inputTokensStat.loading ||
@@ -283,21 +341,60 @@ export function DashboardConsumptionGrid({
     <div className={styles.gridWrapper}>
       {/* Top stats */}
       <div className={styles.statsRow}>
-        <StatItem label="Total Tokens" value={totalTokensValue} unit="short" loading={tokensTotalStat.loading} />
-        <StatItem label="Input Tokens" value={inputTokensValue} unit="short" loading={inputTokensStat.loading} />
-        <StatItem label="Output Tokens" value={outputTokensValue} unit="short" loading={outputTokensStat.loading} />
-        <StatItem label="Cache Read" value={cacheReadValue} unit="short" loading={cacheReadTokensStat.loading} />
-        <StatItem
+        <TopStat
+          label="Total Tokens"
+          value={totalTokensValue}
+          unit="short"
+          loading={tokensTotalStat.loading}
+          prevValue={prevTotalTokensValue}
+          prevLoading={prevTokensTotalStat.loading}
+          comparisonLabel={comparisonLabel}
+        />
+        <TopStat
+          label="Input Tokens"
+          value={inputTokensValue}
+          unit="short"
+          loading={inputTokensStat.loading}
+          prevValue={prevInputTokensValue}
+          prevLoading={prevInputTokensStat.loading}
+          comparisonLabel={comparisonLabel}
+        />
+        <TopStat
+          label="Output Tokens"
+          value={outputTokensValue}
+          unit="short"
+          loading={outputTokensStat.loading}
+          prevValue={prevOutputTokensValue}
+          prevLoading={prevOutputTokensStat.loading}
+          comparisonLabel={comparisonLabel}
+        />
+        <TopStat
+          label="Cache Read"
+          value={cacheReadValue}
+          unit="short"
+          loading={cacheReadTokensStat.loading}
+          prevValue={prevCacheReadValue}
+          prevLoading={prevCacheReadTokensStat.loading}
+          comparisonLabel={comparisonLabel}
+        />
+        <TopStat
           label="Cache Hit Rate"
           value={cacheHitRate}
           unit="percent"
           loading={cacheReadTokensStat.loading || inputTokensStat.loading}
+          prevValue={prevCacheHitRate}
+          prevLoading={prevCacheReadTokensStat.loading || prevInputTokensStat.loading}
+          comparisonLabel={comparisonLabel}
         />
-        <StatItem
+        <TopStat
           label="Estimated Cost"
           value={totalCost.totalCost}
           unit="currencyUSD"
           loading={costTokensData.loading || resolvedPricing.loading}
+          prevValue={prevTotalCost.totalCost}
+          prevLoading={prevCostTokensData.loading || resolvedPricing.loading}
+          invertChange
+          comparisonLabel={comparisonLabel}
         />
       </div>
       <PageInsightBar

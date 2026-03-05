@@ -379,8 +379,7 @@ function getStyles(theme: GrafanaTheme2) {
   const barBase = {
     width: '100%',
     background: theme.colors.background.secondary,
-    border: `1px solid ${theme.colors.primary.main}2d`,
-    boxShadow: `0 0 0 1px ${theme.colors.primary.main}14, 0 0 10px ${theme.colors.primary.main}1f`,
+    border: `1px solid ${theme.colors.border.weak}`,
     borderRadius: theme.shape.radius.default,
     overflow: 'hidden' as const,
   };

@@ -8,7 +8,7 @@ import type { ModelResolvePair, PrometheusQueryResponse } from '../../dashboard/
 
 export function formatStatValue(value: number, unit?: string): string {
   const fmt = getValueFormat(unit ?? 'short');
-  return formattedValueToString(fmt(value));
+  return formattedValueToString(fmt(Number.isNaN(value) ? 0 : value));
 }
 
 // --- StatItem ---
@@ -276,7 +276,7 @@ export function BreakdownStatPanel({
     return aggregation === 'avg' ? total / src.length : total;
   }, [items, stackedItems, isStacked, aggregation, aggregateOverride]);
 
-  const formatVal = (v: number) => formattedValueToString(getValueFormat(unit)(v));
+  const formatVal = (v: number) => formattedValueToString(getValueFormat(unit)(Number.isNaN(v) ? 0 : v));
 
   if (loading) {
     return (
@@ -531,6 +531,22 @@ export function getBreakdownStatPanelStyles(theme: GrafanaTheme2) {
       color: theme.colors.text.secondary,
     }),
   };
+}
+
+export function formatWindowLabel(seconds: number): string {
+  if (seconds < 120) {
+    return `${seconds}s`;
+  }
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 120) {
+    return `${minutes}m`;
+  }
+  const hours = Math.round(seconds / 3600);
+  if (hours < 48) {
+    return `${hours}h`;
+  }
+  const days = Math.round(seconds / 86400);
+  return `${days}d`;
 }
 
 export function formatRelativeTime(dateStr: string): string {

@@ -142,7 +142,8 @@ export function vectorToStatValue(response: PrometheusQueryResponse): number {
   if (results.length === 0) {
     return 0;
   }
-  return parseFloat(results[0].value[1]);
+  const parsed = parseFloat(results[0].value[1]);
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
 
 /** Convert a single scalar value to a stat-compatible DataFrame. */
