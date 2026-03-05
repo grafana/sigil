@@ -136,7 +136,9 @@ function normalizeSeverity(rawSeverity: string): 'high' | 'medium' | 'low' {
   return 'low';
 }
 
-function groupSuggestionsBySeverity(suggestions: AgentRatingSuggestion[]): Record<'high' | 'medium' | 'low', AgentRatingSuggestion[]> {
+function groupSuggestionsBySeverity(
+  suggestions: AgentRatingSuggestion[]
+): Record<'high' | 'medium' | 'low', AgentRatingSuggestion[]> {
   const groups: Record<'high' | 'medium' | 'low', AgentRatingSuggestion[]> = {
     high: [],
     medium: [],
@@ -229,7 +231,7 @@ export default function AgentRatingPanel({
           </Alert>
         )}
 
-        {!running && !result && error.length === 0 && (
+        {!running && !result && (
           <div className={styles.empty}>
             <Text variant="bodySmall" color="secondary">
               Run an on-demand evaluation of this agent&apos;s prompt, tools, and token budget.
