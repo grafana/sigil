@@ -553,11 +553,16 @@ func (s *FanOutStore) readColdConversationGenerationsWithPlan(
 	}
 
 	go func() {
+	producerLoop:
 		for idx := len(blocks) - 1; idx >= 0; idx-- {
 			if coldCtx.Err() != nil {
 				break
 			}
-			jobs <- blocks[idx]
+			select {
+			case jobs <- blocks[idx]:
+			case <-coldCtx.Done():
+				break producerLoop
+			}
 		}
 		close(jobs)
 		wg.Wait()

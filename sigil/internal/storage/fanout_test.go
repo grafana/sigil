@@ -294,6 +294,81 @@ func TestFanOutStoreListConversationGenerationsWithPlanStopsAfterRemainingExpect
 	}
 }
 
+func TestFanOutStoreListConversationGenerationsWithPlanDoesNotHangOnCancelDuringJobSend(t *testing.T) {
+	base := time.Date(2026, 2, 19, 10, 0, 0, 0, time.UTC)
+	coldGeneration := fanOutTestGeneration("cold-1", "conv-1", base.Add(time.Minute))
+	indexWithMatch, generationsByOffset := buildFanOutTestBlock(t, []*sigilv1.Generation{coldGeneration})
+
+	store := NewFanOutStore(
+		&fanOutTestWALReader{
+			getByConversationID: func(_ context.Context, _, _ string) ([]*sigilv1.Generation, error) {
+				return []*sigilv1.Generation{}, nil
+			},
+		},
+		&fanOutTestBlockMetadataStore{
+			listBlocks: func(_ context.Context, _ string, _, _ time.Time) ([]BlockMeta, error) {
+				// Fanout scans from end to start, so block-matching is dispatched first.
+				// The second send can race with cancellation once expected count is reached.
+				return []BlockMeta{
+					{TenantID: "tenant-a", BlockID: "block-extra"},
+					{TenantID: "tenant-a", BlockID: "block-matching"},
+				}, nil
+			},
+		},
+		&fanOutTestBlockReader{
+			readIndex: func(_ context.Context, _, blockID string) (*BlockIndex, error) {
+				if blockID == "block-matching" {
+					// Keep worker busy so producer attempts second send while this block is in flight.
+					time.Sleep(75 * time.Millisecond)
+					return indexWithMatch, nil
+				}
+				return &BlockIndex{Entries: []IndexEntry{}}, nil
+			},
+			readGenerations: func(_ context.Context, _, blockID string, entries []IndexEntry) ([]*sigilv1.Generation, error) {
+				if blockID == "block-matching" {
+					return fanOutGenerationsFromEntries(entries, generationsByOffset), nil
+				}
+				return []*sigilv1.Generation{}, nil
+			},
+		},
+		WithColdReadConfig(ColdReadConfig{
+			TotalBudget:      time.Second,
+			IndexReadTimeout: time.Second,
+			IndexRetries:     0,
+			IndexWorkers:     1,
+			IndexMaxInflight: 1,
+		}),
+	)
+
+	done := make(chan struct{})
+	var (
+		merged []*sigilv1.Generation
+		err    error
+	)
+	go func() {
+		merged, err = store.ListConversationGenerationsWithPlan(
+			context.Background(),
+			"tenant-a",
+			"conv-1",
+			ConversationReadPlan{ExpectedGenerationCount: 1},
+		)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("list conversation generations with plan hung while producer was sending jobs")
+	}
+
+	if err != nil {
+		t.Fatalf("list conversation generations with plan: %v", err)
+	}
+	if len(merged) != 1 || merged[0].GetId() != "cold-1" {
+		t.Fatalf("expected one cold generation, got %#v", merged)
+	}
+}
+
 func TestFanOutStoreAcquireColdIndexSlotTracksInflightCounter(t *testing.T) {
 	store := NewFanOutStore(nil, nil, nil)
 
