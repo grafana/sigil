@@ -14,6 +14,9 @@ import type { ModelCard } from '../modelcard/types';
 import { resolveModelCardsFromNames } from '../modelcard/resolve';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { formatDateShort } from '../utils/date';
+import { defaultDashboardDataSource, type DashboardDataSource } from '../dashboard/api';
+import { computeRateInterval, computeStep, requestsOverTimeQuery } from '../dashboard/queries';
+import type { PrometheusMatrixResult, PrometheusQueryResponse } from '../dashboard/types';
 import { TokenizedText } from '../components/tokenizer/TokenizedText';
 import { useTokenizer } from '../components/tokenizer/useTokenizer';
 import { getEncoding, AVAILABLE_ENCODINGS, type EncodingName } from '../components/tokenizer/encodingMap';
@@ -21,10 +24,20 @@ import { getTokenizeControlStyles } from '../components/tokenizer/tokenizeContro
 import { TopStat } from '../components/TopStat';
 
 const VERSION_PAGE_SIZE = 50;
+const ACTIVITY_BAR_COUNT = 48;
+const ACTIVITY_REFRESH_MS = 70 * 1000;
+const DEFAULT_ACTIVITY_WAVE = Array.from({ length: ACTIVITY_BAR_COUNT }, (_, i) => {
+  const minHeight = 20;
+  const maxHeight = 100;
+  const t = i / (ACTIVITY_BAR_COUNT - 1);
+  const wave = 0.5 + 0.5 * Math.sin(2 * Math.PI * (t - 0.5));
+  return minHeight + (maxHeight - minHeight) * wave;
+});
 
 export type AgentDetailPageProps = {
   dataSource?: AgentsDataSource;
   modelCardClient?: ModelCardClient;
+  activityDataSource?: DashboardDataSource;
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -35,9 +48,16 @@ const getStyles = (theme: GrafanaTheme2) => ({
     minHeight: 0,
     marginTop: theme.spacing(-4),
   }),
+  heroStack: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 0,
+  }),
   heroPanel: css({
     position: 'relative' as const,
     borderRadius: theme.shape.radius.default,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
     border: `1px solid ${theme.colors.border.weak}`,
     background: `linear-gradient(135deg, ${theme.colors.background.primary} 0%, ${theme.colors.background.secondary} 100%)`,
     overflow: 'hidden',
@@ -50,6 +70,35 @@ const getStyles = (theme: GrafanaTheme2) => ({
       height: 3,
       background: 'linear-gradient(90deg, #5794F2 0%, #B877D9 52%, #FF9830 100%)',
     },
+  }),
+  heroActivityTop: css({
+    borderTopLeftRadius: theme.shape.radius.default,
+    borderTopRightRadius: theme.shape.radius.default,
+    overflow: 'hidden',
+    background: 'transparent',
+  }),
+  heroActivityBars: css({
+    display: 'flex',
+    alignItems: 'flex-end',
+    gap: 2,
+    height: 28,
+    padding: 0,
+    opacity: 0.85,
+  }),
+  heroActivityBarSlot: css({
+    flex: 1,
+    minWidth: 2,
+    height: '100%',
+    display: 'flex',
+    alignItems: 'flex-end',
+  }),
+  heroActivityBar: css({
+    width: '100%',
+    height: '100%',
+    borderTopLeftRadius: 1,
+    borderTopRightRadius: 1,
+    transformOrigin: 'bottom',
+    transition: 'transform 0.7s cubic-bezier(0.4, 0, 0.2, 1)',
   }),
   heroPanelBody: css({
     position: 'relative' as const,
@@ -103,11 +152,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexWrap: 'wrap' as const,
   }),
   heroMetaGrid: css({
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
+    display: 'flex',
+    flexWrap: 'wrap' as const,
     gap: theme.spacing(1.25),
-    alignItems: 'stretch',
-    marginTop: theme.spacing(0.75),
+    alignItems: 'flex-start',
+    marginTop: theme.spacing(1.5),
   }),
   heroMetaChip: css({
     display: 'flex',
@@ -118,7 +167,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     border: 'none',
     background: 'transparent',
     padding: `${theme.spacing(0.75)} ${theme.spacing(1)}`,
-    minHeight: 72,
     fontSize: theme.typography.bodySmall.fontSize,
     lineHeight: 1.2,
     minWidth: 0,
@@ -128,6 +176,15 @@ const getStyles = (theme: GrafanaTheme2) => ({
     textTransform: 'uppercase' as const,
     letterSpacing: '0.04em',
     fontSize: theme.typography.bodySmall.fontSize,
+  }),
+  heroMetaLabelWithHelp: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+  }),
+  heroMetaHelpIcon: css({
+    display: 'inline-flex',
+    color: theme.colors.text.secondary,
   }),
   heroMetaValue: css({
     color: theme.colors.text.primary,
@@ -158,7 +215,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexWrap: 'wrap' as const,
     gap: theme.spacing(4),
-    padding: theme.spacing(1.5, 0),
+    padding: theme.spacing(1.5, 1),
   }),
   panel: css({
     borderRadius: theme.shape.radius.default,
@@ -288,17 +345,70 @@ function toTimestampMs(iso: string): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-function formatVersionShort(version: string): string {
-  const clean = version.replace(/^sha256:/, '');
-  if (clean.length <= 12) {
-    return clean;
+function interpolateHex(a: string, b: string, t: number): string {
+  const ar = parseInt(a.slice(1, 3), 16);
+  const ag = parseInt(a.slice(3, 5), 16);
+  const ab = parseInt(a.slice(5, 7), 16);
+  const br = parseInt(b.slice(1, 3), 16);
+  const bg = parseInt(b.slice(3, 5), 16);
+  const bb = parseInt(b.slice(5, 7), 16);
+  const r = Math.round(ar + (br - ar) * t);
+  const g = Math.round(ag + (bg - ag) * t);
+  const bl = Math.round(ab + (bb - ab) * t);
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
+}
+
+function extractSeries(response: PrometheusQueryResponse): number[] {
+  if (response.status !== 'success' || response.data.resultType !== 'matrix') {
+    return [];
   }
-  return `${clean.slice(0, 12)}...`;
+  const [series] = response.data.result as PrometheusMatrixResult[];
+  if (!series?.values) {
+    return [];
+  }
+  return series.values
+    .map(([, value]) => Number.parseFloat(value))
+    .filter((value) => Number.isFinite(value) && value >= 0);
+}
+
+function bucketValues(values: number[], targetCount: number): number[] {
+  if (values.length === 0 || targetCount <= 0) {
+    return [];
+  }
+  return Array.from({ length: targetCount }, (_, i) => {
+    const start = Math.floor((i * values.length) / targetCount);
+    const end = Math.max(start + 1, Math.floor(((i + 1) * values.length) / targetCount));
+    const slice = values.slice(start, end);
+    const sum = slice.reduce((acc, value) => acc + value, 0);
+    return sum / slice.length;
+  });
+}
+
+function normalizeValuesToHeights(values: number[], targetCount: number): number[] {
+  if (values.length === 0 || targetCount <= 0) {
+    return [];
+  }
+  const bucketed = bucketValues(values, targetCount);
+  const minValue = Math.min(...bucketed);
+  const maxValue = Math.max(...bucketed);
+  if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
+    return [];
+  }
+  if (Math.abs(maxValue - minValue) < 1e-9) {
+    return bucketed.map(() => 60);
+  }
+  const minHeight = 20;
+  const maxHeight = 100;
+  return bucketed.map((value) => {
+    const t = (value - minValue) / (maxValue - minValue);
+    return minHeight + t * (maxHeight - minHeight);
+  });
 }
 
 export default function AgentDetailPage({
   dataSource = defaultAgentsDataSource,
   modelCardClient = defaultModelCardClient,
+  activityDataSource = defaultDashboardDataSource,
 }: AgentDetailPageProps) {
   const styles = useStyles2(getStyles);
   const navigate = useNavigate();
@@ -317,6 +427,7 @@ export default function AgentDetailPage({
   const [errorMessage, setErrorMessage] = useState('');
   const [modelCards, setModelCards] = useState<Map<string, ModelCard>>(new Map());
   const [openModel, setOpenModel] = useState<{ key: string; anchorRect: DOMRect } | null>(null);
+  const [activityHeights, setActivityHeights] = useState<number[] | null>(null);
   const detailRequestVersion = useRef(0);
   const versionsRequestVersion = useRef(0);
   const ratingRequestVersion = useRef(0);
@@ -437,6 +548,46 @@ export default function AgentDetailPage({
         setLoadingVersions(false);
       });
   }, [agentName, dataSource]);
+
+  useEffect(() => {
+    if (agentName.length === 0) {
+      setActivityHeights(null);
+      return;
+    }
+    let cancelled = false;
+    const loadActivity = async () => {
+      const to = Math.floor(Date.now() / 1000);
+      const from = to - 3600;
+      const step = computeStep(from, to);
+      const interval = computeRateInterval(step);
+      const query = requestsOverTimeQuery(
+        { providers: [], models: [], agentNames: [agentName], labelFilters: [] },
+        interval,
+        'none'
+      );
+      try {
+        const response = await activityDataSource.queryRange(query, from, to, step);
+        if (cancelled) {
+          return;
+        }
+        const values = extractSeries(response);
+        setActivityHeights(normalizeValuesToHeights(values, ACTIVITY_BAR_COUNT));
+      } catch {
+        if (!cancelled) {
+          setActivityHeights(null);
+        }
+      }
+    };
+
+    void loadActivity();
+    const intervalId = setInterval(() => {
+      void loadActivity();
+    }, ACTIVITY_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
+  }, [agentName, activityDataSource]);
 
   useEffect(() => {
     if (!detail || detail.models.length === 0) {
@@ -585,6 +736,8 @@ export default function AgentDetailPage({
   const primaryModelLabel =
     primaryModel != null ? stripProviderPrefix(primaryModel.name, getProviderMeta(primaryModel.provider).label) : 'n/a';
   const primaryModelProvider = primaryModel != null ? getProviderMeta(primaryModel.provider).label : null;
+  const gradientColors = ['#5794F2', '#B877D9', '#FF9830'] as const;
+  const displayActivityHeights = activityHeights && activityHeights.length > 0 ? activityHeights : DEFAULT_ACTIVITY_WAVE;
 
   return (
     <div className={styles.page}>
@@ -594,91 +747,153 @@ export default function AgentDetailPage({
         </Alert>
       )}
 
-      <div className={styles.heroPanel}>
-        <div className={styles.heroPanelBody}>
-          <div className={styles.heroGlow} aria-hidden />
-          <div className={styles.heroTitleMeta}>
-            <div className={styles.heroTitleRow}>
-              <Button
-                variant="secondary"
-                fill="text"
-                size="sm"
-                icon="arrow-left"
-                className={styles.heroBackButton}
-                onClick={() => navigate(agentsTableRoute)}
-              >
-                All agents
-              </Button>
-              <div>
-                <div className={styles.heroEyebrow}>Agent</div>
-                <h2 className={styles.agentNameHeading}>{isAnonymous ? 'Unnamed agent bucket' : detail.agent_name}</h2>
+      <div className={styles.heroStack}>
+        <div className={styles.heroActivityTop}>
+          <div className={styles.heroActivityBars} aria-hidden>
+            {displayActivityHeights.map((height, i) => {
+              const t = i / (ACTIVITY_BAR_COUNT - 1);
+              const color =
+                t <= 0.52
+                  ? interpolateHex(gradientColors[0], gradientColors[1], t / 0.52)
+                  : interpolateHex(gradientColors[1], gradientColors[2], (t - 0.52) / 0.48);
+              return (
+                <div key={i} className={styles.heroActivityBarSlot}>
+                  <div
+                    className={styles.heroActivityBar}
+                    style={{
+                      transform: `scaleY(${height / 100})`,
+                      backgroundColor: color,
+                    }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div className={styles.heroPanel}>
+          <div className={styles.heroPanelBody}>
+            <div className={styles.heroGlow} aria-hidden />
+            <div className={styles.heroTitleMeta}>
+              <div className={styles.heroTitleRow}>
+                <Button
+                  variant="secondary"
+                  fill="text"
+                  size="sm"
+                  icon="arrow-left"
+                  className={styles.heroBackButton}
+                  onClick={() => navigate(agentsTableRoute)}
+                >
+                  All agents
+                </Button>
+                <div>
+                  <div className={styles.heroEyebrow}>Agent</div>
+                  <h2 className={styles.agentNameHeading}>
+                    {isAnonymous ? 'Unnamed agent bucket' : detail.agent_name}
+                  </h2>
+                </div>
+                <div className={styles.badgeRow}>
+                  {isAnonymous && <Badge text="Anonymous" color="orange" />}
+                </div>
               </div>
-              <div className={styles.badgeRow}>
-                {isAnonymous && <Badge text="Anonymous" color="orange" />}
+              <div className={styles.heroMetaGrid}>
+                <div className={styles.heroMetaChip}>
+                <span className={styles.heroMetaLabelWithHelp}>
+                  <span className={styles.heroMetaLabel}>Versions</span>
+                  <Tooltip content="Total distinct effective versions recorded for this agent." placement="top">
+                    <span aria-label="Versions help">
+                      <Icon name="info-circle" size="sm" className={styles.heroMetaHelpIcon} />
+                    </span>
+                  </Tooltip>
+                </span>
+                <span className={styles.heroMetaValue}>{versionOptions.length.toLocaleString()}</span>
+                </div>
+                <div className={styles.heroMetaChip}>
+                <span className={styles.heroMetaLabelWithHelp}>
+                  <span className={styles.heroMetaLabel}>Declared version</span>
+                  <Tooltip content="Version string reported by instrumentation." placement="top">
+                    <span aria-label="Declared version help">
+                      <Icon name="info-circle" size="sm" className={styles.heroMetaHelpIcon} />
+                    </span>
+                  </Tooltip>
+                </span>
+                  <span className={styles.heroMetaValue}>{detail.declared_version_latest || 'n/a'}</span>
+                </div>
+                <div className={styles.heroMetaChip}>
+                <span className={styles.heroMetaLabelWithHelp}>
+                  <span className={styles.heroMetaLabel}>Models</span>
+                  <Tooltip content="Distinct model variants recorded for this agent version." placement="top">
+                    <span aria-label="Models help">
+                      <Icon name="info-circle" size="sm" className={styles.heroMetaHelpIcon} />
+                    </span>
+                  </Tooltip>
+                </span>
+                  <span className={styles.heroMetaValue}>{detail.models.length.toLocaleString()}</span>
+                </div>
+              <div className={styles.heroMetaChip}>
+                <span className={styles.heroMetaLabelWithHelp}>
+                  <span className={styles.heroMetaLabel}>Tools</span>
+                  <Tooltip content="Declared tool definitions." placement="top">
+                    <span aria-label="Tools help">
+                      <Icon name="info-circle" size="sm" className={styles.heroMetaHelpIcon} />
+                    </span>
+                  </Tooltip>
+                </span>
+                <span className={styles.heroMetaValue}>{detail.tool_count.toLocaleString()}</span>
               </div>
+                <div className={styles.heroMetaChip}>
+                <span className={styles.heroMetaLabelWithHelp}>
+                  <span className={styles.heroMetaLabel}>Primary model</span>
+                  <Tooltip content="Primary model name and provider in this version." placement="top">
+                    <span aria-label="Primary model help">
+                      <Icon name="info-circle" size="sm" className={styles.heroMetaHelpIcon} />
+                    </span>
+                  </Tooltip>
+                </span>
+                  <span className={styles.heroMetaValue}>{primaryModelLabel}</span>
+                  <span className={styles.heroMetaSubline}>{primaryModelProvider ?? 'No model data'}</span>
+                </div>
+              </div>
+              {detail.models.length > 0 && (
+                <div className={styles.modelChipsRow}>
+                  {detail.models.map((model) => {
+                    const cardKey = `${model.provider}::${model.name}`;
+                    const card = modelCards.get(cardKey) ?? null;
+                    const meta = getProviderMeta(model.provider);
+                    const chipLabel = card
+                      ? stripProviderPrefix(card.name || card.source_model_id, meta.label)
+                      : stripProviderPrefix(model.name, meta.label);
+                    const dotColor = getProviderColor(model.provider);
+                    const isOpen = openModel?.key === cardKey;
+                    return (
+                      <div key={cardKey} className={styles.modelChipAnchor}>
+                        <button
+                          type="button"
+                          className={`${styles.modelChip} ${isOpen ? styles.modelChipActive : ''}`}
+                          onClick={(event) => {
+                            if (isOpen) {
+                              setOpenModel(null);
+                              return;
+                            }
+                            setOpenModel({ key: cardKey, anchorRect: event.currentTarget.getBoundingClientRect() });
+                          }}
+                          aria-label={`model card ${chipLabel}`}
+                        >
+                          <span className={styles.modelChipDot} style={{ background: dotColor }} />
+                          <span>{chipLabel}</span>
+                        </button>
+                        {isOpen && card && (
+                          <ModelCardPopover
+                            card={card}
+                            anchorRect={openModel?.anchorRect ?? null}
+                            onClose={() => setOpenModel(null)}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-            <div className={styles.heroMetaGrid}>
-              <div className={styles.heroMetaChip}>
-                <span className={styles.heroMetaLabel}>Version</span>
-                <span className={cx(styles.heroMetaValue, styles.heroMetaValueMono)}>{formatVersionShort(activeVersion)}</span>
-                <span className={styles.heroMetaSubline}>Effective hash</span>
-              </div>
-              <div className={styles.heroMetaChip}>
-                <span className={styles.heroMetaLabel}>Declared version</span>
-                <span className={styles.heroMetaValue}>{detail.declared_version_latest || 'n/a'}</span>
-                <span className={styles.heroMetaSubline}>From instrumentation</span>
-              </div>
-              <div className={styles.heroMetaChip}>
-                <span className={styles.heroMetaLabel}>Models</span>
-                <span className={styles.heroMetaValue}>{detail.models.length.toLocaleString()}</span>
-                <span className={styles.heroMetaSubline}>Distinct model variants</span>
-              </div>
-              <div className={styles.heroMetaChip}>
-                <span className={styles.heroMetaLabel}>Primary model</span>
-                <span className={styles.heroMetaValue}>{primaryModelLabel}</span>
-                <span className={styles.heroMetaSubline}>{primaryModelProvider ?? 'No model data'}</span>
-              </div>
-            </div>
-            {detail.models.length > 0 && (
-              <div className={styles.modelChipsRow}>
-                {detail.models.map((model) => {
-                  const cardKey = `${model.provider}::${model.name}`;
-                  const card = modelCards.get(cardKey) ?? null;
-                  const meta = getProviderMeta(model.provider);
-                  const chipLabel = card
-                    ? stripProviderPrefix(card.name || card.source_model_id, meta.label)
-                    : stripProviderPrefix(model.name, meta.label);
-                  const dotColor = getProviderColor(model.provider);
-                  const isOpen = openModel?.key === cardKey;
-                  return (
-                    <div key={cardKey} className={styles.modelChipAnchor}>
-                      <button
-                        type="button"
-                        className={`${styles.modelChip} ${isOpen ? styles.modelChipActive : ''}`}
-                        onClick={(event) => {
-                          if (isOpen) {
-                            setOpenModel(null);
-                            return;
-                          }
-                          setOpenModel({ key: cardKey, anchorRect: event.currentTarget.getBoundingClientRect() });
-                        }}
-                        aria-label={`model card ${chipLabel}`}
-                      >
-                        <span className={styles.modelChipDot} style={{ background: dotColor }} />
-                        <span>{chipLabel}</span>
-                      </button>
-                      {isOpen && card && (
-                        <ModelCardPopover
-                          card={card}
-                          anchorRect={openModel?.anchorRect ?? null}
-                          onClose={() => setOpenModel(null)}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -696,11 +911,6 @@ export default function AgentDetailPage({
         <Tooltip content="Total generations recorded for this agent version." placement="top">
           <div>
             <TopStat label="Generations" value={detail.generation_count} loading={false} />
-          </div>
-        </Tooltip>
-        <Tooltip content="Total tool definitions recorded for this agent version." placement="top">
-          <div>
-            <TopStat label="Tools" value={detail.tool_count} loading={false} />
           </div>
         </Tooltip>
         <Tooltip

@@ -80,7 +80,7 @@ describe('AgentRatingPanel', () => {
       />
     );
 
-    expect(screen.getByText('Evaluating...')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: /loading conversation/i })).toBeInTheDocument();
     await waitFor(() => expect(lookupAgentRating).toHaveBeenCalledTimes(1));
 
     await act(async () => {
@@ -105,7 +105,7 @@ describe('AgentRatingPanel', () => {
 
     render(<AgentRatingPanel agentName="assistant" version="sha256:test" dataSource={dataSource} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /rate this agent/i }));
+    fireEvent.click(screen.getByRole('button', { name: /generate analysis/i }));
 
     await waitFor(() => expect(rateAgent).toHaveBeenCalledWith('assistant', 'sha256:test'));
     await waitFor(() => expect(lookupAgentRating).toHaveBeenCalledTimes(1));

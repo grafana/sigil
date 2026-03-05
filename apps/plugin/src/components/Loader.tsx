@@ -3,7 +3,7 @@ import { css, keyframes } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { useStyles2 } from '@grafana/ui';
 
-const TYPEWRITER_LINES = [
+const DEFAULT_TYPEWRITER_LINES = [
   'Crunching telemetry data...',
   'Analyzing AI traces...',
   'Decoding telemetry patterns...',
@@ -33,15 +33,20 @@ const EMPTY_LINE_PAUSE_MS = 260;
 
 type LoaderProps = {
   showText?: boolean;
+  lines?: string[];
 };
 
-export const Loader = ({ showText = true }: LoaderProps) => {
+export const Loader = ({ showText = true, lines }: LoaderProps) => {
   const styles = useStyles2(getStyles);
   const [lineIndex, setLineIndex] = useState(0);
   const [charCount, setCharCount] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
+  const activeLines = useMemo(
+    () => (lines && lines.length > 0 ? lines : DEFAULT_TYPEWRITER_LINES),
+    [lines]
+  );
 
-  const currentLine = useMemo(() => TYPEWRITER_LINES[lineIndex] ?? '', [lineIndex]);
+  const currentLine = useMemo(() => activeLines[lineIndex] ?? '', [activeLines, lineIndex]);
 
   useEffect(() => {
     const atLineEnd = charCount >= currentLine.length;
@@ -65,7 +70,7 @@ export const Loader = ({ showText = true }: LoaderProps) => {
         }
 
         setIsDeleting(false);
-        setLineIndex((index) => (index + 1) % TYPEWRITER_LINES.length);
+        setLineIndex((index) => (index + 1) % activeLines.length);
       },
       atLineEnd && !isDeleting
         ? FULL_LINE_PAUSE_MS
@@ -79,7 +84,7 @@ export const Loader = ({ showText = true }: LoaderProps) => {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [charCount, currentLine.length, isDeleting]);
+  }, [activeLines.length, charCount, currentLine.length, isDeleting]);
 
   return (
     <div className={styles.root}>

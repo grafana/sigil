@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Badge, Button, Spinner, Text, useStyles2, useTheme2 } from '@grafana/ui';
+import { Alert, Badge, Button, Text, useStyles2, useTheme2 } from '@grafana/ui';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../../agents/api';
 import type { AgentRatingResponse, AgentRatingStatus, AgentRatingSuggestion } from '../../agents/types';
+import { Loader } from '../Loader';
 
 export type AgentRatingPanelProps = {
   agentName: string;
@@ -16,6 +17,14 @@ export type AgentRatingPanelProps = {
 
 const severityOrder = ['high', 'medium', 'low'] as const;
 const ratingPollingIntervalMs = 5000;
+const RATING_LOADER_LINES = [
+  'Inspecting system prompt structure...',
+  'Reviewing tool schema clarity...',
+  'Checking prompt-tool alignment...',
+  'Scoring context efficiency and token budget...',
+  'Analyzing instruction quality and constraints...',
+  'Drafting targeted optimization suggestions...',
+];
 
 const getStyles = (theme: GrafanaTheme2) => ({
   panel: css({
@@ -43,10 +52,26 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexDirection: 'column' as const,
     gap: theme.spacing(1),
   }),
+  emptyList: css({
+    margin: 0,
+    paddingLeft: theme.spacing(2),
+    color: theme.colors.text.secondary,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.5),
+  }),
+  emptyListItem: css({
+    lineHeight: 1.45,
+  }),
+  actionArea: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'flex-start',
+    gap: theme.spacing(0.75),
+  }),
   loading: css({
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: theme.spacing(1),
+    display: 'flex',
+    justifyContent: 'center',
   }),
   scoreRow: css({
     display: 'flex',
@@ -110,6 +135,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
   suggestionDescription: css({
     color: theme.colors.text.secondary,
     lineHeight: 1.45,
+  }),
+  actionNote: css({
+    margin: 0,
   }),
 });
 
@@ -380,10 +408,7 @@ export default function AgentRatingPanel({
       <div className={styles.body}>
         {running && (
           <div className={styles.loading}>
-            <Spinner size={16} />
-            <Text variant="bodySmall" color="secondary">
-              Evaluating...
-            </Text>
+            <Loader lines={RATING_LOADER_LINES} />
           </div>
         )}
 
@@ -396,12 +421,20 @@ export default function AgentRatingPanel({
         {!running && !completedResult && (
           <div className={styles.empty}>
             <Text variant="bodySmall" color="secondary">
-              Improve prompt quality and context efficiency.
+              Generate a prompt and context analysis that checks:
             </Text>
-            <div>
-              <Button onClick={() => void runRating()} icon="play" variant="primary">
-                Rate this agent
+            <ul className={styles.emptyList}>
+              <li className={styles.emptyListItem}>Instruction clarity and consistency in the system prompt.</li>
+              <li className={styles.emptyListItem}>Tool schema quality, including parameter naming and intent.</li>
+              <li className={styles.emptyListItem}>Context size efficiency and token budget risk.</li>
+            </ul>
+            <div className={styles.actionArea}>
+              <Button onClick={() => void runRating()} icon="sparkles" variant="primary">
+                Generate analysis
               </Button>
+              <Text variant="bodySmall" color="secondary" className={styles.actionNote}>
+                This can take up to 1 minute.
+              </Text>
             </div>
           </div>
         )}
