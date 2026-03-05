@@ -13,7 +13,7 @@ import {
   breakdownToPromLabel,
   tokenDrilldownTypes,
 } from '../../dashboard/types';
-import { extractResolvePairs, BreakdownStatPanel, ProviderMappingBadgeRow } from './dashboardShared';
+import { extractResolvePairs, BreakdownStatPanel } from './dashboardShared';
 import { TopStat } from '../TopStat';
 import { calculateTotalCost, calculateTotalCostByGroup, calculateCostTimeSeries } from '../../dashboard/cost';
 import {
@@ -553,8 +553,6 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
           invertChange
         />
       </div>
-      <ProviderMappingBadgeRow mapped={resolvedPricing.mapped} />
-
       <div className={styles.gridOuter}>
         <div className={styles.grid}>
           {/* Row 1: Requests & Errors */}

@@ -12,7 +12,7 @@ const whatIsSigilQuestions: string[] = [
   'How does Sigil telemetry differ from standard tracing data?',
 ];
 
-const ASSISTANT_ORIGIN = 'grafana/sigil-plugin/landing1';
+const ASSISTANT_ORIGIN = 'grafana/sigil-plugin/landing';
 const PRODUCT_WALKTHROUGH_VIDEO_ID = 'M7lc1UVf-VE';
 
 function buildFakeDocUrl(pathname: string): string {
@@ -127,7 +127,7 @@ function getStyles(theme: GrafanaTheme2) {
     }),
     sectionBlock: css({
       minWidth: 0,
-      padding: theme.spacing(3),
+      padding: theme.spacing(3, 0),
     }),
     lowerSectionsGrid: css({
       display: 'grid',

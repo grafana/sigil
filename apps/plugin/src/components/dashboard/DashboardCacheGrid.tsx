@@ -17,7 +17,6 @@ import {
   getBreakdownStatPanelStyles,
   stringHash,
   getBarPalette,
-  ProviderMappingBadgeRow,
   formatRelativeTime,
 } from './dashboardShared';
 import { lookupPricing, pricingKey, type PricingMap } from '../../dashboard/cost';
@@ -39,7 +38,7 @@ import { MetricPanel } from './MetricPanel';
 import { useResolvedModelPricing } from './useResolvedModelPricing';
 import { type ConversationsDataSource, defaultConversationsDataSource } from '../../conversation/api';
 import type { ConversationSearchResult } from '../../conversation/types';
-import { PLUGIN_BASE, buildConversationDetailRoute } from '../../constants';
+import { PLUGIN_BASE, buildConversationViewRoute } from '../../constants';
 
 export type DashboardCacheGridProps = {
   dataSource: DashboardDataSource;
@@ -210,8 +209,6 @@ export function DashboardCacheGrid({
           loading={cacheByModelData.loading || resolvedPricing.loading}
         />
       </div>
-      <ProviderMappingBadgeRow mapped={resolvedPricing.mapped} />
-
       <div className={styles.grid}>
         {/* Row 1: Cache hit rate over time + cache hit rate by model */}
         <div className={styles.panelRow}>
@@ -649,7 +646,7 @@ function CacheMissConversationsTable({ conversationsDataSource, timeRange }: Cac
               key={c.conversation_id}
               className={styles.tableRow}
               onClick={() => {
-                window.location.href = `${PLUGIN_BASE}/${buildConversationDetailRoute(c.conversation_id)}`;
+                window.location.href = `${PLUGIN_BASE}/${buildConversationViewRoute(c.conversation_id)}`;
               }}
               role="link"
               aria-label={`view conversation ${c.conversation_id}`}

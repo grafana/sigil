@@ -22,18 +22,19 @@
   "includes": [
     {
       "type": "page",
-      "name": "Dashboard",
-      "path": "/a/grafana-sigil-app/dashboard",
+      "name": "Sigil",
+      "path": "/a/grafana-sigil-app",
       "action": "grafana-sigil-app.data:read",
-      "addToNav": true,
+      "addToNav": false,
       "defaultNav": true
     },
     {
       "type": "page",
-      "name": "Landing 1",
-      "path": "/a/grafana-sigil-app/landing1",
+      "name": "Analytics",
+      "path": "/a/grafana-sigil-app/analytics",
       "action": "grafana-sigil-app.data:read",
-      "addToNav": false
+      "addToNav": true,
+      "defaultNav": false
     },
     {
       "type": "page",

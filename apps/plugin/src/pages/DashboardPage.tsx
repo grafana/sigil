@@ -11,7 +11,6 @@ import { DashboardErrorsGrid } from '../components/dashboard/DashboardErrorsGrid
 import { DashboardConsumptionGrid } from '../components/dashboard/DashboardConsumptionGrid';
 import { DashboardCacheGrid } from '../components/dashboard/DashboardCacheGrid';
 import { useCascadingFilterOptions } from '../hooks/useCascadingFilterOptions';
-import { LandingTopBar } from '../components/landing/LandingTopBar';
 
 type DashboardPageProps = {
   dataSource?: DashboardDataSource;
@@ -41,7 +40,6 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
 
   return (
     <div className={styles.container}>
-      <LandingTopBar assistantOrigin="grafana/sigil-plugin/dashboard" />
       <DashboardFilterBar
         timeRange={timeRange}
         filters={filters}
