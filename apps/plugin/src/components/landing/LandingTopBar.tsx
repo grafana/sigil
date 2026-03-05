@@ -7,51 +7,24 @@ import { useNavigate } from 'react-router-dom';
 import { defaultAgentsDataSource } from '../../agents/api';
 import { defaultConversationsDataSource } from '../../conversation/api';
 import { PLUGIN_BASE, ROUTES } from '../../constants';
-import {
-  getInstrumentationPrompt,
-  getInstrumentationPromptFilename,
-  type InstrumentationPromptIde,
-} from '../../content/cursorInstrumentationPrompt';
+import { getInstrumentationPrompt, getInstrumentationPromptFilename } from '../../content/cursorInstrumentationPrompt';
 import type { DashboardDataSource } from '../../dashboard/api';
 import { computeRateInterval, computeStep, requestsOverTimeQuery } from '../../dashboard/queries';
-import { type DashboardFilters, type PrometheusMatrixResult, type PrometheusQueryResponse, emptyFilters } from '../../dashboard/types';
+import {
+  type DashboardFilters,
+  type PrometheusMatrixResult,
+  type PrometheusQueryResponse,
+  emptyFilters,
+} from '../../dashboard/types';
 import { defaultEvaluationDataSource } from '../../evaluation/api';
 import { useFilterUrlState } from '../../hooks/useFilterUrlState';
-import { ClaudeCodeLogo, CopilotLogo, CursorLogo } from './IdeLogos';
-
-type IdeKey = InstrumentationPromptIde;
-
-type IdeTab = {
-  key: IdeKey;
-  label: string;
-  logo: React.ReactNode;
-  blurb: string;
-  tips: string[];
-};
-
-const ideTabs: IdeTab[] = [
-  {
-    key: 'cursor',
-    label: 'Cursor',
-    logo: <CursorLogo />,
-    blurb: 'Have Cursor help add Sigil instrumentation to your code.',
-    tips: [],
-  },
-  {
-    key: 'claudecode',
-    label: 'Claude Code',
-    logo: <ClaudeCodeLogo />,
-    blurb: 'Have Claude Code help add Sigil instrumentation to your code.',
-    tips: [],
-  },
-  {
-    key: 'copilot',
-    label: 'Copilot',
-    logo: <CopilotLogo />,
-    blurb: 'Have Copilot help add Sigil instrumentation to your code.',
-    tips: [],
-  },
-];
+import {
+  buildCursorPromptDeeplink,
+  downloadTextFile,
+  ideTabs,
+  type IdeKey,
+  renderIdeActionLogo,
+} from './ideInstrumentation';
 
 type HeroStatItem = {
   label: string;
@@ -243,34 +216,6 @@ function buildAssistantUrl(message: string): string {
   return url.toString();
 }
 
-function buildCursorPromptDeeplink(promptText: string): string {
-  const deeplink = new URL('https://cursor.com/link/prompt');
-  deeplink.searchParams.set('text', promptText);
-  return deeplink.toString();
-}
-
-function downloadTextFile(filename: string, content: string): void {
-  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
-  const objectUrl = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = objectUrl;
-  anchor.download = filename;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(objectUrl);
-}
-
-function renderIdeActionLogo(ide: IdeKey): React.ReactNode {
-  if (ide === 'cursor') {
-    return <CursorLogo size={20} withBackground={false} />;
-  }
-  if (ide === 'claudecode') {
-    return <ClaudeCodeLogo size={20} />;
-  }
-  return <CopilotLogo size={20} />;
-}
-
 type LandingTopBarProps = {
   assistantOrigin: string;
   requestsDataSource?: DashboardDataSource;
@@ -379,12 +324,8 @@ export function LandingTopBar({
   const { timeRange } = useFilterUrlState();
   const dashboardFrom = useMemo(() => Math.floor(timeRange.from.valueOf() / 1000), [timeRange]);
   const dashboardTo = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);
-  const from = requestsDataSource
-    ? (requestsFrom ?? dashboardFrom)
-    : (requestsFrom ?? 0);
-  const to = requestsDataSource
-    ? (requestsTo ?? dashboardTo)
-    : (requestsTo ?? 0);
+  const from = requestsDataSource ? (requestsFrom ?? dashboardFrom) : (requestsFrom ?? 0);
+  const to = requestsDataSource ? (requestsTo ?? dashboardTo) : (requestsTo ?? 0);
   const [assistantInput, setAssistantInput] = useState('');
   const [selectedIde, setSelectedIde] = useState<IdeKey>('cursor');
   const [isAgentModalOpen, setIsAgentModalOpen] = useState(false);
@@ -579,12 +520,16 @@ export function LandingTopBar({
     }
     return cached;
   }, [requestsDataSource, requestsFilters, from, to, spineCount]);
-  const [requestSpineHeights, setRequestSpineHeights] = useState<number[] | null>(() => initialRequestSpineCache?.heights ?? null);
-  const [requestSpineValues, setRequestSpineValues] = useState<number[] | null>(() => initialRequestSpineCache?.values ?? null);
+  const [requestSpineHeights, setRequestSpineHeights] = useState<number[] | null>(
+    () => initialRequestSpineCache?.heights ?? null
+  );
+  const [requestSpineValues, setRequestSpineValues] = useState<number[] | null>(
+    () => initialRequestSpineCache?.values ?? null
+  );
   const [disableSpineAnimation, setDisableSpineAnimation] = useState<boolean>(() => initialRequestSpineCache != null);
-  const [requestSpineWaveReason, setRequestSpineWaveReason] = useState<
-    null | 'loading' | 'no-data' | 'error'
-  >(() => (requestsDataSource && to > from && initialRequestSpineCache == null ? 'loading' : null));
+  const [requestSpineWaveReason, setRequestSpineWaveReason] = useState<null | 'loading' | 'no-data' | 'error'>(() =>
+    requestsDataSource && to > from && initialRequestSpineCache == null ? 'loading' : null
+  );
 
   useEffect(() => {
     if (!requestsDataSource || to <= from) {
@@ -693,30 +638,20 @@ export function LandingTopBar({
                 requestSpineValues != null && i < requestSpineValues.length
                   ? formatRequestStat(requestSpineValues[i])
                   : null;
-              const timeStr =
-                stat != null && to > from ? formatBarTime(from, to, i, spineCount) : null;
-              const durationStr =
-                stat != null && to > from ? formatBarDuration(from, to, spineCount) : null;
+              const timeStr = stat != null && to > from ? formatBarTime(from, to, i, spineCount) : null;
+              const durationStr = stat != null && to > from ? formatBarDuration(from, to, spineCount) : null;
               const waveIssueTooltip =
-                requestSpineHeights == null &&
-                requestsDataSource != null &&
-                requestSpineWaveReason === 'error'
+                requestSpineHeights == null && requestsDataSource != null && requestSpineWaveReason === 'error'
                   ? 'Failed to load request data'
-                  : requestSpineHeights == null &&
-                      requestsDataSource != null &&
-                      requestSpineWaveReason === 'no-data'
+                  : requestSpineHeights == null && requestsDataSource != null && requestSpineWaveReason === 'no-data'
                     ? 'No data in this time range'
                     : null;
               const tooltipContent =
                 stat != null ? (
                   <div className={styles.spineTooltipContent}>
                     <div>{stat}</div>
-                    {timeStr != null && (
-                      <div className={styles.spineTooltipTime}>{timeStr}</div>
-                    )}
-                    {durationStr != null && (
-                      <div className={styles.spineTooltipTime}>({durationStr})</div>
-                    )}
+                    {timeStr != null && <div className={styles.spineTooltipTime}>{timeStr}</div>}
+                    {durationStr != null && <div className={styles.spineTooltipTime}>({durationStr})</div>}
                   </div>
                 ) : waveIssueTooltip != null ? (
                   waveIssueTooltip
