@@ -84,4 +84,3 @@ describe('resolveConversationTitleFromTelemetry', () => {
     expect(title).toBeNull();
   });
 });
-

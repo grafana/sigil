@@ -84,4 +84,3 @@ export function resolveConversationTitleFromTelemetry(
 
   return titleFromSpans(spans);
 }
-
