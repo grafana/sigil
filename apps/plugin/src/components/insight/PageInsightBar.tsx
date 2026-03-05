@@ -183,7 +183,7 @@ export function PageInsightBar({
           aria-label={collapsed ? 'Expand insights' : 'Collapse insights'}
         >
           <Icon name="ai" size="md" className={styles.aiIcon} />
-          <span className={styles.headerTitle}>Insight</span>
+          <span className={styles.headerTitle}>AI analysis</span>
           {collapsed && firstBullet && (
             <span className={styles.collapsedPreview}>{formatInlineMarkup(firstBullet)}</span>
           )}
