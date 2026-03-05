@@ -47,6 +47,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         requestsFilters={filters}
         requestsFrom={from}
         requestsTo={to}
+        compact
       />
       <DashboardFilterBar
         timeRange={timeRange}
