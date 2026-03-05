@@ -71,17 +71,53 @@ export function DashboardPerformanceGrid({
   const quantile = latencyQuantileMap[latencyPercentile];
 
   // --- Top stats (P50 / P95 / P99 latency + TTFT P95) ---
-  const latencyP50 = usePrometheusQuery(dataSource, latencyStatQuery(filters, rangeDuration, 'none', 0.5), from, to, 'instant');
-  const latencyP95 = usePrometheusQuery(dataSource, latencyStatQuery(filters, rangeDuration, 'none', 0.95), from, to, 'instant');
-  const latencyP99 = usePrometheusQuery(dataSource, latencyStatQuery(filters, rangeDuration, 'none', 0.99), from, to, 'instant');
-  const ttftP95 = usePrometheusQuery(dataSource, ttftStatQuery(filters, rangeDuration, 'none', 0.95), from, to, 'instant');
+  const latencyP50 = usePrometheusQuery(
+    dataSource,
+    latencyStatQuery(filters, rangeDuration, 'none', 0.5),
+    from,
+    to,
+    'instant'
+  );
+  const latencyP95 = usePrometheusQuery(
+    dataSource,
+    latencyStatQuery(filters, rangeDuration, 'none', 0.95),
+    from,
+    to,
+    'instant'
+  );
+  const latencyP99 = usePrometheusQuery(
+    dataSource,
+    latencyStatQuery(filters, rangeDuration, 'none', 0.99),
+    from,
+    to,
+    'instant'
+  );
+  const ttftP95 = usePrometheusQuery(
+    dataSource,
+    ttftStatQuery(filters, rangeDuration, 'none', 0.95),
+    from,
+    to,
+    'instant'
+  );
 
   // --- Previous period comparison ---
   const hourAgo = 3600;
   const prevFrom = from - hourAgo;
   const prevTo = to - hourAgo;
-  const prevLatencyP95 = usePrometheusQuery(dataSource, latencyStatQuery(filters, rangeDuration, 'none', 0.95), prevFrom, prevTo, 'instant');
-  const prevTtftP95 = usePrometheusQuery(dataSource, ttftStatQuery(filters, rangeDuration, 'none', 0.95), prevFrom, prevTo, 'instant');
+  const prevLatencyP95 = usePrometheusQuery(
+    dataSource,
+    latencyStatQuery(filters, rangeDuration, 'none', 0.95),
+    prevFrom,
+    prevTo,
+    'instant'
+  );
+  const prevTtftP95 = usePrometheusQuery(
+    dataSource,
+    ttftStatQuery(filters, rangeDuration, 'none', 0.95),
+    prevFrom,
+    prevTo,
+    'instant'
+  );
 
   // --- Latency over time ---
   const latencyTimeseries = usePrometheusQuery(

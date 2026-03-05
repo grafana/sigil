@@ -32,11 +32,7 @@ export function DashboardUsageGrid(props: DashboardUsageGridProps) {
       <div className={styles.subViewBar}>
         <RadioButtonGroup options={subViewOptions} value={subView} onChange={setSubView} size="sm" />
       </div>
-      {subView === 'tokens' ? (
-        <DashboardConsumptionGrid {...props} />
-      ) : (
-        <DashboardCacheGrid {...props} />
-      )}
+      {subView === 'tokens' ? <DashboardConsumptionGrid {...props} /> : <DashboardCacheGrid {...props} />}
     </div>
   );
 }
