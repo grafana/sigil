@@ -29,10 +29,6 @@ export const PAGE_TITLES = {
   [ROUTES.Evaluation]: 'Evaluation',
 } as const;
 
-export function buildConversationDetailRoute(conversationID: string): string {
-  return `${ROUTES.Conversations}/${encodeURIComponent(conversationID)}/detail`;
-}
-
 export function buildConversationViewRoute(conversationID: string): string {
   return `${ROUTES.Conversations}/${encodeURIComponent(conversationID)}/view`;
 }
