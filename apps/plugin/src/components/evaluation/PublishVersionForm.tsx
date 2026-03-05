@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
-import { Button, Field, FieldSet, Input, Select, Stack, useStyles2 } from '@grafana/ui';
+import { Button, Field, FieldSet, Input, Select, Stack, Switch, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
 import {
   buildOutputKeyFromForm,
@@ -10,6 +10,7 @@ import {
   type PublishVersionRequest,
   type ScoreType,
 } from '../../evaluation/types';
+import { defaultEvaluationDataSource, type EvaluationDataSource } from '../../evaluation/api';
 import { nextVersion } from '../../evaluation/versionUtils';
 
 export type PublishVersionFormProps = {
@@ -21,6 +22,7 @@ export type PublishVersionFormProps = {
   onSubmit: (req: PublishVersionRequest) => void;
   onCancel: () => void;
   onConfigChange?: (state: EvalFormState) => void;
+  dataSource?: EvaluationDataSource;
 };
 
 const SCORE_TYPE_OPTIONS: Array<SelectableValue<ScoreType>> = [
@@ -32,6 +34,7 @@ const SCORE_TYPE_OPTIONS: Array<SelectableValue<ScoreType>> = [
 const getStyles = (theme: GrafanaTheme2) => ({
   textarea: css({
     width: '100%',
+    minWidth: 180,
     minHeight: 180,
     padding: theme.spacing(1, 2),
     fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace",
@@ -62,11 +65,78 @@ export default function PublishVersionForm({
   onSubmit,
   onCancel,
   onConfigChange,
+  dataSource,
 }: PublishVersionFormProps) {
   const styles = useStyles2(getStyles);
+  const ds = dataSource ?? defaultEvaluationDataSource;
 
-  const [version, setVersion] = useState(() => nextVersion(existingVersions));
-  const [configJson, setConfigJson] = useState(initialConfig ? JSON.stringify(initialConfig, null, 2) : '{}');
+  const [version] = useState(() => nextVersion(existingVersions));
+  const [touched, setTouched] = useState(false);
+
+  // llm_judge config
+  const [provider, setProvider] = useState(() => String(initialConfig?.provider ?? ''));
+  const [model, setModel] = useState(() => String(initialConfig?.model ?? ''));
+  const [providerOptions, setProviderOptions] = useState<Array<SelectableValue<string>>>([]);
+  const [modelOptions, setModelOptions] = useState<Array<SelectableValue<string>>>([]);
+  const [systemPrompt, setSystemPrompt] = useState(() => String(initialConfig?.system_prompt ?? ''));
+  const [userPrompt, setUserPrompt] = useState(() => String(initialConfig?.user_prompt ?? ''));
+  const [maxTokens, setMaxTokens] = useState(() => {
+    const v = initialConfig?.max_tokens;
+    return typeof v === 'number' ? v : 256;
+  });
+  const [temperature, setTemperature] = useState(() => {
+    const v = initialConfig?.temperature;
+    return typeof v === 'number' ? v : 0;
+  });
+
+  // json_schema config
+  const [schemaJson, setSchemaJson] = useState(() => {
+    const s = initialConfig?.schema;
+    return s ? JSON.stringify(s, null, 2) : '{}';
+  });
+
+  // regex config
+  const [pattern, setPattern] = useState(() => String(initialConfig?.pattern ?? ''));
+
+  // heuristic config
+  const [notEmpty, setNotEmpty] = useState(() => Boolean(initialConfig?.not_empty));
+  const [heuristicMinLength, setHeuristicMinLength] = useState<number | ''>(() => {
+    const v = initialConfig?.min_length;
+    return typeof v === 'number' ? v : '';
+  });
+  const [heuristicMaxLength, setHeuristicMaxLength] = useState<number | ''>(() => {
+    const v = initialConfig?.max_length;
+    return typeof v === 'number' ? v : '';
+  });
+
+  // Load judge providers on mount
+  useEffect(() => {
+    if (kind !== 'llm_judge') {
+      return;
+    }
+    void ds
+      .listJudgeProviders()
+      .then((res) => {
+        setProviderOptions(res.providers.map((p) => ({ label: p.name, value: p.id })));
+      })
+      .catch(() => {});
+  }, [ds, kind]);
+
+  // Load models when provider changes
+  useEffect(() => {
+    if (kind !== 'llm_judge' || !provider) {
+      setModelOptions([]);
+      return;
+    }
+    void ds
+      .listJudgeModels(provider)
+      .then((res) => {
+        setModelOptions(res.models.map((m) => ({ label: m.name, value: m.id })));
+      })
+      .catch(() => {});
+  }, [ds, kind, provider]);
+
+  // output key
   const [outputKey, setOutputKey] = useState(initialOutputKeys?.[0]?.key ?? '');
   const [outputType, setOutputType] = useState<ScoreType>(initialOutputKeys?.[0]?.type ?? 'number');
   const [outputDescription, setOutputDescription] = useState(initialOutputKeys?.[0]?.description ?? '');
@@ -81,18 +151,37 @@ export default function PublishVersionForm({
   });
 
   const [changelog, setChangelog] = useState(rollbackVersion ? `Rollback to version ${rollbackVersion}` : '');
-  const [touched, setTouched] = useState(false);
+
+  const buildConfig = (): Record<string, unknown> => {
+    switch (kind) {
+      case 'llm_judge':
+        return {
+          provider: provider || undefined,
+          model: model || undefined,
+          system_prompt: systemPrompt || undefined,
+          user_prompt: userPrompt || undefined,
+          max_tokens: maxTokens,
+          temperature: temperature,
+        };
+      case 'json_schema':
+        return { schema: JSON.parse(schemaJson || '{}') };
+      case 'regex':
+        return { pattern: pattern || '' };
+      case 'heuristic':
+        return {
+          not_empty: notEmpty,
+          min_length: heuristicMinLength === '' ? undefined : heuristicMinLength,
+          max_length: heuristicMaxLength === '' ? undefined : heuristicMaxLength,
+        };
+      default:
+        return {};
+    }
+  };
 
   useEffect(() => {
-    let parsedConfig: Record<string, unknown> = {};
-    try {
-      parsedConfig = JSON.parse(configJson);
-    } catch {
-      /* ignore parse errors */
-    }
     onConfigChange?.({
       kind,
-      config: parsedConfig,
+      config: buildConfig(),
       outputKeys: [
         buildOutputKeyFromForm({
           key: outputKey,
@@ -110,7 +199,17 @@ export default function PublishVersionForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     kind,
-    configJson,
+    provider,
+    model,
+    systemPrompt,
+    userPrompt,
+    maxTokens,
+    temperature,
+    schemaJson,
+    pattern,
+    notEmpty,
+    heuristicMinLength,
+    heuristicMaxLength,
     outputKey,
     outputType,
     outputDescription,
@@ -122,25 +221,21 @@ export default function PublishVersionForm({
     passValue,
   ]);
 
-  const isVersionEmpty = version.trim() === '';
-
-  let configParseError = '';
-  try {
-    JSON.parse(configJson);
-  } catch {
-    configParseError = 'Invalid JSON';
+  let schemaParseError = '';
+  if (kind === 'json_schema') {
+    try {
+      JSON.parse(schemaJson || '{}');
+    } catch {
+      schemaParseError = 'Invalid JSON';
+    }
   }
-  const showVersionError = touched && isVersionEmpty;
-
-  const showConfigError = touched && configParseError !== '';
+  const showSchemaError = touched && schemaParseError !== '';
 
   const handleSubmit = () => {
     setTouched(true);
-    if (isVersionEmpty || configParseError) {
+    if (schemaParseError) {
       return;
     }
-
-    const config: Record<string, unknown> = JSON.parse(configJson);
 
     const outputKeys: EvalOutputKey[] = [
       buildOutputKeyFromForm({
@@ -158,7 +253,7 @@ export default function PublishVersionForm({
 
     onSubmit({
       version: version.trim(),
-      config,
+      config: buildConfig(),
       output_keys: outputKeys,
       changelog: changelog.trim() || undefined,
     });
@@ -168,34 +263,142 @@ export default function PublishVersionForm({
 
   return (
     <FieldSet label={label}>
-      <Field
-        label="Version"
-        description="Version in YYYY-MM-DD or YYYY-MM-DD.N format."
-        required
-        invalid={showVersionError}
-        error={showVersionError ? 'Version is required' : undefined}
-      >
-        <Input
-          value={version}
-          onChange={(e) => setVersion(e.currentTarget.value)}
-          placeholder="2026-03-03"
-          width={20}
-        />
+      <Field label="Version" description="Auto-incremented version.">
+        <Input value={version} readOnly disabled width={20} />
       </Field>
 
-      <Field
-        label="Config"
-        description="Evaluator configuration as JSON."
-        invalid={showConfigError}
-        error={showConfigError ? configParseError : undefined}
-      >
-        <textarea
-          className={styles.textarea}
-          value={configJson}
-          onChange={(e) => setConfigJson(e.currentTarget.value)}
-          rows={8}
-        />
-      </Field>
+      {kind === 'llm_judge' && (
+        <>
+          <Stack direction="row" gap={2}>
+            <Field label="Provider" description="LLM provider for the judge.">
+              <Select<string>
+                options={providerOptions}
+                value={provider || undefined}
+                onChange={(v) => {
+                  setProvider(v?.value ?? '');
+                  setModel('');
+                  setModelOptions([]);
+                }}
+                isClearable
+                placeholder="Default"
+                width={20}
+              />
+            </Field>
+            <Field label="Model" description="Model to use for judging.">
+              <Select<string>
+                options={modelOptions}
+                value={model || undefined}
+                onChange={(v) => setModel(v?.value ?? '')}
+                isClearable
+                allowCustomValue
+                placeholder="Default"
+                width={24}
+              />
+            </Field>
+          </Stack>
+          <Field label="System prompt" description="Optional. Instructions for the judge model.">
+            <textarea
+              className={styles.textarea}
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.currentTarget.value)}
+              placeholder="You are an expert evaluator assessing the helpfulness of AI assistant responses. Consider accuracy, relevance, completeness, and clarity."
+              rows={4}
+            />
+          </Field>
+          <Field
+            label="User prompt"
+            description="Supports {{input}}, {{output}}, {{generation_id}}, {{conversation_id}}."
+          >
+            <textarea
+              className={styles.textarea}
+              value={userPrompt}
+              onChange={(e) => setUserPrompt(e.currentTarget.value)}
+              placeholder={'User input:\n{{input}}\n\nAssistant output:\n{{output}}'}
+              rows={4}
+            />
+          </Field>
+          <Stack direction="row" gap={2}>
+            <Field label="Max tokens">
+              <Input
+                type="number"
+                value={maxTokens}
+                onChange={(e) => setMaxTokens(parseInt(e.currentTarget.value, 10) || 0)}
+                width={12}
+              />
+            </Field>
+            <Field label="Temperature">
+              <Input
+                type="number"
+                value={temperature}
+                onChange={(e) => setTemperature(parseFloat(e.currentTarget.value) || 0)}
+                width={12}
+              />
+            </Field>
+          </Stack>
+        </>
+      )}
+
+      {kind === 'json_schema' && (
+        <Field
+          label="Schema"
+          description="JSON schema for validation."
+          invalid={showSchemaError}
+          error={showSchemaError ? schemaParseError : undefined}
+        >
+          <textarea
+            className={styles.textarea}
+            value={schemaJson}
+            onChange={(e) => setSchemaJson(e.currentTarget.value)}
+            placeholder='{"type": "object", "properties": {...}}'
+            rows={6}
+          />
+        </Field>
+      )}
+
+      {kind === 'regex' && (
+        <Field label="Pattern" description="Regex pattern to match.">
+          <Input
+            value={pattern}
+            onChange={(e) => setPattern(e.currentTarget.value)}
+            placeholder="e.g. ^[A-Z].*"
+            width={40}
+          />
+        </Field>
+      )}
+
+      {kind === 'heuristic' && (
+        <>
+          <Field label="Not empty" description="Require non-empty output.">
+            <Switch value={notEmpty} onChange={(e) => setNotEmpty(e.currentTarget.checked)} />
+          </Field>
+          <Stack direction="row" gap={2}>
+            <Field label="Min length">
+              <Input
+                type="number"
+                value={heuristicMinLength}
+                onChange={(e) => {
+                  const v = e.currentTarget.value;
+                  setHeuristicMinLength(v === '' ? '' : parseInt(v, 10) || 0);
+                }}
+                placeholder="—"
+                width={12}
+              />
+            </Field>
+            <Field label="Max length">
+              <Input
+                type="number"
+                value={heuristicMaxLength}
+                onChange={(e) => {
+                  const v = e.currentTarget.value;
+                  setHeuristicMaxLength(v === '' ? '' : parseInt(v, 10) || 0);
+                }}
+                placeholder="—"
+                width={12}
+              />
+            </Field>
+          </Stack>
+        </>
+      )}
 
       <Field label="Output key" description="Key and type for the evaluation result.">
         <div className={styles.outputKeyRow}>

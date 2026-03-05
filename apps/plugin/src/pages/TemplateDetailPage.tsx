@@ -15,6 +15,7 @@ import {
   type TemplateVersion,
 } from '../evaluation/types';
 import EvalTestPanel from '../components/evaluation/EvalTestPanel';
+import TemplateConfigSummary from '../components/evaluation/TemplateConfigSummary';
 import VersionHistoryTable from '../components/evaluation/VersionHistoryTable';
 import PublishVersionForm from '../components/evaluation/PublishVersionForm';
 import VersionCompare from '../components/evaluation/VersionCompare';
@@ -49,17 +50,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     gap: theme.spacing(1),
-  }),
-  code: css({
-    padding: theme.spacing(1),
-    fontFamily: theme.typography.fontFamilyMonospace,
-    fontSize: theme.typography.size.sm,
-    background: theme.colors.background.canvas,
-    border: `1px solid ${theme.colors.border.weak}`,
-    borderRadius: theme.shape.radius.default,
-    overflow: 'auto',
-    whiteSpace: 'pre' as const,
-    maxHeight: 300,
   }),
   loading: css({
     display: 'flex',
@@ -316,18 +306,11 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
         <Text element="h3" weight="medium">
           Current Version: {template.latest_version}
         </Text>
-        {template.config && (
-          <div className={styles.code}>
-            {JSON.stringify(
-              {
-                config: template.config,
-                ...(template.output_keys?.length ? { output_keys: template.output_keys } : {}),
-              },
-              null,
-              2
-            )}
-          </div>
-        )}
+        <TemplateConfigSummary
+          kind={template.kind}
+          config={template.config ?? {}}
+          outputKeys={template.output_keys ?? []}
+        />
       </div>
 
       {activeForm === 'publish' && (
@@ -347,6 +330,7 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
                 setRollbackOutputKeys(undefined);
               }}
               onConfigChange={setFormState}
+              dataSource={dataSource}
             />
           </div>
           <div className={styles.testColumn}>
