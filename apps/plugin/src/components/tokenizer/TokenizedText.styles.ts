@@ -7,7 +7,6 @@ export function getTransparencyPct(theme: GrafanaTheme2): number {
 
 export const getStyles = (theme: GrafanaTheme2) => ({
   container: css({
-    position: 'relative',
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
     lineHeight: 1.6,
@@ -30,7 +29,7 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     fontSize: theme.typography.bodySmall.fontSize,
   }),
   tip: css({
-    position: 'absolute',
+    position: 'fixed',
     transform: 'translate(-50%, -100%) translateY(-4px)',
     padding: `2px ${theme.spacing(0.5)}`,
     borderRadius: theme.shape.radius.default,
@@ -41,8 +40,8 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.secondary,
     pointerEvents: 'none',
     whiteSpace: 'nowrap',
-    zIndex: 1,
-    boxShadow: theme.shadows.z1,
+    zIndex: theme.zIndex.tooltip,
+    boxShadow: theme.shadows.z2,
   }),
   transparencyPct: getTransparencyPct(theme),
 });

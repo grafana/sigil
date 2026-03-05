@@ -1,4 +1,5 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useStyles2 } from '@grafana/ui';
 import { tokenColor } from './palette';
 import { getStyles } from './TokenizedText.styles';
@@ -13,7 +14,6 @@ export type TokenizedTextProps = {
 
 export function TokenizedText({ text, encode, decode }: TokenizedTextProps) {
   const styles = useStyles2(getStyles);
-  const containerRef = useRef<HTMLSpanElement>(null);
   const [tip, setTip] = useState<{ id: string; x: number; y: number } | null>(null);
 
   const handleMouseOver = useCallback((e: React.MouseEvent) => {
@@ -24,14 +24,10 @@ export function TokenizedText({ text, encode, decode }: TokenizedTextProps) {
       return;
     }
     const rect = target.getBoundingClientRect();
-    const containerRect = containerRef.current?.getBoundingClientRect();
-    if (!containerRect) {
-      return;
-    }
     setTip({
       id: tokenId,
-      x: rect.left - containerRect.left + rect.width / 2,
-      y: rect.top - containerRect.top,
+      x: rect.left + rect.width / 2,
+      y: rect.top,
     });
   }, []);
 
@@ -56,7 +52,6 @@ export function TokenizedText({ text, encode, decode }: TokenizedTextProps) {
 
   return (
     <span
-      ref={containerRef}
       className={styles.container}
       onMouseOver={handleMouseOver}
       onMouseLeave={handleMouseLeave}
@@ -79,11 +74,13 @@ export function TokenizedText({ text, encode, decode }: TokenizedTextProps) {
           {'\u2026'} (truncated at {MAX_TOKENS.toLocaleString()} tokens)
         </span>
       )}
-      {tip && (
-        <span className={styles.tip} style={{ left: tip.x, top: tip.y }}>
-          id: {tip.id}
-        </span>
-      )}
+      {tip &&
+        createPortal(
+          <span className={styles.tip} style={{ left: tip.x, top: tip.y }}>
+            id: {tip.id}
+          </span>,
+          document.body
+        )}
     </span>
   );
 }
