@@ -7,7 +7,7 @@
   "executable": "gpx_sigil_app",
   "info": {
     "keywords": ["app", "ai", "observability", "genai"],
-    "description": "Observe what happened after you cast a prompt spell.",
+    "description": "Modern telemetry stack for AI tech",
     "author": {
       "name": "Grafana"
     },
@@ -42,6 +42,18 @@
       "action": "grafana-sigil-app.data:read",
       "addToNav": true,
       "defaultNav": false
+    },
+    {
+      "type": "page",
+      "name": "Tutorial",
+      "path": "/a/grafana-sigil-app/tutorial",
+      "addToNav": false
+    },
+    {
+      "type": "page",
+      "name": "Tutorial",
+      "path": "/a/grafana-sigil-app/tutorial/:slide",
+      "addToNav": false
     },
     {
       "type": "page",

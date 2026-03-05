@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Icon, IconButton, useStyles2 } from '@grafana/ui';
-import { useInlineAssistant } from '@grafana/assistant';
+import { Icon, IconButton, Tooltip, useStyles2 } from '@grafana/ui';
+import { useAssistant, useInlineAssistant } from '@grafana/assistant';
 import { Loader } from '../Loader';
 import { formatInlineMarkup } from './formatInlineMarkup';
 
@@ -17,6 +17,25 @@ const DEFAULT_SYSTEM_PROMPT =
   'You are a concise observability analyst. Return exactly 2-3 high-confidence findings. Each finding is a single short sentence on its own line prefixed with "- ". Bold key numbers/metrics with **bold**. No headers, no paragraphs, no extra text. Keep each bullet under 20 words. Focus on anomalies, changes, or notable patterns only.';
 
 const STORAGE_KEY = 'sigil.insightBar.collapsed';
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+const AGE_TICK_MS = 60 * 1000;
+const CACHE_KEY_PREFIX = 'sigil.page-insight-bar.v1';
+const GENERATE_LOCK_MS = 30 * 1000;
+const inFlightGenerateByScopeKey = new Map<string, number>();
+
+/** Clears the generate lock map. Used by tests to ensure isolation. */
+export function clearGenerateLockForTests(): void {
+  inFlightGenerateByScopeKey.clear();
+}
+
+type CachedInsight = {
+  generatedAt: number;
+  text: string;
+};
+
+type LiveInsight = CachedInsight & {
+  cacheKey: string;
+};
 
 function readCollapsed(): boolean {
   try {
@@ -42,11 +61,12 @@ export function PageInsightBar({
   systemPrompt = DEFAULT_SYSTEM_PROMPT,
 }: PageInsightBarProps) {
   const styles = useStyles2(getStyles);
+  const assistant = useAssistant();
   const gen = useInlineAssistant();
-  const [text, setText] = useState('');
+  const [liveInsight, setLiveInsight] = useState<LiveInsight | null>(null);
+  const [ageTick, setAgeTick] = useState(() => Date.now());
   const [collapsed, setCollapsed] = useState(readCollapsed);
-  const hasAutoRun = useRef(false);
-  const lastDataContextRef = useRef<string | null>(null);
+  const lastRequestKeyRef = useRef<string | null>(null);
 
   const toggleCollapsed = useCallback(() => {
     setCollapsed((prev) => {
@@ -61,50 +81,129 @@ export function PageInsightBar({
     latestRef.current = { prompt, origin, systemPrompt, dataContext, gen };
   });
 
-  const runGenerate = useCallback((ctx: string) => {
+  const runGenerate = useCallback((ctx: string, cacheKey: string, fallbackCacheKey: string) => {
+    const lockKey = fallbackCacheKey;
+    const now = Date.now();
+    const lastStartedAt = inFlightGenerateByScopeKey.get(lockKey);
+    if (lastStartedAt && now - lastStartedAt < GENERATE_LOCK_MS) {
+      return;
+    }
+    inFlightGenerateByScopeKey.set(lockKey, now);
+
     const { prompt: p, origin: o, systemPrompt: sp, gen: g } = latestRef.current;
     const fullPrompt = `${p}\n\nData context:\n${ctx}`;
     g.generate({
       prompt: fullPrompt,
       origin: o,
       systemPrompt: sp,
-      onComplete: (result: string) => setText(result),
-      onError: (err: Error) => console.error('Insight generation failed:', err),
+      onComplete: (result: string) => {
+        inFlightGenerateByScopeKey.delete(lockKey);
+        const generatedTs = Date.now();
+        const cached: CachedInsight = { generatedAt: generatedTs, text: result };
+        setLiveInsight({ ...cached, cacheKey });
+        writeCachedInsight(cacheKey, cached);
+        writeCachedInsight(fallbackCacheKey, cached);
+      },
+      onError: (err: Error) => {
+        inFlightGenerateByScopeKey.delete(lockKey);
+        console.error('Insight generation failed:', err);
+      },
     });
   }, []);
 
+  const cacheKey = dataContext ? buildCacheKey(prompt, origin, systemPrompt, dataContext) : null;
+  const fallbackCacheKey = dataContext ? buildFallbackCacheKey(prompt, origin, systemPrompt) : null;
+  const exactCachedInsight = cacheKey ? readCachedInsight(cacheKey) : null;
+  const fallbackCachedInsight = fallbackCacheKey ? readCachedInsight(fallbackCacheKey) : null;
+  const newestCachedInsight = pickNewestCachedInsight(exactCachedInsight, fallbackCachedInsight);
+
   useEffect(() => {
-    if (collapsed) {
+    if (!dataContext || gen.isGenerating) {
       return;
     }
+    if (!cacheKey || !fallbackCacheKey) {
+      return;
+    }
+    if (lastRequestKeyRef.current === cacheKey) {
+      return;
+    }
+    const newestCacheAgeMs = newestCachedInsight
+      ? Date.now() - newestCachedInsight.generatedAt
+      : Number.POSITIVE_INFINITY;
+    lastRequestKeyRef.current = cacheKey;
+    if (newestCacheAgeMs >= REFRESH_INTERVAL_MS) {
+      runGenerate(dataContext, cacheKey, fallbackCacheKey);
+    }
+  }, [cacheKey, dataContext, fallbackCacheKey, gen.isGenerating, newestCachedInsight, runGenerate]);
+
+  useEffect(() => {
     if (!dataContext) {
-      lastDataContextRef.current = null;
       return;
     }
-    if (gen.isGenerating) {
-      return;
-    }
-    if (lastDataContextRef.current === dataContext) {
-      return;
-    }
-    lastDataContextRef.current = dataContext;
-    if (!hasAutoRun.current) {
-      hasAutoRun.current = true;
-      runGenerate(dataContext);
-    }
-  }, [collapsed, dataContext, gen.isGenerating, runGenerate]);
+    const intervalId = window.setInterval(() => {
+      if (latestRef.current.gen.isGenerating) {
+        return;
+      }
+      const cacheKey = buildCacheKey(prompt, origin, systemPrompt, dataContext);
+      const fallbackCacheKey = buildFallbackCacheKey(prompt, origin, systemPrompt);
+      const exactCached = readCachedInsight(cacheKey);
+      const fallbackCached = readCachedInsight(fallbackCacheKey);
+      const latestCached = pickNewestCachedInsight(exactCached, fallbackCached);
+      const cacheAgeMs = latestCached ? Date.now() - latestCached.generatedAt : Number.POSITIVE_INFINITY;
+      if (cacheAgeMs >= REFRESH_INTERVAL_MS) {
+        runGenerate(dataContext, cacheKey, fallbackCacheKey);
+      }
+    }, REFRESH_INTERVAL_MS);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [dataContext, origin, prompt, runGenerate, systemPrompt]);
 
   const doRegenerate = useCallback(() => {
-    const { dataContext: ctx, gen: g } = latestRef.current;
+    const { dataContext: ctx, gen: g, prompt: p, origin: o, systemPrompt: sp } = latestRef.current;
     if (ctx && !g.isGenerating) {
-      setText('');
-      runGenerate(ctx);
+      const cacheKey = buildCacheKey(p, o, sp, ctx);
+      const fallbackCacheKey = buildFallbackCacheKey(p, o, sp);
+      runGenerate(ctx, cacheKey, fallbackCacheKey);
     }
   }, [runGenerate]);
 
-  const displayText = gen.isGenerating ? gen.content : text;
-  const initialWaiting = !dataContext && !text && !gen.isGenerating;
-  const hasResult = Boolean(text) || gen.isGenerating;
+  const explainInsight = useCallback(
+    (insight: string) => {
+      const question = buildExplainPrompt(insight);
+      if (assistant.openAssistant) {
+        assistant.openAssistant({
+          origin,
+          prompt: question,
+          autoSend: true,
+        });
+        return;
+      }
+      window.location.href = buildAssistantUrl(question);
+    },
+    [assistant, origin]
+  );
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setAgeTick(Date.now());
+    }, AGE_TICK_MS);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  const cachedInsight = newestCachedInsight;
+  const liveForCurrentContext = cacheKey && liveInsight?.cacheKey === cacheKey ? liveInsight : null;
+  const insight = liveForCurrentContext ?? cachedInsight;
+  const effectiveText = dataContext ? (insight?.text ?? '') : '';
+  const hasStreamingText = gen.content.trim().length > 0;
+  const displayText = gen.isGenerating && hasStreamingText ? gen.content : effectiveText;
+  const initialWaiting = !dataContext && !gen.isGenerating;
+  const hasResult = Boolean(effectiveText) || gen.isGenerating;
+  const showLoader = initialWaiting || gen.isGenerating;
+  const loaderTooltip = initialWaiting ? 'Waiting for data' : 'Generating insight...';
+  const insightAgeLabel = dataContext && insight ? formatAgeShort(Math.max(ageTick - insight.generatedAt, 0)) : null;
 
   const bullets = useMemo(() => {
     if (!displayText) {
@@ -129,7 +228,7 @@ export function PageInsightBar({
           aria-label={collapsed ? 'Expand insights' : 'Collapse insights'}
         >
           <Icon name="ai" size="md" className={styles.aiIcon} />
-          <span className={styles.headerTitle}>Insight</span>
+          <span className={styles.headerTitle}>AI analysis</span>
           {collapsed && firstBullet && (
             <span className={styles.collapsedPreview}>{formatInlineMarkup(firstBullet)}</span>
           )}
@@ -137,31 +236,41 @@ export function PageInsightBar({
         </button>
 
         <div className={styles.actions}>
-          {gen.isGenerating && <Loader showText={false} />}
+          {showLoader && (
+            <Tooltip content={loaderTooltip} placement="top">
+              <span className={styles.loaderTooltipTarget}>
+                <Loader showText={false} />
+              </span>
+            </Tooltip>
+          )}
           {!gen.isGenerating && hasResult && (
-            <IconButton
-              name="sync"
-              aria-label="Regenerate insight"
-              tooltip="Regenerate"
-              size="sm"
-              onClick={doRegenerate}
-            />
+            <>
+              {insightAgeLabel && <span className={styles.generatedAtText}>{insightAgeLabel}</span>}
+              <IconButton
+                name="sync"
+                aria-label="Regenerate insight"
+                tooltip="Regenerate"
+                size="sm"
+                onClick={doRegenerate}
+              />
+            </>
           )}
         </div>
       </div>
 
       {!collapsed && (
         <div className={styles.body}>
-          {initialWaiting ? (
-            <span className={styles.placeholder}>Waiting for data...</span>
-          ) : gen.isGenerating && bullets.length === 0 ? (
-            <span className={styles.placeholder}>Generating insight...</span>
-          ) : bullets.length > 0 ? (
+          {initialWaiting || (gen.isGenerating && bullets.length === 0) ? null : bullets.length > 0 ? (
             <ul className={styles.bulletList}>
               {bullets.map((bullet, i) => (
                 <li key={i} className={styles.bulletItem}>
                   <span className={styles.bulletArrow}>→</span>
-                  <span className={styles.bulletText}>{formatInlineMarkup(bullet)}</span>
+                  <div className={styles.bulletContent}>
+                    <span className={styles.bulletText}>{formatInlineMarkup(bullet)}</span>
+                    <button type="button" className={styles.explainLink} onClick={() => explainInsight(bullet)}>
+                      Explain
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -174,8 +283,97 @@ export function PageInsightBar({
   );
 }
 
-const EXPANDED_HEIGHT = 132;
 const COLLAPSED_HEIGHT = 40;
+
+function buildCacheKey(prompt: string, origin: string, systemPrompt: string, dataContext: string): string {
+  const keySource = `${origin}|${prompt}|${systemPrompt}|${dataContext}`;
+  return `${CACHE_KEY_PREFIX}:${stableHash(keySource)}`;
+}
+
+function buildFallbackCacheKey(prompt: string, origin: string, systemPrompt: string): string {
+  const keySource = `${origin}|${prompt}|${systemPrompt}`;
+  return `${CACHE_KEY_PREFIX}:fallback:${stableHash(keySource)}`;
+}
+
+function readCachedInsight(cacheKey: string): CachedInsight | null {
+  try {
+    const raw = window.localStorage.getItem(cacheKey);
+    if (!raw) {
+      return null;
+    }
+    const parsed: unknown = JSON.parse(raw);
+    if (!isCachedInsight(parsed)) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedInsight(cacheKey: string, value: CachedInsight): void {
+  try {
+    window.localStorage.setItem(cacheKey, JSON.stringify(value));
+  } catch {
+    // Ignore quota and storage availability failures.
+  }
+}
+
+function isCachedInsight(value: unknown): value is CachedInsight {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const candidate = value as Partial<CachedInsight>;
+  return typeof candidate.generatedAt === 'number' && typeof candidate.text === 'string';
+}
+
+function pickNewestCachedInsight(
+  exactCached: CachedInsight | null,
+  fallbackCached: CachedInsight | null
+): CachedInsight | null {
+  if (!exactCached) {
+    return fallbackCached;
+  }
+  if (!fallbackCached) {
+    return exactCached;
+  }
+  return exactCached.generatedAt >= fallbackCached.generatedAt ? exactCached : fallbackCached;
+}
+
+function stableHash(input: string): string {
+  let hash = 2166136261 >>> 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function formatAgeShort(ageMs: number): string {
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (ageMs < hour) {
+    return `${Math.max(1, Math.floor(ageMs / minute))}m`;
+  }
+  if (ageMs < day) {
+    return `${Math.floor(ageMs / hour)}h`;
+  }
+  return `${Math.floor(ageMs / day)}d`;
+}
+
+function buildExplainPrompt(insight: string): string {
+  return `Explain this insight briefly in plain language for a user:\n- ${insight}\n\nKeep it concise and specific. Include what it likely means and why it matters. If confidence is limited, add one optional follow-up investigation step.`;
+}
+
+function buildAssistantUrl(message: string): string {
+  const url = new URL('/a/grafana-assistant-app', window.location.origin);
+  url.searchParams.set('command', 'useAssistant');
+  if (message.trim().length > 0) {
+    url.searchParams.set('text', message.trim());
+  }
+  return url.toString();
+}
 
 function getStyles(theme: GrafanaTheme2) {
   const barBase = {
@@ -190,7 +388,8 @@ function getStyles(theme: GrafanaTheme2) {
   return {
     bar: css({
       ...barBase,
-      height: EXPANDED_HEIGHT,
+      minHeight: COLLAPSED_HEIGHT,
+      height: 'auto',
     }),
     barCollapsed: css({
       ...barBase,
@@ -254,10 +453,19 @@ function getStyles(theme: GrafanaTheme2) {
       gap: theme.spacing(0.5),
       flexShrink: 0,
     }),
+    loaderTooltipTarget: css({
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    }),
+    generatedAtText: css({
+      color: theme.colors.text.secondary,
+      fontSize: theme.typography.bodySmall.fontSize,
+      lineHeight: 1,
+    }),
     body: css({
       padding: theme.spacing(0, 1.5, 1.5),
-      height: EXPANDED_HEIGHT - COLLAPSED_HEIGHT,
-      overflow: 'hidden',
+      overflow: 'visible',
     }),
     placeholder: css({
       color: theme.colors.text.secondary,
@@ -278,11 +486,15 @@ function getStyles(theme: GrafanaTheme2) {
       gap: theme.spacing(1),
       padding: theme.spacing(1.25),
       borderRadius: theme.shape.radius.default,
-      background: theme.colors.background.primary,
-      border: `1px solid ${theme.colors.border.weak}`,
       overflow: 'hidden',
       flex: '1 1 0%',
       minWidth: 0,
+    }),
+    bulletContent: css({
+      display: 'flex',
+      flexDirection: 'column',
+      minWidth: 0,
+      gap: theme.spacing(0.5),
     }),
     bulletArrow: css({
       flexShrink: 0,
@@ -308,6 +520,24 @@ function getStyles(theme: GrafanaTheme2) {
         borderRadius: theme.shape.radius.default,
         background: theme.colors.background.canvas,
         fontFamily: theme.typography.fontFamilyMonospace,
+      },
+    }),
+    explainLink: css({
+      alignSelf: 'flex-start',
+      border: 'none',
+      background: 'transparent',
+      color: theme.colors.primary.text,
+      padding: 0,
+      cursor: 'pointer',
+      fontSize: theme.typography.bodySmall.fontSize,
+      lineHeight: 1.2,
+      textDecoration: 'underline',
+      '&:hover': {
+        color: theme.colors.text.primary,
+      },
+      '&:focus-visible': {
+        outline: `2px solid ${theme.colors.primary.border}`,
+        outlineOffset: theme.spacing(0.25),
       },
     }),
   };

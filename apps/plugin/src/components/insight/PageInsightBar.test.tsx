@@ -1,12 +1,16 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { PageInsightBar } from './PageInsightBar';
+import { PageInsightBar, clearGenerateLockForTests } from './PageInsightBar';
 
 const mockGenerate = jest.fn();
+const mockOpenAssistant = jest.fn();
 let mockIsGenerating = false;
 let mockContent = '';
 
 jest.mock('@grafana/assistant', () => ({
+  useAssistant: () => ({
+    openAssistant: mockOpenAssistant,
+  }),
   useInlineAssistant: () => ({
     isGenerating: mockIsGenerating,
     content: mockContent,
@@ -17,9 +21,11 @@ jest.mock('@grafana/assistant', () => ({
 describe('PageInsightBar', () => {
   beforeEach(() => {
     mockGenerate.mockReset();
+    mockOpenAssistant.mockReset();
     mockIsGenerating = false;
     mockContent = '';
-    localStorage.removeItem('sigil.insightBar.collapsed');
+    localStorage.clear();
+    clearGenerateLockForTests();
   });
 
   it('defaults to collapsed when no localStorage value', () => {
@@ -31,7 +37,7 @@ describe('PageInsightBar', () => {
   it('renders waiting placeholder when expanded with no data', () => {
     localStorage.setItem('sigil.insightBar.collapsed', '0');
     render(<PageInsightBar prompt="Analyze" origin="test" dataContext={null} />);
-    expect(screen.getByText('Waiting for data...')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toBeInTheDocument();
   });
 
   it('auto-generates on first render when expanded and data context is provided', () => {
@@ -46,12 +52,22 @@ describe('PageInsightBar', () => {
     );
   });
 
+  it('does not auto-generate again when data context changes while a scoped request lock is active', () => {
+    const { rerender } = render(
+      <PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="initial data" />
+    );
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+
+    rerender(<PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="updated data" />);
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+  });
+
   it('shows placeholder while generating with no content', () => {
     localStorage.setItem('sigil.insightBar.collapsed', '0');
     mockIsGenerating = true;
     mockContent = '';
     render(<PageInsightBar prompt="Analyze" origin="test" dataContext="data" />);
-    expect(screen.getByText('Generating insight...')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toBeInTheDocument();
   });
 
   it('renders collapse/expand toggle', () => {
@@ -106,6 +122,63 @@ describe('PageInsightBar', () => {
     localStorage.setItem('sigil.insightBar.collapsed', '1');
     render(<PageInsightBar prompt="Analyze" origin="test" dataContext="data" />);
     expect(screen.getByRole('button', { name: 'Expand insights' })).toBeInTheDocument();
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not regenerate when data context changes with fresh fallback cache', () => {
+    mockGenerate.mockImplementation(({ onComplete }: { onComplete: (r: string) => void }) => {
+      onComplete('- Fresh insight');
+    });
+    const { rerender } = render(
+      <PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="initial data" />
+    );
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+
+    rerender(<PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="updated data" />);
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows fallback insight and skips regenerating after data context change with fresh cache', () => {
+    mockGenerate.mockImplementation(({ onComplete }: { onComplete: (r: string) => void }) => {
+      onComplete('- Prior context insight');
+    });
+    const { rerender } = render(
+      <PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="initial data" />
+    );
+    expect(screen.getByText(/Prior context insight/)).toBeInTheDocument();
+
+    mockGenerate.mockReset();
+    mockGenerate.mockImplementation(jest.fn());
+
+    rerender(<PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="updated data" />);
+
     expect(mockGenerate).not.toHaveBeenCalled();
+    expect(screen.getByText(/Prior context insight/)).toBeInTheDocument();
+  });
+
+  it('regenerates when prompt changes with same data context', () => {
+    const { rerender } = render(<PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="same data" />);
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+
+    rerender(<PageInsightBar prompt="Analyze differently" origin="test-origin" dataContext="same data" />);
+    expect(mockGenerate).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not regenerate on reload when fallback cache is fresher than 5m', () => {
+    mockGenerate.mockImplementation(({ onComplete }: { onComplete: (r: string) => void }) => {
+      onComplete('- Fresh insight');
+    });
+
+    const { unmount } = render(
+      <PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="initial data" />
+    );
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+
+    unmount();
+    mockGenerate.mockReset();
+
+    render(<PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="updated data" />);
+    expect(mockGenerate).not.toHaveBeenCalled();
+    expect(screen.getByText(/Fresh insight/)).toBeInTheDocument();
   });
 });
