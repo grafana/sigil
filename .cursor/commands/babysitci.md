@@ -3,7 +3,7 @@ Babysit CI for the current branch PR until all checks pass.
 Use `gh` for all GitHub interactions.
 
 Workflow:
-1. Run local-first quality gates before touching CI:
+1. Run local-first quality gates before touching CI: (make this targetted to the changed files if possible)
    - `mise run format`
    - `mise run lint`
    - `mise run check`
