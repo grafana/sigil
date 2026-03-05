@@ -34,6 +34,7 @@ Evaluation checklist:
    - Tool names are specific and distinguishable
    - Tool descriptions are concrete and operational
    - Input schemas are clear and not overly complex
+   - Deferred tools are clearly identified and applied intentionally
    - Tool count is reasonable for reliability
    - Overlapping tools are minimized
    - High-risk tools should imply stronger guardrails
@@ -72,6 +73,7 @@ func buildUserPrompt(agent Agent) string {
 	maxToolName := ""
 	maxToolTokens := 0
 	toolsWithManyParams := 0
+	deferredToolCount := 0
 	for _, tool := range agent.Tools {
 		if tool.TokenEstimate > maxToolTokens {
 			maxToolTokens = tool.TokenEstimate
@@ -79,6 +81,9 @@ func buildUserPrompt(agent Agent) string {
 		}
 		if estimateParameterCount(tool.InputSchemaJSON) > 10 {
 			toolsWithManyParams++
+		}
+		if tool.Deferred {
+			deferredToolCount++
 		}
 	}
 
@@ -106,6 +111,7 @@ func buildUserPrompt(agent Agent) string {
 	fmt.Fprintf(&builder, "    <max_tool_tokens>%d</max_tool_tokens>\n", maxToolTokens)
 	fmt.Fprintf(&builder, "    <max_tool_name>%s</max_tool_name>\n", escapeXML(maxToolName))
 	fmt.Fprintf(&builder, "    <tools_with_more_than_10_params>%d</tools_with_more_than_10_params>\n", toolsWithManyParams)
+	fmt.Fprintf(&builder, "    <deferred_tool_count>%d</deferred_tool_count>\n", deferredToolCount)
 	builder.WriteString("  </derived_metrics>\n")
 	builder.WriteString("  <system_prompt>\n")
 	builder.WriteString(escapeXML(agent.SystemPrompt))
@@ -117,12 +123,13 @@ func buildUserPrompt(agent Agent) string {
 		for index, tool := range agent.Tools {
 			fmt.Fprintf(
 				&builder,
-				"    <tool index=\"%d\" name=\"%s\" type=\"%s\" token_estimate=\"%d\" parameter_count=\"%d\">\n",
+				"    <tool index=\"%d\" name=\"%s\" type=\"%s\" token_estimate=\"%d\" parameter_count=\"%d\" deferred=\"%t\">\n",
 				index+1,
 				escapeXML(tool.Name),
 				escapeXML(tool.Type),
 				tool.TokenEstimate,
 				estimateParameterCount(tool.InputSchemaJSON),
+				tool.Deferred,
 			)
 			fmt.Fprintf(&builder, "      <description>%s</description>\n", escapeXML(tool.Description))
 			fmt.Fprintf(&builder, "      <input_schema_json>%s</input_schema_json>\n", escapeXML(tool.InputSchemaJSON))

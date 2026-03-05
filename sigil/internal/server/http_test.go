@@ -828,6 +828,46 @@ func TestLookupAgentRatingEndpointReturnsNotFoundWhenNoStoredRating(t *testing.T
 	}
 }
 
+func TestMapAgentDetailToRatingAgentPreservesDeferredTools(t *testing.T) {
+	mapped := mapAgentDetailToRatingAgent(query.AgentDetail{
+		AgentName:    "assistant",
+		SystemPrompt: "You are concise.",
+		TokenEstimate: query.AgentTokenEstimate{
+			SystemPrompt: 5,
+			ToolsTotal:   7,
+			Total:        12,
+		},
+		Tools: []query.AgentTool{
+			{
+				Name:            "async_lookup",
+				Description:     "Deferred tool",
+				Type:            "function",
+				InputSchemaJSON: `{"type":"object"}`,
+				Deferred:        true,
+				TokenEstimate:   3,
+			},
+			{
+				Name:            "sync_lookup",
+				Description:     "Immediate tool",
+				Type:            "function",
+				InputSchemaJSON: `{"type":"object"}`,
+				Deferred:        false,
+				TokenEstimate:   4,
+			},
+		},
+	})
+
+	if len(mapped.Tools) != 2 {
+		t.Fatalf("expected two tools, got %d", len(mapped.Tools))
+	}
+	if !mapped.Tools[0].Deferred {
+		t.Fatalf("expected first tool to remain deferred")
+	}
+	if mapped.Tools[1].Deferred {
+		t.Fatalf("expected second tool to remain non-deferred")
+	}
+}
+
 func TestProtectedRoutesRequireTenantHeaderWhenAuthEnabled(t *testing.T) {
 	mux := http.NewServeMux()
 	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: true, FakeTenantID: "fake"})

@@ -32,6 +32,7 @@ type Tool struct {
 	Description     string
 	Type            string
 	InputSchemaJSON string
+	Deferred        bool
 	TokenEstimate   int
 }
 

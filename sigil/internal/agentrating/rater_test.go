@@ -52,6 +52,7 @@ func TestRaterRateWithModel_TableDriven(t *testing.T) {
 				Description:     "Search incidents by service and severity.",
 				Type:            "function",
 				InputSchemaJSON: `{"type":"object","properties":{"service":{"type":"string"},"severity":{"type":"string"}},"required":["service"]}`,
+				Deferred:        true,
 				TokenEstimate:   150,
 			},
 		},
@@ -193,6 +194,9 @@ func TestRaterRateWithModel_TableDriven(t *testing.T) {
 			if testCase.expectNoTools && !strings.Contains(client.lastReq.UserPrompt, "<tool name=\"none\" />") {
 				t.Fatalf("expected no-tools marker in user prompt")
 			}
+			if !testCase.expectNoTools && !strings.Contains(client.lastReq.UserPrompt, `deferred="true"`) {
+				t.Fatalf("expected tool deferred metadata in user prompt")
+			}
 			if testCase.expectWarning && strings.TrimSpace(rating.TokenWarning) == "" {
 				t.Fatalf("expected token warning for high token budget")
 			}
@@ -200,6 +204,46 @@ func TestRaterRateWithModel_TableDriven(t *testing.T) {
 				t.Fatalf("did not expect token warning, got=%q", rating.TokenWarning)
 			}
 		})
+	}
+}
+
+func TestBuildUserPrompt_IncludesDeferredToolMetadata(t *testing.T) {
+	prompt := buildUserPrompt(Agent{
+		Name:         "deferred-tool-agent",
+		SystemPrompt: "Use tools carefully.",
+		Tools: []Tool{
+			{
+				Name:            "async_lookup",
+				Description:     "Deferred external lookup",
+				Type:            "function",
+				InputSchemaJSON: `{"type":"object","properties":{"query":{"type":"string"}}}`,
+				Deferred:        true,
+				TokenEstimate:   12,
+			},
+			{
+				Name:            "sync_lookup",
+				Description:     "Immediate local lookup",
+				Type:            "function",
+				InputSchemaJSON: `{"type":"object","properties":{"query":{"type":"string"}}}`,
+				Deferred:        false,
+				TokenEstimate:   8,
+			},
+		},
+		TokenEstimate: TokenEstimate{
+			SystemPrompt: 10,
+			ToolsTotal:   20,
+			Total:        30,
+		},
+	})
+
+	if !strings.Contains(prompt, "<deferred_tool_count>1</deferred_tool_count>") {
+		t.Fatalf("expected deferred tool count in prompt, got %q", prompt)
+	}
+	if strings.Count(prompt, `deferred="true"`) != 1 {
+		t.Fatalf("expected exactly one deferred=true marker, got prompt %q", prompt)
+	}
+	if strings.Count(prompt, `deferred="false"`) != 1 {
+		t.Fatalf("expected exactly one deferred=false marker, got prompt %q", prompt)
 	}
 }
 

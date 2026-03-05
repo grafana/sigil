@@ -144,6 +144,26 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.primary,
     lineHeight: 1.4,
   }),
+  toolMeta: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    flexShrink: 0,
+  }),
+  toolDeferredBadge: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: `0 ${theme.spacing(0.5)}`,
+    borderRadius: theme.shape.radius.pill,
+    border: `1px solid ${theme.colors.warning.border}`,
+    background: theme.colors.warning.transparent,
+    color: theme.colors.warning.text,
+    fontSize: 10,
+    fontWeight: theme.typography.fontWeightMedium,
+    letterSpacing: '0.03em',
+    textTransform: 'uppercase' as const,
+    lineHeight: 1.6,
+  }),
   toolTokens: css({
     flexShrink: 0,
     fontSize: 11,
@@ -182,6 +202,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     alignItems: 'center',
     gap: theme.spacing(0.5),
+    fontSize: theme.typography.bodySmall.fontSize,
+    color: theme.colors.text.secondary,
+  }),
+  detailExecutionMode: css({
     fontSize: theme.typography.bodySmall.fontSize,
     color: theme.colors.text.secondary,
   }),
@@ -516,7 +540,10 @@ export default function ToolsPanel({
                 aria-pressed={originalIndex === selectedIndex}
               >
                 <span className={styles.toolName}>{tool.name}</span>
-                <span className={styles.toolTokens}>{tool.token_estimate.toLocaleString()} tok</span>
+                <span className={styles.toolMeta}>
+                  {tool.deferred && <span className={styles.toolDeferredBadge}>Deferred</span>}
+                  <span className={styles.toolTokens}>{tool.token_estimate.toLocaleString()} tok</span>
+                </span>
               </button>
             ))}
             {filteredTools.length === 0 && (
@@ -543,6 +570,9 @@ export default function ToolsPanel({
                     <span>{selected.token_estimate.toLocaleString()} tokens</span>
                   </Stack>
                 </Tooltip>
+              </div>
+              <div className={styles.detailExecutionMode}>
+                Execution mode: {selected.deferred ? 'Deferred' : 'Immediate'}
               </div>
             </div>
 

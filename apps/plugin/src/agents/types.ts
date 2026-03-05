@@ -27,6 +27,7 @@ export type AgentTool = {
   description: string;
   type: string;
   input_schema_json: string;
+  deferred?: boolean;
   token_estimate: number;
 };
 

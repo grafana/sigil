@@ -25,6 +25,7 @@ const mockDataSource: AgentsDataSource = {
         type: 'function',
         input_schema_json:
           '{"type":"object","properties":{"service":{"type":"string","description":"Service name to filter by"},"severity":{"type":"string","enum":["critical","high","medium","low"]},"limit":{"type":"number","default":10}},"required":["service"]}',
+        deferred: true,
         token_estimate: 128,
       },
       {
@@ -32,6 +33,7 @@ const mockDataSource: AgentsDataSource = {
         description: 'Fetch runbook markdown by key',
         type: 'function',
         input_schema_json: '{"type":"object","properties":{"key":{"type":"string"}},"required":["key"]}',
+        deferred: false,
         token_estimate: 32,
       },
       {
