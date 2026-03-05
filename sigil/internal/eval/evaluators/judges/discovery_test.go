@@ -2,6 +2,7 @@ package judges
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -9,6 +10,8 @@ import (
 )
 
 func TestDiscoverFromEnvRequiresEnableFlags(t *testing.T) {
+	isolateDiscoveryEnv(t)
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
 		case "/v1/models":
@@ -32,6 +35,8 @@ func TestDiscoverFromEnvRequiresEnableFlags(t *testing.T) {
 }
 
 func TestDiscoverFromEnvRegistersEnabledProviders(t *testing.T) {
+	isolateDiscoveryEnv(t)
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
 		case "/v1/models":
@@ -74,6 +79,8 @@ func TestDiscoverFromEnvRegistersEnabledProviders(t *testing.T) {
 }
 
 func TestDiscoverFromEnvSkipsAnthropicVertexOnInvalidCredentials(t *testing.T) {
+	isolateDiscoveryEnv(t)
+
 	t.Setenv("SIGIL_EVAL_ANTHROPIC_VERTEX_ENABLED", "true")
 	t.Setenv("SIGIL_EVAL_ANTHROPIC_VERTEX_PROJECT", "vertex-project")
 	t.Setenv("SIGIL_EVAL_ANTHROPIC_VERTEX_CREDENTIALS_JSON", "{invalid-json}")
@@ -88,6 +95,8 @@ func TestDiscoverFromEnvSkipsAnthropicVertexOnInvalidCredentials(t *testing.T) {
 }
 
 func TestDiscoverFromEnvSkipsVertexAIWithoutProject(t *testing.T) {
+	isolateDiscoveryEnv(t)
+
 	t.Setenv("SIGIL_EVAL_VERTEXAI_ENABLED", "true")
 
 	discovery := DiscoverFromEnv()
@@ -100,6 +109,8 @@ func TestDiscoverFromEnvSkipsVertexAIWithoutProject(t *testing.T) {
 }
 
 func TestDiscoverFromEnvOpenAICompatIndexed(t *testing.T) {
+	isolateDiscoveryEnv(t)
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"data":[{"id":"test-model"}]}`))
@@ -130,9 +141,69 @@ func TestDiscoverFromEnvOpenAICompatIndexed(t *testing.T) {
 }
 
 func TestDiscoveryListModelsUnknownProvider(t *testing.T) {
+	isolateDiscoveryEnv(t)
+
 	discovery := NewDiscovery()
 	if _, err := discovery.ListModels(context.Background(), "missing"); err == nil {
 		t.Fatalf("expected error for unknown provider")
+	}
+}
+
+func isolateDiscoveryEnv(t *testing.T) {
+	t.Helper()
+
+	keys := []string{
+		"SIGIL_EVAL_OPENAI_ENABLED",
+		"SIGIL_EVAL_OPENAI_API_KEY",
+		"SIGIL_EVAL_OPENAI_BASE_URL",
+		"SIGIL_EVAL_AZURE_OPENAI_ENABLED",
+		"SIGIL_EVAL_AZURE_OPENAI_ENDPOINT",
+		"SIGIL_EVAL_AZURE_OPENAI_API_KEY",
+		"SIGIL_EVAL_ANTHROPIC_ENABLED",
+		"SIGIL_EVAL_ANTHROPIC_API_KEY",
+		"SIGIL_EVAL_ANTHROPIC_AUTH_TOKEN",
+		"ANTHROPIC_API_KEY",
+		"ANTHROPIC_AUTH_TOKEN",
+		"SIGIL_EVAL_BEDROCK_ENABLED",
+		"SIGIL_EVAL_BEDROCK_REGION",
+		"AWS_REGION",
+		"SIGIL_EVAL_BEDROCK_BASE_URL",
+		"SIGIL_EVAL_BEDROCK_BEARER_TOKEN",
+		"SIGIL_EVAL_GOOGLE_ENABLED",
+		"SIGIL_EVAL_GOOGLE_API_KEY",
+		"GOOGLE_API_KEY",
+		"GEMINI_API_KEY",
+		"SIGIL_EVAL_GOOGLE_BASE_URL",
+		"SIGIL_EVAL_VERTEXAI_ENABLED",
+		"SIGIL_EVAL_VERTEXAI_PROJECT",
+		"SIGIL_EVAL_VERTEXAI_LOCATION",
+		"SIGIL_EVAL_VERTEXAI_CREDENTIALS_FILE",
+		"SIGIL_EVAL_VERTEXAI_CREDENTIALS_JSON",
+		"SIGIL_EVAL_VERTEXAI_BASE_URL",
+		"SIGIL_EVAL_ANTHROPIC_VERTEX_ENABLED",
+		"SIGIL_EVAL_ANTHROPIC_VERTEX_PROJECT",
+		"SIGIL_EVAL_ANTHROPIC_VERTEX_LOCATION",
+		"SIGIL_EVAL_ANTHROPIC_VERTEX_CREDENTIALS_FILE",
+		"SIGIL_EVAL_ANTHROPIC_VERTEX_CREDENTIALS_JSON",
+		"SIGIL_EVAL_ANTHROPIC_VERTEX_BASE_URL",
+		"SIGIL_EVAL_OPENAI_COMPAT_ENABLED",
+		"SIGIL_EVAL_OPENAI_COMPAT_BASE_URL",
+		"SIGIL_EVAL_OPENAI_COMPAT_API_KEY",
+		"SIGIL_EVAL_OPENAI_COMPAT_NAME",
+	}
+
+	for i := 1; i <= 20; i++ {
+		prefix := fmt.Sprintf("SIGIL_EVAL_OPENAI_COMPAT_%d", i)
+		keys = append(keys,
+			prefix+"_ENABLED",
+			prefix+"_BASE_URL",
+			prefix+"_API_KEY",
+			prefix+"_NAME",
+		)
+	}
+
+	for _, key := range keys {
+		t.Setenv(key, "")
 	}
 }
 
