@@ -114,4 +114,34 @@ describe('defaultAgentsDataSource', () => {
     const result = await defaultAgentsDataSource.lookupAgentRating('assistant');
     expect(result).toBeNull();
   });
+
+  it('rateAgent posts to async rating endpoint', async () => {
+    fetchMock.mockReturnValue(
+      of({
+        data: {
+          status: 'pending',
+          score: 0,
+          summary: '',
+          suggestions: [],
+          judge_model: '',
+          judge_latency_ms: 0,
+        },
+      })
+    );
+
+    const result = await defaultAgentsDataSource.rateAgent(
+      'assistant',
+      'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith({
+      method: 'POST',
+      url: '/api/plugins/grafana-sigil-app/resources/query/agents/rate',
+      data: {
+        agent_name: 'assistant',
+        version: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      },
+    });
+    expect(result.status).toBe('pending');
+  });
 });

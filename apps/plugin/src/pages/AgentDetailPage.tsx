@@ -540,7 +540,7 @@ export default function AgentDetailPage({
         version={activeVersion}
         dataSource={dataSource}
         initialResult={initialRating}
-        initialLoading={initialRatingLoading}
+        initialLoading={initialRatingLoading || initialRating?.status === 'pending'}
         initialError={initialRatingError}
       />
 

@@ -16,6 +16,7 @@ func TestAgentVersionRatingUpsertAndLookup(t *testing.T) {
 	}
 
 	first := agentrating.Rating{
+		Status:  agentrating.RatingStatusPending,
 		Score:   6,
 		Summary: "Baseline is acceptable but has tool ambiguity.",
 		Suggestions: []agentrating.Suggestion{
@@ -58,6 +59,9 @@ func TestAgentVersionRatingUpsertAndLookup(t *testing.T) {
 	}
 	if got.Summary != first.Summary {
 		t.Fatalf("expected summary=%q, got=%q", first.Summary, got.Summary)
+	}
+	if got.Status != first.Status {
+		t.Fatalf("expected status=%q, got=%q", first.Status, got.Status)
 	}
 	if len(got.Suggestions) != 1 {
 		t.Fatalf("expected one suggestion, got=%d", len(got.Suggestions))
@@ -108,6 +112,9 @@ func TestAgentVersionRatingUpsertAndLookup(t *testing.T) {
 	}
 	if updated.Summary != second.Summary {
 		t.Fatalf("expected summary=%q, got=%q", second.Summary, updated.Summary)
+	}
+	if updated.Status != agentrating.RatingStatusCompleted {
+		t.Fatalf("expected status=%q, got=%q", agentrating.RatingStatusCompleted, updated.Status)
 	}
 	if updated.JudgeModel != second.JudgeModel {
 		t.Fatalf("expected judge model=%q, got=%q", second.JudgeModel, updated.JudgeModel)

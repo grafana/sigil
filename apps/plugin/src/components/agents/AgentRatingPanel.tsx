@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Alert, Badge, Button, Spinner, Text, useStyles2, useTheme2 } from '@grafana/ui';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../../agents/api';
-import type { AgentRatingResponse, AgentRatingSuggestion } from '../../agents/types';
+import type { AgentRatingResponse, AgentRatingStatus, AgentRatingSuggestion } from '../../agents/types';
 
 export type AgentRatingPanelProps = {
   agentName: string;
@@ -15,6 +15,7 @@ export type AgentRatingPanelProps = {
 };
 
 const severityOrder = ['high', 'medium', 'low'] as const;
+const ratingPollingIntervalMs = 5000;
 
 const getStyles = (theme: GrafanaTheme2) => ({
   panel: css({
@@ -160,6 +161,17 @@ function severityBadgeColor(severity: 'high' | 'medium' | 'low'): 'red' | 'orang
   return 'blue';
 }
 
+function normalizeRatingStatus(status: AgentRatingStatus | string | undefined): AgentRatingStatus {
+  const normalized = (status ?? '').trim().toLowerCase();
+  if (normalized === 'pending') {
+    return 'pending';
+  }
+  if (normalized === 'failed') {
+    return 'failed';
+  }
+  return 'completed';
+}
+
 export default function AgentRatingPanel({
   agentName,
   version,
@@ -170,61 +182,164 @@ export default function AgentRatingPanel({
 }: AgentRatingPanelProps) {
   const styles = useStyles2(getStyles);
   const theme = useTheme2();
-  const [running, setRunning] = useState<boolean>(initialLoading);
+  const [running, setRunning] = useState<boolean>(
+    initialLoading || (initialResult !== null && normalizeRatingStatus(initialResult.status) === 'pending')
+  );
   const [result, setResult] = useState<AgentRatingResponse | null>(initialResult);
   const [error, setError] = useState<string>(initialError);
   const requestIdRef = useRef(0);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollInFlightRef = useRef(false);
+
+  const stopPolling = useCallback(() => {
+    if (pollIntervalRef.current !== null) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    pollInFlightRef.current = false;
+  }, []);
+
+  const startPolling = useCallback(
+    (requestId: number) => {
+      stopPolling();
+      const resolvedVersion = version && version.length > 0 ? version : undefined;
+
+      const poll = async () => {
+        if (pollInFlightRef.current) {
+          return;
+        }
+        pollInFlightRef.current = true;
+        try {
+          const rating = await dataSource.lookupAgentRating(agentName, resolvedVersion);
+          if (requestIdRef.current !== requestId) {
+            return;
+          }
+          if (rating === null) {
+            setRunning(true);
+            return;
+          }
+          const status = normalizeRatingStatus(rating.status);
+          if (status === 'pending') {
+            setRunning(true);
+            return;
+          }
+          stopPolling();
+          if (status === 'failed') {
+            setResult(null);
+            setRunning(false);
+            setError('Agent rating failed. Please try again.');
+            return;
+          }
+          setResult(rating);
+          setRunning(false);
+          setError('');
+        } catch (err: unknown) {
+          if (requestIdRef.current !== requestId) {
+            return;
+          }
+          stopPolling();
+          setResult(null);
+          setRunning(false);
+          setError(err instanceof Error ? err.message : 'Failed to load latest agent rating');
+        } finally {
+          pollInFlightRef.current = false;
+        }
+      };
+
+      void poll();
+      pollIntervalRef.current = setInterval(() => {
+        void poll();
+      }, ratingPollingIntervalMs);
+    },
+    [agentName, dataSource, stopPolling, version]
+  );
 
   useEffect(() => {
     requestIdRef.current += 1;
-    setRunning(initialLoading);
+    const requestId = requestIdRef.current;
+    stopPolling();
+
+    const initialStatus = initialResult !== null ? normalizeRatingStatus(initialResult.status) : null;
+    setRunning(initialLoading || initialStatus === 'pending');
     setResult(initialResult);
     setError(initialError);
-  }, [agentName, version, initialLoading, initialResult, initialError]);
+    if (initialStatus === 'pending') {
+      startPolling(requestId);
+    }
+    return () => {
+      stopPolling();
+    };
+  }, [agentName, initialError, initialLoading, initialResult, startPolling, stopPolling, version]);
+
+  const completedResult = useMemo(() => {
+    if (result === null) {
+      return null;
+    }
+    if (normalizeRatingStatus(result.status) !== 'completed') {
+      return null;
+    }
+    return result;
+  }, [result]);
 
   const groupedSuggestions = useMemo(() => {
-    if (!result) {
+    if (!completedResult) {
       return {
         high: [],
         medium: [],
         low: [],
       };
     }
-    return groupSuggestionsBySeverity(result.suggestions ?? []);
-  }, [result]);
+    return groupSuggestionsBySeverity(completedResult.suggestions ?? []);
+  }, [completedResult]);
 
-  const runRating = async () => {
+  const runRating = useCallback(async () => {
     requestIdRef.current += 1;
-    const currentRequestId = requestIdRef.current;
+    const requestId = requestIdRef.current;
+    stopPolling();
     setRunning(true);
     setError('');
     setResult(null);
+
     try {
-      const rating = await dataSource.rateAgent(agentName, version && version.length > 0 ? version : undefined);
-      if (requestIdRef.current !== currentRequestId) {
+      const resolvedVersion = version && version.length > 0 ? version : undefined;
+      const rating = await dataSource.rateAgent(agentName, resolvedVersion);
+      if (requestIdRef.current !== requestId) {
+        return;
+      }
+      const status = normalizeRatingStatus(rating.status);
+      if (status === 'pending') {
+        setRunning(true);
+        startPolling(requestId);
+        return;
+      }
+      if (status === 'failed') {
+        setRunning(false);
+        setResult(null);
+        setError('Agent rating failed. Please try again.');
         return;
       }
       setResult(rating);
+      setRunning(false);
     } catch (err: unknown) {
-      if (requestIdRef.current !== currentRequestId) {
+      if (requestIdRef.current !== requestId) {
         return;
       }
+      setRunning(false);
+      setResult(null);
       setError(err instanceof Error ? err.message : 'Failed to evaluate agent');
-    } finally {
-      if (requestIdRef.current === currentRequestId) {
-        setRunning(false);
-      }
     }
-  };
+  }, [agentName, dataSource, startPolling, stopPolling, version]);
 
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
         <Text weight="medium">Agent Rating</Text>
-        {result && (
+        {completedResult && (
           <Badge
-            text={`${result.score}/10`}
-            color={result.score >= 9 ? 'green' : result.score >= 7 ? 'blue' : result.score >= 5 ? 'orange' : 'red'}
+            text={`${completedResult.score}/10`}
+            color={
+              completedResult.score >= 9 ? 'green' : completedResult.score >= 7 ? 'blue' : completedResult.score >= 5 ? 'orange' : 'red'
+            }
           />
         )}
       </div>
@@ -244,7 +359,7 @@ export default function AgentRatingPanel({
           </Alert>
         )}
 
-        {!running && !result && (
+        {!running && !completedResult && (
           <div className={styles.empty}>
             <Text variant="bodySmall" color="secondary">
               Run an on-demand evaluation of this agent&apos;s prompt, tools, and token budget.
@@ -257,25 +372,25 @@ export default function AgentRatingPanel({
           </div>
         )}
 
-        {!running && result && (
+        {!running && completedResult && (
           <>
             <div className={styles.scoreRow}>
               <div className={styles.scorePill}>
-                <span className={styles.scoreValue} style={{ color: scoreTone(theme, result.score) }}>
-                  {result.score}
+                <span className={styles.scoreValue} style={{ color: scoreTone(theme, completedResult.score) }}>
+                  {completedResult.score}
                 </span>
                 <span className={styles.scoreDenominator}>/ 10</span>
               </div>
               <Text variant="bodySmall" color="secondary">
-                Evaluated by {result.judge_model} in {result.judge_latency_ms}ms
+                Evaluated by {completedResult.judge_model} in {completedResult.judge_latency_ms}ms
               </Text>
             </div>
 
-            <div className={styles.summary}>{result.summary}</div>
+            <div className={styles.summary}>{completedResult.summary}</div>
 
-            {result.token_warning && result.token_warning.length > 0 && (
+            {completedResult.token_warning && completedResult.token_warning.length > 0 && (
               <Alert severity="warning" title="Token budget warning">
-                {result.token_warning}
+                {completedResult.token_warning}
               </Alert>
             )}
 

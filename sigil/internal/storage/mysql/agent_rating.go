@@ -36,6 +36,7 @@ func (s *WALStore) UpsertAgentVersionRating(ctx context.Context, tenantID, agent
 		TenantID:         trimmedTenantID,
 		AgentName:        strings.TrimSpace(agentName),
 		EffectiveVersion: trimmedVersion,
+		Status:           agentrating.NormalizeRatingStatus(rating.Status),
 		Score:            rating.Score,
 		Summary:          strings.TrimSpace(rating.Summary),
 		SuggestionsJSON:  suggestionsJSON,
@@ -52,6 +53,7 @@ func (s *WALStore) UpsertAgentVersionRating(ctx context.Context, tenantID, agent
 			{Name: "effective_version"},
 		},
 		DoUpdates: clause.Assignments(map[string]any{
+			"status":           row.Status,
 			"score":            row.Score,
 			"summary":          row.Summary,
 			"suggestions_json": row.SuggestionsJSON,
@@ -96,6 +98,7 @@ func (s *WALStore) GetAgentVersionRating(ctx context.Context, tenantID, agentNam
 	}
 
 	rating := agentrating.Rating{
+		Status:         agentrating.NormalizeRatingStatus(row.Status),
 		Score:          row.Score,
 		Summary:        row.Summary,
 		Suggestions:    suggestions,

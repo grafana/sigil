@@ -4,9 +4,18 @@
 // estimates) and returns a 0-10 rating with actionable suggestions.
 package agentrating
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
 const tokenWarningThreshold = 30_000
+
+const (
+	RatingStatusPending   = "pending"
+	RatingStatusCompleted = "completed"
+	RatingStatusFailed    = "failed"
+)
 
 // Agent describes the agent configuration that will be evaluated.
 type Agent struct {
@@ -35,12 +44,25 @@ type TokenEstimate struct {
 
 // Rating is the result of evaluating an agent.
 type Rating struct {
+	Status         string       `json:"status"`
 	Score          int          `json:"score"`
 	Summary        string       `json:"summary"`
 	Suggestions    []Suggestion `json:"suggestions"`
 	TokenWarning   string       `json:"token_warning,omitempty"`
 	JudgeModel     string       `json:"judge_model"`
 	JudgeLatencyMs int64        `json:"judge_latency_ms"`
+}
+
+// NormalizeRatingStatus coerces status to a supported value.
+func NormalizeRatingStatus(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case RatingStatusPending:
+		return RatingStatusPending
+	case RatingStatusFailed:
+		return RatingStatusFailed
+	default:
+		return RatingStatusCompleted
+	}
 }
 
 // Suggestion is a single actionable improvement item.

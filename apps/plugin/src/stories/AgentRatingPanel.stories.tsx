@@ -9,6 +9,7 @@ const mockDataSource: AgentsDataSource = {
   listAgentVersions: async () => ({ items: [], next_cursor: '' }),
   lookupAgentRating: async () => null,
   rateAgent: async () => ({
+    status: 'completed',
     score: 8,
     summary: 'Strong design with minor improvements.',
     suggestions: [
@@ -47,6 +48,7 @@ export const Loading = {
 export const GoodScore = {
   args: {
     initialResult: {
+      status: 'completed',
       score: 9,
       summary: 'Excellent overall architecture and prompt quality.',
       suggestions: [
@@ -69,9 +71,24 @@ export const Error = {
   },
 };
 
+export const Pending = {
+  args: {
+    initialLoading: true,
+    initialResult: {
+      status: 'pending',
+      score: 0,
+      summary: '',
+      suggestions: [],
+      judge_model: '',
+      judge_latency_ms: 0,
+    },
+  },
+};
+
 export const PoorScoreManySuggestions = {
   args: {
     initialResult: {
+      status: 'completed',
       score: 3,
       summary: 'Major issues in prompt clarity and tool design.',
       suggestions: [

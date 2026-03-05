@@ -260,6 +260,7 @@ type AgentVersionRatingModel struct {
 	TenantID         string    `gorm:"size:128;not null;uniqueIndex:ux_agent_version_ratings_tenant_name_version,priority:1;index:idx_agent_version_ratings_tenant_name_rated,priority:1"`
 	AgentName        string    `gorm:"size:191;not null;default:'';uniqueIndex:ux_agent_version_ratings_tenant_name_version,priority:2;index:idx_agent_version_ratings_tenant_name_rated,priority:2"`
 	EffectiveVersion string    `gorm:"size:71;not null;uniqueIndex:ux_agent_version_ratings_tenant_name_version,priority:3;index:idx_agent_version_ratings_tenant_name_rated,priority:3"`
+	Status           string    `gorm:"size:16;not null;default:'completed'"`
 	Score            int       `gorm:"not null"`
 	Summary          string    `gorm:"type:text;not null"`
 	SuggestionsJSON  string    `gorm:"type:json;not null"`

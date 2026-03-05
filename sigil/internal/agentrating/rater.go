@@ -108,6 +108,7 @@ func (r *Rater) RateWithModel(ctx context.Context, agent Agent, modelOverride st
 	}
 
 	applyTokenWarning(agent, &rating)
+	rating.Status = RatingStatusCompleted
 	return &rating, nil
 }
 
@@ -303,9 +304,7 @@ func ratingOutputSchema() map[string]any {
 		"type": "object",
 		"properties": map[string]any{
 			"score": map[string]any{
-				"type":    "integer",
-				"minimum": 0,
-				"maximum": 10,
+				"type": "integer",
 			},
 			"summary": map[string]any{
 				"type": "string",

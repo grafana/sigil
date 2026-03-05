@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -534,12 +535,13 @@ func TestRateAgentEndpointValidatesRequestBody(t *testing.T) {
 	}
 
 	mux := http.NewServeMux()
+	ratingStore := &testAgentRatingStore{}
 	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
 	RegisterQueryRoutes(
 		mux,
 		querySvc,
 		agentrating.NewRater(judges.NewDiscovery(), "openai/gpt-4o-mini"),
-		nil,
+		ratingStore,
 		feedback.NewService(feedback.NewMemoryStore()),
 		true,
 		true,
@@ -555,7 +557,7 @@ func TestRateAgentEndpointValidatesRequestBody(t *testing.T) {
 	}
 }
 
-func TestRateAgentEndpointReturnsBadRequestWhenProviderUnavailable(t *testing.T) {
+func TestRateAgentEndpointReturnsAcceptedWhenProviderUnavailable(t *testing.T) {
 	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
 		AgentCatalogStore: &testAgentCatalogStore{
 			latestVersion: &storage.AgentVersion{
@@ -580,12 +582,13 @@ func TestRateAgentEndpointReturnsBadRequestWhenProviderUnavailable(t *testing.T)
 	}
 
 	mux := http.NewServeMux()
+	ratingStore := &testAgentRatingStore{}
 	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
 	RegisterQueryRoutes(
 		mux,
 		querySvc,
 		agentrating.NewRater(judges.NewDiscovery(), "openai/gpt-4o-mini"),
-		nil,
+		ratingStore,
 		feedback.NewService(feedback.NewMemoryStore()),
 		true,
 		true,
@@ -596,8 +599,77 @@ func TestRateAgentEndpointReturnsBadRequestWhenProviderUnavailable(t *testing.T)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents:rate", bytes.NewBufferString(`{"agent_name":"assistant"}`))
 	resp := httptest.NewRecorder()
 	mux.ServeHTTP(resp, req)
-	if resp.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for unavailable judge provider, got %d body=%s", resp.Code, resp.Body.String())
+	if resp.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 for async rate start, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"status":"pending"`) {
+		t.Fatalf("expected pending status in response, body=%s", resp.Body.String())
+	}
+
+	upserts := ratingStore.Upserts()
+	if len(upserts) == 0 {
+		t.Fatalf("expected at least one rating upsert")
+	}
+	if upserts[0].Status != agentrating.RatingStatusPending {
+		t.Fatalf("expected first upsert status=%q, got=%q", agentrating.RatingStatusPending, upserts[0].Status)
+	}
+}
+
+func TestRateAgentEndpointReusesExistingPendingRating(t *testing.T) {
+	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
+		AgentCatalogStore: &testAgentCatalogStore{
+			latestVersion: &storage.AgentVersion{
+				AgentName:             "assistant",
+				EffectiveVersion:      "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				SystemPrompt:          "You are concise.",
+				SystemPromptPrefix:    "You are concise.",
+				ToolCount:             0,
+				TokenEstimateTotal:    40,
+				GenerationCount:       2,
+				FirstSeenAt:           time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC),
+				LastSeenAt:            time.Date(2026, 3, 4, 11, 0, 0, 0, time.UTC),
+				DeclaredVersionFirst:  nil,
+				DeclaredVersionLatest: nil,
+				ToolsJSON:             "[]",
+			},
+		},
+		FeedbackStore: feedback.NewMemoryStore(),
+	})
+	if err != nil {
+		t.Fatalf("new query service: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	ratingStore := &testAgentRatingStore{
+		rating: &agentrating.Rating{
+			Status:      agentrating.RatingStatusPending,
+			Suggestions: []agentrating.Suggestion{},
+		},
+	}
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterQueryRoutes(
+		mux,
+		querySvc,
+		agentrating.NewRater(judges.NewDiscovery(), "openai/gpt-4o-mini"),
+		ratingStore,
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		protected,
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents:rate", bytes.NewBufferString(`{"agent_name":"assistant"}`))
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 for existing pending rating, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"status":"pending"`) {
+		t.Fatalf("expected pending status in response, body=%s", resp.Body.String())
+	}
+	if len(ratingStore.Upserts()) != 0 {
+		t.Fatalf("expected no upserts when rating is already pending")
 	}
 }
 
@@ -662,6 +734,9 @@ func TestLookupAgentRatingEndpointReturnsLatestStoredRating(t *testing.T) {
 	}
 	if !strings.Contains(resp.Body.String(), `"score":8`) {
 		t.Fatalf("expected score in response, body=%s", resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"status":"completed"`) {
+		t.Fatalf("expected normalized status in response, body=%s", resp.Body.String())
 	}
 	if ratingStore.lastEffectiveVersion != "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" {
 		t.Fatalf("expected lookup for resolved effective version, got %q", ratingStore.lastEffectiveVersion)
@@ -1358,18 +1433,27 @@ type testAgentCatalogStore struct {
 }
 
 type testAgentRatingStore struct {
+	mu                   sync.Mutex
 	rating               *agentrating.Rating
 	err                  error
 	lastTenantID         string
 	lastAgentName        string
 	lastEffectiveVersion string
+	upserts              []agentrating.Rating
 }
 
-func (s *testAgentRatingStore) UpsertAgentVersionRating(_ context.Context, _, _, _ string, _ agentrating.Rating) error {
+func (s *testAgentRatingStore) UpsertAgentVersionRating(_ context.Context, _, _, _ string, rating agentrating.Rating) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.upserts = append(s.upserts, rating)
+	copied := rating
+	s.rating = &copied
 	return nil
 }
 
 func (s *testAgentRatingStore) GetAgentVersionRating(_ context.Context, tenantID, agentName, effectiveVersion string) (*agentrating.Rating, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.lastTenantID = tenantID
 	s.lastAgentName = agentName
 	s.lastEffectiveVersion = effectiveVersion
@@ -1381,6 +1465,17 @@ func (s *testAgentRatingStore) GetAgentVersionRating(_ context.Context, tenantID
 	}
 	copied := *s.rating
 	return &copied, nil
+}
+
+func (s *testAgentRatingStore) Upserts() []agentrating.Rating {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.upserts) == 0 {
+		return nil
+	}
+	out := make([]agentrating.Rating, len(s.upserts))
+	copy(out, s.upserts)
+	return out
 }
 
 func (s *testAgentCatalogStore) ListAgentHeads(_ context.Context, _ string, _ int, _ *storage.AgentHeadCursor, _ string) ([]storage.AgentHead, *storage.AgentHeadCursor, error) {

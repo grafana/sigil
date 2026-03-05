@@ -84,7 +84,10 @@ export type AgentRatingSuggestion = {
   description: string;
 };
 
+export type AgentRatingStatus = 'pending' | 'completed' | 'failed';
+
 export type AgentRatingResponse = {
+  status?: AgentRatingStatus;
   score: number;
   summary: string;
   suggestions: AgentRatingSuggestion[];

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -84,7 +85,7 @@ func RegisterQueryRoutes(
 	if ratingStore != nil {
 		mux.Handle("/api/v1/agents:rating", protectedMiddleware(http.HandlerFunc(lookupAgentRating(querySvc, ratingStore))))
 	}
-	if rater != nil {
+	if rater != nil && ratingStore != nil {
 		mux.Handle("/api/v1/agents:rate", protectedMiddleware(http.HandlerFunc(rateAgent(querySvc, rater, ratingStore))))
 	}
 	mux.Handle("/api/v1/conversations:batch-metadata", protectedMiddleware(http.HandlerFunc(batchConversationMetadata(querySvc))))
@@ -519,31 +520,112 @@ func rateAgent(querySvc *query.Service, rater *agentrating.Rater, ratingStore ag
 			return
 		}
 
-		ratingInput := mapAgentDetailToRatingAgent(agentDetail)
-		rating, err := rater.RateWithModel(req.Context(), ratingInput, payload.Model)
+		existingRating, err := ratingStore.GetAgentVersionRating(
+			req.Context(),
+			tenantID,
+			agentDetail.AgentName,
+			agentDetail.EffectiveVersion,
+		)
 		if err != nil {
-			if agentrating.IsValidationError(err) {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			http.Error(w, "failed to evaluate agent", http.StatusBadGateway)
+			http.Error(w, "failed to read existing agent rating", http.StatusInternalServerError)
 			return
 		}
-		if ratingStore != nil {
-			if err := ratingStore.UpsertAgentVersionRating(
-				req.Context(),
-				tenantID,
-				agentDetail.AgentName,
-				agentDetail.EffectiveVersion,
-				*rating,
-			); err != nil {
-				http.Error(w, "failed to persist agent rating", http.StatusInternalServerError)
-				return
-			}
+		if existingRating != nil && agentrating.NormalizeRatingStatus(existingRating.Status) == agentrating.RatingStatusPending {
+			existingRating.Status = agentrating.RatingStatusPending
+			writeJSON(w, http.StatusAccepted, existingRating)
+			return
 		}
 
-		writeJSON(w, http.StatusOK, rating)
+		pendingRating := agentrating.Rating{
+			Status:      agentrating.RatingStatusPending,
+			Suggestions: []agentrating.Suggestion{},
+		}
+		if err := ratingStore.UpsertAgentVersionRating(
+			req.Context(),
+			tenantID,
+			agentDetail.AgentName,
+			agentDetail.EffectiveVersion,
+			pendingRating,
+		); err != nil {
+			http.Error(w, "failed to persist pending agent rating", http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, http.StatusAccepted, pendingRating)
+
+		ratingInput := mapAgentDetailToRatingAgent(agentDetail)
+		go evaluateAgentRating(
+			rater,
+			ratingStore,
+			tenantID,
+			agentDetail.AgentName,
+			agentDetail.EffectiveVersion,
+			ratingInput,
+			payload.Model,
+		)
 	}
+}
+
+func evaluateAgentRating(
+	rater *agentrating.Rater,
+	ratingStore agentrating.LatestStore,
+	tenantID string,
+	agentName string,
+	effectiveVersion string,
+	ratingInput agentrating.Agent,
+	modelOverride string,
+) {
+	defer func() {
+		if recover() != nil {
+			_ = ratingStore.UpsertAgentVersionRating(
+				context.Background(),
+				tenantID,
+				agentName,
+				effectiveVersion,
+				agentrating.Rating{
+					Status:      agentrating.RatingStatusFailed,
+					Suggestions: []agentrating.Suggestion{},
+				},
+			)
+		}
+	}()
+
+	rating, err := rater.RateWithModel(context.Background(), ratingInput, modelOverride)
+	if err != nil {
+		_ = ratingStore.UpsertAgentVersionRating(
+			context.Background(),
+			tenantID,
+			agentName,
+			effectiveVersion,
+			agentrating.Rating{
+				Status:      agentrating.RatingStatusFailed,
+				Suggestions: []agentrating.Suggestion{},
+			},
+		)
+		return
+	}
+	if rating == nil {
+		_ = ratingStore.UpsertAgentVersionRating(
+			context.Background(),
+			tenantID,
+			agentName,
+			effectiveVersion,
+			agentrating.Rating{
+				Status:      agentrating.RatingStatusFailed,
+				Suggestions: []agentrating.Suggestion{},
+			},
+		)
+		return
+	}
+
+	rating.Status = agentrating.RatingStatusCompleted
+	_ = ratingStore.UpsertAgentVersionRating(
+		context.Background(),
+		tenantID,
+		agentName,
+		effectiveVersion,
+		*rating,
+	)
 }
 
 func lookupAgentRating(querySvc *query.Service, ratingStore agentrating.LatestStore) http.HandlerFunc {
@@ -603,6 +685,7 @@ func lookupAgentRating(querySvc *query.Service, ratingStore agentrating.LatestSt
 			http.NotFound(w, req)
 			return
 		}
+		rating.Status = agentrating.NormalizeRatingStatus(rating.Status)
 
 		writeJSON(w, http.StatusOK, rating)
 	}
