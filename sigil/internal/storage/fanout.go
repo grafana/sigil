@@ -431,7 +431,7 @@ func (s *FanOutStore) readColdGenerationByIDWithPlan(
 		generationID,
 		time.Time{},
 		time.Time{},
-		"",
+		conversationHint,
 	)
 	scannedBlocks += fallbackScanned
 	if err != nil {

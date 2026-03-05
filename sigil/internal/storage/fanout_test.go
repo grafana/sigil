@@ -534,6 +534,64 @@ func TestFanOutStoreGetGenerationByIDWithPlanFallsBackWhenRangeHintMisses(t *tes
 	}
 }
 
+func TestFanOutStoreGetGenerationByIDWithPlanFallbackPreservesConversationHint(t *testing.T) {
+	targetGen := fanOutTestGeneration("gen-1", "conv-target", time.Date(2026, 2, 19, 9, 0, 0, 0, time.UTC))
+	otherGen := fanOutTestGeneration("gen-1", "conv-other", time.Date(2026, 2, 19, 10, 0, 0, 0, time.UTC))
+
+	indexOlder, offsetsOlder := buildFanOutTestBlock(t, []*sigilv1.Generation{targetGen})
+	indexNewer, offsetsNewer := buildFanOutTestBlock(t, []*sigilv1.Generation{otherGen})
+
+	var listCalls int32
+	store := NewFanOutStore(
+		&fanOutTestWALReader{
+			getByID: func(_ context.Context, _, _ string) (*sigilv1.Generation, error) {
+				return nil, nil
+			},
+		},
+		&fanOutTestBlockMetadataStore{
+			listBlocks: func(_ context.Context, _ string, from, to time.Time) ([]BlockMeta, error) {
+				call := atomic.AddInt32(&listCalls, 1)
+				if call == 1 {
+					return []BlockMeta{}, nil
+				}
+				return []BlockMeta{
+					{TenantID: "tenant-a", BlockID: "block-older"},
+					{TenantID: "tenant-a", BlockID: "block-newer"},
+				}, nil
+			},
+		},
+		&fanOutTestBlockReader{
+			readIndex: func(_ context.Context, _, blockID string) (*BlockIndex, error) {
+				if blockID == "block-newer" {
+					return indexNewer, nil
+				}
+				return indexOlder, nil
+			},
+			readGenerations: func(_ context.Context, _, blockID string, entries []IndexEntry) ([]*sigilv1.Generation, error) {
+				if blockID == "block-newer" {
+					return fanOutGenerationsFromEntries(entries, offsetsNewer), nil
+				}
+				return fanOutGenerationsFromEntries(entries, offsetsOlder), nil
+			},
+		},
+	)
+
+	found, err := store.GetGenerationByIDWithPlan(context.Background(), "tenant-a", "gen-1", GenerationReadPlan{
+		ConversationID: "conv-target",
+		From:           time.Date(2026, 2, 19, 11, 0, 0, 0, time.UTC),
+		To:             time.Date(2026, 2, 19, 12, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("get generation by id with range+conversation hint: %v", err)
+	}
+	if found == nil || found.GetId() != "gen-1" {
+		t.Fatalf("expected generation to be found, got %#v", found)
+	}
+	if found.GetConversationId() != "conv-target" {
+		t.Fatalf("expected fallback to preserve conversation hint and prefer conv-target, got conversation_id=%q", found.GetConversationId())
+	}
+}
+
 func TestFanOutStoreGetGenerationByIDWithPlanFallbackSharesColdBudget(t *testing.T) {
 	budget := 400 * time.Millisecond
 	firstScanSleep := 200 * time.Millisecond
