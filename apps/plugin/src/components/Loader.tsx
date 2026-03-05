@@ -43,8 +43,9 @@ export const Loader = ({ showText = true, lines, align = 'center' }: LoaderProps
   const [charCount, setCharCount] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
   const activeLines = useMemo(() => (lines && lines.length > 0 ? lines : DEFAULT_TYPEWRITER_LINES), [lines]);
+  const normalizedLineIndex = lineIndex % activeLines.length;
 
-  const currentLine = useMemo(() => activeLines[lineIndex] ?? '', [activeLines, lineIndex]);
+  const currentLine = useMemo(() => activeLines[normalizedLineIndex] ?? '', [activeLines, normalizedLineIndex]);
 
   useEffect(() => {
     const atLineEnd = charCount >= currentLine.length;
