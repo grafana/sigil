@@ -41,11 +41,6 @@ func NewRater(discovery *judges.Discovery, defaultModel string) *Rater {
 	}
 }
 
-// Rate evaluates agent design quality with the configured default judge model.
-func (r *Rater) Rate(ctx context.Context, agent Agent) (*Rating, error) {
-	return r.RateWithModel(ctx, agent, "")
-}
-
 // RateWithModel evaluates agent design quality with an optional model override.
 //
 // modelOverride can be either "provider/model" or just "model". When only
