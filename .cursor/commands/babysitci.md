@@ -11,6 +11,7 @@ Workflow:
    - Fix what is reasonably fixable in this babysit pass.
    - Re-run the failing command(s) until green.
    - If the problem is broad, risky, or needs product/domain decisions, stop and ask for user interaction.
+2. B - if you made any changes, commit them one at a time with brief commit message
 3. Determine the current branch: `git branch --show-current`.
 4. If local fixes were made:
    - Commit with a Conventional Commit message prefixed with `babysit:` (example: `chore: babysit: fix lint failures in plugin query parser`).
