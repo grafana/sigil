@@ -70,3 +70,28 @@ export type AgentVersionListResponse = {
   items: AgentVersionListItem[];
   next_cursor: string;
 };
+
+export type AgentRatingRequest = {
+  agent_name: string;
+  version?: string;
+  model?: string;
+};
+
+export type AgentRatingSuggestion = {
+  category: string;
+  severity: string;
+  title: string;
+  description: string;
+};
+
+export type AgentRatingStatus = 'pending' | 'completed' | 'failed';
+
+export type AgentRatingResponse = {
+  status?: AgentRatingStatus;
+  score: number;
+  summary: string;
+  suggestions: AgentRatingSuggestion[];
+  token_warning?: string;
+  judge_model: string;
+  judge_latency_ms: number;
+};

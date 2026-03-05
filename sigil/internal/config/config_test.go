@@ -275,6 +275,8 @@ func TestFromEnvEvaluationDefaults(t *testing.T) {
 	t.Setenv("SIGIL_EVAL_CLAIM_BATCH_SIZE", "")
 	t.Setenv("SIGIL_EVAL_POLL_INTERVAL", "")
 	t.Setenv("SIGIL_EVAL_DEFAULT_JUDGE_MODEL", "")
+	t.Setenv("SIGIL_AGENT_RATING_JUDGE_PROVIDER", "")
+	t.Setenv("SIGIL_AGENT_RATING_JUDGE_MODEL", "")
 	t.Setenv("SIGIL_EVAL_SEED_STRICT", "")
 
 	cfg := FromEnv()
@@ -298,6 +300,12 @@ func TestFromEnvEvaluationDefaults(t *testing.T) {
 	}
 	if cfg.EvalDefaultJudgeModel != DefaultEvalDefaultJudgeModel {
 		t.Fatalf("expected default eval judge model %q, got %q", DefaultEvalDefaultJudgeModel, cfg.EvalDefaultJudgeModel)
+	}
+	if cfg.AgentRatingJudgeProvider != "" {
+		t.Fatalf("expected default agent rating judge provider to be empty, got %q", cfg.AgentRatingJudgeProvider)
+	}
+	if cfg.AgentRatingJudgeModel != "" {
+		t.Fatalf("expected default agent rating judge model to be empty, got %q", cfg.AgentRatingJudgeModel)
 	}
 	if cfg.EvalSeedStrict {
 		t.Fatalf("expected eval seed strict to default to false")
@@ -352,6 +360,71 @@ func TestValidateRejectsInvalidDefaultJudgeModelFormat(t *testing.T) {
 				t.Fatalf("expected provider/model format error, got %v", err)
 			}
 		})
+	}
+}
+
+func TestValidateRejectsIncompleteAgentRatingJudgeTarget(t *testing.T) {
+	t.Run("provider without model", func(t *testing.T) {
+		cfg := FromEnv()
+		cfg.AgentRatingJudgeProvider = "openai"
+		cfg.AgentRatingJudgeModel = ""
+		err := cfg.Validate()
+		if err == nil {
+			t.Fatalf("expected validation error when provider is set without model")
+		}
+		if !strings.Contains(err.Error(), "must both be set or both be empty") {
+			t.Fatalf("expected pair validation error, got %v", err)
+		}
+	})
+
+	t.Run("model without provider", func(t *testing.T) {
+		cfg := FromEnv()
+		cfg.AgentRatingJudgeProvider = ""
+		cfg.AgentRatingJudgeModel = "gpt-4o-mini"
+		err := cfg.Validate()
+		if err == nil {
+			t.Fatalf("expected validation error when model is set without provider")
+		}
+		if !strings.Contains(err.Error(), "must both be set or both be empty") {
+			t.Fatalf("expected pair validation error, got %v", err)
+		}
+	})
+}
+
+func TestValidateRejectsInvalidAgentRatingProviderID(t *testing.T) {
+	cfg := FromEnv()
+	cfg.AgentRatingJudgeProvider = "OpenAI"
+	cfg.AgentRatingJudgeModel = "gpt-4o-mini"
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatalf("expected validation error for invalid agent rating provider")
+	}
+	if !strings.Contains(err.Error(), "SIGIL_AGENT_RATING_JUDGE_PROVIDER") {
+		t.Fatalf("expected provider-specific validation error, got %v", err)
+	}
+}
+
+func TestAgentRatingJudgeTargetFallsBackToEvalDefault(t *testing.T) {
+	cfg := FromEnv()
+	cfg.EvalDefaultJudgeModel = "anthropic/claude-sonnet-4-5"
+	cfg.AgentRatingJudgeProvider = ""
+	cfg.AgentRatingJudgeModel = ""
+
+	provider, model := cfg.AgentRatingJudgeTarget()
+	if provider != "anthropic" || model != "claude-sonnet-4-5" {
+		t.Fatalf("unexpected fallback target: got %q/%q", provider, model)
+	}
+}
+
+func TestAgentRatingJudgeTargetUsesDedicatedOverride(t *testing.T) {
+	cfg := FromEnv()
+	cfg.EvalDefaultJudgeModel = "openai/gpt-4o-mini"
+	cfg.AgentRatingJudgeProvider = "vertexai"
+	cfg.AgentRatingJudgeModel = "gemini-2.5-pro"
+
+	provider, model := cfg.AgentRatingJudgeTarget()
+	if provider != "vertexai" || model != "gemini-2.5-pro" {
+		t.Fatalf("unexpected override target: got %q/%q", provider, model)
 	}
 }
 

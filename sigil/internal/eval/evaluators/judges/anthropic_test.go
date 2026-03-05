@@ -54,6 +54,98 @@ func TestAnthropicClientJudgeAndListModels(t *testing.T) {
 	}
 }
 
+func TestAnthropicClientJudgeWithAdaptiveThinking(t *testing.T) {
+	var payload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		defer func() { _ = req.Body.Close() }()
+		if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"model":"claude-3-5-sonnet","content":[{"type":"text","text":"judge output"}],"usage":{"input_tokens":9,"output_tokens":4}}`))
+	}))
+	defer server.Close()
+
+	client := NewAnthropicClient(server.Client(), server.URL, "key", "")
+	_, err := client.Judge(context.Background(), JudgeRequest{
+		SystemPrompt: "judge",
+		UserPrompt:   "answer",
+		Model:        "claude-3-5-sonnet",
+		MaxTokens:    1400,
+		Temperature:  0,
+		Thinking: ThinkingConfig{
+			Mode:          ThinkingModePrefer,
+			AnthropicMode: AnthropicThinkingModeAdaptive,
+		},
+	})
+	if err != nil {
+		t.Fatalf("judge: %v", err)
+	}
+	thinkingPayload, ok := payload["thinking"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected thinking payload, got %#v", payload["thinking"])
+	}
+	if gotType, ok := thinkingPayload["type"].(string); !ok || gotType != "adaptive" {
+		t.Fatalf("expected adaptive thinking type, got %#v", thinkingPayload["type"])
+	}
+	if gotTemp, ok := payload["temperature"].(float64); !ok || gotTemp != 1.0 {
+		t.Fatalf("expected temperature=1.0 when thinking is enabled, got %v", payload["temperature"])
+	}
+}
+
+func TestAnthropicClientJudgeThinkingOverridesTemperature(t *testing.T) {
+	tests := []struct {
+		name     string
+		thinking ThinkingConfig
+	}{
+		{
+			name: "adaptive thinking",
+			thinking: ThinkingConfig{
+				Mode:          ThinkingModePrefer,
+				AnthropicMode: AnthropicThinkingModeAdaptive,
+			},
+		},
+		{
+			name: "budgeted thinking",
+			thinking: ThinkingConfig{
+				Mode:          ThinkingModeRequire,
+				AnthropicMode: AnthropicThinkingModeBudgeted,
+				BudgetTokens:  2048,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var payload map[string]any
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				defer func() { _ = req.Body.Close() }()
+				if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+					t.Fatalf("decode payload: %v", err)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"model":"claude-3-5-sonnet","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":1,"output_tokens":1}}`))
+			}))
+			defer server.Close()
+
+			client := NewAnthropicClient(server.Client(), server.URL, "key", "")
+			_, err := client.Judge(context.Background(), JudgeRequest{
+				UserPrompt:  "answer",
+				Model:       "claude-3-5-sonnet",
+				MaxTokens:   4096,
+				Temperature: 0,
+				Thinking:    tt.thinking,
+			})
+			if err != nil {
+				t.Fatalf("judge: %v", err)
+			}
+			gotTemp, ok := payload["temperature"].(float64)
+			if !ok || gotTemp != 1.0 {
+				t.Errorf("expected temperature=1.0 when thinking enabled, got %v", payload["temperature"])
+			}
+		})
+	}
+}
+
 func TestAnthropicClientJudgeWithAuthToken(t *testing.T) {
 	var gotAuthorizationHeader string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

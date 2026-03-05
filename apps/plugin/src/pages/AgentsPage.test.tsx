@@ -137,6 +137,14 @@ function createDataSource(): AgentsDataSource {
       throw new Error('not used in AgentsPage tests');
     }),
     listAgentVersions: jest.fn(async () => ({ items: [], next_cursor: '' })),
+    lookupAgentRating: jest.fn(async () => null),
+    rateAgent: jest.fn(async () => ({
+      score: 8,
+      summary: 'Test summary',
+      suggestions: [],
+      judge_model: 'openai/gpt-4o-mini',
+      judge_latency_ms: 100,
+    })),
   };
 }
 

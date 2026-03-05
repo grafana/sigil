@@ -129,6 +129,27 @@ const mockDataSource: AgentsDataSource = {
     ],
     next_cursor: '',
   }),
+  lookupAgentRating: async () => ({
+    score: 7,
+    summary: 'Persisted latest rating loaded from storage.',
+    suggestions: [],
+    judge_model: 'openai/gpt-4o-mini',
+    judge_latency_ms: 210,
+  }),
+  rateAgent: async () => ({
+    score: 7,
+    summary: 'Solid design with room to simplify tool instructions.',
+    suggestions: [
+      {
+        category: 'tools',
+        severity: 'medium',
+        title: 'Tighten tool parameter docs',
+        description: 'Add explicit guidance for when to use optional parameters.',
+      },
+    ],
+    judge_model: 'openai/gpt-4o-mini',
+    judge_latency_ms: 320,
+  }),
 };
 
 const meta = {

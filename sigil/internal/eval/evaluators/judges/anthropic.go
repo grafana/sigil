@@ -66,6 +66,26 @@ func (c *AnthropicClient) Judge(ctx context.Context, req JudgeRequest) (JudgeRes
 		},
 		Temperature: anthropic.Float(req.Temperature),
 	}
+	if req.Thinking.IsEnabled() {
+		params.Temperature = anthropic.Float(1)
+		switch req.Thinking.AnthropicModeOrDefault() {
+		case AnthropicThinkingModeBudgeted:
+			budgetTokens := req.Thinking.BudgetTokens
+			if budgetTokens < 1024 {
+				budgetTokens = 1024
+			}
+			if maxTokens <= budgetTokens {
+				maxTokens = budgetTokens + 1
+				params.MaxTokens = int64(maxTokens)
+			}
+			params.Thinking = anthropic.ThinkingConfigParamOfEnabled(int64(budgetTokens))
+		default:
+			adaptive := anthropic.NewThinkingConfigAdaptiveParam()
+			params.Thinking = anthropic.ThinkingConfigParamUnion{
+				OfAdaptive: &adaptive,
+			}
+		}
+	}
 	if system := strings.TrimSpace(req.SystemPrompt); system != "" {
 		params.System = []anthropic.TextBlockParam{{Text: system}}
 	}

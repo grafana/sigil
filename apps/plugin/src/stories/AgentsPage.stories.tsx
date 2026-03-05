@@ -59,6 +59,10 @@ const mockDataSource: AgentsDataSource = {
     throw new Error('not implemented in AgentsPage story');
   },
   listAgentVersions: async () => ({ items: [], next_cursor: '' }),
+  lookupAgentRating: async () => null,
+  rateAgent: async () => {
+    throw new Error('not implemented in AgentsPage story');
+  },
 };
 
 const mockDashboardDataSource: DashboardDataSource = {

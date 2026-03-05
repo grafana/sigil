@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -10,12 +11,21 @@ import (
 	"strings"
 	"time"
 
+	kitlog "github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 	"github.com/grafana/dskit/tenant"
+	"github.com/grafana/sigil/sigil/internal/agentrating"
 	"github.com/grafana/sigil/sigil/internal/feedback"
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
+	"github.com/grafana/sigil/sigil/internal/jsonutil"
 	"github.com/grafana/sigil/sigil/internal/modelcards"
 	"github.com/grafana/sigil/sigil/internal/query"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+)
+
+const (
+	agentRatingEvaluationTimeout = 3 * time.Minute
+	agentRatingPersistTimeout    = 10 * time.Second
 )
 
 func RegisterRoutes(
@@ -30,7 +40,18 @@ func RegisterRoutes(
 ) {
 	RegisterCoreRoutes(mux)
 	RegisterIngestRoutes(mux, generationSvc, protectedMiddleware)
-	RegisterQueryRoutes(mux, querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled, modelCardSvc, protectedMiddleware)
+	RegisterQueryRoutes(
+		mux,
+		querySvc,
+		nil,
+		nil,
+		feedbackSvc,
+		ratingsEnabled,
+		annotationsEnabled,
+		modelCardSvc,
+		kitlog.NewNopLogger(),
+		protectedMiddleware,
+	)
 }
 
 // RegisterCoreRoutes wires transport-level routes shared by every runtime role.
@@ -61,14 +82,20 @@ func RegisterIngestRoutes(
 func RegisterQueryRoutes(
 	mux *http.ServeMux,
 	querySvc *query.Service,
+	rater *agentrating.Rater,
+	ratingStore agentrating.LatestStore,
 	feedbackSvc *feedback.Service,
 	ratingsEnabled bool,
 	annotationsEnabled bool,
 	modelCardSvc *modelcards.Service,
+	logger kitlog.Logger,
 	protectedMiddleware func(http.Handler) http.Handler,
 ) {
 	if mux == nil || querySvc == nil {
 		return
+	}
+	if logger == nil {
+		logger = kitlog.NewNopLogger()
 	}
 	if protectedMiddleware == nil {
 		protectedMiddleware = func(next http.Handler) http.Handler { return next }
@@ -78,6 +105,12 @@ func RegisterQueryRoutes(
 	mux.Handle("/api/v1/agents", protectedMiddleware(http.HandlerFunc(listAgents(querySvc))))
 	mux.Handle("/api/v1/agents:lookup", protectedMiddleware(http.HandlerFunc(lookupAgent(querySvc))))
 	mux.Handle("/api/v1/agents:versions", protectedMiddleware(http.HandlerFunc(listAgentVersions(querySvc))))
+	if ratingStore != nil {
+		mux.Handle("/api/v1/agents:rating", protectedMiddleware(http.HandlerFunc(lookupAgentRating(querySvc, ratingStore))))
+	}
+	if rater != nil && ratingStore != nil {
+		mux.Handle("/api/v1/agents:rate", protectedMiddleware(http.HandlerFunc(rateAgent(querySvc, rater, ratingStore, logger))))
+	}
 	mux.Handle("/api/v1/conversations:batch-metadata", protectedMiddleware(http.HandlerFunc(batchConversationMetadata(querySvc))))
 	mux.Handle("/api/v1/conversations", protectedMiddleware(http.HandlerFunc(listConversations(querySvc))))
 	mux.Handle("/api/v1/conversations/", protectedMiddleware(http.HandlerFunc(conversationRoutes(querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled))))
@@ -464,6 +497,339 @@ func listAgentVersions(querySvc *query.Service) http.HandlerFunc {
 			"items":       items,
 			"next_cursor": nextCursor,
 		})
+	}
+}
+
+type rateAgentRequest struct {
+	AgentName string `json:"agent_name"`
+	Version   string `json:"version,omitempty"`
+	Model     string `json:"model,omitempty"`
+}
+
+func rateAgent(
+	querySvc *query.Service,
+	rater *agentrating.Rater,
+	ratingStore agentrating.LatestStore,
+	logger kitlog.Logger,
+) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		tenantID, err := tenant.TenantID(req.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		var payload rateAgentRequest
+		if req.Body == nil {
+			http.Error(w, "request body is required", http.StatusBadRequest)
+			return
+		}
+		decoder := json.NewDecoder(req.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&payload); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+		if err := jsonutil.EnsureEOF(decoder); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		agentDetail, found, err := querySvc.GetAgentDetailForTenant(req.Context(), tenantID, payload.AgentName, payload.Version)
+		if err != nil {
+			if query.IsValidationError(err) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if !found {
+			http.NotFound(w, req)
+			return
+		}
+
+		existingRating, err := ratingStore.GetAgentVersionRating(
+			req.Context(),
+			tenantID,
+			agentDetail.AgentName,
+			agentDetail.EffectiveVersion,
+		)
+		if err != nil {
+			http.Error(w, "failed to read existing agent rating", http.StatusInternalServerError)
+			return
+		}
+		if existingRating != nil && agentrating.NormalizeRatingStatus(existingRating.Status) == agentrating.RatingStatusPending {
+			existingRating.Status = agentrating.RatingStatusPending
+			writeJSON(w, http.StatusAccepted, existingRating)
+			return
+		}
+
+		pendingRating := agentrating.Rating{
+			Status:      agentrating.RatingStatusPending,
+			Suggestions: []agentrating.Suggestion{},
+		}
+		if err := ratingStore.UpsertAgentVersionRating(
+			req.Context(),
+			tenantID,
+			agentDetail.AgentName,
+			agentDetail.EffectiveVersion,
+			pendingRating,
+		); err != nil {
+			http.Error(w, "failed to persist pending agent rating", http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, http.StatusAccepted, pendingRating)
+
+		ratingInput := mapAgentDetailToRatingAgent(agentDetail)
+		go evaluateAgentRating(
+			logger,
+			rater,
+			ratingStore,
+			tenantID,
+			agentDetail.AgentName,
+			agentDetail.EffectiveVersion,
+			ratingInput,
+			payload.Model,
+		)
+	}
+}
+
+func evaluateAgentRating(
+	logger kitlog.Logger,
+	rater *agentrating.Rater,
+	ratingStore agentrating.LatestStore,
+	tenantID string,
+	agentName string,
+	effectiveVersion string,
+	ratingInput agentrating.Agent,
+	modelOverride string,
+) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			_ = level.Error(logger).Log(
+				"msg", "agent rating background evaluation panicked",
+				"tenant_id", tenantID,
+				"agent_name", agentName,
+				"effective_version", effectiveVersion,
+				"panic", recovered,
+			)
+			if err := upsertAgentRatingWithTimeout(
+				ratingStore,
+				tenantID,
+				agentName,
+				effectiveVersion,
+				agentrating.Rating{
+					Status:      agentrating.RatingStatusFailed,
+					Suggestions: []agentrating.Suggestion{},
+				},
+			); err != nil {
+				_ = level.Error(logger).Log(
+					"msg", "failed to persist failed agent rating after panic",
+					"tenant_id", tenantID,
+					"agent_name", agentName,
+					"effective_version", effectiveVersion,
+					"err", err,
+				)
+			}
+		}
+	}()
+
+	evalCtx, cancel := context.WithTimeout(context.Background(), agentRatingEvaluationTimeout)
+	defer cancel()
+
+	rating, err := rater.RateWithModel(evalCtx, ratingInput, modelOverride)
+	if err != nil {
+		_ = level.Error(logger).Log(
+			"msg", "agent rating background evaluation failed",
+			"tenant_id", tenantID,
+			"agent_name", agentName,
+			"effective_version", effectiveVersion,
+			"model_override", modelOverride,
+			"timeout", errors.Is(evalCtx.Err(), context.DeadlineExceeded),
+			"err", err,
+		)
+		if persistErr := upsertAgentRatingWithTimeout(
+			ratingStore,
+			tenantID,
+			agentName,
+			effectiveVersion,
+			agentrating.Rating{
+				Status:      agentrating.RatingStatusFailed,
+				Suggestions: []agentrating.Suggestion{},
+			},
+		); persistErr != nil {
+			_ = level.Error(logger).Log(
+				"msg", "failed to persist failed agent rating after judge error",
+				"tenant_id", tenantID,
+				"agent_name", agentName,
+				"effective_version", effectiveVersion,
+				"err", persistErr,
+			)
+		}
+		return
+	}
+	if rating == nil {
+		_ = level.Error(logger).Log(
+			"msg", "agent rating background evaluation returned nil rating",
+			"tenant_id", tenantID,
+			"agent_name", agentName,
+			"effective_version", effectiveVersion,
+		)
+		if err := upsertAgentRatingWithTimeout(
+			ratingStore,
+			tenantID,
+			agentName,
+			effectiveVersion,
+			agentrating.Rating{
+				Status:      agentrating.RatingStatusFailed,
+				Suggestions: []agentrating.Suggestion{},
+			},
+		); err != nil {
+			_ = level.Error(logger).Log(
+				"msg", "failed to persist failed agent rating after nil judge result",
+				"tenant_id", tenantID,
+				"agent_name", agentName,
+				"effective_version", effectiveVersion,
+				"err", err,
+			)
+		}
+		return
+	}
+
+	rating.Status = agentrating.RatingStatusCompleted
+	if err := upsertAgentRatingWithTimeout(
+		ratingStore,
+		tenantID,
+		agentName,
+		effectiveVersion,
+		*rating,
+	); err != nil {
+		_ = level.Error(logger).Log(
+			"msg", "failed to persist completed agent rating",
+			"tenant_id", tenantID,
+			"agent_name", agentName,
+			"effective_version", effectiveVersion,
+			"err", err,
+		)
+	}
+}
+
+func upsertAgentRatingWithTimeout(
+	ratingStore agentrating.LatestStore,
+	tenantID string,
+	agentName string,
+	effectiveVersion string,
+	rating agentrating.Rating,
+) error {
+	persistCtx, cancel := context.WithTimeout(context.Background(), agentRatingPersistTimeout)
+	defer cancel()
+	return ratingStore.UpsertAgentVersionRating(persistCtx, tenantID, agentName, effectiveVersion, rating)
+}
+
+func lookupAgentRating(querySvc *query.Service, ratingStore agentrating.LatestStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		tenantID, err := tenant.TenantID(req.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		rawNames, hasName := req.URL.Query()["name"]
+		if !hasName {
+			http.Error(w, "name query param is required", http.StatusBadRequest)
+			return
+		}
+
+		agentName := ""
+		if len(rawNames) > 0 {
+			agentName = rawNames[0]
+		}
+
+		agentDetail, found, err := querySvc.GetAgentDetailForTenant(
+			req.Context(),
+			tenantID,
+			agentName,
+			req.URL.Query().Get("version"),
+		)
+		if err != nil {
+			if query.IsValidationError(err) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if !found {
+			http.NotFound(w, req)
+			return
+		}
+
+		rating, err := ratingStore.GetAgentVersionRating(
+			req.Context(),
+			tenantID,
+			agentDetail.AgentName,
+			agentDetail.EffectiveVersion,
+		)
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if rating == nil {
+			http.NotFound(w, req)
+			return
+		}
+		rating.Status = agentrating.NormalizeRatingStatus(rating.Status)
+
+		writeJSON(w, http.StatusOK, rating)
+	}
+}
+
+func mapAgentDetailToRatingAgent(item query.AgentDetail) agentrating.Agent {
+	models := make([]string, 0, len(item.Models))
+	for _, model := range item.Models {
+		provider := strings.TrimSpace(model.Provider)
+		name := strings.TrimSpace(model.Name)
+		switch {
+		case provider != "" && name != "":
+			models = append(models, provider+"/"+name)
+		case name != "":
+			models = append(models, name)
+		}
+	}
+
+	tools := make([]agentrating.Tool, 0, len(item.Tools))
+	for _, tool := range item.Tools {
+		tools = append(tools, agentrating.Tool{
+			Name:            tool.Name,
+			Description:     tool.Description,
+			Type:            tool.Type,
+			InputSchemaJSON: tool.InputSchemaJSON,
+			TokenEstimate:   tool.TokenEstimate,
+		})
+	}
+
+	return agentrating.Agent{
+		Name:         item.AgentName,
+		SystemPrompt: item.SystemPrompt,
+		Tools:        tools,
+		Models:       models,
+		TokenEstimate: agentrating.TokenEstimate{
+			SystemPrompt: item.TokenEstimate.SystemPrompt,
+			ToolsTotal:   item.TokenEstimate.ToolsTotal,
+			Total:        item.TokenEstimate.Total,
+		},
 	}
 }
 

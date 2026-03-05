@@ -61,6 +61,9 @@ func (c *openAICompatHTTPClient) Judge(ctx context.Context, req JudgeRequest) (J
 		},
 		"temperature": req.Temperature,
 	}
+	if req.Thinking.IsEnabled() {
+		payload["reasoning_effort"] = string(mapOpenAIReasoningEffort(req.Thinking.LevelOrDefault()))
+	}
 	if req.MaxTokens > 0 {
 		payload["max_tokens"] = req.MaxTokens
 	}

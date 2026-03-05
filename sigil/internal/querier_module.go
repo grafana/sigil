@@ -10,6 +10,7 @@ import (
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/grafana/dskit/services"
+	"github.com/grafana/sigil/sigil/internal/agentrating"
 	"github.com/grafana/sigil/sigil/internal/config"
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	evalcontrol "github.com/grafana/sigil/sigil/internal/eval/control"
@@ -120,13 +121,28 @@ func newQuerierModule(
 		tenantSettingsSvc = tenantsettings.NewService(tenantSettingsStore)
 	}
 
+	discovery := judges.DiscoverFromEnv()
+	agentRatingProviderID, agentRatingModelName := cfg.AgentRatingJudgeTarget()
+	var agentRater *agentrating.Rater
+	var agentRatingStore agentrating.LatestStore
+	if store, ok := generationStore.(agentrating.LatestStore); ok {
+		agentRatingStore = store
+	}
+	if _, ok := discovery.Client(agentRatingProviderID); ok {
+		agentRater = agentrating.NewRaterWithTarget(discovery, agentRatingProviderID, agentRatingModelName)
+	} else {
+		_ = level.Warn(logger).Log(
+			"msg", "agent rating disabled because configured judge provider is unavailable",
+			"provider", agentRatingProviderID,
+			"model", agentRatingModelName,
+		)
+	}
+
 	var controlSvc *evalcontrol.Service
 	var templateSvc *evalcontrol.TemplateService
 	var ingestScoreSvc *evalingest.Service
 	var testSvc *evalcontrol.TestService
 	if evalStore, ok := generationStore.(evalpkg.EvalStore); ok && evalStore != nil {
-		discovery := judges.DiscoverFromEnv()
-
 		// Build generation reader and evaluator registry for the test service.
 		if genReader, ok := generationStore.(evalworker.GenerationReader); ok {
 			hotColdReader := evalworker.NewHotColdGenerationReader(genReader, blockMetadataStore, blockReader)
@@ -224,10 +240,13 @@ func newQuerierModule(
 			server.RegisterQueryRoutes(
 				mux,
 				querySvc,
+				agentRater,
+				agentRatingStore,
 				feedbackSvc,
 				cfg.ConversationRatingsEnabled,
 				cfg.ConversationAnnotationsEnabled,
 				modelCardSvc,
+				logger,
 				protectedMiddleware,
 			)
 			server.RegisterSettingsRoutes(mux, tenantSettingsSvc, protectedMiddleware)

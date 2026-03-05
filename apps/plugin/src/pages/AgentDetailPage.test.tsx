@@ -12,6 +12,14 @@ function LocationProbe() {
 function createDataSource(): AgentsDataSource {
   return {
     listAgents: jest.fn(async () => ({ items: [], next_cursor: '' })),
+    lookupAgentRating: jest.fn(async () => null),
+    rateAgent: jest.fn(async () => ({
+      score: 8,
+      summary: 'Test summary',
+      suggestions: [],
+      judge_model: 'openai/gpt-4o-mini',
+      judge_latency_ms: 100,
+    })),
     lookupAgent: jest.fn(async (_name: string, version?: string) => ({
       agent_name: _name,
       effective_version:

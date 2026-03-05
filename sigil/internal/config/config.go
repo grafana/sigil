@@ -76,6 +76,8 @@ type Config struct {
 	EvalClaimBatchSize             int
 	EvalPollInterval               time.Duration
 	EvalDefaultJudgeModel          string
+	AgentRatingJudgeProvider       string
+	AgentRatingJudgeModel          string
 	EvalSeedFile                   string
 	EvalSeedStrict                 bool
 	EvalPreviewWindowHours         int
@@ -237,16 +239,18 @@ func FromEnv() Config {
 			StaleHard:     getEnvDuration("SIGIL_MODEL_CARDS_STALE_HARD", 24*time.Hour),
 			BootstrapMode: strings.ToLower(strings.TrimSpace(getEnv("SIGIL_MODEL_CARDS_BOOTSTRAP_MODE", "snapshot-first"))),
 		},
-		EvalWorkerEnabled:      getEnvBool("SIGIL_EVAL_WORKER_ENABLED", false),
-		EvalMaxConcurrent:      getEnvInt("SIGIL_EVAL_MAX_CONCURRENT", DefaultEvalMaxConcurrent),
-		EvalMaxRate:            getEnvInt("SIGIL_EVAL_MAX_RATE", DefaultEvalMaxRate),
-		EvalMaxAttempts:        getEnvInt("SIGIL_EVAL_MAX_ATTEMPTS", DefaultEvalMaxAttempts),
-		EvalClaimBatchSize:     getEnvInt("SIGIL_EVAL_CLAIM_BATCH_SIZE", DefaultEvalClaimBatchSize),
-		EvalPollInterval:       getEnvDuration("SIGIL_EVAL_POLL_INTERVAL", DefaultEvalPollInterval),
-		EvalDefaultJudgeModel:  getEnv("SIGIL_EVAL_DEFAULT_JUDGE_MODEL", DefaultEvalDefaultJudgeModel),
-		EvalSeedFile:           getEnv("SIGIL_EVAL_SEED_FILE", "sigil-eval-seed.yaml"),
-		EvalSeedStrict:         getEnvBool("SIGIL_EVAL_SEED_STRICT", false),
-		EvalPreviewWindowHours: getEnvInt("SIGIL_EVAL_PREVIEW_WINDOW_HOURS", DefaultEvalPreviewWindowHours),
+		EvalWorkerEnabled:        getEnvBool("SIGIL_EVAL_WORKER_ENABLED", false),
+		EvalMaxConcurrent:        getEnvInt("SIGIL_EVAL_MAX_CONCURRENT", DefaultEvalMaxConcurrent),
+		EvalMaxRate:              getEnvInt("SIGIL_EVAL_MAX_RATE", DefaultEvalMaxRate),
+		EvalMaxAttempts:          getEnvInt("SIGIL_EVAL_MAX_ATTEMPTS", DefaultEvalMaxAttempts),
+		EvalClaimBatchSize:       getEnvInt("SIGIL_EVAL_CLAIM_BATCH_SIZE", DefaultEvalClaimBatchSize),
+		EvalPollInterval:         getEnvDuration("SIGIL_EVAL_POLL_INTERVAL", DefaultEvalPollInterval),
+		EvalDefaultJudgeModel:    getEnv("SIGIL_EVAL_DEFAULT_JUDGE_MODEL", DefaultEvalDefaultJudgeModel),
+		AgentRatingJudgeProvider: strings.TrimSpace(getEnv("SIGIL_AGENT_RATING_JUDGE_PROVIDER", "")),
+		AgentRatingJudgeModel:    strings.TrimSpace(getEnv("SIGIL_AGENT_RATING_JUDGE_MODEL", "")),
+		EvalSeedFile:             getEnv("SIGIL_EVAL_SEED_FILE", "sigil-eval-seed.yaml"),
+		EvalSeedStrict:           getEnvBool("SIGIL_EVAL_SEED_STRICT", false),
+		EvalPreviewWindowHours:   getEnvInt("SIGIL_EVAL_PREVIEW_WINDOW_HOURS", DefaultEvalPreviewWindowHours),
 	}
 }
 
@@ -384,6 +388,16 @@ func (c Config) Validate() error {
 	}
 	if err := validateProviderModelFormat(c.EvalDefaultJudgeModel, "SIGIL_EVAL_DEFAULT_JUDGE_MODEL"); err != nil {
 		return err
+	}
+	agentRatingProvider := strings.TrimSpace(c.AgentRatingJudgeProvider)
+	agentRatingModel := strings.TrimSpace(c.AgentRatingJudgeModel)
+	if (agentRatingProvider == "") != (agentRatingModel == "") {
+		return fmt.Errorf("SIGIL_AGENT_RATING_JUDGE_PROVIDER and SIGIL_AGENT_RATING_JUDGE_MODEL must both be set or both be empty")
+	}
+	if agentRatingProvider != "" {
+		if err := validateProviderID(agentRatingProvider, "SIGIL_AGENT_RATING_JUDGE_PROVIDER"); err != nil {
+			return err
+		}
 	}
 
 	if err := c.ObjectStore.Validate(); err != nil {
@@ -529,4 +543,47 @@ func validateProviderModelFormat(raw string, key string) error {
 		return fmt.Errorf("%s must be in provider/model format", key)
 	}
 	return nil
+}
+
+func validateProviderID(raw string, key string) error {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return fmt.Errorf("%s must not be empty", key)
+	}
+	for _, r := range trimmed {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= '0' && r <= '9':
+		case r == '-', r == '_':
+		default:
+			return fmt.Errorf("%s contains invalid character %q; allowed characters are lowercase letters, digits, '-', and '_'", key, r)
+		}
+	}
+	return nil
+}
+
+// AgentRatingJudgeTarget returns the provider/model target used by the
+// on-demand agent rating feature.
+//
+// If SIGIL_AGENT_RATING_JUDGE_PROVIDER and SIGIL_AGENT_RATING_JUDGE_MODEL are
+// set, those values are used. Otherwise the value falls back to
+// SIGIL_EVAL_DEFAULT_JUDGE_MODEL.
+func (c Config) AgentRatingJudgeTarget() (string, string) {
+	provider := strings.TrimSpace(c.AgentRatingJudgeProvider)
+	model := strings.TrimSpace(c.AgentRatingJudgeModel)
+	if provider != "" && model != "" {
+		return provider, model
+	}
+	return splitProviderModel(c.EvalDefaultJudgeModel)
+}
+
+func splitProviderModel(raw string) (string, string) {
+	trimmed := strings.TrimSpace(raw)
+	parts := strings.SplitN(trimmed, "/", 2)
+	if len(parts) != 2 {
+		return "", ""
+	}
+	provider := strings.TrimSpace(parts[0])
+	model := strings.TrimSpace(parts[1])
+	return provider, model
 }

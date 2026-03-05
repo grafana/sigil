@@ -4,10 +4,11 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Alert, Badge, Button, Select, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../agents/api';
-import type { AgentDetail, AgentVersionListItem } from '../agents/types';
+import type { AgentDetail, AgentRatingResponse, AgentVersionListItem } from '../agents/types';
 import ModelCardPopover from '../components/conversations/ModelCardPopover';
 import { getProviderColor, getProviderMeta, stripProviderPrefix } from '../components/conversations/providerMeta';
 import ToolsPanel from '../components/agents/ToolsPanel';
+import AgentRatingPanel from '../components/agents/AgentRatingPanel';
 import { defaultModelCardClient, type ModelCardClient } from '../modelcard/api';
 import type { ModelCard } from '../modelcard/types';
 import { resolveModelCardsFromNames } from '../modelcard/resolve';
@@ -211,11 +212,15 @@ export default function AgentDetailPage({
   const [versionsCursor, setVersionsCursor] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadingVersions, setLoadingVersions] = useState(false);
+  const [initialRatingLoading, setInitialRatingLoading] = useState(false);
+  const [initialRating, setInitialRating] = useState<AgentRatingResponse | null>(null);
+  const [initialRatingError, setInitialRatingError] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [modelCards, setModelCards] = useState<Map<string, ModelCard>>(new Map());
   const [openModel, setOpenModel] = useState<{ key: string; anchorRect: DOMRect } | null>(null);
   const detailRequestVersion = useRef(0);
   const versionsRequestVersion = useRef(0);
+  const ratingRequestVersion = useRef(0);
 
   const selectedVersion = searchParams.get('version')?.trim() ?? '';
   const agentName = buildAgentNameFromRoute(location.pathname, params.agentName);
@@ -253,6 +258,42 @@ export default function AgentDetailPage({
           return;
         }
         setLoading(false);
+      });
+  }, [agentName, dataSource, selectedVersion]);
+
+  useEffect(() => {
+    ratingRequestVersion.current += 1;
+    const version = ratingRequestVersion.current;
+
+    queueMicrotask(() => {
+      if (ratingRequestVersion.current !== version) {
+        return;
+      }
+      setInitialRating(null);
+      setInitialRatingLoading(true);
+      setInitialRatingError('');
+    });
+
+    dataSource
+      .lookupAgentRating(agentName, selectedVersion.length > 0 ? selectedVersion : undefined)
+      .then((rating) => {
+        if (ratingRequestVersion.current !== version) {
+          return;
+        }
+        setInitialRating(rating);
+      })
+      .catch((err: unknown) => {
+        if (ratingRequestVersion.current !== version) {
+          return;
+        }
+        setInitialRating(null);
+        setInitialRatingError(err instanceof Error ? err.message : 'Failed to load latest agent rating');
+      })
+      .finally(() => {
+        if (ratingRequestVersion.current !== version) {
+          return;
+        }
+        setInitialRatingLoading(false);
       });
   }, [agentName, dataSource, selectedVersion]);
 
@@ -493,6 +534,15 @@ export default function AgentDetailPage({
           tooltip="Sum of system prompt and tool tokens — the baseline context cost per generation."
         />
       </div>
+
+      <AgentRatingPanel
+        agentName={agentName}
+        version={activeVersion}
+        dataSource={dataSource}
+        initialResult={initialRating}
+        initialLoading={initialRatingLoading || initialRating?.status === 'pending'}
+        initialError={initialRatingError}
+      />
 
       <div className={styles.panel}>
         <div className={styles.panelHeader}>

@@ -69,6 +69,9 @@ func (c *OpenAIClient) Judge(ctx context.Context, req JudgeRequest) (JudgeRespon
 		},
 		Temperature: openai.Float(req.Temperature),
 	}
+	if req.Thinking.IsEnabled() {
+		params.ReasoningEffort = mapOpenAIReasoningEffort(req.Thinking.LevelOrDefault())
+	}
 	if req.MaxTokens > 0 {
 		params.MaxCompletionTokens = openai.Int(int64(req.MaxTokens))
 	}
@@ -133,6 +136,19 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]JudgeModel, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+func mapOpenAIReasoningEffort(level ThinkingLevel) shared.ReasoningEffort {
+	switch level {
+	case ThinkingLevelMinimal:
+		return shared.ReasoningEffortMinimal
+	case ThinkingLevelLow:
+		return shared.ReasoningEffortLow
+	case ThinkingLevelHigh:
+		return shared.ReasoningEffortHigh
+	default:
+		return shared.ReasoningEffortMedium
+	}
 }
 
 func normalizeOpenAIBaseURL(baseURL string) string {
