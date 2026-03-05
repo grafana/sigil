@@ -7,6 +7,7 @@ import 'react-json-view-lite/dist/index.css';
 import type { AgentTool } from '../../agents/types';
 import { TokenizedText } from '../tokenizer/TokenizedText';
 import { AVAILABLE_ENCODINGS, type EncodingName } from '../tokenizer/encodingMap';
+import { getTokenizeControlStyles } from '../tokenizer/tokenizeControls.styles';
 
 export type ToolsPanelProps = {
   tools: AgentTool[];
@@ -225,58 +226,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     padding: theme.spacing(4),
     color: theme.colors.text.disabled,
   }),
-  tokenizeBtn: css({
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: theme.spacing(0.375),
-    padding: `${theme.spacing(0.25)} ${theme.spacing(0.75)}`,
-    borderRadius: theme.shape.radius.pill,
-    fontSize: 10,
-    fontWeight: theme.typography.fontWeightMedium,
-    color: theme.colors.text.secondary,
-    background: 'transparent',
-    border: `1px solid ${theme.colors.border.weak}`,
-    cursor: 'pointer',
-    transition: 'all 120ms ease',
-    '&:hover': {
-      color: theme.colors.text.primary,
-      borderColor: theme.colors.border.medium,
-      background: theme.colors.action.hover,
-    },
-  }),
-  tokenizeBtnActive: css({
-    color: theme.colors.primary.text,
-    borderColor: theme.colors.primary.border,
-    background: theme.colors.primary.transparent,
-  }),
-  encodingSelect: css({
-    marginLeft: theme.spacing(0.5),
-    fontSize: 10,
-    padding: `1px ${theme.spacing(0.5)}`,
-    height: 22,
-    width: 'fit-content',
-    background: theme.colors.background.primary,
-    border: `1px solid ${theme.colors.border.weak}`,
-    borderRadius: theme.shape.radius.default,
-    color: theme.colors.text.primary,
-    cursor: 'pointer',
-    appearance: 'auto' as const,
-    '&:focus': {
-      borderColor: theme.colors.primary.border,
-      outline: 'none',
-    },
-  }),
-  tokenizedSchema: css({
-    borderRadius: theme.shape.radius.default,
-    border: `1px solid ${theme.colors.border.weak}`,
-    background: theme.colors.background.canvas,
-    padding: theme.spacing(1.5),
-    fontSize: theme.typography.size.sm,
-    lineHeight: 1.6,
-    overflowX: 'auto',
-    whiteSpace: 'pre-wrap' as const,
-    wordBreak: 'break-word' as const,
-  }),
+  ...getTokenizeControlStyles(theme),
 });
 
 function buildJsonViewStyle(theme: GrafanaTheme2): JsonViewProps['style'] {

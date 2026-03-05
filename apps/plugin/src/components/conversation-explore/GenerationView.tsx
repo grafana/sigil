@@ -87,40 +87,42 @@ function Section({
         {title}
         {count && <span className={styles.sectionCount}>({count})</span>}
         {onToggleTokenize && (
-          <span
-            className={cx(styles.tokenizeBtn, tokenized && styles.tokenizeBtnActive)}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleTokenize();
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
+          <span style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto' }}>
+            <span
+              className={cx(styles.tokenizeBtn, tokenized && styles.tokenizeBtnActive)}
+              onClick={(e) => {
                 e.stopPropagation();
                 onToggleTokenize();
-              }
-            }}
-            role="button"
-            tabIndex={0}
-          >
-            <Icon name="brackets-curly" size="xs" />
-            {tokenizerLoading ? 'Loading\u2026' : 'Tokenize'}
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.stopPropagation();
+                  onToggleTokenize();
+                }
+              }}
+              role="button"
+              tabIndex={0}
+            >
+              <Icon name="brackets-curly" size="xs" />
+              {tokenizerLoading ? 'Loading\u2026' : 'Tokenize'}
+            </span>
+            {tokenized && onEncodingChange && (
+              <select
+                className={styles.encodingSelect}
+                aria-label="Tokenizer encoding"
+                value={encodingOverride ?? ''}
+                onChange={(e) => onEncodingChange(e.target.value ? (e.target.value as EncodingName) : null)}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <option value="">Auto ({(autoEncoding ?? 'cl100k_base').replace('_base', '')})</option>
+                {AVAILABLE_ENCODINGS.map((enc) => (
+                  <option key={enc.value} value={enc.value}>
+                    {enc.value.replace('_base', '')}
+                  </option>
+                ))}
+              </select>
+            )}
           </span>
-        )}
-        {tokenized && onEncodingChange && (
-          <select
-            className={styles.encodingSelect}
-            aria-label="Tokenizer encoding"
-            value={encodingOverride ?? ''}
-            onChange={(e) => onEncodingChange(e.target.value ? (e.target.value as EncodingName) : null)}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <option value="">Auto ({autoEncoding ?? 'cl100k'})</option>
-            {AVAILABLE_ENCODINGS.map((enc) => (
-              <option key={enc.value} value={enc.value}>
-                {enc.value.replace('_base', '')}
-              </option>
-            ))}
-          </select>
         )}
       </div>
       {expanded && <div className={styles.sectionContent}>{children}</div>}

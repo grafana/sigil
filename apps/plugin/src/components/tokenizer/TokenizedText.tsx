@@ -5,22 +5,6 @@ import { getStyles } from './TokenizedText.styles';
 
 const MAX_TOKENS = 10_000;
 
-type TokenSegment = {
-  text: string;
-  id: number;
-  index: number;
-};
-
-function tokenize(text: string, encode: (t: string) => number[], decode: (ids: number[]) => string): TokenSegment[] {
-  const tokenIds = encode(text);
-  const capped = tokenIds.length > MAX_TOKENS ? tokenIds.slice(0, MAX_TOKENS) : tokenIds;
-  return capped.map((id, index) => ({
-    text: decode([id]),
-    id,
-    index,
-  }));
-}
-
 export type TokenizedTextProps = {
   text: string;
   encode: ((t: string) => number[]) | undefined;
@@ -36,7 +20,11 @@ export function TokenizedText({ text, encode, decode }: TokenizedTextProps) {
     }
     const tokenIds = encode(text);
     const isTruncated = tokenIds.length > MAX_TOKENS;
-    return { segments: tokenize(text, encode, decode), truncated: isTruncated };
+    const capped = isTruncated ? tokenIds.slice(0, MAX_TOKENS) : tokenIds;
+    return {
+      segments: capped.map((id, index) => ({ text: decode([id]), id, index })),
+      truncated: isTruncated,
+    };
   }, [text, encode, decode]);
 
   if (!segments) {
