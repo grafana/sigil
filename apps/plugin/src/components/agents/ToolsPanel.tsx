@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { css, cx } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Icon, Input, Stack, Text, Tooltip, useStyles2, useTheme2 } from '@grafana/ui';
+import { Icon, Input, Stack, Tab, TabsBar, Text, Tooltip, useStyles2, useTheme2 } from '@grafana/ui';
 import { JsonView, type Props as JsonViewProps } from 'react-json-view-lite';
 import 'react-json-view-lite/dist/index.css';
 import type { AgentTool } from '../../agents/types';
@@ -179,13 +179,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     textTransform: 'uppercase' as const,
     letterSpacing: '0.04em',
   }),
-  detailTokensRow: css({
-    display: 'flex',
-    alignItems: 'center',
-    gap: theme.spacing(0.5),
-    fontSize: theme.typography.bodySmall.fontSize,
-    color: theme.colors.text.secondary,
-  }),
   detailDescription: css({
     fontSize: theme.typography.body.fontSize,
     lineHeight: theme.typography.body.lineHeight,
@@ -198,6 +191,28 @@ const getStyles = (theme: GrafanaTheme2) => ({
     fontWeight: theme.typography.fontWeightMedium,
     letterSpacing: '0.03em',
     textTransform: 'uppercase' as const,
+  }),
+  detailTabs: css({
+    marginTop: `-${theme.spacing(1)}`,
+    marginBottom: `-${theme.spacing(0.5)}`,
+  }),
+  descriptionCode: css({
+    margin: 0,
+    minHeight: 220,
+    maxHeight: 420,
+    overflow: 'auto',
+    whiteSpace: 'pre-wrap' as const,
+    borderRadius: theme.shape.radius.default,
+    border: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.canvas,
+    padding: theme.spacing(1.5),
+    fontFamily: theme.typography.fontFamilyMonospace,
+    fontSize: theme.typography.size.sm,
+    lineHeight: 1.6,
+    color: theme.colors.text.primary,
+    '& code': {
+      fontFamily: 'inherit',
+    },
   }),
   schemaContainer: css({
     borderRadius: theme.shape.radius.default,
@@ -323,8 +338,8 @@ function buildJsonViewStyle(theme: GrafanaTheme2): JsonViewProps['style'] {
   };
 }
 
-function shouldExpandNode(level: number): boolean {
-  return level < 2;
+function shouldExpandNode(): boolean {
+  return true;
 }
 
 function parseSchema(raw: string): object {
@@ -358,6 +373,7 @@ export default function ToolsPanel({
   const jsonStyle = useMemo(() => buildJsonViewStyle(theme), [theme]);
 
   const [selectedToolKey, setSelectedToolKey] = useState<string | null>(null);
+  const [detailTab, setDetailTab] = useState<'description' | 'schema'>('description');
   const [filter, setFilter] = useState('');
   const [sortField, setSortField] = useState<'name' | 'tokens'>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -535,37 +551,49 @@ export default function ToolsPanel({
             <div>
               <Stack direction="row" alignItems="center" gap={1} wrap="wrap">
                 <span className={styles.detailTitle}>{selected.name}</span>
-                <span className={styles.detailType}>{selected.type}</span>
-              </Stack>
-              <div className={styles.detailTokensRow}>
-                <Tooltip content="Estimated tokens consumed by this tool's schema definition" placement="top">
+                <Tooltip content="Approximate tokens consumed by this tool's schema definition" placement="top">
                   <Stack direction="row" alignItems="center" gap={0.5}>
                     <Icon name="database" size="xs" />
-                    <span>{selected.token_estimate.toLocaleString()} tokens</span>
+                    <span>approx {selected.token_estimate.toLocaleString()} tokens</span>
                   </Stack>
                 </Tooltip>
-              </div>
+                <span className={styles.detailType}>{selected.type}</span>
+              </Stack>
             </div>
 
-            {selected.description.length > 0 && (
+            <div className={styles.detailTabs}>
+              <TabsBar>
+                <Tab
+                  label="Description"
+                  active={detailTab === 'description'}
+                  onChangeTab={() => setDetailTab('description')}
+                />
+                <Tab label="Input schema" active={detailTab === 'schema'} onChangeTab={() => setDetailTab('schema')} />
+              </TabsBar>
+            </div>
+
+            {detailTab === 'description' && (
               <div>
-                <div className={styles.sectionLabel}>Description</div>
-                {tokenized && encode && decode ? (
-                  <div className={styles.detailDescription}>
+                {tokenized && encode && decode && selected.description.length > 0 ? (
+                  <pre className={styles.descriptionCode}>
                     <TokenizedText text={selected.description} encode={encode} decode={decode} />
-                  </div>
+                  </pre>
                 ) : (
-                  <div className={styles.detailDescription}>{selected.description}</div>
+                  <pre className={styles.descriptionCode}>
+                    {selected.description.length > 0 ? selected.description : 'No description recorded.'}
+                  </pre>
                 )}
               </div>
             )}
 
-            <div>
-              <div className={styles.sectionLabel}>Input schema</div>
-              <div className={styles.schemaContainer}>
-                <JsonView data={parsedSchema} style={jsonStyle} shouldExpandNode={shouldExpandNode} clickToExpandNode />
+            {detailTab === 'schema' && (
+              <div>
+                <div className={styles.sectionLabel}>Input schema</div>
+                <div className={styles.schemaContainer}>
+                  <JsonView data={parsedSchema} style={jsonStyle} shouldExpandNode={shouldExpandNode} clickToExpandNode />
+                </div>
               </div>
-            </div>
+            )}
           </div>
         ) : (
           <div className={styles.emptyDetail}>
