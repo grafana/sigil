@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { css } from '@emotion/css';
+import { css, cx } from '@emotion/css';
 import { useAssistant } from '@grafana/assistant';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Button, Card, HorizontalGroup, IconButton, LinkButton, Stack, Text, Tooltip, useStyles2 } from '@grafana/ui';
@@ -564,7 +564,6 @@ export function LandingTopBar({
 
   const gradientColors = ['#5794F2', '#B877D9', '#FF9830'] as const;
   const spineCount = 48;
-  const emptyHeights = useMemo(() => Array(spineCount).fill(0), [spineCount]);
   const initialRequestSpineCache = useMemo(() => {
     if (!requestsDataSource || to <= from) {
       return null;
@@ -664,8 +663,6 @@ export function LandingTopBar({
     };
   }, [requestsDataSource, requestsFilters, from, to, spineCount]);
 
-  const spineHeights = requestSpineHeights ?? emptyHeights;
-
   const waveAt75Heights = useMemo(() => {
     const MIN_H = 20;
     const MAX_H = 100;
@@ -676,72 +673,75 @@ export function LandingTopBar({
     });
   }, [spineCount]);
 
-  const displayHeights = requestSpineHeights != null ? spineHeights : waveAt75Heights;
+  const displayHeights = requestSpineHeights ?? waveAt75Heights;
+  const showRequestSpines = requestsDataSource != null && to > from;
 
   return (
     <>
       <div className={styles.pageFlow}>
         <div className={styles.heroBlock}>
-          <div className={styles.heroSpines} aria-hidden>
-            {displayHeights.map((height, i) => {
-              const t = i / (spineCount - 1);
-              const color =
-                t <= 0.52
-                  ? interpolateHex(gradientColors[0], gradientColors[1], t / 0.52)
-                  : interpolateHex(gradientColors[1], gradientColors[2], (t - 0.52) / 0.48);
-              const stat =
-                requestSpineValues != null && i < requestSpineValues.length
-                  ? formatRequestStat(requestSpineValues[i])
-                  : null;
-              const timeStr =
-                stat != null && to > from ? formatBarTime(from, to, i, spineCount) : null;
-              const durationStr =
-                stat != null && to > from ? formatBarDuration(from, to, spineCount) : null;
-              const waveIssueTooltip =
-                requestSpineHeights == null &&
-                requestsDataSource != null &&
-                requestSpineWaveReason === 'error'
-                  ? 'Failed to load request data'
-                  : requestSpineHeights == null &&
-                      requestsDataSource != null &&
-                      requestSpineWaveReason === 'no-data'
-                    ? 'No data in this time range'
+          {showRequestSpines && (
+            <div className={styles.heroSpines} aria-hidden>
+              {displayHeights.map((height, i) => {
+                const t = i / (spineCount - 1);
+                const color =
+                  t <= 0.52
+                    ? interpolateHex(gradientColors[0], gradientColors[1], t / 0.52)
+                    : interpolateHex(gradientColors[1], gradientColors[2], (t - 0.52) / 0.48);
+                const stat =
+                  requestSpineValues != null && i < requestSpineValues.length
+                    ? formatRequestStat(requestSpineValues[i])
                     : null;
-              const tooltipContent =
-                stat != null ? (
-                  <div className={styles.spineTooltipContent}>
-                    <div>{stat}</div>
-                    {timeStr != null && (
-                      <div className={styles.spineTooltipTime}>{timeStr}</div>
-                    )}
-                    {durationStr != null && (
-                      <div className={styles.spineTooltipTime}>({durationStr})</div>
-                    )}
-                  </div>
-                ) : waveIssueTooltip != null ? (
-                  waveIssueTooltip
-                ) : null;
-              const bar = (
-                <div
-                  className={styles.heroSpine}
-                  style={{
-                    transform: `scaleY(${height / 100})`,
-                    backgroundColor: color,
-                    transition: disableSpineAnimation ? 'none' : undefined,
-                    transitionDelay:
-                      requestSpineHeights != null && !disableSpineAnimation ? `${Math.min(i * 6, 150)}ms` : undefined,
-                  }}
-                />
-              );
-              const slot = <div className={styles.heroSpineSlot}>{bar}</div>;
-              return (
-                <Tooltip key={i} content={tooltipContent ?? ''} placement="top">
-                  {slot}
-                </Tooltip>
-              );
-            })}
-          </div>
-          <div className={styles.heroCard}>
+                const timeStr =
+                  stat != null && to > from ? formatBarTime(from, to, i, spineCount) : null;
+                const durationStr =
+                  stat != null && to > from ? formatBarDuration(from, to, spineCount) : null;
+                const waveIssueTooltip =
+                  requestSpineHeights == null &&
+                  requestsDataSource != null &&
+                  requestSpineWaveReason === 'error'
+                    ? 'Failed to load request data'
+                    : requestSpineHeights == null &&
+                        requestsDataSource != null &&
+                        requestSpineWaveReason === 'no-data'
+                      ? 'No data in this time range'
+                      : null;
+                const tooltipContent =
+                  stat != null ? (
+                    <div className={styles.spineTooltipContent}>
+                      <div>{stat}</div>
+                      {timeStr != null && (
+                        <div className={styles.spineTooltipTime}>{timeStr}</div>
+                      )}
+                      {durationStr != null && (
+                        <div className={styles.spineTooltipTime}>({durationStr})</div>
+                      )}
+                    </div>
+                  ) : waveIssueTooltip != null ? (
+                    waveIssueTooltip
+                  ) : null;
+                const bar = (
+                  <div
+                    className={styles.heroSpine}
+                    style={{
+                      transform: `scaleY(${height / 100})`,
+                      backgroundColor: color,
+                      transition: disableSpineAnimation ? 'none' : undefined,
+                      transitionDelay:
+                        requestSpineHeights != null && !disableSpineAnimation ? `${Math.min(i * 6, 150)}ms` : undefined,
+                    }}
+                  />
+                );
+                const slot = <div className={styles.heroSpineSlot}>{bar}</div>;
+                return (
+                  <Tooltip key={i} content={tooltipContent ?? ''} placement="top">
+                    {slot}
+                  </Tooltip>
+                );
+              })}
+            </div>
+          )}
+          <div className={cx(styles.heroCard, showRequestSpines && styles.heroCardWithSpines)}>
             <div className={styles.heroCardContent}>
               <div className={styles.heroHeader}>
                 <div>
@@ -1164,10 +1164,7 @@ function getStyles(theme: GrafanaTheme2) {
       position: 'relative',
       flex: 1,
       minHeight: 0,
-      borderTopLeftRadius: 0,
-      borderTopRightRadius: 0,
-      borderBottomLeftRadius: theme.shape.radius.default,
-      borderBottomRightRadius: theme.shape.radius.default,
+      borderRadius: theme.shape.radius.default,
       overflow: 'hidden',
       paddingTop: theme.spacing(2),
       paddingLeft: theme.spacing(3),
@@ -1182,6 +1179,11 @@ function getStyles(theme: GrafanaTheme2) {
         height: 3,
         background: 'linear-gradient(90deg, #5794F2 0%, #B877D9 52%, #FF9830 100%)',
       },
+    }),
+    heroCardWithSpines: css({
+      label: 'landingTopBar-heroCardWithSpines',
+      borderTopLeftRadius: 0,
+      borderTopRightRadius: 0,
     }),
     heroCardContent: css({
       label: 'landingTopBar-heroCardContent',
