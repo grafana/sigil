@@ -62,6 +62,12 @@ export const GoodScore = {
   },
 };
 
+export const Error = {
+  args: {
+    initialError: 'Provider timeout: the upstream LLM judge did not respond within 30 seconds.',
+  },
+};
+
 export const PoorScoreManySuggestions = {
   args: {
     initialResult: {
