@@ -311,8 +311,10 @@ func (s *FanOutStore) ListConversationGenerationsWithPlan(ctx context.Context, t
 		return merged, nil
 	}
 
+	hotGenerationIDs := uniqueGenerationIDs(hotGenerations)
+	hotUniqueCount := len(hotGenerationIDs)
 	expected := plan.ExpectedGenerationCount
-	if expected > 0 && uniqueGenerationCount(hotGenerations) >= expected {
+	if expected > 0 && hotUniqueCount >= expected {
 		merged := mergeGenerationsPreferHot(hotGenerations, nil)
 		observeQueryResolution("list_conversation", "hot")
 		observeQueryReturnedItems("list_conversation", len(merged))
@@ -326,7 +328,14 @@ func (s *FanOutStore) ListConversationGenerationsWithPlan(ctx context.Context, t
 	}
 
 	coldStart := time.Now()
-	coldGenerations, scannedBlocks, matchedBlocks, err := s.readColdConversationGenerationsWithPlan(ctx, tenantID, conversationID, plan)
+	coldGenerations, scannedBlocks, matchedBlocks, err := s.readColdConversationGenerationsWithPlan(
+		ctx,
+		tenantID,
+		conversationID,
+		plan,
+		hotGenerationIDs,
+		hotUniqueCount,
+	)
 	observeFanOutDuration("cold", coldStart)
 	if err != nil {
 		observeQueryResolution("list_conversation", "error")
@@ -443,6 +452,8 @@ func (s *FanOutStore) readColdConversationGenerationsWithPlan(
 	tenantID,
 	conversationID string,
 	plan ConversationReadPlan,
+	hotGenerationIDs map[string]struct{},
+	hotUniqueCount int,
 ) ([]*sigilv1.Generation, int, int, error) {
 	if !s.hasColdReadPath() {
 		return []*sigilv1.Generation{}, 0, 0, nil
@@ -498,6 +509,9 @@ func (s *FanOutStore) readColdConversationGenerationsWithPlan(
 	}()
 
 	expected := plan.ExpectedGenerationCount
+	if hotGenerationIDs == nil {
+		hotGenerationIDs = map[string]struct{}{}
+	}
 	byID := make(map[string]*sigilv1.Generation)
 	scannedBlocks := 0
 	matchedBlocks := 0
@@ -511,7 +525,7 @@ func (s *FanOutStore) readColdConversationGenerationsWithPlan(
 		}
 		if result.err != nil {
 			if errors.Is(result.err, context.Canceled) || errors.Is(result.err, context.DeadlineExceeded) {
-				if expected > 0 && len(byID) >= expected {
+				if expected > 0 && len(byID)+hotUniqueCount >= expected {
 					continue
 				}
 			}
@@ -529,9 +543,12 @@ func (s *FanOutStore) readColdConversationGenerationsWithPlan(
 			if generationID == "" {
 				continue
 			}
+			if _, hotDuplicate := hotGenerationIDs[generationID]; hotDuplicate {
+				continue
+			}
 			byID[generationID] = generation
 		}
-		if expected > 0 && len(byID) >= expected {
+		if expected > 0 && len(byID)+hotUniqueCount >= expected {
 			cancel()
 		}
 	}
@@ -717,9 +734,9 @@ func withOptionalTimeout(ctx context.Context, timeout time.Duration) (context.Co
 	return context.WithTimeout(ctx, timeout)
 }
 
-func uniqueGenerationCount(generations []*sigilv1.Generation) int {
+func uniqueGenerationIDs(generations []*sigilv1.Generation) map[string]struct{} {
 	if len(generations) == 0 {
-		return 0
+		return map[string]struct{}{}
 	}
 	byID := make(map[string]struct{}, len(generations))
 	for _, generation := range generations {
@@ -732,7 +749,7 @@ func uniqueGenerationCount(generations []*sigilv1.Generation) int {
 		}
 		byID[id] = struct{}{}
 	}
-	return len(byID)
+	return byID
 }
 
 func findEntriesByConversationID(index *BlockIndex, conversationID string) []IndexEntry {

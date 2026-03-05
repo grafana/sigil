@@ -2,7 +2,9 @@ package object
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"testing"
 	"time"
 
@@ -13,6 +15,23 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+type delayedGetBucket struct {
+	objstore.Bucket
+	getDelay time.Duration
+}
+
+func (b *delayedGetBucket) Get(ctx context.Context, name string) (io.ReadCloser, error) {
+	timer := time.NewTimer(b.getDelay)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-timer.C:
+	}
+	return b.Bucket.Get(ctx, name)
+}
 
 func TestStoreWriteReadRoundTrip(t *testing.T) {
 	ctx := context.Background()
@@ -124,6 +143,60 @@ func TestStoreReadIndexCacheHitAndMissMetrics(t *testing.T) {
 	}
 	if delta := missesAfter - missesBefore; delta != 1 {
 		t.Fatalf("expected one cache miss, got %v", delta)
+	}
+}
+
+func TestStoreReadIndexCoalescedReadIgnoresCanceledCallerContext(t *testing.T) {
+	baseBucket := objstore.NewInMemBucket()
+	store := NewStoreWithBucket("sigil", &delayedGetBucket{
+		Bucket:   baseBucket,
+		getDelay: 40 * time.Millisecond,
+	})
+
+	block := &storage.Block{
+		ID: "block-coalesced",
+		Generations: []storage.GenerationRecord{
+			testRecord(t, "gen-1", "conv-1", time.Date(2026, 2, 12, 19, 0, 0, 0, time.UTC)),
+		},
+	}
+	if err := store.WriteBlock(context.Background(), "tenant-a", block); err != nil {
+		t.Fatalf("write block: %v", err)
+	}
+
+	type readResult struct {
+		index *storage.BlockIndex
+		err   error
+	}
+
+	firstCtx, cancelFirst := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancelFirst()
+	secondCtx, cancelSecond := context.WithTimeout(context.Background(), time.Second)
+	defer cancelSecond()
+
+	firstResultCh := make(chan readResult, 1)
+	secondResultCh := make(chan readResult, 1)
+
+	go func() {
+		index, err := store.ReadIndex(firstCtx, "tenant-a", block.ID)
+		firstResultCh <- readResult{index: index, err: err}
+	}()
+	time.Sleep(5 * time.Millisecond)
+	go func() {
+		index, err := store.ReadIndex(secondCtx, "tenant-a", block.ID)
+		secondResultCh <- readResult{index: index, err: err}
+	}()
+
+	firstResult := <-firstResultCh
+	secondResult := <-secondResultCh
+
+	if !errors.Is(firstResult.err, context.DeadlineExceeded) {
+		t.Fatalf("expected first caller to fail on context deadline, got %v", firstResult.err)
+	}
+	if secondResult.err != nil {
+		t.Fatalf("expected second caller to succeed despite first caller cancellation, got %v", secondResult.err)
+	}
+	if secondResult.index == nil || len(secondResult.index.Entries) != 1 {
+		t.Fatalf("expected second caller to receive decoded index, got %#v", secondResult.index)
 	}
 }
 

@@ -53,7 +53,8 @@ const (
 	dataFileName  = "data.sigil"
 	indexFileName = "index.sigil"
 
-	defaultNotFoundCacheTTL = 30 * time.Second
+	defaultNotFoundCacheTTL     = 30 * time.Second
+	defaultCoalescedReadTimeout = 5 * time.Second
 )
 
 var _ storage.BlockWriter = (*Store)(nil)
@@ -251,8 +252,13 @@ func (s *Store) ReadIndex(ctx context.Context, tenantID, blockID string) (*stora
 	queryColdIndexCacheMissesTotal.Inc()
 	span.SetAttributes(attribute.Bool("sigil.query.cold_index.cache_hit", false))
 
-	result, err, _ := s.indexReadGroup.Do(cacheKey, func() (any, error) {
-		index, readErr := s.readIndexFromBucket(ctx, start, trimmedTenantID, trimmedBlockID)
+	resultCh := s.indexReadGroup.DoChan(cacheKey, func() (any, error) {
+		// Run the shared fetch on a detached timeout to avoid one canceled caller
+		// failing all coalesced waiters for the same index key.
+		coalescedCtx, cancel := context.WithTimeout(context.Background(), defaultCoalescedReadTimeout)
+		defer cancel()
+
+		index, readErr := s.readIndexFromBucket(coalescedCtx, start, trimmedTenantID, trimmedBlockID)
 		if readErr != nil {
 			if errors.Is(readErr, storage.ErrBlockNotFound) {
 				s.putNotFoundCache(cacheKey)
@@ -262,12 +268,21 @@ func (s *Store) ReadIndex(ctx context.Context, tenantID, blockID string) (*stora
 		s.putIndexCache(cacheKey, index)
 		return index, nil
 	})
-	if err != nil {
+
+	var result singleflight.Result
+	select {
+	case <-ctx.Done():
+		err := ctx.Err()
 		recordSpanError(span, err)
 		return nil, err
+	case result = <-resultCh:
+	}
+	if result.Err != nil {
+		recordSpanError(span, result.Err)
+		return nil, result.Err
 	}
 
-	index, ok := result.(*storage.BlockIndex)
+	index, ok := result.Val.(*storage.BlockIndex)
 	if !ok || index == nil {
 		err := errors.New("unexpected index read result")
 		recordSpanError(span, err)

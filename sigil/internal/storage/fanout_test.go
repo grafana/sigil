@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -207,6 +208,89 @@ func TestFanOutStoreListConversationGenerationsWithPlanSkipsColdWhenHotComplete(
 	}
 	if coldCalled {
 		t.Fatalf("expected cold path to be skipped when hot satisfies expected generation count")
+	}
+}
+
+func TestFanOutStoreListConversationGenerationsWithPlanStopsAfterRemainingExpectedCount(t *testing.T) {
+	base := time.Date(2026, 2, 19, 10, 0, 0, 0, time.UTC)
+	hotGeneration1 := fanOutTestGeneration("hot-1", "conv-1", base.Add(1*time.Minute))
+	hotGeneration2 := fanOutTestGeneration("hot-2", "conv-1", base.Add(2*time.Minute))
+	coldGeneration1 := fanOutTestGeneration("cold-1", "conv-1", base.Add(3*time.Minute))
+	coldGeneration2 := fanOutTestGeneration("cold-2", "conv-1", base.Add(4*time.Minute))
+	coldGeneration3 := fanOutTestGeneration("cold-3", "conv-1", base.Add(5*time.Minute))
+
+	type blockData struct {
+		index       *BlockIndex
+		byOffsetMap map[int64]*sigilv1.Generation
+	}
+	blocks := map[string]blockData{}
+	for blockID, generation := range map[string]*sigilv1.Generation{
+		"block-a": coldGeneration1,
+		"block-b": coldGeneration2,
+		"block-c": coldGeneration3,
+	} {
+		index, byOffset := buildFanOutTestBlock(t, []*sigilv1.Generation{generation})
+		blocks[blockID] = blockData{
+			index:       index,
+			byOffsetMap: byOffset,
+		}
+	}
+
+	var readIndexCalls int32
+	store := NewFanOutStore(
+		&fanOutTestWALReader{
+			getByConversationID: func(_ context.Context, _, _ string) ([]*sigilv1.Generation, error) {
+				return []*sigilv1.Generation{hotGeneration1, hotGeneration2}, nil
+			},
+		},
+		&fanOutTestBlockMetadataStore{
+			listBlocks: func(_ context.Context, _ string, _, _ time.Time) ([]BlockMeta, error) {
+				// Fanout scans from end to start, so block-c is scanned first.
+				return []BlockMeta{
+					{TenantID: "tenant-a", BlockID: "block-a"},
+					{TenantID: "tenant-a", BlockID: "block-b"},
+					{TenantID: "tenant-a", BlockID: "block-c"},
+				}, nil
+			},
+		},
+		&fanOutTestBlockReader{
+			readIndex: func(_ context.Context, _, blockID string) (*BlockIndex, error) {
+				atomic.AddInt32(&readIndexCalls, 1)
+				data, ok := blocks[blockID]
+				if !ok {
+					return nil, errors.New("unknown block")
+				}
+				return data.index, nil
+			},
+			readGenerations: func(_ context.Context, _, blockID string, entries []IndexEntry) ([]*sigilv1.Generation, error) {
+				data, ok := blocks[blockID]
+				if !ok {
+					return nil, errors.New("unknown block")
+				}
+				return fanOutGenerationsFromEntries(entries, data.byOffsetMap), nil
+			},
+		},
+		WithColdReadConfig(ColdReadConfig{
+			TotalBudget:      time.Second,
+			IndexReadTimeout: time.Second,
+			IndexRetries:     0,
+			IndexWorkers:     1,
+			IndexMaxInflight: 1,
+		}),
+	)
+
+	merged, err := store.ListConversationGenerationsWithPlan(context.Background(), "tenant-a", "conv-1", ConversationReadPlan{
+		ExpectedGenerationCount: 3,
+	})
+	if err != nil {
+		t.Fatalf("list conversation generations with plan: %v", err)
+	}
+
+	if len(merged) != 3 {
+		t.Fatalf("expected merged generation count 3, got %d", len(merged))
+	}
+	if calls := atomic.LoadInt32(&readIndexCalls); calls >= 3 {
+		t.Fatalf("expected early cold stop before scanning 3 blocks, got %d scans", calls)
 	}
 }
 
