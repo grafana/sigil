@@ -107,7 +107,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'grid',
     gridTemplateColumns: 'minmax(0, 1fr) auto',
     gap: theme.spacing(2),
-    padding: theme.spacing(2, 2, 2.5, 2),
+    padding: theme.spacing(2.5, 2, 2.5, 2),
     '@media (max-width: 900px)': {
       gridTemplateColumns: '1fr',
     },
@@ -123,15 +123,33 @@ const getStyles = (theme: GrafanaTheme2) => ({
     background: 'radial-gradient(circle, rgba(87,148,242,0.24) 0%, rgba(87,148,242,0) 65%)',
   }),
   heroTitleRow: css({
-    display: 'flex',
-    alignItems: 'flex-start',
+    display: 'grid',
+    gridTemplateColumns: 'auto minmax(220px, 1fr) minmax(540px, 2fr)',
+    alignItems: 'start',
     gap: theme.spacing(2),
-    flexWrap: 'wrap' as const,
+    '@media (max-width: 1200px)': {
+      gridTemplateColumns: 'auto minmax(220px, 1fr)',
+    },
+    '@media (max-width: 900px)': {
+      gridTemplateColumns: '1fr',
+    },
   }),
   heroTitleMeta: css({
     display: 'flex',
     flexDirection: 'column' as const,
     gap: theme.spacing(0.5),
+  }),
+  heroAgentBlock: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.5),
+    alignItems: 'flex-start',
+    minWidth: 0,
+  }),
+  heroStatsColumn: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    minWidth: 0,
   }),
   heroEyebrow: css({
     textTransform: 'uppercase' as const,
@@ -154,57 +172,22 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexWrap: 'wrap' as const,
   }),
   heroMetaGrid: css({
-    display: 'flex',
-    flexWrap: 'wrap' as const,
-    gap: theme.spacing(1.25),
-    alignItems: 'flex-start',
-    marginTop: theme.spacing(1.5),
+    display: 'grid',
+    gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+    gap: theme.spacing(0.75, 1),
+    width: '100%',
+    '@media (max-width: 1400px)': {
+      gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+    },
+    '@media (max-width: 900px)': {
+      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    },
+    '@media (max-width: 640px)': {
+      gridTemplateColumns: '1fr',
+    },
   }),
-  heroMetaChip: css({
-    display: 'flex',
-    flexDirection: 'column' as const,
-    justifyContent: 'center',
-    gap: theme.spacing(0.25),
-    borderRadius: theme.shape.radius.default,
-    border: 'none',
-    background: 'transparent',
-    padding: `${theme.spacing(0.75)} ${theme.spacing(1)}`,
-    fontSize: theme.typography.bodySmall.fontSize,
-    lineHeight: 1.2,
+  heroMetaStat: css({
     minWidth: 0,
-  }),
-  heroMetaLabel: css({
-    color: theme.colors.text.secondary,
-    textTransform: 'uppercase' as const,
-    letterSpacing: '0.04em',
-    fontSize: theme.typography.bodySmall.fontSize,
-  }),
-  heroMetaLabelWithHelp: css({
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: theme.spacing(0.5),
-  }),
-  heroMetaHelpIcon: css({
-    display: 'inline-flex',
-    color: theme.colors.text.secondary,
-  }),
-  heroMetaValue: css({
-    color: theme.colors.text.primary,
-    fontWeight: theme.typography.fontWeightMedium,
-    fontSize: theme.typography.h6.fontSize,
-    lineHeight: 1.25,
-    whiteSpace: 'nowrap' as const,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  }),
-  heroMetaValueMono: css({
-    fontFamily: theme.typography.fontFamilyMonospace,
-    letterSpacing: '0.02em',
-  }),
-  heroMetaSubline: css({
-    color: theme.colors.text.secondary,
-    fontSize: theme.typography.bodySmall.fontSize,
-    lineHeight: 1.2,
   }),
   anonymousBanner: css({
     borderRadius: theme.shape.radius.default,
@@ -1270,70 +1253,55 @@ export default function AgentDetailPage({
                 >
                   All agents
                 </Button>
-                <div>
+                <div className={styles.heroAgentBlock}>
                   <div className={styles.heroEyebrow}>Agent</div>
                   <h2 className={styles.agentNameHeading}>
                     {isAnonymous ? 'Unnamed agent bucket' : detail.agent_name}
                   </h2>
+                  <div className={styles.badgeRow}>{isAnonymous && <Badge text="Anonymous" color="orange" />}</div>
                 </div>
-                <div className={styles.badgeRow}>{isAnonymous && <Badge text="Anonymous" color="orange" />}</div>
-              </div>
-              <div className={styles.heroMetaGrid}>
-                <div className={styles.heroMetaChip}>
-                  <span className={styles.heroMetaLabelWithHelp}>
-                    <span className={styles.heroMetaLabel}>Versions</span>
+                <div className={styles.heroStatsColumn}>
+                  <div className={styles.heroMetaGrid}>
                     <Tooltip content="Total distinct effective versions recorded for this agent." placement="top">
-                      <span aria-label="Versions help">
-                        <Icon name="info-circle" size="sm" className={styles.heroMetaHelpIcon} />
-                      </span>
+                      <div className={styles.heroMetaStat}>
+                        <TopStat label="VERSIONS" value={versionOptions.length} loading={false} compact />
+                      </div>
                     </Tooltip>
-                  </span>
-                  <span className={styles.heroMetaValue}>{versionOptions.length.toLocaleString()}</span>
-                </div>
-                <div className={styles.heroMetaChip}>
-                  <span className={styles.heroMetaLabelWithHelp}>
-                    <span className={styles.heroMetaLabel}>Declared version</span>
                     <Tooltip content="Version string reported by instrumentation." placement="top">
-                      <span aria-label="Declared version help">
-                        <Icon name="info-circle" size="sm" className={styles.heroMetaHelpIcon} />
-                      </span>
+                      <div className={styles.heroMetaStat}>
+                        <TopStat
+                          label="DECLARED VERSION"
+                          value={0}
+                          displayValue={detail.declared_version_latest || 'n/a'}
+                          loading={false}
+                          compact
+                        />
+                      </div>
                     </Tooltip>
-                  </span>
-                  <span className={styles.heroMetaValue}>{detail.declared_version_latest || 'n/a'}</span>
-                </div>
-                <div className={styles.heroMetaChip}>
-                  <span className={styles.heroMetaLabelWithHelp}>
-                    <span className={styles.heroMetaLabel}>Models</span>
                     <Tooltip content="Distinct model variants recorded for this agent version." placement="top">
-                      <span aria-label="Models help">
-                        <Icon name="info-circle" size="sm" className={styles.heroMetaHelpIcon} />
-                      </span>
+                      <div className={styles.heroMetaStat}>
+                        <TopStat label="MODELS" value={detail.models.length} loading={false} compact />
+                      </div>
                     </Tooltip>
-                  </span>
-                  <span className={styles.heroMetaValue}>{detail.models.length.toLocaleString()}</span>
-                </div>
-                <div className={styles.heroMetaChip}>
-                  <span className={styles.heroMetaLabelWithHelp}>
-                    <span className={styles.heroMetaLabel}>Tools</span>
                     <Tooltip content="Declared tool definitions." placement="top">
-                      <span aria-label="Tools help">
-                        <Icon name="info-circle" size="sm" className={styles.heroMetaHelpIcon} />
-                      </span>
+                      <div className={styles.heroMetaStat}>
+                        <TopStat label="TOOLS" value={detail.tool_count} loading={false} compact />
+                      </div>
                     </Tooltip>
-                  </span>
-                  <span className={styles.heroMetaValue}>{detail.tool_count.toLocaleString()}</span>
-                </div>
-                <div className={styles.heroMetaChip}>
-                  <span className={styles.heroMetaLabelWithHelp}>
-                    <span className={styles.heroMetaLabel}>Primary model</span>
                     <Tooltip content="Primary model name and provider in this version." placement="top">
-                      <span aria-label="Primary model help">
-                        <Icon name="info-circle" size="sm" className={styles.heroMetaHelpIcon} />
-                      </span>
+                      <div className={styles.heroMetaStat}>
+                        <TopStat
+                          label="PRIMARY MODEL"
+                          value={0}
+                          displayValue={
+                            primaryModelProvider ? `${primaryModelLabel} (${primaryModelProvider})` : primaryModelLabel
+                          }
+                          loading={false}
+                          compact
+                        />
+                      </div>
                     </Tooltip>
-                  </span>
-                  <span className={styles.heroMetaValue}>{primaryModelLabel}</span>
-                  <span className={styles.heroMetaSubline}>{primaryModelProvider ?? 'No model data'}</span>
+                  </div>
                 </div>
               </div>
               {detail.models.length > 0 && (

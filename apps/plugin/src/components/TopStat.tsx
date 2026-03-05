@@ -1,5 +1,5 @@
 import React from 'react';
-import { css } from '@emotion/css';
+import { css, cx } from '@emotion/css';
 import { type GrafanaTheme2 } from '@grafana/data';
 import { Tooltip, useStyles2 } from '@grafana/ui';
 import { Link } from 'react-router-dom';
@@ -11,6 +11,7 @@ export type TopStatProps = {
   displayValue?: string;
   unit?: string;
   loading: boolean;
+  compact?: boolean;
   prevValue?: number;
   prevLoading?: boolean;
   invertChange?: boolean;
@@ -27,6 +28,7 @@ export function TopStat({
   displayValue,
   unit,
   loading,
+  compact = false,
   prevValue,
   prevLoading,
   invertChange,
@@ -73,17 +75,19 @@ export function TopStat({
   }
 
   return (
-    <div className={styles.topStat}>
+    <div className={cx(styles.topStat, compact && styles.topStatCompact)}>
       <div className={styles.topStatLabelRow}>
-        <span className={styles.topStatLabel}>{label}</span>
+        <span className={cx(styles.topStatLabel, compact && styles.topStatLabelCompact)}>{label}</span>
         {to && (
           <Link to={to} className={styles.topStatDetailLink}>
             {linkLabel ?? 'View details'}
           </Link>
         )}
       </div>
-      <div className={styles.topStatRow}>
-        <span className={styles.topStatValue}>{loading ? '–' : (displayValue ?? formatStatValue(value, unit))}</span>
+      <div className={cx(styles.topStatRow, compact && styles.topStatRowCompact)}>
+        <span className={cx(styles.topStatValue, compact && styles.topStatValueCompact)}>
+          {loading ? '–' : (displayValue ?? formatStatValue(value, unit))}
+        </span>
         {changeBadge}
       </div>
     </div>
@@ -96,6 +100,9 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'flex',
       flexDirection: 'column',
       gap: theme.spacing(0.5),
+    }),
+    topStatCompact: css({
+      gap: theme.spacing(0.75),
     }),
     topStatLabelRow: css({
       display: 'flex',
@@ -124,16 +131,28 @@ function getStyles(theme: GrafanaTheme2) {
       color: theme.colors.text.secondary,
       lineHeight: 1.2,
     }),
+    topStatLabelCompact: css({
+      fontSize: theme.typography.bodySmall.fontSize,
+      lineHeight: 1.1,
+      letterSpacing: '0.02em',
+    }),
     topStatRow: css({
       display: 'flex',
       alignItems: 'center',
       gap: theme.spacing(1),
+    }),
+    topStatRowCompact: css({
+      gap: theme.spacing(0.5),
     }),
     topStatValue: css({
       fontSize: theme.typography.h3.fontSize,
       fontWeight: theme.typography.fontWeightMedium,
       color: theme.colors.text.primary,
       lineHeight: 1.2,
+    }),
+    topStatValueCompact: css({
+      fontSize: theme.typography.h5.fontSize,
+      lineHeight: 1.15,
     }),
     changeBadge: css({
       display: 'inline-flex',
