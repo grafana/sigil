@@ -157,41 +157,41 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
   {
     slug: 'what-is-sigil',
     title: 'What is Sigil?',
-    subtitle: 'Modern agentic software needs a new modern signal',
+    subtitle: 'Observability purpose-built for LLM applications',
     renderGraphic: (props) => <WhatIsSigilGraphic {...props} />,
     body: (
       <ul>
-        <li>Open specification, built on OTEL.</li>
-        <li>A new database built for scale.</li>
-        <li>Opinionated drilldown UX.</li>
+        <li>Know when your agents break, slow down, or cost too much.</li>
+        <li>Open spec built on OpenTelemetry. No vendor lock-in.</li>
+        <li>Purpose-built storage and UX for generation telemetry.</li>
       </ul>
     ),
   },
   {
     slug: 'about-the-database',
     title: 'New OSS database',
-    subtitle: 'Purpose-built for this signal, at scale.',
+    subtitle: 'Not a trace store. A generation store.',
     renderGraphic: (props) => <DatabaseGraphic {...props} />,
     body: (
       <ul>
-        <li>Schema and APIs are designed around generation events, not retrofitted traces.</li>
-        <li>Efficient query paths for time windows, agent/model filters, and deep drilldown.</li>
-        <li>Built to stay responsive with high-cardinality metadata and large event volumes.</li>
-        <li>One storage model supports both aggregate dashboards and detailed investigations.</li>
+        <li>Schema designed around generation events, not retrofitted spans.</li>
+        <li>Fast queries across time, model, agent, and custom labels.</li>
+        <li>Stays responsive at high cardinality and large volumes.</li>
+        <li>One store powers both dashboards and deep investigations.</li>
       </ul>
     ),
   },
   {
     slug: 'ui-features',
     title: 'Actually useful UX',
-    subtitle: 'Drilldown-inspired UX that surfaces the value of the new signal.',
+    subtitle: 'See what matters. Drill into what doesn\'t look right.',
     renderGraphic: (props) => <UiFeaturesGraphic {...props} />,
     body: (
       <ul>
-        <li>Spot performance regressions, errors, and cost anomalies at a glance.</li>
-        <li>Filter by provider, model, agent, and custom labels.</li>
-        <li>Conversation Explore view for timeline + structured drilldown context.</li>
-        <li>Agent pages and evaluation workflows for faster tuning loops.</li>
+        <li>Spot regressions, errors, and cost spikes at a glance.</li>
+        <li>Filter by provider, model, agent, or any custom label.</li>
+        <li>Explore conversations as a timeline with full context.</li>
+        <li>Evaluate agent performance and tighten tuning loops.</li>
       </ul>
     ),
   },
