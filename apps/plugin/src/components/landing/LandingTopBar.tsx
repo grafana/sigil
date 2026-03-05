@@ -434,13 +434,18 @@ export function LandingTopBar({
   const emptyHeights = useMemo(() => Array(spineCount).fill(0), [spineCount]);
   const [requestSpineHeights, setRequestSpineHeights] = useState<number[] | null>(null);
   const [requestSpineValues, setRequestSpineValues] = useState<number[] | null>(null);
+  const [requestSpineWaveReason, setRequestSpineWaveReason] = useState<
+    null | 'loading' | 'no-data' | 'error'
+  >(null);
 
   useEffect(() => {
     if (!requestsDataSource || to <= from) {
       setRequestSpineHeights(null);
       setRequestSpineValues(null);
+      setRequestSpineWaveReason(null);
       return;
     }
+    setRequestSpineWaveReason('loading');
     let cancelled = false;
     const step = computeStep(from, to);
     const interval = computeRateInterval(step);
@@ -456,6 +461,7 @@ export function LandingTopBar({
         const nextHeights = normalizeValuesToHeights(values, spineCount);
         const nextValues = bucketValues(values, spineCount);
         if (nextHeights.length > 0) {
+          setRequestSpineWaveReason(null);
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
               if (!cancelled) {
@@ -467,11 +473,13 @@ export function LandingTopBar({
         } else {
           setRequestSpineHeights(null);
           setRequestSpineValues(null);
+          setRequestSpineWaveReason('no-data');
         }
       } catch {
         if (!cancelled) {
           setRequestSpineHeights(null);
           setRequestSpineValues(null);
+          setRequestSpineWaveReason('error');
         }
       }
     };
@@ -514,6 +522,16 @@ export function LandingTopBar({
                   : null;
               const timeStr =
                 stat != null && to > from ? formatBarTime(from, to, i, spineCount) : null;
+              const waveIssueTooltip =
+                requestSpineHeights == null &&
+                requestsDataSource != null &&
+                requestSpineWaveReason === 'error'
+                  ? 'Failed to load request data'
+                  : requestSpineHeights == null &&
+                      requestsDataSource != null &&
+                      requestSpineWaveReason === 'no-data'
+                    ? 'No data in this time range'
+                    : null;
               const tooltipContent =
                 stat != null ? (
                   <div className={styles.spineTooltipContent}>
@@ -522,6 +540,8 @@ export function LandingTopBar({
                       <div className={styles.spineTooltipTime}>{timeStr}</div>
                     )}
                   </div>
+                ) : waveIssueTooltip != null ? (
+                  waveIssueTooltip
                 ) : null;
               const bar = (
                 <div
