@@ -50,8 +50,36 @@ export default function AssistantInsightsBanner({
   const [isHovered, setIsHovered] = useState(false);
   const [ageTick, setAgeTick] = useState(() => Date.now());
   const [typedHistory, setTypedHistory] = useState<Record<string, true>>(() => readTypedHistory());
+  const [minHeight, setMinHeight] = useState(0);
+  const maxHeightRef = useRef(0);
+  const contentRef = useRef<HTMLDivElement>(null);
   const latestRef = useRef({ prompt, origin, systemPrompt, assistant });
   const lastDataContextRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (insights.length === 0 || !contentRef.current) {
+      return;
+    }
+    const el = contentRef.current;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const h = entry.contentRect.height;
+        if (h > 0 && h > maxHeightRef.current) {
+          maxHeightRef.current = h;
+          setMinHeight(h);
+        }
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [insights.length]);
+
+  useEffect(() => {
+    if (insights.length === 0) {
+      maxHeightRef.current = 0;
+      queueMicrotask(() => setMinHeight(0));
+    }
+  }, [insights.length]);
 
   useEffect(() => {
     latestRef.current = { prompt, origin, systemPrompt, assistant };
@@ -301,7 +329,7 @@ export default function AssistantInsightsBanner({
       onMouseLeave={() => setIsHovered(false)}
     >
       {hasInsights ? (
-        <div className={styles.contentRow}>
+        <div ref={contentRef} className={styles.contentRow} style={minHeight > 0 ? { minHeight } : undefined}>
           <span className={styles.sparkleIcon} title="AI generated insights" aria-label="AI generated insights">
             ✨
           </span>
