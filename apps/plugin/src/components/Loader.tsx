@@ -34,9 +34,10 @@ const EMPTY_LINE_PAUSE_MS = 260;
 type LoaderProps = {
   showText?: boolean;
   lines?: string[];
+  align?: 'center' | 'left';
 };
 
-export const Loader = ({ showText = true, lines }: LoaderProps) => {
+export const Loader = ({ showText = true, lines, align = 'center' }: LoaderProps) => {
   const styles = useStyles2(getStyles);
   const [lineIndex, setLineIndex] = useState(0);
   const [charCount, setCharCount] = useState(0);
@@ -84,7 +85,7 @@ export const Loader = ({ showText = true, lines }: LoaderProps) => {
   }, [activeLines.length, charCount, currentLine.length, isDeleting]);
 
   return (
-    <div className={styles.root}>
+    <div className={align === 'left' ? styles.rootLeft : styles.root}>
       <div className={styles.container} role="progressbar" aria-label="loading conversation">
         <span className={styles.bar}></span>
         <span className={styles.bar}></span>
@@ -156,6 +157,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     alignItems: 'center',
+  }),
+  rootLeft: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'flex-start',
   }),
   container: css({
     display: 'flex',

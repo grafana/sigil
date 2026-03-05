@@ -421,7 +421,8 @@ describe('AgentRatingPanel', () => {
 
     const dialog = await screen.findByRole('dialog', { name: /rewrite prompt/i });
     expect(dialog).toBeInTheDocument();
-    expect(within(dialog).getByText(/## Rewritten system prompt/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('heading', { name: 'Rewritten system prompt' })).toBeInTheDocument();
+    expect(within(dialog).getByText('You are a safer assistant.')).toBeInTheDocument();
     expect(mockInlineGenerate).toHaveBeenCalledTimes(1);
     expect(mockInlineGenerate).toHaveBeenCalledWith(
       expect.objectContaining({

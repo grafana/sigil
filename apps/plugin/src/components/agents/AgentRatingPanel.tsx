@@ -7,6 +7,7 @@ import { useSearchParams } from 'react-router-dom';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../../agents/api';
 import type { AgentRatingResponse, AgentRatingStatus, AgentRatingSuggestion } from '../../agents/types';
 import { Loader } from '../Loader';
+import MarkdownPreview from '../markdown/MarkdownPreview';
 
 export type AgentRatingPanelProps = {
   agentName: string;
@@ -56,34 +57,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     background: theme.colors.background.secondary,
     overflow: 'visible',
   }),
-  header: css({
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: theme.spacing(1),
-    padding: `${theme.spacing(1)} ${theme.spacing(1.5)}`,
-    borderBottom: `1px solid ${theme.colors.border.weak}`,
-  }),
-  headerRating: css({
-    display: 'inline-flex',
-    alignItems: 'baseline',
-    gap: theme.spacing(0.5),
-    padding: `${theme.spacing(0.25)} ${theme.spacing(0.5)}`,
-    borderBottom: '3px solid transparent',
-  }),
-  headerRatingValue: css({
-    fontSize: theme.typography.h5.fontSize,
-    lineHeight: 1,
-    fontWeight: theme.typography.fontWeightMedium,
-    color: theme.colors.text.primary,
-    fontVariantNumeric: 'tabular-nums',
-  }),
-  headerRatingSuffix: css({
-    fontSize: theme.typography.bodySmall.fontSize,
-    lineHeight: 1,
-    color: theme.colors.text.secondary,
-    fontWeight: theme.typography.fontWeightMedium,
-  }),
   body: css({
     display: 'flex',
     flexDirection: 'column' as const,
@@ -115,7 +88,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   loading: css({
     display: 'flex',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
+    marginTop: theme.spacing(1),
   }),
   scoreRow: css({
     display: 'flex',
@@ -319,6 +293,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flex: 1,
     minWidth: 0,
   }),
+  analysisWarning: css({
+    background: 'transparent !important',
+    border: 'none !important',
+    boxShadow: 'none !important',
+  }),
   actionNote: css({
     margin: 0,
   }),
@@ -399,34 +378,16 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.secondary,
     lineHeight: 1.4,
   }),
-  rewriteBody: css({
+  rewriteBodyPreview: css({
     borderRadius: theme.shape.radius.default,
     border: `1px solid ${theme.colors.border.weak}`,
-    background: theme.colors.background.canvas,
+    background: theme.colors.background.primary,
     padding: theme.spacing(1),
     maxHeight: '50vh',
     overflow: 'auto',
-    margin: 0,
-    whiteSpace: 'pre-wrap' as const,
     color: theme.colors.text.primary,
-    fontFamily: theme.typography.fontFamilyMonospace,
-    fontSize: theme.typography.bodySmall.fontSize,
-    lineHeight: 1.45,
   }),
 });
-
-function headerRatingStyle(theme: GrafanaTheme2, score: number): React.CSSProperties {
-  if (score >= 9) {
-    return { borderBottomColor: theme.colors.success.text };
-  }
-  if (score >= 7) {
-    return { borderBottomColor: theme.colors.info.text };
-  }
-  if (score >= 5) {
-    return { borderBottomColor: theme.colors.warning.text };
-  }
-  return { borderBottomColor: theme.colors.error.text };
-}
 
 function summaryStatusTone(theme: GrafanaTheme2, score: number): string {
   if (score >= 7) {
@@ -1013,7 +974,7 @@ export default function AgentRatingPanel({
       <div className={styles.body}>
         {running && (
           <div className={styles.loading}>
-            <Loader lines={RATING_LOADER_LINES} />
+            <Loader lines={RATING_LOADER_LINES} align="left" />
           </div>
         )}
 
@@ -1075,7 +1036,7 @@ export default function AgentRatingPanel({
             </div>
 
             {completedResult.token_warning && completedResult.token_warning.length > 0 && (
-              <Alert severity="warning" title="Token budget warning">
+              <Alert className={styles.analysisWarning} severity="warning" title="Token budget warning">
                 {completedResult.token_warning}
               </Alert>
             )}
@@ -1138,21 +1099,6 @@ export default function AgentRatingPanel({
 
   return (
     <div className={embedded ? undefined : styles.panel}>
-      {!embedded && (
-        <div className={styles.header}>
-          <Text weight="medium">Prompt and context analysis</Text>
-          {completedResult && (
-            <div
-              className={styles.headerRating}
-              style={headerRatingStyle(theme, completedResult.score)}
-              aria-label={`Rating ${completedResult.score}/10`}
-            >
-              <span className={styles.headerRatingValue}>{completedResult.score}</span>
-              <span className={styles.headerRatingSuffix}>/10</span>
-            </div>
-          )}
-        </div>
-      )}
       {panelBody}
       {selectedSuggestion && (
         <div className={styles.modalBackdrop} role="presentation" onClick={closeSuggestionModal}>
@@ -1261,7 +1207,9 @@ export default function AgentRatingPanel({
               </Alert>
             )}
             {displayedRewriteMarkdown.trim().length > 0 ? (
-              <pre className={styles.rewriteBody}>{displayedRewriteMarkdown}</pre>
+              <div className={styles.rewriteBodyPreview}>
+                <MarkdownPreview markdown={displayedRewriteMarkdown} />
+              </div>
             ) : (
               <div className={styles.loading}>
                 <Loader showText={false} />

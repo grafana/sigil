@@ -429,6 +429,16 @@ const getStyles = (theme: GrafanaTheme2) => ({
     lineHeight: 1.6,
     color: theme.colors.text.primary,
   }),
+  systemPromptPreview: css({
+    margin: 0,
+    maxHeight: 400,
+    overflow: 'auto',
+    borderRadius: theme.shape.radius.default,
+    border: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.primary,
+    padding: theme.spacing(1.5),
+    color: theme.colors.text.primary,
+  }),
   modelChipsRow: css({
     display: 'flex',
     flexWrap: 'wrap' as const,
@@ -1483,7 +1493,7 @@ export default function AgentDetailPage({
                     <TokenizedText text={detail.system_prompt} encode={encode} decode={decode} />
                   </div>
                 ) : systemPromptView === 'preview' ? (
-                  <div className={styles.systemPrompt}>
+                  <div className={styles.systemPromptPreview}>
                     <MarkdownPreview markdown={detail.system_prompt} />
                   </div>
                 ) : (
