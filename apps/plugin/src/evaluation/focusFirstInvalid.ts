@@ -16,3 +16,14 @@ export function focusFirstInvalidField(container: HTMLElement | null): void {
     target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
 }
+
+export function focusInvalidFieldFromMap<FieldKey extends string>(
+  fieldKey: FieldKey | null,
+  fieldRefs: Partial<Record<FieldKey, HTMLElement | null>>
+): void {
+  if (fieldKey == null) {
+    return;
+  }
+
+  focusFirstInvalidField(fieldRefs[fieldKey] ?? null);
+}

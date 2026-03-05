@@ -14,7 +14,8 @@ import {
   type ScoreType,
 } from '../../evaluation/types';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../../evaluation/api';
-import { focusFirstInvalidField } from '../../evaluation/focusFirstInvalid';
+import { focusFirstInvalidField, focusInvalidFieldFromMap } from '../../evaluation/focusFirstInvalid';
+import { parseSchemaConfig, validateSharedForm } from '../../evaluation/formValidation';
 import { parseHeuristicStringListInput } from '../../evaluation/heuristicConfig';
 import { isValidResourceID, INVALID_ID_MESSAGE } from '../../evaluation/utils';
 import { getSectionTitleStyles } from './sectionStyles';
@@ -223,7 +224,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
           temperature,
         };
       case 'json_schema':
-        return { schema: JSON.parse(schemaJson || '{}') };
+        return parseSchemaConfig(schemaJson);
       case 'regex':
         return { pattern: pattern || '' };
       case 'heuristic':
@@ -287,87 +288,69 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
   const isIdEmpty = templateId.trim() === '';
   const isIdInvalid = !isIdEmpty && !isValidResourceID(templateId.trim());
   const templateIdError = isIdEmpty ? 'Template ID is required' : isIdInvalid ? INVALID_ID_MESSAGE : undefined;
-  const isOutputKeyEmpty = outputKey.trim() === '';
-  const outputKeyError = isOutputKeyEmpty ? 'Output key is required' : undefined;
-  const isRegexPatternEmpty = kind === 'regex' && pattern.trim() === '';
-  const regexPatternError = isRegexPatternEmpty ? 'Pattern is required' : undefined;
-  const isMaxTokensInvalid = kind === 'llm_judge' && (!Number.isInteger(maxTokens) || maxTokens < 1);
-  const maxTokensError = isMaxTokensInvalid ? 'Must be an integer greater than 0' : undefined;
-  const isTemperatureInvalid =
-    kind === 'llm_judge' && (!Number.isFinite(temperature) || temperature < 0 || temperature > 2);
-  const temperatureError = isTemperatureInvalid ? 'Must be between 0 and 2' : undefined;
-  let schemaParseError = '';
-  if (kind === 'json_schema') {
-    try {
-      JSON.parse(schemaJson || '{}');
-    } catch {
-      schemaParseError = 'Invalid JSON';
-    }
-  }
-  const isHeuristicRangeInvalid =
-    kind === 'heuristic' && minLength !== '' && maxLength !== '' && Number(minLength) >= Number(maxLength);
-  const heuristicMaxLengthError = isHeuristicRangeInvalid ? 'Must be greater than Min length' : undefined;
-  const isHeuristicEmpty =
-    kind === 'heuristic' &&
-    !notEmpty &&
-    parseHeuristicStringListInput(contains) == null &&
-    parseHeuristicStringListInput(notContains) == null &&
-    minLength === '' &&
-    maxLength === '';
-  const heuristicConfigError = isHeuristicEmpty ? 'Add at least one heuristic rule' : undefined;
-  const isPassThresholdInvalid =
-    outputType === 'number' && passThreshold !== '' && outputMin !== '' && passThreshold < outputMin;
-  const passThresholdError = isPassThresholdInvalid ? 'Must be greater than or equal to Min' : undefined;
-  const isOutputRangeInvalid =
-    outputType === 'number' && outputMin !== '' && outputMax !== '' && outputMin >= outputMax;
-  const outputMaxError = isOutputRangeInvalid ? 'Must be greater than Min' : undefined;
+  const sharedValidation = validateSharedForm({
+    kind,
+    outputKey,
+    pattern,
+    maxTokens,
+    temperature,
+    schemaJson,
+    heuristic: {
+      notEmpty,
+      contains,
+      notContains,
+      minLength,
+      maxLength,
+    },
+    output: {
+      type: outputType,
+      passThreshold,
+      min: outputMin,
+      max: outputMax,
+    },
+  });
+  const outputKeyError = sharedValidation.outputKeyError;
+  const regexPatternError = sharedValidation.regexPatternError;
+  const maxTokensError = sharedValidation.maxTokensError;
+  const temperatureError = sharedValidation.temperatureError;
+  const schemaParseError = sharedValidation.schemaParseError ?? '';
+  const heuristicConfigError = sharedValidation.heuristicConfigError;
+  const heuristicMaxLengthError = sharedValidation.heuristicMaxLengthError;
+  const passThresholdError = sharedValidation.passThresholdError;
+  const outputMaxError = sharedValidation.outputMaxError;
 
   const showIdError = touched && (isIdEmpty || isIdInvalid);
-  const showOutputKeyError = touched && isOutputKeyEmpty;
-  const showRegexPatternError = touched && isRegexPatternEmpty;
-  const showMaxTokensError = touched && isMaxTokensInvalid;
-  const showTemperatureError = touched && isTemperatureInvalid;
+  const showOutputKeyError = touched && outputKeyError != null;
+  const showRegexPatternError = touched && regexPatternError != null;
+  const showMaxTokensError = touched && maxTokensError != null;
+  const showTemperatureError = touched && temperatureError != null;
   const showSchemaError = touched && schemaParseError !== '';
-  const showHeuristicConfigError = touched && isHeuristicEmpty;
-  const showHeuristicMaxLengthError = touched && isHeuristicRangeInvalid;
-  const showPassThresholdError = touched && isPassThresholdInvalid;
-  const showOutputMaxError = touched && isOutputRangeInvalid;
+  const showHeuristicConfigError = touched && heuristicConfigError != null;
+  const showHeuristicMaxLengthError = touched && heuristicMaxLengthError != null;
+  const showPassThresholdError = touched && passThresholdError != null;
+  const showOutputMaxError = touched && outputMaxError != null;
 
   const handleSubmit = () => {
     setTouched(true);
     if (
       isIdEmpty ||
       isIdInvalid ||
-      isOutputKeyEmpty ||
-      isRegexPatternEmpty ||
-      isMaxTokensInvalid ||
-      isTemperatureInvalid ||
-      schemaParseError !== '' ||
-      isHeuristicEmpty ||
-      isHeuristicRangeInvalid ||
-      isPassThresholdInvalid ||
-      isOutputRangeInvalid
+      sharedValidation.hasErrors
     ) {
       if (isIdEmpty || isIdInvalid) {
         focusFirstInvalidField(templateIdFieldRef.current);
-      } else if (isOutputKeyEmpty) {
-        focusFirstInvalidField(outputKeyFieldRef.current);
-      } else if (isRegexPatternEmpty) {
-        focusFirstInvalidField(regexPatternFieldRef.current);
-      } else if (isMaxTokensInvalid) {
-        focusFirstInvalidField(maxTokensFieldRef.current);
-      } else if (isTemperatureInvalid) {
-        focusFirstInvalidField(temperatureFieldRef.current);
-      } else if (schemaParseError !== '') {
-        focusFirstInvalidField(schemaFieldRef.current);
-      } else if (isHeuristicEmpty) {
-        focusFirstInvalidField(heuristicFieldRef.current);
-      } else if (isHeuristicRangeInvalid) {
-        focusFirstInvalidField(heuristicMaxLengthFieldRef.current);
-      } else if (isPassThresholdInvalid) {
-        focusFirstInvalidField(passThresholdFieldRef.current);
-      } else if (isOutputRangeInvalid) {
-        focusFirstInvalidField(outputMaxFieldRef.current);
+      } else {
+        focusInvalidFieldFromMap(sharedValidation.firstInvalidField, {
+          outputKey: outputKeyFieldRef.current,
+          regexPattern: regexPatternFieldRef.current,
+          maxTokens: maxTokensFieldRef.current,
+          temperature: temperatureFieldRef.current,
+          schema: schemaFieldRef.current,
+          heuristic: heuristicFieldRef.current,
+          heuristicMaxLength: heuristicMaxLengthFieldRef.current,
+          passThreshold: passThresholdFieldRef.current,
+          outputMax: outputMaxFieldRef.current,
+        });
       }
       return;
     }
