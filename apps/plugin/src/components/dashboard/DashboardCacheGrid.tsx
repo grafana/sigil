@@ -185,7 +185,10 @@ export function DashboardCacheGrid({
     cacheWriteStat.loading ||
     inputTokensStat.loading ||
     cacheByModelData.loading ||
-    resolvedPricing.loading;
+    resolvedPricing.loading ||
+    cacheHitRateTimeseries.loading ||
+    cacheTokensTimeseries.loading ||
+    cacheReadByBreakdown.loading;
 
   const insightDataContext = useMemo(() => {
     if (allDataLoading) {

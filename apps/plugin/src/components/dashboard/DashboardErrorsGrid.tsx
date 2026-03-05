@@ -117,7 +117,12 @@ export function DashboardErrorsGrid({
   const errorRateValue = topErrorRate.data ? vectorToStatValue(topErrorRate.data) : 0;
 
   const allDataLoading =
-    topTotalErrors.loading || topErrorRate.loading || errorRateTimeseries.loading || errorsByCodeStat.loading;
+    topTotalErrors.loading ||
+    topErrorRate.loading ||
+    errorRateTimeseries.loading ||
+    errorsByCodeStat.loading ||
+    errorsByCodeTimeseries.loading ||
+    errorRateByBreakdown.loading;
 
   const insightDataContext = useMemo(() => {
     if (allDataLoading) {
