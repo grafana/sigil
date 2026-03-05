@@ -24,7 +24,6 @@
       "type": "page",
       "name": "Sigil",
       "path": "/a/grafana-sigil-app",
-      "action": "grafana-sigil-app.data:read",
       "addToNav": false,
       "defaultNav": true
     },

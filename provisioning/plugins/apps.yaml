@@ -10,6 +10,7 @@ apps:
       tenantId: $SIGIL_TENANT_ID
       prometheusDatasourceUID: $SIGIL_PROM_DS_UID
       tempoDatasourceUID: $SIGIL_TEMPO_DS_UID
+      jwksUrl: http://grafana:3000/api/signing-keys/keys
     secureJsonData:
       sigilApiAuthToken: $SIGIL_API_AUTH_TOKEN
     allowServiceAccountAccess: true
