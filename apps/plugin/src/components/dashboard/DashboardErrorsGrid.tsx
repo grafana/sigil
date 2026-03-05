@@ -376,8 +376,12 @@ function ErrorConversationsTable({ conversationsDataSource, timeRange, filters }
         let cursor = '';
         let hasMore = true;
         const all: ConversationSearchResult[] = [];
+        // Cap pages to avoid unbounded fetches; the API lacks server-side ordering,
+        // so we approximate "top N" from a bounded sample.
+        const maxPages = 5;
+        let page = 0;
 
-        while (hasMore) {
+        while (hasMore && page < maxPages) {
           const response = await conversationsDataSource.searchConversations({
             filters: filterString,
             select: [],
@@ -391,6 +395,7 @@ function ErrorConversationsTable({ conversationsDataSource, timeRange, filters }
           all.push(...(response.conversations ?? []));
           cursor = response.next_cursor ?? '';
           hasMore = Boolean(response.has_more && cursor.length > 0);
+          page++;
         }
 
         all.sort((a, b) => b.error_count - a.error_count);
