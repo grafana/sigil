@@ -222,7 +222,15 @@ describe('AgentDetailPage', () => {
     );
 
     expect(await screen.findByText('GENERATIONS')).toBeInTheDocument();
-    const statLabels = ['GENERATIONS', 'PROMPT TOKENS', 'TOOLS TOKENS', 'TOTAL TOKENS', 'AGE', 'FIRST SEEN', 'LAST SEEN'];
+    const statLabels = [
+      'GENERATIONS',
+      'PROMPT TOKENS',
+      'TOOLS TOKENS',
+      'TOTAL TOKENS',
+      'AGE',
+      'FIRST SEEN',
+      'LAST SEEN',
+    ];
     for (const label of statLabels) {
       expect(screen.getByLabelText(`${label} help`)).toBeInTheDocument();
     }

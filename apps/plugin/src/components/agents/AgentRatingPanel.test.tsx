@@ -165,12 +165,7 @@ describe('AgentRatingPanel', () => {
     });
 
     renderPanel(
-      <AgentRatingPanel
-        agentName="assistant"
-        version="sha256:test"
-        dataSource={dataSource}
-        initialResult={completed}
-      />
+      <AgentRatingPanel agentName="assistant" version="sha256:test" dataSource={dataSource} initialResult={completed} />
     );
 
     fireEvent.click(screen.getByRole('button', { name: /re-run/i }));
@@ -187,7 +182,9 @@ describe('AgentRatingPanel', () => {
   });
 
   it('does not auto-run rating until generate is clicked', async () => {
-    const rateAgent = jest.fn<Promise<AgentRatingResponse>, [string, string?]>().mockResolvedValue(createCompletedRating());
+    const rateAgent = jest
+      .fn<Promise<AgentRatingResponse>, [string, string?]>()
+      .mockResolvedValue(createCompletedRating());
     const dataSource = createDataSource({
       rateAgent,
       lookupAgentRating: jest.fn(async () => null),
@@ -516,7 +513,9 @@ describe('AgentRatingPanel', () => {
 
   it('calls onRerun callback before starting rerun', async () => {
     const onRerun = jest.fn();
-    const rateAgent = jest.fn<Promise<AgentRatingResponse>, [string, string?]>().mockResolvedValue(createCompletedRating());
+    const rateAgent = jest
+      .fn<Promise<AgentRatingResponse>, [string, string?]>()
+      .mockResolvedValue(createCompletedRating());
     const dataSource = createDataSource({ rateAgent });
 
     renderPanel(

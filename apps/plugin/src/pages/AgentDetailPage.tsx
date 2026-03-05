@@ -1386,12 +1386,8 @@ export default function AgentDetailPage({
                                 ? {
                                     backgroundColor:
                                       idx / 9 <= 0.52
-                                        ? interpolateHex(gradientColors[0], gradientColors[1], (idx / 9) / 0.52)
-                                        : interpolateHex(
-                                            gradientColors[1],
-                                            gradientColors[2],
-                                            (idx / 9 - 0.52) / 0.48
-                                          ),
+                                        ? interpolateHex(gradientColors[0], gradientColors[1], idx / 9 / 0.52)
+                                        : interpolateHex(gradientColors[1], gradientColors[2], (idx / 9 - 0.52) / 0.48),
                                   }
                                 : undefined
                             }
