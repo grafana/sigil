@@ -22,11 +22,19 @@
   "includes": [
     {
       "type": "page",
-      "name": "Dashboard",
-      "path": "/a/grafana-sigil-app/dashboard",
+      "name": "Sigil",
+      "path": "/a/grafana-sigil-app",
+      "action": "grafana-sigil-app.data:read",
+      "addToNav": false,
+      "defaultNav": true
+    },
+    {
+      "type": "page",
+      "name": "Analytics",
+      "path": "/a/grafana-sigil-app/analytics",
       "action": "grafana-sigil-app.data:read",
       "addToNav": true,
-      "defaultNav": true
+      "defaultNav": false
     },
     {
       "type": "page",
