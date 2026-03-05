@@ -223,7 +223,8 @@ describe('LandingTopBar assistant context', () => {
     fireEvent.change(screen.getByPlaceholderText('Ask me anything about Sigil'), {
       target: { value: 'How does Sigil work?' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    const assistantInput = screen.getByPlaceholderText('Ask me anything about Sigil');
+    fireEvent.submit(assistantInput.closest('form')!);
 
     expect(mockOpenAssistant).toHaveBeenCalledWith(
       expect.objectContaining({
