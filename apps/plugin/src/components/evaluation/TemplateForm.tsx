@@ -4,6 +4,8 @@ import { Button, Field, Input, Select, Stack, Switch, useStyles2 } from '@grafan
 import { css } from '@emotion/css';
 import {
   EVALUATOR_KIND_LABELS,
+  LLM_JUDGE_DEFAULT_SYSTEM_PROMPT,
+  LLM_JUDGE_DEFAULT_USER_PROMPT,
   buildOutputKeyFromForm,
   type CreateTemplateRequest,
   type EvalFormState,
@@ -334,7 +336,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
               className={styles.textarea}
               value={systemPrompt}
               onChange={(e) => setSystemPrompt(e.currentTarget.value)}
-              placeholder="You are an expert evaluator assessing the helpfulness of AI assistant responses. Consider accuracy, relevance, completeness, and clarity."
+              placeholder={LLM_JUDGE_DEFAULT_SYSTEM_PROMPT}
               rows={4}
             />
           </Field>
@@ -346,7 +348,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
               className={styles.textarea}
               value={userPrompt}
               onChange={(e) => setUserPrompt(e.currentTarget.value)}
-              placeholder={'User input:\n{{input}}\n\nAssistant output:\n{{output}}'}
+              placeholder={LLM_JUDGE_DEFAULT_USER_PROMPT}
               rows={4}
             />
           </Field>

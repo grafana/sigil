@@ -244,6 +244,38 @@ func TestTemplateService_PublishVersion_DuplicateVersion(t *testing.T) {
 	}
 }
 
+func TestTemplateService_CreateDuplicate(t *testing.T) {
+	svc, _, _ := newTemplateTestEnv(t)
+
+	_, err := svc.CreateTemplate(context.Background(), "tenant_1", CreateTemplateRequest{
+		TemplateID: "dup_template",
+		Kind:       "llm_judge",
+		Version:    "2026-03-01",
+		Config:     map[string]any{"provider": "openai"},
+		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
+	})
+	if err != nil {
+		t.Fatalf("first create: %v", err)
+	}
+
+	_, err = svc.CreateTemplate(context.Background(), "tenant_1", CreateTemplateRequest{
+		TemplateID: "dup_template",
+		Kind:       "llm_judge",
+		Version:    "2026-03-02",
+		Config:     map[string]any{"provider": "anthropic"},
+		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
+	})
+	if err == nil {
+		t.Fatal("expected error for duplicate template ID")
+	}
+	if !isValidationError(err) {
+		t.Errorf("expected validation error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("expected 'already exists' in error, got %q", err.Error())
+	}
+}
+
 func TestTemplateService_ForkTemplate(t *testing.T) {
 	svc, _, _ := newTemplateTestEnv(t)
 
@@ -604,6 +636,13 @@ func (s *memoryTemplateStore) DeleteTemplate(_ context.Context, tenantID, templa
 	tmpl.DeletedAt = &now
 	tmpl.UpdatedAt = now
 	s.templates[key] = tmpl
+
+	// Hard-delete versions to match MySQL behavior.
+	for k, ver := range s.versions {
+		if ver.TenantID == tenantID && ver.TemplateID == templateID {
+			delete(s.versions, k)
+		}
+	}
 	return nil
 }
 
