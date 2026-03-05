@@ -100,6 +100,7 @@ const (
 	defaultGenerationPayloadMaxBytes  = 16 << 20
 
 	sdkMetadataKeyName = "sigil.sdk.name"
+	metadataUserIDKey  = "sigil.user.id"
 	sdkName            = "sdk-go"
 
 	spanAttrGenerationID           = "sigil.generation.id"
@@ -1000,11 +1001,15 @@ func (r *GenerationRecorder) normalizeGeneration(raw Generation, completedAt tim
 		g.Metadata = map[string]any{}
 	}
 	if g.UserID == "" {
+		g.UserID = metadataString(g.Metadata, metadataUserIDKey)
+	}
+	if g.UserID == "" {
+		// Backward-compatibility with older builds that mirrored user id under the span key.
 		g.UserID = metadataString(g.Metadata, spanAttrUserID)
 	}
 	if userID := strings.TrimSpace(g.UserID); userID != "" {
 		g.UserID = userID
-		g.Metadata[spanAttrUserID] = userID
+		g.Metadata[metadataUserIDKey] = userID
 	}
 	g.Metadata[sdkMetadataKeyName] = sdkName
 

@@ -161,7 +161,7 @@ See `docs/references/grafana-query-response-shapes.md`.
   - display optional conversation `user_id` labels from Tempo span attribute `user.id` (latest matching span wins)
   - support cursor pagination in list view
   - open conversation detail with hydrated generations, ratings, and annotations
-  - display optional conversation detail `user_id` from generation metadata key `user.id`
+  - display optional conversation detail `user_id` from generation metadata key `sigil.user.id`
   - open generation detail with trace/span identifiers
   - render conversation span tree with the local Jaeger-style tree component (`SigilSpanTree`) backed by:
     - `components/conversations/jaegerTree/adapter.ts` for flattening and row metadata

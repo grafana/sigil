@@ -554,7 +554,7 @@ func TestGetConversationDetailForTenantMergesHotAndCold(t *testing.T) {
 		generationMetadataUserIDKey: structpb.NewStringValue("user-older"),
 	}}
 	coldGeneration3.Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{
-		generationMetadataUserIDKey: structpb.NewStringValue("user-final"),
+		generationMetadataLegacyUserIDKey: structpb.NewStringValue("user-final"),
 	}}
 
 	walReader := &stubWALReader{

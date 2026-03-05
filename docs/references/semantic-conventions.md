@@ -114,7 +114,7 @@ The normalized generation payload keeps provider-only details in `metadata` with
 | Key | Description |
 |---|---|
 | `sigil.sdk.name` | SDK identity marker (`sdk-go`, `sdk-js`, `sdk-python`, `sdk-java`, `sdk-dotnet`) |
-| `user.id` | end-user ID mirrored from typed SDK generation fields when set |
+| `sigil.user.id` | end-user ID mirrored from typed SDK generation fields when set |
 | `sigil.gen_ai.request.thinking.budget_tokens` | provider thinking budget (request side) |
 | `sigil.gen_ai.request.thinking.level` | provider thinking level when available (Gemini) |
 | `sigil.gen_ai.usage.tool_use_prompt_tokens` | Gemini `toolUsePromptTokenCount` |

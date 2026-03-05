@@ -1227,8 +1227,8 @@ func TestUserIDFromContext(t *testing.T) {
 	if attrs[spanAttrUserID].AsString() != "user-ctx" {
 		t.Fatalf("expected %s=user-ctx, got %q", spanAttrUserID, attrs[spanAttrUserID].AsString())
 	}
-	if got, ok := generationRecorder.lastGeneration.Metadata[spanAttrUserID]; !ok || got != "user-ctx" {
-		t.Fatalf("expected generation metadata %s=user-ctx, got %#v", spanAttrUserID, generationRecorder.lastGeneration.Metadata)
+	if got, ok := generationRecorder.lastGeneration.Metadata[metadataUserIDKey]; !ok || got != "user-ctx" {
+		t.Fatalf("expected generation metadata %s=user-ctx, got %#v", metadataUserIDKey, generationRecorder.lastGeneration.Metadata)
 	}
 }
 
@@ -1452,7 +1452,7 @@ func TestGenerationMetadataUserIDFallbackSetsSpanAttribute(t *testing.T) {
 
 	_, rec := client.StartGeneration(context.Background(), GenerationStart{
 		Metadata: map[string]any{
-			spanAttrUserID: "metadata-user",
+			metadataUserIDKey: "metadata-user",
 		},
 		Model: ModelRef{
 			Provider: "anthropic",
@@ -1466,8 +1466,32 @@ func TestGenerationMetadataUserIDFallbackSetsSpanAttribute(t *testing.T) {
 	if attrs[spanAttrUserID].AsString() != "metadata-user" {
 		t.Fatalf("expected %s=metadata-user, got %q", spanAttrUserID, attrs[spanAttrUserID].AsString())
 	}
-	if got, ok := rec.lastGeneration.Metadata[spanAttrUserID]; !ok || got != "metadata-user" {
-		t.Fatalf("expected generation metadata %s=metadata-user, got %#v", spanAttrUserID, rec.lastGeneration.Metadata)
+	if got, ok := rec.lastGeneration.Metadata[metadataUserIDKey]; !ok || got != "metadata-user" {
+		t.Fatalf("expected generation metadata %s=metadata-user, got %#v", metadataUserIDKey, rec.lastGeneration.Metadata)
+	}
+}
+
+func TestGenerationMetadataLegacyUserIDFallbackSetsSpanAttribute(t *testing.T) {
+	client, recorder, _ := newTestClient(t, Config{})
+
+	_, rec := client.StartGeneration(context.Background(), GenerationStart{
+		Metadata: map[string]any{
+			spanAttrUserID: "legacy-user",
+		},
+		Model: ModelRef{
+			Provider: "anthropic",
+			Name:     "claude-sonnet-4-5",
+		},
+	})
+	rec.End()
+
+	span := onlyGenerationSpan(t, recorder.Ended())
+	attrs := spanAttributeMap(span)
+	if attrs[spanAttrUserID].AsString() != "legacy-user" {
+		t.Fatalf("expected %s=legacy-user, got %q", spanAttrUserID, attrs[spanAttrUserID].AsString())
+	}
+	if got, ok := rec.lastGeneration.Metadata[metadataUserIDKey]; !ok || got != "legacy-user" {
+		t.Fatalf("expected generation metadata %s=legacy-user, got %#v", metadataUserIDKey, rec.lastGeneration.Metadata)
 	}
 }
 

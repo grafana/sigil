@@ -204,7 +204,7 @@ Read path components:
 4. Conversation/generation detail:
    - MySQL hot rows (`generations`, `conversations`) + object storage blocks.
    - Union + dedupe by `generation_id` with hot-row preference.
-   - Conversation detail `user_id` is derived from latest generation metadata key `user.id` when present.
+   - Conversation detail `user_id` is derived from latest generation metadata key `sigil.user.id` when present.
 5. Proxy routes pass through to Tempo and Prometheus for raw access.
 
 ```mermaid

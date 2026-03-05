@@ -25,7 +25,10 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
-const generationMetadataUserIDKey = "user.id"
+const (
+	generationMetadataUserIDKey       = "sigil.user.id"
+	generationMetadataLegacyUserIDKey = "user.id"
+)
 
 type Conversation struct {
 	ID                string                                  `json:"id"`
@@ -1589,6 +1592,9 @@ func latestConversationUserID(generations []*sigilv1.Generation) string {
 	found := false
 	for idx, generation := range generations {
 		candidate := generationMetadataString(generation, generationMetadataUserIDKey)
+		if candidate == "" {
+			candidate = generationMetadataString(generation, generationMetadataLegacyUserIDKey)
+		}
 		if candidate == "" {
 			continue
 		}
