@@ -130,6 +130,24 @@ describe('PageInsightBar', () => {
     expect(mockGenerate).toHaveBeenCalledTimes(2);
   });
 
+  it('shows fallback insight while regenerating after data context change', () => {
+    mockGenerate.mockImplementation(({ onComplete }: { onComplete: (r: string) => void }) => {
+      onComplete('- Prior context insight');
+    });
+    const { rerender } = render(
+      <PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="initial data" />
+    );
+    expect(screen.getByText(/Prior context insight/)).toBeInTheDocument();
+
+    mockGenerate.mockReset();
+    mockGenerate.mockImplementation(jest.fn());
+
+    rerender(<PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="updated data" />);
+
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/Prior context insight/)).toBeInTheDocument();
+  });
+
   it('regenerates when prompt changes with same data context', () => {
     const { rerender } = render(<PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="same data" />);
     expect(mockGenerate).toHaveBeenCalledTimes(1);

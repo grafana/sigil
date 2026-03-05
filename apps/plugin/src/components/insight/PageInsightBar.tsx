@@ -96,7 +96,7 @@ export function PageInsightBar({
   const exactCachedInsight = useMemo(() => (cacheKey ? readCachedInsight(cacheKey) : null), [cacheKey]);
   const fallbackCachedInsight = useMemo(
     () => (fallbackCacheKey ? readCachedInsight(fallbackCacheKey) : null),
-    [fallbackCacheKey]
+    [dataContext, fallbackCacheKey]
   );
 
   useEffect(() => {
