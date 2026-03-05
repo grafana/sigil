@@ -152,6 +152,31 @@ const getStyles = (theme: GrafanaTheme2) => ({
     marginLeft: 'auto',
     alignItems: 'flex-end',
   }),
+  heroTopStatsRow: css({
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'flex-end',
+    gap: theme.spacing(1.5),
+    width: '100%',
+    '@media (max-width: 900px)': {
+      justifyContent: 'flex-start',
+      flexWrap: 'wrap' as const,
+    },
+  }),
+  heroVersionsPanel: css({
+    minWidth: 420,
+    maxWidth: 620,
+  }),
+  heroVersionsTitle: css({
+    display: 'block',
+    marginBottom: theme.spacing(0.5),
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.bodySmall.fontSize,
+    lineHeight: 1.2,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.03em',
+    fontWeight: theme.typography.fontWeightMedium,
+  }),
   heroEyebrow: css({
     textTransform: 'uppercase' as const,
     letterSpacing: '0.08em',
@@ -205,10 +230,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   heroMetaStatHighlight: css({
     minWidth: 0,
     justifySelf: 'end',
-    padding: theme.spacing(1, 1.25),
-    borderRadius: theme.shape.radius.default,
-    background: theme.colors.background.secondary,
-    border: `1px solid ${theme.colors.border.weak}`,
+    marginLeft: theme.spacing(1),
     '@media (max-width: 1400px)': {
       gridColumn: '4 / 5',
     },
@@ -256,6 +278,29 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   tabStatsItem: css({
     minWidth: 140,
+  }),
+  tabContentLayout: css({
+    display: 'grid',
+    gridTemplateColumns: '260px minmax(0, 1fr)',
+    gap: theme.spacing(2),
+    alignItems: 'start',
+    '@media (max-width: 900px)': {
+      gridTemplateColumns: '1fr',
+    },
+  }),
+  tabSidebar: css({
+    borderRadius: 0,
+    border: 'none',
+    background: 'transparent',
+    padding: theme.spacing(0.25, 0),
+  }),
+  tabSidebarStats: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(1.25),
+  }),
+  tabMainContent: css({
+    minWidth: 0,
   }),
   mainAreaTabs: css({
     borderBottom: `1px solid ${theme.colors.border.weak}`,
@@ -416,22 +461,22 @@ const getStyles = (theme: GrafanaTheme2) => ({
     textAlign: 'left' as const,
     appearance: 'none' as const,
     outline: 'none',
-    borderRadius: theme.shape.radius.default,
+    borderRadius: 0,
     border: 'none',
-    background: theme.colors.background.canvas,
+    background: 'transparent',
     padding: theme.spacing(0.5, 0.75),
     display: 'flex',
     flexDirection: 'column' as const,
     gap: theme.spacing(0.25),
     cursor: 'pointer',
-    transition: 'background 0.15s ease',
+    borderBottom: `3px solid transparent`,
+    transition: 'border-color 0.15s ease',
     '&:hover': {
-      background: theme.colors.action.hover,
+      borderBottomColor: theme.colors.border.medium,
     },
   }),
   recentVersionBoxActive: css({
-    background: theme.colors.primary.transparent,
-    boxShadow: `inset 0 0 0 1px ${theme.colors.primary.border}, 0 0 0 1px ${theme.colors.primary.transparent}`,
+    borderBottomColor: theme.colors.primary.border,
   }),
   recentVersionContent: css({
     display: 'grid',
@@ -1338,65 +1383,112 @@ export default function AgentDetailPage({
                   <div className={styles.badgeRow}>{isAnonymous && <Badge text="Anonymous" color="orange" />}</div>
                 </div>
                 <div className={styles.heroStatsColumn}>
-                  <div className={styles.heroMetaGrid}>
-                    <div className={styles.heroMetaStat}>
-                      <TopStat
-                        label="VERSIONS"
-                        value={versionOptions.length}
-                        loading={false}
-                        compact
-                        normalFontSize
-                        rightAlignContent
-                        helpTooltip="Total distinct effective versions recorded for this agent."
-                      />
-                    </div>
-                    <div className={styles.heroMetaStat}>
-                      <TopStat
-                        label="DECLARED VERSION"
-                        value={0}
-                        displayValue={detail.declared_version_latest || 'n/a'}
-                        loading={false}
-                        compact
-                        normalFontSize
-                        rightAlignContent
-                        helpTooltip="Version string reported by instrumentation."
-                      />
-                    </div>
-                    <div className={styles.heroMetaStat}>
-                      <TopStat
-                        label="MODELS"
-                        value={detail.models.length}
-                        loading={false}
-                        compact
-                        normalFontSize
-                        rightAlignContent
-                        helpTooltip="Distinct model variants recorded for this agent version."
-                      />
-                    </div>
-                    <div className={styles.heroMetaStat}>
-                      <TopStat
-                        label="TOOLS"
-                        value={detail.tool_count}
-                        loading={false}
-                        compact
-                        normalFontSize
-                        rightAlignContent
-                        helpTooltip="Declared tool definitions."
-                      />
-                    </div>
-                    <div className={cx(styles.heroMetaStat, styles.heroMetaStatWide)}>
-                      <TopStat
-                        label="PRIMARY MODEL"
-                        value={0}
-                        displayValue={
-                          primaryModelProvider ? `${primaryModelLabel} (${primaryModelProvider})` : primaryModelLabel
-                        }
-                        loading={false}
-                        compact
-                        normalFontSize
-                        rightAlignContent
-                        helpTooltip="Primary model name and provider in this version."
-                      />
+                  <div className={styles.heroTopStatsRow}>
+                    <div className={styles.heroVersionsPanel}>
+                      <span className={styles.heroVersionsTitle}>Versions</span>
+                      <div className={styles.versionControls}>
+                        <div className={styles.versionSelect}>
+                          <Select
+                            options={versionSelectOptions}
+                            value={activeVersion}
+                            onChange={(selected) => {
+                              if (selected?.value === LOAD_MORE_VERSIONS_VALUE) {
+                                void loadMoreVersions();
+                                return;
+                              }
+                              selectVersion(selected?.value ?? '');
+                            }}
+                            isLoading={loadingVersions}
+                            placeholder="Select a version…"
+                            aria-label="agent version selector"
+                          />
+                        </div>
+                        <Button variant="secondary" onClick={() => selectVersion('')} disabled={selectedVersion.length === 0}>
+                          Latest
+                        </Button>
+                      </div>
+                      {recentVersions.length > 1 && (
+                        <>
+                          <div className={styles.recentVersionsHeading}>Recent versions</div>
+                          <div className={styles.recentVersionsGrid}>
+                            {recentVersions.map((versionItem, index) => {
+                              const rating = recentVersionRatings[versionItem.effective_version];
+                              const isSelected = activeVersion === versionItem.effective_version;
+                              const completedRating = rating?.status === 'completed' ? rating : null;
+                              const versionNumber =
+                                versionItem.declared_version_latest || versionItem.declared_version_first || `#${index + 1}`;
+                              const tooltipContent = (
+                                <div className={styles.versionTooltip}>
+                                  <div className={styles.versionTooltipTitle}>Version {versionNumber}</div>
+                                  <div className={styles.versionTooltipMeta}>Last seen {formatDate(versionItem.last_seen_at)}</div>
+                                  <div
+                                    className={styles.versionTooltipStatus}
+                                    style={{
+                                      color: completedRating ? scoreTone(theme, completedRating.score) : theme.colors.text.secondary,
+                                    }}
+                                  >
+                                    {completedRating ? `Rated ${completedRating.score}/10` : 'Unrated'}
+                                  </div>
+                                </div>
+                              );
+                              return (
+                                <div key={versionItem.effective_version} className={styles.recentVersionItem}>
+                                  <Tooltip content={tooltipContent} placement="top">
+                                    <button
+                                      type="button"
+                                      className={cx(styles.recentVersionBox, isSelected && styles.recentVersionBoxActive)}
+                                      onClick={() => selectVersion(versionItem.effective_version)}
+                                      aria-label={`select version ${versionItem.effective_version}`}
+                                    >
+                                      <span
+                                        className={cx(
+                                          styles.recentVersionContent,
+                                          !completedRating && styles.recentVersionContentSingle
+                                        )}
+                                      >
+                                        <span
+                                          className={cx(
+                                            styles.recentVersionText,
+                                            !completedRating && styles.recentVersionTextCentered
+                                          )}
+                                        >
+                                          <span
+                                            className={cx(
+                                              styles.recentVersionNumber,
+                                              !completedRating && styles.recentVersionNumberCentered
+                                            )}
+                                          >
+                                            {versionNumber}
+                                          </span>
+                                        </span>
+                                        {completedRating && (
+                                          <span
+                                            className={styles.recentVersionScore}
+                                            style={{ color: scoreTone(theme, completedRating.score) }}
+                                          >
+                                            {completedRating.score}/10
+                                          </span>
+                                        )}
+                                      </span>
+                                      <span
+                                        className={cx(
+                                          styles.recentVersionTimelineMarker,
+                                          index === 0 && styles.recentVersionTimelineMarkerStart,
+                                          index === recentVersions.length - 1 && styles.recentVersionTimelineMarkerEnd
+                                        )}
+                                        aria-hidden="true"
+                                      />
+                                      <span className={styles.recentVersionRelativeTime}>
+                                        {formatRelativeDateCompact(versionItem.last_seen_at)}
+                                      </span>
+                                    </button>
+                                  </Tooltip>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
                     </div>
                     <div className={styles.heroMetaStatHighlight}>
                       <TopStat
@@ -1449,163 +1541,67 @@ export default function AgentDetailPage({
         </div>
       )}
 
-      <div className={styles.primaryPanelsRow}>
-        <div className={cx(styles.panel, styles.plainPanel, styles.stretchPanel)}>
-          <div
-            className={cx(styles.panelBody, styles.plainPanelBody, styles.versionsPanelBody, styles.stretchPanelBody)}
-          >
-            <span className={styles.statsHeaderLabel}>Versions</span>
-            <div className={styles.versionControls}>
-              <div className={styles.versionSelect}>
-                <Select
-                  options={versionSelectOptions}
-                  value={activeVersion}
-                  onChange={(selected) => {
-                    if (selected?.value === LOAD_MORE_VERSIONS_VALUE) {
-                      void loadMoreVersions();
-                      return;
-                    }
-                    selectVersion(selected?.value ?? '');
-                  }}
-                  isLoading={loadingVersions}
-                  placeholder="Select a version…"
-                  aria-label="agent version selector"
-                />
-              </div>
-              <Button variant="secondary" onClick={() => selectVersion('')} disabled={selectedVersion.length === 0}>
-                Latest
-              </Button>
-            </div>
-            {recentVersions.length > 0 && (
-              <>
-                <div className={styles.recentVersionsHeading}>Recent versions</div>
-                <div className={styles.recentVersionsGrid}>
-                  {recentVersions.map((versionItem, index) => {
-                    const rating = recentVersionRatings[versionItem.effective_version];
-                    const isSelected = activeVersion === versionItem.effective_version;
-                    const completedRating = rating?.status === 'completed' ? rating : null;
-                    const versionNumber =
-                      versionItem.declared_version_latest || versionItem.declared_version_first || `#${index + 1}`;
-                    const tooltipContent = (
-                      <div className={styles.versionTooltip}>
-                        <div className={styles.versionTooltipTitle}>Version {versionNumber}</div>
-                        <div className={styles.versionTooltipMeta}>
-                          Last seen {formatDate(versionItem.last_seen_at)}
-                        </div>
-                        <div
-                          className={styles.versionTooltipStatus}
-                          style={{
-                            color: completedRating
-                              ? scoreTone(theme, completedRating.score)
-                              : theme.colors.text.secondary,
-                          }}
-                        >
-                          {completedRating ? `Rated ${completedRating.score}/10` : 'Unrated'}
-                        </div>
-                      </div>
-                    );
-                    return (
-                      <div
-                        key={versionItem.effective_version}
-                        className={cx(styles.recentVersionItem, isSelected && styles.recentVersionItemActive)}
-                      >
-                        <Tooltip content={tooltipContent} placement="top">
-                          <button
-                            type="button"
-                            className={cx(styles.recentVersionBox, isSelected && styles.recentVersionBoxActive)}
-                            onClick={() => selectVersion(versionItem.effective_version)}
-                            aria-label={`select version ${versionItem.effective_version}`}
-                          >
-                            <span
-                              className={cx(
-                                styles.recentVersionContent,
-                                !completedRating && styles.recentVersionContentSingle
-                              )}
-                            >
-                              <span
-                                className={cx(
-                                  styles.recentVersionText,
-                                  !completedRating && styles.recentVersionTextCentered
-                                )}
-                              >
-                                <span
-                                  className={cx(
-                                    styles.recentVersionNumber,
-                                    !completedRating && styles.recentVersionNumberCentered,
-                                    isSelected && styles.recentVersionNumberActive
-                                  )}
-                                >
-                                  {versionNumber}
-                                </span>
-                              </span>
-                              {completedRating && (
-                                <span
-                                  className={cx(
-                                    styles.recentVersionScore,
-                                    isSelected && styles.recentVersionScoreActive
-                                  )}
-                                  style={{ color: scoreTone(theme, completedRating.score) }}
-                                >
-                                  {completedRating.score}/10
-                                </span>
-                              )}
-                            </span>
-                            <span
-                              className={cx(
-                                styles.recentVersionTimelineMarker,
-                                index === 0 && styles.recentVersionTimelineMarkerStart,
-                                index === recentVersions.length - 1 && styles.recentVersionTimelineMarkerEnd,
-                                isSelected && styles.recentVersionTimelineMarkerActive
-                              )}
-                              aria-hidden="true"
-                            />
-                            <span
-                              className={cx(
-                                styles.recentVersionRelativeTime,
-                                isSelected && styles.recentVersionRelativeTimeActive
-                              )}
-                            >
-                              {formatRelativeDateCompact(versionItem.last_seen_at)}
-                            </span>
-                          </button>
-                        </Tooltip>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className={cx(styles.stretchPanel, styles.stretchPanelBody)}>
-          <div className={styles.statsGrid}>
-            <TopStat
-              label="AGE"
-              value={Math.max(0, toTimestampMs(detail.last_seen_at) - toTimestampMs(detail.first_seen_at))}
-              displayValue={formatDurationCompact(detail.first_seen_at, detail.last_seen_at)}
-              loading={false}
-              rightAlignContent
-              helpTooltip="Duration between first and last recorded generations for this version."
-            />
-            <TopStat
-              label="FIRST SEEN"
-              value={toTimestampMs(detail.first_seen_at)}
-              displayValue={formatDate(detail.first_seen_at)}
-              loading={false}
-              rightAlignContent
-              helpTooltip="The earliest time a generation was recorded for this agent version."
-            />
-            <TopStat
-              label="LAST SEEN"
-              value={toTimestampMs(detail.last_seen_at)}
-              displayValue={formatDate(detail.last_seen_at)}
-              loading={false}
-              rightAlignContent
-              helpTooltip="The most recent time any generation was recorded for this agent version."
-            />
-          </div>
-        </div>
+      <div className={styles.statsGrid}>
+        <TopStat
+          label="VERSIONS"
+          value={versionOptions.length}
+          loading={false}
+          normalFontSize
+          rightAlignContent
+          helpTooltip="Total distinct effective versions recorded for this agent."
+        />
+        <TopStat
+          label="MODELS"
+          value={detail.models.length}
+          loading={false}
+          normalFontSize
+          rightAlignContent
+          helpTooltip="Distinct model variants recorded for this agent version."
+        />
+        <TopStat
+          label="PRIMARY MODEL"
+          value={0}
+          displayValue={primaryModelProvider ? `${primaryModelLabel} (${primaryModelProvider})` : primaryModelLabel}
+          loading={false}
+          normalFontSize
+          rightAlignContent
+          helpTooltip="Primary model name and provider in this version."
+        />
+        <TopStat
+          label="TOOLS"
+          value={detail.tool_count}
+          loading={false}
+          normalFontSize
+          rightAlignContent
+          helpTooltip="Declared tool definitions."
+        />
+        <TopStat
+          label="AGE"
+          value={Math.max(0, toTimestampMs(detail.last_seen_at) - toTimestampMs(detail.first_seen_at))}
+          displayValue={formatDurationCompact(detail.first_seen_at, detail.last_seen_at)}
+          loading={false}
+          normalFontSize
+          rightAlignContent
+          helpTooltip="Duration between first and last recorded generations for this version."
+        />
+        <TopStat
+          label="FIRST SEEN"
+          value={toTimestampMs(detail.first_seen_at)}
+          displayValue={formatDate(detail.first_seen_at)}
+          loading={false}
+          normalFontSize
+          rightAlignContent
+          helpTooltip="The earliest time a generation was recorded for this agent version."
+        />
+        <TopStat
+          label="LAST SEEN"
+          value={toTimestampMs(detail.last_seen_at)}
+          displayValue={formatDate(detail.last_seen_at)}
+          loading={false}
+          normalFontSize
+          rightAlignContent
+          helpTooltip="The most recent time any generation was recorded for this agent version."
+        />
       </div>
 
       <div className={styles.mainAreaTabs}>
@@ -1616,160 +1612,137 @@ export default function AgentDetailPage({
       </div>
 
       {mainAreaTab === 'prompts' && (
-        <div className={styles.tabStatsStrip} aria-label="Prompt stats">
-          <div className={styles.tabStatsItem}>
-            <TopStat
-              label="GENERATIONS"
-              value={detail.generation_count}
-              loading={false}
-              rightAlignContent
-              helpTooltip="Total generations recorded for this agent version."
-            />
+        <div className={styles.tabContentLayout}>
+          <div className={styles.tabSidebar} aria-label="Prompt stats">
+            <div className={styles.tabSidebarStats}>
+              <TopStat
+                label="GENERATIONS"
+                value={detail.generation_count}
+                loading={false}
+                normalFontSize
+                rightAlignContent
+                helpTooltip="Total generations recorded for this agent version."
+              />
+              <TopStat
+                label="PROMPT TOKENS"
+                value={detail.token_estimate.system_prompt}
+                loading={false}
+                normalFontSize
+                rightAlignContent
+                helpTooltip="Estimated tokens consumed by the system prompt in this version."
+              />
+              <TopStat
+                label="TOTAL TOKENS"
+                value={detail.token_estimate.total}
+                loading={false}
+                normalFontSize
+                rightAlignContent
+                helpTooltip="Sum of system prompt and tool tokens - the baseline context cost per generation."
+              />
+            </div>
           </div>
-          <div className={styles.tabStatsItem}>
-            <TopStat
-              label="PROMPT TOKENS"
-              value={detail.token_estimate.system_prompt}
-              loading={false}
-              rightAlignContent
-              helpTooltip="Estimated tokens consumed by the system prompt in this version."
-            />
-          </div>
-          <div className={styles.tabStatsItem}>
-            <TopStat
-              label="TOTAL TOKENS"
-              value={detail.token_estimate.total}
-              loading={false}
-              rightAlignContent
-              helpTooltip="Sum of system prompt and tool tokens - the baseline context cost per generation."
-            />
-          </div>
-        </div>
-      )}
-
-      {mainAreaTab === 'tools' && (
-        <div className={styles.tabStatsStrip} aria-label="Tools stats">
-          <div className={styles.tabStatsItem}>
-            <TopStat
-              label="TOOLS TOKENS"
-              value={detail.token_estimate.tools_total}
-              loading={false}
-              rightAlignContent
-              helpTooltip="Estimated tokens consumed by all tool schemas combined in this version."
-            />
-          </div>
-          <div className={styles.tabStatsItem}>
-            <TopStat
-              label="TOTAL TOKENS"
-              value={detail.token_estimate.total}
-              loading={false}
-              rightAlignContent
-              helpTooltip="Sum of system prompt and tool tokens - the baseline context cost per generation."
-            />
-          </div>
-        </div>
-      )}
-
-      {mainAreaTab === 'prompts' && (
-        <div ref={promptAnalysisSectionRef} className={cx(styles.panel, styles.stretchPanel)}>
-          <div className={styles.panelHeader}>
-            <Text weight="medium">System prompt and context analysis</Text>
-          </div>
-          <div className={cx(styles.panelBody, styles.stretchPanelBody)}>
-            <div className={styles.combinedPromptSections}>
-              <div className={styles.sectionBlock}>
-                <span className={styles.panelHeaderControls}>
-                  <span className={styles.promptViewToggle} aria-label="System prompt view toggle">
-                    <button
-                      type="button"
-                      className={cx(
-                        styles.promptViewToggleButton,
-                        systemPromptView === 'preview' && styles.promptViewToggleButtonActive
-                      )}
-                      aria-pressed={systemPromptView === 'preview'}
-                      onClick={() => {
-                        if (!isSystemTokenized) {
-                          setSystemPromptView('preview');
-                        }
-                      }}
-                      disabled={isSystemTokenized}
-                    >
-                      Preview
-                    </button>
-                    <button
-                      type="button"
-                      className={cx(
-                        styles.promptViewToggleButton,
-                        systemPromptView === 'markdown' && styles.promptViewToggleButtonActive
-                      )}
-                      aria-pressed={systemPromptView === 'markdown'}
-                      onClick={() => setSystemPromptView('markdown')}
-                    >
-                      Markdown
-                    </button>
-                  </span>
-                  <span
-                    className={cx(styles.tokenizeBtn, tokenizedSections['system'] && styles.tokenizeBtnActive)}
-                    onClick={() => toggleSection('system')}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        toggleSection('system');
-                      }
-                    }}
-                    role="button"
-                    tabIndex={0}
-                  >
-                    <Icon name="brackets-curly" size="xs" />
-                    {tokenizerLoading ? 'Loading\u2026' : 'Tokenize'}
-                  </span>
-                  {tokenizedSections['system'] && (
-                    <select
-                      className={styles.encodingSelect}
-                      aria-label="Tokenizer encoding"
-                      value={encodingOverride ?? ''}
-                      onChange={(e) => setEncodingOverride(e.target.value ? (e.target.value as EncodingName) : null)}
-                    >
-                      <option value="">Auto ({autoEncoding.replace('_base', '')})</option>
-                      {AVAILABLE_ENCODINGS.map((enc) => (
-                        <option key={enc.value} value={enc.value}>
-                          {enc.value.replace('_base', '')}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </span>
-                <div className={styles.systemPromptContent}>
-                  {detail.system_prompt.length > 0 ? (
-                    tokenizedSections['system'] && encode && decode ? (
-                      <div className={styles.systemPrompt}>
-                        <TokenizedText text={detail.system_prompt} encode={encode} decode={decode} />
-                      </div>
-                    ) : systemPromptView === 'preview' ? (
-                      <div className={styles.systemPromptPreview}>
-                        <MarkdownPreview markdown={detail.system_prompt} />
-                      </div>
-                    ) : (
-                      <pre className={styles.systemPrompt}>{detail.system_prompt}</pre>
-                    )
-                  ) : (
-                    <pre className={styles.systemPrompt}>No system prompt recorded.</pre>
-                  )}
-                </div>
+          <div className={styles.tabMainContent}>
+            <div ref={promptAnalysisSectionRef} className={cx(styles.panel, styles.stretchPanel)}>
+              <div className={styles.panelHeader}>
+                <Text weight="medium">System prompt and context analysis</Text>
               </div>
-              <div className={styles.sectionBlock}>
-                <AgentRatingPanel
-                  agentName={agentName}
-                  version={activeVersion}
-                  agentStateContext={agentStateContext}
-                  contentView={isSystemTokenized ? 'markdown' : systemPromptView}
-                  onRerun={scrollToPromptAnalysis}
-                  onResultChange={handleRatingResultChange}
-                  dataSource={dataSource}
-                  initialResult={initialRating}
-                  initialLoading={initialRatingLoading || initialRating?.status === 'pending'}
-                  initialError={initialRatingError}
-                  embedded
-                />
+              <div className={cx(styles.panelBody, styles.stretchPanelBody)}>
+                <div className={styles.combinedPromptSections}>
+                  <div className={styles.sectionBlock}>
+                    <span className={styles.panelHeaderControls}>
+                      <span className={styles.promptViewToggle} aria-label="System prompt view toggle">
+                        <button
+                          type="button"
+                          className={cx(
+                            styles.promptViewToggleButton,
+                            systemPromptView === 'preview' && styles.promptViewToggleButtonActive
+                          )}
+                          aria-pressed={systemPromptView === 'preview'}
+                          onClick={() => {
+                            if (!isSystemTokenized) {
+                              setSystemPromptView('preview');
+                            }
+                          }}
+                          disabled={isSystemTokenized}
+                        >
+                          Preview
+                        </button>
+                        <button
+                          type="button"
+                          className={cx(
+                            styles.promptViewToggleButton,
+                            systemPromptView === 'markdown' && styles.promptViewToggleButtonActive
+                          )}
+                          aria-pressed={systemPromptView === 'markdown'}
+                          onClick={() => setSystemPromptView('markdown')}
+                        >
+                          Markdown
+                        </button>
+                      </span>
+                      <span
+                        className={cx(styles.tokenizeBtn, tokenizedSections['system'] && styles.tokenizeBtnActive)}
+                        onClick={() => toggleSection('system')}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            toggleSection('system');
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                      >
+                        <Icon name="brackets-curly" size="xs" />
+                        {tokenizerLoading ? 'Loading\u2026' : 'Tokenize'}
+                      </span>
+                      {tokenizedSections['system'] && (
+                        <select
+                          className={styles.encodingSelect}
+                          aria-label="Tokenizer encoding"
+                          value={encodingOverride ?? ''}
+                          onChange={(e) => setEncodingOverride(e.target.value ? (e.target.value as EncodingName) : null)}
+                        >
+                          <option value="">Auto ({autoEncoding.replace('_base', '')})</option>
+                          {AVAILABLE_ENCODINGS.map((enc) => (
+                            <option key={enc.value} value={enc.value}>
+                              {enc.value.replace('_base', '')}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </span>
+                    <div className={styles.systemPromptContent}>
+                      {detail.system_prompt.length > 0 ? (
+                        tokenizedSections['system'] && encode && decode ? (
+                          <div className={styles.systemPrompt}>
+                            <TokenizedText text={detail.system_prompt} encode={encode} decode={decode} />
+                          </div>
+                        ) : systemPromptView === 'preview' ? (
+                          <div className={styles.systemPromptPreview}>
+                            <MarkdownPreview markdown={detail.system_prompt} />
+                          </div>
+                        ) : (
+                          <pre className={styles.systemPrompt}>{detail.system_prompt}</pre>
+                        )
+                      ) : (
+                        <pre className={styles.systemPrompt}>No system prompt recorded.</pre>
+                      )}
+                    </div>
+                  </div>
+                  <div className={styles.sectionBlock}>
+                    <AgentRatingPanel
+                      agentName={agentName}
+                      version={activeVersion}
+                      agentStateContext={agentStateContext}
+                      contentView={isSystemTokenized ? 'markdown' : systemPromptView}
+                      onRerun={scrollToPromptAnalysis}
+                      onResultChange={handleRatingResultChange}
+                      dataSource={dataSource}
+                      initialResult={initialRating}
+                      initialLoading={initialRatingLoading || initialRating?.status === 'pending'}
+                      initialError={initialRatingError}
+                      embedded
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1777,17 +1750,41 @@ export default function AgentDetailPage({
       )}
 
       {mainAreaTab === 'tools' && (
-        <ToolsPanel
-          tools={detail.tools}
-          tokenized={tokenizedSections['tools']}
-          onToggleTokenize={() => toggleSection('tools')}
-          tokenizerLoading={tokenizerLoading}
-          autoEncoding={autoEncoding}
-          encodingOverride={encodingOverride}
-          onEncodingChange={setEncodingOverride}
-          encode={encode}
-          decode={decode}
-        />
+        <div className={styles.tabContentLayout}>
+          <div className={styles.tabSidebar} aria-label="Tools stats">
+            <div className={styles.tabSidebarStats}>
+              <TopStat
+                label="TOOLS TOKENS"
+                value={detail.token_estimate.tools_total}
+                loading={false}
+                normalFontSize
+                rightAlignContent
+                helpTooltip="Estimated tokens consumed by all tool schemas combined in this version."
+              />
+              <TopStat
+                label="TOTAL TOKENS"
+                value={detail.token_estimate.total}
+                loading={false}
+                normalFontSize
+                rightAlignContent
+                helpTooltip="Sum of system prompt and tool tokens - the baseline context cost per generation."
+              />
+            </div>
+          </div>
+          <div className={styles.tabMainContent}>
+            <ToolsPanel
+              tools={detail.tools}
+              tokenized={tokenizedSections['tools']}
+              onToggleTokenize={() => toggleSection('tools')}
+              tokenizerLoading={tokenizerLoading}
+              autoEncoding={autoEncoding}
+              encodingOverride={encodingOverride}
+              onEncodingChange={setEncodingOverride}
+              encode={encode}
+              decode={decode}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

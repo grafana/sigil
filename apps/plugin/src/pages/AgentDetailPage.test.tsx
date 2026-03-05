@@ -163,6 +163,37 @@ describe('AgentDetailPage', () => {
     expect(screen.getByText('gen_ai.agent.name')).toBeInTheDocument();
   });
 
+  it('hides recent versions when only one version exists', async () => {
+    const dataSource = createDataSource();
+    dataSource.listAgentVersions = jest.fn(async () => ({
+      items: [
+        {
+          effective_version: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          declared_version_first: '1.0.0',
+          declared_version_latest: '1.0.0',
+          first_seen_at: '2026-03-04T09:00:00Z',
+          last_seen_at: '2026-03-04T10:00:00Z',
+          generation_count: 4,
+          tool_count: 1,
+          system_prompt_prefix: 'v1',
+          token_estimate: { system_prompt: 4, tools_total: 2, total: 6 },
+        },
+      ],
+      next_cursor: '',
+    }));
+
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByLabelText('agent version selector')).toBeInTheDocument();
+    expect(screen.queryByText('Recent versions')).not.toBeInTheDocument();
+  });
+
   it('does not show rating error alert when latest rating returns 404', async () => {
     const dataSource = createDataSource();
     dataSource.lookupAgentRating = jest.fn(async () => {
