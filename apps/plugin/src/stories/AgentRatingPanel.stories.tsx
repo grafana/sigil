@@ -4,7 +4,7 @@ import type { AgentsDataSource } from '../agents/api';
 const mockDataSource: AgentsDataSource = {
   listAgents: async () => ({ items: [], next_cursor: '' }),
   lookupAgent: async () => {
-    throw new Error('not implemented');
+    throw new globalThis.Error('not implemented');
   },
   listAgentVersions: async () => ({ items: [], next_cursor: '' }),
   rateAgent: async () => ({
