@@ -26,6 +26,10 @@ type CachedInsight = {
   text: string;
 };
 
+type LiveInsight = CachedInsight & {
+  cacheKey: string;
+};
+
 function readCollapsed(): boolean {
   try {
     return localStorage.getItem(STORAGE_KEY) === '1';
@@ -51,11 +55,10 @@ export function PageInsightBar({
   const styles = useStyles2(getStyles);
   const assistant = useAssistant();
   const gen = useInlineAssistant();
-  const [text, setText] = useState('');
-  const [generatedAt, setGeneratedAt] = useState<number | null>(null);
+  const [liveInsight, setLiveInsight] = useState<LiveInsight | null>(null);
   const [ageTick, setAgeTick] = useState(() => Date.now());
   const [collapsed, setCollapsed] = useState(readCollapsed);
-  const lastDataContextRef = useRef<string | null>(null);
+  const lastRequestKeyRef = useRef<string | null>(null);
 
   const toggleCollapsed = useCallback(() => {
     setCollapsed((prev) => {
@@ -80,8 +83,7 @@ export function PageInsightBar({
       onComplete: (result: string) => {
         const generatedTs = Date.now();
         const cached: CachedInsight = { generatedAt: generatedTs, text: result };
-        setText(result);
-        setGeneratedAt(generatedTs);
+        setLiveInsight({ ...cached, cacheKey });
         writeCachedInsight(cacheKey, cached);
         writeCachedInsight(fallbackCacheKey, cached);
       },
@@ -90,31 +92,18 @@ export function PageInsightBar({
   }, []);
 
   useEffect(() => {
-    if (!dataContext) {
-      lastDataContextRef.current = null;
-      setText('');
-      setGeneratedAt(null);
-      return;
-    }
-    if (gen.isGenerating) {
-      return;
-    }
-    if (lastDataContextRef.current === dataContext) {
+    if (!dataContext || gen.isGenerating) {
       return;
     }
     const cacheKey = buildCacheKey(prompt, origin, systemPrompt, dataContext);
-    const fallbackCacheKey = buildFallbackCacheKey(prompt, origin, systemPrompt);
-    const cached = readCachedInsight(cacheKey) ?? readCachedInsight(fallbackCacheKey);
-    if (cached) {
-      setText(cached.text);
-      setGeneratedAt(cached.generatedAt);
-    } else {
-      setText('');
-      setGeneratedAt(null);
+    if (lastRequestKeyRef.current === cacheKey) {
+      return;
     }
-    lastDataContextRef.current = dataContext;
-    const cacheAgeMs = cached ? Date.now() - cached.generatedAt : Number.POSITIVE_INFINITY;
-    if (cacheAgeMs >= REFRESH_INTERVAL_MS) {
+    const fallbackCacheKey = buildFallbackCacheKey(prompt, origin, systemPrompt);
+    const exactCached = readCachedInsight(cacheKey);
+    const cacheAgeMs = exactCached ? Date.now() - exactCached.generatedAt : Number.POSITIVE_INFINITY;
+    lastRequestKeyRef.current = cacheKey;
+    if (!exactCached || cacheAgeMs >= REFRESH_INTERVAL_MS) {
       runGenerate(dataContext, cacheKey, fallbackCacheKey);
     }
   }, [dataContext, gen.isGenerating, origin, prompt, runGenerate, systemPrompt]);
@@ -141,8 +130,6 @@ export function PageInsightBar({
     if (ctx && !g.isGenerating) {
       const cacheKey = buildCacheKey(p, o, sp, ctx);
       const fallbackCacheKey = buildFallbackCacheKey(p, o, sp);
-      setText('');
-      setGeneratedAt(null);
       runGenerate(ctx, cacheKey, fallbackCacheKey);
     }
   }, [runGenerate]);
@@ -172,12 +159,22 @@ export function PageInsightBar({
     };
   }, []);
 
-  const displayText = gen.isGenerating ? gen.content : text;
-  const initialWaiting = !dataContext && !text && !gen.isGenerating;
-  const hasResult = Boolean(text) || gen.isGenerating;
+  const cacheKey = dataContext ? buildCacheKey(prompt, origin, systemPrompt, dataContext) : null;
+  const fallbackCacheKey = dataContext ? buildFallbackCacheKey(prompt, origin, systemPrompt) : null;
+  const cachedInsight = useMemo(() => {
+    if (!cacheKey || !fallbackCacheKey) {
+      return null;
+    }
+    return readCachedInsight(cacheKey) ?? readCachedInsight(fallbackCacheKey);
+  }, [cacheKey, fallbackCacheKey]);
+  const liveForCurrentContext = cacheKey && liveInsight?.cacheKey === cacheKey ? liveInsight : null;
+  const insight = liveForCurrentContext ?? cachedInsight;
+  const displayText = gen.isGenerating ? gen.content : (insight?.text ?? '');
+  const initialWaiting = !dataContext && !displayText && !gen.isGenerating;
+  const hasResult = Boolean(displayText) || gen.isGenerating;
   const showLoader = initialWaiting || gen.isGenerating;
   const loaderTooltip = initialWaiting ? 'Waiting for data' : 'Generating insight...';
-  const insightAgeLabel = generatedAt !== null ? formatAgeShort(Math.max(ageTick - generatedAt, 0)) : null;
+  const insightAgeLabel = insight ? formatAgeShort(Math.max(ageTick - insight.generatedAt, 0)) : null;
 
   const bullets = useMemo(() => {
     if (!displayText) {
@@ -202,7 +199,7 @@ export function PageInsightBar({
           aria-label={collapsed ? 'Expand insights' : 'Collapse insights'}
         >
           <Icon name="ai" size="md" className={styles.aiIcon} />
-           <span className={styles.headerTitle}>AI analysis</span>
+          <span className={styles.headerTitle}>AI analysis</span>
           {collapsed && firstBullet && (
             <span className={styles.collapsedPreview}>{formatInlineMarkup(firstBullet)}</span>
           )}
@@ -302,10 +299,10 @@ function isCachedInsight(value: unknown): value is CachedInsight {
 }
 
 function stableHash(input: string): string {
-  let hash = 2166136261;
+  let hash = 2166136261 >>> 0;
   for (let i = 0; i < input.length; i += 1) {
     hash ^= input.charCodeAt(i);
-    hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+    hash = Math.imul(hash, 16777619);
   }
   return (hash >>> 0).toString(36);
 }
