@@ -169,15 +169,15 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
   },
   {
     slug: 'about-the-database',
-    title: 'New OSS database',
-    subtitle: 'Not a trace store. A generation store.',
+    title: 'OSS database: The store of a generation',
+    subtitle: 'Generation-first storage for real production use.',
     renderGraphic: (props) => <DatabaseGraphic {...props} />,
     body: (
       <ul>
-        <li>Schema designed around generation events, not retrofitted spans.</li>
-        <li>Fast queries across time, model, agent, and custom labels.</li>
-        <li>Stays responsive at high cardinality and large volumes.</li>
-        <li>One store powers both dashboards and deep investigations.</li>
+        <li>Built for generations, not retrofitted spans.</li>
+        <li>Fast queries by time, model, agent, and labels.</li>
+        <li>Works seamlessly with metrics, logs, traces, and profiles.</li>
+        <li>Built on the same principles as Mimir, Loki, Tempo, and world-class databases.</li>
       </ul>
     ),
   },
