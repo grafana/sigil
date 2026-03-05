@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-19
+last_reviewed: 2026-03-05
 source_of_truth: true
 audience: both
 ---
@@ -38,10 +38,15 @@ Purpose: define reliability expectations for ingest, hybrid storage reads, and p
 Fan-out read contract:
 
 1. query hot MySQL
-2. query cold compacted storage
-3. union results
-4. dedupe by `generation_id`
-5. prefer hot MySQL row on overlap conflict
+2. if hot rows already satisfy expected conversation generation count, skip cold reads
+3. otherwise query cold compacted storage within bounded conversation time window
+4. enforce bounded cold-read policies (request budget, per-index timeout/retry, bounded worker concurrency, bounded in-flight reads)
+5. cache block index reads (`index.sigil`) in-process with TTL/LRU and in-flight dedupe
+6. union results
+7. dedupe by `generation_id`
+8. prefer hot MySQL row on overlap conflict
+
+Cold-read failures remain strict for conversation detail: when cold data is required and unavailable, the request fails (no silent partial success).
 
 Tempo-first search/query workflows must degrade predictably when Tempo is unavailable.
 

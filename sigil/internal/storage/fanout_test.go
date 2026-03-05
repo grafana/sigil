@@ -145,6 +145,7 @@ func TestFanOutStoreGetGenerationByIDEmitsResolutionMetrics(t *testing.T) {
 
 func TestFanOutStoreGetGenerationByIDHotHitIgnoresColdErrors(t *testing.T) {
 	hotGeneration := fanOutTestGeneration("gen-hot", "conv-1", time.Date(2026, 2, 19, 10, 1, 0, 0, time.UTC))
+	coldCalled := false
 
 	store := NewFanOutStore(
 		&fanOutTestWALReader{
@@ -157,6 +158,7 @@ func TestFanOutStoreGetGenerationByIDHotHitIgnoresColdErrors(t *testing.T) {
 		},
 		&fanOutTestBlockMetadataStore{
 			listBlocks: func(_ context.Context, _ string, _, _ time.Time) ([]BlockMeta, error) {
+				coldCalled = true
 				return nil, errors.New("cold storage unavailable")
 			},
 		},
@@ -170,73 +172,155 @@ func TestFanOutStoreGetGenerationByIDHotHitIgnoresColdErrors(t *testing.T) {
 	if generation != hotGeneration {
 		t.Fatalf("expected hot generation pointer, got %#v", generation)
 	}
+	if coldCalled {
+		t.Fatalf("expected cold path to be skipped on hot hit")
+	}
 }
 
-func TestFanOutStoreListConversationGenerationsRunsHotAndColdInParallel(t *testing.T) {
-	coldStarted := make(chan struct{})
+func TestFanOutStoreListConversationGenerationsWithPlanSkipsColdWhenHotComplete(t *testing.T) {
+	hotGeneration := fanOutTestGeneration("gen-1", "conv-1", time.Date(2026, 2, 19, 10, 0, 0, 0, time.UTC))
+	coldCalled := false
 
 	store := NewFanOutStore(
 		&fanOutTestWALReader{
-			getByConversationID: func(ctx context.Context, _, _ string) ([]*sigilv1.Generation, error) {
-				select {
-				case <-coldStarted:
-					return []*sigilv1.Generation{}, nil
-				case <-ctx.Done():
-					return nil, ctx.Err()
-				}
+			getByConversationID: func(_ context.Context, _, _ string) ([]*sigilv1.Generation, error) {
+				return []*sigilv1.Generation{hotGeneration}, nil
 			},
 		},
 		&fanOutTestBlockMetadataStore{
 			listBlocks: func(_ context.Context, _ string, _, _ time.Time) ([]BlockMeta, error) {
-				close(coldStarted)
+				coldCalled = true
 				return []BlockMeta{}, nil
 			},
 		},
 		&fanOutTestBlockReader{},
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
-	generations, err := store.ListConversationGenerations(ctx, "tenant-a", "conv-1")
+	generations, err := store.ListConversationGenerationsWithPlan(context.Background(), "tenant-a", "conv-1", ConversationReadPlan{
+		ExpectedGenerationCount: 1,
+	})
 	if err != nil {
-		t.Fatalf("list conversation generations: %v", err)
+		t.Fatalf("list conversation generations with plan: %v", err)
 	}
-	if len(generations) != 0 {
-		t.Fatalf("expected empty result set, got %d", len(generations))
+	if len(generations) != 1 {
+		t.Fatalf("expected one hot generation, got %d", len(generations))
+	}
+	if coldCalled {
+		t.Fatalf("expected cold path to be skipped when hot satisfies expected generation count")
 	}
 }
 
-func TestFanOutStoreGetGenerationByIDRunsHotAndColdInParallel(t *testing.T) {
-	coldStarted := make(chan struct{})
+func TestFanOutStoreGetGenerationByIDWithPlanUsesBoundedBlockRange(t *testing.T) {
+	var (
+		capturedFrom time.Time
+		capturedTo   time.Time
+	)
+	planFrom := time.Date(2026, 2, 19, 9, 0, 0, 0, time.UTC)
+	planTo := time.Date(2026, 2, 19, 11, 0, 0, 0, time.UTC)
 
 	store := NewFanOutStore(
 		&fanOutTestWALReader{
-			getByID: func(ctx context.Context, _, _ string) (*sigilv1.Generation, error) {
-				select {
-				case <-coldStarted:
-					return nil, nil
-				case <-ctx.Done():
-					return nil, ctx.Err()
-				}
+			getByID: func(_ context.Context, _, _ string) (*sigilv1.Generation, error) {
+				return nil, nil
 			},
 		},
 		&fanOutTestBlockMetadataStore{
-			listBlocks: func(_ context.Context, _ string, _, _ time.Time) ([]BlockMeta, error) {
-				close(coldStarted)
+			listBlocks: func(_ context.Context, _ string, from, to time.Time) ([]BlockMeta, error) {
+				capturedFrom = from
+				capturedTo = to
 				return []BlockMeta{}, nil
 			},
 		},
 		&fanOutTestBlockReader{},
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
-	generation, err := store.GetGenerationByID(ctx, "tenant-a", "gen-1")
+	_, err := store.GetGenerationByIDWithPlan(context.Background(), "tenant-a", "gen-1", GenerationReadPlan{
+		From: planFrom,
+		To:   planTo,
+	})
 	if err != nil {
-		t.Fatalf("get generation by id: %v", err)
+		t.Fatalf("get generation by id with plan: %v", err)
 	}
-	if generation != nil {
-		t.Fatalf("expected nil generation, got %#v", generation)
+	if !capturedFrom.Equal(planFrom) {
+		t.Fatalf("expected block range from %s, got %s", planFrom, capturedFrom)
+	}
+	if !capturedTo.Equal(planTo) {
+		t.Fatalf("expected block range to %s, got %s", planTo, capturedTo)
+	}
+}
+
+func TestFanOutStoreGetGenerationByIDWithPlanFiltersConversationID(t *testing.T) {
+	generation := fanOutTestGeneration("gen-1", "conv-other", time.Date(2026, 2, 19, 10, 0, 0, 0, time.UTC))
+	index, generationsByOffset := buildFanOutTestBlock(t, []*sigilv1.Generation{generation})
+
+	store := NewFanOutStore(
+		&fanOutTestWALReader{
+			getByID: func(_ context.Context, _, _ string) (*sigilv1.Generation, error) {
+				return nil, nil
+			},
+		},
+		&fanOutTestBlockMetadataStore{
+			listBlocks: func(_ context.Context, _ string, _, _ time.Time) ([]BlockMeta, error) {
+				return []BlockMeta{{TenantID: "tenant-a", BlockID: "block-1"}}, nil
+			},
+		},
+		&fanOutTestBlockReader{
+			readIndex: func(_ context.Context, _, _ string) (*BlockIndex, error) {
+				return index, nil
+			},
+			readGenerations: func(_ context.Context, _, _ string, entries []IndexEntry) ([]*sigilv1.Generation, error) {
+				return fanOutGenerationsFromEntries(entries, generationsByOffset), nil
+			},
+		},
+	)
+
+	found, err := store.GetGenerationByIDWithPlan(context.Background(), "tenant-a", "gen-1", GenerationReadPlan{
+		ConversationID: "conv-target",
+	})
+	if err != nil {
+		t.Fatalf("get generation by id with conversation hint: %v", err)
+	}
+	if found != nil {
+		t.Fatalf("expected nil when generation conversation id does not match hint, got %#v", found)
+	}
+}
+
+func TestFanOutStoreListConversationGenerationsWithPlanUsesBoundedBlockRange(t *testing.T) {
+	var (
+		capturedFrom time.Time
+		capturedTo   time.Time
+	)
+	planFrom := time.Date(2026, 2, 19, 9, 0, 0, 0, time.UTC)
+	planTo := time.Date(2026, 2, 19, 11, 0, 0, 0, time.UTC)
+
+	store := NewFanOutStore(
+		&fanOutTestWALReader{
+			getByConversationID: func(_ context.Context, _, _ string) ([]*sigilv1.Generation, error) {
+				return []*sigilv1.Generation{}, nil
+			},
+		},
+		&fanOutTestBlockMetadataStore{
+			listBlocks: func(_ context.Context, _ string, from, to time.Time) ([]BlockMeta, error) {
+				capturedFrom = from
+				capturedTo = to
+				return []BlockMeta{}, nil
+			},
+		},
+		&fanOutTestBlockReader{},
+	)
+
+	_, err := store.ListConversationGenerationsWithPlan(context.Background(), "tenant-a", "conv-1", ConversationReadPlan{
+		From: planFrom,
+		To:   planTo,
+	})
+	if err != nil {
+		t.Fatalf("list conversation generations with plan: %v", err)
+	}
+	if !capturedFrom.Equal(planFrom) {
+		t.Fatalf("expected block range from %s, got %s", planFrom, capturedFrom)
+	}
+	if !capturedTo.Equal(planTo) {
+		t.Fatalf("expected block range to %s, got %s", planTo, capturedTo)
 	}
 }
 

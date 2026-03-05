@@ -157,6 +157,39 @@ func TestFromEnvQueryProxyDefaults(t *testing.T) {
 	}
 }
 
+func TestFromEnvQueryReadDefaults(t *testing.T) {
+	t.Setenv("SIGIL_QUERY_COLD_TOTAL_BUDGET", "")
+	t.Setenv("SIGIL_QUERY_COLD_INDEX_READ_TIMEOUT", "")
+	t.Setenv("SIGIL_QUERY_COLD_INDEX_RETRIES", "")
+	t.Setenv("SIGIL_QUERY_COLD_INDEX_WORKERS", "")
+	t.Setenv("SIGIL_QUERY_COLD_INDEX_MAX_INFLIGHT", "")
+	t.Setenv("SIGIL_QUERY_COLD_INDEX_CACHE_TTL", "")
+	t.Setenv("SIGIL_QUERY_COLD_INDEX_CACHE_MAX_BYTES", "")
+
+	cfg := FromEnv()
+	if cfg.QueryRead.ColdTotalBudget != DefaultQueryColdTotalBudget {
+		t.Fatalf("expected default cold total budget %s, got %s", DefaultQueryColdTotalBudget, cfg.QueryRead.ColdTotalBudget)
+	}
+	if cfg.QueryRead.ColdIndexReadTimeout != DefaultQueryColdIndexReadTimeout {
+		t.Fatalf("expected default cold index read timeout %s, got %s", DefaultQueryColdIndexReadTimeout, cfg.QueryRead.ColdIndexReadTimeout)
+	}
+	if cfg.QueryRead.ColdIndexRetries != DefaultQueryColdIndexRetries {
+		t.Fatalf("expected default cold index retries %d, got %d", DefaultQueryColdIndexRetries, cfg.QueryRead.ColdIndexRetries)
+	}
+	if cfg.QueryRead.ColdIndexWorkers != DefaultQueryColdIndexWorkers {
+		t.Fatalf("expected default cold index workers %d, got %d", DefaultQueryColdIndexWorkers, cfg.QueryRead.ColdIndexWorkers)
+	}
+	if cfg.QueryRead.ColdIndexMaxInflight != DefaultQueryColdIndexMaxInflight {
+		t.Fatalf("expected default cold index max inflight %d, got %d", DefaultQueryColdIndexMaxInflight, cfg.QueryRead.ColdIndexMaxInflight)
+	}
+	if cfg.QueryRead.ColdIndexCacheTTL != DefaultQueryColdIndexCacheTTL {
+		t.Fatalf("expected default cold index cache ttl %s, got %s", DefaultQueryColdIndexCacheTTL, cfg.QueryRead.ColdIndexCacheTTL)
+	}
+	if cfg.QueryRead.ColdIndexCacheMaxBytes != DefaultQueryColdIndexCacheMaxBytes {
+		t.Fatalf("expected default cold index cache max bytes %d, got %d", DefaultQueryColdIndexCacheMaxBytes, cfg.QueryRead.ColdIndexCacheMaxBytes)
+	}
+}
+
 func TestFromEnvGrafanaTempoDefaults(t *testing.T) {
 	t.Setenv("SIGIL_GRAFANA_URL", "")
 	t.Setenv("SIGIL_GRAFANA_SA_TOKEN", "")
@@ -348,6 +381,50 @@ func TestValidateRejectsInvalidQueryProxyConfig(t *testing.T) {
 	cfg.QueryProxy.TempoBaseURL = "ftp://tempo:3200"
 	if err := cfg.Validate(); err == nil {
 		t.Fatalf("expected validation error for invalid tempo query proxy url scheme")
+	}
+}
+
+func TestValidateRejectsInvalidQueryReadConfig(t *testing.T) {
+	cfg := FromEnv()
+	cfg.QueryRead.ColdTotalBudget = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for cold total budget")
+	}
+
+	cfg = FromEnv()
+	cfg.QueryRead.ColdIndexReadTimeout = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for cold index read timeout")
+	}
+
+	cfg = FromEnv()
+	cfg.QueryRead.ColdIndexRetries = -1
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for cold index retries")
+	}
+
+	cfg = FromEnv()
+	cfg.QueryRead.ColdIndexWorkers = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for cold index workers")
+	}
+
+	cfg = FromEnv()
+	cfg.QueryRead.ColdIndexMaxInflight = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for cold index max inflight")
+	}
+
+	cfg = FromEnv()
+	cfg.QueryRead.ColdIndexCacheTTL = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for cold index cache ttl")
+	}
+
+	cfg = FromEnv()
+	cfg.QueryRead.ColdIndexCacheMaxBytes = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for cold index cache max bytes")
 	}
 }
 

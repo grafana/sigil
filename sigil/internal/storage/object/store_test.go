@@ -8,6 +8,7 @@ import (
 
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	"github.com/grafana/sigil/sigil/internal/storage"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/thanos-io/objstore"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -88,6 +89,41 @@ func TestStoreReadGenerationsMissingObject(t *testing.T) {
 	_, err := store.ReadIndex(ctx, "tenant-a", "missing-block")
 	if err == nil {
 		t.Fatalf("expected missing block error")
+	}
+}
+
+func TestStoreReadIndexCacheHitAndMissMetrics(t *testing.T) {
+	ctx := context.Background()
+	bucket := objstore.NewInMemBucket()
+	store := NewStoreWithBucket("sigil", bucket)
+
+	block := &storage.Block{
+		ID: "block-cache",
+		Generations: []storage.GenerationRecord{
+			testRecord(t, "gen-1", "conv-1", time.Date(2026, 2, 12, 19, 0, 0, 0, time.UTC)),
+		},
+	}
+	if err := store.WriteBlock(ctx, "tenant-a", block); err != nil {
+		t.Fatalf("write block: %v", err)
+	}
+
+	hitsBefore := testutil.ToFloat64(queryColdIndexCacheHitsTotal)
+	missesBefore := testutil.ToFloat64(queryColdIndexCacheMissesTotal)
+
+	if _, err := store.ReadIndex(ctx, "tenant-a", block.ID); err != nil {
+		t.Fatalf("first read index: %v", err)
+	}
+	if _, err := store.ReadIndex(ctx, "tenant-a", block.ID); err != nil {
+		t.Fatalf("second read index: %v", err)
+	}
+
+	hitsAfter := testutil.ToFloat64(queryColdIndexCacheHitsTotal)
+	missesAfter := testutil.ToFloat64(queryColdIndexCacheMissesTotal)
+	if delta := hitsAfter - hitsBefore; delta != 1 {
+		t.Fatalf("expected one cache hit, got %v", delta)
+	}
+	if delta := missesAfter - missesBefore; delta != 1 {
+		t.Fatalf("expected one cache miss, got %v", delta)
 	}
 }
 

@@ -3,6 +3,7 @@ import { getBackendSrv } from '@grafana/runtime';
 import type {
   ConversationDetail,
   ConversationListResponse,
+  GenerationLookupHints,
   ConversationSearchRequest,
   ConversationSearchResponse,
   GenerationDetail,
@@ -25,7 +26,7 @@ export type ConversationsDataSource = {
   listConversations?: () => Promise<ConversationListResponse>;
   searchConversations: (request: ConversationSearchRequest) => Promise<ConversationSearchResponse>;
   getConversationDetail: (conversationID: string) => Promise<ConversationDetail>;
-  getGeneration: (generationID: string) => Promise<GenerationDetail>;
+  getGeneration: (generationID: string, hints?: GenerationLookupHints) => Promise<GenerationDetail>;
   getSearchTags: (from: string, to: string) => Promise<SearchTag[]>;
   getSearchTagValues: (tag: string, from: string, to: string) => Promise<string[]>;
 };
@@ -62,11 +63,28 @@ export const defaultConversationsDataSource: ConversationsDataSource = {
     return response.data;
   },
 
-  async getGeneration(generationID) {
+  async getGeneration(generationID, hints) {
+    const query = new URLSearchParams();
+    if (hints?.conversation_id) {
+      query.set('conversation_id', hints.conversation_id);
+    }
+    if (hints?.from) {
+      query.set('from', hints.from);
+    }
+    if (hints?.to) {
+      query.set('to', hints.to);
+    }
+    if (hints?.at) {
+      query.set('at', hints.at);
+    }
+    const path =
+      query.toString().length > 0
+        ? `${queryBasePath}/generations/${encodeURIComponent(generationID)}?${query.toString()}`
+        : `${queryBasePath}/generations/${encodeURIComponent(generationID)}`;
     const response = await lastValueFrom(
       getBackendSrv().fetch<GenerationDetail>({
         method: 'GET',
-        url: `${queryBasePath}/generations/${encodeURIComponent(generationID)}`,
+        url: path,
       })
     );
     return response.data;

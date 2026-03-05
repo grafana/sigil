@@ -68,6 +68,7 @@ This is the canonical navigation map for repository documentation.
   - Vercel AI SDK TypeScript integration delivery: `exec-plans/completed/2026-02-22-sdk-vercel-ai-sdk-integration.md`
   - Sigil image and plugin artifact publish delivery: `exec-plans/completed/2026-03-02-sigil-image-and-plugin-publish.md`
   - Sigil automatic dev/ops Argo deployment delivery: `exec-plans/completed/2026-03-05-sigil-cd-dev-ops-auto-deploy.md`
+  - Query cold-read hardening delivery: `exec-plans/completed/2026-03-05-query-cold-read-hardening.md`
   - Runtime role split and distributed Helm topology delivery: `exec-plans/completed/2026-03-02-runtime-role-split.md`
   - Conversation details Jaeger-style tree port: `exec-plans/completed/2026-03-03-conversation-jaeger-tree.md`
   - Eval saved conversations: `exec-plans/completed/2026-03-04-eval-saved-conversations.md`

@@ -5,8 +5,10 @@ import (
 	"errors"
 	"hash/fnv"
 	"log/slog"
+	"math/rand"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
@@ -28,6 +30,54 @@ type FanOutStore struct {
 	blockMetadataStore BlockMetadataStore
 	blockReader        BlockReader
 	logger             *slog.Logger
+
+	coldReadConfig  ColdReadConfig
+	indexCacheCfg   IndexCacheConfig
+	coldIndexTokens chan struct{}
+}
+
+type FanOutOption func(*FanOutStore)
+
+func WithColdReadConfig(cfg ColdReadConfig) FanOutOption {
+	return func(store *FanOutStore) {
+		if store == nil {
+			return
+		}
+		if cfg.TotalBudget > 0 {
+			store.coldReadConfig.TotalBudget = cfg.TotalBudget
+		}
+		if cfg.IndexReadTimeout > 0 {
+			store.coldReadConfig.IndexReadTimeout = cfg.IndexReadTimeout
+		}
+		if cfg.IndexRetries >= 0 {
+			store.coldReadConfig.IndexRetries = cfg.IndexRetries
+		}
+		if cfg.IndexWorkers > 0 {
+			store.coldReadConfig.IndexWorkers = cfg.IndexWorkers
+		}
+		if cfg.IndexMaxInflight > 0 {
+			store.coldReadConfig.IndexMaxInflight = cfg.IndexMaxInflight
+			store.coldIndexTokens = make(chan struct{}, cfg.IndexMaxInflight)
+		}
+	}
+}
+
+func WithIndexCacheConfig(cfg IndexCacheConfig) FanOutOption {
+	return func(store *FanOutStore) {
+		if store == nil {
+			return
+		}
+		if !cfg.Enabled {
+			return
+		}
+		store.indexCacheCfg.Enabled = true
+		if cfg.TTL > 0 {
+			store.indexCacheCfg.TTL = cfg.TTL
+		}
+		if cfg.MaxBytes > 0 {
+			store.indexCacheCfg.MaxBytes = cfg.MaxBytes
+		}
+	}
 }
 
 var _ GenerationFanOutReader = (*FanOutStore)(nil)
@@ -49,31 +99,88 @@ var queryReturnedItems = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Buckets: []float64{0, 1, 2, 5, 10, 20, 50, 100, 250, 500, 1000},
 }, []string{"operation"})
 
+var queryColdIndexInflight = promauto.NewGauge(prometheus.GaugeOpts{
+	Name: "sigil_query_cold_index_inflight",
+	Help: "Current in-flight cold index reads across fan-out workers.",
+})
+
+var queryColdBlocksScanned = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	Name:    "sigil_query_cold_blocks_scanned",
+	Help:    "Number of cold blocks scanned per query operation.",
+	Buckets: []float64{0, 1, 2, 5, 10, 20, 50, 100, 250, 500},
+}, []string{"operation"})
+
+var queryColdIndexReadDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+	Name:    "sigil_query_cold_index_read_duration_seconds",
+	Help:    "Cold index read duration in seconds, including retries.",
+	Buckets: prometheus.DefBuckets,
+})
+
 type fanOutGenerationResult struct {
 	generation *sigilv1.Generation
 	err        error
 }
 
-type fanOutGenerationsResult struct {
+type coldBlockResult struct {
 	generations []*sigilv1.Generation
+	scanned     bool
+	matched     bool
 	err         error
+}
+
+type indexCacheConfigurator interface {
+	SetIndexCacheConfig(cfg IndexCacheConfig)
 }
 
 // NewFanOutStore builds a fan-out read store over the provided hot and cold
 // storage dependencies. Any dependency may be nil; nil inputs disable that side.
-func NewFanOutStore(hotReader WALReader, blockMetadataStore BlockMetadataStore, blockReader BlockReader) *FanOutStore {
-	return &FanOutStore{
+func NewFanOutStore(hotReader WALReader, blockMetadataStore BlockMetadataStore, blockReader BlockReader, options ...FanOutOption) *FanOutStore {
+	store := &FanOutStore{
 		hotReader:          hotReader,
 		blockMetadataStore: blockMetadataStore,
 		blockReader:        blockReader,
 		logger:             slog.Default(),
+		coldReadConfig: ColdReadConfig{
+			TotalBudget:      DefaultColdTotalBudget,
+			IndexReadTimeout: DefaultColdIndexReadTimeout,
+			IndexRetries:     DefaultColdIndexRetries,
+			IndexWorkers:     DefaultColdIndexWorkers,
+			IndexMaxInflight: DefaultColdIndexMaxInflight,
+		},
+		indexCacheCfg: IndexCacheConfig{
+			Enabled:  true,
+			TTL:      DefaultIndexCacheTTL,
+			MaxBytes: DefaultIndexCacheMaxBytes,
+		},
 	}
+	store.coldIndexTokens = make(chan struct{}, store.coldReadConfig.IndexMaxInflight)
+	for _, option := range options {
+		if option == nil {
+			continue
+		}
+		option(store)
+	}
+	if store.blockReader != nil && store.indexCacheCfg.Enabled {
+		if configurable, ok := store.blockReader.(indexCacheConfigurator); ok {
+			configurable.SetIndexCacheConfig(store.indexCacheCfg)
+		}
+	}
+	return store
 }
 
-// GetGenerationByID returns a generation by ID with hot-row preference. Hot and
-// cold reads run in parallel. A cold read error is ignored when hot already has
-// the row, because cold is only a fallback in that case.
+// GetGenerationByID returns a generation by ID with hot-row preference.
 func (s *FanOutStore) GetGenerationByID(ctx context.Context, tenantID, generationID string) (*sigilv1.Generation, error) {
+	return s.GetGenerationByIDWithPlan(ctx, tenantID, generationID, GenerationReadPlan{})
+}
+
+// GetGenerationByIDWithPlan is an optimized variant that can use caller hints
+// to reduce cold-read amplification.
+func (s *FanOutStore) GetGenerationByIDWithPlan(
+	ctx context.Context,
+	tenantID,
+	generationID string,
+	plan GenerationReadPlan,
+) (*sigilv1.Generation, error) {
 	if s == nil {
 		return nil, nil
 	}
@@ -82,38 +189,19 @@ func (s *FanOutStore) GetGenerationByID(ctx context.Context, tenantID, generatio
 	fanOutStart := time.Now()
 	defer observeFanOutDuration("fanout", fanOutStart)
 
-	fanOutCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	hotResultCh := make(chan fanOutGenerationResult, 1)
-	coldResultCh := make(chan fanOutGenerationResult, 1)
-
+	hotStart := time.Now()
+	var hotResult fanOutGenerationResult
 	if s.hotReader != nil {
-		go func() {
-			hotStart := time.Now()
-			generation, err := s.hotReader.GetByID(fanOutCtx, tenantID, generationID)
-			observeFanOutDuration("hot", hotStart)
-			hotResultCh <- fanOutGenerationResult{generation: generation, err: err}
-		}()
+		generation, err := s.hotReader.GetByID(ctx, tenantID, generationID)
+		hotResult = fanOutGenerationResult{generation: generation, err: err}
 	} else {
-		hotResultCh <- fanOutGenerationResult{}
+		hotResult = fanOutGenerationResult{}
 	}
-
-	if s.hasColdReadPath() {
-		go func() {
-			coldStart := time.Now()
-			generation, err := s.readColdGenerationByID(fanOutCtx, tenantID, generationID)
-			observeFanOutDuration("cold", coldStart)
-			coldResultCh <- fanOutGenerationResult{generation: generation, err: err}
-		}()
-	} else {
-		coldResultCh <- fanOutGenerationResult{}
-	}
-
-	hotResult := <-hotResultCh
+	observeFanOutDuration("hot", hotStart)
 	if hotResult.err != nil {
 		observeQueryResolution("get_by_id", "error")
 		observeQueryReturnedItems("get_by_id", 0)
+		queryColdBlocksScanned.WithLabelValues("get_by_id").Observe(0)
 		logger.Error("fanout get by id hot read failed",
 			"tenant_id", tenantID,
 			"generation_id", generationID,
@@ -124,6 +212,7 @@ func (s *FanOutStore) GetGenerationByID(ctx context.Context, tenantID, generatio
 	if hotResult.generation != nil {
 		observeQueryResolution("get_by_id", "hot")
 		observeQueryReturnedItems("get_by_id", 1)
+		queryColdBlocksScanned.WithLabelValues("get_by_id").Observe(0)
 		logger.Debug("fanout get by id resolved from hot storage",
 			"tenant_id", tenantID,
 			"generation_id", generationID,
@@ -131,28 +220,45 @@ func (s *FanOutStore) GetGenerationByID(ctx context.Context, tenantID, generatio
 		return hotResult.generation, nil
 	}
 
-	coldResult := <-coldResultCh
-	if coldResult.err != nil {
+	if !s.hasColdReadPath() {
+		observeQueryResolution("get_by_id", "miss")
+		observeQueryReturnedItems("get_by_id", 0)
+		queryColdBlocksScanned.WithLabelValues("get_by_id").Observe(0)
+		return nil, nil
+	}
+
+	coldStart := time.Now()
+	coldGeneration, scannedBlocks, err := s.readColdGenerationByIDWithPlan(ctx, tenantID, generationID, plan)
+	observeFanOutDuration("cold", coldStart)
+	queryColdBlocksScanned.WithLabelValues("get_by_id").Observe(float64(scannedBlocks))
+	if err != nil {
 		observeQueryResolution("get_by_id", "error")
 		observeQueryReturnedItems("get_by_id", 0)
 		logger.Error("fanout get by id cold read failed",
 			"tenant_id", tenantID,
 			"generation_id", generationID,
-			"err", coldResult.err,
+			"cold_scanned_blocks", scannedBlocks,
+			"err", err,
 		)
-		return nil, coldResult.err
+		return nil, err
 	}
-	if coldResult.generation != nil {
+	if coldGeneration != nil {
 		observeQueryResolution("get_by_id", "cold")
 		observeQueryReturnedItems("get_by_id", 1)
 		logger.Debug("fanout get by id resolved from cold storage",
 			"tenant_id", tenantID,
 			"generation_id", generationID,
+			"cold_scanned_blocks", scannedBlocks,
 		)
-		return coldResult.generation, nil
+		return coldGeneration, nil
 	}
 	observeQueryResolution("get_by_id", "miss")
 	observeQueryReturnedItems("get_by_id", 0)
+	logger.Debug("fanout get by id miss",
+		"tenant_id", tenantID,
+		"generation_id", generationID,
+		"cold_scanned_blocks", scannedBlocks,
+	)
 	return nil, nil
 }
 
@@ -160,6 +266,12 @@ func (s *FanOutStore) GetGenerationByID(ctx context.Context, tenantID, generatio
 // deterministic merge semantics: union by generation ID, hot-row preference,
 // then ascending timestamp order.
 func (s *FanOutStore) ListConversationGenerations(ctx context.Context, tenantID, conversationID string) ([]*sigilv1.Generation, error) {
+	return s.ListConversationGenerationsWithPlan(ctx, tenantID, conversationID, ConversationReadPlan{})
+}
+
+// ListConversationGenerationsWithPlan is an optimized variant that can use
+// caller hints to reduce cold-read amplification.
+func (s *FanOutStore) ListConversationGenerationsWithPlan(ctx context.Context, tenantID, conversationID string, plan ConversationReadPlan) ([]*sigilv1.Generation, error) {
 	if s == nil {
 		return []*sigilv1.Generation{}, nil
 	}
@@ -168,73 +280,86 @@ func (s *FanOutStore) ListConversationGenerations(ctx context.Context, tenantID,
 	fanOutStart := time.Now()
 	defer observeFanOutDuration("fanout", fanOutStart)
 
-	hotResultCh := make(chan fanOutGenerationsResult, 1)
-	coldResultCh := make(chan fanOutGenerationsResult, 1)
-
+	hotStart := time.Now()
+	hotGenerations := []*sigilv1.Generation{}
 	if s.hotReader != nil {
-		go func() {
-			hotStart := time.Now()
-			generations, err := s.hotReader.GetByConversationID(ctx, tenantID, conversationID)
-			observeFanOutDuration("hot", hotStart)
-			hotResultCh <- fanOutGenerationsResult{generations: generations, err: err}
-		}()
+		loadedHot, err := s.hotReader.GetByConversationID(ctx, tenantID, conversationID)
+		observeFanOutDuration("hot", hotStart)
+		if err != nil {
+			observeQueryResolution("list_conversation", "error")
+			observeQueryReturnedItems("list_conversation", 0)
+			logger.Error("fanout list conversation generations hot read failed",
+				"tenant_id", tenantID,
+				"conversation_id", conversationID,
+				"err", err,
+			)
+			return nil, err
+		}
+		hotGenerations = loadedHot
 	} else {
-		hotResultCh <- fanOutGenerationsResult{generations: []*sigilv1.Generation{}}
+		observeFanOutDuration("hot", hotStart)
 	}
 
-	if s.hasColdReadPath() {
-		go func() {
-			coldStart := time.Now()
-			generations, err := s.readColdConversationGenerations(ctx, tenantID, conversationID)
-			observeFanOutDuration("cold", coldStart)
-			coldResultCh <- fanOutGenerationsResult{generations: generations, err: err}
-		}()
-	} else {
-		coldResultCh <- fanOutGenerationsResult{generations: []*sigilv1.Generation{}}
+	if !s.hasColdReadPath() {
+		merged := mergeGenerationsPreferHot(hotGenerations, nil)
+		resolution := "miss"
+		if len(merged) > 0 {
+			resolution = "hot"
+		}
+		observeQueryResolution("list_conversation", resolution)
+		observeQueryReturnedItems("list_conversation", len(merged))
+		return merged, nil
 	}
 
-	hotResult := <-hotResultCh
-	coldResult := <-coldResultCh
-
-	if hotResult.err != nil {
-		observeQueryResolution("list_conversation", "error")
-		observeQueryReturnedItems("list_conversation", 0)
-		logger.Error("fanout list conversation generations hot read failed",
+	expected := plan.ExpectedGenerationCount
+	if expected > 0 && uniqueGenerationCount(hotGenerations) >= expected {
+		merged := mergeGenerationsPreferHot(hotGenerations, nil)
+		observeQueryResolution("list_conversation", "hot")
+		observeQueryReturnedItems("list_conversation", len(merged))
+		logger.Debug("fanout list conversation generations completed from hot storage",
 			"tenant_id", tenantID,
 			"conversation_id", conversationID,
-			"err", hotResult.err,
+			"hot_count", len(hotGenerations),
+			"expected_generation_count", expected,
 		)
-		return nil, hotResult.err
+		return merged, nil
 	}
-	if coldResult.err != nil {
+
+	coldStart := time.Now()
+	coldGenerations, scannedBlocks, matchedBlocks, err := s.readColdConversationGenerationsWithPlan(ctx, tenantID, conversationID, plan)
+	observeFanOutDuration("cold", coldStart)
+	if err != nil {
 		observeQueryResolution("list_conversation", "error")
 		observeQueryReturnedItems("list_conversation", 0)
 		logger.Error("fanout list conversation generations cold read failed",
 			"tenant_id", tenantID,
 			"conversation_id", conversationID,
-			"err", coldResult.err,
+			"err", err,
 		)
-		return nil, coldResult.err
+		return nil, err
 	}
 
-	merged := mergeGenerationsPreferHot(hotResult.generations, coldResult.generations)
+	merged := mergeGenerationsPreferHot(hotGenerations, coldGenerations)
 	resolution := "miss"
 	switch {
-	case len(hotResult.generations) > 0 && len(coldResult.generations) > 0:
+	case len(hotGenerations) > 0 && len(coldGenerations) > 0:
 		resolution = "merged"
-	case len(hotResult.generations) > 0:
+	case len(hotGenerations) > 0:
 		resolution = "hot"
-	case len(coldResult.generations) > 0:
+	case len(coldGenerations) > 0:
 		resolution = "cold"
 	}
 	observeQueryResolution("list_conversation", resolution)
 	observeQueryReturnedItems("list_conversation", len(merged))
+	queryColdBlocksScanned.WithLabelValues("list_conversation").Observe(float64(scannedBlocks))
 	logger.Debug("fanout list conversation generations completed",
 		"tenant_id", tenantID,
 		"conversation_id", conversationID,
-		"hot_count", len(hotResult.generations),
-		"cold_count", len(coldResult.generations),
+		"hot_count", len(hotGenerations),
+		"cold_count", len(coldGenerations),
 		"merged_count", len(merged),
+		"cold_scanned_blocks", scannedBlocks,
+		"cold_matched_blocks", matchedBlocks,
 	)
 	return merged, nil
 }
@@ -254,17 +379,28 @@ func (s *FanOutStore) hasColdReadPath() bool {
 	return s != nil && s.blockMetadataStore != nil && s.blockReader != nil
 }
 
-func (s *FanOutStore) readColdGenerationByID(ctx context.Context, tenantID, generationID string) (*sigilv1.Generation, error) {
+func (s *FanOutStore) readColdGenerationByIDWithPlan(
+	ctx context.Context,
+	tenantID,
+	generationID string,
+	plan GenerationReadPlan,
+) (*sigilv1.Generation, int, error) {
 	if !s.hasColdReadPath() {
-		return nil, nil
+		return nil, 0, nil
 	}
 
-	blocks, err := s.blockMetadataStore.ListBlocks(ctx, tenantID, time.Time{}, time.Time{})
+	from, to := normalizedGenerationPlanRange(plan)
+	coldCtx, cancel := withOptionalTimeout(ctx, s.coldReadConfig.TotalBudget)
+	defer cancel()
+
+	blocks, err := s.blockMetadataStore.ListBlocks(coldCtx, tenantID, from, to)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
+	scannedBlocks := 0
 	for idx := len(blocks) - 1; idx >= 0; idx-- {
-		index, err := s.blockReader.ReadIndex(ctx, tenantID, blocks[idx].BlockID)
+		index, err := s.readIndexWithPolicy(coldCtx, tenantID, blocks[idx].BlockID)
+		scannedBlocks++
 		if err != nil {
 			if errors.Is(err, ErrBlockNotFound) {
 				s.loggerOrDefault().Warn("skipping stale block during get-by-id",
@@ -273,13 +409,13 @@ func (s *FanOutStore) readColdGenerationByID(ctx context.Context, tenantID, gene
 				)
 				continue
 			}
-			return nil, err
+			return nil, scannedBlocks, err
 		}
 		entries := findEntriesByGenerationID(index, generationID)
 		if len(entries) == 0 {
 			continue
 		}
-		generations, err := s.blockReader.ReadGenerations(ctx, tenantID, blocks[idx].BlockID, entries)
+		generations, err := s.blockReader.ReadGenerations(coldCtx, tenantID, blocks[idx].BlockID, entries)
 		if err != nil {
 			if errors.Is(err, ErrBlockNotFound) {
 				s.loggerOrDefault().Warn("skipping stale block during get-by-id read",
@@ -288,67 +424,315 @@ func (s *FanOutStore) readColdGenerationByID(ctx context.Context, tenantID, gene
 				)
 				continue
 			}
-			return nil, err
+			return nil, scannedBlocks, err
 		}
 		for _, generation := range generations {
 			if generation.GetId() == generationID {
-				return generation, nil
+				if strings.TrimSpace(plan.ConversationID) != "" && generation.GetConversationId() != plan.ConversationID {
+					continue
+				}
+				return generation, scannedBlocks, nil
 			}
 		}
 	}
-	return nil, nil
+	return nil, scannedBlocks, nil
 }
 
-func (s *FanOutStore) readColdConversationGenerations(ctx context.Context, tenantID, conversationID string) ([]*sigilv1.Generation, error) {
+func (s *FanOutStore) readColdConversationGenerationsWithPlan(
+	ctx context.Context,
+	tenantID,
+	conversationID string,
+	plan ConversationReadPlan,
+) ([]*sigilv1.Generation, int, int, error) {
 	if !s.hasColdReadPath() {
-		return []*sigilv1.Generation{}, nil
+		return []*sigilv1.Generation{}, 0, 0, nil
 	}
 
-	blocks, err := s.blockMetadataStore.ListBlocks(ctx, tenantID, time.Time{}, time.Time{})
+	from, to := normalizedPlanRange(plan)
+	coldCtx, cancel := withOptionalTimeout(ctx, s.coldReadConfig.TotalBudget)
+	defer cancel()
+
+	blocks, err := s.blockMetadataStore.ListBlocks(coldCtx, tenantID, from, to)
 	if err != nil {
-		return nil, err
+		return nil, 0, 0, err
+	}
+	if len(blocks) == 0 {
+		return []*sigilv1.Generation{}, 0, 0, nil
 	}
 
-	out := make([]*sigilv1.Generation, 0)
-	for _, block := range blocks {
-		index, err := s.blockReader.ReadIndex(ctx, tenantID, block.BlockID)
-		if err != nil {
-			if errors.Is(err, ErrBlockNotFound) {
-				s.loggerOrDefault().Warn("skipping stale block during list-conversation",
-					"tenant_id", tenantID,
-					"block_id", block.BlockID,
-					"conversation_id", conversationID,
-				)
-				continue
+	workerCount := s.coldReadConfig.IndexWorkers
+	if workerCount <= 0 {
+		workerCount = 1
+	}
+	if workerCount > len(blocks) {
+		workerCount = len(blocks)
+	}
+
+	jobs := make(chan BlockMeta)
+	results := make(chan coldBlockResult, workerCount)
+	var wg sync.WaitGroup
+
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for block := range jobs {
+				if coldCtx.Err() != nil {
+					return
+				}
+				results <- s.scanConversationBlock(coldCtx, tenantID, conversationID, block)
 			}
-			return nil, err
+		}()
+	}
+
+	go func() {
+		for idx := len(blocks) - 1; idx >= 0; idx-- {
+			if coldCtx.Err() != nil {
+				break
+			}
+			jobs <- blocks[idx]
 		}
-		entries := findEntriesByConversationID(index, conversationID)
-		if len(entries) == 0 {
+		close(jobs)
+		wg.Wait()
+		close(results)
+	}()
+
+	expected := plan.ExpectedGenerationCount
+	byID := make(map[string]*sigilv1.Generation)
+	scannedBlocks := 0
+	matchedBlocks := 0
+	var firstErr error
+	for result := range results {
+		if result.scanned {
+			scannedBlocks++
+		}
+		if result.matched {
+			matchedBlocks++
+		}
+		if result.err != nil {
+			if errors.Is(result.err, context.Canceled) || errors.Is(result.err, context.DeadlineExceeded) {
+				if expected > 0 && len(byID) >= expected {
+					continue
+				}
+			}
+			if firstErr == nil {
+				firstErr = result.err
+				cancel()
+			}
 			continue
 		}
-		generations, err := s.blockReader.ReadGenerations(ctx, tenantID, block.BlockID, entries)
-		if err != nil {
-			if errors.Is(err, ErrBlockNotFound) {
-				s.loggerOrDefault().Warn("skipping stale block during list-conversation read",
-					"tenant_id", tenantID,
-					"block_id", block.BlockID,
-					"conversation_id", conversationID,
-				)
+		for _, generation := range result.generations {
+			if generation == nil {
 				continue
+			}
+			generationID := strings.TrimSpace(generation.GetId())
+			if generationID == "" {
+				continue
+			}
+			byID[generationID] = generation
+		}
+		if expected > 0 && len(byID) >= expected {
+			cancel()
+		}
+	}
+	if firstErr != nil {
+		return nil, scannedBlocks, matchedBlocks, firstErr
+	}
+
+	out := make([]*sigilv1.Generation, 0, len(byID))
+	for _, generation := range byID {
+		out = append(out, generation)
+	}
+	return out, scannedBlocks, matchedBlocks, nil
+}
+
+func (s *FanOutStore) scanConversationBlock(ctx context.Context, tenantID, conversationID string, block BlockMeta) coldBlockResult {
+	index, err := s.readIndexWithPolicy(ctx, tenantID, block.BlockID)
+	if err != nil {
+		if errors.Is(err, ErrBlockNotFound) {
+			s.loggerOrDefault().Warn("skipping stale block during list-conversation",
+				"tenant_id", tenantID,
+				"block_id", block.BlockID,
+				"conversation_id", conversationID,
+			)
+			return coldBlockResult{scanned: true}
+		}
+		return coldBlockResult{scanned: true, err: err}
+	}
+
+	entries := findEntriesByConversationID(index, conversationID)
+	if len(entries) == 0 {
+		return coldBlockResult{scanned: true}
+	}
+
+	generations, err := s.blockReader.ReadGenerations(ctx, tenantID, block.BlockID, entries)
+	if err != nil {
+		if errors.Is(err, ErrBlockNotFound) {
+			s.loggerOrDefault().Warn("skipping stale block during list-conversation read",
+				"tenant_id", tenantID,
+				"block_id", block.BlockID,
+				"conversation_id", conversationID,
+			)
+			return coldBlockResult{scanned: true}
+		}
+		return coldBlockResult{scanned: true, err: err}
+	}
+
+	filtered := make([]*sigilv1.Generation, 0, len(generations))
+	for _, generation := range generations {
+		// Block index lookups are hash-based; always re-check IDs to avoid
+		// hash-collision bleed.
+		if generation.GetConversationId() != conversationID {
+			continue
+		}
+		filtered = append(filtered, generation)
+	}
+	return coldBlockResult{generations: filtered, scanned: true, matched: len(filtered) > 0}
+}
+
+func (s *FanOutStore) readIndexWithPolicy(ctx context.Context, tenantID, blockID string) (*BlockIndex, error) {
+	attempts := s.coldReadConfig.IndexRetries + 1
+	if attempts < 1 {
+		attempts = 1
+	}
+
+	var lastErr error
+	start := time.Now()
+	defer func() {
+		queryColdIndexReadDuration.Observe(time.Since(start).Seconds())
+	}()
+
+	for attempt := 0; attempt < attempts; attempt++ {
+		if ctx.Err() != nil {
+			if lastErr != nil {
+				return nil, lastErr
+			}
+			return nil, ctx.Err()
+		}
+
+		release, err := s.acquireColdIndexSlot(ctx)
+		if err != nil {
+			if lastErr != nil {
+				return nil, lastErr
 			}
 			return nil, err
 		}
-		for _, generation := range generations {
-			// Block index lookups are hash-based; always re-check IDs to avoid
-			// hash-collision bleed.
-			if generation.GetConversationId() != conversationID {
-				continue
-			}
-			out = append(out, generation)
+
+		attemptCtx, cancel := withOptionalTimeout(ctx, s.coldReadConfig.IndexReadTimeout)
+		index, readErr := s.blockReader.ReadIndex(attemptCtx, tenantID, blockID)
+		cancel()
+		release()
+		if readErr == nil {
+			return index, nil
+		}
+		if errors.Is(readErr, ErrBlockNotFound) {
+			return nil, readErr
+		}
+		lastErr = readErr
+		if attempt+1 >= attempts {
+			break
+		}
+		if sleepErr := sleepWithContext(ctx, retryBackoff(attempt)); sleepErr != nil {
+			return nil, sleepErr
 		}
 	}
-	return out, nil
+	if lastErr == nil {
+		lastErr = errors.New("read index failed")
+	}
+	return nil, lastErr
+}
+
+func (s *FanOutStore) acquireColdIndexSlot(ctx context.Context) (func(), error) {
+	if s == nil || s.coldIndexTokens == nil {
+		return func() {}, nil
+	}
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case s.coldIndexTokens <- struct{}{}:
+		queryColdIndexInflight.Set(float64(len(s.coldIndexTokens)))
+		return func() {
+			<-s.coldIndexTokens
+			queryColdIndexInflight.Set(float64(len(s.coldIndexTokens)))
+		}, nil
+	}
+}
+
+func retryBackoff(attempt int) time.Duration {
+	base := 50 + (attempt * 50)
+	if base > 250 {
+		base = 250
+	}
+	jitter := rand.Intn(25)
+	return time.Duration(base+jitter) * time.Millisecond
+}
+
+func sleepWithContext(ctx context.Context, duration time.Duration) error {
+	if duration <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func normalizedPlanRange(plan ConversationReadPlan) (time.Time, time.Time) {
+	from := plan.From.UTC()
+	to := plan.To.UTC()
+	if from.IsZero() || to.IsZero() {
+		return time.Time{}, time.Time{}
+	}
+	if to.Before(from) {
+		return to, from
+	}
+	return from, to
+}
+
+func normalizedGenerationPlanRange(plan GenerationReadPlan) (time.Time, time.Time) {
+	from := plan.From.UTC()
+	to := plan.To.UTC()
+	if from.IsZero() || to.IsZero() {
+		at := plan.At.UTC()
+		if at.IsZero() {
+			return time.Time{}, time.Time{}
+		}
+		from = at.Add(-2 * time.Minute)
+		to = at.Add(2 * time.Minute)
+	}
+	if to.Before(from) {
+		return to, from
+	}
+	return from, to
+}
+
+func withOptionalTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	if timeout <= 0 {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, timeout)
+}
+
+func uniqueGenerationCount(generations []*sigilv1.Generation) int {
+	if len(generations) == 0 {
+		return 0
+	}
+	byID := make(map[string]struct{}, len(generations))
+	for _, generation := range generations {
+		if generation == nil {
+			continue
+		}
+		id := strings.TrimSpace(generation.GetId())
+		if id == "" {
+			continue
+		}
+		byID[id] = struct{}{}
+	}
+	return len(byID)
 }
 
 func findEntriesByConversationID(index *BlockIndex, conversationID string) []IndexEntry {

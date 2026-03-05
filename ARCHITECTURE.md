@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-03-04
+last_reviewed: 2026-03-05
 source_of_truth: true
 audience: both
 ---
@@ -203,6 +203,10 @@ Read path components:
    - Paginated conversation summaries returned to frontend.
 4. Conversation/generation detail:
    - MySQL hot rows (`generations`, `conversations`) + object storage blocks.
+   - Fan-out uses hot-first gating for conversation detail; cold reads are skipped when hot rows already satisfy expected conversation generation count.
+   - Cold block scans are bounded by conversation metadata time range (`created_at`..`last_generation_at` with skew window), not full-history block scans.
+   - Cold index reads use bounded worker concurrency, process-wide in-flight caps, per-read timeout/retry, and a request-level cold-read budget.
+   - Object-store block indexes (`index.sigil`) are cached in-process with TTL/LRU and in-flight dedupe to avoid repeated S3 GETs under concurrent conversation-detail traffic.
    - Union + dedupe by `generation_id` with hot-row preference.
    - Conversation detail `user_id` is derived from latest generation metadata key `sigil.user.id` when present.
 5. Proxy routes pass through to Tempo and Prometheus for raw access.
