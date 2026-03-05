@@ -21,7 +21,7 @@ function setOrDelete(params: URLSearchParams, key: string, value: string, defaul
 
 function parseBreakdown(params: URLSearchParams): BreakdownDimension {
   const v = params.get('breakdownBy') as BreakdownDimension;
-  return BREAKDOWN_VALUES.has(v) ? v : 'none';
+  return BREAKDOWN_VALUES.has(v) ? v : 'agent';
 }
 
 function parseTab(params: URLSearchParams): DashboardTab {
@@ -57,7 +57,7 @@ export function useDashboardUrlState(): DashboardUrlState {
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
-          setOrDelete(next, 'breakdownBy', b, 'none');
+          setOrDelete(next, 'breakdownBy', b, 'agent');
           return next;
         },
         { replace: true }
