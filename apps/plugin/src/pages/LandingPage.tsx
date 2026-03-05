@@ -150,84 +150,92 @@ export default function LandingPage() {
           />
         </div>
         <div className={styles.chartRow}>
-          <MetricPanel
-            title="Requests/s"
-            pluginId="timeseries"
-            height={CHART_HEIGHT}
-            timeRange={chartTimeRange}
-            loading={requestsOverTime.loading}
-            error={requestsOverTime.error}
-            data={requestsOverTime.data ? matrixToDataFrames(requestsOverTime.data) : []}
-            options={chartOptions}
-            fieldConfig={{
-              defaults: {
-                unit: 'short',
-                color: consistentColor,
-                custom: timeseriesDefaults,
-                thresholds: noThresholds,
-              },
-              overrides: [],
-            }}
-          />
-          <MetricPanel
-            title="Latency (P95)"
-            pluginId="timeseries"
-            height={CHART_HEIGHT}
-            timeRange={chartTimeRange}
-            loading={latencyOverTime.loading}
-            error={latencyOverTime.error}
-            data={latencyOverTime.data ? matrixToDataFrames(latencyOverTime.data) : []}
-            options={chartOptions}
-            fieldConfig={{
-              defaults: {
-                unit: 's',
-                color: consistentColor,
-                custom: timeseriesDefaults,
-                thresholds: noThresholds,
-              },
-              overrides: [],
-            }}
-          />
-          <MetricPanel
-            title="Error rate"
-            pluginId="timeseries"
-            height={CHART_HEIGHT}
-            timeRange={chartTimeRange}
-            loading={errorsOverTime.loading}
-            error={errorsOverTime.error}
-            data={errorsOverTime.data ? matrixToDataFrames(errorsOverTime.data) : []}
-            options={chartOptions}
-            fieldConfig={{
-              defaults: {
-                unit: 'percent',
-                min: 0,
-                max: 100,
-                color: consistentColor,
-                custom: timeseriesDefaults,
-                thresholds: noThresholds,
-              },
-              overrides: [],
-            }}
-          />
-          <MetricPanel
-            title="Tokens/s"
-            pluginId="timeseries"
-            height={CHART_HEIGHT}
-            timeRange={chartTimeRange}
-            loading={tokensOverTime.loading}
-            error={tokensOverTime.error}
-            data={tokensOverTime.data ? matrixToDataFrames(tokensOverTime.data) : []}
-            options={chartOptions}
-            fieldConfig={{
-              defaults: {
-                unit: 'short',
-                color: consistentColor,
-                custom: timeseriesDefaults,
-                thresholds: noThresholds,
-              },
-              overrides: [],
-            }}
-          />
+          <div className={styles.chartCrop}>
+            <MetricPanel
+              title="Requests/s"
+              pluginId="timeseries"
+              height={CHART_HEIGHT}
+              timeRange={chartTimeRange}
+              loading={requestsOverTime.loading}
+              error={requestsOverTime.error}
+              data={requestsOverTime.data ? matrixToDataFrames(requestsOverTime.data) : []}
+              options={chartOptions}
+              fieldConfig={{
+                defaults: {
+                  unit: 'short',
+                  color: consistentColor,
+                  custom: timeseriesDefaults,
+                  thresholds: noThresholds,
+                },
+                overrides: [],
+              }}
+            />
+          </div>
+          <div className={styles.chartCrop}>
+            <MetricPanel
+              title="Latency (P95)"
+              pluginId="timeseries"
+              height={CHART_HEIGHT}
+              timeRange={chartTimeRange}
+              loading={latencyOverTime.loading}
+              error={latencyOverTime.error}
+              data={latencyOverTime.data ? matrixToDataFrames(latencyOverTime.data) : []}
+              options={chartOptions}
+              fieldConfig={{
+                defaults: {
+                  unit: 's',
+                  color: consistentColor,
+                  custom: timeseriesDefaults,
+                  thresholds: noThresholds,
+                },
+                overrides: [],
+              }}
+            />
+          </div>
+          <div className={styles.chartCrop}>
+            <MetricPanel
+              title="Error rate"
+              pluginId="timeseries"
+              height={CHART_HEIGHT}
+              timeRange={chartTimeRange}
+              loading={errorsOverTime.loading}
+              error={errorsOverTime.error}
+              data={errorsOverTime.data ? matrixToDataFrames(errorsOverTime.data) : []}
+              options={chartOptions}
+              fieldConfig={{
+                defaults: {
+                  unit: 'percent',
+                  min: 0,
+                  max: 100,
+                  color: consistentColor,
+                  custom: timeseriesDefaults,
+                  thresholds: noThresholds,
+                },
+                overrides: [],
+              }}
+            />
+          </div>
+          <div className={styles.chartCrop}>
+            <MetricPanel
+              title="Tokens/s"
+              pluginId="timeseries"
+              height={CHART_HEIGHT}
+              timeRange={chartTimeRange}
+              loading={tokensOverTime.loading}
+              error={tokensOverTime.error}
+              data={tokensOverTime.data ? matrixToDataFrames(tokensOverTime.data) : []}
+              options={chartOptions}
+              fieldConfig={{
+                defaults: {
+                  unit: 'short',
+                  color: consistentColor,
+                  custom: timeseriesDefaults,
+                  thresholds: noThresholds,
+                },
+                overrides: [],
+              }}
+            />
+          </div>
         </div>
         <div className={styles.footerRow}>
           <Button variant="primary" onClick={() => navigate(`${PLUGIN_BASE}/${ROUTES.Analytics}`)}>
@@ -258,6 +266,16 @@ function getStyles(theme: GrafanaTheme2) {
       borderRadius: theme.shape.radius.default,
       padding: theme.spacing(2.5),
       boxShadow: theme.shadows.z1,
+      // Keep chart rendering defaults but hide the legend row entirely.
+      '& :global(.viz-legend)': {
+        display: 'none',
+      },
+      '& :global(.panel-legend)': {
+        display: 'none',
+      },
+      '& :global([class*="viz-legend"])': {
+        display: 'none',
+      },
     }),
     statsRow: css({
       display: 'grid',
@@ -271,6 +289,10 @@ function getStyles(theme: GrafanaTheme2) {
       gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
       gap: theme.spacing(1),
       width: '100%',
+    }),
+    chartCrop: css({
+      height: CHART_HEIGHT - 30,
+      overflow: 'hidden',
     }),
     timePeriod: css({
       color: theme.colors.text.secondary,
