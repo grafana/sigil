@@ -31,7 +31,7 @@ func RegisterRoutes(
 ) {
 	RegisterCoreRoutes(mux)
 	RegisterIngestRoutes(mux, generationSvc, protectedMiddleware)
-	RegisterQueryRoutes(mux, querySvc, nil, feedbackSvc, ratingsEnabled, annotationsEnabled, modelCardSvc, protectedMiddleware)
+	RegisterQueryRoutes(mux, querySvc, nil, nil, feedbackSvc, ratingsEnabled, annotationsEnabled, modelCardSvc, protectedMiddleware)
 }
 
 // RegisterCoreRoutes wires transport-level routes shared by every runtime role.
@@ -63,6 +63,7 @@ func RegisterQueryRoutes(
 	mux *http.ServeMux,
 	querySvc *query.Service,
 	rater *agentrating.Rater,
+	ratingStore agentrating.LatestStore,
 	feedbackSvc *feedback.Service,
 	ratingsEnabled bool,
 	annotationsEnabled bool,
@@ -80,8 +81,11 @@ func RegisterQueryRoutes(
 	mux.Handle("/api/v1/agents", protectedMiddleware(http.HandlerFunc(listAgents(querySvc))))
 	mux.Handle("/api/v1/agents:lookup", protectedMiddleware(http.HandlerFunc(lookupAgent(querySvc))))
 	mux.Handle("/api/v1/agents:versions", protectedMiddleware(http.HandlerFunc(listAgentVersions(querySvc))))
+	if ratingStore != nil {
+		mux.Handle("/api/v1/agents:rating", protectedMiddleware(http.HandlerFunc(lookupAgentRating(querySvc, ratingStore))))
+	}
 	if rater != nil {
-		mux.Handle("/api/v1/agents:rate", protectedMiddleware(http.HandlerFunc(rateAgent(querySvc, rater))))
+		mux.Handle("/api/v1/agents:rate", protectedMiddleware(http.HandlerFunc(rateAgent(querySvc, rater, ratingStore))))
 	}
 	mux.Handle("/api/v1/conversations:batch-metadata", protectedMiddleware(http.HandlerFunc(batchConversationMetadata(querySvc))))
 	mux.Handle("/api/v1/conversations", protectedMiddleware(http.HandlerFunc(listConversations(querySvc))))
@@ -472,7 +476,7 @@ type rateAgentRequest struct {
 	Model     string `json:"model,omitempty"`
 }
 
-func rateAgent(querySvc *query.Service, rater *agentrating.Rater) http.HandlerFunc {
+func rateAgent(querySvc *query.Service, rater *agentrating.Rater, ratingStore agentrating.LatestStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -523,6 +527,80 @@ func rateAgent(querySvc *query.Service, rater *agentrating.Rater) http.HandlerFu
 				return
 			}
 			http.Error(w, "failed to evaluate agent", http.StatusBadGateway)
+			return
+		}
+		if ratingStore != nil {
+			if err := ratingStore.UpsertAgentVersionRating(
+				req.Context(),
+				tenantID,
+				agentDetail.AgentName,
+				agentDetail.EffectiveVersion,
+				*rating,
+			); err != nil {
+				http.Error(w, "failed to persist agent rating", http.StatusInternalServerError)
+				return
+			}
+		}
+
+		writeJSON(w, http.StatusOK, rating)
+	}
+}
+
+func lookupAgentRating(querySvc *query.Service, ratingStore agentrating.LatestStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		tenantID, err := tenant.TenantID(req.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		rawNames, hasName := req.URL.Query()["name"]
+		if !hasName {
+			http.Error(w, "name query param is required", http.StatusBadRequest)
+			return
+		}
+
+		agentName := ""
+		if len(rawNames) > 0 {
+			agentName = rawNames[0]
+		}
+
+		agentDetail, found, err := querySvc.GetAgentDetailForTenant(
+			req.Context(),
+			tenantID,
+			agentName,
+			req.URL.Query().Get("version"),
+		)
+		if err != nil {
+			if query.IsValidationError(err) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if !found {
+			http.NotFound(w, req)
+			return
+		}
+
+		rating, err := ratingStore.GetAgentVersionRating(
+			req.Context(),
+			tenantID,
+			agentDetail.AgentName,
+			agentDetail.EffectiveVersion,
+		)
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if rating == nil {
+			http.NotFound(w, req)
 			return
 		}
 

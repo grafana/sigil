@@ -133,6 +133,7 @@ func TestRegisterQueryRoutesOwnsQueryPaths(t *testing.T) {
 		mux,
 		query.NewService(),
 		nil,
+		nil,
 		feedback.NewService(feedback.NewMemoryStore()),
 		true,
 		true,
@@ -538,6 +539,7 @@ func TestRateAgentEndpointValidatesRequestBody(t *testing.T) {
 		mux,
 		querySvc,
 		agentrating.NewRater(judges.NewDiscovery(), "openai/gpt-4o-mini"),
+		nil,
 		feedback.NewService(feedback.NewMemoryStore()),
 		true,
 		true,
@@ -583,6 +585,7 @@ func TestRateAgentEndpointReturnsBadRequestWhenProviderUnavailable(t *testing.T)
 		mux,
 		querySvc,
 		agentrating.NewRater(judges.NewDiscovery(), "openai/gpt-4o-mini"),
+		nil,
 		feedback.NewService(feedback.NewMemoryStore()),
 		true,
 		true,
@@ -595,6 +598,117 @@ func TestRateAgentEndpointReturnsBadRequestWhenProviderUnavailable(t *testing.T)
 	mux.ServeHTTP(resp, req)
 	if resp.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for unavailable judge provider, got %d body=%s", resp.Code, resp.Body.String())
+	}
+}
+
+func TestLookupAgentRatingEndpointReturnsLatestStoredRating(t *testing.T) {
+	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
+		AgentCatalogStore: &testAgentCatalogStore{
+			latestVersion: &storage.AgentVersion{
+				AgentName:          "assistant",
+				EffectiveVersion:   "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				SystemPrompt:       "You are concise.",
+				SystemPromptPrefix: "You are concise.",
+				ToolCount:          0,
+				TokenEstimateTotal: 40,
+				GenerationCount:    2,
+				FirstSeenAt:        time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC),
+				LastSeenAt:         time.Date(2026, 3, 4, 11, 0, 0, 0, time.UTC),
+				ToolsJSON:          "[]",
+			},
+		},
+		FeedbackStore: feedback.NewMemoryStore(),
+	})
+	if err != nil {
+		t.Fatalf("new query service: %v", err)
+	}
+
+	ratingStore := &testAgentRatingStore{
+		rating: &agentrating.Rating{
+			Score:   8,
+			Summary: "Strong baseline.",
+			Suggestions: []agentrating.Suggestion{
+				{
+					Category:    "tools",
+					Severity:    "medium",
+					Title:       "Clarify optional params",
+					Description: "Define when optional fields should be set.",
+				},
+			},
+			JudgeModel:     "openai/gpt-4o-mini",
+			JudgeLatencyMs: 123,
+		},
+	}
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterQueryRoutes(
+		mux,
+		querySvc,
+		nil,
+		ratingStore,
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		protected,
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/agents:rating?name=assistant", nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"score":8`) {
+		t.Fatalf("expected score in response, body=%s", resp.Body.String())
+	}
+	if ratingStore.lastEffectiveVersion != "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" {
+		t.Fatalf("expected lookup for resolved effective version, got %q", ratingStore.lastEffectiveVersion)
+	}
+}
+
+func TestLookupAgentRatingEndpointReturnsNotFoundWhenNoStoredRating(t *testing.T) {
+	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
+		AgentCatalogStore: &testAgentCatalogStore{
+			latestVersion: &storage.AgentVersion{
+				AgentName:          "assistant",
+				EffectiveVersion:   "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				SystemPrompt:       "You are concise.",
+				SystemPromptPrefix: "You are concise.",
+				ToolCount:          0,
+				TokenEstimateTotal: 40,
+				GenerationCount:    2,
+				FirstSeenAt:        time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC),
+				LastSeenAt:         time.Date(2026, 3, 4, 11, 0, 0, 0, time.UTC),
+				ToolsJSON:          "[]",
+			},
+		},
+		FeedbackStore: feedback.NewMemoryStore(),
+	})
+	if err != nil {
+		t.Fatalf("new query service: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterQueryRoutes(
+		mux,
+		querySvc,
+		nil,
+		&testAgentRatingStore{},
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		protected,
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/agents:rating?name=assistant", nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d body=%s", resp.Code, resp.Body.String())
 	}
 }
 
@@ -1241,6 +1355,32 @@ type testAgentCatalogStore struct {
 	versions      []storage.AgentVersionSummary
 
 	nextVersionCursor *storage.AgentVersionCursor
+}
+
+type testAgentRatingStore struct {
+	rating               *agentrating.Rating
+	err                  error
+	lastTenantID         string
+	lastAgentName        string
+	lastEffectiveVersion string
+}
+
+func (s *testAgentRatingStore) UpsertAgentVersionRating(_ context.Context, _, _, _ string, _ agentrating.Rating) error {
+	return nil
+}
+
+func (s *testAgentRatingStore) GetAgentVersionRating(_ context.Context, tenantID, agentName, effectiveVersion string) (*agentrating.Rating, error) {
+	s.lastTenantID = tenantID
+	s.lastAgentName = agentName
+	s.lastEffectiveVersion = effectiveVersion
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.rating == nil {
+		return nil, nil
+	}
+	copied := *s.rating
+	return &copied, nil
 }
 
 func (s *testAgentCatalogStore) ListAgentHeads(_ context.Context, _ string, _ int, _ *storage.AgentHeadCursor, _ string) ([]storage.AgentHead, *storage.AgentHeadCursor, error) {

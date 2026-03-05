@@ -7,6 +7,7 @@ const mockDataSource: AgentsDataSource = {
     throw new globalThis.Error('not implemented');
   },
   listAgentVersions: async () => ({ items: [], next_cursor: '' }),
+  lookupAgentRating: async () => null,
   rateAgent: async () => ({
     score: 8,
     summary: 'Strong design with minor improvements.',

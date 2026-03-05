@@ -12,6 +12,7 @@ function LocationProbe() {
 function createDataSource(): AgentsDataSource {
   return {
     listAgents: jest.fn(async () => ({ items: [], next_cursor: '' })),
+    lookupAgentRating: jest.fn(async () => null),
     rateAgent: jest.fn(async () => ({
       score: 8,
       summary: 'Test summary',

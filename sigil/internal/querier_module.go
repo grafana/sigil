@@ -112,6 +112,10 @@ func newQuerierModule(
 	discovery := judges.DiscoverFromEnv()
 	agentRatingProviderID, agentRatingModelName := cfg.AgentRatingJudgeTarget()
 	var agentRater *agentrating.Rater
+	var agentRatingStore agentrating.LatestStore
+	if store, ok := generationStore.(agentrating.LatestStore); ok {
+		agentRatingStore = store
+	}
 	if _, ok := discovery.Client(agentRatingProviderID); ok {
 		agentRater = agentrating.NewRaterWithTarget(discovery, agentRatingProviderID, agentRatingModelName)
 	} else {
@@ -225,6 +229,7 @@ func newQuerierModule(
 				mux,
 				querySvc,
 				agentRater,
+				agentRatingStore,
 				feedbackSvc,
 				cfg.ConversationRatingsEnabled,
 				cfg.ConversationAnnotationsEnabled,
