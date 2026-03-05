@@ -154,4 +154,23 @@ describe('AgentDetailPage', () => {
     expect(await screen.findByText(/aggregates generations where/i)).toBeInTheDocument();
     expect(screen.getByText('gen_ai.agent.name')).toBeInTheDocument();
   });
+
+  it('does not show rating error alert when latest rating returns 404', async () => {
+    const dataSource = createDataSource();
+    dataSource.lookupAgentRating = jest.fn(async () => {
+      throw { status: 404, data: { message: 'not found' } };
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await screen.findByText('Agent Rating');
+    await waitFor(() => expect(dataSource.lookupAgentRating).toHaveBeenCalled());
+    expect(screen.queryByText('Agent rating failed')).not.toBeInTheDocument();
+  });
 });

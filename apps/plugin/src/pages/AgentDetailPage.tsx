@@ -18,6 +18,7 @@ import { TokenizedText } from '../components/tokenizer/TokenizedText';
 import { useTokenizer } from '../components/tokenizer/useTokenizer';
 import { getEncoding, AVAILABLE_ENCODINGS, type EncodingName } from '../components/tokenizer/encodingMap';
 import { getTokenizeControlStyles } from '../components/tokenizer/tokenizeControls.styles';
+import { TopStat } from '../components/TopStat';
 
 const VERSION_PAGE_SIZE = 50;
 
@@ -32,6 +33,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexDirection: 'column' as const,
     gap: theme.spacing(2),
     minHeight: 0,
+    marginTop: theme.spacing(-4),
   }),
   titleRow: css({
     display: 'flex',
@@ -57,30 +59,12 @@ const getStyles = (theme: GrafanaTheme2) => ({
     padding: `${theme.spacing(0.75)} ${theme.spacing(1.5)}`,
   }),
   statsGrid: css({
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-    gap: theme.spacing(1),
-  }),
-  statCell: css({
     borderRadius: theme.shape.radius.default,
-    border: `1px solid ${theme.colors.border.weak}`,
-    background: theme.colors.background.secondary,
-    padding: `${theme.spacing(1)} ${theme.spacing(1.5)}`,
     display: 'flex',
-    flexDirection: 'column' as const,
-    gap: theme.spacing(0.25),
-  }),
-  statLabel: css({
-    fontSize: theme.typography.bodySmall.fontSize,
-    color: theme.colors.text.secondary,
-    lineHeight: 1.3,
-  }),
-  statValue: css({
-    fontSize: theme.typography.h4.fontSize,
-    fontWeight: theme.typography.fontWeightMedium,
-    color: theme.colors.text.primary,
-    lineHeight: 1.2,
-    fontVariantNumeric: 'tabular-nums',
+    flexWrap: 'wrap' as const,
+    gap: theme.spacing(4),
+    padding: theme.spacing(1.5, 0),
+    borderBottom: `1px solid ${theme.colors.border.weak}`,
   }),
   panel: css({
     borderRadius: theme.shape.radius.default,
@@ -177,6 +161,27 @@ function formatDate(iso: string): string {
   return parsed.toLocaleString();
 }
 
+function isNotFoundError(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) {
+    return false;
+  }
+  const withStatus = err as {
+    status?: unknown;
+    statusCode?: unknown;
+    data?: { status?: unknown; statusCode?: unknown; message?: unknown };
+    message?: unknown;
+  };
+  if (withStatus.status === 404 || withStatus.statusCode === 404) {
+    return true;
+  }
+  if (withStatus.data?.status === 404 || withStatus.data?.statusCode === 404) {
+    return true;
+  }
+  const message = typeof withStatus.message === 'string' ? withStatus.message : '';
+  const dataMessage = typeof withStatus.data?.message === 'string' ? withStatus.data.message : '';
+  return /\b404\b/.test(message) || /\b404\b/.test(dataMessage);
+}
+
 function buildAgentNameFromRoute(pathname: string, routeParam?: string): string {
   if (new RegExp(`(^|/)${ROUTES.Agents}/anonymous/?$`).test(pathname)) {
     return '';
@@ -184,22 +189,9 @@ function buildAgentNameFromRoute(pathname: string, routeParam?: string): string 
   return routeParam?.trim() ?? '';
 }
 
-type StatCellProps = {
-  label: string;
-  value: string | number;
-  tooltip: string;
-};
-
-function StatCell({ label, value, tooltip }: StatCellProps) {
-  const styles = useStyles2(getStyles);
-  return (
-    <Tooltip content={tooltip} placement="top">
-      <div className={styles.statCell}>
-        <span className={styles.statLabel}>{label}</span>
-        <span className={styles.statValue}>{typeof value === 'number' ? value.toLocaleString() : value}</span>
-      </div>
-    </Tooltip>
-  );
+function toTimestampMs(iso: string): number {
+  const parsed = Date.parse(iso);
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
 
 export default function AgentDetailPage({
@@ -230,6 +222,7 @@ export default function AgentDetailPage({
   const selectedVersion = searchParams.get('version')?.trim() ?? '';
   const agentName = buildAgentNameFromRoute(location.pathname, params.agentName);
   const isAnonymous = agentName.length === 0;
+  const agentsTableRoute = `${PLUGIN_BASE}/${ROUTES.Agents}?tab=table`;
 
   useEffect(() => {
     detailRequestVersion.current += 1;
@@ -289,6 +282,11 @@ export default function AgentDetailPage({
       })
       .catch((err: unknown) => {
         if (ratingRequestVersion.current !== version) {
+          return;
+        }
+        if (isNotFoundError(err)) {
+          setInitialRating(null);
+          setInitialRatingError('');
           return;
         }
         setInitialRating(null);
@@ -473,7 +471,7 @@ export default function AgentDetailPage({
         <Alert severity="error" title="Agent not found">
           <Text>The selected agent detail could not be loaded.</Text>
         </Alert>
-        <Button variant="secondary" icon="arrow-left" onClick={() => navigate(`${PLUGIN_BASE}/${ROUTES.Agents}`)}>
+        <Button variant="secondary" icon="arrow-left" onClick={() => navigate(agentsTableRoute)}>
           Back to agents
         </Button>
       </div>
@@ -497,15 +495,13 @@ export default function AgentDetailPage({
             fill="text"
             size="sm"
             icon="arrow-left"
-            onClick={() => navigate(`${PLUGIN_BASE}/${ROUTES.Agents}`)}
+            onClick={() => navigate(agentsTableRoute)}
           >
             All agents
           </Button>
           <Text element="h2">{isAnonymous ? 'Unnamed agent bucket' : detail.agent_name}</Text>
           <div className={styles.badgeRow}>
-            <Badge text={isAnonymous ? 'Anonymous' : 'Named'} color={isAnonymous ? 'orange' : 'green'} />
-            <Badge text={`${detail.generation_count.toLocaleString()} generations`} color="blue" />
-            <Badge text={`${detail.tool_count} tools`} color="purple" />
+            {isAnonymous && <Badge text="Anonymous" color="orange" />}
           </div>
           {detail.models.length > 0 && (
             <div className={styles.modelChipsRow}>
@@ -560,31 +556,60 @@ export default function AgentDetailPage({
       )}
 
       <div className={styles.statsGrid}>
-        <StatCell
-          label="Last seen"
-          value={formatDate(detail.last_seen_at)}
-          tooltip="The most recent time any generation was recorded for this agent version."
-        />
-        <StatCell
-          label="First seen"
-          value={formatDate(detail.first_seen_at)}
-          tooltip="The earliest time a generation was recorded for this agent version."
-        />
-        <StatCell
-          label="Prompt tokens"
-          value={detail.token_estimate.system_prompt}
-          tooltip="Estimated tokens consumed by the system prompt in this version."
-        />
-        <StatCell
-          label="Tools tokens"
-          value={detail.token_estimate.tools_total}
-          tooltip="Estimated tokens consumed by all tool schemas combined in this version."
-        />
-        <StatCell
-          label="Total tokens"
-          value={detail.token_estimate.total}
-          tooltip="Sum of system prompt and tool tokens — the baseline context cost per generation."
-        />
+        <Tooltip content="Total generations recorded for this agent version." placement="top">
+          <div>
+            <TopStat label="Generations" value={detail.generation_count} loading={false} />
+          </div>
+        </Tooltip>
+        <Tooltip content="Total tool definitions recorded for this agent version." placement="top">
+          <div>
+            <TopStat label="Tools" value={detail.tool_count} loading={false} />
+          </div>
+        </Tooltip>
+        <Tooltip
+          content="The earliest time a generation was recorded for this agent version."
+          placement="top"
+        >
+          <div>
+            <TopStat
+              label="First seen"
+              value={toTimestampMs(detail.first_seen_at)}
+              displayValue={formatDate(detail.first_seen_at)}
+              loading={false}
+            />
+          </div>
+        </Tooltip>
+        <Tooltip
+          content="The most recent time any generation was recorded for this agent version."
+          placement="top"
+        >
+          <div>
+            <TopStat
+              label="Last seen"
+              value={toTimestampMs(detail.last_seen_at)}
+              displayValue={formatDate(detail.last_seen_at)}
+              loading={false}
+            />
+          </div>
+        </Tooltip>
+        <Tooltip content="Estimated tokens consumed by the system prompt in this version." placement="top">
+          <div>
+            <TopStat label="Prompt tokens" value={detail.token_estimate.system_prompt} loading={false} />
+          </div>
+        </Tooltip>
+        <Tooltip content="Estimated tokens consumed by all tool schemas combined in this version." placement="top">
+          <div>
+            <TopStat label="Tools tokens" value={detail.token_estimate.tools_total} loading={false} />
+          </div>
+        </Tooltip>
+        <Tooltip
+          content="Sum of system prompt and tool tokens — the baseline context cost per generation."
+          placement="top"
+        >
+          <div>
+            <TopStat label="Total tokens" value={detail.token_estimate.total} loading={false} />
+          </div>
+        </Tooltip>
       </div>
 
       <AgentRatingPanel

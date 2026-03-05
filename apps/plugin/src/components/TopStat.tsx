@@ -8,6 +8,7 @@ import { formatStatValue } from './dashboard/dashboardShared';
 export type TopStatProps = {
   label: string;
   value: number;
+  displayValue?: string;
   unit?: string;
   loading: boolean;
   prevValue?: number;
@@ -23,6 +24,7 @@ const DEFAULT_COMPARISON_LABEL = 'one hour ago';
 export function TopStat({
   label,
   value,
+  displayValue,
   unit,
   loading,
   prevValue,
@@ -81,7 +83,7 @@ export function TopStat({
         )}
       </div>
       <div className={styles.topStatRow}>
-        <span className={styles.topStatValue}>{loading ? '–' : formatStatValue(value, unit)}</span>
+        <span className={styles.topStatValue}>{loading ? '–' : displayValue ?? formatStatValue(value, unit)}</span>
         {changeBadge}
       </div>
     </div>
