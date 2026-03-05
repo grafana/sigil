@@ -108,6 +108,9 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, tenantID string, r
 	}
 
 	if err := s.store.CreateTemplate(ctx, tmpl, ver); err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			return nil, newValidationError(err)
+		}
 		return nil, err
 	}
 	return &tmpl, nil

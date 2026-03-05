@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Badge, IconButton, Text, useStyles2 } from '@grafana/ui';
+import { Badge, ConfirmModal, IconButton, Text, useStyles2 } from '@grafana/ui';
 import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type Evaluator } from '../../evaluation/types';
 
 export type EvaluatorTableProps = {
@@ -59,63 +59,80 @@ const getStyles = (theme: GrafanaTheme2) => ({
 
 export default function EvaluatorTable({ evaluators, selectedEvaluatorID, onSelect, onDelete }: EvaluatorTableProps) {
   const styles = useStyles2(getStyles);
+  const [pendingDeleteID, setPendingDeleteID] = useState<string | null>(null);
 
   return (
-    <div className={styles.table}>
-      <div className={styles.header}>
-        <Text weight="medium" variant="bodySmall">
-          Evaluator ID
-        </Text>
-        <Text weight="medium" variant="bodySmall">
-          Kind
-        </Text>
-        <Text weight="medium" variant="bodySmall">
-          Version
-        </Text>
-        <Text weight="medium" variant="bodySmall">
-          Output keys
-        </Text>
-        <Text weight="medium" variant="bodySmall">
-          Created
-        </Text>
-        <div />
-      </div>
-      {evaluators.map((evaluator) => (
-        <div
-          key={evaluator.evaluator_id}
-          className={
-            selectedEvaluatorID === evaluator.evaluator_id ? `${styles.row} ${styles.rowSelected}` : styles.row
+    <>
+      <ConfirmModal
+        isOpen={pendingDeleteID !== null}
+        title="Delete evaluator"
+        body={`Are you sure you want to delete evaluator "${pendingDeleteID}"? This cannot be undone.`}
+        confirmText="Delete"
+        icon="trash-alt"
+        onConfirm={() => {
+          if (pendingDeleteID) {
+            onDelete?.(pendingDeleteID);
           }
-          onClick={() => onSelect?.(evaluator.evaluator_id)}
-          role="row"
-        >
-          <Text truncate>{evaluator.evaluator_id}</Text>
-          <div>
-            <Badge text={EVALUATOR_KIND_LABELS[evaluator.kind]} color={getKindBadgeColor(evaluator.kind)} />
-          </div>
-          <Text color="secondary" variant="bodySmall">
-            {evaluator.version}
+          setPendingDeleteID(null);
+        }}
+        onDismiss={() => setPendingDeleteID(null)}
+      />
+      <div className={styles.table}>
+        <div className={styles.header}>
+          <Text weight="medium" variant="bodySmall">
+            Evaluator ID
           </Text>
-          <div className={styles.outputKeys}>
-            {evaluator.output_keys.map((ok) => (
-              <Badge key={ok.key} text={`${ok.key}: ${ok.type}`} color="blue" />
-            ))}
-          </div>
-          <Text color="secondary" variant="bodySmall">
-            {formatDate(evaluator.created_at)}
+          <Text weight="medium" variant="bodySmall">
+            Kind
           </Text>
-          {onDelete && (
-            <IconButton
-              name="trash-alt"
-              tooltip="Delete"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(evaluator.evaluator_id);
-              }}
-            />
-          )}
+          <Text weight="medium" variant="bodySmall">
+            Version
+          </Text>
+          <Text weight="medium" variant="bodySmall">
+            Output keys
+          </Text>
+          <Text weight="medium" variant="bodySmall">
+            Created
+          </Text>
+          <div />
         </div>
-      ))}
-    </div>
+        {evaluators.map((evaluator) => (
+          <div
+            key={evaluator.evaluator_id}
+            className={
+              selectedEvaluatorID === evaluator.evaluator_id ? `${styles.row} ${styles.rowSelected}` : styles.row
+            }
+            onClick={() => onSelect?.(evaluator.evaluator_id)}
+            role="row"
+          >
+            <Text truncate>{evaluator.evaluator_id}</Text>
+            <div>
+              <Badge text={EVALUATOR_KIND_LABELS[evaluator.kind]} color={getKindBadgeColor(evaluator.kind)} />
+            </div>
+            <Text color="secondary" variant="bodySmall">
+              {evaluator.version}
+            </Text>
+            <div className={styles.outputKeys}>
+              {evaluator.output_keys.map((ok) => (
+                <Badge key={ok.key} text={`${ok.key}: ${ok.type}`} color="blue" />
+              ))}
+            </div>
+            <Text color="secondary" variant="bodySmall">
+              {formatDate(evaluator.created_at)}
+            </Text>
+            {onDelete && (
+              <IconButton
+                name="trash-alt"
+                tooltip="Delete"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPendingDeleteID(evaluator.evaluator_id);
+                }}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    </>
   );
 }

@@ -208,11 +208,19 @@ func (s *WALStore) DeleteTemplate(ctx context.Context, tenantID, templateID stri
 	}
 
 	now := time.Now().UTC()
-	return s.db.WithContext(ctx).
-		Model(&EvalTemplateModel{}).
-		Where("tenant_id = ? AND template_id = ? AND deleted_at IS NULL", tenantID, templateID).
-		Updates(map[string]any{"deleted_at": now, "updated_at": now}).
-		Error
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&EvalTemplateModel{}).
+			Where("tenant_id = ? AND template_id = ? AND deleted_at IS NULL", tenantID, templateID).
+			Updates(map[string]any{"deleted_at": now, "updated_at": now}).
+			Error; err != nil {
+			return fmt.Errorf("soft-delete template: %w", err)
+		}
+		if err := tx.Where("tenant_id = ? AND template_id = ?", tenantID, templateID).
+			Delete(&EvalTemplateVersionModel{}).Error; err != nil {
+			return fmt.Errorf("delete template versions: %w", err)
+		}
+		return nil
+	})
 }
 
 func (s *WALStore) CountActiveTemplates(ctx context.Context, tenantID string) (int64, error) {

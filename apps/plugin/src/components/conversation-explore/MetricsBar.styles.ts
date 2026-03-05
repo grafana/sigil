@@ -47,6 +47,10 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     marginLeft: 'auto',
     flexWrap: 'wrap' as const,
   }),
+  modelChipAnchor: css({
+    position: 'relative' as const,
+    display: 'inline-flex',
+  }),
   modelChip: css({
     display: 'inline-flex',
     alignItems: 'center',
@@ -58,6 +62,20 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     background: theme.colors.background.secondary,
     color: theme.colors.text.primary,
     border: `1px solid ${theme.colors.border.weak}`,
+    cursor: 'pointer',
+    transition: 'border-color 120ms ease, background 120ms ease',
+    '&:hover:not(:disabled)': {
+      borderColor: theme.colors.text.secondary,
+      background: theme.colors.action.hover,
+    },
+    '&:disabled': {
+      cursor: 'default',
+      opacity: 0.9,
+    },
+  }),
+  modelChipActive: css({
+    borderColor: theme.colors.primary.border,
+    background: theme.colors.primary.transparent,
   }),
   providerDot: css({
     width: 8,

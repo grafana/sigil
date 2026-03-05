@@ -47,7 +47,7 @@ function getStyles(theme: GrafanaTheme2) {
     }),
     subViewBar: css({
       display: 'flex',
-      paddingTop: theme.spacing(0.5),
+      padding: theme.spacing(0.5, 2, 0),
     }),
   };
 }

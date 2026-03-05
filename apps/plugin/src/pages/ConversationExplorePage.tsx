@@ -122,6 +122,7 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     tokenSummary,
     costSummary,
     generationCosts,
+    modelCards,
     allGenerations,
   } = useConversationData({
     conversationID,
@@ -395,6 +396,7 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
         costSummary={costSummary}
         models={models}
         modelProviders={modelProviders}
+        modelCards={modelCards}
         errorCount={errorCount}
         generationCount={conversationData.generationCount}
         isSaved={isSaved}

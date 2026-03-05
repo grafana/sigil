@@ -167,3 +167,16 @@ export const breakdownToPromLabel: Record<BreakdownDimension, string> = {
   model: 'gen_ai_request_model',
   agent: 'gen_ai_agent_name',
 };
+
+// Conversation ordering options (used in conversations browser page)
+
+export type ConversationOrderBy = 'time' | 'errors' | 'duration' | 'tokens';
+
+export const conversationOrderByLabel: Record<ConversationOrderBy, string> = {
+  time: 'Recent',
+  errors: 'Errors',
+  duration: 'Duration',
+  tokens: 'Tokens',
+};
+
+export const CONVERSATION_ORDER_BY_VALUES = new Set<ConversationOrderBy>(['time', 'errors', 'duration', 'tokens']);
