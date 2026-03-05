@@ -4,7 +4,6 @@ import type { GrafanaTheme2 } from '@grafana/data';
 import { useStyles2 } from '@grafana/ui';
 import { useAssistant } from '@grafana/assistant';
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
-import { getGradientColorAtIndex } from '../components/conversations/traceGradient';
 import { TryItNowPanel } from '../components/tutorial/TryItNowPanel';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 
@@ -162,7 +161,7 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
     renderGraphic: (props) => <WhatIsSigilGraphic {...props} />,
     body: (
       <ul>
-        <li>A new telemetry signal.</li>
+        <li>Open specification, built on OTEL.</li>
         <li>A new database built for scale.</li>
         <li>Opinionated drilldown UX.</li>
       </ul>
@@ -185,11 +184,11 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
   {
     slug: 'ui-features',
     title: 'Actually useful UX',
-    subtitle: 'The best bits from the current product surface.',
+    subtitle: 'Drilldown-inspired UX that surfaces the value of the new signal.',
     renderGraphic: (props) => <UiFeaturesGraphic {...props} />,
     body: (
       <ul>
-        <li>Dashboard tabs for overview, performance, errors, and usage analysis.</li>
+        <li>Spot performance regressions, errors, and cost anomalies at a glance.</li>
         <li>Cascading filters across providers, models, agents, and labels.</li>
         <li>Conversation Explore view for timeline + structured drilldown context.</li>
         <li>Agent pages and evaluation workflows for faster tuning loops.</li>
@@ -227,6 +226,20 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
     body: <NextStepsBody />,
   },
 ];
+
+const TUTORIAL_COLORS = [
+  '#5794F2',
+  '#8A7DEE',
+  '#B877D9',
+  '#DA7AAF',
+  '#F28B4E',
+  '#FF9830',
+];
+
+function getTutorialColor(_total: number, index: number): string {
+  const i = Math.min(Math.max(Math.round(index), 0), TUTORIAL_COLORS.length - 1);
+  return TUTORIAL_COLORS[i];
+}
 
 const TUTORIAL_SLUGS = new Set(TUTORIAL_SLIDES.map((slide) => slide.slug));
 
@@ -300,8 +313,8 @@ export default function TutorialPage() {
 
   const currentIndex = hasRequestedSlug ? TUTORIAL_SLIDES.findIndex((slide) => slide.slug === requestedSlug) : 0;
   const slide = TUTORIAL_SLIDES[currentIndex];
-  const slideAccentColor = getGradientColorAtIndex(TUTORIAL_SLIDES.length, currentIndex, 1);
-  const slideSecondaryColor = getGradientColorAtIndex(TUTORIAL_SLIDES.length, currentIndex + 2, 0.65);
+  const slideAccentColor = getTutorialColor(TUTORIAL_SLIDES.length, currentIndex);
+  const slideSecondaryColor = getTutorialColor(TUTORIAL_SLIDES.length, currentIndex + 2);
   const previousIndex = currentIndex > 0 ? currentIndex - 1 : null;
   const nextIndex = currentIndex < TUTORIAL_SLIDES.length - 1 ? currentIndex + 1 : null;
   const cardStyle = {
@@ -863,9 +876,22 @@ function getStyles(theme: GrafanaTheme2) {
       lineHeight: theme.typography.h1.lineHeight,
       letterSpacing: '-0.02em',
       fontWeight: theme.typography.fontWeightBold,
-      borderBottom: '4px solid var(--tutorial-accent)',
-      paddingBottom: theme.spacing(1),
+      position: 'relative',
+      paddingBottom: theme.spacing(0.5),
       width: 'fit-content',
+      marginTop: theme.spacing(-1),
+      '&::after': {
+        content: '""',
+        position: 'absolute',
+        left: -0,
+        right: 0,
+        bottom: -12,
+        height: 8,
+        background: 'var(--tutorial-accent)',
+        borderRadius: 2,
+        transform: 'rotate(-1.5deg)',
+        transformOrigin: 'left center',
+      },
       '@media (max-width: 1024px)': {
         gridColumn: '1 / 2',
       },
