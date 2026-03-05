@@ -66,6 +66,12 @@ const getStyles = (theme: GrafanaTheme2) => ({
       background: 'linear-gradient(90deg, #5794F2 0%, #B877D9 52%, #FF9830 100%)',
     },
   }),
+  heroTopRightRating: css({
+    position: 'absolute' as const,
+    top: 8,
+    right: 10,
+    zIndex: 2,
+  }),
   heroActivityTop: css({
     borderTopLeftRadius: theme.shape.radius.default,
     borderTopRightRadius: theme.shape.radius.default,
@@ -551,6 +557,15 @@ function formatRelativeDateCompact(iso: string): string {
   return `${Math.floor(diffSec / 86400)}d`;
 }
 
+function firstLine(text: string): string {
+  const normalized = text.replace(/\r\n/g, '\n').trim();
+  if (!normalized) {
+    return 'No summary available.';
+  }
+  const [line] = normalized.split('\n').map((part) => part.trim()).filter((part) => part.length > 0);
+  return line ?? 'No summary available.';
+}
+
 export default function AgentDetailPage({
   dataSource = defaultAgentsDataSource,
   modelCardClient = defaultModelCardClient,
@@ -954,6 +969,8 @@ export default function AgentDetailPage({
   const primaryModelProvider = primaryModel != null ? getProviderMeta(primaryModel.provider).label : null;
   const gradientColors = ['#5794F2', '#B877D9', '#FF9830'] as const;
   const displayActivityHeights = activityHeights && activityHeights.length > 0 ? activityHeights : EMPTY_ACTIVITY_BARS;
+  const latestHeroRating = selectedVersion.length === 0 && initialRating?.status === 'completed' ? initialRating : null;
+  const latestHeroRatingTooltip = latestHeroRating ? firstLine(latestHeroRating.summary) : '';
 
   return (
     <div className={styles.page}>
@@ -987,6 +1004,26 @@ export default function AgentDetailPage({
           </div>
         </div>
         <div className={styles.heroPanel}>
+          {latestHeroRating && (
+            <div className={styles.heroTopRightRating}>
+              <Tooltip content={latestHeroRatingTooltip} placement="left">
+                <span aria-label={`Latest rating summary: ${latestHeroRatingTooltip}`}>
+                  <Badge
+                    text={`Latest ${latestHeroRating.score}/10`}
+                    color={
+                      latestHeroRating.score >= 9
+                        ? 'green'
+                        : latestHeroRating.score >= 7
+                          ? 'blue'
+                          : latestHeroRating.score >= 5
+                            ? 'orange'
+                            : 'red'
+                    }
+                  />
+                </span>
+              </Tooltip>
+            </div>
+          )}
           <div className={styles.heroPanelBody}>
             <div className={styles.heroGlow} aria-hidden />
             <div className={styles.heroTitleMeta}>

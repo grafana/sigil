@@ -12,7 +12,14 @@ function LocationProbe() {
 function createDataSource(): AgentsDataSource {
   return {
     listAgents: jest.fn(async () => ({ items: [], next_cursor: '' })),
-    lookupAgentRating: jest.fn(async () => null),
+    lookupAgentRating: jest.fn(async () => ({
+      status: 'completed',
+      score: 8,
+      summary: 'Top-line report summary.\nSecond line details.',
+      suggestions: [],
+      judge_model: 'openai/gpt-4o-mini',
+      judge_latency_ms: 88,
+    })),
     rateAgent: jest.fn(async () => ({
       score: 8,
       summary: 'Test summary',
@@ -172,5 +179,20 @@ describe('AgentDetailPage', () => {
     await screen.findByText('Prompt and context analysis');
     await waitFor(() => expect(dataSource.lookupAgentRating).toHaveBeenCalled());
     expect(screen.queryByText('Agent rating failed')).not.toBeInTheDocument();
+  });
+
+  it('shows latest rating badge on hero card with first-line summary text', async () => {
+    const dataSource = createDataSource();
+
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Latest 8/10')).toBeInTheDocument();
+    expect(screen.getByLabelText('Latest rating summary: Top-line report summary.')).toBeInTheDocument();
   });
 });

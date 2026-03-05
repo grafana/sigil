@@ -44,7 +44,6 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
       <LandingTopBar
         assistantOrigin="grafana/sigil-plugin/dashboard"
         requestsDataSource={dataSource}
-        requestsFilters={filters}
         requestsFrom={from}
         requestsTo={to}
         compact

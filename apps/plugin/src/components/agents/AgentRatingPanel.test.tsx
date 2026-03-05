@@ -1,8 +1,17 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import AgentRatingPanel from './AgentRatingPanel';
 import type { AgentsDataSource } from '../../agents/api';
 import type { AgentDetail, AgentListResponse, AgentRatingResponse, AgentVersionListResponse } from '../../agents/types';
+
+const mockOpenAssistant = jest.fn();
+
+jest.mock('@grafana/assistant', () => ({
+  useAssistant: () => ({
+    openAssistant: mockOpenAssistant,
+  }),
+}));
 
 function createCompletedRating(summary = 'Great overall structure.'): AgentRatingResponse {
   return {
@@ -50,9 +59,14 @@ function createDataSource(overrides: Partial<AgentsDataSource>): AgentsDataSourc
   };
 }
 
+function renderPanel(ui: React.ReactElement) {
+  return render(<MemoryRouter>{ui}</MemoryRouter>);
+}
+
 describe('AgentRatingPanel', () => {
   beforeEach(() => {
     jest.useFakeTimers();
+    mockOpenAssistant.mockReset();
   });
 
   afterEach(() => {
@@ -70,7 +84,7 @@ describe('AgentRatingPanel', () => {
       lookupAgentRating,
     });
 
-    render(
+    renderPanel(
       <AgentRatingPanel
         agentName="assistant"
         version="sha256:test"
@@ -103,12 +117,138 @@ describe('AgentRatingPanel', () => {
       lookupAgentRating,
     });
 
-    render(<AgentRatingPanel agentName="assistant" version="sha256:test" dataSource={dataSource} />);
+    renderPanel(<AgentRatingPanel agentName="assistant" version="sha256:test" dataSource={dataSource} />);
 
     fireEvent.click(screen.getByRole('button', { name: /generate analysis/i }));
 
     await waitFor(() => expect(rateAgent).toHaveBeenCalledWith('assistant', 'sha256:test'));
     await waitFor(() => expect(lookupAgentRating).toHaveBeenCalledTimes(1));
     expect(await screen.findByText('Rating became available after trigger.')).toBeInTheDocument();
+  });
+
+  it('renders a succinct analysis summary', async () => {
+    const rateAgent = jest.fn<Promise<AgentRatingResponse>, [string, string?]>().mockResolvedValue({
+      status: 'completed',
+      score: 8,
+      summary:
+        'This is a very long summary that should be shortened for readability in the panel because users only need the key takeaway from the analysis and not every detail in one block of text.',
+      suggestions: [
+        {
+          severity: 'low',
+          category: 'format',
+          title: 'Low priority tweak',
+          description: 'Low severity details that should not displace high priority recommendations.',
+        },
+        {
+          severity: 'high',
+          category: 'safety',
+          title: 'High priority fix',
+          description:
+            'Use explicit constraints to prevent unsafe tool execution and remove ambiguous permission language across workflows.',
+        },
+        {
+          severity: 'medium',
+          category: 'clarity',
+          title: 'Medium priority fix',
+          description: 'Tighten instruction wording to avoid contradictory requirements in edge cases.',
+        },
+        {
+          severity: 'low',
+          category: 'style',
+          title: 'Another low priority tweak',
+          description: 'This fourth suggestion should be hidden to keep the output succinct.',
+        },
+      ],
+      judge_model: 'openai/gpt-4o-mini',
+      judge_latency_ms: 77,
+    });
+    const dataSource = createDataSource({ rateAgent });
+
+    renderPanel(<AgentRatingPanel agentName="assistant" version="sha256:test" dataSource={dataSource} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /generate analysis/i }));
+    await waitFor(() => expect(rateAgent).toHaveBeenCalledWith('assistant', 'sha256:test'));
+
+    const summaryText = await screen.findByText(/This is a very long summary that should be shortened/i);
+    expect(summaryText.textContent?.length ?? 0).toBeLessThan(170);
+    expect(summaryText.textContent).toContain('...');
+    expect(screen.getByText('High priority fix')).toBeInTheDocument();
+    expect(screen.getByText('Medium priority fix')).toBeInTheDocument();
+    expect(screen.getByText('Low priority tweak')).toBeInTheDocument();
+    expect(screen.getByText('Another low priority tweak')).toBeInTheDocument();
+  });
+
+  it('opens assistant from suggestion explain action', async () => {
+    const completed = createCompletedRating('Short summary');
+    completed.suggestions = [
+      {
+        severity: 'high',
+        category: 'safety',
+        title: 'Constrain tool calls',
+        description: 'Add explicit safety constraints for tool invocation.',
+      },
+    ];
+    const dataSource = createDataSource({});
+
+    renderPanel(
+      <AgentRatingPanel agentName="assistant" version="sha256:test" dataSource={dataSource} initialResult={completed} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /suggestion actions for constrain tool calls/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Explain' }));
+
+    expect(mockOpenAssistant).toHaveBeenCalledTimes(1);
+    expect(mockOpenAssistant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        origin: 'sigil-agent-rating',
+        autoSend: true,
+      })
+    );
+  });
+
+  it('removes suggestion when rejected from menu', async () => {
+    const completed = createCompletedRating('Short summary');
+    completed.suggestions = [
+      {
+        severity: 'medium',
+        category: 'clarity',
+        title: 'Tighten wording',
+        description: 'Reduce ambiguity in instruction phrasing.',
+      },
+    ];
+    const dataSource = createDataSource({});
+
+    renderPanel(
+      <AgentRatingPanel agentName="assistant" version="sha256:test" dataSource={dataSource} initialResult={completed} />
+    );
+
+    expect(screen.getByText('Tighten wording')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /suggestion actions for tighten wording/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Reject' }));
+
+    expect(screen.queryByText('Tighten wording')).not.toBeInTheDocument();
+  });
+
+  it('opens a modal when clicking a suggestion title', async () => {
+    const completed = createCompletedRating('Short summary');
+    completed.suggestions = [
+      {
+        severity: 'high',
+        category: 'safety',
+        title: 'Constrain tool calls',
+        description: 'Add explicit safety constraints for tool invocation.',
+      },
+    ];
+    const dataSource = createDataSource({});
+
+    renderPanel(
+      <AgentRatingPanel agentName="assistant" version="sha256:test" dataSource={dataSource} initialResult={completed} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /open suggestion constrain tool calls/i }));
+
+    const dialog = await screen.findByRole('dialog', { name: /suggestion constrain tool calls/i });
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByText('Add explicit safety constraints for tool invocation.')).toBeInTheDocument();
   });
 });
