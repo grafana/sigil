@@ -93,7 +93,7 @@ export type ModelCardResolveResponse = {
 };
 
 // Dashboard tab
-export type DashboardTab = 'overview' | 'errors' | 'consumption' | 'cache';
+export type DashboardTab = 'overview' | 'performance' | 'errors' | 'usage';
 
 // Dashboard filter state
 

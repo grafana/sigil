@@ -22,12 +22,20 @@ describe('PageInsightBar', () => {
     localStorage.removeItem('sigil.insightBar.collapsed');
   });
 
-  it('renders waiting placeholder when data context is null', () => {
+  it('defaults to collapsed when no localStorage value', () => {
+    render(<PageInsightBar prompt="Analyze" origin="test" dataContext={null} />);
+    expect(screen.getByRole('button', { name: 'Expand insights' })).toBeInTheDocument();
+    expect(screen.queryByText('Waiting for data...')).not.toBeInTheDocument();
+  });
+
+  it('renders waiting placeholder when expanded with no data', () => {
+    localStorage.setItem('sigil.insightBar.collapsed', '0');
     render(<PageInsightBar prompt="Analyze" origin="test" dataContext={null} />);
     expect(screen.getByText('Waiting for data...')).toBeInTheDocument();
   });
 
-  it('auto-generates on first render when data context is provided', () => {
+  it('auto-generates on first render when expanded and data context is provided', () => {
+    localStorage.setItem('sigil.insightBar.collapsed', '0');
     render(<PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="some data" />);
     expect(mockGenerate).toHaveBeenCalledTimes(1);
     expect(mockGenerate).toHaveBeenCalledWith(
@@ -39,6 +47,7 @@ describe('PageInsightBar', () => {
   });
 
   it('shows placeholder while generating with no content', () => {
+    localStorage.setItem('sigil.insightBar.collapsed', '0');
     mockIsGenerating = true;
     mockContent = '';
     render(<PageInsightBar prompt="Analyze" origin="test" dataContext="data" />);
@@ -46,6 +55,7 @@ describe('PageInsightBar', () => {
   });
 
   it('renders collapse/expand toggle', () => {
+    localStorage.setItem('sigil.insightBar.collapsed', '0');
     mockGenerate.mockImplementation(({ onComplete }: { onComplete: (r: string) => void }) => {
       onComplete('- Finding one\n- Finding two');
     });
@@ -59,6 +69,7 @@ describe('PageInsightBar', () => {
   });
 
   it('renders insight bullets after completion', () => {
+    localStorage.setItem('sigil.insightBar.collapsed', '0');
     mockGenerate.mockImplementation(({ onComplete }: { onComplete: (r: string) => void }) => {
       onComplete('- **Error rate** spiked to 5%\n- Token usage is normal');
     });
@@ -68,6 +79,7 @@ describe('PageInsightBar', () => {
   });
 
   it('shows no-insights placeholder when result is empty', () => {
+    localStorage.setItem('sigil.insightBar.collapsed', '0');
     mockGenerate.mockImplementation(({ onComplete }: { onComplete: (r: string) => void }) => {
       onComplete('');
     });
@@ -76,6 +88,7 @@ describe('PageInsightBar', () => {
   });
 
   it('persists collapsed state in localStorage', () => {
+    localStorage.setItem('sigil.insightBar.collapsed', '0');
     mockGenerate.mockImplementation(({ onComplete }: { onComplete: (r: string) => void }) => {
       onComplete('- Finding one');
     });

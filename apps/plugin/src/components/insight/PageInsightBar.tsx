@@ -20,9 +20,10 @@ const STORAGE_KEY = 'sigil.insightBar.collapsed';
 
 function readCollapsed(): boolean {
   try {
-    return localStorage.getItem(STORAGE_KEY) === '1';
+    const v = localStorage.getItem(STORAGE_KEY);
+    return v === null ? true : v === '1';
   } catch {
-    return false;
+    return true;
   }
 }
 

@@ -189,7 +189,7 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
     renderGraphic: (props) => <UiFeaturesGraphic {...props} />,
     body: (
       <ul>
-        <li>Dashboard tabs for overview, errors, consumption, and cache analysis.</li>
+        <li>Dashboard tabs for overview, performance, errors, and usage analysis.</li>
         <li>Cascading filters across providers, models, agents, and labels.</li>
         <li>Conversation Explore view for timeline + structured drilldown context.</li>
         <li>Agent pages and evaluation workflows for faster tuning loops.</li>

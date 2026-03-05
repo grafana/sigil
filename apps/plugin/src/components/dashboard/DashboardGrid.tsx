@@ -199,14 +199,7 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
   const latencyQuery = latencyOverTimeQuery(filters, interval, breakdownBy, latencyQuantileMap[latencyPercentile]);
   const latencyTimeseries = usePrometheusQuery(dataSource, latencyQuery, from, to, 'range', step);
 
-  // --- Latency stat (with breakdown for panel) ---
-  const latencyStat = usePrometheusQuery(
-    dataSource,
-    latencyStatQuery(filters, rangeDuration, breakdownBy, latencyQuantileMap[latencyPercentile]),
-    from,
-    to,
-    'instant'
-  );
+  // latencyStat moved to Performance tab
 
   // --- TTFT over time ---
   const ttftTimeseries = usePrometheusQuery(
@@ -563,15 +556,17 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
 
       <div className={styles.grid}>
         {/* Row 1: Requests & Errors */}
-        <div className={styles.panelRowFirstStat}>
-          <BreakdownStatPanel
-            title="Total Requests"
-            data={totalOpsStat.data}
-            loading={totalOpsStat.loading}
-            error={totalOpsStat.error}
-            breakdownLabel={breakdownPromLabel}
-            height={CHART_HEIGHT}
-          />
+        <div className={hasBreakdown ? styles.panelRowWithStat : styles.panelRowEqual}>
+          {hasBreakdown && (
+            <BreakdownStatPanel
+              title="Total Requests"
+              data={totalOpsStat.data}
+              loading={totalOpsStat.loading}
+              error={totalOpsStat.error}
+              breakdownLabel={breakdownPromLabel}
+              height={CHART_HEIGHT}
+            />
+          )}
           <MetricPanel
             title="Requests/s"
             pluginId="timeseries"
@@ -604,7 +599,6 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
               defaults: {
                 unit: 'percent',
                 min: 0,
-                max: 100,
                 color: consistentColor,
                 custom: timeseriesDefaults,
                 thresholds: noThresholds,
@@ -614,8 +608,8 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
           />
         </div>
 
-        {/* Row 2: Latency */}
-        <div className={styles.panelRowLatencyFull}>
+        {/* Row 2: Latency & TTFT */}
+        <div className={styles.panelRowEqual}>
           <MetricPanel
             title="Latency"
             pluginId="timeseries"
@@ -642,16 +636,6 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
               />
             }
           />
-          <BreakdownStatPanel
-            title={`Avg Latency (${latencyPercentile.toUpperCase()})`}
-            data={latencyStat.data}
-            loading={latencyStat.loading}
-            error={latencyStat.error}
-            breakdownLabel={breakdownPromLabel}
-            height={CHART_HEIGHT}
-            unit="s"
-            aggregation="avg"
-          />
           <MetricPanel
             title="Time to First Token"
             pluginId="timeseries"
@@ -669,7 +653,7 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
         </div>
 
         {/* Row 3: Consumption */}
-        <div className={styles.panelRowLatency}>
+        <div className={hasBreakdown ? styles.panelRowWithStat : styles.panelRowFull}>
           <MetricPanel
             title="Consumption"
             pluginId="timeseries"
@@ -721,41 +705,43 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
               </div>
             }
           />
-          <BreakdownStatPanel
-            title={costMode === 'tokens' ? 'Total Tokens' : 'Total Cost'}
-            data={
-              isTokenByType && hasBreakdown
-                ? tokensByBreakdownAndType.data
-                : isTokenByType
-                  ? tokensByTypeStat.data
-                  : costMode === 'tokens'
-                    ? tokensTotalByBreakdown.data
-                    : costByBreakdownData
-            }
-            loading={
-              isTokenByType && hasBreakdown
-                ? tokensByBreakdownAndType.loading
-                : isTokenByType
-                  ? tokensByTypeStat.loading
-                  : costMode === 'tokens'
-                    ? tokensTotalByBreakdown.loading
-                    : costTokens.loading || resolvedPricing.loading
-            }
-            error={
-              isTokenByType && hasBreakdown
-                ? tokensByBreakdownAndType.error
-                : isTokenByType
-                  ? tokensByTypeStat.error
-                  : costMode === 'tokens'
-                    ? tokensTotalByBreakdown.error
-                    : costTokens.error
-            }
-            breakdownLabel={breakdownPromLabel}
-            height={CHART_HEIGHT}
-            unit={costMode === 'tokens' ? 'short' : 'currencyUSD'}
-            segmentLabel={isTokenByType && hasBreakdown ? 'gen_ai_token_type' : undefined}
-            segmentNames={isTokenByType && hasBreakdown ? drilldownTypes : undefined}
-          />
+          {hasBreakdown && (
+            <BreakdownStatPanel
+              title={costMode === 'tokens' ? 'Total Tokens' : 'Total Cost'}
+              data={
+                isTokenByType && hasBreakdown
+                  ? tokensByBreakdownAndType.data
+                  : isTokenByType
+                    ? tokensByTypeStat.data
+                    : costMode === 'tokens'
+                      ? tokensTotalByBreakdown.data
+                      : costByBreakdownData
+              }
+              loading={
+                isTokenByType && hasBreakdown
+                  ? tokensByBreakdownAndType.loading
+                  : isTokenByType
+                    ? tokensByTypeStat.loading
+                    : costMode === 'tokens'
+                      ? tokensTotalByBreakdown.loading
+                      : costTokens.loading || resolvedPricing.loading
+              }
+              error={
+                isTokenByType && hasBreakdown
+                  ? tokensByBreakdownAndType.error
+                  : isTokenByType
+                    ? tokensByTypeStat.error
+                    : costMode === 'tokens'
+                      ? tokensTotalByBreakdown.error
+                      : costTokens.error
+              }
+              breakdownLabel={breakdownPromLabel}
+              height={CHART_HEIGHT}
+              unit={costMode === 'tokens' ? 'short' : 'currencyUSD'}
+              segmentLabel={isTokenByType && hasBreakdown ? 'gen_ai_token_type' : undefined}
+              segmentNames={isTokenByType && hasBreakdown ? drilldownTypes : undefined}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -790,19 +776,19 @@ function getStyles(theme: GrafanaTheme2) {
       padding: theme.spacing(1.5, 0),
       borderBottom: `1px solid ${theme.colors.border.weak}`,
     }),
-    panelRowFirstStat: css({
+    panelRowEqual: css({
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: theme.spacing(1),
+    }),
+    panelRowWithStat: css({
       display: 'grid',
       gridTemplateColumns: '2fr 3fr 3fr',
       gap: theme.spacing(1),
     }),
-    panelRowLatency: css({
+    panelRowFull: css({
       display: 'grid',
-      gridTemplateColumns: '3fr 2fr',
-      gap: theme.spacing(1),
-    }),
-    panelRowLatencyFull: css({
-      display: 'grid',
-      gridTemplateColumns: '3fr 2fr 3fr',
+      gridTemplateColumns: '1fr',
       gap: theme.spacing(1),
     }),
     panelActions: css({
