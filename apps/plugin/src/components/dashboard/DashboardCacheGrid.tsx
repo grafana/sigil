@@ -180,6 +180,73 @@ export function DashboardCacheGrid({
     [cacheByModelData.data]
   );
 
+  const allDataLoading =
+    cacheReadStat.loading ||
+    cacheWriteStat.loading ||
+    inputTokensStat.loading ||
+    cacheByModelData.loading ||
+    resolvedPricing.loading ||
+    cacheHitRateTimeseries.loading ||
+    cacheTokensTimeseries.loading ||
+    cacheReadByBreakdown.loading;
+
+  const insightDataContext = useMemo(() => {
+    if (allDataLoading) {
+      return null;
+    }
+    const hasAnyData =
+      hasResponseData(cacheReadStat.data) ||
+      hasResponseData(cacheWriteStat.data) ||
+      hasResponseData(inputTokensStat.data) ||
+      hasResponseData(cacheHitRateTimeseries.data);
+    if (!hasAnyData) {
+      return null;
+    }
+    const parts = [
+      'Cache dashboard context:',
+      `Breakdown: ${breakdownBy}`,
+      '',
+      `Cache hit rate: ${cacheHitRate.toFixed(2)}%`,
+      `Cache read tokens: ${cacheReadValue}`,
+      `Cache write tokens: ${cacheWriteValue}`,
+      `Input tokens: ${inputTokensValue}`,
+      `Estimated savings (USD): $${savings.savings.toFixed(4)}`,
+    ];
+    if (savings.byModel.length > 0) {
+      parts.push('');
+      parts.push('Savings by model:');
+      for (const m of savings.byModel) {
+        parts.push(
+          `  ${m.provider}/${m.model}: $${m.savings.toFixed(4)} saved, cache_hit_rate=${m.cacheHitRate.toFixed(1)}%`
+        );
+      }
+    }
+    parts.push('');
+    parts.push(summarizeMatrix(cacheHitRateTimeseries.data, 'Cache hit rate over time'));
+    parts.push(summarizeMatrix(cacheTokensTimeseries.data, 'Cache read vs write over time'));
+    if (hasBreakdown) {
+      parts.push(summarizeVector(cacheReadByBreakdown.data, `Cache read by ${breakdownBy}`));
+    }
+    return parts.join('\n');
+  }, [
+    allDataLoading,
+    breakdownBy,
+    cacheHitRate,
+    cacheReadValue,
+    cacheWriteValue,
+    inputTokensValue,
+    savings,
+    cacheReadStat.data,
+    cacheWriteStat.data,
+    inputTokensStat.data,
+    cacheHitRateTimeseries.data,
+    cacheTokensTimeseries.data,
+    hasBreakdown,
+    cacheReadByBreakdown.data,
+  ]);
+
+  const insightPrompt = `Analyze this GenAI cache dashboard. Breakdown: ${breakdownBy}. Only flag significant findings — low cache utilization, savings opportunities, model-specific inefficiencies, or actionable issues. Skip anything that looks normal.`;
+
   const timeseriesDefaults = { fillOpacity: 6, showPoints: 'never', lineWidth: 2 };
   const tooltipOptions = { mode: 'multi', sort: 'desc' };
   const chartOptions = {
