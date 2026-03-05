@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Badge, Button, Spinner, Stack, Text, useStyles2 } from '@grafana/ui';
+import { Alert, Badge, Button, ConfirmModal, Spinner, Stack, Text, useStyles2 } from '@grafana/ui';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
 import {
@@ -89,6 +89,8 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
   const [rollbackOutputKeys, setRollbackOutputKeys] = useState<
     Array<{ key: string; type: 'number' | 'bool' | 'string' }> | undefined
   >(undefined);
+
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Version compare state
   const [selectedVersions, setSelectedVersions] = useState<string[]>([]);
@@ -261,6 +263,18 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
 
   return (
     <div className={styles.pageContainer}>
+      <ConfirmModal
+        isOpen={confirmDelete}
+        title="Delete template"
+        body={`Are you sure you want to delete template "${templateID}"? This cannot be undone.`}
+        confirmText="Delete"
+        icon="trash-alt"
+        onConfirm={() => {
+          setConfirmDelete(false);
+          void handleDelete();
+        }}
+        onDismiss={() => setConfirmDelete(false)}
+      />
       {errorMessage.length > 0 && (
         <Alert severity="error" title="Error" onRemove={() => setErrorMessage('')}>
           <Text>{errorMessage}</Text>
@@ -294,7 +308,7 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
             Fork to Evaluator
           </Button>
           {template.scope === 'tenant' && (
-            <Button variant="destructive" icon="trash-alt" onClick={handleDelete}>
+            <Button variant="destructive" icon="trash-alt" onClick={() => setConfirmDelete(true)}>
               Delete
             </Button>
           )}
