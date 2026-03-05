@@ -23,6 +23,11 @@ const CACHE_KEY_PREFIX = 'sigil.page-insight-bar.v1';
 const GENERATE_LOCK_MS = 30 * 1000;
 const inFlightGenerateByCacheKey = new Map<string, number>();
 
+/** Clears the generate lock map. Used by tests to ensure isolation. */
+export function clearGenerateLockForTests(): void {
+  inFlightGenerateByCacheKey.clear();
+}
+
 type CachedInsight = {
   generatedAt: number;
   text: string;
@@ -120,13 +125,13 @@ export function PageInsightBar({
     if (lastRequestKeyRef.current === cacheKey) {
       return;
     }
-    const latestCached = newestCachedInsight;
-    const cacheAgeMs = latestCached ? Date.now() - latestCached.generatedAt : Number.POSITIVE_INFINITY;
+    const hasExactCache = !!exactCachedInsight;
+    const exactCacheAgeMs = exactCachedInsight ? Date.now() - exactCachedInsight.generatedAt : Number.POSITIVE_INFINITY;
     lastRequestKeyRef.current = cacheKey;
-    if (!latestCached || cacheAgeMs >= REFRESH_INTERVAL_MS) {
+    if (!hasExactCache || exactCacheAgeMs >= REFRESH_INTERVAL_MS) {
       runGenerate(dataContext, cacheKey, fallbackCacheKey);
     }
-  }, [cacheKey, dataContext, fallbackCacheKey, gen.isGenerating, newestCachedInsight, runGenerate]);
+  }, [cacheKey, dataContext, fallbackCacheKey, exactCachedInsight, gen.isGenerating, runGenerate]);
 
   useEffect(() => {
     if (!dataContext) {

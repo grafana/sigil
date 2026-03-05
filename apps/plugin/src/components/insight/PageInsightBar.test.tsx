@@ -1,6 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { PageInsightBar } from './PageInsightBar';
+import { PageInsightBar, clearGenerateLockForTests } from './PageInsightBar';
 
 const mockGenerate = jest.fn();
 const mockOpenAssistant = jest.fn();
@@ -25,6 +25,7 @@ describe('PageInsightBar', () => {
     mockIsGenerating = false;
     mockContent = '';
     localStorage.clear();
+    clearGenerateLockForTests();
   });
 
   it('renders waiting placeholder when data context is null', () => {
