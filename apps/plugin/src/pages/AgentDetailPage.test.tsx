@@ -13,7 +13,7 @@ function createDataSource(): AgentsDataSource {
   return {
     listAgents: jest.fn(async () => ({ items: [], next_cursor: '' })),
     lookupAgentRating: jest.fn(async () => ({
-      status: 'completed',
+      status: 'completed' as const,
       score: 8,
       summary: 'Top-line report summary.\nSecond line details.',
       suggestions: [],
