@@ -376,21 +376,19 @@ const getStyles = (theme: GrafanaTheme2) => ({
     appearance: 'none' as const,
     outline: 'none',
     borderRadius: theme.shape.radius.default,
-    border: '1px solid transparent',
+    border: 'none',
     background: theme.colors.background.canvas,
     padding: theme.spacing(0.5, 0.75),
     display: 'flex',
     flexDirection: 'column' as const,
     gap: theme.spacing(0.25),
     cursor: 'pointer',
-    transition: 'border-color 0.15s ease, background 0.15s ease',
+    transition: 'background 0.15s ease',
     '&:hover': {
-      borderColor: theme.colors.border.medium,
       background: theme.colors.action.hover,
     },
   }),
   recentVersionBoxActive: css({
-    borderColor: theme.colors.primary.border,
     background: theme.colors.primary.transparent,
   }),
   recentVersionContent: css({
@@ -437,7 +435,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
   recentVersionTimelineMarker: css({
     position: 'relative' as const,
     height: 14,
-    width: '100%',
+    width: `calc(100% + ${theme.spacing(1.5)})`,
+    marginLeft: `-${theme.spacing(0.75)}`,
     '&::before': {
       content: '""',
       position: 'absolute' as const,
@@ -1370,7 +1369,9 @@ export default function AgentDetailPage({
 
       <div className={styles.primaryPanelsRow}>
         <div className={cx(styles.panel, styles.plainPanel, styles.stretchPanel)}>
-          <div className={cx(styles.panelBody, styles.plainPanelBody, styles.versionsPanelBody, styles.stretchPanelBody)}>
+          <div
+            className={cx(styles.panelBody, styles.plainPanelBody, styles.versionsPanelBody, styles.stretchPanelBody)}
+          >
             <span className={styles.statsHeaderLabel}>Versions</span>
             <div className={styles.versionControls}>
               <div className={styles.versionSelect}>

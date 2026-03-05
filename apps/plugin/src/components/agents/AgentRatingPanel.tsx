@@ -1142,7 +1142,11 @@ export default function AgentRatingPanel({
               {formatSuggestionCategory(selectedSuggestion.category).toUpperCase()}
             </Text>
             <div className={styles.modalBody}>
-              {isPreviewView ? <MarkdownPreview markdown={selectedSuggestion.description} /> : selectedSuggestion.description}
+              {isPreviewView ? (
+                <MarkdownPreview markdown={selectedSuggestion.description} />
+              ) : (
+                selectedSuggestion.description
+              )}
             </div>
             <div className={styles.modalActions}>
               <Button variant="secondary" icon="ai" onClick={() => onExplainSuggestion(selectedSuggestion)}>
