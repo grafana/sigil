@@ -29,6 +29,7 @@ import type { ConversationSearchResult } from '../../conversation/types';
 import { PLUGIN_BASE, buildConversationViewRoute } from '../../constants';
 import { PageInsightBar } from '../insight/PageInsightBar';
 import { summarizeVector, summarizeMatrix, hasResponseData } from '../insight/summarize';
+import { DashboardSummaryBar } from './DashboardSummaryBar';
 
 export type DashboardErrorsGridProps = {
   dataSource: DashboardDataSource;
@@ -41,7 +42,7 @@ export type DashboardErrorsGridProps = {
   onTimeRangeChange: (timeRange: TimeRange) => void;
 };
 
-const CHART_HEIGHT = 320;
+const CHART_HEIGHT = 250;
 
 const noThresholds = {
   mode: ThresholdsMode.Absolute,
@@ -202,7 +203,7 @@ export function DashboardErrorsGrid({
   return (
     <div className={styles.gridWrapper}>
       {/* Top stats */}
-      <div className={styles.statsRow}>
+      <DashboardSummaryBar>
         <TopStat
           label="Total Errors"
           value={totalErrorsValue}
@@ -222,7 +223,7 @@ export function DashboardErrorsGrid({
           invertChange
           comparisonLabel={comparisonLabel}
         />
-      </div>
+      </DashboardSummaryBar>
 
       <PageInsightBar
         prompt={insightPrompt}
@@ -511,12 +512,6 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'flex',
       flexDirection: 'column',
       gap: theme.spacing(3),
-    }),
-    statsRow: css({
-      display: 'flex',
-      gap: theme.spacing(4),
-      padding: theme.spacing(1.5, 0),
-      borderBottom: `1px solid ${theme.colors.border.weak}`,
     }),
     panelRow: css({
       display: 'grid',

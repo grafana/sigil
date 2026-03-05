@@ -43,6 +43,6 @@ Rules:
 - Do not use force push.
 - Do not amend commits unless explicitly requested.
 - Keep commits focused and readable.
-- Use `babysit:` in every babysitting commit message.
+- Use `[/babysit]` as a prefix in every babysitting commit message.
 - Prefer small, low-risk fixes; escalate big/risky items for user interaction.
 - Report each cycle briefly: current check status, detected failure, fix applied, commit hash, and push result.

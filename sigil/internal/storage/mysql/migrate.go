@@ -69,6 +69,18 @@ func (s *WALStore) AutoMigrate(ctx context.Context) error {
 		}
 	}
 
+	// Backfill first_generation_at for existing rows that still have the
+	// column default (CURRENT_TIMESTAMP). Use last_generation_at as the best
+	// available approximation — it equals the true first generation timestamp
+	// for single-generation conversations and is at least a generation-clock
+	// value (not server-clock) for multi-generation ones.
+	if err := s.db.WithContext(ctx).Exec(
+		"UPDATE conversations SET first_generation_at = last_generation_at WHERE first_generation_at > last_generation_at",
+	).Error; err != nil {
+		s.logger.Error("mysql first_generation_at backfill failed", "err", err)
+		return fmt.Errorf("backfill first_generation_at: %w", err)
+	}
+
 	s.logger.Info("mysql auto-migrate completed")
 	return nil
 }
