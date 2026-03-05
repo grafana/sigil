@@ -16,6 +16,7 @@ concurrency:
 
 permissions:
   contents: read
+  id-token: write
   packages: write
 
 jobs:
@@ -54,3 +55,15 @@ jobs:
             --cache-to "type=registry,ref=$IMAGE_REPOSITORY:buildcache,mode=max" \
             --push \
             ./sigil
+
+      - name: Trigger Argo workflow
+        uses: grafana/shared-workflows/actions/trigger-argo-workflow@e100806688f1209051080dfea5719fbbd1d18cc0 # trigger-argo-workflow/v1.2.1
+        with:
+          instance: 'ops'
+          namespace: 'sigil-cd'
+          workflow_template: 'deploy-sigil-stack'
+          parameters: |
+            commit=${{ github.sha }}
+            commit_author=${{ github.actor }}
+            commit_link=https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+            dockertag=${{ github.sha }}
