@@ -45,8 +45,6 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         assistantOrigin="grafana/sigil-plugin/dashboard"
         requestsDataSource={dataSource}
         requestsFilters={filters}
-        requestsFrom={from}
-        requestsTo={to}
       />
       <DashboardFilterBar
         timeRange={timeRange}

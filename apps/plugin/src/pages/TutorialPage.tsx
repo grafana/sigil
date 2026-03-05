@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { css, cx, keyframes } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { useStyles2 } from '@grafana/ui';
@@ -252,6 +252,32 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
 
 const TUTORIAL_SLUGS = new Set(TUTORIAL_SLIDES.map((slide) => slide.slug));
 
+const TYPEWRITER_MS_PER_CHAR = 28;
+
+function TypewriterSubtitle({ text, className }: { text: string; className: string }) {
+  const [displayed, setDisplayed] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setDisplayed(text);
+      return;
+    }
+    setDisplayed('');
+    let i = 0;
+    const id = setInterval(() => {
+      if (i >= text.length) {
+        clearInterval(id);
+        return;
+      }
+      setDisplayed(text.slice(0, i + 1));
+      i += 1;
+    }, TYPEWRITER_MS_PER_CHAR);
+    return () => clearInterval(id);
+  }, [text]);
+
+  return <p className={className}>{displayed}</p>;
+}
+
 function getTutorialBasePath(pathname: string): string {
   const marker = `/${ROUTES.Tutorial}`;
   const markerIndex = pathname.indexOf(marker);
@@ -348,13 +374,13 @@ export default function TutorialPage() {
         <div className={styles.content}>
           <div className={styles.slideLayout}>
             <div className={styles.textContent}>
-              <p className={styles.subtitle}>{slide.subtitle}</p>
+              <TypewriterSubtitle text={slide.subtitle} className={styles.subtitle} key={currentIndex} />
               {slide.subtitleBadge ? <p className={styles.subtitleBadge}>{slide.subtitleBadge}</p> : null}
               <div className={styles.body}>{slide.body}</div>
               {nextIndex !== null ? (
                 <div className={styles.contentFooter}>
-                  <Link to={getSlidePath(nextIndex, tutorialBasePath)} className={styles.nextButton}>
-                    Next
+                  <Link to={getSlidePath(nextIndex, tutorialBasePath)} className={styles.nextLink}>
+                    Next →
                   </Link>
                 </div>
               ) : null}
@@ -749,22 +775,15 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'flex',
       justifyContent: 'flex-end',
     }),
-    nextButton: css({
+    nextLink: css({
       textDecoration: 'none',
-      color: theme.colors.text.primary,
+      color: 'var(--tutorial-accent)',
       fontSize: theme.typography.h5.fontSize,
       fontWeight: theme.typography.fontWeightMedium,
       lineHeight: 1,
-      padding: theme.spacing(1.5, 2.5),
-      borderRadius: `calc(${theme.shape.radius.default} * 1.25)`,
-      border: `1px solid ${theme.colors.border.weak}`,
-      background: theme.colors.background.secondary,
-      transition: `background-color ${theme.transitions.duration.short}ms ease, border-color ${theme.transitions.duration.short}ms ease, transform ${theme.transitions.duration.short}ms ease`,
+      transition: `color ${theme.transitions.duration.short}ms ease`,
       '&:hover': {
-        color: theme.colors.text.primary,
-        background: theme.colors.action.hover,
-        borderColor: 'var(--tutorial-accent)',
-        transform: 'translateY(-1px)',
+        textDecoration: 'underline',
       },
       '&:focus-visible': {
         outline: `2px solid ${theme.colors.primary.main}`,

@@ -16,6 +16,7 @@ import type { DashboardDataSource } from '../../dashboard/api';
 import { computeRateInterval, computeStep, requestsOverTimeQuery } from '../../dashboard/queries';
 import { type DashboardFilters, type PrometheusMatrixResult, type PrometheusQueryResponse, emptyFilters } from '../../dashboard/types';
 import { defaultEvaluationDataSource } from '../../evaluation/api';
+import { useFilterUrlState } from '../../hooks/useFilterUrlState';
 import { ClaudeCodeLogo, CopilotLogo, CursorLogo } from './IdeLogos';
 
 type IdeKey = InstrumentationPromptIde;
@@ -229,10 +230,10 @@ function extractRequestsSeries(response: PrometheusQueryResponse): number[] {
     .filter((value) => Number.isFinite(value) && value >= 0);
 }
 
-function formatBarTime(from: number, to: number, index: number, count: number): string {
-  const range = to - from;
-  const ts = from + ((index + 0.5) / count) * range;
-  const date = new Date(ts);
+function formatBarTime(fromSec: number, toSec: number, index: number, count: number): string {
+  const range = toSec - fromSec;
+  const tsSec = fromSec + ((index + 0.5) / count) * range;
+  const date = new Date(tsSec * 1000);
   return date.toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -299,6 +300,15 @@ export function LandingTopBar({
   const styles = useStyles2(getStyles);
   const assistant = useAssistant();
   const navigate = useNavigate();
+  const { timeRange } = useFilterUrlState();
+  const dashboardFrom = useMemo(() => Math.floor(timeRange.from.valueOf() / 1000), [timeRange]);
+  const dashboardTo = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);
+  const from = requestsDataSource
+    ? (requestsFrom ?? dashboardFrom)
+    : (requestsFrom ?? 0);
+  const to = requestsDataSource
+    ? (requestsTo ?? dashboardTo)
+    : (requestsTo ?? 0);
   const [assistantInput, setAssistantInput] = useState('');
   const [selectedIde, setSelectedIde] = useState<IdeKey>('cursor');
   const [isAgentModalOpen, setIsAgentModalOpen] = useState(false);
@@ -426,19 +436,19 @@ export function LandingTopBar({
   const [requestSpineValues, setRequestSpineValues] = useState<number[] | null>(null);
 
   useEffect(() => {
-    if (!requestsDataSource || requestsFrom === undefined || requestsTo === undefined || requestsTo <= requestsFrom) {
+    if (!requestsDataSource || to <= from) {
       setRequestSpineHeights(null);
       setRequestSpineValues(null);
       return;
     }
     let cancelled = false;
-    const step = computeStep(requestsFrom, requestsTo);
+    const step = computeStep(from, to);
     const interval = computeRateInterval(step);
     const query = requestsOverTimeQuery(requestsFilters, interval, 'none');
 
     const loadRequestBars = async () => {
       try {
-        const response = await requestsDataSource.queryRange(query, requestsFrom, requestsTo, step);
+        const response = await requestsDataSource.queryRange(query, from, to, step);
         if (cancelled) {
           return;
         }
@@ -446,8 +456,14 @@ export function LandingTopBar({
         const nextHeights = normalizeValuesToHeights(values, spineCount);
         const nextValues = bucketValues(values, spineCount);
         if (nextHeights.length > 0) {
-          setRequestSpineHeights(nextHeights);
-          setRequestSpineValues(nextValues);
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              if (!cancelled) {
+                setRequestSpineHeights(nextHeights);
+                setRequestSpineValues(nextValues);
+              }
+            });
+          });
         } else {
           setRequestSpineHeights(null);
           setRequestSpineValues(null);
@@ -465,10 +481,9 @@ export function LandingTopBar({
     return () => {
       cancelled = true;
     };
-  }, [requestsDataSource, requestsFilters, requestsFrom, requestsTo, spineCount]);
+  }, [requestsDataSource, requestsFilters, from, to, spineCount]);
 
   const spineHeights = requestSpineHeights ?? emptyHeights;
-  const [isSpinesHovered, setIsSpinesHovered] = useState(false);
 
   const waveAt75Heights = useMemo(() => {
     const MIN_H = 25;
@@ -480,19 +495,13 @@ export function LandingTopBar({
     });
   }, [spineCount]);
 
-  const displayHeights =
-    isSpinesHovered && requestSpineHeights != null ? spineHeights : waveAt75Heights;
+  const displayHeights = requestSpineHeights != null ? spineHeights : waveAt75Heights;
 
   return (
     <>
       <div className={styles.pageFlow}>
         <div className={styles.heroBlock}>
-          <div
-            className={styles.heroSpines}
-            aria-hidden
-            onMouseEnter={() => setIsSpinesHovered(true)}
-            onMouseLeave={() => setIsSpinesHovered(false)}
-          >
+          <div className={styles.heroSpines} aria-hidden>
             {displayHeights.map((height, i) => {
               const t = i / (spineCount - 1);
               const color =
@@ -504,12 +513,7 @@ export function LandingTopBar({
                   ? formatRequestStat(requestSpineValues[i])
                   : null;
               const timeStr =
-                stat != null &&
-                requestsFrom != null &&
-                requestsTo != null &&
-                requestsTo > requestsFrom
-                  ? formatBarTime(requestsFrom, requestsTo, i, spineCount)
-                  : null;
+                stat != null && to > from ? formatBarTime(from, to, i, spineCount) : null;
               const tooltipContent =
                 stat != null ? (
                   <div className={styles.spineTooltipContent}>
@@ -525,16 +529,16 @@ export function LandingTopBar({
                   style={{
                     transform: `scaleY(${height / 100})`,
                     backgroundColor: color,
+                    transitionDelay:
+                      requestSpineHeights != null ? `${Math.min(i * 6, 150)}ms` : undefined,
                   }}
                 />
               );
               const slot = <div className={styles.heroSpineSlot}>{bar}</div>;
-              return tooltipContent != null ? (
-                <Tooltip key={i} content={tooltipContent} placement="top">
+              return (
+                <Tooltip key={i} content={tooltipContent ?? ''} placement="top">
                   {slot}
                 </Tooltip>
-              ) : (
-                <React.Fragment key={i}>{slot}</React.Fragment>
               );
             })}
           </div>
@@ -890,7 +894,7 @@ function getStyles(theme: GrafanaTheme2) {
       justifyContent: 'stretch',
       gap: 2,
       height: 32,
-      paddingTop: theme.spacing(1),
+      paddingTop: 0,
       paddingLeft: 0,
       paddingRight: 0,
       overflow: 'hidden',
@@ -911,7 +915,7 @@ function getStyles(theme: GrafanaTheme2) {
       borderTopLeftRadius: 1,
       borderTopRightRadius: 1,
       transformOrigin: 'bottom',
-      transition: 'transform 0.5s ease-out',
+      transition: 'transform 0.7s cubic-bezier(0.4, 0, 0.2, 1)',
     }),
     spineTooltipContent: css({
       label: 'landingTopBar-spineTooltipContent',
