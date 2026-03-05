@@ -216,7 +216,7 @@ function AgentContextLabel({ generation, fallbackModel }: { generation: Generati
   if (generation.stop_reason) {
     extraTags.push(`stop: ${generation.stop_reason}`);
   }
-  const hasExtra = extraTags.length > 0 || systemPrompt || tools.length > 0 || agentDetailUrl;
+  const hasExtra = extraTags.length > 0 || !!systemPrompt || tools.length > 0;
 
   if (!hasExtra) {
     return <span className={styles.agentLabel}>{label}</span>;
