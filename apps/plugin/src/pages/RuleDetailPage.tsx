@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Badge, Button, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
+import { Alert, Badge, Button, ConfirmModal, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { useOptionalEvalRulesDataContext } from '../contexts/EvalRulesDataContext';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
@@ -136,6 +136,7 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -292,9 +293,6 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
     if (!ruleID || isNew) {
       return;
     }
-    if (!window.confirm(`Delete rule "${ruleID}"?`)) {
-      return;
-    }
     setDeleting(true);
     setErrorMessage('');
     try {
@@ -363,6 +361,18 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
 
   return (
     <div className={styles.pageContainer}>
+      <ConfirmModal
+        isOpen={confirmDelete}
+        title="Delete rule"
+        body={`Are you sure you want to delete rule "${ruleID}"? This cannot be undone.`}
+        confirmText="Delete"
+        icon="trash-alt"
+        onConfirm={() => {
+          setConfirmDelete(false);
+          void handleDelete();
+        }}
+        onDismiss={() => setConfirmDelete(false)}
+      />
       <div className={styles.header}>
         <div className={styles.headerLeft}>
           <div>
@@ -377,7 +387,12 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
         </div>
         <div className={styles.actions}>
           {!isNew && (
-            <Button variant="destructive" onClick={handleDelete} disabled={deleting || saving} icon="trash-alt">
+            <Button
+              variant="destructive"
+              onClick={() => setConfirmDelete(true)}
+              disabled={deleting || saving}
+              icon="trash-alt"
+            >
               {deleting ? 'Deleting...' : 'Delete Rule'}
             </Button>
           )}

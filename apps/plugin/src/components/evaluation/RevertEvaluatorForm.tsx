@@ -17,18 +17,9 @@ export default function RevertEvaluatorForm({
   onSubmit,
   onCancel,
 }: RevertEvaluatorFormProps) {
-  const [version, setVersion] = useState(() => nextVersion(existingVersions));
-  const [touched, setTouched] = useState(false);
-
-  const isVersionEmpty = version.trim() === '';
-  const showVersionError = touched && isVersionEmpty;
+  const [version] = useState(() => nextVersion(existingVersions));
 
   const handleSubmit = () => {
-    setTouched(true);
-    if (isVersionEmpty) {
-      return;
-    }
-
     const req: CreateEvaluatorRequest = {
       evaluator_id: evaluator.evaluator_id,
       version: version.trim(),
@@ -41,19 +32,8 @@ export default function RevertEvaluatorForm({
 
   return (
     <FieldSet label={`Revert to version ${evaluator.version}`}>
-      <Field
-        label="New version"
-        description="This will create a new version with the same configuration."
-        required
-        invalid={showVersionError}
-        error={showVersionError ? 'Version is required' : undefined}
-      >
-        <Input
-          value={version}
-          onChange={(e) => setVersion(e.currentTarget.value)}
-          placeholder="YYYY-MM-DD"
-          width={20}
-        />
+      <Field label="New version" description="This will create a new version with the same configuration.">
+        <Input value={version} readOnly disabled width={20} />
       </Field>
 
       <Stack direction="row" gap={1}>

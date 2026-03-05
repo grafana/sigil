@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Badge, Button, IconButton, Text, useStyles2 } from '@grafana/ui';
+import { Badge, Button, ConfirmModal, IconButton, Text, useStyles2 } from '@grafana/ui';
 import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type TemplateDefinition } from '../../evaluation/types';
 
 export type TemplateTableProps = {
@@ -63,87 +63,104 @@ const getStyles = (theme: GrafanaTheme2) => ({
 
 export default function TemplateTable({ templates, onSelect, onDelete, onFork }: TemplateTableProps) {
   const styles = useStyles2(getStyles);
+  const [pendingDeleteID, setPendingDeleteID] = useState<string | null>(null);
 
   return (
-    <div className={styles.table}>
-      <div className={styles.header}>
-        <Text weight="medium" variant="bodySmall">
-          Template
-        </Text>
-        <Text weight="medium" variant="bodySmall">
-          Kind
-        </Text>
-        <Text weight="medium" variant="bodySmall">
-          Scope
-        </Text>
-        <Text weight="medium" variant="bodySmall">
-          Version
-        </Text>
-        <Text weight="medium" variant="bodySmall">
-          Description
-        </Text>
-        <Text weight="medium" variant="bodySmall">
-          Created
-        </Text>
-        <div />
-      </div>
-      {templates.map((template) => (
-        <div
-          key={template.template_id}
-          className={styles.row}
-          onClick={() => onSelect?.(template.template_id)}
-          role="row"
-        >
-          <div className={styles.templateId}>
-            <Text weight="medium" truncate>
-              {template.template_id}
-            </Text>
-          </div>
-          <div>
-            <Badge text={EVALUATOR_KIND_LABELS[template.kind]} color={getKindBadgeColor(template.kind)} />
-          </div>
-          <div>
-            <Badge text={template.scope} color={template.scope === 'global' ? 'orange' : 'blue'} />
-          </div>
-          <Text color="secondary" variant="bodySmall">
-            {template.latest_version}
+    <>
+      <ConfirmModal
+        isOpen={pendingDeleteID !== null}
+        title="Delete template"
+        body={`Are you sure you want to delete template "${pendingDeleteID}"? This cannot be undone.`}
+        confirmText="Delete"
+        icon="trash-alt"
+        onConfirm={() => {
+          if (pendingDeleteID) {
+            onDelete?.(pendingDeleteID);
+          }
+          setPendingDeleteID(null);
+        }}
+        onDismiss={() => setPendingDeleteID(null)}
+      />
+      <div className={styles.table}>
+        <div className={styles.header}>
+          <Text weight="medium" variant="bodySmall">
+            Template
           </Text>
-          <Text truncate color="secondary" variant="bodySmall">
-            {template.description || '—'}
+          <Text weight="medium" variant="bodySmall">
+            Kind
           </Text>
-          <Text color="secondary" variant="bodySmall">
-            {formatDate(template.created_at)}
+          <Text weight="medium" variant="bodySmall">
+            Scope
           </Text>
-          <div className={styles.actions}>
-            {onFork && (
-              <Button
-                variant="secondary"
-                size="sm"
-                icon="code-branch"
-                fill="text"
-                tooltip="Fork as evaluator"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onFork(template.template_id);
-                }}
-              >
-                Fork
-              </Button>
-            )}
-            {onDelete && template.scope === 'tenant' && (
-              <IconButton
-                name="trash-alt"
-                size="sm"
-                tooltip="Delete"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(template.template_id);
-                }}
-              />
-            )}
-          </div>
+          <Text weight="medium" variant="bodySmall">
+            Version
+          </Text>
+          <Text weight="medium" variant="bodySmall">
+            Description
+          </Text>
+          <Text weight="medium" variant="bodySmall">
+            Created
+          </Text>
+          <div />
         </div>
-      ))}
-    </div>
+        {templates.map((template) => (
+          <div
+            key={template.template_id}
+            className={styles.row}
+            onClick={() => onSelect?.(template.template_id)}
+            role="row"
+          >
+            <div className={styles.templateId}>
+              <Text weight="medium" truncate>
+                {template.template_id}
+              </Text>
+            </div>
+            <div>
+              <Badge text={EVALUATOR_KIND_LABELS[template.kind]} color={getKindBadgeColor(template.kind)} />
+            </div>
+            <div>
+              <Badge text={template.scope} color={template.scope === 'global' ? 'orange' : 'blue'} />
+            </div>
+            <Text color="secondary" variant="bodySmall">
+              {template.latest_version}
+            </Text>
+            <Text truncate color="secondary" variant="bodySmall">
+              {template.description || '—'}
+            </Text>
+            <Text color="secondary" variant="bodySmall">
+              {formatDate(template.created_at)}
+            </Text>
+            <div className={styles.actions}>
+              {onFork && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon="code-branch"
+                  fill="text"
+                  tooltip="Fork as evaluator"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onFork(template.template_id);
+                  }}
+                >
+                  Fork
+                </Button>
+              )}
+              {onDelete && template.scope === 'tenant' && (
+                <IconButton
+                  name="trash-alt"
+                  size="sm"
+                  tooltip="Delete"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPendingDeleteID(template.template_id);
+                  }}
+                />
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
