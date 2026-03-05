@@ -17,6 +17,7 @@ const mockDataSource: AgentsDataSource = {
       '# Support assistant system prompt',
       '',
       'You are the support assistant for production incidents.',
+      'Use **bold summaries** and link to [runbooks](https://grafana.com/docs/).',
       '',
       '## Operating rules',
       '- Start with a concise summary.',

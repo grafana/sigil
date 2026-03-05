@@ -216,7 +216,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
     borderRadius: theme.shape.radius.default,
     display: 'flex',
     flexWrap: 'wrap' as const,
+    justifyContent: 'center',
+    alignContent: 'center',
+    alignItems: 'center',
     gap: theme.spacing(4),
+    height: '100%',
     padding: theme.spacing(1.5),
   }),
   primaryPanelsRow: css({
@@ -238,6 +242,18 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: theme.spacing(2),
     gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
     alignItems: 'stretch',
+  }),
+  combinedPromptSections: css({
+    display: 'grid',
+    gap: theme.spacing(2),
+    gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
+    alignItems: 'start',
+  }),
+  sectionBlock: css({
+    minWidth: 0,
+  }),
+  sectionTitle: css({
+    marginBottom: theme.spacing(1),
   }),
   panel: css({
     borderRadius: theme.shape.radius.default,
@@ -1399,94 +1415,101 @@ export default function AgentDetailPage({
         </div>
       </div>
 
-      <div className={styles.promptPanelsRow}>
-        <div className={cx(styles.panel, styles.stretchPanel)}>
-          <div className={styles.panelHeader}>
-            <Text weight="medium">System prompt</Text>
-            <span className={styles.panelHeaderControls}>
-              <span className={styles.promptViewToggle} aria-label="System prompt view toggle">
-                <button
-                  type="button"
-                  className={cx(
-                    styles.promptViewToggleButton,
-                    systemPromptView === 'preview' && styles.promptViewToggleButtonActive
-                  )}
-                  aria-pressed={systemPromptView === 'preview'}
-                  onClick={() => setSystemPromptView('preview')}
+      <div className={cx(styles.panel, styles.stretchPanel)}>
+        <div className={styles.panelHeader}>
+          <Text weight="medium">System prompt and context analysis</Text>
+        </div>
+        <div className={cx(styles.panelBody, styles.stretchPanelBody)}>
+          <div className={styles.combinedPromptSections}>
+            <div className={styles.sectionBlock}>
+              <span className={styles.panelHeaderControls}>
+                <span className={styles.promptViewToggle} aria-label="System prompt view toggle">
+                  <button
+                    type="button"
+                    className={cx(
+                      styles.promptViewToggleButton,
+                      systemPromptView === 'preview' && styles.promptViewToggleButtonActive
+                    )}
+                    aria-pressed={systemPromptView === 'preview'}
+                    onClick={() => setSystemPromptView('preview')}
+                  >
+                    Preview
+                  </button>
+                  <button
+                    type="button"
+                    className={cx(
+                      styles.promptViewToggleButton,
+                      systemPromptView === 'markdown' && styles.promptViewToggleButtonActive
+                    )}
+                    aria-pressed={systemPromptView === 'markdown'}
+                    onClick={() => setSystemPromptView('markdown')}
+                  >
+                    Markdown
+                  </button>
+                </span>
+                <span
+                  className={cx(styles.tokenizeBtn, tokenizedSections['system'] && styles.tokenizeBtnActive)}
+                  onClick={() => toggleSection('system')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      toggleSection('system');
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                 >
-                  Preview
-                </button>
-                <button
-                  type="button"
-                  className={cx(
-                    styles.promptViewToggleButton,
-                    systemPromptView === 'markdown' && styles.promptViewToggleButtonActive
-                  )}
-                  aria-pressed={systemPromptView === 'markdown'}
-                  onClick={() => setSystemPromptView('markdown')}
-                >
-                  Markdown
-                </button>
+                  <Icon name="brackets-curly" size="xs" />
+                  {tokenizerLoading ? 'Loading\u2026' : 'Tokenize'}
+                </span>
+                {tokenizedSections['system'] && (
+                  <select
+                    className={styles.encodingSelect}
+                    aria-label="Tokenizer encoding"
+                    value={encodingOverride ?? ''}
+                    onChange={(e) => setEncodingOverride(e.target.value ? (e.target.value as EncodingName) : null)}
+                  >
+                    <option value="">Auto ({autoEncoding.replace('_base', '')})</option>
+                    {AVAILABLE_ENCODINGS.map((enc) => (
+                      <option key={enc.value} value={enc.value}>
+                        {enc.value.replace('_base', '')}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </span>
-              <span
-                className={cx(styles.tokenizeBtn, tokenizedSections['system'] && styles.tokenizeBtnActive)}
-                onClick={() => toggleSection('system')}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    toggleSection('system');
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-              >
-                <Icon name="brackets-curly" size="xs" />
-                {tokenizerLoading ? 'Loading\u2026' : 'Tokenize'}
-              </span>
-              {tokenizedSections['system'] && (
-                <select
-                  className={styles.encodingSelect}
-                  aria-label="Tokenizer encoding"
-                  value={encodingOverride ?? ''}
-                  onChange={(e) => setEncodingOverride(e.target.value ? (e.target.value as EncodingName) : null)}
-                >
-                  <option value="">Auto ({autoEncoding.replace('_base', '')})</option>
-                  {AVAILABLE_ENCODINGS.map((enc) => (
-                    <option key={enc.value} value={enc.value}>
-                      {enc.value.replace('_base', '')}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </span>
-          </div>
-          <div className={cx(styles.panelBody, styles.stretchPanelBody)}>
-            {detail.system_prompt.length > 0 ? (
-              tokenizedSections['system'] && encode && decode ? (
-                <div className={styles.systemPrompt}>
-                  <TokenizedText text={detail.system_prompt} encode={encode} decode={decode} />
-                </div>
-              ) : systemPromptView === 'preview' ? (
-                <div className={styles.systemPrompt}>
-                  <MarkdownPreview markdown={detail.system_prompt} />
-                </div>
+              {detail.system_prompt.length > 0 ? (
+                tokenizedSections['system'] && encode && decode ? (
+                  <div className={styles.systemPrompt}>
+                    <TokenizedText text={detail.system_prompt} encode={encode} decode={decode} />
+                  </div>
+                ) : systemPromptView === 'preview' ? (
+                  <div className={styles.systemPrompt}>
+                    <MarkdownPreview markdown={detail.system_prompt} />
+                  </div>
+                ) : (
+                  <pre className={styles.systemPrompt}>{detail.system_prompt}</pre>
+                )
               ) : (
-                <pre className={styles.systemPrompt}>{detail.system_prompt}</pre>
-              )
-            ) : (
-              <pre className={styles.systemPrompt}>No system prompt recorded.</pre>
-            )}
+                <pre className={styles.systemPrompt}>No system prompt recorded.</pre>
+              )}
+            </div>
+            <div className={styles.sectionBlock}>
+              <Text weight="medium" className={styles.sectionTitle}>
+                Prompt and context analysis
+              </Text>
+              <AgentRatingPanel
+                agentName={agentName}
+                version={activeVersion}
+                agentStateContext={agentStateContext}
+                dataSource={dataSource}
+                initialResult={initialRating}
+                initialLoading={initialRatingLoading || initialRating?.status === 'pending'}
+                initialError={initialRatingError}
+                embedded
+              />
+            </div>
           </div>
         </div>
-
-        <AgentRatingPanel
-          agentName={agentName}
-          version={activeVersion}
-          agentStateContext={agentStateContext}
-          dataSource={dataSource}
-          initialResult={initialRating}
-          initialLoading={initialRatingLoading || initialRating?.status === 'pending'}
-          initialError={initialRatingError}
-        />
       </div>
 
       <ToolsPanel

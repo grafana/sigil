@@ -51,6 +51,18 @@ const getStyles = (theme: GrafanaTheme2) => ({
     lineHeight: 1.45,
     whiteSpace: 'pre' as const,
   }),
+  inlineCode: css({
+    fontFamily: theme.typography.fontFamilyMonospace,
+    fontSize: theme.typography.bodySmall.fontSize,
+    background: theme.colors.background.secondary,
+    border: `1px solid ${theme.colors.border.weak}`,
+    borderRadius: theme.shape.radius.default,
+    padding: '0 4px',
+  }),
+  link: css({
+    color: theme.colors.text.link,
+    textDecoration: 'underline',
+  }),
 });
 
 export default function MarkdownPreview({ markdown, className }: MarkdownPreviewProps) {
@@ -64,7 +76,7 @@ export default function MarkdownPreview({ markdown, className }: MarkdownPreview
           const HeadingTag = `h${block.level}` as keyof React.JSX.IntrinsicElements;
           return (
             <HeadingTag key={`heading-${index}`} className={styles.heading}>
-              {block.text}
+              {renderInlineMarkdown(block.text, `heading-${index}`, styles)}
             </HeadingTag>
           );
         }
@@ -74,7 +86,7 @@ export default function MarkdownPreview({ markdown, className }: MarkdownPreview
             <ul key={`ul-${index}`} className={styles.list}>
               {block.items.map((item, itemIndex) => (
                 <li key={`${itemIndex}:${item}`} className={styles.listItem}>
-                  {item}
+                  {renderInlineMarkdown(item, `ul-${index}-${itemIndex}`, styles)}
                 </li>
               ))}
             </ul>
@@ -86,7 +98,7 @@ export default function MarkdownPreview({ markdown, className }: MarkdownPreview
             <ol key={`ol-${index}`} className={styles.list}>
               {block.items.map((item, itemIndex) => (
                 <li key={`${itemIndex}:${item}`} className={styles.listItem}>
-                  {item}
+                  {renderInlineMarkdown(item, `ol-${index}-${itemIndex}`, styles)}
                 </li>
               ))}
             </ol>
@@ -103,12 +115,113 @@ export default function MarkdownPreview({ markdown, className }: MarkdownPreview
 
         return (
           <p key={`paragraph-${index}`} className={styles.paragraph}>
-            {block.text}
+            {renderInlineMarkdown(block.text, `paragraph-${index}`, styles)}
           </p>
         );
       })}
     </div>
   );
+}
+
+function renderInlineMarkdown(
+  text: string,
+  keyPrefix: string,
+  styles: ReturnType<typeof getStyles>
+): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  const pattern =
+    /\[([^\]]+)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)|`([^`]+)`|\*\*([^*]+)\*\*|__([^_]+)__|\*([^*\n]+)\*|_([^_\n]+)_|~~([^~]+)~~/g;
+
+  let cursor = 0;
+  let tokenIndex = 0;
+
+  for (const match of text.matchAll(pattern)) {
+    const fullMatch = match[0];
+    const start = match.index ?? 0;
+    const end = start + fullMatch.length;
+
+    if (start > cursor) {
+      parts.push(text.slice(cursor, start));
+    }
+
+    if (match[1] && match[2]) {
+      const safeHref = sanitizeMarkdownUrl(match[2]);
+      if (safeHref) {
+        parts.push(
+          <a
+            key={`${keyPrefix}-link-${tokenIndex}`}
+            className={styles.link}
+            href={safeHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={match[3]}
+          >
+            {match[1]}
+          </a>
+        );
+      } else {
+        parts.push(match[1]);
+      }
+    } else if (match[4]) {
+      parts.push(
+        <code key={`${keyPrefix}-code-${tokenIndex}`} className={styles.inlineCode}>
+          {match[4]}
+        </code>
+      );
+    } else if (match[5] || match[6]) {
+      parts.push(<strong key={`${keyPrefix}-strong-${tokenIndex}`}>{match[5] ?? match[6]}</strong>);
+    } else if (match[7] || match[8]) {
+      parts.push(<em key={`${keyPrefix}-em-${tokenIndex}`}>{match[7] ?? match[8]}</em>);
+    } else if (match[9]) {
+      parts.push(<del key={`${keyPrefix}-del-${tokenIndex}`}>{match[9]}</del>);
+    } else {
+      parts.push(fullMatch);
+    }
+
+    cursor = end;
+    tokenIndex++;
+  }
+
+  if (cursor < text.length) {
+    parts.push(text.slice(cursor));
+  }
+
+  return parts;
+}
+
+function sanitizeMarkdownUrl(input: string): string | null {
+  const rawUrl = input.trim().replace(/[\t\r\n]/g, '');
+  if (rawUrl.length === 0) {
+    return null;
+  }
+
+  const hasDisallowedProtocol = /^(?:javascript|data|vbscript|file):/i.test(rawUrl);
+  if (hasDisallowedProtocol) {
+    return null;
+  }
+
+  const isRelativeUrl =
+    rawUrl.startsWith('/') ||
+    rawUrl.startsWith('./') ||
+    rawUrl.startsWith('../') ||
+    rawUrl.startsWith('#') ||
+    rawUrl.startsWith('?');
+
+  if (isRelativeUrl) {
+    return rawUrl;
+  }
+
+  try {
+    const parsedUrl = new URL(rawUrl);
+    const isAllowedProtocol =
+      parsedUrl.protocol === 'http:' ||
+      parsedUrl.protocol === 'https:' ||
+      parsedUrl.protocol === 'mailto:' ||
+      parsedUrl.protocol === 'tel:';
+    return isAllowedProtocol ? parsedUrl.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {

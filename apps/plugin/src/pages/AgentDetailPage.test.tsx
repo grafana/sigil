@@ -218,7 +218,7 @@ describe('AgentDetailPage', () => {
       const detail = await lookupAgent(name, version);
       return {
         ...detail,
-        system_prompt: '# Prompt heading\n\n- First bullet',
+        system_prompt: '# Prompt heading\n\nUse **bold** and [Docs](https://grafana.com/docs).\n\n- First bullet',
         system_prompt_prefix: '# Prompt heading',
       };
     });
@@ -233,6 +233,8 @@ describe('AgentDetailPage', () => {
 
     expect(await screen.findByText('Prompt heading')).toBeInTheDocument();
     expect(screen.queryByText('# Prompt heading')).not.toBeInTheDocument();
+    expect(screen.getByText('bold', { selector: 'strong' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Docs' })).toHaveAttribute('href', 'https://grafana.com/docs');
 
     fireEvent.click(screen.getByRole('button', { name: 'Markdown' }));
 

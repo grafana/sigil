@@ -16,6 +16,7 @@ export type AgentRatingPanelProps = {
   initialResult?: AgentRatingResponse | null;
   initialLoading?: boolean;
   initialError?: string;
+  embedded?: boolean;
 };
 
 const severityOrder = ['high', 'medium', 'low'] as const;
@@ -581,6 +582,7 @@ export default function AgentRatingPanel({
   initialResult = null,
   initialLoading = false,
   initialError = '',
+  embedded = false,
 }: AgentRatingPanelProps) {
   const styles = useStyles2(getStyles);
   const theme = useTheme2();
@@ -1006,21 +1008,8 @@ export default function AgentRatingPanel({
     ? String(rewriteAssistant.content ?? '')
     : rewriteMarkdown;
 
-  return (
-    <div className={styles.panel}>
-      <div className={styles.header}>
-        <Text weight="medium">Prompt and context analysis</Text>
-        {completedResult && (
-          <div
-            className={styles.headerRating}
-            style={headerRatingStyle(theme, completedResult.score)}
-            aria-label={`Rating ${completedResult.score}/10`}
-          >
-            <span className={styles.headerRatingValue}>{completedResult.score}</span>
-            <span className={styles.headerRatingSuffix}>/10</span>
-          </div>
-        )}
-      </div>
+  const panelBody = (
+    <>
       <div className={styles.body}>
         {running && (
           <div className={styles.loading}>
@@ -1144,6 +1133,27 @@ export default function AgentRatingPanel({
           </div>
         )}
       </div>
+    </>
+  );
+
+  return (
+    <div className={embedded ? undefined : styles.panel}>
+      {!embedded && (
+        <div className={styles.header}>
+          <Text weight="medium">Prompt and context analysis</Text>
+          {completedResult && (
+            <div
+              className={styles.headerRating}
+              style={headerRatingStyle(theme, completedResult.score)}
+              aria-label={`Rating ${completedResult.score}/10`}
+            >
+              <span className={styles.headerRatingValue}>{completedResult.score}</span>
+              <span className={styles.headerRatingSuffix}>/10</span>
+            </div>
+          )}
+        </div>
+      )}
+      {panelBody}
       {selectedSuggestion && (
         <div className={styles.modalBackdrop} role="presentation" onClick={closeSuggestionModal}>
           <div
