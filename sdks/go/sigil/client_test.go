@@ -94,6 +94,9 @@ func TestStartGenerationEnqueuesArtifacts(t *testing.T) {
 	if generationRecorder.lastGeneration.ConversationTitle != "Ticket triage" {
 		t.Fatalf("expected conversation title Ticket triage, got %q", generationRecorder.lastGeneration.ConversationTitle)
 	}
+	if got, ok := generationRecorder.lastGeneration.Metadata[spanAttrConversationTitle]; !ok || got != "Ticket triage" {
+		t.Fatalf("expected generation metadata %s=Ticket triage, got %#v", spanAttrConversationTitle, generationRecorder.lastGeneration.Metadata)
+	}
 
 	span := onlyGenerationSpan(t, recorder.Ended())
 	attrs := spanAttributeMap(span)

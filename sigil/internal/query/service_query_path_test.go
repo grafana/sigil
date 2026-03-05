@@ -110,6 +110,194 @@ func TestSearchConversationsForTenantAppliesTempoAndMySQLFilters(t *testing.T) {
 	}
 }
 
+func TestSearchConversationsForTenantUsesGenerationTitleWhenTempoTitleMissing(t *testing.T) {
+	base := time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)
+	conversationStore := &stubConversationStore{
+		items: map[string]storage.Conversation{
+			"conv-1": {
+				TenantID:         "tenant-a",
+				ConversationID:   "conv-1",
+				GenerationCount:  1,
+				CreatedAt:        base.Add(-5 * time.Minute),
+				LastGenerationAt: base.Add(-2 * time.Minute),
+				UpdatedAt:        base.Add(-2 * time.Minute),
+			},
+		},
+	}
+
+	generation := testGenerationPayload("gen-1", "conv-1", base.Add(-2*time.Minute))
+	generation.Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{
+		generationMetadataConversationKey: structpb.NewStringValue("Incident: generation-backed title"),
+	}}
+	walReader := &stubWALReader{
+		byID: map[string]*sigilv1.Generation{
+			"gen-1": generation,
+		},
+	}
+
+	service := NewServiceWithStores(conversationStore, feedback.NewMemoryStore())
+	service.walReader = walReader
+	service.fanOutStore = storage.NewFanOutStore(walReader, nil, nil)
+	service.tempoClient = &stubTempoClient{
+		searchResponses: []*TempoSearchResponse{{
+			Traces: []TempoTrace{
+				newTempoTrace("trace-1", base.Add(-2*time.Minute), "conv-1", "gen-1", "gpt-4o", "assistant", ""),
+			},
+		}},
+	}
+
+	response, err := service.SearchConversationsForTenant(context.Background(), "tenant-a", ConversationSearchRequest{
+		Filters:  `model = "gpt-4o"`,
+		PageSize: 20,
+		TimeRange: ConversationSearchTimeRange{
+			From: base.Add(-time.Hour),
+			To:   base,
+		},
+	})
+	if err != nil {
+		t.Fatalf("search conversations: %v", err)
+	}
+	if len(response.Conversations) != 1 {
+		t.Fatalf("expected one conversation, got %d", len(response.Conversations))
+	}
+	if response.Conversations[0].ConversationTitle != "Incident: generation-backed title" {
+		t.Fatalf("expected conversation title from generation metadata, got %q", response.Conversations[0].ConversationTitle)
+	}
+	if len(walReader.requestedGenerationIDs) == 0 || walReader.requestedGenerationIDs[0] != "gen-1" {
+		t.Fatalf("expected generation title lookup via wal reader, got %#v", walReader.requestedGenerationIDs)
+	}
+}
+
+func TestSearchConversationsForTenantPrefersGenerationTitleOverTempoTitle(t *testing.T) {
+	base := time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)
+	conversationStore := &stubConversationStore{
+		items: map[string]storage.Conversation{
+			"conv-1": {
+				TenantID:         "tenant-a",
+				ConversationID:   "conv-1",
+				GenerationCount:  1,
+				CreatedAt:        base.Add(-5 * time.Minute),
+				LastGenerationAt: base.Add(-2 * time.Minute),
+				UpdatedAt:        base.Add(-2 * time.Minute),
+			},
+		},
+	}
+
+	generation := testGenerationPayload("gen-1", "conv-1", base.Add(-2*time.Minute))
+	generation.Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{
+		generationMetadataConversationKey: structpb.NewStringValue("Incident: generation title"),
+	}}
+	walReader := &stubWALReader{
+		byID: map[string]*sigilv1.Generation{
+			"gen-1": generation,
+		},
+	}
+
+	trace := newTempoTrace("trace-1", base.Add(-2*time.Minute), "conv-1", "gen-1", "gpt-4o", "assistant", "")
+	trace.SpanSets[0].Spans[0].Attributes = append(
+		trace.SpanSets[0].Spans[0].Attributes,
+		TempoAttribute{Key: "sigil.conversation.title", Value: tempoStringValue("Incident: trace title")},
+	)
+
+	service := NewServiceWithStores(conversationStore, feedback.NewMemoryStore())
+	service.walReader = walReader
+	service.fanOutStore = storage.NewFanOutStore(walReader, nil, nil)
+	service.tempoClient = &stubTempoClient{
+		searchResponses: []*TempoSearchResponse{{
+			Traces: []TempoTrace{trace},
+		}},
+	}
+
+	response, err := service.SearchConversationsForTenant(context.Background(), "tenant-a", ConversationSearchRequest{
+		Filters:  `model = "gpt-4o"`,
+		PageSize: 20,
+		TimeRange: ConversationSearchTimeRange{
+			From: base.Add(-time.Hour),
+			To:   base,
+		},
+	})
+	if err != nil {
+		t.Fatalf("search conversations: %v", err)
+	}
+	if len(response.Conversations) != 1 {
+		t.Fatalf("expected one conversation, got %d", len(response.Conversations))
+	}
+	if response.Conversations[0].ConversationTitle != "Incident: generation title" {
+		t.Fatalf("expected generation title to win over tempo title, got %q", response.Conversations[0].ConversationTitle)
+	}
+}
+
+func TestSearchConversationsForTenantPrefersLatestGenerationTitleOverLatestSpanTitle(t *testing.T) {
+	base := time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)
+	conversationStore := &stubConversationStore{
+		items: map[string]storage.Conversation{
+			"conv-1": {
+				TenantID:         "tenant-a",
+				ConversationID:   "conv-1",
+				GenerationCount:  2,
+				CreatedAt:        base.Add(-8 * time.Minute),
+				LastGenerationAt: base.Add(-time.Minute),
+				UpdatedAt:        base.Add(-time.Minute),
+			},
+		},
+	}
+
+	oldGeneration := testGenerationPayload("gen-1", "conv-1", base.Add(-5*time.Minute))
+	oldGeneration.Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{
+		generationMetadataConversationKey: structpb.NewStringValue("Incident: old generation title"),
+	}}
+	newGeneration := testGenerationPayload("gen-2", "conv-1", base.Add(-time.Minute))
+	newGeneration.Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{
+		generationMetadataConversationKey: structpb.NewStringValue("Incident: latest generation title"),
+	}}
+
+	walReader := &stubWALReader{
+		byID: map[string]*sigilv1.Generation{
+			"gen-1": oldGeneration,
+			"gen-2": newGeneration,
+		},
+		byConversation: map[string][]*sigilv1.Generation{
+			"conv-1": {oldGeneration, newGeneration},
+		},
+	}
+
+	trace := newTempoTrace("trace-1", base.Add(-30*time.Second), "conv-1", "gen-1", "gpt-4o", "assistant", "")
+	trace.SpanSets[0].Spans[0].Attributes = append(
+		trace.SpanSets[0].Spans[0].Attributes,
+		TempoAttribute{Key: "sigil.conversation.title", Value: tempoStringValue("Incident: latest span title")},
+	)
+
+	service := NewServiceWithStores(conversationStore, feedback.NewMemoryStore())
+	service.walReader = walReader
+	service.fanOutStore = storage.NewFanOutStore(walReader, nil, nil)
+	service.tempoClient = &stubTempoClient{
+		searchResponses: []*TempoSearchResponse{{
+			Traces: []TempoTrace{trace},
+		}},
+	}
+
+	response, err := service.SearchConversationsForTenant(context.Background(), "tenant-a", ConversationSearchRequest{
+		Filters:  `model = "gpt-4o"`,
+		PageSize: 20,
+		TimeRange: ConversationSearchTimeRange{
+			From: base.Add(-time.Hour),
+			To:   base,
+		},
+	})
+	if err != nil {
+		t.Fatalf("search conversations: %v", err)
+	}
+	if len(response.Conversations) != 1 {
+		t.Fatalf("expected one conversation, got %d", len(response.Conversations))
+	}
+	if response.Conversations[0].ConversationTitle != "Incident: latest generation title" {
+		t.Fatalf("expected latest generation title to win, got %q", response.Conversations[0].ConversationTitle)
+	}
+	if len(walReader.requestedConversationIDs) == 0 || walReader.requestedConversationIDs[0] != "conv-1" {
+		t.Fatalf("expected conversation generation lookup, got %#v", walReader.requestedConversationIDs)
+	}
+}
+
 func TestSearchConversationsForTenantEmptyFilterUsesSDKNameGuard(t *testing.T) {
 	base := time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)
 	conversationStore := &stubConversationStore{
