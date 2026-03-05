@@ -4,11 +4,15 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"sort"
+	"strings"
 	"testing"
 )
 
 func TestDiscoverFromEnvRequiresEnableFlags(t *testing.T) {
+	resetDiscoveryEnv(t)
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
 		case "/v1/models":
@@ -32,6 +36,8 @@ func TestDiscoverFromEnvRequiresEnableFlags(t *testing.T) {
 }
 
 func TestDiscoverFromEnvRegistersEnabledProviders(t *testing.T) {
+	resetDiscoveryEnv(t)
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
 		case "/v1/models":
@@ -74,6 +80,8 @@ func TestDiscoverFromEnvRegistersEnabledProviders(t *testing.T) {
 }
 
 func TestDiscoverFromEnvSkipsAnthropicVertexOnInvalidCredentials(t *testing.T) {
+	resetDiscoveryEnv(t)
+
 	t.Setenv("SIGIL_EVAL_ANTHROPIC_VERTEX_ENABLED", "true")
 	t.Setenv("SIGIL_EVAL_ANTHROPIC_VERTEX_PROJECT", "vertex-project")
 	t.Setenv("SIGIL_EVAL_ANTHROPIC_VERTEX_CREDENTIALS_JSON", "{invalid-json}")
@@ -88,6 +96,8 @@ func TestDiscoverFromEnvSkipsAnthropicVertexOnInvalidCredentials(t *testing.T) {
 }
 
 func TestDiscoverFromEnvSkipsVertexAIWithoutProject(t *testing.T) {
+	resetDiscoveryEnv(t)
+
 	t.Setenv("SIGIL_EVAL_VERTEXAI_ENABLED", "true")
 
 	discovery := DiscoverFromEnv()
@@ -100,6 +110,8 @@ func TestDiscoverFromEnvSkipsVertexAIWithoutProject(t *testing.T) {
 }
 
 func TestDiscoverFromEnvOpenAICompatIndexed(t *testing.T) {
+	resetDiscoveryEnv(t)
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"data":[{"id":"test-model"}]}`))
@@ -142,4 +154,24 @@ func providerIDs(providers []ProviderInfo) []string {
 		ids = append(ids, provider.ID)
 	}
 	return ids
+}
+
+func resetDiscoveryEnv(t *testing.T) {
+	t.Helper()
+
+	for _, entry := range os.Environ() {
+		key, _, found := strings.Cut(entry, "=")
+		if !found {
+			continue
+		}
+		if strings.HasPrefix(key, "SIGIL_EVAL_") {
+			t.Setenv(key, "")
+		}
+	}
+
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("GOOGLE_API_KEY", "")
+	t.Setenv("GEMINI_API_KEY", "")
+	t.Setenv("AWS_REGION", "")
 }
