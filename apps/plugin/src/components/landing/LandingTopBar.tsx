@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { useAssistant } from '@grafana/assistant';
 import type { GrafanaTheme2 } from '@grafana/data';
@@ -66,7 +66,9 @@ const METRIC_WINDOW_MS = 24 * 60 * 60 * 1000;
 const PAGE_SIZE = 200;
 const MAX_PAGES = 10;
 const HERO_STATS_STORAGE_KEY = 'grafana-sigil-hero-stats';
-const HERO_STATS_CACHE_TTL_MS = 5 * 60 * 1000;
+const HERO_STATS_ANIMATION_MS = 600;
+const REQUEST_SPINE_STORAGE_KEY = 'grafana-sigil-request-spine';
+const REQUEST_SPINE_CACHE_TTL_MS = 15 * 60 * 1000;
 
 type StoredHeroStats = {
   fetched_at?: number;
@@ -78,6 +80,13 @@ type StoredHeroStats = {
 type HeroStatsCache = {
   stats: HeroStatItem[];
   fetchedAt?: number;
+};
+
+type StoredRequestSpine = {
+  fetched_at: number;
+  key: string;
+  heights: number[];
+  values: number[];
 };
 
 function readHeroStatsCache(): HeroStatsCache | null {
@@ -121,6 +130,57 @@ function readHeroStatsCache(): HeroStatsCache | null {
   }
 }
 
+export function buildRequestSpineCacheKey(query: string, from: number, to: number, spineCount: number): string {
+  // Use query + duration so relative ranges (for example "last 6h") can reuse
+  // cached bars across quick refreshes while still revalidating immediately.
+  return JSON.stringify({
+    query,
+    durationSec: Math.max(0, Math.floor(to - from)),
+    spineCount,
+  });
+}
+
+function readRequestSpineFromStorage(key: string): { heights: number[]; values: number[] } | null {
+  try {
+    const raw = localStorage.getItem(REQUEST_SPINE_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as StoredRequestSpine;
+    if (
+      parsed?.key !== key ||
+      !Array.isArray(parsed.heights) ||
+      !Array.isArray(parsed.values) ||
+      typeof parsed.fetched_at !== 'number'
+    ) {
+      return null;
+    }
+    if (Date.now() - parsed.fetched_at > REQUEST_SPINE_CACHE_TTL_MS) {
+      return null;
+    }
+    return {
+      heights: parsed.heights.filter((value) => Number.isFinite(value)).map((value) => Number(value)),
+      values: parsed.values.filter((value) => Number.isFinite(value)).map((value) => Number(value)),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveRequestSpineToStorage(key: string, heights: number[], values: number[]): void {
+  try {
+    const stored: StoredRequestSpine = {
+      fetched_at: Date.now(),
+      key,
+      heights,
+      values,
+    };
+    localStorage.setItem(REQUEST_SPINE_STORAGE_KEY, JSON.stringify(stored));
+  } catch {
+    // ignore
+  }
+}
+
 function loadHeroStatsFromStorage(): HeroStatItem[] | null {
   const cached = readHeroStatsCache();
   if (!cached) {
@@ -134,7 +194,9 @@ export function shouldFetchHeroStats(now = Date.now()): boolean {
   if (!cached?.fetchedAt) {
     return true;
   }
-  return now - cached.fetchedAt > HERO_STATS_CACHE_TTL_MS;
+  // Always revalidate in the background so cached stats render instantly
+  // while still converging to fresh backend values.
+  return now - cached.fetchedAt >= 0;
 }
 
 function saveHeroStatsToStorage(stats: HeroStatItem[]): void {
@@ -294,9 +356,9 @@ function normalizeValuesToHeights(values: number[], targetCount: number): number
     return [];
   }
   if (Math.abs(maxValue - minValue) < 1e-9) {
-    return bucketed.map(() => 56);
+    return bucketed.map(() => 60);
   }
-  const minHeight = 18;
+  const minHeight = 20;
   const maxHeight = 100;
   return bucketed.map((value) => {
     const t = (value - minValue) / (maxValue - minValue);
@@ -344,6 +406,20 @@ export function LandingTopBar({
       { label: 'Evaluations', route: ROUTES.Evaluation, cta: 'Manage evals', current: 0, previous: 0, loading: true },
     ];
   });
+  const heroStatsRef = useRef(heroStats);
+  const heroStatsAnimationFrameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    heroStatsRef.current = heroStats;
+  }, [heroStats]);
+
+  useEffect(() => {
+    return () => {
+      if (heroStatsAnimationFrameRef.current != null) {
+        cancelAnimationFrame(heroStatsAnimationFrameRef.current);
+      }
+    };
+  }, []);
 
   const selectedIdeConfig = useMemo(() => ideTabs.find((ide) => ide.key === selectedIde) ?? ideTabs[0], [selectedIde]);
   const selectedPrompt = useMemo(() => getInstrumentationPrompt(selectedIde), [selectedIde]);
@@ -425,8 +501,51 @@ export function LandingTopBar({
             loading: false,
           },
         ];
-        setHeroStats(next);
-        saveHeroStatsToStorage(next);
+        if (heroStatsAnimationFrameRef.current != null) {
+          cancelAnimationFrame(heroStatsAnimationFrameRef.current);
+          heroStatsAnimationFrameRef.current = null;
+        }
+
+        const previous = heroStatsRef.current;
+        const canAnimate =
+          previous.length === next.length &&
+          previous.every((item, index) => item.label === next[index].label && !item.loading && !next[index].loading);
+        const hasValueChange = previous.some(
+          (item, index) => item.current !== next[index].current || item.previous !== next[index].previous
+        );
+
+        if (!canAnimate || !hasValueChange) {
+          setHeroStats(next);
+          saveHeroStatsToStorage(next);
+          return;
+        }
+
+        const animationStart = performance.now();
+        const from = previous.map((item) => ({ ...item }));
+        const to = next.map((item) => ({ ...item }));
+        const animate = (timestamp: number) => {
+          const elapsed = timestamp - animationStart;
+          const progress = Math.min(1, elapsed / HERO_STATS_ANIMATION_MS);
+          const eased = 1 - Math.pow(1 - progress, 3);
+          const frame = from.map((item, index) => ({
+            ...item,
+            current: Math.round(item.current + (to[index].current - item.current) * eased),
+            previous: Math.round(item.previous + (to[index].previous - item.previous) * eased),
+            loading: false,
+          }));
+          setHeroStats(frame);
+
+          if (progress < 1) {
+            heroStatsAnimationFrameRef.current = requestAnimationFrame(animate);
+            return;
+          }
+
+          heroStatsAnimationFrameRef.current = null;
+          setHeroStats(to);
+          saveHeroStatsToStorage(to);
+        };
+
+        heroStatsAnimationFrameRef.current = requestAnimationFrame(animate);
       } catch {
         if (cancelled) {
           return;
@@ -446,24 +565,52 @@ export function LandingTopBar({
   const gradientColors = ['#5794F2', '#B877D9', '#FF9830'] as const;
   const spineCount = 48;
   const emptyHeights = useMemo(() => Array(spineCount).fill(0), [spineCount]);
-  const [requestSpineHeights, setRequestSpineHeights] = useState<number[] | null>(null);
-  const [requestSpineValues, setRequestSpineValues] = useState<number[] | null>(null);
+  const initialRequestSpineCache = useMemo(() => {
+    if (!requestsDataSource || to <= from) {
+      return null;
+    }
+    const step = computeStep(from, to);
+    const interval = computeRateInterval(step);
+    const query = requestsOverTimeQuery(requestsFilters, interval, 'none');
+    const cacheKey = buildRequestSpineCacheKey(query, from, to, spineCount);
+    const cached = readRequestSpineFromStorage(cacheKey);
+    if (!cached || cached.heights.length === 0 || cached.values.length === 0) {
+      return null;
+    }
+    return cached;
+  }, [requestsDataSource, requestsFilters, from, to, spineCount]);
+  const [requestSpineHeights, setRequestSpineHeights] = useState<number[] | null>(() => initialRequestSpineCache?.heights ?? null);
+  const [requestSpineValues, setRequestSpineValues] = useState<number[] | null>(() => initialRequestSpineCache?.values ?? null);
+  const [disableSpineAnimation, setDisableSpineAnimation] = useState<boolean>(() => initialRequestSpineCache != null);
   const [requestSpineWaveReason, setRequestSpineWaveReason] = useState<
     null | 'loading' | 'no-data' | 'error'
-  >(null);
+  >(() => (requestsDataSource && to > from && initialRequestSpineCache == null ? 'loading' : null));
 
   useEffect(() => {
     if (!requestsDataSource || to <= from) {
+      setDisableSpineAnimation(false);
       setRequestSpineHeights(null);
       setRequestSpineValues(null);
       setRequestSpineWaveReason(null);
       return;
     }
-    setRequestSpineWaveReason('loading');
     let cancelled = false;
     const step = computeStep(from, to);
     const interval = computeRateInterval(step);
     const query = requestsOverTimeQuery(requestsFilters, interval, 'none');
+    const cacheKey = buildRequestSpineCacheKey(query, from, to, spineCount);
+    const cached = readRequestSpineFromStorage(cacheKey);
+    const hasCached = cached != null && cached.heights.length > 0 && cached.values.length > 0;
+
+    if (hasCached) {
+      setDisableSpineAnimation(true);
+      setRequestSpineHeights(cached.heights);
+      setRequestSpineValues(cached.values);
+      setRequestSpineWaveReason(null);
+    } else {
+      setDisableSpineAnimation(false);
+      setRequestSpineWaveReason('loading');
+    }
 
     const loadRequestBars = async () => {
       try {
@@ -476,21 +623,29 @@ export function LandingTopBar({
         const nextValues = bucketValues(values, spineCount);
         if (nextHeights.length > 0) {
           setRequestSpineWaveReason(null);
+          saveRequestSpineToStorage(cacheKey, nextHeights, nextValues);
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
               if (!cancelled) {
+                setDisableSpineAnimation(false);
                 setRequestSpineHeights(nextHeights);
                 setRequestSpineValues(nextValues);
               }
             });
           });
         } else {
+          if (hasCached) {
+            return;
+          }
           setRequestSpineHeights(null);
           setRequestSpineValues(null);
           setRequestSpineWaveReason('no-data');
         }
       } catch {
         if (!cancelled) {
+          if (hasCached) {
+            return;
+          }
           setRequestSpineHeights(null);
           setRequestSpineValues(null);
           setRequestSpineWaveReason('error');
@@ -508,8 +663,8 @@ export function LandingTopBar({
   const spineHeights = requestSpineHeights ?? emptyHeights;
 
   const waveAt75Heights = useMemo(() => {
-    const MIN_H = 25;
-    const MAX_H = 75;
+    const MIN_H = 20;
+    const MAX_H = 100;
     return Array.from({ length: spineCount }, (_, i) => {
       const t = i / (spineCount - 1);
       const wave = 0.5 + 0.5 * Math.sin(2 * Math.PI * (t - 0.5));
@@ -568,8 +723,9 @@ export function LandingTopBar({
                   style={{
                     transform: `scaleY(${height / 100})`,
                     backgroundColor: color,
+                    transition: disableSpineAnimation ? 'none' : undefined,
                     transitionDelay:
-                      requestSpineHeights != null ? `${Math.min(i * 6, 150)}ms` : undefined,
+                      requestSpineHeights != null && !disableSpineAnimation ? `${Math.min(i * 6, 150)}ms` : undefined,
                   }}
                 />
               );
@@ -916,6 +1072,7 @@ function getStyles(theme: GrafanaTheme2) {
       alignItems: 'stretch',
       gap: theme.spacing(3),
       boxSizing: 'border-box',
+      marginTop: theme.spacing(-2),
       '@media (max-width: 1200px)': {
         gridTemplateColumns: '1fr',
       },
@@ -1032,7 +1189,7 @@ function getStyles(theme: GrafanaTheme2) {
     }),
     introducingLabel: css({
       label: 'landingTopBar-introducingLabel',
-      marginTop: theme.spacing(1),
+      marginTop: 0,
       textTransform: 'uppercase',
       letterSpacing: '0.08em',
       fontWeight: theme.typography.fontWeightMedium,

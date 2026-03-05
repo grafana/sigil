@@ -1,6 +1,6 @@
 import { defaultAgentsDataSource } from '../../agents/api';
 import type { AgentListItem } from '../../agents/types';
-import { countAgentsSeenInWindows, shouldFetchHeroStats } from './LandingTopBar';
+import { buildRequestSpineCacheKey, countAgentsSeenInWindows, shouldFetchHeroStats } from './LandingTopBar';
 
 const HERO_STATS_STORAGE_KEY = 'grafana-sigil-hero-stats';
 
@@ -48,7 +48,7 @@ describe('shouldFetchHeroStats', () => {
     localStorage.removeItem(HERO_STATS_STORAGE_KEY);
   });
 
-  it('returns false when cache is still fresh', () => {
+  it('returns true when cache is still fresh to revalidate in background', () => {
     const now = new Date('2026-03-04T12:00:00Z').getTime();
     localStorage.setItem(
       HERO_STATS_STORAGE_KEY,
@@ -60,7 +60,7 @@ describe('shouldFetchHeroStats', () => {
       })
     );
 
-    expect(shouldFetchHeroStats(now)).toBe(false);
+    expect(shouldFetchHeroStats(now)).toBe(true);
   });
 
   it('returns true when cache is stale or missing timestamp', () => {
@@ -85,5 +85,17 @@ describe('shouldFetchHeroStats', () => {
       })
     );
     expect(shouldFetchHeroStats(now)).toBe(true);
+  });
+});
+
+describe('buildRequestSpineCacheKey', () => {
+  it('reuses cache key across quick refreshes for same query and duration', () => {
+    const query = 'sum(rate(http_requests_total[5m]))';
+    const fromA = 1_700_000_000;
+    const toA = 1_700_021_600;
+    const fromB = 1_700_000_060;
+    const toB = 1_700_021_660;
+
+    expect(buildRequestSpineCacheKey(query, fromA, toA, 48)).toBe(buildRequestSpineCacheKey(query, fromB, toB, 48));
   });
 });
