@@ -173,9 +173,8 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
 
   const handleConfirmSave = useCallback(() => {
     setSaveModalOpen(false);
-    // saveName is always pre-filled with defaultSaveName when the modal opens,
-    // so trim() is sufficient — the empty fallback is purely defensive.
-    void toggleSave(saveName.trim())
+    // Pass undefined when blank so the fallback chain in toggleSave activates.
+    void toggleSave(saveName.trim() || undefined)
       .then((nowSaved) => {
         if (nowSaved === null) {
           return;
