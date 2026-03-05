@@ -42,7 +42,6 @@ export default function AssistantInsightsBanner({
   const styles = useStyles2(getStyles);
   const assistant = Assistant.useInlineAssistant();
   const fullAssistant = Assistant.useAssistant();
-  const [, setRawAssistantText] = useState('');
   const [insights, setInsights] = useState<InsightItem[]>([]);
   const [currentInsightIndex, setCurrentInsightIndex] = useState(0);
   const [typedLength, setTypedLength] = useState(0);
@@ -91,7 +90,6 @@ export default function AssistantInsightsBanner({
   }, [typedLength]);
 
   const resetInsights = useCallback(() => {
-    setRawAssistantText('');
     setInsights([]);
     setCurrentInsightIndex(0);
     setTypedLength(0);
@@ -111,7 +109,6 @@ export default function AssistantInsightsBanner({
       systemPrompt: currentSystemPrompt,
       onComplete: (result: string) => {
         const generatedAt = Date.now();
-        setRawAssistantText(result);
         const parsedInsights = parseInsights(result);
         if (result.trim().length > 0 && parsedInsights.length === 0) {
           console.error('Assistant insights parse failed: no valid insight lines found.');
@@ -123,8 +120,6 @@ export default function AssistantInsightsBanner({
       },
       onError: (err: Error) => {
         console.error('Assistant insights generation failed:', err);
-        setRawAssistantText('');
-        setInsights([]);
       },
     });
   }, []);
@@ -146,7 +141,6 @@ export default function AssistantInsightsBanner({
     const cached = readCachedInsights(cacheKey) ?? readCachedInsights(fallbackCacheKey);
     if (cached) {
       queueMicrotask(() => {
-        setRawAssistantText(cached.insights.join('\n'));
         setInsights(cached.insights.map((text) => ({ text, generatedAt: cached.generatedAt })));
         setCurrentInsightIndex(0);
         setTypedLength(0);
