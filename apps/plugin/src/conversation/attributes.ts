@@ -6,6 +6,7 @@ export const ATTR_SDK_NAME = 'sigil.sdk.name';
 export const ATTR_OPERATION_NAME = 'gen_ai.operation.name';
 export const ATTR_PROVIDER_NAME = 'gen_ai.provider.name';
 export const ATTR_CONVERSATION_ID = 'gen_ai.conversation.id';
+export const ATTR_CONVERSATION_TITLE = 'sigil.conversation.title';
 export const ATTR_AGENT_NAME = 'gen_ai.agent.name';
 export const ATTR_AGENT_VERSION = 'gen_ai.agent.version';
 

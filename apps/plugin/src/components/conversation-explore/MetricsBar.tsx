@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { cx } from '@emotion/css';
 import { Icon, Tooltip, useStyles2 } from '@grafana/ui';
 import type { CostSummary, TokenSummary } from '../../conversation/aggregates';
@@ -7,8 +7,11 @@ import ModelCardPopover from '../conversations/ModelCardPopover';
 import { getProviderColor, stripProviderPrefix, toDisplayProvider } from '../conversations/providerMeta';
 import { getStyles } from './MetricsBar.styles';
 
+const TYPEWRITER_STEP_MS = 28;
+
 export type MetricsBarProps = {
   conversationID: string;
+  conversationTitle?: string;
   totalDurationMs: number;
   tokenSummary: TokenSummary | null;
   costSummary: CostSummary | null;
@@ -20,6 +23,46 @@ export type MetricsBarProps = {
   isSaved?: boolean;
   onToggleSave?: () => void;
 };
+
+type ConversationLabelProps = {
+  label: string;
+  animate: boolean;
+  className: string;
+  cursorClassName: string;
+};
+
+function ConversationLabel({ label, animate, className, cursorClassName }: ConversationLabelProps) {
+  const [typedLabel, setTypedLabel] = useState(() => (animate ? '' : label));
+
+  useEffect(() => {
+    if (!animate || label.length === 0) {
+      return;
+    }
+
+    let index = 0;
+    const interval = window.setInterval(() => {
+      index += 1;
+      setTypedLabel(label.slice(0, index));
+      if (index >= label.length) {
+        window.clearInterval(interval);
+      }
+    }, TYPEWRITER_STEP_MS);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [animate, label]);
+
+  const visibleLabel = animate ? typedLabel : label;
+  const showCursor = animate && typedLabel.length < label.length;
+
+  return (
+    <span className={className}>
+      {visibleLabel}
+      {showCursor && <span className={cursorClassName}>|</span>}
+    </span>
+  );
+}
 
 function formatDuration(ms: number): string {
   if (ms < 1000) {
@@ -52,6 +95,7 @@ function formatTokenCount(count: number): string {
 
 export default function MetricsBar({
   conversationID,
+  conversationTitle,
   totalDurationMs,
   tokenSummary,
   costSummary,
@@ -65,6 +109,13 @@ export default function MetricsBar({
 }: MetricsBarProps) {
   const styles = useStyles2(getStyles);
   const [openModel, setOpenModel] = useState<{ key: string; anchorRect: DOMRect } | null>(null);
+  const normalizedConversationTitle = conversationTitle?.trim() ?? '';
+  const conversationLabel = normalizedConversationTitle.length > 0 ? normalizedConversationTitle : conversationID;
+  const prefersReducedMotion =
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const animateConversationLabel = normalizedConversationTitle.length > 0 && !prefersReducedMotion;
 
   const uniqueModels = Array.from(new Set(models));
   const cardsByModelName = useMemo(() => {
@@ -85,8 +136,14 @@ export default function MetricsBar({
 
   return (
     <div className={styles.container}>
-      <Tooltip content={conversationID} placement="bottom">
-        <span className={styles.conversationId}>{conversationID}</span>
+      <Tooltip content={conversationLabel} placement="bottom">
+        <ConversationLabel
+          key={conversationLabel}
+          label={conversationLabel}
+          animate={animateConversationLabel}
+          className={cx(styles.conversationId, animateConversationLabel && styles.conversationTitle)}
+          cursorClassName={styles.typewriterCursor}
+        />
       </Tooltip>
 
       <div className={styles.separator} />
