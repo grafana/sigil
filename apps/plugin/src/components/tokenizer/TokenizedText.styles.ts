@@ -1,7 +1,7 @@
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 
-export function getTransparencyPct(theme: GrafanaTheme2): number {
+function getTransparencyPct(theme: GrafanaTheme2): number {
   return theme.isDark ? 75 : 65;
 }
 

@@ -4,7 +4,7 @@ import type { EncodingName } from './encodingMap';
 type EncodeFn = (text: string) => number[];
 type DecodeFn = (tokens: number[]) => string;
 
-export type TokenizerModule = {
+type TokenizerModule = {
   encode: EncodeFn;
   decode: DecodeFn;
 };
