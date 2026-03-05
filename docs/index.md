@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-03-04
+last_reviewed: 2026-03-05
 source_of_truth: true
 audience: both
 ---
@@ -67,6 +67,7 @@ This is the canonical navigation map for repository documentation.
   - OpenAI Agents/LlamaIndex/Google ADK framework integration delivery: `exec-plans/completed/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
   - Vercel AI SDK TypeScript integration delivery: `exec-plans/completed/2026-02-22-sdk-vercel-ai-sdk-integration.md`
   - Sigil image and plugin artifact publish delivery: `exec-plans/completed/2026-03-02-sigil-image-and-plugin-publish.md`
+  - Sigil automatic dev/ops Argo deployment delivery: `exec-plans/completed/2026-03-05-sigil-cd-dev-ops-auto-deploy.md`
   - Runtime role split and distributed Helm topology delivery: `exec-plans/completed/2026-03-02-runtime-role-split.md`
   - Conversation details Jaeger-style tree port: `exec-plans/completed/2026-03-03-conversation-jaeger-tree.md`
   - Eval saved conversations: `exec-plans/completed/2026-03-04-eval-saved-conversations.md`
@@ -92,6 +93,7 @@ This is the canonical navigation map for repository documentation.
     - `exec-plans/completed/2026-02-20-sdk-langchain-langgraph-integrations.md`
     - `exec-plans/completed/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
     - `exec-plans/completed/2026-03-02-sigil-image-and-plugin-publish.md`
+    - `exec-plans/completed/2026-03-05-sigil-cd-dev-ops-auto-deploy.md`
     - `exec-plans/completed/2026-03-02-runtime-role-split.md`
     - `exec-plans/completed/2026-03-03-conversation-jaeger-tree.md`
   - Tech debt tracker: [`exec-plans/tech-debt-tracker.md`](exec-plans/tech-debt-tracker.md)
