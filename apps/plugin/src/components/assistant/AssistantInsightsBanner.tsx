@@ -52,6 +52,7 @@ export default function AssistantInsightsBanner({
   const [typedHistory, setTypedHistory] = useState<Record<string, true>>(() => readTypedHistory());
   const [minHeight, setMinHeight] = useState(0);
   const maxHeightRef = useRef(0);
+  const typedLengthRef = useRef(0);
   const contentRef = useRef<HTMLDivElement>(null);
   const latestRef = useRef({ prompt, origin, systemPrompt, assistant });
   const lastDataContextRef = useRef<string | null>(null);
@@ -84,6 +85,10 @@ export default function AssistantInsightsBanner({
   useEffect(() => {
     latestRef.current = { prompt, origin, systemPrompt, assistant };
   });
+
+  useEffect(() => {
+    typedLengthRef.current = typedLength;
+  }, [typedLength]);
 
   const resetInsights = useCallback(() => {
     setRawAssistantText('');
@@ -243,9 +248,10 @@ export default function AssistantInsightsBanner({
     if (!currentInsightText.length || isHovered) {
       return;
     }
-    let nextLength = typedLength;
+    const insightLength = currentInsightText.length;
+    let nextLength = typedLengthRef.current;
     let pauseTimeoutId: number | undefined;
-    if (nextLength >= currentInsightText.length) {
+    if (nextLength >= insightLength) {
       if (insights.length > 1) {
         pauseTimeoutId = window.setTimeout(() => {
           setCurrentInsightIndex((prev) => (prev + 1) % insights.length);
@@ -258,13 +264,15 @@ export default function AssistantInsightsBanner({
       };
     }
     const typeInterval = window.setInterval(() => {
-      nextLength += 1;
-      setTypedLength(nextLength);
-      if (nextLength >= currentInsightText.length) {
+      setTypedLength((prev) => {
+        nextLength = Math.min(prev + 1, insightLength);
+        return nextLength;
+      });
+      if (nextLength >= insightLength) {
         window.clearInterval(typeInterval);
         pauseTimeoutId = window.setTimeout(() => {
           if (insights.length <= 1) {
-            setTypedLength(currentInsightText.length);
+            setTypedLength(insightLength);
             return;
           }
           setCurrentInsightIndex((prev) => (prev + 1) % insights.length);
@@ -277,7 +285,7 @@ export default function AssistantInsightsBanner({
         window.clearTimeout(pauseTimeoutId);
       }
     };
-  }, [currentInsightText, insights.length, isHovered, typedLength]);
+  }, [currentInsightText, insights.length, isHovered]);
 
   useEffect(() => {
     const cursorInterval = window.setInterval(() => {
