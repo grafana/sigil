@@ -51,8 +51,58 @@ function titleFromSpan(span: ConversationSpan): string | null {
   return titleFromMetadata(span.generation?.metadata);
 }
 
-function titleFromSpans(spans: ConversationSpan[]): string | null {
+function generationCreatedAtMs(generation: GenerationDetail): number | null {
+  if (typeof generation.created_at !== 'string') {
+    return null;
+  }
+  const parsed = Date.parse(generation.created_at);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function titleFromLatestGeneration(generations: GenerationDetail[]): string | null {
+  let bestTitle: string | null = null;
+  let bestTimestamp: number | null = null;
+  let bestIndex = -1;
+
+  generations.forEach((generation, index) => {
+    const title = titleFromMetadata(generation.metadata);
+    if (!title) {
+      return;
+    }
+
+    const timestamp = generationCreatedAtMs(generation);
+    if (bestTitle === null) {
+      bestTitle = title;
+      bestTimestamp = timestamp;
+      bestIndex = index;
+      return;
+    }
+
+    if (timestamp !== null) {
+      if (bestTimestamp === null || timestamp > bestTimestamp || (timestamp === bestTimestamp && index > bestIndex)) {
+        bestTitle = title;
+        bestTimestamp = timestamp;
+        bestIndex = index;
+      }
+      return;
+    }
+
+    if (bestTimestamp === null && index > bestIndex) {
+      bestTitle = title;
+      bestIndex = index;
+    }
+  });
+
+  return bestTitle;
+}
+
+function titleFromLatestSpans(spans: ConversationSpan[]): string | null {
   const stack = [...spans];
+  let bestTitle: string | null = null;
+  let bestStart: bigint | null = null;
+  let bestOrder = -1;
+  let order = 0;
+
   while (stack.length > 0) {
     const span = stack.shift();
     if (!span) {
@@ -61,26 +111,34 @@ function titleFromSpans(spans: ConversationSpan[]): string | null {
 
     const title = titleFromSpan(span);
     if (title) {
-      return title;
+      if (
+        bestStart === null ||
+        span.startTimeUnixNano > bestStart ||
+        (span.startTimeUnixNano === bestStart && order > bestOrder)
+      ) {
+        bestTitle = title;
+        bestStart = span.startTimeUnixNano;
+        bestOrder = order;
+      }
     }
 
     if (span.children.length > 0) {
       stack.unshift(...span.children);
     }
+    order += 1;
   }
-  return null;
+
+  return bestTitle;
 }
 
 export function resolveConversationTitleFromTelemetry(
   generations: GenerationDetail[],
   spans: ConversationSpan[]
 ): string | null {
-  for (const generation of generations) {
-    const title = titleFromMetadata(generation.metadata);
-    if (title) {
-      return title;
-    }
+  const latestGenerationTitle = titleFromLatestGeneration(generations);
+  if (latestGenerationTitle) {
+    return latestGenerationTitle;
   }
 
-  return titleFromSpans(spans);
+  return titleFromLatestSpans(spans);
 }

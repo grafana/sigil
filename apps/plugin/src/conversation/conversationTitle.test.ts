@@ -74,6 +74,38 @@ describe('resolveConversationTitleFromTelemetry', () => {
     expect(title).toBe('Conversation title from metadata');
   });
 
+  it('prefers latest generation metadata title by timestamp', () => {
+    const older = makeGeneration({
+      generation_id: 'gen-old',
+      created_at: '2026-03-05T09:00:00Z',
+      metadata: { 'sigil.conversation.title': 'Earlier title' },
+    });
+    const latest = makeGeneration({
+      generation_id: 'gen-latest',
+      created_at: '2026-03-05T10:00:00Z',
+      metadata: { 'sigil.conversation.title': 'Latest title' },
+    });
+
+    const title = resolveConversationTitleFromTelemetry([older, latest], []);
+    expect(title).toBe('Latest title');
+  });
+
+  it('falls back to latest span title by start time when generation title is absent', () => {
+    const older = makeSpan({
+      spanID: 'span-old',
+      startTimeUnixNano: BigInt(1),
+      attributes: attrs([['sigil.conversation.title', { stringValue: 'Older span title' }]]),
+    });
+    const latest = makeSpan({
+      spanID: 'span-latest',
+      startTimeUnixNano: BigInt(2),
+      attributes: attrs([['sigil.conversation.title', { stringValue: 'Latest span title' }]]),
+    });
+
+    const title = resolveConversationTitleFromTelemetry([], [older, latest]);
+    expect(title).toBe('Latest span title');
+  });
+
   it('returns null when title is missing or blank', () => {
     const generation = makeGeneration({ metadata: { 'sigil.conversation.title': '   ' } });
     const span = makeSpan({

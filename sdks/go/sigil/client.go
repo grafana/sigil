@@ -1000,11 +1000,12 @@ func (r *GenerationRecorder) normalizeGeneration(raw Generation, completedAt tim
 	if g.Metadata == nil {
 		g.Metadata = map[string]any{}
 	}
-	if g.ConversationTitle == "" {
-		g.ConversationTitle = metadataString(g.Metadata, spanAttrConversationTitle)
+	conversationTitle := strings.TrimSpace(g.ConversationTitle)
+	if conversationTitle == "" {
+		conversationTitle = metadataString(g.Metadata, spanAttrConversationTitle)
 	}
-	if conversationTitle := strings.TrimSpace(g.ConversationTitle); conversationTitle != "" {
-		g.ConversationTitle = conversationTitle
+	g.ConversationTitle = conversationTitle
+	if conversationTitle != "" {
 		g.Metadata[spanAttrConversationTitle] = conversationTitle
 	}
 	if g.UserID == "" {
