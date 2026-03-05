@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { AppEvents, type GrafanaTheme2 } from '@grafana/data';
-import { Alert, useStyles2 } from '@grafana/ui';
+import { Alert, Button, Input, Modal, useStyles2 } from '@grafana/ui';
 import { getAppEvents } from '@grafana/runtime';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
@@ -101,6 +101,12 @@ const getStyles = (theme: GrafanaTheme2) => ({
     minHeight: 0,
     overflow: 'hidden',
   }),
+  saveModal: css({
+    width: 400,
+  }),
+  saveModalInput: css({
+    paddingBottom: theme.spacing(0.5),
+  }),
 });
 
 export default function ConversationExplorePage(props: ConversationExplorePageProps) {
@@ -137,15 +143,24 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     toggleSave,
   } = useSavedConversation(conversationID, conversationTitle || conversationID);
 
+  const defaultSaveName = conversationTitle || conversationID;
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [saveName, setSaveName] = useState('');
+
   const handleToggleSave = useCallback(() => {
+    if (!isSaved) {
+      setSaveName(defaultSaveName);
+      setSaveModalOpen(true);
+      return;
+    }
     void toggleSave()
       .then((nowSaved) => {
         if (nowSaved === null) {
           return;
         }
         getAppEvents().publish({
-          type: AppEvents.alertSuccess.name,
-          payload: [nowSaved ? 'Conversation saved' : 'Conversation unsaved'],
+          type: AppEvents.alertWarning.name,
+          payload: ['Conversation unsaved'],
         });
       })
       .catch(() => {
@@ -154,7 +169,29 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
           payload: ['Failed to update save status'],
         });
       });
-  }, [toggleSave]);
+  }, [isSaved, toggleSave, defaultSaveName]);
+
+  const handleConfirmSave = useCallback(() => {
+    setSaveModalOpen(false);
+    // saveName is always pre-filled with defaultSaveName when the modal opens,
+    // so trim() is sufficient — the empty fallback is purely defensive.
+    void toggleSave(saveName.trim())
+      .then((nowSaved) => {
+        if (nowSaved === null) {
+          return;
+        }
+        getAppEvents().publish({
+          type: AppEvents.alertSuccess.name,
+          payload: ['Conversation saved'],
+        });
+      })
+      .catch(() => {
+        getAppEvents().publish({
+          type: AppEvents.alertWarning.name,
+          payload: ['Failed to save conversation'],
+        });
+      });
+  }, [toggleSave, saveName]);
 
   const VALID_GROUP_BY = new Set<FlowGroupBy>(['none', 'agent', 'model', 'provider']);
   const VALID_SORT_BY = new Set<FlowSortBy>(['time', 'duration', 'tokens', 'cost']);
@@ -389,6 +426,32 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
 
   return (
     <div className={styles.pageContainer}>
+      <Modal
+        title="Save conversation"
+        isOpen={saveModalOpen}
+        onDismiss={() => setSaveModalOpen(false)}
+        className={styles.saveModal}
+      >
+        <div className={styles.saveModalInput}>
+          <Input
+            value={saveName}
+            placeholder={defaultSaveName}
+            onChange={(e) => setSaveName(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleConfirmSave();
+              }
+            }}
+            autoFocus
+          />
+        </div>
+        <Modal.ButtonRow>
+          <Button variant="secondary" onClick={() => setSaveModalOpen(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleConfirmSave}>Save</Button>
+        </Modal.ButtonRow>
+      </Modal>
       <MetricsBar
         conversationID={conversationID}
         totalDurationMs={totalDurationMs}
