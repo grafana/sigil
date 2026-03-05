@@ -76,7 +76,10 @@ const mockDataSource: EvaluationDataSource = {
   forkPredefinedEvaluator: async (_templateID: string, _req: ForkEvaluatorRequest) => mockEvaluators[0],
   createRule: async (req: CreateRuleRequest) => ({ ...mockRule, rule_id: req.rule_id }),
   getRule: async () => mockRule,
-  updateRule: async (_id: string, req: UpdateRuleRequest) => ({ ...mockRule, enabled: req.enabled }),
+  updateRule: async (_id: string, req: UpdateRuleRequest) => ({
+    ...mockRule,
+    ...(req.enabled != null && { enabled: req.enabled }),
+  }),
   deleteRule: async () => {},
   previewRule: async (_req: RulePreviewRequest) => mockPreview,
   listJudgeProviders: async (): Promise<JudgeProviderListResponse> => ({ providers: [] }),

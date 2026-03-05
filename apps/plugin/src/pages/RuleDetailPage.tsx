@@ -266,7 +266,13 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
         };
         await dataSource.createRule(req);
       } else {
-        const req: UpdateRuleRequest = { enabled };
+        const req: UpdateRuleRequest = {
+          enabled,
+          selector,
+          match,
+          sample_rate: sampleRate,
+          evaluator_ids: evaluatorIDs,
+        };
         await dataSource.updateRule(ruleID!, req);
       }
       evalRulesContext?.refetch();
@@ -319,15 +325,13 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
   );
 
   const validationErrors: string[] = [];
-  if (isNew) {
-    if (!ruleIDInput.trim()) {
-      validationErrors.push('Rule ID');
-    }
-    if (evaluatorIDs.length === 0) {
-      validationErrors.push('Evaluators');
-    }
+  if (isNew && !ruleIDInput.trim()) {
+    validationErrors.push('Rule ID');
   }
-  const canSave = isNew ? validationErrors.length === 0 : true;
+  if (evaluatorIDs.length === 0) {
+    validationErrors.push('Evaluators');
+  }
+  const canSave = validationErrors.length === 0;
 
   if (loading) {
     return (
@@ -377,7 +381,7 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
           <Button variant="secondary" onClick={handleCancel} disabled={saving || deleting}>
             Cancel
           </Button>
-          {isNew && !canSave ? (
+          {!canSave ? (
             <Tooltip content={`Missing required: ${validationErrors.join(', ')}`}>
               <span>
                 <Button variant="primary" disabled icon="save">
@@ -392,7 +396,7 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
               disabled={saving || deleting}
               icon={saving ? undefined : 'save'}
             >
-              {saving ? 'Saving...' : isNew ? 'Save Rule' : 'Update Enabled Status'}
+              {saving ? 'Saving...' : isNew ? 'Save Rule' : 'Update Rule'}
             </Button>
           )}
         </div>
@@ -426,7 +430,6 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
               onSampleRateChange={setSampleRate}
               onEvaluatorIDsChange={setEvaluatorIDs}
               onRuleIDChange={setRuleIDInput}
-              disabled={!isNew}
             />
           </div>
         </div>

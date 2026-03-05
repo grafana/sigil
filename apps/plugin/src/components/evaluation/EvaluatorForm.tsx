@@ -12,15 +12,19 @@ import {
   type EvaluatorKind,
   type ScoreType,
 } from '../../evaluation/types';
+import { defaultEvaluationDataSource, type EvaluationDataSource } from '../../evaluation/api';
 import { nextVersion } from '../../evaluation/versionUtils';
 
 export type EvaluatorFormProps = {
   initialEvaluator?: Evaluator;
+  /** Pre-fill the form in create mode (e.g. when forking a template). */
+  prefill?: Partial<Evaluator>;
   /** When editing, pass existing versions so the form suggests a new unique version. */
   existingVersions?: string[];
   onSubmit: (req: CreateEvaluatorRequest) => void;
   onCancel: () => void;
   onConfigChange?: (state: EvalFormState) => void;
+  dataSource?: EvaluationDataSource;
 };
 
 const KIND_OPTIONS: Array<SelectableValue<EvaluatorKind>> = (
@@ -59,7 +63,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
 });
 
 function parseEvaluatorToFormState(
-  e: Evaluator,
+  e: Partial<Evaluator>,
   existingVersions?: string[]
 ): {
   evaluatorId: string;
@@ -78,6 +82,11 @@ function parseEvaluatorToFormState(
   outputType: ScoreType;
   outputDescription: string;
   outputEnum: string;
+  passThreshold: number | '';
+  outputMin: number | '';
+  outputMax: number | '';
+  passMatch: string;
+  passValue: 'true' | 'false' | '';
 } {
   const cfg = e.config ?? {};
   const firstOk = e.output_keys?.[0];
@@ -99,21 +108,30 @@ function parseEvaluatorToFormState(
     outputType: (firstOk?.type as ScoreType) ?? 'number',
     outputDescription: firstOk?.description ?? '',
     outputEnum: firstOk?.enum?.join(', ') ?? '',
+    passThreshold: firstOk?.pass_threshold ?? '',
+    outputMin: firstOk?.min ?? '',
+    outputMax: firstOk?.max ?? '',
+    passMatch: firstOk?.pass_match?.join(', ') ?? '',
+    passValue: firstOk?.pass_value != null ? (firstOk.pass_value ? 'true' : 'false') : '',
   };
 }
 
 export default function EvaluatorForm({
   initialEvaluator,
+  prefill,
   existingVersions,
   onSubmit,
   onCancel,
   onConfigChange,
+  dataSource,
 }: EvaluatorFormProps) {
   const styles = useStyles2(getStyles);
+  const ds = dataSource ?? defaultEvaluationDataSource;
   const isEdit = initialEvaluator != null;
+  const seedEvaluator = initialEvaluator ?? prefill;
   const initialState = useMemo(
-    () => (initialEvaluator != null ? parseEvaluatorToFormState(initialEvaluator, existingVersions) : null),
-    // Only needed for initial mount; initialEvaluator/existingVersions are stable for the component lifecycle.
+    () => (seedEvaluator != null ? parseEvaluatorToFormState(seedEvaluator, existingVersions) : null),
+    // Only needed for initial mount; seedEvaluator/existingVersions are stable for the component lifecycle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
@@ -123,11 +141,45 @@ export default function EvaluatorForm({
   const [kind, setKind] = useState<EvaluatorKind>(initialState?.kind ?? 'llm_judge');
   const [touched, setTouched] = useState(false);
 
-  // llm_judge: system_prompt, user_prompt, max_tokens, temperature
+  // llm_judge: provider, model, system_prompt, user_prompt, max_tokens, temperature
+  const [provider, setProvider] = useState(() => {
+    const cfg = seedEvaluator?.config;
+    return (cfg?.provider as string) ?? '';
+  });
+  const [model, setModel] = useState(() => {
+    const cfg = seedEvaluator?.config;
+    return (cfg?.model as string) ?? '';
+  });
+  const [providerOptions, setProviderOptions] = useState<Array<SelectableValue<string>>>([]);
+  const [modelOptions, setModelOptions] = useState<Array<SelectableValue<string>>>([]);
   const [systemPrompt, setSystemPrompt] = useState(initialState?.systemPrompt ?? '');
   const [userPrompt, setUserPrompt] = useState(initialState?.userPrompt ?? '');
   const [maxTokens, setMaxTokens] = useState(initialState?.maxTokens ?? 256);
   const [temperature, setTemperature] = useState(initialState?.temperature ?? 0);
+
+  // Load judge providers on mount
+  useEffect(() => {
+    void ds
+      .listJudgeProviders()
+      .then((res) => {
+        setProviderOptions(res.providers.map((p) => ({ label: p.name, value: p.id })));
+      })
+      .catch(() => {});
+  }, [ds]);
+
+  // Load models when provider changes
+  useEffect(() => {
+    if (!provider) {
+      setModelOptions([]);
+      return;
+    }
+    void ds
+      .listJudgeModels(provider)
+      .then((res) => {
+        setModelOptions(res.models.map((m) => ({ label: m.name, value: m.id })));
+      })
+      .catch(() => {});
+  }, [ds, provider]);
 
   // json_schema: schema
   const [schemaJson, setSchemaJson] = useState(initialState?.schemaJson ?? '{}');
@@ -145,6 +197,11 @@ export default function EvaluatorForm({
   const [outputType, setOutputType] = useState<ScoreType>(initialState?.outputType ?? 'number');
   const [outputDescription, setOutputDescription] = useState(initialState?.outputDescription ?? '');
   const [outputEnum, setOutputEnum] = useState(initialState?.outputEnum ?? '');
+  const [passThreshold, setPassThreshold] = useState<number | ''>(initialState?.passThreshold ?? '');
+  const [outputMin, setOutputMin] = useState<number | ''>(initialState?.outputMin ?? '');
+  const [outputMax, setOutputMax] = useState<number | ''>(initialState?.outputMax ?? '');
+  const [passMatch, setPassMatch] = useState(initialState?.passMatch ?? '');
+  const [passValue, setPassValue] = useState<'true' | 'false' | ''>(initialState?.passValue ?? '');
 
   const versionManuallyEdited = useRef(false);
   const prevExistingVersionsKey = useRef<string>('');
@@ -160,10 +217,17 @@ export default function EvaluatorForm({
     }
   }, [isEdit, existingVersions]);
 
+  // Preserve unknown config fields (e.g. provider, model) from the initial/prefill evaluator
+  // by spreading them first, then overriding with form-managed fields.
+  const baseConfig = seedEvaluator?.config ?? {};
+
   const buildConfig = (): Record<string, unknown> => {
     switch (kind) {
       case 'llm_judge':
         return {
+          ...baseConfig,
+          provider: provider || undefined,
+          model: model || undefined,
           system_prompt: systemPrompt || undefined,
           user_prompt: userPrompt || undefined,
           max_tokens: maxTokens,
@@ -171,20 +235,21 @@ export default function EvaluatorForm({
         };
       case 'json_schema':
         try {
-          return { schema: JSON.parse(schemaJson || '{}') };
+          return { ...baseConfig, schema: JSON.parse(schemaJson || '{}') };
         } catch {
-          return { schema: {} };
+          return { ...baseConfig, schema: {} };
         }
       case 'regex':
-        return { pattern: pattern || '' };
+        return { ...baseConfig, pattern: pattern || '' };
       case 'heuristic':
         return {
+          ...baseConfig,
           not_empty: notEmpty,
           min_length: minLength === '' ? undefined : minLength,
           max_length: maxLength === '' ? undefined : maxLength,
         };
       default:
-        return {};
+        return { ...baseConfig };
     }
   };
 
@@ -192,11 +257,25 @@ export default function EvaluatorForm({
     onConfigChange?.({
       kind,
       config: buildConfig(),
-      outputKeys: [buildOutputKeyFromForm(outputKey, outputType, outputDescription, outputEnum)],
+      outputKeys: [
+        buildOutputKeyFromForm({
+          key: outputKey,
+          type: outputType,
+          description: outputDescription,
+          enumValue: outputEnum,
+          passThreshold,
+          min: outputMin,
+          max: outputMax,
+          passMatch,
+          passValue,
+        }),
+      ],
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     kind,
+    provider,
+    model,
     systemPrompt,
     userPrompt,
     maxTokens,
@@ -210,6 +289,11 @@ export default function EvaluatorForm({
     outputType,
     outputDescription,
     outputEnum,
+    passThreshold,
+    outputMin,
+    outputMax,
+    passMatch,
+    passValue,
   ]);
 
   const isIdEmpty = evaluatorId.trim() === '';
@@ -221,7 +305,19 @@ export default function EvaluatorForm({
       return;
     }
 
-    const outputKeys: EvalOutputKey[] = [buildOutputKeyFromForm(outputKey, outputType, outputDescription, outputEnum)];
+    const outputKeys: EvalOutputKey[] = [
+      buildOutputKeyFromForm({
+        key: outputKey,
+        type: outputType,
+        description: outputDescription,
+        enumValue: outputEnum,
+        passThreshold,
+        min: outputMin,
+        max: outputMax,
+        passMatch,
+        passValue,
+      }),
+    ];
 
     const req: CreateEvaluatorRequest = {
       evaluator_id: evaluatorId.trim(),
@@ -277,6 +373,33 @@ export default function EvaluatorForm({
 
       {kind === 'llm_judge' && (
         <>
+          <Stack direction="row" gap={2}>
+            <Field label="Provider" description="LLM provider for the judge.">
+              <Select<string>
+                options={providerOptions}
+                value={provider || undefined}
+                onChange={(v) => {
+                  setProvider(v?.value ?? '');
+                  setModel('');
+                  setModelOptions([]);
+                }}
+                isClearable
+                placeholder="Default"
+                width={20}
+              />
+            </Field>
+            <Field label="Model" description="Model to use for judging.">
+              <Select<string>
+                options={modelOptions}
+                value={model || undefined}
+                onChange={(v) => setModel(v?.value ?? '')}
+                isClearable
+                allowCustomValue
+                placeholder="Default"
+                width={24}
+              />
+            </Field>
+          </Stack>
           <Field label="System prompt" description="Optional. Instructions for the judge model.">
             <textarea
               className={styles.textarea}
@@ -396,7 +519,14 @@ export default function EvaluatorForm({
           />
         </div>
       </Field>
-      <Field label="Output description" description="Optional description for the output key.">
+      <Field
+        label="Output description"
+        description={
+          kind === 'llm_judge'
+            ? 'Included in the LLM Judge prompt to guide scoring.'
+            : 'Optional metadata for the output key.'
+        }
+      >
         <Input
           value={outputDescription}
           onChange={(e) => setOutputDescription(e.currentTarget.value)}
@@ -414,6 +544,61 @@ export default function EvaluatorForm({
             onChange={(e) => setOutputEnum(e.currentTarget.value)}
             placeholder="e.g. none, mild, moderate, severe"
             width={60}
+          />
+        </Field>
+      )}
+      {outputType === 'number' && (
+        <Stack direction="row" gap={1}>
+          <Field label="Pass threshold" description="Score >= this value passes.">
+            <Input
+              type="number"
+              value={passThreshold}
+              onChange={(e) => setPassThreshold(e.currentTarget.value === '' ? '' : Number(e.currentTarget.value))}
+              placeholder="—"
+              width={12}
+            />
+          </Field>
+          <Field label="Min" description="Scores below this are dropped.">
+            <Input
+              type="number"
+              value={outputMin}
+              onChange={(e) => setOutputMin(e.currentTarget.value === '' ? '' : Number(e.currentTarget.value))}
+              placeholder="—"
+              width={12}
+            />
+          </Field>
+          <Field label="Max" description="Scores above this are dropped.">
+            <Input
+              type="number"
+              value={outputMax}
+              onChange={(e) => setOutputMax(e.currentTarget.value === '' ? '' : Number(e.currentTarget.value))}
+              placeholder="—"
+              width={12}
+            />
+          </Field>
+        </Stack>
+      )}
+      {outputType === 'string' && (
+        <Field label="Pass values" description="Comma-separated values that count as passing.">
+          <Input
+            value={passMatch}
+            onChange={(e) => setPassMatch(e.currentTarget.value)}
+            placeholder="e.g. none, mild"
+            width={60}
+          />
+        </Field>
+      )}
+      {outputType === 'bool' && (
+        <Field label="Pass when" description="Which boolean value counts as passing.">
+          <Select<string>
+            options={[
+              { label: 'true (default)', value: '' },
+              { label: 'true', value: 'true' },
+              { label: 'false', value: 'false' },
+            ]}
+            value={passValue}
+            onChange={(v) => setPassValue((v?.value ?? '') as 'true' | 'false' | '')}
+            width={20}
           />
         </Field>
       )}

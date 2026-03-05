@@ -105,6 +105,21 @@ export default function EvaluatorDetail({ evaluator }: EvaluatorDetailProps) {
                   threshold: {ok.pass_threshold}
                 </Text>
               )}
+              {ok.min != null && (
+                <Text color="secondary" variant="bodySmall">
+                  min: {ok.min}
+                </Text>
+              )}
+              {ok.max != null && (
+                <Text color="secondary" variant="bodySmall">
+                  max: {ok.max}
+                </Text>
+              )}
+              {ok.pass_match != null && ok.pass_match.length > 0 && (
+                <Text color="secondary" variant="bodySmall">
+                  pass values: {ok.pass_match.join(', ')}
+                </Text>
+              )}
             </div>
           ))}
         </div>

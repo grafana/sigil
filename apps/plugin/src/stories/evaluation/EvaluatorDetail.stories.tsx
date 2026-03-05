@@ -12,10 +12,31 @@ const mockLLMJudge: Evaluator = {
     max_tokens: 256,
     temperature: 0,
   },
-  output_keys: [{ key: 'helpfulness', type: 'number', pass_threshold: 7 }],
+  output_keys: [{ key: 'helpfulness', type: 'number', pass_threshold: 7, min: 1, max: 10 }],
   is_predefined: true,
   created_at: '2026-02-17T00:00:00Z',
   updated_at: '2026-02-17T00:00:00Z',
+};
+
+const mockStringJudge: Evaluator = {
+  evaluator_id: 'custom.severity',
+  version: '2026-03-04',
+  kind: 'llm_judge',
+  config: {
+    system_prompt: 'Classify the severity of the issue in the response.',
+    user_prompt: 'Input: {{input}}\n\nOutput: {{output}}\n\nClassify severity.',
+  },
+  output_keys: [
+    {
+      key: 'severity',
+      type: 'string',
+      enum: ['none', 'mild', 'moderate', 'severe'],
+      pass_match: ['none', 'mild'],
+    },
+  ],
+  is_predefined: false,
+  created_at: '2026-03-04T00:00:00Z',
+  updated_at: '2026-03-04T00:00:00Z',
 };
 
 const mockHeuristic: Evaluator = {
@@ -45,5 +66,11 @@ export const LLMJudge = {
 export const Heuristic = {
   args: {
     evaluator: mockHeuristic,
+  },
+};
+
+export const StringJudgeWithPassMatch = {
+  args: {
+    evaluator: mockStringJudge,
   },
 };

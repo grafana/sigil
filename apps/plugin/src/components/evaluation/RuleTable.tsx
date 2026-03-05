@@ -2,7 +2,13 @@ import React from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, Switch, Text, Tooltip, useStyles2 } from '@grafana/ui';
-import { formatEvaluatorId, SELECTOR_OPTIONS, type Evaluator, type Rule } from '../../evaluation/types';
+import {
+  formatEvaluatorId,
+  getKindBadgeColor,
+  SELECTOR_OPTIONS,
+  type Evaluator,
+  type Rule,
+} from '../../evaluation/types';
 
 export type RuleTableProps = {
   rules: Rule[];
@@ -96,9 +102,12 @@ export default function RuleTable({ rules, evaluators, onToggle, onClick }: Rule
       {rules.map((rule) => {
         const matchEntries = formatMatchEntries(rule.match);
         const matchDisplay = matchEntries.length === 0 ? '—' : matchEntries[0];
-        const evalNames = rule.evaluator_ids.map((id) => {
+        const evalEntries = rule.evaluator_ids.map((id) => {
           const evaluator = evaluators.find((e) => e.evaluator_id === id);
-          return evaluator ? formatEvaluatorId(evaluator.evaluator_id) : id;
+          return {
+            name: evaluator ? formatEvaluatorId(evaluator.evaluator_id) : id,
+            color: evaluator ? getKindBadgeColor(evaluator.kind) : ('blue' as const),
+          };
         });
 
         return (
@@ -148,8 +157,8 @@ export default function RuleTable({ rules, evaluators, onToggle, onClick }: Rule
               {Math.round(rule.sample_rate * 100)}%
             </Text>
             <div className={styles.evaluators}>
-              {evalNames.map((name) => (
-                <Badge key={name} text={name} color="purple" />
+              {evalEntries.map((entry) => (
+                <Badge key={entry.name} text={entry.name} color={entry.color} />
               ))}
             </div>
           </div>

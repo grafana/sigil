@@ -51,9 +51,9 @@ func (e *HeuristicEvaluator) Evaluate(_ context.Context, input EvalInput, defini
 		}
 	}
 
-	key, scoreType, unit, _ := firstOutputKey(definition, "heuristic_pass", evalpkg.ScoreTypeBool)
-	if scoreType != evalpkg.ScoreTypeBool {
-		return nil, evalpkg.Permanent(fmt.Errorf("heuristic evaluator output key %q must be bool", key))
+	meta := firstOutputKey(definition, "heuristic_pass", evalpkg.ScoreTypeBool)
+	if meta.Type != evalpkg.ScoreTypeBool {
+		return nil, evalpkg.Permanent(fmt.Errorf("heuristic evaluator output key %q must be bool", meta.Key))
 	}
 
 	metadata := map[string]any{"response_length": length}
@@ -74,10 +74,10 @@ func (e *HeuristicEvaluator) Evaluate(_ context.Context, input EvalInput, defini
 	}
 
 	return []ScoreOutput{{
-		Key:      key,
+		Key:      meta.Key,
 		Type:     evalpkg.ScoreTypeBool,
 		Value:    evalpkg.BoolValue(passed),
-		Unit:     unit,
+		Unit:     meta.Unit,
 		Passed:   boolPointer(passed),
 		Metadata: metadata,
 	}}, nil

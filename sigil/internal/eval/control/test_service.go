@@ -107,6 +107,11 @@ func (s *TestService) RunTest(ctx context.Context, tenantID string, req EvalTest
 		return nil, fmt.Errorf("evaluate: %w", err)
 	}
 
+	keyConstraints := make(map[string]evalpkg.OutputKey, len(req.OutputKeys))
+	for _, ok := range req.OutputKeys {
+		keyConstraints[ok.Key] = ok
+	}
+
 	result := &EvalTestResponse{
 		GenerationID:    generation.GetId(),
 		ConversationID:  generation.GetConversationId(),
@@ -115,6 +120,15 @@ func (s *TestService) RunTest(ctx context.Context, tenantID string, req EvalTest
 	}
 
 	for _, s := range scores {
+		if constraint, found := keyConstraints[s.Key]; found && s.Type == evalpkg.ScoreTypeNumber && s.Value.Number != nil {
+			if constraint.Min != nil && *s.Value.Number < *constraint.Min {
+				continue
+			}
+			if constraint.Max != nil && *s.Value.Number > *constraint.Max {
+				continue
+			}
+		}
+
 		result.Scores = append(result.Scores, EvalTestScore{
 			Key:         s.Key,
 			Type:        string(s.Type),

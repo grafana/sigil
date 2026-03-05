@@ -141,6 +141,7 @@ describe('ConversationListPanel', () => {
     expect(screen.getByText('Agents')).toBeInTheDocument();
     expect(screen.getByText('Models')).toBeInTheDocument();
     expect(screen.getByText('Quality')).toBeInTheDocument();
+    expect(screen.getByText('Evals')).toBeInTheDocument();
   });
 
   it('shows truncated conversation ID with copy button in extended mode', () => {

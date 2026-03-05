@@ -50,6 +50,20 @@ export type GenerationUsage = {
   reasoning_tokens?: number;
 };
 
+export type LatestScoreValue = {
+  number?: number;
+  bool?: boolean;
+  string?: string;
+};
+
+export type LatestScore = {
+  value: LatestScoreValue;
+  evaluator_id: string;
+  evaluator_version: string;
+  created_at: string;
+  passed?: boolean;
+};
+
 export type GenerationDetail = {
   generation_id: string;
   conversation_id: string;
@@ -71,6 +85,7 @@ export type GenerationDetail = {
   metadata?: Record<string, unknown>;
   created_at?: string;
   error?: null | { message?: string };
+  latest_scores?: Record<string, LatestScore>;
 };
 
 export type GenerationCostBreakdown = {
@@ -88,5 +103,18 @@ export type GenerationCostResult = {
   card: ModelCard;
   breakdown: GenerationCostBreakdown;
 };
+
+export function formatScoreValue(value: LatestScoreValue): string {
+  if (value.number !== undefined) {
+    return Number.isInteger(value.number) ? String(value.number) : value.number.toFixed(3);
+  }
+  if (value.bool !== undefined) {
+    return value.bool ? 'true' : 'false';
+  }
+  if (value.string !== undefined) {
+    return value.string;
+  }
+  return '—';
+}
 
 export type { ModelCard, ModelCardPricing };

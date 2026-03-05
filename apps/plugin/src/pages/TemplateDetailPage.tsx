@@ -9,7 +9,7 @@ import {
   EVALUATOR_KIND_LABELS,
   getKindBadgeColor,
   type EvalFormState,
-  type ForkTemplateRequest,
+  type Evaluator,
   type PublishVersionRequest,
   type TemplateDefinition,
   type TemplateVersion,
@@ -18,7 +18,6 @@ import EvalTestPanel from '../components/evaluation/EvalTestPanel';
 import VersionHistoryTable from '../components/evaluation/VersionHistoryTable';
 import PublishVersionForm from '../components/evaluation/PublishVersionForm';
 import VersionCompare from '../components/evaluation/VersionCompare';
-import ForkTemplateForm from '../components/evaluation/ForkTemplateForm';
 
 const EVAL_TEMPLATES_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}/templates`;
 const EVAL_EVALUATORS_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}/evaluators`;
@@ -82,7 +81,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-type ActiveForm = 'none' | 'publish' | 'fork';
+type ActiveForm = 'none' | 'publish';
 
 export default function TemplateDetailPage(props: TemplateDetailPageProps) {
   const dataSource = props.dataSource ?? defaultEvaluationDataSource;
@@ -221,16 +220,18 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
     }
   };
 
-  const handleForkSubmit = async (req: ForkTemplateRequest) => {
-    if (!templateID) {
+  const handleFork = () => {
+    if (!template) {
       return;
     }
-    try {
-      await dataSource.forkTemplate(templateID, req);
-      navigate(EVAL_EVALUATORS_BASE);
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to fork template');
-    }
+    const prefill: Partial<Evaluator> = {
+      evaluator_id: '',
+      kind: template.kind,
+      config: template.config ?? {},
+      output_keys: template.output_keys ?? [],
+      version: '',
+    };
+    navigate(`${EVAL_EVALUATORS_BASE}/new`, { state: { prefill } });
   };
 
   const handleDelete = async () => {
@@ -298,12 +299,7 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
               Publish New Version
             </Button>
           )}
-          <Button
-            variant="secondary"
-            icon="code-branch"
-            onClick={() => setActiveForm('fork')}
-            disabled={activeForm !== 'none'}
-          >
+          <Button variant="secondary" icon="code-branch" onClick={handleFork}>
             Fork to Evaluator
           </Button>
           {template.scope === 'tenant' && (
@@ -364,15 +360,6 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
             )}
           </div>
         </div>
-      )}
-
-      {activeForm === 'fork' && (
-        <ForkTemplateForm
-          templateID={template.template_id}
-          onSubmit={handleForkSubmit}
-          onCancel={() => setActiveForm('none')}
-          dataSource={dataSource}
-        />
       )}
 
       <div className={styles.section}>

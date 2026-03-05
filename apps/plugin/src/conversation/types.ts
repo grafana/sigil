@@ -74,6 +74,12 @@ export type ConversationListResponse = {
   items: ConversationListItem[];
 };
 
+export type ConversationEvalSummary = {
+  total_scores: number;
+  pass_count: number;
+  fail_count: number;
+};
+
 export type ConversationSearchResult = {
   conversation_id: string;
   conversation_title?: string;
@@ -88,6 +94,7 @@ export type ConversationSearchResult = {
   trace_ids: string[];
   rating_summary?: ConversationRatingSummary;
   annotation_count: number;
+  eval_summary?: ConversationEvalSummary;
   selected?: Record<string, string[] | number>;
 };
 

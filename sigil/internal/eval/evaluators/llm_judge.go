@@ -75,8 +75,8 @@ func (e *LLMJudgeEvaluator) Evaluate(ctx context.Context, input EvalInput, defin
 		return nil, err
 	}
 
-	key, scoreType, unit, passThreshold := firstOutputKey(definition, "judge_score", evalpkg.ScoreTypeNumber)
-	value, parsedPassed, explanation, err := parseJudgeResponse(response.Text, key, scoreType)
+	meta := firstOutputKey(definition, "judge_score", evalpkg.ScoreTypeNumber)
+	value, parsedPassed, explanation, err := parseJudgeResponse(response.Text, meta.Key, meta.Type)
 	if err != nil {
 		return nil, evalpkg.Permanent(err)
 	}
@@ -84,10 +84,16 @@ func (e *LLMJudgeEvaluator) Evaluate(ctx context.Context, input EvalInput, defin
 	passed := parsedPassed
 	if passed == nil {
 		switch {
-		case scoreType == evalpkg.ScoreTypeNumber && value.Number != nil && passThreshold != nil:
-			passed = boolPointer(*value.Number >= *passThreshold)
-		case scoreType == evalpkg.ScoreTypeBool && value.Bool != nil:
-			passed = boolPointer(*value.Bool)
+		case meta.Type == evalpkg.ScoreTypeNumber && value.Number != nil && meta.PassThreshold != nil:
+			passed = boolPointer(*value.Number >= *meta.PassThreshold)
+		case meta.Type == evalpkg.ScoreTypeBool && value.Bool != nil:
+			if meta.PassValue != nil {
+				passed = boolPointer(*value.Bool == *meta.PassValue)
+			} else {
+				passed = boolPointer(*value.Bool)
+			}
+		case meta.Type == evalpkg.ScoreTypeString && value.String != nil && len(meta.PassMatch) > 0:
+			passed = boolPointer(stringSliceContains(meta.PassMatch, *value.String))
 		}
 	}
 
@@ -101,10 +107,10 @@ func (e *LLMJudgeEvaluator) Evaluate(ctx context.Context, input EvalInput, defin
 	}
 
 	return []ScoreOutput{{
-		Key:         key,
-		Type:        scoreType,
+		Key:         meta.Key,
+		Type:        meta.Type,
 		Value:       value,
-		Unit:        unit,
+		Unit:        meta.Unit,
 		Passed:      passed,
 		Explanation: explanation,
 		Metadata:    metadata,
@@ -170,7 +176,8 @@ func parseJudgeResponse(raw string, scoreKey string, scoreType evalpkg.ScoreType
 	case evalpkg.ScoreTypeBool:
 		if boolValue, ok := parseJudgeBoolFallback(trimmed); ok {
 			value := evalpkg.BoolValue(boolValue)
-			return value, boolPointer(boolValue), "", nil
+			// Don't infer passed here; let the caller apply PassValue logic.
+			return value, nil, "", nil
 		}
 		return evalpkg.ScoreValue{}, nil, "", fmt.Errorf("judge response did not include a bool score")
 	case evalpkg.ScoreTypeString:
@@ -267,9 +274,8 @@ func parseJudgeJSON(parsed map[string]any, scoreKey string, scoreType evalpkg.Sc
 			return evalpkg.ScoreValue{}, nil, explanation, fmt.Errorf("judge response score must be bool")
 		}
 		value := evalpkg.BoolValue(boolScore)
-		if passed == nil {
-			passed = boolPointer(boolScore)
-		}
+		// Only return passed from an explicit "passed" field in the JSON;
+		// let the caller apply PassValue logic for inferred pass/fail.
 		return value, passed, explanation, nil
 	case evalpkg.ScoreTypeString:
 		stringScore, ok := scoreRaw.(string)

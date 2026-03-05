@@ -64,9 +64,21 @@ func flattenMessages(messages []*sigilv1.Message) string {
 	return strings.Join(parts, "\n")
 }
 
-func firstOutputKey(definition evalpkg.EvaluatorDefinition, fallbackKey string, fallbackType evalpkg.ScoreType) (string, evalpkg.ScoreType, string, *float64) {
+// OutputKeyMeta holds the resolved fields from the first output key definition.
+type OutputKeyMeta struct {
+	Key           string
+	Type          evalpkg.ScoreType
+	Unit          string
+	PassThreshold *float64
+	Min           *float64
+	Max           *float64
+	PassMatch     []string
+	PassValue     *bool
+}
+
+func firstOutputKey(definition evalpkg.EvaluatorDefinition, fallbackKey string, fallbackType evalpkg.ScoreType) OutputKeyMeta {
 	if len(definition.OutputKeys) == 0 {
-		return fallbackKey, fallbackType, "", nil
+		return OutputKeyMeta{Key: fallbackKey, Type: fallbackType}
 	}
 	item := definition.OutputKeys[0]
 	key := strings.TrimSpace(item.Key)
@@ -77,10 +89,28 @@ func firstOutputKey(definition evalpkg.EvaluatorDefinition, fallbackKey string, 
 	if strings.TrimSpace(string(typeValue)) == "" {
 		typeValue = fallbackType
 	}
-	return key, typeValue, item.Unit, item.PassThreshold
+	return OutputKeyMeta{
+		Key:           key,
+		Type:          typeValue,
+		Unit:          item.Unit,
+		PassThreshold: item.PassThreshold,
+		Min:           item.Min,
+		Max:           item.Max,
+		PassMatch:     item.PassMatch,
+		PassValue:     item.PassValue,
+	}
 }
 
 func boolPointer(value bool) *bool {
 	copied := value
 	return &copied
+}
+
+func stringSliceContains(slice []string, target string) bool {
+	for _, s := range slice {
+		if s == target {
+			return true
+		}
+	}
+	return false
 }

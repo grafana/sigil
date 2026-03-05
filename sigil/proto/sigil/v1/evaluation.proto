@@ -12,6 +12,12 @@ message EvalOutputKey {
   string type = 2;
   string unit = 3;
   optional double pass_threshold = 4;
+  optional double min = 5;
+  optional double max = 6;
+  repeated string pass_match = 7;
+  optional bool pass_value = 8;
+  string description = 9;
+  repeated string enum = 10;
 }
 
 message Evaluator {

@@ -48,15 +48,15 @@ func (e *RegexEvaluator) Evaluate(_ context.Context, input EvalInput, definition
 		passed = !matched
 	}
 
-	key, scoreType, unit, _ := firstOutputKey(definition, "regex_match", evalpkg.ScoreTypeBool)
-	if scoreType != evalpkg.ScoreTypeBool {
-		return nil, evalpkg.Permanent(fmt.Errorf("regex evaluator output key %q must be bool", key))
+	meta := firstOutputKey(definition, "regex_match", evalpkg.ScoreTypeBool)
+	if meta.Type != evalpkg.ScoreTypeBool {
+		return nil, evalpkg.Permanent(fmt.Errorf("regex evaluator output key %q must be bool", meta.Key))
 	}
 	return []ScoreOutput{{
-		Key:      key,
+		Key:      meta.Key,
 		Type:     evalpkg.ScoreTypeBool,
 		Value:    evalpkg.BoolValue(passed),
-		Unit:     unit,
+		Unit:     meta.Unit,
 		Passed:   boolPointer(passed),
 		Metadata: map[string]any{"patterns": patterns, "reject": rejectMatches, "matched": matched},
 	}}, nil

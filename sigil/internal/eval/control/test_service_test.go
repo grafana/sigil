@@ -217,3 +217,192 @@ func TestTestService_RunTest_EvaluatorError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "evaluator exploded")
 }
+
+func float64Ptr(v float64) *float64 { return &v }
+
+func TestTestService_RunTest_BoundsEnforcement(t *testing.T) {
+	tests := []struct {
+		name           string
+		outputKeys     []evalpkg.OutputKey
+		scores         []evaluators.ScoreOutput
+		wantScoreCount int
+		wantScoreKeys  []string
+	}{
+		{
+			name: "score_within_bounds_is_returned",
+			outputKeys: []evalpkg.OutputKey{{
+				Key:  "score",
+				Type: evalpkg.ScoreTypeNumber,
+				Min:  float64Ptr(0),
+				Max:  float64Ptr(10),
+			}},
+			scores: []evaluators.ScoreOutput{{
+				Key:   "score",
+				Type:  evalpkg.ScoreTypeNumber,
+				Value: evalpkg.NumberValue(5),
+			}},
+			wantScoreCount: 1,
+			wantScoreKeys:  []string{"score"},
+		},
+		{
+			name: "score_below_min_is_filtered",
+			outputKeys: []evalpkg.OutputKey{{
+				Key:  "score",
+				Type: evalpkg.ScoreTypeNumber,
+				Min:  float64Ptr(0),
+				Max:  float64Ptr(10),
+			}},
+			scores: []evaluators.ScoreOutput{{
+				Key:   "score",
+				Type:  evalpkg.ScoreTypeNumber,
+				Value: evalpkg.NumberValue(-1),
+			}},
+			wantScoreCount: 0,
+		},
+		{
+			name: "score_above_max_is_filtered",
+			outputKeys: []evalpkg.OutputKey{{
+				Key:  "score",
+				Type: evalpkg.ScoreTypeNumber,
+				Min:  float64Ptr(0),
+				Max:  float64Ptr(10),
+			}},
+			scores: []evaluators.ScoreOutput{{
+				Key:   "score",
+				Type:  evalpkg.ScoreTypeNumber,
+				Value: evalpkg.NumberValue(11),
+			}},
+			wantScoreCount: 0,
+		},
+		{
+			name: "only_min_set_below_min_filtered",
+			outputKeys: []evalpkg.OutputKey{{
+				Key:  "score",
+				Type: evalpkg.ScoreTypeNumber,
+				Min:  float64Ptr(0),
+			}},
+			scores: []evaluators.ScoreOutput{{
+				Key:   "score",
+				Type:  evalpkg.ScoreTypeNumber,
+				Value: evalpkg.NumberValue(-0.5),
+			}},
+			wantScoreCount: 0,
+		},
+		{
+			name: "only_min_set_above_min_returned",
+			outputKeys: []evalpkg.OutputKey{{
+				Key:  "score",
+				Type: evalpkg.ScoreTypeNumber,
+				Min:  float64Ptr(0),
+			}},
+			scores: []evaluators.ScoreOutput{{
+				Key:   "score",
+				Type:  evalpkg.ScoreTypeNumber,
+				Value: evalpkg.NumberValue(100),
+			}},
+			wantScoreCount: 1,
+			wantScoreKeys:  []string{"score"},
+		},
+		{
+			name: "only_max_set_above_max_filtered",
+			outputKeys: []evalpkg.OutputKey{{
+				Key:  "score",
+				Type: evalpkg.ScoreTypeNumber,
+				Max:  float64Ptr(10),
+			}},
+			scores: []evaluators.ScoreOutput{{
+				Key:   "score",
+				Type:  evalpkg.ScoreTypeNumber,
+				Value: evalpkg.NumberValue(10.5),
+			}},
+			wantScoreCount: 0,
+		},
+		{
+			name: "only_max_set_below_max_returned",
+			outputKeys: []evalpkg.OutputKey{{
+				Key:  "score",
+				Type: evalpkg.ScoreTypeNumber,
+				Max:  float64Ptr(10),
+			}},
+			scores: []evaluators.ScoreOutput{{
+				Key:   "score",
+				Type:  evalpkg.ScoreTypeNumber,
+				Value: evalpkg.NumberValue(-100),
+			}},
+			wantScoreCount: 1,
+			wantScoreKeys:  []string{"score"},
+		},
+		{
+			name: "score_at_exact_min_is_returned",
+			outputKeys: []evalpkg.OutputKey{{
+				Key:  "score",
+				Type: evalpkg.ScoreTypeNumber,
+				Min:  float64Ptr(0),
+				Max:  float64Ptr(10),
+			}},
+			scores: []evaluators.ScoreOutput{{
+				Key:   "score",
+				Type:  evalpkg.ScoreTypeNumber,
+				Value: evalpkg.NumberValue(0),
+			}},
+			wantScoreCount: 1,
+			wantScoreKeys:  []string{"score"},
+		},
+		{
+			name: "score_at_exact_max_is_returned",
+			outputKeys: []evalpkg.OutputKey{{
+				Key:  "score",
+				Type: evalpkg.ScoreTypeNumber,
+				Min:  float64Ptr(0),
+				Max:  float64Ptr(10),
+			}},
+			scores: []evaluators.ScoreOutput{{
+				Key:   "score",
+				Type:  evalpkg.ScoreTypeNumber,
+				Value: evalpkg.NumberValue(10),
+			}},
+			wantScoreCount: 1,
+			wantScoreKeys:  []string{"score"},
+		},
+		{
+			name: "bool_score_not_affected_by_number_bounds",
+			outputKeys: []evalpkg.OutputKey{{
+				Key:  "pass",
+				Type: evalpkg.ScoreTypeBool,
+			}},
+			scores: []evaluators.ScoreOutput{{
+				Key:   "pass",
+				Type:  evalpkg.ScoreTypeBool,
+				Value: evalpkg.BoolValue(true),
+			}},
+			wantScoreCount: 1,
+			wantScoreKeys:  []string{"pass"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reader := &stubGenerationReader{generation: testGeneration()}
+			eval := &stubEvaluator{
+				kind:   evalpkg.EvaluatorKindHeuristic,
+				scores: tt.scores,
+			}
+			svc := newTestService(reader, eval)
+
+			resp, err := svc.RunTest(context.Background(), "tenant-1", EvalTestRequest{
+				Kind:         "heuristic",
+				Config:       map[string]any{"some": "config"},
+				OutputKeys:   tt.outputKeys,
+				GenerationID: "gen-1",
+			})
+
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+			assert.Len(t, resp.Scores, tt.wantScoreCount)
+
+			for i, wantKey := range tt.wantScoreKeys {
+				assert.Equal(t, wantKey, resp.Scores[i].Key)
+			}
+		})
+	}
+}
