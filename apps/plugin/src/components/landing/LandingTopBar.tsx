@@ -463,16 +463,16 @@ export function LandingTopBar({
         }
 
         const animationStart = performance.now();
-        const from = previous.map((item) => ({ ...item }));
-        const to = next.map((item) => ({ ...item }));
+        const animationFrom = previous.map((item) => ({ ...item }));
+        const animationTo = next.map((item) => ({ ...item }));
         const animate = (timestamp: number) => {
           const elapsed = timestamp - animationStart;
           const progress = Math.min(1, elapsed / HERO_STATS_ANIMATION_MS);
           const eased = 1 - Math.pow(1 - progress, 3);
-          const frame = from.map((item, index) => ({
+          const frame = animationFrom.map((item, index) => ({
             ...item,
-            current: Math.round(item.current + (to[index].current - item.current) * eased),
-            previous: Math.round(item.previous + (to[index].previous - item.previous) * eased),
+            current: Math.round(item.current + (animationTo[index].current - item.current) * eased),
+            previous: Math.round(item.previous + (animationTo[index].previous - item.previous) * eased),
             loading: false,
           }));
           setHeroStats(frame);
@@ -483,8 +483,8 @@ export function LandingTopBar({
           }
 
           heroStatsAnimationFrameRef.current = null;
-          setHeroStats(to);
-          saveHeroStatsToStorage(to);
+          setHeroStats(animationTo);
+          saveHeroStatsToStorage(animationTo);
         };
 
         heroStatsAnimationFrameRef.current = requestAnimationFrame(animate);
