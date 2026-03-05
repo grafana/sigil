@@ -51,20 +51,11 @@ export function TokenizedText({ text, encode, decode }: TokenizedTextProps) {
   }
 
   return (
-    <span
-      className={styles.container}
-      onMouseOver={handleMouseOver}
-      onMouseLeave={handleMouseLeave}
-    >
+    <span className={styles.container} onMouseOver={handleMouseOver} onMouseLeave={handleMouseLeave}>
       {segments.map((seg) => {
         const bg = `color-mix(in oklch, ${tokenColor(seg.index)}, transparent ${styles.transparencyPct}%)`;
         return (
-          <span
-            key={seg.index}
-            className={styles.token}
-            data-token-id={seg.id}
-            style={{ backgroundColor: bg }}
-          >
+          <span key={seg.index} className={styles.token} data-token-id={seg.id} style={{ backgroundColor: bg }}>
             {seg.text}
           </span>
         );
