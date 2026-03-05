@@ -22,41 +22,9 @@ import {
 } from '../../dashboard/types';
 import { defaultEvaluationDataSource } from '../../evaluation/api';
 import { useFilterUrlState } from '../../hooks/useFilterUrlState';
-import { ClaudeCodeLogo, CopilotLogo, CursorLogo } from './IdeLogos';
+import { ideTabs, buildCursorPromptDeeplink, downloadTextFile, renderIdeActionLogo } from '../../ide/ideUtils';
 
 type IdeKey = InstrumentationPromptIde;
-
-type IdeTab = {
-  key: IdeKey;
-  label: string;
-  logo: React.ReactNode;
-  blurb: string;
-  tips: string[];
-};
-
-const ideTabs: IdeTab[] = [
-  {
-    key: 'cursor',
-    label: 'Cursor',
-    logo: <CursorLogo />,
-    blurb: 'Have Cursor help add Sigil instrumentation to your code.',
-    tips: [],
-  },
-  {
-    key: 'claudecode',
-    label: 'Claude Code',
-    logo: <ClaudeCodeLogo />,
-    blurb: 'Have Claude Code help add Sigil instrumentation to your code.',
-    tips: [],
-  },
-  {
-    key: 'copilot',
-    label: 'Copilot',
-    logo: <CopilotLogo />,
-    blurb: 'Have Copilot help add Sigil instrumentation to your code.',
-    tips: [],
-  },
-];
 
 type HeroStatItem = {
   label: string;
@@ -249,33 +217,6 @@ function buildAssistantUrl(message: string): string {
   return url.toString();
 }
 
-function buildCursorPromptDeeplink(promptText: string): string {
-  const deeplink = new URL('https://cursor.com/link/prompt');
-  deeplink.searchParams.set('text', promptText);
-  return deeplink.toString();
-}
-
-function downloadTextFile(filename: string, content: string): void {
-  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
-  const objectUrl = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = objectUrl;
-  anchor.download = filename;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(objectUrl);
-}
-
-function renderIdeActionLogo(ide: IdeKey): React.ReactNode {
-  if (ide === 'cursor') {
-    return <CursorLogo size={20} withBackground={false} />;
-  }
-  if (ide === 'claudecode') {
-    return <ClaudeCodeLogo size={20} />;
-  }
-  return <CopilotLogo size={20} />;
-}
 
 type LandingTopBarProps = {
   assistantOrigin: string;
