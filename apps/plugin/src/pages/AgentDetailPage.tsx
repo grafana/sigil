@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { css } from '@emotion/css';
+import { css, cx } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Badge, Button, Select, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
+import { Alert, Badge, Button, Icon, Select, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../agents/api';
 import type { AgentDetail, AgentRatingResponse, AgentVersionListItem } from '../agents/types';
 import ModelCardPopover from '../components/conversations/ModelCardPopover';
@@ -14,6 +14,10 @@ import type { ModelCard } from '../modelcard/types';
 import { resolveModelCardsFromNames } from '../modelcard/resolve';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { formatDateShort } from '../utils/date';
+import { TokenizedText } from '../components/tokenizer/TokenizedText';
+import { useTokenizer } from '../components/tokenizer/useTokenizer';
+import { getEncoding, AVAILABLE_ENCODINGS, type EncodingName } from '../components/tokenizer/encodingMap';
+import { getTokenizeControlStyles } from '../components/tokenizer/tokenizeControls.styles';
 
 const VERSION_PAGE_SIZE = 50;
 
@@ -162,6 +166,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     justifyContent: 'center',
     padding: theme.spacing(4),
   }),
+  ...getTokenizeControlStyles(theme),
 });
 
 function formatDate(iso: string): string {
@@ -405,6 +410,53 @@ export default function AgentDetailPage({
     }
   };
 
+  const autoEncoding = useMemo(() => {
+    if (!detail) {
+      return 'cl100k_base' as EncodingName;
+    }
+    const firstModel = detail.models[0];
+    return getEncoding(firstModel?.provider, firstModel?.name);
+  }, [detail]);
+
+  const versionKey = `${agentName}:${selectedVersion}`;
+  const [tokenizeState, setTokenizeState] = useState<{
+    versionKey: string;
+    sections: Record<string, boolean>;
+    encodingOverride: EncodingName | null;
+  }>({ versionKey, sections: {}, encodingOverride: null });
+
+  const tokenizedSections = tokenizeState.versionKey === versionKey ? tokenizeState.sections : {};
+  const encodingOverride = tokenizeState.versionKey === versionKey ? tokenizeState.encodingOverride : null;
+
+  const activeEncoding = encodingOverride ?? autoEncoding;
+  const anyTokenized = Object.values(tokenizedSections).some(Boolean);
+  const { encode, decode, isLoading: tokenizerLoading } = useTokenizer(anyTokenized ? activeEncoding : null);
+
+  const setEncodingOverride = useCallback(
+    (enc: EncodingName | null) => {
+      setTokenizeState((prev) => ({
+        versionKey,
+        sections: prev.versionKey === versionKey ? prev.sections : {},
+        encodingOverride: enc,
+      }));
+    },
+    [versionKey]
+  );
+
+  const toggleSection = useCallback(
+    (key: string) => {
+      setTokenizeState((prev) => {
+        const sections = prev.versionKey === versionKey ? prev.sections : {};
+        return {
+          versionKey,
+          sections: { ...sections, [key]: !sections[key] },
+          encodingOverride: prev.versionKey === versionKey ? prev.encodingOverride : null,
+        };
+      });
+    },
+    [versionKey]
+  );
+
   if (loading) {
     return (
       <div className={styles.page}>
@@ -577,15 +629,64 @@ export default function AgentDetailPage({
       <div className={styles.panel}>
         <div className={styles.panelHeader}>
           <Text weight="medium">System prompt</Text>
+          <span style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto' }}>
+            <span
+              className={cx(styles.tokenizeBtn, tokenizedSections['system'] && styles.tokenizeBtnActive)}
+              onClick={() => toggleSection('system')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  toggleSection('system');
+                }
+              }}
+              role="button"
+              tabIndex={0}
+            >
+              <Icon name="brackets-curly" size="xs" />
+              {tokenizerLoading ? 'Loading\u2026' : 'Tokenize'}
+            </span>
+            {tokenizedSections['system'] && (
+              <select
+                className={styles.encodingSelect}
+                aria-label="Tokenizer encoding"
+                value={encodingOverride ?? ''}
+                onChange={(e) => setEncodingOverride(e.target.value ? (e.target.value as EncodingName) : null)}
+              >
+                <option value="">Auto ({autoEncoding.replace('_base', '')})</option>
+                {AVAILABLE_ENCODINGS.map((enc) => (
+                  <option key={enc.value} value={enc.value}>
+                    {enc.value.replace('_base', '')}
+                  </option>
+                ))}
+              </select>
+            )}
+          </span>
         </div>
         <div className={styles.panelBody}>
-          <pre className={styles.systemPrompt}>
-            {detail.system_prompt.length > 0 ? detail.system_prompt : 'No system prompt recorded.'}
-          </pre>
+          {detail.system_prompt.length > 0 ? (
+            tokenizedSections['system'] && encode && decode ? (
+              <div className={styles.systemPrompt}>
+                <TokenizedText text={detail.system_prompt} encode={encode} decode={decode} />
+              </div>
+            ) : (
+              <pre className={styles.systemPrompt}>{detail.system_prompt}</pre>
+            )
+          ) : (
+            <pre className={styles.systemPrompt}>No system prompt recorded.</pre>
+          )}
         </div>
       </div>
 
-      <ToolsPanel tools={detail.tools} />
+      <ToolsPanel
+        tools={detail.tools}
+        tokenized={tokenizedSections['tools']}
+        onToggleTokenize={() => toggleSection('tools')}
+        tokenizerLoading={tokenizerLoading}
+        autoEncoding={autoEncoding}
+        encodingOverride={encodingOverride}
+        onEncodingChange={setEncodingOverride}
+        encode={encode}
+        decode={decode}
+      />
     </div>
   );
 }

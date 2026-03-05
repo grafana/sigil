@@ -13,6 +13,9 @@ import type { FlowNode } from './types';
 import { getStyles } from './GenerationView.styles';
 import { renderTextWithXml } from './CollapsibleXml';
 import { formatToolContent } from './formatContent';
+import { TokenizedText } from '../tokenizer/TokenizedText';
+import { useTokenizer } from '../tokenizer/useTokenizer';
+import { getEncoding, AVAILABLE_ENCODINGS, type EncodingName } from '../tokenizer/encodingMap';
 
 export type GenerationViewProps = {
   node: FlowNode;
@@ -51,11 +54,23 @@ function Section({
   title,
   count,
   defaultExpanded = true,
+  tokenized,
+  onToggleTokenize,
+  autoEncoding,
+  encodingOverride,
+  onEncodingChange,
+  tokenizerLoading,
   children,
 }: {
   title: string;
   count?: string;
   defaultExpanded?: boolean;
+  tokenized?: boolean;
+  onToggleTokenize?: () => void;
+  autoEncoding?: EncodingName;
+  encodingOverride?: EncodingName | null;
+  onEncodingChange?: (encoding: EncodingName | null) => void;
+  tokenizerLoading?: boolean;
   children: React.ReactNode;
 }) {
   const styles = useStyles2(getStyles);
@@ -71,13 +86,61 @@ function Section({
         />
         {title}
         {count && <span className={styles.sectionCount}>({count})</span>}
+        {onToggleTokenize && (
+          <span style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto' }}>
+            <span
+              className={cx(styles.tokenizeBtn, tokenized && styles.tokenizeBtnActive)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleTokenize();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.stopPropagation();
+                  onToggleTokenize();
+                }
+              }}
+              role="button"
+              tabIndex={0}
+            >
+              <Icon name="brackets-curly" size="xs" />
+              {tokenizerLoading ? 'Loading\u2026' : 'Tokenize'}
+            </span>
+            {tokenized && onEncodingChange && (
+              <select
+                className={styles.encodingSelect}
+                aria-label="Tokenizer encoding"
+                value={encodingOverride ?? ''}
+                onChange={(e) => onEncodingChange(e.target.value ? (e.target.value as EncodingName) : null)}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <option value="">Auto ({(autoEncoding ?? 'cl100k_base').replace('_base', '')})</option>
+                {AVAILABLE_ENCODINGS.map((enc) => (
+                  <option key={enc.value} value={enc.value}>
+                    {enc.value.replace('_base', '')}
+                  </option>
+                ))}
+              </select>
+            )}
+          </span>
+        )}
       </div>
       {expanded && <div className={styles.sectionContent}>{children}</div>}
     </div>
   );
 }
 
-function MessageBlock({ message }: { message: Message }) {
+function MessageBlock({
+  message,
+  tokenized,
+  encode,
+  decode,
+}: {
+  message: Message;
+  tokenized?: boolean;
+  encode?: (text: string) => number[];
+  decode?: (ids: number[]) => string;
+}) {
   const styles = useStyles2(getStyles);
 
   const roleClass = cx(
@@ -91,23 +154,48 @@ function MessageBlock({ message }: { message: Message }) {
     <div className={styles.messageBlock}>
       <div className={roleClass}>{roleToLabel(message.role)}</div>
       {message.parts.map((part, i) => (
-        <PartContent key={i} part={part} />
+        <PartContent key={i} part={part} tokenized={tokenized} encode={encode} decode={decode} />
       ))}
     </div>
   );
 }
 
-function PartContent({ part }: { part: Part }) {
+function PartContent({
+  part,
+  tokenized,
+  encode,
+  decode,
+}: {
+  part: Part;
+  tokenized?: boolean;
+  encode?: (text: string) => number[];
+  decode?: (ids: number[]) => string;
+}) {
   const styles = useStyles2(getStyles);
 
   if (part.text) {
+    if (tokenized && encode && decode) {
+      return (
+        <div className={styles.messageText}>
+          <TokenizedText text={part.text} encode={encode} decode={decode} />
+        </div>
+      );
+    }
     return <div className={styles.messageText}>{renderTextWithXml(part.text)}</div>;
   }
 
   if (part.thinking) {
+    const thinkingText = part.thinking.length > 1000 ? `${part.thinking.slice(0, 1000)}...` : part.thinking;
+    if (tokenized && encode && decode) {
+      return (
+        <div className={styles.messageText} style={{ fontStyle: 'italic', opacity: 0.7 }}>
+          <TokenizedText text={thinkingText} encode={encode} decode={decode} />
+        </div>
+      );
+    }
     return (
       <div className={styles.messageText} style={{ fontStyle: 'italic', opacity: 0.7 }}>
-        {part.thinking.length > 1000 ? `${part.thinking.slice(0, 1000)}...` : part.thinking}
+        {thinkingText}
       </div>
     );
   }
@@ -493,6 +581,50 @@ export default function GenerationView({
 
   const displayedInput = contextCount > 0 ? newMessages : inputMessages;
 
+  const autoEncoding = useMemo(
+    () => getEncoding(gen?.model?.provider, gen?.model?.name),
+    [gen?.model?.provider, gen?.model?.name]
+  );
+  const genId = gen?.generation_id;
+  const [tokenizeState, setTokenizeState] = useState<{
+    genId: string | undefined;
+    sections: Record<string, boolean>;
+    encodingOverride: EncodingName | null;
+  }>({ genId, sections: {}, encodingOverride: null });
+
+  // Reset tokenize state when generation changes
+  const tokenizedSections = tokenizeState.genId === genId ? tokenizeState.sections : {};
+  const encodingOverride = tokenizeState.genId === genId ? tokenizeState.encodingOverride : null;
+
+  const activeEncoding = encodingOverride ?? autoEncoding;
+  const anyTokenized = Object.values(tokenizedSections).some(Boolean);
+  const { encode, decode, isLoading: tokenizerLoading } = useTokenizer(anyTokenized ? activeEncoding : null);
+
+  const setEncodingOverride = useCallback(
+    (enc: EncodingName | null) => {
+      setTokenizeState((prev) => ({
+        genId,
+        sections: prev.genId === genId ? prev.sections : {},
+        encodingOverride: enc,
+      }));
+    },
+    [genId]
+  );
+
+  const toggleSection = useCallback(
+    (key: string) => {
+      setTokenizeState((prev) => {
+        const sections = prev.genId === genId ? prev.sections : {};
+        return {
+          genId,
+          sections: { ...sections, [key]: !sections[key] },
+          encodingOverride: prev.genId === genId ? prev.encodingOverride : null,
+        };
+      });
+    },
+    [genId]
+  );
+
   const tracesDrilldownUrl = useMemo(() => {
     if (!node.span) {
       return undefined;
@@ -519,7 +651,12 @@ export default function GenerationView({
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      ) {
         return;
       }
       if (e.key === 'a' && adjacent?.previous) {
@@ -617,18 +754,66 @@ export default function GenerationView({
           </Section>
         )}
 
+        {gen?.system_prompt && (
+          <Section
+            title="System Prompt"
+            tokenized={tokenizedSections['system']}
+            onToggleTokenize={() => toggleSection('system')}
+            autoEncoding={autoEncoding}
+            encodingOverride={encodingOverride}
+            onEncodingChange={setEncodingOverride}
+            tokenizerLoading={tokenizerLoading}
+          >
+            {tokenizedSections['system'] && encode && decode ? (
+              <TokenizedText text={gen.system_prompt} encode={encode} decode={decode} />
+            ) : (
+              <div className={styles.messageText}>{gen.system_prompt}</div>
+            )}
+          </Section>
+        )}
+
         {displayedInput.length > 0 && (
-          <Section title="Input" count={inputTokens > 0 ? `${formatNumber(inputTokens)} tokens` : undefined}>
+          <Section
+            title="Input"
+            count={inputTokens > 0 ? `${formatNumber(inputTokens)} tokens` : undefined}
+            tokenized={tokenizedSections['input']}
+            onToggleTokenize={() => toggleSection('input')}
+            autoEncoding={autoEncoding}
+            encodingOverride={encodingOverride}
+            onEncodingChange={setEncodingOverride}
+            tokenizerLoading={tokenizerLoading}
+          >
             {displayedInput.map((msg, i) => (
-              <MessageBlock key={i} message={msg} />
+              <MessageBlock
+                key={i}
+                message={msg}
+                tokenized={tokenizedSections['input'] && !!encode}
+                encode={encode}
+                decode={decode}
+              />
             ))}
           </Section>
         )}
 
         {outputMessages.length > 0 && (
-          <Section title="Output" count={outputTokens > 0 ? `${formatNumber(outputTokens)} tokens` : undefined}>
+          <Section
+            title="Output"
+            count={outputTokens > 0 ? `${formatNumber(outputTokens)} tokens` : undefined}
+            tokenized={tokenizedSections['output']}
+            onToggleTokenize={() => toggleSection('output')}
+            autoEncoding={autoEncoding}
+            encodingOverride={encodingOverride}
+            onEncodingChange={setEncodingOverride}
+            tokenizerLoading={tokenizerLoading}
+          >
             {outputMessages.map((msg, i) => (
-              <MessageBlock key={i} message={msg} />
+              <MessageBlock
+                key={i}
+                message={msg}
+                tokenized={tokenizedSections['output'] && !!encode}
+                encode={encode}
+                decode={decode}
+              />
             ))}
           </Section>
         )}

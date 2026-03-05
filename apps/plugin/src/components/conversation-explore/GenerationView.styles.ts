@@ -1,5 +1,6 @@
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
+import { getTokenizeControlStyles } from '../tokenizer/tokenizeControls.styles';
 
 export const getStyles = (theme: GrafanaTheme2) => ({
   container: css({
@@ -361,4 +362,5 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     border: `1px solid ${theme.colors.border.weak}`,
     fontSize: 11,
   }),
+  ...getTokenizeControlStyles(theme),
 });
