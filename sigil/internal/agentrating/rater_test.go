@@ -249,3 +249,29 @@ func TestRaterRateWithModel_ReturnsValidationErrorForUnknownProvider(t *testing.
 		t.Fatalf("expected validation error, got=%T %v", err, err)
 	}
 }
+
+func TestNewRaterWithTarget_DefaultFallback(t *testing.T) {
+	rater := NewRaterWithTarget(judges.NewDiscovery(), "", "")
+	if rater == nil {
+		t.Fatalf("expected non-nil rater")
+	}
+	if rater.defaultProviderID != "openai" {
+		t.Fatalf("expected default provider openai, got %q", rater.defaultProviderID)
+	}
+	if rater.defaultModelName != "gpt-4o-mini" {
+		t.Fatalf("expected default model gpt-4o-mini, got %q", rater.defaultModelName)
+	}
+}
+
+func TestNewRaterWithTarget_UsesExplicitProviderAndModel(t *testing.T) {
+	rater := NewRaterWithTarget(judges.NewDiscovery(), "anthropic", "claude-sonnet-4-5")
+	if rater == nil {
+		t.Fatalf("expected non-nil rater")
+	}
+	if rater.defaultProviderID != "anthropic" {
+		t.Fatalf("expected provider anthropic, got %q", rater.defaultProviderID)
+	}
+	if rater.defaultModelName != "claude-sonnet-4-5" {
+		t.Fatalf("expected model claude-sonnet-4-5, got %q", rater.defaultModelName)
+	}
+}

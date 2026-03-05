@@ -110,7 +110,17 @@ func newQuerierModule(
 	}
 
 	discovery := judges.DiscoverFromEnv()
-	agentRater := agentrating.NewRater(discovery, cfg.EvalDefaultJudgeModel)
+	agentRatingProviderID, agentRatingModelName := cfg.AgentRatingJudgeTarget()
+	var agentRater *agentrating.Rater
+	if _, ok := discovery.Client(agentRatingProviderID); ok {
+		agentRater = agentrating.NewRaterWithTarget(discovery, agentRatingProviderID, agentRatingModelName)
+	} else {
+		_ = level.Warn(logger).Log(
+			"msg", "agent rating disabled because configured judge provider is unavailable",
+			"provider", agentRatingProviderID,
+			"model", agentRatingModelName,
+		)
+	}
 
 	var controlSvc *evalcontrol.Service
 	var templateSvc *evalcontrol.TemplateService

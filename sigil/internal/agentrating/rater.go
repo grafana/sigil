@@ -34,10 +34,23 @@ type Rater struct {
 // the provider defaults to "openai".
 func NewRater(discovery *judges.Discovery, defaultModel string) *Rater {
 	defaultProviderID, defaultModelName := parseDefaultModel(defaultModel)
+	return NewRaterWithTarget(discovery, defaultProviderID, defaultModelName)
+}
+
+// NewRaterWithTarget returns a Rater configured with explicit provider/model
+// defaults.
+//
+// When provider or model is empty, it falls back to "openai/gpt-4o-mini".
+func NewRaterWithTarget(discovery *judges.Discovery, defaultProviderID string, defaultModelName string) *Rater {
+	providerID := strings.TrimSpace(defaultProviderID)
+	modelName := strings.TrimSpace(defaultModelName)
+	if providerID == "" || modelName == "" {
+		providerID, modelName = parseDefaultModel(defaultJudgeModel)
+	}
 	return &Rater{
 		resolver:          discovery,
-		defaultProviderID: defaultProviderID,
-		defaultModelName:  defaultModelName,
+		defaultProviderID: providerID,
+		defaultModelName:  modelName,
 	}
 }
 
