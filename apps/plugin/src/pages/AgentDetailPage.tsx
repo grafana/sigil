@@ -1501,59 +1501,51 @@ export default function AgentDetailPage({
 
         <div className={cx(styles.stretchPanel, styles.stretchPanelBody)}>
           <div className={styles.statsGrid}>
-            <Tooltip content="Total generations recorded for this agent version." placement="top">
-              <div>
-                <TopStat label="GENERATIONS" value={detail.generation_count} loading={false} />
-              </div>
-            </Tooltip>
-            <Tooltip content="Estimated tokens consumed by the system prompt in this version." placement="top">
-              <div>
-                <TopStat label="PROMPT TOKENS" value={detail.token_estimate.system_prompt} loading={false} />
-              </div>
-            </Tooltip>
-            <Tooltip content="Estimated tokens consumed by all tool schemas combined in this version." placement="top">
-              <div>
-                <TopStat label="TOOLS TOKENS" value={detail.token_estimate.tools_total} loading={false} />
-              </div>
-            </Tooltip>
-            <Tooltip
-              content="Sum of system prompt and tool tokens — the baseline context cost per generation."
-              placement="top"
-            >
-              <div>
-                <TopStat label="TOTAL TOKENS" value={detail.token_estimate.total} loading={false} />
-              </div>
-            </Tooltip>
-            <Tooltip content="Duration between first and last recorded generations for this version." placement="top">
-              <div>
-                <TopStat
-                  label="AGE"
-                  value={Math.max(0, toTimestampMs(detail.last_seen_at) - toTimestampMs(detail.first_seen_at))}
-                  displayValue={formatDurationCompact(detail.first_seen_at, detail.last_seen_at)}
-                  loading={false}
-                />
-              </div>
-            </Tooltip>
-            <Tooltip content="The earliest time a generation was recorded for this agent version." placement="top">
-              <div>
-                <TopStat
-                  label="FIRST SEEN"
-                  value={toTimestampMs(detail.first_seen_at)}
-                  displayValue={formatDate(detail.first_seen_at)}
-                  loading={false}
-                />
-              </div>
-            </Tooltip>
-            <Tooltip content="The most recent time any generation was recorded for this agent version." placement="top">
-              <div>
-                <TopStat
-                  label="LAST SEEN"
-                  value={toTimestampMs(detail.last_seen_at)}
-                  displayValue={formatDate(detail.last_seen_at)}
-                  loading={false}
-                />
-              </div>
-            </Tooltip>
+            <TopStat
+              label="GENERATIONS"
+              value={detail.generation_count}
+              loading={false}
+              helpTooltip="Total generations recorded for this agent version."
+            />
+            <TopStat
+              label="PROMPT TOKENS"
+              value={detail.token_estimate.system_prompt}
+              loading={false}
+              helpTooltip="Estimated tokens consumed by the system prompt in this version."
+            />
+            <TopStat
+              label="TOOLS TOKENS"
+              value={detail.token_estimate.tools_total}
+              loading={false}
+              helpTooltip="Estimated tokens consumed by all tool schemas combined in this version."
+            />
+            <TopStat
+              label="TOTAL TOKENS"
+              value={detail.token_estimate.total}
+              loading={false}
+              helpTooltip="Sum of system prompt and tool tokens - the baseline context cost per generation."
+            />
+            <TopStat
+              label="AGE"
+              value={Math.max(0, toTimestampMs(detail.last_seen_at) - toTimestampMs(detail.first_seen_at))}
+              displayValue={formatDurationCompact(detail.first_seen_at, detail.last_seen_at)}
+              loading={false}
+              helpTooltip="Duration between first and last recorded generations for this version."
+            />
+            <TopStat
+              label="FIRST SEEN"
+              value={toTimestampMs(detail.first_seen_at)}
+              displayValue={formatDate(detail.first_seen_at)}
+              loading={false}
+              helpTooltip="The earliest time a generation was recorded for this agent version."
+            />
+            <TopStat
+              label="LAST SEEN"
+              value={toTimestampMs(detail.last_seen_at)}
+              displayValue={formatDate(detail.last_seen_at)}
+              loading={false}
+              helpTooltip="The most recent time any generation was recorded for this agent version."
+            />
           </div>
         </div>
       </div>

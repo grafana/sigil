@@ -210,6 +210,24 @@ describe('AgentDetailPage', () => {
     expect(screen.getByText('2h')).toBeInTheDocument();
   });
 
+  it('shows info icons for all top stats', async () => {
+    const dataSource = createDataSource();
+
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('GENERATIONS')).toBeInTheDocument();
+    const statLabels = ['GENERATIONS', 'PROMPT TOKENS', 'TOOLS TOKENS', 'TOTAL TOKENS', 'AGE', 'FIRST SEEN', 'LAST SEEN'];
+    for (const label of statLabels) {
+      expect(screen.getByLabelText(`${label} help`)).toBeInTheDocument();
+    }
+  });
+
   it('toggles system prompt between preview and markdown views', async () => {
     const dataSource = createDataSource();
     const lookupAgent = dataSource.lookupAgent;
