@@ -72,4 +72,33 @@ describe('GenerationView', () => {
       '/a/grafana-sigil-app/agents/name/assistant?version=sha256%3Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
     );
   });
+
+  it('shows the agent detail link even when no other agent context fields are present', async () => {
+    const generation: GenerationDetail = {
+      generation_id: 'gen-1',
+      conversation_id: 'conv-1',
+      agent_name: 'assistant',
+      agent_effective_version: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    };
+    const node: FlowNode = {
+      id: 'node-1',
+      kind: 'generation',
+      label: 'generation',
+      durationMs: 125,
+      startMs: 0,
+      status: 'success',
+      generation,
+      children: [],
+    };
+
+    render(<GenerationView node={node} allGenerations={[generation]} onClose={jest.fn()} />);
+
+    fireEvent.click(screen.getByLabelText('Agent context'));
+
+    const link = await screen.findByRole('link', { name: 'Open agent page' });
+    expect(link).toHaveAttribute(
+      'href',
+      '/a/grafana-sigil-app/agents/name/assistant?version=sha256%3Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    );
+  });
 });
