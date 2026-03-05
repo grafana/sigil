@@ -333,8 +333,6 @@ export function DashboardGrid({
   const costGroupByLabel = breakdownPromLabel;
   const agentItemHref = useMemo(() => (breakdownBy === 'agent' ? buildAgentDetailHref : undefined), [breakdownBy]);
 
-  const { onModelClick, modelPopoverElement } = useModelCardBreakdownPopover(breakdownBy, totalOpsStat.data);
-
   const costByBreakdownData = useMemo<PrometheusQueryResponse | null>(() => {
     if (costMode !== 'usd' || !costTokensData) {
       return null;
@@ -360,6 +358,24 @@ export function DashboardGrid({
       },
     };
   }, [costMode, costGroupByLabel, costTokensData, resolvedPricing.pricingMap, totalCost.totalCost]);
+
+  const popoverDataSources = useMemo(
+    () => [
+      totalOpsStat.data,
+      tokensTotalByBreakdown.data,
+      tokensByTypeStat.data,
+      tokensByBreakdownAndType.data,
+      costByBreakdownData,
+    ],
+    [
+      totalOpsStat.data,
+      tokensTotalByBreakdown.data,
+      tokensByTypeStat.data,
+      tokensByBreakdownAndType.data,
+      costByBreakdownData,
+    ]
+  );
+  const { onModelClick, modelPopoverElement } = useModelCardBreakdownPopover(breakdownBy, popoverDataSources);
 
   const costTimeSeries = useMemo(() => {
     if (isTokenTotal) {

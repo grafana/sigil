@@ -235,8 +235,6 @@ export function DashboardConsumptionGrid({
     'instant'
   );
 
-  const { onModelClick, modelPopoverElement } = useModelCardBreakdownPopover(breakdownBy, tokensByBreakdown.data);
-
   // --- Cost by breakdown ---
   const costGroupByLabel = breakdownPromLabel;
   const costByBreakdownData = useMemo<PrometheusQueryResponse | null>(() => {
@@ -268,6 +266,12 @@ export function DashboardConsumptionGrid({
       },
     };
   }, [costGroupByLabel, costTokensData.data, resolvedPricing.pricingMap, totalCost.totalCost]);
+
+  const popoverDataSources = useMemo(
+    () => [tokensByBreakdown.data, costByBreakdownData],
+    [tokensByBreakdown.data, costByBreakdownData]
+  );
+  const { onModelClick, modelPopoverElement } = useModelCardBreakdownPopover(breakdownBy, popoverDataSources);
 
   const costTimeSeries = useMemo(() => {
     if (!costOverTimeData.data) {

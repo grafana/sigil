@@ -216,14 +216,17 @@ export function DashboardCacheGrid({
     'instant'
   );
 
+  const cacheByModelDataSources = useMemo(() => [cacheByModelData.data], [cacheByModelData.data]);
   const { onModelClick: onCacheModelClick, modelPopoverElement: cacheModelPopoverElement } =
-    useModelCardBreakdownPopover('model', cacheByModelData.data);
-  const { onModelClick, modelPopoverElement } = useModelCardBreakdownPopover(
-    breakdownBy,
-    cacheTokensByBreakdownAndType.data
+    useModelCardBreakdownPopover('model', cacheByModelDataSources);
+  const cacheTokensDataSources = useMemo(
+    () => [cacheTokensByBreakdownAndType.data],
+    [cacheTokensByBreakdownAndType.data]
   );
+  const { onModelClick, modelPopoverElement } = useModelCardBreakdownPopover(breakdownBy, cacheTokensDataSources);
+  const cacheReadDataSources = useMemo(() => [cacheReadByBreakdown.data], [cacheReadByBreakdown.data]);
   const { onModelClick: onCacheReadModelClick, modelPopoverElement: cacheReadModelPopoverElement } =
-    useModelCardBreakdownPopover(breakdownBy, cacheReadByBreakdown.data);
+    useModelCardBreakdownPopover(breakdownBy, cacheReadDataSources);
 
   // --- Derived values ---
   const cacheReadValue = cacheReadStat.data ? vectorToStatValue(cacheReadStat.data) : 0;

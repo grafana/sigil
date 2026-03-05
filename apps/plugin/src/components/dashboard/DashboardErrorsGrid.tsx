@@ -144,7 +144,8 @@ export function DashboardErrorsGrid({
     'instant'
   );
 
-  const { onModelClick, modelPopoverElement } = useModelCardBreakdownPopover(breakdownBy, errorRateByBreakdown.data);
+  const errorDataSources = useMemo(() => [errorRateByBreakdown.data], [errorRateByBreakdown.data]);
+  const { onModelClick, modelPopoverElement } = useModelCardBreakdownPopover(breakdownBy, errorDataSources);
 
   const timeseriesDefaults = { fillOpacity: 6, showPoints: 'never', lineWidth: 2 };
   const tooltipOptions = { mode: 'multi', sort: 'desc' };

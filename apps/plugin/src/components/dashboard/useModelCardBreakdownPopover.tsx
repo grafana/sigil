@@ -10,32 +10,47 @@ type ModelCardBreakdownPopoverResult = {
   modelPopoverElement: React.ReactNode;
 };
 
+function extractModelNames(data: PrometheusQueryResponse | null | undefined): string[] {
+  if (!data || data.data.resultType !== 'vector') {
+    return [];
+  }
+  const names: string[] = [];
+  for (const result of data.data.result) {
+    const model = (result as { metric: Record<string, string> }).metric.gen_ai_request_model;
+    if (model) {
+      names.push(model);
+    }
+  }
+  return names;
+}
+
 /**
  * Resolves model cards from breakdown data and manages model card popover state.
- * When breakdownBy is 'model', extracts model names from the Prometheus response,
+ * When breakdownBy is 'model', extracts model names from all provided Prometheus responses,
  * resolves them to full ModelCard objects, and returns a click handler + popover element.
+ *
+ * Accepts multiple data sources to ensure all models across different panels are resolved.
  */
 export function useModelCardBreakdownPopover(
   breakdownBy: BreakdownDimension,
-  breakdownData: PrometheusQueryResponse | null | undefined,
+  breakdownDataSources: Array<PrometheusQueryResponse | null | undefined>,
   client: ModelCardClient = defaultModelCardClient
 ): ModelCardBreakdownPopoverResult {
   const [cards, setCards] = useState<Map<string, ModelCard>>(new Map());
   const [openModel, setOpenModel] = useState<{ name: string; anchorRect: DOMRect } | null>(null);
 
   const modelNames = useMemo(() => {
-    if (breakdownBy !== 'model' || !breakdownData || breakdownData.data.resultType !== 'vector') {
+    if (breakdownBy !== 'model') {
       return [];
     }
     const names = new Set<string>();
-    for (const result of breakdownData.data.result) {
-      const model = (result as { metric: Record<string, string> }).metric.gen_ai_request_model;
-      if (model) {
-        names.add(model);
+    for (const data of breakdownDataSources) {
+      for (const name of extractModelNames(data)) {
+        names.add(name);
       }
     }
     return Array.from(names);
-  }, [breakdownBy, breakdownData]);
+  }, [breakdownBy, breakdownDataSources]);
 
   useEffect(() => {
     if (modelNames.length === 0) {
@@ -59,6 +74,17 @@ export function useModelCardBreakdownPopover(
     };
   }, [modelNames, client]);
 
+  const handleClose = useCallback(() => setOpenModel(null), []);
+
+  useEffect(() => {
+    if (!openModel) {
+      return;
+    }
+    const handleScroll = () => handleClose();
+    window.addEventListener('scroll', handleScroll, true);
+    return () => window.removeEventListener('scroll', handleScroll, true);
+  }, [openModel, handleClose]);
+
   const onModelClick = useCallback(
     (name: string, event: React.MouseEvent<HTMLButtonElement>) => {
       const provider = inferProviderFromModelName(name);
@@ -71,8 +97,6 @@ export function useModelCardBreakdownPopover(
     },
     [cards]
   );
-
-  const handleClose = useCallback(() => setOpenModel(null), []);
 
   if (breakdownBy !== 'model') {
     return { onModelClick: undefined, modelPopoverElement: null };
