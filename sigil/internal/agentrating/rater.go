@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math"
 	"sort"
 	"strings"
 
 	"github.com/grafana/sigil/sigil/internal/eval/evaluators/judges"
+	"github.com/grafana/sigil/sigil/internal/jsonutil"
 )
 
 const defaultJudgeModel = "openai/gpt-4o-mini"
@@ -152,7 +152,7 @@ func parseJudgeRatingOutput(raw string) (Rating, error) {
 	if err := decoder.Decode(&output); err != nil {
 		return Rating{}, err
 	}
-	if err := ensureJSONEOF(decoder); err != nil {
+	if err := jsonutil.EnsureEOF(decoder); err != nil {
 		return Rating{}, err
 	}
 
@@ -172,17 +172,6 @@ func parseJudgeRatingOutput(raw string) (Rating, error) {
 		Suggestions:  suggestions,
 		TokenWarning: strings.TrimSpace(output.TokenWarning),
 	}, nil
-}
-
-func ensureJSONEOF(decoder *json.Decoder) error {
-	var trailing json.RawMessage
-	if err := decoder.Decode(&trailing); err != io.EOF {
-		if err == nil {
-			return fmt.Errorf("unexpected trailing JSON data")
-		}
-		return err
-	}
-	return nil
 }
 
 func parseScore(rawScore json.Number) (int, error) {

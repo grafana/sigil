@@ -229,7 +229,7 @@ export default function AgentRatingPanel({
           </Alert>
         )}
 
-        {!running && !result && (
+        {!running && !result && error.length === 0 && (
           <div className={styles.empty}>
             <Text variant="bodySmall" color="secondary">
               Run an on-demand evaluation of this agent&apos;s prompt, tools, and token budget.

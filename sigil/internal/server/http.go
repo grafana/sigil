@@ -12,6 +12,7 @@ import (
 	"github.com/grafana/dskit/tenant"
 	"github.com/grafana/sigil/sigil/internal/agentrating"
 	"github.com/grafana/sigil/sigil/internal/feedback"
+	"github.com/grafana/sigil/sigil/internal/jsonutil"
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
 	"github.com/grafana/sigil/sigil/internal/modelcards"
 	"github.com/grafana/sigil/sigil/internal/query"
@@ -499,7 +500,7 @@ func rateAgent(querySvc *query.Service, rater *agentrating.Rater) http.HandlerFu
 			http.Error(w, "invalid request body", http.StatusBadRequest)
 			return
 		}
-		if err := ensureBodyEOF(decoder); err != nil {
+		if err := jsonutil.EnsureEOF(decoder); err != nil {
 			http.Error(w, "invalid request body", http.StatusBadRequest)
 			return
 		}
@@ -531,17 +532,6 @@ func rateAgent(querySvc *query.Service, rater *agentrating.Rater) http.HandlerFu
 
 		writeJSON(w, http.StatusOK, rating)
 	}
-}
-
-func ensureBodyEOF(decoder *json.Decoder) error {
-	var extra json.RawMessage
-	if err := decoder.Decode(&extra); err != io.EOF {
-		if err == nil {
-			return errors.New("unexpected trailing JSON data")
-		}
-		return err
-	}
-	return nil
 }
 
 func mapAgentDetailToRatingAgent(item query.AgentDetail) agentrating.Agent {
