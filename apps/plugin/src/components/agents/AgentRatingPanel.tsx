@@ -47,6 +47,9 @@ const REWRITE_SYSTEM_PROMPT = [
 
 const getStyles = (theme: GrafanaTheme2) => ({
   panel: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    height: '100%',
     borderRadius: theme.shape.radius.default,
     border: `1px solid ${theme.colors.border.weak}`,
     background: theme.colors.background.secondary,
@@ -83,6 +86,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   body: css({
     display: 'flex',
     flexDirection: 'column' as const,
+    flex: 1,
     gap: theme.spacing(1.5),
     padding: theme.spacing(1.5),
   }),

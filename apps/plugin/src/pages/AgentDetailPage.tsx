@@ -216,7 +216,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexWrap: 'wrap' as const,
     gap: theme.spacing(4),
-    padding: theme.spacing(1.5, 1),
+    padding: theme.spacing(0.5, 0),
   }),
   primaryPanelsRow: css({
     display: 'grid',
@@ -236,7 +236,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'grid',
     gap: theme.spacing(2),
     gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
-    alignItems: 'start',
+    alignItems: 'stretch',
   }),
   panel: css({
     borderRadius: theme.shape.radius.default,
@@ -1197,52 +1197,6 @@ export default function AgentDetailPage({
         </div>
       )}
 
-      <div className={styles.statsGrid}>
-        <Tooltip content="Total generations recorded for this agent version." placement="top">
-          <div>
-            <TopStat label="Generations" value={detail.generation_count} loading={false} />
-          </div>
-        </Tooltip>
-        <Tooltip content="The earliest time a generation was recorded for this agent version." placement="top">
-          <div>
-            <TopStat
-              label="First seen"
-              value={toTimestampMs(detail.first_seen_at)}
-              displayValue={formatDate(detail.first_seen_at)}
-              loading={false}
-            />
-          </div>
-        </Tooltip>
-        <Tooltip content="The most recent time any generation was recorded for this agent version." placement="top">
-          <div>
-            <TopStat
-              label="Last seen"
-              value={toTimestampMs(detail.last_seen_at)}
-              displayValue={formatDate(detail.last_seen_at)}
-              loading={false}
-            />
-          </div>
-        </Tooltip>
-        <Tooltip content="Estimated tokens consumed by the system prompt in this version." placement="top">
-          <div>
-            <TopStat label="Prompt tokens" value={detail.token_estimate.system_prompt} loading={false} />
-          </div>
-        </Tooltip>
-        <Tooltip content="Estimated tokens consumed by all tool schemas combined in this version." placement="top">
-          <div>
-            <TopStat label="Tools tokens" value={detail.token_estimate.tools_total} loading={false} />
-          </div>
-        </Tooltip>
-        <Tooltip
-          content="Sum of system prompt and tool tokens — the baseline context cost per generation."
-          placement="top"
-        >
-          <div>
-            <TopStat label="Total tokens" value={detail.token_estimate.total} loading={false} />
-          </div>
-        </Tooltip>
-      </div>
-
       <div className={styles.primaryPanelsRow}>
         <div className={cx(styles.panel, styles.stretchPanel)}>
           <div className={styles.panelHeader}>
@@ -1334,21 +1288,62 @@ export default function AgentDetailPage({
           </div>
         </div>
 
-        <ToolsPanel
-          tools={detail.tools}
-          tokenized={tokenizedSections['tools']}
-          onToggleTokenize={() => toggleSection('tools')}
-          tokenizerLoading={tokenizerLoading}
-          autoEncoding={autoEncoding}
-          encodingOverride={encodingOverride}
-          onEncodingChange={setEncodingOverride}
-          encode={encode}
-          decode={decode}
-        />
+        <div className={cx(styles.panel, styles.stretchPanel)}>
+          <div className={styles.panelHeader}>
+            <Text weight="medium">Top stats</Text>
+          </div>
+          <div className={cx(styles.panelBody, styles.stretchPanelBody)}>
+            <div className={styles.statsGrid}>
+              <Tooltip content="Total generations recorded for this agent version." placement="top">
+                <div>
+                  <TopStat label="Generations" value={detail.generation_count} loading={false} />
+                </div>
+              </Tooltip>
+              <Tooltip content="The earliest time a generation was recorded for this agent version." placement="top">
+                <div>
+                  <TopStat
+                    label="First seen"
+                    value={toTimestampMs(detail.first_seen_at)}
+                    displayValue={formatDate(detail.first_seen_at)}
+                    loading={false}
+                  />
+                </div>
+              </Tooltip>
+              <Tooltip content="The most recent time any generation was recorded for this agent version." placement="top">
+                <div>
+                  <TopStat
+                    label="Last seen"
+                    value={toTimestampMs(detail.last_seen_at)}
+                    displayValue={formatDate(detail.last_seen_at)}
+                    loading={false}
+                  />
+                </div>
+              </Tooltip>
+              <Tooltip content="Estimated tokens consumed by the system prompt in this version." placement="top">
+                <div>
+                  <TopStat label="Prompt tokens" value={detail.token_estimate.system_prompt} loading={false} />
+                </div>
+              </Tooltip>
+              <Tooltip content="Estimated tokens consumed by all tool schemas combined in this version." placement="top">
+                <div>
+                  <TopStat label="Tools tokens" value={detail.token_estimate.tools_total} loading={false} />
+                </div>
+              </Tooltip>
+              <Tooltip
+                content="Sum of system prompt and tool tokens — the baseline context cost per generation."
+                placement="top"
+              >
+                <div>
+                  <TopStat label="Total tokens" value={detail.token_estimate.total} loading={false} />
+                </div>
+              </Tooltip>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className={styles.promptPanelsRow}>
-        <div className={styles.panel}>
+        <div className={cx(styles.panel, styles.stretchPanel)}>
           <div className={styles.panelHeader}>
             <Text weight="medium">System prompt</Text>
             <span style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto' }}>
@@ -1383,7 +1378,7 @@ export default function AgentDetailPage({
               )}
             </span>
           </div>
-          <div className={styles.panelBody}>
+          <div className={cx(styles.panelBody, styles.stretchPanelBody)}>
             {detail.system_prompt.length > 0 ? (
               tokenizedSections['system'] && encode && decode ? (
                 <div className={styles.systemPrompt}>
@@ -1408,6 +1403,18 @@ export default function AgentDetailPage({
           initialError={initialRatingError}
         />
       </div>
+
+      <ToolsPanel
+        tools={detail.tools}
+        tokenized={tokenizedSections['tools']}
+        onToggleTokenize={() => toggleSection('tools')}
+        tokenizerLoading={tokenizerLoading}
+        autoEncoding={autoEncoding}
+        encodingOverride={encodingOverride}
+        onEncodingChange={setEncodingOverride}
+        encode={encode}
+        decode={decode}
+      />
     </div>
   );
 }
