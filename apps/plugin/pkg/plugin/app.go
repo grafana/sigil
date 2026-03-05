@@ -32,6 +32,7 @@ type App struct {
 	tempoDatasourceUID         string
 	grafanaAppURL              string
 	grafanaServiceAccountToken string
+	jwksURL                    string
 	client                     *http.Client
 	authzClient                authorizationClient
 	mx                         sync.Mutex
@@ -42,6 +43,7 @@ type appJSONData struct {
 	TenantID                flexString `json:"tenantId"`
 	PrometheusDatasourceUID string     `json:"prometheusDatasourceUID"`
 	TempoDatasourceUID      string     `json:"tempoDatasourceUID"`
+	JWKsURL                 string     `json:"jwksUrl"`
 }
 
 // flexString unmarshals both JSON strings and numbers into a Go string.
@@ -73,6 +75,7 @@ func (f *flexString) UnmarshalJSON(data []byte) error {
 
 const defaultSigilAPIURL = "http://sigil:8080"
 const defaultTenantID = "fake"
+const defaultJWKsURL = "http://api-lb.auth.svc.cluster.local/v1/keys"
 
 const (
 	// permissionDataRead grants read-only access to plugin query routes.
@@ -128,6 +131,7 @@ func NewApp(ctx context.Context, settings backend.AppInstanceSettings) (instance
 		tempoDatasourceUID:         strings.TrimSpace(cfg.TempoDatasourceUID),
 		grafanaAppURL:              strings.TrimSuffix(strings.TrimSpace(grafanaAppURL), "/"),
 		grafanaServiceAccountToken: grafanaServiceAccountToken,
+		jwksURL:                    strings.TrimSpace(cfg.JWKsURL),
 		client:                     &http.Client{Timeout: 5 * time.Minute},
 	}
 
@@ -180,11 +184,16 @@ func (a *App) getAuthzClient(ctx context.Context) (authorizationClient, error) {
 		return nil, errors.New("grafana service account token is unavailable")
 	}
 
+	jwksURL := a.jwksURL
+	if jwksURL == "" {
+		jwksURL = defaultJWKsURL
+	}
+
 	client, err := authz.NewEnforcementClient(
 		authz.Config{
 			APIURL:  apiURL,
 			Token:   token,
-			JWKsURL: strings.TrimRight(apiURL, "/") + "/api/signing-keys/keys",
+			JWKsURL: jwksURL,
 		},
 		authz.WithSearchByPrefix("grafana-sigil-app"),
 		authz.WithCache(cache.NewLocalCache(cache.Config{
