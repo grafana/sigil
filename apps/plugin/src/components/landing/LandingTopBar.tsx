@@ -223,6 +223,7 @@ type LandingTopBarProps = {
   requestsFilters?: DashboardFilters;
   requestsFrom?: number;
   requestsTo?: number;
+  compact?: boolean;
 };
 
 function extractRequestsSeries(response: PrometheusQueryResponse): number[] {
@@ -318,6 +319,7 @@ export function LandingTopBar({
   requestsFilters = emptyFilters,
   requestsFrom,
   requestsTo,
+  compact = false,
 }: LandingTopBarProps) {
   const styles = useStyles2(getStyles);
   const assistant = useAssistant();
@@ -631,6 +633,64 @@ export function LandingTopBar({
 
   const displayHeights = requestSpineHeights ?? waveAt75Heights;
   const showRequestSpines = requestsDataSource != null && to > from;
+
+  if (compact) {
+    return (
+      <div className={styles.compactBar}>
+        {showRequestSpines && (
+          <div className={styles.compactSpines} aria-hidden>
+            {displayHeights.map((height, i) => {
+              const t = i / (spineCount - 1);
+              const color =
+                t <= 0.52
+                  ? interpolateHex(gradientColors[0], gradientColors[1], t / 0.52)
+                  : interpolateHex(gradientColors[1], gradientColors[2], (t - 0.52) / 0.48);
+              const stat =
+                requestSpineValues != null && i < requestSpineValues.length
+                  ? formatRequestStat(requestSpineValues[i])
+                  : null;
+              const timeStr = stat != null && to > from ? formatBarTime(from, to, i, spineCount) : null;
+              const durationStr = stat != null && to > from ? formatBarDuration(from, to, spineCount) : null;
+              const waveIssueTooltip =
+                requestSpineHeights == null && requestsDataSource != null && requestSpineWaveReason === 'error'
+                  ? 'Failed to load request data'
+                  : requestSpineHeights == null && requestsDataSource != null && requestSpineWaveReason === 'no-data'
+                    ? 'No data in this time range'
+                    : null;
+              const tooltipContent =
+                stat != null ? (
+                  <div className={styles.spineTooltipContent}>
+                    <div>{stat}</div>
+                    {timeStr != null && <div className={styles.spineTooltipTime}>{timeStr}</div>}
+                    {durationStr != null && <div className={styles.spineTooltipTime}>({durationStr})</div>}
+                  </div>
+                ) : waveIssueTooltip != null ? (
+                  waveIssueTooltip
+                ) : null;
+              const bar = (
+                <div
+                  className={styles.heroSpine}
+                  style={{
+                    transform: `scaleY(${height / 100})`,
+                    backgroundColor: color,
+                    transition: disableSpineAnimation ? 'none' : undefined,
+                    transitionDelay:
+                      requestSpineHeights != null && !disableSpineAnimation ? `${Math.min(i * 6, 150)}ms` : undefined,
+                  }}
+                />
+              );
+              const slot = <div className={styles.heroSpineSlot}>{bar}</div>;
+              return (
+                <Tooltip key={i} content={tooltipContent ?? ''} placement="top">
+                  {slot}
+                </Tooltip>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <>
@@ -1017,6 +1077,22 @@ async function countEvaluatorsUpdatedInWindows(
 
 function getStyles(theme: GrafanaTheme2) {
   return {
+    compactBar: css({
+      label: 'landingTopBar-compactBar',
+      height: 28,
+      marginBottom: theme.spacing(-3),
+    }),
+    compactSpines: css({
+      label: 'landingTopBar-compactSpines',
+      display: 'flex',
+      alignItems: 'flex-end',
+      justifyContent: 'stretch',
+      gap: 2,
+      height: '100%',
+      width: '100%',
+      overflow: 'hidden',
+      opacity: 0.75,
+    }),
     pageFlow: css({
       label: 'landingTopBar-pageFlow',
       display: 'grid',
