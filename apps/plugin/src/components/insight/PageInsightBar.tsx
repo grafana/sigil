@@ -20,6 +20,8 @@ const STORAGE_KEY = 'sigil.insightBar.collapsed';
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const AGE_TICK_MS = 60 * 1000;
 const CACHE_KEY_PREFIX = 'sigil.page-insight-bar.v1';
+const GENERATE_LOCK_MS = 30 * 1000;
+const inFlightGenerateByCacheKey = new Map<string, number>();
 
 type CachedInsight = {
   generatedAt: number;
@@ -74,6 +76,13 @@ export function PageInsightBar({
   });
 
   const runGenerate = useCallback((ctx: string, cacheKey: string, fallbackCacheKey: string) => {
+    const now = Date.now();
+    const lastStartedAt = inFlightGenerateByCacheKey.get(cacheKey);
+    if (lastStartedAt && now - lastStartedAt < GENERATE_LOCK_MS) {
+      return;
+    }
+    inFlightGenerateByCacheKey.set(cacheKey, now);
+
     const { prompt: p, origin: o, systemPrompt: sp, gen: g } = latestRef.current;
     const fullPrompt = `${p}\n\nData context:\n${ctx}`;
     g.generate({
@@ -81,13 +90,17 @@ export function PageInsightBar({
       origin: o,
       systemPrompt: sp,
       onComplete: (result: string) => {
+        inFlightGenerateByCacheKey.delete(cacheKey);
         const generatedTs = Date.now();
         const cached: CachedInsight = { generatedAt: generatedTs, text: result };
         setLiveInsight({ ...cached, cacheKey });
         writeCachedInsight(cacheKey, cached);
         writeCachedInsight(fallbackCacheKey, cached);
       },
-      onError: (err: Error) => console.error('Insight generation failed:', err),
+      onError: (err: Error) => {
+        inFlightGenerateByCacheKey.delete(cacheKey);
+        console.error('Insight generation failed:', err);
+      },
     });
   }, []);
 
@@ -95,6 +108,7 @@ export function PageInsightBar({
   const fallbackCacheKey = dataContext ? buildFallbackCacheKey(prompt, origin, systemPrompt) : null;
   const exactCachedInsight = cacheKey ? readCachedInsight(cacheKey) : null;
   const fallbackCachedInsight = fallbackCacheKey ? readCachedInsight(fallbackCacheKey) : null;
+  const newestCachedInsight = pickNewestCachedInsight(exactCachedInsight, fallbackCachedInsight);
 
   useEffect(() => {
     if (!dataContext || gen.isGenerating) {
@@ -106,13 +120,13 @@ export function PageInsightBar({
     if (lastRequestKeyRef.current === cacheKey) {
       return;
     }
-    const exactCached = exactCachedInsight;
-    const cacheAgeMs = exactCached ? Date.now() - exactCached.generatedAt : Number.POSITIVE_INFINITY;
+    const latestCached = newestCachedInsight;
+    const cacheAgeMs = latestCached ? Date.now() - latestCached.generatedAt : Number.POSITIVE_INFINITY;
     lastRequestKeyRef.current = cacheKey;
-    if (!exactCached || cacheAgeMs >= REFRESH_INTERVAL_MS) {
+    if (!latestCached || cacheAgeMs >= REFRESH_INTERVAL_MS) {
       runGenerate(dataContext, cacheKey, fallbackCacheKey);
     }
-  }, [cacheKey, dataContext, exactCachedInsight, fallbackCacheKey, gen.isGenerating, runGenerate]);
+  }, [cacheKey, dataContext, fallbackCacheKey, gen.isGenerating, newestCachedInsight, runGenerate]);
 
   useEffect(() => {
     if (!dataContext) {
@@ -124,7 +138,13 @@ export function PageInsightBar({
       }
       const cacheKey = buildCacheKey(prompt, origin, systemPrompt, dataContext);
       const fallbackCacheKey = buildFallbackCacheKey(prompt, origin, systemPrompt);
-      runGenerate(dataContext, cacheKey, fallbackCacheKey);
+      const exactCached = readCachedInsight(cacheKey);
+      const fallbackCached = readCachedInsight(fallbackCacheKey);
+      const latestCached = pickNewestCachedInsight(exactCached, fallbackCached);
+      const cacheAgeMs = latestCached ? Date.now() - latestCached.generatedAt : Number.POSITIVE_INFINITY;
+      if (cacheAgeMs >= REFRESH_INTERVAL_MS) {
+        runGenerate(dataContext, cacheKey, fallbackCacheKey);
+      }
     }, REFRESH_INTERVAL_MS);
     return () => {
       window.clearInterval(intervalId);
@@ -165,7 +185,7 @@ export function PageInsightBar({
     };
   }, []);
 
-  const cachedInsight = exactCachedInsight ?? fallbackCachedInsight;
+  const cachedInsight = newestCachedInsight;
   const liveForCurrentContext = cacheKey && liveInsight?.cacheKey === cacheKey ? liveInsight : null;
   const insight = liveForCurrentContext ?? cachedInsight;
   const effectiveText = dataContext ? (insight?.text ?? '') : '';
@@ -297,6 +317,19 @@ function isCachedInsight(value: unknown): value is CachedInsight {
   }
   const candidate = value as Partial<CachedInsight>;
   return typeof candidate.generatedAt === 'number' && typeof candidate.text === 'string';
+}
+
+function pickNewestCachedInsight(
+  exactCached: CachedInsight | null,
+  fallbackCached: CachedInsight | null
+): CachedInsight | null {
+  if (!exactCached) {
+    return fallbackCached;
+  }
+  if (!fallbackCached) {
+    return exactCached;
+  }
+  return exactCached.generatedAt >= fallbackCached.generatedAt ? exactCached : fallbackCached;
 }
 
 function stableHash(input: string): string {
