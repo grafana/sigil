@@ -40,10 +40,11 @@ type BlockMeta struct {
 }
 
 type Conversation struct {
-	TenantID         string
-	ConversationID   string
-	LastGenerationAt time.Time
-	GenerationCount  int
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	TenantID          string
+	ConversationID    string
+	FirstGenerationAt time.Time
+	LastGenerationAt  time.Time
+	GenerationCount   int
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }

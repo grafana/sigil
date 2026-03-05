@@ -228,12 +228,13 @@ func normalizedNow(value time.Time) time.Time {
 
 func toConversation(row ConversationModel) storage.Conversation {
 	return storage.Conversation{
-		TenantID:         row.TenantID,
-		ConversationID:   row.ConversationID,
-		LastGenerationAt: row.LastGenerationAt.UTC(),
-		GenerationCount:  row.GenerationCount,
-		CreatedAt:        row.CreatedAt.UTC(),
-		UpdatedAt:        row.UpdatedAt.UTC(),
+		TenantID:          row.TenantID,
+		ConversationID:    row.ConversationID,
+		FirstGenerationAt: row.FirstGenerationAt.UTC(),
+		LastGenerationAt:  row.LastGenerationAt.UTC(),
+		GenerationCount:   row.GenerationCount,
+		CreatedAt:         row.CreatedAt.UTC(),
+		UpdatedAt:         row.UpdatedAt.UTC(),
 	}
 }
 
