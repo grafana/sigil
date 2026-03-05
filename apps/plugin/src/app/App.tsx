@@ -1,9 +1,9 @@
 import React from 'react';
 import { css } from '@emotion/css';
-import type { AppRootProps, GrafanaTheme2 } from '@grafana/data';
+import type { AppRootProps, GrafanaTheme2, NavModelItem } from '@grafana/data';
 import { PluginPage } from '@grafana/runtime';
 import { useStyles2 } from '@grafana/ui';
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes, useLocation } from 'react-router-dom';
 import { ROUTES } from '../constants';
 
 const LandingPage = React.lazy(() => import('../pages/LandingPage'));
@@ -26,11 +26,26 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function App(_props: AppRootProps) {
+export default function App(props: AppRootProps) {
   const styles = useStyles2(getStyles);
+  const { pathname } = useLocation();
+
+  const pageNav = React.useMemo<NavModelItem | undefined>(() => {
+    const isLandingRoute = pathname === props.basename || pathname === `${props.basename}/`;
+    if (!isLandingRoute) {
+      return undefined;
+    }
+
+    return {
+      text: props.meta.name,
+      subTitle: undefined,
+      img: undefined,
+      icon: undefined,
+    };
+  }, [pathname, props.basename, props.meta.name]);
 
   return (
-    <PluginPage renderTitle={() => <></>} background="canvas">
+    <PluginPage renderTitle={() => <></>} background="canvas" pageNav={pageNav}>
       <Routes>
         <Route path={ROUTES.Root} element={<LandingPage />} />
         <Route path={ROUTES.Analytics} element={<DashboardPage />} />
