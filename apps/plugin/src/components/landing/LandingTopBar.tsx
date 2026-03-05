@@ -217,7 +217,6 @@ function buildAssistantUrl(message: string): string {
   return url.toString();
 }
 
-
 type LandingTopBarProps = {
   assistantOrigin: string;
   requestsDataSource?: DashboardDataSource;
