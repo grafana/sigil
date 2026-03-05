@@ -19,6 +19,17 @@ const generationNodeWithAgentLink = {
       }
     : generationNode.generation,
 };
+const generationNodeWithDeclaredVersionOnly = {
+  ...generationNode,
+  generation: generationNode.generation
+    ? {
+        ...generationNode.generation,
+        agent_effective_version: undefined,
+        agent_id: undefined,
+        agent_version: '1.2.3',
+      }
+    : generationNode.generation,
+};
 
 export const Default = {
   args: {
@@ -52,6 +63,31 @@ export const WithAgentPageLink = {
         : generation
     ),
     onClose: () => {
+      // Storybook interaction-only callback.
+    },
+    onOpenAgentContext: () => {
+      // Storybook interaction-only callback.
+    },
+  },
+};
+
+export const WithDeclaredVersionOnly = {
+  args: {
+    node: generationNodeWithDeclaredVersionOnly,
+    allGenerations: mockGenerations.map((generation) =>
+      generation.generation_id === generationNode.generation?.generation_id
+        ? {
+            ...generation,
+            agent_effective_version: undefined,
+            agent_id: undefined,
+            agent_version: '1.2.3',
+          }
+        : generation
+    ),
+    onClose: () => {
+      // Storybook interaction-only callback.
+    },
+    onOpenAgentContext: () => {
       // Storybook interaction-only callback.
     },
   },

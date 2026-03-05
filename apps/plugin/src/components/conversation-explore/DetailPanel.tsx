@@ -4,7 +4,7 @@ import type { GenerationCostResult, GenerationDetail } from '../../generation/ty
 import type { FlowNode } from './types';
 import ChatThread from './ChatThread';
 import ConversationMetricsStrip from './ConversationMetricsStrip';
-import GenerationView from './GenerationView';
+import GenerationView, { type AgentContextDrawerPayload } from './GenerationView';
 import { getStyles } from './DetailPanel.styles';
 
 export type DetailPanelProps = {
@@ -15,6 +15,7 @@ export type DetailPanelProps = {
   onDeselectNode: () => void;
   onNavigateToGeneration?: (generationId: string) => void;
   scrollToToolCallId?: string | null;
+  onOpenAgentContext?: (context: AgentContextDrawerPayload) => void;
 };
 
 export default function DetailPanel({
@@ -25,6 +26,7 @@ export default function DetailPanel({
   onDeselectNode,
   onNavigateToGeneration,
   scrollToToolCallId,
+  onOpenAgentContext,
 }: DetailPanelProps) {
   const styles = useStyles2(getStyles);
 
@@ -44,6 +46,7 @@ export default function DetailPanel({
           onClose={onDeselectNode}
           onNavigateToGeneration={onNavigateToGeneration}
           scrollToToolCallId={scrollToToolCallId}
+          onOpenAgentContext={onOpenAgentContext}
         />
       ) : (
         <ChatThread generations={allGenerations} />

@@ -37,6 +37,22 @@ export const getStyles = (theme: GrafanaTheme2) => ({
       textDecorationColor: theme.colors.text.secondary,
     },
   }),
+  agentLabelButton: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    padding: 0,
+    border: 'none',
+    background: 'transparent',
+    cursor: 'pointer',
+    color: theme.colors.text.secondary,
+    '&:hover': {
+      color: theme.colors.text.primary,
+    },
+  }),
+  agentLabelIcon: css({
+    flexShrink: 0,
+  }),
   content: css({
     padding: theme.spacing(2),
     display: 'flex',

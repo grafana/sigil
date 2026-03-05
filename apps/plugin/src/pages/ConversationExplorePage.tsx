@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { AppEvents, type GrafanaTheme2 } from '@grafana/data';
-import { Alert, useStyles2 } from '@grafana/ui';
+import { Alert, Icon, useStyles2 } from '@grafana/ui';
 import { getAppEvents } from '@grafana/runtime';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
@@ -20,6 +20,7 @@ import FlowTree from '../components/conversation-explore/FlowTree';
 import MiniTimeline from '../components/conversation-explore/MiniTimeline';
 import DetailPanel from '../components/conversation-explore/DetailPanel';
 import type { FlowNode } from '../components/conversation-explore/types';
+import type { AgentContextDrawerPayload } from '../components/conversation-explore/GenerationView';
 import { Loader } from '../components/Loader';
 import { PageInsightBar } from '../components/insight/PageInsightBar';
 
@@ -56,11 +57,36 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexShrink: 0,
   }),
   contentArea: css({
+    position: 'relative' as const,
     flex: 1,
     display: 'flex',
     flexDirection: 'row' as const,
     minHeight: 0,
     overflow: 'hidden',
+  }),
+  leftPanelToggle: css({
+    position: 'absolute' as const,
+    top: theme.spacing(1),
+    width: 24,
+    height: 28,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: `1px solid ${theme.colors.border.weak}`,
+    borderLeft: 'none',
+    borderRadius: `0 ${theme.shape.radius.default}px ${theme.shape.radius.default}px 0`,
+    background: theme.colors.background.secondary,
+    color: theme.colors.text.secondary,
+    cursor: 'pointer',
+    zIndex: 6,
+    transition: 'left 140ms ease, color 120ms ease, background 120ms ease',
+    '&:hover': {
+      color: theme.colors.text.primary,
+      background: theme.colors.action.hover,
+    },
+  }),
+  leftPanelToggleCollapsed: css({
+    left: 0,
   }),
   leftPanel: css({
     display: 'flex',
@@ -87,6 +113,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     overflow: 'hidden',
   }),
   rightPanelContent: css({
+    position: 'relative' as const,
     flex: 1,
     display: 'flex',
     minWidth: 0,
@@ -100,6 +127,143 @@ const getStyles = (theme: GrafanaTheme2) => ({
     minWidth: 0,
     minHeight: 0,
     overflow: 'hidden',
+  }),
+  agentDrawer: css({
+    flex: '0 0 380px',
+    width: 380,
+    minWidth: 280,
+    maxWidth: '45%',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    background: theme.colors.background.primary,
+    borderLeft: `1px solid ${theme.colors.border.weak}`,
+    overflow: 'hidden',
+  }),
+  agentDrawerHeader: css({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing(1),
+    padding: `${theme.spacing(1.25)} ${theme.spacing(1.5)}`,
+    borderBottom: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.secondary,
+  }),
+  agentDrawerTitleWrap: css({
+    minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.25),
+  }),
+  agentDrawerTitle: css({
+    fontSize: theme.typography.bodySmall.fontSize,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.04em',
+    color: theme.colors.text.secondary,
+    fontWeight: theme.typography.fontWeightMedium,
+  }),
+  agentDrawerSubtitle: css({
+    fontSize: theme.typography.h5.fontSize,
+    lineHeight: 1.3,
+    color: theme.colors.text.primary,
+    wordBreak: 'break-word' as const,
+  }),
+  agentDrawerClose: css({
+    width: 28,
+    height: 28,
+    borderRadius: theme.shape.radius.default,
+    border: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.primary,
+    color: theme.colors.text.secondary,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    flexShrink: 0,
+    '&:hover': {
+      color: theme.colors.text.primary,
+      background: theme.colors.action.hover,
+    },
+  }),
+  agentDrawerBody: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(1.5),
+    padding: theme.spacing(1.5),
+    overflowY: 'auto' as const,
+  }),
+  agentDrawerTagRow: css({
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    gap: theme.spacing(0.5),
+  }),
+  agentDrawerTag: css({
+    display: 'inline-flex',
+    padding: `${theme.spacing(0.25)} ${theme.spacing(0.75)}`,
+    borderRadius: theme.shape.radius.pill,
+    fontSize: 11,
+    background: theme.colors.background.secondary,
+    border: `1px solid ${theme.colors.border.weak}`,
+    color: theme.colors.text.secondary,
+    fontFamily: theme.typography.fontFamilyMonospace,
+  }),
+  agentDrawerSection: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.75),
+  }),
+  agentDrawerSectionLabel: css({
+    fontSize: 10,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.04em',
+    color: theme.colors.text.secondary,
+    fontWeight: theme.typography.fontWeightMedium,
+  }),
+  agentDrawerPrompt: css({
+    margin: 0,
+    padding: theme.spacing(1),
+    borderRadius: theme.shape.radius.default,
+    border: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.secondary,
+    whiteSpace: 'pre-wrap' as const,
+    wordBreak: 'break-word' as const,
+    fontFamily: theme.typography.fontFamilyMonospace,
+    fontSize: theme.typography.bodySmall.fontSize,
+    lineHeight: 1.5,
+    color: theme.colors.text.primary,
+    maxHeight: 220,
+    overflowY: 'auto' as const,
+  }),
+  agentDrawerToolList: css({
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    gap: theme.spacing(0.5),
+  }),
+  agentDrawerToolChip: css({
+    display: 'inline-flex',
+    padding: `${theme.spacing(0.25)} ${theme.spacing(0.75)}`,
+    borderRadius: theme.shape.radius.pill,
+    border: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.secondary,
+    color: theme.colors.text.primary,
+    fontFamily: theme.typography.fontFamilyMonospace,
+    fontSize: 11,
+  }),
+  agentDrawerLink: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    width: 'fit-content',
+    color: theme.colors.text.link,
+    textDecoration: 'none',
+    fontSize: theme.typography.bodySmall.fontSize,
+    '&:hover': {
+      color: theme.colors.text.primary,
+      textDecoration: 'underline',
+    },
+  }),
+  agentDrawerEmpty: css({
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.bodySmall.fontSize,
   }),
 });
 
@@ -233,7 +397,9 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   const MIN_PANEL_WIDTH = 260;
   const MAX_PANEL_WIDTH = 700;
   const [panelWidth, setPanelWidth] = useState(340);
+  const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false);
   const dragging = useRef(false);
+  const [agentContextDrawer, setAgentContextDrawer] = useState<AgentContextDrawerPayload | null>(null);
 
   const handleResizeStart = useCallback(
     (e: React.MouseEvent) => {
@@ -259,6 +425,10 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     },
     [panelWidth]
   );
+
+  const toggleLeftPanel = useCallback(() => {
+    setIsLeftPanelCollapsed((prev) => !prev);
+  }, []);
 
   const selectedNode = useMemo<FlowNode | null>(() => {
     if (selectedNodeId === null) {
@@ -310,6 +480,16 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     },
     [flowNodes, setSelectedNodeId]
   );
+
+  const handleOpenAgentContext = useCallback((context: AgentContextDrawerPayload) => {
+    setAgentContextDrawer(context);
+  }, []);
+
+  const handleCloseAgentContext = useCallback(() => {
+    setAgentContextDrawer(null);
+  }, []);
+  const visibleAgentContextDrawer =
+    selectedNode == null || selectedNode.kind === 'agent' ? null : agentContextDrawer;
 
   const models = useMemo(
     () => Array.from(new Set(allGenerations.map((g) => g.model?.name).filter((n): n is string => Boolean(n)))),
@@ -410,35 +590,49 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
         />
       </div>
       <div className={styles.contentArea}>
-        <div className={styles.leftPanel} style={{ width: panelWidth }}>
-          <MiniTimeline
-            nodes={flowNodes}
-            totalDurationMs={totalDurationMs}
-            selectedNodeId={selectedNodeId}
-            onSelectNode={handleSelectNode}
-            generationCosts={generationCosts}
+        <button
+          type="button"
+          className={`${styles.leftPanelToggle} ${isLeftPanelCollapsed ? styles.leftPanelToggleCollapsed : ''}`}
+          style={{ left: isLeftPanelCollapsed ? 0 : panelWidth + 4 }}
+          aria-label={isLeftPanelCollapsed ? 'Expand flow panel' : 'Collapse flow panel'}
+          aria-expanded={!isLeftPanelCollapsed}
+          onClick={toggleLeftPanel}
+        >
+          <Icon name={isLeftPanelCollapsed ? 'angle-right' : 'angle-left'} size="sm" />
+        </button>
+        {!isLeftPanelCollapsed && (
+          <div className={styles.leftPanel} style={{ width: panelWidth }}>
+            <MiniTimeline
+              nodes={flowNodes}
+              totalDurationMs={totalDurationMs}
+              selectedNodeId={selectedNodeId}
+              onSelectNode={handleSelectNode}
+              generationCosts={generationCosts}
+            />
+            <FlowTree
+              nodes={flowNodes}
+              loading={tracesLoading}
+              selectedNodeId={selectedNodeId}
+              onSelectNode={handleSelectNode}
+              generationCosts={generationCosts}
+              groupBy={flowGroupBy}
+              onGroupByChange={setFlowGroupBy}
+              sortBy={flowSortBy}
+              onSortByChange={setFlowSortBy}
+              searchQuery={flowSearchQuery}
+              onSearchQueryChange={setFlowSearchQuery}
+            />
+          </div>
+        )}
+        {!isLeftPanelCollapsed && (
+          <div
+            className={styles.resizeHandle}
+            onMouseDown={handleResizeStart}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize flow panel"
           />
-          <FlowTree
-            nodes={flowNodes}
-            loading={tracesLoading}
-            selectedNodeId={selectedNodeId}
-            onSelectNode={handleSelectNode}
-            generationCosts={generationCosts}
-            groupBy={flowGroupBy}
-            onGroupByChange={setFlowGroupBy}
-            sortBy={flowSortBy}
-            onSortByChange={setFlowSortBy}
-            searchQuery={flowSearchQuery}
-            onSearchQueryChange={setFlowSearchQuery}
-          />
-        </div>
-        <div
-          className={styles.resizeHandle}
-          onMouseDown={handleResizeStart}
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize flow panel"
-        />
+        )}
         <div className={styles.rightPanel}>
           <div className={styles.rightPanelContent}>
             <div className={styles.detailPanelWrap}>
@@ -450,8 +644,71 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
                 onDeselectNode={handleDeselectNode}
                 onNavigateToGeneration={handleNavigateToGeneration}
                 scrollToToolCallId={scrollToToolCallId}
+                onOpenAgentContext={handleOpenAgentContext}
               />
             </div>
+            {visibleAgentContextDrawer && (
+              <div className={styles.agentDrawer} role="dialog" aria-label="Agent context drawer">
+                <div className={styles.agentDrawerHeader}>
+                  <div className={styles.agentDrawerTitleWrap}>
+                    <div className={styles.agentDrawerTitle}>Agent Context</div>
+                    <div className={styles.agentDrawerSubtitle}>{visibleAgentContextDrawer.label}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.agentDrawerClose}
+                    aria-label="Close agent drawer"
+                    onClick={handleCloseAgentContext}
+                  >
+                    <Icon name="times" size="sm" />
+                  </button>
+                </div>
+                <div className={styles.agentDrawerBody}>
+                  {visibleAgentContextDrawer.extraTags.length > 0 && (
+                    <div className={styles.agentDrawerTagRow}>
+                      {visibleAgentContextDrawer.extraTags.map((tag) => (
+                        <span key={tag} className={styles.agentDrawerTag}>
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {visibleAgentContextDrawer.systemPrompt && (
+                    <div className={styles.agentDrawerSection}>
+                      <div className={styles.agentDrawerSectionLabel}>System Prompt</div>
+                      <pre className={styles.agentDrawerPrompt}>
+                        {visibleAgentContextDrawer.systemPrompt.length > 1200
+                          ? `${visibleAgentContextDrawer.systemPrompt.slice(0, 1200)}…`
+                          : visibleAgentContextDrawer.systemPrompt}
+                      </pre>
+                    </div>
+                  )}
+
+                  <div className={styles.agentDrawerSection}>
+                    <div className={styles.agentDrawerSectionLabel}>Tools ({visibleAgentContextDrawer.tools.length})</div>
+                    {visibleAgentContextDrawer.tools.length > 0 ? (
+                      <div className={styles.agentDrawerToolList}>
+                        {visibleAgentContextDrawer.tools.map((tool) => (
+                          <span key={tool.name} className={styles.agentDrawerToolChip}>
+                            {tool.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className={styles.agentDrawerEmpty}>No tools recorded for this generation.</div>
+                    )}
+                  </div>
+
+                  {visibleAgentContextDrawer.agentDetailUrl && (
+                    <a href={visibleAgentContextDrawer.agentDetailUrl} className={styles.agentDrawerLink}>
+                      <Icon name="external-link-alt" size="sm" />
+                      Open agent page
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

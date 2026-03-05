@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cx } from '@emotion/css';
-import { Icon, Toggletip, Tooltip, useStyles2 } from '@grafana/ui';
+import { Icon, Tooltip, useStyles2 } from '@grafana/ui';
 import {
   formatScoreValue,
   type GenerationDetail,
   type LatestScore,
   type Message,
   type Part,
+  type ToolDefinition,
 } from '../../generation/types';
 import type { ConversationSpan } from '../../conversation/types';
 import { buildAgentDetailByNameRoute, buildAnonymousAgentDetailRoute, PLUGIN_BASE } from '../../constants';
@@ -24,6 +25,16 @@ export type GenerationViewProps = {
   onClose: () => void;
   onNavigateToGeneration?: (generationId: string) => void;
   scrollToToolCallId?: string | null;
+  onOpenAgentContext?: (context: AgentContextDrawerPayload) => void;
+};
+
+export type AgentContextDrawerPayload = {
+  label: string;
+  model?: string;
+  extraTags: string[];
+  systemPrompt?: string;
+  tools: ToolDefinition[];
+  agentDetailUrl: string | null;
 };
 
 function formatDuration(ms: number): string {
@@ -34,14 +45,29 @@ function formatDuration(ms: number): string {
 }
 
 const numberFmt = new Intl.NumberFormat('en-US');
+const effectiveVersionPattern = /^sha256:[0-9a-f]{64}$/i;
+
 function formatNumber(n: number): string {
   return numberFmt.format(n);
 }
 
+function resolveEffectiveVersion(generation: GenerationDetail): string {
+  const candidates = [generation.agent_id, generation.agent_effective_version, generation.agent_version];
+  for (const candidate of candidates) {
+    const trimmed = candidate?.trim() ?? '';
+    if (trimmed.length === 0) {
+      continue;
+    }
+    if (effectiveVersionPattern.test(trimmed)) {
+      return trimmed.toLowerCase();
+    }
+  }
+  return '';
+}
+
 function buildAgentDetailUrl(generation: GenerationDetail): string | null {
   const agentName = generation.agent_name?.trim() ?? '';
-  const effectiveVersion =
-    generation.agent_id?.trim() || generation.agent_effective_version?.trim() || generation.agent_version?.trim() || '';
+  const effectiveVersion = resolveEffectiveVersion(generation);
   const route = agentName.length > 0 ? buildAgentDetailByNameRoute(agentName) : buildAnonymousAgentDetailRoute();
   if (!route) {
     return null;
@@ -277,7 +303,15 @@ function UsageChips({ generation }: { generation: GenerationDetail }) {
   );
 }
 
-function AgentContextLabel({ generation, fallbackModel }: { generation: GenerationDetail; fallbackModel?: string }) {
+function AgentContextLabel({
+  generation,
+  fallbackModel,
+  onOpenAgentContext,
+}: {
+  generation: GenerationDetail;
+  fallbackModel?: string;
+  onOpenAgentContext?: (context: AgentContextDrawerPayload) => void;
+}) {
   const styles = useStyles2(getStyles);
 
   const agentName = generation.agent_name;
@@ -310,55 +344,34 @@ function AgentContextLabel({ generation, fallbackModel }: { generation: Generati
     return <span className={styles.agentLabel}>{label}</span>;
   }
 
-  const content = (
-    <div className={styles.tipContainer}>
-      {extraTags.length > 0 && (
-        <div className={styles.tipTagRow}>
-          {extraTags.map((tag) => (
-            <span key={tag} className={styles.tipTag}>
-              {tag}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {systemPrompt && (
-        <div className={styles.tipSection}>
-          <div className={styles.tipSectionLabel}>System Prompt</div>
-          <div className={styles.tipSystemPrompt}>
-            {systemPrompt.length > 800 ? `${systemPrompt.slice(0, 800)}…` : systemPrompt}
-          </div>
-        </div>
-      )}
-
-      {tools.length > 0 && (
-        <div className={styles.tipSection}>
-          <div className={styles.tipSectionLabel}>Tools ({tools.length})</div>
-          <div className={styles.toolList}>
-            {tools.map((tool) => (
-              <span key={tool.name} className={styles.toolChip}>
-                {tool.name}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {agentDetailUrl && (
+  if (!onOpenAgentContext) {
+    if (agentDetailUrl) {
+      return (
         <a href={agentDetailUrl} className={styles.tipActionLink}>
+          <span className={styles.agentLabel}>{label}</span>
           <Icon name="external-link-alt" size="sm" />
-          Open agent page
         </a>
-      )}
-    </div>
-  );
+      );
+    }
+    return <span className={styles.agentLabel}>{label}</span>;
+  }
+
+  const handleOpen = () => {
+    onOpenAgentContext({
+      label,
+      model,
+      extraTags,
+      systemPrompt,
+      tools,
+      agentDetailUrl,
+    });
+  };
 
   return (
-    <Toggletip placement="bottom" fitContent content={content}>
-      <span className={styles.agentLabel} role="button" tabIndex={0} aria-label="Agent context">
-        {label}
-      </span>
-    </Toggletip>
+    <button type="button" className={styles.agentLabelButton} aria-label="Agent context" onClick={handleOpen}>
+      <span className={styles.agentLabel}>{label}</span>
+      <Icon name="angle-right" size="sm" className={styles.agentLabelIcon} />
+    </button>
   );
 }
 
@@ -585,6 +598,7 @@ export default function GenerationView({
   onClose,
   onNavigateToGeneration,
   scrollToToolCallId,
+  onOpenAgentContext,
 }: GenerationViewProps) {
   const styles = useStyles2(getStyles);
   const gen = useMemo(() => resolveGeneration(node, allGenerations), [node, allGenerations]);
@@ -740,7 +754,11 @@ export default function GenerationView({
           )}
           <div className={styles.navCenter}>
             {gen ? (
-              <AgentContextLabel generation={gen} fallbackModel={modelName} />
+              <AgentContextLabel
+                generation={gen}
+                fallbackModel={modelName}
+                onOpenAgentContext={onOpenAgentContext}
+              />
             ) : (
               modelName && <span className={styles.barMeta}>{modelName}</span>
             )}

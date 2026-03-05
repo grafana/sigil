@@ -39,7 +39,8 @@ describe('GenerationView', () => {
     expect(within(chip!).queryByText('✓')).not.toBeInTheDocument();
   });
 
-  it('shows an agent detail link in the agent context popover', async () => {
+  it('opens agent context drawer payload with hash-style version link', () => {
+    const onOpenAgentContext = jest.fn();
     const generation: GenerationDetail = {
       generation_id: 'gen-1',
       conversation_id: 'conv-1',
@@ -62,18 +63,28 @@ describe('GenerationView', () => {
       children: [],
     };
 
-    render(<GenerationView node={node} allGenerations={[generation]} onClose={jest.fn()} />);
+    render(
+      <GenerationView
+        node={node}
+        allGenerations={[generation]}
+        onClose={jest.fn()}
+        onOpenAgentContext={onOpenAgentContext}
+      />
+    );
 
     fireEvent.click(screen.getByLabelText('Agent context'));
 
-    const link = await screen.findByRole('link', { name: 'Open agent page' });
-    expect(link).toHaveAttribute(
-      'href',
-      '/a/grafana-sigil-app/agents/name/assistant?version=sha256%3Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    expect(onOpenAgentContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: 'assistant · gpt-4.1',
+        agentDetailUrl:
+          '/a/grafana-sigil-app/agents/name/assistant?version=sha256%3Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      })
     );
   });
 
-  it('shows the agent detail link even when no other agent context fields are present', async () => {
+  it('opens drawer payload even when only agent link metadata is present', () => {
+    const onOpenAgentContext = jest.fn();
     const generation: GenerationDetail = {
       generation_id: 'gen-1',
       conversation_id: 'conv-1',
@@ -91,14 +102,61 @@ describe('GenerationView', () => {
       children: [],
     };
 
-    render(<GenerationView node={node} allGenerations={[generation]} onClose={jest.fn()} />);
+    render(
+      <GenerationView
+        node={node}
+        allGenerations={[generation]}
+        onClose={jest.fn()}
+        onOpenAgentContext={onOpenAgentContext}
+      />
+    );
 
     fireEvent.click(screen.getByLabelText('Agent context'));
 
-    const link = await screen.findByRole('link', { name: 'Open agent page' });
-    expect(link).toHaveAttribute(
-      'href',
-      '/a/grafana-sigil-app/agents/name/assistant?version=sha256%3Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    expect(onOpenAgentContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: 'assistant',
+        agentDetailUrl:
+          '/a/grafana-sigil-app/agents/name/assistant?version=sha256%3Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      })
+    );
+  });
+
+  it('does not use declared agent_version as agent detail version query parameter', () => {
+    const onOpenAgentContext = jest.fn();
+    const generation: GenerationDetail = {
+      generation_id: 'gen-1',
+      conversation_id: 'conv-1',
+      agent_name: 'assistant',
+      agent_version: '1.2.3',
+    };
+    const node: FlowNode = {
+      id: 'node-1',
+      kind: 'generation',
+      label: 'generation',
+      durationMs: 125,
+      startMs: 0,
+      status: 'success',
+      generation,
+      children: [],
+    };
+
+    render(
+      <GenerationView
+        node={node}
+        allGenerations={[generation]}
+        onClose={jest.fn()}
+        onOpenAgentContext={onOpenAgentContext}
+      />
+    );
+
+    fireEvent.click(screen.getByLabelText('Agent context'));
+
+    expect(onOpenAgentContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: 'assistant',
+        agentDetailUrl: '/a/grafana-sigil-app/agents/name/assistant',
+      })
     );
   });
 });

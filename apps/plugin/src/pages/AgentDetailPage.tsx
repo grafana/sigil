@@ -20,6 +20,7 @@ import { getEncoding, AVAILABLE_ENCODINGS, type EncodingName } from '../componen
 import { getTokenizeControlStyles } from '../components/tokenizer/tokenizeControls.styles';
 
 const VERSION_PAGE_SIZE = 50;
+const EFFECTIVE_VERSION_PATTERN = /^sha256:[0-9a-f]{64}$/i;
 
 export type AgentDetailPageProps = {
   dataSource?: AgentsDataSource;
@@ -177,6 +178,31 @@ function formatDate(iso: string): string {
   return parsed.toLocaleString();
 }
 
+function normalizeEffectiveVersion(value: string): string {
+  const trimmed = value.trim();
+  if (!EFFECTIVE_VERSION_PATTERN.test(trimmed)) {
+    return '';
+  }
+  return trimmed.toLowerCase();
+}
+
+function extractStatusCode(err: unknown): number {
+  if (typeof err !== 'object' || err === null) {
+    return 0;
+  }
+  const withStatus = err as { status?: unknown; statusCode?: unknown; data?: { status?: unknown } };
+  if (typeof withStatus.status === 'number') {
+    return withStatus.status;
+  }
+  if (typeof withStatus.statusCode === 'number') {
+    return withStatus.statusCode;
+  }
+  if (typeof withStatus.data?.status === 'number') {
+    return withStatus.data.status;
+  }
+  return 0;
+}
+
 function buildAgentNameFromRoute(pathname: string, routeParam?: string): string {
   if (new RegExp(`(^|/)${ROUTES.Agents}/anonymous/?$`).test(pathname)) {
     return '';
@@ -227,9 +253,24 @@ export default function AgentDetailPage({
   const versionsRequestVersion = useRef(0);
   const ratingRequestVersion = useRef(0);
 
-  const selectedVersion = searchParams.get('version')?.trim() ?? '';
+  const selectedVersionRaw = searchParams.get('version')?.trim() ?? '';
+  const selectedVersion = normalizeEffectiveVersion(selectedVersionRaw);
   const agentName = buildAgentNameFromRoute(location.pathname, params.agentName);
   const isAnonymous = agentName.length === 0;
+
+  useEffect(() => {
+    if (selectedVersionRaw.length === 0 || selectedVersion.length > 0) {
+      return;
+    }
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('version');
+        return next;
+      },
+      { replace: true }
+    );
+  }, [selectedVersion, selectedVersionRaw, setSearchParams]);
 
   useEffect(() => {
     detailRequestVersion.current += 1;
@@ -251,10 +292,38 @@ export default function AgentDetailPage({
         }
         setDetail(item);
       })
-      .catch((err) => {
+      .catch(async (err) => {
         if (detailRequestVersion.current !== version) {
           return;
         }
+
+        const statusCode = extractStatusCode(err);
+        if (selectedVersion.length > 0 && (statusCode === 400 || statusCode === 404)) {
+          try {
+            const latest = await dataSource.lookupAgent(agentName);
+            if (detailRequestVersion.current !== version) {
+              return;
+            }
+            setDetail(latest);
+            setSearchParams(
+              (prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete('version');
+                return next;
+              },
+              { replace: true }
+            );
+            return;
+          } catch (fallbackErr) {
+            if (detailRequestVersion.current !== version) {
+              return;
+            }
+            setDetail(null);
+            setErrorMessage(fallbackErr instanceof Error ? fallbackErr.message : 'Failed to load agent detail');
+            return;
+          }
+        }
+
         setDetail(null);
         setErrorMessage(err instanceof Error ? err.message : 'Failed to load agent detail');
       })
@@ -264,7 +333,7 @@ export default function AgentDetailPage({
         }
         setLoading(false);
       });
-  }, [agentName, dataSource, selectedVersion]);
+  }, [agentName, dataSource, selectedVersion, setSearchParams]);
 
   useEffect(() => {
     ratingRequestVersion.current += 1;
