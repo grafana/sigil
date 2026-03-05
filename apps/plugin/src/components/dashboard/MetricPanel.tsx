@@ -145,6 +145,8 @@ export function MetricPanel({
 }: MetricPanelProps) {
   const styles = useStyles2(getStyles);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dataRef = useRef(data);
+  dataRef.current = data;
   const [width, setWidth] = useState(0);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -204,11 +206,11 @@ export function MetricPanel({
       onToggleSeriesVisibility: (label: string, mode: SeriesVisibilityChangeMode) => {
         setUserFieldConfig((prev) => {
           const current = prev ?? stableFieldConfig;
-          return seriesVisibilityConfigFactory(label, mode, current, data);
+          return seriesVisibilityConfigFactory(label, mode, current, dataRef.current);
         });
       },
     }),
-    [eventBus, stableFieldConfig, data]
+    [eventBus, stableFieldConfig]
   );
 
   return (
