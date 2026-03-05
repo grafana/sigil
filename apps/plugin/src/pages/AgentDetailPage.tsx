@@ -35,22 +35,99 @@ const getStyles = (theme: GrafanaTheme2) => ({
     minHeight: 0,
     marginTop: theme.spacing(-4),
   }),
-  titleRow: css({
+  heroPanel: css({
+    position: 'relative' as const,
+    borderRadius: theme.shape.radius.default,
+    border: `1px solid ${theme.colors.border.weak}`,
+    background: `linear-gradient(135deg, ${theme.colors.background.primary} 0%, ${theme.colors.background.secondary} 100%)`,
+    overflow: 'hidden',
+    '&::before': {
+      content: '""',
+      position: 'absolute' as const,
+      top: 0,
+      left: 0,
+      right: 0,
+      height: 3,
+      background: 'linear-gradient(90deg, #5794F2 0%, #B877D9 52%, #FF9830 100%)',
+    },
+  }),
+  heroPanelBody: css({
+    position: 'relative' as const,
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) auto',
+    gap: theme.spacing(2),
+    padding: theme.spacing(2, 2, 2.5, 2),
+    '@media (max-width: 900px)': {
+      gridTemplateColumns: '1fr',
+    },
+  }),
+  heroGlow: css({
+    pointerEvents: 'none' as const,
+    position: 'absolute' as const,
+    width: 240,
+    height: 240,
+    right: -60,
+    top: -90,
+    borderRadius: '50%',
+    background: 'radial-gradient(circle, rgba(87,148,242,0.24) 0%, rgba(87,148,242,0) 65%)',
+  }),
+  heroTitleRow: css({
     display: 'flex',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
     gap: theme.spacing(2),
     flexWrap: 'wrap' as const,
   }),
-  titleMeta: css({
+  heroTitleMeta: css({
     display: 'flex',
     flexDirection: 'column' as const,
     gap: theme.spacing(0.5),
+  }),
+  heroEyebrow: css({
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.08em',
+    fontSize: theme.typography.bodySmall.fontSize,
+    color: '#5794F2',
+    fontWeight: theme.typography.fontWeightMedium,
+    lineHeight: 1.2,
+  }),
+  heroBackButton: css({
+    marginTop: theme.spacing(0.25),
+  }),
+  agentNameHeading: css({
+    margin: 0,
+    lineHeight: 1.1,
   }),
   badgeRow: css({
     display: 'flex',
     gap: theme.spacing(0.5),
     flexWrap: 'wrap' as const,
+  }),
+  heroMetaGrid: css({
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    gap: theme.spacing(1),
+    alignItems: 'stretch',
+  }),
+  heroMetaChip: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing(0.5),
+    borderRadius: theme.shape.radius.default,
+    border: `1px solid ${theme.colors.border.medium}`,
+    background: theme.colors.background.secondary,
+    padding: `${theme.spacing(0.5)} ${theme.spacing(0.75)}`,
+    fontSize: theme.typography.bodySmall.fontSize,
+    lineHeight: 1.2,
+    whiteSpace: 'nowrap' as const,
+    minWidth: 0,
+  }),
+  heroMetaLabel: css({
+    color: theme.colors.text.secondary,
+  }),
+  heroMetaValue: css({
+    color: theme.colors.text.primary,
+    fontWeight: theme.typography.fontWeightMedium,
   }),
   anonymousBanner: css({
     borderRadius: theme.shape.radius.default,
@@ -64,7 +141,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexWrap: 'wrap' as const,
     gap: theme.spacing(4),
     padding: theme.spacing(1.5, 0),
-    borderBottom: `1px solid ${theme.colors.border.weak}`,
   }),
   panel: css({
     borderRadius: theme.shape.radius.default,
@@ -192,6 +268,14 @@ function buildAgentNameFromRoute(pathname: string, routeParam?: string): string 
 function toTimestampMs(iso: string): number {
   const parsed = Date.parse(iso);
   return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function formatVersionShort(version: string): string {
+  const clean = version.replace(/^sha256:/, '');
+  if (clean.length <= 12) {
+    return clean;
+  }
+  return `${clean.slice(0, 12)}...`;
 }
 
 export default function AgentDetailPage({
@@ -488,61 +572,92 @@ export default function AgentDetailPage({
         </Alert>
       )}
 
-      <div className={styles.titleRow}>
-        <div className={styles.titleMeta}>
-          <Button
-            variant="secondary"
-            fill="text"
-            size="sm"
-            icon="arrow-left"
-            onClick={() => navigate(agentsTableRoute)}
-          >
-            All agents
-          </Button>
-          <Text element="h2">{isAnonymous ? 'Unnamed agent bucket' : detail.agent_name}</Text>
-          <div className={styles.badgeRow}>
-            {isAnonymous && <Badge text="Anonymous" color="orange" />}
-          </div>
-          {detail.models.length > 0 && (
-            <div className={styles.modelChipsRow}>
-              {detail.models.map((model) => {
-                const cardKey = `${model.provider}::${model.name}`;
-                const card = modelCards.get(cardKey) ?? null;
-                const meta = getProviderMeta(model.provider);
-                const chipLabel = card
-                  ? stripProviderPrefix(card.name || card.source_model_id, meta.label)
-                  : stripProviderPrefix(model.name, meta.label);
-                const dotColor = getProviderColor(model.provider);
-                const isOpen = openModel?.key === cardKey;
-                return (
-                  <div key={cardKey} className={styles.modelChipAnchor}>
-                    <button
-                      type="button"
-                      className={`${styles.modelChip} ${isOpen ? styles.modelChipActive : ''}`}
-                      onClick={(event) => {
-                        if (isOpen) {
-                          setOpenModel(null);
-                          return;
-                        }
-                        setOpenModel({ key: cardKey, anchorRect: event.currentTarget.getBoundingClientRect() });
-                      }}
-                      aria-label={`model card ${chipLabel}`}
-                    >
-                      <span className={styles.modelChipDot} style={{ background: dotColor }} />
-                      <span>{chipLabel}</span>
-                    </button>
-                    {isOpen && card && (
-                      <ModelCardPopover
-                        card={card}
-                        anchorRect={openModel?.anchorRect ?? null}
-                        onClose={() => setOpenModel(null)}
-                      />
-                    )}
-                  </div>
-                );
-              })}
+      <div className={styles.heroPanel}>
+        <div className={styles.heroPanelBody}>
+          <div className={styles.heroGlow} aria-hidden />
+          <div className={styles.heroTitleMeta}>
+            <div className={styles.heroTitleRow}>
+              <Button
+                variant="secondary"
+                fill="text"
+                size="sm"
+                icon="arrow-left"
+                className={styles.heroBackButton}
+                onClick={() => navigate(agentsTableRoute)}
+              >
+                All agents
+              </Button>
+              <div>
+                <div className={styles.heroEyebrow}>Agent</div>
+                <h2 className={styles.agentNameHeading}>{isAnonymous ? 'Unnamed agent bucket' : detail.agent_name}</h2>
+              </div>
+              <div className={styles.badgeRow}>
+                {isAnonymous && <Badge text="Anonymous" color="orange" />}
+              </div>
             </div>
-          )}
+            <div className={styles.heroMetaGrid}>
+              <div className={styles.heroMetaChip}>
+                <span className={styles.heroMetaLabel}>Version</span>
+                <span className={styles.heroMetaValue}>{formatVersionShort(activeVersion)}</span>
+              </div>
+              <div className={styles.heroMetaChip}>
+                <span className={styles.heroMetaLabel}>Declared version</span>
+                <span className={styles.heroMetaValue}>{detail.declared_version_latest || 'n/a'}</span>
+              </div>
+              <div className={styles.heroMetaChip}>
+                <span className={styles.heroMetaLabel}>Models</span>
+                <span className={styles.heroMetaValue}>{detail.models.length.toLocaleString()}</span>
+              </div>
+              <div className={styles.heroMetaChip}>
+                <span className={styles.heroMetaLabel}>Primary model</span>
+                <span className={styles.heroMetaValue}>
+                  {detail.models.length > 0
+                    ? stripProviderPrefix(detail.models[0].name, getProviderMeta(detail.models[0].provider).label)
+                    : 'n/a'}
+                </span>
+              </div>
+            </div>
+            {detail.models.length > 0 && (
+              <div className={styles.modelChipsRow}>
+                {detail.models.map((model) => {
+                  const cardKey = `${model.provider}::${model.name}`;
+                  const card = modelCards.get(cardKey) ?? null;
+                  const meta = getProviderMeta(model.provider);
+                  const chipLabel = card
+                    ? stripProviderPrefix(card.name || card.source_model_id, meta.label)
+                    : stripProviderPrefix(model.name, meta.label);
+                  const dotColor = getProviderColor(model.provider);
+                  const isOpen = openModel?.key === cardKey;
+                  return (
+                    <div key={cardKey} className={styles.modelChipAnchor}>
+                      <button
+                        type="button"
+                        className={`${styles.modelChip} ${isOpen ? styles.modelChipActive : ''}`}
+                        onClick={(event) => {
+                          if (isOpen) {
+                            setOpenModel(null);
+                            return;
+                          }
+                          setOpenModel({ key: cardKey, anchorRect: event.currentTarget.getBoundingClientRect() });
+                        }}
+                        aria-label={`model card ${chipLabel}`}
+                      >
+                        <span className={styles.modelChipDot} style={{ background: dotColor }} />
+                        <span>{chipLabel}</span>
+                      </button>
+                      {isOpen && card && (
+                        <ModelCardPopover
+                          card={card}
+                          anchorRect={openModel?.anchorRect ?? null}
+                          onClose={() => setOpenModel(null)}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
