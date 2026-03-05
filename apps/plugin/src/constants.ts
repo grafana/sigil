@@ -30,3 +30,5 @@ export function buildAgentDetailByNameRoute(agentName: string): string {
 export function buildAnonymousAgentDetailRoute(): string {
   return ROUTES.AgentDetailAnonymous;
 }
+
+export const EFFECTIVE_VERSION_PATTERN = /^sha256:[0-9a-f]{64}$/i;

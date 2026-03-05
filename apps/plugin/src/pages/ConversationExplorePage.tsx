@@ -399,7 +399,10 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   const [panelWidth, setPanelWidth] = useState(340);
   const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false);
   const dragging = useRef(false);
-  const [agentContextDrawer, setAgentContextDrawer] = useState<AgentContextDrawerPayload | null>(null);
+  const [agentContextDrawer, setAgentContextDrawer] = useState<{
+    nodeId: string | null;
+    payload: AgentContextDrawerPayload;
+  } | null>(null);
 
   const handleResizeStart = useCallback(
     (e: React.MouseEvent) => {
@@ -481,15 +484,20 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     [flowNodes, setSelectedNodeId]
   );
 
-  const handleOpenAgentContext = useCallback((context: AgentContextDrawerPayload) => {
-    setAgentContextDrawer(context);
-  }, []);
+  const handleOpenAgentContext = useCallback(
+    (context: AgentContextDrawerPayload) => {
+      setAgentContextDrawer({ nodeId: selectedNodeId, payload: context });
+    },
+    [selectedNodeId]
+  );
 
   const handleCloseAgentContext = useCallback(() => {
     setAgentContextDrawer(null);
   }, []);
   const visibleAgentContextDrawer =
-    selectedNode == null || selectedNode.kind === 'agent' ? null : agentContextDrawer;
+    selectedNode == null || selectedNode.kind === 'agent' || agentContextDrawer?.nodeId !== selectedNodeId
+      ? null
+      : agentContextDrawer.payload;
 
   const models = useMemo(
     () => Array.from(new Set(allGenerations.map((g) => g.model?.name).filter((n): n is string => Boolean(n)))),

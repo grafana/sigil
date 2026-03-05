@@ -12,7 +12,7 @@ import AgentRatingPanel from '../components/agents/AgentRatingPanel';
 import { defaultModelCardClient, type ModelCardClient } from '../modelcard/api';
 import type { ModelCard } from '../modelcard/types';
 import { resolveModelCardsFromNames } from '../modelcard/resolve';
-import { PLUGIN_BASE, ROUTES } from '../constants';
+import { EFFECTIVE_VERSION_PATTERN, PLUGIN_BASE, ROUTES } from '../constants';
 import { formatDateShort } from '../utils/date';
 import { TokenizedText } from '../components/tokenizer/TokenizedText';
 import { useTokenizer } from '../components/tokenizer/useTokenizer';
@@ -20,7 +20,6 @@ import { getEncoding, AVAILABLE_ENCODINGS, type EncodingName } from '../componen
 import { getTokenizeControlStyles } from '../components/tokenizer/tokenizeControls.styles';
 
 const VERSION_PAGE_SIZE = 50;
-const EFFECTIVE_VERSION_PATTERN = /^sha256:[0-9a-f]{64}$/i;
 
 export type AgentDetailPageProps = {
   dataSource?: AgentsDataSource;
@@ -252,6 +251,7 @@ export default function AgentDetailPage({
   const detailRequestVersion = useRef(0);
   const versionsRequestVersion = useRef(0);
   const ratingRequestVersion = useRef(0);
+  const fallbackApplied = useRef(false);
 
   const selectedVersionRaw = searchParams.get('version')?.trim() ?? '';
   const selectedVersion = normalizeEffectiveVersion(selectedVersionRaw);
@@ -273,6 +273,11 @@ export default function AgentDetailPage({
   }, [selectedVersion, selectedVersionRaw, setSearchParams]);
 
   useEffect(() => {
+    if (fallbackApplied.current) {
+      fallbackApplied.current = false;
+      return;
+    }
+
     detailRequestVersion.current += 1;
     const version = detailRequestVersion.current;
 
@@ -305,6 +310,7 @@ export default function AgentDetailPage({
               return;
             }
             setDetail(latest);
+            fallbackApplied.current = true;
             setSearchParams(
               (prev) => {
                 const next = new URLSearchParams(prev);

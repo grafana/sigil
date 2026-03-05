@@ -10,7 +10,12 @@ import {
   type ToolDefinition,
 } from '../../generation/types';
 import type { ConversationSpan } from '../../conversation/types';
-import { buildAgentDetailByNameRoute, buildAnonymousAgentDetailRoute, PLUGIN_BASE } from '../../constants';
+import {
+  buildAgentDetailByNameRoute,
+  buildAnonymousAgentDetailRoute,
+  EFFECTIVE_VERSION_PATTERN,
+  PLUGIN_BASE,
+} from '../../constants';
 import type { FlowNode } from './types';
 import { getStyles } from './GenerationView.styles';
 import { renderTextWithXml } from './CollapsibleXml';
@@ -45,7 +50,6 @@ function formatDuration(ms: number): string {
 }
 
 const numberFmt = new Intl.NumberFormat('en-US');
-const effectiveVersionPattern = /^sha256:[0-9a-f]{64}$/i;
 
 function formatNumber(n: number): string {
   return numberFmt.format(n);
@@ -58,7 +62,7 @@ function resolveEffectiveVersion(generation: GenerationDetail): string {
     if (trimmed.length === 0) {
       continue;
     }
-    if (effectiveVersionPattern.test(trimmed)) {
+    if (EFFECTIVE_VERSION_PATTERN.test(trimmed)) {
       return trimmed.toLowerCase();
     }
   }
