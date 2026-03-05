@@ -3,7 +3,7 @@ import { css } from '@emotion/css';
 import type { AppRootProps, GrafanaTheme2, NavModelItem } from '@grafana/data';
 import { PluginPage } from '@grafana/runtime';
 import { useStyles2 } from '@grafana/ui';
-import { Route, Routes, useLocation } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
 import { ROUTES } from '../constants';
 
 const LandingPage = React.lazy(() => import('../pages/LandingPage'));
@@ -28,21 +28,16 @@ const getStyles = (theme: GrafanaTheme2) => ({
 
 export default function App(props: AppRootProps) {
   const styles = useStyles2(getStyles);
-  const { pathname } = useLocation();
-
-  const pageNav = React.useMemo<NavModelItem | undefined>(() => {
-    const isLandingRoute = pathname === props.basename || pathname === `${props.basename}/`;
-    if (!isLandingRoute) {
-      return undefined;
-    }
-
-    return {
+  const pageNav = React.useMemo<NavModelItem>(
+    () => ({
       text: props.meta.name,
       subTitle: undefined,
       img: undefined,
       icon: undefined,
-    };
-  }, [pathname, props.basename, props.meta.name]);
+      hideFromBreadcrumbs: true,
+    }),
+    [props.meta.name]
+  );
 
   return (
     <PluginPage renderTitle={() => <></>} background="canvas" pageNav={pageNav}>
