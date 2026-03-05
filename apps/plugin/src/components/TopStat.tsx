@@ -12,6 +12,7 @@ export type TopStatProps = {
   unit?: string;
   loading: boolean;
   compact?: boolean;
+  normalFontSize?: boolean;
   prevValue?: number;
   prevLoading?: boolean;
   invertChange?: boolean;
@@ -30,6 +31,7 @@ export function TopStat({
   unit,
   loading,
   compact = false,
+  normalFontSize = false,
   prevValue,
   prevLoading,
   invertChange,
@@ -96,7 +98,13 @@ export function TopStat({
         )}
       </div>
       <div className={cx(styles.topStatRow, compact && styles.topStatRowCompact)}>
-        <span className={cx(styles.topStatValue, compact && styles.topStatValueCompact)}>
+        <span
+          className={cx(
+            styles.topStatValue,
+            compact && styles.topStatValueCompact,
+            normalFontSize && styles.topStatValueNormalFont
+          )}
+        >
           {loading ? '–' : (displayValue ?? formatStatValue(value, unit))}
         </span>
         {changeBadge}
@@ -176,6 +184,10 @@ function getStyles(theme: GrafanaTheme2) {
     topStatValueCompact: css({
       fontSize: theme.typography.h5.fontSize,
       lineHeight: 1.15,
+    }),
+    topStatValueNormalFont: css({
+      fontSize: theme.typography.body.fontSize,
+      lineHeight: 1.3,
     }),
     changeBadge: css({
       display: 'inline-flex',

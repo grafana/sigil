@@ -132,6 +132,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     fontVariantNumeric: 'tabular-nums',
   }),
   summary: css({
+    display: 'flex',
+    alignItems: 'center',
+    flexWrap: 'wrap' as const,
+    gap: theme.spacing(0.25),
     color: theme.colors.text.primary,
     lineHeight: 1.5,
     background: `${theme.colors.background.canvas}40`,
@@ -144,16 +148,15 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   summaryPrefix: css({
     color: theme.colors.text.secondary,
-    marginRight: theme.spacing(0.5),
     fontWeight: theme.typography.fontWeightMedium,
   }),
   summaryStatusIcon: css({
     display: 'inline-flex',
     alignItems: 'center',
-    marginRight: theme.spacing(0.5),
-    verticalAlign: 'text-bottom',
   }),
   summaryTextButton: css({
+    display: 'inline-flex',
+    alignItems: 'center',
     border: 'none',
     background: 'transparent',
     padding: 0,

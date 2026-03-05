@@ -67,12 +67,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
       background: 'linear-gradient(90deg, #5794F2 0%, #B877D9 52%, #FF9830 100%)',
     },
   }),
-  heroTopRightRating: css({
-    position: 'absolute' as const,
-    top: 8,
-    right: 10,
-    zIndex: 2,
-  }),
   heroActivityTop: css({
     borderTopLeftRadius: theme.shape.radius.default,
     borderTopRightRadius: theme.shape.radius.default,
@@ -111,16 +105,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     '@media (max-width: 900px)': {
       gridTemplateColumns: '1fr',
     },
-  }),
-  heroGlow: css({
-    pointerEvents: 'none' as const,
-    position: 'absolute' as const,
-    width: 240,
-    height: 240,
-    right: -60,
-    top: -90,
-    borderRadius: '50%',
-    background: 'radial-gradient(circle, rgba(87,148,242,0.24) 0%, rgba(87,148,242,0) 65%)',
   }),
   heroTitleRow: css({
     display: 'grid',
@@ -174,11 +158,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   heroMetaGrid: css({
     display: 'grid',
-    gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+    gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
     gap: theme.spacing(0.75, 1),
     width: '100%',
     '@media (max-width: 1400px)': {
-      gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+      gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
     },
     '@media (max-width: 900px)': {
       gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
@@ -190,6 +174,30 @@ const getStyles = (theme: GrafanaTheme2) => ({
   heroMetaStat: css({
     minWidth: 0,
     paddingTop: theme.spacing(0.5),
+  }),
+  heroMetaStatWide: css({
+    gridColumn: 'span 2',
+    '@media (max-width: 900px)': {
+      gridColumn: 'auto',
+    },
+  }),
+  heroMetaStatHighlight: css({
+    minWidth: 0,
+    padding: theme.spacing(1, 1.25),
+    borderRadius: theme.shape.radius.default,
+    background: theme.colors.background.secondary,
+    border: `1px solid ${theme.colors.border.weak}`,
+  }),
+  latestScoreBlocks: css({
+    display: 'grid',
+    gridTemplateColumns: 'repeat(10, minmax(0, 1fr))',
+    gap: 3,
+    marginTop: theme.spacing(0.5),
+  }),
+  latestScoreBlock: css({
+    height: 6,
+    borderRadius: 2,
+    background: theme.colors.border.weak,
   }),
   anonymousBanner: css({
     borderRadius: theme.shape.radius.default,
@@ -1187,7 +1195,8 @@ export default function AgentDetailPage({
   const gradientColors = ['#5794F2', '#B877D9', '#FF9830'] as const;
   const displayActivityHeights = activityHeights && activityHeights.length > 0 ? activityHeights : EMPTY_ACTIVITY_BARS;
   const latestHeroRating = selectedVersion.length === 0 && initialRating?.status === 'completed' ? initialRating : null;
-  const latestHeroRatingTooltip = latestHeroRating ? firstLine(latestHeroRating.summary) : '';
+  const latestHeroRatingSummary = latestHeroRating ? firstLine(latestHeroRating.summary) : '';
+  const latestScoreFilledBlocks = latestHeroRating ? Math.max(0, Math.min(10, Math.round(latestHeroRating.score))) : 0;
 
   return (
     <div className={styles.page}>
@@ -1221,28 +1230,7 @@ export default function AgentDetailPage({
           </div>
         </div>
         <div className={styles.heroPanel}>
-          {latestHeroRating && (
-            <div className={styles.heroTopRightRating}>
-              <Tooltip content={latestHeroRatingTooltip} placement="left">
-                <span aria-label={`Latest rating summary: ${latestHeroRatingTooltip}`}>
-                  <Badge
-                    text={`Latest ${latestHeroRating.score}/10`}
-                    color={
-                      latestHeroRating.score >= 9
-                        ? 'green'
-                        : latestHeroRating.score >= 7
-                          ? 'blue'
-                          : latestHeroRating.score >= 5
-                            ? 'orange'
-                            : 'red'
-                    }
-                  />
-                </span>
-              </Tooltip>
-            </div>
-          )}
           <div className={styles.heroPanelBody}>
-            <div className={styles.heroGlow} aria-hidden />
             <div className={styles.heroTitleMeta}>
               <div className={styles.heroTitleRow}>
                 <Button
@@ -1270,6 +1258,7 @@ export default function AgentDetailPage({
                         value={versionOptions.length}
                         loading={false}
                         compact
+                        normalFontSize
                         helpTooltip="Total distinct effective versions recorded for this agent."
                       />
                     </div>
@@ -1280,6 +1269,7 @@ export default function AgentDetailPage({
                         displayValue={detail.declared_version_latest || 'n/a'}
                         loading={false}
                         compact
+                        normalFontSize
                         helpTooltip="Version string reported by instrumentation."
                       />
                     </div>
@@ -1289,6 +1279,7 @@ export default function AgentDetailPage({
                         value={detail.models.length}
                         loading={false}
                         compact
+                        normalFontSize
                         helpTooltip="Distinct model variants recorded for this agent version."
                       />
                     </div>
@@ -1298,10 +1289,11 @@ export default function AgentDetailPage({
                         value={detail.tool_count}
                         loading={false}
                         compact
+                        normalFontSize
                         helpTooltip="Declared tool definitions."
                       />
                     </div>
-                    <div className={styles.heroMetaStat}>
+                    <div className={cx(styles.heroMetaStat, styles.heroMetaStatWide)}>
                       <TopStat
                         label="PRIMARY MODEL"
                         value={0}
@@ -1310,8 +1302,46 @@ export default function AgentDetailPage({
                         }
                         loading={false}
                         compact
+                        normalFontSize
                         helpTooltip="Primary model name and provider in this version."
                       />
+                    </div>
+                    <div className={styles.heroMetaStatHighlight}>
+                      <TopStat
+                        label="LATEST SCORE"
+                        value={0}
+                        displayValue={latestHeroRating ? `${latestHeroRating.score}/10` : 'n/a'}
+                        loading={false}
+                        compact
+                        normalFontSize
+                        helpTooltip={
+                          latestHeroRating
+                            ? `Latest completed rating summary: ${latestHeroRatingSummary}`
+                            : 'No completed latest-version rating available.'
+                        }
+                      />
+                      <div className={styles.latestScoreBlocks} aria-hidden="true">
+                        {Array.from({ length: 10 }, (_, idx) => (
+                          <span
+                            key={idx}
+                            className={styles.latestScoreBlock}
+                            style={
+                              idx < latestScoreFilledBlocks
+                                ? {
+                                    backgroundColor:
+                                      idx / 9 <= 0.52
+                                        ? interpolateHex(gradientColors[0], gradientColors[1], (idx / 9) / 0.52)
+                                        : interpolateHex(
+                                            gradientColors[1],
+                                            gradientColors[2],
+                                            (idx / 9 - 0.52) / 0.48
+                                          ),
+                                  }
+                                : undefined
+                            }
+                          />
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
