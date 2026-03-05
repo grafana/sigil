@@ -166,8 +166,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
     },
   }),
   heroVersionsPanel: css({
-    minWidth: 420,
-    maxWidth: 620,
+    minWidth: 520,
+    maxWidth: 760,
   }),
   heroVersionsTitle: css({
     display: 'block',
@@ -438,17 +438,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
   recentVersionsGrid: css({
     display: 'flex',
     flexWrap: 'nowrap' as const,
+    width: '100%',
+    minWidth: '100%',
     gap: 0,
     marginTop: theme.spacing(0.5),
     overflowX: 'auto' as const,
-  }),
-  recentVersionsHeading: css({
-    marginTop: theme.spacing(1.25),
-    marginBottom: theme.spacing(0.25),
-    color: theme.colors.text.secondary,
-    fontSize: theme.typography.bodySmall.fontSize,
-    textTransform: 'uppercase' as const,
-    letterSpacing: '0.03em',
   }),
   recentVersionItem: css({
     width: '100%',
@@ -1416,10 +1410,8 @@ export default function AgentDetailPage({
                         </Button>
                       </div>
                       {recentVersions.length > 1 && (
-                        <>
-                          <div className={styles.recentVersionsHeading}>Recent versions</div>
-                          <div className={styles.recentVersionsGrid}>
-                            {recentVersions.map((versionItem, index) => {
+                        <div className={styles.recentVersionsGrid}>
+                          {recentVersions.map((versionItem, index) => {
                               const rating = recentVersionRatings[versionItem.effective_version];
                               const isSelected = activeVersion === versionItem.effective_version;
                               const completedRating = rating?.status === 'completed' ? rating : null;
@@ -1502,9 +1494,8 @@ export default function AgentDetailPage({
                                   </Tooltip>
                                 </div>
                               );
-                            })}
-                          </div>
-                        </>
+                          })}
+                        </div>
                       )}
                     </div>
                     <div className={styles.heroMetaStatHighlight}>
