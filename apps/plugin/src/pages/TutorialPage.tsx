@@ -170,7 +170,7 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
   },
   {
     slug: 'about-the-database',
-    title: 'About the database',
+    title: 'New OSS database',
     subtitle: 'Purpose-built for this signal, at scale.',
     renderGraphic: (props) => <DatabaseGraphic {...props} />,
     body: (
