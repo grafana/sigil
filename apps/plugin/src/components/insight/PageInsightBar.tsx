@@ -404,8 +404,6 @@ function getStyles(theme: GrafanaTheme2) {
       gap: theme.spacing(1),
       padding: theme.spacing(1.25),
       borderRadius: theme.shape.radius.default,
-      background: theme.colors.background.primary,
-      border: `1px solid ${theme.colors.border.weak}`,
       overflow: 'hidden',
       flex: '1 1 0%',
       minWidth: 0,
