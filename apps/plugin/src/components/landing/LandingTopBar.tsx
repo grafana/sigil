@@ -243,6 +243,20 @@ function formatBarTime(fromSec: number, toSec: number, index: number, count: num
   });
 }
 
+function formatBarDuration(fromSec: number, toSec: number, count: number): string {
+  const durationSec = (toSec - fromSec) / count;
+  if (durationSec >= 86400) {
+    return `${Math.round(durationSec / 86400)}d`;
+  }
+  if (durationSec >= 3600) {
+    return `${Math.round(durationSec / 3600)}h`;
+  }
+  if (durationSec >= 60) {
+    return `${Math.round(durationSec / 60)}m`;
+  }
+  return `${Math.round(durationSec)}s`;
+}
+
 function formatRequestStat(value: number): string {
   if (!Number.isFinite(value) || value < 0) {
     return '0 req/s';
@@ -522,6 +536,8 @@ export function LandingTopBar({
                   : null;
               const timeStr =
                 stat != null && to > from ? formatBarTime(from, to, i, spineCount) : null;
+              const durationStr =
+                stat != null && to > from ? formatBarDuration(from, to, spineCount) : null;
               const waveIssueTooltip =
                 requestSpineHeights == null &&
                 requestsDataSource != null &&
@@ -538,6 +554,9 @@ export function LandingTopBar({
                     <div>{stat}</div>
                     {timeStr != null && (
                       <div className={styles.spineTooltipTime}>{timeStr}</div>
+                    )}
+                    {durationStr != null && (
+                      <div className={styles.spineTooltipTime}>({durationStr})</div>
                     )}
                   </div>
                 ) : waveIssueTooltip != null ? (
