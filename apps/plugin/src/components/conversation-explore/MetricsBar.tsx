@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { cx } from '@emotion/css';
 import { Icon, Tooltip, useStyles2 } from '@grafana/ui';
 import type { CostSummary, TokenSummary } from '../../conversation/aggregates';
+import type { ModelCard } from '../../modelcard/types';
+import ModelCardPopover from '../conversations/ModelCardPopover';
 import { getProviderColor, stripProviderPrefix, toDisplayProvider } from '../conversations/providerMeta';
 import { getStyles } from './MetricsBar.styles';
 
@@ -12,6 +14,7 @@ export type MetricsBarProps = {
   costSummary: CostSummary | null;
   models: string[];
   modelProviders?: Record<string, string>;
+  modelCards?: Map<string, ModelCard>;
   errorCount: number;
   generationCount: number;
   isSaved?: boolean;
@@ -47,6 +50,55 @@ function formatTokenCount(count: number): string {
   return String(count);
 }
 
+function withAlpha(color: string, alpha: number): string {
+  const clampedAlpha = Math.max(0, Math.min(1, alpha));
+  const hex = color.trim();
+
+  const shortMatch = /^#([0-9a-fA-F]{3})$/.exec(hex);
+  if (shortMatch) {
+    const [r, g, b] = shortMatch[1].split('').map((part) => parseInt(part + part, 16));
+    return `rgba(${r}, ${g}, ${b}, ${clampedAlpha})`;
+  }
+
+  const fullMatch = /^#([0-9a-fA-F]{6})$/.exec(hex);
+  if (fullMatch) {
+    const value = fullMatch[1];
+    const r = parseInt(value.slice(0, 2), 16);
+    const g = parseInt(value.slice(2, 4), 16);
+    const b = parseInt(value.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${clampedAlpha})`;
+  }
+
+  return color;
+}
+
+function findModelCard(
+  modelCards: Map<string, ModelCard> | undefined,
+  modelName: string,
+  provider: string,
+  displayProvider: string
+): ModelCard | null {
+  if (!modelCards || modelCards.size === 0) {
+    return null;
+  }
+
+  const exactProviderKey = `${provider}::${modelName}`;
+  const exactDisplayProviderKey = `${displayProvider}::${modelName}`;
+  if (modelCards.has(exactProviderKey)) {
+    return modelCards.get(exactProviderKey) ?? null;
+  }
+  if (modelCards.has(exactDisplayProviderKey)) {
+    return modelCards.get(exactDisplayProviderKey) ?? null;
+  }
+
+  for (const [key, card] of modelCards.entries()) {
+    if (key.endsWith(`::${modelName}`)) {
+      return card;
+    }
+  }
+  return null;
+}
+
 export default function MetricsBar({
   conversationID,
   totalDurationMs,
@@ -54,14 +106,40 @@ export default function MetricsBar({
   costSummary,
   models,
   modelProviders,
+  modelCards,
   errorCount,
   generationCount,
   isSaved = false,
   onToggleSave,
 }: MetricsBarProps) {
   const styles = useStyles2(getStyles);
+  const [openModel, setOpenModel] = useState<{ key: string; anchorRect: DOMRect } | null>(null);
 
   const uniqueModels = Array.from(new Set(models));
+  const modelMeta = useMemo(
+    () =>
+      uniqueModels.map((model) => {
+        const provider = modelProviders?.[model] ?? '';
+        const displayProvider = toDisplayProvider(provider);
+        const card = findModelCard(modelCards, model, provider, displayProvider);
+        const color = getProviderColor(displayProvider);
+        const displayName = provider ? stripProviderPrefix(model, displayProvider) : model;
+        const key = `${provider}::${model}`;
+        return {
+          key,
+          displayName,
+          color,
+          card,
+        };
+      }),
+    [modelCards, modelProviders, uniqueModels]
+  );
+  const activeModelCard = useMemo(() => {
+    if (!openModel) {
+      return null;
+    }
+    return modelMeta.find(({ key }) => key === openModel.key)?.card ?? null;
+  }, [modelMeta, openModel]);
 
   return (
     <div className={styles.container}>
@@ -137,20 +215,46 @@ export default function MetricsBar({
       )}
 
       <div className={styles.modelChips}>
-        {uniqueModels.map((model) => {
-          const provider = modelProviders?.[model] ?? '';
-          const displayProvider = toDisplayProvider(provider);
-          const color = getProviderColor(displayProvider);
-          const displayName = provider ? stripProviderPrefix(model, displayProvider) : model;
+        {modelMeta.map(({ key, displayName, color, card }) => {
+          const isOpen = openModel?.key === key;
+          const chipToneStyle: React.CSSProperties = {
+            borderColor: withAlpha(color, isOpen ? 0.7 : 0.38),
+            background: withAlpha(color, isOpen ? 0.2 : 0.1),
+          };
+          if (!card) {
+            return (
+              <span key={key} className={styles.modelChip} style={chipToneStyle}>
+                <span className={styles.providerDot} style={{ background: color }} />
+                {displayName}
+              </span>
+            );
+          }
 
           return (
-            <span key={model} className={styles.modelChip}>
+            <button
+              key={key}
+              type="button"
+              className={cx(styles.modelChip, styles.modelChipButton, isOpen && styles.modelChipActive)}
+              style={chipToneStyle}
+              onClick={(event) => {
+                if (isOpen) {
+                  setOpenModel(null);
+                  return;
+                }
+                setOpenModel({ key, anchorRect: event.currentTarget.getBoundingClientRect() });
+              }}
+              aria-label={`model card ${displayName}`}
+            >
               <span className={styles.providerDot} style={{ background: color }} />
               {displayName}
-            </span>
+            </button>
           );
         })}
       </div>
+
+      {openModel && activeModelCard && (
+        <ModelCardPopover card={activeModelCard} anchorRect={openModel.anchorRect} onClose={() => setOpenModel(null)} />
+      )}
     </div>
   );
 }
