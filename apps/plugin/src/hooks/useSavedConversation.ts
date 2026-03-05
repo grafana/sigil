@@ -4,10 +4,10 @@ import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evalu
 /**
  * Manages the saved/unsaved state for a conversation via the eval saved-conversations API.
  *
- * ID convention: this hook uses `saved-{conversationID}` as the deterministic saved_id when
- * creating new saves. The initial lookup tries this predicted ID first (fast path), then falls
- * back to paginating the full saved-conversations list to find entries created by other UI
- * surfaces (e.g. GenerationPicker) that may use different ID schemes.
+ * On mount, paginates through saved conversations to find one matching the conversation_id
+ * (works regardless of the saved_id scheme used by different UI surfaces).
+ *
+ * When saving, uses `saved-{conversationID}` as the deterministic saved_id.
  */
 export type ToggleSaveResult = boolean | null;
 
@@ -31,29 +31,14 @@ export function useSavedConversation(
     let stale = false;
     setLoading(true);
 
-    // Fast path: try the deterministic ID this hook would generate.
-    const predictedId = `saved-${conversationID}`;
-    evalDataSource
-      .getSavedConversation(predictedId)
-      .then((saved) => {
-        if (!stale) {
-          setSavedId(saved.saved_id);
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (stale) {
-          return;
-        }
-        // Slow path: paginate through all saved conversations to find one matching
-        // this conversation_id (covers saves created with non-deterministic IDs).
-        void paginateFind(evalDataSource, conversationID, () => stale).then((matchedSavedId) => {
-          if (!stale) {
-            setSavedId(matchedSavedId);
-            setLoading(false);
-          }
-        });
-      });
+    // List saved conversations and find one matching this conversation_id.
+    // This covers saves created by any UI surface regardless of saved_id scheme.
+    void paginateFind(evalDataSource, conversationID, () => stale).then((matchedSavedId) => {
+      if (!stale) {
+        setSavedId(matchedSavedId);
+        setLoading(false);
+      }
+    });
 
     return () => {
       stale = true;
