@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { lastValueFrom } from 'rxjs';
+import { getBackendSrv } from '@grafana/runtime';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
+import type { SavedConversation } from '../evaluation/types';
 
 /**
  * Manages the saved/unsaved state for a conversation via the eval saved-conversations API.
  *
- * On mount, paginates through saved conversations to find one matching the conversation_id
- * (works regardless of the saved_id scheme used by different UI surfaces).
+ * On mount, attempts a deterministic ID fast-path GET (`saved-{conversationID}`) with error
+ * alerts suppressed, then falls back to paginated list search for saves created by other UI
+ * surfaces that may use a different saved_id scheme.
  *
  * When saving, uses `saved-{conversationID}` as the deterministic saved_id.
  */
@@ -31,14 +35,22 @@ export function useSavedConversation(
     let stale = false;
     setLoading(true);
 
-    // List saved conversations and find one matching this conversation_id.
-    // This covers saves created by any UI surface regardless of saved_id scheme.
-    void paginateFind(evalDataSource, conversationID, () => stale).then((matchedSavedId) => {
-      if (!stale) {
-        setSavedId(matchedSavedId);
-        setLoading(false);
-      }
-    });
+    // Try deterministic ID fast-path first (single GET, O(1)), then fall back to
+    // paginated list search for saves created with a different saved_id scheme.
+    const predictedId = `saved-${conversationID}`;
+    void fastGetSavedConversation(predictedId)
+      .then((saved) => {
+        if (!stale && saved && saved.conversation_id === conversationID) {
+          return saved.saved_id;
+        }
+        return paginateFind(evalDataSource, conversationID, () => stale);
+      })
+      .then((matchedSavedId) => {
+        if (!stale) {
+          setSavedId(matchedSavedId ?? null);
+          setLoading(false);
+        }
+      });
 
     return () => {
       stale = true;
@@ -72,6 +84,27 @@ export function useSavedConversation(
   }, [isSaved, savedId, conversationID, conversationName, evalDataSource]);
 
   return { isSaved, loading, toggleSave };
+}
+
+const EVAL_BASE_PATH = '/api/plugins/grafana-sigil-app/resources/eval';
+
+/**
+ * Attempts a single GET for the predicted saved_id with error alerts suppressed.
+ * Returns the saved conversation on success, or null on any failure (404, network, etc.).
+ */
+async function fastGetSavedConversation(savedID: string): Promise<SavedConversation | null> {
+  try {
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<SavedConversation>({
+        method: 'GET',
+        url: `${EVAL_BASE_PATH}/saved-conversations/${encodeURIComponent(savedID)}`,
+        showErrorAlert: false,
+      })
+    );
+    return response.data;
+  } catch {
+    return null;
+  }
 }
 
 async function paginateFind(
