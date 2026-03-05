@@ -126,7 +126,9 @@ export function PageInsightBar({
     if (lastRequestKeyRef.current === cacheKey) {
       return;
     }
-    const newestCacheAgeMs = newestCachedInsight ? Date.now() - newestCachedInsight.generatedAt : Number.POSITIVE_INFINITY;
+    const newestCacheAgeMs = newestCachedInsight
+      ? Date.now() - newestCachedInsight.generatedAt
+      : Number.POSITIVE_INFINITY;
     lastRequestKeyRef.current = cacheKey;
     if (newestCacheAgeMs >= REFRESH_INTERVAL_MS) {
       runGenerate(dataContext, cacheKey, fallbackCacheKey);
