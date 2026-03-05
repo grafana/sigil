@@ -511,6 +511,7 @@ function SignalFieldMosaic({ groups }: { groups: SignalFieldGroup[] }) {
                       <span className={styles.signalFieldName}>{field.name}</span>{' '}
                       <span className={styles.signalFieldType}>({field.type})</span>:{' '}
                       <span className={styles.signalFieldDescription}>{field.description}</span>
+                      <div className={styles.signalFieldDetails}>{field.details}</div>
                     </li>
                   ))}
                 </ul>
