@@ -114,6 +114,18 @@ describe('PageInsightBar', () => {
     expect(screen.queryByText('No notable insights.')).not.toBeInTheDocument();
   });
 
+  it('can still collapse when expanded and result is empty', () => {
+    localStorage.setItem('sigil.insightBar.collapsed', '0');
+    mockGenerate.mockImplementation(({ onComplete }: { onComplete: (r: string) => void }) => {
+      onComplete('');
+    });
+    render(<PageInsightBar prompt="Analyze" origin="test" dataContext="data" />);
+    const toggle = screen.getByRole('button', { name: 'Collapse insights' });
+    expect(toggle).not.toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(toggle);
+    expect(screen.getByRole('button', { name: 'No insights available' })).toBeInTheDocument();
+  });
+
   it('persists collapsed state in localStorage', () => {
     localStorage.setItem('sigil.insightBar.collapsed', '0');
     mockGenerate.mockImplementation(({ onComplete }: { onComplete: (r: string) => void }) => {

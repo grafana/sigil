@@ -217,24 +217,25 @@ export function PageInsightBar({
 
   const firstBullet = bullets.length > 0 ? bullets[0] : null;
   const canExpand = bullets.length > 0;
+  const isToggleDisabled = collapsed && !canExpand;
 
   return (
     <div className={collapsed ? styles.barCollapsed : styles.bar} role="complementary" aria-label="Page insight">
       <div className={styles.header}>
         <button
           type="button"
-          className={canExpand ? styles.headerToggle : styles.headerToggleDisabled}
-          onClick={canExpand ? toggleCollapsed : undefined}
-          aria-expanded={canExpand ? !collapsed : undefined}
-          aria-label={!canExpand ? 'No insights available' : collapsed ? 'Expand insights' : 'Collapse insights'}
-          aria-disabled={!canExpand}
+          className={isToggleDisabled ? styles.headerToggleDisabled : styles.headerToggle}
+          onClick={isToggleDisabled ? undefined : toggleCollapsed}
+          aria-expanded={isToggleDisabled ? undefined : !collapsed}
+          aria-label={isToggleDisabled ? 'No insights available' : collapsed ? 'Expand insights' : 'Collapse insights'}
+          aria-disabled={isToggleDisabled}
         >
           <Icon name="ai" size="md" className={styles.aiIcon} />
           <span className={styles.headerTitle}>AI analysis</span>
           {collapsed && firstBullet && (
             <span className={styles.collapsedPreview}>{formatInlineMarkup(firstBullet)}</span>
           )}
-          {canExpand && <Icon name={collapsed ? 'angle-down' : 'angle-up'} size="md" className={styles.chevron} />}
+          {!isToggleDisabled && <Icon name={collapsed ? 'angle-down' : 'angle-up'} size="md" className={styles.chevron} />}
         </button>
 
         <div className={styles.actions}>
