@@ -26,7 +26,7 @@ const mockDataSource: AgentsDataSource = {
 };
 
 const meta = {
-  title: 'Sigil/Agents/Agent Rating Panel',
+  title: 'Sigil/Agents/Prompt and Context Analysis Panel',
   component: AgentRatingPanel,
   args: {
     agentName: 'support-assistant',

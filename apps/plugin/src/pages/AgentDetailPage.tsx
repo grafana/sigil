@@ -104,30 +104,48 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   heroMetaGrid: css({
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-    gap: theme.spacing(1),
+    gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
+    gap: theme.spacing(1.25),
     alignItems: 'stretch',
+    marginTop: theme.spacing(0.75),
   }),
   heroMetaChip: css({
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: theme.spacing(0.5),
+    display: 'flex',
+    flexDirection: 'column' as const,
+    justifyContent: 'center',
+    gap: theme.spacing(0.25),
     borderRadius: theme.shape.radius.default,
-    border: `1px solid ${theme.colors.border.medium}`,
-    background: theme.colors.background.secondary,
-    padding: `${theme.spacing(0.5)} ${theme.spacing(0.75)}`,
+    border: 'none',
+    background: 'transparent',
+    padding: `${theme.spacing(0.75)} ${theme.spacing(1)}`,
+    minHeight: 72,
     fontSize: theme.typography.bodySmall.fontSize,
     lineHeight: 1.2,
-    whiteSpace: 'nowrap' as const,
     minWidth: 0,
   }),
   heroMetaLabel: css({
     color: theme.colors.text.secondary,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.04em',
+    fontSize: theme.typography.bodySmall.fontSize,
   }),
   heroMetaValue: css({
     color: theme.colors.text.primary,
     fontWeight: theme.typography.fontWeightMedium,
+    fontSize: theme.typography.h6.fontSize,
+    lineHeight: 1.25,
+    whiteSpace: 'nowrap' as const,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  }),
+  heroMetaValueMono: css({
+    fontFamily: theme.typography.fontFamilyMonospace,
+    letterSpacing: '0.02em',
+  }),
+  heroMetaSubline: css({
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.bodySmall.fontSize,
+    lineHeight: 1.2,
   }),
   anonymousBanner: css({
     borderRadius: theme.shape.radius.default,
@@ -563,6 +581,10 @@ export default function AgentDetailPage({
   }
 
   const activeVersion = selectedVersion.length > 0 ? selectedVersion : detail.effective_version;
+  const primaryModel = detail.models[0];
+  const primaryModelLabel =
+    primaryModel != null ? stripProviderPrefix(primaryModel.name, getProviderMeta(primaryModel.provider).label) : 'n/a';
+  const primaryModelProvider = primaryModel != null ? getProviderMeta(primaryModel.provider).label : null;
 
   return (
     <div className={styles.page}>
@@ -598,23 +620,23 @@ export default function AgentDetailPage({
             <div className={styles.heroMetaGrid}>
               <div className={styles.heroMetaChip}>
                 <span className={styles.heroMetaLabel}>Version</span>
-                <span className={styles.heroMetaValue}>{formatVersionShort(activeVersion)}</span>
+                <span className={cx(styles.heroMetaValue, styles.heroMetaValueMono)}>{formatVersionShort(activeVersion)}</span>
+                <span className={styles.heroMetaSubline}>Effective hash</span>
               </div>
               <div className={styles.heroMetaChip}>
                 <span className={styles.heroMetaLabel}>Declared version</span>
                 <span className={styles.heroMetaValue}>{detail.declared_version_latest || 'n/a'}</span>
+                <span className={styles.heroMetaSubline}>From instrumentation</span>
               </div>
               <div className={styles.heroMetaChip}>
                 <span className={styles.heroMetaLabel}>Models</span>
                 <span className={styles.heroMetaValue}>{detail.models.length.toLocaleString()}</span>
+                <span className={styles.heroMetaSubline}>Distinct model variants</span>
               </div>
               <div className={styles.heroMetaChip}>
                 <span className={styles.heroMetaLabel}>Primary model</span>
-                <span className={styles.heroMetaValue}>
-                  {detail.models.length > 0
-                    ? stripProviderPrefix(detail.models[0].name, getProviderMeta(detail.models[0].provider).label)
-                    : 'n/a'}
-                </span>
+                <span className={styles.heroMetaValue}>{primaryModelLabel}</span>
+                <span className={styles.heroMetaSubline}>{primaryModelProvider ?? 'No model data'}</span>
               </div>
             </div>
             {detail.models.length > 0 && (

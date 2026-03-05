@@ -361,7 +361,7 @@ export default function AgentRatingPanel({
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
-        <Text weight="medium">Agent Rating</Text>
+        <Text weight="medium">Prompt and context analysis</Text>
         {completedResult && (
           <Badge
             text={`${completedResult.score}/10`}
@@ -396,7 +396,7 @@ export default function AgentRatingPanel({
         {!running && !completedResult && (
           <div className={styles.empty}>
             <Text variant="bodySmall" color="secondary">
-              Run an on-demand evaluation of this agent&apos;s prompt, tools, and token budget.
+              Improve prompt quality and context efficiency.
             </Text>
             <div>
               <Button onClick={() => void runRating()} icon="play" variant="primary">
