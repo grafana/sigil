@@ -54,7 +54,7 @@ export type DashboardCacheGridProps = {
   onTimeRangeChange: (timeRange: TimeRange) => void;
 };
 
-const CHART_HEIGHT = 320;
+const CHART_HEIGHT = 250;
 
 const noThresholds = {
   mode: ThresholdsMode.Absolute,

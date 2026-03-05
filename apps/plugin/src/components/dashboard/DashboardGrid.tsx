@@ -54,7 +54,7 @@ export type DashboardGridProps = {
   onTimeRangeChange: (timeRange: TimeRange) => void;
 };
 
-const CHART_HEIGHT = 320;
+const CHART_HEIGHT = 250;
 
 const costModeOptions: Array<{ label: string; value: CostMode }> = [
   { label: 'Cost', value: 'usd' },

@@ -36,7 +36,7 @@ export type DashboardPerformanceGridProps = {
   onTimeRangeChange: (timeRange: TimeRange) => void;
 };
 
-const CHART_HEIGHT = 320;
+const CHART_HEIGHT = 250;
 
 const latencyPercentileOptions: Array<{ label: string; value: LatencyPercentile }> = [
   { label: 'P50', value: 'p50' },
