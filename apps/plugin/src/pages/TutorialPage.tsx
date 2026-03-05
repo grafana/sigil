@@ -217,9 +217,7 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
     title: 'Autoinstrumentation',
     subtitle: 'Get instrumented quickly with agentic coding workflows.',
     renderGraphic: (props) => <AutoinstrumentationGraphic {...props} />,
-    body: (
-      <AutoinstrumentationBody />
-    ),
+    body: <AutoinstrumentationBody />,
   },
   {
     slug: 'agent-experience',
@@ -338,7 +336,11 @@ export default function TutorialPage() {
           <h1 className={styles.title}>{slide.title}</h1>
           <nav className={styles.navigation} aria-label="Tutorial navigation">
             {previousIndex !== null ? (
-              <Link to={getSlidePath(previousIndex, tutorialBasePath)} className={styles.arrowButton} aria-label="Previous page">
+              <Link
+                to={getSlidePath(previousIndex, tutorialBasePath)}
+                className={styles.arrowButton}
+                aria-label="Previous page"
+              >
                 {'<'}
               </Link>
             ) : (
@@ -358,7 +360,11 @@ export default function TutorialPage() {
               ))}
             </div>
             {nextIndex !== null ? (
-              <Link to={getSlidePath(nextIndex, tutorialBasePath)} className={styles.arrowButton} aria-label="Next page">
+              <Link
+                to={getSlidePath(nextIndex, tutorialBasePath)}
+                className={styles.arrowButton}
+                aria-label="Next page"
+              >
                 {'>'}
               </Link>
             ) : (
@@ -426,53 +432,71 @@ function SignalFieldMosaic({ groups }: { groups: SignalFieldGroup[] }) {
         const buttonId = `telemetry-field-group-button-${index}`;
 
         return (
-        <div key={group.title} className={cx(styles.signalFieldGroup, isOpen && styles.signalFieldGroupOpen)}>
-          <button
-            id={buttonId}
-            type="button"
-            className={styles.signalFieldGroupToggle}
-            aria-expanded={isOpen}
-            aria-controls={panelId}
-            onClick={() => setOpenGroupIndex(index)}
-          >
-            <span className={styles.signalFieldGroupHeaderRow}>
-              <span className={styles.signalFieldGroupTitle}>{group.title}</span>
-              <span className={cx(styles.signalFieldGroupChevron, isOpen && styles.signalFieldGroupChevronOpen)} aria-hidden>
-                {'>'}
+          <div key={group.title} className={cx(styles.signalFieldGroup, isOpen && styles.signalFieldGroupOpen)}>
+            <button
+              id={buttonId}
+              type="button"
+              className={styles.signalFieldGroupToggle}
+              aria-expanded={isOpen}
+              aria-controls={panelId}
+              onClick={() => setOpenGroupIndex(index)}
+            >
+              <span className={styles.signalFieldGroupHeaderRow}>
+                <span className={styles.signalFieldGroupTitle}>{group.title}</span>
+                <span
+                  className={cx(styles.signalFieldGroupChevron, isOpen && styles.signalFieldGroupChevronOpen)}
+                  aria-hidden
+                >
+                  {'>'}
+                </span>
               </span>
-            </span>
-            <span className={styles.signalFieldGroupSubtitle}>{group.subtitle}</span>
-          </button>
-          <div
-            id={panelId}
-            role="region"
-            aria-labelledby={buttonId}
-            aria-hidden={!isOpen}
-            className={cx(styles.signalFieldGroupPanel, isOpen && styles.signalFieldGroupPanelOpen)}
-          >
-            <div className={styles.signalFieldGroupPanelInner}>
-              <ul className={styles.signalFieldList} aria-label={`${group.title} fields`}>
-                {group.fields.map((field) => (
-                  <li key={field.name} className={styles.signalFieldListItem}>
-                    <span className={styles.signalFieldName}>{field.name}</span>{' '}
-                    <span className={styles.signalFieldType}>({field.type})</span>: <span className={styles.signalFieldDescription}>{field.description}</span>
-                  </li>
-                ))}
-              </ul>
+              <span className={styles.signalFieldGroupSubtitle}>{group.subtitle}</span>
+            </button>
+            <div
+              id={panelId}
+              role="region"
+              aria-labelledby={buttonId}
+              aria-hidden={!isOpen}
+              className={cx(styles.signalFieldGroupPanel, isOpen && styles.signalFieldGroupPanelOpen)}
+            >
+              <div className={styles.signalFieldGroupPanelInner}>
+                <ul className={styles.signalFieldList} aria-label={`${group.title} fields`}>
+                  {group.fields.map((field) => (
+                    <li key={field.name} className={styles.signalFieldListItem}>
+                      <span className={styles.signalFieldName}>{field.name}</span>{' '}
+                      <span className={styles.signalFieldType}>({field.type})</span>:{' '}
+                      <span className={styles.signalFieldDescription}>{field.description}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </div>
-        </div>
         );
       })}
     </div>
   );
 }
 
-function WhatIsSigilGraphic({ accentColor, secondaryColor, backgroundClassName, foregroundClassName }: SlideGraphicProps) {
+function WhatIsSigilGraphic({
+  accentColor,
+  secondaryColor,
+  backgroundClassName,
+  foregroundClassName,
+}: SlideGraphicProps) {
   return (
     <svg viewBox="0 0 300 240" width="100%" height="100%" focusable={false}>
       <g className={backgroundClassName} style={{ filter: 'drop-shadow(0 6px 10px rgba(0, 0, 0, 0.35))' }}>
-        <rect x="36" y="24" width="228" height="184" rx="28" fill="#9aa0aa" opacity={0.1} transform="rotate(-2.8 150 116)" />
+        <rect
+          x="36"
+          y="24"
+          width="228"
+          height="184"
+          rx="28"
+          fill="#9aa0aa"
+          opacity={0.1}
+          transform="rotate(-2.8 150 116)"
+        />
       </g>
       <g className={foregroundClassName} transform="rotate(1.5 150 120)">
         <circle cx="96" cy="96" r="22" fill={accentColor} />
@@ -485,11 +509,25 @@ function WhatIsSigilGraphic({ accentColor, secondaryColor, backgroundClassName, 
   );
 }
 
-function TelemetrySignalGraphic({ accentColor, secondaryColor, backgroundClassName, foregroundClassName }: SlideGraphicProps) {
+function TelemetrySignalGraphic({
+  accentColor,
+  secondaryColor,
+  backgroundClassName,
+  foregroundClassName,
+}: SlideGraphicProps) {
   return (
     <svg viewBox="0 0 300 240" width="100%" height="100%" focusable={false}>
       <g className={backgroundClassName} style={{ filter: 'drop-shadow(0 6px 10px rgba(0, 0, 0, 0.35))' }}>
-        <rect x="34" y="36" width="232" height="168" rx="26" fill="#9aa0aa" opacity={0.1} transform="rotate(3.2 150 120)" />
+        <rect
+          x="34"
+          y="36"
+          width="232"
+          height="168"
+          rx="26"
+          fill="#9aa0aa"
+          opacity={0.1}
+          transform="rotate(3.2 150 120)"
+        />
       </g>
       <g className={foregroundClassName} transform="rotate(-1.5 150 120)">
         <circle cx="86" cy="120" r="10" fill={accentColor} />
@@ -508,7 +546,12 @@ function DatabaseGraphic({ accentColor, secondaryColor, backgroundClassName, for
     <svg viewBox="0 0 300 240" width="100%" height="100%" focusable={false}>
       <g className={backgroundClassName} style={{ filter: 'drop-shadow(0 6px 10px rgba(0, 0, 0, 0.35))' }}>
         <ellipse cx="150" cy="62" rx="88" ry="26" fill="#9aa0aa" opacity={0.1} transform="rotate(-3.4 150 120)" />
-        <path d="M62 62V158C62 172 101 184 150 184C199 184 238 172 238 158V62" fill="#9aa0aa" opacity={0.1} transform="rotate(-3.4 150 120)" />
+        <path
+          d="M62 62V158C62 172 101 184 150 184C199 184 238 172 238 158V62"
+          fill="#9aa0aa"
+          opacity={0.1}
+          transform="rotate(-3.4 150 120)"
+        />
       </g>
       <g className={foregroundClassName} transform="rotate(1.5 150 120)">
         <ellipse cx="150" cy="62" rx="88" ry="26" fill={accentColor} opacity={0.6} />
@@ -520,11 +563,25 @@ function DatabaseGraphic({ accentColor, secondaryColor, backgroundClassName, for
   );
 }
 
-function UiFeaturesGraphic({ accentColor, secondaryColor, backgroundClassName, foregroundClassName }: SlideGraphicProps) {
+function UiFeaturesGraphic({
+  accentColor,
+  secondaryColor,
+  backgroundClassName,
+  foregroundClassName,
+}: SlideGraphicProps) {
   return (
     <svg viewBox="0 0 300 240" width="100%" height="100%" focusable={false}>
       <g className={backgroundClassName} style={{ filter: 'drop-shadow(0 6px 10px rgba(0, 0, 0, 0.35))' }}>
-        <rect x="38" y="30" width="224" height="180" rx="24" fill="#9aa0aa" opacity={0.1} transform="rotate(2.5 150 120)" />
+        <rect
+          x="38"
+          y="30"
+          width="224"
+          height="180"
+          rx="24"
+          fill="#9aa0aa"
+          opacity={0.1}
+          transform="rotate(2.5 150 120)"
+        />
       </g>
       <g className={foregroundClassName} transform="rotate(-1.5 150 120)">
         <rect x="58" y="52" width="184" height="20" rx="10" fill={accentColor} opacity={0.28} />
@@ -539,11 +596,25 @@ function UiFeaturesGraphic({ accentColor, secondaryColor, backgroundClassName, f
   );
 }
 
-function AgentExperienceGraphic({ accentColor, secondaryColor, backgroundClassName, foregroundClassName }: SlideGraphicProps) {
+function AgentExperienceGraphic({
+  accentColor,
+  secondaryColor,
+  backgroundClassName,
+  foregroundClassName,
+}: SlideGraphicProps) {
   return (
     <svg viewBox="0 0 300 240" width="100%" height="100%" focusable={false}>
       <g className={backgroundClassName} style={{ filter: 'drop-shadow(0 6px 10px rgba(0, 0, 0, 0.35))' }}>
-        <rect x="72" y="48" width="156" height="120" rx="28" fill="#9aa0aa" opacity={0.1} transform="rotate(3.6 150 120)" />
+        <rect
+          x="72"
+          y="48"
+          width="156"
+          height="120"
+          rx="28"
+          fill="#9aa0aa"
+          opacity={0.1}
+          transform="rotate(3.6 150 120)"
+        />
       </g>
       <g className={foregroundClassName} transform="rotate(-1.5 150 120)">
         <rect x="98" y="74" width="104" height="74" rx="20" fill={accentColor} opacity={0.65} />
@@ -555,11 +626,25 @@ function AgentExperienceGraphic({ accentColor, secondaryColor, backgroundClassNa
   );
 }
 
-function AutoinstrumentationGraphic({ accentColor, secondaryColor, backgroundClassName, foregroundClassName }: SlideGraphicProps) {
+function AutoinstrumentationGraphic({
+  accentColor,
+  secondaryColor,
+  backgroundClassName,
+  foregroundClassName,
+}: SlideGraphicProps) {
   return (
     <svg viewBox="0 0 300 240" width="100%" height="100%" focusable={false}>
       <g className={backgroundClassName} style={{ filter: 'drop-shadow(0 6px 10px rgba(0, 0, 0, 0.35))' }}>
-        <rect x="42" y="30" width="216" height="180" rx="26" fill="#9aa0aa" opacity={0.1} transform="rotate(-2.2 150 120)" />
+        <rect
+          x="42"
+          y="30"
+          width="216"
+          height="180"
+          rx="26"
+          fill="#9aa0aa"
+          opacity={0.1}
+          transform="rotate(-2.2 150 120)"
+        />
       </g>
       <g className={foregroundClassName} transform="rotate(1.2 150 120)">
         <rect x="64" y="64" width="172" height="96" rx="16" fill={accentColor} opacity={0.18} />
@@ -568,14 +653,26 @@ function AutoinstrumentationGraphic({ accentColor, secondaryColor, backgroundCla
         <rect x="78" y="118" width="104" height="10" rx="5" fill={accentColor} opacity={0.42} />
         <rect x="78" y="136" width="72" height="8" rx="4" fill={accentColor} opacity={0.3} />
         <circle cx="218" cy="98" r="16" fill={accentColor} opacity={0.9} />
-        <path d="M212 98 L217 103 L226 94" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        <path
+          d="M212 98 L217 103 L226 94"
+          stroke="#ffffff"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
         <rect x="96" y="176" width="108" height="12" rx="6" fill={secondaryColor} opacity={0.45} />
       </g>
     </svg>
   );
 }
 
-function NextStepsGraphic({ accentColor, secondaryColor, backgroundClassName, foregroundClassName }: SlideGraphicProps) {
+function NextStepsGraphic({
+  accentColor,
+  secondaryColor,
+  backgroundClassName,
+  foregroundClassName,
+}: SlideGraphicProps) {
   return (
     <svg viewBox="0 0 300 240" width="100%" height="100%" focusable={false}>
       <g className={backgroundClassName} transform="rotate(1.5 150 120)">
@@ -583,13 +680,34 @@ function NextStepsGraphic({ accentColor, secondaryColor, backgroundClassName, fo
       </g>
       <g className={foregroundClassName} transform="rotate(1.5 150 120)">
         <circle cx="100" cy="94" r="9" fill={accentColor} opacity={0.95} />
-        <path d="M95 94 L99 99 L107 90" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        <path
+          d="M95 94 L99 99 L107 90"
+          stroke="#ffffff"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
         <rect x="118" y="90" width="84" height="8" rx="4" fill={accentColor} opacity={0.85} />
         <circle cx="100" cy="122" r="9" fill={accentColor} opacity={0.95} />
-        <path d="M95 122 L99 127 L107 118" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        <path
+          d="M95 122 L99 127 L107 118"
+          stroke="#ffffff"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
         <rect x="118" y="118" width="72" height="8" rx="4" fill={accentColor} opacity={0.75} />
         <circle cx="100" cy="150" r="9" fill={accentColor} opacity={0.95} />
-        <path d="M95 150 L99 155 L107 146" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        <path
+          d="M95 150 L99 155 L107 146"
+          stroke="#ffffff"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
         <rect x="118" y="146" width="92" height="8" rx="4" fill={accentColor} opacity={0.65} />
       </g>
     </svg>

@@ -154,64 +154,64 @@ export function FilterToolbar({
       )}
       <div className={styles.filtersSection}>
         <Stack direction="row" gap={1} alignItems="center" wrap="wrap">
-            <MultiSelect<string>
-              className={styles.multiSelect}
-              options={providerSelectOptions}
-              value={filters.providers}
-              onChange={handleProviderChange}
-              onCreateOption={handleProviderCreate}
-              placeholder="Provider"
-              isClearable
-              allowCustomValue
-              isSearchable
-              width="auto"
+          <MultiSelect<string>
+            className={styles.multiSelect}
+            options={providerSelectOptions}
+            value={filters.providers}
+            onChange={handleProviderChange}
+            onCreateOption={handleProviderCreate}
+            placeholder="Provider"
+            isClearable
+            allowCustomValue
+            isSearchable
+            width="auto"
+          />
+          <MultiSelect<string>
+            className={styles.multiSelect}
+            options={modelSelectOptions}
+            value={filters.models}
+            onChange={handleModelChange}
+            onCreateOption={handleModelCreate}
+            placeholder="Model"
+            isClearable
+            allowCustomValue
+            isSearchable
+            width="auto"
+          />
+          <MultiSelect<string>
+            className={styles.multiSelect}
+            options={agentSelectOptions}
+            value={filters.agentNames}
+            onChange={handleAgentChange}
+            onCreateOption={handleAgentCreate}
+            placeholder="Agent"
+            isClearable
+            allowCustomValue
+            isSearchable
+            width="auto"
+          />
+          {!hideLabelFilters && (
+            <LabelFilterInput
+              filters={draftLabelFilters}
+              labelKeyOptions={labelKeySelectOptions}
+              labelsLoading={labelsLoading}
+              dataSource={dataSource}
+              from={from}
+              to={to}
+              onChange={handleLabelFilterChange}
+              onRemove={handleLabelFilterRemove}
             />
-            <MultiSelect<string>
-              className={styles.multiSelect}
-              options={modelSelectOptions}
-              value={filters.models}
-              onChange={handleModelChange}
-              onCreateOption={handleModelCreate}
-              placeholder="Model"
-              isClearable
-              allowCustomValue
-              isSearchable
-              width="auto"
+          )}
+          {activeFilterCount > 0 && (
+            <IconButton
+              name="times-circle"
+              aria-label="Clear all filters"
+              tooltip="Clear all filters"
+              size="md"
+              onClick={handleClearFilters}
+              className={styles.clearButton}
             />
-            <MultiSelect<string>
-              className={styles.multiSelect}
-              options={agentSelectOptions}
-              value={filters.agentNames}
-              onChange={handleAgentChange}
-              onCreateOption={handleAgentCreate}
-              placeholder="Agent"
-              isClearable
-              allowCustomValue
-              isSearchable
-              width="auto"
-            />
-            {!hideLabelFilters && (
-              <LabelFilterInput
-                filters={draftLabelFilters}
-                labelKeyOptions={labelKeySelectOptions}
-                labelsLoading={labelsLoading}
-                dataSource={dataSource}
-                from={from}
-                to={to}
-                onChange={handleLabelFilterChange}
-                onRemove={handleLabelFilterRemove}
-              />
-            )}
-            {activeFilterCount > 0 && (
-              <IconButton
-                name="times-circle"
-                aria-label="Clear all filters"
-                tooltip="Clear all filters"
-                size="md"
-                onClick={handleClearFilters}
-                className={styles.clearButton}
-              />
-            )}
+          )}
         </Stack>
       </div>
       <TimeRangePicker
