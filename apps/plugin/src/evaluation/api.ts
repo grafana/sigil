@@ -332,7 +332,9 @@ export const defaultEvaluationDataSource: EvaluationDataSource = {
     }
     const qs = params.toString();
     const url = qs.length > 0 ? `${evalBasePath}/saved-conversations?${qs}` : `${evalBasePath}/saved-conversations`;
-    const response = await lastValueFrom(getBackendSrv().fetch<SavedConversationListResponse>({ method: 'GET', url, showErrorAlert: false }));
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<SavedConversationListResponse>({ method: 'GET', url, showErrorAlert: false })
+    );
     return response.data;
   },
 

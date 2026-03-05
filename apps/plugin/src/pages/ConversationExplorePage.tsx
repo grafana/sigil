@@ -109,13 +109,21 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   const [searchParams, setSearchParams] = useSearchParams();
   const conversationTitle = searchParams.get('conversationTitle') ?? '';
 
-  const { conversationData, loading, tracesLoading, errorMessage, tokenSummary, costSummary, generationCosts, allGenerations } =
-    useConversationData({
-      conversationID,
-      dataSource,
-      traceFetcher,
-      modelCardClient,
-    });
+  const {
+    conversationData,
+    loading,
+    tracesLoading,
+    errorMessage,
+    tokenSummary,
+    costSummary,
+    generationCosts,
+    allGenerations,
+  } = useConversationData({
+    conversationID,
+    dataSource,
+    traceFetcher,
+    modelCardClient,
+  });
 
   const {
     isSaved,
@@ -342,7 +350,6 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     </div>
   );
 }
-
 
 function findNodeById(nodes: FlowNode[], id: string): FlowNode | null {
   for (const node of nodes) {

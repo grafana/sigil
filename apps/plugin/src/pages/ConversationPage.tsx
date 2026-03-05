@@ -117,8 +117,16 @@ export default function ConversationPage(props: ConversationPageProps) {
   const traceFetcher = props.traceFetcher ?? defaultTraceFetcher;
   const modelCardClient = props.modelCardClient ?? defaultModelCardClient;
 
-  const { conversationData, loading, tracesLoading, errorMessage, tokenSummary, costSummary, modelCards, allGenerations } =
-    useConversationData({ conversationID, dataSource, traceFetcher, modelCardClient });
+  const {
+    conversationData,
+    loading,
+    tracesLoading,
+    errorMessage,
+    tokenSummary,
+    costSummary,
+    modelCards,
+    allGenerations,
+  } = useConversationData({ conversationID, dataSource, traceFetcher, modelCardClient });
 
   const [splitterRatio, setSplitterRatio] = useState(0.55);
   const [isSplitterDragging, setIsSplitterDragging] = useState(false);
