@@ -120,7 +120,13 @@ export default function LandingPage() {
 
   return (
     <div className={styles.container}>
-      <LandingTopBar assistantOrigin={ASSISTANT_ORIGIN} />
+      <LandingTopBar
+        assistantOrigin={ASSISTANT_ORIGIN}
+        requestsDataSource={defaultDashboardDataSource}
+        requestsFilters={emptyFilters}
+        requestsFrom={from}
+        requestsTo={to}
+      />
       <section className={styles.section} aria-label="Analytics overview highlights">
         <div className={styles.statsRow}>
           <TopStat
