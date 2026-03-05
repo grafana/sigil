@@ -247,6 +247,16 @@ const getStyles = (theme: GrafanaTheme2) => ({
     height: '100%',
     padding: theme.spacing(1.5),
   }),
+  tabStatsStrip: css({
+    borderRadius: theme.shape.radius.default,
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    gap: theme.spacing(3),
+    padding: theme.spacing(1, 1.5),
+  }),
+  tabStatsItem: css({
+    minWidth: 140,
+  }),
   mainAreaTabs: css({
     borderBottom: `1px solid ${theme.colors.border.weak}`,
     marginBottom: theme.spacing(1),
@@ -1571,34 +1581,6 @@ export default function AgentDetailPage({
         <div className={cx(styles.stretchPanel, styles.stretchPanelBody)}>
           <div className={styles.statsGrid}>
             <TopStat
-              label="GENERATIONS"
-              value={detail.generation_count}
-              loading={false}
-              rightAlignContent
-              helpTooltip="Total generations recorded for this agent version."
-            />
-            <TopStat
-              label="PROMPT TOKENS"
-              value={detail.token_estimate.system_prompt}
-              loading={false}
-              rightAlignContent
-              helpTooltip="Estimated tokens consumed by the system prompt in this version."
-            />
-            <TopStat
-              label="TOOLS TOKENS"
-              value={detail.token_estimate.tools_total}
-              loading={false}
-              rightAlignContent
-              helpTooltip="Estimated tokens consumed by all tool schemas combined in this version."
-            />
-            <TopStat
-              label="TOTAL TOKENS"
-              value={detail.token_estimate.total}
-              loading={false}
-              rightAlignContent
-              helpTooltip="Sum of system prompt and tool tokens - the baseline context cost per generation."
-            />
-            <TopStat
               label="AGE"
               value={Math.max(0, toTimestampMs(detail.last_seen_at) - toTimestampMs(detail.first_seen_at))}
               displayValue={formatDurationCompact(detail.first_seen_at, detail.last_seen_at)}
@@ -1632,6 +1614,61 @@ export default function AgentDetailPage({
           <Tab label="Tools" active={mainAreaTab === 'tools'} onChangeTab={() => setMainAreaTab('tools')} />
         </TabsBar>
       </div>
+
+      {mainAreaTab === 'prompts' && (
+        <div className={styles.tabStatsStrip} aria-label="Prompt stats">
+          <div className={styles.tabStatsItem}>
+            <TopStat
+              label="GENERATIONS"
+              value={detail.generation_count}
+              loading={false}
+              rightAlignContent
+              helpTooltip="Total generations recorded for this agent version."
+            />
+          </div>
+          <div className={styles.tabStatsItem}>
+            <TopStat
+              label="PROMPT TOKENS"
+              value={detail.token_estimate.system_prompt}
+              loading={false}
+              rightAlignContent
+              helpTooltip="Estimated tokens consumed by the system prompt in this version."
+            />
+          </div>
+          <div className={styles.tabStatsItem}>
+            <TopStat
+              label="TOTAL TOKENS"
+              value={detail.token_estimate.total}
+              loading={false}
+              rightAlignContent
+              helpTooltip="Sum of system prompt and tool tokens - the baseline context cost per generation."
+            />
+          </div>
+        </div>
+      )}
+
+      {mainAreaTab === 'tools' && (
+        <div className={styles.tabStatsStrip} aria-label="Tools stats">
+          <div className={styles.tabStatsItem}>
+            <TopStat
+              label="TOOLS TOKENS"
+              value={detail.token_estimate.tools_total}
+              loading={false}
+              rightAlignContent
+              helpTooltip="Estimated tokens consumed by all tool schemas combined in this version."
+            />
+          </div>
+          <div className={styles.tabStatsItem}>
+            <TopStat
+              label="TOTAL TOKENS"
+              value={detail.token_estimate.total}
+              loading={false}
+              rightAlignContent
+              helpTooltip="Sum of system prompt and tool tokens - the baseline context cost per generation."
+            />
+          </div>
+        </div>
+      )}
 
       {mainAreaTab === 'prompts' && (
         <div ref={promptAnalysisSectionRef} className={cx(styles.panel, styles.stretchPanel)}>

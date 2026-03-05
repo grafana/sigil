@@ -247,19 +247,20 @@ describe('AgentDetailPage', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByText('GENERATIONS')).toBeInTheDocument();
-    const statLabels = [
-      'GENERATIONS',
-      'PROMPT TOKENS',
-      'TOOLS TOKENS',
-      'TOTAL TOKENS',
-      'AGE',
-      'FIRST SEEN',
-      'LAST SEEN',
-    ];
-    for (const label of statLabels) {
+    expect(await screen.findByText('AGE')).toBeInTheDocument();
+    const staticStatLabels = ['AGE', 'FIRST SEEN', 'LAST SEEN'];
+    for (const label of staticStatLabels) {
       expect(screen.getByLabelText(`${label} help`)).toBeInTheDocument();
     }
+
+    const promptStatLabels = ['GENERATIONS', 'PROMPT TOKENS', 'TOTAL TOKENS'];
+    for (const label of promptStatLabels) {
+      expect(screen.getByLabelText(`${label} help`)).toBeInTheDocument();
+    }
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Tools' }));
+    expect(await screen.findByText('TOOLS TOKENS')).toBeInTheDocument();
+    expect(screen.getByLabelText('TOOLS TOKENS help')).toBeInTheDocument();
   });
 
   it('defaults to markdown and keeps markdown when tokenize is enabled', async () => {
