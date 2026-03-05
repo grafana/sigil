@@ -150,6 +150,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     minWidth: 0,
+    marginTop: theme.spacing(0.5),
   }),
   heroEyebrow: css({
     textTransform: 'uppercase' as const,
@@ -188,6 +189,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   heroMetaStat: css({
     minWidth: 0,
+    paddingTop: theme.spacing(0.5),
   }),
   anonymousBanner: css({
     borderRadius: theme.shape.radius.default,
@@ -1262,45 +1264,55 @@ export default function AgentDetailPage({
                 </div>
                 <div className={styles.heroStatsColumn}>
                   <div className={styles.heroMetaGrid}>
-                    <Tooltip content="Total distinct effective versions recorded for this agent." placement="top">
-                      <div className={styles.heroMetaStat}>
-                        <TopStat label="VERSIONS" value={versionOptions.length} loading={false} compact />
-                      </div>
-                    </Tooltip>
-                    <Tooltip content="Version string reported by instrumentation." placement="top">
-                      <div className={styles.heroMetaStat}>
-                        <TopStat
-                          label="DECLARED VERSION"
-                          value={0}
-                          displayValue={detail.declared_version_latest || 'n/a'}
-                          loading={false}
-                          compact
-                        />
-                      </div>
-                    </Tooltip>
-                    <Tooltip content="Distinct model variants recorded for this agent version." placement="top">
-                      <div className={styles.heroMetaStat}>
-                        <TopStat label="MODELS" value={detail.models.length} loading={false} compact />
-                      </div>
-                    </Tooltip>
-                    <Tooltip content="Declared tool definitions." placement="top">
-                      <div className={styles.heroMetaStat}>
-                        <TopStat label="TOOLS" value={detail.tool_count} loading={false} compact />
-                      </div>
-                    </Tooltip>
-                    <Tooltip content="Primary model name and provider in this version." placement="top">
-                      <div className={styles.heroMetaStat}>
-                        <TopStat
-                          label="PRIMARY MODEL"
-                          value={0}
-                          displayValue={
-                            primaryModelProvider ? `${primaryModelLabel} (${primaryModelProvider})` : primaryModelLabel
-                          }
-                          loading={false}
-                          compact
-                        />
-                      </div>
-                    </Tooltip>
+                    <div className={styles.heroMetaStat}>
+                      <TopStat
+                        label="VERSIONS"
+                        value={versionOptions.length}
+                        loading={false}
+                        compact
+                        helpTooltip="Total distinct effective versions recorded for this agent."
+                      />
+                    </div>
+                    <div className={styles.heroMetaStat}>
+                      <TopStat
+                        label="DECLARED VERSION"
+                        value={0}
+                        displayValue={detail.declared_version_latest || 'n/a'}
+                        loading={false}
+                        compact
+                        helpTooltip="Version string reported by instrumentation."
+                      />
+                    </div>
+                    <div className={styles.heroMetaStat}>
+                      <TopStat
+                        label="MODELS"
+                        value={detail.models.length}
+                        loading={false}
+                        compact
+                        helpTooltip="Distinct model variants recorded for this agent version."
+                      />
+                    </div>
+                    <div className={styles.heroMetaStat}>
+                      <TopStat
+                        label="TOOLS"
+                        value={detail.tool_count}
+                        loading={false}
+                        compact
+                        helpTooltip="Declared tool definitions."
+                      />
+                    </div>
+                    <div className={styles.heroMetaStat}>
+                      <TopStat
+                        label="PRIMARY MODEL"
+                        value={0}
+                        displayValue={
+                          primaryModelProvider ? `${primaryModelLabel} (${primaryModelProvider})` : primaryModelLabel
+                        }
+                        loading={false}
+                        compact
+                        helpTooltip="Primary model name and provider in this version."
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1449,7 +1461,10 @@ export default function AgentDetailPage({
                               </span>
                               {completedRating && (
                                 <span
-                                  className={cx(styles.recentVersionScore, isSelected && styles.recentVersionScoreActive)}
+                                  className={cx(
+                                    styles.recentVersionScore,
+                                    isSelected && styles.recentVersionScoreActive
+                                  )}
                                   style={{ color: scoreTone(theme, completedRating.score) }}
                                 >
                                   {completedRating.score}/10

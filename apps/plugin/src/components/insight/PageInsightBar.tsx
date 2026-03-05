@@ -295,7 +295,7 @@ export function PageInsightBar({
 }
 
 const COLLAPSED_HEIGHT = 40;
-const EXPANDED_HEIGHT = 140;
+const EXPANDED_MIN_HEIGHT = 140;
 
 function buildCacheKey(prompt: string, origin: string, systemPrompt: string, dataContext: string): string {
   const keySource = `${origin}|${prompt}|${systemPrompt}|${dataContext}`;
@@ -392,13 +392,12 @@ function getStyles(theme: GrafanaTheme2) {
     width: '100%',
     background: theme.colors.background.secondary,
     overflow: 'hidden' as const,
-    marginBottom: theme.spacing(2),
   };
 
   return {
     bar: css({
       ...barBase,
-      height: EXPANDED_HEIGHT,
+      minHeight: EXPANDED_MIN_HEIGHT,
       display: 'flex',
       flexDirection: 'column',
     }),
@@ -488,10 +487,10 @@ function getStyles(theme: GrafanaTheme2) {
       lineHeight: 1,
     }),
     body: css({
-      padding: theme.spacing(0, 1.5, 1.5),
+      padding: theme.spacing(1.5),
       flex: 1,
       minHeight: 0,
-      overflow: 'hidden',
+      overflow: 'visible',
     }),
     placeholder: css({
       color: theme.colors.text.secondary,
@@ -532,10 +531,7 @@ function getStyles(theme: GrafanaTheme2) {
       fontSize: theme.typography.body.fontSize,
       lineHeight: 1.6,
       color: theme.colors.text.secondary,
-      display: '-webkit-box',
-      WebkitLineClamp: 3,
-      WebkitBoxOrient: 'vertical',
-      overflow: 'hidden',
+      overflowWrap: 'anywhere',
       '& strong': {
         fontWeight: theme.typography.fontWeightBold,
         color: theme.colors.text.primary,

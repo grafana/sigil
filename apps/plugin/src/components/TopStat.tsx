@@ -1,7 +1,7 @@
 import React from 'react';
 import { css, cx } from '@emotion/css';
 import { type GrafanaTheme2 } from '@grafana/data';
-import { Tooltip, useStyles2 } from '@grafana/ui';
+import { Icon, Tooltip, useStyles2 } from '@grafana/ui';
 import { Link } from 'react-router-dom';
 import { formatStatValue } from './dashboard/dashboardShared';
 
@@ -18,6 +18,7 @@ export type TopStatProps = {
   comparisonLabel?: string;
   to?: string;
   linkLabel?: string;
+  helpTooltip?: React.ReactNode;
 };
 
 const DEFAULT_COMPARISON_LABEL = 'one hour ago';
@@ -35,6 +36,7 @@ export function TopStat({
   comparisonLabel = DEFAULT_COMPARISON_LABEL,
   to,
   linkLabel,
+  helpTooltip,
 }: TopStatProps) {
   const styles = useStyles2(getStyles);
 
@@ -77,7 +79,16 @@ export function TopStat({
   return (
     <div className={cx(styles.topStat, compact && styles.topStatCompact)}>
       <div className={styles.topStatLabelRow}>
-        <span className={cx(styles.topStatLabel, compact && styles.topStatLabelCompact)}>{label}</span>
+        <span className={styles.topStatLabelGroup}>
+          <span className={cx(styles.topStatLabel, compact && styles.topStatLabelCompact)}>{label}</span>
+          {helpTooltip && (
+            <Tooltip content={helpTooltip} placement="top">
+              <span className={styles.topStatHelpIcon} aria-label={`${label} help`}>
+                <Icon name="info-circle" size="sm" />
+              </span>
+            </Tooltip>
+          )}
+        </span>
         {to && (
           <Link to={to} className={styles.topStatDetailLink}>
             {linkLabel ?? 'View details'}
@@ -106,9 +117,21 @@ function getStyles(theme: GrafanaTheme2) {
     }),
     topStatLabelRow: css({
       display: 'flex',
-      alignItems: 'baseline',
+      alignItems: 'center',
       justifyContent: 'space-between',
       gap: theme.spacing(1),
+    }),
+    topStatLabelGroup: css({
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: theme.spacing(0.5),
+      minWidth: 0,
+    }),
+    topStatHelpIcon: css({
+      display: 'inline-flex',
+      alignItems: 'center',
+      color: theme.colors.text.secondary,
+      lineHeight: 1,
     }),
     topStatDetailLink: css({
       fontSize: theme.typography.bodySmall.fontSize,
