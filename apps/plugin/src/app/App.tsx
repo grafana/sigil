@@ -7,7 +7,6 @@ import { PAGE_TITLES, PLUGIN_BASE, ROUTES } from '../constants';
 import { PageRoot } from './PageRoot';
 
 const DashboardPage = React.lazy(() => import('../pages/DashboardPage'));
-const Landing1Page = React.lazy(() => import('../pages/Landing1Page'));
 const TutorialPage = React.lazy(() => import('../pages/TutorialPage'));
 const ConversationsBrowserPage = React.lazy(() => import('../pages/ConversationsBrowserPage'));
 const ConversationPage = React.lazy(() => import('../pages/ConversationPage'));
@@ -45,10 +44,6 @@ export function isChromeLightRoute(path: string): boolean {
 function resolveRouteTitle(path: string): RouteTitle {
   if (path === '' || path === ROUTES.Root || path === ROUTES.Dashboard) {
     return { title: APP_TITLE, navTitle: '', sectionPath: ROUTES.Root };
-  }
-
-  if (path === ROUTES.Landing1) {
-    return { title: PAGE_TITLES[ROUTES.Landing1], sectionPath: ROUTES.Landing1 };
   }
 
   if (path === ROUTES.Tutorial || path.startsWith(`${ROUTES.Tutorial}/`)) {
@@ -149,20 +144,11 @@ export default function App(props: AppRootProps) {
   }, [currentTitle]);
 
   const chromeLightRoute = isChromeLightRoute(pluginRelativePath);
-  const isLanding1Route = /\/landing1\/?$/.test(location.pathname);
 
   return (
     <div className={cx(styles.pageWrapper, chromeLightRoute && styles.pageWrapperNoPadding)}>
       <div className={styles.routesContainer}>
         <Routes>
-          <Route
-            path={ROUTES.Landing1}
-            element={
-              <PageRoot>
-                <Landing1Page />
-              </PageRoot>
-            }
-          />
           <Route
             path={ROUTES.Dashboard}
             element={
@@ -229,7 +215,7 @@ export default function App(props: AppRootProps) {
               </PageRoot>
             }
           />
-          <Route path="*" element={isLanding1Route ? <Landing1Page /> : <DashboardPage />} />
+          <Route path="*" element={<DashboardPage />} />
         </Routes>
       </div>
     </div>
