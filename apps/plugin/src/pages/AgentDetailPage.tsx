@@ -2,7 +2,20 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { css, cx } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Badge, Button, Icon, Select, Spinner, Tab, TabsBar, Text, Tooltip, useStyles2, useTheme2 } from '@grafana/ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  Icon,
+  Select,
+  Spinner,
+  Tab,
+  TabsBar,
+  Text,
+  Tooltip,
+  useStyles2,
+  useTheme2,
+} from '@grafana/ui';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../agents/api';
 import type { AgentDetail, AgentRatingResponse, AgentVersionListItem } from '../agents/types';
 import ModelCardPopover from '../components/conversations/ModelCardPopover';

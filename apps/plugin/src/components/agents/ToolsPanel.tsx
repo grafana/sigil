@@ -590,7 +590,12 @@ export default function ToolsPanel({
               <div>
                 <div className={styles.sectionLabel}>Input schema</div>
                 <div className={styles.schemaContainer}>
-                  <JsonView data={parsedSchema} style={jsonStyle} shouldExpandNode={shouldExpandNode} clickToExpandNode />
+                  <JsonView
+                    data={parsedSchema}
+                    style={jsonStyle}
+                    shouldExpandNode={shouldExpandNode}
+                    clickToExpandNode
+                  />
                 </div>
               </div>
             )}

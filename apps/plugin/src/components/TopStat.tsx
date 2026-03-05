@@ -81,7 +81,9 @@ export function TopStat({
   }
 
   return (
-    <div className={cx(styles.topStat, compact && styles.topStatCompact, rightAlignContent && styles.topStatRightAligned)}>
+    <div
+      className={cx(styles.topStat, compact && styles.topStatCompact, rightAlignContent && styles.topStatRightAligned)}
+    >
       <div className={cx(styles.topStatLabelRow, rightAlignContent && styles.topStatLabelRowRightAligned)}>
         <span className={cx(styles.topStatLabelGroup, rightAlignContent && styles.topStatLabelGroupRightAligned)}>
           {helpTooltip && rightAlignContent && (
@@ -106,7 +108,13 @@ export function TopStat({
           </Link>
         )}
       </div>
-      <div className={cx(styles.topStatRow, compact && styles.topStatRowCompact, rightAlignContent && styles.topStatRowRightAligned)}>
+      <div
+        className={cx(
+          styles.topStatRow,
+          compact && styles.topStatRowCompact,
+          rightAlignContent && styles.topStatRowRightAligned
+        )}
+      >
         <span
           className={cx(
             styles.topStatValue,
