@@ -6,6 +6,8 @@ describe('isChromeLightRoute', () => {
     expect(isChromeLightRoute('conversations/conv-1/view')).toBe(true);
     expect(isChromeLightRoute('conversations/conv-1/explore')).toBe(true);
     expect(isChromeLightRoute('agents')).toBe(true);
+    expect(isChromeLightRoute('tutorial')).toBe(true);
+    expect(isChromeLightRoute('tutorial/what-is-sigil')).toBe(true);
     expect(isChromeLightRoute('evaluation')).toBe(true);
     expect(isChromeLightRoute('evaluation/runs')).toBe(true);
   });

@@ -8,6 +8,7 @@ import { PageRoot } from './PageRoot';
 
 const DashboardPage = React.lazy(() => import('../pages/DashboardPage'));
 const Landing1Page = React.lazy(() => import('../pages/Landing1Page'));
+const TutorialPage = React.lazy(() => import('../pages/TutorialPage'));
 const ConversationsBrowserPage = React.lazy(() => import('../pages/ConversationsBrowserPage'));
 const ConversationPage = React.lazy(() => import('../pages/ConversationPage'));
 const ConversationExplorePage = React.lazy(() => import('../pages/ConversationExplorePage'));
@@ -34,6 +35,10 @@ export function isChromeLightRoute(path: string): boolean {
     return true;
   }
 
+  if (normalizedPath === ROUTES.Tutorial || normalizedPath.startsWith(`${ROUTES.Tutorial}/`)) {
+    return true;
+  }
+
   return normalizedPath === ROUTES.Evaluation || normalizedPath.startsWith(`${ROUTES.Evaluation}/`);
 }
 
@@ -44,6 +49,10 @@ function resolveRouteTitle(path: string): RouteTitle {
 
   if (path === ROUTES.Landing1) {
     return { title: PAGE_TITLES[ROUTES.Landing1], sectionPath: ROUTES.Landing1 };
+  }
+
+  if (path === ROUTES.Tutorial || path.startsWith(`${ROUTES.Tutorial}/`)) {
+    return { title: PAGE_TITLES[ROUTES.Tutorial], sectionPath: ROUTES.Tutorial };
   }
 
   if (path === ROUTES.ConversationsOld) {
@@ -159,6 +168,14 @@ export default function App(props: AppRootProps) {
             element={
               <PageRoot>
                 <DashboardPage />
+              </PageRoot>
+            }
+          />
+          <Route
+            path={`${ROUTES.Tutorial}/*`}
+            element={
+              <PageRoot fullBleed>
+                <TutorialPage />
               </PageRoot>
             }
           />

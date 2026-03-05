@@ -4,6 +4,7 @@ export const ROUTES = {
   Root: '',
   Dashboard: 'dashboard',
   Landing1: 'landing1',
+  Tutorial: 'tutorial',
   Conversations: 'conversations',
   ConversationsView: 'conversations/:conversationID/view',
   ConversationsExplore: 'conversations/:conversationID/explore',
@@ -18,6 +19,7 @@ export const ROUTES = {
 export const PAGE_TITLES = {
   [ROUTES.Dashboard]: 'Dashboard',
   [ROUTES.Landing1]: 'Landing 1',
+  [ROUTES.Tutorial]: 'Tutorial',
   [ROUTES.Conversations]: 'Conversations',
   [ROUTES.ConversationsView]: 'Conversation view',
   [ROUTES.ConversationsExplore]: 'Conversation explore',
