@@ -548,7 +548,7 @@ export function LandingTopBar({
 
         <div className={styles.heroSideHeaderBlock}>
           <HorizontalGroup className={styles.heroSideActions}>
-            <LinkButton href={buildFakeDocUrl('/sigil/get-started')} icon="book-open" target="_blank" rel="noreferrer">
+            <LinkButton href={`${PLUGIN_BASE}/${ROUTES.Dashboard}`} icon="book-open">
               Try our tutorial
             </LinkButton>
             <LinkButton href={buildFakeDocUrl('/sigil/overview')} variant="secondary" target="_blank" rel="noreferrer">
