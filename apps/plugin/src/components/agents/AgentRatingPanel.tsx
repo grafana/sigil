@@ -15,6 +15,7 @@ export type AgentRatingPanelProps = {
   agentStateContext?: string;
   contentView?: 'preview' | 'markdown';
   onRerun?: () => void;
+  onResultChange?: (result: AgentRatingResponse | null) => void;
   dataSource?: AgentsDataSource;
   initialResult?: AgentRatingResponse | null;
   initialLoading?: boolean;
@@ -547,12 +548,21 @@ function isNotFoundError(err: unknown): boolean {
   return /\b404\b/.test(message) || /\b404\b/.test(dataMessage);
 }
 
+function logRatingGenerationFailure(agentName: string, version: string | undefined, detail: unknown): void {
+  console.error('Agent rating generation failed', {
+    agentName,
+    version: version ?? 'latest',
+    detail,
+  });
+}
+
 export default function AgentRatingPanel({
   agentName,
   version,
   agentStateContext = '',
   contentView = 'preview',
   onRerun,
+  onResultChange,
   dataSource = defaultAgentsDataSource,
   initialResult = null,
   initialLoading = false,
@@ -578,7 +588,6 @@ export default function AgentRatingPanel({
   const rewriteRequestIdRef = useRef(0);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollInFlightRef = useRef(false);
-  const autoRunKeyRef = useRef('');
 
   const stopPolling = useCallback(() => {
     if (pollIntervalRef.current !== null) {
@@ -616,9 +625,11 @@ export default function AgentRatingPanel({
           if (status === 'failed') {
             setRunning(false);
             setError('Agent rating failed. Please try again.');
+            logRatingGenerationFailure(agentName, resolvedVersion, 'rating status failed while polling');
             return;
           }
           setResult(rating);
+          onResultChange?.(rating);
           setRunning(false);
           setError('');
         } catch (err: unknown) {
@@ -626,13 +637,15 @@ export default function AgentRatingPanel({
             return;
           }
           if (isNotFoundError(err)) {
-            stopPolling();
-            setRunning(false);
+            // A newly triggered rating can briefly 404 before it is materialized.
+            // Keep polling so the panel does not drop back to the empty state.
+            setRunning(true);
             setError('');
             return;
           }
           stopPolling();
           setRunning(false);
+          logRatingGenerationFailure(agentName, resolvedVersion, err);
           setError(err instanceof Error ? err.message : 'Failed to load latest agent rating');
         } finally {
           pollInFlightRef.current = false;
@@ -644,7 +657,7 @@ export default function AgentRatingPanel({
         void poll();
       }, ratingPollingIntervalMs);
     },
-    [agentName, dataSource, stopPolling, version]
+    [agentName, dataSource, onResultChange, stopPolling, version]
   );
 
   useEffect(() => {
@@ -733,9 +746,10 @@ export default function AgentRatingPanel({
     stopPolling();
     setRunning(true);
     setError('');
+    onResultChange?.(null);
+    const resolvedVersion = version && version.length > 0 ? version : undefined;
 
     try {
-      const resolvedVersion = version && version.length > 0 ? version : undefined;
       const rating = await dataSource.rateAgent(agentName, resolvedVersion);
       if (requestIdRef.current !== requestId) {
         return;
@@ -749,39 +763,26 @@ export default function AgentRatingPanel({
       if (status === 'failed') {
         setRunning(false);
         setError('Agent rating failed. Please try again.');
+        logRatingGenerationFailure(agentName, resolvedVersion, 'rating status failed');
         return;
       }
       setResult(rating);
+      onResultChange?.(rating);
       setRunning(false);
     } catch (err: unknown) {
       if (requestIdRef.current !== requestId) {
         return;
       }
       setRunning(false);
+      logRatingGenerationFailure(agentName, version && version.length > 0 ? version : undefined, err);
       setError(err instanceof Error ? err.message : 'Failed to evaluate agent');
     }
-  }, [agentName, dataSource, startPolling, stopPolling, version]);
+  }, [agentName, dataSource, onResultChange, startPolling, stopPolling, version]);
 
   const onClickRerun = useCallback(() => {
     onRerun?.();
     void runRating();
   }, [onRerun, runRating]);
-
-  useEffect(() => {
-    const autoRunKey = `${agentName}::${version ?? ''}`;
-    if (autoRunKeyRef.current === autoRunKey) {
-      return;
-    }
-
-    const hasInitialResult = initialResult !== null;
-    const hasInitialError = initialError.trim().length > 0;
-    if (initialLoading || hasInitialResult || hasInitialError) {
-      return;
-    }
-
-    autoRunKeyRef.current = autoRunKey;
-    void runRating();
-  }, [agentName, initialError, initialLoading, initialResult, runRating, version]);
 
   const onExplainSuggestion = useCallback(
     (suggestion: AgentRatingSuggestion) => {

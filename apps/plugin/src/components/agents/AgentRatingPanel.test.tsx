@@ -9,6 +9,7 @@ const mockOpenAssistant = jest.fn();
 const mockInlineGenerate = jest.fn();
 let mockInlineIsGenerating = false;
 let mockInlineContent = '';
+let consoleErrorSpy: jest.SpyInstance;
 
 jest.mock('@grafana/assistant', () => ({
   createAssistantContextItem: (type: string, params: { title?: string; data?: unknown }) => ({
@@ -88,11 +89,13 @@ describe('AgentRatingPanel', () => {
     mockInlineGenerate.mockReset();
     mockInlineIsGenerating = false;
     mockInlineContent = '';
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
     jest.clearAllTimers();
     jest.useRealTimers();
+    consoleErrorSpy.mockRestore();
   });
 
   it('polls when initial rating is pending and renders completed result', async () => {
@@ -147,7 +150,43 @@ describe('AgentRatingPanel', () => {
     expect(await screen.findByText('Rating became available after trigger.')).toBeInTheDocument();
   });
 
-  it('auto-runs rating when no initial rating exists', async () => {
+  it('keeps polling when lookup briefly returns 404 after rerun', async () => {
+    const completed = createCompletedRating('Existing report remains while rerun starts.');
+    const rateAgent = jest
+      .fn<Promise<AgentRatingResponse>, [string, string?]>()
+      .mockResolvedValue(createPendingRating());
+    const lookupAgentRating = jest
+      .fn<Promise<AgentRatingResponse | null>, [string, string?]>()
+      .mockRejectedValueOnce({ status: 404 })
+      .mockResolvedValueOnce(createCompletedRating('Fresh rerun rating.'));
+    const dataSource = createDataSource({
+      rateAgent,
+      lookupAgentRating,
+    });
+
+    renderPanel(
+      <AgentRatingPanel
+        agentName="assistant"
+        version="sha256:test"
+        dataSource={dataSource}
+        initialResult={completed}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /re-run/i }));
+
+    await waitFor(() => expect(rateAgent).toHaveBeenCalledWith('assistant', 'sha256:test'));
+    await waitFor(() => expect(lookupAgentRating).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('progressbar', { name: /loading conversation/i })).toBeInTheDocument();
+
+    await act(async () => {
+      jest.advanceTimersByTime(5000);
+    });
+
+    expect(await screen.findByText('Fresh rerun rating.')).toBeInTheDocument();
+  });
+
+  it('does not auto-run rating until generate is clicked', async () => {
     const rateAgent = jest.fn<Promise<AgentRatingResponse>, [string, string?]>().mockResolvedValue(createCompletedRating());
     const dataSource = createDataSource({
       rateAgent,
@@ -156,6 +195,8 @@ describe('AgentRatingPanel', () => {
 
     renderPanel(<AgentRatingPanel agentName="assistant" version="sha256:test" dataSource={dataSource} />);
 
+    expect(rateAgent).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /generate analysis/i }));
     await waitFor(() => expect(rateAgent).toHaveBeenCalledWith('assistant', 'sha256:test'));
     expect(await screen.findByText('Great overall structure.')).toBeInTheDocument();
   });
@@ -464,6 +505,13 @@ describe('AgentRatingPanel', () => {
 
     expect(await screen.findByText('backend unavailable')).toBeInTheDocument();
     expect(screen.getByText('Existing report should stay visible.')).toBeInTheDocument();
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Agent rating generation failed',
+      expect.objectContaining({
+        agentName: 'assistant',
+        version: 'sha256:test',
+      })
+    );
   });
 
   it('calls onRerun callback before starting rerun', async () => {

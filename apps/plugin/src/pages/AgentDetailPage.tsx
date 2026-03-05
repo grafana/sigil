@@ -1174,6 +1174,11 @@ export default function AgentDetailPage({
   const scrollToPromptAnalysis = useCallback(() => {
     promptAnalysisSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
+  const handleRatingResultChange = useCallback((nextRating: AgentRatingResponse | null) => {
+    setInitialRating(nextRating);
+    setInitialRatingError('');
+    setInitialRatingLoading(false);
+  }, []);
 
   if (loading) {
     return (
@@ -1205,9 +1210,9 @@ export default function AgentDetailPage({
   const primaryModelProvider = primaryModel != null ? getProviderMeta(primaryModel.provider).label : null;
   const gradientColors = ['#5794F2', '#B877D9', '#FF9830'] as const;
   const displayActivityHeights = activityHeights && activityHeights.length > 0 ? activityHeights : EMPTY_ACTIVITY_BARS;
-  const latestHeroRating = selectedVersion.length === 0 && initialRating?.status === 'completed' ? initialRating : null;
-  const latestHeroRatingSummary = latestHeroRating ? firstLine(latestHeroRating.summary) : '';
-  const latestScoreFilledBlocks = latestHeroRating ? Math.max(0, Math.min(10, Math.round(latestHeroRating.score))) : 0;
+  const activeHeroRating = initialRating?.status === 'completed' ? initialRating : null;
+  const activeHeroRatingSummary = activeHeroRating ? firstLine(activeHeroRating.summary) : '';
+  const activeScoreFilledBlocks = activeHeroRating ? Math.max(0, Math.min(10, Math.round(activeHeroRating.score))) : 0;
 
   return (
     <div className={styles.page}>
@@ -1361,14 +1366,14 @@ export default function AgentDetailPage({
                       <TopStat
                         label="LATEST SCORE"
                         value={0}
-                        displayValue={latestHeroRating ? `${latestHeroRating.score}/10` : 'n/a'}
+                        displayValue={activeHeroRating ? `${activeHeroRating.score}/10` : 'n/a'}
                         loading={false}
                         compact
                         normalFontSize
                         helpTooltip={
-                          latestHeroRating
-                            ? `Latest completed rating summary: ${latestHeroRatingSummary}`
-                            : 'No completed latest-version rating available.'
+                          activeHeroRating
+                            ? `Completed rating summary for selected version: ${activeHeroRatingSummary}`
+                            : 'No completed rating available for selected version.'
                         }
                       />
                       <div className={styles.latestScoreBlocks} aria-hidden="true">
@@ -1377,7 +1382,7 @@ export default function AgentDetailPage({
                             key={idx}
                             className={styles.latestScoreBlock}
                             style={
-                              idx < latestScoreFilledBlocks
+                              idx < activeScoreFilledBlocks
                                 ? {
                                     backgroundColor:
                                       idx / 9 <= 0.52
@@ -1683,6 +1688,7 @@ export default function AgentDetailPage({
                 agentStateContext={agentStateContext}
                 contentView={isSystemTokenized ? 'markdown' : systemPromptView}
                 onRerun={scrollToPromptAnalysis}
+                onResultChange={handleRatingResultChange}
                 dataSource={dataSource}
                 initialResult={initialRating}
                 initialLoading={initialRatingLoading || initialRating?.status === 'pending'}
