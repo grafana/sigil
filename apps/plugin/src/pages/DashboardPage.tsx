@@ -41,7 +41,13 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
 
   return (
     <div className={styles.container}>
-      <LandingTopBar assistantOrigin="grafana/sigil-plugin/dashboard" />
+      <LandingTopBar
+        assistantOrigin="grafana/sigil-plugin/dashboard"
+        requestsDataSource={dataSource}
+        requestsFilters={filters}
+        requestsFrom={from}
+        requestsTo={to}
+      />
       <DashboardFilterBar
         timeRange={timeRange}
         filters={filters}

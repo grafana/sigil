@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { useAssistant } from '@grafana/assistant';
 import type { GrafanaTheme2 } from '@grafana/data';
@@ -12,6 +12,9 @@ import {
   getInstrumentationPromptFilename,
   type InstrumentationPromptIde,
 } from '../../content/cursorInstrumentationPrompt';
+import type { DashboardDataSource } from '../../dashboard/api';
+import { computeRateInterval, computeStep, requestsOverTimeQuery } from '../../dashboard/queries';
+import { type DashboardFilters, type PrometheusMatrixResult, type PrometheusQueryResponse, emptyFilters } from '../../dashboard/types';
 import { defaultEvaluationDataSource } from '../../evaluation/api';
 import { ClaudeCodeLogo, CopilotLogo, CursorLogo } from './IdeLogos';
 
@@ -207,9 +210,59 @@ function renderIdeActionLogo(ide: IdeKey): React.ReactNode {
 
 type LandingTopBarProps = {
   assistantOrigin: string;
+  requestsDataSource?: DashboardDataSource;
+  requestsFilters?: DashboardFilters;
+  requestsFrom?: number;
+  requestsTo?: number;
 };
 
-export function LandingTopBar({ assistantOrigin }: LandingTopBarProps) {
+function extractRequestsSeries(response: PrometheusQueryResponse): number[] {
+  if (response.status !== 'success' || response.data.resultType !== 'matrix') {
+    return [];
+  }
+  const [series] = response.data.result as PrometheusMatrixResult[];
+  if (!series?.values) {
+    return [];
+  }
+  return series.values
+    .map(([, value]) => Number.parseFloat(value))
+    .filter((value) => Number.isFinite(value) && value >= 0);
+}
+
+function normalizeValuesToHeights(values: number[], targetCount: number): number[] {
+  if (values.length === 0 || targetCount <= 0) {
+    return [];
+  }
+  const bucketed = Array.from({ length: targetCount }, (_, i) => {
+    const start = Math.floor((i * values.length) / targetCount);
+    const end = Math.max(start + 1, Math.floor(((i + 1) * values.length) / targetCount));
+    const slice = values.slice(start, end);
+    const sum = slice.reduce((acc, value) => acc + value, 0);
+    return sum / slice.length;
+  });
+  const minValue = Math.min(...bucketed);
+  const maxValue = Math.max(...bucketed);
+  if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
+    return [];
+  }
+  if (Math.abs(maxValue - minValue) < 1e-9) {
+    return bucketed.map(() => 56);
+  }
+  const minHeight = 18;
+  const maxHeight = 100;
+  return bucketed.map((value) => {
+    const t = (value - minValue) / (maxValue - minValue);
+    return minHeight + t * (maxHeight - minHeight);
+  });
+}
+
+export function LandingTopBar({
+  assistantOrigin,
+  requestsDataSource,
+  requestsFilters = emptyFilters,
+  requestsFrom,
+  requestsTo,
+}: LandingTopBarProps) {
   const styles = useStyles2(getStyles);
   const assistant = useAssistant();
   const navigate = useNavigate();
@@ -335,56 +388,105 @@ export function LandingTopBar({ assistantOrigin }: LandingTopBarProps) {
 
   const gradientColors = ['#5794F2', '#B877D9', '#FF9830'] as const;
   const spineCount = 48;
-  const spineHeights = useMemo(
-    () =>
-      Array.from({ length: spineCount }, (_, i) => {
-        const t = Math.sin(i * 0.35) * 0.4 + 0.55;
-        return `${Math.max(20, t * 100)}%`;
-      }),
-    []
-  );
+  const emptyHeights = useMemo(() => Array(spineCount).fill(0), [spineCount]);
+  const [requestSpineHeights, setRequestSpineHeights] = useState<number[] | null>(null);
 
-  const [hoveredSpineIndex, setHoveredSpineIndex] = useState<number | null>(null);
+  useEffect(() => {
+    if (!requestsDataSource || requestsFrom === undefined || requestsTo === undefined || requestsTo <= requestsFrom) {
+      setRequestSpineHeights(null);
+      return;
+    }
+    let cancelled = false;
+    const step = computeStep(requestsFrom, requestsTo);
+    const interval = computeRateInterval(step);
+    const query = requestsOverTimeQuery(requestsFilters, interval, 'none');
 
-  const getSpineScale = (index: number): number => {
-    if (hoveredSpineIndex === null) {
-      return 1;
+    const loadRequestBars = async () => {
+      try {
+        const response = await requestsDataSource.queryRange(query, requestsFrom, requestsTo, step);
+        if (cancelled) {
+          return;
+        }
+        const values = extractRequestsSeries(response);
+        const nextHeights = normalizeValuesToHeights(values, spineCount);
+        setRequestSpineHeights(nextHeights.length > 0 ? nextHeights : null);
+      } catch {
+        if (!cancelled) {
+          setRequestSpineHeights(null);
+        }
+      }
+    };
+
+    void loadRequestBars();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [requestsDataSource, requestsFilters, requestsFrom, requestsTo, spineCount]);
+
+  const spineHeights = requestSpineHeights ?? emptyHeights;
+  const [displayHeights, setDisplayHeights] = useState<number[]>(() => Array(spineCount).fill(0));
+  const loadingStartRef = useRef<number | null>(null);
+
+  const isLoading =
+    requestSpineHeights === null &&
+    Boolean(requestsDataSource) &&
+    requestsFrom !== undefined &&
+    requestsTo !== undefined &&
+    requestsTo > requestsFrom;
+
+  useEffect(() => {
+    if (!isLoading) {
+      setDisplayHeights(spineHeights);
+      loadingStartRef.current = null;
+      return;
     }
-    const distance = Math.abs(index - hoveredSpineIndex);
-    if (distance === 0) {
-      return 1.2;
-    }
-    if (distance === 1) {
-      return 1.1;
-    }
-    if (distance === 2) {
-      return 1.05;
-    }
-    return 1;
-  };
+    loadingStartRef.current = performance.now();
+  }, [isLoading, spineHeights]);
+
+  useEffect(() => {
+    if (!isLoading) return;
+    let rafId: number;
+    const WAVE_CYCLE_MS = 2400;
+    const MIN_H = 20;
+    const MAX_H = 85;
+
+    const tick = () => {
+      const start = loadingStartRef.current ?? performance.now();
+      const elapsed = (performance.now() - start) / 1000;
+      const x = (elapsed / (WAVE_CYCLE_MS / 1000)) % 2;
+      const phase = x <= 1 ? x : 2 - x;
+      const next = Array.from({ length: spineCount }, (_, i) => {
+        const t = i / (spineCount - 1);
+        const wave = 0.5 + 0.5 * Math.sin(2 * Math.PI * (t - phase));
+        return MIN_H + (MAX_H - MIN_H) * wave;
+      });
+      setDisplayHeights(next);
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [isLoading, spineCount]);
 
   return (
     <>
       <div className={styles.pageFlow}>
         <div className={styles.heroBlock}>
-          <div className={styles.heroSpines} aria-hidden onMouseLeave={() => setHoveredSpineIndex(null)}>
-            {spineHeights.map((height, i) => {
+          <div className={styles.heroSpines} aria-hidden>
+            {displayHeights.map((height, i) => {
               const t = i / (spineCount - 1);
               const color =
                 t <= 0.52
                   ? interpolateHex(gradientColors[0], gradientColors[1], t / 0.52)
                   : interpolateHex(gradientColors[1], gradientColors[2], (t - 0.52) / 0.48);
-              const scale = getSpineScale(i);
               return (
                 <div
                   key={i}
-                  className={styles.heroSpine}
+                  className={isLoading ? styles.heroSpineLoading : styles.heroSpine}
                   style={{
-                    height,
+                    transform: `scaleY(${height / 100})`,
                     backgroundColor: color,
-                    transform: `scaleY(${scale})`,
                   }}
-                  onMouseEnter={() => setHoveredSpineIndex(i)}
                 />
               );
             })}
@@ -447,10 +549,10 @@ export function LandingTopBar({ assistantOrigin }: LandingTopBarProps) {
         <div className={styles.heroSideHeaderBlock}>
           <HorizontalGroup className={styles.heroSideActions}>
             <LinkButton href={buildFakeDocUrl('/sigil/get-started')} icon="book-open" target="_blank" rel="noreferrer">
-              Read docs
+              Try our tutorial
             </LinkButton>
             <LinkButton href={buildFakeDocUrl('/sigil/overview')} variant="secondary" target="_blank" rel="noreferrer">
-              Learn more
+              Read docs
             </LinkButton>
           </HorizontalGroup>
           <Card className={styles.heroSideCard}>
@@ -738,8 +840,6 @@ function getStyles(theme: GrafanaTheme2) {
       paddingTop: theme.spacing(1),
       paddingLeft: 0,
       paddingRight: 0,
-      borderBottomLeftRadius: theme.shape.radius.default,
-      borderBottomRightRadius: theme.shape.radius.default,
       overflow: 'hidden',
       opacity: 0.75,
     }),
@@ -747,10 +847,20 @@ function getStyles(theme: GrafanaTheme2) {
       label: 'landingTopBar-heroSpine',
       flex: 1,
       minWidth: 2,
+      height: '100%',
       borderTopLeftRadius: 1,
       borderTopRightRadius: 1,
       transformOrigin: 'bottom',
-      transition: 'transform 0.35s ease-out',
+      transition: 'transform 0.5s ease-out',
+    }),
+    heroSpineLoading: css({
+      label: 'landingTopBar-heroSpineLoading',
+      flex: 1,
+      minWidth: 2,
+      height: '100%',
+      borderTopLeftRadius: 1,
+      borderTopRightRadius: 1,
+      transformOrigin: 'bottom',
     }),
     heroSideHeaderBlock: css({
       label: 'landingTopBar-heroSideHeaderBlock',
@@ -788,7 +898,10 @@ function getStyles(theme: GrafanaTheme2) {
       position: 'relative',
       flex: 1,
       minHeight: 0,
-      borderRadius: theme.shape.radius.default,
+      borderTopLeftRadius: 0,
+      borderTopRightRadius: 0,
+      borderBottomLeftRadius: theme.shape.radius.default,
+      borderBottomRightRadius: theme.shape.radius.default,
       overflow: 'hidden',
       paddingTop: theme.spacing(2),
       paddingLeft: theme.spacing(3),
@@ -801,8 +914,6 @@ function getStyles(theme: GrafanaTheme2) {
         left: 0,
         right: 0,
         height: 3,
-        borderTopLeftRadius: theme.shape.radius.default,
-        borderTopRightRadius: theme.shape.radius.default,
         background: 'linear-gradient(90deg, #5794F2 0%, #B877D9 52%, #FF9830 100%)',
       },
     }),
