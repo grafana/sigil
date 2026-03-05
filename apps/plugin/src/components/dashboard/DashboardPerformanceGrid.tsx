@@ -34,6 +34,8 @@ import type { ConversationSearchResult } from '../../conversation/types';
 import { PLUGIN_BASE, ROUTES, buildConversationExploreRoute } from '../../constants';
 import { formatDuration } from '../conversations/ConversationListPanel';
 import { ViewConversationsLink } from './ViewConversationsLink';
+import { ViewAgentsLink, buildAgentDetailHref } from './ViewAgentsLink';
+import { useModelCardBreakdownPopover } from './useModelCardBreakdownPopover';
 import { PageInsightBar } from '../insight/PageInsightBar';
 import { summarizeVector, summarizeMatrix, hasResponseData } from '../insight/summarize';
 import { DashboardSummaryBar } from './DashboardSummaryBar';
@@ -77,6 +79,7 @@ export function DashboardPerformanceGrid({
   const styles = useStyles2(getStyles);
   const hasBreakdown = breakdownBy !== 'none';
   const breakdownPromLabel = hasBreakdown ? breakdownToPromLabel[breakdownBy] : undefined;
+  const agentItemHref = useMemo(() => (breakdownBy === 'agent' ? buildAgentDetailHref : undefined), [breakdownBy]);
   const [latencyPercentile, setLatencyPercentile] = useState<LatencyPercentile>('p95');
 
   const handlePanelTimeRangeChange = useCallback(
@@ -176,6 +179,8 @@ export function DashboardPerformanceGrid({
     to,
     'instant'
   );
+
+  const { onModelClick, modelPopoverElement } = useModelCardBreakdownPopover(breakdownBy, latencyStat.data);
 
   // --- TTFT over time ---
   const ttftTimeseries = usePrometheusQuery(
@@ -335,7 +340,12 @@ export function DashboardPerformanceGrid({
                 width={10}
               />
             }
-            actions={<ViewConversationsLink timeRange={timeRange} filters={filters} orderBy="duration" />}
+            actions={
+              <>
+                {breakdownBy === 'agent' && <ViewAgentsLink />}
+                <ViewConversationsLink timeRange={timeRange} filters={filters} orderBy="duration" />
+              </>
+            }
           />
           <BreakdownStatPanel
             title={`Avg Latency (${latencyPercentile.toUpperCase()})`}
@@ -346,6 +356,8 @@ export function DashboardPerformanceGrid({
             height={CHART_HEIGHT}
             unit="s"
             aggregation="avg"
+            getItemHref={agentItemHref}
+            onItemClick={onModelClick}
           />
         </div>
 
@@ -387,6 +399,8 @@ export function DashboardPerformanceGrid({
             height={CHART_HEIGHT}
             unit="s"
             aggregation="avg"
+            getItemHref={agentItemHref}
+            onItemClick={onModelClick}
           />
         </div>
       </div>
@@ -396,6 +410,7 @@ export function DashboardPerformanceGrid({
         timeRange={timeRange}
         filters={filters}
       />
+      {modelPopoverElement}
     </div>
   );
 }

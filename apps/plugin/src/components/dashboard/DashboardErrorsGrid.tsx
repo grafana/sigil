@@ -29,6 +29,8 @@ import { buildConversationSearchFilter } from '../../conversation/filters';
 import type { ConversationSearchResult } from '../../conversation/types';
 import { PLUGIN_BASE, ROUTES, buildConversationExploreRoute } from '../../constants';
 import { ViewConversationsLink } from './ViewConversationsLink';
+import { ViewAgentsLink, buildAgentDetailHref } from './ViewAgentsLink';
+import { useModelCardBreakdownPopover } from './useModelCardBreakdownPopover';
 import { PageInsightBar } from '../insight/PageInsightBar';
 import { summarizeVector, summarizeMatrix, hasResponseData } from '../insight/summarize';
 import { DashboardSummaryBar } from './DashboardSummaryBar';
@@ -66,6 +68,7 @@ export function DashboardErrorsGrid({
   const styles = useStyles2(getStyles);
   const hasBreakdown = breakdownBy !== 'none';
   const breakdownPromLabel = hasBreakdown ? breakdownToPromLabel[breakdownBy] : undefined;
+  const agentItemHref = useMemo(() => (breakdownBy === 'agent' ? buildAgentDetailHref : undefined), [breakdownBy]);
 
   const handlePanelTimeRangeChange = useCallback(
     (abs: AbsoluteTimeRange) => {
@@ -140,6 +143,8 @@ export function DashboardErrorsGrid({
     to,
     'instant'
   );
+
+  const { onModelClick, modelPopoverElement } = useModelCardBreakdownPopover(breakdownBy, errorRateByBreakdown.data);
 
   const timeseriesDefaults = { fillOpacity: 6, showPoints: 'never', lineWidth: 2 };
   const tooltipOptions = { mode: 'multi', sort: 'desc' };
@@ -259,7 +264,12 @@ export function DashboardErrorsGrid({
               },
               overrides: [],
             }}
-            actions={<ViewConversationsLink timeRange={timeRange} filters={filters} orderBy="errors" />}
+            actions={
+              <>
+                {breakdownBy === 'agent' && <ViewAgentsLink />}
+                <ViewConversationsLink timeRange={timeRange} filters={filters} orderBy="errors" />
+              </>
+            }
           />
           <BreakdownStatPanel
             title="Errors by code"
@@ -305,6 +315,8 @@ export function DashboardErrorsGrid({
             unit="percent"
             aggregation="avg"
             aggregateOverride={hasBreakdown ? errorRateValue : undefined}
+            getItemHref={agentItemHref}
+            onItemClick={onModelClick}
           />
         </div>
       </div>
@@ -315,6 +327,7 @@ export function DashboardErrorsGrid({
         timeRange={timeRange}
         filters={filters}
       />
+      {modelPopoverElement}
     </div>
   );
 }

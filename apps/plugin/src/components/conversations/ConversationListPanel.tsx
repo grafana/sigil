@@ -6,6 +6,7 @@ import type { ConversationSearchResult } from '../../conversation/types';
 import { inferProviderFromModelName } from '../../modelcard/resolve';
 import type { ModelCard } from '../../modelcard/types';
 import { getProviderColor, getProviderMeta, stripProviderPrefix, toDisplayProvider } from './providerMeta';
+import { PLUGIN_BASE, buildAgentDetailByNameRoute, buildAnonymousAgentDetailRoute } from '../../constants';
 
 export type ConversationListPanelProps = {
   conversations: ConversationSearchResult[];
@@ -73,7 +74,7 @@ function formatCacheHitRate(rate: number): string {
   return `${rate.toFixed(1)}%`;
 }
 
-function truncateId(id: string, length = 8): string {
+function truncateId(id: string, length = 40): string {
   if (id.length <= length) {
     return id;
   }
@@ -241,6 +242,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
     background: theme.colors.info.transparent,
     color: theme.colors.info.text,
     border: `1px solid ${theme.colors.info.border}`,
+    textDecoration: 'none',
+    cursor: 'pointer',
+    transition: 'border-color 0.15s ease',
+    '&:hover': {
+      borderColor: theme.colors.info.text,
+      textDecoration: 'underline',
+    },
   }),
   modelChip: css({
     label: 'conversationListPanel-modelChip',
@@ -309,11 +317,12 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   durationCell: css({
     label: 'conversationListPanel-durationCell',
-    display: 'inline-block',
-    minWidth: 40,
-    textAlign: 'right' as const,
     color: theme.colors.text.secondary,
     fontFamily: theme.typography.fontFamilyMonospace,
+  }),
+  callCountCell: css({
+    label: 'conversationListPanel-callCountCell',
+    fontVariantNumeric: 'tabular-nums',
   }),
   emptyState: css({
     label: 'conversationListPanel-emptyState',
@@ -343,10 +352,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     overscrollBehavior: 'none' as const,
   }),
   colLastActivity: css({ width: 100 }),
-  colConversation: css({ width: 240 }),
+  colConversation: css({ width: 300 }),
   colActivity: css({ width: 140 }),
   colAgents: css({ width: '20%' }),
-  colModels: css({ width: '25%' }),
+  colModels: css({ width: '20%' }),
   colQuality: css({ width: 100 }),
   colTokens: css({ width: 90 }),
   colCacheHitRate: css({ width: 100 }),
@@ -406,6 +415,11 @@ function CopyIdButton({ id }: { id: string }) {
   );
 }
 
+function agentDetailHref(name: string): string {
+  const route = name.trim().length > 0 ? buildAgentDetailByNameRoute(name) : buildAnonymousAgentDetailRoute();
+  return `${PLUGIN_BASE}/${route}`;
+}
+
 function AgentPillList({ items }: { items: string[] }) {
   const styles = useStyles2(getStyles);
   if (items.length === 0) {
@@ -418,12 +432,18 @@ function AgentPillList({ items }: { items: string[] }) {
   return (
     <div className={styles.pillList}>
       {visible.map((item) => (
-        <Tooltip key={item} content={item}>
-          <span className={styles.agentPill}>
-            <Icon name="user" size="xs" />
-            {item}
-          </span>
-        </Tooltip>
+        <a
+          key={item}
+          href={agentDetailHref(item)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={styles.agentPill}
+          title={`Open ${item} agent page`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Icon name="user" size="xs" />
+          {item}
+        </a>
       ))}
       {overflow > 0 && (
         <Tooltip content={items.slice(MAX_VISIBLE_PILLS).join(', ')}>
@@ -690,7 +710,7 @@ export default function ConversationListPanel({
                         {formatDuration(conversation.first_generation_at, conversation.last_generation_at)}
                       </span>
                       <span className={styles.groupedSeparator}>·</span>
-                      <span>{conversation.generation_count} calls</span>
+                      <span className={styles.callCountCell}>{conversation.generation_count} calls</span>
                     </div>
                   </td>
                   {getConversationTokens && (

@@ -392,7 +392,6 @@ function getStyles(theme: GrafanaTheme2) {
     width: '100%',
     background: theme.colors.background.secondary,
     overflow: 'hidden' as const,
-    marginBottom: theme.spacing(2),
   };
 
   return {

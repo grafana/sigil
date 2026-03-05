@@ -47,6 +47,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   badgeRow: css({
     display: 'flex',
+    alignItems: 'center',
     gap: theme.spacing(0.5),
     flexWrap: 'wrap' as const,
   }),
@@ -506,6 +507,37 @@ export default function AgentDetailPage({
             <Badge text={isAnonymous ? 'Anonymous' : 'Named'} color={isAnonymous ? 'orange' : 'green'} />
             <Badge text={`${detail.generation_count.toLocaleString()} generations`} color="blue" />
             <Badge text={`${detail.tool_count} tools`} color="purple" />
+            {!isAnonymous && (
+              <>
+                <Tooltip content="View analytics for this agent">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon="graph-bar"
+                    aria-label="View analytics"
+                    onClick={() => {
+                      const params = new URLSearchParams();
+                      params.set('agent', detail.agent_name);
+                      params.set('breakdownBy', 'agent');
+                      navigate(`${PLUGIN_BASE}/${ROUTES.Analytics}?${params.toString()}`);
+                    }}
+                  />
+                </Tooltip>
+                <Tooltip content="View conversations for this agent">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={'align-left' as any}
+                    aria-label="View conversations"
+                    onClick={() => {
+                      const params = new URLSearchParams();
+                      params.set('agent', detail.agent_name);
+                      navigate(`${PLUGIN_BASE}/${ROUTES.Conversations}?${params.toString()}`);
+                    }}
+                  />
+                </Tooltip>
+              </>
+            )}
           </div>
           {detail.models.length > 0 && (
             <div className={styles.modelChipsRow}>

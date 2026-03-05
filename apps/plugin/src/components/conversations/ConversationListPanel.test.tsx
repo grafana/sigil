@@ -152,7 +152,7 @@ describe('ConversationListPanel', () => {
         showExtendedColumns
       />
     );
-    expect(screen.getByText('conv-abc...')).toBeInTheDocument();
+    expect(screen.getByText('conv-abcdef-1234567890')).toBeInTheDocument();
     expect(screen.getByLabelText('copy conversation id')).toBeInTheDocument();
   });
 
@@ -169,7 +169,7 @@ describe('ConversationListPanel', () => {
       />
     );
     expect(screen.getByText('Follow-up: outage postmortem')).toBeInTheDocument();
-    expect(screen.getByText('conv-abc...')).toBeInTheDocument();
+    expect(screen.getByText('conv-abcdef-1234567890')).toBeInTheDocument();
   });
 
   it('shows user ID in compact mode when available', () => {
