@@ -390,6 +390,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   recentVersionBoxActive: css({
     background: theme.colors.primary.transparent,
+    boxShadow: `inset 0 0 0 1px ${theme.colors.primary.border}, 0 0 0 1px ${theme.colors.primary.transparent}`,
   }),
   recentVersionContent: css({
     display: 'grid',
@@ -424,6 +425,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
   recentVersionNumberCentered: css({
     textAlign: 'center' as const,
   }),
+  recentVersionNumberActive: css({
+    color: theme.colors.primary.text,
+    fontWeight: theme.typography.fontWeightBold,
+  }),
   recentVersionRelativeTime: css({
     fontSize: theme.typography.size.sm,
     color: theme.colors.text.secondary,
@@ -431,6 +436,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     whiteSpace: 'nowrap' as const,
     textAlign: 'center' as const,
     width: '100%',
+  }),
+  recentVersionRelativeTimeActive: css({
+    color: theme.colors.primary.text,
+    fontWeight: theme.typography.fontWeightMedium,
   }),
   recentVersionTimelineMarker: css({
     position: 'relative' as const,
@@ -485,6 +494,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
     fontVariantNumeric: 'tabular-nums',
     fontSize: theme.typography.size.sm,
     lineHeight: 1.2,
+  }),
+  recentVersionScoreActive: css({
+    fontWeight: theme.typography.fontWeightBold,
   }),
   versionTooltip: css({
     display: 'flex',
@@ -1449,7 +1461,8 @@ export default function AgentDetailPage({
                                 <span
                                   className={cx(
                                     styles.recentVersionNumber,
-                                    !completedRating && styles.recentVersionNumberCentered
+                                    !completedRating && styles.recentVersionNumberCentered,
+                                    isSelected && styles.recentVersionNumberActive
                                   )}
                                 >
                                   {versionNumber}
@@ -1457,7 +1470,7 @@ export default function AgentDetailPage({
                               </span>
                               {completedRating && (
                                 <span
-                                  className={styles.recentVersionScore}
+                                  className={cx(styles.recentVersionScore, isSelected && styles.recentVersionScoreActive)}
                                   style={{ color: scoreTone(theme, completedRating.score) }}
                                 >
                                   {completedRating.score}/10
@@ -1473,7 +1486,12 @@ export default function AgentDetailPage({
                               )}
                               aria-hidden="true"
                             />
-                            <span className={styles.recentVersionRelativeTime}>
+                            <span
+                              className={cx(
+                                styles.recentVersionRelativeTime,
+                                isSelected && styles.recentVersionRelativeTimeActive
+                              )}
+                            >
                               {formatRelativeDateCompact(versionItem.last_seen_at)}
                             </span>
                           </button>
