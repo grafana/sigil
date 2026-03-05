@@ -3,6 +3,7 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Field, Input, useStyles2 } from '@grafana/ui';
 import type { Evaluator, RuleSelector } from '../../evaluation/types';
+import { isValidResourceID, INVALID_ID_MESSAGE } from '../../evaluation/utils';
 import EvaluatorPicker from './EvaluatorPicker';
 import MatchCriteriaEditor from './MatchCriteriaEditor';
 import SampleRateInput from './SampleRateInput';
@@ -56,9 +57,17 @@ export default function RuleForm({
 }: RuleFormProps) {
   const styles = useStyles2(getStyles);
 
+  const trimmedRuleID = ruleID.trim();
+  const isRuleIdInvalid = trimmedRuleID !== '' && !isValidResourceID(trimmedRuleID);
+
   return (
     <div className={styles.stack}>
-      <Field label="Rule ID" description="Unique identifier for this rule.">
+      <Field
+        label="Rule ID"
+        description="Unique identifier for this rule."
+        invalid={isRuleIdInvalid}
+        error={isRuleIdInvalid ? INVALID_ID_MESSAGE : undefined}
+      >
         <Input
           className={`${styles.fieldWidth} ${styles.ruleIdInput}`}
           value={ruleID}

@@ -13,6 +13,7 @@ import {
   type ScoreType,
 } from '../../evaluation/types';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../../evaluation/api';
+import { isValidResourceID, INVALID_ID_MESSAGE } from '../../evaluation/utils';
 import { nextVersion } from '../../evaluation/versionUtils';
 
 export type EvaluatorFormProps = {
@@ -291,11 +292,13 @@ export default function EvaluatorForm({
   ]);
 
   const isIdEmpty = evaluatorId.trim() === '';
-  const showIdError = touched && isIdEmpty;
+  const isIdInvalid = !isIdEmpty && !isValidResourceID(evaluatorId.trim());
+  const idError = isIdEmpty ? 'Evaluator ID is required' : isIdInvalid ? INVALID_ID_MESSAGE : undefined;
+  const showIdError = touched && (isIdEmpty || isIdInvalid);
 
   const handleSubmit = () => {
     setTouched(true);
-    if (isIdEmpty) {
+    if (isIdEmpty || isIdInvalid) {
       return;
     }
 
@@ -330,7 +333,7 @@ export default function EvaluatorForm({
         description="Unique identifier for this evaluator."
         required
         invalid={showIdError}
-        error={showIdError ? 'Evaluator ID is required' : undefined}
+        error={idError}
       >
         <Input
           value={evaluatorId}

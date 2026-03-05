@@ -146,7 +146,7 @@ func TestDeleteEvaluatorRejectsEnabledRuleReferences(t *testing.T) {
 	}
 	if err := store.CreateRule(context.Background(), evalpkg.RuleDefinition{
 		TenantID:     "fake",
-		RuleID:       "rule-helpfulness",
+		RuleID:       "rule_helpfulness",
 		Enabled:      true,
 		Selector:     evalpkg.SelectorUserVisibleTurn,
 		Match:        map[string]any{},
@@ -204,7 +204,7 @@ func TestCreateEvaluatorRejectsMultipleOutputKeys(t *testing.T) {
 	mux, _, _ := newEvalHTTPEnv(t)
 
 	createPayload := `{
-		"evaluator_id":"custom.multi-output",
+		"evaluator_id":"custom.multi_output",
 		"version":"2026-02-17",
 		"kind":"heuristic",
 		"config":{"not_empty":true},
@@ -259,7 +259,7 @@ func TestRuleCRUDHTTP(t *testing.T) {
 	mux := newEvalMux(service)
 
 	createPayload := `{
-		"rule_id":"rule-helpfulness",
+		"rule_id":"rule_helpfulness",
 		"enabled":true,
 		"selector":"user_visible_turn",
 		"match":{"agent_name":["assistant-*" ]},
@@ -275,11 +275,11 @@ func TestRuleCRUDHTTP(t *testing.T) {
 	if listResp.Code != http.StatusOK {
 		t.Fatalf("expected 200 list rules, got %d body=%s", listResp.Code, listResp.Body.String())
 	}
-	if !strings.Contains(listResp.Body.String(), `"rule-helpfulness"`) {
+	if !strings.Contains(listResp.Body.String(), `"rule_helpfulness"`) {
 		t.Errorf("expected rule id in list response, body=%s", listResp.Body.String())
 	}
 
-	patchResp := doRequest(mux, http.MethodPatch, "/api/v1/eval/rules/rule-helpfulness", `{"enabled":false}`)
+	patchResp := doRequest(mux, http.MethodPatch, "/api/v1/eval/rules/rule_helpfulness", `{"enabled":false}`)
 	if patchResp.Code != http.StatusOK {
 		t.Fatalf("expected 200 patch rule, got %d body=%s", patchResp.Code, patchResp.Body.String())
 	}
@@ -287,17 +287,17 @@ func TestRuleCRUDHTTP(t *testing.T) {
 		t.Errorf("expected enabled=false after patch, body=%s", patchResp.Body.String())
 	}
 
-	deleteResp := doRequest(mux, http.MethodDelete, "/api/v1/eval/rules/rule-helpfulness", "")
+	deleteResp := doRequest(mux, http.MethodDelete, "/api/v1/eval/rules/rule_helpfulness", "")
 	if deleteResp.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 delete rule, got %d body=%s", deleteResp.Code, deleteResp.Body.String())
 	}
-	deleteResp = doRequest(mux, http.MethodDelete, "/api/v1/eval/rules/rule-helpfulness", "")
+	deleteResp = doRequest(mux, http.MethodDelete, "/api/v1/eval/rules/rule_helpfulness", "")
 	if deleteResp.Code != http.StatusNoContent {
 		t.Fatalf("expected idempotent 204 delete rule, got %d body=%s", deleteResp.Code, deleteResp.Body.String())
 	}
 }
 
-func TestRuleByIDAcceptsEscapedSlashInRuleID(t *testing.T) {
+func TestRuleByIDRejectsSlashInRuleID(t *testing.T) {
 	store := newMemoryControlStore()
 	if err := store.CreateEvaluator(context.Background(), evalpkg.EvaluatorDefinition{
 		TenantID: "fake", EvaluatorID: "e1", Version: "v1", Kind: evalpkg.EvaluatorKindHeuristic,
@@ -305,19 +305,13 @@ func TestRuleByIDAcceptsEscapedSlashInRuleID(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
 	}
-	createPayload := `{"rule_id":"ns/rule-name","selector":"user_visible_turn","sample_rate":1.0,"evaluator_ids":["e1"]}`
+	createPayload := `{"rule_id":"ns/rule_name","selector":"user_visible_turn","sample_rate":1.0,"evaluator_ids":["e1"]}`
 	service := NewService(store, nil)
 	mux := newEvalMux(service)
 
 	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/rules", createPayload)
-	if createResp.Code != http.StatusOK {
-		t.Fatalf("expected 200 create rule, got %d body=%s", createResp.Code, createResp.Body.String())
-	}
-
-	// Delete using URL-encoded slash (%2F) in path
-	deleteResp := doRequest(mux, http.MethodDelete, "/api/v1/eval/rules/ns%2Frule-name", "")
-	if deleteResp.Code != http.StatusNoContent {
-		t.Fatalf("expected 204 delete rule with slash in id, got %d body=%s", deleteResp.Code, deleteResp.Body.String())
+	if createResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 create rule with slash in id (invalid char), got %d body=%s", createResp.Code, createResp.Body.String())
 	}
 }
 
@@ -338,7 +332,7 @@ func TestEnableRuleRejectsMissingEvaluators(t *testing.T) {
 	mux := newEvalMux(service)
 
 	createPayload := `{
-		"rule_id":"rule-helpfulness",
+		"rule_id":"rule_helpfulness",
 		"enabled":false,
 		"selector":"user_visible_turn",
 		"sample_rate":1.0,
@@ -354,7 +348,7 @@ func TestEnableRuleRejectsMissingEvaluators(t *testing.T) {
 		t.Fatalf("expected 204 delete evaluator referenced only by disabled rule, got %d body=%s", deleteResp.Code, deleteResp.Body.String())
 	}
 
-	enableResp := doRequest(mux, http.MethodPatch, "/api/v1/eval/rules/rule-helpfulness", `{"enabled":true}`)
+	enableResp := doRequest(mux, http.MethodPatch, "/api/v1/eval/rules/rule_helpfulness", `{"enabled":true}`)
 	if enableResp.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 enable rule with missing evaluator, got %d body=%s", enableResp.Code, enableResp.Body.String())
 	}
@@ -380,7 +374,7 @@ func TestCreateRuleDefaultsEnabledAndSampleRateWhenOmitted(t *testing.T) {
 	mux := newEvalMux(service)
 
 	createPayload := `{
-		"rule_id":"rule-defaults",
+		"rule_id":"rule_defaults",
 		"evaluator_ids":["custom.helpfulness"]
 	}`
 	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/rules", createPayload)
@@ -420,7 +414,7 @@ func TestCreateRuleSupportsExplicitZeroSamplingAndDisabled(t *testing.T) {
 	mux := newEvalMux(service)
 
 	createPayload := `{
-		"rule_id":"rule-explicit-zero",
+		"rule_id":"rule_explicit_zero",
 		"enabled":false,
 		"sample_rate":0,
 		"evaluator_ids":["custom.helpfulness"]
@@ -460,7 +454,7 @@ func TestCreateRuleReturnsInternalServerErrorOnStoreFailure(t *testing.T) {
 	mux := newEvalMux(service)
 
 	createPayload := `{
-		"rule_id":"rule-backend-failure",
+		"rule_id":"rule_backend_failure",
 		"evaluator_ids":["custom.helpfulness"]
 	}`
 	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/rules", createPayload)
@@ -489,7 +483,7 @@ func TestCreateRuleRejectsUnsupportedMatchKeys(t *testing.T) {
 	mux := newEvalMux(service)
 
 	createPayload := `{
-		"rule_id":"rule-invalid-match",
+		"rule_id":"rule_invalid_match",
 		"match":{"model.provier":"openai"},
 		"evaluator_ids":["custom.helpfulness"]
 	}`
@@ -548,7 +542,7 @@ func TestCreateRuleRejectsInvalidMatchValueTypes(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			createPayload := `{
-				"rule_id":"rule-invalid-match-value-` + testCase.name + `",
+				"rule_id":"rule_invalid_match_value_` + testCase.name + `",
 				"match":` + testCase.matchJSON + `,
 				"evaluator_ids":["custom.helpfulness"]
 			}`
@@ -580,7 +574,7 @@ func TestCreateRuleNormalizesRuleIDAndMatchKeysWithWhitespace(t *testing.T) {
 	mux := newEvalMux(service)
 
 	createPayload := `{
-		"rule_id":"  rule-whitespace  ",
+		"rule_id":"  rule_whitespace  ",
 		"match":{" agent_name ":["assistant-*"],"tags. env ":["prod"]},
 		"evaluator_ids":[" custom.helpfulness "]
 	}`
@@ -593,7 +587,7 @@ func TestCreateRuleNormalizesRuleIDAndMatchKeysWithWhitespace(t *testing.T) {
 	if err := json.Unmarshal(createResp.Body.Bytes(), &created); err != nil {
 		t.Fatalf("decode create response: %v", err)
 	}
-	if created.RuleID != "rule-whitespace" {
+	if created.RuleID != "rule_whitespace" {
 		t.Errorf("expected trimmed rule_id, got %q", created.RuleID)
 	}
 	if len(created.EvaluatorIDs) != 1 || created.EvaluatorIDs[0] != "custom.helpfulness" {
@@ -627,7 +621,7 @@ func TestCreateRuleRejectsDuplicateMatchKeysAfterNormalization(t *testing.T) {
 	mux := newEvalMux(service)
 
 	createPayload := `{
-		"rule_id":"rule-dup-match-key",
+		"rule_id":"rule_dup_match_key",
 		"match":{"agent_name":["assistant-a"]," agent_name ":["assistant-b"]},
 		"evaluator_ids":["custom.helpfulness"]
 	}`
@@ -877,7 +871,7 @@ func TestPredefinedEndpoints_FallbackToHardcoded_WithNilTemplateStore(t *testing
 
 	// Fork should work using hardcoded fallback (no lineage fields).
 	forkPayload := `{
-		"evaluator_id":"custom.helpfulness-fallback",
+		"evaluator_id":"custom.helpfulness_fallback",
 		"config":{"provider":"openai"}
 	}`
 	forkResp := doRequest(mux, http.MethodPost, "/api/v1/eval/predefined/evaluators/sigil.helpfulness:fork", forkPayload)
@@ -923,7 +917,7 @@ func TestPredefinedEndpoints_TemplateStoreFallbackToHardcoded(t *testing.T) {
 
 	// Fork should succeed via hardcoded fallback.
 	forkPayload := `{
-		"evaluator_id":"custom.helpfulness-from-hardcoded",
+		"evaluator_id":"custom.helpfulness_from_hardcoded",
 		"config":{"provider":"openai"}
 	}`
 	forkResp := doRequest(mux, http.MethodPost, "/api/v1/eval/predefined/evaluators/sigil.helpfulness:fork", forkPayload)
@@ -935,8 +929,8 @@ func TestPredefinedEndpoints_TemplateStoreFallbackToHardcoded(t *testing.T) {
 	if err := json.Unmarshal(forkResp.Body.Bytes(), &forked); err != nil {
 		t.Fatalf("decode fork response: %v", err)
 	}
-	if forked.EvaluatorID != "custom.helpfulness-from-hardcoded" {
-		t.Errorf("expected evaluator_id=custom.helpfulness-from-hardcoded, got %q", forked.EvaluatorID)
+	if forked.EvaluatorID != "custom.helpfulness_from_hardcoded" {
+		t.Errorf("expected evaluator_id=custom.helpfulness_from_hardcoded, got %q", forked.EvaluatorID)
 	}
 	// Hardcoded fallback produces no lineage fields.
 	if forked.SourceTemplateID != "" {
@@ -951,7 +945,7 @@ func TestCreateRuleRejectsPredefinedTemplateReferenceWithoutFork(t *testing.T) {
 	mux, _, _ := newEvalHTTPEnv(t)
 
 	createRulePayload := `{
-		"rule_id":"rule-helpfulness",
+		"rule_id":"rule_helpfulness",
 		"enabled":true,
 		"selector":"user_visible_turn",
 		"sample_rate":0.1,

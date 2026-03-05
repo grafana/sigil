@@ -65,6 +65,9 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, tenantID string, r
 	if templateID == "" {
 		return nil, newValidationError(errors.New("template_id is required"))
 	}
+	if err := validateID("template_id", templateID); err != nil {
+		return nil, newValidationError(err)
+	}
 	kind := evalpkg.EvaluatorKind(strings.TrimSpace(req.Kind))
 	if err := validateKind(kind); err != nil {
 		return nil, newValidationError(err)
@@ -259,6 +262,9 @@ func (s *TemplateService) ForkTemplate(ctx context.Context, tenantID, templateID
 	evaluatorID := strings.TrimSpace(req.EvaluatorID)
 	if evaluatorID == "" {
 		return nil, newValidationError(errors.New("evaluator_id is required"))
+	}
+	if err := validateID("evaluator_id", evaluatorID); err != nil {
+		return nil, newValidationError(err)
 	}
 
 	// Resolve template (tenant first, then global).

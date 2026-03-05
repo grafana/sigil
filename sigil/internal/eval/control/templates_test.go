@@ -23,8 +23,8 @@ func newTemplateTestEnv(t *testing.T) (*TemplateService, *memoryTemplateStore, *
 func TestTemplateService_Create(t *testing.T) {
 	svc, _, _ := newTemplateTestEnv(t)
 
-	tmpl, err := svc.CreateTemplate(context.Background(), "tenant-1", CreateTemplateRequest{
-		TemplateID:  "my-template",
+	tmpl, err := svc.CreateTemplate(context.Background(), "tenant_1", CreateTemplateRequest{
+		TemplateID:  "my_template",
 		Kind:        "llm_judge",
 		Description: "A test template",
 		Version:     "2026-03-01",
@@ -41,19 +41,19 @@ func TestTemplateService_Create(t *testing.T) {
 	if tmpl.LatestVersion != "2026-03-01" {
 		t.Errorf("expected latest_version=2026-03-01, got %q", tmpl.LatestVersion)
 	}
-	if tmpl.TemplateID != "my-template" {
-		t.Errorf("expected template_id=my-template, got %q", tmpl.TemplateID)
+	if tmpl.TemplateID != "my_template" {
+		t.Errorf("expected template_id=my_template, got %q", tmpl.TemplateID)
 	}
-	if tmpl.TenantID != "tenant-1" {
-		t.Errorf("expected tenant_id=tenant-1, got %q", tmpl.TenantID)
+	if tmpl.TenantID != "tenant_1" {
+		t.Errorf("expected tenant_id=tenant_1, got %q", tmpl.TenantID)
 	}
 }
 
 func TestTemplateService_Create_InvalidKind(t *testing.T) {
 	svc, _, _ := newTemplateTestEnv(t)
 
-	_, err := svc.CreateTemplate(context.Background(), "tenant-1", CreateTemplateRequest{
-		TemplateID: "my-template",
+	_, err := svc.CreateTemplate(context.Background(), "tenant_1", CreateTemplateRequest{
+		TemplateID: "my_template",
 		Kind:       "unknown_kind",
 		Version:    "2026-03-01",
 		Config:     map[string]any{"key": "value"},
@@ -85,8 +85,8 @@ func TestTemplateService_Create_InvalidVersion(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := svc.CreateTemplate(context.Background(), "tenant-1", CreateTemplateRequest{
-				TemplateID: "my-template",
+			_, err := svc.CreateTemplate(context.Background(), "tenant_1", CreateTemplateRequest{
+				TemplateID: "my_template",
 				Kind:       "llm_judge",
 				Version:    tc.version,
 				Config:     map[string]any{"key": "value"},
@@ -126,7 +126,7 @@ func TestTemplateService_Create_MissingFields(t *testing.T) {
 		{
 			name: "missing_config",
 			req: CreateTemplateRequest{
-				TemplateID: "my-template",
+				TemplateID: "my_template",
 				Kind:       "llm_judge",
 				Version:    "2026-03-01",
 				Config:     nil,
@@ -137,7 +137,7 @@ func TestTemplateService_Create_MissingFields(t *testing.T) {
 		{
 			name: "missing_output_keys",
 			req: CreateTemplateRequest{
-				TemplateID: "my-template",
+				TemplateID: "my_template",
 				Kind:       "llm_judge",
 				Version:    "2026-03-01",
 				Config:     map[string]any{"key": "value"},
@@ -148,7 +148,7 @@ func TestTemplateService_Create_MissingFields(t *testing.T) {
 		{
 			name: "multiple_output_keys",
 			req: CreateTemplateRequest{
-				TemplateID: "my-template",
+				TemplateID: "my_template",
 				Kind:       "llm_judge",
 				Version:    "2026-03-01",
 				Config:     map[string]any{"key": "value"},
@@ -163,7 +163,7 @@ func TestTemplateService_Create_MissingFields(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := svc.CreateTemplate(context.Background(), "tenant-1", tc.req)
+			_, err := svc.CreateTemplate(context.Background(), "tenant_1", tc.req)
 			if err == nil {
 				t.Fatal("expected validation error")
 			}
@@ -180,8 +180,8 @@ func TestTemplateService_Create_MissingFields(t *testing.T) {
 func TestTemplateService_PublishVersion(t *testing.T) {
 	svc, _, _ := newTemplateTestEnv(t)
 
-	_, err := svc.CreateTemplate(context.Background(), "tenant-1", CreateTemplateRequest{
-		TemplateID: "my-template",
+	_, err := svc.CreateTemplate(context.Background(), "tenant_1", CreateTemplateRequest{
+		TemplateID: "my_template",
 		Kind:       "llm_judge",
 		Version:    "2026-03-01",
 		Config:     map[string]any{"provider": "openai"},
@@ -191,7 +191,7 @@ func TestTemplateService_PublishVersion(t *testing.T) {
 		t.Fatalf("create template: %v", err)
 	}
 
-	ver, err := svc.PublishVersion(context.Background(), "tenant-1", "my-template", PublishVersionRequest{
+	ver, err := svc.PublishVersion(context.Background(), "tenant_1", "my_template", PublishVersionRequest{
 		Version:    "2026-03-02",
 		Config:     map[string]any{"provider": "openai", "model": "gpt-4o"},
 		OutputKeys: []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeNumber}},
@@ -205,7 +205,7 @@ func TestTemplateService_PublishVersion(t *testing.T) {
 	}
 
 	// Verify latest_version advanced.
-	tmpl, latestVer, err := svc.GetTemplate(context.Background(), "tenant-1", "my-template")
+	tmpl, latestVer, err := svc.GetTemplate(context.Background(), "tenant_1", "my_template")
 	if err != nil {
 		t.Fatalf("get template: %v", err)
 	}
@@ -220,8 +220,8 @@ func TestTemplateService_PublishVersion(t *testing.T) {
 func TestTemplateService_PublishVersion_DuplicateVersion(t *testing.T) {
 	svc, _, _ := newTemplateTestEnv(t)
 
-	_, err := svc.CreateTemplate(context.Background(), "tenant-1", CreateTemplateRequest{
-		TemplateID: "my-template",
+	_, err := svc.CreateTemplate(context.Background(), "tenant_1", CreateTemplateRequest{
+		TemplateID: "my_template",
 		Kind:       "llm_judge",
 		Version:    "2026-03-01",
 		Config:     map[string]any{"provider": "openai"},
@@ -231,7 +231,7 @@ func TestTemplateService_PublishVersion_DuplicateVersion(t *testing.T) {
 		t.Fatalf("create template: %v", err)
 	}
 
-	_, err = svc.PublishVersion(context.Background(), "tenant-1", "my-template", PublishVersionRequest{
+	_, err = svc.PublishVersion(context.Background(), "tenant_1", "my_template", PublishVersionRequest{
 		Version:    "2026-03-01",
 		Config:     map[string]any{"provider": "openai", "model": "gpt-4o"},
 		OutputKeys: []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeNumber}},
@@ -247,8 +247,8 @@ func TestTemplateService_PublishVersion_DuplicateVersion(t *testing.T) {
 func TestTemplateService_ForkTemplate(t *testing.T) {
 	svc, _, _ := newTemplateTestEnv(t)
 
-	_, err := svc.CreateTemplate(context.Background(), "tenant-1", CreateTemplateRequest{
-		TemplateID: "my-template",
+	_, err := svc.CreateTemplate(context.Background(), "tenant_1", CreateTemplateRequest{
+		TemplateID: "my_template",
 		Kind:       "llm_judge",
 		Version:    "2026-03-01",
 		Config:     map[string]any{"provider": "openai", "model": "gpt-4o-mini"},
@@ -258,7 +258,7 @@ func TestTemplateService_ForkTemplate(t *testing.T) {
 		t.Fatalf("create template: %v", err)
 	}
 
-	eval, err := svc.ForkTemplate(context.Background(), "tenant-1", "my-template", ForkTemplateRequest{
+	eval, err := svc.ForkTemplate(context.Background(), "tenant_1", "my_template", ForkTemplateRequest{
 		EvaluatorID: "custom.helpfulness",
 	})
 	if err != nil {
@@ -267,8 +267,8 @@ func TestTemplateService_ForkTemplate(t *testing.T) {
 	if eval.EvaluatorID != "custom.helpfulness" {
 		t.Errorf("expected evaluator_id=custom.helpfulness, got %q", eval.EvaluatorID)
 	}
-	if eval.SourceTemplateID != "my-template" {
-		t.Errorf("expected source_template_id=my-template, got %q", eval.SourceTemplateID)
+	if eval.SourceTemplateID != "my_template" {
+		t.Errorf("expected source_template_id=my_template, got %q", eval.SourceTemplateID)
 	}
 	if eval.SourceTemplateVersion != "2026-03-01" {
 		t.Errorf("expected source_template_version=2026-03-01, got %q", eval.SourceTemplateVersion)
@@ -284,8 +284,8 @@ func TestTemplateService_ForkTemplate(t *testing.T) {
 func TestTemplateService_ForkTemplate_WithOverrides(t *testing.T) {
 	svc, _, _ := newTemplateTestEnv(t)
 
-	_, err := svc.CreateTemplate(context.Background(), "tenant-1", CreateTemplateRequest{
-		TemplateID: "my-template",
+	_, err := svc.CreateTemplate(context.Background(), "tenant_1", CreateTemplateRequest{
+		TemplateID: "my_template",
 		Kind:       "llm_judge",
 		Version:    "2026-03-01",
 		Config:     map[string]any{"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.5},
@@ -295,7 +295,7 @@ func TestTemplateService_ForkTemplate_WithOverrides(t *testing.T) {
 		t.Fatalf("create template: %v", err)
 	}
 
-	eval, err := svc.ForkTemplate(context.Background(), "tenant-1", "my-template", ForkTemplateRequest{
+	eval, err := svc.ForkTemplate(context.Background(), "tenant_1", "my_template", ForkTemplateRequest{
 		EvaluatorID: "custom.helpfulness",
 		Config:      map[string]any{"provider": "google", "model": "gemini-2.0-flash"},
 		OutputKeys:  []evalpkg.OutputKey{{Key: "quality", Type: evalpkg.ScoreTypeBool}},
@@ -324,7 +324,7 @@ func TestTemplateService_ForkTemplate_WithOverrides(t *testing.T) {
 func TestTemplateService_ForkTemplate_NotFound(t *testing.T) {
 	svc, _, _ := newTemplateTestEnv(t)
 
-	_, err := svc.ForkTemplate(context.Background(), "tenant-1", "nonexistent", ForkTemplateRequest{
+	_, err := svc.ForkTemplate(context.Background(), "tenant_1", "nonexistent", ForkTemplateRequest{
 		EvaluatorID: "custom.helpfulness",
 	})
 	if err == nil {
@@ -341,8 +341,8 @@ func TestTemplateService_ForkTemplate_NotFound(t *testing.T) {
 func TestTemplateService_DeleteTemplate(t *testing.T) {
 	svc, _, _ := newTemplateTestEnv(t)
 
-	_, err := svc.CreateTemplate(context.Background(), "tenant-1", CreateTemplateRequest{
-		TemplateID: "my-template",
+	_, err := svc.CreateTemplate(context.Background(), "tenant_1", CreateTemplateRequest{
+		TemplateID: "my_template",
 		Kind:       "heuristic",
 		Version:    "2026-03-01",
 		Config:     map[string]any{"key": "value"},
@@ -352,12 +352,12 @@ func TestTemplateService_DeleteTemplate(t *testing.T) {
 		t.Fatalf("create template: %v", err)
 	}
 
-	if err := svc.DeleteTemplate(context.Background(), "tenant-1", "my-template"); err != nil {
+	if err := svc.DeleteTemplate(context.Background(), "tenant_1", "my_template"); err != nil {
 		t.Fatalf("delete template: %v", err)
 	}
 
 	// Verify template is no longer returned.
-	tmpl, _, err := svc.GetTemplate(context.Background(), "tenant-1", "my-template")
+	tmpl, _, err := svc.GetTemplate(context.Background(), "tenant_1", "my_template")
 	if err != nil {
 		t.Fatalf("get template after delete: %v", err)
 	}
@@ -373,7 +373,7 @@ func TestTemplateService_DeleteTemplate_Global(t *testing.T) {
 	now := time.Now().UTC()
 	if err := ts.CreateTemplate(context.Background(), evalpkg.TemplateDefinition{
 		TenantID:      GlobalTenantID,
-		TemplateID:    "global-template",
+		TemplateID:    "global_template",
 		Scope:         evalpkg.TemplateScopeGlobal,
 		LatestVersion: "2026-03-01",
 		Kind:          evalpkg.EvaluatorKindLLMJudge,
@@ -381,7 +381,7 @@ func TestTemplateService_DeleteTemplate_Global(t *testing.T) {
 		UpdatedAt:     now,
 	}, evalpkg.TemplateVersion{
 		TenantID:   GlobalTenantID,
-		TemplateID: "global-template",
+		TemplateID: "global_template",
 		Version:    "2026-03-01",
 		Config:     map[string]any{"provider": "openai"},
 		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
@@ -390,7 +390,7 @@ func TestTemplateService_DeleteTemplate_Global(t *testing.T) {
 		t.Fatalf("seed global template: %v", err)
 	}
 
-	err := svc.DeleteTemplate(context.Background(), "tenant-1", "global-template")
+	err := svc.DeleteTemplate(context.Background(), "tenant_1", "global_template")
 	if err == nil {
 		t.Fatal("expected error when deleting global template")
 	}
@@ -410,7 +410,7 @@ func TestTemplateService_Get_TenantShadowsGlobal(t *testing.T) {
 	// Create global template.
 	if err := ts.CreateTemplate(context.Background(), evalpkg.TemplateDefinition{
 		TenantID:      GlobalTenantID,
-		TemplateID:    "shared-template",
+		TemplateID:    "shared_template",
 		Scope:         evalpkg.TemplateScopeGlobal,
 		LatestVersion: "2026-01-01",
 		Kind:          evalpkg.EvaluatorKindLLMJudge,
@@ -419,7 +419,7 @@ func TestTemplateService_Get_TenantShadowsGlobal(t *testing.T) {
 		UpdatedAt:     now,
 	}, evalpkg.TemplateVersion{
 		TenantID:   GlobalTenantID,
-		TemplateID: "shared-template",
+		TemplateID: "shared_template",
 		Version:    "2026-01-01",
 		Config:     map[string]any{"source": "global"},
 		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
@@ -429,8 +429,8 @@ func TestTemplateService_Get_TenantShadowsGlobal(t *testing.T) {
 	}
 
 	// Create tenant template with same ID.
-	_, err := svc.CreateTemplate(context.Background(), "tenant-1", CreateTemplateRequest{
-		TemplateID:  "shared-template",
+	_, err := svc.CreateTemplate(context.Background(), "tenant_1", CreateTemplateRequest{
+		TemplateID:  "shared_template",
 		Kind:        "llm_judge",
 		Description: "tenant version",
 		Version:     "2026-03-01",
@@ -441,7 +441,7 @@ func TestTemplateService_Get_TenantShadowsGlobal(t *testing.T) {
 		t.Fatalf("create tenant template: %v", err)
 	}
 
-	tmpl, ver, err := svc.GetTemplate(context.Background(), "tenant-1", "shared-template")
+	tmpl, ver, err := svc.GetTemplate(context.Background(), "tenant_1", "shared_template")
 	if err != nil {
 		t.Fatalf("get template: %v", err)
 	}
@@ -467,7 +467,7 @@ func TestTemplateService_List(t *testing.T) {
 	// Create global template.
 	if err := ts.CreateTemplate(context.Background(), evalpkg.TemplateDefinition{
 		TenantID:      GlobalTenantID,
-		TemplateID:    "global-template",
+		TemplateID:    "global_template",
 		Scope:         evalpkg.TemplateScopeGlobal,
 		LatestVersion: "2026-01-01",
 		Kind:          evalpkg.EvaluatorKindLLMJudge,
@@ -475,7 +475,7 @@ func TestTemplateService_List(t *testing.T) {
 		UpdatedAt:     now,
 	}, evalpkg.TemplateVersion{
 		TenantID:   GlobalTenantID,
-		TemplateID: "global-template",
+		TemplateID: "global_template",
 		Version:    "2026-01-01",
 		Config:     map[string]any{"source": "global"},
 		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
@@ -485,8 +485,8 @@ func TestTemplateService_List(t *testing.T) {
 	}
 
 	// Create tenant template.
-	_, err := svc.CreateTemplate(context.Background(), "tenant-1", CreateTemplateRequest{
-		TemplateID: "tenant-template",
+	_, err := svc.CreateTemplate(context.Background(), "tenant_1", CreateTemplateRequest{
+		TemplateID: "tenant_template",
 		Kind:       "heuristic",
 		Version:    "2026-03-01",
 		Config:     map[string]any{"source": "tenant"},
@@ -497,7 +497,7 @@ func TestTemplateService_List(t *testing.T) {
 	}
 
 	// List all (no scope filter) should include both.
-	items, _, err := svc.ListTemplates(context.Background(), "tenant-1", nil, 50, 0)
+	items, _, err := svc.ListTemplates(context.Background(), "tenant_1", nil, 50, 0)
 	if err != nil {
 		t.Fatalf("list templates: %v", err)
 	}
@@ -510,11 +510,11 @@ func TestTemplateService_List(t *testing.T) {
 		ids = append(ids, item.TemplateID)
 	}
 	sort.Strings(ids)
-	if !slices.Contains(ids, "global-template") {
-		t.Errorf("expected global-template in list, got %v", ids)
+	if !slices.Contains(ids, "global_template") {
+		t.Errorf("expected global_template in list, got %v", ids)
 	}
-	if !slices.Contains(ids, "tenant-template") {
-		t.Errorf("expected tenant-template in list, got %v", ids)
+	if !slices.Contains(ids, "tenant_template") {
+		t.Errorf("expected tenant_template in list, got %v", ids)
 	}
 }
 
