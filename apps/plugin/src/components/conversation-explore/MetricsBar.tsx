@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { cx } from '@emotion/css';
 import { Icon, Tooltip, useStyles2 } from '@grafana/ui';
 import type { CostSummary, TokenSummary } from '../../conversation/aggregates';
+import type { ModelCard } from '../../modelcard/types';
+import ModelCardPopover from '../conversations/ModelCardPopover';
 import { getProviderColor, stripProviderPrefix, toDisplayProvider } from '../conversations/providerMeta';
 import { getStyles } from './MetricsBar.styles';
 
@@ -12,6 +14,7 @@ export type MetricsBarProps = {
   costSummary: CostSummary | null;
   models: string[];
   modelProviders?: Record<string, string>;
+  modelCards?: Map<string, ModelCard>;
   errorCount: number;
   generationCount: number;
   isSaved?: boolean;
@@ -54,14 +57,31 @@ export default function MetricsBar({
   costSummary,
   models,
   modelProviders,
+  modelCards,
   errorCount,
   generationCount,
   isSaved = false,
   onToggleSave,
 }: MetricsBarProps) {
   const styles = useStyles2(getStyles);
+  const [openModel, setOpenModel] = useState<{ key: string; anchorRect: DOMRect } | null>(null);
 
   const uniqueModels = Array.from(new Set(models));
+  const cardsByModelName = useMemo(() => {
+    const map = new Map<string, ModelCard>();
+    if (!modelCards) {
+      return map;
+    }
+    for (const [, card] of modelCards.entries()) {
+      if (card.name && !map.has(card.name)) {
+        map.set(card.name, card);
+      }
+      if (card.source_model_id && !map.has(card.source_model_id)) {
+        map.set(card.source_model_id, card);
+      }
+    }
+    return map;
+  }, [modelCards]);
 
   return (
     <div className={styles.container}>
@@ -88,7 +108,11 @@ export default function MetricsBar({
         <>
           <div className={styles.separator} />
           <Tooltip
-            content={`In: ${formatTokenCount(tokenSummary.inputTokens)} · Out: ${formatTokenCount(tokenSummary.outputTokens)}${tokenSummary.cacheReadTokens > 0 ? ` · Cache: ${formatTokenCount(tokenSummary.cacheReadTokens)}` : ''}`}
+            content={`In: ${formatTokenCount(tokenSummary.inputTokens)} · Out: ${formatTokenCount(tokenSummary.outputTokens)}${
+              tokenSummary.cacheReadTokens > 0 || tokenSummary.cacheWriteTokens > 0
+                ? ` · Cache read: ${formatTokenCount(tokenSummary.cacheReadTokens)} · Cache write: ${formatTokenCount(tokenSummary.cacheWriteTokens)}`
+                : ''
+            }`}
             placement="bottom"
           >
             <div className={styles.metric}>
@@ -138,15 +162,43 @@ export default function MetricsBar({
 
       <div className={styles.modelChips}>
         {uniqueModels.map((model) => {
-          const provider = modelProviders?.[model] ?? '';
+          const provider = modelProviders?.[model]?.trim() ?? '';
           const displayProvider = toDisplayProvider(provider);
           const color = getProviderColor(displayProvider);
           const displayName = provider ? stripProviderPrefix(model, displayProvider) : model;
+          const cardKey = provider.length > 0 ? `${provider}::${model}` : '';
+          const resolvedCard = (cardKey ? modelCards?.get(cardKey) : undefined) ?? cardsByModelName.get(model) ?? null;
+          const chipKey = `${provider || 'unknown'}::${model}`;
+          const isOpen = openModel?.key === chipKey;
 
           return (
-            <span key={model} className={styles.modelChip}>
-              <span className={styles.providerDot} style={{ background: color }} />
-              {displayName}
+            <span key={chipKey} className={styles.modelChipAnchor}>
+              <button
+                type="button"
+                className={cx(styles.modelChip, isOpen && styles.modelChipActive)}
+                onClick={(event) => {
+                  if (!resolvedCard) {
+                    return;
+                  }
+                  if (isOpen) {
+                    setOpenModel(null);
+                    return;
+                  }
+                  setOpenModel({ key: chipKey, anchorRect: event.currentTarget.getBoundingClientRect() });
+                }}
+                aria-label={resolvedCard ? `model card ${displayName}` : `model ${displayName}`}
+                disabled={!resolvedCard}
+              >
+                <span className={styles.providerDot} style={{ background: color }} />
+                {displayName}
+              </button>
+              {isOpen && resolvedCard && (
+                <ModelCardPopover
+                  card={resolvedCard}
+                  anchorRect={openModel?.anchorRect ?? null}
+                  onClose={() => setOpenModel(null)}
+                />
+              )}
             </span>
           );
         })}

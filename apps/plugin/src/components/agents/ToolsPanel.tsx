@@ -5,9 +5,20 @@ import { Icon, Input, Stack, Text, Tooltip, useStyles2, useTheme2 } from '@grafa
 import { JsonView, type Props as JsonViewProps } from 'react-json-view-lite';
 import 'react-json-view-lite/dist/index.css';
 import type { AgentTool } from '../../agents/types';
+import { TokenizedText } from '../tokenizer/TokenizedText';
+import { AVAILABLE_ENCODINGS, type EncodingName } from '../tokenizer/encodingMap';
+import { getTokenizeControlStyles } from '../tokenizer/tokenizeControls.styles';
 
 export type ToolsPanelProps = {
   tools: AgentTool[];
+  tokenized?: boolean;
+  onToggleTokenize?: () => void;
+  tokenizerLoading?: boolean;
+  autoEncoding?: EncodingName;
+  encodingOverride?: EncodingName | null;
+  onEncodingChange?: (encoding: EncodingName | null) => void;
+  encode?: (text: string) => number[];
+  decode?: (ids: number[]) => string;
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -215,6 +226,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     padding: theme.spacing(4),
     color: theme.colors.text.disabled,
   }),
+  ...getTokenizeControlStyles(theme),
 });
 
 function buildJsonViewStyle(theme: GrafanaTheme2): JsonViewProps['style'] {
@@ -329,7 +341,17 @@ function buildToolKey(tool: AgentTool): string {
   return [tool.name, tool.type, tool.input_schema_json].join('\u0000');
 }
 
-export default function ToolsPanel({ tools }: ToolsPanelProps) {
+export default function ToolsPanel({
+  tools,
+  tokenized,
+  onToggleTokenize,
+  tokenizerLoading,
+  autoEncoding,
+  encodingOverride,
+  onEncodingChange,
+  encode,
+  decode,
+}: ToolsPanelProps) {
   const styles = useStyles2(getStyles);
   const theme = useTheme2();
   const jsonStyle = useMemo(() => buildJsonViewStyle(theme), [theme]);
@@ -416,6 +438,39 @@ export default function ToolsPanel({ tools }: ToolsPanelProps) {
           <Text weight="medium">Tools</Text>
           <span className={styles.headerCount}>{tools.length}</span>
         </Stack>
+        {onToggleTokenize && (
+          <span style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto' }}>
+            <span
+              className={cx(styles.tokenizeBtn, tokenized && styles.tokenizeBtnActive)}
+              onClick={onToggleTokenize}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  onToggleTokenize();
+                }
+              }}
+              role="button"
+              tabIndex={0}
+            >
+              <Icon name="brackets-curly" size="xs" />
+              {tokenizerLoading ? 'Loading\u2026' : 'Tokenize'}
+            </span>
+            {tokenized && onEncodingChange && (
+              <select
+                className={styles.encodingSelect}
+                aria-label="Tokenizer encoding"
+                value={encodingOverride ?? ''}
+                onChange={(e) => onEncodingChange(e.target.value ? (e.target.value as EncodingName) : null)}
+              >
+                <option value="">Auto ({(autoEncoding ?? 'cl100k').replace('_base', '')})</option>
+                {AVAILABLE_ENCODINGS.map((enc) => (
+                  <option key={enc.value} value={enc.value}>
+                    {enc.value.replace('_base', '')}
+                  </option>
+                ))}
+              </select>
+            )}
+          </span>
+        )}
       </div>
 
       <div className={styles.body}>
@@ -494,7 +549,13 @@ export default function ToolsPanel({ tools }: ToolsPanelProps) {
             {selected.description.length > 0 && (
               <div>
                 <div className={styles.sectionLabel}>Description</div>
-                <div className={styles.detailDescription}>{selected.description}</div>
+                {tokenized && encode && decode ? (
+                  <div className={styles.detailDescription}>
+                    <TokenizedText text={selected.description} encode={encode} decode={decode} />
+                  </div>
+                ) : (
+                  <div className={styles.detailDescription}>{selected.description}</div>
+                )}
               </div>
             )}
 

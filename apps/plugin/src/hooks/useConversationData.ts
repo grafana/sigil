@@ -11,7 +11,7 @@ import {
 } from '../conversation/aggregates';
 import { resolveGenerationCosts } from '../generation/cost';
 import { defaultModelCardClient, type ModelCardClient } from '../modelcard/api';
-import { resolveModelCardsFromNames } from '../modelcard/resolve';
+import { inferProviderFromModelName, resolveModelCardsFromNames, type ModelInput } from '../modelcard/resolve';
 import type { ModelCard } from '../modelcard/types';
 import type { ConversationData } from '../conversation/types';
 import type { GenerationCostResult, GenerationDetail } from '../generation/types';
@@ -132,24 +132,48 @@ export function useConversationData({
     return cards;
   }, [conversationCosts]);
 
-  const modelNamesForFallback = useMemo(() => {
+  const modelsForFallback = useMemo<ModelInput[]>(() => {
     if (costModelCards.size > 0) {
       return [];
     }
-    return Array.from(new Set(allGenerations.map((g) => g.model?.name).filter((n): n is string => Boolean(n))));
+    const seen = new Set<string>();
+    const inputs: ModelInput[] = [];
+
+    for (const generation of allGenerations) {
+      const name = generation.model?.name?.trim() ?? '';
+      if (name.length === 0) {
+        continue;
+      }
+
+      const provider = generation.model?.provider?.trim() ?? '';
+      const keyProvider = provider || inferProviderFromModelName(name);
+      const key = `${keyProvider}::${name}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+
+      if (provider.length > 0) {
+        inputs.push({ name, provider });
+      } else {
+        inputs.push(name);
+      }
+    }
+
+    return inputs;
   }, [costModelCards, allGenerations]);
 
   useEffect(() => {
-    if (modelNamesForFallback.length === 0) {
+    if (modelsForFallback.length === 0) {
       queueMicrotask(() => setNameResolvedModelCards(new Map()));
       return;
     }
-    void resolveModelCardsFromNames(modelNamesForFallback, modelCardClient)
+    void resolveModelCardsFromNames(modelsForFallback, modelCardClient)
       .then(setNameResolvedModelCards)
       .catch(() => {
         setNameResolvedModelCards(new Map());
       });
-  }, [modelNamesForFallback, modelCardClient]);
+  }, [modelsForFallback, modelCardClient]);
 
   const modelCards = costModelCards.size > 0 ? costModelCards : nameResolvedModelCards;
 

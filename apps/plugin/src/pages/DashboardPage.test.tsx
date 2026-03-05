@@ -60,6 +60,16 @@ jest.mock('@grafana/assistant', () => ({
   useAssistant: () => ({
     openAssistant: jest.fn(),
   }),
+  createAssistantContextItem: jest.fn((_type: string, params: { title?: string }) => ({
+    node: {
+      id: 'sigil-context',
+      name: params.title ?? 'Sigil knowledgebase',
+      navigable: false,
+      selectable: true,
+      data: { type: 'structured' },
+    },
+    occurrences: [],
+  })),
 }));
 
 jest.mock('../components/landing/LandingTopBar', () => ({

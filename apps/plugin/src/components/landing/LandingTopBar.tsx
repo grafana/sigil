@@ -12,6 +12,11 @@ import {
   getInstrumentationPromptFilename,
   type InstrumentationPromptIde,
 } from '../../content/cursorInstrumentationPrompt';
+import {
+  buildSigilAssistantContextItems,
+  buildSigilAssistantPrompt,
+  withSigilProjectContextFallback,
+} from '../../content/assistantContext';
 import type { DashboardDataSource } from '../../dashboard/api';
 import { computeRateInterval, computeStep, requestsOverTimeQuery } from '../../dashboard/queries';
 import {
@@ -370,12 +375,13 @@ export function LandingTopBar({
   const cursorDeeplink = useMemo(() => buildCursorPromptDeeplink(selectedPrompt), [selectedPrompt]);
 
   const openAssistantWithPrompt = (message: string) => {
-    const prompt = message.trim();
+    const prompt = buildSigilAssistantPrompt(message);
     if (assistant.openAssistant) {
       if (prompt.length > 0) {
         assistant.openAssistant({
           origin: assistantOrigin,
           prompt,
+          context: buildSigilAssistantContextItems(),
           autoSend: true,
         });
       } else {
@@ -386,11 +392,22 @@ export function LandingTopBar({
       return;
     }
 
-    window.location.href = buildAssistantUrl(prompt);
+    window.location.href = buildAssistantUrl(withSigilProjectContextFallback(prompt));
   };
 
   const openAssistant = () => {
     openAssistantWithPrompt(assistantInput);
+  };
+
+  const handleAssistantInputKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== 'Enter' || event.shiftKey) {
+      return;
+    }
+    event.preventDefault();
+    if (assistantInput.trim().length === 0) {
+      return;
+    }
+    openAssistant();
   };
 
   useEffect(() => {
@@ -780,10 +797,20 @@ export function LandingTopBar({
                   ))}
                 </ul>
               </div>
-              <form className={styles.assistantRowDash}>
+              <form
+                className={styles.assistantRowDash}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (assistantInput.trim().length === 0) {
+                    return;
+                  }
+                  openAssistant();
+                }}
+              >
                 <textarea
                   value={assistantInput}
                   onChange={(event) => setAssistantInput(event.currentTarget.value)}
+                  onKeyDown={handleAssistantInputKeyDown}
                   placeholder="Ask me anything about Sigil"
                   className={styles.assistantInput}
                   rows={3}
@@ -796,8 +823,7 @@ export function LandingTopBar({
                   tooltip="Send"
                   className={styles.askSubmitButton}
                   disabled={assistantInput.trim().length === 0}
-                  onClick={openAssistant}
-                  type="button"
+                  type="submit"
                 />
               </form>
             </div>

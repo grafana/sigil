@@ -153,12 +153,13 @@ func buildRows(tenantID string, generation *sigilv1.Generation) (GenerationModel
 		conversationPtr = &conversationID
 		now := time.Now().UTC()
 		conversationRow = &ConversationModel{
-			TenantID:         tenantID,
-			ConversationID:   conversationID,
-			LastGenerationAt: createdAt,
-			GenerationCount:  1,
-			CreatedAt:        now,
-			UpdatedAt:        now,
+			TenantID:          tenantID,
+			ConversationID:    conversationID,
+			FirstGenerationAt: createdAt,
+			LastGenerationAt:  createdAt,
+			GenerationCount:   1,
+			CreatedAt:         now,
+			UpdatedAt:         now,
 		}
 	}
 
@@ -181,9 +182,10 @@ func upsertConversation(tx *gorm.DB, conversation *ConversationModel) error {
 	return tx.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "tenant_id"}, {Name: "conversation_id"}},
 		DoUpdates: clause.Assignments(map[string]any{
-			"generation_count":   gorm.Expr("generation_count + 1"),
-			"last_generation_at": gorm.Expr("GREATEST(last_generation_at, ?)", conversation.LastGenerationAt),
-			"updated_at":         conversation.UpdatedAt,
+			"generation_count":    gorm.Expr("generation_count + 1"),
+			"first_generation_at": gorm.Expr("LEAST(first_generation_at, ?)", conversation.FirstGenerationAt),
+			"last_generation_at":  gorm.Expr("GREATEST(last_generation_at, ?)", conversation.LastGenerationAt),
+			"updated_at":          conversation.UpdatedAt,
 		}),
 	}).Create(conversation).Error
 }

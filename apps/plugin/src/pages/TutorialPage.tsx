@@ -5,6 +5,11 @@ import { useStyles2 } from '@grafana/ui';
 import { useAssistant } from '@grafana/assistant';
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 import { TryItNowPanel } from '../components/tutorial/TryItNowPanel';
+import {
+  buildSigilAssistantContextItems,
+  buildSigilAssistantPrompt,
+  withSigilProjectContextFallback,
+} from '../content/assistantContext';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 
 type TutorialSlide = {
@@ -169,15 +174,15 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
   },
   {
     slug: 'about-the-database',
-    title: 'New OSS database',
-    subtitle: 'Not a trace store. A generation store.',
+    title: 'OSS database: The store of a generation',
+    subtitle: 'Generation-first storage for real production use.',
     renderGraphic: (props) => <DatabaseGraphic {...props} />,
     body: (
       <ul>
-        <li>Schema designed around generation events, not retrofitted spans.</li>
-        <li>Fast queries across time, model, agent, and custom labels.</li>
-        <li>Stays responsive at high cardinality and large volumes.</li>
-        <li>One store powers both dashboards and deep investigations.</li>
+        <li>Built for generations, not retrofitted spans.</li>
+        <li>Fast queries by time, model, agent, and labels.</li>
+        <li>Works seamlessly with metrics, logs, traces, and profiles.</li>
+        <li>Built on the same principles as Mimir, Loki, Tempo, and other world-class databases.</li>
       </ul>
     ),
   },
@@ -429,15 +434,16 @@ function NextStepsBody() {
   ] as const;
 
   const openAssistant = () => {
-    const prompt = 'What is Sigil and how can I get started?';
+    const prompt = buildSigilAssistantPrompt('What is Sigil and how can I get started?');
     if (assistant.openAssistant) {
       assistant.openAssistant({
         origin: ASSISTANT_ORIGIN_TUTORIAL,
         prompt,
+        context: buildSigilAssistantContextItems(),
         autoSend: true,
       });
     } else {
-      window.location.href = buildAssistantUrl(prompt);
+      window.location.href = buildAssistantUrl(withSigilProjectContextFallback(prompt));
     }
   };
 
@@ -875,11 +881,11 @@ function getStyles(theme: GrafanaTheme2) {
         position: 'absolute',
         left: -0,
         right: 0,
-        bottom: -12,
-        height: 8,
+        bottom: -9,
+        height: 5,
         background: 'var(--tutorial-accent)',
         borderRadius: 2,
-        transform: 'rotate(-1.5deg)',
+        transform: 'rotate(0deg)',
         transformOrigin: 'left center',
       },
       '@media (max-width: 1024px)': {

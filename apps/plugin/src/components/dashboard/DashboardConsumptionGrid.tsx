@@ -30,6 +30,7 @@ import { MetricPanel } from './MetricPanel';
 import { useResolvedModelPricing } from './useResolvedModelPricing';
 import { PageInsightBar } from '../insight/PageInsightBar';
 import { summarizeVector, summarizeMatrix, hasResponseData } from '../insight/summarize';
+import { DashboardSummaryBar } from './DashboardSummaryBar';
 
 export type DashboardConsumptionGridProps = {
   dataSource: DashboardDataSource;
@@ -41,7 +42,7 @@ export type DashboardConsumptionGridProps = {
   onTimeRangeChange: (timeRange: TimeRange) => void;
 };
 
-const CHART_HEIGHT = 320;
+const CHART_HEIGHT = 250;
 
 const noThresholds = {
   mode: ThresholdsMode.Absolute,
@@ -340,7 +341,7 @@ export function DashboardConsumptionGrid({
   return (
     <div className={styles.gridWrapper}>
       {/* Top stats */}
-      <div className={styles.statsRow}>
+      <DashboardSummaryBar>
         <TopStat
           label="Total Tokens"
           value={totalTokensValue}
@@ -396,7 +397,7 @@ export function DashboardConsumptionGrid({
           invertChange
           comparisonLabel={comparisonLabel}
         />
-      </div>
+      </DashboardSummaryBar>
       <PageInsightBar
         prompt={insightPrompt}
         origin="sigil-plugin/dashboard-consumption-insight"
@@ -527,13 +528,6 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'flex',
       flexDirection: 'column',
       gap: theme.spacing(3),
-    }),
-    statsRow: css({
-      display: 'flex',
-      gap: theme.spacing(4),
-      padding: theme.spacing(1.5, 0),
-      borderBottom: `1px solid ${theme.colors.border.weak}`,
-      flexWrap: 'wrap',
     }),
     panelRow: css({
       display: 'grid',

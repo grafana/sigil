@@ -250,6 +250,10 @@ func TestSaveBatchConversationProjectionUpsert(t *testing.T) {
 	if conversation.GenerationCount != 2 {
 		t.Fatalf("expected generation_count 2, got %d", conversation.GenerationCount)
 	}
+	expectedFirst := generations[0].GetCompletedAt().AsTime().UTC()
+	if !conversation.FirstGenerationAt.Equal(expectedFirst) {
+		t.Fatalf("expected first_generation_at %v, got %v", expectedFirst, conversation.FirstGenerationAt)
+	}
 	expectedLast := generations[1].GetCompletedAt().AsTime().UTC()
 	if !conversation.LastGenerationAt.Equal(expectedLast) {
 		t.Fatalf("expected last_generation_at %v, got %v", expectedLast, conversation.LastGenerationAt)

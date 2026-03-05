@@ -25,6 +25,7 @@ import { usePrometheusQuery } from './usePrometheusQuery';
 import { MetricPanel } from './MetricPanel';
 import { PageInsightBar } from '../insight/PageInsightBar';
 import { summarizeVector, summarizeMatrix, hasResponseData } from '../insight/summarize';
+import { DashboardSummaryBar } from './DashboardSummaryBar';
 
 export type DashboardPerformanceGridProps = {
   dataSource: DashboardDataSource;
@@ -36,7 +37,7 @@ export type DashboardPerformanceGridProps = {
   onTimeRangeChange: (timeRange: TimeRange) => void;
 };
 
-const CHART_HEIGHT = 320;
+const CHART_HEIGHT = 250;
 
 const latencyPercentileOptions: Array<{ label: string; value: LatencyPercentile }> = [
   { label: 'P50', value: 'p50' },
@@ -243,7 +244,7 @@ export function DashboardPerformanceGrid({
 
   return (
     <div className={styles.gridWrapper}>
-      <div className={styles.statsRow}>
+      <DashboardSummaryBar>
         <TopStat
           label="Latency (P50)"
           value={latencyP50Value}
@@ -284,7 +285,7 @@ export function DashboardPerformanceGrid({
           invertChange
           comparisonLabel={comparisonLabel}
         />
-      </div>
+      </DashboardSummaryBar>
       <PageInsightBar
         prompt={insightPrompt}
         origin="sigil-plugin/dashboard-performance-insight"
@@ -392,13 +393,6 @@ function getStyles(theme: GrafanaTheme2) {
       gap: theme.spacing(3),
       flex: 1,
       minWidth: 0,
-    }),
-    statsRow: css({
-      display: 'flex',
-      gap: theme.spacing(4),
-      padding: theme.spacing(1.5, 0),
-      borderBottom: `1px solid ${theme.colors.border.weak}`,
-      flexWrap: 'wrap',
     }),
     panelRowWithStat: css({
       display: 'grid',

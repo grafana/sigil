@@ -1,5 +1,29 @@
 import MetricsBar from '../../components/conversation-explore/MetricsBar';
+import type { ModelCard } from '../../modelcard/types';
 import { mockTokenSummary, mockCostSummary } from './fixtures';
+
+const demoModelCard: ModelCard = {
+  model_key: 'openrouter:anthropic/claude-sonnet-4.5',
+  source: 'openrouter',
+  source_model_id: 'anthropic/claude-sonnet-4.5',
+  canonical_slug: 'anthropic/claude-sonnet-4-5',
+  name: 'claude-sonnet-4-5',
+  provider: 'anthropic',
+  pricing: {
+    prompt_usd_per_token: 0.000003,
+    completion_usd_per_token: 0.000015,
+    request_usd: null,
+    image_usd: null,
+    web_search_usd: null,
+    input_cache_read_usd_per_token: null,
+    input_cache_write_usd_per_token: null,
+  },
+  is_free: false,
+  top_provider: {},
+  first_seen_at: '2026-01-01T00:00:00Z',
+  last_seen_at: '2026-01-01T00:00:00Z',
+  refreshed_at: '2026-01-01T00:00:00Z',
+};
 
 const meta = {
   title: 'Sigil/Conversation Explore/MetricsBar',
@@ -62,3 +86,10 @@ export const UnsavedConversation = {
 };
 
 export const Screenshot = Default;
+
+export const WithModelCardPopover = {
+  args: {
+    ...Default.args,
+    modelCards: new Map<string, ModelCard>([['anthropic::claude-sonnet-4-5', demoModelCard]]),
+  },
+};

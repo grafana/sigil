@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, render, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { defaultAgentsDataSource } from '../../agents/api';
 import type { AgentListItem } from '../../agents/types';
@@ -12,10 +12,21 @@ import {
   shouldFetchHeroStats,
 } from './LandingTopBar';
 
+const mockOpenAssistant = jest.fn();
 jest.mock('@grafana/assistant', () => ({
   useAssistant: () => ({
-    openAssistant: jest.fn(),
+    openAssistant: mockOpenAssistant,
   }),
+  createAssistantContextItem: jest.fn((_type: string, params: { title?: string }) => ({
+    node: {
+      id: 'sigil-context',
+      name: params.title ?? 'Sigil knowledgebase',
+      navigable: false,
+      selectable: true,
+      data: { type: 'structured' },
+    },
+    occurrences: [],
+  })),
 }));
 
 jest.mock('../../conversation/api', () => ({
@@ -51,6 +62,7 @@ const HERO_STATS_STORAGE_KEY = 'grafana-sigil-hero-stats';
 describe('countAgentsSeenInWindows', () => {
   afterEach(() => {
     jest.restoreAllMocks();
+    mockOpenAssistant.mockReset();
   });
 
   it('caps agent pagination when counting both windows', async () => {
@@ -191,5 +203,66 @@ describe('LandingTopBar hero stats polling', () => {
     expect(secondCurrentTo).toBeGreaterThan(firstCurrentTo);
     expect(secondCurrentFrom - firstCurrentFrom).toBe(70_000);
     expect(secondCurrentTo - firstCurrentTo).toBe(70_000);
+  });
+});
+
+describe('LandingTopBar assistant context', () => {
+  afterEach(() => {
+    mockOpenAssistant.mockReset();
+  });
+
+  it('sends user prompt and structured context separately', async () => {
+    await act(async () => {
+      render(
+        <MemoryRouter>
+          <LandingTopBar assistantOrigin="test-origin" />
+        </MemoryRouter>
+      );
+    });
+
+    fireEvent.change(screen.getByPlaceholderText('Ask me anything about Sigil'), {
+      target: { value: 'How does Sigil work?' },
+    });
+    const assistantInput = screen.getByPlaceholderText('Ask me anything about Sigil');
+    fireEvent.submit(assistantInput.closest('form')!);
+
+    expect(mockOpenAssistant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        origin: 'test-origin',
+        autoSend: true,
+        prompt: 'How does Sigil work?',
+        context: expect.arrayContaining([
+          expect.objectContaining({
+            node: expect.objectContaining({
+              name: 'Sigil knowledgebase',
+            }),
+          }),
+        ]),
+      })
+    );
+  });
+
+  it('submits prompt when pressing Enter in the assistant input', async () => {
+    await act(async () => {
+      render(
+        <MemoryRouter>
+          <LandingTopBar assistantOrigin="test-origin" />
+        </MemoryRouter>
+      );
+    });
+
+    const input = screen.getByPlaceholderText('Ask me anything about Sigil');
+    fireEvent.change(input, {
+      target: { value: 'Tell me about Sigil' },
+    });
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', charCode: 13 });
+
+    expect(mockOpenAssistant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        origin: 'test-origin',
+        autoSend: true,
+        prompt: 'Tell me about Sigil',
+      })
+    );
   });
 });
