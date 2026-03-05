@@ -152,22 +152,24 @@ describe('ConversationsPage', () => {
         .fn<Promise<ConversationSearchResponse>, [ConversationSearchRequest]>()
         .mockImplementationOnce(async () => slowSearch.promise)
         .mockImplementationOnce(async () => fastSearch.promise),
-      getConversationDetail: jest.fn(async (conversationID: string): Promise<ConversationDetail> => ({
-        conversation_id: conversationID,
-        generation_count: 1,
-        first_generation_at: '2026-02-15T10:00:00Z',
-        last_generation_at: '2026-02-15T10:00:00Z',
-        generations: [
-          {
-            generation_id: `${conversationID}-gen`,
-            conversation_id: conversationID,
-            trace_id: `${conversationID}-trace`,
-            output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'response' }] }],
-            created_at: '2026-02-15T10:00:00Z',
-          },
-        ],
-        annotations: [],
-      })),
+      getConversationDetail: jest.fn(
+        async (conversationID: string): Promise<ConversationDetail> => ({
+          conversation_id: conversationID,
+          generation_count: 1,
+          first_generation_at: '2026-02-15T10:00:00Z',
+          last_generation_at: '2026-02-15T10:00:00Z',
+          generations: [
+            {
+              generation_id: `${conversationID}-gen`,
+              conversation_id: conversationID,
+              trace_id: `${conversationID}-trace`,
+              output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'response' }] }],
+              created_at: '2026-02-15T10:00:00Z',
+            },
+          ],
+          annotations: [],
+        })
+      ),
     });
 
     render(<ConversationsPage dataSource={dataSource} />);

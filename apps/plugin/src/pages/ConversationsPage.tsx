@@ -79,7 +79,9 @@ export default function ConversationsPage(props: ConversationsPageProps) {
     if (!conversationDetail || selectedGenerationID.length === 0) {
       return null;
     }
-    return conversationDetail.generations.find((generation) => generation.generation_id === selectedGenerationID) ?? null;
+    return (
+      conversationDetail.generations.find((generation) => generation.generation_id === selectedGenerationID) ?? null
+    );
   }, [conversationDetail, selectedGenerationID]);
 
   const [errorMessage, setErrorMessage] = useState<string>('');
