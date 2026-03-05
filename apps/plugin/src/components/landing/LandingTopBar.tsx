@@ -393,18 +393,18 @@ export function LandingTopBar({
 
   useEffect(() => {
     let cancelled = false;
-    const now = Date.now();
-
-    if (!shouldFetchHeroStats(now)) {
-      return;
-    }
-
-    const currentFrom = new Date(now - METRIC_WINDOW_MS);
-    const currentTo = new Date(now);
-    const previousFrom = new Date(now - 2 * METRIC_WINDOW_MS);
-    const previousTo = new Date(now - METRIC_WINDOW_MS);
 
     const loadStats = async () => {
+      const now = Date.now();
+      if (!shouldFetchHeroStats(now)) {
+        return;
+      }
+
+      const currentFrom = new Date(now - METRIC_WINDOW_MS);
+      const currentTo = new Date(now);
+      const previousFrom = new Date(now - 2 * METRIC_WINDOW_MS);
+      const previousTo = new Date(now - METRIC_WINDOW_MS);
+
       try {
         const [conversationCurrent, conversationPrevious, agentCounts, evaluatorCounts] = await Promise.all([
           countConversationsInRange(currentFrom, currentTo),
