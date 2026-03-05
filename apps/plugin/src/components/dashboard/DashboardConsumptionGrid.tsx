@@ -212,62 +212,6 @@ export function DashboardConsumptionGrid({
   const cacheHitRate =
     inputTokensValue + cacheReadValue > 0 ? (cacheReadValue / (inputTokensValue + cacheReadValue)) * 100 : 0;
 
-  const allDataLoading =
-    tokensTotalStat.loading ||
-    inputTokensStat.loading ||
-    outputTokensStat.loading ||
-    cacheReadTokensStat.loading ||
-    costTokensData.loading ||
-    resolvedPricing.loading;
-
-  const insightDataContext = useMemo(() => {
-    if (allDataLoading) {
-      return null;
-    }
-    const hasAnyData =
-      hasResponseData(tokensTotalStat.data) ||
-      hasResponseData(tokensByTypeStat.data) ||
-      hasResponseData(tokensByTypeTimeseries.data) ||
-      hasResponseData(costTokensData.data);
-    if (!hasAnyData) {
-      return null;
-    }
-    return [
-      'Consumption dashboard context:',
-      `Breakdown: ${breakdownBy}`,
-      '',
-      `Total tokens: ${totalTokensValue}`,
-      `Input tokens: ${inputTokensValue}`,
-      `Output tokens: ${outputTokensValue}`,
-      `Cache read tokens: ${cacheReadValue}`,
-      `Cache hit rate: ${cacheHitRate.toFixed(2)}%`,
-      `Estimated total cost (USD): $${totalCost.totalCost.toFixed(4)}`,
-      '',
-      summarizeVector(tokensByTypeStat.data, 'Tokens by type'),
-      summarizeMatrix(tokensByTypeTimeseries.data, 'Tokens by type over time'),
-      summarizeMatrix(tokensTotalTimeseries.data, 'Total tokens over time'),
-      summarizeVector(tokensByBreakdown.data, `Tokens by ${breakdownBy}`),
-      summarizeVector(costTokensData.data, 'Token usage by model for cost'),
-    ].join('\n');
-  }, [
-    allDataLoading,
-    breakdownBy,
-    totalTokensValue,
-    inputTokensValue,
-    outputTokensValue,
-    cacheReadValue,
-    cacheHitRate,
-    totalCost.totalCost,
-    tokensTotalStat.data,
-    tokensByTypeStat.data,
-    tokensByTypeTimeseries.data,
-    tokensTotalTimeseries.data,
-    tokensByBreakdown.data,
-    costTokensData.data,
-  ]);
-
-  const insightPrompt = `Analyze this GenAI consumption dashboard. Breakdown: ${breakdownBy}. Only flag significant findings — cost anomalies, token usage imbalances, cache optimization opportunities, or actionable issues. Skip anything that looks normal.`;
-
   return (
     <div className={styles.gridWrapper}>
       {/* Top stats */}

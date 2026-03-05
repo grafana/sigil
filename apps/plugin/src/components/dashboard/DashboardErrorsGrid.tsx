@@ -116,50 +116,6 @@ export function DashboardErrorsGrid({
   const totalErrorsValue = topTotalErrors.data ? vectorToStatValue(topTotalErrors.data) : 0;
   const errorRateValue = topErrorRate.data ? vectorToStatValue(topErrorRate.data) : 0;
 
-  const allDataLoading =
-    topTotalErrors.loading ||
-    topErrorRate.loading ||
-    errorRateTimeseries.loading ||
-    errorsByCodeStat.loading ||
-    errorsByCodeTimeseries.loading ||
-    errorRateByBreakdown.loading;
-
-  const insightDataContext = useMemo(() => {
-    if (allDataLoading) {
-      return null;
-    }
-    const hasAnyData =
-      hasResponseData(topTotalErrors.data) ||
-      hasResponseData(topErrorRate.data) ||
-      hasResponseData(errorRateTimeseries.data) ||
-      hasResponseData(errorsByCodeStat.data);
-    if (!hasAnyData) {
-      return null;
-    }
-    return [
-      'Errors dashboard context:',
-      `Breakdown: ${breakdownBy}`,
-      '',
-      summarizeVector(topTotalErrors.data, 'Total Errors'),
-      summarizeVector(topErrorRate.data, 'Error Rate (%)'),
-      summarizeMatrix(errorRateTimeseries.data, 'Error rate over time'),
-      summarizeVector(errorsByCodeStat.data, 'Errors by code'),
-      summarizeMatrix(errorsByCodeTimeseries.data, 'Errors by code over time'),
-      summarizeVector(errorRateByBreakdown.data, `Error rate by ${breakdownBy}`),
-    ].join('\n');
-  }, [
-    allDataLoading,
-    breakdownBy,
-    topTotalErrors.data,
-    topErrorRate.data,
-    errorRateTimeseries.data,
-    errorsByCodeStat.data,
-    errorsByCodeTimeseries.data,
-    errorRateByBreakdown.data,
-  ]);
-
-  const insightPrompt = `Analyze this GenAI errors dashboard. Breakdown: ${breakdownBy}. Only flag significant findings — anomalies, outliers, error spikes, or actionable issues. Skip anything that looks normal.`;
-
   return (
     <div className={styles.gridWrapper}>
       {/* Top stats */}
