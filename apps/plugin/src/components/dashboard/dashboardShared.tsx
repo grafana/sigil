@@ -8,7 +8,7 @@ import type { ModelResolvePair, PrometheusQueryResponse } from '../../dashboard/
 
 export function formatStatValue(value: number, unit?: string): string {
   const fmt = getValueFormat(unit ?? 'short');
-  return formattedValueToString(fmt(value));
+  return formattedValueToString(fmt(Number.isNaN(value) ? 0 : value));
 }
 
 // --- StatItem ---
@@ -276,7 +276,7 @@ export function BreakdownStatPanel({
     return aggregation === 'avg' ? total / src.length : total;
   }, [items, stackedItems, isStacked, aggregation, aggregateOverride]);
 
-  const formatVal = (v: number) => formattedValueToString(getValueFormat(unit)(v));
+  const formatVal = (v: number) => formattedValueToString(getValueFormat(unit)(Number.isNaN(v) ? 0 : v));
 
   if (loading) {
     return (

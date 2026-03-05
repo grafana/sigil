@@ -11,7 +11,6 @@ import {
 } from '../../dashboard/types';
 import {
   formatStatValue,
-  StatItem,
   extractResolvePairs,
   BreakdownStatPanel,
   getBreakdownStatPanelStyles,
@@ -19,6 +18,7 @@ import {
   getBarPalette,
   formatRelativeTime,
 } from './dashboardShared';
+import { TopStat } from '../TopStat';
 import { lookupPricing, pricingKey, type PricingMap } from '../../dashboard/cost';
 import {
   computeStep,
@@ -112,6 +112,32 @@ export function DashboardCacheGrid({
     'instant'
   );
 
+  // --- Previous period comparison ---
+  const windowSize = to - from;
+  const prevFrom = from - windowSize;
+  const prevTo = to - windowSize;
+  const prevCacheReadStat = usePrometheusQuery(
+    dataSource,
+    totalTokensQuery(filters, rangeDuration, 'none', ['cache_read']),
+    prevFrom,
+    prevTo,
+    'instant'
+  );
+  const prevCacheWriteStat = usePrometheusQuery(
+    dataSource,
+    totalTokensQuery(filters, rangeDuration, 'none', ['cache_write']),
+    prevFrom,
+    prevTo,
+    'instant'
+  );
+  const prevInputTokensStat = usePrometheusQuery(
+    dataSource,
+    totalTokensQuery(filters, rangeDuration, 'none', ['input']),
+    prevFrom,
+    prevTo,
+    'instant'
+  );
+
   // Cache tokens by model for savings calculation
   const cacheByModelData = usePrometheusQuery(
     dataSource,
@@ -120,13 +146,21 @@ export function DashboardCacheGrid({
     to,
     'instant'
   );
+  const prevCacheByModelData = usePrometheusQuery(
+    dataSource,
+    cacheTokensByModelQuery(filters, rangeDuration),
+    prevFrom,
+    prevTo,
+    'instant'
+  );
 
   const resolvePairs = useMemo(() => {
-    if (!cacheByModelData.data) {
-      return [];
+    const pairs = cacheByModelData.data ? extractResolvePairs(cacheByModelData.data) : [];
+    if (prevCacheByModelData.data) {
+      pairs.push(...extractResolvePairs(prevCacheByModelData.data));
     }
-    return extractResolvePairs(cacheByModelData.data);
-  }, [cacheByModelData.data]);
+    return pairs;
+  }, [cacheByModelData.data, prevCacheByModelData.data]);
   const resolvedPricing = useResolvedModelPricing(dataSource, resolvePairs);
 
   // --- Timeseries ---
@@ -185,6 +219,18 @@ export function DashboardCacheGrid({
   const savings = useMemo(() => {
     return calculateCacheSavings(cacheByModelData.data ?? undefined, resolvedPricing.pricingMap);
   }, [cacheByModelData.data, resolvedPricing.pricingMap]);
+
+  const prevCacheReadValue = prevCacheReadStat.data ? vectorToStatValue(prevCacheReadStat.data) : 0;
+  const prevCacheWriteValue = prevCacheWriteStat.data ? vectorToStatValue(prevCacheWriteStat.data) : 0;
+  const prevInputTokensValue = prevInputTokensStat.data ? vectorToStatValue(prevInputTokensStat.data) : 0;
+  const prevCacheHitRate =
+    prevInputTokensValue + prevCacheReadValue > 0
+      ? (prevCacheReadValue / (prevInputTokensValue + prevCacheReadValue)) * 100
+      : 0;
+  const prevSavings = useMemo(() => {
+    return calculateCacheSavings(prevCacheByModelData.data ?? undefined, resolvedPricing.pricingMap);
+  }, [prevCacheByModelData.data, resolvedPricing.pricingMap]);
+  const comparisonLabel = `previous ${formatWindowLabel(windowSize)}`;
 
   const cacheHitRateByModelData = useMemo(
     () => buildCacheHitRateByModelResponse(cacheByModelData.data),
@@ -273,20 +319,50 @@ export function DashboardCacheGrid({
     <div className={styles.gridWrapper}>
       {/* Top stats */}
       <div className={styles.statsRow}>
-        <StatItem
+        <TopStat
           label="Cache Hit Rate"
           value={cacheHitRate}
           unit="percent"
           loading={cacheReadStat.loading || inputTokensStat.loading}
+          prevValue={prevCacheHitRate}
+          prevLoading={prevCacheReadStat.loading || prevInputTokensStat.loading}
+          comparisonLabel={comparisonLabel}
         />
-        <StatItem label="Cache Read Tokens" value={cacheReadValue} unit="short" loading={cacheReadStat.loading} />
-        <StatItem label="Cache Write Tokens" value={cacheWriteValue} unit="short" loading={cacheWriteStat.loading} />
-        <StatItem label="Input Tokens" value={inputTokensValue} unit="short" loading={inputTokensStat.loading} />
-        <StatItem
+        <TopStat
+          label="Cache Read Tokens"
+          value={cacheReadValue}
+          unit="short"
+          loading={cacheReadStat.loading}
+          prevValue={prevCacheReadValue}
+          prevLoading={prevCacheReadStat.loading}
+          comparisonLabel={comparisonLabel}
+        />
+        <TopStat
+          label="Cache Write Tokens"
+          value={cacheWriteValue}
+          unit="short"
+          loading={cacheWriteStat.loading}
+          prevValue={prevCacheWriteValue}
+          prevLoading={prevCacheWriteStat.loading}
+          comparisonLabel={comparisonLabel}
+        />
+        <TopStat
+          label="Input Tokens"
+          value={inputTokensValue}
+          unit="short"
+          loading={inputTokensStat.loading}
+          prevValue={prevInputTokensValue}
+          prevLoading={prevInputTokensStat.loading}
+          comparisonLabel={comparisonLabel}
+        />
+        <TopStat
           label="Estimated Savings"
           value={savings.savings}
           unit="currencyUSD"
           loading={cacheByModelData.loading || resolvedPricing.loading}
+          prevValue={prevSavings.savings}
+          prevLoading={prevCacheByModelData.loading || resolvedPricing.loading}
+          comparisonLabel={comparisonLabel}
         />
       </div>
       <PageInsightBar
@@ -800,6 +876,22 @@ function CacheHitRateBadge({ rate }: { rate: number }) {
     return <Badge text={formatStatValue(rate, 'percent')} color="orange" />;
   }
   return <Badge text={formatStatValue(rate, 'percent')} color="green" />;
+}
+
+function formatWindowLabel(seconds: number): string {
+  if (seconds < 120) {
+    return `${seconds}s`;
+  }
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 120) {
+    return `${minutes}m`;
+  }
+  const hours = Math.round(seconds / 3600);
+  if (hours < 48) {
+    return `${hours}h`;
+  }
+  const days = Math.round(seconds / 86400);
+  return `${days}d`;
 }
 
 function getStyles(theme: GrafanaTheme2) {

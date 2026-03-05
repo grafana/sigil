@@ -1,6 +1,6 @@
 import React from 'react';
-import { makeTimeRange } from '@grafana/data';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, useNavigate } from 'react-router-dom';
 import ConversationsPage from './ConversationsPage';
 import type { ConversationsDataSource } from '../conversation/api';
 import type {
@@ -11,14 +11,11 @@ import type {
   SearchTag,
 } from '../conversation/types';
 
-let capturedTimeRangeOnChange: ((tr: ReturnType<typeof makeTimeRange>) => void) | undefined;
-
 jest.mock('@grafana/ui', () => {
   const actual = jest.requireActual('@grafana/ui');
   return {
     ...actual,
-    TimeRangePicker: ({ onChange }: { value: unknown; onChange: (tr: unknown) => void }) => {
-      capturedTimeRangeOnChange = onChange;
+    TimeRangePicker: () => {
       return <div data-testid="time-range-picker" />;
     },
   };
@@ -116,7 +113,11 @@ describe('ConversationsPage', () => {
       ),
     });
 
-    render(<ConversationsPage dataSource={dataSource} />);
+    render(
+      <MemoryRouter>
+        <ConversationsPage dataSource={dataSource} />
+      </MemoryRouter>
+    );
 
     fireEvent.change(screen.getByLabelText('conversation filters'), { target: { value: 'model = "gpt-4o"' } });
     fireEvent.click(screen.getByLabelText('apply filters'));
@@ -141,7 +142,11 @@ describe('ConversationsPage', () => {
         }),
     });
 
-    render(<ConversationsPage dataSource={dataSource} />);
+    render(
+      <MemoryRouter>
+        <ConversationsPage dataSource={dataSource} />
+      </MemoryRouter>
+    );
 
     fireEvent.click(screen.getByLabelText('apply filters'));
     await screen.findByLabelText('select conversation conv-1');
@@ -187,7 +192,11 @@ describe('ConversationsPage', () => {
       ),
     });
 
-    render(<ConversationsPage dataSource={dataSource} />);
+    render(
+      <MemoryRouter>
+        <ConversationsPage dataSource={dataSource} />
+      </MemoryRouter>
+    );
 
     fireEvent.change(screen.getByLabelText('conversation filters'), { target: { value: 'model = "slow"' } });
     fireEvent.click(screen.getByLabelText('apply filters'));
@@ -226,16 +235,30 @@ describe('ConversationsPage', () => {
         .mockImplementationOnce(async () => fastTags.promise),
     });
 
-    render(<ConversationsPage dataSource={dataSource} />);
+    const navigateRef = React.createRef<ReturnType<typeof useNavigate>>();
+    function NavHelper() {
+      const nav = useNavigate();
+      React.useEffect(() => {
+        (navigateRef as React.MutableRefObject<ReturnType<typeof useNavigate>>).current = nav;
+      });
+      return null;
+    }
+
+    render(
+      <MemoryRouter>
+        <NavHelper />
+        <ConversationsPage dataSource={dataSource} />
+      </MemoryRouter>
+    );
     expect(await screen.findByRole('button', { name: 'initial-tag' })).toBeInTheDocument();
 
-    act(() => {
-      capturedTimeRangeOnChange?.(makeTimeRange('2026-02-15T08:00:00Z', '2026-02-16T08:00:00Z'));
+    await act(async () => {
+      navigateRef.current!('?from=2026-02-15T08:00:00Z&to=2026-02-16T08:00:00Z', { replace: true });
     });
     await waitFor(() => expect(dataSource.getSearchTags).toHaveBeenCalledTimes(2));
 
-    act(() => {
-      capturedTimeRangeOnChange?.(makeTimeRange('2026-02-15T09:00:00Z', '2026-02-16T09:00:00Z'));
+    await act(async () => {
+      navigateRef.current!('?from=2026-02-15T09:00:00Z&to=2026-02-16T09:00:00Z', { replace: true });
     });
     await waitFor(() => expect(dataSource.getSearchTags).toHaveBeenCalledTimes(3));
 
@@ -256,7 +279,11 @@ describe('ConversationsPage', () => {
 
   it('requests tag values for active filter key', async () => {
     const dataSource = createDataSource();
-    render(<ConversationsPage dataSource={dataSource} />);
+    render(
+      <MemoryRouter>
+        <ConversationsPage dataSource={dataSource} />
+      </MemoryRouter>
+    );
 
     fireEvent.change(screen.getByLabelText('conversation filters'), { target: { value: 'model = ' } });
 
@@ -271,7 +298,11 @@ describe('ConversationsPage', () => {
       getSearchTagValues: jest.fn((_tag: string, _from: string, _to: string) => valuesDeferred.promise),
     });
 
-    render(<ConversationsPage dataSource={dataSource} />);
+    render(
+      <MemoryRouter>
+        <ConversationsPage dataSource={dataSource} />
+      </MemoryRouter>
+    );
     fireEvent.change(screen.getByLabelText('conversation filters'), { target: { value: 'model = ' } });
 
     await waitFor(() => expect(dataSource.getSearchTagValues).toHaveBeenCalledTimes(1));
@@ -342,7 +373,11 @@ describe('ConversationsPage', () => {
       ),
     });
 
-    render(<ConversationsPage dataSource={dataSource} />);
+    render(
+      <MemoryRouter>
+        <ConversationsPage dataSource={dataSource} />
+      </MemoryRouter>
+    );
     fireEvent.click(screen.getByLabelText('apply filters'));
 
     await waitFor(() => expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-1'));
@@ -404,7 +439,11 @@ describe('ConversationsPage', () => {
       ),
     });
 
-    render(<ConversationsPage dataSource={dataSource} />);
+    render(
+      <MemoryRouter>
+        <ConversationsPage dataSource={dataSource} />
+      </MemoryRouter>
+    );
     fireEvent.click(screen.getByLabelText('apply filters'));
 
     await waitFor(() => expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-1'));

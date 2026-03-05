@@ -111,13 +111,27 @@ export function DashboardPerformanceGrid({
     'instant'
   );
 
-  // --- Previous period comparison ---
-  const hourAgo = 3600;
-  const prevFrom = from - hourAgo;
-  const prevTo = to - hourAgo;
+  // --- Previous period comparison (shifted back by the selected window size) ---
+  const windowSize = to - from;
+  const prevFrom = from - windowSize;
+  const prevTo = to - windowSize;
+  const prevLatencyP50 = usePrometheusQuery(
+    dataSource,
+    latencyStatQuery(filters, rangeDuration, 'none', 0.5),
+    prevFrom,
+    prevTo,
+    'instant'
+  );
   const prevLatencyP95 = usePrometheusQuery(
     dataSource,
     latencyStatQuery(filters, rangeDuration, 'none', 0.95),
+    prevFrom,
+    prevTo,
+    'instant'
+  );
+  const prevLatencyP99 = usePrometheusQuery(
+    dataSource,
+    latencyStatQuery(filters, rangeDuration, 'none', 0.99),
     prevFrom,
     prevTo,
     'instant'
@@ -143,7 +157,7 @@ export function DashboardPerformanceGrid({
   // --- Latency breakdown stat ---
   const latencyStat = usePrometheusQuery(
     dataSource,
-    hasBreakdown ? latencyStatQuery(filters, rangeDuration, breakdownBy, quantile) : '',
+    latencyStatQuery(filters, rangeDuration, breakdownBy, quantile),
     from,
     to,
     'instant'
@@ -162,7 +176,7 @@ export function DashboardPerformanceGrid({
   // --- TTFT breakdown stat ---
   const ttftStat = usePrometheusQuery(
     dataSource,
-    hasBreakdown ? ttftStatQuery(filters, rangeDuration, breakdownBy, quantile) : '',
+    ttftStatQuery(filters, rangeDuration, breakdownBy, quantile),
     from,
     to,
     'instant'
@@ -215,18 +229,31 @@ export function DashboardPerformanceGrid({
 
   const insightPrompt = `Analyze this GenAI performance dashboard. Breakdown: ${breakdownBy}. Latency percentile: ${latencyPercentile}. Only flag significant findings — latency anomalies, TTFT outliers, model-specific slowness, or actionable issues. Skip anything that looks normal.`;
 
+  const comparisonLabel = `previous ${formatWindowLabel(windowSize)}`;
+
   const latencyP50Value = latencyP50.data ? vectorToStatValue(latencyP50.data) : 0;
   const latencyP95Value = latencyP95.data ? vectorToStatValue(latencyP95.data) : 0;
   const latencyP99Value = latencyP99.data ? vectorToStatValue(latencyP99.data) : 0;
   const ttftP95Value = ttftP95.data ? vectorToStatValue(ttftP95.data) : 0;
 
+  const prevLatencyP50Value = prevLatencyP50.data ? vectorToStatValue(prevLatencyP50.data) : 0;
   const prevLatencyP95Value = prevLatencyP95.data ? vectorToStatValue(prevLatencyP95.data) : 0;
+  const prevLatencyP99Value = prevLatencyP99.data ? vectorToStatValue(prevLatencyP99.data) : 0;
   const prevTtftP95Value = prevTtftP95.data ? vectorToStatValue(prevTtftP95.data) : 0;
 
   return (
     <div className={styles.gridWrapper}>
       <div className={styles.statsRow}>
-        <TopStat label="Latency (P50)" value={latencyP50Value} unit="s" loading={latencyP50.loading} invertChange />
+        <TopStat
+          label="Latency (P50)"
+          value={latencyP50Value}
+          unit="s"
+          loading={latencyP50.loading}
+          prevValue={prevLatencyP50Value}
+          prevLoading={prevLatencyP50.loading}
+          invertChange
+          comparisonLabel={comparisonLabel}
+        />
         <TopStat
           label="Latency (P95)"
           value={latencyP95Value}
@@ -235,8 +262,18 @@ export function DashboardPerformanceGrid({
           prevValue={prevLatencyP95Value}
           prevLoading={prevLatencyP95.loading}
           invertChange
+          comparisonLabel={comparisonLabel}
         />
-        <TopStat label="Latency (P99)" value={latencyP99Value} unit="s" loading={latencyP99.loading} invertChange />
+        <TopStat
+          label="Latency (P99)"
+          value={latencyP99Value}
+          unit="s"
+          loading={latencyP99.loading}
+          prevValue={prevLatencyP99Value}
+          prevLoading={prevLatencyP99.loading}
+          invertChange
+          comparisonLabel={comparisonLabel}
+        />
         <TopStat
           label="Time to First Token (P95)"
           value={ttftP95Value}
@@ -245,6 +282,7 @@ export function DashboardPerformanceGrid({
           prevValue={prevTtftP95Value}
           prevLoading={prevTtftP95.loading}
           invertChange
+          comparisonLabel={comparisonLabel}
         />
       </div>
       <PageInsightBar
@@ -256,7 +294,7 @@ export function DashboardPerformanceGrid({
 
       <div className={styles.grid}>
         {/* Row 1: Latency over time */}
-        <div className={hasBreakdown ? styles.panelRowWithStat : styles.panelRowFull}>
+        <div className={styles.panelRowWithStat}>
           <MetricPanel
             title="Latency"
             pluginId="timeseries"
@@ -284,22 +322,20 @@ export function DashboardPerformanceGrid({
               />
             }
           />
-          {hasBreakdown && (
-            <BreakdownStatPanel
-              title={`Avg Latency (${latencyPercentile.toUpperCase()})`}
-              data={latencyStat.data}
-              loading={latencyStat.loading}
-              error={latencyStat.error}
-              breakdownLabel={breakdownPromLabel}
-              height={CHART_HEIGHT}
-              unit="s"
-              aggregation="avg"
-            />
-          )}
+          <BreakdownStatPanel
+            title={`Avg Latency (${latencyPercentile.toUpperCase()})`}
+            data={latencyStat.data}
+            loading={latencyStat.loading}
+            error={latencyStat.error}
+            breakdownLabel={breakdownPromLabel}
+            height={CHART_HEIGHT}
+            unit="s"
+            aggregation="avg"
+          />
         </div>
 
         {/* Row 2: Time to First Token */}
-        <div className={hasBreakdown ? styles.panelRowWithStat : styles.panelRowFull}>
+        <div className={styles.panelRowWithStat}>
           <MetricPanel
             title="Time to First Token"
             pluginId="timeseries"
@@ -327,22 +363,36 @@ export function DashboardPerformanceGrid({
               />
             }
           />
-          {hasBreakdown && (
-            <BreakdownStatPanel
-              title={`Avg TTFT (${latencyPercentile.toUpperCase()})`}
-              data={ttftStat.data}
-              loading={ttftStat.loading}
-              error={ttftStat.error}
-              breakdownLabel={breakdownPromLabel}
-              height={CHART_HEIGHT}
-              unit="s"
-              aggregation="avg"
-            />
-          )}
+          <BreakdownStatPanel
+            title={`Avg TTFT (${latencyPercentile.toUpperCase()})`}
+            data={ttftStat.data}
+            loading={ttftStat.loading}
+            error={ttftStat.error}
+            breakdownLabel={breakdownPromLabel}
+            height={CHART_HEIGHT}
+            unit="s"
+            aggregation="avg"
+          />
         </div>
       </div>
     </div>
   );
+}
+
+function formatWindowLabel(seconds: number): string {
+  if (seconds < 120) {
+    return `${seconds}s`;
+  }
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 120) {
+    return `${minutes}m`;
+  }
+  const hours = Math.round(seconds / 3600);
+  if (hours < 48) {
+    return `${hours}h`;
+  }
+  const days = Math.round(seconds / 86400);
+  return `${days}d`;
 }
 
 function getStyles(theme: GrafanaTheme2) {
@@ -365,11 +415,6 @@ function getStyles(theme: GrafanaTheme2) {
       padding: theme.spacing(1.5, 0),
       borderBottom: `1px solid ${theme.colors.border.weak}`,
       flexWrap: 'wrap',
-    }),
-    panelRowFull: css({
-      display: 'grid',
-      gridTemplateColumns: '1fr',
-      gap: theme.spacing(1),
     }),
     panelRowWithStat: css({
       display: 'grid',

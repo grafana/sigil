@@ -130,10 +130,10 @@ export function DashboardGrid({
     'instant'
   );
 
-  // --- Previous period comparison (same queries shifted back 1 hour) ---
-  const hourAgo = 3600;
-  const prevFrom = from - hourAgo;
-  const prevTo = to - hourAgo;
+  // --- Previous period comparison (shifted back by the selected window size) ---
+  const windowSize = to - from;
+  const prevFrom = from - windowSize;
+  const prevTo = to - windowSize;
   const prevTotalOps = usePrometheusQuery(
     dataSource,
     totalOpsQuery(filters, rangeDuration),
@@ -387,7 +387,11 @@ export function DashboardGrid({
       for (const f of successFrames) {
         f.name = 'Success';
         if (f.fields[1]) {
-          f.fields[1].config = { ...f.fields[1].config, displayName: 'Success' };
+          f.fields[1].config = {
+            ...f.fields[1].config,
+            displayName: 'Success',
+            color: { mode: 'fixed', fixedColor: 'green' },
+          };
         }
       }
       frames.push(...successFrames);
@@ -397,7 +401,11 @@ export function DashboardGrid({
       for (const f of errorFrames) {
         f.name = 'Errors';
         if (f.fields[1]) {
-          f.fields[1].config = { ...f.fields[1].config, displayName: 'Errors' };
+          f.fields[1].config = {
+            ...f.fields[1].config,
+            displayName: 'Errors',
+            color: { mode: 'fixed', fixedColor: 'red' },
+          };
         }
       }
       frames.push(...errorFrames);
@@ -508,6 +516,8 @@ export function DashboardGrid({
 
   const insightPrompt = `Analyze this GenAI observability dashboard. Breakdown: ${breakdownBy}. Latency percentile: ${latencyPercentile}. Cost mode: ${costMode}${costMode === 'tokens' ? `. Token drilldown: ${tokenDrilldown}` : ''}. Only flag significant findings — anomalies, outliers, or actionable issues. Skip anything that looks normal.`;
 
+  const comparisonLabel = `previous ${formatWindowLabel(windowSize)}`;
+
   const totalRequestsValue = topTotalOps.data ? vectorToStatValue(topTotalOps.data) : 0;
   const latencyValue = topLatency.data ? vectorToStatValue(topLatency.data) : 0;
   const errorRateValue = topErrRate.data ? vectorToStatValue(topErrRate.data) : 0;
@@ -528,6 +538,7 @@ export function DashboardGrid({
           loading={topTotalOps.loading}
           prevValue={prevRequestsValue}
           prevLoading={prevTotalOps.loading}
+          comparisonLabel={comparisonLabel}
         />
         <TopStat
           label="Avg Latency (P95)"
@@ -537,6 +548,7 @@ export function DashboardGrid({
           prevValue={prevLatencyValue}
           prevLoading={prevLatency.loading}
           invertChange
+          comparisonLabel={comparisonLabel}
         />
         <TopStat
           label="Error Rate"
@@ -546,6 +558,7 @@ export function DashboardGrid({
           prevValue={prevErrRateValue}
           prevLoading={prevErrRate.loading}
           invertChange
+          comparisonLabel={comparisonLabel}
         />
         <TopStat
           label="Total Tokens"
@@ -554,6 +567,7 @@ export function DashboardGrid({
           loading={tokensTotalStat.loading}
           prevValue={prevTokensValue}
           prevLoading={prevTokensTotal.loading}
+          comparisonLabel={comparisonLabel}
         />
         <TopStat
           label="Total Cost"
@@ -563,6 +577,7 @@ export function DashboardGrid({
           prevValue={prevTotalCost.totalCost}
           prevLoading={prevCostTokens.loading}
           invertChange
+          comparisonLabel={comparisonLabel}
         />
       </div>
       <PageInsightBar
@@ -574,17 +589,15 @@ export function DashboardGrid({
 
       <div className={styles.grid}>
         {/* Row 1: Requests & Errors */}
-        <div className={hasBreakdown ? styles.panelRowWithStat : styles.panelRowEqual}>
-          {hasBreakdown && (
-            <BreakdownStatPanel
-              title="Total Requests"
-              data={totalOpsStat.data}
-              loading={totalOpsStat.loading}
-              error={totalOpsStat.error}
-              breakdownLabel={breakdownPromLabel}
-              height={CHART_HEIGHT}
-            />
-          )}
+        <div className={styles.panelRowWithStat}>
+          <BreakdownStatPanel
+            title="Total Requests"
+            data={totalOpsStat.data}
+            loading={totalOpsStat.loading}
+            error={totalOpsStat.error}
+            breakdownLabel={breakdownPromLabel}
+            height={CHART_HEIGHT}
+          />
           <MetricPanel
             title="Requests/s"
             pluginId="timeseries"
@@ -675,7 +688,7 @@ export function DashboardGrid({
         </div>
 
         {/* Row 3: Consumption */}
-        <div className={hasBreakdown ? styles.panelRowWithStat : styles.panelRowFull}>
+        <div className={styles.panelRowChartStat}>
           <MetricPanel
             title="Consumption"
             pluginId="timeseries"
@@ -728,47 +741,61 @@ export function DashboardGrid({
               </div>
             }
           />
-          {hasBreakdown && (
-            <BreakdownStatPanel
-              title={costMode === 'tokens' ? 'Total Tokens' : 'Total Cost'}
-              data={
-                isTokenByType && hasBreakdown
-                  ? tokensByBreakdownAndType.data
-                  : isTokenByType
-                    ? tokensByTypeStat.data
-                    : costMode === 'tokens'
-                      ? tokensTotalByBreakdown.data
-                      : costByBreakdownData
-              }
-              loading={
-                isTokenByType && hasBreakdown
-                  ? tokensByBreakdownAndType.loading
-                  : isTokenByType
-                    ? tokensByTypeStat.loading
-                    : costMode === 'tokens'
-                      ? tokensTotalByBreakdown.loading
-                      : costTokens.loading || resolvedPricing.loading
-              }
-              error={
-                isTokenByType && hasBreakdown
-                  ? tokensByBreakdownAndType.error
-                  : isTokenByType
-                    ? tokensByTypeStat.error
-                    : costMode === 'tokens'
-                      ? tokensTotalByBreakdown.error
-                      : costTokens.error
-              }
-              breakdownLabel={breakdownPromLabel}
-              height={CHART_HEIGHT}
-              unit={costMode === 'tokens' ? 'short' : 'currencyUSD'}
-              segmentLabel={isTokenByType && hasBreakdown ? 'gen_ai_token_type' : undefined}
-              segmentNames={isTokenByType && hasBreakdown ? drilldownTypes : undefined}
-            />
-          )}
+          <BreakdownStatPanel
+            title={costMode === 'tokens' ? 'Total Tokens' : 'Total Cost'}
+            data={
+              isTokenByType && hasBreakdown
+                ? tokensByBreakdownAndType.data
+                : isTokenByType
+                  ? tokensByTypeStat.data
+                  : costMode === 'tokens'
+                    ? tokensTotalByBreakdown.data
+                    : costByBreakdownData
+            }
+            loading={
+              isTokenByType && hasBreakdown
+                ? tokensByBreakdownAndType.loading
+                : isTokenByType
+                  ? tokensByTypeStat.loading
+                  : costMode === 'tokens'
+                    ? tokensTotalByBreakdown.loading
+                    : costTokens.loading || resolvedPricing.loading
+            }
+            error={
+              isTokenByType && hasBreakdown
+                ? tokensByBreakdownAndType.error
+                : isTokenByType
+                  ? tokensByTypeStat.error
+                  : costMode === 'tokens'
+                    ? tokensTotalByBreakdown.error
+                    : costTokens.error
+            }
+            breakdownLabel={breakdownPromLabel}
+            height={CHART_HEIGHT}
+            unit={costMode === 'tokens' ? 'short' : 'currencyUSD'}
+            segmentLabel={isTokenByType && hasBreakdown ? 'gen_ai_token_type' : undefined}
+            segmentNames={isTokenByType && hasBreakdown ? drilldownTypes : undefined}
+          />
         </div>
       </div>
     </div>
   );
+}
+
+function formatWindowLabel(seconds: number): string {
+  if (seconds < 120) {
+    return `${seconds}s`;
+  }
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 120) {
+    return `${minutes}m`;
+  }
+  const hours = Math.round(seconds / 3600);
+  if (hours < 48) {
+    return `${hours}h`;
+  }
+  const days = Math.round(seconds / 86400);
+  return `${days}d`;
 }
 
 function formatUtcMillis(ms: number): string {
@@ -809,9 +836,9 @@ function getStyles(theme: GrafanaTheme2) {
       gridTemplateColumns: '2fr 3fr 3fr',
       gap: theme.spacing(1),
     }),
-    panelRowFull: css({
+    panelRowChartStat: css({
       display: 'grid',
-      gridTemplateColumns: '1fr',
+      gridTemplateColumns: '3fr 2fr',
       gap: theme.spacing(1),
     }),
     panelActions: css({
