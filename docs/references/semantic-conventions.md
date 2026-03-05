@@ -22,6 +22,7 @@ Canonical reference for all OTel span attributes, metrics, span naming, and even
 | `gen_ai.provider.name` | string | when non-empty |
 | `gen_ai.conversation.id` | string | when present |
 | `sigil.conversation.title` | string | when present |
+| `user.id` | string | when present |
 | `gen_ai.agent.name` | string | when present |
 | `gen_ai.agent.version` | string | when present |
 
@@ -113,6 +114,7 @@ The normalized generation payload keeps provider-only details in `metadata` with
 | Key | Description |
 |---|---|
 | `sigil.sdk.name` | SDK identity marker (`sdk-go`, `sdk-js`, `sdk-python`, `sdk-java`, `sdk-dotnet`) |
+| `sigil.user.id` | end-user ID mirrored from typed SDK generation fields when set |
 | `sigil.gen_ai.request.thinking.budget_tokens` | provider thinking budget (request side) |
 | `sigil.gen_ai.request.thinking.level` | provider thinking level when available (Gemini) |
 | `sigil.gen_ai.usage.tool_use_prompt_tokens` | Gemini `toolUsePromptTokenCount` |

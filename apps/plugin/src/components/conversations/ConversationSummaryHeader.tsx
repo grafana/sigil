@@ -148,6 +148,7 @@ export default function ConversationSummaryHeader({
   const ratingSummary = conversation.rating_summary;
   const conversationTitle = conversation.conversation_title?.trim() ?? '';
   const hasConversationTitle = conversationTitle.length > 0;
+  const userID = conversation.user_id?.trim() ?? '';
 
   return (
     <div className={styles.header}>
@@ -156,6 +157,10 @@ export default function ConversationSummaryHeader({
           <div className={styles.label}>{hasConversationTitle ? 'Conversation' : 'Conversation ID'}</div>
           <div className={styles.value}>{hasConversationTitle ? conversationTitle : conversation.conversation_id}</div>
           {hasConversationTitle && <div className={styles.valueSecondary}>{conversation.conversation_id}</div>}
+        </div>
+        <div className={styles.item}>
+          <div className={styles.label}>User ID</div>
+          <div className={styles.value}>{userID.length > 0 ? userID : '-'}</div>
         </div>
         <div className={styles.item}>
           <div className={styles.label}>LLM calls</div>

@@ -45,4 +45,20 @@ export const NoCost = {
   },
 };
 
+export const SavedConversation = {
+  args: {
+    ...Default.args,
+    isSaved: true,
+    onToggleSave: () => {},
+  },
+};
+
+export const UnsavedConversation = {
+  args: {
+    ...Default.args,
+    isSaved: false,
+    onToggleSave: () => {},
+  },
+};
+
 export const Screenshot = Default;

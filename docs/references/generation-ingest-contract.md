@@ -129,6 +129,7 @@ audience: both
   - `sigil.generation.id`
   - `gen_ai.conversation.id`
   - `sigil.conversation.title` (Sigil extension)
+  - `user.id`
   - `gen_ai.agent.name`
   - `gen_ai.agent.version` (Sigil extension; OTel-style naming)
   - `gen_ai.provider.name`
@@ -161,6 +162,7 @@ audience: both
     "sigil.generation.id": "gen_01K2...",
     "gen_ai.conversation.id": "conv-7",
     "sigil.conversation.title": "Weather follow-up",
+    "user.id": "user-42",
     "gen_ai.agent.name": "assistant-anthropic",
     "gen_ai.agent.version": "1.0.0",
     "gen_ai.operation.name": "generateText",
@@ -191,6 +193,7 @@ audience: both
 The normalized payload keeps provider-only details in `metadata` with a stable Sigil prefix. Current extensions:
 
 - `sigil.sdk.name`: SDK identity marker (`sdk-go`, `sdk-js`, `sdk-python`, `sdk-java`, `sdk-dotnet`).
+- `sigil.user.id`: end-user ID mirrored from typed SDK generation fields when set.
 - `sigil.gen_ai.request.thinking.budget_tokens`: provider thinking budget (request side).
 - `sigil.gen_ai.request.thinking.level`: provider thinking level when available (Gemini).
 - `sigil.gen_ai.usage.tool_use_prompt_tokens`: Gemini `toolUsePromptTokenCount`.

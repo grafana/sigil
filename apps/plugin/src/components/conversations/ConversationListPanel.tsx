@@ -66,6 +66,14 @@ function conversationTitleForDisplay(conversation: ConversationSearchResult): st
   return conversation.conversation_id;
 }
 
+function conversationUserIDForDisplay(conversation: ConversationSearchResult): string {
+  const userID = conversation.user_id?.trim() ?? '';
+  if (userID.length > 0) {
+    return userID;
+  }
+  return '';
+}
+
 const MAX_VISIBLE_PILLS = 3;
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -505,6 +513,7 @@ export default function ConversationListPanel({
                 const selected = conversation.conversation_id === selectedConversationId;
                 const displayTitle = conversationTitleForDisplay(conversation);
                 const hasTitle = displayTitle !== conversation.conversation_id;
+                const userID = conversationUserIDForDisplay(conversation);
                 return (
                   <tr
                     key={conversation.conversation_id}
@@ -531,13 +540,30 @@ export default function ConversationListPanel({
                               {displayTitle}
                               <br />
                               {conversation.conversation_id}
+                              {userID.length > 0 && (
+                                <>
+                                  <br />
+                                  {userID}
+                                </>
+                              )}
                             </>
                           ) : (
-                            conversation.conversation_id
+                            <>
+                              {conversation.conversation_id}
+                              {userID.length > 0 && (
+                                <>
+                                  <br />
+                                  {userID}
+                                </>
+                              )}
+                            </>
                           )
                         }
                       >
-                        <span>{displayTitle}</span>
+                        <div className={styles.idCellStack}>
+                          <span className={styles.idCellPrimary}>{displayTitle}</span>
+                          {userID.length > 0 && <span className={styles.idCellSecondary}>{userID}</span>}
+                        </div>
                       </Tooltip>
                     </td>
                   </tr>
@@ -590,6 +616,7 @@ export default function ConversationListPanel({
               const selected = conversation.conversation_id === selectedConversationId;
               const displayTitle = conversationTitleForDisplay(conversation);
               const hasTitle = displayTitle !== conversation.conversation_id;
+              const userID = conversationUserIDForDisplay(conversation);
               const rating = conversation.rating_summary;
               return (
                 <tr
@@ -616,6 +643,11 @@ export default function ConversationListPanel({
                         {hasTitle && (
                           <Tooltip content={conversation.conversation_id}>
                             <span className={styles.idCellSecondary}>{truncateId(conversation.conversation_id)}</span>
+                          </Tooltip>
+                        )}
+                        {userID.length > 0 && (
+                          <Tooltip content={userID}>
+                            <span className={styles.idCellSecondary}>{userID}</span>
                           </Tooltip>
                         )}
                       </div>
