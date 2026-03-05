@@ -15,6 +15,7 @@ import (
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	"github.com/grafana/sigil/sigil/internal/eval/predefined"
 	"github.com/grafana/sigil/sigil/internal/tenantauth"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 func TestEvaluatorCRUDHTTP(t *testing.T) {
@@ -57,6 +58,40 @@ func TestEvaluatorCRUDHTTP(t *testing.T) {
 	missingResp := doRequest(mux, http.MethodGet, "/api/v1/eval/evaluators/custom.helpfulness", "")
 	if missingResp.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 after delete, got %d body=%s", missingResp.Code, missingResp.Body.String())
+	}
+}
+
+func TestEvalControlMetricsByTenant(t *testing.T) {
+	mux, _, _ := newEvalHTTPEnv(t)
+	before := testutil.ToFloat64(evalControlRequestsTotal.WithLabelValues("fake", "evaluators", "GET", "2xx"))
+
+	listResp := doRequest(mux, http.MethodGet, "/api/v1/eval/evaluators", "")
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 list evaluators, got %d body=%s", listResp.Code, listResp.Body.String())
+	}
+
+	after := testutil.ToFloat64(evalControlRequestsTotal.WithLabelValues("fake", "evaluators", "GET", "2xx"))
+	if delta := after - before; delta != 1 {
+		t.Fatalf("expected one metrics increment, got %v", delta)
+	}
+}
+
+func TestEvalControlMetricsUnauthorizedUsesUnknownTenant(t *testing.T) {
+	store := newMemoryControlStore()
+	service := NewService(store, nil)
+	mux := http.NewServeMux()
+	RegisterHTTPRoutes(mux, service, nil, nil, nil)
+
+	before := testutil.ToFloat64(evalControlRequestsTotal.WithLabelValues("unknown", "judge_providers", "GET", "4xx"))
+
+	providersResp := doRequest(mux, http.MethodGet, "/api/v1/eval/judge/providers", "")
+	if providersResp.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 providers without tenant context, got %d body=%s", providersResp.Code, providersResp.Body.String())
+	}
+
+	after := testutil.ToFloat64(evalControlRequestsTotal.WithLabelValues("unknown", "judge_providers", "GET", "4xx"))
+	if delta := after - before; delta != 1 {
+		t.Fatalf("expected one metrics increment, got %v", delta)
 	}
 }
 
