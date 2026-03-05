@@ -308,6 +308,44 @@ func parseSearchTagValuesPath(path string, escapedPath string, routePrefix strin
 	return tag, true
 }
 
+var hopByHopResponseHeaders = map[string]struct{}{
+	"Connection":          {},
+	"Keep-Alive":          {},
+	"Proxy-Authenticate":  {},
+	"Proxy-Authorization": {},
+	"Te":                  {},
+	"Trailer":             {},
+	"Transfer-Encoding":   {},
+	"Upgrade":             {},
+}
+
+func isConnectionHeader(name string, connectionValues []string) bool {
+	for _, raw := range connectionValues {
+		for _, token := range strings.Split(raw, ",") {
+			if http.CanonicalHeaderKey(strings.TrimSpace(token)) == name {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func copyUpstreamResponseHeaders(dst http.Header, src http.Header) {
+	connectionValues := src.Values("Connection")
+	for key, values := range src {
+		canonical := http.CanonicalHeaderKey(key)
+		if _, skip := hopByHopResponseHeaders[canonical]; skip {
+			continue
+		}
+		if isConnectionHeader(canonical, connectionValues) {
+			continue
+		}
+		for _, value := range values {
+			dst.Add(key, value)
+		}
+	}
+}
+
 func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string, method string) {
 	if req.Method != method {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -341,10 +379,6 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 		return
 	}
 	proxyReq.Header = req.Header.Clone()
-	// Remove Accept-Encoding so the upstream always returns uncompressed
-	// responses. Without this the upstream may gzip the body, but
-	// our proxy does not forward Content-Encoding, causing garbled output.
-	proxyReq.Header.Del("Accept-Encoding")
 	if a.apiAuthToken != "" {
 		proxyReq.SetBasicAuth(a.tenantID, a.apiAuthToken)
 	}
@@ -366,12 +400,10 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 		}
 	}()
 
-	// Forward the upstream Content-Type when available; fall back to JSON.
-	ct := resp.Header.Get("Content-Type")
-	if ct == "" {
-		ct = "application/json"
+	copyUpstreamResponseHeaders(w.Header(), resp.Header)
+	if w.Header().Get("Content-Type") == "" {
+		w.Header().Set("Content-Type", "application/json")
 	}
-	w.Header().Set("Content-Type", ct)
 	w.WriteHeader(resp.StatusCode)
 	span.SetAttributes(attribute.Int("http.response.status_code", resp.StatusCode))
 	if resp.StatusCode >= http.StatusInternalServerError {
@@ -414,7 +446,6 @@ func (a *App) handleGrafanaProxy(w http.ResponseWriter, req *http.Request, path 
 	}
 
 	proxyReq.Header = req.Header.Clone()
-	proxyReq.Header.Del("Accept-Encoding")
 	if token := strings.TrimSpace(a.grafanaServiceAccountToken); token != "" {
 		proxyReq.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -433,11 +464,10 @@ func (a *App) handleGrafanaProxy(w http.ResponseWriter, req *http.Request, path 
 		}
 	}()
 
-	ct := resp.Header.Get("Content-Type")
-	if ct == "" {
-		ct = "application/json"
+	copyUpstreamResponseHeaders(w.Header(), resp.Header)
+	if w.Header().Get("Content-Type") == "" {
+		w.Header().Set("Content-Type", "application/json")
 	}
-	w.Header().Set("Content-Type", ct)
 	w.WriteHeader(resp.StatusCode)
 	span.SetAttributes(attribute.Int("http.response.status_code", resp.StatusCode))
 	if resp.StatusCode >= http.StatusInternalServerError {
