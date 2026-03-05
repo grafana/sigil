@@ -176,7 +176,6 @@ describe('AgentDetailPage', () => {
       </MemoryRouter>
     );
 
-    await screen.findByText('Prompt and context analysis');
     await waitFor(() => expect(dataSource.lookupAgentRating).toHaveBeenCalled());
     expect(screen.queryByText('Agent rating failed')).not.toBeInTheDocument();
   });

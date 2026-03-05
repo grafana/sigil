@@ -58,10 +58,17 @@ const getStyles = (theme: GrafanaTheme2) => ({
     background: theme.colors.background.secondary,
     overflow: 'visible',
   }),
+  embeddedRoot: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    height: '100%',
+    minHeight: 280,
+  }),
   body: css({
     display: 'flex',
     flexDirection: 'column' as const,
     flex: 1,
+    minHeight: 0,
     gap: theme.spacing(1.5),
     padding: theme.spacing(1.5),
   }),
@@ -1105,7 +1112,7 @@ export default function AgentRatingPanel({
   );
 
   return (
-    <div className={embedded ? undefined : styles.panel}>
+    <div className={embedded ? styles.embeddedRoot : styles.panel}>
       {panelBody}
       {selectedSuggestion && (
         <div className={styles.modalBackdrop} role="presentation" onClick={closeSuggestionModal}>

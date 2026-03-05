@@ -112,6 +112,25 @@ const getStyles = (theme: GrafanaTheme2) => ({
       gridTemplateColumns: '1fr',
     },
   }),
+  heroStatsPanel: css({
+    display: 'flex',
+    alignItems: 'stretch',
+    justifyContent: 'flex-end',
+    minWidth: 340,
+    '@media (max-width: 1200px)': {
+      display: 'none',
+    },
+  }),
+  heroStatsGrid: css({
+    borderRadius: theme.shape.radius.default,
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(140px, 1fr))',
+    gap: theme.spacing(1.25, 2),
+    alignContent: 'start',
+    justifyItems: 'start',
+    width: 'min(100%, 440px)',
+    padding: theme.spacing(0.5, 0),
+  }),
   heroGlow: css({
     pointerEvents: 'none' as const,
     position: 'absolute' as const,
@@ -237,6 +256,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
   stretchPanelBody: css({
     flex: 1,
   }),
+  statsFallbackPanel: css({
+    '@media (min-width: 1201px)': {
+      display: 'none',
+    },
+  }),
   promptPanelsRow: css({
     display: 'grid',
     gap: theme.spacing(2),
@@ -247,10 +271,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'grid',
     gap: theme.spacing(2),
     gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
-    alignItems: 'start',
+    alignItems: 'stretch',
   }),
   sectionBlock: css({
     minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    minHeight: 0,
   }),
   sectionTitle: css({
     marginBottom: theme.spacing(1),
@@ -521,7 +548,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   systemPrompt: css({
     margin: 0,
-    maxHeight: 400,
+    minHeight: 280,
+    maxHeight: 580,
+    height: '100%',
     overflow: 'auto',
     whiteSpace: 'pre-wrap' as const,
     borderRadius: theme.shape.radius.default,
@@ -535,13 +564,19 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   systemPromptPreview: css({
     margin: 0,
-    maxHeight: 400,
+    minHeight: 280,
+    maxHeight: 580,
+    height: '100%',
     overflow: 'auto',
     borderRadius: theme.shape.radius.default,
     border: `1px solid ${theme.colors.border.weak}`,
     background: theme.colors.background.primary,
     padding: theme.spacing(1.5),
     color: theme.colors.text.primary,
+  }),
+  systemPromptContent: css({
+    flex: 1,
+    minHeight: 0,
   }),
   modelChipsRow: css({
     display: 'flex',
@@ -1366,6 +1401,66 @@ export default function AgentDetailPage({
                 </div>
               )}
             </div>
+            <div className={styles.heroStatsPanel}>
+              <div className={styles.heroStatsGrid}>
+                <Tooltip content="Total generations recorded for this agent version." placement="top">
+                  <div>
+                    <TopStat label="GENERATIONS" value={detail.generation_count} loading={false} />
+                  </div>
+                </Tooltip>
+                <Tooltip content="Estimated tokens consumed by the system prompt in this version." placement="top">
+                  <div>
+                    <TopStat label="PROMPT TOKENS" value={detail.token_estimate.system_prompt} loading={false} />
+                  </div>
+                </Tooltip>
+                <Tooltip content="Estimated tokens consumed by all tool schemas combined in this version." placement="top">
+                  <div>
+                    <TopStat label="TOOLS TOKENS" value={detail.token_estimate.tools_total} loading={false} />
+                  </div>
+                </Tooltip>
+                <Tooltip
+                  content="Sum of system prompt and tool tokens — the baseline context cost per generation."
+                  placement="top"
+                >
+                  <div>
+                    <TopStat label="TOTAL TOKENS" value={detail.token_estimate.total} loading={false} />
+                  </div>
+                </Tooltip>
+                <Tooltip content="Duration between first and last recorded generations for this version." placement="top">
+                  <div>
+                    <TopStat
+                      label="AGE"
+                      value={Math.max(0, toTimestampMs(detail.last_seen_at) - toTimestampMs(detail.first_seen_at))}
+                      displayValue={formatDurationCompact(detail.first_seen_at, detail.last_seen_at)}
+                      loading={false}
+                    />
+                  </div>
+                </Tooltip>
+                <Tooltip content="The earliest time a generation was recorded for this agent version." placement="top">
+                  <div>
+                    <TopStat
+                      label="FIRST SEEN"
+                      value={toTimestampMs(detail.first_seen_at)}
+                      displayValue={formatDate(detail.first_seen_at)}
+                      loading={false}
+                    />
+                  </div>
+                </Tooltip>
+                <Tooltip
+                  content="The most recent time any generation was recorded for this agent version."
+                  placement="top"
+                >
+                  <div>
+                    <TopStat
+                      label="LAST SEEN"
+                      value={toTimestampMs(detail.last_seen_at)}
+                      displayValue={formatDate(detail.last_seen_at)}
+                      loading={false}
+                    />
+                  </div>
+                </Tooltip>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1505,7 +1600,7 @@ export default function AgentDetailPage({
           </div>
         </div>
 
-        <div className={cx(styles.stretchPanel, styles.stretchPanelBody)}>
+        <div className={cx(styles.stretchPanel, styles.stretchPanelBody, styles.statsFallbackPanel)}>
           <div className={styles.statsGrid}>
             <Tooltip content="Total generations recorded for this agent version." placement="top">
               <div>
@@ -1626,26 +1721,25 @@ export default function AgentDetailPage({
                   </select>
                 )}
               </span>
-              {detail.system_prompt.length > 0 ? (
-                tokenizedSections['system'] && encode && decode ? (
-                  <div className={styles.systemPrompt}>
-                    <TokenizedText text={detail.system_prompt} encode={encode} decode={decode} />
-                  </div>
-                ) : systemPromptView === 'preview' ? (
-                  <div className={styles.systemPromptPreview}>
-                    <MarkdownPreview markdown={detail.system_prompt} />
-                  </div>
+              <div className={styles.systemPromptContent}>
+                {detail.system_prompt.length > 0 ? (
+                  tokenizedSections['system'] && encode && decode ? (
+                    <div className={styles.systemPrompt}>
+                      <TokenizedText text={detail.system_prompt} encode={encode} decode={decode} />
+                    </div>
+                  ) : systemPromptView === 'preview' ? (
+                    <div className={styles.systemPromptPreview}>
+                      <MarkdownPreview markdown={detail.system_prompt} />
+                    </div>
+                  ) : (
+                    <pre className={styles.systemPrompt}>{detail.system_prompt}</pre>
+                  )
                 ) : (
-                  <pre className={styles.systemPrompt}>{detail.system_prompt}</pre>
-                )
-              ) : (
-                <pre className={styles.systemPrompt}>No system prompt recorded.</pre>
-              )}
+                  <pre className={styles.systemPrompt}>No system prompt recorded.</pre>
+                )}
+              </div>
             </div>
             <div className={styles.sectionBlock}>
-              <div className={styles.sectionTitle}>
-                <Text weight="medium">Prompt and context analysis</Text>
-              </div>
               <AgentRatingPanel
                 agentName={agentName}
                 version={activeVersion}
