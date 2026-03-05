@@ -159,12 +159,12 @@ describe('buildLabelSelector', () => {
 });
 
 describe('computeStep', () => {
-  it('returns minimum of 15 for short ranges', () => {
-    expect(computeStep(0, 100)).toBe(15);
+  it('returns minimum of 60 for short ranges', () => {
+    expect(computeStep(0, 100)).toBe(60);
   });
 
   it('computes step for longer ranges', () => {
-    expect(computeStep(0, 3600)).toBe(15);
+    expect(computeStep(0, 3600)).toBe(60);
     expect(computeStep(0, 86400)).toBe(345);
   });
 });
