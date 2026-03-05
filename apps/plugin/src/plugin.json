@@ -7,7 +7,7 @@
   "executable": "gpx_sigil_app",
   "info": {
     "keywords": ["app", "ai", "observability", "genai"],
-    "description": "Observe what happened after you cast a prompt spell.",
+    "description": "Modern telemetry stack for AI tech",
     "author": {
       "name": "Grafana"
     },
