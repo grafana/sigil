@@ -1691,11 +1691,11 @@ func TestNewAppHandlesNumericTenantID(t *testing.T) {
 
 func TestParseAuthToken(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		wantID   string
-		wantTok  string
-		wantOK   bool
+		name    string
+		input   string
+		wantID  string
+		wantTok string
+		wantOK  bool
 	}{
 		{name: "combined format", input: "27821:secret-token", wantID: "27821", wantTok: "secret-token", wantOK: true},
 		{name: "combined with whitespace", input: " 27821:secret-token ", wantID: "27821", wantTok: "secret-token", wantOK: true},
