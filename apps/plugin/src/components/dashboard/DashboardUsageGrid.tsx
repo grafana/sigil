@@ -14,6 +14,7 @@ export type DashboardUsageGridProps = {
   from: number;
   to: number;
   timeRange: TimeRange;
+  onTimeRangeChange: (timeRange: TimeRange) => void;
 };
 
 type UsageSubView = 'tokens' | 'cache';

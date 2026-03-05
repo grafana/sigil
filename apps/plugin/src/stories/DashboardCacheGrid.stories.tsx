@@ -308,6 +308,7 @@ export const Default = {
       from={from}
       to={to}
       timeRange={timeRange}
+      onTimeRangeChange={() => {}}
     />
   ),
 };
@@ -322,6 +323,7 @@ export const BreakdownByProvider = {
       from={from}
       to={to}
       timeRange={timeRange}
+      onTimeRangeChange={() => {}}
     />
   ),
 };

@@ -449,7 +449,12 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
         />
       </div>
 
-      <ConversationTimelineHistogram conversations={conversations} timeRange={timeRange} loading={loading} />
+      <ConversationTimelineHistogram
+        conversations={conversations}
+        timeRange={timeRange}
+        loading={loading}
+        onTimeRangeChange={setTimeRange}
+      />
 
       <div className={styles.listPanel}>
         <ConversationListPanel

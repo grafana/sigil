@@ -188,6 +188,7 @@ export const Default = {
       from={from}
       to={to}
       timeRange={timeRange}
+      onTimeRangeChange={() => {}}
     />
   ),
 };
@@ -202,6 +203,7 @@ export const WithBreakdown = {
       from={from}
       to={to}
       timeRange={timeRange}
+      onTimeRangeChange={() => {}}
     />
   ),
 };

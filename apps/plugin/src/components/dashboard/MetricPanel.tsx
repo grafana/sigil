@@ -4,6 +4,7 @@ import { PanelChrome, useStyles2 } from '@grafana/ui';
 import { PanelRenderer } from '@grafana/runtime';
 import {
   LoadingState,
+  type AbsoluteTimeRange,
   type DataFrame,
   type FieldConfigSource,
   type GrafanaTheme2,
@@ -20,6 +21,7 @@ export type MetricPanelProps = {
   error?: string;
   height: number;
   timeRange: TimeRange;
+  onChangeTimeRange?: (timeRange: AbsoluteTimeRange) => void;
   options?: Record<string, unknown>;
   fieldConfig?: FieldConfigSource;
   actions?: React.ReactNode;
@@ -35,6 +37,7 @@ export function MetricPanel({
   error,
   height,
   timeRange,
+  onChangeTimeRange,
   options = {},
   fieldConfig = { defaults: {}, overrides: [] },
   actions,
@@ -113,6 +116,7 @@ export function MetricPanel({
               timeZone="browser"
               onOptionsChange={onOptionsChange}
               onFieldConfigChange={onFieldConfigChange}
+              onChangeTimeRange={onChangeTimeRange}
             />
           )}
         </PanelChrome>

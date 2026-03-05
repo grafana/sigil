@@ -842,7 +842,12 @@ export default function AgentsPage({
                     </div>
                   </div>
 
-                  <AgentActivityTimeline items={items} timeRange={timeRange} loading={loading} />
+                  <AgentActivityTimeline
+                    items={items}
+                    timeRange={timeRange}
+                    loading={loading}
+                    onTimeRangeChange={setTimeRange}
+                  />
 
                   <div className={styles.heroBody}>
                     <div className={styles.heroSection}>

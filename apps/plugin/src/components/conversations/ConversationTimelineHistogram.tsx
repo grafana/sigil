@@ -1,9 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { css } from '@emotion/css';
 import { useStyles2 } from '@grafana/ui';
 import {
+  dateTime,
   FieldType,
   ThresholdsMode,
+  type AbsoluteTimeRange,
   type DataFrame,
   type FieldConfigSource,
   type GrafanaTheme2,
@@ -137,12 +139,14 @@ export type ConversationTimelineHistogramProps = {
   conversations: ConversationSearchResult[];
   timeRange: TimeRange;
   loading: boolean;
+  onTimeRangeChange?: (timeRange: TimeRange) => void;
 };
 
 export function ConversationTimelineHistogram({
   conversations,
   timeRange,
   loading,
+  onTimeRangeChange,
 }: ConversationTimelineHistogramProps) {
   const styles = useStyles2(getStyles);
 
@@ -155,6 +159,18 @@ export function ConversationTimelineHistogram({
     return buildDataFrames(buckets);
   }, [conversations, fromMs, toMs, bucketCount]);
 
+  const handlePanelTimeRangeChange = useCallback(
+    (abs: AbsoluteTimeRange) => {
+      if (!onTimeRangeChange) {
+        return;
+      }
+      const f = dateTime(abs.from);
+      const t = dateTime(abs.to);
+      onTimeRangeChange({ from: f, to: t, raw: { from: f.toISOString(), to: t.toISOString() } });
+    },
+    [onTimeRangeChange]
+  );
+
   return (
     <div className={styles.container}>
       <MetricPanel
@@ -164,6 +180,7 @@ export function ConversationTimelineHistogram({
         loading={loading}
         height={HISTOGRAM_HEIGHT}
         timeRange={timeRange}
+        onChangeTimeRange={onTimeRangeChange ? handlePanelTimeRangeChange : undefined}
         options={panelOptions}
         fieldConfig={fieldConfig}
       />
