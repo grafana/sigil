@@ -240,4 +240,28 @@ describe('LandingTopBar assistant context', () => {
       })
     );
   });
+
+  it('submits prompt when pressing Enter in the assistant input', async () => {
+    await act(async () => {
+      render(
+        <MemoryRouter>
+          <LandingTopBar assistantOrigin="test-origin" />
+        </MemoryRouter>
+      );
+    });
+
+    const input = screen.getByPlaceholderText('Ask me anything about Sigil');
+    fireEvent.change(input, {
+      target: { value: 'Tell me about Sigil' },
+    });
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', charCode: 13 });
+
+    expect(mockOpenAssistant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        origin: 'test-origin',
+        autoSend: true,
+        prompt: 'Tell me about Sigil',
+      })
+    );
+  });
 });

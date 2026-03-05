@@ -399,6 +399,17 @@ export function LandingTopBar({
     openAssistantWithPrompt(assistantInput);
   };
 
+  const handleAssistantInputKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== 'Enter' || event.shiftKey) {
+      return;
+    }
+    event.preventDefault();
+    if (assistantInput.trim().length === 0) {
+      return;
+    }
+    openAssistant();
+  };
+
   useEffect(() => {
     let cancelled = false;
 
@@ -786,10 +797,20 @@ export function LandingTopBar({
                   ))}
                 </ul>
               </div>
-              <form className={styles.assistantRowDash}>
+              <form
+                className={styles.assistantRowDash}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (assistantInput.trim().length === 0) {
+                    return;
+                  }
+                  openAssistant();
+                }}
+              >
                 <textarea
                   value={assistantInput}
                   onChange={(event) => setAssistantInput(event.currentTarget.value)}
+                  onKeyDown={handleAssistantInputKeyDown}
                   placeholder="Ask me anything about Sigil"
                   className={styles.assistantInput}
                   rows={3}
@@ -803,7 +824,7 @@ export function LandingTopBar({
                   className={styles.askSubmitButton}
                   disabled={assistantInput.trim().length === 0}
                   onClick={openAssistant}
-                  type="button"
+                  type="submit"
                 />
               </form>
             </div>
