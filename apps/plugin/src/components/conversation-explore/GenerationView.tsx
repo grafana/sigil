@@ -155,11 +155,11 @@ function UsageChips({ generation }: { generation: GenerationDetail }) {
 
   return (
     <span className={styles.usageChips}>
-      {`↓${formatNumber(input)}  ↑${formatNumber(output)}`}
+      {`in ${formatNumber(input)} / out ${formatNumber(output)}`}
       {hasCache && (
         <>
           <span className={styles.usageSep}>│</span>
-          {`cache ↓${formatNumber(cacheR)}  ↑${formatNumber(cacheW)}`}
+          {`cache read ${formatNumber(cacheR)} / write ${formatNumber(cacheW)}`}
         </>
       )}
       {reasoning > 0 && (

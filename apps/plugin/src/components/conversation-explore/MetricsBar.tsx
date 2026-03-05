@@ -88,7 +88,11 @@ export default function MetricsBar({
         <>
           <div className={styles.separator} />
           <Tooltip
-            content={`In: ${formatTokenCount(tokenSummary.inputTokens)} · Out: ${formatTokenCount(tokenSummary.outputTokens)}${tokenSummary.cacheReadTokens > 0 ? ` · Cache: ${formatTokenCount(tokenSummary.cacheReadTokens)}` : ''}`}
+            content={`In: ${formatTokenCount(tokenSummary.inputTokens)} · Out: ${formatTokenCount(tokenSummary.outputTokens)}${
+              tokenSummary.cacheReadTokens > 0 || tokenSummary.cacheWriteTokens > 0
+                ? ` · Cache read: ${formatTokenCount(tokenSummary.cacheReadTokens)} · Cache write: ${formatTokenCount(tokenSummary.cacheWriteTokens)}`
+                : ''
+            }`}
             placement="bottom"
           >
             <div className={styles.metric}>
