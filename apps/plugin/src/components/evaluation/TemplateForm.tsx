@@ -261,7 +261,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
           value={templateId}
           onChange={(e) => setTemplateId(e.currentTarget.value)}
           onBlur={() => setTouched(true)}
-          placeholder="e.g. my-org.helpfulness"
+          placeholder="e.g. my_org.helpfulness"
           width={40}
         />
       </Field>
