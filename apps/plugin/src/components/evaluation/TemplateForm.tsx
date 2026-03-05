@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
 import { Button, Field, Input, Select, Stack, Switch, Text, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
@@ -14,6 +14,8 @@ import {
   type ScoreType,
 } from '../../evaluation/types';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../../evaluation/api';
+import { focusFirstInvalidField } from '../../evaluation/focusFirstInvalid';
+import { parseHeuristicStringListInput } from '../../evaluation/heuristicConfig';
 import { isValidResourceID, INVALID_ID_MESSAGE } from '../../evaluation/utils';
 import { getSectionTitleStyles } from './sectionStyles';
 
@@ -184,6 +186,8 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
   const [schemaJson, setSchemaJson] = useState('{}');
   const [pattern, setPattern] = useState('');
   const [notEmpty, setNotEmpty] = useState(false);
+  const [contains, setContains] = useState('');
+  const [notContains, setNotContains] = useState('');
   const [minLength, setMinLength] = useState<number | ''>('');
   const [maxLength, setMaxLength] = useState<number | ''>('');
 
@@ -196,6 +200,16 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
   const [outputMax, setOutputMax] = useState<number | ''>('');
   const [passMatch, setPassMatch] = useState('');
   const [passValue, setPassValue] = useState<'true' | 'false' | ''>('');
+  const templateIdFieldRef = useRef<HTMLDivElement>(null);
+  const outputKeyFieldRef = useRef<HTMLDivElement>(null);
+  const regexPatternFieldRef = useRef<HTMLDivElement>(null);
+  const maxTokensFieldRef = useRef<HTMLDivElement>(null);
+  const temperatureFieldRef = useRef<HTMLDivElement>(null);
+  const schemaFieldRef = useRef<HTMLDivElement>(null);
+  const heuristicFieldRef = useRef<HTMLDivElement>(null);
+  const heuristicMaxLengthFieldRef = useRef<HTMLDivElement>(null);
+  const passThresholdFieldRef = useRef<HTMLDivElement>(null);
+  const outputMaxFieldRef = useRef<HTMLDivElement>(null);
 
   const buildConfig = (): Record<string, unknown> => {
     switch (kind) {
@@ -215,6 +229,8 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
       case 'heuristic':
         return {
           not_empty: notEmpty,
+          contains: parseHeuristicStringListInput(contains),
+          not_contains: parseHeuristicStringListInput(notContains),
           min_length: minLength === '' ? undefined : minLength,
           max_length: maxLength === '' ? undefined : maxLength,
         };
@@ -253,6 +269,8 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
     schemaJson,
     pattern,
     notEmpty,
+    contains,
+    notContains,
     minLength,
     maxLength,
     outputKey,
@@ -275,8 +293,9 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
   const regexPatternError = isRegexPatternEmpty ? 'Pattern is required' : undefined;
   const isMaxTokensInvalid = kind === 'llm_judge' && (!Number.isInteger(maxTokens) || maxTokens < 1);
   const maxTokensError = isMaxTokensInvalid ? 'Must be an integer greater than 0' : undefined;
-  const isTemperatureInvalid = kind === 'llm_judge' && (!Number.isFinite(temperature) || temperature < 0);
-  const temperatureError = isTemperatureInvalid ? 'Must be 0 or greater' : undefined;
+  const isTemperatureInvalid =
+    kind === 'llm_judge' && (!Number.isFinite(temperature) || temperature < 0 || temperature > 2);
+  const temperatureError = isTemperatureInvalid ? 'Must be between 0 and 2' : undefined;
   let schemaParseError = '';
   if (kind === 'json_schema') {
     try {
@@ -286,10 +305,22 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
     }
   }
   const isHeuristicRangeInvalid =
-    kind === 'heuristic' && minLength !== '' && maxLength !== '' && Number(minLength) > Number(maxLength);
-  const heuristicMaxLengthError = isHeuristicRangeInvalid ? 'Must be greater than or equal to Min length' : undefined;
-  const isOutputRangeInvalid = outputType === 'number' && outputMin !== '' && outputMax !== '' && outputMin > outputMax;
-  const outputMaxError = isOutputRangeInvalid ? 'Must be greater than or equal to Min' : undefined;
+    kind === 'heuristic' && minLength !== '' && maxLength !== '' && Number(minLength) >= Number(maxLength);
+  const heuristicMaxLengthError = isHeuristicRangeInvalid ? 'Must be greater than Min length' : undefined;
+  const isHeuristicEmpty =
+    kind === 'heuristic' &&
+    !notEmpty &&
+    parseHeuristicStringListInput(contains) == null &&
+    parseHeuristicStringListInput(notContains) == null &&
+    minLength === '' &&
+    maxLength === '';
+  const heuristicConfigError = isHeuristicEmpty ? 'Add at least one heuristic rule' : undefined;
+  const isPassThresholdInvalid =
+    outputType === 'number' && passThreshold !== '' && outputMin !== '' && passThreshold < outputMin;
+  const passThresholdError = isPassThresholdInvalid ? 'Must be greater than or equal to Min' : undefined;
+  const isOutputRangeInvalid =
+    outputType === 'number' && outputMin !== '' && outputMax !== '' && outputMin >= outputMax;
+  const outputMaxError = isOutputRangeInvalid ? 'Must be greater than Min' : undefined;
 
   const showIdError = touched && (isIdEmpty || isIdInvalid);
   const showOutputKeyError = touched && isOutputKeyEmpty;
@@ -297,7 +328,9 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
   const showMaxTokensError = touched && isMaxTokensInvalid;
   const showTemperatureError = touched && isTemperatureInvalid;
   const showSchemaError = touched && schemaParseError !== '';
+  const showHeuristicConfigError = touched && isHeuristicEmpty;
   const showHeuristicMaxLengthError = touched && isHeuristicRangeInvalid;
+  const showPassThresholdError = touched && isPassThresholdInvalid;
   const showOutputMaxError = touched && isOutputRangeInvalid;
 
   const handleSubmit = () => {
@@ -310,9 +343,32 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
       isMaxTokensInvalid ||
       isTemperatureInvalid ||
       schemaParseError !== '' ||
+      isHeuristicEmpty ||
       isHeuristicRangeInvalid ||
+      isPassThresholdInvalid ||
       isOutputRangeInvalid
     ) {
+      if (isIdEmpty || isIdInvalid) {
+        focusFirstInvalidField(templateIdFieldRef.current);
+      } else if (isOutputKeyEmpty) {
+        focusFirstInvalidField(outputKeyFieldRef.current);
+      } else if (isRegexPatternEmpty) {
+        focusFirstInvalidField(regexPatternFieldRef.current);
+      } else if (isMaxTokensInvalid) {
+        focusFirstInvalidField(maxTokensFieldRef.current);
+      } else if (isTemperatureInvalid) {
+        focusFirstInvalidField(temperatureFieldRef.current);
+      } else if (schemaParseError !== '') {
+        focusFirstInvalidField(schemaFieldRef.current);
+      } else if (isHeuristicEmpty) {
+        focusFirstInvalidField(heuristicFieldRef.current);
+      } else if (isHeuristicRangeInvalid) {
+        focusFirstInvalidField(heuristicMaxLengthFieldRef.current);
+      } else if (isPassThresholdInvalid) {
+        focusFirstInvalidField(passThresholdFieldRef.current);
+      } else if (isOutputRangeInvalid) {
+        focusFirstInvalidField(outputMaxFieldRef.current);
+      }
       return;
     }
 
@@ -356,7 +412,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
           </div>
           <div className={styles.twoColumnGrid}>
             <Field label="Template ID" description="Unique identifier for this template." required>
-              <>
+              <div ref={templateIdFieldRef}>
                 <Input
                   className={styles.compactControl}
                   value={templateId}
@@ -371,7 +427,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
                     </Text>
                   </div>
                 )}
-              </>
+              </div>
             </Field>
             <Field label="Kind" description="Select how this template scores a generation.">
               <Select<EvaluatorKind>
@@ -418,7 +474,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
               </Text>
             </div>
             <div className={styles.twoColumnGrid}>
-              <Field label="Provider">
+              <Field label="Provider" description="Optional. Override the default judge provider.">
                 <Select<string>
                   className={styles.compactControl}
                   options={providerOptions}
@@ -432,7 +488,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
                   placeholder="Default"
                 />
               </Field>
-              <Field label="Model">
+              <Field label="Model" description="Optional. Override the default judge model.">
                 <Select<string>
                   className={styles.compactControl}
                   options={modelOptions}
@@ -444,7 +500,10 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
                 />
               </Field>
             </div>
-            <Field label="System prompt" description="Instructions for the judge model.">
+            <Field
+              label="System prompt"
+              description="Optional. Instructions for the judge model. Uses the default prompt when blank."
+            >
               <textarea
                 className={styles.textarea}
                 value={systemPrompt}
@@ -455,7 +514,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
             </Field>
             <Field
               label="User prompt"
-              description="Supports {{input}}, {{output}}, {{generation_id}}, {{conversation_id}}."
+              description="Optional. Supports {{input}}, {{output}}, {{generation_id}}, {{conversation_id}}. Uses the default prompt when blank."
             >
               <textarea
                 className={styles.textarea}
@@ -467,7 +526,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
             </Field>
             <div className={styles.twoColumnGrid}>
               <Field label="Max tokens">
-                <>
+                <div ref={maxTokensFieldRef}>
                   <Input
                     className={styles.numericControl}
                     type="number"
@@ -481,10 +540,10 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
                       </Text>
                     </div>
                   )}
-                </>
+                </div>
               </Field>
               <Field label="Temperature">
-                <>
+                <div ref={temperatureFieldRef}>
                   <Input
                     className={styles.numericControl}
                     type="number"
@@ -498,7 +557,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
                       </Text>
                     </div>
                   )}
-                </>
+                </div>
               </Field>
             </div>
           </div>
@@ -516,8 +575,8 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
                 Provide the JSON schema used to validate each generation result.
               </Text>
             </div>
-            <Field label="Schema" description="JSON schema for validation.">
-              <>
+            <Field label="Schema" description="Optional. JSON schema for validation. Leave blank to use {}.">
+              <div ref={schemaFieldRef}>
                 <textarea
                   className={`${styles.textarea} ${styles.codeTextarea}`}
                   value={schemaJson}
@@ -532,7 +591,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
                     </Text>
                   </div>
                 )}
-              </>
+              </div>
             </Field>
           </div>
         </div>
@@ -550,7 +609,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
               </Text>
             </div>
             <Field label="Pattern" description="Regex pattern to match.">
-              <>
+              <div ref={regexPatternFieldRef}>
                 <Input
                   className={styles.compactControl}
                   value={pattern}
@@ -564,7 +623,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
                     </Text>
                   </div>
                 )}
-              </>
+              </div>
             </Field>
           </div>
         </div>
@@ -581,11 +640,41 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
                 Define the simple rules used to check presence and length for each generation result.
               </Text>
             </div>
-            <Field className={styles.switchField} label="Not empty" description="Require non-empty output.">
-              <Switch value={notEmpty} onChange={(e) => setNotEmpty(e.currentTarget.checked)} />
+            {showHeuristicConfigError && heuristicConfigError && (
+              <div className={styles.validationMessage}>
+                <Text variant="bodySmall" color="error">
+                  {heuristicConfigError}
+                </Text>
+              </div>
+            )}
+            <Field className={styles.switchField} label="Not empty" description="Optional. Require non-empty output.">
+              <div ref={heuristicFieldRef}>
+                <Switch value={notEmpty} onChange={(e) => setNotEmpty(e.currentTarget.checked)} />
+              </div>
+            </Field>
+            <Field label="Contains" description="Optional. Require each phrase to appear. Use one phrase per line.">
+              <textarea
+                className={`${styles.textarea} ${styles.descriptionTextarea}`}
+                value={contains}
+                onChange={(e) => setContains(e.currentTarget.value)}
+                placeholder={'e.g. refund requested\naccount issue'}
+                rows={3}
+              />
+            </Field>
+            <Field
+              label="Not contains"
+              description="Optional. Reject output if any phrase appears. Use one phrase per line."
+            >
+              <textarea
+                className={`${styles.textarea} ${styles.descriptionTextarea}`}
+                value={notContains}
+                onChange={(e) => setNotContains(e.currentTarget.value)}
+                placeholder={'e.g. profanity\nunsafe advice'}
+                rows={3}
+              />
             </Field>
             <div className={styles.twoColumnGrid}>
-              <Field label="Min length">
+              <Field label="Min length" description="Optional. Minimum response length.">
                 <Input
                   className={styles.numericControl}
                   type="number"
@@ -597,8 +686,8 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
                   placeholder="e.g. 0"
                 />
               </Field>
-              <Field label="Max length">
-                <>
+              <Field label="Max length" description="Optional. Maximum response length.">
+                <div ref={heuristicMaxLengthFieldRef}>
                   <Input
                     className={styles.numericControl}
                     type="number"
@@ -607,7 +696,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
                       const v = e.currentTarget.value;
                       setMaxLength(v === '' ? '' : parseInt(v, 10) || 0);
                     }}
-                    placeholder="e.g. 0"
+                    placeholder="e.g. 100"
                   />
                   {showHeuristicMaxLengthError && heuristicMaxLengthError && (
                     <div className={styles.validationMessage}>
@@ -616,7 +705,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
                       </Text>
                     </div>
                   )}
-                </>
+                </div>
               </Field>
             </div>
           </div>
@@ -635,7 +724,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
           </div>
           <div className={styles.twoColumnGrid}>
             <Field label="Output key">
-              <>
+              <div ref={outputKeyFieldRef}>
                 <Input
                   className={styles.compactControl}
                   value={outputKey}
@@ -649,7 +738,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
                     </Text>
                   </div>
                 )}
-              </>
+              </div>
             </Field>
             <Field label="Output type">
               <Select<ScoreType>
@@ -668,8 +757,8 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
             label="Output description"
             description={
               kind === 'llm_judge'
-                ? 'Included in the LLM Judge prompt to guide scoring.'
-                : 'Optional metadata for the output key.'
+                ? 'Optional. Included in the LLM Judge prompt to guide scoring.'
+                : 'Optional. Metadata for the output key.'
             }
           >
             <Input
@@ -682,7 +771,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
           {kind === 'llm_judge' && outputType === 'string' && (
             <Field
               label="Allowed values"
-              description="Comma-separated list of allowed string values. Enforced via structured output."
+              description="Optional. Comma-separated list of allowed string values. Enforced via structured output."
             >
               <Input
                 className={styles.fullWidthControl}
@@ -707,16 +796,27 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
           </div>
           {outputType === 'number' && (
             <div className={styles.twoColumnGrid}>
-              <Field label="Pass threshold">
-                <Input
-                  className={styles.numericControl}
-                  type="number"
-                  value={passThreshold}
-                  onChange={(e) => setPassThreshold(e.currentTarget.value === '' ? '' : Number(e.currentTarget.value))}
-                  placeholder="e.g. 5"
-                />
+              <Field label="Pass threshold" description="Optional. Score at or above this value passes.">
+                <div ref={passThresholdFieldRef}>
+                  <Input
+                    className={styles.numericControl}
+                    type="number"
+                    value={passThreshold}
+                    onChange={(e) =>
+                      setPassThreshold(e.currentTarget.value === '' ? '' : Number(e.currentTarget.value))
+                    }
+                    placeholder="e.g. 5"
+                  />
+                  {showPassThresholdError && passThresholdError && (
+                    <div className={styles.validationMessage}>
+                      <Text variant="bodySmall" color="error">
+                        {passThresholdError}
+                      </Text>
+                    </div>
+                  )}
+                </div>
               </Field>
-              <Field label="Min">
+              <Field label="Min" description="Optional. Lowest expected score value.">
                 <Input
                   className={styles.numericControl}
                   type="number"
@@ -725,8 +825,8 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
                   placeholder="e.g. 1"
                 />
               </Field>
-              <Field label="Max">
-                <>
+              <Field label="Max" description="Optional. Highest expected score value.">
+                <div ref={outputMaxFieldRef}>
                   <Input
                     className={styles.numericControl}
                     type="number"
@@ -741,12 +841,12 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
                       </Text>
                     </div>
                   )}
-                </>
+                </div>
               </Field>
             </div>
           )}
           {outputType === 'string' && (
-            <Field label="Pass values" description="Comma-separated values that count as passing.">
+            <Field label="Pass values" description="Optional. Comma-separated values that count as passing.">
               <Input
                 className={styles.fullWidthControl}
                 value={passMatch}
@@ -756,7 +856,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
             </Field>
           )}
           {outputType === 'bool' && (
-            <Field label="Pass when" description="Which boolean value counts as passing.">
+            <Field label="Pass when" description="Optional. Choose which boolean value counts as passing.">
               <Select<string>
                 className={styles.compactControl}
                 options={[

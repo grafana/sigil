@@ -8,6 +8,7 @@ import {
   type EvalOutputKey,
   type EvaluatorKind,
 } from '../../evaluation/types';
+import { formatHeuristicStringList, normalizeHeuristicStringList } from '../../evaluation/heuristicConfig';
 
 export type TemplateConfigSummaryProps = {
   kind: EvaluatorKind;
@@ -38,6 +39,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
 export default function TemplateConfigSummary({ kind, config, outputKeys }: TemplateConfigSummaryProps) {
   const styles = useStyles2(getStyles);
   const ok = outputKeys[0];
+  const containsValues = normalizeHeuristicStringList(config.contains);
+  const notContainsValues = normalizeHeuristicStringList(config.not_contains);
 
   return (
     <>
@@ -108,6 +111,26 @@ export default function TemplateConfigSummary({ kind, config, outputKeys }: Temp
               <Input value={config.max_length != null ? String(config.max_length) : '—'} readOnly disabled width={12} />
             </Field>
           </Stack>
+          {containsValues.length > 0 && (
+            <Field label="Contains">
+              <textarea
+                className={styles.readonlyTextarea}
+                value={formatHeuristicStringList(config.contains)}
+                readOnly
+                rows={3}
+              />
+            </Field>
+          )}
+          {notContainsValues.length > 0 && (
+            <Field label="Not contains">
+              <textarea
+                className={styles.readonlyTextarea}
+                value={formatHeuristicStringList(config.not_contains)}
+                readOnly
+                rows={3}
+              />
+            </Field>
+          )}
         </>
       )}
 
