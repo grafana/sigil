@@ -228,7 +228,7 @@ describe('AgentDetailPage', () => {
     }
   });
 
-  it('toggles system prompt between preview and markdown views', async () => {
+  it('defaults to markdown and keeps markdown when tokenize is enabled', async () => {
     const dataSource = createDataSource();
     const lookupAgent = dataSource.lookupAgent;
     const lookupAgentRating = dataSource.lookupAgentRating;
@@ -268,6 +268,12 @@ describe('AgentDetailPage', () => {
       </MemoryRouter>
     );
 
+    expect(await screen.findByText(/# Prompt heading/)).toBeInTheDocument();
+    expect(screen.getByText(/- First bullet/)).toBeInTheDocument();
+    expect(screen.getByText(/\*\*strict constraints\*\*/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+
     expect(await screen.findByText('Prompt heading')).toBeInTheDocument();
     expect(screen.queryByText('# Prompt heading')).not.toBeInTheDocument();
     expect(screen.getByText('bold', { selector: 'strong' })).toBeInTheDocument();
@@ -279,5 +285,33 @@ describe('AgentDetailPage', () => {
     expect(await screen.findByText(/# Prompt heading/)).toBeInTheDocument();
     expect(screen.getByText(/- First bullet/)).toBeInTheDocument();
     expect(screen.getByText(/\*\*strict constraints\*\*/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Tokenize' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+
+    expect(screen.getByText(/# Prompt heading/)).toBeInTheDocument();
+    expect(screen.queryByText('Prompt heading')).not.toBeInTheDocument();
+  });
+
+  it('scrolls to system prompt and context analysis when re-running analysis', async () => {
+    const dataSource = createDataSource();
+    const scrollIntoViewSpy = jest.fn();
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoViewSpy;
+    try {
+      render(
+        <MemoryRouter initialEntries={['/agents/name/assistant']}>
+          <Routes>
+            <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      fireEvent.click(await screen.findByRole('button', { name: /re-run/i }));
+
+      expect(scrollIntoViewSpy).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+    }
   });
 });

@@ -14,6 +14,7 @@ export type AgentRatingPanelProps = {
   version?: string;
   agentStateContext?: string;
   contentView?: 'preview' | 'markdown';
+  onRerun?: () => void;
   dataSource?: AgentsDataSource;
   initialResult?: AgentRatingResponse | null;
   initialLoading?: boolean;
@@ -551,6 +552,7 @@ export default function AgentRatingPanel({
   version,
   agentStateContext = '',
   contentView = 'preview',
+  onRerun,
   dataSource = defaultAgentsDataSource,
   initialResult = null,
   initialLoading = false,
@@ -576,6 +578,7 @@ export default function AgentRatingPanel({
   const rewriteRequestIdRef = useRef(0);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollInFlightRef = useRef(false);
+  const autoRunKeyRef = useRef('');
 
   const stopPolling = useCallback(() => {
     if (pollIntervalRef.current !== null) {
@@ -611,7 +614,6 @@ export default function AgentRatingPanel({
           }
           stopPolling();
           if (status === 'failed') {
-            setResult(null);
             setRunning(false);
             setError('Agent rating failed. Please try again.');
             return;
@@ -625,13 +627,11 @@ export default function AgentRatingPanel({
           }
           if (isNotFoundError(err)) {
             stopPolling();
-            setResult(null);
             setRunning(false);
             setError('');
             return;
           }
           stopPolling();
-          setResult(null);
           setRunning(false);
           setError(err instanceof Error ? err.message : 'Failed to load latest agent rating');
         } finally {
@@ -733,7 +733,6 @@ export default function AgentRatingPanel({
     stopPolling();
     setRunning(true);
     setError('');
-    setResult(null);
 
     try {
       const resolvedVersion = version && version.length > 0 ? version : undefined;
@@ -749,7 +748,6 @@ export default function AgentRatingPanel({
       }
       if (status === 'failed') {
         setRunning(false);
-        setResult(null);
         setError('Agent rating failed. Please try again.');
         return;
       }
@@ -760,10 +758,30 @@ export default function AgentRatingPanel({
         return;
       }
       setRunning(false);
-      setResult(null);
       setError(err instanceof Error ? err.message : 'Failed to evaluate agent');
     }
   }, [agentName, dataSource, startPolling, stopPolling, version]);
+
+  const onClickRerun = useCallback(() => {
+    onRerun?.();
+    void runRating();
+  }, [onRerun, runRating]);
+
+  useEffect(() => {
+    const autoRunKey = `${agentName}::${version ?? ''}`;
+    if (autoRunKeyRef.current === autoRunKey) {
+      return;
+    }
+
+    const hasInitialResult = initialResult !== null;
+    const hasInitialError = initialError.trim().length > 0;
+    if (initialLoading || hasInitialResult || hasInitialError) {
+      return;
+    }
+
+    autoRunKeyRef.current = autoRunKey;
+    void runRating();
+  }, [agentName, initialError, initialLoading, initialResult, runRating, version]);
 
   const onExplainSuggestion = useCallback(
     (suggestion: AgentRatingSuggestion) => {
@@ -1104,7 +1122,7 @@ export default function AgentRatingPanel({
               <Button variant="secondary" icon="ai" onClick={openRewriteModal}>
                 Rewrite prompt
               </Button>
-              <Button onClick={() => void runRating()} icon="sync" variant="secondary" className={styles.rerunButton}>
+              <Button onClick={onClickRerun} icon="sync" variant="secondary" className={styles.rerunButton}>
                 Re-run
               </Button>
             </div>

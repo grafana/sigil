@@ -814,6 +814,7 @@ export default function AgentDetailPage({
   const versionsRequestVersion = useRef(0);
   const ratingRequestVersion = useRef(0);
   const recentRatingsRequestVersion = useRef(0);
+  const promptAnalysisSectionRef = useRef<HTMLDivElement | null>(null);
 
   const selectedVersion = searchParams.get('version')?.trim() ?? '';
   const agentName = buildAgentNameFromRoute(location.pathname, params.agentName);
@@ -1128,14 +1129,21 @@ export default function AgentDetailPage({
     sections: Record<string, boolean>;
     encodingOverride: EncodingName | null;
   }>({ versionKey, sections: {}, encodingOverride: null });
-  const [systemPromptView, setSystemPromptView] = useState<'preview' | 'markdown'>('preview');
+  const [systemPromptView, setSystemPromptView] = useState<'preview' | 'markdown'>('markdown');
 
   const tokenizedSections = tokenizeState.versionKey === versionKey ? tokenizeState.sections : {};
   const encodingOverride = tokenizeState.versionKey === versionKey ? tokenizeState.encodingOverride : null;
+  const isSystemTokenized = Boolean(tokenizedSections['system']);
 
   const activeEncoding = encodingOverride ?? autoEncoding;
   const anyTokenized = Object.values(tokenizedSections).some(Boolean);
   const { encode, decode, isLoading: tokenizerLoading } = useTokenizer(anyTokenized ? activeEncoding : null);
+
+  useEffect(() => {
+    if (isSystemTokenized && systemPromptView !== 'markdown') {
+      setSystemPromptView('markdown');
+    }
+  }, [isSystemTokenized, systemPromptView]);
 
   const setEncodingOverride = useCallback(
     (enc: EncodingName | null) => {
@@ -1163,6 +1171,9 @@ export default function AgentDetailPage({
   );
 
   const agentStateContext = useMemo(() => (detail ? buildAgentStateContext(detail) : ''), [detail]);
+  const scrollToPromptAnalysis = useCallback(() => {
+    promptAnalysisSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
 
   if (loading) {
     return (
@@ -1580,7 +1591,7 @@ export default function AgentDetailPage({
         </div>
       </div>
 
-      <div className={cx(styles.panel, styles.stretchPanel)}>
+      <div ref={promptAnalysisSectionRef} className={cx(styles.panel, styles.stretchPanel)}>
         <div className={styles.panelHeader}>
           <Text weight="medium">System prompt and context analysis</Text>
         </div>
@@ -1596,7 +1607,12 @@ export default function AgentDetailPage({
                       systemPromptView === 'preview' && styles.promptViewToggleButtonActive
                     )}
                     aria-pressed={systemPromptView === 'preview'}
-                    onClick={() => setSystemPromptView('preview')}
+                    onClick={() => {
+                      if (!isSystemTokenized) {
+                        setSystemPromptView('preview');
+                      }
+                    }}
+                    disabled={isSystemTokenized}
                   >
                     Preview
                   </button>
@@ -1665,7 +1681,8 @@ export default function AgentDetailPage({
                 agentName={agentName}
                 version={activeVersion}
                 agentStateContext={agentStateContext}
-                contentView={systemPromptView}
+                contentView={isSystemTokenized ? 'markdown' : systemPromptView}
+                onRerun={scrollToPromptAnalysis}
                 dataSource={dataSource}
                 initialResult={initialRating}
                 initialLoading={initialRatingLoading || initialRating?.status === 'pending'}

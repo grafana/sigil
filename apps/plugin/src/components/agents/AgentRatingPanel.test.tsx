@@ -147,6 +147,19 @@ describe('AgentRatingPanel', () => {
     expect(await screen.findByText('Rating became available after trigger.')).toBeInTheDocument();
   });
 
+  it('auto-runs rating when no initial rating exists', async () => {
+    const rateAgent = jest.fn<Promise<AgentRatingResponse>, [string, string?]>().mockResolvedValue(createCompletedRating());
+    const dataSource = createDataSource({
+      rateAgent,
+      lookupAgentRating: jest.fn(async () => null),
+    });
+
+    renderPanel(<AgentRatingPanel agentName="assistant" version="sha256:test" dataSource={dataSource} />);
+
+    await waitFor(() => expect(rateAgent).toHaveBeenCalledWith('assistant', 'sha256:test'));
+    expect(await screen.findByText('Great overall structure.')).toBeInTheDocument();
+  });
+
   it('renders a succinct analysis summary', async () => {
     const rateAgent = jest.fn<Promise<AgentRatingResponse>, [string, string?]>().mockResolvedValue({
       status: 'completed',
@@ -431,5 +444,46 @@ describe('AgentRatingPanel', () => {
         systemPrompt: expect.stringContaining('You are an expert prompt engineer.'),
       })
     );
+  });
+
+  it('keeps last completed report visible when re-run fails', async () => {
+    const dataSource = createDataSource({
+      rateAgent: jest.fn(async () => {
+        throw new Error('backend unavailable');
+      }),
+    });
+    const completed = createCompletedRating('Existing report should stay visible.');
+
+    renderPanel(
+      <AgentRatingPanel agentName="assistant" version="sha256:test" dataSource={dataSource} initialResult={completed} />
+    );
+
+    expect(screen.getByText('Existing report should stay visible.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /re-run/i }));
+
+    expect(await screen.findByText('backend unavailable')).toBeInTheDocument();
+    expect(screen.getByText('Existing report should stay visible.')).toBeInTheDocument();
+  });
+
+  it('calls onRerun callback before starting rerun', async () => {
+    const onRerun = jest.fn();
+    const rateAgent = jest.fn<Promise<AgentRatingResponse>, [string, string?]>().mockResolvedValue(createCompletedRating());
+    const dataSource = createDataSource({ rateAgent });
+
+    renderPanel(
+      <AgentRatingPanel
+        agentName="assistant"
+        version="sha256:test"
+        dataSource={dataSource}
+        initialResult={createCompletedRating('Existing report')}
+        onRerun={onRerun}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /re-run/i }));
+
+    expect(onRerun).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(rateAgent).toHaveBeenCalledWith('assistant', 'sha256:test'));
   });
 });
