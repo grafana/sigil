@@ -151,6 +151,19 @@ function saveHeroStatsToStorage(stats: HeroStatItem[]): void {
   }
 }
 
+function interpolateHex(a: string, b: string, t: number): string {
+  const ar = parseInt(a.slice(1, 3), 16);
+  const ag = parseInt(a.slice(3, 5), 16);
+  const ab = parseInt(a.slice(5, 7), 16);
+  const br = parseInt(b.slice(1, 3), 16);
+  const bg = parseInt(b.slice(3, 5), 16);
+  const bb = parseInt(b.slice(5, 7), 16);
+  const r = Math.round(ar + (br - ar) * t);
+  const g = Math.round(ag + (bg - ag) * t);
+  const bl = Math.round(ab + (bb - ab) * t);
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
+}
+
 function buildFakeDocUrl(pathname: string): string {
   return new URL(pathname, 'https://docs.example.com').toString();
 }
@@ -320,10 +333,37 @@ export function LandingTopBar({ assistantOrigin }: LandingTopBarProps) {
     };
   }, []);
 
+  const gradientColors = ['#5794F2', '#B877D9', '#FF9830'] as const;
+  const barCount = 48;
+  const barHeights = useMemo(
+    () =>
+      Array.from({ length: barCount }, (_, i) => {
+        const t = Math.sin(i * 0.35) * 0.4 + 0.55;
+        return `${Math.max(20, t * 100)}%`;
+      }),
+    []
+  );
+
   return (
     <>
       <div className={styles.pageFlow}>
         <div className={styles.heroBlock}>
+          <div className={styles.heroBars} aria-hidden>
+            {barHeights.map((height, i) => {
+              const t = i / (barCount - 1);
+              const color =
+                t <= 0.52
+                  ? interpolateHex(gradientColors[0], gradientColors[1], t / 0.52)
+                  : interpolateHex(gradientColors[1], gradientColors[2], (t - 0.52) / 0.48);
+              return (
+                <div
+                  key={i}
+                  className={styles.heroBar}
+                  style={{ height, backgroundColor: color }}
+                />
+              );
+            })}
+          </div>
           <div className={styles.heroCard}>
             <div className={styles.heroCardContent}>
               <div className={styles.heroHeader}>
@@ -662,6 +702,25 @@ function getStyles(theme: GrafanaTheme2) {
       minWidth: 0,
       display: 'flex',
       flexDirection: 'column',
+    }),
+    heroBars: css({
+      label: 'landingTopBar-heroBars',
+      display: 'flex',
+      alignItems: 'flex-end',
+      justifyContent: 'stretch',
+      gap: 2,
+      height: 32,
+      paddingLeft: theme.spacing(3),
+      paddingRight: theme.spacing(3),
+      paddingTop: theme.spacing(1),
+      opacity: 0.75,
+    }),
+    heroBar: css({
+      label: 'landingTopBar-heroBar',
+      flex: 1,
+      minWidth: 2,
+      borderRadius: 1,
+      transition: 'height 0.2s ease',
     }),
     heroSideHeaderBlock: css({
       label: 'landingTopBar-heroSideHeaderBlock',
