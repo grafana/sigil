@@ -64,52 +64,54 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         onFiltersChange={setFilters}
         onBreakdownChange={setBreakdownBy}
       />
-      <TabsBar>
-        <Tab label="Overview" active={tab === 'overview'} onChangeTab={handleTabChange('overview')} />
-        <Tab label="Errors" active={tab === 'errors'} onChangeTab={handleTabChange('errors')} />
-        <Tab label="Consumption" active={tab === 'consumption'} onChangeTab={handleTabChange('consumption')} />
-        <Tab label="Cache" active={tab === 'cache'} onChangeTab={handleTabChange('cache')} />
-      </TabsBar>
-      {tab === 'overview' && (
-        <DashboardGrid
-          dataSource={dataSource}
-          filters={filters}
-          breakdownBy={breakdownBy}
-          from={from}
-          to={to}
-          timeRange={timeRange}
-        />
-      )}
-      {tab === 'errors' && (
-        <DashboardErrorsGrid
-          dataSource={dataSource}
-          filters={filters}
-          breakdownBy={breakdownBy}
-          from={from}
-          to={to}
-          timeRange={timeRange}
-        />
-      )}
-      {tab === 'consumption' && (
-        <DashboardConsumptionGrid
-          dataSource={dataSource}
-          filters={filters}
-          breakdownBy={breakdownBy}
-          from={from}
-          to={to}
-          timeRange={timeRange}
-        />
-      )}
-      {tab === 'cache' && (
-        <DashboardCacheGrid
-          dataSource={dataSource}
-          filters={filters}
-          breakdownBy={breakdownBy}
-          from={from}
-          to={to}
-          timeRange={timeRange}
-        />
-      )}
+      <div className={styles.tabsContent}>
+        <TabsBar>
+          <Tab label="Overview" active={tab === 'overview'} onChangeTab={handleTabChange('overview')} />
+          <Tab label="Errors" active={tab === 'errors'} onChangeTab={handleTabChange('errors')} />
+          <Tab label="Consumption" active={tab === 'consumption'} onChangeTab={handleTabChange('consumption')} />
+          <Tab label="Cache" active={tab === 'cache'} onChangeTab={handleTabChange('cache')} />
+        </TabsBar>
+        {tab === 'overview' && (
+          <DashboardGrid
+            dataSource={dataSource}
+            filters={filters}
+            breakdownBy={breakdownBy}
+            from={from}
+            to={to}
+            timeRange={timeRange}
+          />
+        )}
+        {tab === 'errors' && (
+          <DashboardErrorsGrid
+            dataSource={dataSource}
+            filters={filters}
+            breakdownBy={breakdownBy}
+            from={from}
+            to={to}
+            timeRange={timeRange}
+          />
+        )}
+        {tab === 'consumption' && (
+          <DashboardConsumptionGrid
+            dataSource={dataSource}
+            filters={filters}
+            breakdownBy={breakdownBy}
+            from={from}
+            to={to}
+            timeRange={timeRange}
+          />
+        )}
+        {tab === 'cache' && (
+          <DashboardCacheGrid
+            dataSource={dataSource}
+            filters={filters}
+            breakdownBy={breakdownBy}
+            from={from}
+            to={to}
+            timeRange={timeRange}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -121,6 +123,11 @@ function getStyles(theme: GrafanaTheme2) {
       flexDirection: 'column',
       gap: theme.spacing(3),
       marginTop: theme.spacing(-2),
+    }),
+    tabsContent: css({
+      display: 'flex',
+      flexDirection: 'column',
+      gap: theme.spacing(1),
     }),
   };
 }

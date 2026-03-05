@@ -14,7 +14,7 @@ import {
   tokenDrilldownTypes,
 } from '../../dashboard/types';
 import { extractResolvePairs, BreakdownStatPanel } from './dashboardShared';
-import { TopStat } from '../TopStat';
+import { DashboardStatsBar } from './DashboardStatsBar';
 import { calculateTotalCost, calculateTotalCostByGroup, calculateCostTimeSeries } from '../../dashboard/cost';
 import {
   computeStep,
@@ -41,7 +41,7 @@ import { matrixToDataFrames, vectorToStatValue } from '../../dashboard/transform
 import { usePrometheusQuery } from './usePrometheusQuery';
 import { MetricPanel } from './MetricPanel';
 import { useResolvedModelPricing } from './useResolvedModelPricing';
-import AssistantInsightsList from '../assistant/AssistantInsightsList';
+import AssistantInsightsBanner from '../assistant/AssistantInsightsBanner';
 
 export type DashboardGridProps = {
   dataSource: DashboardDataSource;
@@ -509,259 +509,258 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
   return (
     <div className={styles.gridWrapper}>
       {/* Top-level stats row */}
-      <div className={styles.statsRow}>
-        <TopStat
-          label="Total Requests"
-          value={totalRequestsValue}
-          loading={topTotalOps.loading}
-          prevValue={prevRequestsValue}
-          prevLoading={prevTotalOps.loading}
-        />
-        <TopStat
-          label="Avg Latency (P95)"
-          value={latencyValue}
-          unit="s"
-          loading={topLatency.loading}
-          prevValue={prevLatencyValue}
-          prevLoading={prevLatency.loading}
-          invertChange
-        />
-        <TopStat
-          label="Error Rate"
-          value={errorRateValue}
-          unit="percent"
-          loading={topErrRate.loading}
-          prevValue={prevErrRateValue}
-          prevLoading={prevErrRate.loading}
-          invertChange
-        />
-        <TopStat
-          label="Total Tokens"
-          value={totalTokensValue}
-          unit="short"
-          loading={tokensTotalStat.loading}
-          prevValue={prevTokensValue}
-          prevLoading={prevTokensTotal.loading}
-        />
-        <TopStat
-          label="Total Cost"
-          value={totalCost.totalCost}
-          unit="currencyUSD"
-          loading={costTokens.loading || resolvedPricing.loading}
-          prevValue={prevTotalCost.totalCost}
-          prevLoading={prevCostTokens.loading}
-          invertChange
-        />
-      </div>
-      <div className={styles.gridOuter}>
-        <div className={styles.grid}>
-          {/* Row 1: Requests & Errors */}
-          <div className={styles.panelRowFirstStat}>
-            <BreakdownStatPanel
-              title="Total Requests"
-              data={totalOpsStat.data}
-              loading={totalOpsStat.loading}
-              error={totalOpsStat.error}
-              breakdownLabel={breakdownPromLabel}
-              height={CHART_HEIGHT}
-            />
-            <MetricPanel
-              title="Requests/s"
-              pluginId="timeseries"
-              height={CHART_HEIGHT}
-              timeRange={timeRange}
-              loading={requestsLoading}
-              error={requestsErr}
-              data={requestsData}
-              options={requestsOptions}
-              fieldConfig={{
-                defaults: {
-                  unit: 'short',
-                  color: consistentColor,
-                  custom: timeseriesDefaults,
-                  thresholds: noThresholds,
-                },
-                overrides: [],
-              }}
-            />
-            <MetricPanel
-              title="Error rate"
-              pluginId="timeseries"
-              height={CHART_HEIGHT}
-              timeRange={timeRange}
-              loading={errorsTimeseries.loading}
-              error={errorsTimeseries.error}
-              data={errorsTimeseries.data ? matrixToDataFrames(errorsTimeseries.data) : []}
-              options={errorOptions}
-              fieldConfig={{
-                defaults: {
-                  unit: 'percent',
-                  min: 0,
-                  max: 100,
-                  color: consistentColor,
-                  custom: timeseriesDefaults,
-                  thresholds: noThresholds,
-                },
-                overrides: [],
-              }}
-            />
-          </div>
-
-          {/* Row 2: Latency */}
-          <div className={styles.panelRowLatencyFull}>
-            <MetricPanel
-              title="Latency"
-              pluginId="timeseries"
-              height={CHART_HEIGHT}
-              timeRange={timeRange}
-              loading={latencyTimeseries.loading}
-              error={latencyTimeseries.error}
-              data={latencyTimeseries.data ? matrixToDataFrames(latencyTimeseries.data) : []}
-              options={latencyOptions}
-              fieldConfig={{
-                defaults: { unit: 's', color: consistentColor, custom: timeseriesDefaults, thresholds: noThresholds },
-                overrides: [],
-              }}
-              titleItems={
-                <Select
-                  options={latencyPercentileOptions}
-                  value={latencyPercentile}
-                  onChange={(v) => {
-                    if (v.value) {
-                      setLatencyPercentile(v.value);
-                    }
-                  }}
-                  width={10}
-                />
-              }
-            />
-            <BreakdownStatPanel
-              title={`Avg Latency (${latencyPercentile.toUpperCase()})`}
-              data={latencyStat.data}
-              loading={latencyStat.loading}
-              error={latencyStat.error}
-              breakdownLabel={breakdownPromLabel}
-              height={CHART_HEIGHT}
-              unit="s"
-              aggregation="avg"
-            />
-            <MetricPanel
-              title="Time to First Token"
-              pluginId="timeseries"
-              height={CHART_HEIGHT}
-              timeRange={timeRange}
-              loading={ttftTimeseries.loading}
-              error={ttftTimeseries.error}
-              data={ttftTimeseries.data ? matrixToDataFrames(ttftTimeseries.data) : []}
-              options={latencyOptions}
-              fieldConfig={{
-                defaults: { unit: 's', color: consistentColor, custom: timeseriesDefaults, thresholds: noThresholds },
-                overrides: [],
-              }}
-            />
-          </div>
-
-          {/* Row 3: Consumption */}
-          <div className={styles.panelRowLatency}>
-            <MetricPanel
-              title="Consumption"
-              pluginId="timeseries"
-              height={CHART_HEIGHT}
-              timeRange={timeRange}
-              loading={costSeriesLoading}
-              error={
-                isTokenTotal
-                  ? tokensTotalTimeseries.error
-                  : isTokenByType
-                    ? tokensByTypeTimeseries.error
-                    : costOverTime.error
-              }
-              data={costTimeSeries}
-              options={consumptionOptions}
-              fieldConfig={{
-                defaults: {
-                  unit: costMode === 'tokens' ? 'short' : 'currencyUSD',
-                  color: consistentColor,
-                  custom: timeseriesDefaults,
-                  thresholds: noThresholds,
-                },
-                overrides: [],
-              }}
-              titleItems={
-                <div className={styles.panelActions}>
-                  <Select
-                    options={costModeOptions}
-                    value={costMode}
-                    onChange={(v) => {
-                      if (v.value) {
-                        setCostMode(v.value);
-                      }
-                    }}
-                    width={12}
-                  />
-                  {costMode === 'tokens' && (
-                    <Select
-                      options={tokenDrilldownOptions}
-                      value={tokenDrilldown}
-                      onChange={(v) => {
-                        if (v.value) {
-                          setTokenDrilldown(v.value);
-                        }
-                      }}
-                      width={18}
-                    />
-                  )}
-                </div>
-              }
-            />
-            <BreakdownStatPanel
-              title={costMode === 'tokens' ? 'Total Tokens' : 'Total Cost'}
-              data={
-                isTokenByType && hasBreakdown
-                  ? tokensByBreakdownAndType.data
-                  : isTokenByType
-                    ? tokensByTypeStat.data
-                    : costMode === 'tokens'
-                      ? tokensTotalByBreakdown.data
-                      : costByBreakdownData
-              }
-              loading={
-                isTokenByType && hasBreakdown
-                  ? tokensByBreakdownAndType.loading
-                  : isTokenByType
-                    ? tokensByTypeStat.loading
-                    : costMode === 'tokens'
-                      ? tokensTotalByBreakdown.loading
-                      : costTokens.loading || resolvedPricing.loading
-              }
-              error={
-                isTokenByType && hasBreakdown
-                  ? tokensByBreakdownAndType.error
-                  : isTokenByType
-                    ? tokensByTypeStat.error
-                    : costMode === 'tokens'
-                      ? tokensTotalByBreakdown.error
-                      : costTokens.error
-              }
-              breakdownLabel={breakdownPromLabel}
-              height={CHART_HEIGHT}
-              unit={costMode === 'tokens' ? 'short' : 'currencyUSD'}
-              segmentLabel={isTokenByType && hasBreakdown ? 'gen_ai_token_type' : undefined}
-              segmentNames={isTokenByType && hasBreakdown ? drilldownTypes : undefined}
-            />
-          </div>
+      <DashboardStatsBar
+        stats={[
+          {
+            label: 'Total Requests',
+            value: totalRequestsValue,
+            loading: topTotalOps.loading,
+            prevValue: prevRequestsValue,
+            prevLoading: prevTotalOps.loading,
+          },
+          {
+            label: 'Avg Latency (P95)',
+            value: latencyValue,
+            unit: 's',
+            loading: topLatency.loading,
+            prevValue: prevLatencyValue,
+            prevLoading: prevLatency.loading,
+            invertChange: true,
+          },
+          {
+            label: 'Error Rate',
+            value: errorRateValue,
+            unit: 'percent',
+            loading: topErrRate.loading,
+            prevValue: prevErrRateValue,
+            prevLoading: prevErrRate.loading,
+            invertChange: true,
+          },
+          {
+            label: 'Total Tokens',
+            value: totalTokensValue,
+            unit: 'short',
+            loading: tokensTotalStat.loading,
+            prevValue: prevTokensValue,
+            prevLoading: prevTokensTotal.loading,
+          },
+          {
+            label: 'Total Cost',
+            value: totalCost.totalCost,
+            unit: 'currencyUSD',
+            loading: costTokens.loading || resolvedPricing.loading,
+            prevValue: prevTotalCost.totalCost,
+            prevLoading: prevCostTokens.loading,
+            invertChange: true,
+          },
+        ]}
+      />
+      <AssistantInsightsBanner
+        className={styles.insightBanner}
+        prompt={insightPrompt}
+        origin="sigil-plugin/dashboard-insight"
+        systemPrompt="You are a concise observability analyst. Return 3-5 plain text insights. Each insight must be one short sentence on its own line, prefixed with '- '. No markdown, no headers, no extra text. Focus only on anomalies, changes, or notable patterns that are strongly supported by the provided data."
+        dataContext={insightDataContext}
+        waitingText="Waiting for data..."
+        emptyText="No notable insights."
+        invalidText="Could not parse assistant insights."
+      />
+      <div className={styles.grid}>
+        {/* Row 1: Requests & Errors */}
+        <div className={styles.panelRowFirstStat}>
+          <BreakdownStatPanel
+            title="Total Requests"
+            data={totalOpsStat.data}
+            loading={totalOpsStat.loading}
+            error={totalOpsStat.error}
+            breakdownLabel={breakdownPromLabel}
+            height={CHART_HEIGHT}
+          />
+          <MetricPanel
+            title="Requests/s"
+            pluginId="timeseries"
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={requestsLoading}
+            error={requestsErr}
+            data={requestsData}
+            options={requestsOptions}
+            fieldConfig={{
+              defaults: {
+                unit: 'short',
+                color: consistentColor,
+                custom: timeseriesDefaults,
+                thresholds: noThresholds,
+              },
+              overrides: [],
+            }}
+          />
+          <MetricPanel
+            title="Error rate"
+            pluginId="timeseries"
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={errorsTimeseries.loading}
+            error={errorsTimeseries.error}
+            data={errorsTimeseries.data ? matrixToDataFrames(errorsTimeseries.data) : []}
+            options={errorOptions}
+            fieldConfig={{
+              defaults: {
+                unit: 'percent',
+                min: 0,
+                max: 100,
+                color: consistentColor,
+                custom: timeseriesDefaults,
+                thresholds: noThresholds,
+              },
+              overrides: [],
+            }}
+          />
         </div>
 
-        <AssistantInsightsList
-          className={styles.insightPanel}
-          prompt={insightPrompt}
-          origin="sigil-plugin/dashboard-insight"
-          systemPrompt="You are a concise observability analyst. Return exactly 3-5 high-confidence suggestions. Include only suggestions strongly supported by the provided data; omit uncertain ideas. Each suggestion is a single short sentence on its own line prefixed with '- '. Bold key numbers/metrics with **bold**. No headers, no paragraphs, no extra text. Keep each bullet under 20 words. Focus on anomalies, changes, or notable patterns only."
-          dataContext={insightDataContext}
-          waitingText="Waiting for data..."
-          emptyText="No notable insights."
-          invalidText="Could not parse assistant insights."
-        />
+        {/* Row 2: Latency */}
+        <div className={styles.panelRowLatencyFull}>
+          <MetricPanel
+            title="Latency"
+            pluginId="timeseries"
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={latencyTimeseries.loading}
+            error={latencyTimeseries.error}
+            data={latencyTimeseries.data ? matrixToDataFrames(latencyTimeseries.data) : []}
+            options={latencyOptions}
+            fieldConfig={{
+              defaults: { unit: 's', color: consistentColor, custom: timeseriesDefaults, thresholds: noThresholds },
+              overrides: [],
+            }}
+            titleItems={
+              <Select
+                options={latencyPercentileOptions}
+                value={latencyPercentile}
+                onChange={(v) => {
+                  if (v.value) {
+                    setLatencyPercentile(v.value);
+                  }
+                }}
+                width={10}
+              />
+            }
+          />
+          <BreakdownStatPanel
+            title={`Avg Latency (${latencyPercentile.toUpperCase()})`}
+            data={latencyStat.data}
+            loading={latencyStat.loading}
+            error={latencyStat.error}
+            breakdownLabel={breakdownPromLabel}
+            height={CHART_HEIGHT}
+            unit="s"
+            aggregation="avg"
+          />
+          <MetricPanel
+            title="Time to First Token"
+            pluginId="timeseries"
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={ttftTimeseries.loading}
+            error={ttftTimeseries.error}
+            data={ttftTimeseries.data ? matrixToDataFrames(ttftTimeseries.data) : []}
+            options={latencyOptions}
+            fieldConfig={{
+              defaults: { unit: 's', color: consistentColor, custom: timeseriesDefaults, thresholds: noThresholds },
+              overrides: [],
+            }}
+          />
+        </div>
+
+        {/* Row 3: Consumption */}
+        <div className={styles.panelRowLatency}>
+          <MetricPanel
+            title="Consumption"
+            pluginId="timeseries"
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={costSeriesLoading}
+            error={
+              isTokenTotal
+                ? tokensTotalTimeseries.error
+                : isTokenByType
+                  ? tokensByTypeTimeseries.error
+                  : costOverTime.error
+            }
+            data={costTimeSeries}
+            options={consumptionOptions}
+            fieldConfig={{
+              defaults: {
+                unit: costMode === 'tokens' ? 'short' : 'currencyUSD',
+                color: consistentColor,
+                custom: timeseriesDefaults,
+                thresholds: noThresholds,
+              },
+              overrides: [],
+            }}
+            titleItems={
+              <div className={styles.panelActions}>
+                <Select
+                  options={costModeOptions}
+                  value={costMode}
+                  onChange={(v) => {
+                    if (v.value) {
+                      setCostMode(v.value);
+                    }
+                  }}
+                  width={12}
+                />
+                {costMode === 'tokens' && (
+                  <Select
+                    options={tokenDrilldownOptions}
+                    value={tokenDrilldown}
+                    onChange={(v) => {
+                      if (v.value) {
+                        setTokenDrilldown(v.value);
+                      }
+                    }}
+                    width={18}
+                  />
+                )}
+              </div>
+            }
+          />
+          <BreakdownStatPanel
+            title={costMode === 'tokens' ? 'Total Tokens' : 'Total Cost'}
+            data={
+              isTokenByType && hasBreakdown
+                ? tokensByBreakdownAndType.data
+                : isTokenByType
+                  ? tokensByTypeStat.data
+                  : costMode === 'tokens'
+                    ? tokensTotalByBreakdown.data
+                    : costByBreakdownData
+            }
+            loading={
+              isTokenByType && hasBreakdown
+                ? tokensByBreakdownAndType.loading
+                : isTokenByType
+                  ? tokensByTypeStat.loading
+                  : costMode === 'tokens'
+                    ? tokensTotalByBreakdown.loading
+                    : costTokens.loading || resolvedPricing.loading
+            }
+            error={
+              isTokenByType && hasBreakdown
+                ? tokensByBreakdownAndType.error
+                : isTokenByType
+                  ? tokensByTypeStat.error
+                  : costMode === 'tokens'
+                    ? tokensTotalByBreakdown.error
+                    : costTokens.error
+            }
+            breakdownLabel={breakdownPromLabel}
+            height={CHART_HEIGHT}
+            unit={costMode === 'tokens' ? 'short' : 'currencyUSD'}
+            segmentLabel={isTokenByType && hasBreakdown ? 'gen_ai_token_type' : undefined}
+            segmentNames={isTokenByType && hasBreakdown ? drilldownTypes : undefined}
+          />
+        </div>
       </div>
     </div>
   );
@@ -834,23 +833,12 @@ function getStyles(theme: GrafanaTheme2) {
       flexDirection: 'column',
       gap: theme.spacing(1),
     }),
-    gridOuter: css({
-      display: 'flex',
-      gap: theme.spacing(2),
-      alignItems: 'stretch',
-    }),
     grid: css({
       display: 'flex',
       flexDirection: 'column',
       gap: theme.spacing(3),
       flex: 1,
       minWidth: 0,
-    }),
-    statsRow: css({
-      display: 'flex',
-      gap: theme.spacing(4),
-      padding: theme.spacing(1.5, 0),
-      borderBottom: `1px solid ${theme.colors.border.weak}`,
     }),
     panelRowFirstStat: css({
       display: 'grid',
@@ -872,14 +860,8 @@ function getStyles(theme: GrafanaTheme2) {
       alignItems: 'center',
       gap: theme.spacing(0.5),
     }),
-    insightPanel: css({
-      width: 280,
-      flexShrink: 0,
-      display: 'flex',
-      flexDirection: 'column',
-      background: theme.colors.background.primary,
-      borderRadius: theme.shape.radius.default,
-      overflow: 'hidden',
+    insightBanner: css({
+      width: '100%',
     }),
   };
 }

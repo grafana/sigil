@@ -2,9 +2,14 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { css } from '@emotion/css';
 import { ThresholdsMode, type GrafanaTheme2, type TimeRange } from '@grafana/data';
 import { Badge, Button, Icon, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
-import { StatItem, BreakdownStatPanel, getBreakdownStatPanelStyles, formatRelativeTime } from './dashboardShared';
+import { BreakdownStatPanel, getBreakdownStatPanelStyles, formatRelativeTime } from './dashboardShared';
 import type { DashboardDataSource } from '../../dashboard/api';
-import { type BreakdownDimension, type DashboardFilters, breakdownToPromLabel } from '../../dashboard/types';
+import {
+  type BreakdownDimension,
+  type DashboardFilters,
+  type PrometheusQueryResponse,
+  breakdownToPromLabel,
+} from '../../dashboard/types';
 import {
   computeStep,
   computeRateInterval,
@@ -21,6 +26,8 @@ import { MetricPanel } from './MetricPanel';
 import { type ConversationsDataSource, defaultConversationsDataSource } from '../../conversation/api';
 import type { ConversationSearchResult } from '../../conversation/types';
 import { PLUGIN_BASE, buildConversationViewRoute } from '../../constants';
+import AssistantInsightsBanner from '../assistant/AssistantInsightsBanner';
+import { DashboardStatsBar } from './DashboardStatsBar';
 
 export type DashboardErrorsGridProps = {
   dataSource: DashboardDataSource;
@@ -113,14 +120,80 @@ export function DashboardErrorsGrid({
 
   const totalErrorsValue = topTotalErrors.data ? vectorToStatValue(topTotalErrors.data) : 0;
   const errorRateValue = topErrorRate.data ? vectorToStatValue(topErrorRate.data) : 0;
+  const allDataLoading =
+    topTotalErrors.loading ||
+    topErrorRate.loading ||
+    errorRateTimeseries.loading ||
+    errorsByCodeStat.loading ||
+    errorsByCodeTimeseries.loading ||
+    errorRateByBreakdown.loading;
+  const insightDataContext = useMemo(() => {
+    if (allDataLoading) {
+      return null;
+    }
+    const hasAnyData =
+      hasResponseData(topTotalErrors.data) ||
+      hasResponseData(topErrorRate.data) ||
+      hasResponseData(errorRateTimeseries.data) ||
+      hasResponseData(errorsByCodeStat.data) ||
+      hasResponseData(errorsByCodeTimeseries.data) ||
+      hasResponseData(errorRateByBreakdown.data);
+    if (!hasAnyData) {
+      return null;
+    }
+    const parts = [
+      'Errors dashboard context:',
+      `Time range (raw): from=${String(timeRange.raw.from)}; to=${String(timeRange.raw.to)}`,
+      `Time range (UTC): from=${formatUtcMillis(from)}; to=${formatUtcMillis(to)}`,
+      `Breakdown: ${breakdownBy}`,
+      '',
+      summarizeVector(topTotalErrors.data, 'Total Errors'),
+      summarizeVector(topErrorRate.data, 'Error Rate (%)'),
+      summarizeMatrix(errorRateTimeseries.data, 'Error rate over time'),
+      summarizeVector(errorsByCodeStat.data, 'Errors by code'),
+      summarizeMatrix(errorsByCodeTimeseries.data, 'Errors by code over time'),
+      summarizeVector(errorRateByBreakdown.data, hasBreakdown ? `Error rate by ${breakdownBy}` : 'Error rate'),
+    ];
+    return parts.join('\n');
+  }, [
+    allDataLoading,
+    topTotalErrors.data,
+    topErrorRate.data,
+    errorRateTimeseries.data,
+    errorsByCodeStat.data,
+    errorsByCodeTimeseries.data,
+    errorRateByBreakdown.data,
+    timeRange.raw.from,
+    timeRange.raw.to,
+    from,
+    to,
+    breakdownBy,
+    hasBreakdown,
+  ]);
+  const insightPrompt = `Analyze this errors observability dashboard. Breakdown: ${breakdownBy}. Only flag significant findings — spikes, outliers, or actionable error issues. Skip anything that looks normal.`;
 
   return (
     <div className={styles.gridWrapper}>
       {/* Top stats */}
-      <div className={styles.statsRow}>
-        <StatItem label="Total Errors" value={totalErrorsValue} loading={topTotalErrors.loading} />
-        <StatItem label="Error Rate" value={errorRateValue} unit="percent" loading={topErrorRate.loading} />
-      </div>
+      <DashboardStatsBar
+        stats={[
+          { label: 'Total Errors', value: totalErrorsValue, loading: topTotalErrors.loading },
+          {
+            label: 'Error Rate',
+            value: errorRateValue,
+            unit: 'percent',
+            loading: topErrorRate.loading,
+            invertChange: true,
+          },
+        ]}
+      />
+      <AssistantInsightsBanner
+        className={styles.insightBanner}
+        prompt={insightPrompt}
+        origin="sigil-plugin/dashboard-errors-insight"
+        systemPrompt="You are a concise observability analyst. Return 3-5 plain text insights. Each insight must be one short sentence on its own line, prefixed with '- '. No markdown, no headers, no extra text. Focus only on anomalies, changes, or notable patterns that are strongly supported by the provided data."
+        dataContext={insightDataContext}
+      />
 
       {/* Visualizations */}
       <div className={styles.grid}>
@@ -401,11 +474,8 @@ function getStyles(theme: GrafanaTheme2) {
       flexDirection: 'column',
       gap: theme.spacing(3),
     }),
-    statsRow: css({
-      display: 'flex',
-      gap: theme.spacing(4),
-      padding: theme.spacing(1.5, 0),
-      borderBottom: `1px solid ${theme.colors.border.weak}`,
+    insightBanner: css({
+      width: '100%',
     }),
     panelRow: css({
       display: 'grid',
@@ -477,4 +547,64 @@ function getStyles(theme: GrafanaTheme2) {
       color: theme.colors.error.text,
     }),
   };
+}
+
+function hasResponseData(response: PrometheusQueryResponse | null | undefined): boolean {
+  if (!response) {
+    return false;
+  }
+  if (response.data.resultType !== 'vector' && response.data.resultType !== 'matrix') {
+    return false;
+  }
+  return response.data.result.length > 0;
+}
+
+function summarizeVector(response: PrometheusQueryResponse | null | undefined, label: string): string {
+  if (!response || response.data.resultType !== 'vector') {
+    return `${label}: no data`;
+  }
+  const results = response.data.result as Array<{ metric: Record<string, string>; value: [number, string] }>;
+  if (results.length === 0) {
+    return `${label}: 0`;
+  }
+  if (results.length === 1) {
+    return `${label}: ${results[0].value[1]}`;
+  }
+  const lines = results.map((r) => {
+    const tags = Object.entries(r.metric)
+      .filter(([k]) => !k.startsWith('__'))
+      .map(([k, v]) => `${k}=${v}`)
+      .join(', ');
+    return `  ${tags || 'total'}: ${r.value[1]}`;
+  });
+  return `${label} (by series):\n${lines.join('\n')}`;
+}
+
+function summarizeMatrix(response: PrometheusQueryResponse | null | undefined, label: string): string {
+  if (!response || response.data.resultType !== 'matrix') {
+    return `${label}: no data`;
+  }
+  const results = response.data.result as Array<{ metric: Record<string, string>; values: Array<[number, string]> }>;
+  if (results.length === 0) {
+    return `${label}: no series`;
+  }
+  const lines = results.map((r) => {
+    const tags = Object.entries(r.metric)
+      .filter(([k]) => !k.startsWith('__'))
+      .map(([k, v]) => `${k}=${v}`)
+      .join(', ');
+    const vals = r.values;
+    const last = vals.length > 0 ? vals[vals.length - 1][1] : 'N/A';
+    const first = vals.length > 0 ? vals[0][1] : 'N/A';
+    return `  ${tags || 'total'}: first=${first}, last=${last}, points=${vals.length}`;
+  });
+  return `${label} (${results.length} series):\n${lines.join('\n')}`;
+}
+
+function formatUtcMillis(ms: number): string {
+  const dt = new Date(ms);
+  if (Number.isNaN(dt.getTime())) {
+    return 'invalid';
+  }
+  return dt.toISOString();
 }
