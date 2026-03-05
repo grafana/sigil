@@ -685,16 +685,29 @@ export default function ConversationListPanel({
                   <td className={styles.cell}>
                     <div className={styles.idCell}>
                       <div className={styles.idCellStack}>
-                        <Tooltip content={displayTitle}>
-                          <span className={styles.idCellPrimary}>
-                            {hasTitle ? displayTitle : truncateId(conversation.conversation_id)}
-                          </span>
-                        </Tooltip>
-                        {hasTitle && (
-                          <Tooltip content={conversation.conversation_id}>
-                            <span className={styles.idCellSecondary}>{truncateId(conversation.conversation_id)}</span>
+                        {hasTitle ? (
+                          <Tooltip content={displayTitle}>
+                            <span className={styles.idCellPrimary}>{displayTitle}</span>
                           </Tooltip>
+                        ) : conversation.conversation_id.length > 40 ? (
+                          <Tooltip content={conversation.conversation_id}>
+                            <span className={styles.idCellPrimary}>
+                              {truncateId(conversation.conversation_id)}
+                            </span>
+                          </Tooltip>
+                        ) : (
+                          <span className={styles.idCellPrimary}>{conversation.conversation_id}</span>
                         )}
+                        {hasTitle &&
+                          (conversation.conversation_id.length > 40 ? (
+                            <Tooltip content={conversation.conversation_id}>
+                              <span className={styles.idCellSecondary}>
+                                {truncateId(conversation.conversation_id)}
+                              </span>
+                            </Tooltip>
+                          ) : (
+                            <span className={styles.idCellSecondary}>{conversation.conversation_id}</span>
+                          ))}
                         {userID.length > 0 && (
                           <Tooltip content={userID}>
                             <span className={styles.idCellSecondary}>{userID}</span>
