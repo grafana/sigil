@@ -1176,6 +1176,9 @@ export default function AgentDetailPage({
     promptAnalysisSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
   const handleRatingResultChange = useCallback((nextRating: AgentRatingResponse | null) => {
+    if (nextRating === null) {
+      return;
+    }
     setInitialRating(nextRating);
     setInitialRatingError('');
     setInitialRatingLoading(false);
