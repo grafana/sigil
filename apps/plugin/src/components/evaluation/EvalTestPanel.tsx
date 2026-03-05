@@ -114,7 +114,7 @@ export default function EvalTestPanel({
   const convDs = conversationsDataSource ?? defaultConversationsDataSource;
 
   const [generationId, setGenerationId] = useState<string | undefined>();
-  const generationLookupHintsRef = useRef<GenerationLookupHints | undefined>();
+  const generationLookupHintsRef = useRef<GenerationLookupHints | undefined>(undefined);
   const [generation, setGeneration] = useState<GenerationDetail | null>(null);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<EvalTestResponse | null>(null);
