@@ -23,16 +23,12 @@ describe('PageInsightBar', () => {
   });
 
   it('renders waiting placeholder when data context is null', () => {
-    render(
-      <PageInsightBar prompt="Analyze" origin="test" dataContext={null} />
-    );
+    render(<PageInsightBar prompt="Analyze" origin="test" dataContext={null} />);
     expect(screen.getByText('Waiting for data...')).toBeInTheDocument();
   });
 
   it('auto-generates on first render when data context is provided', () => {
-    render(
-      <PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="some data" />
-    );
+    render(<PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="some data" />);
     expect(mockGenerate).toHaveBeenCalledTimes(1);
     expect(mockGenerate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -45,9 +41,7 @@ describe('PageInsightBar', () => {
   it('shows placeholder while generating with no content', () => {
     mockIsGenerating = true;
     mockContent = '';
-    render(
-      <PageInsightBar prompt="Analyze" origin="test" dataContext="data" />
-    );
+    render(<PageInsightBar prompt="Analyze" origin="test" dataContext="data" />);
     expect(screen.getByText('Generating insight...')).toBeInTheDocument();
   });
 
@@ -55,9 +49,7 @@ describe('PageInsightBar', () => {
     mockGenerate.mockImplementation(({ onComplete }: { onComplete: (r: string) => void }) => {
       onComplete('- Finding one\n- Finding two');
     });
-    render(
-      <PageInsightBar prompt="Analyze" origin="test" dataContext="data" />
-    );
+    render(<PageInsightBar prompt="Analyze" origin="test" dataContext="data" />);
 
     const toggle = screen.getByRole('button', { name: 'Collapse insights' });
     expect(toggle).toBeInTheDocument();
@@ -70,9 +62,7 @@ describe('PageInsightBar', () => {
     mockGenerate.mockImplementation(({ onComplete }: { onComplete: (r: string) => void }) => {
       onComplete('- **Error rate** spiked to 5%\n- Token usage is normal');
     });
-    render(
-      <PageInsightBar prompt="Analyze" origin="test" dataContext="data" />
-    );
+    render(<PageInsightBar prompt="Analyze" origin="test" dataContext="data" />);
     expect(screen.getByText(/Error rate/)).toBeInTheDocument();
     expect(screen.getByText(/Token usage is normal/)).toBeInTheDocument();
   });
@@ -81,9 +71,7 @@ describe('PageInsightBar', () => {
     mockGenerate.mockImplementation(({ onComplete }: { onComplete: (r: string) => void }) => {
       onComplete('');
     });
-    render(
-      <PageInsightBar prompt="Analyze" origin="test" dataContext="data" />
-    );
+    render(<PageInsightBar prompt="Analyze" origin="test" dataContext="data" />);
     expect(screen.getByText('No notable insights.')).toBeInTheDocument();
   });
 
@@ -91,9 +79,7 @@ describe('PageInsightBar', () => {
     mockGenerate.mockImplementation(({ onComplete }: { onComplete: (r: string) => void }) => {
       onComplete('- Finding one');
     });
-    render(
-      <PageInsightBar prompt="Analyze" origin="test" dataContext="data" />
-    );
+    render(<PageInsightBar prompt="Analyze" origin="test" dataContext="data" />);
 
     const toggle = screen.getByRole('button', { name: 'Collapse insights' });
     fireEvent.click(toggle);
@@ -105,9 +91,7 @@ describe('PageInsightBar', () => {
 
   it('starts collapsed when localStorage has collapsed state', () => {
     localStorage.setItem('sigil.insightBar.collapsed', '1');
-    render(
-      <PageInsightBar prompt="Analyze" origin="test" dataContext="data" />
-    );
+    render(<PageInsightBar prompt="Analyze" origin="test" dataContext="data" />);
     expect(screen.getByRole('button', { name: 'Expand insights' })).toBeInTheDocument();
     expect(mockGenerate).not.toHaveBeenCalled();
   });

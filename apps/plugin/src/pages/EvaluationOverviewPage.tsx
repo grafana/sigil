@@ -47,7 +47,9 @@ export default function EvaluationOverviewPage() {
     if (loading || rules.length === 0) {
       return null;
     }
-    const ruleNames = rules.map((r) => `  ${r.rule_id} (${r.selector}): ${r.enabled ? 'active' : 'disabled'}, sample_rate=${r.sample_rate}`).join('\n');
+    const ruleNames = rules
+      .map((r) => `  ${r.rule_id} (${r.selector}): ${r.enabled ? 'active' : 'disabled'}, sample_rate=${r.sample_rate}`)
+      .join('\n');
     return [
       `Total rules: ${rules.length}`,
       `Active rules: ${activeRuleCount}`,

@@ -562,202 +562,202 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
       />
 
       <div className={styles.grid}>
-          {/* Row 1: Requests & Errors */}
-          <div className={styles.panelRowFirstStat}>
-            <BreakdownStatPanel
-              title="Total Requests"
-              data={totalOpsStat.data}
-              loading={totalOpsStat.loading}
-              error={totalOpsStat.error}
-              breakdownLabel={breakdownPromLabel}
-              height={CHART_HEIGHT}
-            />
-            <MetricPanel
-              title="Requests/s"
-              pluginId="timeseries"
-              height={CHART_HEIGHT}
-              timeRange={timeRange}
-              loading={requestsLoading}
-              error={requestsErr}
-              data={requestsData}
-              options={requestsOptions}
-              fieldConfig={{
-                defaults: {
-                  unit: 'short',
-                  color: consistentColor,
-                  custom: timeseriesDefaults,
-                  thresholds: noThresholds,
-                },
-                overrides: [],
-              }}
-            />
-            <MetricPanel
-              title="Error rate"
-              pluginId="timeseries"
-              height={CHART_HEIGHT}
-              timeRange={timeRange}
-              loading={errorsTimeseries.loading}
-              error={errorsTimeseries.error}
-              data={errorsTimeseries.data ? matrixToDataFrames(errorsTimeseries.data) : []}
-              options={errorOptions}
-              fieldConfig={{
-                defaults: {
-                  unit: 'percent',
-                  min: 0,
-                  max: 100,
-                  color: consistentColor,
-                  custom: timeseriesDefaults,
-                  thresholds: noThresholds,
-                },
-                overrides: [],
-              }}
-            />
-          </div>
+        {/* Row 1: Requests & Errors */}
+        <div className={styles.panelRowFirstStat}>
+          <BreakdownStatPanel
+            title="Total Requests"
+            data={totalOpsStat.data}
+            loading={totalOpsStat.loading}
+            error={totalOpsStat.error}
+            breakdownLabel={breakdownPromLabel}
+            height={CHART_HEIGHT}
+          />
+          <MetricPanel
+            title="Requests/s"
+            pluginId="timeseries"
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={requestsLoading}
+            error={requestsErr}
+            data={requestsData}
+            options={requestsOptions}
+            fieldConfig={{
+              defaults: {
+                unit: 'short',
+                color: consistentColor,
+                custom: timeseriesDefaults,
+                thresholds: noThresholds,
+              },
+              overrides: [],
+            }}
+          />
+          <MetricPanel
+            title="Error rate"
+            pluginId="timeseries"
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={errorsTimeseries.loading}
+            error={errorsTimeseries.error}
+            data={errorsTimeseries.data ? matrixToDataFrames(errorsTimeseries.data) : []}
+            options={errorOptions}
+            fieldConfig={{
+              defaults: {
+                unit: 'percent',
+                min: 0,
+                max: 100,
+                color: consistentColor,
+                custom: timeseriesDefaults,
+                thresholds: noThresholds,
+              },
+              overrides: [],
+            }}
+          />
+        </div>
 
-          {/* Row 2: Latency */}
-          <div className={styles.panelRowLatencyFull}>
-            <MetricPanel
-              title="Latency"
-              pluginId="timeseries"
-              height={CHART_HEIGHT}
-              timeRange={timeRange}
-              loading={latencyTimeseries.loading}
-              error={latencyTimeseries.error}
-              data={latencyTimeseries.data ? matrixToDataFrames(latencyTimeseries.data) : []}
-              options={latencyOptions}
-              fieldConfig={{
-                defaults: { unit: 's', color: consistentColor, custom: timeseriesDefaults, thresholds: noThresholds },
-                overrides: [],
-              }}
-              titleItems={
+        {/* Row 2: Latency */}
+        <div className={styles.panelRowLatencyFull}>
+          <MetricPanel
+            title="Latency"
+            pluginId="timeseries"
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={latencyTimeseries.loading}
+            error={latencyTimeseries.error}
+            data={latencyTimeseries.data ? matrixToDataFrames(latencyTimeseries.data) : []}
+            options={latencyOptions}
+            fieldConfig={{
+              defaults: { unit: 's', color: consistentColor, custom: timeseriesDefaults, thresholds: noThresholds },
+              overrides: [],
+            }}
+            titleItems={
+              <Select
+                options={latencyPercentileOptions}
+                value={latencyPercentile}
+                onChange={(v) => {
+                  if (v.value) {
+                    setLatencyPercentile(v.value);
+                  }
+                }}
+                width={10}
+              />
+            }
+          />
+          <BreakdownStatPanel
+            title={`Avg Latency (${latencyPercentile.toUpperCase()})`}
+            data={latencyStat.data}
+            loading={latencyStat.loading}
+            error={latencyStat.error}
+            breakdownLabel={breakdownPromLabel}
+            height={CHART_HEIGHT}
+            unit="s"
+            aggregation="avg"
+          />
+          <MetricPanel
+            title="Time to First Token"
+            pluginId="timeseries"
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={ttftTimeseries.loading}
+            error={ttftTimeseries.error}
+            data={ttftTimeseries.data ? matrixToDataFrames(ttftTimeseries.data) : []}
+            options={latencyOptions}
+            fieldConfig={{
+              defaults: { unit: 's', color: consistentColor, custom: timeseriesDefaults, thresholds: noThresholds },
+              overrides: [],
+            }}
+          />
+        </div>
+
+        {/* Row 3: Consumption */}
+        <div className={styles.panelRowLatency}>
+          <MetricPanel
+            title="Consumption"
+            pluginId="timeseries"
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            loading={costSeriesLoading}
+            error={
+              isTokenTotal
+                ? tokensTotalTimeseries.error
+                : isTokenByType
+                  ? tokensByTypeTimeseries.error
+                  : costOverTime.error
+            }
+            data={costTimeSeries}
+            options={consumptionOptions}
+            fieldConfig={{
+              defaults: {
+                unit: costMode === 'tokens' ? 'short' : 'currencyUSD',
+                color: consistentColor,
+                custom: timeseriesDefaults,
+                thresholds: noThresholds,
+              },
+              overrides: [],
+            }}
+            titleItems={
+              <div className={styles.panelActions}>
                 <Select
-                  options={latencyPercentileOptions}
-                  value={latencyPercentile}
+                  options={costModeOptions}
+                  value={costMode}
                   onChange={(v) => {
                     if (v.value) {
-                      setLatencyPercentile(v.value);
+                      setCostMode(v.value);
                     }
                   }}
-                  width={10}
+                  width={12}
                 />
-              }
-            />
-            <BreakdownStatPanel
-              title={`Avg Latency (${latencyPercentile.toUpperCase()})`}
-              data={latencyStat.data}
-              loading={latencyStat.loading}
-              error={latencyStat.error}
-              breakdownLabel={breakdownPromLabel}
-              height={CHART_HEIGHT}
-              unit="s"
-              aggregation="avg"
-            />
-            <MetricPanel
-              title="Time to First Token"
-              pluginId="timeseries"
-              height={CHART_HEIGHT}
-              timeRange={timeRange}
-              loading={ttftTimeseries.loading}
-              error={ttftTimeseries.error}
-              data={ttftTimeseries.data ? matrixToDataFrames(ttftTimeseries.data) : []}
-              options={latencyOptions}
-              fieldConfig={{
-                defaults: { unit: 's', color: consistentColor, custom: timeseriesDefaults, thresholds: noThresholds },
-                overrides: [],
-              }}
-            />
-          </div>
-
-          {/* Row 3: Consumption */}
-          <div className={styles.panelRowLatency}>
-            <MetricPanel
-              title="Consumption"
-              pluginId="timeseries"
-              height={CHART_HEIGHT}
-              timeRange={timeRange}
-              loading={costSeriesLoading}
-              error={
-                isTokenTotal
-                  ? tokensTotalTimeseries.error
-                  : isTokenByType
-                    ? tokensByTypeTimeseries.error
-                    : costOverTime.error
-              }
-              data={costTimeSeries}
-              options={consumptionOptions}
-              fieldConfig={{
-                defaults: {
-                  unit: costMode === 'tokens' ? 'short' : 'currencyUSD',
-                  color: consistentColor,
-                  custom: timeseriesDefaults,
-                  thresholds: noThresholds,
-                },
-                overrides: [],
-              }}
-              titleItems={
-                <div className={styles.panelActions}>
+                {costMode === 'tokens' && (
                   <Select
-                    options={costModeOptions}
-                    value={costMode}
+                    options={tokenDrilldownOptions}
+                    value={tokenDrilldown}
                     onChange={(v) => {
                       if (v.value) {
-                        setCostMode(v.value);
+                        setTokenDrilldown(v.value);
                       }
                     }}
-                    width={12}
+                    width={18}
                   />
-                  {costMode === 'tokens' && (
-                    <Select
-                      options={tokenDrilldownOptions}
-                      value={tokenDrilldown}
-                      onChange={(v) => {
-                        if (v.value) {
-                          setTokenDrilldown(v.value);
-                        }
-                      }}
-                      width={18}
-                    />
-                  )}
-                </div>
-              }
-            />
-            <BreakdownStatPanel
-              title={costMode === 'tokens' ? 'Total Tokens' : 'Total Cost'}
-              data={
-                isTokenByType && hasBreakdown
-                  ? tokensByBreakdownAndType.data
-                  : isTokenByType
-                    ? tokensByTypeStat.data
-                    : costMode === 'tokens'
-                      ? tokensTotalByBreakdown.data
-                      : costByBreakdownData
-              }
-              loading={
-                isTokenByType && hasBreakdown
-                  ? tokensByBreakdownAndType.loading
-                  : isTokenByType
-                    ? tokensByTypeStat.loading
-                    : costMode === 'tokens'
-                      ? tokensTotalByBreakdown.loading
-                      : costTokens.loading || resolvedPricing.loading
-              }
-              error={
-                isTokenByType && hasBreakdown
-                  ? tokensByBreakdownAndType.error
-                  : isTokenByType
-                    ? tokensByTypeStat.error
-                    : costMode === 'tokens'
-                      ? tokensTotalByBreakdown.error
-                      : costTokens.error
-              }
-              breakdownLabel={breakdownPromLabel}
-              height={CHART_HEIGHT}
-              unit={costMode === 'tokens' ? 'short' : 'currencyUSD'}
-              segmentLabel={isTokenByType && hasBreakdown ? 'gen_ai_token_type' : undefined}
-              segmentNames={isTokenByType && hasBreakdown ? drilldownTypes : undefined}
-            />
-          </div>
+                )}
+              </div>
+            }
+          />
+          <BreakdownStatPanel
+            title={costMode === 'tokens' ? 'Total Tokens' : 'Total Cost'}
+            data={
+              isTokenByType && hasBreakdown
+                ? tokensByBreakdownAndType.data
+                : isTokenByType
+                  ? tokensByTypeStat.data
+                  : costMode === 'tokens'
+                    ? tokensTotalByBreakdown.data
+                    : costByBreakdownData
+            }
+            loading={
+              isTokenByType && hasBreakdown
+                ? tokensByBreakdownAndType.loading
+                : isTokenByType
+                  ? tokensByTypeStat.loading
+                  : costMode === 'tokens'
+                    ? tokensTotalByBreakdown.loading
+                    : costTokens.loading || resolvedPricing.loading
+            }
+            error={
+              isTokenByType && hasBreakdown
+                ? tokensByBreakdownAndType.error
+                : isTokenByType
+                  ? tokensByTypeStat.error
+                  : costMode === 'tokens'
+                    ? tokensTotalByBreakdown.error
+                    : costTokens.error
+            }
+            breakdownLabel={breakdownPromLabel}
+            height={CHART_HEIGHT}
+            unit={costMode === 'tokens' ? 'short' : 'currencyUSD'}
+            segmentLabel={isTokenByType && hasBreakdown ? 'gen_ai_token_type' : undefined}
+            segmentNames={isTokenByType && hasBreakdown ? drilldownTypes : undefined}
+          />
         </div>
+      </div>
     </div>
   );
 }

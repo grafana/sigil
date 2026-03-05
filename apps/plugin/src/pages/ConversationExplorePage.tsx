@@ -288,7 +288,17 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     ]
       .filter((l) => l.length > 0)
       .join('\n');
-  }, [loading, conversationData, conversationID, totalDurationMs, tokenSummary, costSummary, errorCount, models, generationCosts]);
+  }, [
+    loading,
+    conversationData,
+    conversationID,
+    totalDurationMs,
+    tokenSummary,
+    costSummary,
+    errorCount,
+    models,
+    generationCosts,
+  ]);
 
   if (loading) {
     return (

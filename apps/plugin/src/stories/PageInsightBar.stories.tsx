@@ -57,7 +57,8 @@ export const DashboardContext = {
 
 export const AgentsContext = {
   args: {
-    prompt: 'Analyze this agent fleet overview. Flag concentration risks, anomalies in usage patterns, or agents that need attention.',
+    prompt:
+      'Analyze this agent fleet overview. Flag concentration risks, anomalies in usage patterns, or agents that need attention.',
     origin: 'sigil-plugin/agents-insight',
     dataContext: [
       'Agents in time range: 12',
@@ -76,7 +77,8 @@ export const AgentsContext = {
 
 export const ConversationsContext = {
   args: {
-    prompt: 'Analyze these conversation metrics. Flag quality concerns, unusual patterns, or notable trends vs the previous period.',
+    prompt:
+      'Analyze these conversation metrics. Flag quality concerns, unusual patterns, or notable trends vs the previous period.',
     origin: 'sigil-plugin/conversations-browser-insight',
     dataContext: [
       'Conversations: 342 (previous window: 290)',

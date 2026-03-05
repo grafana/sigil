@@ -34,7 +34,12 @@ function writeCollapsed(value: boolean) {
   }
 }
 
-export function PageInsightBar({ prompt, origin, dataContext, systemPrompt = DEFAULT_SYSTEM_PROMPT }: PageInsightBarProps) {
+export function PageInsightBar({
+  prompt,
+  origin,
+  dataContext,
+  systemPrompt = DEFAULT_SYSTEM_PROMPT,
+}: PageInsightBarProps) {
   const styles = useStyles2(getStyles);
   const gen = useInlineAssistant();
   const [text, setText] = useState('');

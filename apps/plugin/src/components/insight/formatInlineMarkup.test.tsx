@@ -23,9 +23,7 @@ describe('formatInlineMarkup', () => {
   });
 
   it('handles mixed bold and code', () => {
-    const { container } = render(
-      <span>{formatInlineMarkup('**Error rate** spiked in `us-east-1`')}</span>
-    );
+    const { container } = render(<span>{formatInlineMarkup('**Error rate** spiked in `us-east-1`')}</span>);
     expect(container.querySelector('strong')?.textContent).toBe('Error rate');
     expect(container.querySelector('code')?.textContent).toBe('us-east-1');
   });
