@@ -425,7 +425,7 @@ func (s *FanOutStore) readColdGenerationByIDWithPlan(
 	// to preserve generation-id correctness.
 	fallbackCtx, fallbackCancel := withOptionalTimeout(coldCtx, s.coldReadConfig.TotalBudget)
 	defer fallbackCancel()
-	fallbackGeneration, _, fallbackScanned, err := s.scanColdGenerationByID(
+	fallbackGeneration, fallbackHintedCandidate, fallbackScanned, err := s.scanColdGenerationByID(
 		fallbackCtx,
 		tenantID,
 		generationID,
@@ -437,7 +437,13 @@ func (s *FanOutStore) readColdGenerationByIDWithPlan(
 	if err != nil {
 		return nil, scannedBlocks, err
 	}
-	return fallbackGeneration, scannedBlocks, nil
+	if fallbackGeneration != nil {
+		return fallbackGeneration, scannedBlocks, nil
+	}
+	if fallbackHintedCandidate != nil {
+		return fallbackHintedCandidate, scannedBlocks, nil
+	}
+	return nil, scannedBlocks, nil
 }
 
 func (s *FanOutStore) scanColdGenerationByID(
@@ -728,16 +734,12 @@ func (s *FanOutStore) acquireColdIndexSlot(ctx context.Context) (func(), error) 
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case s.coldIndexTokens <- struct{}{}:
-		inflight := atomic.AddInt64(&s.coldIndexReads, 1)
-		queryColdIndexInflight.Set(float64(inflight))
+		atomic.AddInt64(&s.coldIndexReads, 1)
+		queryColdIndexInflight.Inc()
 		return func() {
 			<-s.coldIndexTokens
-			updated := atomic.AddInt64(&s.coldIndexReads, -1)
-			if updated < 0 {
-				atomic.StoreInt64(&s.coldIndexReads, 0)
-				updated = 0
-			}
-			queryColdIndexInflight.Set(float64(updated))
+			atomic.AddInt64(&s.coldIndexReads, -1)
+			queryColdIndexInflight.Dec()
 		}, nil
 	}
 }

@@ -371,6 +371,7 @@ func TestFanOutStoreListConversationGenerationsWithPlanDoesNotHangOnCancelDuring
 
 func TestFanOutStoreAcquireColdIndexSlotTracksInflightCounter(t *testing.T) {
 	store := NewFanOutStore(nil, nil, nil)
+	gaugeBefore := testutil.ToFloat64(queryColdIndexInflight)
 
 	release1, err := store.acquireColdIndexSlot(context.Background())
 	if err != nil {
@@ -384,24 +385,24 @@ func TestFanOutStoreAcquireColdIndexSlotTracksInflightCounter(t *testing.T) {
 	if inflight := atomic.LoadInt64(&store.coldIndexReads); inflight != 2 {
 		t.Fatalf("expected inflight counter=2 after two acquires, got %d", inflight)
 	}
-	if gauge := testutil.ToFloat64(queryColdIndexInflight); gauge != 2 {
-		t.Fatalf("expected inflight gauge=2 after two acquires, got %v", gauge)
+	if gauge := testutil.ToFloat64(queryColdIndexInflight); gauge != gaugeBefore+2 {
+		t.Fatalf("expected inflight gauge=%v after two acquires, got %v", gaugeBefore+2, gauge)
 	}
 
 	release1()
 	if inflight := atomic.LoadInt64(&store.coldIndexReads); inflight != 1 {
 		t.Fatalf("expected inflight counter=1 after one release, got %d", inflight)
 	}
-	if gauge := testutil.ToFloat64(queryColdIndexInflight); gauge != 1 {
-		t.Fatalf("expected inflight gauge=1 after one release, got %v", gauge)
+	if gauge := testutil.ToFloat64(queryColdIndexInflight); gauge != gaugeBefore+1 {
+		t.Fatalf("expected inflight gauge=%v after one release, got %v", gaugeBefore+1, gauge)
 	}
 
 	release2()
 	if inflight := atomic.LoadInt64(&store.coldIndexReads); inflight != 0 {
 		t.Fatalf("expected inflight counter=0 after releases, got %d", inflight)
 	}
-	if gauge := testutil.ToFloat64(queryColdIndexInflight); gauge != 0 {
-		t.Fatalf("expected inflight gauge=0 after releases, got %v", gauge)
+	if gauge := testutil.ToFloat64(queryColdIndexInflight); gauge != gaugeBefore {
+		t.Fatalf("expected inflight gauge=%v after releases, got %v", gaugeBefore, gauge)
 	}
 }
 
@@ -582,13 +583,66 @@ func TestFanOutStoreGetGenerationByIDWithPlanFallbackPreservesConversationHint(t
 		To:             time.Date(2026, 2, 19, 12, 0, 0, 0, time.UTC),
 	})
 	if err != nil {
-		t.Fatalf("get generation by id with range+conversation hint: %v", err)
+		t.Fatalf("get generation by id with range + conversation hint: %v", err)
 	}
 	if found == nil || found.GetId() != "gen-1" {
 		t.Fatalf("expected generation to be found, got %#v", found)
 	}
 	if found.GetConversationId() != "conv-target" {
 		t.Fatalf("expected fallback to preserve conversation hint and prefer conv-target, got conversation_id=%q", found.GetConversationId())
+	}
+	if calls := atomic.LoadInt32(&listCalls); calls != 2 {
+		t.Fatalf("expected bounded + fallback list-block calls, got %d", calls)
+	}
+}
+
+func TestFanOutStoreGetGenerationByIDWithPlanFallbackPreservesAdvisoryHintedCandidate(t *testing.T) {
+	generation := fanOutTestGeneration("gen-1", "conv-other", time.Date(2026, 2, 19, 10, 0, 0, 0, time.UTC))
+	index, generationsByOffset := buildFanOutTestBlock(t, []*sigilv1.Generation{generation})
+
+	var listCalls int32
+	store := NewFanOutStore(
+		&fanOutTestWALReader{
+			getByID: func(_ context.Context, _, _ string) (*sigilv1.Generation, error) {
+				return nil, nil
+			},
+		},
+		&fanOutTestBlockMetadataStore{
+			listBlocks: func(_ context.Context, _ string, from, to time.Time) ([]BlockMeta, error) {
+				call := atomic.AddInt32(&listCalls, 1)
+				if call == 1 {
+					// Simulate a bad range hint that misses the real block.
+					if from.IsZero() || to.IsZero() {
+						t.Fatalf("expected bounded first call for range hint, got from=%s to=%s", from, to)
+					}
+					return []BlockMeta{}, nil
+				}
+				return []BlockMeta{{TenantID: "tenant-a", BlockID: "block-1"}}, nil
+			},
+		},
+		&fanOutTestBlockReader{
+			readIndex: func(_ context.Context, _, _ string) (*BlockIndex, error) {
+				return index, nil
+			},
+			readGenerations: func(_ context.Context, _, _ string, entries []IndexEntry) ([]*sigilv1.Generation, error) {
+				return fanOutGenerationsFromEntries(entries, generationsByOffset), nil
+			},
+		},
+	)
+
+	found, err := store.GetGenerationByIDWithPlan(context.Background(), "tenant-a", "gen-1", GenerationReadPlan{
+		ConversationID: "conv-target",
+		From:           time.Date(2026, 2, 19, 11, 0, 0, 0, time.UTC),
+		To:             time.Date(2026, 2, 19, 12, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("get generation by id with range + conversation hint: %v", err)
+	}
+	if found == nil || found.GetId() != "gen-1" {
+		t.Fatalf("expected fallback advisory candidate to return generation id match, got %#v", found)
+	}
+	if calls := atomic.LoadInt32(&listCalls); calls != 2 {
+		t.Fatalf("expected bounded + fallback list-block calls, got %d", calls)
 	}
 }
 
