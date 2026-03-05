@@ -350,9 +350,7 @@ export default function PublishVersionForm({
 
   const handleSubmit = () => {
     setTouched(true);
-    if (
-      sharedValidation.hasErrors
-    ) {
+    if (sharedValidation.hasErrors) {
       focusInvalidFieldFromMap(sharedValidation.firstInvalidField, {
         outputKey: outputKeyFieldRef.current,
         regexPattern: regexPatternFieldRef.current,

@@ -8,7 +8,7 @@ export function normalizeHeuristicStringList(value: unknown): string[] {
 
   if (typeof value === 'string') {
     return value
-      .split(/\r?\n|,/)
+      .split(/\r?\n/)
       .map((item) => item.trim())
       .filter(Boolean);
   }

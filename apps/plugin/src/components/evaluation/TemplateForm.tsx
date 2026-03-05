@@ -332,11 +332,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
 
   const handleSubmit = () => {
     setTouched(true);
-    if (
-      isIdEmpty ||
-      isIdInvalid ||
-      sharedValidation.hasErrors
-    ) {
+    if (isIdEmpty || isIdInvalid || sharedValidation.hasErrors) {
       if (isIdEmpty || isIdInvalid) {
         focusFirstInvalidField(templateIdFieldRef.current);
       } else {

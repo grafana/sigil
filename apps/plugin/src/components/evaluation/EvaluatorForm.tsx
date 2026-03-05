@@ -434,11 +434,7 @@ export default function EvaluatorForm({
 
   const handleSubmit = () => {
     setTouched(true);
-    if (
-      isIdEmpty ||
-      isIdInvalid ||
-      sharedValidation.hasErrors
-    ) {
+    if (isIdEmpty || isIdInvalid || sharedValidation.hasErrors) {
       if (isIdEmpty || isIdInvalid) {
         focusFirstInvalidField(evaluatorIdFieldRef.current);
       } else {
