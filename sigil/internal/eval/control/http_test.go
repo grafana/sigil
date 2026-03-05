@@ -95,6 +95,30 @@ func TestEvalControlMetricsUnauthorizedUsesUnknownTenant(t *testing.T) {
 	}
 }
 
+func TestEvalControlMetricsRecordedWhenAuthMiddlewareRejects(t *testing.T) {
+	store := newMemoryControlStore()
+	service := NewService(store, nil)
+	mux := http.NewServeMux()
+	rejectingAuth := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+		})
+	}
+	RegisterHTTPRoutes(mux, service, nil, nil, rejectingAuth)
+
+	before := testutil.ToFloat64(evalControlRequestsTotal.WithLabelValues("unknown", "evaluators", "GET", "4xx"))
+
+	resp := doRequest(mux, http.MethodGet, "/api/v1/eval/evaluators", "")
+	if resp.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d body=%s", resp.Code, resp.Body.String())
+	}
+
+	after := testutil.ToFloat64(evalControlRequestsTotal.WithLabelValues("unknown", "evaluators", "GET", "4xx"))
+	if delta := after - before; delta != 1 {
+		t.Fatalf("expected one metrics increment for auth-rejected request, got %v", delta)
+	}
+}
+
 func TestDecodeJSONBody_WhitespaceOnlyBodyReturnsRequiredError(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/eval/evaluators", bytes.NewBufferString(" \n\t "))
 

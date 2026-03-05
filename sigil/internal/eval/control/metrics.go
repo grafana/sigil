@@ -27,6 +27,7 @@ var (
 type statusCapturingResponseWriter struct {
 	http.ResponseWriter
 	statusCode int
+	metricsCtx context.Context
 }
 
 func (w *statusCapturingResponseWriter) WriteHeader(statusCode int) {
@@ -45,20 +46,35 @@ func instrumentControlHandler(endpoint string, next http.Handler) http.Handler {
 	endpointLabel := controlEndpoint(endpoint)
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		startedAt := time.Now()
-		writer := &statusCapturingResponseWriter{ResponseWriter: w}
+		writer := &statusCapturingResponseWriter{ResponseWriter: w, metricsCtx: req.Context()}
 		next.ServeHTTP(writer, req)
 
 		statusCode := writer.statusCode
 		if statusCode == 0 {
 			statusCode = http.StatusOK
 		}
-		observeControlRequestMetrics(req.Context(), endpointLabel, req.Method, statusCode, time.Since(startedAt))
+		observeControlRequestMetrics(writer.metricsCtx, endpointLabel, req.Method, statusCode, time.Since(startedAt))
+	})
+}
+
+// captureMetricsContext propagates the (potentially enriched) request context
+// back to the statusCapturingResponseWriter so the outer metrics layer can
+// see values injected by inner middleware (e.g., tenant ID from auth).
+func captureMetricsContext(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if cw, ok := w.(*statusCapturingResponseWriter); ok {
+			cw.metricsCtx = r.Context()
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 
 func observeControlRequestMetrics(ctx context.Context, endpoint, method string, statusCode int, duration time.Duration) {
-	evalControlRequestsTotal.WithLabelValues(controlTenantID(ctx), controlEndpoint(endpoint), controlMethod(method), controlStatusClass(statusCode)).Inc()
-	evalControlRequestDuration.WithLabelValues(controlTenantID(ctx), controlEndpoint(endpoint), controlMethod(method), controlStatusClass(statusCode)).Observe(duration.Seconds())
+	tenantLabel := controlTenantID(ctx)
+	methodLabel := controlMethod(method)
+	statusLabel := controlStatusClass(statusCode)
+	evalControlRequestsTotal.WithLabelValues(tenantLabel, endpoint, methodLabel, statusLabel).Inc()
+	evalControlRequestDuration.WithLabelValues(tenantLabel, endpoint, methodLabel, statusLabel).Observe(duration.Seconds())
 }
 
 func controlTenantID(ctx context.Context) string {

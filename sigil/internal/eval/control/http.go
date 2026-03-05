@@ -53,7 +53,7 @@ func RegisterHTTPRoutes(mux *http.ServeMux, service *Service, templateService *T
 	}
 
 	register := func(pattern string, endpoint string, handler http.Handler) {
-		mux.Handle(pattern, protectedMiddleware(instrumentControlHandler(endpoint, handler)))
+		mux.Handle(pattern, instrumentControlHandler(endpoint, protectedMiddleware(captureMetricsContext(handler))))
 	}
 
 	register("/api/v1/eval/evaluators", "evaluators", http.HandlerFunc(service.handleEvaluators))
