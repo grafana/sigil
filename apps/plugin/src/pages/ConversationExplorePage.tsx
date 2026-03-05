@@ -1,13 +1,15 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
-import type { GrafanaTheme2 } from '@grafana/data';
+import { AppEvents, type GrafanaTheme2 } from '@grafana/data';
 import { Alert, useStyles2 } from '@grafana/ui';
+import { getAppEvents } from '@grafana/runtime';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
 import { createTempoTraceFetcher } from '../conversation/fetchTrace';
 import type { TraceFetcher } from '../conversation/loader';
 import { defaultModelCardClient, type ModelCardClient } from '../modelcard/api';
 import { useConversationData } from '../hooks/useConversationData';
+import { useSavedConversation } from '../hooks/useSavedConversation';
 import {
   useConversationFlow,
   type FlowGroupBy,
@@ -118,6 +120,9 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   const traceFetcher = props.traceFetcher ?? defaultTraceFetcher;
   const modelCardClient = props.modelCardClient ?? defaultModelCardClient;
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const conversationTitle = searchParams.get('conversationTitle') ?? '';
+
   const { conversationData, loading, errorMessage, tokenSummary, costSummary, generationCosts, allGenerations } =
     useConversationData({
       conversationID,
@@ -125,6 +130,27 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
       traceFetcher,
       modelCardClient,
     });
+
+  const { isSaved, loading: saveLoading, toggleSave } = useSavedConversation(
+    conversationID,
+    conversationTitle || conversationID
+  );
+
+  const handleToggleSave = useCallback(() => {
+    void toggleSave()
+      .then((nowSaved) => {
+        getAppEvents().publish({
+          type: AppEvents.alertSuccess.name,
+          payload: [nowSaved ? 'Conversation saved' : 'Conversation unsaved'],
+        });
+      })
+      .catch(() => {
+        getAppEvents().publish({
+          type: AppEvents.alertWarning.name,
+          payload: ['Failed to update save status'],
+        });
+      });
+  }, [toggleSave]);
 
   const [flowGroupBy, setFlowGroupBy] = useState<FlowGroupBy>('agent');
   const [flowSortBy, setFlowSortBy] = useState<FlowSortBy>('time');
@@ -138,7 +164,6 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     generationCosts
   );
 
-  const [searchParams, setSearchParams] = useSearchParams();
   const selectedNodeId = searchParams.get('node');
 
   const MIN_PANEL_WIDTH = 260;
@@ -377,6 +402,8 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
         modelProviders={modelProviders}
         errorCount={errorCount}
         generationCount={conversationData.generationCount}
+        isSaved={isSaved}
+        onToggleSave={saveLoading ? undefined : handleToggleSave}
       />
       <div className={styles.contentArea}>
         <div className={styles.leftPanel} style={{ width: panelWidth }}>
