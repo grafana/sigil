@@ -269,6 +269,7 @@ export default function AgentDetailPage({
       if (ratingRequestVersion.current !== version) {
         return;
       }
+      setInitialRating(null);
       setInitialRatingLoading(true);
       setInitialRatingError('');
     });
