@@ -6,7 +6,6 @@ Workflow:
 1. Run local-first quality gates before touching CI: (make this targetted to the changed files if possible)
    - `mise run format`
    - `mise run lint`
-   - `mise run check`
 2. If any local command fails:
    - Fix what is reasonably fixable in this babysit pass.
    - Re-run the failing command(s) until green.
@@ -28,10 +27,6 @@ Workflow:
 9. If checks fail:
    - Identify failing jobs and fetch details/logs using `gh` (for example `gh run list`, `gh run view <run-id> --log-failed`, and related commands).
    - Reproduce/fix the issue in the repo.
-   - Run local verification in this order unless unnecessary for the scoped change:
-     - `mise run format`
-     - `mise run lint`
-     - `mise run check`
    - Resolve issues before pushing.
    - Commit with a clear Conventional Commit message prefixed with `babysit:` and explain what changed and why.
    - Push explicitly: `git push origin "$(git branch --show-current)"`.
