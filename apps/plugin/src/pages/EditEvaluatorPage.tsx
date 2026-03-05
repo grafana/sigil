@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Spinner, Text, useStyles2 } from '@grafana/ui';
+import { Alert, Badge, Spinner, Text, useStyles2 } from '@grafana/ui';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
 import type { CreateEvaluatorRequest, EvalFormState, Evaluator, TemplateVersionSummary } from '../evaluation/types';
@@ -10,7 +10,7 @@ import EvaluatorForm from '../components/evaluation/EvaluatorForm';
 import EvalTestPanel from '../components/evaluation/EvalTestPanel';
 import VersionHistoryTable from '../components/evaluation/VersionHistoryTable';
 import VersionCompare from '../components/evaluation/VersionCompare';
-import RevertEvaluatorForm from '../components/evaluation/RevertEvaluatorForm';
+import { getSectionTitleStyles } from '../components/evaluation/sectionStyles';
 
 const EVAL_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}`;
 
@@ -27,12 +27,17 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   layout: css({
     display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
+    gridTemplateColumns: 'minmax(0, 3fr) minmax(360px, 2fr)',
     gridTemplateRows: '1fr',
-    gap: theme.spacing(3),
+    gap: theme.spacing(2),
     flex: 1,
     minHeight: 0,
     overflow: 'hidden',
+    '@media (max-width: 1360px)': {
+      gridTemplateColumns: '1fr',
+      gridTemplateRows: 'auto auto',
+      overflow: 'auto',
+    },
   }),
   left: css({
     overflow: 'auto',
@@ -40,23 +45,28 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexDirection: 'column' as const,
     gap: theme.spacing(2),
     minHeight: 0,
-    padding: theme.spacing(0.5),
-    paddingLeft: 0,
+    minWidth: 0,
   }),
   formCard: css({
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: theme.spacing(1.5),
-    padding: theme.spacing(2),
-    background: theme.colors.background.primary,
-    boxShadow: theme.shadows.z1,
-    borderRadius: theme.shape.radius.default,
+    gap: theme.spacing(0.75),
+    padding: 0,
+    background: 'transparent',
+    minWidth: 0,
   }),
   right: css({
     display: 'flex',
     flexDirection: 'column' as const,
     minHeight: 0,
     overflow: 'hidden',
+    minWidth: 0,
+    borderLeft: `1px solid ${theme.colors.border.weak}`,
+    paddingLeft: theme.spacing(2),
+    '@media (max-width: 1360px)': {
+      borderLeft: 'none',
+      paddingLeft: 0,
+    },
   }),
   rightInner: css({
     flex: 1,
@@ -64,7 +74,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     overflow: 'hidden',
-    padding: theme.spacing(0.5, 0, 2, 2),
+    padding: 0,
   }),
   header: css({
     display: 'flex',
@@ -89,7 +99,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   headerSubtitle: css({
     marginTop: theme.spacing(0.5),
     color: theme.colors.text.secondary,
-    fontSize: theme.typography.bodySmall.fontSize,
+    fontSize: theme.typography.body.fontSize,
   }),
   loading: css({
     display: 'flex',
@@ -102,14 +112,31 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexDirection: 'column' as const,
     gap: theme.spacing(1),
   }),
-  versionHistoryCard: css({
+  bottomSections: css({
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: theme.spacing(1.5),
-    padding: theme.spacing(2),
+    gap: theme.spacing(2),
+  }),
+  detailCard: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
     background: theme.colors.background.primary,
-    boxShadow: theme.shadows.z1,
     borderRadius: theme.shape.radius.default,
+  }),
+  detailCardHeader: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+    background: theme.colors.background.primary,
+    flexShrink: 0,
+    padding: theme.spacing(0.75, 1.25, 0.25),
+    borderBottom: `1px solid ${theme.colors.border.weak}`,
+  }),
+  sectionTitle: css({
+    ...getSectionTitleStyles(theme),
+  }),
+  detailCardBody: css({
+    padding: theme.spacing(1, 1.25),
   }),
 });
 
@@ -130,7 +157,6 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
   const [versions, setVersions] = useState<TemplateVersionSummary[]>([]);
   const [versionDetails, setVersionDetails] = useState<Evaluator[]>([]);
   const [selectedVersions, setSelectedVersions] = useState<string[]>([]);
-  const [rollbackEvaluator, setRollbackEvaluator] = useState<Evaluator | null>(null);
 
   useEffect(() => {
     if (!evaluatorID) {
@@ -217,35 +243,6 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
     ? (versionDetails.find((e) => e.version === selectedVersions[1]) ?? null)
     : null;
 
-  const handleRollback = (version: string) => {
-    const e = versionDetails.find((ev) => ev.version === version);
-    if (e) {
-      setRollbackEvaluator(e);
-    }
-  };
-
-  // When rollback form is shown, use rollback evaluator's config for the test panel.
-  // When editing, use formState from EvaluatorForm's onConfigChange.
-  const testPanelState: EvalFormState = rollbackEvaluator
-    ? {
-        kind: rollbackEvaluator.kind,
-        config: rollbackEvaluator.config ?? {},
-        outputKeys: rollbackEvaluator.output_keys ?? [],
-      }
-    : formState;
-
-  const handleRevertSubmit = async (req: CreateEvaluatorRequest) => {
-    if (!evaluator) {
-      return;
-    }
-    try {
-      await dataSource.createEvaluator(req);
-      navigate(`${EVAL_BASE}/evaluators`);
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to revert');
-    }
-  };
-
   const handleSubmit = async (req: CreateEvaluatorRequest) => {
     try {
       await dataSource.createEvaluator(req);
@@ -314,6 +311,7 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
               <Text element="h3" weight="bold">
                 Edit evaluator {evaluator.evaluator_id}
               </Text>
+              <Badge text={evaluator.version} color="blue" />
             </div>
             <div className={styles.headerSubtitle}>
               Update the evaluator configuration and test it against recent generations.
@@ -325,44 +323,50 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
       <div className={styles.layout}>
         <div className={styles.left}>
           <div className={styles.formCard}>
-            {rollbackEvaluator ? (
-              <RevertEvaluatorForm
-                evaluator={rollbackEvaluator}
-                existingVersions={versions.map((v) => v.version)}
-                onSubmit={handleRevertSubmit}
-                onCancel={() => setRollbackEvaluator(null)}
-              />
-            ) : (
-              <EvaluatorForm
-                key={evaluator.evaluator_id}
-                initialEvaluator={evaluator}
-                existingVersions={
-                  versions.length > 0 ? versions.map((v) => v.version) : evaluator ? [evaluator.version] : []
-                }
-                onSubmit={handleSubmit}
-                onCancel={handleCancel}
-                onConfigChange={setFormState}
-              />
-            )}
+            <EvaluatorForm
+              key={evaluator.evaluator_id}
+              initialEvaluator={evaluator}
+              existingVersions={
+                versions.length > 0 ? versions.map((v) => v.version) : evaluator ? [evaluator.version] : []
+              }
+              onSubmit={handleSubmit}
+              onCancel={handleCancel}
+              onConfigChange={setFormState}
+            />
           </div>
+        </div>
+        <div className={styles.right}>
+          <div className={styles.rightInner}>
+            <EvalTestPanel
+              kind={formState.kind}
+              config={formState.config}
+              outputKeys={formState.outputKeys}
+              dataSource={dataSource}
+            />
+          </div>
+        </div>
+      </div>
 
-          <div className={styles.versionHistoryCard}>
-            <Text element="h3" weight="medium">
-              Version History
-            </Text>
+      <div className={styles.bottomSections}>
+        <div className={styles.detailCard}>
+          <div className={styles.detailCardHeader}>
+            <div className={styles.sectionTitle}>Version history</div>
+          </div>
+          <div className={styles.detailCardBody}>
             <VersionHistoryTable
               versions={versions}
               selectedVersions={selectedVersions}
               onToggleSelect={handleToggleVersionSelect}
-              onRollback={handleRollback}
             />
           </div>
+        </div>
 
-          {compareLeft && compareRight && (
-            <div className={styles.section}>
-              <Text element="h3" weight="medium">
-                Version Compare
-              </Text>
+        {compareLeft && compareRight && (
+          <div className={styles.detailCard}>
+            <div className={styles.detailCardHeader}>
+              <div className={styles.sectionTitle}>Version compare</div>
+            </div>
+            <div className={styles.detailCardBody}>
               <VersionCompare
                 left={{
                   version: compareLeft.version,
@@ -378,18 +382,8 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
                 }}
               />
             </div>
-          )}
-        </div>
-        <div className={styles.right}>
-          <div className={styles.rightInner}>
-            <EvalTestPanel
-              kind={testPanelState.kind}
-              config={testPanelState.config}
-              outputKeys={testPanelState.outputKeys}
-              dataSource={dataSource}
-            />
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
