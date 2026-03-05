@@ -224,7 +224,7 @@ export default function AgentRatingPanel({
         {result && (
           <Badge
             text={`${result.score}/10`}
-            color={result.score >= 7 ? 'green' : result.score >= 5 ? 'orange' : 'red'}
+            color={result.score >= 9 ? 'green' : result.score >= 7 ? 'blue' : result.score >= 5 ? 'orange' : 'red'}
           />
         )}
       </div>

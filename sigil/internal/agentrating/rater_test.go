@@ -181,9 +181,9 @@ func TestRaterRateWithModel_TableDriven(t *testing.T) {
 			if client.lastReq.OutputSchema == nil {
 				t.Fatalf("expected OutputSchema to be set")
 			}
-		if client.lastReq.Thinking.ModeOrDefault() != judges.ThinkingModeOff {
-			t.Fatalf("expected default thinking mode off, got %q", client.lastReq.Thinking.ModeOrDefault())
-		}
+			if client.lastReq.Thinking.ModeOrDefault() != judges.ThinkingModeOff {
+				t.Fatalf("expected default thinking mode off, got %q", client.lastReq.Thinking.ModeOrDefault())
+			}
 			if client.lastReq.Thinking.AnthropicModeOrDefault() != judges.AnthropicThinkingModeAdaptive {
 				t.Fatalf("expected default anthropic thinking mode adaptive, got %q", client.lastReq.Thinking.AnthropicModeOrDefault())
 			}
