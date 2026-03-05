@@ -1730,13 +1730,19 @@ func (s *Service) batchResolveGenerationTitles(
 	}
 
 	resultCh := make(chan titleResult, len(candidates))
+
+	cacheSnapshot := make(map[string]generationTitleSnapshot, len(cache))
+	for k, v := range cache {
+		cacheSnapshot[k] = v
+	}
+
 	var wg sync.WaitGroup
 	for i, candidate := range candidates {
 		wg.Add(1)
 		go func(idx int, c searchCandidate) {
 			defer wg.Done()
-			localCache := make(map[string]generationTitleSnapshot, len(cache))
-			for k, v := range cache {
+			localCache := make(map[string]generationTitleSnapshot, len(cacheSnapshot))
+			for k, v := range cacheSnapshot {
 				localCache[k] = v
 			}
 			title := s.resolveLatestConversationTitleFromGenerations(ctx, tenantID, c.metadata, reader, localCache)

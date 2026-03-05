@@ -18,6 +18,81 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+type stubFanOutReader struct {
+	generations map[string]*sigilv1.Generation
+}
+
+func (r *stubFanOutReader) GetGenerationByID(_ context.Context, _, generationID string) (*sigilv1.Generation, error) {
+	if gen, ok := r.generations[generationID]; ok {
+		return gen, nil
+	}
+	return nil, nil
+}
+
+func (r *stubFanOutReader) ListConversationGenerations(_ context.Context, _, conversationID string) ([]*sigilv1.Generation, error) {
+	var out []*sigilv1.Generation
+	for _, gen := range r.generations {
+		if gen.GetConversationId() == conversationID {
+			out = append(out, gen)
+		}
+	}
+	return out, nil
+}
+
+func TestBatchResolveGenerationTitles_NoConcurrentMapRace(t *testing.T) {
+	base := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+
+	makeGeneration := func(id, convID string, ts time.Time, title string) *sigilv1.Generation {
+		gen := &sigilv1.Generation{
+			Id:             id,
+			ConversationId: convID,
+			CompletedAt:    timestamppb.New(ts),
+		}
+		if title != "" {
+			gen.Metadata, _ = structpb.NewStruct(map[string]interface{}{
+				"sigil.conversation.title": title,
+			})
+		}
+		return gen
+	}
+
+	reader := &stubFanOutReader{
+		generations: map[string]*sigilv1.Generation{
+			"gen-1": makeGeneration("gen-1", "conv-1", base, "title-1"),
+			"gen-2": makeGeneration("gen-2", "conv-2", base.Add(time.Second), "title-2"),
+		},
+	}
+
+	candidates := make([]searchCandidate, 20)
+	for i := range candidates {
+		convID := "conv-1"
+		genID := "gen-1"
+		if i%2 == 1 {
+			convID = "conv-2"
+			genID = "gen-2"
+		}
+		candidates[i] = searchCandidate{
+			conversationID: convID,
+			aggregate: &tempoConversationAggregate{
+				GenerationIDs: map[string]struct{}{genID: {}},
+			},
+			metadata: storage.Conversation{
+				ConversationID:  convID,
+				GenerationCount: 1,
+			},
+		}
+	}
+
+	service := NewService()
+	cache := make(map[string]generationTitleSnapshot)
+
+	titles := service.batchResolveGenerationTitles(context.Background(), "tenant-a", candidates, reader, cache)
+
+	if len(titles) != len(candidates) {
+		t.Fatalf("expected %d titles, got %d", len(candidates), len(titles))
+	}
+}
+
 func TestSearchConversationsForTenantAppliesTempoAndMySQLFilters(t *testing.T) {
 	base := time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)
 	conversationStore := &stubConversationStore{
