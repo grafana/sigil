@@ -6,7 +6,6 @@ import { useStyles2 } from '@grafana/ui';
 import { Route, Routes } from 'react-router-dom';
 import { ROUTES } from '../constants';
 
-const LandingPage = React.lazy(() => import('../pages/LandingPage'));
 const DashboardPage = React.lazy(() => import('../pages/DashboardPage'));
 const TutorialPage = React.lazy(() => import('../pages/TutorialPage'));
 const ConversationsBrowserPage = React.lazy(() => import('../pages/ConversationsBrowserPage'));
