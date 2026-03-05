@@ -195,4 +195,48 @@ describe('AgentDetailPage', () => {
     expect(await screen.findByText('Latest 8/10')).toBeInTheDocument();
     expect(screen.getByLabelText('Latest rating summary: Top-line report summary.')).toBeInTheDocument();
   });
+
+  it('shows compact age in top stats', async () => {
+    const dataSource = createDataSource();
+
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Age')).toBeInTheDocument();
+    expect(screen.getByText('2h')).toBeInTheDocument();
+  });
+
+  it('toggles system prompt between preview and markdown views', async () => {
+    const dataSource = createDataSource();
+    const lookupAgent = dataSource.lookupAgent;
+    dataSource.lookupAgent = jest.fn(async (name: string, version?: string) => {
+      const detail = await lookupAgent(name, version);
+      return {
+        ...detail,
+        system_prompt: '# Prompt heading\n\n- First bullet',
+        system_prompt_prefix: '# Prompt heading',
+      };
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Prompt heading')).toBeInTheDocument();
+    expect(screen.queryByText('# Prompt heading')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Markdown' }));
+
+    expect(await screen.findByText(/# Prompt heading/)).toBeInTheDocument();
+    expect(screen.getByText(/- First bullet/)).toBeInTheDocument();
+  });
 });
