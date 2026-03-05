@@ -253,10 +253,16 @@ export function DashboardConsumptionGrid({
       `Cache hit rate (%): ${cacheHitRate.toFixed(2)}`,
       summarizeVector(tokensByTypeStat.data, 'Tokens by type'),
       summarizeMatrix(tokensByTypeTimeseries.data, 'Tokens by type over time'),
-      summarizeMatrix(tokensTotalTimeseries.data, hasBreakdown ? `Tokens over time by ${breakdownBy}` : 'Total tokens over time'),
+      summarizeMatrix(
+        tokensTotalTimeseries.data,
+        hasBreakdown ? `Tokens over time by ${breakdownBy}` : 'Total tokens over time'
+      ),
       summarizeVector(tokensByBreakdown.data, hasBreakdown ? `Tokens by ${breakdownBy}` : 'Tokens'),
       summarizeVector(costByBreakdownData, hasBreakdown ? `Cost by ${breakdownBy}` : 'Estimated cost'),
-      summarizeCostTimeSeries(costTimeSeries, hasBreakdown ? `Cost over time by ${breakdownBy}` : 'Estimated cost over time'),
+      summarizeCostTimeSeries(
+        costTimeSeries,
+        hasBreakdown ? `Cost over time by ${breakdownBy}` : 'Estimated cost over time'
+      ),
       `Estimated total cost (USD): $${totalCost.totalCost.toFixed(4)}`,
     ];
     return parts.join('\n');

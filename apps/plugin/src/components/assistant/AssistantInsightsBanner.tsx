@@ -42,7 +42,7 @@ export default function AssistantInsightsBanner({
   const styles = useStyles2(getStyles);
   const assistant = Assistant.useInlineAssistant();
   const fullAssistant = Assistant.useAssistant();
-  const [rawAssistantText, setRawAssistantText] = useState('');
+  const [, setRawAssistantText] = useState('');
   const [insights, setInsights] = useState<InsightItem[]>([]);
   const [currentInsightIndex, setCurrentInsightIndex] = useState(0);
   const [typedLength, setTypedLength] = useState(0);
@@ -99,7 +99,7 @@ export default function AssistantInsightsBanner({
   useEffect(() => {
     if (!dataContext) {
       lastDataContextRef.current = null;
-      resetInsights();
+      queueMicrotask(() => resetInsights());
       return;
     }
     if (assistant.isGenerating) {
@@ -112,20 +112,22 @@ export default function AssistantInsightsBanner({
     const fallbackCacheKey = buildFallbackCacheKey(prompt, origin, systemPrompt);
     const cached = readCachedInsights(cacheKey) ?? readCachedInsights(fallbackCacheKey);
     if (cached) {
-      setRawAssistantText(cached.insights.join('\n'));
-      setInsights(cached.insights.map((text) => ({ text, generatedAt: cached.generatedAt })));
-      setCurrentInsightIndex(0);
-      setTypedLength(0);
-      setTypedHistory((prev) => {
-        const next = mergeTypedHistory(prev, cached.insights);
-        if (next === prev) {
-          return prev;
-        }
-        writeTypedHistory(next);
-        return next;
+      queueMicrotask(() => {
+        setRawAssistantText(cached.insights.join('\n'));
+        setInsights(cached.insights.map((text) => ({ text, generatedAt: cached.generatedAt })));
+        setCurrentInsightIndex(0);
+        setTypedLength(0);
+        setTypedHistory((prev) => {
+          const next = mergeTypedHistory(prev, cached.insights);
+          if (next === prev) {
+            return prev;
+          }
+          writeTypedHistory(next);
+          return next;
+        });
       });
     } else {
-      resetInsights();
+      queueMicrotask(() => resetInsights());
     }
     lastDataContextRef.current = dataContext;
     const cacheAgeMs = cached ? Date.now() - cached.generatedAt : Number.POSITIVE_INFINITY;
@@ -177,10 +179,10 @@ export default function AssistantInsightsBanner({
 
   useEffect(() => {
     if (!currentInsightText.length) {
-      setTypedLength(0);
+      queueMicrotask(() => setTypedLength(0));
       return;
     }
-    setTypedLength(hasTypedCurrentInsight ? currentInsightText.length : 0);
+    queueMicrotask(() => setTypedLength(hasTypedCurrentInsight ? currentInsightText.length : 0));
   }, [currentInsightText, hasTypedCurrentInsight]);
 
   useEffect(() => {
@@ -190,21 +192,23 @@ export default function AssistantInsightsBanner({
     if (typedHistory[currentInsightTypedKey]) {
       return;
     }
-    setTypedHistory((prev) => {
-      if (prev[currentInsightTypedKey]) {
-        return prev;
-      }
-      const next = { ...prev, [currentInsightTypedKey]: true };
-      writeTypedHistory(next);
-      return next;
-    });
+    queueMicrotask(() =>
+      setTypedHistory((prev) => {
+        if (prev[currentInsightTypedKey]) {
+          return prev;
+        }
+        const next: Record<string, true> = { ...prev, [currentInsightTypedKey]: true };
+        writeTypedHistory(next);
+        return next;
+      })
+    );
   }, [currentInsightText, currentInsightTypedKey, typedHistory, typedLength]);
 
   useEffect(() => {
     if (!isHovered || !currentInsightText.length) {
       return;
     }
-    setTypedLength(currentInsightText.length);
+    queueMicrotask(() => setTypedLength(currentInsightText.length));
   }, [currentInsightText, isHovered]);
 
   useEffect(() => {
@@ -301,7 +305,7 @@ export default function AssistantInsightsBanner({
           <span className={styles.sparkleIcon} title="AI generated insights" aria-label="AI generated insights">
             ✨
           </span>
-          <p className={cx(styles.text, isHovered && styles.textExpanded)}>
+          <p className={cx(styles.text, isHovered ? styles.textExpanded : undefined)}>
             {showAgePrefix ? <span className={styles.agePrefix}>{agePrefixText}</span> : null}
             {typedInsight}
             <span className={styles.cursor} aria-hidden="true">
@@ -430,12 +434,7 @@ function stableHash(input: string): string {
   let hash = 2166136261;
   for (let i = 0; i < input.length; i += 1) {
     hash ^= input.charCodeAt(i);
-    hash +=
-      (hash << 1) +
-      (hash << 4) +
-      (hash << 7) +
-      (hash << 8) +
-      (hash << 24);
+    hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
   }
   return (hash >>> 0).toString(36);
 }
@@ -462,6 +461,8 @@ function getStyles(theme: GrafanaTheme2) {
     banner: css({
       width: '100%',
       padding: theme.spacing(0.5, 0),
+      marginTop: theme.spacing(1),
+      marginBottom: theme.spacing(1),
       display: 'flex',
       alignItems: 'flex-start',
     }),

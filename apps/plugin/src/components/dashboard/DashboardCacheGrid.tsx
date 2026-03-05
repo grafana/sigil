@@ -229,7 +229,10 @@ export function DashboardCacheGrid({
       summarizeVector(inputTokensStat.data, 'Input tokens'),
       `Cache hit rate (%): ${cacheHitRate.toFixed(2)}`,
       `Estimated cache savings (USD): $${savings.savings.toFixed(4)}`,
-      summarizeMatrix(cacheHitRateTimeseries.data, hasBreakdown ? `Cache hit rate by ${breakdownBy}` : 'Cache hit rate over time'),
+      summarizeMatrix(
+        cacheHitRateTimeseries.data,
+        hasBreakdown ? `Cache hit rate by ${breakdownBy}` : 'Cache hit rate over time'
+      ),
       summarizeVector(cacheHitRateByModelData, 'Cache hit rate by model'),
       summarizeMatrix(cacheTokensTimeseries.data, 'Cache read vs write over time'),
       summarizeVector(
