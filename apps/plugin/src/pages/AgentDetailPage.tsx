@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { css } from '@emotion/css';
+import { css, cx } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Badge, Button, Select, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
+import { Alert, Badge, Button, Icon, Select, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../agents/api';
 import type { AgentDetail, AgentVersionListItem } from '../agents/types';
 import ModelCardPopover from '../components/conversations/ModelCardPopover';
@@ -13,6 +13,9 @@ import type { ModelCard } from '../modelcard/types';
 import { resolveModelCardsFromNames } from '../modelcard/resolve';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { formatDateShort } from '../utils/date';
+import { TokenizedText } from '../components/tokenizer/TokenizedText';
+import { useTokenizer } from '../components/tokenizer/useTokenizer';
+import { getEncoding, AVAILABLE_ENCODINGS, type EncodingName } from '../components/tokenizer/encodingMap';
 
 const VERSION_PAGE_SIZE = 50;
 
@@ -160,6 +163,47 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     justifyContent: 'center',
     padding: theme.spacing(4),
+  }),
+  tokenizeBtn: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.375),
+    padding: `${theme.spacing(0.25)} ${theme.spacing(0.75)}`,
+    borderRadius: theme.shape.radius.pill,
+    fontSize: 10,
+    fontWeight: theme.typography.fontWeightMedium,
+    color: theme.colors.text.secondary,
+    background: 'transparent',
+    border: `1px solid ${theme.colors.border.weak}`,
+    cursor: 'pointer',
+    transition: 'all 120ms ease',
+    '&:hover': {
+      color: theme.colors.text.primary,
+      borderColor: theme.colors.border.medium,
+      background: theme.colors.action.hover,
+    },
+  }),
+  tokenizeBtnActive: css({
+    color: theme.colors.primary.text,
+    borderColor: theme.colors.primary.border,
+    background: theme.colors.primary.transparent,
+  }),
+  encodingSelect: css({
+    marginLeft: theme.spacing(0.5),
+    fontSize: 10,
+    padding: `1px ${theme.spacing(0.5)}`,
+    height: 22,
+    width: 'fit-content',
+    background: theme.colors.background.primary,
+    border: `1px solid ${theme.colors.border.weak}`,
+    borderRadius: theme.shape.radius.default,
+    color: theme.colors.text.primary,
+    cursor: 'pointer',
+    appearance: 'auto' as const,
+    '&:focus': {
+      borderColor: theme.colors.primary.border,
+      outline: 'none',
+    },
   }),
 });
 
@@ -364,6 +408,25 @@ export default function AgentDetailPage({
     }
   };
 
+  const autoEncoding = useMemo(() => {
+    if (!detail) {
+      return 'cl100k_base' as EncodingName;
+    }
+    const firstModel = detail.models[0];
+    return getEncoding(firstModel?.provider, firstModel?.name);
+  }, [detail]);
+
+  const [tokenizedSections, setTokenizedSections] = useState<Record<string, boolean>>({});
+  const [encodingOverride, setEncodingOverride] = useState<EncodingName | null>(null);
+
+  const activeEncoding = encodingOverride ?? autoEncoding;
+  const anyTokenized = Object.values(tokenizedSections).some(Boolean);
+  const { encode, decode, isLoading: tokenizerLoading } = useTokenizer(anyTokenized ? activeEncoding : null);
+
+  const toggleSection = useCallback((key: string) => {
+    setTokenizedSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+
   if (loading) {
     return (
       <div className={styles.page}>
@@ -527,15 +590,64 @@ export default function AgentDetailPage({
       <div className={styles.panel}>
         <div className={styles.panelHeader}>
           <Text weight="medium">System prompt</Text>
+          <span style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto' }}>
+            <span
+              className={cx(styles.tokenizeBtn, tokenizedSections['system'] && styles.tokenizeBtnActive)}
+              onClick={() => toggleSection('system')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  toggleSection('system');
+                }
+              }}
+              role="button"
+              tabIndex={0}
+            >
+              <Icon name="brackets-curly" size="xs" />
+              {tokenizerLoading ? 'Loading\u2026' : 'Tokenize'}
+            </span>
+            {tokenizedSections['system'] && (
+              <select
+                className={styles.encodingSelect}
+                aria-label="Tokenizer encoding"
+                value={encodingOverride ?? ''}
+                onChange={(e) => setEncodingOverride(e.target.value ? (e.target.value as EncodingName) : null)}
+              >
+                <option value="">Auto ({autoEncoding.replace('_base', '')})</option>
+                {AVAILABLE_ENCODINGS.map((enc) => (
+                  <option key={enc.value} value={enc.value}>
+                    {enc.value.replace('_base', '')}
+                  </option>
+                ))}
+              </select>
+            )}
+          </span>
         </div>
         <div className={styles.panelBody}>
-          <pre className={styles.systemPrompt}>
-            {detail.system_prompt.length > 0 ? detail.system_prompt : 'No system prompt recorded.'}
-          </pre>
+          {detail.system_prompt.length > 0 ? (
+            tokenizedSections['system'] && encode && decode ? (
+              <div className={styles.systemPrompt}>
+                <TokenizedText text={detail.system_prompt} encode={encode} decode={decode} />
+              </div>
+            ) : (
+              <pre className={styles.systemPrompt}>{detail.system_prompt}</pre>
+            )
+          ) : (
+            <pre className={styles.systemPrompt}>No system prompt recorded.</pre>
+          )}
         </div>
       </div>
 
-      <ToolsPanel tools={detail.tools} />
+      <ToolsPanel
+        tools={detail.tools}
+        tokenized={tokenizedSections['tools']}
+        onToggleTokenize={() => toggleSection('tools')}
+        tokenizerLoading={tokenizerLoading}
+        autoEncoding={autoEncoding}
+        encodingOverride={encodingOverride}
+        onEncodingChange={setEncodingOverride}
+        encode={encode}
+        decode={decode}
+      />
     </div>
   );
 }
