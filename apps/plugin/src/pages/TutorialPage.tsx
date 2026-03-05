@@ -189,7 +189,7 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
     body: (
       <ul>
         <li>Spot performance regressions, errors, and cost anomalies at a glance.</li>
-        <li>Cascading filters across providers, models, agents, and labels.</li>
+        <li>Filter by provider, model, agent, and custom labels.</li>
         <li>Conversation Explore view for timeline + structured drilldown context.</li>
         <li>Agent pages and evaluation workflows for faster tuning loops.</li>
       </ul>
