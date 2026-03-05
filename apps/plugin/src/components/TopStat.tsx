@@ -100,6 +100,7 @@ function getStyles(theme: GrafanaTheme2) {
       alignItems: 'baseline',
       justifyContent: 'space-between',
       gap: theme.spacing(1),
+      minHeight: theme.spacing(3),
     }),
     topStatDetailLink: css({
       fontSize: theme.typography.bodySmall.fontSize,

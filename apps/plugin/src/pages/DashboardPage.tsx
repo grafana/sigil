@@ -10,6 +10,7 @@ import { DashboardGrid } from '../components/dashboard/DashboardGrid';
 import { DashboardPerformanceGrid } from '../components/dashboard/DashboardPerformanceGrid';
 import { DashboardErrorsGrid } from '../components/dashboard/DashboardErrorsGrid';
 import { DashboardUsageGrid } from '../components/dashboard/DashboardUsageGrid';
+import { DashboardEvalGrid } from '../components/dashboard/DashboardEvalGrid';
 import { useCascadingFilterOptions } from '../hooks/useCascadingFilterOptions';
 import { LandingTopBar } from '../components/landing/LandingTopBar';
 
@@ -70,6 +71,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         <Tab label="Performance" active={tab === 'performance'} onChangeTab={handleTabChange('performance')} />
         <Tab label="Errors" active={tab === 'errors'} onChangeTab={handleTabChange('errors')} />
         <Tab label="Usage" active={tab === 'usage'} onChangeTab={handleTabChange('usage')} />
+        <Tab label="Evaluation" active={tab === 'evaluation'} onChangeTab={handleTabChange('evaluation')} />
       </TabsBar>
       {tab === 'overview' && (
         <DashboardGrid
@@ -106,6 +108,17 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
       )}
       {tab === 'usage' && (
         <DashboardUsageGrid
+          dataSource={dataSource}
+          filters={filters}
+          breakdownBy={breakdownBy}
+          from={from}
+          to={to}
+          timeRange={timeRange}
+          onTimeRangeChange={setTimeRange}
+        />
+      )}
+      {tab === 'evaluation' && (
+        <DashboardEvalGrid
           dataSource={dataSource}
           filters={filters}
           breakdownBy={breakdownBy}
