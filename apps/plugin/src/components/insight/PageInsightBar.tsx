@@ -21,11 +21,11 @@ const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const AGE_TICK_MS = 60 * 1000;
 const CACHE_KEY_PREFIX = 'sigil.page-insight-bar.v1';
 const GENERATE_LOCK_MS = 30 * 1000;
-const inFlightGenerateByCacheKey = new Map<string, number>();
+const inFlightGenerateByScopeKey = new Map<string, number>();
 
 /** Clears the generate lock map. Used by tests to ensure isolation. */
 export function clearGenerateLockForTests(): void {
-  inFlightGenerateByCacheKey.clear();
+  inFlightGenerateByScopeKey.clear();
 }
 
 type CachedInsight = {
@@ -81,12 +81,13 @@ export function PageInsightBar({
   });
 
   const runGenerate = useCallback((ctx: string, cacheKey: string, fallbackCacheKey: string) => {
+    const lockKey = fallbackCacheKey;
     const now = Date.now();
-    const lastStartedAt = inFlightGenerateByCacheKey.get(cacheKey);
+    const lastStartedAt = inFlightGenerateByScopeKey.get(lockKey);
     if (lastStartedAt && now - lastStartedAt < GENERATE_LOCK_MS) {
       return;
     }
-    inFlightGenerateByCacheKey.set(cacheKey, now);
+    inFlightGenerateByScopeKey.set(lockKey, now);
 
     const { prompt: p, origin: o, systemPrompt: sp, gen: g } = latestRef.current;
     const fullPrompt = `${p}\n\nData context:\n${ctx}`;
@@ -95,7 +96,7 @@ export function PageInsightBar({
       origin: o,
       systemPrompt: sp,
       onComplete: (result: string) => {
-        inFlightGenerateByCacheKey.delete(cacheKey);
+        inFlightGenerateByScopeKey.delete(lockKey);
         const generatedTs = Date.now();
         const cached: CachedInsight = { generatedAt: generatedTs, text: result };
         setLiveInsight({ ...cached, cacheKey });
@@ -103,7 +104,7 @@ export function PageInsightBar({
         writeCachedInsight(fallbackCacheKey, cached);
       },
       onError: (err: Error) => {
-        inFlightGenerateByCacheKey.delete(cacheKey);
+        inFlightGenerateByScopeKey.delete(lockKey);
         console.error('Insight generation failed:', err);
       },
     });
@@ -125,13 +126,12 @@ export function PageInsightBar({
     if (lastRequestKeyRef.current === cacheKey) {
       return;
     }
-    const hasExactCache = !!exactCachedInsight;
-    const exactCacheAgeMs = exactCachedInsight ? Date.now() - exactCachedInsight.generatedAt : Number.POSITIVE_INFINITY;
+    const newestCacheAgeMs = newestCachedInsight ? Date.now() - newestCachedInsight.generatedAt : Number.POSITIVE_INFINITY;
     lastRequestKeyRef.current = cacheKey;
-    if (!hasExactCache || exactCacheAgeMs >= REFRESH_INTERVAL_MS) {
+    if (newestCacheAgeMs >= REFRESH_INTERVAL_MS) {
       runGenerate(dataContext, cacheKey, fallbackCacheKey);
     }
-  }, [cacheKey, dataContext, fallbackCacheKey, exactCachedInsight, gen.isGenerating, runGenerate]);
+  }, [cacheKey, dataContext, fallbackCacheKey, gen.isGenerating, newestCachedInsight, runGenerate]);
 
   useEffect(() => {
     if (!dataContext) {

@@ -44,20 +44,14 @@ describe('PageInsightBar', () => {
     );
   });
 
-  it('auto-generates again when data context changes', () => {
+  it('does not auto-generate again when data context changes while a scoped request lock is active', () => {
     const { rerender } = render(
       <PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="initial data" />
     );
     expect(mockGenerate).toHaveBeenCalledTimes(1);
 
     rerender(<PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="updated data" />);
-    expect(mockGenerate).toHaveBeenCalledTimes(2);
-    expect(mockGenerate).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        prompt: expect.stringContaining('updated data'),
-        origin: 'test-origin',
-      })
-    );
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
   });
 
   it('shows placeholder while generating with no content', () => {
@@ -118,7 +112,7 @@ describe('PageInsightBar', () => {
     expect(mockGenerate).toHaveBeenCalledTimes(1);
   });
 
-  it('regenerates when data context changes even with fresh fallback cache', () => {
+  it('does not regenerate when data context changes with fresh fallback cache', () => {
     mockGenerate.mockImplementation(({ onComplete }: { onComplete: (r: string) => void }) => {
       onComplete('- Fresh insight');
     });
@@ -128,10 +122,10 @@ describe('PageInsightBar', () => {
     expect(mockGenerate).toHaveBeenCalledTimes(1);
 
     rerender(<PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="updated data" />);
-    expect(mockGenerate).toHaveBeenCalledTimes(2);
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
   });
 
-  it('shows fallback insight while regenerating after data context change', () => {
+  it('shows fallback insight and skips regenerating after data context change with fresh cache', () => {
     mockGenerate.mockImplementation(({ onComplete }: { onComplete: (r: string) => void }) => {
       onComplete('- Prior context insight');
     });
@@ -145,7 +139,7 @@ describe('PageInsightBar', () => {
 
     rerender(<PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="updated data" />);
 
-    expect(mockGenerate).toHaveBeenCalledTimes(1);
+    expect(mockGenerate).not.toHaveBeenCalled();
     expect(screen.getByText(/Prior context insight/)).toBeInTheDocument();
   });
 
@@ -155,5 +149,23 @@ describe('PageInsightBar', () => {
 
     rerender(<PageInsightBar prompt="Analyze differently" origin="test-origin" dataContext="same data" />);
     expect(mockGenerate).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not regenerate on reload when fallback cache is fresher than 5m', () => {
+    mockGenerate.mockImplementation(({ onComplete }: { onComplete: (r: string) => void }) => {
+      onComplete('- Fresh insight');
+    });
+
+    const { unmount } = render(
+      <PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="initial data" />
+    );
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+
+    unmount();
+    mockGenerate.mockReset();
+
+    render(<PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="updated data" />);
+    expect(mockGenerate).not.toHaveBeenCalled();
+    expect(screen.getByText(/Fresh insight/)).toBeInTheDocument();
   });
 });
