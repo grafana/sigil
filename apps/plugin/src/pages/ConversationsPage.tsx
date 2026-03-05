@@ -80,7 +80,7 @@ export default function ConversationsPage(props: ConversationsPageProps) {
       return null;
     }
     return (
-      conversationDetail.generations.find((generation) => generation.generation_id === selectedGenerationID) ?? null
+      conversationDetail.generations?.find((generation) => generation.generation_id === selectedGenerationID) ?? null
     );
   }, [conversationDetail, selectedGenerationID]);
 

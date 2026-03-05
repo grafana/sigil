@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { css, keyframes } from '@emotion/css';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
 import { Alert, Button, Field, Icon, Select, Spinner, Stack, Text, useStyles2 } from '@grafana/ui';
@@ -114,7 +114,7 @@ export default function EvalTestPanel({
   const convDs = conversationsDataSource ?? defaultConversationsDataSource;
 
   const [generationId, setGenerationId] = useState<string | undefined>();
-  const [generationLookupHints, setGenerationLookupHints] = useState<GenerationLookupHints | undefined>();
+  const generationLookupHintsRef = useRef<GenerationLookupHints | undefined>();
   const [generation, setGeneration] = useState<GenerationDetail | null>(null);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<EvalTestResponse | null>(null);
@@ -159,10 +159,10 @@ export default function EvalTestPanel({
       return;
     }
     void convDs
-      .getGeneration(generationId, generationLookupHints)
+      .getGeneration(generationId, generationLookupHintsRef.current)
       .then(setGeneration)
       .catch(() => setGeneration(null));
-  }, [generationId, generationLookupHints, convDs]);
+  }, [generationId, convDs]);
 
   const handleRun = async () => {
     if (!generationId) {
@@ -245,8 +245,8 @@ export default function EvalTestPanel({
 
         <GenerationPicker
           onSelect={(id, hints) => {
+            generationLookupHintsRef.current = hints;
             setGenerationId(id);
-            setGenerationLookupHints(hints);
           }}
           selectedGenerationId={generationId}
           conversationsDataSource={convDs}
