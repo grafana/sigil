@@ -11,6 +11,7 @@ import {
 } from '../../dashboard/types';
 import {
   formatStatValue,
+  StatItem,
   extractResolvePairs,
   BreakdownStatPanel,
   getBreakdownStatPanelStyles,
@@ -38,8 +39,8 @@ import { useResolvedModelPricing } from './useResolvedModelPricing';
 import { type ConversationsDataSource, defaultConversationsDataSource } from '../../conversation/api';
 import type { ConversationSearchResult } from '../../conversation/types';
 import { PLUGIN_BASE, buildConversationViewRoute } from '../../constants';
-import AssistantInsightsBanner from '../assistant/AssistantInsightsBanner';
-import { DashboardStatsBar } from './DashboardStatsBar';
+import { PageInsightBar } from '../insight/PageInsightBar';
+import { summarizeVector, summarizeMatrix, hasResponseData } from '../insight/summarize';
 
 export type DashboardCacheGridProps = {
   dataSource: DashboardDataSource;
@@ -179,6 +180,73 @@ export function DashboardCacheGrid({
     [cacheByModelData.data]
   );
 
+  const allDataLoading =
+    cacheReadStat.loading ||
+    cacheWriteStat.loading ||
+    inputTokensStat.loading ||
+    cacheByModelData.loading ||
+    resolvedPricing.loading ||
+    cacheHitRateTimeseries.loading ||
+    cacheTokensTimeseries.loading ||
+    cacheReadByBreakdown.loading;
+
+  const insightDataContext = useMemo(() => {
+    if (allDataLoading) {
+      return null;
+    }
+    const hasAnyData =
+      hasResponseData(cacheReadStat.data) ||
+      hasResponseData(cacheWriteStat.data) ||
+      hasResponseData(inputTokensStat.data) ||
+      hasResponseData(cacheHitRateTimeseries.data);
+    if (!hasAnyData) {
+      return null;
+    }
+    const parts = [
+      'Cache dashboard context:',
+      `Breakdown: ${breakdownBy}`,
+      '',
+      `Cache hit rate: ${cacheHitRate.toFixed(2)}%`,
+      `Cache read tokens: ${cacheReadValue}`,
+      `Cache write tokens: ${cacheWriteValue}`,
+      `Input tokens: ${inputTokensValue}`,
+      `Estimated savings (USD): $${savings.savings.toFixed(4)}`,
+    ];
+    if (savings.byModel.length > 0) {
+      parts.push('');
+      parts.push('Savings by model:');
+      for (const m of savings.byModel) {
+        parts.push(
+          `  ${m.provider}/${m.model}: $${m.savings.toFixed(4)} saved, cache_hit_rate=${m.cacheHitRate.toFixed(1)}%`
+        );
+      }
+    }
+    parts.push('');
+    parts.push(summarizeMatrix(cacheHitRateTimeseries.data, 'Cache hit rate over time'));
+    parts.push(summarizeMatrix(cacheTokensTimeseries.data, 'Cache read vs write over time'));
+    if (hasBreakdown) {
+      parts.push(summarizeVector(cacheReadByBreakdown.data, `Cache read by ${breakdownBy}`));
+    }
+    return parts.join('\n');
+  }, [
+    allDataLoading,
+    breakdownBy,
+    cacheHitRate,
+    cacheReadValue,
+    cacheWriteValue,
+    inputTokensValue,
+    savings,
+    cacheReadStat.data,
+    cacheWriteStat.data,
+    inputTokensStat.data,
+    cacheHitRateTimeseries.data,
+    cacheTokensTimeseries.data,
+    hasBreakdown,
+    cacheReadByBreakdown.data,
+  ]);
+
+  const insightPrompt = `Analyze this GenAI cache dashboard. Breakdown: ${breakdownBy}. Only flag significant findings — low cache utilization, savings opportunities, model-specific inefficiencies, or actionable issues. Skip anything that looks normal.`;
+
   const timeseriesDefaults = { fillOpacity: 6, showPoints: 'never', lineWidth: 2 };
   const tooltipOptions = { mode: 'multi', sort: 'desc' };
   const chartOptions = {
@@ -189,115 +257,34 @@ export function DashboardCacheGrid({
     legend: { displayMode: 'list', placement: 'bottom', calcs: [] },
     tooltip: tooltipOptions,
   };
-  const allDataLoading =
-    cacheReadStat.loading ||
-    cacheWriteStat.loading ||
-    inputTokensStat.loading ||
-    cacheByModelData.loading ||
-    resolvedPricing.loading ||
-    cacheHitRateTimeseries.loading ||
-    cacheTokensTimeseries.loading ||
-    cacheReadTimeseries.loading ||
-    cacheReadByBreakdown.loading ||
-    cacheTokensByBreakdownAndType.loading;
-  const insightDataContext = useMemo(() => {
-    if (allDataLoading) {
-      return null;
-    }
-    const hasAnyData =
-      hasResponseData(cacheReadStat.data) ||
-      hasResponseData(cacheWriteStat.data) ||
-      hasResponseData(inputTokensStat.data) ||
-      hasResponseData(cacheByModelData.data) ||
-      hasResponseData(cacheHitRateTimeseries.data) ||
-      hasResponseData(cacheTokensTimeseries.data) ||
-      hasResponseData(cacheReadTimeseries.data) ||
-      hasResponseData(cacheReadByBreakdown.data) ||
-      hasResponseData(cacheTokensByBreakdownAndType.data) ||
-      hasResponseData(cacheHitRateByModelData);
-    if (!hasAnyData) {
-      return null;
-    }
-    const parts = [
-      'Cache dashboard context:',
-      `Time range (raw): from=${String(timeRange.raw.from)}; to=${String(timeRange.raw.to)}`,
-      `Time range (UTC): from=${formatUtcMillis(from)}; to=${formatUtcMillis(to)}`,
-      `Breakdown: ${breakdownBy}`,
-      '',
-      summarizeVector(cacheReadStat.data, 'Cache read tokens'),
-      summarizeVector(cacheWriteStat.data, 'Cache write tokens'),
-      summarizeVector(inputTokensStat.data, 'Input tokens'),
-      `Cache hit rate (%): ${cacheHitRate.toFixed(2)}`,
-      `Estimated cache savings (USD): $${savings.savings.toFixed(4)}`,
-      summarizeMatrix(
-        cacheHitRateTimeseries.data,
-        hasBreakdown ? `Cache hit rate by ${breakdownBy}` : 'Cache hit rate over time'
-      ),
-      summarizeVector(cacheHitRateByModelData, 'Cache hit rate by model'),
-      summarizeMatrix(cacheTokensTimeseries.data, 'Cache read vs write over time'),
-      summarizeVector(
-        cacheTokensByBreakdownAndType.data,
-        hasBreakdown ? `Cache tokens by ${breakdownBy}` : 'Cache tokens by type'
-      ),
-    ];
-    if (hasBreakdown) {
-      parts.push(summarizeMatrix(cacheReadTimeseries.data, `Cache read tokens by ${breakdownBy}`));
-      parts.push(summarizeVector(cacheReadByBreakdown.data, `Cache read by ${breakdownBy}`));
-    }
-    return parts.join('\n');
-  }, [
-    allDataLoading,
-    cacheReadStat.data,
-    cacheWriteStat.data,
-    inputTokensStat.data,
-    cacheByModelData.data,
-    cacheHitRateTimeseries.data,
-    cacheTokensTimeseries.data,
-    cacheReadTimeseries.data,
-    cacheReadByBreakdown.data,
-    cacheTokensByBreakdownAndType.data,
-    cacheHitRateByModelData,
-    hasBreakdown,
-    breakdownBy,
-    cacheHitRate,
-    savings.savings,
-    timeRange.raw.from,
-    timeRange.raw.to,
-    from,
-    to,
-  ]);
-  const insightPrompt = `Analyze this cache observability dashboard. Breakdown: ${breakdownBy}. Only flag significant findings — regressions in cache hit rate, unusual cache-read/write behavior, or actionable savings opportunities. Skip anything that looks normal.`;
 
   return (
     <div className={styles.gridWrapper}>
       {/* Top stats */}
-      <DashboardStatsBar
-        stats={[
-          {
-            label: 'Cache Hit Rate',
-            value: cacheHitRate,
-            unit: 'percent',
-            loading: cacheReadStat.loading || inputTokensStat.loading,
-            invertChange: true,
-          },
-          { label: 'Cache Read Tokens', value: cacheReadValue, unit: 'short', loading: cacheReadStat.loading },
-          { label: 'Cache Write Tokens', value: cacheWriteValue, unit: 'short', loading: cacheWriteStat.loading },
-          { label: 'Input Tokens', value: inputTokensValue, unit: 'short', loading: inputTokensStat.loading },
-          {
-            label: 'Estimated Savings',
-            value: savings.savings,
-            unit: 'currencyUSD',
-            loading: cacheByModelData.loading || resolvedPricing.loading,
-          },
-        ]}
-      />
-      <AssistantInsightsBanner
-        className={styles.insightBanner}
+      <div className={styles.statsRow}>
+        <StatItem
+          label="Cache Hit Rate"
+          value={cacheHitRate}
+          unit="percent"
+          loading={cacheReadStat.loading || inputTokensStat.loading}
+        />
+        <StatItem label="Cache Read Tokens" value={cacheReadValue} unit="short" loading={cacheReadStat.loading} />
+        <StatItem label="Cache Write Tokens" value={cacheWriteValue} unit="short" loading={cacheWriteStat.loading} />
+        <StatItem label="Input Tokens" value={inputTokensValue} unit="short" loading={inputTokensStat.loading} />
+        <StatItem
+          label="Estimated Savings"
+          value={savings.savings}
+          unit="currencyUSD"
+          loading={cacheByModelData.loading || resolvedPricing.loading}
+        />
+      </div>
+      <PageInsightBar
         prompt={insightPrompt}
         origin="sigil-plugin/dashboard-cache-insight"
-        systemPrompt="You are a concise observability analyst. Return 3-5 plain text insights. Each insight must be one short sentence on its own line, prefixed with '- '. No markdown, no headers, no extra text. Focus only on anomalies, changes, or notable patterns that are strongly supported by the provided data."
         dataContext={insightDataContext}
+        systemPrompt="You are a concise observability analyst. Return exactly 3-5 high-confidence suggestions. Include only suggestions strongly supported by the provided data; omit uncertain ideas. Each suggestion is a single short sentence on its own line prefixed with '- '. Bold key numbers/metrics with **bold**. No headers, no paragraphs, no extra text. Keep each bullet under 20 words. Focus on anomalies, changes, or notable patterns only."
       />
+
       <div className={styles.grid}>
         {/* Row 1: Cache hit rate over time + cache hit rate by model */}
         <div className={styles.panelRow}>
@@ -801,66 +788,6 @@ function CacheHitRateBadge({ rate }: { rate: number }) {
   return <Badge text={formatStatValue(rate, 'percent')} color="green" />;
 }
 
-function hasResponseData(response: PrometheusQueryResponse | null | undefined): boolean {
-  if (!response) {
-    return false;
-  }
-  if (response.data.resultType !== 'vector' && response.data.resultType !== 'matrix') {
-    return false;
-  }
-  return response.data.result.length > 0;
-}
-
-function summarizeVector(response: PrometheusQueryResponse | null | undefined, label: string): string {
-  if (!response || response.data.resultType !== 'vector') {
-    return `${label}: no data`;
-  }
-  const results = response.data.result as Array<{ metric: Record<string, string>; value: [number, string] }>;
-  if (results.length === 0) {
-    return `${label}: 0`;
-  }
-  if (results.length === 1) {
-    return `${label}: ${results[0].value[1]}`;
-  }
-  const lines = results.map((r) => {
-    const tags = Object.entries(r.metric)
-      .filter(([k]) => !k.startsWith('__'))
-      .map(([k, v]) => `${k}=${v}`)
-      .join(', ');
-    return `  ${tags || 'total'}: ${r.value[1]}`;
-  });
-  return `${label} (by series):\n${lines.join('\n')}`;
-}
-
-function summarizeMatrix(response: PrometheusQueryResponse | null | undefined, label: string): string {
-  if (!response || response.data.resultType !== 'matrix') {
-    return `${label}: no data`;
-  }
-  const results = response.data.result as Array<{ metric: Record<string, string>; values: Array<[number, string]> }>;
-  if (results.length === 0) {
-    return `${label}: no series`;
-  }
-  const lines = results.map((r) => {
-    const tags = Object.entries(r.metric)
-      .filter(([k]) => !k.startsWith('__'))
-      .map(([k, v]) => `${k}=${v}`)
-      .join(', ');
-    const vals = r.values;
-    const last = vals.length > 0 ? vals[vals.length - 1][1] : 'N/A';
-    const first = vals.length > 0 ? vals[0][1] : 'N/A';
-    return `  ${tags || 'total'}: first=${first}, last=${last}, points=${vals.length}`;
-  });
-  return `${label} (${results.length} series):\n${lines.join('\n')}`;
-}
-
-function formatUtcMillis(ms: number): string {
-  const dt = new Date(ms);
-  if (Number.isNaN(dt.getTime())) {
-    return 'invalid';
-  }
-  return dt.toISOString();
-}
-
 function getStyles(theme: GrafanaTheme2) {
   return {
     gridWrapper: css({
@@ -873,8 +800,12 @@ function getStyles(theme: GrafanaTheme2) {
       flexDirection: 'column',
       gap: theme.spacing(3),
     }),
-    insightBanner: css({
-      width: '100%',
+    statsRow: css({
+      display: 'flex',
+      gap: theme.spacing(4),
+      padding: theme.spacing(1.5, 0),
+      borderBottom: `1px solid ${theme.colors.border.weak}`,
+      flexWrap: 'wrap',
     }),
     panelRow: css({
       display: 'grid',

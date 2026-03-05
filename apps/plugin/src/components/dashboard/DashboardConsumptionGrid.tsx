@@ -10,7 +10,7 @@ import {
   type PrometheusQueryResponse,
   breakdownToPromLabel,
 } from '../../dashboard/types';
-import { extractResolvePairs, BreakdownStatPanel } from './dashboardShared';
+import { StatItem, extractResolvePairs, BreakdownStatPanel } from './dashboardShared';
 import { calculateTotalCost, calculateTotalCostByGroup, calculateCostTimeSeries } from '../../dashboard/cost';
 import {
   computeStep,
@@ -27,8 +27,8 @@ import { matrixToDataFrames, vectorToStatValue } from '../../dashboard/transform
 import { usePrometheusQuery } from './usePrometheusQuery';
 import { MetricPanel } from './MetricPanel';
 import { useResolvedModelPricing } from './useResolvedModelPricing';
-import AssistantInsightsBanner from '../assistant/AssistantInsightsBanner';
-import { DashboardStatsBar } from './DashboardStatsBar';
+import { PageInsightBar } from '../insight/PageInsightBar';
+import { summarizeVector, summarizeMatrix, hasResponseData } from '../insight/summarize';
 
 export type DashboardConsumptionGridProps = {
   dataSource: DashboardDataSource;
@@ -211,115 +211,91 @@ export function DashboardConsumptionGrid({
   const cacheReadValue = cacheReadTokensStat.data ? vectorToStatValue(cacheReadTokensStat.data) : 0;
   const cacheHitRate =
     inputTokensValue + cacheReadValue > 0 ? (cacheReadValue / (inputTokensValue + cacheReadValue)) * 100 : 0;
+
   const allDataLoading =
     tokensTotalStat.loading ||
     inputTokensStat.loading ||
     outputTokensStat.loading ||
     cacheReadTokensStat.loading ||
     costTokensData.loading ||
-    costOverTimeData.loading ||
-    resolvedPricing.loading ||
-    tokensByTypeStat.loading ||
-    tokensByTypeTimeseries.loading ||
-    tokensTotalTimeseries.loading ||
-    tokensByBreakdown.loading;
+    resolvedPricing.loading;
+
   const insightDataContext = useMemo(() => {
     if (allDataLoading) {
       return null;
     }
     const hasAnyData =
       hasResponseData(tokensTotalStat.data) ||
-      hasResponseData(inputTokensStat.data) ||
-      hasResponseData(outputTokensStat.data) ||
-      hasResponseData(cacheReadTokensStat.data) ||
       hasResponseData(tokensByTypeStat.data) ||
       hasResponseData(tokensByTypeTimeseries.data) ||
-      hasResponseData(tokensTotalTimeseries.data) ||
-      hasResponseData(tokensByBreakdown.data) ||
-      hasResponseData(costByBreakdownData);
+      hasResponseData(costTokensData.data);
     if (!hasAnyData) {
       return null;
     }
-    const parts = [
+    return [
       'Consumption dashboard context:',
-      `Time range (raw): from=${String(timeRange.raw.from)}; to=${String(timeRange.raw.to)}`,
-      `Time range (UTC): from=${formatUtcMillis(from)}; to=${formatUtcMillis(to)}`,
       `Breakdown: ${breakdownBy}`,
       '',
-      summarizeVector(tokensTotalStat.data, 'Total tokens'),
-      summarizeVector(inputTokensStat.data, 'Input tokens'),
-      summarizeVector(outputTokensStat.data, 'Output tokens'),
-      summarizeVector(cacheReadTokensStat.data, 'Cache read tokens'),
-      `Cache hit rate (%): ${cacheHitRate.toFixed(2)}`,
+      `Total tokens: ${totalTokensValue}`,
+      `Input tokens: ${inputTokensValue}`,
+      `Output tokens: ${outputTokensValue}`,
+      `Cache read tokens: ${cacheReadValue}`,
+      `Cache hit rate: ${cacheHitRate.toFixed(2)}%`,
+      `Estimated total cost (USD): $${totalCost.totalCost.toFixed(4)}`,
+      '',
       summarizeVector(tokensByTypeStat.data, 'Tokens by type'),
       summarizeMatrix(tokensByTypeTimeseries.data, 'Tokens by type over time'),
-      summarizeMatrix(
-        tokensTotalTimeseries.data,
-        hasBreakdown ? `Tokens over time by ${breakdownBy}` : 'Total tokens over time'
-      ),
-      summarizeVector(tokensByBreakdown.data, hasBreakdown ? `Tokens by ${breakdownBy}` : 'Tokens'),
-      summarizeVector(costByBreakdownData, hasBreakdown ? `Cost by ${breakdownBy}` : 'Estimated cost'),
-      summarizeCostTimeSeries(
-        costTimeSeries,
-        hasBreakdown ? `Cost over time by ${breakdownBy}` : 'Estimated cost over time'
-      ),
-      `Estimated total cost (USD): $${totalCost.totalCost.toFixed(4)}`,
-    ];
-    return parts.join('\n');
+      summarizeMatrix(tokensTotalTimeseries.data, 'Total tokens over time'),
+      summarizeVector(tokensByBreakdown.data, `Tokens by ${breakdownBy}`),
+      summarizeVector(costTokensData.data, 'Token usage by model for cost'),
+    ].join('\n');
   }, [
     allDataLoading,
+    breakdownBy,
+    totalTokensValue,
+    inputTokensValue,
+    outputTokensValue,
+    cacheReadValue,
+    cacheHitRate,
+    totalCost.totalCost,
     tokensTotalStat.data,
-    inputTokensStat.data,
-    outputTokensStat.data,
-    cacheReadTokensStat.data,
     tokensByTypeStat.data,
     tokensByTypeTimeseries.data,
     tokensTotalTimeseries.data,
     tokensByBreakdown.data,
-    costByBreakdownData,
-    costTimeSeries,
-    totalCost.totalCost,
-    timeRange.raw.from,
-    timeRange.raw.to,
-    from,
-    to,
-    breakdownBy,
-    hasBreakdown,
-    cacheHitRate,
+    costTokensData.data,
   ]);
-  const insightPrompt = `Analyze this consumption observability dashboard. Breakdown: ${breakdownBy}. Only flag significant findings — anomalies, outliers, unusual token mix, or actionable cost issues. Skip anything that looks normal.`;
+
+  const insightPrompt = `Analyze this GenAI consumption dashboard. Breakdown: ${breakdownBy}. Only flag significant findings — cost anomalies, token usage imbalances, cache optimization opportunities, or actionable issues. Skip anything that looks normal.`;
 
   return (
     <div className={styles.gridWrapper}>
       {/* Top stats */}
-      <DashboardStatsBar
-        stats={[
-          { label: 'Total Tokens', value: totalTokensValue, unit: 'short', loading: tokensTotalStat.loading },
-          { label: 'Input Tokens', value: inputTokensValue, unit: 'short', loading: inputTokensStat.loading },
-          { label: 'Output Tokens', value: outputTokensValue, unit: 'short', loading: outputTokensStat.loading },
-          { label: 'Cache Read', value: cacheReadValue, unit: 'short', loading: cacheReadTokensStat.loading },
-          {
-            label: 'Cache Hit Rate',
-            value: cacheHitRate,
-            unit: 'percent',
-            loading: cacheReadTokensStat.loading || inputTokensStat.loading,
-          },
-          {
-            label: 'Estimated Cost',
-            value: totalCost.totalCost,
-            unit: 'currencyUSD',
-            loading: costTokensData.loading || resolvedPricing.loading,
-            invertChange: true,
-          },
-        ]}
-      />
-      <AssistantInsightsBanner
-        className={styles.insightBanner}
+      <div className={styles.statsRow}>
+        <StatItem label="Total Tokens" value={totalTokensValue} unit="short" loading={tokensTotalStat.loading} />
+        <StatItem label="Input Tokens" value={inputTokensValue} unit="short" loading={inputTokensStat.loading} />
+        <StatItem label="Output Tokens" value={outputTokensValue} unit="short" loading={outputTokensStat.loading} />
+        <StatItem label="Cache Read" value={cacheReadValue} unit="short" loading={cacheReadTokensStat.loading} />
+        <StatItem
+          label="Cache Hit Rate"
+          value={cacheHitRate}
+          unit="percent"
+          loading={cacheReadTokensStat.loading || inputTokensStat.loading}
+        />
+        <StatItem
+          label="Estimated Cost"
+          value={totalCost.totalCost}
+          unit="currencyUSD"
+          loading={costTokensData.loading || resolvedPricing.loading}
+        />
+      </div>
+      <PageInsightBar
         prompt={insightPrompt}
         origin="sigil-plugin/dashboard-consumption-insight"
-        systemPrompt="You are a concise observability analyst. Return 3-5 plain text insights. Each insight must be one short sentence on its own line, prefixed with '- '. No markdown, no headers, no extra text. Focus only on anomalies, changes, or notable patterns that are strongly supported by the provided data."
         dataContext={insightDataContext}
+        systemPrompt="You are a concise observability analyst. Return exactly 3-5 high-confidence suggestions. Include only suggestions strongly supported by the provided data; omit uncertain ideas. Each suggestion is a single short sentence on its own line prefixed with '- '. Bold key numbers/metrics with **bold**. No headers, no paragraphs, no extra text. Keep each bullet under 20 words. Focus on anomalies, changes, or notable patterns only."
       />
+
       <div className={styles.grid}>
         {/* Row 1: Tokens by type over time + Tokens by type breakdown */}
         <div className={styles.panelRow}>
@@ -441,8 +417,12 @@ function getStyles(theme: GrafanaTheme2) {
       flexDirection: 'column',
       gap: theme.spacing(3),
     }),
-    insightBanner: css({
-      width: '100%',
+    statsRow: css({
+      display: 'flex',
+      gap: theme.spacing(4),
+      padding: theme.spacing(1.5, 0),
+      borderBottom: `1px solid ${theme.colors.border.weak}`,
+      flexWrap: 'wrap',
     }),
     panelRow: css({
       display: 'grid',
@@ -450,79 +430,4 @@ function getStyles(theme: GrafanaTheme2) {
       gap: theme.spacing(1),
     }),
   };
-}
-
-function hasResponseData(response: PrometheusQueryResponse | null | undefined): boolean {
-  if (!response) {
-    return false;
-  }
-  if (response.data.resultType !== 'vector' && response.data.resultType !== 'matrix') {
-    return false;
-  }
-  return response.data.result.length > 0;
-}
-
-function summarizeVector(response: PrometheusQueryResponse | null | undefined, label: string): string {
-  if (!response || response.data.resultType !== 'vector') {
-    return `${label}: no data`;
-  }
-  const results = response.data.result as Array<{ metric: Record<string, string>; value: [number, string] }>;
-  if (results.length === 0) {
-    return `${label}: 0`;
-  }
-  if (results.length === 1) {
-    return `${label}: ${results[0].value[1]}`;
-  }
-  const lines = results.map((r) => {
-    const tags = Object.entries(r.metric)
-      .filter(([k]) => !k.startsWith('__'))
-      .map(([k, v]) => `${k}=${v}`)
-      .join(', ');
-    return `  ${tags || 'total'}: ${r.value[1]}`;
-  });
-  return `${label} (by series):\n${lines.join('\n')}`;
-}
-
-function summarizeMatrix(response: PrometheusQueryResponse | null | undefined, label: string): string {
-  if (!response || response.data.resultType !== 'matrix') {
-    return `${label}: no data`;
-  }
-  const results = response.data.result as Array<{ metric: Record<string, string>; values: Array<[number, string]> }>;
-  if (results.length === 0) {
-    return `${label}: no series`;
-  }
-  const lines = results.map((r) => {
-    const tags = Object.entries(r.metric)
-      .filter(([k]) => !k.startsWith('__'))
-      .map(([k, v]) => `${k}=${v}`)
-      .join(', ');
-    const vals = r.values;
-    const last = vals.length > 0 ? vals[vals.length - 1][1] : 'N/A';
-    const first = vals.length > 0 ? vals[0][1] : 'N/A';
-    return `  ${tags || 'total'}: first=${first}, last=${last}, points=${vals.length}`;
-  });
-  return `${label} (${results.length} series):\n${lines.join('\n')}`;
-}
-
-function summarizeCostTimeSeries(series: any[], label: string): string {
-  if (series.length === 0) {
-    return `${label}: no data`;
-  }
-  const lines = series.map((frame) => {
-    const valueField = frame.fields[1];
-    const values = valueField?.values;
-    const points = values && typeof values.length === 'number' ? values.length : 0;
-    const first = points > 0 ? String(values?.get(0) ?? 'N/A') : 'N/A';
-    const last = points > 0 ? String(values?.get(points - 1) ?? 'N/A') : 'N/A';
-    return `  ${frame.name || 'series'}: first=${first}, last=${last}, points=${points}`;
-  });
-  return `${label} (${series.length} series):\n${lines.join('\n')}`;
-}
-
-function formatUtcMillis(ms: number): string {
-  const dt = new Date(ms);
-  if (Number.isNaN(dt.getTime())) {
-    return 'invalid';
-  }
-  return dt.toISOString();
 }

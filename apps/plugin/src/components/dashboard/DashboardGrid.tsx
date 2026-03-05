@@ -14,7 +14,7 @@ import {
   tokenDrilldownTypes,
 } from '../../dashboard/types';
 import { extractResolvePairs, BreakdownStatPanel } from './dashboardShared';
-import { DashboardStatsBar } from './DashboardStatsBar';
+import { TopStat } from '../TopStat';
 import { calculateTotalCost, calculateTotalCostByGroup, calculateCostTimeSeries } from '../../dashboard/cost';
 import {
   computeStep,
@@ -41,7 +41,8 @@ import { matrixToDataFrames, vectorToStatValue } from '../../dashboard/transform
 import { usePrometheusQuery } from './usePrometheusQuery';
 import { MetricPanel } from './MetricPanel';
 import { useResolvedModelPricing } from './useResolvedModelPricing';
-import AssistantInsightsBanner from '../assistant/AssistantInsightsBanner';
+import { PageInsightBar } from '../insight/PageInsightBar';
+import { summarizeVector, summarizeMatrix, hasResponseData } from '../insight/summarize';
 
 export type DashboardGridProps = {
   dataSource: DashboardDataSource;
@@ -509,62 +510,57 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
   return (
     <div className={styles.gridWrapper}>
       {/* Top-level stats row */}
-      <DashboardStatsBar
-        stats={[
-          {
-            label: 'Total Requests',
-            value: totalRequestsValue,
-            loading: topTotalOps.loading,
-            prevValue: prevRequestsValue,
-            prevLoading: prevTotalOps.loading,
-          },
-          {
-            label: 'Avg Latency (P95)',
-            value: latencyValue,
-            unit: 's',
-            loading: topLatency.loading,
-            prevValue: prevLatencyValue,
-            prevLoading: prevLatency.loading,
-            invertChange: true,
-          },
-          {
-            label: 'Error Rate',
-            value: errorRateValue,
-            unit: 'percent',
-            loading: topErrRate.loading,
-            prevValue: prevErrRateValue,
-            prevLoading: prevErrRate.loading,
-            invertChange: true,
-          },
-          {
-            label: 'Total Tokens',
-            value: totalTokensValue,
-            unit: 'short',
-            loading: tokensTotalStat.loading,
-            prevValue: prevTokensValue,
-            prevLoading: prevTokensTotal.loading,
-          },
-          {
-            label: 'Total Cost',
-            value: totalCost.totalCost,
-            unit: 'currencyUSD',
-            loading: costTokens.loading || resolvedPricing.loading,
-            prevValue: prevTotalCost.totalCost,
-            prevLoading: prevCostTokens.loading,
-            invertChange: true,
-          },
-        ]}
-      />
-      <AssistantInsightsBanner
-        className={styles.insightBanner}
+      <div className={styles.statsRow}>
+        <TopStat
+          label="Total Requests"
+          value={totalRequestsValue}
+          loading={topTotalOps.loading}
+          prevValue={prevRequestsValue}
+          prevLoading={prevTotalOps.loading}
+        />
+        <TopStat
+          label="Avg Latency (P95)"
+          value={latencyValue}
+          unit="s"
+          loading={topLatency.loading}
+          prevValue={prevLatencyValue}
+          prevLoading={prevLatency.loading}
+          invertChange
+        />
+        <TopStat
+          label="Error Rate"
+          value={errorRateValue}
+          unit="percent"
+          loading={topErrRate.loading}
+          prevValue={prevErrRateValue}
+          prevLoading={prevErrRate.loading}
+          invertChange
+        />
+        <TopStat
+          label="Total Tokens"
+          value={totalTokensValue}
+          unit="short"
+          loading={tokensTotalStat.loading}
+          prevValue={prevTokensValue}
+          prevLoading={prevTokensTotal.loading}
+        />
+        <TopStat
+          label="Total Cost"
+          value={totalCost.totalCost}
+          unit="currencyUSD"
+          loading={costTokens.loading || resolvedPricing.loading}
+          prevValue={prevTotalCost.totalCost}
+          prevLoading={prevCostTokens.loading}
+          invertChange
+        />
+      </div>
+      <PageInsightBar
         prompt={insightPrompt}
         origin="sigil-plugin/dashboard-insight"
-        systemPrompt="You are a concise observability analyst. Return 3-5 plain text insights. Each insight must be one short sentence on its own line, prefixed with '- '. No markdown, no headers, no extra text. Focus only on anomalies, changes, or notable patterns that are strongly supported by the provided data."
         dataContext={insightDataContext}
-        waitingText="Waiting for data..."
-        emptyText="No notable insights."
-        invalidText="Could not parse assistant insights."
+        systemPrompt="You are a concise observability analyst. Return exactly 3-5 high-confidence suggestions. Include only suggestions strongly supported by the provided data; omit uncertain ideas. Each suggestion is a single short sentence on its own line prefixed with '- '. Bold key numbers/metrics with **bold**. No headers, no paragraphs, no extra text. Keep each bullet under 20 words. Focus on anomalies, changes, or notable patterns only."
       />
+
       <div className={styles.grid}>
         {/* Row 1: Requests & Errors */}
         <div className={styles.panelRowFirstStat}>
@@ -766,58 +762,6 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
   );
 }
 
-function hasResponseData(response: PrometheusQueryResponse | null | undefined): boolean {
-  if (!response) {
-    return false;
-  }
-  if (response.data.resultType !== 'vector' && response.data.resultType !== 'matrix') {
-    return false;
-  }
-  return response.data.result.length > 0;
-}
-
-function summarizeVector(response: PrometheusQueryResponse | null | undefined, label: string): string {
-  if (!response || response.data.resultType !== 'vector') {
-    return `${label}: no data`;
-  }
-  const results = response.data.result as Array<{ metric: Record<string, string>; value: [number, string] }>;
-  if (results.length === 0) {
-    return `${label}: 0`;
-  }
-  if (results.length === 1) {
-    return `${label}: ${results[0].value[1]}`;
-  }
-  const lines = results.map((r) => {
-    const tags = Object.entries(r.metric)
-      .filter(([k]) => !k.startsWith('__'))
-      .map(([k, v]) => `${k}=${v}`)
-      .join(', ');
-    return `  ${tags || 'total'}: ${r.value[1]}`;
-  });
-  return `${label} (by series):\n${lines.join('\n')}`;
-}
-
-function summarizeMatrix(response: PrometheusQueryResponse | null | undefined, label: string): string {
-  if (!response || response.data.resultType !== 'matrix') {
-    return `${label}: no data`;
-  }
-  const results = response.data.result as Array<{ metric: Record<string, string>; values: Array<[number, string]> }>;
-  if (results.length === 0) {
-    return `${label}: no series`;
-  }
-  const lines = results.map((r) => {
-    const tags = Object.entries(r.metric)
-      .filter(([k]) => !k.startsWith('__'))
-      .map(([k, v]) => `${k}=${v}`)
-      .join(', ');
-    const vals = r.values;
-    const last = vals.length > 0 ? vals[vals.length - 1][1] : 'N/A';
-    const first = vals.length > 0 ? vals[0][1] : 'N/A';
-    return `  ${tags || 'total'}: first=${first}, last=${last}, points=${vals.length}`;
-  });
-  return `${label} (${results.length} series):\n${lines.join('\n')}`;
-}
-
 function formatUtcMillis(ms: number): string {
   const dt = new Date(ms);
   if (Number.isNaN(dt.getTime())) {
@@ -840,6 +784,12 @@ function getStyles(theme: GrafanaTheme2) {
       flex: 1,
       minWidth: 0,
     }),
+    statsRow: css({
+      display: 'flex',
+      gap: theme.spacing(4),
+      padding: theme.spacing(1.5, 0),
+      borderBottom: `1px solid ${theme.colors.border.weak}`,
+    }),
     panelRowFirstStat: css({
       display: 'grid',
       gridTemplateColumns: '2fr 3fr 3fr',
@@ -859,9 +809,6 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'flex',
       alignItems: 'center',
       gap: theme.spacing(0.5),
-    }),
-    insightBanner: css({
-      width: '100%',
     }),
   };
 }
