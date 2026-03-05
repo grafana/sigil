@@ -216,23 +216,27 @@ export function PageInsightBar({
   }, [displayText]);
 
   const firstBullet = bullets.length > 0 ? bullets[0] : null;
+  const canExpand = bullets.length > 0;
 
   return (
     <div className={collapsed ? styles.barCollapsed : styles.bar} role="complementary" aria-label="Page insight">
       <div className={styles.header}>
         <button
           type="button"
-          className={styles.headerToggle}
-          onClick={toggleCollapsed}
-          aria-expanded={!collapsed}
-          aria-label={collapsed ? 'Expand insights' : 'Collapse insights'}
+          className={canExpand ? styles.headerToggle : styles.headerToggleDisabled}
+          onClick={canExpand ? toggleCollapsed : undefined}
+          aria-expanded={canExpand ? !collapsed : undefined}
+          aria-label={!canExpand ? 'No insights available' : collapsed ? 'Expand insights' : 'Collapse insights'}
+          aria-disabled={!canExpand}
         >
           <Icon name="ai" size="md" className={styles.aiIcon} />
           <span className={styles.headerTitle}>AI analysis</span>
           {collapsed && firstBullet && (
             <span className={styles.collapsedPreview}>{formatInlineMarkup(firstBullet)}</span>
           )}
-          <Icon name={collapsed ? 'angle-down' : 'angle-up'} size="md" className={styles.chevron} />
+          {canExpand && (
+            <Icon name={collapsed ? 'angle-down' : 'angle-up'} size="md" className={styles.chevron} />
+          )}
         </button>
 
         <div className={styles.actions}>
@@ -379,8 +383,6 @@ function getStyles(theme: GrafanaTheme2) {
   const barBase = {
     width: '100%',
     background: theme.colors.background.secondary,
-    border: `1px solid ${theme.colors.border.weak}`,
-    borderRadius: theme.shape.radius.default,
     overflow: 'hidden' as const,
   };
 
@@ -413,6 +415,18 @@ function getStyles(theme: GrafanaTheme2) {
       flex: 1,
       color: theme.colors.text.primary,
     }),
+    headerToggleDisabled: css({
+      display: 'flex',
+      alignItems: 'center',
+      gap: theme.spacing(0.75),
+      border: 'none',
+      background: 'transparent',
+      cursor: 'default',
+      padding: 0,
+      minWidth: 0,
+      flex: 1,
+      color: theme.colors.text.primary,
+    }),
     aiIcon: css({
       flexShrink: 0,
       color: theme.colors.primary.text,
@@ -423,7 +437,7 @@ function getStyles(theme: GrafanaTheme2) {
       flexShrink: 0,
     }),
     collapsedPreview: css({
-      fontSize: theme.typography.bodySmall.fontSize,
+      fontSize: theme.typography.body.fontSize,
       color: theme.colors.text.secondary,
       overflow: 'hidden',
       textOverflow: 'ellipsis',
@@ -502,7 +516,7 @@ function getStyles(theme: GrafanaTheme2) {
       lineHeight: 1.6,
     }),
     bulletText: css({
-      fontSize: theme.typography.bodySmall.fontSize,
+      fontSize: theme.typography.body.fontSize,
       lineHeight: 1.6,
       color: theme.colors.text.secondary,
       display: '-webkit-box',

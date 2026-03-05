@@ -30,8 +30,16 @@ describe('PageInsightBar', () => {
 
   it('defaults to collapsed when no localStorage value', () => {
     render(<PageInsightBar prompt="Analyze" origin="test" dataContext={null} />);
-    expect(screen.getByRole('button', { name: 'Expand insights' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'No insights available' })).toBeInTheDocument();
     expect(screen.queryByText('Waiting for data...')).not.toBeInTheDocument();
+  });
+
+  it('cannot be expanded when there is no content', () => {
+    render(<PageInsightBar prompt="Analyze" origin="test" dataContext={null} />);
+    const toggle = screen.getByRole('button', { name: 'No insights available' });
+    expect(toggle).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(toggle);
+    expect(screen.queryByText('No notable insights.')).not.toBeInTheDocument();
   });
 
   it('renders waiting placeholder when expanded with no data', () => {
@@ -94,13 +102,16 @@ describe('PageInsightBar', () => {
     expect(screen.getByText(/Token usage is normal/)).toBeInTheDocument();
   });
 
-  it('shows no-insights placeholder when result is empty', () => {
-    localStorage.setItem('sigil.insightBar.collapsed', '0');
+  it('cannot expand when result is empty', () => {
+    localStorage.setItem('sigil.insightBar.collapsed', '1');
     mockGenerate.mockImplementation(({ onComplete }: { onComplete: (r: string) => void }) => {
       onComplete('');
     });
     render(<PageInsightBar prompt="Analyze" origin="test" dataContext="data" />);
-    expect(screen.getByText('No notable insights.')).toBeInTheDocument();
+    const toggle = screen.getByRole('button', { name: 'No insights available' });
+    expect(toggle).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(toggle);
+    expect(screen.queryByText('No notable insights.')).not.toBeInTheDocument();
   });
 
   it('persists collapsed state in localStorage', () => {
@@ -121,7 +132,7 @@ describe('PageInsightBar', () => {
   it('starts collapsed when localStorage has collapsed state', () => {
     localStorage.setItem('sigil.insightBar.collapsed', '1');
     render(<PageInsightBar prompt="Analyze" origin="test" dataContext="data" />);
-    expect(screen.getByRole('button', { name: 'Expand insights' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'No insights available' })).toBeInTheDocument();
     expect(mockGenerate).toHaveBeenCalledTimes(1);
   });
 
