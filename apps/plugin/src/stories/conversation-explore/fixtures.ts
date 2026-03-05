@@ -109,6 +109,23 @@ export const mockGenerations: GenerationDetail[] = [
     ],
     usage: { input_tokens: 1500, output_tokens: 320, total_tokens: 1820 },
     created_at: '2024-11-17T12:52:15.000Z',
+    latest_scores: {
+      helpfulness: {
+        value: { number: 8 },
+        evaluator_id: 'custom.helpfulness',
+        evaluator_version: '2025-01-15',
+        evaluator_description: 'Rates how helpful the response is on a 1–10 scale',
+        created_at: '2024-11-17T12:52:16.000Z',
+        passed: true,
+      },
+      safety: {
+        value: { bool: true },
+        evaluator_id: 'sigil.safety',
+        evaluator_version: '2025-03-01',
+        created_at: '2024-11-17T12:52:16.500Z',
+        passed: true,
+      },
+    },
   },
 ];
 

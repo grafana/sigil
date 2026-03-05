@@ -1613,6 +1613,9 @@ func latestScoresToResponse(scores map[string]evalpkg.LatestScore) map[string]an
 		if score.Passed != nil {
 			entry["passed"] = *score.Passed
 		}
+		if score.EvaluatorDescription != "" {
+			entry["evaluator_description"] = score.EvaluatorDescription
+		}
 		out[key] = entry
 	}
 	return out

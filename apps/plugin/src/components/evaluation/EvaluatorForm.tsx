@@ -72,6 +72,7 @@ function parseEvaluatorToFormState(
   evaluatorId: string;
   version: string;
   kind: EvaluatorKind;
+  description: string;
   systemPrompt: string;
   userPrompt: string;
   maxTokens: number;
@@ -98,6 +99,7 @@ function parseEvaluatorToFormState(
     evaluatorId: e.evaluator_id ?? '',
     version: nextVersion(versionsToAvoid.length > 0 ? versionsToAvoid : undefined),
     kind: e.kind ?? 'llm_judge',
+    description: e.description ?? '',
     systemPrompt: (cfg.system_prompt as string) || LLM_JUDGE_DEFAULT_SYSTEM_PROMPT,
     userPrompt: (cfg.user_prompt as string) || LLM_JUDGE_DEFAULT_USER_PROMPT,
     maxTokens: (cfg.max_tokens as number) ?? 256,
@@ -142,6 +144,7 @@ export default function EvaluatorForm({
   const [evaluatorId, setEvaluatorId] = useState(() => initialState?.evaluatorId ?? '');
   const [version, setVersion] = useState(() => initialState?.version ?? nextVersion());
   const [kind, setKind] = useState<EvaluatorKind>(initialState?.kind ?? 'llm_judge');
+  const [description, setDescription] = useState(() => initialState?.description ?? '');
   const [touched, setTouched] = useState(false);
 
   // llm_judge: provider, model, system_prompt, user_prompt, max_tokens, temperature
@@ -322,6 +325,7 @@ export default function EvaluatorForm({
       evaluator_id: evaluatorId.trim(),
       version: version.trim() || nextVersion(),
       kind,
+      description: description.trim() || undefined,
       config: buildConfig(),
       output_keys: outputKeys,
     };
@@ -367,6 +371,14 @@ export default function EvaluatorForm({
             }
           }}
           width={24}
+        />
+      </Field>
+      <Field label="Description" description="Optional description shown in score tooltips.">
+        <Input
+          value={description}
+          onChange={(e) => setDescription(e.currentTarget.value)}
+          placeholder="e.g. Checks whether the response is helpful"
+          width={60}
         />
       </Field>
 
