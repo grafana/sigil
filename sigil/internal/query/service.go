@@ -178,6 +178,8 @@ type ServiceDependencies struct {
 	HTTPClient          *http.Client
 	OverfetchMultiplier int
 	MaxSearchIterations int
+	ColdReadConfig      storage.ColdReadConfig
+	IndexCacheConfig    storage.IndexCacheConfig
 }
 
 type Service struct {
@@ -198,6 +200,21 @@ type Service struct {
 }
 
 var queryServiceTracer = otel.Tracer("github.com/grafana/sigil/query/service")
+
+type plannedConversationFanOutReader interface {
+	ListConversationGenerationsWithPlan(ctx context.Context, tenantID, conversationID string, plan storage.ConversationReadPlan) ([]*sigilv1.Generation, error)
+}
+
+type plannedGenerationFanOutReader interface {
+	GetGenerationByIDWithPlan(ctx context.Context, tenantID, generationID string, plan storage.GenerationReadPlan) (*sigilv1.Generation, error)
+}
+
+type GenerationDetailReadPlan struct {
+	ConversationID string
+	From           time.Time
+	To             time.Time
+	At             time.Time
+}
 
 func recordQuerySpanError(span trace.Span, err error) {
 	if span == nil || err == nil {
@@ -276,7 +293,18 @@ func NewServiceWithDependencies(dependencies ServiceDependencies) (*Service, err
 	if dependencies.FanOutStore != nil {
 		service.fanOutStore = dependencies.FanOutStore
 	} else {
-		service.fanOutStore = storage.NewFanOutStore(service.walReader, blockMetadataStore, dependencies.BlockReader)
+		options := []storage.FanOutOption{}
+		if dependencies.ColdReadConfig.TotalBudget > 0 ||
+			dependencies.ColdReadConfig.IndexReadTimeout > 0 ||
+			dependencies.ColdReadConfig.IndexRetries > 0 ||
+			dependencies.ColdReadConfig.IndexWorkers > 0 ||
+			dependencies.ColdReadConfig.IndexMaxInflight > 0 {
+			options = append(options, storage.WithColdReadConfig(dependencies.ColdReadConfig))
+		}
+		if dependencies.IndexCacheConfig.Enabled {
+			options = append(options, storage.WithIndexCacheConfig(dependencies.IndexCacheConfig))
+		}
+		service.fanOutStore = storage.NewFanOutStore(service.walReader, blockMetadataStore, dependencies.BlockReader, options...)
 	}
 
 	if dependencies.OverfetchMultiplier > 0 {
@@ -875,7 +903,18 @@ func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, 
 		return ConversationDetail{}, false, nil
 	}
 
-	mergedGenerations, err := fanOutStore.ListConversationGenerations(ctx, trimmedTenantID, trimmedConversationID)
+	plan := storage.ConversationReadPlan{
+		ExpectedGenerationCount: conversation.GenerationCount,
+	}
+	if !conversation.LastGenerationAt.IsZero() {
+		plan.To = conversation.LastGenerationAt.UTC().Add(2 * time.Minute)
+	}
+	var mergedGenerations []*sigilv1.Generation
+	if plannedReader, ok := fanOutStore.(plannedConversationFanOutReader); ok {
+		mergedGenerations, err = plannedReader.ListConversationGenerationsWithPlan(ctx, trimmedTenantID, trimmedConversationID, plan)
+	} else {
+		mergedGenerations, err = fanOutStore.ListConversationGenerations(ctx, trimmedTenantID, trimmedConversationID)
+	}
 	if err != nil {
 		recordQuerySpanError(span, err)
 		return ConversationDetail{}, false, err
@@ -942,6 +981,15 @@ func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, 
 }
 
 func (s *Service) GetGenerationDetailForTenant(ctx context.Context, tenantID, generationID string) (map[string]any, bool, error) {
+	return s.GetGenerationDetailForTenantWithPlan(ctx, tenantID, generationID, GenerationDetailReadPlan{})
+}
+
+func (s *Service) GetGenerationDetailForTenantWithPlan(
+	ctx context.Context,
+	tenantID,
+	generationID string,
+	plan GenerationDetailReadPlan,
+) (map[string]any, bool, error) {
 	ctx, span := queryServiceTracer.Start(ctx, "sigil.query.get_generation_detail")
 	defer span.End()
 
@@ -950,6 +998,9 @@ func (s *Service) GetGenerationDetailForTenant(ctx context.Context, tenantID, ge
 	span.SetAttributes(
 		attribute.String("sigil.tenant.id", trimmedTenantID),
 		attribute.String("sigil.generation.id", trimmedGenerationID),
+		attribute.String("sigil.query.hint_conversation_id", strings.TrimSpace(plan.ConversationID)),
+		attribute.Bool("sigil.query.hint_has_range", !plan.From.IsZero() && !plan.To.IsZero()),
+		attribute.Bool("sigil.query.hint_has_at", !plan.At.IsZero()),
 	)
 	if trimmedTenantID == "" {
 		err := NewValidationError("tenant id is required")
@@ -971,7 +1022,21 @@ func (s *Service) GetGenerationDetailForTenant(ctx context.Context, tenantID, ge
 		fanOutStore = storage.NewFanOutStore(s.walReader, nil, nil)
 	}
 
-	generation, err := fanOutStore.GetGenerationByID(ctx, trimmedTenantID, trimmedGenerationID)
+	storagePlan := storage.GenerationReadPlan{
+		ConversationID: strings.TrimSpace(plan.ConversationID),
+		From:           plan.From.UTC(),
+		To:             plan.To.UTC(),
+		At:             plan.At.UTC(),
+	}
+	var (
+		generation *sigilv1.Generation
+		err        error
+	)
+	if plannedReader, ok := fanOutStore.(plannedGenerationFanOutReader); ok {
+		generation, err = plannedReader.GetGenerationByIDWithPlan(ctx, trimmedTenantID, trimmedGenerationID, storagePlan)
+	} else {
+		generation, err = fanOutStore.GetGenerationByID(ctx, trimmedTenantID, trimmedGenerationID)
+	}
 	if err != nil {
 		recordQuerySpanError(span, err)
 		return nil, false, err

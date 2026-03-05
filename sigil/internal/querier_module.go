@@ -86,6 +86,18 @@ func newQuerierModule(
 		FeedbackStore:      feedbackStore,
 		TempoBaseURL:       cfg.QueryProxy.TempoBaseURL,
 		HTTPClient:         &http.Client{Timeout: cfg.QueryProxy.Timeout},
+		ColdReadConfig: storage.ColdReadConfig{
+			TotalBudget:      cfg.QueryRead.ColdTotalBudget,
+			IndexReadTimeout: cfg.QueryRead.ColdIndexReadTimeout,
+			IndexRetries:     cfg.QueryRead.ColdIndexRetries,
+			IndexWorkers:     cfg.QueryRead.ColdIndexWorkers,
+			IndexMaxInflight: cfg.QueryRead.ColdIndexMaxInflight,
+		},
+		IndexCacheConfig: storage.IndexCacheConfig{
+			Enabled:  true,
+			TTL:      cfg.QueryRead.ColdIndexCacheTTL,
+			MaxBytes: cfg.QueryRead.ColdIndexCacheMaxBytes,
+		},
 	})
 	if err != nil {
 		return nil, err

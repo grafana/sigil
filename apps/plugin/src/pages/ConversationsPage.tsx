@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { dateTime, type GrafanaTheme2, makeTimeRange, type TimeRange } from '@grafana/data';
 import { Alert, Text, useStyles2 } from '@grafana/ui';
@@ -75,14 +75,19 @@ export default function ConversationsPage(props: ConversationsPageProps) {
   const [loadingConversationDetail, setLoadingConversationDetail] = useState<boolean>(false);
 
   const [selectedGenerationID, setSelectedGenerationID] = useState<string>('');
-  const [generationDetail, setGenerationDetail] = useState<GenerationDetail | null>(null);
-  const [loadingGenerationDetail, setLoadingGenerationDetail] = useState<boolean>(false);
+  const generationDetail = useMemo<GenerationDetail | null>(() => {
+    if (!conversationDetail || selectedGenerationID.length === 0) {
+      return null;
+    }
+    return (
+      conversationDetail.generations?.find((generation) => generation.generation_id === selectedGenerationID) ?? null
+    );
+  }, [conversationDetail, selectedGenerationID]);
 
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   const searchRequestVersion = useRef<number>(0);
   const conversationDetailRequestVersion = useRef<number>(0);
-  const generationDetailRequestVersion = useRef<number>(0);
   const tagsRequestVersion = useRef<number>(0);
   const tagValuesRequestVersion = useRef<number>(0);
   const inFlightTagValuesKey = useRef<string>('');
@@ -182,7 +187,6 @@ export default function ConversationsPage(props: ConversationsPageProps) {
     if (selectedConversationID.length === 0) {
       setConversationDetail(null);
       setSelectedGenerationID('');
-      setGenerationDetail(null);
       setLoadingConversationDetail(false);
       return;
     }
@@ -205,7 +209,6 @@ export default function ConversationsPage(props: ConversationsPageProps) {
         setErrorMessage(error instanceof Error ? error.message : 'failed to load conversation detail');
         setConversationDetail(null);
         setSelectedGenerationID('');
-        setGenerationDetail(null);
       })
       .finally(() => {
         if (conversationDetailRequestVersion.current !== requestVersion) {
@@ -214,41 +217,6 @@ export default function ConversationsPage(props: ConversationsPageProps) {
         setLoadingConversationDetail(false);
       });
   }, [dataSource, selectedConversationID]);
-
-  useEffect(() => {
-    generationDetailRequestVersion.current += 1;
-    const requestVersion = generationDetailRequestVersion.current;
-
-    if (selectedGenerationID.length === 0) {
-      setGenerationDetail(null);
-      setLoadingGenerationDetail(false);
-      return;
-    }
-
-    setLoadingGenerationDetail(true);
-    setErrorMessage('');
-    void dataSource
-      .getGeneration(selectedGenerationID)
-      .then((detail) => {
-        if (generationDetailRequestVersion.current !== requestVersion) {
-          return;
-        }
-        setGenerationDetail(detail);
-      })
-      .catch((error) => {
-        if (generationDetailRequestVersion.current !== requestVersion) {
-          return;
-        }
-        setErrorMessage(error instanceof Error ? error.message : 'failed to load generation detail');
-        setGenerationDetail(null);
-      })
-      .finally(() => {
-        if (generationDetailRequestVersion.current !== requestVersion) {
-          return;
-        }
-        setLoadingGenerationDetail(false);
-      });
-  }, [dataSource, selectedGenerationID]);
 
   const requestTagValues = useCallback(
     (tag: string): void => {
@@ -337,7 +305,7 @@ export default function ConversationsPage(props: ConversationsPageProps) {
           <GenerationViewerPanel
             conversationDetail={conversationDetail}
             generationDetail={generationDetail}
-            loading={loadingConversationDetail || loadingGenerationDetail}
+            loading={loadingConversationDetail}
             onSelectGeneration={setSelectedGenerationID}
           />
         </div>

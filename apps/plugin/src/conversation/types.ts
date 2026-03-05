@@ -105,6 +105,13 @@ export type ConversationSearchResponse = {
   has_more: boolean;
 };
 
+export type GenerationLookupHints = {
+  conversation_id?: string;
+  from?: string;
+  to?: string;
+  at?: string;
+};
+
 export type {
   GenerationUsage,
   GenerationDetail,
