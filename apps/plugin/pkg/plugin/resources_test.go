@@ -1557,12 +1557,7 @@ func TestCallResourceSupportsEvalWriteOperations(t *testing.T) {
 	}
 }
 
-func TestCallResourceReturnsValidJSONWhenClientSendsAcceptEncodingGzip(t *testing.T) {
-	// Upstream responds with gzip when it sees Accept-Encoding: gzip.
-	// Go's http.Transport adds Accept-Encoding: gzip automatically when
-	// the user-provided header is stripped, and then transparently
-	// decompresses the response. This test verifies the proxy returns
-	// valid JSON instead of garbled gzip bytes.
+func TestCallResourceForwardsGzipEncodedResponses(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
@@ -1594,10 +1589,89 @@ func TestCallResourceReturnsValidJSONWhenClientSendsAcceptEncodingGzip(t *testin
 	if sender.Status != http.StatusOK {
 		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)
 	}
-	// Verify the response body is valid JSON, not garbled gzip bytes.
+
+	contentEncoding := sender.Headers["Content-Encoding"]
+	if len(contentEncoding) == 0 || contentEncoding[0] != "gzip" {
+		t.Fatalf("expected gzip content encoding, got headers=%v", sender.Headers)
+	}
+
+	gz, err := gzip.NewReader(bytes.NewReader(sender.Body))
+	if err != nil {
+		t.Fatalf("response body is not gzip-compressed: %v", err)
+	}
+	decompressed, err := io.ReadAll(gz)
+	if err != nil {
+		t.Fatalf("failed to decompress response body: %v", err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatalf("failed to close gzip reader: %v", err)
+	}
+
 	var result map[string]interface{}
-	if err := json.Unmarshal(sender.Body, &result); err != nil {
-		t.Fatalf("response body is not valid JSON (garbled encoding?): %v\nbody bytes: %x", err, sender.Body)
+	if err := json.Unmarshal(decompressed, &result); err != nil {
+		t.Fatalf("decompressed response body is not valid JSON: %v\nbody bytes: %x", err, decompressed)
+	}
+}
+
+func TestCallResourceForwardsGzipEncodedGrafanaProxyResponses(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/datasources/proxy/uid/tempo-ds/api/search" {
+			http.Error(w, "unexpected path", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			w.Header().Set("Content-Encoding", "gzip")
+			gz := gzip.NewWriter(w)
+			_, _ = gz.Write([]byte(`{"traces":[]}`))
+			_ = gz.Close()
+			return
+		}
+		_, _ = io.WriteString(w, `{"traces":[]}`)
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+	app.grafanaAppURL = upstream.URL
+	app.grafanaServiceAccountToken = "sa-token"
+	app.tempoDatasourceUID = "tempo-ds"
+
+	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "query/proxy/tempo/api/search",
+		Headers: map[string][]string{
+			"Accept-Encoding": {"gzip"},
+		},
+	})
+	if sender.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)
+	}
+
+	contentEncoding := sender.Headers["Content-Encoding"]
+	if len(contentEncoding) == 0 || contentEncoding[0] != "gzip" {
+		t.Fatalf("expected gzip content encoding, got headers=%v", sender.Headers)
+	}
+
+	gz, err := gzip.NewReader(bytes.NewReader(sender.Body))
+	if err != nil {
+		t.Fatalf("response body is not gzip-compressed: %v", err)
+	}
+	decompressed, err := io.ReadAll(gz)
+	if err != nil {
+		t.Fatalf("failed to decompress response body: %v", err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatalf("failed to close gzip reader: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(decompressed, &result); err != nil {
+		t.Fatalf("decompressed response body is not valid JSON: %v\nbody bytes: %x", err, decompressed)
 	}
 }
 

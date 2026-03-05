@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { dateTime, ThresholdsMode, type AbsoluteTimeRange, type GrafanaTheme2, type TimeRange } from '@grafana/data';
-import { Badge, Button, Icon, Spinner, Text, Tooltip, useStyles2, useTheme2 } from '@grafana/ui';
+import { Badge, Icon, LinkButton, Spinner, Text, Tooltip, useStyles2, useTheme2 } from '@grafana/ui';
 import type { DashboardDataSource } from '../../dashboard/api';
 import {
   type BreakdownDimension,
@@ -38,8 +38,10 @@ import { usePrometheusQuery } from './usePrometheusQuery';
 import { MetricPanel } from './MetricPanel';
 import { useResolvedModelPricing } from './useResolvedModelPricing';
 import { type ConversationsDataSource, defaultConversationsDataSource } from '../../conversation/api';
+import { buildConversationSearchFilter } from '../../conversation/filters';
 import type { ConversationSearchResult } from '../../conversation/types';
-import { PLUGIN_BASE, buildConversationViewRoute } from '../../constants';
+import { PLUGIN_BASE, ROUTES, buildConversationExploreRoute } from '../../constants';
+import { ViewConversationsLink } from './ViewConversationsLink';
 import { PageInsightBar } from '../insight/PageInsightBar';
 import { summarizeVector, summarizeMatrix, hasResponseData } from '../insight/summarize';
 import { DashboardSummaryBar } from './DashboardSummaryBar';
@@ -398,6 +400,7 @@ export function DashboardCacheGrid({
               },
               overrides: [],
             }}
+            actions={<ViewConversationsLink timeRange={timeRange} filters={filters} orderBy="tokens" />}
           />
           <BreakdownStatPanel
             title="Cache hit rate by model"
@@ -484,7 +487,11 @@ export function DashboardCacheGrid({
       </div>
 
       {/* Conversations with low cache utilization */}
-      <CacheMissConversationsTable conversationsDataSource={conversationsDataSource} timeRange={timeRange} />
+      <CacheMissConversationsTable
+        conversationsDataSource={conversationsDataSource}
+        timeRange={timeRange}
+        filters={filters}
+      />
     </div>
   );
 }
@@ -665,52 +672,94 @@ function SavingsTable({ items, height }: SavingsTableProps) {
 
 // --- Conversations with low cache utilization ---
 
+const MAX_CACHE_ROWS = 10;
 const CACHE_SELECT_FIELDS = ['span.gen_ai.usage.input_tokens', 'span.gen_ai.usage.cache_read_input_tokens'];
 
 type CacheMissConversationsTableProps = {
   conversationsDataSource: ConversationsDataSource;
   timeRange: TimeRange;
+  filters: DashboardFilters;
 };
 
-function CacheMissConversationsTable({ conversationsDataSource, timeRange }: CacheMissConversationsTableProps) {
+function buildCacheSeeMoreUrl(timeRange: TimeRange, filters: DashboardFilters): string {
+  const params = new URLSearchParams();
+  params.set('from', String(timeRange.raw.from));
+  params.set('to', String(timeRange.raw.to));
+  for (const p of filters.providers) {
+    params.append('provider', p);
+  }
+  for (const m of filters.models) {
+    params.append('model', m);
+  }
+  for (const a of filters.agentNames) {
+    params.append('agent', a);
+  }
+  for (const lf of filters.labelFilters) {
+    if (lf.key && lf.value) {
+      params.append('label', `${lf.key}|${lf.operator}|${lf.value}`);
+    }
+  }
+  return `${PLUGIN_BASE}/${ROUTES.Conversations}?${params.toString()}`;
+}
+
+function CacheMissConversationsTable({
+  conversationsDataSource,
+  timeRange,
+  filters,
+}: CacheMissConversationsTableProps) {
   const styles = useStyles2(getStyles);
   const bspStyles = useStyles2(getBreakdownStatPanelStyles);
   const [conversations, setConversations] = useState<ConversationSearchResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [hasMore, setHasMore] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const cursorRef = useRef<string | undefined>(undefined);
   const versionRef = useRef(0);
 
   const fromISO = useMemo(() => timeRange.from.toISOString(), [timeRange.from]);
   const toISO = useMemo(() => timeRange.to.toISOString(), [timeRange.to]);
+  const filterString = useMemo(() => buildConversationSearchFilter(filters), [filters]);
 
-  const fetchConversations = useCallback(
-    async (cursor?: string) => {
-      const version = ++versionRef.current;
-      if (!cursor) {
-        setLoading(true);
-      } else {
-        setLoadingMore(true);
-      }
-      setError('');
+  useEffect(() => {
+    const version = ++versionRef.current;
+    setLoading(true);
+    setError('');
 
+    void (async () => {
       try {
-        const response = await conversationsDataSource.searchConversations({
-          filters: '',
-          select: CACHE_SELECT_FIELDS,
-          time_range: { from: fromISO, to: toISO },
-          page_size: 20,
-          cursor,
-        });
-        if (versionRef.current !== version) {
-          return;
+        let cursor = '';
+        let hasMore = true;
+        const all: ConversationSearchResult[] = [];
+        // Cap pages to avoid unbounded fetches; the API lacks server-side ordering,
+        // so we approximate "top N" from a bounded sample.
+        const maxPages = 5;
+        let page = 0;
+
+        while (hasMore && page < maxPages) {
+          const response = await conversationsDataSource.searchConversations({
+            filters: filterString,
+            select: CACHE_SELECT_FIELDS,
+            time_range: { from: fromISO, to: toISO },
+            page_size: 100,
+            cursor,
+          });
+          if (versionRef.current !== version) {
+            return;
+          }
+          all.push(...(response.conversations ?? []));
+          cursor = response.next_cursor ?? '';
+          hasMore = Boolean(response.has_more && cursor.length > 0);
+          page++;
         }
-        const items = response.conversations ?? [];
-        setConversations((prev) => (cursor ? [...prev, ...items] : items));
-        setHasMore(response.has_more);
-        cursorRef.current = response.next_cursor;
+
+        const withStats = all.map((c) => {
+          const inputTokens = (c.selected?.['span.gen_ai.usage.input_tokens'] as number) ?? 0;
+          const cacheReadTokens = (c.selected?.['span.gen_ai.usage.cache_read_input_tokens'] as number) ?? 0;
+          const total = inputTokens + cacheReadTokens;
+          const cacheHitRate = total > 0 ? (cacheReadTokens / total) * 100 : 0;
+          return { ...c, inputTokens, cacheReadTokens, cacheHitRate };
+        });
+        withStats.sort((a, b) => a.cacheHitRate - b.cacheHitRate);
+
+        setConversations(withStats.slice(0, MAX_CACHE_ROWS));
       } catch (err) {
         if (versionRef.current !== version) {
           return;
@@ -719,37 +768,23 @@ function CacheMissConversationsTable({ conversationsDataSource, timeRange }: Cac
       } finally {
         if (versionRef.current === version) {
           setLoading(false);
-          setLoadingMore(false);
         }
       }
-    },
-    [conversationsDataSource, fromISO, toISO]
-  );
-
-  useEffect(() => {
-    cursorRef.current = undefined;
-    fetchConversations();
-  }, [fetchConversations]);
-
-  const handleLoadMore = useCallback(() => {
-    if (cursorRef.current) {
-      fetchConversations(cursorRef.current);
-    }
-  }, [fetchConversations]);
+    })();
+  }, [conversationsDataSource, fromISO, toISO, filterString]);
 
   const withCacheStats = useMemo(() => {
-    return conversations
-      .map((c) => {
-        const inputTokens = (c.selected?.['span.gen_ai.usage.input_tokens'] as number) ?? 0;
-        const cacheReadTokens = (c.selected?.['span.gen_ai.usage.cache_read_input_tokens'] as number) ?? 0;
-        const total = inputTokens + cacheReadTokens;
-        const cacheHitRate = total > 0 ? (cacheReadTokens / total) * 100 : 0;
-        return { ...c, inputTokens, cacheReadTokens, cacheHitRate };
-      })
-      .sort((a, b) => a.cacheHitRate - b.cacheHitRate);
+    return conversations.map((c) => {
+      const inputTokens = (c.selected?.['span.gen_ai.usage.input_tokens'] as number) ?? 0;
+      const cacheReadTokens = (c.selected?.['span.gen_ai.usage.cache_read_input_tokens'] as number) ?? 0;
+      const total = inputTokens + cacheReadTokens;
+      const cacheHitRate = total > 0 ? (cacheReadTokens / total) * 100 : 0;
+      return { ...c, inputTokens, cacheReadTokens, cacheHitRate };
+    });
   }, [conversations]);
 
   const title = 'Conversations with low cache utilization';
+  const seeMoreHref = buildCacheSeeMoreUrl(timeRange, filters);
 
   if (loading) {
     return (
@@ -813,14 +848,19 @@ function CacheMissConversationsTable({ conversationsDataSource, timeRange }: Cac
             <tr
               key={c.conversation_id}
               className={styles.tableRow}
-              onClick={() => {
-                window.location.href = `${PLUGIN_BASE}/${buildConversationViewRoute(c.conversation_id)}`;
+              onClick={(e) => {
+                const href = `${PLUGIN_BASE}/${buildConversationExploreRoute(c.conversation_id)}`;
+                if (e.metaKey || e.ctrlKey) {
+                  window.open(href, '_blank');
+                } else {
+                  window.location.href = href;
+                }
               }}
               role="link"
               aria-label={`view conversation ${c.conversation_id}`}
             >
               <td className={`${styles.tableCell} ${styles.idCell}`}>
-                <span>{c.conversation_id}</span>
+                <span>{c.conversation_title?.trim() || c.conversation_id}</span>
               </td>
               <td className={styles.tableCell}>{c.generation_count}</td>
               <td className={styles.tableCell}>
@@ -848,24 +888,11 @@ function CacheMissConversationsTable({ conversationsDataSource, timeRange }: Cac
         </tbody>
       </table>
 
-      {hasMore && (
-        <div style={{ padding: 8 }}>
-          {error && (
-            <div className={styles.loadMoreError}>
-              <Text>{error}</Text>
-            </div>
-          )}
-          <Button
-            aria-label={error ? 'retry load more' : 'load more conversations'}
-            onClick={handleLoadMore}
-            disabled={loadingMore}
-            variant="secondary"
-            fullWidth
-          >
-            {loadingMore ? 'Loading...' : error ? 'Retry' : 'Load more'}
-          </Button>
-        </div>
-      )}
+      <div className={styles.seeMoreFooter}>
+        <LinkButton href={seeMoreHref} variant="secondary" fill="text" size="sm" icon="arrow-right">
+          See more conversations
+        </LinkButton>
+      </div>
     </div>
   );
 }
@@ -957,9 +984,11 @@ function getStyles(theme: GrafanaTheme2) {
       padding: theme.spacing(4),
       color: theme.colors.text.secondary,
     }),
-    loadMoreError: css({
-      marginBottom: theme.spacing(1),
-      color: theme.colors.error.text,
+    seeMoreFooter: css({
+      display: 'flex',
+      justifyContent: 'center',
+      padding: theme.spacing(1),
+      borderTop: `1px solid ${theme.colors.border.weak}`,
     }),
   };
 }

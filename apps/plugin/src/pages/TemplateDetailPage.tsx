@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Badge, Button, Spinner, Stack, Text, useStyles2 } from '@grafana/ui';
+import { Alert, Badge, Button, ConfirmModal, Spinner, Stack, Text, useStyles2 } from '@grafana/ui';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
 import {
@@ -15,6 +15,7 @@ import {
   type TemplateVersion,
 } from '../evaluation/types';
 import EvalTestPanel from '../components/evaluation/EvalTestPanel';
+import TemplateConfigSummary from '../components/evaluation/TemplateConfigSummary';
 import VersionHistoryTable from '../components/evaluation/VersionHistoryTable';
 import PublishVersionForm from '../components/evaluation/PublishVersionForm';
 import VersionCompare from '../components/evaluation/VersionCompare';
@@ -49,17 +50,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     gap: theme.spacing(1),
-  }),
-  code: css({
-    padding: theme.spacing(1),
-    fontFamily: theme.typography.fontFamilyMonospace,
-    fontSize: theme.typography.size.sm,
-    background: theme.colors.background.canvas,
-    border: `1px solid ${theme.colors.border.weak}`,
-    borderRadius: theme.shape.radius.default,
-    overflow: 'auto',
-    whiteSpace: 'pre' as const,
-    maxHeight: 300,
   }),
   loading: css({
     display: 'flex',
@@ -99,6 +89,8 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
   const [rollbackOutputKeys, setRollbackOutputKeys] = useState<
     Array<{ key: string; type: 'number' | 'bool' | 'string' }> | undefined
   >(undefined);
+
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Version compare state
   const [selectedVersions, setSelectedVersions] = useState<string[]>([]);
@@ -240,7 +232,7 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
     }
     try {
       await dataSource.deleteTemplate(templateID);
-      navigate(EVAL_TEMPLATES_BASE);
+      navigate(EVAL_EVALUATORS_BASE);
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Failed to delete template');
     }
@@ -271,6 +263,18 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
 
   return (
     <div className={styles.pageContainer}>
+      <ConfirmModal
+        isOpen={confirmDelete}
+        title="Delete template"
+        body={`Are you sure you want to delete template "${templateID}"? This cannot be undone.`}
+        confirmText="Delete"
+        icon="trash-alt"
+        onConfirm={() => {
+          setConfirmDelete(false);
+          void handleDelete();
+        }}
+        onDismiss={() => setConfirmDelete(false)}
+      />
       {errorMessage.length > 0 && (
         <Alert severity="error" title="Error" onRemove={() => setErrorMessage('')}>
           <Text>{errorMessage}</Text>
@@ -282,6 +286,7 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
           <Text element="h2">Template {template.template_id}</Text>
           <Badge text={EVALUATOR_KIND_LABELS[template.kind]} color={getKindBadgeColor(template.kind)} />
           <Badge text={template.scope} color={template.scope === 'global' ? 'orange' : 'blue'} />
+          <Badge text={`v${template.latest_version}`} color="green" />
         </div>
         <Stack direction="row" gap={1}>
           {template.scope === 'tenant' && (
@@ -303,7 +308,7 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
             Fork to Evaluator
           </Button>
           {template.scope === 'tenant' && (
-            <Button variant="destructive" icon="trash-alt" onClick={handleDelete}>
+            <Button variant="destructive" icon="trash-alt" onClick={() => setConfirmDelete(true)}>
               Delete
             </Button>
           )}
@@ -312,23 +317,15 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
 
       {template.description && <Text color="secondary">{template.description}</Text>}
 
-      <div className={styles.section}>
-        <Text element="h3" weight="medium">
-          Current Version: {template.latest_version}
-        </Text>
-        {template.config && (
-          <div className={styles.code}>
-            {JSON.stringify(
-              {
-                config: template.config,
-                ...(template.output_keys?.length ? { output_keys: template.output_keys } : {}),
-              },
-              null,
-              2
-            )}
-          </div>
-        )}
-      </div>
+      {activeForm === 'none' && (
+        <div className={styles.section}>
+          <TemplateConfigSummary
+            kind={template.kind}
+            config={template.config ?? {}}
+            outputKeys={template.output_keys ?? []}
+          />
+        </div>
+      )}
 
       {activeForm === 'publish' && (
         <div className={styles.formWithTest}>
@@ -347,6 +344,7 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
                 setRollbackOutputKeys(undefined);
               }}
               onConfigChange={setFormState}
+              dataSource={dataSource}
             />
           </div>
           <div className={styles.testColumn}>

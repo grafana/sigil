@@ -208,7 +208,9 @@ export default function GenerationPicker({
       .listSavedConversations(undefined, 50)
       .then((resp) => {
         if (!cancelled) {
-          setSavedConversations(resp.items ?? []);
+          // Reverse to show newest first. TODO: request server-side descending order
+          // once the API supports it — client-side reverse only covers the first page (50 items).
+          setSavedConversations((resp.items ?? []).slice().reverse());
         }
       })
       .catch(() => {

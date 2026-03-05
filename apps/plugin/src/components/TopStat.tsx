@@ -47,7 +47,7 @@ export function TopStat({
       const badgeClass = isGood ? styles.changeBadgeGood : styles.changeBadgeWarn;
       changeBadge = (
         <Tooltip content={`Zero ${comparisonLabel}`} placement="bottom">
-          <span className={`${styles.changeBadge} ${badgeClass}`}>new</span>
+          <span className={`${styles.changeBadge} ${badgeClass}`}>↑ 0</span>
         </Tooltip>
       );
     } else {

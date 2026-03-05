@@ -4,6 +4,8 @@ import { Button, Field, Input, Select, Stack, Switch, useStyles2 } from '@grafan
 import { css } from '@emotion/css';
 import {
   EVALUATOR_KIND_LABELS,
+  LLM_JUDGE_DEFAULT_SYSTEM_PROMPT,
+  LLM_JUDGE_DEFAULT_USER_PROMPT,
   buildOutputKeyFromForm,
   type CreateEvaluatorRequest,
   type EvalFormState,
@@ -96,8 +98,8 @@ function parseEvaluatorToFormState(
     evaluatorId: e.evaluator_id ?? '',
     version: nextVersion(versionsToAvoid.length > 0 ? versionsToAvoid : undefined),
     kind: e.kind ?? 'llm_judge',
-    systemPrompt: (cfg.system_prompt as string) ?? '',
-    userPrompt: (cfg.user_prompt as string) ?? '',
+    systemPrompt: (cfg.system_prompt as string) || LLM_JUDGE_DEFAULT_SYSTEM_PROMPT,
+    userPrompt: (cfg.user_prompt as string) || LLM_JUDGE_DEFAULT_USER_PROMPT,
     maxTokens: (cfg.max_tokens as number) ?? 256,
     temperature: (cfg.temperature as number) ?? 0,
     schemaJson: typeof cfg.schema === 'object' ? JSON.stringify(cfg.schema, null, 2) : '{}',

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { dateTime, ThresholdsMode, type AbsoluteTimeRange, type GrafanaTheme2, type TimeRange } from '@grafana/data';
-import { Badge, Button, Icon, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
+import { Badge, Icon, LinkButton, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import {
   BreakdownStatPanel,
   getBreakdownStatPanelStyles,
@@ -25,8 +25,10 @@ import { matrixToDataFrames, vectorToStatValue } from '../../dashboard/transform
 import { usePrometheusQuery } from './usePrometheusQuery';
 import { MetricPanel } from './MetricPanel';
 import { type ConversationsDataSource, defaultConversationsDataSource } from '../../conversation/api';
+import { buildConversationSearchFilter } from '../../conversation/filters';
 import type { ConversationSearchResult } from '../../conversation/types';
-import { PLUGIN_BASE, buildConversationViewRoute } from '../../constants';
+import { PLUGIN_BASE, ROUTES, buildConversationExploreRoute } from '../../constants';
+import { ViewConversationsLink } from './ViewConversationsLink';
 import { PageInsightBar } from '../insight/PageInsightBar';
 import { summarizeVector, summarizeMatrix, hasResponseData } from '../insight/summarize';
 import { DashboardSummaryBar } from './DashboardSummaryBar';
@@ -257,6 +259,7 @@ export function DashboardErrorsGrid({
               },
               overrides: [],
             }}
+            actions={<ViewConversationsLink timeRange={timeRange} filters={filters} orderBy="errors" />}
           />
           <BreakdownStatPanel
             title="Errors by code"
@@ -307,57 +310,98 @@ export function DashboardErrorsGrid({
       </div>
 
       {/* Conversations with errors */}
-      <ErrorConversationsTable conversationsDataSource={conversationsDataSource} timeRange={timeRange} />
+      <ErrorConversationsTable
+        conversationsDataSource={conversationsDataSource}
+        timeRange={timeRange}
+        filters={filters}
+      />
     </div>
   );
 }
 
 // --- Conversations with errors table ---
 
+const MAX_ERROR_ROWS = 10;
+
 type ErrorConversationsTableProps = {
   conversationsDataSource: ConversationsDataSource;
   timeRange: TimeRange;
+  filters: DashboardFilters;
 };
 
-function ErrorConversationsTable({ conversationsDataSource, timeRange }: ErrorConversationsTableProps) {
+function buildErrorsSeeMoreUrl(timeRange: TimeRange, filters: DashboardFilters): string {
+  const params = new URLSearchParams();
+  params.set('from', String(timeRange.raw.from));
+  params.set('to', String(timeRange.raw.to));
+  for (const p of filters.providers) {
+    params.append('provider', p);
+  }
+  for (const m of filters.models) {
+    params.append('model', m);
+  }
+  for (const a of filters.agentNames) {
+    params.append('agent', a);
+  }
+  for (const lf of filters.labelFilters) {
+    if (lf.key && lf.value) {
+      params.append('label', `${lf.key}|${lf.operator}|${lf.value}`);
+    }
+  }
+  params.set('orderBy', 'errors');
+  return `${PLUGIN_BASE}/${ROUTES.Conversations}?${params.toString()}`;
+}
+
+function ErrorConversationsTable({ conversationsDataSource, timeRange, filters }: ErrorConversationsTableProps) {
   const styles = useStyles2(getStyles);
   const bspStyles = useStyles2(getBreakdownStatPanelStyles);
   const [conversations, setConversations] = useState<ConversationSearchResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [hasMore, setHasMore] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const cursorRef = useRef<string | undefined>(undefined);
   const versionRef = useRef(0);
 
   const fromISO = useMemo(() => timeRange.from.toISOString(), [timeRange.from]);
   const toISO = useMemo(() => timeRange.to.toISOString(), [timeRange.to]);
 
-  const fetchConversations = useCallback(
-    async (cursor?: string) => {
-      const version = ++versionRef.current;
-      if (!cursor) {
-        setLoading(true);
-      } else {
-        setLoadingMore(true);
-      }
-      setError('');
+  const filterString = useMemo(() => {
+    const dashboardFilter = buildConversationSearchFilter(filters);
+    return dashboardFilter ? `status = error ${dashboardFilter}` : 'status = error';
+  }, [filters]);
 
+  useEffect(() => {
+    const version = ++versionRef.current;
+    setLoading(true);
+    setError('');
+
+    void (async () => {
       try {
-        const response = await conversationsDataSource.searchConversations({
-          filters: 'status = error',
-          select: [],
-          time_range: { from: fromISO, to: toISO },
-          page_size: 20,
-          cursor,
-        });
-        if (versionRef.current !== version) {
-          return;
+        let cursor = '';
+        let hasMore = true;
+        const all: ConversationSearchResult[] = [];
+        // Cap pages to avoid unbounded fetches; the API lacks server-side ordering,
+        // so we approximate "top N" from a bounded sample.
+        const maxPages = 5;
+        let page = 0;
+
+        while (hasMore && page < maxPages) {
+          const response = await conversationsDataSource.searchConversations({
+            filters: filterString,
+            select: [],
+            time_range: { from: fromISO, to: toISO },
+            page_size: 100,
+            cursor,
+          });
+          if (versionRef.current !== version) {
+            return;
+          }
+          all.push(...(response.conversations ?? []));
+          cursor = response.next_cursor ?? '';
+          hasMore = Boolean(response.has_more && cursor.length > 0);
+          page++;
         }
-        const items = response.conversations ?? [];
-        setConversations((prev) => (cursor ? [...prev, ...items] : items));
-        setHasMore(response.has_more);
-        cursorRef.current = response.next_cursor;
+
+        all.sort((a, b) => b.error_count - a.error_count);
+
+        setConversations(all.slice(0, MAX_ERROR_ROWS));
       } catch (err) {
         if (versionRef.current !== version) {
           return;
@@ -366,29 +410,19 @@ function ErrorConversationsTable({ conversationsDataSource, timeRange }: ErrorCo
       } finally {
         if (versionRef.current === version) {
           setLoading(false);
-          setLoadingMore(false);
         }
       }
-    },
-    [conversationsDataSource, fromISO, toISO]
-  );
+    })();
+  }, [conversationsDataSource, fromISO, toISO, filterString]);
 
-  useEffect(() => {
-    cursorRef.current = undefined;
-    fetchConversations();
-  }, [fetchConversations]);
-
-  const handleLoadMore = useCallback(() => {
-    if (cursorRef.current) {
-      fetchConversations(cursorRef.current);
-    }
-  }, [fetchConversations]);
+  const title = 'Conversations with errors';
+  const seeMoreHref = buildErrorsSeeMoreUrl(timeRange, filters);
 
   if (loading) {
     return (
       <div className={styles.tablePanel}>
         <div className={styles.tablePanelHeader}>
-          <span className={bspStyles.bspTitle}>Conversations with errors</span>
+          <span className={bspStyles.bspTitle}>{title}</span>
         </div>
         <div className={bspStyles.bspCenter} style={{ padding: 32 }}>
           <Spinner size="lg" />
@@ -401,7 +435,7 @@ function ErrorConversationsTable({ conversationsDataSource, timeRange }: ErrorCo
     return (
       <div className={styles.tablePanel}>
         <div className={styles.tablePanelHeader}>
-          <span className={bspStyles.bspTitle}>Conversations with errors</span>
+          <span className={bspStyles.bspTitle}>{title}</span>
         </div>
         <div className={bspStyles.bspCenter} style={{ padding: 32, opacity: 0.6 }}>
           {error}
@@ -414,7 +448,7 @@ function ErrorConversationsTable({ conversationsDataSource, timeRange }: ErrorCo
     return (
       <div className={styles.tablePanel}>
         <div className={styles.tablePanelHeader}>
-          <span className={bspStyles.bspTitle}>Conversations with errors</span>
+          <span className={bspStyles.bspTitle}>{title}</span>
         </div>
         <div className={styles.emptyState}>
           <Icon name="check-circle" size="xl" />
@@ -427,7 +461,7 @@ function ErrorConversationsTable({ conversationsDataSource, timeRange }: ErrorCo
   return (
     <div className={styles.tablePanel}>
       <div className={styles.tablePanelHeader}>
-        <span className={bspStyles.bspTitle}>Conversations with errors</span>
+        <span className={bspStyles.bspTitle}>{title}</span>
       </div>
       <table className={styles.table}>
         <thead>
@@ -444,14 +478,19 @@ function ErrorConversationsTable({ conversationsDataSource, timeRange }: ErrorCo
             <tr
               key={conversation.conversation_id}
               className={styles.tableRow}
-              onClick={() => {
-                window.location.href = `${PLUGIN_BASE}/${buildConversationViewRoute(conversation.conversation_id)}`;
+              onClick={(e) => {
+                const href = `${PLUGIN_BASE}/${buildConversationExploreRoute(conversation.conversation_id)}`;
+                if (e.metaKey || e.ctrlKey) {
+                  window.open(href, '_blank');
+                } else {
+                  window.location.href = href;
+                }
               }}
               role="link"
               aria-label={`view conversation ${conversation.conversation_id}`}
             >
               <td className={`${styles.tableCell} ${styles.idCell}`}>
-                <span>{conversation.conversation_id}</span>
+                <span>{conversation.conversation_title?.trim() || conversation.conversation_id}</span>
               </td>
               <td className={styles.tableCell}>{conversation.generation_count}</td>
               <td className={styles.tableCell}>
@@ -479,24 +518,11 @@ function ErrorConversationsTable({ conversationsDataSource, timeRange }: ErrorCo
         </tbody>
       </table>
 
-      {hasMore && (
-        <div style={{ padding: 8 }}>
-          {error && (
-            <div className={styles.loadMoreError}>
-              <Text>{error}</Text>
-            </div>
-          )}
-          <Button
-            aria-label={error ? 'retry load more' : 'load more conversations'}
-            onClick={handleLoadMore}
-            disabled={loadingMore}
-            variant="secondary"
-            fullWidth
-          >
-            {loadingMore ? 'Loading...' : error ? 'Retry' : 'Load more'}
-          </Button>
-        </div>
-      )}
+      <div className={styles.seeMoreFooter}>
+        <LinkButton href={seeMoreHref} variant="secondary" fill="text" size="sm" icon="arrow-right">
+          See more conversations
+        </LinkButton>
+      </div>
     </div>
   );
 }
@@ -578,9 +604,11 @@ function getStyles(theme: GrafanaTheme2) {
       padding: theme.spacing(4),
       color: theme.colors.text.secondary,
     }),
-    loadMoreError: css({
-      marginBottom: theme.spacing(1),
-      color: theme.colors.error.text,
+    seeMoreFooter: css({
+      display: 'flex',
+      justifyContent: 'center',
+      padding: theme.spacing(1),
+      borderTop: `1px solid ${theme.colors.border.weak}`,
     }),
   };
 }

@@ -1,7 +1,7 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { dateTime, ThresholdsMode, type AbsoluteTimeRange, type GrafanaTheme2, type TimeRange } from '@grafana/data';
-import { Select, useStyles2 } from '@grafana/ui';
+import { Badge, Icon, LinkButton, Select, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import type { DashboardDataSource } from '../../dashboard/api';
 import {
   type BreakdownDimension,
@@ -13,7 +13,18 @@ import {
   breakdownToPromLabel,
   tokenDrilldownTypes,
 } from '../../dashboard/types';
-import { extractResolvePairs, BreakdownStatPanel, formatWindowLabel } from './dashboardShared';
+import { PLUGIN_BASE, buildConversationExploreRoute } from '../../constants';
+import { type ConversationsDataSource, defaultConversationsDataSource } from '../../conversation/api';
+import { buildConversationSearchFilter } from '../../conversation/filters';
+import type { ConversationSearchResult } from '../../conversation/types';
+import {
+  extractResolvePairs,
+  BreakdownStatPanel,
+  getBreakdownStatPanelStyles,
+  formatRelativeTime,
+  formatWindowLabel,
+} from './dashboardShared';
+import { ViewConversationsLink, buildConversationsUrl } from './ViewConversationsLink';
 import { TopStat } from '../TopStat';
 import { calculateTotalCost, calculateTotalCostByGroup, calculateCostTimeSeries } from '../../dashboard/cost';
 import {
@@ -47,6 +58,7 @@ import { DashboardSummaryBar } from './DashboardSummaryBar';
 
 export type DashboardGridProps = {
   dataSource: DashboardDataSource;
+  conversationsDataSource?: ConversationsDataSource;
   filters: DashboardFilters;
   breakdownBy: BreakdownDimension;
   from: number;
@@ -83,6 +95,7 @@ const consistentColor = { mode: 'palette-classic-by-name' };
 
 export function DashboardGrid({
   dataSource,
+  conversationsDataSource = defaultConversationsDataSource,
   filters,
   breakdownBy,
   from,
@@ -618,6 +631,7 @@ export function DashboardGrid({
               },
               overrides: [],
             }}
+            actions={<ViewConversationsLink timeRange={timeRange} filters={filters} orderBy="time" />}
           />
           <MetricPanel
             title="Error rate"
@@ -639,6 +653,7 @@ export function DashboardGrid({
               },
               overrides: [],
             }}
+            actions={<ViewConversationsLink timeRange={timeRange} filters={filters} orderBy="errors" />}
           />
         </div>
 
@@ -670,6 +685,7 @@ export function DashboardGrid({
                 width={10}
               />
             }
+            actions={<ViewConversationsLink timeRange={timeRange} filters={filters} orderBy="duration" />}
           />
           <MetricPanel
             title="Time to First Token"
@@ -741,6 +757,7 @@ export function DashboardGrid({
                 )}
               </div>
             }
+            actions={<ViewConversationsLink timeRange={timeRange} filters={filters} orderBy="tokens" />}
           />
           <BreakdownStatPanel
             title={costMode === 'tokens' ? 'Total Tokens' : 'Total Cost'}
@@ -778,6 +795,180 @@ export function DashboardGrid({
             segmentNames={isTokenByType && hasBreakdown ? drilldownTypes : undefined}
           />
         </div>
+      </div>
+
+      <RecentConversationsTable
+        conversationsDataSource={conversationsDataSource}
+        timeRange={timeRange}
+        filters={filters}
+      />
+    </div>
+  );
+}
+
+// --- Recent conversations table ---
+
+const MAX_RECENT_ROWS = 10;
+
+type RecentConversationsTableProps = {
+  conversationsDataSource: ConversationsDataSource;
+  timeRange: TimeRange;
+  filters: DashboardFilters;
+};
+
+function buildRecentSeeMoreUrl(timeRange: TimeRange, filters: DashboardFilters): string {
+  return buildConversationsUrl(timeRange, filters, 'time');
+}
+
+function RecentConversationsTable({ conversationsDataSource, timeRange, filters }: RecentConversationsTableProps) {
+  const styles = useStyles2(getStyles);
+  const bspStyles = useStyles2(getBreakdownStatPanelStyles);
+  const [conversations, setConversations] = useState<ConversationSearchResult[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const versionRef = useRef(0);
+
+  const fromISO = useMemo(() => timeRange.from.toISOString(), [timeRange.from]);
+  const toISO = useMemo(() => timeRange.to.toISOString(), [timeRange.to]);
+  const filterString = useMemo(() => buildConversationSearchFilter(filters), [filters]);
+
+  useEffect(() => {
+    const version = ++versionRef.current;
+    setLoading(true);
+    setError('');
+
+    void (async () => {
+      try {
+        const response = await conversationsDataSource.searchConversations({
+          filters: filterString,
+          select: [],
+          time_range: { from: fromISO, to: toISO },
+          page_size: MAX_RECENT_ROWS,
+        });
+        if (versionRef.current !== version) {
+          return;
+        }
+        setConversations(response.conversations ?? []);
+      } catch (err) {
+        if (versionRef.current !== version) {
+          return;
+        }
+        setError(err instanceof Error ? err.message : 'Failed to load conversations');
+      } finally {
+        if (versionRef.current === version) {
+          setLoading(false);
+        }
+      }
+    })();
+  }, [conversationsDataSource, fromISO, toISO, filterString]);
+
+  const title = 'Recent conversations';
+  const seeMoreHref = buildRecentSeeMoreUrl(timeRange, filters);
+
+  if (loading) {
+    return (
+      <div className={styles.tablePanel}>
+        <div className={styles.tablePanelHeader}>
+          <span className={bspStyles.bspTitle}>{title}</span>
+        </div>
+        <div className={bspStyles.bspCenter} style={{ padding: 32 }}>
+          <Spinner size="lg" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error && conversations.length === 0) {
+    return (
+      <div className={styles.tablePanel}>
+        <div className={styles.tablePanelHeader}>
+          <span className={bspStyles.bspTitle}>{title}</span>
+        </div>
+        <div className={bspStyles.bspCenter} style={{ padding: 32, opacity: 0.6 }}>
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  if (conversations.length === 0) {
+    return (
+      <div className={styles.tablePanel}>
+        <div className={styles.tablePanelHeader}>
+          <span className={bspStyles.bspTitle}>{title}</span>
+        </div>
+        <div className={styles.emptyState}>
+          <Icon name="comments-alt" size="xl" />
+          <Text color="secondary">No conversations in this time range.</Text>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.tablePanel}>
+      <div className={styles.tablePanelHeader}>
+        <span className={bspStyles.bspTitle}>{title}</span>
+      </div>
+      <table className={styles.table}>
+        <thead>
+          <tr className={styles.headerRow}>
+            <th className={styles.headerCell}>Conversation</th>
+            <th className={styles.headerCell}>LLM calls</th>
+            <th className={styles.headerCell}>Models</th>
+            <th className={styles.headerCell}>Errors</th>
+            <th className={styles.headerCell}>Last activity</th>
+          </tr>
+        </thead>
+        <tbody>
+          {conversations.map((conversation) => (
+            <tr
+              key={conversation.conversation_id}
+              className={styles.tableRow}
+              onClick={(e) => {
+                const href = `${PLUGIN_BASE}/${buildConversationExploreRoute(conversation.conversation_id)}`;
+                if (e.metaKey || e.ctrlKey) {
+                  window.open(href, '_blank');
+                } else {
+                  window.location.href = href;
+                }
+              }}
+              role="link"
+              aria-label={`view conversation ${conversation.conversation_id}`}
+            >
+              <td className={`${styles.tableCell} ${styles.idCell}`}>
+                <span>{conversation.conversation_title?.trim() || conversation.conversation_id}</span>
+              </td>
+              <td className={styles.tableCell}>{conversation.generation_count}</td>
+              <td className={styles.tableCell}>
+                <div className={styles.modelList}>
+                  {conversation.models.map((model) => (
+                    <Badge key={model} text={model} color="blue" />
+                  ))}
+                  {conversation.models.length === 0 && <Text color="secondary">-</Text>}
+                </div>
+              </td>
+              <td className={styles.tableCell}>
+                {conversation.error_count > 0 ? (
+                  <Badge text={String(conversation.error_count)} color="red" />
+                ) : (
+                  <Text color="secondary">0</Text>
+                )}
+              </td>
+              <td className={styles.tableCell}>
+                <Tooltip content={new Date(conversation.last_generation_at).toLocaleString()} placement="left">
+                  <span>{formatRelativeTime(conversation.last_generation_at)}</span>
+                </Tooltip>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div className={styles.seeMoreFooter}>
+        <LinkButton href={seeMoreHref} variant="secondary" fill="text" size="sm" icon="arrow-right">
+          See more conversations
+        </LinkButton>
       </div>
     </div>
   );
@@ -824,6 +1015,72 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'flex',
       alignItems: 'center',
       gap: theme.spacing(0.5),
+    }),
+    tablePanel: css({
+      display: 'flex',
+      flexDirection: 'column',
+      background: theme.colors.background.primary,
+      border: `1px solid ${theme.colors.border.weak}`,
+      borderRadius: theme.shape.radius.default,
+      overflow: 'hidden',
+    }),
+    tablePanelHeader: css({
+      padding: theme.spacing(1.5, 2),
+      borderBottom: `1px solid ${theme.colors.border.weak}`,
+    }),
+    table: css({
+      width: '100%',
+      borderCollapse: 'collapse',
+    }),
+    headerRow: css({
+      borderBottom: `2px solid ${theme.colors.border.medium}`,
+    }),
+    headerCell: css({
+      padding: theme.spacing(1, 1.5),
+      textAlign: 'left',
+      fontSize: theme.typography.bodySmall.fontSize,
+      fontWeight: theme.typography.fontWeightMedium,
+      color: theme.colors.text.secondary,
+      whiteSpace: 'nowrap',
+    }),
+    tableRow: css({
+      borderBottom: `1px solid ${theme.colors.border.weak}`,
+      cursor: 'pointer',
+      transition: 'background 0.1s ease',
+      '&:hover': {
+        background: theme.colors.action.hover,
+      },
+    }),
+    tableCell: css({
+      padding: theme.spacing(1, 1.5),
+      fontSize: theme.typography.bodySmall.fontSize,
+      verticalAlign: 'middle',
+    }),
+    idCell: css({
+      fontFamily: theme.typography.fontFamilyMonospace,
+      fontSize: theme.typography.bodySmall.fontSize,
+      whiteSpace: 'normal',
+      overflowWrap: 'anywhere',
+    }),
+    modelList: css({
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: theme.spacing(0.5),
+    }),
+    emptyState: css({
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: theme.spacing(1),
+      padding: theme.spacing(4),
+      color: theme.colors.text.secondary,
+    }),
+    seeMoreFooter: css({
+      display: 'flex',
+      justifyContent: 'center',
+      padding: theme.spacing(1),
+      borderTop: `1px solid ${theme.colors.border.weak}`,
     }),
   };
 }
