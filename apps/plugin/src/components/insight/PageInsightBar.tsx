@@ -217,17 +217,18 @@ export function PageInsightBar({
 
   const firstBullet = bullets.length > 0 ? bullets[0] : null;
   const canExpand = bullets.length > 0;
+  const canToggle = canExpand || !collapsed;
 
   return (
     <div className={collapsed ? styles.barCollapsed : styles.bar} role="complementary" aria-label="Page insight">
       <div className={styles.header}>
         <button
           type="button"
-          className={canExpand ? styles.headerToggle : styles.headerToggleDisabled}
-          onClick={canExpand ? toggleCollapsed : undefined}
-          aria-expanded={canExpand ? !collapsed : undefined}
+          className={canToggle ? styles.headerToggle : styles.headerToggleDisabled}
+          onClick={canToggle ? toggleCollapsed : undefined}
+          aria-expanded={canToggle ? !collapsed : undefined}
           aria-label={!canExpand ? 'No insights available' : collapsed ? 'Expand insights' : 'Collapse insights'}
-          aria-disabled={!canExpand}
+          aria-disabled={!canToggle}
         >
           <Icon name="ai" size="md" className={styles.aiIcon} />
           <span className={styles.headerTitle}>AI analysis</span>
@@ -384,6 +385,18 @@ function getStyles(theme: GrafanaTheme2) {
     overflow: 'hidden' as const,
   };
 
+  const headerToggleBase = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.75),
+    border: 'none',
+    background: 'transparent',
+    padding: 0,
+    minWidth: 0,
+    flex: 1,
+    color: theme.colors.text.primary,
+  };
+
   return {
     bar: css({
       ...barBase,
@@ -402,28 +415,12 @@ function getStyles(theme: GrafanaTheme2) {
       height: COLLAPSED_HEIGHT,
     }),
     headerToggle: css({
-      display: 'flex',
-      alignItems: 'center',
-      gap: theme.spacing(0.75),
-      border: 'none',
-      background: 'transparent',
+      ...headerToggleBase,
       cursor: 'pointer',
-      padding: 0,
-      minWidth: 0,
-      flex: 1,
-      color: theme.colors.text.primary,
     }),
     headerToggleDisabled: css({
-      display: 'flex',
-      alignItems: 'center',
-      gap: theme.spacing(0.75),
-      border: 'none',
-      background: 'transparent',
+      ...headerToggleBase,
       cursor: 'default',
-      padding: 0,
-      minWidth: 0,
-      flex: 1,
-      color: theme.colors.text.primary,
     }),
     aiIcon: css({
       flexShrink: 0,
