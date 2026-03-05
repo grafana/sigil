@@ -3,9 +3,34 @@ Babysit CI for the current branch PR until all checks pass.
 Use `gh` for all GitHub interactions.
 
 Workflow:
-1. Run local-first quality gates before touching CI: (make this targetted to the changed files if possible)
-   - `mise run format`
-   - `mise run lint`
+1. Run local-first quality gates before touching CI, targeted to changed files first.
+   - Build a changed-file list once:
+     - `BASE="$(git merge-base origin/main HEAD)"`
+     - `mapfile -t CHANGED < <(git diff --name-only --diff-filter=ACMR "$BASE"...HEAD)`
+   - Run only relevant gates for changed paths:
+     - Plugin TS/JS (`apps/plugin/src/**/*.{ts,tsx,js,jsx}`):
+       - `mapfile -t PLUGIN_TS < <(printf '%s\n' "${CHANGED[@]}" | rg '^apps/plugin/src/.*\.(ts|tsx|js|jsx)$')`
+       - `pnpm --filter @grafana/sigil-plugin exec prettier --write "${PLUGIN_TS[@]}"`
+       - `pnpm --filter @grafana/sigil-plugin exec eslint --fix "${PLUGIN_TS[@]}"`
+       - `pnpm --filter @grafana/sigil-plugin exec eslint "${PLUGIN_TS[@]}"`
+     - Go files (`**/*.go`):
+       - `mapfile -t GO_FILES < <(printf '%s\n' "${CHANGED[@]}" | rg '\.go$')`
+       - `gofmt -w "${GO_FILES[@]}"`
+       - Run `golangci-lint` only in touched modules:
+         - If any path starts with `sigil/`: `(cd sigil && GOWORK=off golangci-lint run ./...)`
+         - If any path starts with `apps/plugin/` and Go changed there: `(cd apps/plugin && GOWORK=off golangci-lint run ./...)`
+         - If any path starts with `sdks/go/`: `(cd sdks/go && GOWORK=off golangci-lint run ./...)`
+         - If any path starts with `sdks/go-providers/anthropic/`: `(cd sdks/go-providers/anthropic && GOWORK=off golangci-lint run ./...)`
+         - If any path starts with `sdks/go-providers/openai/`: `(cd sdks/go-providers/openai && GOWORK=off golangci-lint run ./...)`
+         - If any path starts with `sdks/go-providers/gemini/`: `(cd sdks/go-providers/gemini && GOWORK=off golangci-lint run ./...)`
+     - Helm chart (`charts/sigil/**`):
+       - `helm lint ./charts/sigil`
+     - .NET SDK (`sdks/dotnet/**`):
+       - `dotnet format sdks/dotnet/Sigil.DotNet.sln`
+       - `dotnet format sdks/dotnet/Sigil.DotNet.sln --verify-no-changes`
+   - If scope detection is unclear or many areas changed, run full gates:
+     - `mise run format`
+     - `mise run lint`
 2. If any local command fails:
    - Fix what is reasonably fixable in this babysit pass.
    - Re-run the failing command(s) until green.
