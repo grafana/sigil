@@ -645,7 +645,7 @@ function getStyles(theme: GrafanaTheme2) {
     textContent: css({
       maxWidth: '760px',
       display: 'grid',
-      gap: theme.spacing(2),
+      gap: theme.spacing(4),
     }),
     graphicFrame: css({
       justifySelf: 'end',
@@ -899,6 +899,7 @@ function getStyles(theme: GrafanaTheme2) {
       alignItems: 'center',
       justifyContent: 'flex-end',
       gap: theme.spacing(2),
+      marginRight: theme.spacing(2),
       userSelect: 'none',
       '@media (max-width: 1024px)': {
         gridColumn: '1 / -1',
@@ -907,15 +908,16 @@ function getStyles(theme: GrafanaTheme2) {
     }),
     arrowButton: css({
       textDecoration: 'none',
-      color: theme.colors.text.primary,
-      fontSize: '36px',
+      color: theme.colors.text.secondary,
+      fontSize: theme.typography.h4.fontSize,
       fontWeight: theme.typography.fontWeightMedium,
       lineHeight: 1,
-      minWidth: '36px',
+      minWidth: '28px',
       textAlign: 'center',
+      opacity: 0.7,
       transition: `opacity ${theme.transitions.duration.short}ms ease`,
       '&:hover': {
-        opacity: 0.7,
+        opacity: 1,
       },
       '&:focus-visible': {
         outline: `2px solid ${theme.colors.primary.main}`,

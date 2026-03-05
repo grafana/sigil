@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { css } from '@emotion/css';
 import { useAssistant } from '@grafana/assistant';
 import type { GrafanaTheme2 } from '@grafana/data';
@@ -229,17 +229,50 @@ function extractRequestsSeries(response: PrometheusQueryResponse): number[] {
     .filter((value) => Number.isFinite(value) && value >= 0);
 }
 
-function normalizeValuesToHeights(values: number[], targetCount: number): number[] {
+function formatBarTime(from: number, to: number, index: number, count: number): string {
+  const range = to - from;
+  const ts = from + ((index + 0.5) / count) * range;
+  const date = new Date(ts);
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+function formatRequestStat(value: number): string {
+  if (!Number.isFinite(value) || value < 0) {
+    return '0 req/s';
+  }
+  if (value >= 100) {
+    return `${Math.round(value).toLocaleString()} req/s`;
+  }
+  if (value >= 1) {
+    return `${value.toFixed(2)} req/s`;
+  }
+  return `${value.toFixed(3)} req/s`;
+}
+
+function bucketValues(values: number[], targetCount: number): number[] {
   if (values.length === 0 || targetCount <= 0) {
     return [];
   }
-  const bucketed = Array.from({ length: targetCount }, (_, i) => {
+  return Array.from({ length: targetCount }, (_, i) => {
     const start = Math.floor((i * values.length) / targetCount);
     const end = Math.max(start + 1, Math.floor(((i + 1) * values.length) / targetCount));
     const slice = values.slice(start, end);
     const sum = slice.reduce((acc, value) => acc + value, 0);
     return sum / slice.length;
   });
+}
+
+function normalizeValuesToHeights(values: number[], targetCount: number): number[] {
+  if (values.length === 0 || targetCount <= 0) {
+    return [];
+  }
+  const bucketed = bucketValues(values, targetCount);
   const minValue = Math.min(...bucketed);
   const maxValue = Math.max(...bucketed);
   if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
@@ -390,10 +423,12 @@ export function LandingTopBar({
   const spineCount = 48;
   const emptyHeights = useMemo(() => Array(spineCount).fill(0), [spineCount]);
   const [requestSpineHeights, setRequestSpineHeights] = useState<number[] | null>(null);
+  const [requestSpineValues, setRequestSpineValues] = useState<number[] | null>(null);
 
   useEffect(() => {
     if (!requestsDataSource || requestsFrom === undefined || requestsTo === undefined || requestsTo <= requestsFrom) {
       setRequestSpineHeights(null);
+      setRequestSpineValues(null);
       return;
     }
     let cancelled = false;
@@ -409,10 +444,18 @@ export function LandingTopBar({
         }
         const values = extractRequestsSeries(response);
         const nextHeights = normalizeValuesToHeights(values, spineCount);
-        setRequestSpineHeights(nextHeights.length > 0 ? nextHeights : null);
+        const nextValues = bucketValues(values, spineCount);
+        if (nextHeights.length > 0) {
+          setRequestSpineHeights(nextHeights);
+          setRequestSpineValues(nextValues);
+        } else {
+          setRequestSpineHeights(null);
+          setRequestSpineValues(null);
+        }
       } catch {
         if (!cancelled) {
           setRequestSpineHeights(null);
+          setRequestSpineValues(null);
         }
       }
     };
@@ -425,69 +468,73 @@ export function LandingTopBar({
   }, [requestsDataSource, requestsFilters, requestsFrom, requestsTo, spineCount]);
 
   const spineHeights = requestSpineHeights ?? emptyHeights;
-  const [displayHeights, setDisplayHeights] = useState<number[]>(() => Array(spineCount).fill(0));
-  const loadingStartRef = useRef<number | null>(null);
+  const [isSpinesHovered, setIsSpinesHovered] = useState(false);
 
-  const isLoading =
-    requestSpineHeights === null &&
-    Boolean(requestsDataSource) &&
-    requestsFrom !== undefined &&
-    requestsTo !== undefined &&
-    requestsTo > requestsFrom;
+  const waveAt75Heights = useMemo(() => {
+    const MIN_H = 25;
+    const MAX_H = 75;
+    return Array.from({ length: spineCount }, (_, i) => {
+      const t = i / (spineCount - 1);
+      const wave = 0.5 + 0.5 * Math.sin(2 * Math.PI * (t - 0.5));
+      return MIN_H + (MAX_H - MIN_H) * wave;
+    });
+  }, [spineCount]);
 
-  useEffect(() => {
-    if (!isLoading) {
-      setDisplayHeights(spineHeights);
-      loadingStartRef.current = null;
-      return;
-    }
-    loadingStartRef.current = performance.now();
-  }, [isLoading, spineHeights]);
-
-  useEffect(() => {
-    if (!isLoading) return;
-    let rafId: number;
-    const WAVE_CYCLE_MS = 2400;
-    const MIN_H = 20;
-    const MAX_H = 85;
-
-    const tick = () => {
-      const start = loadingStartRef.current ?? performance.now();
-      const elapsed = (performance.now() - start) / 1000;
-      const x = (elapsed / (WAVE_CYCLE_MS / 1000)) % 2;
-      const phase = x <= 1 ? x : 2 - x;
-      const next = Array.from({ length: spineCount }, (_, i) => {
-        const t = i / (spineCount - 1);
-        const wave = 0.5 + 0.5 * Math.sin(2 * Math.PI * (t - phase));
-        return MIN_H + (MAX_H - MIN_H) * wave;
-      });
-      setDisplayHeights(next);
-      rafId = requestAnimationFrame(tick);
-    };
-    rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
-  }, [isLoading, spineCount]);
+  const displayHeights =
+    isSpinesHovered && requestSpineHeights != null ? spineHeights : waveAt75Heights;
 
   return (
     <>
       <div className={styles.pageFlow}>
         <div className={styles.heroBlock}>
-          <div className={styles.heroSpines} aria-hidden>
+          <div
+            className={styles.heroSpines}
+            aria-hidden
+            onMouseEnter={() => setIsSpinesHovered(true)}
+            onMouseLeave={() => setIsSpinesHovered(false)}
+          >
             {displayHeights.map((height, i) => {
               const t = i / (spineCount - 1);
               const color =
                 t <= 0.52
                   ? interpolateHex(gradientColors[0], gradientColors[1], t / 0.52)
                   : interpolateHex(gradientColors[1], gradientColors[2], (t - 0.52) / 0.48);
-              return (
+              const stat =
+                requestSpineValues != null && i < requestSpineValues.length
+                  ? formatRequestStat(requestSpineValues[i])
+                  : null;
+              const timeStr =
+                stat != null &&
+                requestsFrom != null &&
+                requestsTo != null &&
+                requestsTo > requestsFrom
+                  ? formatBarTime(requestsFrom, requestsTo, i, spineCount)
+                  : null;
+              const tooltipContent =
+                stat != null ? (
+                  <div className={styles.spineTooltipContent}>
+                    <div>{stat}</div>
+                    {timeStr != null && (
+                      <div className={styles.spineTooltipTime}>{timeStr}</div>
+                    )}
+                  </div>
+                ) : null;
+              const bar = (
                 <div
-                  key={i}
-                  className={isLoading ? styles.heroSpineLoading : styles.heroSpine}
+                  className={styles.heroSpine}
                   style={{
                     transform: `scaleY(${height / 100})`,
                     backgroundColor: color,
                   }}
                 />
+              );
+              const slot = <div className={styles.heroSpineSlot}>{bar}</div>;
+              return tooltipContent != null ? (
+                <Tooltip key={i} content={tooltipContent} placement="top">
+                  {slot}
+                </Tooltip>
+              ) : (
+                <React.Fragment key={i}>{slot}</React.Fragment>
               );
             })}
           </div>
@@ -849,24 +896,33 @@ function getStyles(theme: GrafanaTheme2) {
       overflow: 'hidden',
       opacity: 0.75,
     }),
-    heroSpine: css({
-      label: 'landingTopBar-heroSpine',
+    heroSpineSlot: css({
+      label: 'landingTopBar-heroSpineSlot',
       flex: 1,
       minWidth: 2,
+      height: '100%',
+      display: 'flex',
+      alignItems: 'flex-end',
+    }),
+    heroSpine: css({
+      label: 'landingTopBar-heroSpine',
+      width: '100%',
       height: '100%',
       borderTopLeftRadius: 1,
       borderTopRightRadius: 1,
       transformOrigin: 'bottom',
       transition: 'transform 0.5s ease-out',
     }),
-    heroSpineLoading: css({
-      label: 'landingTopBar-heroSpineLoading',
-      flex: 1,
-      minWidth: 2,
-      height: '100%',
-      borderTopLeftRadius: 1,
-      borderTopRightRadius: 1,
-      transformOrigin: 'bottom',
+    spineTooltipContent: css({
+      label: 'landingTopBar-spineTooltipContent',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: theme.spacing(0.5),
+    }),
+    spineTooltipTime: css({
+      label: 'landingTopBar-spineTooltipTime',
+      fontSize: theme.typography.bodySmall.fontSize,
+      color: theme.colors.text.secondary,
     }),
     heroSideHeaderBlock: css({
       label: 'landingTopBar-heroSideHeaderBlock',
