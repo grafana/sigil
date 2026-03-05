@@ -212,6 +212,30 @@ describe('AgentDetailPage', () => {
     expect(screen.getByText('2h')).toBeInTheDocument();
   });
 
+  it('switches between Prompts and Tools main tabs', async () => {
+    const dataSource = createDataSource();
+
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('System prompt and context analysis')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'select tool weather' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Tools' }));
+
+    expect(await screen.findByRole('button', { name: 'select tool weather' })).toBeInTheDocument();
+    expect(screen.queryByText('System prompt and context analysis')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Prompts' }));
+
+    expect(await screen.findByText('System prompt and context analysis')).toBeInTheDocument();
+  });
+
   it('shows info icons for all top stats', async () => {
     const dataSource = createDataSource();
 

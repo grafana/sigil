@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { css, cx } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Badge, Button, Icon, Select, Spinner, Text, Tooltip, useStyles2, useTheme2 } from '@grafana/ui';
+import { Alert, Badge, Button, Icon, Select, Spinner, Tab, TabsBar, Text, Tooltip, useStyles2, useTheme2 } from '@grafana/ui';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../agents/api';
 import type { AgentDetail, AgentRatingResponse, AgentVersionListItem } from '../agents/types';
 import ModelCardPopover from '../components/conversations/ModelCardPopover';
@@ -217,6 +217,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: theme.spacing(4),
     height: '100%',
     padding: theme.spacing(1.5),
+  }),
+  mainAreaTabs: css({
+    borderBottom: `1px solid ${theme.colors.border.weak}`,
+    marginBottom: theme.spacing(1),
   }),
   primaryPanelsRow: css({
     display: 'grid',
@@ -1114,6 +1118,7 @@ export default function AgentDetailPage({
     encodingOverride: EncodingName | null;
   }>({ versionKey, sections: {}, encodingOverride: null });
   const [systemPromptView, setSystemPromptView] = useState<'preview' | 'markdown'>('markdown');
+  const [mainAreaTab, setMainAreaTab] = useState<'prompts' | 'tools'>('prompts');
 
   const tokenizedSections = tokenizeState.versionKey === versionKey ? tokenizeState.sections : {};
   const encodingOverride = tokenizeState.versionKey === versionKey ? tokenizeState.encodingOverride : null;
@@ -1579,121 +1584,132 @@ export default function AgentDetailPage({
         </div>
       </div>
 
-      <div ref={promptAnalysisSectionRef} className={cx(styles.panel, styles.stretchPanel)}>
-        <div className={styles.panelHeader}>
-          <Text weight="medium">System prompt and context analysis</Text>
-        </div>
-        <div className={cx(styles.panelBody, styles.stretchPanelBody)}>
-          <div className={styles.combinedPromptSections}>
-            <div className={styles.sectionBlock}>
-              <span className={styles.panelHeaderControls}>
-                <span className={styles.promptViewToggle} aria-label="System prompt view toggle">
-                  <button
-                    type="button"
-                    className={cx(
-                      styles.promptViewToggleButton,
-                      systemPromptView === 'preview' && styles.promptViewToggleButtonActive
-                    )}
-                    aria-pressed={systemPromptView === 'preview'}
-                    onClick={() => {
-                      if (!isSystemTokenized) {
-                        setSystemPromptView('preview');
+      <div className={styles.mainAreaTabs}>
+        <TabsBar>
+          <Tab label="Prompts" active={mainAreaTab === 'prompts'} onChangeTab={() => setMainAreaTab('prompts')} />
+          <Tab label="Tools" active={mainAreaTab === 'tools'} onChangeTab={() => setMainAreaTab('tools')} />
+        </TabsBar>
+      </div>
+
+      {mainAreaTab === 'prompts' && (
+        <div ref={promptAnalysisSectionRef} className={cx(styles.panel, styles.stretchPanel)}>
+          <div className={styles.panelHeader}>
+            <Text weight="medium">System prompt and context analysis</Text>
+          </div>
+          <div className={cx(styles.panelBody, styles.stretchPanelBody)}>
+            <div className={styles.combinedPromptSections}>
+              <div className={styles.sectionBlock}>
+                <span className={styles.panelHeaderControls}>
+                  <span className={styles.promptViewToggle} aria-label="System prompt view toggle">
+                    <button
+                      type="button"
+                      className={cx(
+                        styles.promptViewToggleButton,
+                        systemPromptView === 'preview' && styles.promptViewToggleButtonActive
+                      )}
+                      aria-pressed={systemPromptView === 'preview'}
+                      onClick={() => {
+                        if (!isSystemTokenized) {
+                          setSystemPromptView('preview');
+                        }
+                      }}
+                      disabled={isSystemTokenized}
+                    >
+                      Preview
+                    </button>
+                    <button
+                      type="button"
+                      className={cx(
+                        styles.promptViewToggleButton,
+                        systemPromptView === 'markdown' && styles.promptViewToggleButtonActive
+                      )}
+                      aria-pressed={systemPromptView === 'markdown'}
+                      onClick={() => setSystemPromptView('markdown')}
+                    >
+                      Markdown
+                    </button>
+                  </span>
+                  <span
+                    className={cx(styles.tokenizeBtn, tokenizedSections['system'] && styles.tokenizeBtnActive)}
+                    onClick={() => toggleSection('system')}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        toggleSection('system');
                       }
                     }}
-                    disabled={isSystemTokenized}
+                    role="button"
+                    tabIndex={0}
                   >
-                    Preview
-                  </button>
-                  <button
-                    type="button"
-                    className={cx(
-                      styles.promptViewToggleButton,
-                      systemPromptView === 'markdown' && styles.promptViewToggleButtonActive
-                    )}
-                    aria-pressed={systemPromptView === 'markdown'}
-                    onClick={() => setSystemPromptView('markdown')}
-                  >
-                    Markdown
-                  </button>
+                    <Icon name="brackets-curly" size="xs" />
+                    {tokenizerLoading ? 'Loading\u2026' : 'Tokenize'}
+                  </span>
+                  {tokenizedSections['system'] && (
+                    <select
+                      className={styles.encodingSelect}
+                      aria-label="Tokenizer encoding"
+                      value={encodingOverride ?? ''}
+                      onChange={(e) => setEncodingOverride(e.target.value ? (e.target.value as EncodingName) : null)}
+                    >
+                      <option value="">Auto ({autoEncoding.replace('_base', '')})</option>
+                      {AVAILABLE_ENCODINGS.map((enc) => (
+                        <option key={enc.value} value={enc.value}>
+                          {enc.value.replace('_base', '')}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </span>
-                <span
-                  className={cx(styles.tokenizeBtn, tokenizedSections['system'] && styles.tokenizeBtnActive)}
-                  onClick={() => toggleSection('system')}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      toggleSection('system');
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
-                >
-                  <Icon name="brackets-curly" size="xs" />
-                  {tokenizerLoading ? 'Loading\u2026' : 'Tokenize'}
-                </span>
-                {tokenizedSections['system'] && (
-                  <select
-                    className={styles.encodingSelect}
-                    aria-label="Tokenizer encoding"
-                    value={encodingOverride ?? ''}
-                    onChange={(e) => setEncodingOverride(e.target.value ? (e.target.value as EncodingName) : null)}
-                  >
-                    <option value="">Auto ({autoEncoding.replace('_base', '')})</option>
-                    {AVAILABLE_ENCODINGS.map((enc) => (
-                      <option key={enc.value} value={enc.value}>
-                        {enc.value.replace('_base', '')}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </span>
-              <div className={styles.systemPromptContent}>
-                {detail.system_prompt.length > 0 ? (
-                  tokenizedSections['system'] && encode && decode ? (
-                    <div className={styles.systemPrompt}>
-                      <TokenizedText text={detail.system_prompt} encode={encode} decode={decode} />
-                    </div>
-                  ) : systemPromptView === 'preview' ? (
-                    <div className={styles.systemPromptPreview}>
-                      <MarkdownPreview markdown={detail.system_prompt} />
-                    </div>
+                <div className={styles.systemPromptContent}>
+                  {detail.system_prompt.length > 0 ? (
+                    tokenizedSections['system'] && encode && decode ? (
+                      <div className={styles.systemPrompt}>
+                        <TokenizedText text={detail.system_prompt} encode={encode} decode={decode} />
+                      </div>
+                    ) : systemPromptView === 'preview' ? (
+                      <div className={styles.systemPromptPreview}>
+                        <MarkdownPreview markdown={detail.system_prompt} />
+                      </div>
+                    ) : (
+                      <pre className={styles.systemPrompt}>{detail.system_prompt}</pre>
+                    )
                   ) : (
-                    <pre className={styles.systemPrompt}>{detail.system_prompt}</pre>
-                  )
-                ) : (
-                  <pre className={styles.systemPrompt}>No system prompt recorded.</pre>
-                )}
+                    <pre className={styles.systemPrompt}>No system prompt recorded.</pre>
+                  )}
+                </div>
               </div>
-            </div>
-            <div className={styles.sectionBlock}>
-              <AgentRatingPanel
-                agentName={agentName}
-                version={activeVersion}
-                agentStateContext={agentStateContext}
-                contentView={isSystemTokenized ? 'markdown' : systemPromptView}
-                onRerun={scrollToPromptAnalysis}
-                onResultChange={handleRatingResultChange}
-                dataSource={dataSource}
-                initialResult={initialRating}
-                initialLoading={initialRatingLoading || initialRating?.status === 'pending'}
-                initialError={initialRatingError}
-                embedded
-              />
+              <div className={styles.sectionBlock}>
+                <AgentRatingPanel
+                  agentName={agentName}
+                  version={activeVersion}
+                  agentStateContext={agentStateContext}
+                  contentView={isSystemTokenized ? 'markdown' : systemPromptView}
+                  onRerun={scrollToPromptAnalysis}
+                  onResultChange={handleRatingResultChange}
+                  dataSource={dataSource}
+                  initialResult={initialRating}
+                  initialLoading={initialRatingLoading || initialRating?.status === 'pending'}
+                  initialError={initialRatingError}
+                  embedded
+                />
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      <ToolsPanel
-        tools={detail.tools}
-        tokenized={tokenizedSections['tools']}
-        onToggleTokenize={() => toggleSection('tools')}
-        tokenizerLoading={tokenizerLoading}
-        autoEncoding={autoEncoding}
-        encodingOverride={encodingOverride}
-        onEncodingChange={setEncodingOverride}
-        encode={encode}
-        decode={decode}
-      />
+      {mainAreaTab === 'tools' && (
+        <ToolsPanel
+          tools={detail.tools}
+          tokenized={tokenizedSections['tools']}
+          onToggleTokenize={() => toggleSection('tools')}
+          tokenizerLoading={tokenizerLoading}
+          autoEncoding={autoEncoding}
+          encodingOverride={encodingOverride}
+          onEncodingChange={setEncodingOverride}
+          encode={encode}
+          decode={decode}
+        />
+      )}
     </div>
   );
 }
