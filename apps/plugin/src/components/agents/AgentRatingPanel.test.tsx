@@ -6,10 +6,18 @@ import type { AgentsDataSource } from '../../agents/api';
 import type { AgentDetail, AgentListResponse, AgentRatingResponse, AgentVersionListResponse } from '../../agents/types';
 
 const mockOpenAssistant = jest.fn();
+const mockInlineGenerate = jest.fn();
+let mockInlineIsGenerating = false;
+let mockInlineContent = '';
 
 jest.mock('@grafana/assistant', () => ({
   useAssistant: () => ({
     openAssistant: mockOpenAssistant,
+  }),
+  useInlineAssistant: () => ({
+    generate: mockInlineGenerate,
+    isGenerating: mockInlineIsGenerating,
+    content: mockInlineContent,
   }),
 }));
 
@@ -67,6 +75,9 @@ describe('AgentRatingPanel', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     mockOpenAssistant.mockReset();
+    mockInlineGenerate.mockReset();
+    mockInlineIsGenerating = false;
+    mockInlineContent = '';
   });
 
   afterEach(() => {
@@ -178,7 +189,7 @@ describe('AgentRatingPanel', () => {
     expect(screen.getByText('Another low priority tweak')).toBeInTheDocument();
   });
 
-  it('opens assistant from suggestion explain action', async () => {
+  it('opens assistant from modal explain action', async () => {
     const completed = createCompletedRating('Short summary');
     completed.suggestions = [
       {
@@ -194,10 +205,12 @@ describe('AgentRatingPanel', () => {
       <AgentRatingPanel agentName="assistant" version="sha256:test" dataSource={dataSource} initialResult={completed} />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /suggestion actions for constrain tool calls/i }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Explain' }));
+    fireEvent.click(screen.getByRole('button', { name: /open suggestion constrain tool calls/i }));
+    const dialog = await screen.findByRole('dialog', { name: /suggestion constrain tool calls/i });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Explain' }));
 
     expect(mockOpenAssistant).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: /suggestion constrain tool calls/i })).not.toBeInTheDocument();
     expect(mockOpenAssistant).toHaveBeenCalledWith(
       expect.objectContaining({
         origin: 'sigil-agent-rating',
@@ -206,7 +219,7 @@ describe('AgentRatingPanel', () => {
     );
   });
 
-  it('removes suggestion when rejected from menu', async () => {
+  it('removes suggestion when rejected from modal', async () => {
     const completed = createCompletedRating('Short summary');
     completed.suggestions = [
       {
@@ -223,8 +236,9 @@ describe('AgentRatingPanel', () => {
     );
 
     expect(screen.getByText('Tighten wording')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /suggestion actions for tighten wording/i }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Reject' }));
+    fireEvent.click(screen.getByRole('button', { name: /open suggestion tighten wording/i }));
+    const dialog = await screen.findByRole('dialog', { name: /suggestion tighten wording/i });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reject' }));
 
     expect(screen.queryByText('Tighten wording')).not.toBeInTheDocument();
   });
@@ -253,5 +267,45 @@ describe('AgentRatingPanel', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Reject' }));
     expect(screen.queryByRole('dialog', { name: /suggestion constrain tool calls/i })).not.toBeInTheDocument();
     expect(screen.queryByText('Constrain tool calls')).not.toBeInTheDocument();
+  });
+
+  it('opens rewrite prompt modal and generates markdown from rating context', async () => {
+    const completed = createCompletedRating('Prompt has strong intent but unclear tool boundaries.');
+    completed.suggestions = [
+      {
+        severity: 'high',
+        category: 'safety',
+        title: 'Constrain tool calls',
+        description: 'Add explicit tool safety boundaries and fallback behavior.',
+      },
+    ];
+    mockInlineGenerate.mockImplementation(({ onComplete }: { onComplete?: (result: string) => void }) => {
+      onComplete?.('## Rewritten system prompt\n\n```text\nYou are a safer assistant.\n```');
+    });
+    const dataSource = createDataSource({});
+
+    renderPanel(
+      <AgentRatingPanel
+        agentName="assistant"
+        version="sha256:test"
+        dataSource={dataSource}
+        initialResult={completed}
+        agentStateContext="- Current system prompt: You are helpful."
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /rewrite prompt/i }));
+
+    const dialog = await screen.findByRole('dialog', { name: /rewrite prompt/i });
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByText(/## Rewritten system prompt/)).toBeInTheDocument();
+    expect(mockInlineGenerate).toHaveBeenCalledTimes(1);
+    expect(mockInlineGenerate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        origin: 'sigil-agent-rating-rewrite',
+        prompt: expect.stringContaining('Prompt has strong intent but unclear tool boundaries.'),
+        systemPrompt: expect.stringContaining('You are an expert prompt engineer.'),
+      })
+    );
   });
 });

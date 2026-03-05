@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Alert, Badge, Button, Text, useStyles2, useTheme2 } from '@grafana/ui';
-import { useAssistant } from '@grafana/assistant';
+import { useAssistant, useInlineAssistant } from '@grafana/assistant';
 import { useSearchParams } from 'react-router-dom';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../../agents/api';
 import type { AgentRatingResponse, AgentRatingStatus, AgentRatingSuggestion } from '../../agents/types';
@@ -11,6 +11,7 @@ import { Loader } from '../Loader';
 export type AgentRatingPanelProps = {
   agentName: string;
   version?: string;
+  agentStateContext?: string;
   dataSource?: AgentsDataSource;
   initialResult?: AgentRatingResponse | null;
   initialLoading?: boolean;
@@ -31,6 +32,18 @@ const RATING_LOADER_LINES = [
   'Analyzing instruction quality and constraints...',
   'Drafting targeted optimization suggestions...',
 ];
+const REWRITE_SYSTEM_PROMPT = [
+  'You are an expert prompt engineer.',
+  'Given the current agent context and analysis report, rewrite the system prompt to improve quality and safety.',
+  'Return markdown only.',
+  'Include exactly these sections in this order:',
+  '## Rewritten system prompt',
+  '```text',
+  '<rewritten system prompt>',
+  '```',
+  '## Why this is better',
+  '- <3-6 concise bullets tied to report findings>',
+].join('\n');
 
 const getStyles = (theme: GrafanaTheme2) => ({
   panel: css({
@@ -52,8 +65,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     alignItems: 'baseline',
     gap: theme.spacing(0.5),
     padding: `${theme.spacing(0.25)} ${theme.spacing(0.75)}`,
-    borderRadius: theme.shape.radius.pill,
-    background: theme.colors.background.canvas,
+    borderRadius: theme.shape.radius.default,
   }),
   headerRatingValue: css({
     fontSize: theme.typography.h4.fontSize,
@@ -124,18 +136,41 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.secondary,
   }),
   summary: css({
-    color: theme.colors.text.secondary,
+    color: theme.colors.text.primary,
     lineHeight: 1.5,
+    background: theme.colors.background.canvas,
+    borderRadius: 0,
+    padding: theme.spacing(1.5, 3.5),
+    marginTop: theme.spacing(2),
+    marginBottom: theme.spacing(0.75),
+    marginLeft: theme.spacing(-2),
+    marginRight: theme.spacing(-2),
+  }),
+  summaryPrefix: css({
+    color: theme.colors.text.secondary,
+    marginRight: theme.spacing(0.5),
+    fontWeight: theme.typography.fontWeightMedium,
+  }),
+  reportBody: css({
+    paddingLeft: theme.spacing(0.5),
+    paddingRight: theme.spacing(0.5),
+    paddingTop: theme.spacing(0.5),
+    paddingBottom: theme.spacing(0.5),
   }),
   suggestionGroup: css({
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: theme.spacing(0.75),
+    gap: theme.spacing(1),
   }),
   suggestionCard: css({
-    padding: theme.spacing(0.75, 0),
+    padding: theme.spacing(1, 0),
     display: 'flex',
     flexDirection: 'column' as const,
+    gap: theme.spacing(1),
+  }),
+  suggestionCardCompact: css({
+    paddingTop: theme.spacing(0.625),
+    paddingBottom: theme.spacing(0.75),
     gap: theme.spacing(0.75),
   }),
   suggestionRow: css({
@@ -146,16 +181,23 @@ const getStyles = (theme: GrafanaTheme2) => ({
   suggestionContent: css({
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: theme.spacing(0.25),
+    gap: theme.spacing(0.5),
     minWidth: 0,
     flex: 1,
   }),
   suggestionTitleLine: css({
     display: 'flex',
+    alignItems: 'flex-start',
+    gap: theme.spacing(0.5),
+    minWidth: 0,
+    flexWrap: 'wrap' as const,
+  }),
+  suggestionTitleMain: css({
+    display: 'inline-flex',
     alignItems: 'center',
     gap: theme.spacing(0.5),
     minWidth: 0,
-    flexWrap: 'nowrap' as const,
+    flex: '0 1 auto',
   }),
   suggestionSeverityLabel: css({
     display: 'inline-flex',
@@ -168,6 +210,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
     textTransform: 'uppercase' as const,
     lineHeight: 1.2,
     flexShrink: 0,
+    marginTop: theme.spacing(0.125),
+    whiteSpace: 'nowrap' as const,
   }),
   suggestionTitleButton: css({
     display: 'inline-flex',
@@ -180,6 +224,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     cursor: 'pointer',
     textAlign: 'left' as const,
     minWidth: 0,
+    flex: '0 1 auto',
     '&:hover': {
       textDecoration: 'underline',
     },
@@ -187,13 +232,15 @@ const getStyles = (theme: GrafanaTheme2) => ({
   suggestionTitleText: css({
     fontWeight: theme.typography.fontWeightMedium,
     color: theme.colors.text.primary,
-    whiteSpace: 'nowrap' as const,
+    whiteSpace: 'normal' as const,
+    overflowWrap: 'anywhere',
   }),
   suggestionSeverityDot: css({
     width: 8,
     height: 8,
     borderRadius: '50%',
     flexShrink: 0,
+    marginRight: theme.spacing(0.25),
   }),
   suggestionCategory: css({
     fontSize: theme.typography.bodySmall.fontSize,
@@ -201,6 +248,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     textTransform: 'uppercase' as const,
     letterSpacing: '0.03em',
     lineHeight: 1.2,
+    marginBottom: theme.spacing(0.5),
   }),
   suggestionDescription: css({
     color: theme.colors.text.secondary,
@@ -209,60 +257,20 @@ const getStyles = (theme: GrafanaTheme2) => ({
   suggestionDescriptionRow: css({
     display: 'flex',
     alignItems: 'flex-start',
-    gap: theme.spacing(0.5),
+    gap: theme.spacing(0.75),
   }),
   suggestionDescriptionText: css({
     flex: 1,
     minWidth: 0,
   }),
-  menuWrap: css({
-    position: 'relative' as const,
-    display: 'inline-flex',
-    flexShrink: 0,
-  }),
-  menuButton: css({
-    border: 'none',
-    background: 'transparent',
-    color: theme.colors.text.disabled,
-    cursor: 'pointer',
-    padding: `${theme.spacing(0.125)} ${theme.spacing(0.5)}`,
-    borderRadius: theme.shape.radius.default,
-    lineHeight: 1,
-    fontWeight: theme.typography.fontWeightBold,
-    '&:hover': {
-      background: theme.colors.action.hover,
-      color: theme.colors.text.primary,
-    },
-  }),
-  menuPanel: css({
-    position: 'absolute' as const,
-    top: 'calc(100% + 4px)',
-    right: 0,
-    minWidth: 140,
-    display: 'flex',
-    flexDirection: 'column' as const,
-    borderRadius: theme.shape.radius.default,
-    border: `1px solid ${theme.colors.border.weak}`,
-    background: theme.colors.background.primary,
-    boxShadow: theme.shadows.z3,
-    padding: theme.spacing(0.5),
-    zIndex: 2,
-  }),
-  menuItem: css({
-    border: 'none',
-    background: 'transparent',
-    color: theme.colors.text.primary,
-    textAlign: 'left' as const,
-    fontSize: theme.typography.bodySmall.fontSize,
-    borderRadius: theme.shape.radius.default,
-    padding: `${theme.spacing(0.5)} ${theme.spacing(0.75)}`,
-    cursor: 'pointer',
-    '&:hover': {
-      background: theme.colors.action.hover,
-    },
-  }),
   actionNote: css({
     margin: 0,
+  }),
+  panelActions: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.75),
+    flexWrap: 'wrap' as const,
   }),
   modalBackdrop: css({
     position: 'fixed' as const,
@@ -314,13 +322,36 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   modalBody: css({
     color: theme.colors.text.secondary,
-    lineHeight: 1.5,
+    lineHeight: 1.7,
     whiteSpace: 'pre-wrap' as const,
   }),
   modalActions: css({
     display: 'flex',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: theme.spacing(0.75),
+  }),
+  rewriteTitle: css({
+    margin: 0,
+  }),
+  rewriteMeta: css({
+    margin: 0,
+    color: theme.colors.text.secondary,
+    lineHeight: 1.4,
+  }),
+  rewriteBody: css({
+    borderRadius: theme.shape.radius.default,
+    border: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.canvas,
+    padding: theme.spacing(1),
+    maxHeight: '50vh',
+    overflow: 'auto',
+    margin: 0,
+    whiteSpace: 'pre-wrap' as const,
+    color: theme.colors.text.primary,
+    fontFamily: theme.typography.fontFamilyMonospace,
+    fontSize: theme.typography.bodySmall.fontSize,
+    lineHeight: 1.45,
   }),
 });
 
@@ -335,6 +366,19 @@ function scoreTone(theme: GrafanaTheme2, score: number): string {
     return theme.colors.warning.text;
   }
   return theme.colors.error.text;
+}
+
+function headerRatingStyle(theme: GrafanaTheme2, score: number): React.CSSProperties {
+  if (score >= 9) {
+    return { background: theme.colors.success.transparent };
+  }
+  if (score >= 7) {
+    return { background: theme.colors.info.transparent };
+  }
+  if (score >= 5) {
+    return { background: theme.colors.warning.transparent };
+  }
+  return { background: theme.colors.error.transparent };
 }
 
 function normalizeSeverity(rawSeverity: string): 'high' | 'medium' | 'low' {
@@ -425,6 +469,18 @@ function toSuggestionKey(suggestion: AgentRatingSuggestion): string {
   ].join('|');
 }
 
+function formatSuggestionCategory(category: string): string {
+  const normalized = category
+    .trim()
+    .replace(/[_\-.]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+  if (!normalized) {
+    return 'General';
+  }
+  return `${normalized.charAt(0).toUpperCase()}${normalized.slice(1)}`;
+}
+
 function normalizeRatingStatus(status: AgentRatingStatus | string | undefined): AgentRatingStatus {
   const normalized = (status ?? '').trim().toLowerCase();
   if (normalized === 'pending') {
@@ -460,6 +516,7 @@ function isNotFoundError(err: unknown): boolean {
 export default function AgentRatingPanel({
   agentName,
   version,
+  agentStateContext = '',
   dataSource = defaultAgentsDataSource,
   initialResult = null,
   initialLoading = false,
@@ -468,15 +525,19 @@ export default function AgentRatingPanel({
   const styles = useStyles2(getStyles);
   const theme = useTheme2();
   const assistant = useAssistant();
+  const rewriteAssistant = useInlineAssistant();
   const [searchParams, setSearchParams] = useSearchParams();
   const [running, setRunning] = useState<boolean>(
     initialLoading || (initialResult !== null && normalizeRatingStatus(initialResult.status) === 'pending')
   );
   const [result, setResult] = useState<AgentRatingResponse | null>(initialResult);
   const [error, setError] = useState<string>(initialError);
-  const [openMenuSuggestionKey, setOpenMenuSuggestionKey] = useState<string | null>(null);
   const [rejectedSuggestionKeys, setRejectedSuggestionKeys] = useState<Record<string, true>>({});
+  const [rewriteModalOpen, setRewriteModalOpen] = useState(false);
+  const [rewriteMarkdown, setRewriteMarkdown] = useState('');
+  const [rewriteError, setRewriteError] = useState('');
   const requestIdRef = useRef(0);
+  const rewriteRequestIdRef = useRef(0);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollInFlightRef = useRef(false);
 
@@ -567,29 +628,6 @@ export default function AgentRatingPanel({
     };
   }, [agentName, initialError, initialLoading, initialResult, startPolling, stopPolling, version]);
 
-  useEffect(() => {
-    if (!openMenuSuggestionKey) {
-      return;
-    }
-    const onPointerDown = (event: MouseEvent) => {
-      if (!(event.target instanceof Element)) {
-        return;
-      }
-      const scopedParent = event.target.closest('[data-suggestion-menu-scope]');
-      if (!(scopedParent instanceof HTMLElement)) {
-        setOpenMenuSuggestionKey(null);
-        return;
-      }
-      if (scopedParent.dataset.suggestionMenuScope !== openMenuSuggestionKey) {
-        setOpenMenuSuggestionKey(null);
-      }
-    };
-    document.addEventListener('mousedown', onPointerDown);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-    };
-  }, [openMenuSuggestionKey]);
-
   const completedResult = useMemo(() => {
     if (result === null) {
       return null;
@@ -601,7 +639,6 @@ export default function AgentRatingPanel({
   }, [result]);
 
   useEffect(() => {
-    setOpenMenuSuggestionKey(null);
     setRejectedSuggestionKeys({});
   }, [completedResult]);
 
@@ -620,21 +657,30 @@ export default function AgentRatingPanel({
     return groupSuggestionsBySeverity(prioritized);
   }, [completedResult, rejectedSuggestionKeys]);
 
-  const suggestionByKey = useMemo(() => {
-    const byKey = new Map<string, AgentRatingSuggestion>();
-    for (const severity of severityOrder) {
-      for (const suggestion of groupedSuggestions[severity]) {
-        const key = toSuggestionKey(suggestion);
-        if (!byKey.has(key)) {
-          byKey.set(key, suggestion);
-        }
-      }
-    }
-    return byKey;
+  const orderedSuggestions = useMemo(() => {
+    return severityOrder.flatMap((severity) => groupedSuggestions[severity]);
   }, [groupedSuggestions]);
 
-  const selectedSuggestionKey = searchParams.get(SUGGESTION_QUERY_PARAM)?.trim() ?? '';
-  const selectedSuggestion = selectedSuggestionKey.length > 0 ? suggestionByKey.get(selectedSuggestionKey) ?? null : null;
+  const renderedSuggestions = useMemo(() => {
+    return orderedSuggestions.map((suggestion, index) => {
+      const categoryLabel = formatSuggestionCategory(suggestion.category);
+      const prevCategoryLabel = index > 0 ? formatSuggestionCategory(orderedSuggestions[index - 1].category) : '';
+      return {
+        suggestion,
+        index,
+        categoryLabel,
+        showCategory: index === 0 || categoryLabel.toLowerCase() !== prevCategoryLabel.toLowerCase(),
+      };
+    });
+  }, [orderedSuggestions]);
+
+  const selectedSuggestionIndexRaw = searchParams.get(SUGGESTION_QUERY_PARAM)?.trim() ?? '';
+  const selectedSuggestionIndex =
+    selectedSuggestionIndexRaw.length > 0 ? Number.parseInt(selectedSuggestionIndexRaw, 10) : Number.NaN;
+  const selectedSuggestion =
+    Number.isFinite(selectedSuggestionIndex) && selectedSuggestionIndex >= 0
+      ? orderedSuggestions[selectedSuggestionIndex] ?? null
+      : null;
 
   const succinctSummary = useMemo(() => {
     if (!completedResult) {
@@ -683,6 +729,9 @@ export default function AgentRatingPanel({
 
   const onExplainSuggestion = useCallback(
     (suggestion: AgentRatingSuggestion) => {
+      const next = new URLSearchParams(searchParams);
+      next.delete(SUGGESTION_QUERY_PARAM);
+      setSearchParams(next, { replace: false });
       const prompt = [
         'Explain this recommendation in concise, plain language and why it matters.',
         '',
@@ -700,26 +749,24 @@ export default function AgentRatingPanel({
         prompt,
         autoSend: true,
       });
-      setOpenMenuSuggestionKey(null);
     },
-    [assistant]
+    [assistant, searchParams, setSearchParams]
   );
 
   const onRejectSuggestion = useCallback((suggestion: AgentRatingSuggestion) => {
     const key = toSuggestionKey(suggestion);
     setRejectedSuggestionKeys((prev) => ({ ...prev, [toSuggestionKey(suggestion)]: true }));
-    if (selectedSuggestionKey === key) {
+    if (selectedSuggestion && toSuggestionKey(selectedSuggestion) === key) {
       const next = new URLSearchParams(searchParams);
       next.delete(SUGGESTION_QUERY_PARAM);
       setSearchParams(next, { replace: false });
     }
-    setOpenMenuSuggestionKey(null);
-  }, [searchParams, selectedSuggestionKey, setSearchParams]);
+  }, [searchParams, selectedSuggestion, setSearchParams]);
 
   const openSuggestionModal = useCallback(
-    (suggestion: AgentRatingSuggestion) => {
+    (suggestionIndex: number) => {
       const next = new URLSearchParams(searchParams);
-      next.set(SUGGESTION_QUERY_PARAM, toSuggestionKey(suggestion));
+      next.set(SUGGESTION_QUERY_PARAM, String(suggestionIndex));
       setSearchParams(next, { replace: false });
     },
     [searchParams, setSearchParams]
@@ -731,12 +778,82 @@ export default function AgentRatingPanel({
     setSearchParams(next, { replace: false });
   }, [searchParams, setSearchParams]);
 
+  const runRewritePrompt = useCallback(() => {
+    if (!completedResult) {
+      return;
+    }
+    const resolvedVersion = version && version.length > 0 ? version : 'latest';
+    const suggestionsText = completedResult.suggestions.length
+      ? completedResult.suggestions
+          .map((suggestion, index) => {
+            const severity = normalizeSeverity(suggestion.severity);
+            return `${index + 1}. [${severity.toUpperCase()}] ${formatSuggestionCategory(suggestion.category)} - ${suggestion.title}\n${suggestion.description}`;
+          })
+          .join('\n\n')
+      : 'None.';
+    const prompt = [
+      'Create a stronger system prompt alternative based on this agent context and rating report.',
+      '',
+      '## Current agent state',
+      `- Agent name: ${agentName}`,
+      `- Version: ${resolvedVersion}`,
+      agentStateContext.trim().length > 0 ? agentStateContext.trim() : '- No additional state context provided.',
+      '',
+      '## Analysis report',
+      `- Score: ${completedResult.score}/10`,
+      `- Summary: ${completedResult.summary}`,
+      completedResult.token_warning ? `- Token warning: ${completedResult.token_warning}` : '- Token warning: none',
+      '',
+      '### Suggestions',
+      suggestionsText,
+    ].join('\n');
+
+    rewriteRequestIdRef.current += 1;
+    const requestId = rewriteRequestIdRef.current;
+    setRewriteError('');
+    setRewriteMarkdown('');
+    rewriteAssistant.generate({
+      origin: 'sigil-agent-rating-rewrite',
+      prompt,
+      systemPrompt: REWRITE_SYSTEM_PROMPT,
+      onComplete: (result: string) => {
+        if (rewriteRequestIdRef.current !== requestId) {
+          return;
+        }
+        setRewriteMarkdown(result);
+      },
+      onError: (err: Error) => {
+        if (rewriteRequestIdRef.current !== requestId) {
+          return;
+        }
+        setRewriteMarkdown('');
+        setRewriteError(err.message || 'Failed to rewrite prompt.');
+      },
+    });
+  }, [agentName, agentStateContext, completedResult, rewriteAssistant, version]);
+
+  const openRewriteModal = useCallback(() => {
+    setRewriteModalOpen(true);
+    runRewritePrompt();
+  }, [runRewritePrompt]);
+
+  const closeRewriteModal = useCallback(() => {
+    rewriteRequestIdRef.current += 1;
+    setRewriteModalOpen(false);
+  }, []);
+
+  const displayedRewriteMarkdown = rewriteAssistant.isGenerating ? String(rewriteAssistant.content ?? '') : rewriteMarkdown;
+
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
         <Text weight="medium">Prompt and context analysis</Text>
         {completedResult && (
-          <div className={styles.headerRating} aria-label={`Rating ${completedResult.score}/10`}>
+          <div
+            className={styles.headerRating}
+            style={headerRatingStyle(theme, completedResult.score)}
+            aria-label={`Rating ${completedResult.score}/10`}
+          >
             <span className={styles.headerRatingValue}>{completedResult.score}</span>
             <span className={styles.headerRatingSuffix}>/10</span>
           </div>
@@ -774,7 +891,7 @@ export default function AgentRatingPanel({
         )}
 
         {!running && completedResult && (
-          <>
+          <div className={styles.reportBody}>
             <div className={styles.scoreRow}>
               <div className={styles.scorePill}>
                 <span className={styles.scoreValue} style={{ color: scoreTone(theme, completedResult.score) }}>
@@ -787,7 +904,10 @@ export default function AgentRatingPanel({
               </Text>
             </div>
 
-            <div className={styles.summary}>{succinctSummary}</div>
+            <div className={styles.summary}>
+              <span className={styles.summaryPrefix}>tl;dr:</span>
+              {succinctSummary}
+            </div>
 
             {completedResult.token_warning && completedResult.token_warning.length > 0 && (
               <Alert severity="warning" title="Token budget warning">
@@ -795,94 +915,56 @@ export default function AgentRatingPanel({
               </Alert>
             )}
 
-            {severityOrder.map((severity) => {
-              const suggestions = groupedSuggestions[severity];
-              if (suggestions.length === 0) {
-                return null;
-              }
+            {renderedSuggestions.map(({ suggestion, index, categoryLabel, showCategory }) => {
+              const normalizedSeverity = normalizeSeverity(suggestion.severity);
               return (
-                <div key={severity} className={styles.suggestionGroup}>
-                  {suggestions.map((suggestion, index) => {
-                    const suggestionKey = `${toSuggestionKey(suggestion)}:${index}`;
-                    const isMenuOpen = openMenuSuggestionKey === suggestionKey;
-                    const normalizedSeverity = normalizeSeverity(suggestion.severity);
-                    return (
-                      <div
-                        key={`${severity}-${index}-${suggestion.category}-${suggestion.title}`}
-                        className={styles.suggestionCard}
-                      >
-                        <div className={styles.suggestionRow}>
-                          <div className={styles.suggestionContent}>
-                            <span className={styles.suggestionCategory}>{suggestion.category}</span>
-                            <span className={styles.suggestionTitleLine}>
-                              <div className={styles.menuWrap} data-suggestion-menu-scope={suggestionKey}>
-                                <button
-                                  type="button"
-                                  className={styles.menuButton}
-                                  aria-label={`Suggestion actions for ${suggestion.title}`}
-                                  aria-expanded={isMenuOpen}
-                                  onClick={() => setOpenMenuSuggestionKey(isMenuOpen ? null : suggestionKey)}
-                                >
-                                  ...
-                                </button>
-                                {isMenuOpen && (
-                                  <div className={styles.menuPanel} role="menu">
-                                    <button
-                                      type="button"
-                                      className={styles.menuItem}
-                                      role="menuitem"
-                                      onClick={() => onExplainSuggestion(suggestion)}
-                                    >
-                                      Explain
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className={styles.menuItem}
-                                      role="menuitem"
-                                      onClick={() => onRejectSuggestion(suggestion)}
-                                    >
-                                      Reject
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                              <span
-                                className={styles.suggestionSeverityDot}
-                                style={{ backgroundColor: severityDotColor(theme, normalizedSeverity) }}
-                                aria-hidden
-                              />
-                              <button
-                                type="button"
-                                className={styles.suggestionTitleButton}
-                                onClick={() => openSuggestionModal(suggestion)}
-                                aria-label={`Open suggestion ${suggestion.title}`}
-                              >
-                                <span className={styles.suggestionTitleText}>{suggestion.title}</span>
-                              </button>
-                              <span className={styles.suggestionSeverityLabel} style={severityLabelStyle(theme, normalizedSeverity)}>
-                                {normalizedSeverity}
-                              </span>
-                            </span>
-                            <div className={styles.suggestionDescriptionRow}>
-                              <div className={cx(styles.suggestionDescription, styles.suggestionDescriptionText)}>
-                                {toSuccinctText(suggestion.description, SUGGESTION_MAX_CHARS)}
-                              </div>
-                            </div>
-                          </div>
+                <div
+                  key={`${toSuggestionKey(suggestion)}:${index}`}
+                  className={cx(styles.suggestionCard, !showCategory ? styles.suggestionCardCompact : undefined)}
+                >
+                  <div className={styles.suggestionRow}>
+                    <div className={styles.suggestionContent}>
+                      {showCategory && <span className={styles.suggestionCategory}>{categoryLabel}</span>}
+                      <span className={styles.suggestionTitleLine}>
+                        <span className={styles.suggestionTitleMain}>
+                          <span
+                            className={styles.suggestionSeverityDot}
+                            style={{ backgroundColor: severityDotColor(theme, normalizedSeverity) }}
+                            aria-hidden
+                          />
+                          <button
+                            type="button"
+                            className={styles.suggestionTitleButton}
+                            onClick={() => openSuggestionModal(index)}
+                            aria-label={`Open suggestion ${suggestion.title}`}
+                          >
+                            <span className={styles.suggestionTitleText}>{suggestion.title}</span>
+                          </button>
+                        </span>
+                        <span className={styles.suggestionSeverityLabel} style={severityLabelStyle(theme, normalizedSeverity)}>
+                          {normalizedSeverity}
+                        </span>
+                      </span>
+                      <div className={styles.suggestionDescriptionRow}>
+                        <div className={cx(styles.suggestionDescription, styles.suggestionDescriptionText)}>
+                          {toSuccinctText(suggestion.description, SUGGESTION_MAX_CHARS)}
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  </div>
                 </div>
               );
             })}
 
-            <div>
+            <div className={styles.panelActions}>
+              <Button variant="secondary" icon="ai" onClick={openRewriteModal}>
+                Rewrite prompt
+              </Button>
               <Button onClick={() => void runRating()} icon="sync" variant="secondary">
                 Re-run
               </Button>
             </div>
-          </>
+          </div>
         )}
       </div>
       {selectedSuggestion && (
@@ -917,7 +999,7 @@ export default function AgentRatingPanel({
               </button>
             </div>
             <Text variant="bodySmall" color="secondary">
-              {selectedSuggestion.category}
+              {formatSuggestionCategory(selectedSuggestion.category).toUpperCase()}
             </Text>
             <div className={styles.modalBody}>{selectedSuggestion.description}</div>
             <div className={styles.modalActions}>
@@ -926,6 +1008,52 @@ export default function AgentRatingPanel({
               </Button>
               <Button variant="destructive" onClick={() => onRejectSuggestion(selectedSuggestion)}>
                 Reject
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {rewriteModalOpen && completedResult && (
+        <div className={styles.modalBackdrop} role="presentation" onClick={closeRewriteModal}>
+          <div
+            className={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Rewrite prompt"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className={styles.modalHeader}>
+              <h3 className={styles.rewriteTitle}>Rewrite prompt</h3>
+              <button
+                type="button"
+                className={styles.modalCloseButton}
+                onClick={closeRewriteModal}
+                aria-label="Close rewrite prompt modal"
+              >
+                x
+              </button>
+            </div>
+            <p className={styles.rewriteMeta}>
+              Generated from the current agent state and rating report. Output is markdown.
+            </p>
+            {rewriteError.length > 0 && (
+              <Alert severity="error" title="Rewrite failed">
+                {rewriteError}
+              </Alert>
+            )}
+            {displayedRewriteMarkdown.trim().length > 0 ? (
+              <pre className={styles.rewriteBody}>{displayedRewriteMarkdown}</pre>
+            ) : (
+              <div className={styles.loading}>
+                <Loader showText={false} />
+              </div>
+            )}
+            <div className={styles.modalActions}>
+              <Button variant="secondary" icon="sync" onClick={runRewritePrompt} disabled={rewriteAssistant.isGenerating}>
+                Regenerate
+              </Button>
+              <Button variant="secondary" onClick={closeRewriteModal}>
+                Close
               </Button>
             </div>
           </div>

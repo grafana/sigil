@@ -566,6 +566,30 @@ function firstLine(text: string): string {
   return line ?? 'No summary available.';
 }
 
+function buildAgentStateContext(detail: AgentDetail): string {
+  const modelLines = detail.models.length
+    ? detail.models.map((model, index) => `  ${index + 1}. ${model.provider}/${model.name} (${model.generation_count} generations)`)
+    : ['  None recorded.'];
+  const toolLines = detail.tools.length
+    ? detail.tools.map((tool, index) => `  ${index + 1}. ${tool.name} (${tool.type}, ${tool.token_estimate} tokens)`)
+    : ['  None recorded.'];
+  return [
+    '- Declared version (latest): ' + (detail.declared_version_latest || 'n/a'),
+    '- Declared version (first): ' + (detail.declared_version_first || 'n/a'),
+    '- First seen: ' + detail.first_seen_at,
+    '- Last seen: ' + detail.last_seen_at,
+    '- Generation count: ' + detail.generation_count,
+    '- Token estimate: system=' + detail.token_estimate.system_prompt + ', tools=' + detail.token_estimate.tools_total + ', total=' + detail.token_estimate.total,
+    '- Models:',
+    ...modelLines,
+    '- Tools:',
+    ...toolLines,
+    '',
+    '## Current system prompt',
+    detail.system_prompt || 'No system prompt recorded.',
+  ].join('\n');
+}
+
 export default function AgentDetailPage({
   dataSource = defaultAgentsDataSource,
   modelCardClient = defaultModelCardClient,
@@ -938,6 +962,8 @@ export default function AgentDetailPage({
     },
     [versionKey]
   );
+
+  const agentStateContext = useMemo(() => (detail ? buildAgentStateContext(detail) : ''), [detail]);
 
   if (loading) {
     return (
@@ -1366,6 +1392,7 @@ export default function AgentDetailPage({
         <AgentRatingPanel
           agentName={agentName}
           version={activeVersion}
+          agentStateContext={agentStateContext}
           dataSource={dataSource}
           initialResult={initialRating}
           initialLoading={initialRatingLoading || initialRating?.status === 'pending'}
