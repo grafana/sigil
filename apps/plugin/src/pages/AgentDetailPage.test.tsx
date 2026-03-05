@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import AgentDetailPage from './AgentDetailPage';
 import type { AgentsDataSource } from '../agents/api';
+import type { AgentRatingResponse } from '../agents/types';
 
 function LocationProbe() {
   const location = useLocation();
@@ -191,8 +192,9 @@ describe('AgentDetailPage', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByText('Latest 8/10')).toBeInTheDocument();
-    expect(screen.getByLabelText('Latest rating summary: Top-line report summary.')).toBeInTheDocument();
+    expect(await screen.findByText('LATEST SCORE')).toBeInTheDocument();
+    expect(screen.getAllByText('8/10').length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('LATEST SCORE help')).toBeInTheDocument();
   });
 
   it('shows compact age in top stats', async () => {
@@ -250,9 +252,9 @@ describe('AgentDetailPage', () => {
     });
     dataSource.lookupAgentRating = jest.fn(async (name: string, version?: string) => {
       const rating = await lookupAgentRating(name, version);
-      return {
+      const nextRating: AgentRatingResponse = {
         ...rating,
-        status: 'completed',
+        status: 'completed' as const,
         score: 8,
         summary: 'Summary with **emphasis**.',
         suggestions: [
@@ -266,6 +268,7 @@ describe('AgentDetailPage', () => {
         judge_model: 'openai/gpt-4o-mini',
         judge_latency_ms: 88,
       };
+      return nextRating;
     });
 
     render(

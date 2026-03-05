@@ -19,7 +19,7 @@ export type TopStatProps = {
   comparisonLabel?: string;
   to?: string;
   linkLabel?: string;
-  helpTooltip?: React.ReactNode;
+  helpTooltip?: string | React.ReactElement;
 };
 
 const DEFAULT_COMPARISON_LABEL = 'one hour ago';
