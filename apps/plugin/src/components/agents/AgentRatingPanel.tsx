@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Alert, Badge, Button, Spinner, Text, useStyles2, useTheme2 } from '@grafana/ui';
@@ -173,8 +173,10 @@ export default function AgentRatingPanel({
   const [running, setRunning] = useState<boolean>(initialLoading);
   const [result, setResult] = useState<AgentRatingResponse | null>(initialResult);
   const [error, setError] = useState<string>(initialError);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
+    requestIdRef.current += 1;
     setRunning(initialLoading);
     setResult(initialResult);
     setError(initialError);
@@ -192,16 +194,26 @@ export default function AgentRatingPanel({
   }, [result]);
 
   const runRating = async () => {
+    requestIdRef.current += 1;
+    const currentRequestId = requestIdRef.current;
     setRunning(true);
     setError('');
     setResult(null);
     try {
       const rating = await dataSource.rateAgent(agentName, version && version.length > 0 ? version : undefined);
+      if (requestIdRef.current !== currentRequestId) {
+        return;
+      }
       setResult(rating);
     } catch (err: unknown) {
+      if (requestIdRef.current !== currentRequestId) {
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Failed to evaluate agent');
     } finally {
-      setRunning(false);
+      if (requestIdRef.current === currentRequestId) {
+        setRunning(false);
+      }
     }
   };
 

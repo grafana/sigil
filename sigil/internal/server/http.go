@@ -81,7 +81,7 @@ func RegisterQueryRoutes(
 	mux.Handle("/api/v1/agents:lookup", protectedMiddleware(http.HandlerFunc(lookupAgent(querySvc))))
 	mux.Handle("/api/v1/agents:versions", protectedMiddleware(http.HandlerFunc(listAgentVersions(querySvc))))
 	if rater != nil {
-		mux.Handle("POST /api/v1/agents:rate", protectedMiddleware(http.HandlerFunc(rateAgent(querySvc, rater))))
+		mux.Handle("/api/v1/agents:rate", protectedMiddleware(http.HandlerFunc(rateAgent(querySvc, rater))))
 	}
 	mux.Handle("/api/v1/conversations:batch-metadata", protectedMiddleware(http.HandlerFunc(batchConversationMetadata(querySvc))))
 	mux.Handle("/api/v1/conversations", protectedMiddleware(http.HandlerFunc(listConversations(querySvc))))
@@ -476,10 +476,6 @@ func rateAgent(querySvc *query.Service, rater *agentrating.Rater) http.HandlerFu
 	return func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		if rater == nil {
-			http.Error(w, "agent rating is not configured", http.StatusServiceUnavailable)
 			return
 		}
 
