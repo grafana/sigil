@@ -98,3 +98,40 @@
 
 - Use Conventional Commits.
 - Explain both what changed and why in commit body.
+
+## Cursor Cloud specific instructions
+
+### Services overview
+
+The full local stack runs via Docker Compose (`mise run up`). Key services: Grafana (:3000), Sigil API (:8080), MySQL (:3306), MinIO (:9000), Tempo (:3200), Prometheus (:9090), Alloy (OTLP collector :14317/:4318), and the plugin dev server (:35729). The `traffic` profile adds `sdk-traffic` for synthetic data generation.
+
+### Starting the stack
+
+- Run `DEVELOPMENT=true docker compose --profile core up --build --remove-orphans -d` for detached mode (omit `--watch` since it cannot combine with `-d`).
+- After the Grafana container starts, the delve debugger may attach to the wrong process (the bash wrapper PID instead of the Grafana server). If Grafana is not responding on `:3000`, exec into the container and run `supervisorctl stop delve` then `kill -CONT <grafana-bash-pid>` to unblock it.
+- The mage-watcher inside the Grafana container will fail to rebuild Go plugin binaries because the `replace` directive (`../../sigil`) doesn't resolve inside that container. This is benign — the initial build is done by `plugin-precache`. Hot-reload of Go backend changes requires restarting `plugin-precache`.
+- Grafana uses anonymous auth by default (Admin role). Login credentials if needed: `admin` / `admin`.
+
+### Lint / test / check
+
+All commands are in `mise.toml`. Quick reference:
+- `mise run lint` — Go (golangci-lint), TypeScript (eslint), Helm, .NET
+- `mise run test` — Plugin TS tests, Sigil Go tests, SDK tests
+- `mise run check` — lint + typecheck + test combined
+- `mise run format` — Go + TypeScript + .NET formatting
+
+### Generating test data
+
+After the core stack is running, start the traffic profile for synthetic conversations:
+```
+DEVELOPMENT=true docker compose --profile core --profile traffic up --build --remove-orphans -d
+```
+Or use `mise run up` (foreground with `--watch`). Conversations will appear in the Sigil plugin UI at `http://localhost:3000/a/grafana-sigil-app/conversations` within ~30 seconds.
+
+### Gotchas
+
+- The `.env` file must exist (copy from `.env.example`). The `mise.toml` `[env]` section loads it.
+- `pnpm install` may warn about ignored build scripts. These are non-blocking; native fallbacks work.
+- Go tests for `sigil/internal/storage/mysql` use testcontainers (MySQL in Docker). Ensure Docker is running before `go test ./...` in `sigil/`.
+- Node version must be exactly `24.14.0` (`engines` field in `package.json`).
+- Go version is `1.26.0` via mise, with `GOTOOLCHAIN=go1.25.7+auto` for workspace compatibility.
