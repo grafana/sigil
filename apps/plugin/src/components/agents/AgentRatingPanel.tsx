@@ -136,7 +136,9 @@ function normalizeSeverity(rawSeverity: string): 'high' | 'medium' | 'low' {
   return 'low';
 }
 
-function groupSuggestionsBySeverity(suggestions: AgentRatingSuggestion[]): Record<'high' | 'medium' | 'low', AgentRatingSuggestion[]> {
+function groupSuggestionsBySeverity(
+  suggestions: AgentRatingSuggestion[]
+): Record<'high' | 'medium' | 'low', AgentRatingSuggestion[]> {
   const groups: Record<'high' | 'medium' | 'low', AgentRatingSuggestion[]> = {
     high: [],
     medium: [],
@@ -148,7 +150,7 @@ function groupSuggestionsBySeverity(suggestions: AgentRatingSuggestion[]): Recor
   return groups;
 }
 
-function severityBadgeColor(severity: 'high' | 'medium' | 'low'): string {
+function severityBadgeColor(severity: 'high' | 'medium' | 'low'): 'red' | 'orange' | 'blue' {
   if (severity === 'high') {
     return 'red';
   }

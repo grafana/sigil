@@ -1,4 +1,3 @@
-import React from 'react';
 import AgentRatingPanel from '../components/agents/AgentRatingPanel';
 import type { AgentsDataSource } from '../agents/api';
 
