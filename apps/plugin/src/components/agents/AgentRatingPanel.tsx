@@ -194,6 +194,7 @@ export default function AgentRatingPanel({
   const runRating = async () => {
     setRunning(true);
     setError('');
+    setResult(null);
     try {
       const rating = await dataSource.rateAgent(agentName, version && version.length > 0 ? version : undefined);
       setResult(rating);
