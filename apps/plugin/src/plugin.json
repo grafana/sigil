@@ -45,6 +45,18 @@
     },
     {
       "type": "page",
+      "name": "Tutorial",
+      "path": "/a/grafana-sigil-app/tutorial",
+      "addToNav": false
+    },
+    {
+      "type": "page",
+      "name": "Tutorial",
+      "path": "/a/grafana-sigil-app/tutorial/:slide",
+      "addToNav": false
+    },
+    {
+      "type": "page",
       "name": "Conversations",
       "path": "/a/grafana-sigil-app/conversations/:conversationID/view",
       "action": "grafana-sigil-app.data:read",
