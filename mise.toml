@@ -85,7 +85,7 @@ run = "DEVELOPMENT=true SIGIL_API_URL=https://sigil-dev-001.grafana-dev.net/ SIG
 
 [tasks."up:ops"]
 description = "Start local stack without sdk-traffic, pointing to ops datasources"
-run = "DEVELOPMENT=true SIGIL_API_URL=https://sigil-ops-001.grafana-ops.net/ SIGIL_TENANT_ID=27821 SIGIL_API_AUTH_TOKEN=$SIGIL_API_AUTH_TOKEN_OPS SIGIL_PROM_DS_UID=grafanacloud-prom SIGIL_TEMPO_DS_UID=grafanacloud-traces docker compose --profile core up --watch --build --remove-orphans"
+run = "DEVELOPMENT=true SIGIL_API_URL=https://sigil-ops-001.grafana-ops.net/ SIGIL_API_AUTH_TOKEN=$SIGIL_API_AUTH_TOKEN_OPS SIGIL_PROM_DS_UID=grafanacloud-prom SIGIL_TEMPO_DS_UID=grafanacloud-traces docker compose --profile core up --watch --build --remove-orphans"
 
 [tasks."up:build"]
 description = "Start local stack and force image rebuilds"

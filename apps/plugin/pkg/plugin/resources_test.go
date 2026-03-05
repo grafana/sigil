@@ -1689,6 +1689,116 @@ func TestNewAppHandlesNumericTenantID(t *testing.T) {
 	}
 }
 
+func TestParseAuthToken(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		wantID   string
+		wantTok  string
+		wantOK   bool
+	}{
+		{name: "combined format", input: "27821:secret-token", wantID: "27821", wantTok: "secret-token", wantOK: true},
+		{name: "combined with whitespace", input: " 27821:secret-token ", wantID: "27821", wantTok: "secret-token", wantOK: true},
+		{name: "token with colons", input: "42:part1:part2", wantID: "42", wantTok: "part1:part2", wantOK: true},
+		{name: "plain token no colon", input: "secret-token", wantOK: false},
+		{name: "empty string", input: "", wantOK: false},
+		{name: "colon only", input: ":", wantOK: false},
+		{name: "missing tenant", input: ":token", wantOK: false},
+		{name: "missing token", input: "42:", wantOK: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotID, gotTok, gotOK := parseAuthToken(tt.input)
+			if gotOK != tt.wantOK {
+				t.Fatalf("parseAuthToken(%q) ok = %v, want %v", tt.input, gotOK, tt.wantOK)
+			}
+			if !gotOK {
+				return
+			}
+			if gotID != tt.wantID {
+				t.Errorf("parseAuthToken(%q) tenantID = %q, want %q", tt.input, gotID, tt.wantID)
+			}
+			if gotTok != tt.wantTok {
+				t.Errorf("parseAuthToken(%q) token = %q, want %q", tt.input, gotTok, tt.wantTok)
+			}
+		})
+	}
+}
+
+func TestNewAppParsesCombinedAuthToken(t *testing.T) {
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{
+		JSONData: []byte(`{"sigilApiUrl":"https://remote.example.com","tenantId":"ignored"}`),
+		DecryptedSecureJSONData: map[string]string{
+			"sigilApiAuthToken": "27821:secret-token",
+		},
+	})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+
+	app := inst.(*App)
+	if app.tenantID != "27821" {
+		t.Fatalf("expected tenant id %q from combined token, got %q", "27821", app.tenantID)
+	}
+	if app.apiAuthToken != "secret-token" {
+		t.Fatalf("expected api auth token %q, got %q", "secret-token", app.apiAuthToken)
+	}
+}
+
+func TestNewAppFallsBackToJsonDataTenantID(t *testing.T) {
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{
+		JSONData: []byte(`{"sigilApiUrl":"https://remote.example.com","tenantId":"42"}`),
+	})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+
+	app := inst.(*App)
+	if app.tenantID != "42" {
+		t.Fatalf("expected tenant id %q from jsonData fallback, got %q", "42", app.tenantID)
+	}
+	if app.apiAuthToken != "" {
+		t.Fatalf("expected empty api auth token, got %q", app.apiAuthToken)
+	}
+}
+
+func TestCallResourceInjectsCombinedAuthOnSigilProxy(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, pass, ok := r.BasicAuth()
+		if !ok || user != "27821" || pass != "secret-token" {
+			http.Error(w, "expected basic auth 27821:secret-token", http.StatusUnauthorized)
+			return
+		}
+		if got := r.Header.Get("X-Scope-OrgID"); got != "27821" {
+			http.Error(w, "expected X-Scope-OrgID 27821, got "+got, http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"items":[]}`)
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{
+		DecryptedSecureJSONData: map[string]string{
+			"sigilApiAuthToken": "27821:secret-token",
+		},
+	})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+	app.apiURL = upstream.URL
+
+	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "query/conversations",
+	})
+	if sender.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)
+	}
+}
+
 func TestCallResourceSettingsRoutesProxyToSigil(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/settings" {

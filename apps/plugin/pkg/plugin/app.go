@@ -123,6 +123,13 @@ func NewApp(ctx context.Context, settings backend.AppInstanceSettings) (instance
 		apiAuthToken = strings.TrimSpace(settings.DecryptedSecureJSONData["sigilApiAuthToken"])
 	}
 
+	// Cloud provisioning sends apiAuthToken as "tenantid:token". When present,
+	// the embedded tenant ID takes precedence over the separate jsonData field.
+	if tokenTenant, tokenSecret, ok := parseAuthToken(apiAuthToken); ok {
+		tenantID = tokenTenant
+		apiAuthToken = tokenSecret
+	}
+
 	app := App{
 		apiURL:                     cfg.SigilAPIURL,
 		apiAuthToken:               apiAuthToken,
@@ -151,6 +158,17 @@ func (a *App) CheckHealth(_ context.Context, _ *backend.CheckHealthRequest) (*ba
 		Status:  backend.HealthStatusOk,
 		Message: "ok",
 	}, nil
+}
+
+// parseAuthToken splits a combined "tenantid:token" string into its parts.
+// Returns ok=false when the input is empty or has no colon separator.
+func parseAuthToken(raw string) (tenantID string, token string, ok bool) {
+	trimmed := strings.TrimSpace(raw)
+	idx := strings.IndexByte(trimmed, ':')
+	if idx <= 0 || idx == len(trimmed)-1 {
+		return "", "", false
+	}
+	return trimmed[:idx], trimmed[idx+1:], true
 }
 
 // getAuthzClient lazily initializes and caches the Grafana authorization client.
