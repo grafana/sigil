@@ -82,4 +82,22 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     background: theme.colors.error.transparent,
     color: theme.colors.error.text,
   }),
+  saveButton: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: theme.spacing(0.5),
+    border: 'none',
+    background: 'none',
+    cursor: 'pointer',
+    color: theme.colors.text.disabled,
+    borderRadius: theme.shape.radius.default,
+    transition: 'color 120ms ease',
+    '&:hover': {
+      color: theme.colors.warning.main,
+    },
+  }),
+  saveButtonActive: css({
+    color: theme.colors.warning.main,
+  }),
 });

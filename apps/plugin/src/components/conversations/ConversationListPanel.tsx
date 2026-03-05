@@ -326,6 +326,36 @@ const getStyles = (theme: GrafanaTheme2) => ({
   colAgents: css({ width: '20%' }),
   colModels: css({ width: '25%' }),
   colQuality: css({ width: 130 }),
+  colEval: css({ width: 130 }),
+  evalBar: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.25),
+  }),
+  evalBarTrack: css({
+    width: '100%',
+    height: 6,
+    borderRadius: 3,
+    background: theme.colors.error.transparent,
+    overflow: 'hidden',
+  }),
+  evalBarFill: css({
+    height: '100%',
+    borderRadius: 3,
+    background: theme.colors.success.main,
+    transition: 'width 200ms ease',
+  }),
+  evalBarLabel: css({
+    display: 'flex',
+    justifyContent: 'space-between',
+    fontSize: 10,
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: 1,
+    color: theme.colors.text.secondary,
+  }),
+  evalBarPct: css({
+    fontWeight: theme.typography.fontWeightMedium,
+  }),
 });
 
 function CopyIdButton({ id }: { id: string }) {
@@ -568,6 +598,7 @@ export default function ConversationListPanel({
             <col className={styles.colAgents} />
             <col className={styles.colModels} />
             <col className={styles.colQuality} />
+            <col className={styles.colEval} />
           </colgroup>
           <thead>
             <tr className={styles.headerRow}>
@@ -577,6 +608,7 @@ export default function ConversationListPanel({
               <th className={styles.headerCell}>Agents</th>
               <th className={styles.headerCell}>Models</th>
               <th className={styles.headerCell}>Quality</th>
+              <th className={styles.headerCell}>Evals</th>
             </tr>
           </thead>
           <tbody>
@@ -664,6 +696,31 @@ export default function ConversationListPanel({
                         </>
                       )}
                     </div>
+                  </td>
+                  <td className={styles.cell}>
+                    {conversation.eval_summary != null &&
+                    (conversation.eval_summary.pass_count > 0 || conversation.eval_summary.fail_count > 0) ? (
+                      (() => {
+                        const { pass_count, fail_count } = conversation.eval_summary;
+                        const total = pass_count + fail_count;
+                        const pct = total > 0 ? Math.round((pass_count / total) * 100) : 0;
+                        return (
+                          <div className={styles.evalBar}>
+                            <div className={styles.evalBarTrack}>
+                              <div className={styles.evalBarFill} style={{ width: `${pct}%` }} />
+                            </div>
+                            <div className={styles.evalBarLabel}>
+                              <span className={styles.evalBarPct}>{pct}%</span>
+                              <span>
+                                {pass_count}p · {fail_count}f
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })()
+                    ) : (
+                      <Text color="secondary">-</Text>
+                    )}
                   </td>
                 </tr>
               );

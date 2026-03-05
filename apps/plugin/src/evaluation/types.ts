@@ -16,24 +16,53 @@ export type EvalOutputKey = {
   unit?: string;
   pass_threshold?: number;
   enum?: string[];
+  min?: number;
+  max?: number;
+  pass_match?: string[];
+  pass_value?: boolean;
+};
+
+export type OutputKeyFormInput = {
+  key: string;
+  type: ScoreType;
+  description: string;
+  enumValue: string;
+  passThreshold: number | '';
+  min: number | '';
+  max: number | '';
+  passMatch: string;
+  passValue: 'true' | 'false' | '';
 };
 
 /** Build an EvalOutputKey from form state, applying trim and enum parsing. */
-export function buildOutputKeyFromForm(
-  key: string,
-  type: ScoreType,
-  description: string,
-  enumValue: string
-): EvalOutputKey {
-  const ok: EvalOutputKey = { key: key.trim() || 'score', type };
-  if (description.trim()) {
-    ok.description = description.trim();
+export function buildOutputKeyFromForm(input: OutputKeyFormInput): EvalOutputKey {
+  const ok: EvalOutputKey = { key: input.key.trim() || 'score', type: input.type };
+  if (input.description.trim()) {
+    ok.description = input.description.trim();
   }
-  if (type === 'string' && enumValue.trim()) {
-    ok.enum = enumValue
+  if (input.type === 'string' && input.enumValue.trim()) {
+    ok.enum = input.enumValue
       .split(',')
       .map((v) => v.trim())
       .filter(Boolean);
+  }
+  if (input.type === 'number' && input.passThreshold !== '') {
+    ok.pass_threshold = input.passThreshold;
+  }
+  if (input.type === 'number' && input.min !== '') {
+    ok.min = input.min;
+  }
+  if (input.type === 'number' && input.max !== '') {
+    ok.max = input.max;
+  }
+  if (input.type === 'string' && input.passMatch.trim()) {
+    ok.pass_match = input.passMatch
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean);
+  }
+  if (input.type === 'bool' && input.passValue !== '') {
+    ok.pass_value = input.passValue === 'true';
   }
   return ok;
 }
@@ -91,7 +120,11 @@ export type CreateRuleRequest = {
 };
 
 export type UpdateRuleRequest = {
-  enabled: boolean;
+  enabled?: boolean;
+  selector?: RuleSelector;
+  match?: Record<string, string | string[]>;
+  sample_rate?: number;
+  evaluator_ids?: string[];
 };
 
 export type JudgeProvider = {

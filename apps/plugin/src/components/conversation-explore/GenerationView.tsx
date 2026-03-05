@@ -1,7 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cx } from '@emotion/css';
 import { Icon, Toggletip, Tooltip, useStyles2 } from '@grafana/ui';
-import type { GenerationDetail, Message, Part } from '../../generation/types';
+import {
+  formatScoreValue,
+  type GenerationDetail,
+  type LatestScore,
+  type Message,
+  type Part,
+} from '../../generation/types';
 import type { ConversationSpan } from '../../conversation/types';
 import type { FlowNode } from './types';
 import { getStyles } from './GenerationView.styles';
@@ -428,6 +434,38 @@ function NavButton({
   );
 }
 
+function ScoreChips({ scores }: { scores: Record<string, LatestScore> }) {
+  const styles = useStyles2(getStyles);
+
+  const chips = useMemo(() => Object.entries(scores).sort(([a], [b]) => a.localeCompare(b)), [scores]);
+
+  if (chips.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className={styles.scoreChipsContainer}>
+      {chips.map(([key, score]) => {
+        const passed = score.passed;
+        const chipClass =
+          passed == null ? styles.scoreChipNeutral : passed ? styles.scoreChipPass : styles.scoreChipFail;
+
+        return (
+          <div key={key} className={`${styles.scoreChip} ${chipClass}`}>
+            <span className={styles.scoreChipEvaluator}>{score.evaluator_id}</span>
+            <span className={styles.scoreChipSep}>›</span>
+            <span className={styles.scoreChipKey}>{key}:</span>
+            <span className={styles.scoreChipValue}>{formatScoreValue(score.value)}</span>
+            {passed != null && (
+              <span className={passed ? styles.scoreChipPassIcon : styles.scoreChipFailIcon}>{passed ? '✓' : '✗'}</span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function GenerationView({
   node,
   allGenerations,
@@ -572,6 +610,12 @@ export default function GenerationView({
 
       <div ref={contentRef} className={styles.content}>
         {gen?.error?.message && <div className={styles.errorBanner}>{gen.error.message}</div>}
+
+        {gen?.latest_scores && Object.keys(gen.latest_scores).length > 0 && (
+          <Section title="Evaluations" count={String(Object.keys(gen.latest_scores).length)}>
+            <ScoreChips scores={gen.latest_scores} />
+          </Section>
+        )}
 
         {displayedInput.length > 0 && (
           <Section title="Input" count={inputTokens > 0 ? `${formatNumber(inputTokens)} tokens` : undefined}>

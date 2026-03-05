@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import SpanDetailPanel from './SpanDetailPanel';
 import type { ConversationSpan, SpanAttributeValue } from '../../conversation/types';
 import type { GenerationDetail } from '../../generation/types';
@@ -43,6 +43,29 @@ describe('SpanDetailPanel', () => {
     render(<SpanDetailPanel span={span} />);
     expect(screen.getByText('Generation')).toBeInTheDocument();
     expect(screen.getByText('Token Usage')).toBeInTheDocument();
+  });
+
+  it('renders neutral score status when passed is null', () => {
+    const generationWithNullPassed: GenerationDetail = {
+      ...sampleGeneration,
+      latest_scores: {
+        quality: {
+          value: { number: 0.8 },
+          evaluator_id: 'sigil.quality',
+          evaluator_version: '2026-03-04',
+          created_at: '2026-03-04T10:00:01Z',
+          passed: null,
+        },
+      },
+    };
+    const span = makeSpan({ generation: generationWithNullPassed });
+
+    render(<SpanDetailPanel span={span} />);
+
+    const row = screen.getByText('quality').closest('tr');
+    expect(row).not.toBeNull();
+    expect(within(row!).getByText('—')).toBeInTheDocument();
+    expect(within(row!).queryByText('✗')).not.toBeInTheDocument();
   });
 
   it('shows generation when allGenerations matches exact span_id', () => {

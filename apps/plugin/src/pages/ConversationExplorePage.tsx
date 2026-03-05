@@ -1,13 +1,15 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
-import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Spinner, useStyles2 } from '@grafana/ui';
+import { AppEvents, type GrafanaTheme2 } from '@grafana/data';
+import { Alert, useStyles2 } from '@grafana/ui';
+import { getAppEvents } from '@grafana/runtime';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
 import { createTempoTraceFetcher } from '../conversation/fetchTrace';
 import type { TraceFetcher } from '../conversation/loader';
 import { defaultModelCardClient, type ModelCardClient } from '../modelcard/api';
 import { useConversationData } from '../hooks/useConversationData';
+import { useSavedConversation } from '../hooks/useSavedConversation';
 import {
   useConversationFlow,
   type FlowGroupBy,
@@ -18,6 +20,7 @@ import FlowTree from '../components/conversation-explore/FlowTree';
 import MiniTimeline from '../components/conversation-explore/MiniTimeline';
 import DetailPanel from '../components/conversation-explore/DetailPanel';
 import type { FlowNode } from '../components/conversation-explore/types';
+import { Loader } from '../components/Loader';
 
 export type ConversationExplorePageProps = {
   dataSource?: ConversationsDataSource;
@@ -78,6 +81,21 @@ const getStyles = (theme: GrafanaTheme2) => ({
     minWidth: 0,
     overflow: 'hidden',
   }),
+  rightPanelContent: css({
+    flex: 1,
+    display: 'flex',
+    minWidth: 0,
+    minHeight: 0,
+    overflow: 'hidden',
+  }),
+  detailPanelWrap: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
+    overflow: 'hidden',
+  }),
 });
 
 export default function ConversationExplorePage(props: ConversationExplorePageProps) {
@@ -88,13 +106,41 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   const traceFetcher = props.traceFetcher ?? defaultTraceFetcher;
   const modelCardClient = props.modelCardClient ?? defaultModelCardClient;
 
-  const { conversationData, loading, errorMessage, tokenSummary, costSummary, generationCosts, allGenerations } =
+  const [searchParams, setSearchParams] = useSearchParams();
+  const conversationTitle = searchParams.get('conversationTitle') ?? '';
+
+  const { conversationData, loading, tracesLoading, errorMessage, tokenSummary, costSummary, generationCosts, allGenerations } =
     useConversationData({
       conversationID,
       dataSource,
       traceFetcher,
       modelCardClient,
     });
+
+  const {
+    isSaved,
+    loading: saveLoading,
+    toggleSave,
+  } = useSavedConversation(conversationID, conversationTitle || conversationID);
+
+  const handleToggleSave = useCallback(() => {
+    void toggleSave()
+      .then((nowSaved) => {
+        if (nowSaved === null) {
+          return;
+        }
+        getAppEvents().publish({
+          type: AppEvents.alertSuccess.name,
+          payload: [nowSaved ? 'Conversation saved' : 'Conversation unsaved'],
+        });
+      })
+      .catch(() => {
+        getAppEvents().publish({
+          type: AppEvents.alertWarning.name,
+          payload: ['Failed to update save status'],
+        });
+      });
+  }, [toggleSave]);
 
   const [flowGroupBy, setFlowGroupBy] = useState<FlowGroupBy>('agent');
   const [flowSortBy, setFlowSortBy] = useState<FlowSortBy>('time');
@@ -108,7 +154,6 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     generationCosts
   );
 
-  const [searchParams, setSearchParams] = useSearchParams();
   const selectedNodeId = searchParams.get('node');
 
   const MIN_PANEL_WIDTH = 260;
@@ -208,12 +253,11 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   }, [allGenerations]);
 
   const errorCount = useMemo(() => allGenerations.filter((g) => Boolean(g.error?.message)).length, [allGenerations]);
-
   if (loading) {
     return (
       <div className={styles.pageContainer}>
         <div className={styles.spinnerWrap}>
-          <Spinner aria-label="loading conversation" />
+          <Loader />
         </div>
       </div>
     );
@@ -246,6 +290,8 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
         modelProviders={modelProviders}
         errorCount={errorCount}
         generationCount={conversationData.generationCount}
+        isSaved={isSaved}
+        onToggleSave={saveLoading ? undefined : handleToggleSave}
       />
       <div className={styles.contentArea}>
         <div className={styles.leftPanel} style={{ width: panelWidth }}>
@@ -258,6 +304,7 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
           />
           <FlowTree
             nodes={flowNodes}
+            loading={tracesLoading}
             selectedNodeId={selectedNodeId}
             onSelectNode={handleSelectNode}
             generationCosts={generationCosts}
@@ -277,20 +324,25 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
           aria-label="Resize flow panel"
         />
         <div className={styles.rightPanel}>
-          <DetailPanel
-            selectedNode={selectedNode}
-            allGenerations={allGenerations}
-            flowNodes={flowNodes}
-            generationCosts={generationCosts}
-            onDeselectNode={handleDeselectNode}
-            onNavigateToGeneration={handleNavigateToGeneration}
-            scrollToToolCallId={scrollToToolCallId}
-          />
+          <div className={styles.rightPanelContent}>
+            <div className={styles.detailPanelWrap}>
+              <DetailPanel
+                selectedNode={selectedNode}
+                allGenerations={allGenerations}
+                flowNodes={flowNodes}
+                generationCosts={generationCosts}
+                onDeselectNode={handleDeselectNode}
+                onNavigateToGeneration={handleNavigateToGeneration}
+                scrollToToolCallId={scrollToToolCallId}
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
 
 function findNodeById(nodes: FlowNode[], id: string): FlowNode | null {
   for (const node of nodes) {

@@ -493,6 +493,238 @@ func TestServiceRefreshQueueDepthResetsMissingTenantToZero(t *testing.T) {
 	}
 }
 
+func float64Ptr(v float64) *float64 { return &v }
+
+func TestServiceBoundsEnforcement(t *testing.T) {
+	tests := []struct {
+		name           string
+		outputKeys     []evalpkg.OutputKey
+		outputs        []evaluators.ScoreOutput
+		wantScoreCount int
+		wantScoreKeys  []string
+	}{
+		{
+			name: "score_within_bounds_is_stored",
+			outputKeys: []evalpkg.OutputKey{{
+				Key:  "score",
+				Type: evalpkg.ScoreTypeNumber,
+				Min:  float64Ptr(0),
+				Max:  float64Ptr(10),
+			}},
+			outputs: []evaluators.ScoreOutput{{
+				Key:   "score",
+				Type:  evalpkg.ScoreTypeNumber,
+				Value: evalpkg.NumberValue(5),
+			}},
+			wantScoreCount: 1,
+			wantScoreKeys:  []string{"score"},
+		},
+		{
+			name: "score_below_min_is_dropped",
+			outputKeys: []evalpkg.OutputKey{{
+				Key:  "score",
+				Type: evalpkg.ScoreTypeNumber,
+				Min:  float64Ptr(0),
+				Max:  float64Ptr(10),
+			}},
+			outputs: []evaluators.ScoreOutput{{
+				Key:   "score",
+				Type:  evalpkg.ScoreTypeNumber,
+				Value: evalpkg.NumberValue(-1),
+			}},
+			wantScoreCount: 0,
+			wantScoreKeys:  nil,
+		},
+		{
+			name: "score_above_max_is_dropped",
+			outputKeys: []evalpkg.OutputKey{{
+				Key:  "score",
+				Type: evalpkg.ScoreTypeNumber,
+				Min:  float64Ptr(0),
+				Max:  float64Ptr(10),
+			}},
+			outputs: []evaluators.ScoreOutput{{
+				Key:   "score",
+				Type:  evalpkg.ScoreTypeNumber,
+				Value: evalpkg.NumberValue(11),
+			}},
+			wantScoreCount: 0,
+			wantScoreKeys:  nil,
+		},
+		{
+			name: "only_min_set_below_min_dropped",
+			outputKeys: []evalpkg.OutputKey{{
+				Key:  "score",
+				Type: evalpkg.ScoreTypeNumber,
+				Min:  float64Ptr(0),
+			}},
+			outputs: []evaluators.ScoreOutput{{
+				Key:   "score",
+				Type:  evalpkg.ScoreTypeNumber,
+				Value: evalpkg.NumberValue(-0.5),
+			}},
+			wantScoreCount: 0,
+			wantScoreKeys:  nil,
+		},
+		{
+			name: "only_min_set_above_min_stored",
+			outputKeys: []evalpkg.OutputKey{{
+				Key:  "score",
+				Type: evalpkg.ScoreTypeNumber,
+				Min:  float64Ptr(0),
+			}},
+			outputs: []evaluators.ScoreOutput{{
+				Key:   "score",
+				Type:  evalpkg.ScoreTypeNumber,
+				Value: evalpkg.NumberValue(100),
+			}},
+			wantScoreCount: 1,
+			wantScoreKeys:  []string{"score"},
+		},
+		{
+			name: "only_max_set_above_max_dropped",
+			outputKeys: []evalpkg.OutputKey{{
+				Key:  "score",
+				Type: evalpkg.ScoreTypeNumber,
+				Max:  float64Ptr(10),
+			}},
+			outputs: []evaluators.ScoreOutput{{
+				Key:   "score",
+				Type:  evalpkg.ScoreTypeNumber,
+				Value: evalpkg.NumberValue(10.5),
+			}},
+			wantScoreCount: 0,
+			wantScoreKeys:  nil,
+		},
+		{
+			name: "only_max_set_below_max_stored",
+			outputKeys: []evalpkg.OutputKey{{
+				Key:  "score",
+				Type: evalpkg.ScoreTypeNumber,
+				Max:  float64Ptr(10),
+			}},
+			outputs: []evaluators.ScoreOutput{{
+				Key:   "score",
+				Type:  evalpkg.ScoreTypeNumber,
+				Value: evalpkg.NumberValue(-100),
+			}},
+			wantScoreCount: 1,
+			wantScoreKeys:  []string{"score"},
+		},
+		{
+			name: "score_at_exact_min_is_stored",
+			outputKeys: []evalpkg.OutputKey{{
+				Key:  "score",
+				Type: evalpkg.ScoreTypeNumber,
+				Min:  float64Ptr(0),
+				Max:  float64Ptr(10),
+			}},
+			outputs: []evaluators.ScoreOutput{{
+				Key:   "score",
+				Type:  evalpkg.ScoreTypeNumber,
+				Value: evalpkg.NumberValue(0),
+			}},
+			wantScoreCount: 1,
+			wantScoreKeys:  []string{"score"},
+		},
+		{
+			name: "score_at_exact_max_is_stored",
+			outputKeys: []evalpkg.OutputKey{{
+				Key:  "score",
+				Type: evalpkg.ScoreTypeNumber,
+				Min:  float64Ptr(0),
+				Max:  float64Ptr(10),
+			}},
+			outputs: []evaluators.ScoreOutput{{
+				Key:   "score",
+				Type:  evalpkg.ScoreTypeNumber,
+				Value: evalpkg.NumberValue(10),
+			}},
+			wantScoreCount: 1,
+			wantScoreKeys:  []string{"score"},
+		},
+		{
+			name: "bool_score_ignores_bounds",
+			outputKeys: []evalpkg.OutputKey{{
+				Key:  "pass",
+				Type: evalpkg.ScoreTypeBool,
+				Min:  float64Ptr(0),
+				Max:  float64Ptr(1),
+			}},
+			outputs: []evaluators.ScoreOutput{{
+				Key:    "pass",
+				Type:   evalpkg.ScoreTypeBool,
+				Value:  evalpkg.BoolValue(true),
+				Passed: boolPtr(true),
+			}},
+			wantScoreCount: 1,
+			wantScoreKeys:  []string{"pass"},
+		},
+		{
+			name: "mixed_outputs_partial_drop",
+			outputKeys: []evalpkg.OutputKey{
+				{Key: "accuracy", Type: evalpkg.ScoreTypeNumber, Min: float64Ptr(0), Max: float64Ptr(1)},
+				{Key: "latency", Type: evalpkg.ScoreTypeNumber, Min: float64Ptr(0), Max: float64Ptr(5000)},
+			},
+			outputs: []evaluators.ScoreOutput{
+				{Key: "accuracy", Type: evalpkg.ScoreTypeNumber, Value: evalpkg.NumberValue(1.5)}, // above max, dropped
+				{Key: "latency", Type: evalpkg.ScoreTypeNumber, Value: evalpkg.NumberValue(200)},  // within bounds, stored
+			},
+			wantScoreCount: 1,
+			wantScoreKeys:  []string{"latency"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := &workerStoreStub{
+				claimed: []evalpkg.WorkItem{newClaimedItem("work-1", "gen-1")},
+				evaluators: map[string]evalpkg.EvaluatorDefinition{
+					"tenant-a|eval-1|v1": {
+						EvaluatorID: "eval-1",
+						Version:     "v1",
+						Kind:        evalpkg.EvaluatorKindHeuristic,
+						OutputKeys:  tt.outputKeys,
+					},
+				},
+				statusCounts: defaultStatusCounts(),
+			}
+
+			service := newTestService(t, store, Config{
+				Enabled:          true,
+				MaxConcurrent:    1,
+				MaxRatePerMinute: 10000,
+				MaxAttempts:      3,
+				ClaimBatchSize:   10,
+				PollInterval:     time.Millisecond,
+			})
+			service.evaluators[evalpkg.EvaluatorKindHeuristic] = &workerFakeEvaluator{
+				kind:    evalpkg.EvaluatorKindHeuristic,
+				outputs: tt.outputs,
+			}
+
+			service.runCycle(context.Background())
+
+			if store.insertedScores != tt.wantScoreCount {
+				t.Fatalf("expected %d inserted scores, got %d", tt.wantScoreCount, store.insertedScores)
+			}
+			if tt.wantScoreCount > 0 {
+				if len(store.lastScoreBatch) != tt.wantScoreCount {
+					t.Fatalf("expected %d scores in batch, got %d", tt.wantScoreCount, len(store.lastScoreBatch))
+				}
+				for i, wantKey := range tt.wantScoreKeys {
+					if store.lastScoreBatch[i].ScoreKey != wantKey {
+						t.Fatalf("expected score[%d].ScoreKey=%q, got %q", i, wantKey, store.lastScoreBatch[i].ScoreKey)
+					}
+				}
+			}
+			if store.completed != 1 {
+				t.Fatalf("expected item to be completed, got %d", store.completed)
+			}
+		})
+	}
+}
+
 func newTestService(t *testing.T, store *workerStoreStub, cfg Config) *Service {
 	t.Helper()
 
@@ -553,6 +785,7 @@ type workerStoreStub struct {
 	lastFailMaxAttempts      int
 	lastRetryAt              time.Time
 	insertedScores           int
+	lastScoreBatch           []evalpkg.GenerationScore
 	completed                int
 	requeueCtxCanceledCount  int
 	failCtxCanceledCount     int
@@ -585,6 +818,7 @@ func (s *workerStoreStub) InsertScoreBatch(_ context.Context, scores []evalpkg.G
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.insertedScores += len(scores)
+	s.lastScoreBatch = append(s.lastScoreBatch, scores...)
 	return len(scores), nil
 }
 

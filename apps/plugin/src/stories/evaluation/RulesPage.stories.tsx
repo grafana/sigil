@@ -83,7 +83,7 @@ const mockDataSource: EvaluationDataSource = {
   getRule: async (id: string) => (id === mockRule1.rule_id ? mockRule1 : mockRule2),
   updateRule: async (id: string, req: UpdateRuleRequest) => {
     const rule = id === mockRule1.rule_id ? mockRule1 : mockRule2;
-    return { ...rule, enabled: req.enabled };
+    return { ...rule, ...(req.enabled != null && { enabled: req.enabled }) };
   },
   deleteRule: async () => {},
   previewRule: async (_req: RulePreviewRequest): Promise<RulePreviewResponse> => ({

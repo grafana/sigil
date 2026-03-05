@@ -7,11 +7,13 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	gokitlog "github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	sigil "github.com/grafana/sigil/sigil/internal"
 	"github.com/grafana/sigil/sigil/internal/config"
+	"github.com/grafana/sigil/sigil/internal/telemetry"
 )
 
 func main() {
@@ -27,6 +29,15 @@ func main() {
 	}
 
 	logger := gokitlog.NewLogfmtLogger(gokitlog.NewSyncWriter(os.Stdout))
+	tracingShutdown, tracingState := telemetry.InitTracing(context.Background(), logger)
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := tracingShutdown(shutdownCtx); err != nil {
+			_ = level.Warn(logger).Log("msg", "failed to shutdown tracing exporter", "err", err)
+		}
+	}()
+	_ = level.Info(logger).Log("msg", "tracing bootstrap complete", "enabled", tracingState.Enabled, "reason", tracingState.Reason)
 
 	runtime, err := sigil.NewRuntime(cfg, logger)
 	if err != nil {

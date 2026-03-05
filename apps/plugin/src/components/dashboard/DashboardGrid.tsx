@@ -1,8 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { css } from '@emotion/css';
 import { ThresholdsMode, type GrafanaTheme2, type TimeRange } from '@grafana/data';
-import { Button, Icon, IconButton, Select, Spinner, useStyles2 } from '@grafana/ui';
-import { useInlineAssistant } from '@grafana/assistant';
+import { Select, useStyles2 } from '@grafana/ui';
 import type { DashboardDataSource } from '../../dashboard/api';
 import {
   type BreakdownDimension,
@@ -42,6 +41,7 @@ import { matrixToDataFrames, vectorToStatValue } from '../../dashboard/transform
 import { usePrometheusQuery } from './usePrometheusQuery';
 import { MetricPanel } from './MetricPanel';
 import { useResolvedModelPricing } from './useResolvedModelPricing';
+import AssistantInsightsList from '../assistant/AssistantInsightsList';
 
 export type DashboardGridProps = {
   dataSource: DashboardDataSource;
@@ -440,13 +440,21 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
       return null;
     }
     const parts = [
+      'Dashboard context:',
+      `Time range (raw): from=${String(timeRange.raw.from)}; to=${String(timeRange.raw.to)}`,
+      `Time range (UTC): from=${formatUtcMillis(from)}; to=${formatUtcMillis(to)}`,
+      `Breakdown: ${breakdownBy}`,
+      `Latency percentile: ${latencyPercentile}`,
+      `Cost mode: ${costMode}`,
+      costMode === 'tokens' ? `Token drilldown: ${tokenDrilldown}` : null,
+      '',
       summarizeVector(topTotalOps.data, 'Total Requests'),
       summarizeVector(topErrRate.data, 'Error Rate (%)'),
       summarizeMatrix(requestsSource, 'Requests over time'),
       summarizeMatrix(errorsTimeseries.data, 'Errors over time'),
       summarizeVector(topLatency.data, `Latency ${latencyPercentile} (seconds)`),
       summarizeMatrix(latencyTimeseries.data, 'Latency over time'),
-    ];
+    ].filter((part): part is string => part !== null);
     if (costMode === 'tokens' && tokenDrilldown === 'all') {
       parts.push(summarizeVector(tokensTotalStat.data, 'Total tokens'));
       parts.push(summarizeVector(tokensTotalByBreakdown.data, 'Total tokens by breakdown'));
@@ -461,6 +469,9 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
     return parts.join('\n');
   }, [
     allDataLoading,
+    breakdownBy,
+    from,
+    to,
     topTotalOps.data,
     topErrRate.data,
     hasBreakdown,
@@ -472,6 +483,8 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
     latencyTimeseries.data,
     costMode,
     tokenDrilldown,
+    timeRange.raw.from,
+    timeRange.raw.to,
     tokensTotalStat.data,
     tokensTotalByBreakdown.data,
     tokensTotalTimeseries.data,
@@ -741,136 +754,16 @@ export function DashboardGrid({ dataSource, filters, breakdownBy, from, to, time
           </div>
         </div>
 
-        <InsightPanel prompt={insightPrompt} origin="sigil-plugin/dashboard-insight" dataContext={insightDataContext} />
-      </div>
-    </div>
-  );
-}
-
-function formatInlineMarkup(text: string): React.ReactNode[] {
-  const parts: React.ReactNode[] = [];
-  const pattern = /\*\*(.+?)\*\*|`(.+?)`/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = pattern.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index));
-    }
-    if (match[1] !== undefined) {
-      parts.push(<strong key={match.index}>{match[1]}</strong>);
-    } else if (match[2] !== undefined) {
-      parts.push(<code key={match.index}>{match[2]}</code>);
-    }
-    lastIndex = pattern.lastIndex;
-  }
-
-  if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex));
-  }
-
-  return parts;
-}
-
-type InsightPanelProps = {
-  prompt: string;
-  origin: string;
-  dataContext: string | null;
-};
-
-function InsightPanel({ prompt, origin, dataContext }: InsightPanelProps) {
-  const styles = useStyles2(getStyles);
-  const gen = useInlineAssistant();
-  const [text, setText] = useState('');
-  const isDevelopment = process.env.NODE_ENV === 'development';
-  const hasAutoRun = useRef(isDevelopment);
-
-  const latestRef = useRef({ prompt, origin, dataContext, gen });
-  useEffect(() => {
-    latestRef.current = { prompt, origin, dataContext, gen };
-  });
-
-  const runGenerate = useCallback((ctx: string) => {
-    const { prompt: p, origin: o, gen: g } = latestRef.current;
-    const fullPrompt = `${p}\n\nDashboard data:\n${ctx}`;
-    g.generate({
-      prompt: fullPrompt,
-      origin: o,
-      systemPrompt:
-        'You are a concise observability analyst. Return exactly 2-3 findings. Each finding is a single short sentence on its own line prefixed with "- ". Bold key numbers/metrics with **bold**. No headers, no paragraphs, no extra text. Keep each bullet under 20 words. Focus on anomalies, changes, or notable patterns only.',
-      onComplete: (result: string) => setText(result),
-      onError: (err: Error) => console.error('Insight generation failed:', err),
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!dataContext || hasAutoRun.current) {
-      return;
-    }
-    hasAutoRun.current = true;
-    runGenerate(dataContext);
-  }, [dataContext, runGenerate]);
-
-  const doGenerate = useCallback(() => {
-    const { dataContext: ctx, gen: g } = latestRef.current;
-    if (ctx && !g.isGenerating) {
-      setText('');
-      runGenerate(ctx);
-    }
-  }, [runGenerate]);
-
-  const displayText = gen.isGenerating ? gen.content : text;
-  const initialWaiting = !dataContext && !text && !gen.isGenerating;
-  const hasResult = Boolean(text) || gen.isGenerating;
-  const showRegenerate = !gen.isGenerating && hasResult;
-
-  const renderedBullets = useMemo(() => {
-    if (!displayText) {
-      return null;
-    }
-    const lines = displayText.split('\n').filter((l) => l.trim().length > 0);
-    return (
-      <ul>
-        {lines.map((line, i) => {
-          const content = line.replace(/^[-•*]\s*/, '');
-          return (
-            <li key={i}>
-              <span className="insight-bullet">{formatInlineMarkup(content)}</span>
-            </li>
-          );
-        })}
-      </ul>
-    );
-  }, [displayText]);
-
-  return (
-    <div className={styles.insightPanel}>
-      <div className={styles.insightPanelHeader}>
-        <span className={styles.insightTitle}>
-          <Icon name="ai" size="md" />
-          Assistant Insight
-        </span>
-        <div className={styles.insightActions}>
-          {(gen.isGenerating || initialWaiting) && <Spinner size="sm" />}
-          {showRegenerate && (
-            <IconButton name="repeat" aria-label="Rerun insight" tooltip="Rerun" size="md" onClick={doGenerate} />
-          )}
-        </div>
-      </div>
-      <div className={styles.insightPanelBody}>
-        {initialWaiting ? (
-          <span className={styles.insightPlaceholder}>Waiting for data...</span>
-        ) : renderedBullets ? (
-          <div>{renderedBullets}</div>
-        ) : gen.isGenerating ? (
-          <span className={styles.insightPlaceholder}>Generating insight...</span>
-        ) : isDevelopment ? (
-          <Button icon="ai" size="sm" variant="secondary" fill="outline" onClick={doGenerate} disabled={!dataContext}>
-            Generate Insight
-          </Button>
-        ) : (
-          <span className={styles.insightPlaceholder}>Generating insight...</span>
-        )}
+        <AssistantInsightsList
+          className={styles.insightPanel}
+          prompt={insightPrompt}
+          origin="sigil-plugin/dashboard-insight"
+          systemPrompt="You are a concise observability analyst. Return exactly 3-5 high-confidence suggestions. Include only suggestions strongly supported by the provided data; omit uncertain ideas. Each suggestion is a single short sentence on its own line prefixed with '- '. Bold key numbers/metrics with **bold**. No headers, no paragraphs, no extra text. Keep each bullet under 20 words. Focus on anomalies, changes, or notable patterns only."
+          dataContext={insightDataContext}
+          waitingText="Waiting for data..."
+          emptyText="No notable insights."
+          invalidText="Could not parse assistant insights."
+        />
       </div>
     </div>
   );
@@ -928,6 +821,14 @@ function summarizeMatrix(response: PrometheusQueryResponse | null | undefined, l
   return `${label} (${results.length} series):\n${lines.join('\n')}`;
 }
 
+function formatUtcMillis(ms: number): string {
+  const dt = new Date(ms);
+  if (Number.isNaN(dt.getTime())) {
+    return 'invalid';
+  }
+  return dt.toISOString();
+}
+
 function getStyles(theme: GrafanaTheme2) {
   return {
     gridWrapper: css({
@@ -979,73 +880,8 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'flex',
       flexDirection: 'column',
       background: theme.colors.background.primary,
-      border: `1px solid ${theme.colors.border.weak}`,
       borderRadius: theme.shape.radius.default,
       overflow: 'hidden',
-    }),
-    insightPanelHeader: css({
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: theme.spacing(1.5, 2),
-      flexShrink: 0,
-    }),
-    insightTitle: css({
-      display: 'flex',
-      alignItems: 'center',
-      gap: theme.spacing(0.75),
-      fontSize: theme.typography.h6.fontSize,
-      fontWeight: theme.typography.fontWeightMedium,
-      color: theme.colors.text.primary,
-    }),
-    insightActions: css({
-      display: 'flex',
-      alignItems: 'center',
-      gap: theme.spacing(0.5),
-    }),
-    insightPlaceholder: css({
-      color: theme.colors.text.secondary,
-      fontStyle: 'italic',
-    }),
-    insightPanelBody: css({
-      flex: 1,
-      padding: theme.spacing(0, 2, 2),
-      overflowY: 'auto',
-      '& ul': {
-        margin: 0,
-        padding: 0,
-        listStyle: 'none',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: theme.spacing(1.5),
-      },
-      '& li': {
-        display: 'flex',
-        gap: theme.spacing(1),
-        padding: theme.spacing(1.5),
-        borderRadius: theme.shape.radius.default,
-        background: theme.colors.background.secondary,
-        fontSize: theme.typography.bodySmall.fontSize,
-        lineHeight: 1.6,
-        color: theme.colors.text.secondary,
-        '&::before': {
-          content: '"→"',
-          flexShrink: 0,
-          color: theme.colors.text.disabled,
-          fontWeight: theme.typography.fontWeightBold,
-        },
-      },
-      '& strong': {
-        fontWeight: theme.typography.fontWeightBold,
-        color: theme.colors.text.primary,
-      },
-      '& code': {
-        fontSize: '0.85em',
-        padding: '1px 4px',
-        borderRadius: theme.shape.radius.default,
-        background: theme.colors.background.primary,
-        fontFamily: theme.typography.fontFamilyMonospace,
-      },
     }),
   };
 }

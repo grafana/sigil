@@ -109,6 +109,7 @@ Design doc: `docs/design-docs/2026-02-13-sdk-metrics-and-telemetry-pipeline.md`
 
 - Generation path is direct to Sigil generation ingest (`/api/v1/generations:export` or `GenerationIngestService.ExportGenerations`) using tenant auth mode.
 - Trace and metrics path goes through Alloy / OTel Collector. `OTEL_EXPORTER_OTLP_ENDPOINT` points at the collector.
+- Sigil backend internal spans (HTTP server routes, gRPC server handling, ingest/query service spans) are exported only when Sigil runtime OTEL trace export is configured with standard `OTEL_*` env vars (for example `OTEL_TRACES_EXPORTER` and OTLP exporter endpoint vars).
 - Enterprise proxy pattern:
   - client sends bearer token
   - proxy authenticates bearer and translates to upstream `X-Scope-OrgID`
@@ -169,8 +170,9 @@ Write path components:
    - agent catalog projection rows (`agent_heads`, `agent_versions`, `agent_version_models`) keyed by effective agent version.
 4. Client SDKs export OTLP traces and metrics to Alloy / OTel Collector.
 5. Alloy enriches telemetry with infrastructure metadata and forwards traces to Tempo and metrics to Prometheus.
-6. Compactor target reads MySQL generations, writes object blocks + metadata, then marks/truncates compacted rows.
-7. Prometheus scrapes Sigil `GET /metrics` endpoints for backend operational metrics.
+6. Optional: Sigil runtime exports its own internal spans through the configured OTEL trace exporter path.
+7. Compactor target reads MySQL generations, writes object blocks + metadata, then marks/truncates compacted rows.
+8. Prometheus scrapes Sigil `GET /metrics` endpoints for backend operational metrics.
 
 ```mermaid
 flowchart LR

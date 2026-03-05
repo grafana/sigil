@@ -76,6 +76,10 @@ type OutputKey struct {
 	Unit          string    `json:"unit,omitempty"`
 	PassThreshold *float64  `json:"pass_threshold,omitempty"`
 	Enum          []string  `json:"enum,omitempty"`
+	Min           *float64  `json:"min,omitempty"`
+	Max           *float64  `json:"max,omitempty"`
+	PassMatch     []string  `json:"pass_match,omitempty"`
+	PassValue     *bool     `json:"pass_value,omitempty"`
 }
 
 type EvaluatorDefinition struct {

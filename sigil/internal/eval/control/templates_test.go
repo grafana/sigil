@@ -705,6 +705,127 @@ func (s *memoryTemplateStore) UpdateTemplateDescription(_ context.Context, tenan
 	return nil
 }
 
+func TestValidateOutputKeyConstraints(t *testing.T) {
+	floatPtr := func(v float64) *float64 { return &v }
+
+	tests := []struct {
+		name    string
+		key     evalpkg.OutputKey
+		wantErr string
+	}{
+		{
+			name: "number_with_valid_min_max",
+			key: evalpkg.OutputKey{
+				Key:  "score",
+				Type: evalpkg.ScoreTypeNumber,
+				Min:  floatPtr(0),
+				Max:  floatPtr(10),
+			},
+			wantErr: "",
+		},
+		{
+			name: "number_with_min_greater_than_max",
+			key: evalpkg.OutputKey{
+				Key:  "score",
+				Type: evalpkg.ScoreTypeNumber,
+				Min:  floatPtr(10),
+				Max:  floatPtr(5),
+			},
+			wantErr: "min (10) must be <= max (5)",
+		},
+		{
+			name: "bool_with_min_max_wrong_type",
+			key: evalpkg.OutputKey{
+				Key:  "flag",
+				Type: evalpkg.ScoreTypeBool,
+				Min:  floatPtr(0),
+				Max:  floatPtr(1),
+			},
+			wantErr: "min/max are only valid for number types",
+		},
+		{
+			name: "number_with_pass_match_wrong_type",
+			key: evalpkg.OutputKey{
+				Key:       "score",
+				Type:      evalpkg.ScoreTypeNumber,
+				PassMatch: []string{"good"},
+			},
+			wantErr: "pass_match is only valid for string types",
+		},
+		{
+			name: "string_with_pass_match_valid",
+			key: evalpkg.OutputKey{
+				Key:       "severity",
+				Type:      evalpkg.ScoreTypeString,
+				PassMatch: []string{"none", "mild"},
+			},
+			wantErr: "",
+		},
+		{
+			name: "string_with_pass_threshold_wrong_type",
+			key: evalpkg.OutputKey{
+				Key:           "severity",
+				Type:          evalpkg.ScoreTypeString,
+				PassThreshold: floatPtr(0.5),
+			},
+			wantErr: "pass_threshold is only valid for number types",
+		},
+		{
+			name: "number_with_pass_threshold_valid",
+			key: evalpkg.OutputKey{
+				Key:           "score",
+				Type:          evalpkg.ScoreTypeNumber,
+				PassThreshold: floatPtr(7),
+			},
+			wantErr: "",
+		},
+		{
+			name: "bool_no_constraints_valid",
+			key: evalpkg.OutputKey{
+				Key:  "flag",
+				Type: evalpkg.ScoreTypeBool,
+			},
+			wantErr: "",
+		},
+		{
+			name: "bool_with_pass_value_valid",
+			key: evalpkg.OutputKey{
+				Key:       "toxic",
+				Type:      evalpkg.ScoreTypeBool,
+				PassValue: func() *bool { v := false; return &v }(),
+			},
+			wantErr: "",
+		},
+		{
+			name: "number_with_pass_value_wrong_type",
+			key: evalpkg.OutputKey{
+				Key:       "score",
+				Type:      evalpkg.ScoreTypeNumber,
+				PassValue: func() *bool { v := true; return &v }(),
+			},
+			wantErr: "pass_value is only valid for bool types",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateOutputKeyConstraints(tc.key)
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("expected error containing %q, got nil", tc.wantErr)
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("expected error containing %q, got %q", tc.wantErr, err.Error())
+			}
+		})
+	}
+}
+
 func templateKey(tenantID, templateID string) string {
 	return tenantID + "|" + templateID
 }

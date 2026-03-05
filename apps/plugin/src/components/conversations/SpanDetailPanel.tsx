@@ -3,7 +3,13 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { useStyles2 } from '@grafana/ui';
 import type { ConversationSpan, SpanAttributes, SpanAttributeValue } from '../../conversation/types';
-import type { GenerationDetail, Message, Part } from '../../generation/types';
+import {
+  formatScoreValue,
+  type GenerationDetail,
+  type LatestScore,
+  type Message,
+  type Part,
+} from '../../generation/types';
 import { ATTR_GENERATION_ID, getStringAttr } from '../../conversation/attributes';
 
 export type SpanDetailPanelProps = {
@@ -227,6 +233,57 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.primary.text,
     fontWeight: theme.typography.fontWeightMedium,
   }),
+  scoresTable: css({
+    width: '100%',
+    borderCollapse: 'collapse' as const,
+    fontSize: '11px',
+  }),
+  scoresThead: css({
+    borderBottom: `1px solid ${theme.colors.border.medium}`,
+    '& th': {
+      padding: theme.spacing(0.25, 0.5),
+      textAlign: 'left' as const,
+      color: theme.colors.text.secondary,
+      fontWeight: theme.typography.fontWeightMedium,
+      fontFamily: theme.typography.fontFamilyMonospace,
+      fontSize: '10px',
+      textTransform: 'uppercase' as const,
+    },
+  }),
+  scoresTbody: css({
+    '& tr:not(:last-child)': {
+      borderBottom: `1px solid ${theme.colors.border.weak}`,
+    },
+    '& td': {
+      padding: theme.spacing(0.35, 0.5),
+      verticalAlign: 'middle' as const,
+    },
+  }),
+  scoreKey: css({
+    fontFamily: theme.typography.fontFamilyMonospace,
+    color: theme.colors.text.primary,
+    fontWeight: theme.typography.fontWeightMedium,
+  }),
+  scoreValue: css({
+    fontFamily: theme.typography.fontFamilyMonospace,
+    color: theme.colors.text.primary,
+  }),
+  scoreEvaluator: css({
+    color: theme.colors.text.secondary,
+    fontFamily: theme.typography.fontFamilyMonospace,
+    fontSize: '10px',
+  }),
+  passedYes: css({
+    color: theme.colors.success.text,
+    fontWeight: theme.typography.fontWeightMedium,
+  }),
+  passedNo: css({
+    color: theme.colors.error.text,
+    fontWeight: theme.typography.fontWeightMedium,
+  }),
+  passedNa: css({
+    color: theme.colors.text.disabled,
+  }),
 });
 
 type SectionProps = {
@@ -306,6 +363,46 @@ function MessageList({ messages, label }: { messages: Message[]; label: string }
   );
 }
 
+function ScoresTable({ scores }: { scores: Record<string, LatestScore> }) {
+  const styles = useStyles2(getStyles);
+  const rows = useMemo(() => Object.entries(scores).sort(([a], [b]) => a.localeCompare(b)), [scores]);
+
+  if (rows.length === 0) {
+    return <div className={styles.emptyHint}>No scores</div>;
+  }
+
+  return (
+    <table className={styles.scoresTable}>
+      <thead className={styles.scoresThead}>
+        <tr>
+          <th>Key</th>
+          <th>Value</th>
+          <th>Passed</th>
+          <th>Evaluator</th>
+        </tr>
+      </thead>
+      <tbody className={styles.scoresTbody}>
+        {rows.map(([key, score]) => (
+          <tr key={key}>
+            <td className={styles.scoreKey}>{key}</td>
+            <td className={styles.scoreValue}>{formatScoreValue(score.value)}</td>
+            <td>
+              {score.passed == null ? (
+                <span className={styles.passedNa}>—</span>
+              ) : score.passed ? (
+                <span className={styles.passedYes}>✓</span>
+              ) : (
+                <span className={styles.passedNo}>✗</span>
+              )}
+            </td>
+            <td className={styles.scoreEvaluator}>{score.evaluator_id}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function GenerationSection({ generation }: { generation: GenerationDetail }) {
   const styles = useStyles2(getStyles);
 
@@ -356,6 +453,12 @@ function GenerationSection({ generation }: { generation: GenerationDetail }) {
           <KV key={key} label={key} value={typeof value === 'number' ? value.toLocaleString() : 'n/a'} />
         ))}
       </Section>
+
+      {generation.latest_scores && Object.keys(generation.latest_scores).length > 0 && (
+        <Section title="Scores" count={Object.keys(generation.latest_scores).length} defaultOpen>
+          <ScoresTable scores={generation.latest_scores} />
+        </Section>
+      )}
 
       {generation.system_prompt && (
         <Section title="System Prompt">

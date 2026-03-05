@@ -60,7 +60,7 @@ type HeroStatItem = {
 
 const METRIC_WINDOW_MS = 24 * 60 * 60 * 1000;
 const PAGE_SIZE = 200;
-const MAX_PAGES = 50;
+const MAX_PAGES = 10;
 const HERO_STATS_STORAGE_KEY = 'grafana-sigil-hero-stats';
 const HERO_STATS_CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -325,7 +325,7 @@ export function LandingTopBar({ assistantOrigin }: LandingTopBarProps) {
       <div className={styles.pageFlow}>
         <div className={styles.heroBlock}>
           <div className={styles.heroCard}>
-            <Stack direction="column" gap={2}>
+            <div className={styles.heroCardContent}>
               <div className={styles.heroHeader}>
                 <div>
                   <div className={styles.introducingLabel}>Introducing</div>
@@ -375,7 +375,7 @@ export function LandingTopBar({ assistantOrigin }: LandingTopBarProps) {
                   type="button"
                 />
               </form>
-            </Stack>
+            </div>
           </div>
         </div>
 
@@ -717,6 +717,14 @@ function getStyles(theme: GrafanaTheme2) {
         background: 'linear-gradient(90deg, #5794F2 0%, #B877D9 52%, #FF9830 100%)',
       },
     }),
+    heroCardContent: css({
+      label: 'landingTopBar-heroCardContent',
+      height: '100%',
+      minHeight: 0,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: theme.spacing(2),
+    }),
     introducingLabel: css({
       label: 'landingTopBar-introducingLabel',
       marginTop: theme.spacing(1),
@@ -743,11 +751,10 @@ function getStyles(theme: GrafanaTheme2) {
       paddingLeft: 0,
       listStyle: 'none',
       display: 'grid',
-      gridTemplateColumns: 'repeat(3, minmax(160px, 1fr))',
+      gridTemplateColumns: 'repeat(3, max-content)',
       gap: theme.spacing(0.5),
       justifySelf: 'end',
       alignSelf: 'center',
-      width: '100%',
       '@media (max-width: 900px)': {
         gridTemplateColumns: '1fr',
         justifySelf: 'start',
@@ -757,10 +764,9 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'flex',
       flexDirection: 'column',
       gap: theme.spacing(0.5),
-      width: '100%',
       border: 0,
       background: 'none',
-      padding: theme.spacing(0.5, 0.75),
+      padding: theme.spacing(1, 2),
       borderRadius: theme.shape.radius.default,
       textAlign: 'right',
       cursor: 'pointer',
@@ -838,12 +844,13 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'grid',
       gridTemplateColumns: '1fr auto',
       gap: theme.spacing(1),
+      flex: 1,
       width: `calc(100% + ${theme.spacing(6)})`,
       marginLeft: theme.spacing(-3),
       marginRight: theme.spacing(-3),
-      marginTop: theme.spacing(1),
+      marginTop: 'auto',
       marginBottom: theme.spacing(-2),
-      alignItems: 'start',
+      alignItems: 'stretch',
       minHeight: 96,
       borderTop: `1px solid ${theme.colors.border.medium}`,
       paddingTop: theme.spacing(0.75),
@@ -855,6 +862,7 @@ function getStyles(theme: GrafanaTheme2) {
     assistantInput: css({
       label: 'landingTopBar-assistantInput',
       width: '100%',
+      height: '100%',
       border: 'none',
       background: 'transparent',
       boxShadow: 'none',

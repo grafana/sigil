@@ -20,6 +20,8 @@ export type FilterToolbarProps = {
   onTimeRangeChange: (timeRange: TimeRange) => void;
   onFiltersChange: (filters: DashboardFilters) => void;
   hideLabelFilters?: boolean;
+  /** When true, filters start collapsed with "Default view (click to change)". Click expands once (no collapse). */
+  collapsible?: boolean;
   children?: React.ReactNode;
 };
 
@@ -37,9 +39,11 @@ export function FilterToolbar({
   onTimeRangeChange,
   onFiltersChange,
   hideLabelFilters = false,
+  collapsible = false,
   children,
 }: FilterToolbarProps) {
   const styles = useStyles2(getStyles);
+  const [filtersExpanded, setFiltersExpanded] = useState(!collapsible);
 
   const [pendingRows, setPendingRows] = useState<LabelFilter[]>([]);
 
@@ -153,66 +157,72 @@ export function FilterToolbar({
         </>
       )}
       <div className={styles.filtersSection}>
-        <Stack direction="row" gap={1} alignItems="center" wrap="wrap">
-          <MultiSelect<string>
-            className={styles.multiSelect}
-            options={providerSelectOptions}
-            value={filters.providers}
-            onChange={handleProviderChange}
-            onCreateOption={handleProviderCreate}
-            placeholder="Provider"
-            isClearable
-            allowCustomValue
-            isSearchable
-            width="auto"
-          />
-          <MultiSelect<string>
-            className={styles.multiSelect}
-            options={modelSelectOptions}
-            value={filters.models}
-            onChange={handleModelChange}
-            onCreateOption={handleModelCreate}
-            placeholder="Model"
-            isClearable
-            allowCustomValue
-            isSearchable
-            width="auto"
-          />
-          <MultiSelect<string>
-            className={styles.multiSelect}
-            options={agentSelectOptions}
-            value={filters.agentNames}
-            onChange={handleAgentChange}
-            onCreateOption={handleAgentCreate}
-            placeholder="Agent"
-            isClearable
-            allowCustomValue
-            isSearchable
-            width="auto"
-          />
-          {!hideLabelFilters && (
-            <LabelFilterInput
-              filters={draftLabelFilters}
-              labelKeyOptions={labelKeySelectOptions}
-              labelsLoading={labelsLoading}
-              dataSource={dataSource}
-              from={from}
-              to={to}
-              onChange={handleLabelFilterChange}
-              onRemove={handleLabelFilterRemove}
+        {filtersExpanded ? (
+          <Stack direction="row" gap={1} alignItems="center" wrap="wrap">
+            <MultiSelect<string>
+              className={styles.multiSelect}
+              options={providerSelectOptions}
+              value={filters.providers}
+              onChange={handleProviderChange}
+              onCreateOption={handleProviderCreate}
+              placeholder="Provider"
+              isClearable
+              allowCustomValue
+              isSearchable
+              width="auto"
             />
-          )}
-          {activeFilterCount > 0 && (
-            <IconButton
-              name="times-circle"
-              aria-label="Clear all filters"
-              tooltip="Clear all filters"
-              size="md"
-              onClick={handleClearFilters}
-              className={styles.clearButton}
+            <MultiSelect<string>
+              className={styles.multiSelect}
+              options={modelSelectOptions}
+              value={filters.models}
+              onChange={handleModelChange}
+              onCreateOption={handleModelCreate}
+              placeholder="Model"
+              isClearable
+              allowCustomValue
+              isSearchable
+              width="auto"
             />
-          )}
-        </Stack>
+            <MultiSelect<string>
+              className={styles.multiSelect}
+              options={agentSelectOptions}
+              value={filters.agentNames}
+              onChange={handleAgentChange}
+              onCreateOption={handleAgentCreate}
+              placeholder="Agent"
+              isClearable
+              allowCustomValue
+              isSearchable
+              width="auto"
+            />
+            {!hideLabelFilters && (
+              <LabelFilterInput
+                filters={draftLabelFilters}
+                labelKeyOptions={labelKeySelectOptions}
+                labelsLoading={labelsLoading}
+                dataSource={dataSource}
+                from={from}
+                to={to}
+                onChange={handleLabelFilterChange}
+                onRemove={handleLabelFilterRemove}
+              />
+            )}
+            {activeFilterCount > 0 && (
+              <IconButton
+                name="times-circle"
+                aria-label="Clear all filters"
+                tooltip="Clear all filters"
+                size="md"
+                onClick={handleClearFilters}
+                className={styles.clearButton}
+              />
+            )}
+          </Stack>
+        ) : (
+          <button type="button" className={styles.collapsedFilters} onClick={() => setFiltersExpanded(true)}>
+            Default view (click to change)
+          </button>
+        )}
       </div>
       <TimeRangePicker
         value={timeRange}
@@ -258,6 +268,17 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'flex',
       flex: '1 1 auto',
       minWidth: 0,
+    }),
+    collapsedFilters: css({
+      background: 'none',
+      border: 'none',
+      padding: theme.spacing(0.5, 1),
+      cursor: 'pointer',
+      color: theme.colors.text.secondary,
+      fontSize: theme.typography.body.fontSize,
+      '&:hover': {
+        color: theme.colors.text.primary,
+      },
     }),
     divider: css({
       width: 1,

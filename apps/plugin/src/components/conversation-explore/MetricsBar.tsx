@@ -1,4 +1,5 @@
 import React from 'react';
+import { cx } from '@emotion/css';
 import { Icon, Tooltip, useStyles2 } from '@grafana/ui';
 import type { CostSummary, TokenSummary } from '../../conversation/aggregates';
 import { getProviderColor, stripProviderPrefix, toDisplayProvider } from '../conversations/providerMeta';
@@ -13,6 +14,8 @@ export type MetricsBarProps = {
   modelProviders?: Record<string, string>;
   errorCount: number;
   generationCount: number;
+  isSaved?: boolean;
+  onToggleSave?: () => void;
 };
 
 function formatDuration(ms: number): string {
@@ -53,6 +56,8 @@ export default function MetricsBar({
   modelProviders,
   errorCount,
   generationCount,
+  isSaved = false,
+  onToggleSave,
 }: MetricsBarProps) {
   const styles = useStyles2(getStyles);
 
@@ -116,6 +121,19 @@ export default function MetricsBar({
           <Icon name="check-circle" size="sm" />
           OK
         </span>
+      )}
+
+      {onToggleSave && (
+        <Tooltip content={isSaved ? 'Unsave conversation' : 'Save conversation'} placement="bottom">
+          <button
+            type="button"
+            className={cx(styles.saveButton, isSaved && styles.saveButtonActive)}
+            onClick={onToggleSave}
+            aria-label={isSaved ? 'unsave conversation' : 'save conversation'}
+          >
+            <Icon name={isSaved ? 'favorite' : 'star'} size="md" />
+          </button>
+        </Tooltip>
       )}
 
       <div className={styles.modelChips}>

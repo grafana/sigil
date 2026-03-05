@@ -1,6 +1,6 @@
 import type { ConversationsDataSource } from './api';
 import { parseOTLPTrace, buildSpanTree } from './spans';
-import type { ConversationData } from './types';
+import type { ConversationData, ConversationDetail } from './types';
 
 export type TraceFetcher = (traceID: string) => Promise<unknown>;
 
@@ -33,21 +33,56 @@ async function fetchTracesWithConcurrency(
   return results;
 }
 
-export async function loadConversation(
+function detailToConversationData(detail: ConversationDetail): ConversationData {
+  return {
+    conversationID: detail.conversation_id,
+    userName: detail.user_name,
+    generationCount: detail.generation_count,
+    firstGenerationAt: detail.first_generation_at,
+    lastGenerationAt: detail.last_generation_at,
+    ratingSummary: detail.rating_summary ?? null,
+    annotations: detail.annotations ?? [],
+    spans: [],
+    orphanGenerations: detail.generations,
+  };
+}
+
+const inflightDetails = new Map<string, Promise<ConversationData>>();
+
+export function loadConversationDetail(
   dataSource: ConversationsDataSource,
-  conversationID: string,
+  conversationID: string
+): Promise<ConversationData> {
+  const existing = inflightDetails.get(conversationID);
+  if (existing) {
+    return existing;
+  }
+
+  const promise = dataSource
+    .getConversationDetail(conversationID)
+    .then(detailToConversationData)
+    .finally(() => inflightDetails.delete(conversationID));
+
+  inflightDetails.set(conversationID, promise);
+  return promise;
+}
+
+export async function loadConversationTraces(
+  data: ConversationData,
   fetchTrace: TraceFetcher
 ): Promise<ConversationData> {
-  const detail = await dataSource.getConversationDetail(conversationID);
-
   const traceIDSet = new Set<string>();
-  for (const gen of detail.generations) {
+  for (const gen of data.orphanGenerations) {
     if (gen.trace_id && gen.trace_id.length > 0) {
       traceIDSet.add(gen.trace_id);
     }
   }
 
   const traceIDs = Array.from(traceIDSet);
+  if (traceIDs.length === 0) {
+    return data;
+  }
+
   const tracePayloads = await fetchTracesWithConcurrency(traceIDs, fetchTrace);
 
   const allParsedSpans = tracePayloads.flatMap(({ traceID, payload }) => {
@@ -57,17 +92,21 @@ export async function loadConversation(
     return parseOTLPTrace(traceID, payload);
   });
 
-  const { roots, orphanGenerations } = buildSpanTree(allParsedSpans, detail.generations);
+  const allGenerations = data.orphanGenerations;
+  const { roots, orphanGenerations } = buildSpanTree(allParsedSpans, allGenerations);
 
   return {
-    conversationID: detail.conversation_id,
-    userName: detail.user_name,
-    generationCount: detail.generation_count,
-    firstGenerationAt: detail.first_generation_at,
-    lastGenerationAt: detail.last_generation_at,
-    ratingSummary: detail.rating_summary ?? null,
-    annotations: detail.annotations ?? [],
+    ...data,
     spans: roots,
     orphanGenerations,
   };
+}
+
+export async function loadConversation(
+  dataSource: ConversationsDataSource,
+  conversationID: string,
+  fetchTrace: TraceFetcher
+): Promise<ConversationData> {
+  const data = await loadConversationDetail(dataSource, conversationID);
+  return loadConversationTraces(data, fetchTrace);
 }
