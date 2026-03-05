@@ -41,10 +41,7 @@ export const Loader = ({ showText = true, lines }: LoaderProps) => {
   const [lineIndex, setLineIndex] = useState(0);
   const [charCount, setCharCount] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
-  const activeLines = useMemo(
-    () => (lines && lines.length > 0 ? lines : DEFAULT_TYPEWRITER_LINES),
-    [lines]
-  );
+  const activeLines = useMemo(() => (lines && lines.length > 0 ? lines : DEFAULT_TYPEWRITER_LINES), [lines]);
 
   const currentLine = useMemo(() => activeLines[lineIndex] ?? '', [activeLines, lineIndex]);
 

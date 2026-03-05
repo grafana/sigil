@@ -737,7 +737,7 @@ export default function AgentRatingPanel({
     selectedSuggestionIndexRaw.length > 0 ? Number.parseInt(selectedSuggestionIndexRaw, 10) : Number.NaN;
   const selectedSuggestion =
     Number.isFinite(selectedSuggestionIndex) && selectedSuggestionIndex >= 0
-      ? orderedSuggestions[selectedSuggestionIndex] ?? null
+      ? (orderedSuggestions[selectedSuggestionIndex] ?? null)
       : null;
 
   const succinctSummary = useMemo(() => {
@@ -860,7 +860,8 @@ export default function AgentRatingPanel({
       createAssistantContextItem('structured', {
         title: 'Additional agent state',
         data: {
-          details: agentStateContext.trim().length > 0 ? agentStateContext.trim() : 'No additional state context provided.',
+          details:
+            agentStateContext.trim().length > 0 ? agentStateContext.trim() : 'No additional state context provided.',
         },
       }),
     ];
@@ -892,15 +893,18 @@ export default function AgentRatingPanel({
     });
   }, [agentName, agentStateContext, assistant, completedResult, orderedSuggestions, version]);
 
-  const onRejectSuggestion = useCallback((suggestion: AgentRatingSuggestion) => {
-    const key = toSuggestionKey(suggestion);
-    setRejectedSuggestionKeys((prev) => ({ ...prev, [toSuggestionKey(suggestion)]: true }));
-    if (selectedSuggestion && toSuggestionKey(selectedSuggestion) === key) {
-      const next = new URLSearchParams(searchParams);
-      next.delete(SUGGESTION_QUERY_PARAM);
-      setSearchParams(next, { replace: false });
-    }
-  }, [searchParams, selectedSuggestion, setSearchParams]);
+  const onRejectSuggestion = useCallback(
+    (suggestion: AgentRatingSuggestion) => {
+      const key = toSuggestionKey(suggestion);
+      setRejectedSuggestionKeys((prev) => ({ ...prev, [toSuggestionKey(suggestion)]: true }));
+      if (selectedSuggestion && toSuggestionKey(selectedSuggestion) === key) {
+        const next = new URLSearchParams(searchParams);
+        next.delete(SUGGESTION_QUERY_PARAM);
+        setSearchParams(next, { replace: false });
+      }
+    },
+    [searchParams, selectedSuggestion, setSearchParams]
+  );
 
   const openSuggestionModal = useCallback(
     (suggestionIndex: number) => {
@@ -994,7 +998,9 @@ export default function AgentRatingPanel({
     setRewriteModalOpen(false);
   }, []);
 
-  const displayedRewriteMarkdown = rewriteAssistant.isGenerating ? String(rewriteAssistant.content ?? '') : rewriteMarkdown;
+  const displayedRewriteMarkdown = rewriteAssistant.isGenerating
+    ? String(rewriteAssistant.content ?? '')
+    : rewriteMarkdown;
 
   return (
     <div className={styles.panel}>
@@ -1105,7 +1111,10 @@ export default function AgentRatingPanel({
                             <span className={styles.suggestionTitleText}>{suggestion.title}</span>
                           </button>
                         </span>
-                        <span className={styles.suggestionSeverityLabel} style={severityLabelStyle(theme, normalizedSeverity)}>
+                        <span
+                          className={styles.suggestionSeverityLabel}
+                          style={severityLabelStyle(theme, normalizedSeverity)}
+                        >
                           {normalizedSeverity}
                         </span>
                       </span>
@@ -1245,7 +1254,12 @@ export default function AgentRatingPanel({
               </div>
             )}
             <div className={styles.modalActions}>
-              <Button variant="secondary" icon="sync" onClick={runRewritePrompt} disabled={rewriteAssistant.isGenerating}>
+              <Button
+                variant="secondary"
+                icon="sync"
+                onClick={runRewritePrompt}
+                disabled={rewriteAssistant.isGenerating}
+              >
                 Regenerate
               </Button>
               <Button variant="secondary" onClick={closeRewriteModal}>

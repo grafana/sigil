@@ -400,7 +400,11 @@ export function LandingTopBar({
                   }}
                 />
               );
-              return <div key={i} className={styles.heroSpineSlot}>{bar}</div>;
+              return (
+                <div key={i} className={styles.heroSpineSlot}>
+                  {bar}
+                </div>
+              );
             })}
           </div>
         )}
@@ -429,7 +433,11 @@ export function LandingTopBar({
                     }}
                   />
                 );
-                return <div key={i} className={styles.heroSpineSlot}>{bar}</div>;
+                return (
+                  <div key={i} className={styles.heroSpineSlot}>
+                    {bar}
+                  </div>
+                );
               })}
             </div>
           ) : (

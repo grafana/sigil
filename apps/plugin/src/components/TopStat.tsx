@@ -83,7 +83,7 @@ export function TopStat({
         )}
       </div>
       <div className={styles.topStatRow}>
-        <span className={styles.topStatValue}>{loading ? '–' : displayValue ?? formatStatValue(value, unit)}</span>
+        <span className={styles.topStatValue}>{loading ? '–' : (displayValue ?? formatStatValue(value, unit))}</span>
         {changeBadge}
       </div>
     </div>

@@ -562,13 +562,18 @@ function firstLine(text: string): string {
   if (!normalized) {
     return 'No summary available.';
   }
-  const [line] = normalized.split('\n').map((part) => part.trim()).filter((part) => part.length > 0);
+  const [line] = normalized
+    .split('\n')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
   return line ?? 'No summary available.';
 }
 
 function buildAgentStateContext(detail: AgentDetail): string {
   const modelLines = detail.models.length
-    ? detail.models.map((model, index) => `  ${index + 1}. ${model.provider}/${model.name} (${model.generation_count} generations)`)
+    ? detail.models.map(
+        (model, index) => `  ${index + 1}. ${model.provider}/${model.name} (${model.generation_count} generations)`
+      )
     : ['  None recorded.'];
   const toolLines = detail.tools.length
     ? detail.tools.map((tool, index) => `  ${index + 1}. ${tool.name} (${tool.type}, ${tool.token_estimate} tokens)`)
@@ -579,7 +584,12 @@ function buildAgentStateContext(detail: AgentDetail): string {
     '- First seen: ' + detail.first_seen_at,
     '- Last seen: ' + detail.last_seen_at,
     '- Generation count: ' + detail.generation_count,
-    '- Token estimate: system=' + detail.token_estimate.system_prompt + ', tools=' + detail.token_estimate.tools_total + ', total=' + detail.token_estimate.total,
+    '- Token estimate: system=' +
+      detail.token_estimate.system_prompt +
+      ', tools=' +
+      detail.token_estimate.tools_total +
+      ', total=' +
+      detail.token_estimate.total,
     '- Models:',
     ...modelLines,
     '- Tools:',
@@ -747,9 +757,12 @@ export default function AgentDetailPage({
       const nowSec = Math.floor(Date.now() / 1000);
       const detailLastSeenSec = detail ? Math.floor(Date.parse(detail.last_seen_at) / 1000) : 0;
       const detailFirstSeenSec = detail ? Math.floor(Date.parse(detail.first_seen_at) / 1000) : 0;
-      const to = Number.isFinite(detailLastSeenSec) && detailLastSeenSec > 0 ? Math.min(nowSec, detailLastSeenSec) : nowSec;
+      const to =
+        Number.isFinite(detailLastSeenSec) && detailLastSeenSec > 0 ? Math.min(nowSec, detailLastSeenSec) : nowSec;
       const observedSpan =
-        Number.isFinite(detailFirstSeenSec) && detailFirstSeenSec > 0 && detailFirstSeenSec < to ? to - detailFirstSeenSec : 0;
+        Number.isFinite(detailFirstSeenSec) && detailFirstSeenSec > 0 && detailFirstSeenSec < to
+          ? to - detailFirstSeenSec
+          : 0;
       const windowSec = Math.max(3600, Math.min(24 * 3600, observedSpan > 0 ? observedSpan : 3600));
       const from = to - windowSec;
       const step = computeStep(from, to);
@@ -1070,64 +1083,62 @@ export default function AgentDetailPage({
                     {isAnonymous ? 'Unnamed agent bucket' : detail.agent_name}
                   </h2>
                 </div>
-                <div className={styles.badgeRow}>
-                  {isAnonymous && <Badge text="Anonymous" color="orange" />}
-                </div>
+                <div className={styles.badgeRow}>{isAnonymous && <Badge text="Anonymous" color="orange" />}</div>
               </div>
               <div className={styles.heroMetaGrid}>
                 <div className={styles.heroMetaChip}>
-                <span className={styles.heroMetaLabelWithHelp}>
-                  <span className={styles.heroMetaLabel}>Versions</span>
-                  <Tooltip content="Total distinct effective versions recorded for this agent." placement="top">
-                    <span aria-label="Versions help">
-                      <Icon name="info-circle" size="sm" className={styles.heroMetaHelpIcon} />
-                    </span>
-                  </Tooltip>
-                </span>
-                <span className={styles.heroMetaValue}>{versionOptions.length.toLocaleString()}</span>
+                  <span className={styles.heroMetaLabelWithHelp}>
+                    <span className={styles.heroMetaLabel}>Versions</span>
+                    <Tooltip content="Total distinct effective versions recorded for this agent." placement="top">
+                      <span aria-label="Versions help">
+                        <Icon name="info-circle" size="sm" className={styles.heroMetaHelpIcon} />
+                      </span>
+                    </Tooltip>
+                  </span>
+                  <span className={styles.heroMetaValue}>{versionOptions.length.toLocaleString()}</span>
                 </div>
                 <div className={styles.heroMetaChip}>
-                <span className={styles.heroMetaLabelWithHelp}>
-                  <span className={styles.heroMetaLabel}>Declared version</span>
-                  <Tooltip content="Version string reported by instrumentation." placement="top">
-                    <span aria-label="Declared version help">
-                      <Icon name="info-circle" size="sm" className={styles.heroMetaHelpIcon} />
-                    </span>
-                  </Tooltip>
-                </span>
+                  <span className={styles.heroMetaLabelWithHelp}>
+                    <span className={styles.heroMetaLabel}>Declared version</span>
+                    <Tooltip content="Version string reported by instrumentation." placement="top">
+                      <span aria-label="Declared version help">
+                        <Icon name="info-circle" size="sm" className={styles.heroMetaHelpIcon} />
+                      </span>
+                    </Tooltip>
+                  </span>
                   <span className={styles.heroMetaValue}>{detail.declared_version_latest || 'n/a'}</span>
                 </div>
                 <div className={styles.heroMetaChip}>
-                <span className={styles.heroMetaLabelWithHelp}>
-                  <span className={styles.heroMetaLabel}>Models</span>
-                  <Tooltip content="Distinct model variants recorded for this agent version." placement="top">
-                    <span aria-label="Models help">
-                      <Icon name="info-circle" size="sm" className={styles.heroMetaHelpIcon} />
-                    </span>
-                  </Tooltip>
-                </span>
+                  <span className={styles.heroMetaLabelWithHelp}>
+                    <span className={styles.heroMetaLabel}>Models</span>
+                    <Tooltip content="Distinct model variants recorded for this agent version." placement="top">
+                      <span aria-label="Models help">
+                        <Icon name="info-circle" size="sm" className={styles.heroMetaHelpIcon} />
+                      </span>
+                    </Tooltip>
+                  </span>
                   <span className={styles.heroMetaValue}>{detail.models.length.toLocaleString()}</span>
                 </div>
-              <div className={styles.heroMetaChip}>
-                <span className={styles.heroMetaLabelWithHelp}>
-                  <span className={styles.heroMetaLabel}>Tools</span>
-                  <Tooltip content="Declared tool definitions." placement="top">
-                    <span aria-label="Tools help">
-                      <Icon name="info-circle" size="sm" className={styles.heroMetaHelpIcon} />
-                    </span>
-                  </Tooltip>
-                </span>
-                <span className={styles.heroMetaValue}>{detail.tool_count.toLocaleString()}</span>
-              </div>
                 <div className={styles.heroMetaChip}>
-                <span className={styles.heroMetaLabelWithHelp}>
-                  <span className={styles.heroMetaLabel}>Primary model</span>
-                  <Tooltip content="Primary model name and provider in this version." placement="top">
-                    <span aria-label="Primary model help">
-                      <Icon name="info-circle" size="sm" className={styles.heroMetaHelpIcon} />
-                    </span>
-                  </Tooltip>
-                </span>
+                  <span className={styles.heroMetaLabelWithHelp}>
+                    <span className={styles.heroMetaLabel}>Tools</span>
+                    <Tooltip content="Declared tool definitions." placement="top">
+                      <span aria-label="Tools help">
+                        <Icon name="info-circle" size="sm" className={styles.heroMetaHelpIcon} />
+                      </span>
+                    </Tooltip>
+                  </span>
+                  <span className={styles.heroMetaValue}>{detail.tool_count.toLocaleString()}</span>
+                </div>
+                <div className={styles.heroMetaChip}>
+                  <span className={styles.heroMetaLabelWithHelp}>
+                    <span className={styles.heroMetaLabel}>Primary model</span>
+                    <Tooltip content="Primary model name and provider in this version." placement="top">
+                      <span aria-label="Primary model help">
+                        <Icon name="info-circle" size="sm" className={styles.heroMetaHelpIcon} />
+                      </span>
+                    </Tooltip>
+                  </span>
                   <span className={styles.heroMetaValue}>{primaryModelLabel}</span>
                   <span className={styles.heroMetaSubline}>{primaryModelProvider ?? 'No model data'}</span>
                 </div>
@@ -1192,10 +1203,7 @@ export default function AgentDetailPage({
             <TopStat label="Generations" value={detail.generation_count} loading={false} />
           </div>
         </Tooltip>
-        <Tooltip
-          content="The earliest time a generation was recorded for this agent version."
-          placement="top"
-        >
+        <Tooltip content="The earliest time a generation was recorded for this agent version." placement="top">
           <div>
             <TopStat
               label="First seen"
@@ -1205,10 +1213,7 @@ export default function AgentDetailPage({
             />
           </div>
         </Tooltip>
-        <Tooltip
-          content="The most recent time any generation was recorded for this agent version."
-          placement="top"
-        >
+        <Tooltip content="The most recent time any generation was recorded for this agent version." placement="top">
           <div>
             <TopStat
               label="Last seen"
@@ -1278,11 +1283,15 @@ export default function AgentDetailPage({
                     const tooltipContent = (
                       <div className={styles.versionTooltip}>
                         <div className={styles.versionTooltipTitle}>Version {versionNumber}</div>
-                        <div className={styles.versionTooltipMeta}>Last seen {formatDate(versionItem.last_seen_at)}</div>
+                        <div className={styles.versionTooltipMeta}>
+                          Last seen {formatDate(versionItem.last_seen_at)}
+                        </div>
                         <div
                           className={styles.versionTooltipStatus}
                           style={{
-                            color: completedRating ? scoreTone(theme, completedRating.score) : theme.colors.text.secondary,
+                            color: completedRating
+                              ? scoreTone(theme, completedRating.score)
+                              : theme.colors.text.secondary,
                           }}
                         >
                           {completedRating ? `Rated ${completedRating.score}/10` : 'Unrated'}
@@ -1399,7 +1408,6 @@ export default function AgentDetailPage({
           initialError={initialRatingError}
         />
       </div>
-
     </div>
   );
 }
