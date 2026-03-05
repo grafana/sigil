@@ -288,17 +288,21 @@ func (s *Service) handleRuleByID(w http.ResponseWriter, req *http.Request) {
 		writeJSON(w, http.StatusOK, rule)
 	case http.MethodPatch:
 		var patch struct {
-			Enabled *bool `json:"enabled"`
+			Enabled      *bool             `json:"enabled"`
+			Selector     *evalpkg.Selector `json:"selector"`
+			Match        map[string]any    `json:"match"`
+			SampleRate   *float64          `json:"sample_rate"`
+			EvaluatorIDs []string          `json:"evaluator_ids"`
 		}
 		if err := decodeJSONBody(req, &patch); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if patch.Enabled == nil {
-			http.Error(w, "enabled field is required", http.StatusBadRequest)
+		if patch.Enabled == nil && patch.Selector == nil && patch.Match == nil && patch.SampleRate == nil && patch.EvaluatorIDs == nil {
+			http.Error(w, "at least one field must be provided", http.StatusBadRequest)
 			return
 		}
-		updated, err := s.UpdateRuleEnabled(req.Context(), tenantID, ruleID, *patch.Enabled)
+		updated, err := s.UpdateRule(req.Context(), tenantID, ruleID, patch.Enabled, patch.Selector, patch.Match, patch.SampleRate, patch.EvaluatorIDs)
 		if err != nil {
 			writeControlWriteError(w, err)
 			return

@@ -170,8 +170,10 @@ func TestParseJudgeResponseBoolFallback(t *testing.T) {
 			if value.Bool == nil || *value.Bool != tc.wantValue {
 				t.Fatalf("expected bool value=%v, got %#v", tc.wantValue, value)
 			}
-			if passed == nil || *passed != tc.wantValue {
-				t.Fatalf("expected passed=%v, got %#v", tc.wantValue, passed)
+			// parseJudgeResponse no longer infers passed from the bool value;
+			// the caller applies PassValue logic instead.
+			if passed != nil {
+				t.Fatalf("expected passed=nil (caller infers), got %v", *passed)
 			}
 		})
 	}
@@ -386,6 +388,195 @@ func TestParseJudgeResponseStructuredOutputKeyLookup(t *testing.T) {
 			}
 			if explanation != tc.wantExpl {
 				t.Fatalf("expected explanation %q, got %q", tc.wantExpl, explanation)
+			}
+		})
+	}
+}
+
+func TestLLMJudgeEvaluatorStringPassMatchDerived(t *testing.T) {
+	tests := []struct {
+		name       string
+		judgeReply string
+		passMatch  []string
+		wantPassed *bool
+		wantValue  string
+	}{
+		{
+			name:       "matching_value_passes",
+			judgeReply: `{"severity":"none","explanation":"no issues"}`,
+			passMatch:  []string{"none", "mild"},
+			wantPassed: boolPointer(true),
+			wantValue:  "none",
+		},
+		{
+			name:       "non_matching_value_fails",
+			judgeReply: `{"severity":"severe","explanation":"very bad"}`,
+			passMatch:  []string{"none", "mild"},
+			wantPassed: boolPointer(false),
+			wantValue:  "severe",
+		},
+		{
+			name:       "no_pass_match_leaves_passed_nil",
+			judgeReply: `{"severity":"moderate","explanation":"some issues"}`,
+			passMatch:  nil,
+			wantPassed: nil,
+			wantValue:  "moderate",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				reply := map[string]any{
+					"choices": []map[string]any{{
+						"message": map[string]any{"content": tc.judgeReply},
+					}},
+					"model": "judge-model",
+					"usage": map[string]any{"prompt_tokens": 12, "completion_tokens": 8},
+				}
+				replyBytes, _ := json.Marshal(reply)
+				_, _ = w.Write(replyBytes)
+			}))
+			defer server.Close()
+
+			t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_BASE_URL", server.URL)
+			t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_API_KEY", "test")
+			t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_ENABLED", "true")
+			discovery := judges.DiscoverFromEnv()
+			evaluator := NewLLMJudgeEvaluator(discovery, "openai-compat/judge-model")
+
+			outputs, err := evaluator.Evaluate(context.Background(), EvalInput{
+				InputText:    "Evaluate this.",
+				ResponseText: "Some response.",
+			}, evalpkg.EvaluatorDefinition{
+				Kind: evalpkg.EvaluatorKindLLMJudge,
+				Config: map[string]any{
+					"provider":      "openai-compat",
+					"model":         "judge-model",
+					"system_prompt": "Judge the severity",
+					"user_prompt":   "Input: {{input}}\nOutput: {{output}}",
+				},
+				OutputKeys: []evalpkg.OutputKey{{
+					Key:       "severity",
+					Type:      evalpkg.ScoreTypeString,
+					PassMatch: tc.passMatch,
+				}},
+			})
+			if err != nil {
+				t.Fatalf("evaluate: %v", err)
+			}
+			if len(outputs) != 1 {
+				t.Fatalf("expected 1 output, got %d", len(outputs))
+			}
+			out := outputs[0]
+			if out.Value.String == nil || *out.Value.String != tc.wantValue {
+				t.Fatalf("expected value %q, got %v", tc.wantValue, out.Value)
+			}
+			if tc.wantPassed == nil {
+				if out.Passed != nil {
+					t.Fatalf("expected passed=nil, got %v", *out.Passed)
+				}
+			} else {
+				if out.Passed == nil {
+					t.Fatalf("expected passed=%v, got nil", *tc.wantPassed)
+				}
+				if *out.Passed != *tc.wantPassed {
+					t.Fatalf("expected passed=%v, got %v", *tc.wantPassed, *out.Passed)
+				}
+			}
+		})
+	}
+}
+
+func TestLLMJudgeEvaluatorBoolPassValue(t *testing.T) {
+	tests := []struct {
+		name       string
+		judgeReply string
+		passValue  *bool
+		wantPassed *bool
+	}{
+		{
+			name:       "default_true_passes",
+			judgeReply: `{"toxicity":true,"explanation":"toxic"}`,
+			passValue:  nil,
+			wantPassed: boolPointer(true),
+		},
+		{
+			name:       "default_false_fails",
+			judgeReply: `{"toxicity":false,"explanation":"clean"}`,
+			passValue:  nil,
+			wantPassed: boolPointer(false),
+		},
+		{
+			name:       "pass_value_false_inverts_false_passes",
+			judgeReply: `{"toxicity":false,"explanation":"clean"}`,
+			passValue:  boolPointer(false),
+			wantPassed: boolPointer(true),
+		},
+		{
+			name:       "pass_value_false_inverts_true_fails",
+			judgeReply: `{"toxicity":true,"explanation":"toxic"}`,
+			passValue:  boolPointer(false),
+			wantPassed: boolPointer(false),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				reply := map[string]any{
+					"choices": []map[string]any{{
+						"message": map[string]any{"content": tc.judgeReply},
+					}},
+					"model": "judge-model",
+					"usage": map[string]any{"prompt_tokens": 12, "completion_tokens": 8},
+				}
+				replyBytes, _ := json.Marshal(reply)
+				_, _ = w.Write(replyBytes)
+			}))
+			defer server.Close()
+
+			t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_BASE_URL", server.URL)
+			t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_API_KEY", "test")
+			t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_ENABLED", "true")
+			discovery := judges.DiscoverFromEnv()
+			evaluator := NewLLMJudgeEvaluator(discovery, "openai-compat/judge-model")
+
+			outputs, err := evaluator.Evaluate(context.Background(), EvalInput{
+				InputText:    "Evaluate this.",
+				ResponseText: "Some response.",
+			}, evalpkg.EvaluatorDefinition{
+				Kind: evalpkg.EvaluatorKindLLMJudge,
+				Config: map[string]any{
+					"provider": "openai-compat",
+					"model":    "judge-model",
+				},
+				OutputKeys: []evalpkg.OutputKey{{
+					Key:       "toxicity",
+					Type:      evalpkg.ScoreTypeBool,
+					PassValue: tc.passValue,
+				}},
+			})
+			if err != nil {
+				t.Fatalf("evaluate: %v", err)
+			}
+			if len(outputs) != 1 {
+				t.Fatalf("expected 1 output, got %d", len(outputs))
+			}
+			out := outputs[0]
+			if tc.wantPassed == nil {
+				if out.Passed != nil {
+					t.Fatalf("expected passed=nil, got %v", *out.Passed)
+				}
+			} else {
+				if out.Passed == nil {
+					t.Fatalf("expected passed=%v, got nil", *tc.wantPassed)
+				}
+				if *out.Passed != *tc.wantPassed {
+					t.Fatalf("expected passed=%v, got %v", *tc.wantPassed, *out.Passed)
+				}
 			}
 		})
 	}

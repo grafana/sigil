@@ -176,8 +176,24 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
     return a.template_id.localeCompare(b.template_id);
   });
 
-  const handleForkTemplate = (templateID: string) => {
-    navigate(`${EVAL_BASE}/templates/${encodeURIComponent(templateID)}/fork`);
+  const handleForkTemplate = async (templateID: string) => {
+    try {
+      const tmpl = await dataSource.getTemplate(templateID);
+      navigate(`${EVAL_BASE}/evaluators/new`, {
+        state: {
+          prefill: {
+            evaluator_id: '',
+            kind: tmpl.kind,
+            config: tmpl.config ?? {},
+            output_keys: tmpl.output_keys ?? [],
+            version: '',
+          },
+        },
+      });
+    } catch {
+      // Fall back to navigating without prefill
+      navigate(`${EVAL_BASE}/evaluators/new`);
+    }
   };
 
   const handleViewTemplate = (templateID: string) => {

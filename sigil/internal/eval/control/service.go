@@ -444,7 +444,7 @@ func (s *Service) GetRule(ctx context.Context, tenantID, ruleID string) (*evalpk
 	return s.store.GetRule(ctx, strings.TrimSpace(tenantID), strings.TrimSpace(ruleID))
 }
 
-func (s *Service) UpdateRuleEnabled(ctx context.Context, tenantID, ruleID string, enabled bool) (*evalpkg.RuleDefinition, error) {
+func (s *Service) UpdateRule(ctx context.Context, tenantID, ruleID string, enabled *bool, selector *evalpkg.Selector, match map[string]any, sampleRate *float64, evaluatorIDs []string) (*evalpkg.RuleDefinition, error) {
 	if s.store == nil {
 		return nil, errors.New("eval store is required")
 	}
@@ -455,12 +455,29 @@ func (s *Service) UpdateRuleEnabled(ctx context.Context, tenantID, ruleID string
 	if rule == nil {
 		return nil, nil
 	}
-	if enabled {
+	if enabled != nil {
+		rule.Enabled = *enabled
+	}
+	if selector != nil {
+		rule.Selector = *selector
+	}
+	if match != nil {
+		rule.Match = match
+	}
+	if sampleRate != nil {
+		rule.SampleRate = *sampleRate
+	}
+	if evaluatorIDs != nil {
+		rule.EvaluatorIDs = evaluatorIDs
+	}
+	if err := validateRule(rule); err != nil {
+		return nil, newValidationError(err)
+	}
+	if rule.Enabled {
 		if err := s.validateRuleEvaluatorReferences(ctx, rule.TenantID, rule.EvaluatorIDs); err != nil {
 			return nil, err
 		}
 	}
-	rule.Enabled = enabled
 	rule.UpdatedAt = s.now().UTC()
 	if err := s.store.UpdateRule(ctx, *rule); err != nil {
 		if errors.Is(err, evalpkg.ErrNotFound) {
@@ -716,6 +733,9 @@ func validateEvaluator(evaluator *evalpkg.EvaluatorDefinition) error {
 		case evalpkg.ScoreTypeNumber, evalpkg.ScoreTypeBool, evalpkg.ScoreTypeString:
 		default:
 			return fmt.Errorf("output key %q has invalid type", key.Key)
+		}
+		if err := validateOutputKeyConstraints(*key); err != nil {
+			return err
 		}
 	}
 	if evaluator.Config == nil {

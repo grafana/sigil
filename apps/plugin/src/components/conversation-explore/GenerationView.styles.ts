@@ -299,6 +299,55 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     letterSpacing: '0.04em',
     color: theme.colors.text.secondary,
   }),
+  scoreChipsContainer: css({
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    gap: theme.spacing(0.5),
+  }),
+  scoreChip: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.375),
+    padding: `${theme.spacing(0.25)} ${theme.spacing(0.75)}`,
+    borderRadius: theme.shape.radius.pill,
+    fontSize: 11,
+    fontFamily: theme.typography.fontFamilyMonospace,
+    border: '1px solid',
+    lineHeight: 1.4,
+  }),
+  scoreChipPass: css({
+    background: theme.colors.success.transparent,
+    borderColor: theme.colors.success.border,
+  }),
+  scoreChipFail: css({
+    background: theme.colors.error.transparent,
+    borderColor: theme.colors.error.border,
+  }),
+  scoreChipNeutral: css({
+    background: theme.colors.background.secondary,
+    borderColor: theme.colors.border.weak,
+  }),
+  scoreChipEvaluator: css({
+    color: theme.colors.text.secondary,
+  }),
+  scoreChipSep: css({
+    color: theme.colors.text.disabled,
+  }),
+  scoreChipKey: css({
+    color: theme.colors.text.primary,
+    fontWeight: theme.typography.fontWeightMedium,
+  }),
+  scoreChipValue: css({
+    color: theme.colors.text.primary,
+  }),
+  scoreChipPassIcon: css({
+    color: theme.colors.success.text,
+    fontWeight: theme.typography.fontWeightMedium,
+  }),
+  scoreChipFailIcon: css({
+    color: theme.colors.error.text,
+    fontWeight: theme.typography.fontWeightMedium,
+  }),
   tipSystemPrompt: css({
     whiteSpace: 'pre-wrap' as const,
     wordBreak: 'break-word' as const,

@@ -246,7 +246,24 @@ func (s *Service) executeItem(ctx context.Context, item evalpkg.WorkItem) {
 
 	scores := make([]evalpkg.GenerationScore, 0, len(outputs))
 	createdAt := time.Now().UTC()
+
+	keyConstraints := make(map[string]evalpkg.OutputKey, len(evaluatorDefinition.OutputKeys))
+	for _, ok := range evaluatorDefinition.OutputKeys {
+		keyConstraints[ok.Key] = ok
+	}
+
 	for _, output := range outputs {
+		if constraint, found := keyConstraints[output.Key]; found && output.Type == evalpkg.ScoreTypeNumber && output.Value.Number != nil {
+			if constraint.Min != nil && *output.Value.Number < *constraint.Min {
+				_ = level.Warn(s.logger).Log("msg", "dropping score below min bound", "key", output.Key, "value", *output.Value.Number, "min", *constraint.Min)
+				continue
+			}
+			if constraint.Max != nil && *output.Value.Number > *constraint.Max {
+				_ = level.Warn(s.logger).Log("msg", "dropping score above max bound", "key", output.Key, "value", *output.Value.Number, "max", *constraint.Max)
+				continue
+			}
+		}
+
 		score := evalpkg.GenerationScore{
 			TenantID:         item.TenantID,
 			ScoreID:          makeScoreID(item.WorkID, output.Key),

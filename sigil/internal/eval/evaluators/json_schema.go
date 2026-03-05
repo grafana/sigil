@@ -20,18 +20,18 @@ func (e *JSONSchemaEvaluator) Kind() evalpkg.EvaluatorKind {
 }
 
 func (e *JSONSchemaEvaluator) Evaluate(_ context.Context, input EvalInput, definition evalpkg.EvaluatorDefinition) ([]ScoreOutput, error) {
-	key, scoreType, unit, _ := firstOutputKey(definition, "json_valid", evalpkg.ScoreTypeBool)
-	if scoreType != evalpkg.ScoreTypeBool {
-		return nil, evalpkg.Permanent(fmt.Errorf("json_schema evaluator output key %q must be bool", key))
+	meta := firstOutputKey(definition, "json_valid", evalpkg.ScoreTypeBool)
+	if meta.Type != evalpkg.ScoreTypeBool {
+		return nil, evalpkg.Permanent(fmt.Errorf("json_schema evaluator output key %q must be bool", meta.Key))
 	}
 
 	var value any
 	if err := json.Unmarshal([]byte(input.ResponseText), &value); err != nil {
 		return []ScoreOutput{{
-			Key:         key,
+			Key:         meta.Key,
 			Type:        evalpkg.ScoreTypeBool,
 			Value:       evalpkg.BoolValue(false),
-			Unit:        unit,
+			Unit:        meta.Unit,
 			Passed:      boolPointer(false),
 			Explanation: "response is not valid JSON",
 			Metadata:    map[string]any{"error": err.Error()},
@@ -55,10 +55,10 @@ func (e *JSONSchemaEvaluator) Evaluate(_ context.Context, input EvalInput, defin
 	}
 
 	return []ScoreOutput{{
-		Key:         key,
+		Key:         meta.Key,
 		Type:        evalpkg.ScoreTypeBool,
 		Value:       evalpkg.BoolValue(valid),
-		Unit:        unit,
+		Unit:        meta.Unit,
 		Passed:      boolPointer(valid),
 		Explanation: explanation,
 		Metadata:    metadata,

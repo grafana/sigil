@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Alert, Badge, Text, useStyles2 } from '@grafana/ui';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
-import type { CreateEvaluatorRequest, EvalFormState } from '../evaluation/types';
+import type { CreateEvaluatorRequest, EvalFormState, Evaluator } from '../evaluation/types';
 import EvaluatorForm from '../components/evaluation/EvaluatorForm';
 import EvalTestPanel from '../components/evaluation/EvalTestPanel';
 
@@ -93,6 +93,13 @@ export default function CreateEvaluatorPage(props: CreateEvaluatorPageProps) {
   const dataSource = props.dataSource ?? defaultEvaluationDataSource;
   const styles = useStyles2(getStyles);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // When navigating from "Fork template", location.state carries the template data.
+  const prefill = useMemo<Partial<Evaluator> | undefined>(() => {
+    const s = location.state as { prefill?: Partial<Evaluator> } | null;
+    return s?.prefill ?? undefined;
+  }, [location.state]);
 
   const [formState, setFormState] = useState<EvalFormState>({
     kind: 'llm_judge',
@@ -139,7 +146,13 @@ export default function CreateEvaluatorPage(props: CreateEvaluatorPageProps) {
       <div className={styles.layout}>
         <div className={styles.left}>
           <div className={styles.formCard}>
-            <EvaluatorForm onSubmit={handleSubmit} onCancel={handleCancel} onConfigChange={setFormState} />
+            <EvaluatorForm
+              prefill={prefill}
+              onSubmit={handleSubmit}
+              onCancel={handleCancel}
+              onConfigChange={setFormState}
+              dataSource={dataSource}
+            />
           </div>
         </div>
         <div className={styles.right}>

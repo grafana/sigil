@@ -359,6 +359,30 @@ func validateOutputKeys(keys []evalpkg.OutputKey) error {
 		default:
 			return fmt.Errorf("output key %q has invalid type", key.Key)
 		}
+		if err := validateOutputKeyConstraints(key); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateOutputKeyConstraints(key evalpkg.OutputKey) error {
+	if key.Min != nil || key.Max != nil {
+		if key.Type != evalpkg.ScoreTypeNumber {
+			return fmt.Errorf("output key %q: min/max are only valid for number types", key.Key)
+		}
+		if key.Min != nil && key.Max != nil && *key.Min > *key.Max {
+			return fmt.Errorf("output key %q: min (%g) must be <= max (%g)", key.Key, *key.Min, *key.Max)
+		}
+	}
+	if key.PassThreshold != nil && key.Type != evalpkg.ScoreTypeNumber {
+		return fmt.Errorf("output key %q: pass_threshold is only valid for number types", key.Key)
+	}
+	if len(key.PassMatch) > 0 && key.Type != evalpkg.ScoreTypeString {
+		return fmt.Errorf("output key %q: pass_match is only valid for string types", key.Key)
+	}
+	if key.PassValue != nil && key.Type != evalpkg.ScoreTypeBool {
+		return fmt.Errorf("output key %q: pass_value is only valid for bool types", key.Key)
 	}
 	return nil
 }
