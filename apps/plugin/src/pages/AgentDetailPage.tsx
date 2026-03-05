@@ -1248,6 +1248,46 @@ export default function AgentDetailPage({
                   <h2 className={styles.agentNameHeading}>
                     {isAnonymous ? 'Unnamed agent bucket' : detail.agent_name}
                   </h2>
+                  {detail.models.length > 0 && (
+                    <div className={styles.modelChipsRow}>
+                      {detail.models.map((model) => {
+                        const cardKey = `${model.provider}::${model.name}`;
+                        const card = modelCards.get(cardKey) ?? null;
+                        const meta = getProviderMeta(model.provider);
+                        const chipLabel = card
+                          ? stripProviderPrefix(card.name || card.source_model_id, meta.label)
+                          : stripProviderPrefix(model.name, meta.label);
+                        const dotColor = getProviderColor(model.provider);
+                        const isOpen = openModel?.key === cardKey;
+                        return (
+                          <div key={cardKey} className={styles.modelChipAnchor}>
+                            <button
+                              type="button"
+                              className={`${styles.modelChip} ${isOpen ? styles.modelChipActive : ''}`}
+                              onClick={(event) => {
+                                if (isOpen) {
+                                  setOpenModel(null);
+                                  return;
+                                }
+                                setOpenModel({ key: cardKey, anchorRect: event.currentTarget.getBoundingClientRect() });
+                              }}
+                              aria-label={`model card ${chipLabel}`}
+                            >
+                              <span className={styles.modelChipDot} style={{ background: dotColor }} />
+                              <span>{chipLabel}</span>
+                            </button>
+                            {isOpen && card && (
+                              <ModelCardPopover
+                                card={card}
+                                anchorRect={openModel?.anchorRect ?? null}
+                                onClose={() => setOpenModel(null)}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                   <div className={styles.badgeRow}>{isAnonymous && <Badge text="Anonymous" color="orange" />}</div>
                 </div>
                 <div className={styles.heroStatsColumn}>
@@ -1346,46 +1386,6 @@ export default function AgentDetailPage({
                   </div>
                 </div>
               </div>
-              {detail.models.length > 0 && (
-                <div className={styles.modelChipsRow}>
-                  {detail.models.map((model) => {
-                    const cardKey = `${model.provider}::${model.name}`;
-                    const card = modelCards.get(cardKey) ?? null;
-                    const meta = getProviderMeta(model.provider);
-                    const chipLabel = card
-                      ? stripProviderPrefix(card.name || card.source_model_id, meta.label)
-                      : stripProviderPrefix(model.name, meta.label);
-                    const dotColor = getProviderColor(model.provider);
-                    const isOpen = openModel?.key === cardKey;
-                    return (
-                      <div key={cardKey} className={styles.modelChipAnchor}>
-                        <button
-                          type="button"
-                          className={`${styles.modelChip} ${isOpen ? styles.modelChipActive : ''}`}
-                          onClick={(event) => {
-                            if (isOpen) {
-                              setOpenModel(null);
-                              return;
-                            }
-                            setOpenModel({ key: cardKey, anchorRect: event.currentTarget.getBoundingClientRect() });
-                          }}
-                          aria-label={`model card ${chipLabel}`}
-                        >
-                          <span className={styles.modelChipDot} style={{ background: dotColor }} />
-                          <span>{chipLabel}</span>
-                        </button>
-                        {isOpen && card && (
-                          <ModelCardPopover
-                            card={card}
-                            anchorRect={openModel?.anchorRect ?? null}
-                            onClose={() => setOpenModel(null)}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
           </div>
         </div>
