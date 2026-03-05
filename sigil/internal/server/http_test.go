@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	kitlog "github.com/go-kit/log"
 	"github.com/grafana/sigil/sigil/internal/agentrating"
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	"github.com/grafana/sigil/sigil/internal/eval/evaluators/judges"
@@ -139,6 +140,7 @@ func TestRegisterQueryRoutesOwnsQueryPaths(t *testing.T) {
 		true,
 		true,
 		newTestModelCardService(t),
+		kitlog.NewNopLogger(),
 		protected,
 	)
 
@@ -546,6 +548,7 @@ func TestRateAgentEndpointValidatesRequestBody(t *testing.T) {
 		true,
 		true,
 		newTestModelCardService(t),
+		kitlog.NewNopLogger(),
 		protected,
 	)
 
@@ -593,6 +596,7 @@ func TestRateAgentEndpointReturnsAcceptedWhenProviderUnavailable(t *testing.T) {
 		true,
 		true,
 		newTestModelCardService(t),
+		kitlog.NewNopLogger(),
 		protected,
 	)
 
@@ -656,6 +660,7 @@ func TestRateAgentEndpointReusesExistingPendingRating(t *testing.T) {
 		true,
 		true,
 		newTestModelCardService(t),
+		kitlog.NewNopLogger(),
 		protected,
 	)
 
@@ -723,6 +728,7 @@ func TestLookupAgentRatingEndpointReturnsLatestStoredRating(t *testing.T) {
 		true,
 		true,
 		newTestModelCardService(t),
+		kitlog.NewNopLogger(),
 		protected,
 	)
 
@@ -776,6 +782,7 @@ func TestLookupAgentRatingEndpointReturnsNotFoundWhenNoStoredRating(t *testing.T
 		true,
 		true,
 		newTestModelCardService(t),
+		kitlog.NewNopLogger(),
 		protected,
 	)
 

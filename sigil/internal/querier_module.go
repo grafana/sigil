@@ -234,6 +234,7 @@ func newQuerierModule(
 				cfg.ConversationRatingsEnabled,
 				cfg.ConversationAnnotationsEnabled,
 				modelCardSvc,
+				logger,
 				protectedMiddleware,
 			)
 			server.RegisterSettingsRoutes(mux, tenantSettingsSvc, protectedMiddleware)

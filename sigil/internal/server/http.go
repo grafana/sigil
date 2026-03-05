@@ -9,7 +9,10 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
+	kitlog "github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 	"github.com/grafana/dskit/tenant"
 	"github.com/grafana/sigil/sigil/internal/agentrating"
 	"github.com/grafana/sigil/sigil/internal/feedback"
@@ -18,6 +21,11 @@ import (
 	"github.com/grafana/sigil/sigil/internal/modelcards"
 	"github.com/grafana/sigil/sigil/internal/query"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+)
+
+const (
+	agentRatingEvaluationTimeout = 3 * time.Minute
+	agentRatingPersistTimeout    = 10 * time.Second
 )
 
 func RegisterRoutes(
@@ -32,7 +40,18 @@ func RegisterRoutes(
 ) {
 	RegisterCoreRoutes(mux)
 	RegisterIngestRoutes(mux, generationSvc, protectedMiddleware)
-	RegisterQueryRoutes(mux, querySvc, nil, nil, feedbackSvc, ratingsEnabled, annotationsEnabled, modelCardSvc, protectedMiddleware)
+	RegisterQueryRoutes(
+		mux,
+		querySvc,
+		nil,
+		nil,
+		feedbackSvc,
+		ratingsEnabled,
+		annotationsEnabled,
+		modelCardSvc,
+		kitlog.NewNopLogger(),
+		protectedMiddleware,
+	)
 }
 
 // RegisterCoreRoutes wires transport-level routes shared by every runtime role.
@@ -69,10 +88,14 @@ func RegisterQueryRoutes(
 	ratingsEnabled bool,
 	annotationsEnabled bool,
 	modelCardSvc *modelcards.Service,
+	logger kitlog.Logger,
 	protectedMiddleware func(http.Handler) http.Handler,
 ) {
 	if mux == nil || querySvc == nil {
 		return
+	}
+	if logger == nil {
+		logger = kitlog.NewNopLogger()
 	}
 	if protectedMiddleware == nil {
 		protectedMiddleware = func(next http.Handler) http.Handler { return next }
@@ -86,7 +109,7 @@ func RegisterQueryRoutes(
 		mux.Handle("/api/v1/agents:rating", protectedMiddleware(http.HandlerFunc(lookupAgentRating(querySvc, ratingStore))))
 	}
 	if rater != nil && ratingStore != nil {
-		mux.Handle("/api/v1/agents:rate", protectedMiddleware(http.HandlerFunc(rateAgent(querySvc, rater, ratingStore))))
+		mux.Handle("/api/v1/agents:rate", protectedMiddleware(http.HandlerFunc(rateAgent(querySvc, rater, ratingStore, logger))))
 	}
 	mux.Handle("/api/v1/conversations:batch-metadata", protectedMiddleware(http.HandlerFunc(batchConversationMetadata(querySvc))))
 	mux.Handle("/api/v1/conversations", protectedMiddleware(http.HandlerFunc(listConversations(querySvc))))
@@ -477,7 +500,12 @@ type rateAgentRequest struct {
 	Model     string `json:"model,omitempty"`
 }
 
-func rateAgent(querySvc *query.Service, rater *agentrating.Rater, ratingStore agentrating.LatestStore) http.HandlerFunc {
+func rateAgent(
+	querySvc *query.Service,
+	rater *agentrating.Rater,
+	ratingStore agentrating.LatestStore,
+	logger kitlog.Logger,
+) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -555,6 +583,7 @@ func rateAgent(querySvc *query.Service, rater *agentrating.Rater, ratingStore ag
 
 		ratingInput := mapAgentDetailToRatingAgent(agentDetail)
 		go evaluateAgentRating(
+			logger,
 			rater,
 			ratingStore,
 			tenantID,
@@ -567,6 +596,7 @@ func rateAgent(querySvc *query.Service, rater *agentrating.Rater, ratingStore ag
 }
 
 func evaluateAgentRating(
+	logger kitlog.Logger,
 	rater *agentrating.Rater,
 	ratingStore agentrating.LatestStore,
 	tenantID string,
@@ -576,9 +606,16 @@ func evaluateAgentRating(
 	modelOverride string,
 ) {
 	defer func() {
-		if recover() != nil {
-			_ = ratingStore.UpsertAgentVersionRating(
-				context.Background(),
+		if recovered := recover(); recovered != nil {
+			_ = level.Error(logger).Log(
+				"msg", "agent rating background evaluation panicked",
+				"tenant_id", tenantID,
+				"agent_name", agentName,
+				"effective_version", effectiveVersion,
+				"panic", recovered,
+			)
+			if err := upsertAgentRatingWithTimeout(
+				ratingStore,
 				tenantID,
 				agentName,
 				effectiveVersion,
@@ -586,14 +623,34 @@ func evaluateAgentRating(
 					Status:      agentrating.RatingStatusFailed,
 					Suggestions: []agentrating.Suggestion{},
 				},
-			)
+			); err != nil {
+				_ = level.Error(logger).Log(
+					"msg", "failed to persist failed agent rating after panic",
+					"tenant_id", tenantID,
+					"agent_name", agentName,
+					"effective_version", effectiveVersion,
+					"err", err,
+				)
+			}
 		}
 	}()
 
-	rating, err := rater.RateWithModel(context.Background(), ratingInput, modelOverride)
+	evalCtx, cancel := context.WithTimeout(context.Background(), agentRatingEvaluationTimeout)
+	defer cancel()
+
+	rating, err := rater.RateWithModel(evalCtx, ratingInput, modelOverride)
 	if err != nil {
-		_ = ratingStore.UpsertAgentVersionRating(
-			context.Background(),
+		_ = level.Error(logger).Log(
+			"msg", "agent rating background evaluation failed",
+			"tenant_id", tenantID,
+			"agent_name", agentName,
+			"effective_version", effectiveVersion,
+			"model_override", modelOverride,
+			"timeout", errors.Is(evalCtx.Err(), context.DeadlineExceeded),
+			"err", err,
+		)
+		if persistErr := upsertAgentRatingWithTimeout(
+			ratingStore,
 			tenantID,
 			agentName,
 			effectiveVersion,
@@ -601,12 +658,26 @@ func evaluateAgentRating(
 				Status:      agentrating.RatingStatusFailed,
 				Suggestions: []agentrating.Suggestion{},
 			},
-		)
+		); persistErr != nil {
+			_ = level.Error(logger).Log(
+				"msg", "failed to persist failed agent rating after judge error",
+				"tenant_id", tenantID,
+				"agent_name", agentName,
+				"effective_version", effectiveVersion,
+				"err", persistErr,
+			)
+		}
 		return
 	}
 	if rating == nil {
-		_ = ratingStore.UpsertAgentVersionRating(
-			context.Background(),
+		_ = level.Error(logger).Log(
+			"msg", "agent rating background evaluation returned nil rating",
+			"tenant_id", tenantID,
+			"agent_name", agentName,
+			"effective_version", effectiveVersion,
+		)
+		if err := upsertAgentRatingWithTimeout(
+			ratingStore,
 			tenantID,
 			agentName,
 			effectiveVersion,
@@ -614,18 +685,46 @@ func evaluateAgentRating(
 				Status:      agentrating.RatingStatusFailed,
 				Suggestions: []agentrating.Suggestion{},
 			},
-		)
+		); err != nil {
+			_ = level.Error(logger).Log(
+				"msg", "failed to persist failed agent rating after nil judge result",
+				"tenant_id", tenantID,
+				"agent_name", agentName,
+				"effective_version", effectiveVersion,
+				"err", err,
+			)
+		}
 		return
 	}
 
 	rating.Status = agentrating.RatingStatusCompleted
-	_ = ratingStore.UpsertAgentVersionRating(
-		context.Background(),
+	if err := upsertAgentRatingWithTimeout(
+		ratingStore,
 		tenantID,
 		agentName,
 		effectiveVersion,
 		*rating,
-	)
+	); err != nil {
+		_ = level.Error(logger).Log(
+			"msg", "failed to persist completed agent rating",
+			"tenant_id", tenantID,
+			"agent_name", agentName,
+			"effective_version", effectiveVersion,
+			"err", err,
+		)
+	}
+}
+
+func upsertAgentRatingWithTimeout(
+	ratingStore agentrating.LatestStore,
+	tenantID string,
+	agentName string,
+	effectiveVersion string,
+	rating agentrating.Rating,
+) error {
+	persistCtx, cancel := context.WithTimeout(context.Background(), agentRatingPersistTimeout)
+	defer cancel()
+	return ratingStore.UpsertAgentVersionRating(persistCtx, tenantID, agentName, effectiveVersion, rating)
 }
 
 func lookupAgentRating(querySvc *query.Service, ratingStore agentrating.LatestStore) http.HandlerFunc {
