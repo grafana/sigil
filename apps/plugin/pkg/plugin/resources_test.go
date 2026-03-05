@@ -379,7 +379,7 @@ func TestCallResource(t *testing.T) {
 					http.Error(w, "missing fallback tenant header on tempo search", http.StatusUnauthorized)
 					return
 				}
-				_, _ = io.WriteString(w, `{"traces":[{"traceID":"trace-1","startTimeUnixNano":"1739612400000000000","spanSets":[{"spans":[{"spanID":"span-1","durationNanos":"1000000000","attributes":[{"key":"sigil.generation.id","value":{"stringValue":"gen-1"}},{"key":"gen_ai.conversation.id","value":{"stringValue":"conv-1"}},{"key":"gen_ai.request.model","value":{"stringValue":"gpt-4o"}},{"key":"gen_ai.agent.name","value":{"stringValue":"assistant"}}]}]}]}]}`)
+				_, _ = io.WriteString(w, `{"traces":[{"traceID":"trace-1","startTimeUnixNano":"1739612400000000000","spanSets":[{"spans":[{"spanID":"span-1","durationNanos":"1000000000","attributes":[{"key":"sigil.generation.id","value":{"stringValue":"gen-1"}},{"key":"gen_ai.conversation.id","value":{"stringValue":"conv-1"}},{"key":"gen_ai.request.model","value":{"stringValue":"gpt-4o"}},{"key":"gen_ai.agent.name","value":{"stringValue":"assistant"}},{"key":"user.id","value":{"stringValue":"user-42"}}]}]}]}]}`)
 				return
 			}
 			_, _ = io.WriteString(w, `{"traces":[]}`)
@@ -600,6 +600,7 @@ func TestCallResource(t *testing.T) {
 			reqBody:   []byte(`{"filters":"model=\"gpt-4o\"","time_range":{"from":"2026-02-14T00:00:00Z","to":"2026-02-16T00:00:00Z"},"page_size":20}`),
 			expBodyContains: []string{
 				`"conversation_id":"conv-1"`,
+				`"user_id":"user-42"`,
 				`"has_more":false`,
 			},
 		},

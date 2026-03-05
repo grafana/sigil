@@ -25,6 +25,11 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
+const (
+	generationMetadataUserIDKey       = "sigil.user.id"
+	generationMetadataLegacyUserIDKey = "user.id"
+)
+
 type Conversation struct {
 	ID                string                                  `json:"id"`
 	Title             string                                  `json:"title,omitempty"`
@@ -57,6 +62,7 @@ type ConversationSearchRequest struct {
 type ConversationSearchResult struct {
 	ConversationID    string                              `json:"conversation_id"`
 	ConversationTitle string                              `json:"conversation_title,omitempty"`
+	UserID            string                              `json:"user_id,omitempty"`
 	GenerationCount   int                                 `json:"generation_count"`
 	FirstGenerationAt time.Time                           `json:"first_generation_at"`
 	LastGenerationAt  time.Time                           `json:"last_generation_at"`
@@ -92,6 +98,7 @@ type ConversationBatchMetadata struct {
 
 type ConversationDetail struct {
 	ConversationID    string                              `json:"conversation_id"`
+	UserID            string                              `json:"user_id,omitempty"`
 	GenerationCount   int                                 `json:"generation_count"`
 	FirstGenerationAt time.Time                           `json:"first_generation_at"`
 	LastGenerationAt  time.Time                           `json:"last_generation_at"`
@@ -698,6 +705,7 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 			result := ConversationSearchResult{
 				ConversationID:    conversationID,
 				ConversationTitle: aggregate.ConversationTitle,
+				UserID:            aggregate.UserID,
 				GenerationCount:   conversationMetadata.GenerationCount,
 				FirstGenerationAt: conversationMetadata.CreatedAt.UTC(),
 				LastGenerationAt:  conversationMetadata.LastGenerationAt.UTC(),
@@ -872,6 +880,7 @@ func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, 
 		recordQuerySpanError(span, err)
 		return ConversationDetail{}, false, err
 	}
+	userID := latestConversationUserID(mergedGenerations)
 
 	generationPayloads := make([]map[string]any, 0, len(mergedGenerations))
 	for _, generation := range mergedGenerations {
@@ -922,6 +931,7 @@ func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, 
 	)
 	return ConversationDetail{
 		ConversationID:    conversation.ConversationID,
+		UserID:            userID,
 		GenerationCount:   conversation.GenerationCount,
 		FirstGenerationAt: conversation.CreatedAt.UTC(),
 		LastGenerationAt:  conversation.LastGenerationAt.UTC(),
@@ -1573,6 +1583,49 @@ func generationTimestamp(generation *sigilv1.Generation) time.Time {
 		return startedAt.AsTime().UTC()
 	}
 	return time.Time{}
+}
+
+func latestConversationUserID(generations []*sigilv1.Generation) string {
+	var userID string
+	var latestAt time.Time
+	bestIndex := -1
+	found := false
+	for idx, generation := range generations {
+		candidate := generationMetadataString(generation, generationMetadataUserIDKey)
+		if candidate == "" {
+			candidate = generationMetadataString(generation, generationMetadataLegacyUserIDKey)
+		}
+		if candidate == "" {
+			continue
+		}
+		candidateAt := generationTimestamp(generation)
+		if !found || candidateAt.After(latestAt) || (candidateAt.Equal(latestAt) && idx > bestIndex) {
+			userID = candidate
+			latestAt = candidateAt
+			bestIndex = idx
+			found = true
+		}
+	}
+	return userID
+}
+
+func generationMetadataString(generation *sigilv1.Generation, key string) string {
+	if generation == nil {
+		return ""
+	}
+	metadata := generation.GetMetadata()
+	if metadata == nil {
+		return ""
+	}
+	raw, ok := metadata.AsMap()[key]
+	if !ok {
+		return ""
+	}
+	asString, ok := raw.(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(asString)
 }
 
 func normalizeTempoTagKey(scope string, key string) string {

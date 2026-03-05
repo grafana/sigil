@@ -172,6 +172,26 @@ describe('ConversationListPanel', () => {
     expect(screen.getByText('conv-abc...')).toBeInTheDocument();
   });
 
+  it('shows user ID in compact mode when available', () => {
+    render(
+      <ConversationListPanel {...defaultProps} conversations={[makeConversation('conv-1', { user_id: 'user-42' })]} />
+    );
+
+    expect(screen.getByText('user-42')).toBeInTheDocument();
+  });
+
+  it('shows user ID in extended mode when available', () => {
+    render(
+      <ConversationListPanel
+        {...defaultProps}
+        conversations={[makeConversation('conv-1', { user_id: 'user-42' })]}
+        showExtendedColumns
+      />
+    );
+
+    expect(screen.getByText('user-42')).toBeInTheDocument();
+  });
+
   it('applies error border class for rows with errors', () => {
     const { container } = render(
       <ConversationListPanel

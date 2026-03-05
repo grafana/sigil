@@ -36,6 +36,7 @@ async function fetchTracesWithConcurrency(
 function detailToConversationData(detail: ConversationDetail): ConversationData {
   return {
     conversationID: detail.conversation_id,
+    userID: detail.user_id,
     generationCount: detail.generation_count,
     firstGenerationAt: detail.first_generation_at,
     lastGenerationAt: detail.last_generation_at,
