@@ -45,13 +45,7 @@ export const mockGenerations: GenerationDetail[] = [
       { name: 'booking_api', description: 'Search and book flights and hotels' },
       { name: 'attractions_api', description: 'Find local attractions and restaurants' },
     ],
-    usage: {
-      input_tokens: 3877,
-      output_tokens: 527,
-      total_tokens: 4404,
-      cache_read_input_tokens: 1200,
-      cache_write_input_tokens: 540,
-    },
+    usage: { input_tokens: 3877, output_tokens: 527, total_tokens: 4404, cache_read_input_tokens: 1200 },
     created_at: '2024-11-17T12:52:07.291Z',
   },
   {
@@ -308,7 +302,7 @@ export const mockTokenSummary: TokenSummary = {
   inputTokens: 7477,
   outputTokens: 1737,
   cacheReadTokens: 1200,
-  cacheWriteTokens: 540,
+  cacheWriteTokens: 0,
   reasoningTokens: 0,
   totalTokens: 9214,
 };
