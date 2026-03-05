@@ -13,6 +13,7 @@ export type AgentRatingPanelProps = {
   agentName: string;
   version?: string;
   agentStateContext?: string;
+  contentView?: 'preview' | 'markdown';
   dataSource?: AgentsDataSource;
   initialResult?: AgentRatingResponse | null;
   initialLoading?: boolean;
@@ -539,6 +540,7 @@ export default function AgentRatingPanel({
   agentName,
   version,
   agentStateContext = '',
+  contentView = 'preview',
   dataSource = defaultAgentsDataSource,
   initialResult = null,
   initialLoading = false,
@@ -713,6 +715,7 @@ export default function AgentRatingPanel({
     }
     return toSuccinctText(completedResult.summary, SUMMARY_MAX_CHARS);
   }, [completedResult]);
+  const isPreviewView = contentView === 'preview';
 
   const runRating = useCallback(async () => {
     requestIdRef.current += 1;
@@ -1074,7 +1077,11 @@ export default function AgentRatingPanel({
                       </span>
                       <div className={styles.suggestionDescriptionRow}>
                         <div className={cx(styles.suggestionDescription, styles.suggestionDescriptionText)}>
-                          {toSuccinctText(suggestion.description, SUGGESTION_MAX_CHARS)}
+                          {isPreviewView ? (
+                            <MarkdownPreview markdown={toSuccinctText(suggestion.description, SUGGESTION_MAX_CHARS)} />
+                          ) : (
+                            toSuccinctText(suggestion.description, SUGGESTION_MAX_CHARS)
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1134,7 +1141,9 @@ export default function AgentRatingPanel({
             <Text variant="bodySmall" color="secondary">
               {formatSuggestionCategory(selectedSuggestion.category).toUpperCase()}
             </Text>
-            <div className={styles.modalBody}>{selectedSuggestion.description}</div>
+            <div className={styles.modalBody}>
+              {isPreviewView ? <MarkdownPreview markdown={selectedSuggestion.description} /> : selectedSuggestion.description}
+            </div>
             <div className={styles.modalActions}>
               <Button variant="secondary" icon="ai" onClick={() => onExplainSuggestion(selectedSuggestion)}>
                 Explain
@@ -1166,7 +1175,9 @@ export default function AgentRatingPanel({
                 x
               </button>
             </div>
-            <div className={styles.modalBody}>{completedResult.summary}</div>
+            <div className={styles.modalBody}>
+              {isPreviewView ? <MarkdownPreview markdown={completedResult.summary} /> : completedResult.summary}
+            </div>
             <div className={styles.modalActions}>
               <Button variant="secondary" icon="ai" onClick={onExplainSummaryModal}>
                 Explain

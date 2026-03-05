@@ -207,19 +207,39 @@ describe('AgentDetailPage', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByText('Age')).toBeInTheDocument();
+    expect(await screen.findByText('AGE')).toBeInTheDocument();
     expect(screen.getByText('2h')).toBeInTheDocument();
   });
 
   it('toggles system prompt between preview and markdown views', async () => {
     const dataSource = createDataSource();
     const lookupAgent = dataSource.lookupAgent;
+    const lookupAgentRating = dataSource.lookupAgentRating;
     dataSource.lookupAgent = jest.fn(async (name: string, version?: string) => {
       const detail = await lookupAgent(name, version);
       return {
         ...detail,
         system_prompt: '# Prompt heading\n\nUse **bold** and [Docs](https://grafana.com/docs).\n\n- First bullet',
         system_prompt_prefix: '# Prompt heading',
+      };
+    });
+    dataSource.lookupAgentRating = jest.fn(async (name: string, version?: string) => {
+      const rating = await lookupAgentRating(name, version);
+      return {
+        ...rating,
+        status: 'completed',
+        score: 8,
+        summary: 'Summary with **emphasis**.',
+        suggestions: [
+          {
+            severity: 'medium',
+            category: 'clarity',
+            title: 'Use clearer constraints',
+            description: 'Add **strict constraints** for tool execution.',
+          },
+        ],
+        judge_model: 'openai/gpt-4o-mini',
+        judge_latency_ms: 88,
       };
     });
 
@@ -235,10 +255,12 @@ describe('AgentDetailPage', () => {
     expect(screen.queryByText('# Prompt heading')).not.toBeInTheDocument();
     expect(screen.getByText('bold', { selector: 'strong' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Docs' })).toHaveAttribute('href', 'https://grafana.com/docs');
+    expect(screen.getByText('strict constraints', { selector: 'strong' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Markdown' }));
 
     expect(await screen.findByText(/# Prompt heading/)).toBeInTheDocument();
     expect(screen.getByText(/- First bullet/)).toBeInTheDocument();
+    expect(screen.getByText(/\*\*strict constraints\*\*/)).toBeInTheDocument();
   });
 });

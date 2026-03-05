@@ -302,9 +302,32 @@ const getStyles = (theme: GrafanaTheme2) => ({
   panelBody: css({
     padding: theme.spacing(1.5),
   }),
+  plainPanel: css({
+    border: 'none',
+    background: 'transparent',
+    borderRadius: 0,
+    overflow: 'visible',
+  }),
+  plainPanelHeader: css({
+    borderBottom: 'none',
+    padding: `${theme.spacing(0.25)} 0 ${theme.spacing(0.5)}`,
+  }),
+  statsHeaderLabel: css({
+    display: 'block',
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.bodySmall.fontSize,
+    lineHeight: 1.2,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.03em',
+    fontWeight: theme.typography.fontWeightMedium,
+    marginBottom: theme.spacing(0.5),
+  }),
+  plainPanelBody: css({
+    padding: theme.spacing(1.25),
+  }),
   versionControls: css({
     display: 'flex',
-    gap: theme.spacing(1),
+    gap: theme.spacing(0.75),
     alignItems: 'center',
     [`@media (max-width: 640px)`]: {
       flexDirection: 'column' as const,
@@ -318,11 +341,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
   recentVersionsGrid: css({
     display: 'flex',
     flexWrap: 'nowrap' as const,
-    gap: theme.spacing(1),
-    marginTop: theme.spacing(0.75),
+    gap: theme.spacing(0.75),
+    marginTop: theme.spacing(0.5),
   }),
   recentVersionsHeading: css({
-    marginTop: theme.spacing(1.25),
+    marginTop: theme.spacing(1),
     marginBottom: theme.spacing(0.25),
     color: theme.colors.text.secondary,
     fontSize: theme.typography.bodySmall.fontSize,
@@ -335,7 +358,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flex: 1,
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: theme.spacing(0.25),
+    gap: theme.spacing(0.125),
   }),
   recentVersionBox: css({
     width: '100%',
@@ -344,7 +367,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     borderRadius: theme.shape.radius.default,
     border: `1px solid ${theme.colors.border.weak}`,
     background: theme.colors.background.canvas,
-    padding: theme.spacing(0.75, 1),
+    padding: theme.spacing(0.5, 0.75),
     display: 'flex',
     flexDirection: 'column' as const,
     gap: theme.spacing(0.25),
@@ -386,7 +409,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.secondary,
     lineHeight: 1.2,
     whiteSpace: 'nowrap' as const,
-    paddingLeft: theme.spacing(0.5),
+    textAlign: 'center' as const,
+    width: '100%',
   }),
   recentVersionScore: css({
     fontWeight: theme.typography.fontWeightMedium,
@@ -1276,11 +1300,9 @@ export default function AgentDetailPage({
       )}
 
       <div className={styles.primaryPanelsRow}>
-        <div className={cx(styles.panel, styles.stretchPanel)}>
-          <div className={styles.panelHeader}>
-            <Text weight="medium">Versions</Text>
-          </div>
-          <div className={cx(styles.panelBody, styles.stretchPanelBody)}>
+        <div className={cx(styles.panel, styles.plainPanel, styles.stretchPanel)}>
+          <div className={cx(styles.panelBody, styles.plainPanelBody, styles.stretchPanelBody)}>
+            <span className={styles.statsHeaderLabel}>Versions</span>
             <div className={styles.versionControls}>
               <div className={styles.versionSelect}>
                 <Select
@@ -1370,17 +1392,17 @@ export default function AgentDetailPage({
           <div className={styles.statsGrid}>
             <Tooltip content="Total generations recorded for this agent version." placement="top">
               <div>
-                <TopStat label="Generations" value={detail.generation_count} loading={false} />
+                <TopStat label="GENERATIONS" value={detail.generation_count} loading={false} />
               </div>
             </Tooltip>
             <Tooltip content="Estimated tokens consumed by the system prompt in this version." placement="top">
               <div>
-                <TopStat label="Prompt tokens" value={detail.token_estimate.system_prompt} loading={false} />
+                <TopStat label="PROMPT TOKENS" value={detail.token_estimate.system_prompt} loading={false} />
               </div>
             </Tooltip>
             <Tooltip content="Estimated tokens consumed by all tool schemas combined in this version." placement="top">
               <div>
-                <TopStat label="Tools tokens" value={detail.token_estimate.tools_total} loading={false} />
+                <TopStat label="TOOLS TOKENS" value={detail.token_estimate.tools_total} loading={false} />
               </div>
             </Tooltip>
             <Tooltip
@@ -1388,13 +1410,13 @@ export default function AgentDetailPage({
               placement="top"
             >
               <div>
-                <TopStat label="Total tokens" value={detail.token_estimate.total} loading={false} />
+                <TopStat label="TOTAL TOKENS" value={detail.token_estimate.total} loading={false} />
               </div>
             </Tooltip>
             <Tooltip content="Duration between first and last recorded generations for this version." placement="top">
               <div>
                 <TopStat
-                  label="Age"
+                  label="AGE"
                   value={Math.max(0, toTimestampMs(detail.last_seen_at) - toTimestampMs(detail.first_seen_at))}
                   displayValue={formatDurationCompact(detail.first_seen_at, detail.last_seen_at)}
                   loading={false}
@@ -1404,7 +1426,7 @@ export default function AgentDetailPage({
             <Tooltip content="The earliest time a generation was recorded for this agent version." placement="top">
               <div>
                 <TopStat
-                  label="First seen"
+                  label="FIRST SEEN"
                   value={toTimestampMs(detail.first_seen_at)}
                   displayValue={formatDate(detail.first_seen_at)}
                   loading={false}
@@ -1414,7 +1436,7 @@ export default function AgentDetailPage({
             <Tooltip content="The most recent time any generation was recorded for this agent version." placement="top">
               <div>
                 <TopStat
-                  label="Last seen"
+                  label="LAST SEEN"
                   value={toTimestampMs(detail.last_seen_at)}
                   displayValue={formatDate(detail.last_seen_at)}
                   loading={false}
@@ -1504,13 +1526,14 @@ export default function AgentDetailPage({
               )}
             </div>
             <div className={styles.sectionBlock}>
-              <Text weight="medium" className={styles.sectionTitle}>
-                Prompt and context analysis
-              </Text>
+              <div className={styles.sectionTitle}>
+                <Text weight="medium">Prompt and context analysis</Text>
+              </div>
               <AgentRatingPanel
                 agentName={agentName}
                 version={activeVersion}
                 agentStateContext={agentStateContext}
+                contentView={systemPromptView}
                 dataSource={dataSource}
                 initialResult={initialRating}
                 initialLoading={initialRatingLoading || initialRating?.status === 'pending'}
