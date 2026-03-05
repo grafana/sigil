@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { css } from '@emotion/css';
-import { dateTime, ThresholdsMode, type AbsoluteTimeRange, type GrafanaTheme2, type TimeRange } from '@grafana/data';
+import { dateTime, ThresholdsMode, type AbsoluteTimeRange, type GrafanaTheme2 } from '@grafana/data';
 import { Button, Icon, Select, Text, useStyles2 } from '@grafana/ui';
 import { Link } from 'react-router-dom';
 import { type DashboardDataSource, defaultDashboardDataSource } from '../dashboard/api';
