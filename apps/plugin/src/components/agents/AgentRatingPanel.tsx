@@ -8,6 +8,7 @@ import { defaultAgentsDataSource, type AgentsDataSource } from '../../agents/api
 import type { AgentRatingResponse, AgentRatingStatus, AgentRatingSuggestion } from '../../agents/types';
 import { Loader } from '../Loader';
 import MarkdownPreview from '../markdown/MarkdownPreview';
+import { isNotFoundError } from '../../utils/http';
 
 export type AgentRatingPanelProps = {
   agentName: string;
@@ -525,27 +526,6 @@ function normalizeRatingStatus(status: AgentRatingStatus | string | undefined): 
     return 'failed';
   }
   return 'completed';
-}
-
-function isNotFoundError(err: unknown): boolean {
-  if (typeof err !== 'object' || err === null) {
-    return false;
-  }
-  const withStatus = err as {
-    status?: unknown;
-    statusCode?: unknown;
-    data?: { status?: unknown; statusCode?: unknown; message?: unknown };
-    message?: unknown;
-  };
-  if (withStatus.status === 404 || withStatus.statusCode === 404) {
-    return true;
-  }
-  if (withStatus.data?.status === 404 || withStatus.data?.statusCode === 404) {
-    return true;
-  }
-  const message = typeof withStatus.message === 'string' ? withStatus.message : '';
-  const dataMessage = typeof withStatus.data?.message === 'string' ? withStatus.data.message : '';
-  return /\b404\b/.test(message) || /\b404\b/.test(dataMessage);
 }
 
 function logRatingGenerationFailure(agentName: string, version: string | undefined, detail: unknown): void {

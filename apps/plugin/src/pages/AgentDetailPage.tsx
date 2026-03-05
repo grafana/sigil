@@ -14,6 +14,7 @@ import type { ModelCard } from '../modelcard/types';
 import { resolveModelCardsFromNames } from '../modelcard/resolve';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { formatDateShort } from '../utils/date';
+import { isNotFoundError } from '../utils/http';
 import { defaultDashboardDataSource, type DashboardDataSource } from '../dashboard/api';
 import { computeRateInterval, computeStep, requestsOverTimeQuery } from '../dashboard/queries';
 import type { PrometheusMatrixResult, PrometheusQueryResponse } from '../dashboard/types';
@@ -598,27 +599,6 @@ function formatDate(iso: string): string {
     return 'n/a';
   }
   return parsed.toLocaleString();
-}
-
-function isNotFoundError(err: unknown): boolean {
-  if (typeof err !== 'object' || err === null) {
-    return false;
-  }
-  const withStatus = err as {
-    status?: unknown;
-    statusCode?: unknown;
-    data?: { status?: unknown; statusCode?: unknown; message?: unknown };
-    message?: unknown;
-  };
-  if (withStatus.status === 404 || withStatus.statusCode === 404) {
-    return true;
-  }
-  if (withStatus.data?.status === 404 || withStatus.data?.statusCode === 404) {
-    return true;
-  }
-  const message = typeof withStatus.message === 'string' ? withStatus.message : '';
-  const dataMessage = typeof withStatus.data?.message === 'string' ? withStatus.data.message : '';
-  return /\b404\b/.test(message) || /\b404\b/.test(dataMessage);
 }
 
 function buildAgentNameFromRoute(pathname: string, routeParam?: string): string {
