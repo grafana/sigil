@@ -338,7 +338,13 @@ export default function AgentRatingPanel({
           <Badge
             text={`${completedResult.score}/10`}
             color={
-              completedResult.score >= 9 ? 'green' : completedResult.score >= 7 ? 'blue' : completedResult.score >= 5 ? 'orange' : 'red'
+              completedResult.score >= 9
+                ? 'green'
+                : completedResult.score >= 7
+                  ? 'blue'
+                  : completedResult.score >= 5
+                    ? 'orange'
+                    : 'red'
             }
           />
         )}

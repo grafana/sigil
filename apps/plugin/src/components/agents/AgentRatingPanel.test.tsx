@@ -28,7 +28,7 @@ function createPendingRating(): AgentRatingResponse {
 
 function createDataSource(overrides: Partial<AgentsDataSource>): AgentsDataSource {
   return {
-    listAgents: async () => ({ items: [], next_cursor: '' } satisfies AgentListResponse),
+    listAgents: async () => ({ items: [], next_cursor: '' }) satisfies AgentListResponse,
     lookupAgent: async () =>
       ({
         agent_name: 'assistant',
@@ -43,7 +43,7 @@ function createDataSource(overrides: Partial<AgentsDataSource>): AgentsDataSourc
         tools: [],
         models: [],
       }) satisfies AgentDetail,
-    listAgentVersions: async () => ({ items: [], next_cursor: '' } satisfies AgentVersionListResponse),
+    listAgentVersions: async () => ({ items: [], next_cursor: '' }) satisfies AgentVersionListResponse,
     lookupAgentRating: async () => null,
     rateAgent: async () => createCompletedRating(),
     ...overrides,
@@ -91,7 +91,9 @@ describe('AgentRatingPanel', () => {
   });
 
   it('starts polling after clicking rate when backend returns pending', async () => {
-    const rateAgent = jest.fn<Promise<AgentRatingResponse>, [string, string?]>().mockResolvedValue(createPendingRating());
+    const rateAgent = jest
+      .fn<Promise<AgentRatingResponse>, [string, string?]>()
+      .mockResolvedValue(createPendingRating());
     const lookupAgentRating = jest
       .fn<Promise<AgentRatingResponse | null>, [string, string?]>()
       .mockResolvedValue(createCompletedRating('Rating became available after trigger.'));
