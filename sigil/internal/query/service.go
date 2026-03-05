@@ -906,8 +906,7 @@ func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, 
 	plan := storage.ConversationReadPlan{
 		ExpectedGenerationCount: conversation.GenerationCount,
 	}
-	if !conversation.CreatedAt.IsZero() && !conversation.LastGenerationAt.IsZero() {
-		plan.From = conversation.CreatedAt.UTC().Add(-2 * time.Minute)
+	if !conversation.LastGenerationAt.IsZero() {
 		plan.To = conversation.LastGenerationAt.UTC().Add(2 * time.Minute)
 	}
 	var mergedGenerations []*sigilv1.Generation

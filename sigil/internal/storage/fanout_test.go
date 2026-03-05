@@ -310,8 +310,10 @@ func TestFanOutStoreGetGenerationByIDWithPlanUsesBoundedBlockRange(t *testing.T)
 		},
 		&fanOutTestBlockMetadataStore{
 			listBlocks: func(_ context.Context, _ string, from, to time.Time) ([]BlockMeta, error) {
-				capturedFrom = from
-				capturedTo = to
+				if capturedFrom.IsZero() && capturedTo.IsZero() && (!from.IsZero() || !to.IsZero()) {
+					capturedFrom = from
+					capturedTo = to
+				}
 				return []BlockMeta{}, nil
 			},
 		},
@@ -333,7 +335,7 @@ func TestFanOutStoreGetGenerationByIDWithPlanUsesBoundedBlockRange(t *testing.T)
 	}
 }
 
-func TestFanOutStoreGetGenerationByIDWithPlanFiltersConversationID(t *testing.T) {
+func TestFanOutStoreGetGenerationByIDWithPlanTreatsConversationHintAsAdvisory(t *testing.T) {
 	generation := fanOutTestGeneration("gen-1", "conv-other", time.Date(2026, 2, 19, 10, 0, 0, 0, time.UTC))
 	index, generationsByOffset := buildFanOutTestBlock(t, []*sigilv1.Generation{generation})
 
@@ -364,8 +366,60 @@ func TestFanOutStoreGetGenerationByIDWithPlanFiltersConversationID(t *testing.T)
 	if err != nil {
 		t.Fatalf("get generation by id with conversation hint: %v", err)
 	}
-	if found != nil {
-		t.Fatalf("expected nil when generation conversation id does not match hint, got %#v", found)
+	if found == nil || found.GetId() != "gen-1" {
+		t.Fatalf("expected advisory hint to still return generation id match, got %#v", found)
+	}
+}
+
+func TestFanOutStoreGetGenerationByIDWithPlanFallsBackWhenRangeHintMisses(t *testing.T) {
+	generation := fanOutTestGeneration("gen-1", "conv-1", time.Date(2026, 2, 19, 10, 0, 0, 0, time.UTC))
+	index, generationsByOffset := buildFanOutTestBlock(t, []*sigilv1.Generation{generation})
+
+	var listCalls int32
+	store := NewFanOutStore(
+		&fanOutTestWALReader{
+			getByID: func(_ context.Context, _, _ string) (*sigilv1.Generation, error) {
+				return nil, nil
+			},
+		},
+		&fanOutTestBlockMetadataStore{
+			listBlocks: func(_ context.Context, _ string, from, to time.Time) ([]BlockMeta, error) {
+				call := atomic.AddInt32(&listCalls, 1)
+				if call == 1 {
+					if from.IsZero() || to.IsZero() {
+						t.Fatalf("expected bounded first call for range hint, got from=%s to=%s", from, to)
+					}
+					// Simulate a bad hint range that excludes the real block.
+					return []BlockMeta{}, nil
+				}
+				if !from.IsZero() || !to.IsZero() {
+					t.Fatalf("expected unbounded fallback call, got from=%s to=%s", from, to)
+				}
+				return []BlockMeta{{TenantID: "tenant-a", BlockID: "block-1"}}, nil
+			},
+		},
+		&fanOutTestBlockReader{
+			readIndex: func(_ context.Context, _, _ string) (*BlockIndex, error) {
+				return index, nil
+			},
+			readGenerations: func(_ context.Context, _, _ string, entries []IndexEntry) ([]*sigilv1.Generation, error) {
+				return fanOutGenerationsFromEntries(entries, generationsByOffset), nil
+			},
+		},
+	)
+
+	found, err := store.GetGenerationByIDWithPlan(context.Background(), "tenant-a", "gen-1", GenerationReadPlan{
+		From: time.Date(2026, 2, 19, 11, 0, 0, 0, time.UTC),
+		To:   time.Date(2026, 2, 19, 12, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("get generation by id with range hint: %v", err)
+	}
+	if found == nil || found.GetId() != "gen-1" {
+		t.Fatalf("expected fallback to return generation despite bad range hint, got %#v", found)
+	}
+	if calls := atomic.LoadInt32(&listCalls); calls != 2 {
+		t.Fatalf("expected bounded + fallback list-block calls, got %d", calls)
 	}
 }
 

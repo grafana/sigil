@@ -399,16 +399,62 @@ func (s *FanOutStore) readColdGenerationByIDWithPlan(
 	}
 
 	from, to := normalizedGenerationPlanRange(plan)
+	conversationHint := strings.TrimSpace(plan.ConversationID)
 	coldCtx, cancel := withOptionalTimeout(ctx, s.coldReadConfig.TotalBudget)
 	defer cancel()
 
-	blocks, err := s.blockMetadataStore.ListBlocks(coldCtx, tenantID, from, to)
+	matched, hintedCandidate, scannedBlocks, err := s.scanColdGenerationByID(coldCtx, tenantID, generationID, from, to, conversationHint)
 	if err != nil {
-		return nil, 0, err
+		return nil, scannedBlocks, err
 	}
+	if matched != nil {
+		return matched, scannedBlocks, nil
+	}
+	// conversation_id hint is advisory; if ID is found with a different
+	// conversation, prefer returning the ID match over false negatives.
+	if hintedCandidate != nil {
+		return hintedCandidate, scannedBlocks, nil
+	}
+	if !hasGenerationRangeHint(plan) {
+		return nil, scannedBlocks, nil
+	}
+
+	// Range/at hints are advisory; when the bounded pass misses, retry unbounded
+	// to preserve generation-id correctness.
+	fallbackCtx, fallbackCancel := withOptionalTimeout(ctx, s.coldReadConfig.TotalBudget)
+	defer fallbackCancel()
+	fallbackGeneration, _, fallbackScanned, err := s.scanColdGenerationByID(
+		fallbackCtx,
+		tenantID,
+		generationID,
+		time.Time{},
+		time.Time{},
+		"",
+	)
+	scannedBlocks += fallbackScanned
+	if err != nil {
+		return nil, scannedBlocks, err
+	}
+	return fallbackGeneration, scannedBlocks, nil
+}
+
+func (s *FanOutStore) scanColdGenerationByID(
+	ctx context.Context,
+	tenantID,
+	generationID string,
+	from,
+	to time.Time,
+	conversationHint string,
+) (*sigilv1.Generation, *sigilv1.Generation, int, error) {
+	blocks, err := s.blockMetadataStore.ListBlocks(ctx, tenantID, from, to)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+
 	scannedBlocks := 0
+	var hintedCandidate *sigilv1.Generation
 	for idx := len(blocks) - 1; idx >= 0; idx-- {
-		index, err := s.readIndexWithPolicy(coldCtx, tenantID, blocks[idx].BlockID)
+		index, err := s.readIndexWithPolicy(ctx, tenantID, blocks[idx].BlockID)
 		scannedBlocks++
 		if err != nil {
 			if errors.Is(err, ErrBlockNotFound) {
@@ -418,13 +464,13 @@ func (s *FanOutStore) readColdGenerationByIDWithPlan(
 				)
 				continue
 			}
-			return nil, scannedBlocks, err
+			return nil, nil, scannedBlocks, err
 		}
 		entries := findEntriesByGenerationID(index, generationID)
 		if len(entries) == 0 {
 			continue
 		}
-		generations, err := s.blockReader.ReadGenerations(coldCtx, tenantID, blocks[idx].BlockID, entries)
+		generations, err := s.blockReader.ReadGenerations(ctx, tenantID, blocks[idx].BlockID, entries)
 		if err != nil {
 			if errors.Is(err, ErrBlockNotFound) {
 				s.loggerOrDefault().Warn("skipping stale block during get-by-id read",
@@ -433,18 +479,21 @@ func (s *FanOutStore) readColdGenerationByIDWithPlan(
 				)
 				continue
 			}
-			return nil, scannedBlocks, err
+			return nil, nil, scannedBlocks, err
 		}
 		for _, generation := range generations {
-			if generation.GetId() == generationID {
-				if strings.TrimSpace(plan.ConversationID) != "" && generation.GetConversationId() != plan.ConversationID {
-					continue
-				}
-				return generation, scannedBlocks, nil
+			if generation.GetId() != generationID {
+				continue
+			}
+			if conversationHint == "" || generation.GetConversationId() == conversationHint {
+				return generation, nil, scannedBlocks, nil
+			}
+			if hintedCandidate == nil {
+				hintedCandidate = generation
 			}
 		}
 	}
-	return nil, scannedBlocks, nil
+	return nil, hintedCandidate, scannedBlocks, nil
 }
 
 func (s *FanOutStore) readColdConversationGenerationsWithPlan(
@@ -701,9 +750,6 @@ func sleepWithContext(ctx context.Context, duration time.Duration) error {
 func normalizedPlanRange(plan ConversationReadPlan) (time.Time, time.Time) {
 	from := plan.From.UTC()
 	to := plan.To.UTC()
-	if from.IsZero() || to.IsZero() {
-		return time.Time{}, time.Time{}
-	}
 	if to.Before(from) {
 		return to, from
 	}
@@ -725,6 +771,13 @@ func normalizedGenerationPlanRange(plan GenerationReadPlan) (time.Time, time.Tim
 		return to, from
 	}
 	return from, to
+}
+
+func hasGenerationRangeHint(plan GenerationReadPlan) bool {
+	if !plan.From.IsZero() && !plan.To.IsZero() {
+		return true
+	}
+	return !plan.At.IsZero()
 }
 
 func withOptionalTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
