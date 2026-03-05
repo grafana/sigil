@@ -182,6 +182,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
   heroMetaStatWide: css({
     gridColumn: 'span 2',
     justifySelf: 'end',
+    '@media (max-width: 1400px)': {
+      gridColumn: '2 / 4',
+    },
     '@media (max-width: 900px)': {
       gridColumn: 'auto',
     },
@@ -193,6 +196,15 @@ const getStyles = (theme: GrafanaTheme2) => ({
     borderRadius: theme.shape.radius.default,
     background: theme.colors.background.secondary,
     border: `1px solid ${theme.colors.border.weak}`,
+    '@media (max-width: 1400px)': {
+      gridColumn: '4 / 5',
+    },
+    '@media (max-width: 900px)': {
+      gridColumn: '2 / 3',
+    },
+    '@media (max-width: 640px)': {
+      gridColumn: '1 / 2',
+    },
   }),
   latestScoreBlocks: css({
     display: 'grid',
