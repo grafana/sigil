@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-02-18
+last_reviewed: 2026-03-05
 source_of_truth: true
 audience: both
 ---
@@ -21,6 +21,18 @@ Write-path status semantics:
 Read-path status semantics:
 - `404 Not Found`: missing evaluator/rule.
 - `400 Bad Request`: invalid pagination/query params.
+
+## Control-Plane Metrics
+
+Evaluation control routes emit per-tenant HTTP usage metrics:
+
+- `sigil_eval_control_requests_total{tenant_id,endpoint,method,status_class}`
+- `sigil_eval_control_request_duration_seconds{tenant_id,endpoint,method,status_class}`
+
+Label notes:
+- `tenant_id`: request tenant, or `unknown` when auth context is missing.
+- `endpoint`: bounded route group (`evaluators`, `rules`, `rule_by_id`, `templates`, `eval_test`, etc).
+- `status_class`: HTTP class (`2xx`, `4xx`, `5xx`, ...).
 
 ## Evaluators
 

@@ -52,23 +52,27 @@ func RegisterHTTPRoutes(mux *http.ServeMux, service *Service, templateService *T
 		protectedMiddleware = func(next http.Handler) http.Handler { return next }
 	}
 
-	mux.Handle("/api/v1/eval/evaluators", protectedMiddleware(http.HandlerFunc(service.handleEvaluators)))
-	mux.Handle("/api/v1/eval/evaluators/", protectedMiddleware(http.HandlerFunc(service.handleEvaluatorByID)))
-	mux.Handle("/api/v1/eval/predefined/evaluators", protectedMiddleware(http.HandlerFunc(service.handlePredefinedEvaluators)))
-	mux.Handle("/api/v1/eval/predefined/evaluators/", protectedMiddleware(http.HandlerFunc(service.handlePredefinedEvaluatorByID)))
-	mux.Handle("/api/v1/eval/rules", protectedMiddleware(http.HandlerFunc(service.handleRules)))
-	mux.Handle("/api/v1/eval/rules/", protectedMiddleware(http.HandlerFunc(service.handleRuleByID)))
-	mux.Handle("POST /api/v1/eval/rules:preview", protectedMiddleware(http.HandlerFunc(service.handleRulesPreview)))
-	mux.Handle("/api/v1/eval/judge/providers", protectedMiddleware(http.HandlerFunc(service.handleJudgeProviders)))
-	mux.Handle("/api/v1/eval/judge/models", protectedMiddleware(http.HandlerFunc(service.handleJudgeModels)))
+	register := func(pattern string, endpoint string, handler http.Handler) {
+		mux.Handle(pattern, instrumentControlHandler(endpoint, protectedMiddleware(captureMetricsContext(handler))))
+	}
+
+	register("/api/v1/eval/evaluators", "evaluators", http.HandlerFunc(service.handleEvaluators))
+	register("/api/v1/eval/evaluators/", "evaluator_by_id", http.HandlerFunc(service.handleEvaluatorByID))
+	register("/api/v1/eval/predefined/evaluators", "predefined_evaluators", http.HandlerFunc(service.handlePredefinedEvaluators))
+	register("/api/v1/eval/predefined/evaluators/", "predefined_evaluator_by_id", http.HandlerFunc(service.handlePredefinedEvaluatorByID))
+	register("/api/v1/eval/rules", "rules", http.HandlerFunc(service.handleRules))
+	register("/api/v1/eval/rules/", "rule_by_id", http.HandlerFunc(service.handleRuleByID))
+	register("POST /api/v1/eval/rules:preview", "rules_preview", http.HandlerFunc(service.handleRulesPreview))
+	register("/api/v1/eval/judge/providers", "judge_providers", http.HandlerFunc(service.handleJudgeProviders))
+	register("/api/v1/eval/judge/models", "judge_models", http.HandlerFunc(service.handleJudgeModels))
 
 	if templateService != nil {
-		mux.Handle("/api/v1/eval/templates", protectedMiddleware(http.HandlerFunc(templateService.handleTemplates)))
-		mux.Handle("/api/v1/eval/templates/", protectedMiddleware(http.HandlerFunc(templateService.routeTemplateSubpaths)))
+		register("/api/v1/eval/templates", "templates", http.HandlerFunc(templateService.handleTemplates))
+		register("/api/v1/eval/templates/", "template_subpaths", http.HandlerFunc(templateService.routeTemplateSubpaths))
 	}
 
 	if testService != nil {
-		mux.Handle("POST /api/v1/eval:test", protectedMiddleware(http.HandlerFunc(testService.handleEvalTest)))
+		register("POST /api/v1/eval:test", "eval_test", http.HandlerFunc(testService.handleEvalTest))
 	}
 }
 

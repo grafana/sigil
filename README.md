@@ -142,6 +142,7 @@ Image publishing automation:
 - GitHub Actions workflow: `.github/workflows/sigil-image-publish.yml`
 - Trigger: pushes to `main` that touch `sigil/**` or workflow/go workspace files.
 - Published tags: `ghcr.io/grafana/sigil:<git-sha>` and `ghcr.io/grafana/sigil:latest`
+- Automatic deployment: triggers Argo workflow `deploy-sigil-stack` in `sigil-cd`, rolling out the published SHA-tagged image to `dev` and then `ops`.
 
 Chart docs and reference:
 

@@ -20,7 +20,7 @@ import { usePrometheusQuery } from './usePrometheusQuery';
 import { MetricPanel } from './MetricPanel';
 import { type ConversationsDataSource, defaultConversationsDataSource } from '../../conversation/api';
 import type { ConversationSearchResult } from '../../conversation/types';
-import { PLUGIN_BASE, buildConversationDetailRoute } from '../../constants';
+import { PLUGIN_BASE, buildConversationViewRoute } from '../../constants';
 
 export type DashboardErrorsGridProps = {
   dataSource: DashboardDataSource;
@@ -333,7 +333,7 @@ function ErrorConversationsTable({ conversationsDataSource, timeRange }: ErrorCo
               key={conversation.conversation_id}
               className={styles.tableRow}
               onClick={() => {
-                window.location.href = `${PLUGIN_BASE}/${buildConversationDetailRoute(conversation.conversation_id)}`;
+                window.location.href = `${PLUGIN_BASE}/${buildConversationViewRoute(conversation.conversation_id)}`;
               }}
               role="link"
               aria-label={`view conversation ${conversation.conversation_id}`}
