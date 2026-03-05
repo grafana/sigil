@@ -14,6 +14,7 @@ import (
 	"github.com/grafana/sigil/sigil/internal/storage"
 	"github.com/grafana/sigil/sigil/internal/storage/object"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -59,6 +60,7 @@ func TestSearchConversationsForTenantAppliesTempoAndMySQLFilters(t *testing.T) {
 	traceWithTitle.SpanSets[0].Spans[0].Attributes = append(
 		traceWithTitle.SpanSets[0].Spans[0].Attributes,
 		TempoAttribute{Key: "sigil.conversation.title", Value: tempoStringValue("Escalation: billing outage")},
+		TempoAttribute{Key: "sigil.user.name", Value: tempoStringValue("Responder Name")},
 	)
 	service.tempoClient = &stubTempoClient{
 		searchResponses: []*TempoSearchResponse{{
@@ -90,6 +92,9 @@ func TestSearchConversationsForTenantAppliesTempoAndMySQLFilters(t *testing.T) {
 	}
 	if item.ConversationTitle != "Escalation: billing outage" {
 		t.Fatalf("expected conversation title from tempo span, got %q", item.ConversationTitle)
+	}
+	if item.UserName != "Responder Name" {
+		t.Fatalf("expected user name from tempo span, got %q", item.UserName)
 	}
 	if item.GenerationCount != 5 {
 		t.Fatalf("expected generation_count=5, got %d", item.GenerationCount)
@@ -545,6 +550,12 @@ func TestGetConversationDetailForTenantMergesHotAndCold(t *testing.T) {
 	hotGeneration2 := testGenerationPayload("gen-2", "conv-1", base.Add(2*time.Minute))
 	coldGeneration2 := testGenerationPayload("gen-2", "conv-1", base.Add(30*time.Second))
 	coldGeneration3 := testGenerationPayload("gen-3", "conv-1", base.Add(3*time.Minute))
+	hotGeneration1.Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{
+		generationMetadataUserNameKey: structpb.NewStringValue("Older User"),
+	}}
+	coldGeneration3.Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{
+		generationMetadataUserNameKey: structpb.NewStringValue("Final User"),
+	}}
 
 	walReader := &stubWALReader{
 		byConversation: map[string][]*sigilv1.Generation{
@@ -605,6 +616,9 @@ func TestGetConversationDetailForTenantMergesHotAndCold(t *testing.T) {
 	}
 	if detail.RatingSummary == nil || detail.RatingSummary.TotalCount != 1 {
 		t.Fatalf("expected rating summary total_count=1, got %#v", detail.RatingSummary)
+	}
+	if detail.UserName != "Final User" {
+		t.Fatalf("expected latest user name in detail, got %q", detail.UserName)
 	}
 }
 

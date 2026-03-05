@@ -98,6 +98,7 @@ func TestBuildTraceQLIncludesBaseAndSelect(t *testing.T) {
 		"duration > 5s",
 		"select(span.sigil.generation.id",
 		"span.sigil.conversation.title",
+		"span.sigil.user.name",
 		"resource.k8s.namespace.name",
 		"span.gen_ai.usage.input_tokens",
 	}

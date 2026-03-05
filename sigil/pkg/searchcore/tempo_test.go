@@ -12,13 +12,15 @@ func TestGroupTempoSearchResponseAndOrdering(t *testing.T) {
 					{
 						Spans: []TempoSpan{
 							{
-								SpanID:        "span-1",
-								DurationNanos: "10",
+								SpanID:            "span-1",
+								StartTimeUnixNano: "200",
+								DurationNanos:     "10",
 								Attributes: []TempoAttribute{
 									attrString("gen_ai.conversation.id", "conv-1"),
 									attrString("sigil.generation.id", "gen-1"),
 									attrString("gen_ai.request.model", "gpt-4o"),
 									attrString("gen_ai.agent.name", "assistant"),
+									attrString("sigil.user.name", "Latest User"),
 									attrString("error.type", "provider_error"),
 									attrDouble("span.custom.score", 1.5),
 									attrBool("span.custom.flag", true),
@@ -26,8 +28,9 @@ func TestGroupTempoSearchResponseAndOrdering(t *testing.T) {
 								},
 							},
 							{
-								SpanID:        "span-2",
-								DurationNanos: "20",
+								SpanID:            "span-2",
+								StartTimeUnixNano: "190",
+								DurationNanos:     "20",
 								Attributes: []TempoAttribute{
 									attrString("span.gen_ai.conversation.id", "conv-1"),
 									attrString("span.sigil.generation.id", "gen-2"),
@@ -49,13 +52,15 @@ func TestGroupTempoSearchResponseAndOrdering(t *testing.T) {
 					{
 						Spans: []TempoSpan{
 							{
-								SpanID:        "span-3",
-								DurationNanos: "30",
+								SpanID:            "span-3",
+								StartTimeUnixNano: "100",
+								DurationNanos:     "30",
 								Attributes: []TempoAttribute{
 									attrString("gen_ai.conversation.id", "conv-2"),
 									attrString("sigil.generation.id", "gen-3"),
 									attrString("gen_ai.request.model", "gpt-4o"),
 									attrString("gen_ai.agent.name", "copilot"),
+									attrString("sigil.user.name", "Older User"),
 								},
 							},
 						},
@@ -95,6 +100,9 @@ func TestGroupTempoSearchResponseAndOrdering(t *testing.T) {
 	}
 	if conv1.LatestTraceStartNanos != 200 {
 		t.Fatalf("expected latest trace nanos 200, got %d", conv1.LatestTraceStartNanos)
+	}
+	if conv1.UserName != "Latest User" {
+		t.Fatalf("expected latest user name, got %q", conv1.UserName)
 	}
 
 	selected := BuildSelectedResultMap(conv1.Selected)

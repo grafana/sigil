@@ -61,6 +61,7 @@ export async function loadConversation(
 
   return {
     conversationID: detail.conversation_id,
+    userName: detail.user_name,
     generationCount: detail.generation_count,
     firstGenerationAt: detail.first_generation_at,
     lastGenerationAt: detail.last_generation_at,

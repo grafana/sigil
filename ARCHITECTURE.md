@@ -196,12 +196,13 @@ Read path components:
 2. Plugin backend adds tenant context and forwards to Sigil query API.
 3. Conversation search:
    - Sigil translates user filter expression to TraceQL with `gen_ai.operation.name != ""` base predicate.
-   - Tempo returns matching spans with `sigil.generation.id`, `gen_ai.conversation.id`, and optional `sigil.conversation.title` attributes.
+   - Tempo returns matching spans with `sigil.generation.id`, `gen_ai.conversation.id`, and optional `sigil.conversation.title` and `sigil.user.name` attributes.
    - Sigil groups spans by conversation, enriches from MySQL metadata and feedback tables.
    - Paginated conversation summaries returned to frontend.
 4. Conversation/generation detail:
    - MySQL hot rows (`generations`, `conversations`) + object storage blocks.
    - Union + dedupe by `generation_id` with hot-row preference.
+   - Conversation detail `user_name` is derived from latest generation metadata key `sigil.user.name` when present.
 5. Proxy routes pass through to Tempo and Prometheus for raw access.
 
 ```mermaid
@@ -519,6 +520,8 @@ See `docs/references/grafana-query-response-shapes.md`.
   - `sigil.sdk.name`
 - Generation and execute_tool spans may include a human-readable conversation label:
   - `sigil.conversation.title`
+- Generation spans may include a human-readable end-user label:
+  - `sigil.user.name`
 - `rec.Err()` surfaces local validation/enqueue failures only.
 - Background export failures are retried and logged.
 - Generation export auth supports strict modes:

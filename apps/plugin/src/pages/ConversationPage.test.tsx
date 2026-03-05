@@ -40,6 +40,7 @@ function createDataSource(conversationID = 'conv-b'): MockConversationsDataSourc
     })),
     getConversationDetail: jest.fn(async (_id: string) => ({
       conversation_id: _id,
+      user_name: 'Taylor User',
       generation_count: 2,
       first_generation_at: '2026-02-01T10:00:00Z',
       last_generation_at: '2026-02-01T10:01:00Z',
@@ -86,6 +87,7 @@ describe('ConversationPage', () => {
 
     expect(await screen.findByText('Conversation ID')).toBeInTheDocument();
     expect(screen.getByText('Conversation ID').parentElement).toHaveTextContent('conv-b');
+    expect(screen.getByText('Taylor User')).toBeInTheDocument();
     expect(await screen.findByText(/^Generations \(\d+\)$/)).toBeInTheDocument();
     expect(screen.queryByLabelText('select conversation conv-b')).not.toBeInTheDocument();
     expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-b');

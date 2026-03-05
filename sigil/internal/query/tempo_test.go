@@ -126,6 +126,46 @@ func TestGroupTempoSearchResponseConversationTitleUsesLatestSpan(t *testing.T) {
 	}
 }
 
+func TestGroupTempoSearchResponseUserNameUsesLatestSpan(t *testing.T) {
+	response := &TempoSearchResponse{
+		Traces: []TempoTrace{
+			{
+				TraceID:           "trace-1",
+				StartTimeUnixNano: "1739606400000000000",
+				SpanSets: []TempoSpanSet{{
+					Spans: []TempoSpan{
+						{
+							SpanID:            "span-1",
+							StartTimeUnixNano: "1739606400000000000",
+							Attributes: []TempoAttribute{
+								{Key: "gen_ai.conversation.id", Value: tempoStringValue("conv-1")},
+								{Key: "sigil.user.name", Value: tempoStringValue("Older User")},
+							},
+						},
+						{
+							SpanID:            "span-2",
+							StartTimeUnixNano: "1739606500000000000",
+							Attributes: []TempoAttribute{
+								{Key: "gen_ai.conversation.id", Value: tempoStringValue("conv-1")},
+								{Key: "sigil.user.name", Value: tempoStringValue("Latest User")},
+							},
+						},
+					},
+				}},
+			},
+		},
+	}
+
+	grouped := groupTempoSearchResponse(response, nil)
+	aggregate := grouped.Conversations["conv-1"]
+	if aggregate == nil {
+		t.Fatalf("expected conv-1 aggregate")
+	}
+	if aggregate.UserName != "Latest User" {
+		t.Fatalf("expected latest user name, got %q", aggregate.UserName)
+	}
+}
+
 func TestGroupTempoSearchResponseTracksModelProviders(t *testing.T) {
 	response := &TempoSearchResponse{
 		Traces: []TempoTrace{

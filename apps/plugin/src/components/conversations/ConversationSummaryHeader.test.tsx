@@ -53,4 +53,18 @@ describe('ConversationSummaryHeader', () => {
 
     expect(screen.getByText('Conversation ID')).toBeInTheDocument();
   });
+
+  it('shows user name when available', () => {
+    render(<ConversationSummaryHeader conversation={makeConversation({ user_name: 'Taylor User' })} />);
+
+    expect(screen.getByText('User')).toBeInTheDocument();
+    expect(screen.getByText('Taylor User')).toBeInTheDocument();
+  });
+
+  it('shows "-" when user name is not available', () => {
+    render(<ConversationSummaryHeader conversation={makeConversation()} />);
+
+    const userItem = screen.getByText('User').parentElement;
+    expect(userItem).toHaveTextContent('-');
+  });
 });

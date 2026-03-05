@@ -797,6 +797,7 @@ type conversationEvalSummary struct {
 
 type conversationSearchResult struct {
 	ConversationID    string                     `json:"conversation_id"`
+	UserName          string                     `json:"user_name,omitempty"`
 	GenerationCount   int                        `json:"generation_count"`
 	FirstGenerationAt time.Time                  `json:"first_generation_at"`
 	LastGenerationAt  time.Time                  `json:"last_generation_at"`
@@ -1092,6 +1093,7 @@ func (a *App) searchConversations(req *http.Request, payload conversationSearchR
 			aggregate := grouped.Conversations[conversationID]
 			result := conversationSearchResult{
 				ConversationID:    conversationID,
+				UserName:          aggregate.UserName,
 				GenerationCount:   conversationMetadata.GenerationCount,
 				FirstGenerationAt: conversationMetadata.FirstGenerationAt.UTC(),
 				LastGenerationAt:  conversationMetadata.LastGenerationAt.UTC(),

@@ -171,6 +171,29 @@ describe('ConversationListPanel', () => {
     expect(screen.getByText('conv-abc...')).toBeInTheDocument();
   });
 
+  it('shows user name in compact mode when available', () => {
+    render(
+      <ConversationListPanel
+        {...defaultProps}
+        conversations={[makeConversation('conv-1', { user_name: 'Taylor User' })]}
+      />
+    );
+
+    expect(screen.getByText('Taylor User')).toBeInTheDocument();
+  });
+
+  it('shows user name in extended mode when available', () => {
+    render(
+      <ConversationListPanel
+        {...defaultProps}
+        conversations={[makeConversation('conv-1', { user_name: 'Taylor User' })]}
+        showExtendedColumns
+      />
+    );
+
+    expect(screen.getByText('Taylor User')).toBeInTheDocument();
+  });
+
   it('applies error border class for rows with errors', () => {
     const { container } = render(
       <ConversationListPanel
