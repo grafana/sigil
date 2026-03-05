@@ -17,6 +17,14 @@ const DEFAULT_SYSTEM_PROMPT =
   'You are a concise observability analyst. Return exactly 2-3 high-confidence findings. Each finding is a single short sentence on its own line prefixed with "- ". Bold key numbers/metrics with **bold**. No headers, no paragraphs, no extra text. Keep each bullet under 20 words. Focus on anomalies, changes, or notable patterns only.';
 
 const STORAGE_KEY = 'sigil.insightBar.collapsed';
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+const AGE_TICK_MS = 60 * 1000;
+const CACHE_KEY_PREFIX = 'sigil.page-insight-bar.v1';
+
+type CachedInsight = {
+  generatedAt: number;
+  text: string;
+};
 
 function readCollapsed(): boolean {
   try {
@@ -43,6 +51,8 @@ export function PageInsightBar({
   const styles = useStyles2(getStyles);
   const gen = useInlineAssistant();
   const [text, setText] = useState('');
+  const [generatedAt, setGeneratedAt] = useState<number | null>(null);
+  const [ageTick, setAgeTick] = useState(() => Date.now());
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const lastDataContextRef = useRef<string | null>(null);
 
@@ -59,24 +69,30 @@ export function PageInsightBar({
     latestRef.current = { prompt, origin, systemPrompt, dataContext, gen };
   });
 
-  const runGenerate = useCallback((ctx: string) => {
+  const runGenerate = useCallback((ctx: string, cacheKey: string, fallbackCacheKey: string) => {
     const { prompt: p, origin: o, systemPrompt: sp, gen: g } = latestRef.current;
     const fullPrompt = `${p}\n\nData context:\n${ctx}`;
     g.generate({
       prompt: fullPrompt,
       origin: o,
       systemPrompt: sp,
-      onComplete: (result: string) => setText(result),
+      onComplete: (result: string) => {
+        const generatedTs = Date.now();
+        const cached: CachedInsight = { generatedAt: generatedTs, text: result };
+        setText(result);
+        setGeneratedAt(generatedTs);
+        writeCachedInsight(cacheKey, cached);
+        writeCachedInsight(fallbackCacheKey, cached);
+      },
       onError: (err: Error) => console.error('Insight generation failed:', err),
     });
   }, []);
 
   useEffect(() => {
-    if (collapsed) {
-      return;
-    }
     if (!dataContext) {
       lastDataContextRef.current = null;
+      setText('');
+      setGeneratedAt(null);
       return;
     }
     if (gen.isGenerating) {
@@ -85,21 +101,64 @@ export function PageInsightBar({
     if (lastDataContextRef.current === dataContext) {
       return;
     }
+    const cacheKey = buildCacheKey(prompt, origin, systemPrompt, dataContext);
+    const fallbackCacheKey = buildFallbackCacheKey(prompt, origin, systemPrompt);
+    const cached = readCachedInsight(cacheKey) ?? readCachedInsight(fallbackCacheKey);
+    if (cached) {
+      setText(cached.text);
+      setGeneratedAt(cached.generatedAt);
+    } else {
+      setText('');
+      setGeneratedAt(null);
+    }
     lastDataContextRef.current = dataContext;
-    runGenerate(dataContext);
-  }, [collapsed, dataContext, gen.isGenerating, runGenerate]);
+    const cacheAgeMs = cached ? Date.now() - cached.generatedAt : Number.POSITIVE_INFINITY;
+    if (cacheAgeMs >= REFRESH_INTERVAL_MS) {
+      runGenerate(dataContext, cacheKey, fallbackCacheKey);
+    }
+  }, [dataContext, gen.isGenerating, origin, prompt, runGenerate, systemPrompt]);
+
+  useEffect(() => {
+    if (!dataContext) {
+      return;
+    }
+    const intervalId = window.setInterval(() => {
+      if (latestRef.current.gen.isGenerating) {
+        return;
+      }
+      const cacheKey = buildCacheKey(prompt, origin, systemPrompt, dataContext);
+      const fallbackCacheKey = buildFallbackCacheKey(prompt, origin, systemPrompt);
+      runGenerate(dataContext, cacheKey, fallbackCacheKey);
+    }, REFRESH_INTERVAL_MS);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [dataContext, origin, prompt, runGenerate, systemPrompt]);
 
   const doRegenerate = useCallback(() => {
-    const { dataContext: ctx, gen: g } = latestRef.current;
+    const { dataContext: ctx, gen: g, prompt: p, origin: o, systemPrompt: sp } = latestRef.current;
     if (ctx && !g.isGenerating) {
+      const cacheKey = buildCacheKey(p, o, sp, ctx);
+      const fallbackCacheKey = buildFallbackCacheKey(p, o, sp);
       setText('');
-      runGenerate(ctx);
+      setGeneratedAt(null);
+      runGenerate(ctx, cacheKey, fallbackCacheKey);
     }
   }, [runGenerate]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setAgeTick(Date.now());
+    }, AGE_TICK_MS);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   const displayText = gen.isGenerating ? gen.content : text;
   const initialWaiting = !dataContext && !text && !gen.isGenerating;
   const hasResult = Boolean(text) || gen.isGenerating;
+  const insightAgeLabel = generatedAt !== null ? formatAgeShort(Math.max(ageTick - generatedAt, 0)) : null;
 
   const bullets = useMemo(() => {
     if (!displayText) {
@@ -134,13 +193,16 @@ export function PageInsightBar({
         <div className={styles.actions}>
           {gen.isGenerating && <Loader showText={false} />}
           {!gen.isGenerating && hasResult && (
-            <IconButton
-              name="sync"
-              aria-label="Regenerate insight"
-              tooltip="Regenerate"
-              size="sm"
-              onClick={doRegenerate}
-            />
+            <>
+              {insightAgeLabel && <span className={styles.generatedAtText}>{insightAgeLabel}</span>}
+              <IconButton
+                name="sync"
+                aria-label="Regenerate insight"
+                tooltip="Regenerate"
+                size="sm"
+                onClick={doRegenerate}
+              />
+            </>
           )}
         </div>
       </div>
@@ -171,6 +233,70 @@ export function PageInsightBar({
 
 const EXPANDED_HEIGHT = 132;
 const COLLAPSED_HEIGHT = 40;
+
+function buildCacheKey(prompt: string, origin: string, systemPrompt: string, dataContext: string): string {
+  const keySource = `${origin}|${prompt}|${systemPrompt}|${dataContext}`;
+  return `${CACHE_KEY_PREFIX}:${stableHash(keySource)}`;
+}
+
+function buildFallbackCacheKey(prompt: string, origin: string, systemPrompt: string): string {
+  const keySource = `${origin}|${prompt}|${systemPrompt}`;
+  return `${CACHE_KEY_PREFIX}:fallback:${stableHash(keySource)}`;
+}
+
+function readCachedInsight(cacheKey: string): CachedInsight | null {
+  try {
+    const raw = window.localStorage.getItem(cacheKey);
+    if (!raw) {
+      return null;
+    }
+    const parsed: unknown = JSON.parse(raw);
+    if (!isCachedInsight(parsed)) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedInsight(cacheKey: string, value: CachedInsight): void {
+  try {
+    window.localStorage.setItem(cacheKey, JSON.stringify(value));
+  } catch {
+    // Ignore quota and storage availability failures.
+  }
+}
+
+function isCachedInsight(value: unknown): value is CachedInsight {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const candidate = value as Partial<CachedInsight>;
+  return typeof candidate.generatedAt === 'number' && typeof candidate.text === 'string';
+}
+
+function stableHash(input: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function formatAgeShort(ageMs: number): string {
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (ageMs < hour) {
+    return `${Math.max(1, Math.floor(ageMs / minute))}m`;
+  }
+  if (ageMs < day) {
+    return `${Math.floor(ageMs / hour)}h`;
+  }
+  return `${Math.floor(ageMs / day)}d`;
+}
 
 function getStyles(theme: GrafanaTheme2) {
   const barBase = {
@@ -248,6 +374,11 @@ function getStyles(theme: GrafanaTheme2) {
       alignItems: 'center',
       gap: theme.spacing(0.5),
       flexShrink: 0,
+    }),
+    generatedAtText: css({
+      color: theme.colors.text.secondary,
+      fontSize: theme.typography.bodySmall.fontSize,
+      lineHeight: 1,
     }),
     body: css({
       padding: theme.spacing(0, 1.5, 1.5),
