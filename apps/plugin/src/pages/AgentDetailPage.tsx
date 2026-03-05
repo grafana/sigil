@@ -815,6 +815,7 @@ export default function AgentDetailPage({
   const versionsRequestVersion = useRef(0);
   const ratingRequestVersion = useRef(0);
   const recentRatingsRequestVersion = useRef(0);
+  const recentVersionRatingsRef = useRef<Record<string, AgentRatingResponse | null>>({});
   const promptAnalysisSectionRef = useRef<HTMLDivElement | null>(null);
 
   const selectedVersion = searchParams.get('version')?.trim() ?? '';
@@ -1040,6 +1041,7 @@ export default function AgentDetailPage({
   const recentVersions = useMemo(() => versionOptions.slice(0, 5).reverse(), [versionOptions]);
 
   useEffect(() => {
+    recentVersionRatingsRef.current = {};
     setRecentVersionRatings({});
   }, [agentName]);
 
@@ -1049,7 +1051,7 @@ export default function AgentDetailPage({
     }
     const unresolvedVersions = recentVersions
       .map((versionItem) => versionItem.effective_version)
-      .filter((version) => recentVersionRatings[version] === undefined);
+      .filter((version) => !(version in recentVersionRatingsRef.current));
     if (unresolvedVersions.length === 0) {
       return;
     }
@@ -1079,6 +1081,7 @@ export default function AgentDetailPage({
           for (const result of results) {
             next[result.version] = result.rating;
           }
+          recentVersionRatingsRef.current = next;
           return next;
         });
       })
@@ -1088,7 +1091,7 @@ export default function AgentDetailPage({
         }
         setErrorMessage(err instanceof Error ? err.message : 'Failed to load version ratings');
       });
-  }, [agentName, dataSource, recentVersionRatings, recentVersions]);
+  }, [agentName, dataSource, recentVersions]);
 
   const selectVersion = (nextVersion: string) => {
     const next = new URLSearchParams(searchParams);

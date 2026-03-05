@@ -304,6 +304,41 @@ describe('AgentDetailPage', () => {
     expect(screen.queryByText('Prompt heading')).not.toBeInTheDocument();
   });
 
+  it('does not retry recent version ratings forever after lookup failures', async () => {
+    const dataSource = createDataSource();
+    dataSource.lookupAgentRating = jest.fn(async (_name: string, version?: string) => {
+      if (version && version.length > 0) {
+        throw new Error('boom');
+      }
+      return {
+        status: 'completed' as const,
+        score: 8,
+        summary: 'Top-line report summary.\nSecond line details.',
+        suggestions: [],
+        judge_model: 'openai/gpt-4o-mini',
+        judge_latency_ms: 88,
+      };
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      const versionedCalls = (dataSource.lookupAgentRating as jest.Mock).mock.calls.filter(([, version]) => Boolean(version));
+      expect(versionedCalls).toHaveLength(2);
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const versionedCalls = (dataSource.lookupAgentRating as jest.Mock).mock.calls.filter(([, version]) => Boolean(version));
+    expect(versionedCalls).toHaveLength(2);
+  });
+
   it('scrolls to system prompt and context analysis when re-running analysis', async () => {
     const dataSource = createDataSource();
     const scrollIntoViewSpy = jest.fn();
