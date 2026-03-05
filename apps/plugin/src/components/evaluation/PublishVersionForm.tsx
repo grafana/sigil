@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
-import { Button, Field, FieldSet, Input, Select, Stack, Switch, useStyles2 } from '@grafana/ui';
+import { Button, Field, Input, Select, Stack, Switch, Text, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
 import {
   LLM_JUDGE_DEFAULT_SYSTEM_PROMPT,
@@ -14,6 +14,7 @@ import {
 } from '../../evaluation/types';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../../evaluation/api';
 import { nextVersion } from '../../evaluation/versionUtils';
+import { getSectionTitleStyles } from './sectionStyles';
 
 export type PublishVersionFormProps = {
   kind: EvaluatorKind;
@@ -34,13 +35,79 @@ const SCORE_TYPE_OPTIONS: Array<SelectableValue<ScoreType>> = [
 ];
 
 const getStyles = (theme: GrafanaTheme2) => ({
+  form: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(1.25),
+  }),
+  section: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    background: theme.colors.background.primary,
+    borderRadius: theme.shape.radius.default,
+  }),
+  sectionHeader: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+    background: theme.colors.background.primary,
+    flexShrink: 0,
+    padding: theme.spacing(0.75, 1.25, 0.25),
+    borderBottom: `1px solid ${theme.colors.border.weak}`,
+  }),
+  sectionTitle: css({
+    ...getSectionTitleStyles(theme),
+  }),
+  sectionBody: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(1.25),
+    padding: theme.spacing(1, 1.25),
+    '& > *': {
+      margin: '0 !important',
+    },
+  }),
+  sectionText: css({
+    marginBottom: theme.spacing(0.25),
+  }),
+  twoColumnGrid: css({
+    display: 'grid',
+    gridTemplateColumns: '1fr',
+    gap: theme.spacing(1.25),
+    alignItems: 'start',
+    '& > *': {
+      margin: '0 !important',
+    },
+  }),
+  threeColumnGrid: css({
+    display: 'grid',
+    gridTemplateColumns: '1fr',
+    gap: theme.spacing(1.25),
+    alignItems: 'start',
+    '& > *': {
+      margin: '0 !important',
+    },
+  }),
+  fullWidthControl: css({
+    width: '100% !important',
+    minWidth: 0,
+  }),
+  compactControl: css({
+    width: '100% !important',
+    maxWidth: 320,
+    minWidth: 0,
+  }),
+  numericControl: css({
+    width: '100% !important',
+    maxWidth: 180,
+    minWidth: 0,
+  }),
   textarea: css({
     width: '100%',
-    minWidth: 180,
     minHeight: 180,
     padding: theme.spacing(1, 2),
-    fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace",
-    fontSize: theme.typography.size.sm,
+    fontSize: theme.typography.body.fontSize,
+    lineHeight: theme.typography.body.lineHeight,
     borderRadius: theme.shape.radius.default,
     border: `1px solid ${theme.colors.border.medium}`,
     background: theme.colors.background.canvas,
@@ -51,10 +118,22 @@ const getStyles = (theme: GrafanaTheme2) => ({
       borderColor: theme.colors.primary.border,
     },
   }),
-  outputKeyRow: css({
+  codeTextarea: css({
+    fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace",
+  }),
+  switchField: css({
+    minHeight: theme.spacing(7),
     display: 'flex',
-    alignItems: 'center',
-    gap: theme.spacing(1),
+    flexDirection: 'column' as const,
+    justifyContent: 'center',
+  }),
+  validationMessage: css({
+    marginTop: theme.spacing(0.25),
+  }),
+  actions: css({
+    display: 'flex',
+    justifyContent: 'flex-start',
+    paddingTop: theme.spacing(0.25),
   }),
 });
 
@@ -75,7 +154,6 @@ export default function PublishVersionForm({
   const [version] = useState(() => nextVersion(existingVersions));
   const [touched, setTouched] = useState(false);
 
-  // llm_judge config
   const [provider, setProvider] = useState(() => String(initialConfig?.provider ?? ''));
   const [model, setModel] = useState(() => String(initialConfig?.model ?? ''));
   const [providerOptions, setProviderOptions] = useState<Array<SelectableValue<string>>>([]);
@@ -95,16 +173,11 @@ export default function PublishVersionForm({
     return typeof v === 'number' ? v : 0;
   });
 
-  // json_schema config
   const [schemaJson, setSchemaJson] = useState(() => {
     const s = initialConfig?.schema;
     return s ? JSON.stringify(s, null, 2) : '{}';
   });
-
-  // regex config
   const [pattern, setPattern] = useState(() => String(initialConfig?.pattern ?? ''));
-
-  // heuristic config
   const [notEmpty, setNotEmpty] = useState(() => Boolean(initialConfig?.not_empty));
   const [heuristicMinLength, setHeuristicMinLength] = useState<number | ''>(() => {
     const v = initialConfig?.min_length;
@@ -115,7 +188,6 @@ export default function PublishVersionForm({
     return typeof v === 'number' ? v : '';
   });
 
-  // Load judge providers on mount
   useEffect(() => {
     if (kind !== 'llm_judge') {
       return;
@@ -128,7 +200,6 @@ export default function PublishVersionForm({
       .catch(() => {});
   }, [ds, kind]);
 
-  // Load models when provider changes
   useEffect(() => {
     if (kind !== 'llm_judge' || !provider) {
       setModelOptions([]);
@@ -142,8 +213,7 @@ export default function PublishVersionForm({
       .catch(() => {});
   }, [ds, kind, provider]);
 
-  // output key
-  const [outputKey, setOutputKey] = useState(initialOutputKeys?.[0]?.key ?? '');
+  const [outputKey, setOutputKey] = useState(initialOutputKeys?.[0]?.key ?? 'score');
   const [outputType, setOutputType] = useState<ScoreType>(initialOutputKeys?.[0]?.type ?? 'number');
   const [outputDescription, setOutputDescription] = useState(initialOutputKeys?.[0]?.description ?? '');
   const [outputEnum, setOutputEnum] = useState(initialOutputKeys?.[0]?.enum?.join(', ') ?? '');
@@ -167,7 +237,7 @@ export default function PublishVersionForm({
           system_prompt: systemPrompt || undefined,
           user_prompt: userPrompt || undefined,
           max_tokens: maxTokens,
-          temperature: temperature,
+          temperature,
         };
       case 'json_schema':
         try {
@@ -231,6 +301,14 @@ export default function PublishVersionForm({
     passValue,
   ]);
 
+  const isOutputKeyEmpty = outputKey.trim() === '';
+  const outputKeyError = isOutputKeyEmpty ? 'Output key is required' : undefined;
+  const isRegexPatternEmpty = kind === 'regex' && pattern.trim() === '';
+  const regexPatternError = isRegexPatternEmpty ? 'Pattern is required' : undefined;
+  const isMaxTokensInvalid = kind === 'llm_judge' && (!Number.isInteger(maxTokens) || maxTokens < 1);
+  const maxTokensError = isMaxTokensInvalid ? 'Must be an integer greater than 0' : undefined;
+  const isTemperatureInvalid = kind === 'llm_judge' && (!Number.isFinite(temperature) || temperature < 0);
+  const temperatureError = isTemperatureInvalid ? 'Must be 0 or greater' : undefined;
   let schemaParseError = '';
   if (kind === 'json_schema') {
     try {
@@ -239,11 +317,34 @@ export default function PublishVersionForm({
       schemaParseError = 'Invalid JSON';
     }
   }
+  const isHeuristicRangeInvalid =
+    kind === 'heuristic' &&
+    heuristicMinLength !== '' &&
+    heuristicMaxLength !== '' &&
+    Number(heuristicMinLength) > Number(heuristicMaxLength);
+  const heuristicMaxLengthError = isHeuristicRangeInvalid ? 'Must be greater than or equal to Min length' : undefined;
+  const isOutputRangeInvalid = outputType === 'number' && outputMin !== '' && outputMax !== '' && outputMin > outputMax;
+  const outputMaxError = isOutputRangeInvalid ? 'Must be greater than or equal to Min' : undefined;
+
+  const showOutputKeyError = touched && isOutputKeyEmpty;
+  const showRegexPatternError = touched && isRegexPatternEmpty;
+  const showMaxTokensError = touched && isMaxTokensInvalid;
+  const showTemperatureError = touched && isTemperatureInvalid;
   const showSchemaError = touched && schemaParseError !== '';
+  const showHeuristicMaxLengthError = touched && isHeuristicRangeInvalid;
+  const showOutputMaxError = touched && isOutputRangeInvalid;
 
   const handleSubmit = () => {
     setTouched(true);
-    if (schemaParseError) {
+    if (
+      isOutputKeyEmpty ||
+      isRegexPatternEmpty ||
+      isMaxTokensInvalid ||
+      isTemperatureInvalid ||
+      schemaParseError !== '' ||
+      isHeuristicRangeInvalid ||
+      isOutputRangeInvalid
+    ) {
       return;
     }
 
@@ -269,266 +370,408 @@ export default function PublishVersionForm({
     });
   };
 
-  const label = rollbackVersion ? `Publish new version (rollback from ${rollbackVersion})` : 'Publish new version';
-
   return (
-    <FieldSet label={label}>
-      <Field label="Version" description="Auto-incremented version.">
-        <Input value={version} readOnly disabled width={20} />
-      </Field>
+    <div className={styles.form}>
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <div className={styles.sectionTitle}>Version details</div>
+        </div>
+        <div className={styles.sectionBody}>
+          <div className={styles.sectionText}>
+            <Text variant="body" color="secondary">
+              Review the next version number and describe what changed in this release.
+            </Text>
+          </div>
+          <div className={styles.twoColumnGrid}>
+            <Field label="Version" description="Auto-generated next version.">
+              <Input className={styles.compactControl} value={version} readOnly disabled />
+            </Field>
+            <Field label="Changelog" description="Optional summary saved with this version.">
+              <Input
+                className={styles.fullWidthControl}
+                value={changelog}
+                onChange={(e) => setChangelog(e.currentTarget.value)}
+                placeholder={rollbackVersion ? `Rollback to version ${rollbackVersion}` : 'What changed in this version'}
+              />
+            </Field>
+          </div>
+        </div>
+      </div>
 
       {kind === 'llm_judge' && (
-        <>
-          <Stack direction="row" gap={2}>
-            <Field label="Provider" description="LLM provider for the judge.">
-              <Select<string>
-                options={providerOptions}
-                value={provider || undefined}
-                onChange={(v) => {
-                  setProvider(v?.value ?? '');
-                  setModel('');
-                  setModelOptions([]);
-                }}
-                isClearable
-                placeholder="Default"
-                width={20}
+        <div className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <div className={styles.sectionTitle}>Judge configuration</div>
+          </div>
+          <div className={styles.sectionBody}>
+            <div className={styles.sectionText}>
+              <Text variant="body" color="secondary">
+                Choose the judge model and define the prompts and settings used to score each generation.
+              </Text>
+            </div>
+            <div className={styles.twoColumnGrid}>
+              <Field label="Provider">
+                <Select<string>
+                  className={styles.compactControl}
+                  options={providerOptions}
+                  value={provider || undefined}
+                  onChange={(v) => {
+                    setProvider(v?.value ?? '');
+                    setModel('');
+                    setModelOptions([]);
+                  }}
+                  isClearable
+                  placeholder="Default"
+                />
+              </Field>
+              <Field label="Model">
+                <Select<string>
+                  className={styles.compactControl}
+                  options={modelOptions}
+                  value={model || undefined}
+                  onChange={(v) => setModel(v?.value ?? '')}
+                  isClearable
+                  allowCustomValue
+                  placeholder="Default"
+                />
+              </Field>
+            </div>
+            <Field label="System prompt" description="Instructions for the judge model.">
+              <textarea
+                className={styles.textarea}
+                value={systemPrompt}
+                onChange={(e) => setSystemPrompt(e.currentTarget.value)}
+                placeholder={LLM_JUDGE_DEFAULT_SYSTEM_PROMPT}
+                rows={4}
               />
             </Field>
-            <Field label="Model" description="Model to use for judging.">
-              <Select<string>
-                options={modelOptions}
-                value={model || undefined}
-                onChange={(v) => setModel(v?.value ?? '')}
-                isClearable
-                allowCustomValue
-                placeholder="Default"
-                width={24}
+            <Field
+              label="User prompt"
+              description="Supports {{input}}, {{output}}, {{generation_id}}, {{conversation_id}}."
+            >
+              <textarea
+                className={styles.textarea}
+                value={userPrompt}
+                onChange={(e) => setUserPrompt(e.currentTarget.value)}
+                placeholder={LLM_JUDGE_DEFAULT_USER_PROMPT}
+                rows={4}
               />
             </Field>
-          </Stack>
-          <Field label="System prompt" description="Optional. Instructions for the judge model.">
-            <textarea
-              className={styles.textarea}
-              value={systemPrompt}
-              onChange={(e) => setSystemPrompt(e.currentTarget.value)}
-              placeholder={LLM_JUDGE_DEFAULT_SYSTEM_PROMPT}
-              rows={4}
-            />
-          </Field>
-          <Field
-            label="User prompt"
-            description="Supports {{input}}, {{output}}, {{generation_id}}, {{conversation_id}}."
-          >
-            <textarea
-              className={styles.textarea}
-              value={userPrompt}
-              onChange={(e) => setUserPrompt(e.currentTarget.value)}
-              placeholder={LLM_JUDGE_DEFAULT_USER_PROMPT}
-              rows={4}
-            />
-          </Field>
-          <Stack direction="row" gap={2}>
-            <Field label="Max tokens">
-              <Input
-                type="number"
-                value={maxTokens}
-                onChange={(e) => setMaxTokens(parseInt(e.currentTarget.value, 10) || 0)}
-                width={12}
-              />
-            </Field>
-            <Field label="Temperature">
-              <Input
-                type="number"
-                value={temperature}
-                onChange={(e) => setTemperature(parseFloat(e.currentTarget.value) || 0)}
-                width={12}
-              />
-            </Field>
-          </Stack>
-        </>
+            <div className={styles.twoColumnGrid}>
+              <Field label="Max tokens">
+                <>
+                  <Input
+                    className={styles.numericControl}
+                    type="number"
+                    value={maxTokens}
+                    onChange={(e) => setMaxTokens(parseInt(e.currentTarget.value, 10) || 0)}
+                  />
+                  {showMaxTokensError && maxTokensError && (
+                    <div className={styles.validationMessage}>
+                      <Text variant="bodySmall" color="error">
+                        {maxTokensError}
+                      </Text>
+                    </div>
+                  )}
+                </>
+              </Field>
+              <Field label="Temperature">
+                <>
+                  <Input
+                    className={styles.numericControl}
+                    type="number"
+                    value={temperature}
+                    onChange={(e) => setTemperature(parseFloat(e.currentTarget.value) || 0)}
+                  />
+                  {showTemperatureError && temperatureError && (
+                    <div className={styles.validationMessage}>
+                      <Text variant="bodySmall" color="error">
+                        {temperatureError}
+                      </Text>
+                    </div>
+                  )}
+                </>
+              </Field>
+            </div>
+          </div>
+        </div>
       )}
 
       {kind === 'json_schema' && (
-        <Field
-          label="Schema"
-          description="JSON schema for validation."
-          invalid={showSchemaError}
-          error={showSchemaError ? schemaParseError : undefined}
-        >
-          <textarea
-            className={styles.textarea}
-            value={schemaJson}
-            onChange={(e) => setSchemaJson(e.currentTarget.value)}
-            placeholder='{"type": "object", "properties": {...}}'
-            rows={6}
-          />
-        </Field>
+        <div className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <div className={styles.sectionTitle}>Schema configuration</div>
+          </div>
+          <div className={styles.sectionBody}>
+            <div className={styles.sectionText}>
+              <Text variant="body" color="secondary">
+                Provide the JSON schema used to validate each generation result.
+              </Text>
+            </div>
+            <Field label="Schema" description="JSON schema for validation.">
+              <>
+                <textarea
+                  className={`${styles.textarea} ${styles.codeTextarea}`}
+                  value={schemaJson}
+                  onChange={(e) => setSchemaJson(e.currentTarget.value)}
+                  placeholder='{"type": "object", "properties": {...}}'
+                  rows={6}
+                />
+                {showSchemaError && (
+                  <div className={styles.validationMessage}>
+                    <Text variant="bodySmall" color="error">
+                      {schemaParseError}
+                    </Text>
+                  </div>
+                )}
+              </>
+            </Field>
+          </div>
+        </div>
       )}
 
       {kind === 'regex' && (
-        <Field label="Pattern" description="Regex pattern to match.">
-          <Input
-            value={pattern}
-            onChange={(e) => setPattern(e.currentTarget.value)}
-            placeholder="e.g. ^[A-Z].*"
-            width={40}
-          />
-        </Field>
+        <div className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <div className={styles.sectionTitle}>Regex configuration</div>
+          </div>
+          <div className={styles.sectionBody}>
+            <div className={styles.sectionText}>
+              <Text variant="body" color="secondary">
+                Provide the pattern used to check each generation result.
+              </Text>
+            </div>
+            <Field label="Pattern" description="Regex pattern to match.">
+              <>
+                <Input
+                  className={styles.compactControl}
+                  value={pattern}
+                  onChange={(e) => setPattern(e.currentTarget.value)}
+                  placeholder="e.g. ^[A-Z].*"
+                />
+                {showRegexPatternError && regexPatternError && (
+                  <div className={styles.validationMessage}>
+                    <Text variant="bodySmall" color="error">
+                      {regexPatternError}
+                    </Text>
+                  </div>
+                )}
+              </>
+            </Field>
+          </div>
+        </div>
       )}
 
       {kind === 'heuristic' && (
-        <>
-          <Field label="Not empty" description="Require non-empty output.">
-            <Switch value={notEmpty} onChange={(e) => setNotEmpty(e.currentTarget.checked)} />
-          </Field>
-          <Stack direction="row" gap={2}>
-            <Field label="Min length">
-              <Input
-                type="number"
-                value={heuristicMinLength}
-                onChange={(e) => {
-                  const v = e.currentTarget.value;
-                  setHeuristicMinLength(v === '' ? '' : parseInt(v, 10) || 0);
-                }}
-                placeholder="—"
-                width={12}
-              />
+        <div className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <div className={styles.sectionTitle}>Heuristic configuration</div>
+          </div>
+          <div className={styles.sectionBody}>
+            <div className={styles.sectionText}>
+              <Text variant="body" color="secondary">
+                Define the simple rules used to check presence and length for each generation result.
+              </Text>
+            </div>
+            <Field className={styles.switchField} label="Not empty" description="Require non-empty output.">
+              <Switch value={notEmpty} onChange={(e) => setNotEmpty(e.currentTarget.checked)} />
             </Field>
-            <Field label="Max length">
-              <Input
-                type="number"
-                value={heuristicMaxLength}
-                onChange={(e) => {
-                  const v = e.currentTarget.value;
-                  setHeuristicMaxLength(v === '' ? '' : parseInt(v, 10) || 0);
-                }}
-                placeholder="—"
-                width={12}
-              />
-            </Field>
-          </Stack>
-        </>
-      )}
-
-      <Field label="Output key" description="Key and type for the evaluation result.">
-        <div className={styles.outputKeyRow}>
-          <Input
-            value={outputKey}
-            onChange={(e) => setOutputKey(e.currentTarget.value)}
-            placeholder="score"
-            width={20}
-          />
-          <Select<ScoreType>
-            options={SCORE_TYPE_OPTIONS}
-            value={outputType}
-            onChange={(v) => {
-              if (v?.value) {
-                setOutputType(v.value);
-              }
-            }}
-            width={16}
-          />
+            <div className={styles.twoColumnGrid}>
+              <Field label="Min length">
+                <Input
+                  className={styles.numericControl}
+                  type="number"
+                  value={heuristicMinLength}
+                  onChange={(e) => {
+                    const v = e.currentTarget.value;
+                    setHeuristicMinLength(v === '' ? '' : parseInt(v, 10) || 0);
+                  }}
+                  placeholder="e.g. 0"
+                />
+              </Field>
+              <Field label="Max length">
+                <>
+                  <Input
+                    className={styles.numericControl}
+                    type="number"
+                    value={heuristicMaxLength}
+                    onChange={(e) => {
+                      const v = e.currentTarget.value;
+                      setHeuristicMaxLength(v === '' ? '' : parseInt(v, 10) || 0);
+                    }}
+                    placeholder="e.g. 0"
+                  />
+                  {showHeuristicMaxLengthError && heuristicMaxLengthError && (
+                    <div className={styles.validationMessage}>
+                      <Text variant="bodySmall" color="error">
+                        {heuristicMaxLengthError}
+                      </Text>
+                    </div>
+                  )}
+                </>
+              </Field>
+            </div>
+          </div>
         </div>
-      </Field>
-      <Field
-        label="Output description"
-        description={
-          kind === 'llm_judge'
-            ? 'Included in the LLM Judge prompt to guide scoring.'
-            : 'Optional metadata for the output key.'
-        }
-      >
-        <Input
-          value={outputDescription}
-          onChange={(e) => setOutputDescription(e.currentTarget.value)}
-          placeholder="e.g. How helpful the response is on a 1-10 scale"
-          width={60}
-        />
-      </Field>
-      {kind === 'llm_judge' && outputType === 'string' && (
-        <Field
-          label="Allowed values"
-          description="Comma-separated list of allowed string values. Enforced via structured output."
-        >
-          <Input
-            value={outputEnum}
-            onChange={(e) => setOutputEnum(e.currentTarget.value)}
-            placeholder="e.g. none, mild, moderate, severe"
-            width={60}
-          />
-        </Field>
       )}
-      {outputType === 'number' && (
+
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <div className={styles.sectionTitle}>Output</div>
+        </div>
+        <div className={styles.sectionBody}>
+          <div className={styles.sectionText}>
+            <Text variant="body" color="secondary">
+              Define the score this template emits and how downstream views should interpret it.
+            </Text>
+          </div>
+          <div className={styles.twoColumnGrid}>
+            <Field label="Output key">
+              <>
+                <Input
+                  className={styles.compactControl}
+                  value={outputKey}
+                  onChange={(e) => setOutputKey(e.currentTarget.value)}
+                  placeholder="score"
+                />
+                {showOutputKeyError && outputKeyError && (
+                  <div className={styles.validationMessage}>
+                    <Text variant="bodySmall" color="error">
+                      {outputKeyError}
+                    </Text>
+                  </div>
+                )}
+              </>
+            </Field>
+            <Field label="Output type">
+              <Select<ScoreType>
+                className={styles.compactControl}
+                options={SCORE_TYPE_OPTIONS}
+                value={outputType}
+                onChange={(v) => {
+                  if (v?.value) {
+                    setOutputType(v.value);
+                  }
+                }}
+              />
+            </Field>
+          </div>
+          <Field
+            label="Output description"
+            description={
+              kind === 'llm_judge'
+                ? 'Included in the LLM Judge prompt to guide scoring.'
+                : 'Optional metadata for the output key.'
+            }
+          >
+            <Input
+              className={styles.fullWidthControl}
+              value={outputDescription}
+              onChange={(e) => setOutputDescription(e.currentTarget.value)}
+              placeholder="e.g. How helpful the response is on a 1-10 scale"
+            />
+          </Field>
+          {kind === 'llm_judge' && outputType === 'string' && (
+            <Field
+              label="Allowed values"
+              description="Comma-separated list of allowed string values. Enforced via structured output."
+            >
+              <Input
+                className={styles.fullWidthControl}
+                value={outputEnum}
+                onChange={(e) => setOutputEnum(e.currentTarget.value)}
+                placeholder="e.g. none, mild, moderate, severe"
+              />
+            </Field>
+          )}
+        </div>
+      </div>
+
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <div className={styles.sectionTitle}>Pass conditions</div>
+        </div>
+        <div className={styles.sectionBody}>
+          <div className={styles.sectionText}>
+            <Text variant="body" color="secondary">
+              Define which output values should count as passing for this template.
+            </Text>
+          </div>
+          {outputType === 'number' && (
+            <div className={styles.threeColumnGrid}>
+              <Field label="Pass threshold">
+                <Input
+                  className={styles.numericControl}
+                  type="number"
+                  value={passThreshold}
+                  onChange={(e) => setPassThreshold(e.currentTarget.value === '' ? '' : Number(e.currentTarget.value))}
+                  placeholder="e.g. 5"
+                />
+              </Field>
+              <Field label="Min">
+                <Input
+                  className={styles.numericControl}
+                  type="number"
+                  value={outputMin}
+                  onChange={(e) => setOutputMin(e.currentTarget.value === '' ? '' : Number(e.currentTarget.value))}
+                  placeholder="e.g. 1"
+                />
+              </Field>
+              <Field label="Max">
+                <>
+                  <Input
+                    className={styles.numericControl}
+                    type="number"
+                    value={outputMax}
+                    onChange={(e) => setOutputMax(e.currentTarget.value === '' ? '' : Number(e.currentTarget.value))}
+                    placeholder="e.g. 10"
+                  />
+                  {showOutputMaxError && outputMaxError && (
+                    <div className={styles.validationMessage}>
+                      <Text variant="bodySmall" color="error">
+                        {outputMaxError}
+                      </Text>
+                    </div>
+                  )}
+                </>
+              </Field>
+            </div>
+          )}
+          {outputType === 'string' && (
+            <Field label="Pass values" description="Comma-separated values that count as passing.">
+              <Input
+                className={styles.fullWidthControl}
+                value={passMatch}
+                onChange={(e) => setPassMatch(e.currentTarget.value)}
+                placeholder="e.g. none, mild"
+              />
+            </Field>
+          )}
+          {outputType === 'bool' && (
+            <Field label="Pass when" description="Which boolean value counts as passing.">
+              <Select<string>
+                className={styles.compactControl}
+                options={[
+                  { label: 'true (default)', value: '' },
+                  { label: 'true', value: 'true' },
+                  { label: 'false', value: 'false' },
+                ]}
+                value={passValue}
+                onChange={(v) => setPassValue((v?.value ?? '') as 'true' | 'false' | '')}
+              />
+            </Field>
+          )}
+        </div>
+      </div>
+
+      <div className={styles.actions}>
         <Stack direction="row" gap={1}>
-          <Field label="Pass threshold" description="Score >= this value passes.">
-            <Input
-              type="number"
-              value={passThreshold}
-              onChange={(e) => setPassThreshold(e.currentTarget.value === '' ? '' : Number(e.currentTarget.value))}
-              placeholder="—"
-              width={12}
-            />
-          </Field>
-          <Field label="Min" description="Scores below this are dropped.">
-            <Input
-              type="number"
-              value={outputMin}
-              onChange={(e) => setOutputMin(e.currentTarget.value === '' ? '' : Number(e.currentTarget.value))}
-              placeholder="—"
-              width={12}
-            />
-          </Field>
-          <Field label="Max" description="Scores above this are dropped.">
-            <Input
-              type="number"
-              value={outputMax}
-              onChange={(e) => setOutputMax(e.currentTarget.value === '' ? '' : Number(e.currentTarget.value))}
-              placeholder="—"
-              width={12}
-            />
-          </Field>
+          <Button onClick={handleSubmit}>Publish</Button>
+          <Button variant="secondary" onClick={onCancel}>
+            Cancel
+          </Button>
         </Stack>
-      )}
-      {outputType === 'string' && (
-        <Field label="Pass values" description="Comma-separated values that count as passing.">
-          <Input
-            value={passMatch}
-            onChange={(e) => setPassMatch(e.currentTarget.value)}
-            placeholder="e.g. none, mild"
-            width={60}
-          />
-        </Field>
-      )}
-      {outputType === 'bool' && (
-        <Field label="Pass when" description="Which boolean value counts as passing.">
-          <Select<string>
-            options={[
-              { label: 'true (default)', value: '' },
-              { label: 'true', value: 'true' },
-              { label: 'false', value: 'false' },
-            ]}
-            value={passValue}
-            onChange={(v) => setPassValue((v?.value ?? '') as 'true' | 'false' | '')}
-            width={20}
-          />
-        </Field>
-      )}
-
-      <Field label="Changelog" description="Description of changes in this version.">
-        <Input
-          value={changelog}
-          onChange={(e) => setChangelog(e.currentTarget.value)}
-          placeholder="What changed in this version"
-          width={60}
-        />
-      </Field>
-
-      <Stack direction="row" gap={1}>
-        <Button onClick={handleSubmit}>Publish</Button>
-        <Button variant="secondary" onClick={onCancel}>
-          Cancel
-        </Button>
-      </Stack>
-    </FieldSet>
+      </div>
+    </div>
   );
 }

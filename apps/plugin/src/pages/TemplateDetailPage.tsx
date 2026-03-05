@@ -19,6 +19,7 @@ import TemplateConfigSummary from '../components/evaluation/TemplateConfigSummar
 import VersionHistoryTable from '../components/evaluation/VersionHistoryTable';
 import PublishVersionForm from '../components/evaluation/PublishVersionForm';
 import VersionCompare from '../components/evaluation/VersionCompare';
+import { getSectionTitleStyles } from '../components/evaluation/sectionStyles';
 
 const EVAL_TEMPLATES_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}/templates`;
 const EVAL_EVALUATORS_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}/evaluators`;
@@ -32,19 +33,32 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     height: '100%',
-    gap: theme.spacing(2),
+    gap: theme.spacing(3),
   }),
   header: css({
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: theme.spacing(2),
     flexWrap: 'wrap' as const,
   }),
-  titleRow: css({
+  headerLeft: css({
     display: 'flex',
     alignItems: 'center',
     gap: theme.spacing(1),
+    flex: 1,
+    minWidth: 0,
+  }),
+  headerTitleRow: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+    flexWrap: 'wrap' as const,
+  }),
+  headerSubtitle: css({
+    marginTop: theme.spacing(0.5),
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.body.fontSize,
   }),
   section: css({
     display: 'flex',
@@ -59,15 +73,75 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   formWithTest: css({
     display: 'grid',
-    gridTemplateColumns: '3fr 2fr',
-    gap: theme.spacing(3),
+    gridTemplateColumns: 'minmax(0, 3fr) minmax(360px, 2fr)',
+    gap: theme.spacing(2),
+    minHeight: 0,
+    overflow: 'hidden',
+    '@media (max-width: 1360px)': {
+      gridTemplateColumns: '1fr',
+      gridTemplateRows: 'auto auto',
+      overflow: 'auto',
+    },
   }),
   formColumn: css({
     minWidth: 0,
+    overflow: 'auto',
+    display: 'flex',
+    flexDirection: 'column' as const,
+  }),
+  formCard: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.75),
+    padding: 0,
+    background: 'transparent',
+    minWidth: 0,
   }),
   testColumn: css({
-    position: 'relative' as const,
     minHeight: 0,
+    minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    overflow: 'hidden',
+    borderLeft: `1px solid ${theme.colors.border.weak}`,
+    paddingLeft: theme.spacing(2),
+    '@media (max-width: 1360px)': {
+      borderLeft: 'none',
+      paddingLeft: 0,
+    },
+  }),
+  testInner: css({
+    flex: 1,
+    minHeight: 0,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    overflow: 'hidden',
+  }),
+  bottomSections: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(2),
+  }),
+  detailCard: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    background: theme.colors.background.primary,
+    borderRadius: theme.shape.radius.default,
+  }),
+  detailCardHeader: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+    background: theme.colors.background.primary,
+    flexShrink: 0,
+    padding: theme.spacing(0.75, 1.25, 0.25),
+    borderBottom: `1px solid ${theme.colors.border.weak}`,
+  }),
+  detailCardBody: css({
+    padding: theme.spacing(1, 1.25),
+  }),
+  sectionTitle: css({
+    ...getSectionTitleStyles(theme),
   }),
 });
 
@@ -84,11 +158,6 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
   const [errorMessage, setErrorMessage] = useState('');
   const [activeForm, setActiveForm] = useState<ActiveForm>('none');
   const [formState, setFormState] = useState<EvalFormState | null>(null);
-  const [rollbackVersion, setRollbackVersion] = useState<string | undefined>(undefined);
-  const [rollbackConfig, setRollbackConfig] = useState<Record<string, unknown> | undefined>(undefined);
-  const [rollbackOutputKeys, setRollbackOutputKeys] = useState<
-    Array<{ key: string; type: 'number' | 'bool' | 'string' }> | undefined
-  >(undefined);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -181,21 +250,6 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
     };
   }, [dataSource, templateID, selectedVersions]);
 
-  const handleRollback = async (version: string) => {
-    if (!templateID) {
-      return;
-    }
-    try {
-      const ver = await dataSource.getTemplateVersion(templateID, version);
-      setRollbackVersion(version);
-      setRollbackConfig(ver.config);
-      setRollbackOutputKeys(ver.output_keys);
-      setActiveForm('publish');
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to load version for rollback');
-    }
-  };
-
   const handlePublishSubmit = async (req: PublishVersionRequest) => {
     if (!templateID) {
       return;
@@ -203,9 +257,6 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
     try {
       await dataSource.publishVersion(templateID, req);
       setActiveForm('none');
-      setRollbackVersion(undefined);
-      setRollbackConfig(undefined);
-      setRollbackOutputKeys(undefined);
       setReloadCounter((c) => c + 1);
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Failed to publish version');
@@ -282,11 +333,18 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
       )}
 
       <div className={styles.header}>
-        <div className={styles.titleRow}>
-          <Text element="h2">Template {template.template_id}</Text>
-          <Badge text={EVALUATOR_KIND_LABELS[template.kind]} color={getKindBadgeColor(template.kind)} />
-          <Badge text={template.scope} color={template.scope === 'global' ? 'orange' : 'blue'} />
-          <Badge text={`v${template.latest_version}`} color="green" />
+        <div className={styles.headerLeft}>
+          <div>
+            <div className={styles.headerTitleRow}>
+              <Text element="h3" weight="bold">
+                Template {template.template_id}
+              </Text>
+              <Badge text={EVALUATOR_KIND_LABELS[template.kind]} color={getKindBadgeColor(template.kind)} />
+              <Badge text={template.scope} color={template.scope === 'global' ? 'orange' : 'blue'} />
+              <Badge text={`v${template.latest_version}`} color="green" />
+            </div>
+            {template.description && <div className={styles.headerSubtitle}>{template.description}</div>}
+          </div>
         </div>
         <Stack direction="row" gap={1}>
           {template.scope === 'tenant' && (
@@ -294,9 +352,6 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
               variant="primary"
               icon="plus"
               onClick={() => {
-                setRollbackVersion(undefined);
-                setRollbackConfig(template.config);
-                setRollbackOutputKeys(template.output_keys);
                 setActiveForm('publish');
               }}
               disabled={activeForm !== 'none'}
@@ -315,84 +370,92 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
         </Stack>
       </div>
 
-      {template.description && <Text color="secondary">{template.description}</Text>}
-
       {activeForm === 'none' && (
-        <div className={styles.section}>
-          <TemplateConfigSummary
-            kind={template.kind}
-            config={template.config ?? {}}
-            outputKeys={template.output_keys ?? []}
-          />
+        <div className={styles.detailCard}>
+          <div className={styles.detailCardHeader}>
+            <div className={styles.sectionTitle}>Current configuration</div>
+          </div>
+          <div className={styles.detailCardBody}>
+            <TemplateConfigSummary
+              kind={template.kind}
+              config={template.config ?? {}}
+              outputKeys={template.output_keys ?? []}
+            />
+          </div>
         </div>
       )}
 
       {activeForm === 'publish' && (
         <div className={styles.formWithTest}>
           <div className={styles.formColumn}>
-            <PublishVersionForm
-              kind={template.kind}
-              initialConfig={rollbackConfig}
-              initialOutputKeys={rollbackOutputKeys}
-              rollbackVersion={rollbackVersion}
-              existingVersions={template?.versions?.map((v) => v.version)}
-              onSubmit={handlePublishSubmit}
-              onCancel={() => {
-                setActiveForm('none');
-                setRollbackVersion(undefined);
-                setRollbackConfig(undefined);
-                setRollbackOutputKeys(undefined);
-              }}
-              onConfigChange={setFormState}
-              dataSource={dataSource}
-            />
-          </div>
-          <div className={styles.testColumn}>
-            {formState && (
-              <EvalTestPanel
-                kind={formState.kind}
-                config={formState.config}
-                outputKeys={formState.outputKeys}
+            <div className={styles.formCard}>
+              <PublishVersionForm
+                kind={template.kind}
+                initialConfig={template.config}
+                initialOutputKeys={template.output_keys}
+                existingVersions={template?.versions?.map((v) => v.version)}
+                onSubmit={handlePublishSubmit}
+                onCancel={() => {
+                  setActiveForm('none');
+                }}
+                onConfigChange={setFormState}
                 dataSource={dataSource}
               />
-            )}
+            </div>
+          </div>
+          <div className={styles.testColumn}>
+            <div className={styles.testInner}>
+              {formState && (
+                <EvalTestPanel
+                  kind={formState.kind}
+                  config={formState.config}
+                  outputKeys={formState.outputKeys}
+                  dataSource={dataSource}
+                />
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      <div className={styles.section}>
-        <Text element="h3" weight="medium">
-          Version History
-        </Text>
-        <VersionHistoryTable
-          versions={template.versions ?? []}
-          selectedVersions={selectedVersions}
-          onToggleSelect={handleToggleVersionSelect}
-          onRollback={template.scope === 'tenant' ? handleRollback : undefined}
-        />
-      </div>
-
-      {compareLeft && compareRight && (
-        <div className={styles.section}>
-          <Text element="h3" weight="medium">
-            Version Compare
-          </Text>
-          <VersionCompare
-            left={{
-              version: compareLeft.version,
-              changelog: compareLeft.changelog,
-              config: compareLeft.config,
-              outputKeys: compareLeft.output_keys,
-            }}
-            right={{
-              version: compareRight.version,
-              changelog: compareRight.changelog,
-              config: compareRight.config,
-              outputKeys: compareRight.output_keys,
-            }}
-          />
+      <div className={styles.bottomSections}>
+        <div className={styles.detailCard}>
+          <div className={styles.detailCardHeader}>
+            <div className={styles.sectionTitle}>Version history</div>
+          </div>
+          <div className={styles.detailCardBody}>
+            <VersionHistoryTable
+              versions={template.versions ?? []}
+              selectedVersions={selectedVersions}
+              onToggleSelect={handleToggleVersionSelect}
+            />
+          </div>
         </div>
-      )}
+
+        {compareLeft && compareRight && (
+          <div className={styles.detailCard}>
+            <div className={styles.detailCardHeader}>
+              <div className={styles.sectionTitle}>Version compare</div>
+            </div>
+            <div className={styles.detailCardBody}>
+              <VersionCompare
+                left={{
+                  version: compareLeft.version,
+                  changelog: compareLeft.changelog,
+                  config: compareLeft.config,
+                  outputKeys: compareLeft.output_keys,
+                }}
+                right={{
+                  version: compareRight.version,
+                  changelog: compareRight.changelog,
+                  config: compareRight.config,
+                  outputKeys: compareRight.output_keys,
+                }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
