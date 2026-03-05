@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useStyles2 } from '@grafana/ui';
 import { tokenColor } from './palette';
 import { getStyles } from './TokenizedText.styles';
@@ -13,6 +13,29 @@ export type TokenizedTextProps = {
 
 export function TokenizedText({ text, encode, decode }: TokenizedTextProps) {
   const styles = useStyles2(getStyles);
+  const containerRef = useRef<HTMLSpanElement>(null);
+  const [tip, setTip] = useState<{ id: string; x: number; y: number } | null>(null);
+
+  const handleMouseOver = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const tokenId = target.dataset?.tokenId;
+    if (!tokenId) {
+      setTip(null);
+      return;
+    }
+    const rect = target.getBoundingClientRect();
+    const containerRect = containerRef.current?.getBoundingClientRect();
+    if (!containerRect) {
+      return;
+    }
+    setTip({
+      id: tokenId,
+      x: rect.left - containerRect.left + rect.width / 2,
+      y: rect.top - containerRect.top,
+    });
+  }, []);
+
+  const handleMouseLeave = useCallback(() => setTip(null), []);
 
   const { segments, truncated } = useMemo(() => {
     if (!encode || !decode) {
@@ -32,7 +55,12 @@ export function TokenizedText({ text, encode, decode }: TokenizedTextProps) {
   }
 
   return (
-    <span className={styles.container}>
+    <span
+      ref={containerRef}
+      className={styles.container}
+      onMouseOver={handleMouseOver}
+      onMouseLeave={handleMouseLeave}
+    >
       {segments.map((seg) => {
         const bg = `color-mix(in oklch, ${tokenColor(seg.index)}, transparent ${styles.transparencyPct}%)`;
         return (
@@ -40,7 +68,6 @@ export function TokenizedText({ text, encode, decode }: TokenizedTextProps) {
             key={seg.index}
             className={styles.token}
             data-token-id={seg.id}
-            title={`Token ID: ${seg.id}`}
             style={{ backgroundColor: bg }}
           >
             {seg.text}
@@ -50,6 +77,11 @@ export function TokenizedText({ text, encode, decode }: TokenizedTextProps) {
       {truncated && (
         <span className={styles.truncated}>
           {'\u2026'} (truncated at {MAX_TOKENS.toLocaleString()} tokens)
+        </span>
+      )}
+      {tip && (
+        <span className={styles.tip} style={{ left: tip.x, top: tip.y }}>
+          {tip.id}
         </span>
       )}
     </span>
