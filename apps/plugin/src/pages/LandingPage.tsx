@@ -133,6 +133,8 @@ export default function LandingPage() {
             label="Total Requests"
             value={totalRequests.data ? vectorToStatValue(totalRequests.data) : 0}
             loading={totalRequests.loading}
+            to={`${PLUGIN_BASE}/${ROUTES.Analytics}?tab=overview`}
+            linkLabel="Overview analytics"
           />
           <TopStat
             label="Avg Latency (P95)"
@@ -140,6 +142,8 @@ export default function LandingPage() {
             unit="s"
             loading={latencyP95.loading}
             invertChange
+            to={`${PLUGIN_BASE}/${ROUTES.Analytics}?tab=performance`}
+            linkLabel="Performance analytics"
           />
           <TopStat
             label="Error Rate"
@@ -147,12 +151,16 @@ export default function LandingPage() {
             unit="percent"
             loading={errorRate.loading}
             invertChange
+            to={`${PLUGIN_BASE}/${ROUTES.Analytics}?tab=errors`}
+            linkLabel="Error analytics"
           />
           <TopStat
             label="Total Tokens"
             value={totalTokens.data ? vectorToStatValue(totalTokens.data) : 0}
             unit="short"
             loading={totalTokens.loading}
+            to={`${PLUGIN_BASE}/${ROUTES.Analytics}?tab=usage`}
+            linkLabel="Usage analytics"
           />
         </div>
         <div className={styles.chartRow}>

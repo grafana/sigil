@@ -1,9 +1,11 @@
 import React from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { TopStat, type TopStatProps } from '../components/TopStat';
 
 export default {
   title: 'Components/TopStat',
   component: TopStat,
+  decorators: [(Story: React.ComponentType) => <MemoryRouter><Story /></MemoryRouter>],
 };
 
 const Template = (args: TopStatProps) => (
@@ -65,6 +67,10 @@ export const CustomComparisonLabel = () => (
     prevLoading={false}
     comparisonLabel="in previous window"
   />
+);
+
+export const WithLink = () => (
+  <Template label="Total Requests" value={12345} loading={false} to="/a/grafana-sigil-app/analytics?tab=overview" />
 );
 
 export const StatsRow = () => (

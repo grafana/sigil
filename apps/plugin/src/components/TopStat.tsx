@@ -2,6 +2,7 @@ import React from 'react';
 import { css } from '@emotion/css';
 import { type GrafanaTheme2 } from '@grafana/data';
 import { Tooltip, useStyles2 } from '@grafana/ui';
+import { Link } from 'react-router-dom';
 import { formatStatValue } from './dashboard/dashboardShared';
 
 export type TopStatProps = {
@@ -13,6 +14,8 @@ export type TopStatProps = {
   prevLoading?: boolean;
   invertChange?: boolean;
   comparisonLabel?: string;
+  to?: string;
+  linkLabel?: string;
 };
 
 const DEFAULT_COMPARISON_LABEL = 'one hour ago';
@@ -26,6 +29,8 @@ export function TopStat({
   prevLoading,
   invertChange,
   comparisonLabel = DEFAULT_COMPARISON_LABEL,
+  to,
+  linkLabel,
 }: TopStatProps) {
   const styles = useStyles2(getStyles);
 
@@ -67,7 +72,10 @@ export function TopStat({
 
   return (
     <div className={styles.topStat}>
-      <span className={styles.topStatLabel}>{label}</span>
+      <div className={styles.topStatLabelRow}>
+        <span className={styles.topStatLabel}>{label}</span>
+        {to && <Link to={to} className={styles.topStatDetailLink}>{linkLabel ?? 'View details'}</Link>}
+      </div>
       <div className={styles.topStatRow}>
         <span className={styles.topStatValue}>{loading ? '–' : formatStatValue(value, unit)}</span>
         {changeBadge}
@@ -82,6 +90,28 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'flex',
       flexDirection: 'column',
       gap: theme.spacing(0.5),
+    }),
+    topStatLabelRow: css({
+      display: 'flex',
+      alignItems: 'baseline',
+      justifyContent: 'space-between',
+      gap: theme.spacing(1),
+    }),
+    topStatDetailLink: css({
+      fontSize: theme.typography.bodySmall.fontSize,
+      color: theme.colors.text.secondary,
+      textDecoration: 'none',
+      whiteSpace: 'nowrap',
+      padding: theme.spacing(0.25, 1),
+      border: `1px solid ${theme.colors.border.weak}`,
+      borderRadius: theme.shape.radius.default,
+      background: 'transparent',
+      transition: 'background 0.15s ease, color 0.15s ease, border-color 0.15s ease',
+      '&:hover': {
+        background: theme.colors.action.hover,
+        color: theme.colors.text.primary,
+        borderColor: theme.colors.border.medium,
+      },
     }),
     topStatLabel: css({
       fontSize: theme.typography.bodySmall.fontSize,
