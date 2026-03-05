@@ -215,7 +215,14 @@ export default function App(props: AppRootProps) {
               </PageRoot>
             }
           />
-          <Route path="*" element={<DashboardPage />} />
+          <Route
+            path="*"
+            element={
+              <PageRoot>
+                <DashboardPage />
+              </PageRoot>
+            }
+          />
         </Routes>
       </div>
     </div>
