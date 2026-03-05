@@ -1,9 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { css } from '@emotion/css';
 import { useStyles2 } from '@grafana/ui';
 import {
+  dateTime,
   FieldType,
   ThresholdsMode,
+  type AbsoluteTimeRange,
   type DataFrame,
   type FieldConfigSource,
   type GrafanaTheme2,
@@ -131,9 +133,10 @@ export type AgentActivityTimelineProps = {
   items: AgentListItem[];
   timeRange: TimeRange;
   loading: boolean;
+  onTimeRangeChange?: (timeRange: TimeRange) => void;
 };
 
-export function AgentActivityTimeline({ items, timeRange, loading }: AgentActivityTimelineProps) {
+export function AgentActivityTimeline({ items, timeRange, loading, onTimeRangeChange }: AgentActivityTimelineProps) {
   const styles = useStyles2(getStyles);
   const fromMs = timeRange.from.valueOf();
   const toMs = timeRange.to.valueOf();
@@ -142,6 +145,18 @@ export function AgentActivityTimeline({ items, timeRange, loading }: AgentActivi
   const dataFrames = useMemo(
     () => buildDataFrames(items, fromMs, toMs, bucketCount),
     [items, fromMs, toMs, bucketCount]
+  );
+
+  const handlePanelTimeRangeChange = useCallback(
+    (abs: AbsoluteTimeRange) => {
+      if (!onTimeRangeChange) {
+        return;
+      }
+      const f = dateTime(abs.from);
+      const t = dateTime(abs.to);
+      onTimeRangeChange({ from: f, to: t, raw: { from: f.toISOString(), to: t.toISOString() } });
+    },
+    [onTimeRangeChange]
   );
 
   return (
@@ -154,6 +169,7 @@ export function AgentActivityTimeline({ items, timeRange, loading }: AgentActivi
         loading={loading}
         height={PANEL_HEIGHT}
         timeRange={timeRange}
+        onChangeTimeRange={onTimeRangeChange ? handlePanelTimeRangeChange : undefined}
         options={panelOptions}
         fieldConfig={fieldConfig}
       />

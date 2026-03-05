@@ -276,6 +276,7 @@ export const NoBreakdown = {
       from={from}
       to={to}
       timeRange={timeRange}
+      onTimeRangeChange={() => {}}
     />
   ),
 };
@@ -289,6 +290,7 @@ export const BreakdownByProvider = {
       from={from}
       to={to}
       timeRange={timeRange}
+      onTimeRangeChange={() => {}}
     />
   ),
 };
@@ -302,6 +304,7 @@ export const TokensMode = {
       from={from}
       to={to}
       timeRange={timeRange}
+      onTimeRangeChange={() => {}}
     />
   ),
 };
@@ -315,6 +318,7 @@ export const TokensModeWithBreakdown = {
       from={from}
       to={to}
       timeRange={timeRange}
+      onTimeRangeChange={() => {}}
     />
   ),
 };

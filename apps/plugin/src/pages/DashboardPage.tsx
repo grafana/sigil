@@ -79,6 +79,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
           from={from}
           to={to}
           timeRange={timeRange}
+          onTimeRangeChange={setTimeRange}
         />
       )}
       {tab === 'performance' && (
@@ -89,6 +90,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
           from={from}
           to={to}
           timeRange={timeRange}
+          onTimeRangeChange={setTimeRange}
         />
       )}
       {tab === 'errors' && (
@@ -99,6 +101,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
           from={from}
           to={to}
           timeRange={timeRange}
+          onTimeRangeChange={setTimeRange}
         />
       )}
       {tab === 'usage' && (
@@ -109,6 +112,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
           from={from}
           to={to}
           timeRange={timeRange}
+          onTimeRangeChange={setTimeRange}
         />
       )}
     </div>

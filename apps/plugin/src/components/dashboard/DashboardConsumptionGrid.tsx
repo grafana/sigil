@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { css } from '@emotion/css';
-import { ThresholdsMode, type GrafanaTheme2, type TimeRange } from '@grafana/data';
+import { dateTime, ThresholdsMode, type AbsoluteTimeRange, type GrafanaTheme2, type TimeRange } from '@grafana/data';
 import { useStyles2 } from '@grafana/ui';
 import type { DashboardDataSource } from '../../dashboard/api';
 import {
@@ -37,6 +37,7 @@ export type DashboardConsumptionGridProps = {
   from: number;
   to: number;
   timeRange: TimeRange;
+  onTimeRangeChange: (timeRange: TimeRange) => void;
 };
 
 const CHART_HEIGHT = 320;
@@ -55,10 +56,20 @@ export function DashboardConsumptionGrid({
   from,
   to,
   timeRange,
+  onTimeRangeChange,
 }: DashboardConsumptionGridProps) {
   const styles = useStyles2(getStyles);
   const hasBreakdown = breakdownBy !== 'none';
   const breakdownPromLabel = hasBreakdown ? breakdownToPromLabel[breakdownBy] : undefined;
+
+  const handlePanelTimeRangeChange = useCallback(
+    (abs: AbsoluteTimeRange) => {
+      const f = dateTime(abs.from);
+      const t = dateTime(abs.to);
+      onTimeRangeChange({ from: f, to: t, raw: { from: f.toISOString(), to: t.toISOString() } });
+    },
+    [onTimeRangeChange]
+  );
 
   const step = useMemo(() => computeStep(from, to), [from, to]);
   const interval = useMemo(() => computeRateInterval(step), [step]);
@@ -304,6 +315,7 @@ export function DashboardConsumptionGrid({
             pluginId="timeseries"
             height={CHART_HEIGHT}
             timeRange={timeRange}
+            onChangeTimeRange={handlePanelTimeRangeChange}
             loading={tokensByTypeTimeseries.loading}
             error={tokensByTypeTimeseries.error}
             data={tokensByTypeTimeseries.data ? matrixToDataFrames(tokensByTypeTimeseries.data) : []}
@@ -335,6 +347,7 @@ export function DashboardConsumptionGrid({
             pluginId="timeseries"
             height={CHART_HEIGHT}
             timeRange={timeRange}
+            onChangeTimeRange={handlePanelTimeRangeChange}
             loading={tokensTotalTimeseries.loading}
             error={tokensTotalTimeseries.error}
             data={tokensTotalTimeseries.data ? matrixToDataFrames(tokensTotalTimeseries.data) : []}
@@ -376,6 +389,7 @@ export function DashboardConsumptionGrid({
             pluginId="timeseries"
             height={CHART_HEIGHT}
             timeRange={timeRange}
+            onChangeTimeRange={handlePanelTimeRangeChange}
             loading={costOverTimeData.loading || resolvedPricing.loading}
             error={costOverTimeData.error}
             data={costTimeSeries}
