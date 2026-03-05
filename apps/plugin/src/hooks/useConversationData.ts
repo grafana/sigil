@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createTempoTraceFetcher } from '../conversation/fetchTrace';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
-import { loadConversation, type TraceFetcher } from '../conversation/loader';
+import { loadConversationDetail, loadConversationTraces, type TraceFetcher } from '../conversation/loader';
 import {
   getAllGenerations,
   getCostSummary,
@@ -28,6 +28,7 @@ export type UseConversationDataOptions = {
 export type UseConversationDataResult = {
   conversationData: ConversationData | null;
   loading: boolean;
+  tracesLoading: boolean;
   errorMessage: string;
   tokenSummary: TokenSummary | null;
   costSummary: CostSummary | null;
@@ -44,6 +45,7 @@ export function useConversationData({
 }: UseConversationDataOptions): UseConversationDataResult {
   const [conversationData, setConversationData] = useState<ConversationData | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [tracesLoading, setTracesLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [conversationCosts, setConversationCosts] = useState<Map<string, GenerationCostResult>>(new Map());
   const [nameResolvedModelCards, setNameResolvedModelCards] = useState<Map<string, ModelCard>>(new Map());
@@ -57,6 +59,7 @@ export function useConversationData({
       queueMicrotask(() => {
         setConversationData(null);
         setLoading(false);
+        setTracesLoading(false);
         setErrorMessage('');
       });
       return;
@@ -64,28 +67,35 @@ export function useConversationData({
 
     queueMicrotask(() => {
       setLoading(true);
+      setTracesLoading(false);
       setErrorMessage('');
       setConversationData(null);
     });
 
-    void loadConversation(dataSource, conversationID, traceFetcher)
+    void loadConversationDetail(dataSource, conversationID)
       .then((data) => {
         if (requestVersionRef.current !== requestVersion) {
           return;
         }
         setConversationData(data);
+        setLoading(false);
+        setTracesLoading(true);
+
+        return loadConversationTraces(data, traceFetcher).then((enriched) => {
+          if (requestVersionRef.current !== requestVersion) {
+            return;
+          }
+          setConversationData(enriched);
+          setTracesLoading(false);
+        });
       })
       .catch((error) => {
         if (requestVersionRef.current !== requestVersion) {
           return;
         }
         setErrorMessage(error instanceof Error ? error.message : 'failed to load conversation detail');
-      })
-      .finally(() => {
-        if (requestVersionRef.current !== requestVersion) {
-          return;
-        }
         setLoading(false);
+        setTracesLoading(false);
       });
   }, [dataSource, conversationID, traceFetcher]);
 
@@ -160,6 +170,7 @@ export function useConversationData({
   return {
     conversationData,
     loading,
+    tracesLoading,
     errorMessage,
     tokenSummary,
     costSummary,

@@ -117,7 +117,7 @@ export default function ConversationPage(props: ConversationPageProps) {
   const traceFetcher = props.traceFetcher ?? defaultTraceFetcher;
   const modelCardClient = props.modelCardClient ?? defaultModelCardClient;
 
-  const { conversationData, loading, errorMessage, tokenSummary, costSummary, modelCards, allGenerations } =
+  const { conversationData, loading, tracesLoading, errorMessage, tokenSummary, costSummary, modelCards, allGenerations } =
     useConversationData({ conversationID, dataSource, traceFetcher, modelCardClient });
 
   const [splitterRatio, setSplitterRatio] = useState(0.55);
@@ -246,6 +246,7 @@ export default function ConversationPage(props: ConversationPageProps) {
             >
               <ConversationGenerations
                 data={conversationData}
+                loading={tracesLoading}
                 selectedSpanSelectionID={selectedSpanSelectionID}
                 onSelectSpan={onSelectSpan}
               />

@@ -20,12 +20,7 @@ import FlowTree from '../components/conversation-explore/FlowTree';
 import MiniTimeline from '../components/conversation-explore/MiniTimeline';
 import DetailPanel from '../components/conversation-explore/DetailPanel';
 import type { FlowNode } from '../components/conversation-explore/types';
-import {
-  getHighlightedSidebarItems,
-  type HighlightedSidebarItem,
-} from '../components/conversation-explore/getHighlightedSidebarItems';
 import { Loader } from '../components/Loader';
-import AssistantInsightsList, { type AssistantInsightDisplayItem } from '../components/assistant/AssistantInsightsList';
 
 export type ConversationExplorePageProps = {
   dataSource?: ConversationsDataSource;
@@ -94,23 +89,14 @@ const getStyles = (theme: GrafanaTheme2) => ({
     overflow: 'hidden',
   }),
   detailPanelWrap: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
     flex: 1,
     minWidth: 0,
     minHeight: 0,
     overflow: 'hidden',
   }),
-  insightsWrap: css({
-    width: 320,
-    flexShrink: 0,
-    minHeight: 0,
-    background: theme.colors.background.primary,
-  }),
 });
-
-type AssistantInsightItem = {
-  itemId: string;
-  focus: string;
-};
 
 export default function ConversationExplorePage(props: ConversationExplorePageProps) {
   const styles = useStyles2(getStyles);
@@ -123,7 +109,7 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   const [searchParams, setSearchParams] = useSearchParams();
   const conversationTitle = searchParams.get('conversationTitle') ?? '';
 
-  const { conversationData, loading, errorMessage, tokenSummary, costSummary, generationCosts, allGenerations } =
+  const { conversationData, loading, tracesLoading, errorMessage, tokenSummary, costSummary, generationCosts, allGenerations } =
     useConversationData({
       conversationID,
       dataSource,
@@ -267,108 +253,6 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   }, [allGenerations]);
 
   const errorCount = useMemo(() => allGenerations.filter((g) => Boolean(g.error?.message)).length, [allGenerations]);
-  const totalTokensForInsights = useMemo(() => {
-    if (tokenSummary) {
-      return tokenSummary.totalTokens;
-    }
-    return allGenerations.reduce((sum, generation) => sum + (generation.usage?.total_tokens ?? 0), 0);
-  }, [allGenerations, tokenSummary]);
-  const totalCostUsdForInsights = useMemo(() => {
-    if (costSummary) {
-      return costSummary.totalCost;
-    }
-    let total = 0;
-    for (const [, cost] of generationCosts) {
-      total += cost.breakdown.totalCost;
-    }
-    return total;
-  }, [costSummary, generationCosts]);
-  const highlightedSidebarItems = useMemo(
-    () => getHighlightedSidebarItems(flowNodes, generationCosts),
-    [flowNodes, generationCosts]
-  );
-
-  const highlightedSidebarItemMap = useMemo(() => {
-    const map = new Map<string, HighlightedSidebarItem>();
-    for (const item of highlightedSidebarItems) {
-      map.set(item.itemId, item);
-    }
-    return map;
-  }, [highlightedSidebarItems]);
-
-  const insightsDataContext = useMemo(() => {
-    if (highlightedSidebarItems.length === 0) {
-      return null;
-    }
-    const modelList = models.length > 0 ? models.join(', ') : 'unknown';
-    const providerValues = Array.from(new Set(Object.values(modelProviders)));
-    const providerList = providerValues.length > 0 ? providerValues.join(', ') : 'unknown';
-    const lines: string[] = [
-      'Conversation metadata:',
-      `Conversation ID: ${conversationID}`,
-      `First generation at (UTC): ${conversationData?.firstGenerationAt ?? 'unknown'}`,
-      `Last generation at (UTC): ${conversationData?.lastGenerationAt ?? 'unknown'}`,
-      `Generations: ${conversationData?.generationCount ?? allGenerations.length}`,
-      `Models: ${modelList}`,
-      `Providers: ${providerList}`,
-      `Total duration (ms): ${Math.round(totalDurationMs)}`,
-      `Total tokens: ${totalTokensForInsights}`,
-      `Total cost USD: ${totalCostUsdForInsights.toFixed(6)}`,
-      `Error count: ${errorCount}`,
-      '',
-      'Selectable sidebar items (use itemId exactly):',
-    ];
-    for (const item of highlightedSidebarItems) {
-      lines.push(
-        `- itemId=${item.itemId}; label=${item.label}; kind=${item.kind}; reasons=${item.reasons.join(',')}; durationMs=${Math.round(item.durationMs)}; tokenCount=${item.tokenCount}; costUsd=${item.costUsd.toFixed(6)}; status=${item.status}`
-      );
-    }
-    return lines.join('\n');
-  }, [
-    allGenerations.length,
-    conversationData?.generationCount,
-    conversationData?.firstGenerationAt,
-    conversationData?.lastGenerationAt,
-    conversationID,
-    errorCount,
-    highlightedSidebarItems,
-    modelProviders,
-    models,
-    totalCostUsdForInsights,
-    totalDurationMs,
-    totalTokensForInsights,
-  ]);
-
-  const parseAssistantDisplayItems = useCallback(
-    (raw: string): AssistantInsightDisplayItem[] => {
-      const items: AssistantInsightDisplayItem[] = [];
-      for (const item of parseAssistantInsightItems(raw)) {
-        const sidebarItem = highlightedSidebarItemMap.get(item.itemId);
-        if (!sidebarItem) {
-          continue;
-        }
-        items.push({
-          itemId: item.itemId,
-          sidebarLabel: sidebarItem.label,
-          focus: item.focus,
-        });
-      }
-      return items;
-    },
-    [highlightedSidebarItemMap]
-  );
-
-  const handleSelectInsightItem = useCallback(
-    (itemId: string) => {
-      const node = highlightedSidebarItemMap.get(itemId)?.node;
-      if (!node) {
-        return;
-      }
-      handleSelectNode(node);
-    },
-    [handleSelectNode, highlightedSidebarItemMap]
-  );
-
   if (loading) {
     return (
       <div className={styles.pageContainer}>
@@ -420,6 +304,7 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
           />
           <FlowTree
             nodes={flowNodes}
+            loading={tracesLoading}
             selectedNodeId={selectedNodeId}
             onSelectNode={handleSelectNode}
             generationCosts={generationCosts}
@@ -451,19 +336,6 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
                 scrollToToolCallId={scrollToToolCallId}
               />
             </div>
-            <div className={styles.insightsWrap}>
-              <AssistantInsightsList
-                prompt="Review this conversation flow and suggest 3-5 high-confidence things to pay attention to. Prioritize anomalies. Use only selectable item IDs from the provided list."
-                origin="sigil-plugin/conversation-explore-assistant-insights"
-                systemPrompt='You are a concise GenAI observability analyst. Return JSON only, no markdown. Format exactly as: {"items":[{"itemId":"<exact item id>","focus":"<high-confidence suggestion on what to pay attention to>"}]}. Return 3-5 items. Include only high-confidence suggestions that are clearly supported by the provided data; omit uncertain suggestions. itemId must be one of the provided selectable IDs. Keep focus under 24 words.'
-                dataContext={insightsDataContext}
-                parseItems={parseAssistantDisplayItems}
-                onSelectItem={handleSelectInsightItem}
-                waitingText="Waiting for highlighted sidebar items."
-                emptyText="Waiting for highlighted sidebar items."
-                invalidText="Could not map assistant output to selectable sidebar items."
-              />
-            </div>
           </div>
         </div>
       </div>
@@ -471,28 +343,6 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   );
 }
 
-function parseAssistantInsightItems(raw: string): AssistantInsightItem[] {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return [];
-  }
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const jsonText = fenced?.[1] ?? trimmed;
-  try {
-    const parsed = JSON.parse(jsonText) as { items?: Array<Partial<AssistantInsightItem>> };
-    if (!Array.isArray(parsed.items)) {
-      return [];
-    }
-    return parsed.items
-      .map((item) => ({
-        itemId: (item.itemId ?? '').trim(),
-        focus: (item.focus ?? '').trim(),
-      }))
-      .filter((item) => item.itemId.length > 0 && item.focus.length > 0);
-  } catch {
-    return [];
-  }
-}
 
 function findNodeById(nodes: FlowNode[], id: string): FlowNode | null {
   for (const node of nodes) {
