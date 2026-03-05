@@ -265,26 +265,27 @@ func (s *Service) executeItem(ctx context.Context, item evalpkg.WorkItem) {
 		}
 
 		score := evalpkg.GenerationScore{
-			TenantID:         item.TenantID,
-			ScoreID:          makeScoreID(item.WorkID, output.Key),
-			GenerationID:     item.GenerationID,
-			ConversationID:   generation.GetConversationId(),
-			TraceID:          generation.GetTraceId(),
-			SpanID:           generation.GetSpanId(),
-			EvaluatorID:      item.EvaluatorID,
-			EvaluatorVersion: item.EvaluatorVersion,
-			RuleID:           item.RuleID,
-			RunID:            item.WorkID,
-			ScoreKey:         output.Key,
-			ScoreType:        output.Type,
-			Value:            output.Value,
-			Unit:             output.Unit,
-			Passed:           output.Passed,
-			Explanation:      output.Explanation,
-			Metadata:         output.Metadata,
-			CreatedAt:        createdAt,
-			SourceKind:       "online_rule",
-			SourceID:         item.RuleID,
+			TenantID:             item.TenantID,
+			ScoreID:              makeScoreID(item.WorkID, output.Key),
+			GenerationID:         item.GenerationID,
+			ConversationID:       generation.GetConversationId(),
+			TraceID:              generation.GetTraceId(),
+			SpanID:               generation.GetSpanId(),
+			EvaluatorID:          item.EvaluatorID,
+			EvaluatorVersion:     item.EvaluatorVersion,
+			EvaluatorDescription: evaluatorDefinition.Description,
+			RuleID:               item.RuleID,
+			RunID:                item.WorkID,
+			ScoreKey:             output.Key,
+			ScoreType:            output.Type,
+			Value:                output.Value,
+			Unit:                 output.Unit,
+			Passed:               output.Passed,
+			Explanation:          output.Explanation,
+			Metadata:             output.Metadata,
+			CreatedAt:            createdAt,
+			SourceKind:           "online_rule",
+			SourceID:             item.RuleID,
 		}
 		scores = append(scores, score)
 	}
@@ -300,10 +301,12 @@ func (s *Service) executeItem(ctx context.Context, item evalpkg.WorkItem) {
 		return
 	}
 
-	observeExecution(item.TenantID, item.EvaluatorID, kind, item.RuleID, "success")
+	model := generation.GetResponseModel()
+	agentName := generation.GetAgentName()
+	observeExecution(item.TenantID, item.EvaluatorID, kind, item.RuleID, "success", model, agentName)
 	observeExecutionDuration(item.TenantID, item.EvaluatorID, kind, item.RuleID, time.Since(startedAt))
 	for _, score := range scores {
-		observeProducedScore(item.TenantID, item.EvaluatorID, kind, item.RuleID, score.ScoreKey, score.Passed)
+		observeProducedScore(item.TenantID, item.EvaluatorID, kind, item.RuleID, score.ScoreKey, score.Passed, model, agentName)
 	}
 }
 
@@ -324,7 +327,7 @@ func (s *Service) failItem(ctx context.Context, item evalpkg.WorkItem, kind stri
 	if requeued {
 		observeRetry(item.TenantID, item.EvaluatorID, kind, item.RuleID)
 	}
-	observeExecution(item.TenantID, item.EvaluatorID, kind, item.RuleID, "failed")
+	observeExecution(item.TenantID, item.EvaluatorID, kind, item.RuleID, "failed", "", "")
 }
 
 func (s *Service) requeueCanceledItem(ctx context.Context, item evalpkg.WorkItem, cause error) {

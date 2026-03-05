@@ -538,8 +538,8 @@ function ScoreChips({ scores }: { scores: Record<string, LatestScore> }) {
         const chipClass =
           passed == null ? styles.scoreChipNeutral : passed ? styles.scoreChipPass : styles.scoreChipFail;
 
-        return (
-          <div key={key} className={`${styles.scoreChip} ${chipClass}`}>
+        const chipContent = (
+          <>
             <span className={styles.scoreChipEvaluator}>{score.evaluator_id}</span>
             <span className={styles.scoreChipSep}>›</span>
             <span className={styles.scoreChipKey}>{key}:</span>
@@ -547,7 +547,32 @@ function ScoreChips({ scores }: { scores: Record<string, LatestScore> }) {
             {passed != null && (
               <span className={passed ? styles.scoreChipPassIcon : styles.scoreChipFailIcon}>{passed ? '✓' : '✗'}</span>
             )}
-          </div>
+          </>
+        );
+
+        if (!score.evaluator_description) {
+          return (
+            <div key={key} className={`${styles.scoreChip} ${chipClass}`}>
+              {chipContent}
+            </div>
+          );
+        }
+
+        return (
+          <Tooltip
+            key={key}
+            content={
+              <div>
+                <div>
+                  {score.evaluator_id} v{score.evaluator_version}
+                </div>
+                <div>{score.evaluator_description}</div>
+              </div>
+            }
+            placement="top"
+          >
+            <div className={`${styles.scoreChip} ${chipClass}`}>{chipContent}</div>
+          </Tooltip>
         );
       })}
     </div>

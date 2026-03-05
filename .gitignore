@@ -56,3 +56,4 @@ __pycache__/
 .vscode/
 .eslintcache
 .turbo/
+scripts/mysql-port-forward.sh

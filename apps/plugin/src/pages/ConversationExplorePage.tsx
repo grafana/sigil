@@ -1,13 +1,14 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { AppEvents, type GrafanaTheme2 } from '@grafana/data';
-import { Alert, useStyles2 } from '@grafana/ui';
+import { Alert, Button, Input, Modal, useStyles2 } from '@grafana/ui';
 import { getAppEvents } from '@grafana/runtime';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
 import { createTempoTraceFetcher } from '../conversation/fetchTrace';
 import type { TraceFetcher } from '../conversation/loader';
 import { defaultModelCardClient, type ModelCardClient } from '../modelcard/api';
+import { resolveConversationTitleFromTelemetry } from '../conversation/conversationTitle';
 import { useConversationData } from '../hooks/useConversationData';
 import { useSavedConversation } from '../hooks/useSavedConversation';
 import {
@@ -101,6 +102,12 @@ const getStyles = (theme: GrafanaTheme2) => ({
     minHeight: 0,
     overflow: 'hidden',
   }),
+  saveModal: css({
+    width: 400,
+  }),
+  saveModalInput: css({
+    paddingBottom: theme.spacing(0.5),
+  }),
 });
 
 export default function ConversationExplorePage(props: ConversationExplorePageProps) {
@@ -112,7 +119,7 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   const modelCardClient = props.modelCardClient ?? defaultModelCardClient;
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const conversationTitle = searchParams.get('conversationTitle') ?? '';
+  const conversationTitleFromURL = (searchParams.get('conversationTitle') ?? '').trim();
 
   const {
     conversationData,
@@ -131,21 +138,37 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     modelCardClient,
   });
 
+  const conversationTitleFromTelemetry = useMemo(
+    () => resolveConversationTitleFromTelemetry(allGenerations, conversationData?.spans ?? []),
+    [allGenerations, conversationData?.spans]
+  );
+
+  const conversationTitle = conversationTitleFromTelemetry ?? conversationTitleFromURL;
+
   const {
     isSaved,
     loading: saveLoading,
     toggleSave,
   } = useSavedConversation(conversationID, conversationTitle || conversationID);
 
+  const defaultSaveName = conversationTitle || conversationID;
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [saveName, setSaveName] = useState('');
+
   const handleToggleSave = useCallback(() => {
+    if (!isSaved) {
+      setSaveName(defaultSaveName);
+      setSaveModalOpen(true);
+      return;
+    }
     void toggleSave()
       .then((nowSaved) => {
         if (nowSaved === null) {
           return;
         }
         getAppEvents().publish({
-          type: AppEvents.alertSuccess.name,
-          payload: [nowSaved ? 'Conversation saved' : 'Conversation unsaved'],
+          type: AppEvents.alertWarning.name,
+          payload: ['Conversation unsaved'],
         });
       })
       .catch(() => {
@@ -154,7 +177,28 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
           payload: ['Failed to update save status'],
         });
       });
-  }, [toggleSave]);
+  }, [isSaved, toggleSave, defaultSaveName]);
+
+  const handleConfirmSave = useCallback(() => {
+    setSaveModalOpen(false);
+    // Pass undefined when blank so the fallback chain in toggleSave activates.
+    void toggleSave(saveName.trim() || undefined)
+      .then((nowSaved) => {
+        if (nowSaved === null) {
+          return;
+        }
+        getAppEvents().publish({
+          type: AppEvents.alertSuccess.name,
+          payload: ['Conversation saved'],
+        });
+      })
+      .catch(() => {
+        getAppEvents().publish({
+          type: AppEvents.alertWarning.name,
+          payload: ['Failed to save conversation'],
+        });
+      });
+  }, [toggleSave, saveName]);
 
   const VALID_GROUP_BY = new Set<FlowGroupBy>(['none', 'agent', 'model', 'provider']);
   const VALID_SORT_BY = new Set<FlowSortBy>(['time', 'duration', 'tokens', 'cost']);
@@ -389,8 +433,35 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
 
   return (
     <div className={styles.pageContainer}>
+      <Modal
+        title="Save conversation"
+        isOpen={saveModalOpen}
+        onDismiss={() => setSaveModalOpen(false)}
+        className={styles.saveModal}
+      >
+        <div className={styles.saveModalInput}>
+          <Input
+            value={saveName}
+            placeholder={defaultSaveName}
+            onChange={(e) => setSaveName(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleConfirmSave();
+              }
+            }}
+            autoFocus
+          />
+        </div>
+        <Modal.ButtonRow>
+          <Button variant="secondary" onClick={() => setSaveModalOpen(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleConfirmSave}>Save</Button>
+        </Modal.ButtonRow>
+      </Modal>
       <MetricsBar
         conversationID={conversationID}
+        conversationTitle={conversationTitle}
         totalDurationMs={totalDurationMs}
         tokenSummary={tokenSummary}
         costSummary={costSummary}

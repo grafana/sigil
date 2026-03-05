@@ -76,6 +76,7 @@ export type Evaluator = {
   evaluator_id: string;
   version: string;
   kind: EvaluatorKind;
+  description?: string;
   config: Record<string, unknown>;
   output_keys: EvalOutputKey[];
   is_predefined: boolean;
@@ -87,6 +88,7 @@ export type CreateEvaluatorRequest = {
   evaluator_id: string;
   version: string;
   kind: EvaluatorKind;
+  description?: string;
   config: Record<string, unknown>;
   output_keys: EvalOutputKey[];
 };

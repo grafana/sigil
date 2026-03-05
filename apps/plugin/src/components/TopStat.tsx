@@ -128,6 +128,7 @@ function getStyles(theme: GrafanaTheme2) {
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: theme.spacing(1),
+      minHeight: theme.spacing(3),
     }),
     topStatLabelGroup: css({
       display: 'inline-flex',

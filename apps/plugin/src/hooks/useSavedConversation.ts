@@ -57,31 +57,34 @@ export function useSavedConversation(
     };
   }, [conversationID, evalDataSource]);
 
-  const toggleSave = useCallback(async (): Promise<ToggleSaveResult> => {
-    if (savingRef.current) {
-      // A save/unsave request is already in flight; report explicit no-op.
-      return null;
-    }
-    savingRef.current = true;
-    try {
-      if (isSaved && savedId) {
-        await evalDataSource.deleteSavedConversation(savedId);
-        setSavedId(null);
-        return false;
+  const toggleSave = useCallback(
+    async (name?: string): Promise<ToggleSaveResult> => {
+      if (savingRef.current) {
+        // A save/unsave request is already in flight; report explicit no-op.
+        return null;
       }
-      const newSavedId = `saved-${conversationID}`;
-      const result = await evalDataSource.saveConversation({
-        saved_id: newSavedId,
-        conversation_id: conversationID,
-        name: conversationName ?? conversationID,
-        saved_by: 'user',
-      });
-      setSavedId(result.saved_id);
-      return true;
-    } finally {
-      savingRef.current = false;
-    }
-  }, [isSaved, savedId, conversationID, conversationName, evalDataSource]);
+      savingRef.current = true;
+      try {
+        if (isSaved && savedId) {
+          await evalDataSource.deleteSavedConversation(savedId);
+          setSavedId(null);
+          return false;
+        }
+        const newSavedId = `saved-${conversationID}`;
+        const result = await evalDataSource.saveConversation({
+          saved_id: newSavedId,
+          conversation_id: conversationID,
+          name: name ?? conversationName ?? conversationID,
+          saved_by: 'user',
+        });
+        setSavedId(result.saved_id);
+        return true;
+      } finally {
+        savingRef.current = false;
+      }
+    },
+    [isSaved, savedId, conversationID, conversationName, evalDataSource]
+  );
 
   return { isSaved, loading, toggleSave };
 }

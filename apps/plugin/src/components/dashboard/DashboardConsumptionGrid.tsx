@@ -39,6 +39,8 @@ import { buildConversationSearchFilter } from '../../conversation/filters';
 import type { ConversationSearchResult } from '../../conversation/types';
 import { PLUGIN_BASE, ROUTES, buildConversationExploreRoute } from '../../constants';
 import { ViewConversationsLink } from './ViewConversationsLink';
+import { buildAgentDetailHref } from './ViewAgentsLink';
+import { useModelCardBreakdownPopover } from './useModelCardBreakdownPopover';
 import { PageInsightBar } from '../insight/PageInsightBar';
 import { summarizeVector, summarizeMatrix, hasResponseData } from '../insight/summarize';
 import { DashboardSummaryBar } from './DashboardSummaryBar';
@@ -76,6 +78,7 @@ export function DashboardConsumptionGrid({
   const styles = useStyles2(getStyles);
   const hasBreakdown = breakdownBy !== 'none';
   const breakdownPromLabel = hasBreakdown ? breakdownToPromLabel[breakdownBy] : undefined;
+  const agentItemHref = useMemo(() => (breakdownBy === 'agent' ? buildAgentDetailHref : undefined), [breakdownBy]);
 
   const handlePanelTimeRangeChange = useCallback(
     (abs: AbsoluteTimeRange) => {
@@ -231,6 +234,8 @@ export function DashboardConsumptionGrid({
     to,
     'instant'
   );
+
+  const { onModelClick, modelPopoverElement } = useModelCardBreakdownPopover(breakdownBy, tokensByBreakdown.data);
 
   // --- Cost by breakdown ---
   const costGroupByLabel = breakdownPromLabel;
@@ -482,6 +487,8 @@ export function DashboardConsumptionGrid({
               error={tokensByBreakdown.error}
               breakdownLabel={breakdownPromLabel}
               height={CHART_HEIGHT}
+              getItemHref={agentItemHref}
+              onItemClick={onModelClick}
             />
           ) : (
             <BreakdownStatPanel
@@ -524,6 +531,8 @@ export function DashboardConsumptionGrid({
             breakdownLabel={costGroupByLabel}
             height={CHART_HEIGHT}
             unit="currencyUSD"
+            getItemHref={agentItemHref}
+            onItemClick={onModelClick}
           />
         </div>
       </div>
@@ -533,6 +542,7 @@ export function DashboardConsumptionGrid({
         timeRange={timeRange}
         filters={filters}
       />
+      {modelPopoverElement}
     </div>
   );
 }

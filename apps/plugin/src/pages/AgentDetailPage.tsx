@@ -153,6 +153,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   badgeRow: css({
     display: 'flex',
+    alignItems: 'center',
     gap: theme.spacing(0.5),
     flexWrap: 'wrap' as const,
   }),

@@ -87,6 +87,7 @@ type EvaluatorDefinition struct {
 	EvaluatorID           string         `json:"evaluator_id"`
 	Version               string         `json:"version"`
 	Kind                  EvaluatorKind  `json:"kind"`
+	Description           string         `json:"description,omitempty"`
 	Config                map[string]any `json:"config"`
 	OutputKeys            []OutputKey    `json:"output_keys"`
 	IsPredefined          bool           `json:"is_predefined"`
@@ -146,37 +147,39 @@ type TemplateVersion struct {
 }
 
 type GenerationScore struct {
-	TenantID         string         `json:"tenant_id"`
-	ScoreID          string         `json:"score_id"`
-	GenerationID     string         `json:"generation_id"`
-	ConversationID   string         `json:"conversation_id,omitempty"`
-	TraceID          string         `json:"trace_id,omitempty"`
-	SpanID           string         `json:"span_id,omitempty"`
-	EvaluatorID      string         `json:"evaluator_id"`
-	EvaluatorVersion string         `json:"evaluator_version"`
-	RuleID           string         `json:"rule_id,omitempty"`
-	RunID            string         `json:"run_id,omitempty"`
-	ScoreKey         string         `json:"score_key"`
-	ScoreType        ScoreType      `json:"score_type"`
-	Value            ScoreValue     `json:"value"`
-	Unit             string         `json:"unit,omitempty"`
-	Passed           *bool          `json:"passed,omitempty"`
-	Explanation      string         `json:"explanation,omitempty"`
-	Metadata         map[string]any `json:"metadata,omitempty"`
-	CreatedAt        time.Time      `json:"created_at"`
-	IngestedAt       time.Time      `json:"ingested_at"`
-	SourceKind       string         `json:"source_kind,omitempty"`
-	SourceID         string         `json:"source_id,omitempty"`
+	TenantID             string         `json:"tenant_id"`
+	ScoreID              string         `json:"score_id"`
+	GenerationID         string         `json:"generation_id"`
+	ConversationID       string         `json:"conversation_id,omitempty"`
+	TraceID              string         `json:"trace_id,omitempty"`
+	SpanID               string         `json:"span_id,omitempty"`
+	EvaluatorID          string         `json:"evaluator_id"`
+	EvaluatorVersion     string         `json:"evaluator_version"`
+	EvaluatorDescription string         `json:"evaluator_description,omitempty"`
+	RuleID               string         `json:"rule_id,omitempty"`
+	RunID                string         `json:"run_id,omitempty"`
+	ScoreKey             string         `json:"score_key"`
+	ScoreType            ScoreType      `json:"score_type"`
+	Value                ScoreValue     `json:"value"`
+	Unit                 string         `json:"unit,omitempty"`
+	Passed               *bool          `json:"passed,omitempty"`
+	Explanation          string         `json:"explanation,omitempty"`
+	Metadata             map[string]any `json:"metadata,omitempty"`
+	CreatedAt            time.Time      `json:"created_at"`
+	IngestedAt           time.Time      `json:"ingested_at"`
+	SourceKind           string         `json:"source_kind,omitempty"`
+	SourceID             string         `json:"source_id,omitempty"`
 }
 
 type LatestScore struct {
-	ScoreKey         string     `json:"score_key"`
-	ScoreType        ScoreType  `json:"score_type"`
-	Value            ScoreValue `json:"value"`
-	Passed           *bool      `json:"passed,omitempty"`
-	EvaluatorID      string     `json:"evaluator_id"`
-	EvaluatorVersion string     `json:"evaluator_version"`
-	CreatedAt        time.Time  `json:"created_at"`
+	ScoreKey             string     `json:"score_key"`
+	ScoreType            ScoreType  `json:"score_type"`
+	Value                ScoreValue `json:"value"`
+	Passed               *bool      `json:"passed,omitempty"`
+	EvaluatorID          string     `json:"evaluator_id"`
+	EvaluatorVersion     string     `json:"evaluator_version"`
+	EvaluatorDescription string     `json:"evaluator_description,omitempty"`
+	CreatedAt            time.Time  `json:"created_at"`
 }
 
 // ConversationEvalSummary is an aggregate summary of eval scores for a conversation.
