@@ -136,6 +136,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexDirection: 'column' as const,
     minWidth: 0,
     marginTop: theme.spacing(0.5),
+    marginLeft: 'auto',
+    alignItems: 'flex-end',
   }),
   heroEyebrow: css({
     textTransform: 'uppercase' as const,
@@ -162,7 +164,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'grid',
     gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
     gap: theme.spacing(0.75, 1),
-    width: '100%',
+    width: 'auto',
     '@media (max-width: 1400px)': {
       gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
     },
@@ -179,12 +181,14 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   heroMetaStatWide: css({
     gridColumn: 'span 2',
+    justifySelf: 'end',
     '@media (max-width: 900px)': {
       gridColumn: 'auto',
     },
   }),
   heroMetaStatHighlight: css({
     minWidth: 0,
+    justifySelf: 'end',
     padding: theme.spacing(1, 1.25),
     borderRadius: theme.shape.radius.default,
     background: theme.colors.background.secondary,
@@ -211,8 +215,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
     borderRadius: theme.shape.radius.default,
     display: 'flex',
     flexWrap: 'wrap' as const,
-    justifyContent: 'center',
-    alignContent: 'center',
+    justifyContent: 'flex-end',
+    alignContent: 'flex-start',
     alignItems: 'center',
     gap: theme.spacing(4),
     height: '100%',
@@ -1307,6 +1311,7 @@ export default function AgentDetailPage({
                         loading={false}
                         compact
                         normalFontSize
+                        rightAlignContent
                         helpTooltip="Total distinct effective versions recorded for this agent."
                       />
                     </div>
@@ -1318,6 +1323,7 @@ export default function AgentDetailPage({
                         loading={false}
                         compact
                         normalFontSize
+                        rightAlignContent
                         helpTooltip="Version string reported by instrumentation."
                       />
                     </div>
@@ -1328,6 +1334,7 @@ export default function AgentDetailPage({
                         loading={false}
                         compact
                         normalFontSize
+                        rightAlignContent
                         helpTooltip="Distinct model variants recorded for this agent version."
                       />
                     </div>
@@ -1338,6 +1345,7 @@ export default function AgentDetailPage({
                         loading={false}
                         compact
                         normalFontSize
+                        rightAlignContent
                         helpTooltip="Declared tool definitions."
                       />
                     </div>
@@ -1351,6 +1359,7 @@ export default function AgentDetailPage({
                         loading={false}
                         compact
                         normalFontSize
+                        rightAlignContent
                         helpTooltip="Primary model name and provider in this version."
                       />
                     </div>
@@ -1362,6 +1371,7 @@ export default function AgentDetailPage({
                         loading={false}
                         compact
                         normalFontSize
+                        rightAlignContent
                         helpTooltip={
                           activeHeroRating
                             ? `Completed rating summary for selected version: ${activeHeroRatingSummary}`
@@ -1539,24 +1549,28 @@ export default function AgentDetailPage({
               label="GENERATIONS"
               value={detail.generation_count}
               loading={false}
+              rightAlignContent
               helpTooltip="Total generations recorded for this agent version."
             />
             <TopStat
               label="PROMPT TOKENS"
               value={detail.token_estimate.system_prompt}
               loading={false}
+              rightAlignContent
               helpTooltip="Estimated tokens consumed by the system prompt in this version."
             />
             <TopStat
               label="TOOLS TOKENS"
               value={detail.token_estimate.tools_total}
               loading={false}
+              rightAlignContent
               helpTooltip="Estimated tokens consumed by all tool schemas combined in this version."
             />
             <TopStat
               label="TOTAL TOKENS"
               value={detail.token_estimate.total}
               loading={false}
+              rightAlignContent
               helpTooltip="Sum of system prompt and tool tokens - the baseline context cost per generation."
             />
             <TopStat
@@ -1564,6 +1578,7 @@ export default function AgentDetailPage({
               value={Math.max(0, toTimestampMs(detail.last_seen_at) - toTimestampMs(detail.first_seen_at))}
               displayValue={formatDurationCompact(detail.first_seen_at, detail.last_seen_at)}
               loading={false}
+              rightAlignContent
               helpTooltip="Duration between first and last recorded generations for this version."
             />
             <TopStat
@@ -1571,6 +1586,7 @@ export default function AgentDetailPage({
               value={toTimestampMs(detail.first_seen_at)}
               displayValue={formatDate(detail.first_seen_at)}
               loading={false}
+              rightAlignContent
               helpTooltip="The earliest time a generation was recorded for this agent version."
             />
             <TopStat
@@ -1578,6 +1594,7 @@ export default function AgentDetailPage({
               value={toTimestampMs(detail.last_seen_at)}
               displayValue={formatDate(detail.last_seen_at)}
               loading={false}
+              rightAlignContent
               helpTooltip="The most recent time any generation was recorded for this agent version."
             />
           </div>
