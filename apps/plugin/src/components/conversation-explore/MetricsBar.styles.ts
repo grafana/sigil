@@ -1,5 +1,10 @@
-import { css } from '@emotion/css';
+import { css, keyframes } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
+
+const blink = keyframes({
+  '0%, 50%': { opacity: 1 },
+  '50.01%, 100%': { opacity: 0 },
+});
 
 export const getStyles = (theme: GrafanaTheme2) => ({
   container: css({
@@ -20,6 +25,19 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+  }),
+  conversationTitle: css({
+    fontFamily: theme.typography.fontFamily,
+    fontWeight: theme.typography.fontWeightMedium,
+    color: theme.colors.text.primary,
+  }),
+  typewriterCursor: css({
+    display: 'inline-block',
+    marginLeft: theme.spacing(0.25),
+    color: theme.colors.text.secondary,
+    [theme.transitions.handleMotion('no-preference', 'reduce')]: {
+      animation: `${blink} 1s steps(1, end) infinite`,
+    },
   }),
   separator: css({
     width: 1,
