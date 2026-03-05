@@ -38,6 +38,20 @@ describe('PageInsightBar', () => {
     );
   });
 
+  it('auto-generates again when data context changes', () => {
+    const { rerender } = render(<PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="initial data" />);
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+
+    rerender(<PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="updated data" />);
+    expect(mockGenerate).toHaveBeenCalledTimes(2);
+    expect(mockGenerate).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining('updated data'),
+        origin: 'test-origin',
+      })
+    );
+  });
+
   it('shows placeholder while generating with no content', () => {
     mockIsGenerating = true;
     mockContent = '';

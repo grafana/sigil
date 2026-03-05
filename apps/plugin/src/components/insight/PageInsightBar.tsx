@@ -44,7 +44,6 @@ export function PageInsightBar({
   const gen = useInlineAssistant();
   const [text, setText] = useState('');
   const [collapsed, setCollapsed] = useState(readCollapsed);
-  const hasAutoRun = useRef(false);
   const lastDataContextRef = useRef<string | null>(null);
 
   const toggleCollapsed = useCallback(() => {
@@ -87,10 +86,7 @@ export function PageInsightBar({
       return;
     }
     lastDataContextRef.current = dataContext;
-    if (!hasAutoRun.current) {
-      hasAutoRun.current = true;
-      runGenerate(dataContext);
-    }
+    runGenerate(dataContext);
   }, [collapsed, dataContext, gen.isGenerating, runGenerate]);
 
   const doRegenerate = useCallback(() => {
