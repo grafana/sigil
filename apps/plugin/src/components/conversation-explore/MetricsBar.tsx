@@ -141,9 +141,7 @@ function getStatusTooltip(errorCount: number): string {
   return 'No generations in this conversation have an error message.';
 }
 
-function renderBreakdownTable(
-  rows: Array<{ label: string; value: string }>
-): React.JSX.Element {
+function renderBreakdownTable(rows: Array<{ label: string; value: string }>): React.JSX.Element {
   return (
     <table style={{ borderCollapse: 'separate', borderSpacing: '0 0' }}>
       <tbody>

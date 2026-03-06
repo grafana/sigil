@@ -38,9 +38,5 @@ export function resolveConversationUserId(data: ConversationData | null | undefi
     }
   }
 
-  return (
-    candidates.find(looksEmailLike) ??
-    candidates.find(looksHumanReadable) ??
-    candidates[0]
-  );
+  return candidates.find(looksEmailLike) ?? candidates.find(looksHumanReadable) ?? candidates[0];
 }

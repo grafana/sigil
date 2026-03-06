@@ -2,7 +2,14 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { css } from '@emotion/css';
 import { AppEvents, dateTime, type GrafanaTheme2, type TimeRange } from '@grafana/data';
 import { initPluginTranslations } from '@grafana/i18n';
-import { EmbeddedScene, PanelBuilders, SceneFlexItem, SceneFlexLayout, SceneQueryRunner, SceneTimeRange } from '@grafana/scenes';
+import {
+  EmbeddedScene,
+  PanelBuilders,
+  SceneFlexItem,
+  SceneFlexLayout,
+  SceneQueryRunner,
+  SceneTimeRange,
+} from '@grafana/scenes';
 import { Alert, Button, Icon, Input, Modal, Tooltip, useStyles2 } from '@grafana/ui';
 import { getAppEvents } from '@grafana/runtime';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -369,7 +376,9 @@ function findOverviewToggle(container: HTMLElement): HTMLButtonElement | null {
 
 function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProps) {
   const styles = useStyles2(getStyles);
-  const tempoDatasourceUID = (plugin.meta.jsonData as { tempoDatasourceUID?: string } | undefined)?.tempoDatasourceUID?.trim();
+  const tempoDatasourceUID = (
+    plugin.meta.jsonData as { tempoDatasourceUID?: string } | undefined
+  )?.tempoDatasourceUID?.trim();
   const [scene, setScene] = useState<EmbeddedScene | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const collapsedOverviewKeyRef = useRef<string | null>(null);
@@ -894,12 +903,15 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     [flowNodes, setSelectedNodeId]
   );
 
-  const handleOpenTraceDrawer = useCallback((span: ConversationSpan) => {
-    sidebarCollapsedBeforeTraceRef.current = sidebarCollapsed;
-    pendingTraceDrawerAutosizeRef.current = true;
-    setSidebarCollapsed(true);
-    setTraceOverlaySpan(span);
-  }, [sidebarCollapsed]);
+  const handleOpenTraceDrawer = useCallback(
+    (span: ConversationSpan) => {
+      sidebarCollapsedBeforeTraceRef.current = sidebarCollapsed;
+      pendingTraceDrawerAutosizeRef.current = true;
+      setSidebarCollapsed(true);
+      setTraceOverlaySpan(span);
+    },
+    [sidebarCollapsed]
+  );
 
   const handleCloseTraceDrawer = useCallback(() => {
     setTraceOverlaySpan(null);
@@ -1168,30 +1180,30 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
                   aria-label="Resize trace drawer"
                 />
                 <div className={styles.traceDrawerPanel} style={{ width: traceDrawerWidth }}>
-                <div className={styles.traceDrawerHeader}>
-                  <div className={styles.traceDrawerTitle}>
-                    <Icon name="gf-traces" size="sm" />
-                    Trace
+                  <div className={styles.traceDrawerHeader}>
+                    <div className={styles.traceDrawerTitle}>
+                      <Icon name="gf-traces" size="sm" />
+                      Trace
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.traceDrawerClose}
+                      aria-label="Close trace drawer"
+                      onClick={handleCloseTraceDrawer}
+                    >
+                      <Icon name="times" size="sm" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className={styles.traceDrawerClose}
-                    aria-label="Close trace drawer"
-                    onClick={handleCloseTraceDrawer}
-                  >
-                    <Icon name="times" size="sm" />
-                  </button>
-                </div>
-                <div className={styles.traceDrawerBody}>
-                  <div className={styles.tracePanelHost}>
-                    <GrafanaTracePanel
-                      key={`${traceOverlaySpan.traceID}:${traceOverlaySpan.spanID}`}
-                      traceId={traceOverlaySpan.traceID}
-                      spanId={traceOverlaySpan.spanID}
-                      timeRange={traceOverlayTimeRange}
-                    />
+                  <div className={styles.traceDrawerBody}>
+                    <div className={styles.tracePanelHost}>
+                      <GrafanaTracePanel
+                        key={`${traceOverlaySpan.traceID}:${traceOverlaySpan.spanID}`}
+                        traceId={traceOverlaySpan.traceID}
+                        spanId={traceOverlaySpan.spanID}
+                        timeRange={traceOverlayTimeRange}
+                      />
+                    </div>
                   </div>
-                </div>
                 </div>
               </>
             )}

@@ -232,7 +232,13 @@ describe('GenerationView', () => {
       children: [],
     };
 
-    render(<GenerationView node={node} allGenerations={[generation, { ...generation, generation_id: 'gen-5' }]} onClose={jest.fn()} />);
+    render(
+      <GenerationView
+        node={node}
+        allGenerations={[generation, { ...generation, generation_id: 'gen-5' }]}
+        onClose={jest.fn()}
+      />
+    );
 
     const link = screen.getByRole('link', {
       name: 'Open agent page: fe-grafana-assistant (sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)',

@@ -469,7 +469,9 @@ function AttributeSections({ span }: { span: ConversationSpan }) {
 
   const genAiEntries = useMemo(
     () =>
-      [...resourceEntries, ...spanEntries].filter(({ key }) => isAiPillKey(key)).sort((a, b) => a.key.localeCompare(b.key)),
+      [...resourceEntries, ...spanEntries]
+        .filter(({ key }) => isAiPillKey(key))
+        .sort((a, b) => a.key.localeCompare(b.key)),
     [resourceEntries, spanEntries]
   );
   const plainResourceEntries = useMemo(
@@ -513,7 +515,11 @@ function AttributeSections({ span }: { span: ConversationSpan }) {
           </button>
         ))}
       </div>
-      {activeTab === 'genai' ? <AiAttributePills entries={activeEntries} /> : <AttributePills entries={activeEntries} />}
+      {activeTab === 'genai' ? (
+        <AiAttributePills entries={activeEntries} />
+      ) : (
+        <AttributePills entries={activeEntries} />
+      )}
     </div>
   );
 }
@@ -786,12 +792,17 @@ export default function GenerationView({
   );
 
   const traceTargetSpan = node.span;
-  const hasAttributeSection = Boolean(node.span && (node.span.resourceAttributes.size > 0 || node.span.attributes.size > 0));
+  const hasAttributeSection = Boolean(
+    node.span && (node.span.resourceAttributes.size > 0 || node.span.attributes.size > 0)
+  );
   const visibleAttributeCount = useMemo(() => {
     if (!node.span) {
       return 0;
     }
-    return collectAttributeEntries(node.span.resourceAttributes).length + collectAttributeEntries(node.span.attributes).length;
+    return (
+      collectAttributeEntries(node.span.resourceAttributes).length +
+      collectAttributeEntries(node.span.attributes).length
+    );
   }, [node.span]);
 
   const navigatePrev = useCallback(() => {

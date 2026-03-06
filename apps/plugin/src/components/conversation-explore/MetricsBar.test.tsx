@@ -286,11 +286,11 @@ describe('MetricsBar conversation title', () => {
     expect(
       screen
         .getAllByTestId('tooltip')
-        .find((element) => element.getAttribute('data-content') === 'No generations in this conversation have an error message.')
-    ).toHaveAttribute(
-      'data-content',
-      'No generations in this conversation have an error message.'
-    );
+        .find(
+          (element) =>
+            element.getAttribute('data-content') === 'No generations in this conversation have an error message.'
+        )
+    ).toHaveAttribute('data-content', 'No generations in this conversation have an error message.');
   });
 
   it('explains the error status badge on hover', () => {
@@ -299,10 +299,10 @@ describe('MetricsBar conversation title', () => {
     expect(
       screen
         .getAllByTestId('tooltip')
-        .find((element) => element.getAttribute('data-content') === '2 generations in this conversation have an error message.')
-    ).toHaveAttribute(
-      'data-content',
-      '2 generations in this conversation have an error message.'
-    );
+        .find(
+          (element) =>
+            element.getAttribute('data-content') === '2 generations in this conversation have an error message.'
+        )
+    ).toHaveAttribute('data-content', '2 generations in this conversation have an error message.');
   });
 });
