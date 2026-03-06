@@ -193,6 +193,16 @@ const getStyles = (theme: GrafanaTheme2) => ({
     },
   }),
   reportBody: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    flex: 1,
+    minHeight: 0,
+  }),
+  reportScrollArea: css({
+    flex: 1,
+    minHeight: 280,
+    maxHeight: 580,
+    overflowY: 'auto',
     paddingLeft: theme.spacing(0.5),
     paddingRight: theme.spacing(0.5),
     paddingTop: theme.spacing(0.5),
@@ -324,7 +334,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
     alignItems: 'center',
     gap: theme.spacing(0.75),
     flexWrap: 'wrap' as const,
-    marginTop: theme.spacing(0.75),
+    marginTop: theme.spacing(1),
+    paddingTop: theme.spacing(1),
+    borderTop: `1px solid ${theme.colors.border.weak}`,
   }),
   rerunButton: css({
     marginLeft: 'auto',
@@ -1020,90 +1032,94 @@ const AgentRatingPanel = forwardRef<AgentRatingPanelHandle, AgentRatingPanelProp
 
         {!running && completedResult && (
           <div className={styles.reportBody}>
-            <div className={styles.scoreRow}>
-              <div className={styles.scoreMetaStat}>
-                <span className={styles.scoreMetaLabel}>Evaluated by</span>
-                <span className={styles.scoreMetaValue}>
-                  {completedResult.judge_model} · {completedResult.judge_latency_ms}ms
-                </span>
+            <div className={styles.reportScrollArea} aria-label="Agent rating findings">
+              <div className={styles.scoreRow}>
+                <div className={styles.scoreMetaStat}>
+                  <span className={styles.scoreMetaLabel}>Evaluated by</span>
+                  <span className={styles.scoreMetaValue}>
+                    {completedResult.judge_model} · {completedResult.judge_latency_ms}ms
+                  </span>
+                </div>
               </div>
-            </div>
 
-            <div className={styles.summary}>
-              <span className={styles.summaryPrefix}>tl;dr:</span>
-              <span className={styles.summaryStatusIcon}>
-                <Icon
-                  name={summaryStatusIconName(completedResult.score)}
-                  size="sm"
-                  style={{ color: summaryStatusTone(theme, completedResult.score) }}
-                />
-              </span>
-              <button
-                type="button"
-                className={styles.summaryTextButton}
-                onClick={openSummaryModal}
-                aria-label="Open full rating summary"
-              >
-                {succinctSummary}
-              </button>
-              <button type="button" className={styles.summaryExplainLink} onClick={onExplainReport}>
-                Explain
-              </button>
-            </div>
-
-            {completedResult.token_warning && completedResult.token_warning.length > 0 && (
-              <Alert className={styles.analysisWarning} severity="warning" title="Token budget warning">
-                {completedResult.token_warning}
-              </Alert>
-            )}
-
-            {renderedSuggestions.map(({ suggestion, index, categoryLabel, showCategory }) => {
-              const normalizedSeverity = normalizeSeverity(suggestion.severity);
-              return (
-                <div
-                  key={`${toSuggestionKey(suggestion)}:${index}`}
-                  className={cx(styles.suggestionCard, !showCategory ? styles.suggestionCardCompact : undefined)}
+              <div className={styles.summary}>
+                <span className={styles.summaryPrefix}>tl;dr:</span>
+                <span className={styles.summaryStatusIcon}>
+                  <Icon
+                    name={summaryStatusIconName(completedResult.score)}
+                    size="sm"
+                    style={{ color: summaryStatusTone(theme, completedResult.score) }}
+                  />
+                </span>
+                <button
+                  type="button"
+                  className={styles.summaryTextButton}
+                  onClick={openSummaryModal}
+                  aria-label="Open full rating summary"
                 >
-                  <div className={styles.suggestionRow}>
-                    <div className={styles.suggestionContent}>
-                      {showCategory && <span className={styles.suggestionCategory}>{categoryLabel}</span>}
-                      <span className={styles.suggestionTitleLine}>
-                        <span className={styles.suggestionTitleMain}>
-                          <span className={styles.suggestionOrdinal} aria-hidden>
-                            {index + 1}.
+                  {succinctSummary}
+                </button>
+                <button type="button" className={styles.summaryExplainLink} onClick={onExplainReport}>
+                  Explain
+                </button>
+              </div>
+
+              {completedResult.token_warning && completedResult.token_warning.length > 0 && (
+                <Alert className={styles.analysisWarning} severity="warning" title="Token budget warning">
+                  {completedResult.token_warning}
+                </Alert>
+              )}
+
+              {renderedSuggestions.map(({ suggestion, index, categoryLabel, showCategory }) => {
+                const normalizedSeverity = normalizeSeverity(suggestion.severity);
+                return (
+                  <div
+                    key={`${toSuggestionKey(suggestion)}:${index}`}
+                    className={cx(styles.suggestionCard, !showCategory ? styles.suggestionCardCompact : undefined)}
+                  >
+                    <div className={styles.suggestionRow}>
+                      <div className={styles.suggestionContent}>
+                        {showCategory && <span className={styles.suggestionCategory}>{categoryLabel}</span>}
+                        <span className={styles.suggestionTitleLine}>
+                          <span className={styles.suggestionTitleMain}>
+                            <span className={styles.suggestionOrdinal} aria-hidden>
+                              {index + 1}.
+                            </span>
+                            <button
+                              type="button"
+                              className={styles.suggestionTitleButton}
+                              onClick={() => openSuggestionModal(index)}
+                              aria-label={`Open suggestion ${suggestion.title}`}
+                            >
+                              <span className={styles.suggestionTitleText}>{suggestion.title}</span>
+                            </button>
                           </span>
-                          <button
-                            type="button"
-                            className={styles.suggestionTitleButton}
-                            onClick={() => openSuggestionModal(index)}
-                            aria-label={`Open suggestion ${suggestion.title}`}
+                          <span
+                            className={styles.suggestionSeverityLabel}
+                            style={severityLabelStyle(theme, normalizedSeverity)}
                           >
-                            <span className={styles.suggestionTitleText}>{suggestion.title}</span>
-                          </button>
+                            {normalizedSeverity}
+                          </span>
                         </span>
-                        <span
-                          className={styles.suggestionSeverityLabel}
-                          style={severityLabelStyle(theme, normalizedSeverity)}
-                        >
-                          {normalizedSeverity}
-                        </span>
-                      </span>
-                      <div className={styles.suggestionDescriptionRow}>
-                        <div className={cx(styles.suggestionDescription, styles.suggestionDescriptionText)}>
-                          {isPreviewView ? (
-                            <MarkdownPreview markdown={toSuccinctText(suggestion.description, SUGGESTION_MAX_CHARS)} />
-                          ) : (
-                            toSuccinctText(suggestion.description, SUGGESTION_MAX_CHARS)
-                          )}
+                        <div className={styles.suggestionDescriptionRow}>
+                          <div className={cx(styles.suggestionDescription, styles.suggestionDescriptionText)}>
+                            {isPreviewView ? (
+                              <MarkdownPreview
+                                markdown={toSuccinctText(suggestion.description, SUGGESTION_MAX_CHARS)}
+                              />
+                            ) : (
+                              toSuccinctText(suggestion.description, SUGGESTION_MAX_CHARS)
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
 
-            <div className={styles.panelActions}>
+            <div className={styles.panelActions} aria-label="Agent rating actions">
               <Button variant="secondary" icon="ai" onClick={openRewriteModal}>
                 Rewrite prompt
               </Button>

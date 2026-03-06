@@ -358,7 +358,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   tabContentLayout: css({
     display: 'grid',
-    gridTemplateColumns: '150px minmax(0, 1fr)',
+    gridTemplateColumns: '140px minmax(0, 1fr)',
     gap: theme.spacing(2),
     alignItems: 'start',
     '@media (max-width: 900px)': {
@@ -983,6 +983,18 @@ function firstLine(text: string): string {
   return line ?? 'No summary available.';
 }
 
+function getNonDeferredToolTokens(detail: AgentDetail): number {
+  return detail.tools.reduce((sum, tool) => sum + (tool.deferred ? 0 : tool.token_estimate), 0);
+}
+
+function getDeferredToolTokens(detail: AgentDetail): number {
+  return detail.tools.reduce((sum, tool) => sum + (tool.deferred ? tool.token_estimate : 0), 0);
+}
+
+function getEffectiveTotalTokens(detail: AgentDetail): number {
+  return detail.token_estimate.system_prompt + getNonDeferredToolTokens(detail);
+}
+
 function buildAgentStateContext(detail: AgentDetail): string {
   const modelLines = detail.models.length
     ? detail.models.map(
@@ -990,8 +1002,13 @@ function buildAgentStateContext(detail: AgentDetail): string {
       )
     : ['  None recorded.'];
   const toolLines = detail.tools.length
-    ? detail.tools.map((tool, index) => `  ${index + 1}. ${tool.name} (${tool.type}, ${tool.token_estimate} tokens)`)
+    ? detail.tools.map(
+        (tool, index) =>
+          `  ${index + 1}. ${tool.name} (${tool.type}, ${tool.token_estimate} tokens${tool.deferred ? ', deferred' : ''})`
+      )
     : ['  None recorded.'];
+  const nonDeferredToolTokens = getNonDeferredToolTokens(detail);
+  const effectiveTotalTokens = getEffectiveTotalTokens(detail);
   return [
     '- Declared version (latest): ' + (detail.declared_version_latest || 'n/a'),
     '- Declared version (first): ' + (detail.declared_version_first || 'n/a'),
@@ -1001,9 +1018,9 @@ function buildAgentStateContext(detail: AgentDetail): string {
     '- Token estimate: system=' +
       detail.token_estimate.system_prompt +
       ', tools=' +
-      detail.token_estimate.tools_total +
+      nonDeferredToolTokens +
       ', total=' +
-      detail.token_estimate.total,
+      effectiveTotalTokens,
     '- Models:',
     ...modelLines,
     '- Tools:',
@@ -1499,6 +1516,9 @@ export default function AgentDetailPage({
   const handleHighlightClick = useCallback((_insight: unknown, kind: 'strength' | 'weakness', index: number) => {
     insightsRef.current?.focusInsight(kind, index);
   }, []);
+  const nonDeferredToolTokens = useMemo(() => (detail ? getNonDeferredToolTokens(detail) : 0), [detail]);
+  const deferredToolTokens = useMemo(() => (detail ? getDeferredToolTokens(detail) : 0), [detail]);
+  const effectiveTotalTokens = useMemo(() => (detail ? getEffectiveTotalTokens(detail) : 0), [detail]);
   const handleRatingResultChange = useCallback((nextRating: AgentRatingResponse | null) => {
     if (nextRating === null) {
       return;
@@ -1934,11 +1954,11 @@ export default function AgentDetailPage({
               />
               <TopStat
                 label="TOTAL TOKENS"
-                value={detail.token_estimate.total}
+                value={effectiveTotalTokens}
                 loading={false}
                 normalFontSize
                 rightAlignContent
-                helpTooltip="Sum of system prompt and tool tokens - the baseline context cost per generation."
+                helpTooltip="Sum of system prompt and non-deferred tool tokens - the baseline context cost per generation."
               />
             </div>
           </div>
@@ -2076,21 +2096,23 @@ export default function AgentDetailPage({
           <div className={styles.tabSidebar} aria-label="Tools stats">
             <div className={styles.tabSidebarStats}>
               <TopStat
-                label="TOOLS TOKENS"
-                value={detail.token_estimate.tools_total}
+                label="TOOL TOKENS"
+                value={nonDeferredToolTokens}
                 loading={false}
                 normalFontSize
                 rightAlignContent
-                helpTooltip="Estimated tokens consumed by all tool schemas combined in this version."
+                helpTooltip="Estimated tokens consumed by immediate, non-deferred tool schemas included in the initial context for this version."
               />
-              <TopStat
-                label="TOTAL TOKENS"
-                value={detail.token_estimate.total}
-                loading={false}
-                normalFontSize
-                rightAlignContent
-                helpTooltip="Sum of system prompt and tool tokens - the baseline context cost per generation."
-              />
+              {deferredToolTokens > 0 && (
+                <TopStat
+                  label="DEFERRED TOKENS"
+                  value={deferredToolTokens}
+                  loading={false}
+                  normalFontSize
+                  rightAlignContent
+                  helpTooltip="Estimated tokens consumed by deferred tool schemas that are loaded dynamically instead of included in the initial context."
+                />
+              )}
             </div>
           </div>
           <div className={styles.tabMainContent}>

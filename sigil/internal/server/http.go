@@ -859,6 +859,7 @@ func mapAgentDetailToRatingAgent(item query.AgentDetail) agentrating.Agent {
 			Description:     tool.Description,
 			Type:            tool.Type,
 			InputSchemaJSON: tool.InputSchemaJSON,
+			Deferred:        tool.Deferred,
 			TokenEstimate:   tool.TokenEstimate,
 		})
 	}

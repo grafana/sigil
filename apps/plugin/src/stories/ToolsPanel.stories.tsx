@@ -9,6 +9,7 @@ const sampleTools: AgentTool[] = [
     type: 'function',
     input_schema_json:
       '{"type":"object","properties":{"datasource_uid":{"type":"string"},"query_type":{"type":"string","enum":["instant","range"]},"operation":{"type":"string"},"metric_patterns":{"type":"array","items":{"type":"string"}},"label_name":{"type":"string"},"start":{"type":"string"},"end":{"type":"string"}},"required":["datasource_uid","operation"]}',
+    deferred: true,
     token_estimate: 1577,
   },
   {
@@ -17,6 +18,7 @@ const sampleTools: AgentTool[] = [
     type: 'function',
     input_schema_json:
       '{"type":"object","properties":{"datasource_uid":{"type":"string"},"query":{"type":"string"},"start":{"type":"string"},"end":{"type":"string"},"limit":{"type":"number"}},"required":["datasource_uid","query"]}',
+    deferred: true,
     token_estimate: 1577,
   },
   {

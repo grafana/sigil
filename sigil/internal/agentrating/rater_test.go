@@ -52,6 +52,7 @@ func TestRaterRateWithModel_TableDriven(t *testing.T) {
 				Description:     "Search incidents by service and severity.",
 				Type:            "function",
 				InputSchemaJSON: `{"type":"object","properties":{"service":{"type":"string"},"severity":{"type":"string"}},"required":["service"]}`,
+				Deferred:        true,
 				TokenEstimate:   150,
 			},
 		},
@@ -86,8 +87,17 @@ func TestRaterRateWithModel_TableDriven(t *testing.T) {
 			agent: Agent{
 				Name:         baseAgent.Name,
 				SystemPrompt: baseAgent.SystemPrompt,
-				Tools:        baseAgent.Tools,
-				Models:       baseAgent.Models,
+				Tools: []Tool{
+					{
+						Name:            "large_immediate_tool",
+						Description:     "Large immediate tool payload.",
+						Type:            "function",
+						InputSchemaJSON: `{"type":"object","properties":{"service":{"type":"string"}},"required":["service"]}`,
+						Deferred:        false,
+						TokenEstimate:   16_500,
+					},
+				},
+				Models: baseAgent.Models,
 				TokenEstimate: TokenEstimate{
 					SystemPrompt: 18_000,
 					ToolsTotal:   16_500,
@@ -193,6 +203,9 @@ func TestRaterRateWithModel_TableDriven(t *testing.T) {
 			if testCase.expectNoTools && !strings.Contains(client.lastReq.UserPrompt, "<tool name=\"none\" />") {
 				t.Fatalf("expected no-tools marker in user prompt")
 			}
+			if strings.Contains(testCase.name, "good agent") && !strings.Contains(client.lastReq.UserPrompt, `deferred="true"`) {
+				t.Fatalf("expected tool deferred metadata in user prompt")
+			}
 			if testCase.expectWarning && strings.TrimSpace(rating.TokenWarning) == "" {
 				t.Fatalf("expected token warning for high token budget")
 			}
@@ -200,6 +213,89 @@ func TestRaterRateWithModel_TableDriven(t *testing.T) {
 				t.Fatalf("did not expect token warning, got=%q", rating.TokenWarning)
 			}
 		})
+	}
+}
+
+func TestBuildUserPrompt_IncludesDeferredToolMetadata(t *testing.T) {
+	prompt := buildUserPrompt(Agent{
+		Name:         "deferred-tool-agent",
+		SystemPrompt: "Use tools carefully.",
+		Tools: []Tool{
+			{
+				Name:            "async_lookup",
+				Description:     "Deferred external lookup",
+				Type:            "function",
+				InputSchemaJSON: `{"type":"object","properties":{"query":{"type":"string"}}}`,
+				Deferred:        true,
+				TokenEstimate:   12,
+			},
+			{
+				Name:            "sync_lookup",
+				Description:     "Immediate local lookup",
+				Type:            "function",
+				InputSchemaJSON: `{"type":"object","properties":{"query":{"type":"string"}}}`,
+				Deferred:        false,
+				TokenEstimate:   8,
+			},
+		},
+		TokenEstimate: TokenEstimate{
+			SystemPrompt: 10,
+			ToolsTotal:   20,
+			Total:        30,
+		},
+	})
+
+	if !strings.Contains(prompt, "<deferred_tool_count>1</deferred_tool_count>") {
+		t.Fatalf("expected deferred tool count in prompt, got %q", prompt)
+	}
+	if !strings.Contains(prompt, `tools_total="8"`) {
+		t.Fatalf("expected tools_total to exclude deferred tools in prompt, got %q", prompt)
+	}
+	if !strings.Contains(prompt, `total="18"`) {
+		t.Fatalf("expected total to exclude deferred tools in prompt, got %q", prompt)
+	}
+	if !strings.Contains(prompt, `declared_tools_total="20"`) {
+		t.Fatalf("expected declared tools total in prompt, got %q", prompt)
+	}
+	if !strings.Contains(prompt, `declared_total="30"`) {
+		t.Fatalf("expected declared total in prompt, got %q", prompt)
+	}
+	if !strings.Contains(prompt, "Deferred tools are loaded dynamically") {
+		t.Fatalf("expected deferred tools note in prompt, got %q", prompt)
+	}
+	if strings.Count(prompt, `deferred="true"`) != 1 {
+		t.Fatalf("expected exactly one deferred=true marker, got prompt %q", prompt)
+	}
+	if strings.Count(prompt, `deferred="false"`) != 1 {
+		t.Fatalf("expected exactly one deferred=false marker, got prompt %q", prompt)
+	}
+}
+
+func TestApplyTokenWarning_UsesImmediateBaselineContext(t *testing.T) {
+	rating := &Rating{}
+	applyTokenWarning(Agent{
+		Name:         "deferred-budget-agent",
+		SystemPrompt: "You are an assistant.",
+		Tools: []Tool{
+			{
+				Name:          "large-deferred-tool",
+				Deferred:      true,
+				TokenEstimate: 40_000,
+			},
+			{
+				Name:          "small-immediate-tool",
+				Deferred:      false,
+				TokenEstimate: 500,
+			},
+		},
+		TokenEstimate: TokenEstimate{
+			SystemPrompt: 500,
+			ToolsTotal:   40_500,
+			Total:        41_000,
+		},
+	}, rating)
+	if rating.TokenWarning != "" {
+		t.Fatalf("did not expect token warning when only deferred tools push declared total over threshold, got %q", rating.TokenWarning)
 	}
 }
 
@@ -312,6 +408,78 @@ func TestRaterRateWithModel_ReturnsValidationErrorForUnknownProvider(t *testing.
 	}
 	if !IsValidationError(err) {
 		t.Fatalf("expected validation error, got=%T %v", err, err)
+	}
+}
+
+func TestParseJudgeRatingOutput_ExtractsJSONObjectFromWrappedText(t *testing.T) {
+	rating, err := parseJudgeRatingOutput(strings.TrimSpace(`
+Here is the evaluation result:
+
+{"score":8,"summary":"Strong overall prompt and tool hygiene.","suggestions":[]}
+
+Thanks.
+`))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rating.Score != 8 {
+		t.Fatalf("expected score 8, got %d", rating.Score)
+	}
+	if rating.Summary != "Strong overall prompt and tool hygiene." {
+		t.Fatalf("unexpected summary: %q", rating.Summary)
+	}
+}
+
+func TestRaterRateWithModel_RetriesOnParseFailure(t *testing.T) {
+	callCount := 0
+	client := &mockJudgeClient{
+		judgeFunc: func(req judges.JudgeRequest) (judges.JudgeResponse, error) {
+			callCount++
+			if callCount < 3 {
+				return judges.JudgeResponse{
+					Text:      `{"score":7,"summary":"Incomplete`,
+					Model:     "gpt-4o-mini",
+					LatencyMs: 45,
+				}, nil
+			}
+			return judges.JudgeResponse{
+				Text:      `{"score":7,"summary":"Recovered on retry.","suggestions":[]}`,
+				Model:     "gpt-4o-mini",
+				LatencyMs: 45,
+			}, nil
+		},
+	}
+	rater := &Rater{
+		resolver:          mockResolver{clients: map[string]judges.JudgeClient{"openai": client}},
+		defaultProviderID: "openai",
+		defaultModelName:  "gpt-4o-mini",
+	}
+
+	rating, err := rater.RateWithModel(context.Background(), Agent{
+		Name:         "retry-parse-test",
+		SystemPrompt: "You are an assistant.",
+		Tools:        []Tool{},
+		Models:       []string{"openai/gpt-4o-mini"},
+		TokenEstimate: TokenEstimate{
+			SystemPrompt: 120,
+			ToolsTotal:   0,
+			Total:        120,
+		},
+	}, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rating == nil {
+		t.Fatalf("expected rating, got nil")
+	}
+	if rating.Summary != "Recovered on retry." {
+		t.Fatalf("unexpected summary: %q", rating.Summary)
+	}
+	if len(client.requests) != 3 {
+		t.Fatalf("expected three judge calls after parse retries, got %d", len(client.requests))
+	}
+	if !strings.Contains(client.requests[1].SystemPrompt, "could not be parsed as valid JSON") {
+		t.Fatalf("expected retry instruction in second request system prompt")
 	}
 }
 

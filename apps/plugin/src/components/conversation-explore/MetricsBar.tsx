@@ -5,6 +5,7 @@ import type { CostSummary, TokenSummary } from '../../conversation/aggregates';
 import type { ModelCard } from '../../modelcard/types';
 import ModelCardPopover from '../conversations/ModelCardPopover';
 import { getProviderColor, stripProviderPrefix, toDisplayProvider } from '../conversations/providerMeta';
+import { withAlpha } from '../conversations/jaegerTree/serviceColors';
 import { getStyles } from './MetricsBar.styles';
 
 const TYPEWRITER_STEP_MS = 28;
@@ -22,6 +23,7 @@ export type MetricsBarProps = {
   generationCount: number;
   isSaved?: boolean;
   onToggleSave?: () => void;
+  onBack?: () => void;
 };
 
 type ConversationLabelProps = {
@@ -93,6 +95,41 @@ function formatTokenCount(count: number): string {
   return String(count);
 }
 
+function toAlphaHex(alpha: number): string {
+  const clampedAlpha = Math.max(0, Math.min(1, alpha));
+  return Math.round(clampedAlpha * 255)
+    .toString(16)
+    .padStart(2, '0')
+    .toUpperCase();
+}
+
+function findModelCard(
+  modelCards: Map<string, ModelCard> | undefined,
+  modelName: string,
+  provider: string,
+  displayProvider: string
+): ModelCard | null {
+  if (!modelCards || modelCards.size === 0) {
+    return null;
+  }
+
+  const exactProviderKey = `${provider}::${modelName}`;
+  const exactDisplayProviderKey = `${displayProvider}::${modelName}`;
+  if (modelCards.has(exactProviderKey)) {
+    return modelCards.get(exactProviderKey) ?? null;
+  }
+  if (modelCards.has(exactDisplayProviderKey)) {
+    return modelCards.get(exactDisplayProviderKey) ?? null;
+  }
+
+  for (const [key, card] of modelCards.entries()) {
+    if (key.endsWith(`::${modelName}`)) {
+      return card;
+    }
+  }
+  return null;
+}
+
 export default function MetricsBar({
   conversationID,
   conversationTitle,
@@ -106,6 +143,7 @@ export default function MetricsBar({
   generationCount,
   isSaved = false,
   onToggleSave,
+  onBack,
 }: MetricsBarProps) {
   const styles = useStyles2(getStyles);
   const [openModel, setOpenModel] = useState<{ key: string; anchorRect: DOMRect } | null>(null);
@@ -117,25 +155,41 @@ export default function MetricsBar({
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const animateConversationLabel = normalizedConversationTitle.length > 0 && !prefersReducedMotion;
 
-  const uniqueModels = Array.from(new Set(models));
-  const cardsByModelName = useMemo(() => {
-    const map = new Map<string, ModelCard>();
-    if (!modelCards) {
-      return map;
+  const uniqueModels = useMemo(() => Array.from(new Set(models)), [models]);
+  const modelMeta = useMemo(
+    () =>
+      uniqueModels.map((model) => {
+        const provider = modelProviders?.[model]?.trim() ?? '';
+        const displayProvider = toDisplayProvider(provider);
+        const card = findModelCard(modelCards, model, provider, displayProvider);
+        const color = getProviderColor(displayProvider);
+        const displayName = provider ? stripProviderPrefix(model, displayProvider) : model;
+        const key = `${provider || 'unknown'}::${model}`;
+        return {
+          key,
+          displayName,
+          color,
+          card,
+        };
+      }),
+    [modelCards, modelProviders, uniqueModels]
+  );
+  const activeModelCard = useMemo(() => {
+    if (!openModel) {
+      return null;
     }
-    for (const [, card] of modelCards.entries()) {
-      if (card.name && !map.has(card.name)) {
-        map.set(card.name, card);
-      }
-      if (card.source_model_id && !map.has(card.source_model_id)) {
-        map.set(card.source_model_id, card);
-      }
-    }
-    return map;
-  }, [modelCards]);
+    return modelMeta.find(({ key }) => key === openModel.key)?.card ?? null;
+  }, [modelMeta, openModel]);
 
   return (
     <div className={styles.container}>
+      {onBack && (
+        <Tooltip content="Back" placement="bottom">
+          <button type="button" className={styles.backButton} onClick={onBack} aria-label="Go back">
+            <Icon name="arrow-left" size="md" />
+          </button>
+        </Tooltip>
+      )}
       <Tooltip content={conversationLabel} placement="bottom">
         <ConversationLabel
           key={conversationLabel}
@@ -218,48 +272,43 @@ export default function MetricsBar({
       )}
 
       <div className={styles.modelChips}>
-        {uniqueModels.map((model) => {
-          const provider = modelProviders?.[model]?.trim() ?? '';
-          const displayProvider = toDisplayProvider(provider);
-          const color = getProviderColor(displayProvider);
-          const displayName = provider ? stripProviderPrefix(model, displayProvider) : model;
-          const cardKey = provider.length > 0 ? `${provider}::${model}` : '';
-          const resolvedCard = (cardKey ? modelCards?.get(cardKey) : undefined) ?? cardsByModelName.get(model) ?? null;
-          const chipKey = `${provider || 'unknown'}::${model}`;
-          const isOpen = openModel?.key === chipKey;
+        {modelMeta.map(({ key, displayName, color, card }) => {
+          const isOpen = openModel?.key === key;
+          const chipToneStyle = {
+            '--chip-border-color': withAlpha(color, toAlphaHex(isOpen ? 0.7 : 0.38)),
+            '--chip-bg': withAlpha(color, toAlphaHex(isOpen ? 0.2 : 0.1)),
+          } as React.CSSProperties;
 
           return (
-            <span key={chipKey} className={styles.modelChipAnchor}>
+            <span key={key} className={styles.modelChipAnchor}>
               <button
                 type="button"
-                className={cx(styles.modelChip, isOpen && styles.modelChipActive)}
+                className={cx(styles.modelChip, styles.modelChipButton, isOpen && styles.modelChipActive)}
+                style={chipToneStyle}
                 onClick={(event) => {
-                  if (!resolvedCard) {
+                  if (!card) {
                     return;
                   }
                   if (isOpen) {
                     setOpenModel(null);
                     return;
                   }
-                  setOpenModel({ key: chipKey, anchorRect: event.currentTarget.getBoundingClientRect() });
+                  setOpenModel({ key, anchorRect: event.currentTarget.getBoundingClientRect() });
                 }}
-                aria-label={resolvedCard ? `model card ${displayName}` : `model ${displayName}`}
-                disabled={!resolvedCard}
+                aria-label={card ? `model card ${displayName}` : `model ${displayName}`}
+                disabled={!card}
               >
                 <span className={styles.providerDot} style={{ background: color }} />
                 {displayName}
               </button>
-              {isOpen && resolvedCard && (
-                <ModelCardPopover
-                  card={resolvedCard}
-                  anchorRect={openModel?.anchorRect ?? null}
-                  onClose={() => setOpenModel(null)}
-                />
-              )}
             </span>
           );
         })}
       </div>
+
+      {openModel && activeModelCard && (
+        <ModelCardPopover card={activeModelCard} anchorRect={openModel.anchorRect} onClose={() => setOpenModel(null)} />
+      )}
     </div>
   );
 }

@@ -213,7 +213,9 @@ export default function ConversationPage(props: ConversationPageProps) {
     const errorCount = allGenerations.filter((g) => Boolean(g.error?.message)).length;
     return {
       conversation_id: conversationData.conversationID,
-      conversation_title: conversationTitleFromURL.length > 0 ? conversationTitleFromURL : undefined,
+      conversation_title:
+        conversationData.conversationTitle?.trim() ||
+        (conversationTitleFromURL.length > 0 ? conversationTitleFromURL : undefined),
       user_id: conversationData.userID,
       generation_count: conversationData.generationCount,
       first_generation_at: conversationData.firstGenerationAt,

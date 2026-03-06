@@ -334,8 +334,90 @@ describe('AgentDetailPage', () => {
     }
 
     fireEvent.click(screen.getByRole('tab', { name: 'Tools' }));
-    expect(await screen.findByText('TOOLS TOKENS')).toBeInTheDocument();
-    expect(screen.getByLabelText('TOOLS TOKENS help')).toBeInTheDocument();
+    expect(await screen.findByText('TOOL TOKENS')).toBeInTheDocument();
+    expect(screen.getByLabelText('TOOL TOKENS help')).toBeInTheDocument();
+    expect(screen.queryByLabelText('DEFERRED TOKENS help')).not.toBeInTheDocument();
+  });
+
+  it('excludes deferred tools from tools and total token stats', async () => {
+    const dataSource = createDataSource();
+    dataSource.lookupAgent = jest.fn(async (_name: string, version?: string) => ({
+      agent_name: _name,
+      effective_version:
+        version && version.length > 0
+          ? version
+          : 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      declared_version_first: '1.0.0',
+      declared_version_latest: '1.1.0',
+      first_seen_at: '2026-03-04T09:00:00Z',
+      last_seen_at: '2026-03-04T11:00:00Z',
+      generation_count: 10,
+      system_prompt: 'You are concise.',
+      system_prompt_prefix: 'You are concise.',
+      tool_count: 2,
+      token_estimate: { system_prompt: 4, tools_total: 13, total: 17 },
+      tools: [
+        {
+          name: 'weather',
+          description: 'Get weather',
+          type: 'function',
+          input_schema_json: '{"city":{"type":"string"}}',
+          token_estimate: 3,
+          deferred: false,
+        },
+        {
+          name: 'slow_background_lookup',
+          description: 'Deferred lookup',
+          type: 'function',
+          input_schema_json: '{"city":{"type":"string"}}',
+          token_estimate: 10,
+          deferred: true,
+        },
+      ],
+      models: [
+        {
+          provider: 'openai',
+          name: 'gpt-5',
+          generation_count: 10,
+          first_seen_at: '2026-03-04T09:00:00Z',
+          last_seen_at: '2026-03-04T11:00:00Z',
+        },
+      ],
+    }));
+
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('TOTAL TOKENS')).toBeInTheDocument();
+    expect(screen.getByText('7')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Tools' }));
+    expect(await screen.findByText('TOOL TOKENS')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('10')).toBeInTheDocument();
+    expect(screen.queryByText('TOTAL TOOL TOKENS')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^13$/)).not.toBeInTheDocument();
+  });
+
+  it('hides deferred token stat when there are no deferred tools', async () => {
+    const dataSource = createDataSource();
+
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('AGE')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Tools' }));
+    expect(await screen.findByText('TOOL TOKENS')).toBeInTheDocument();
+    expect(screen.queryByText('DEFERRED TOKENS')).not.toBeInTheDocument();
   });
 
   it('defaults to markdown view and toggles between markdown and tokenize', async () => {

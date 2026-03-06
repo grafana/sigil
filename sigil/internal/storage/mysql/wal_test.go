@@ -14,6 +14,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gorm.io/gorm"
 )
@@ -257,6 +258,47 @@ func TestSaveBatchConversationProjectionUpsert(t *testing.T) {
 	expectedLast := generations[1].GetCompletedAt().AsTime().UTC()
 	if !conversation.LastGenerationAt.Equal(expectedLast) {
 		t.Fatalf("expected last_generation_at %v, got %v", expectedLast, conversation.LastGenerationAt)
+	}
+}
+
+func TestSaveBatchConversationProjectionStoresLatestNonEmptyTitle(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	older := testGeneration("gen-1", "conv-title", time.Date(2026, 2, 12, 18, 0, 0, 0, time.UTC))
+	older.Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{
+		"sigil.conversation.title": structpb.NewStringValue("Incident: earlier title"),
+	}}
+	blankLater := testGeneration("gen-2", "conv-title", time.Date(2026, 2, 12, 18, 5, 0, 0, time.UTC))
+	blankLater.Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{
+		"sigil.conversation.title": structpb.NewStringValue("   "),
+	}}
+	latest := testGeneration("gen-3", "conv-title", time.Date(2026, 2, 12, 18, 8, 0, 0, time.UTC))
+	latest.Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{
+		"sigil.conversation.title": structpb.NewStringValue("Incident: latest title"),
+	}}
+	outOfOrderOlder := testGeneration("gen-4", "conv-title", time.Date(2026, 2, 12, 18, 3, 0, 0, time.UTC))
+	outOfOrderOlder.Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{
+		"sigil.conversation.title": structpb.NewStringValue("Incident: stale title"),
+	}}
+
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{older, blankLater, latest}))
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{outOfOrderOlder}))
+
+	var conversation ConversationModel
+	err := store.DB().Where("tenant_id = ? AND conversation_id = ?", "tenant-a", "conv-title").First(&conversation).Error
+	if err != nil {
+		t.Fatalf("query conversation row: %v", err)
+	}
+	if conversation.ConversationTitle == nil || *conversation.ConversationTitle != "Incident: latest title" {
+		t.Fatalf("expected latest non-empty title, got %#v", conversation.ConversationTitle)
+	}
+	if conversation.TitleUpdatedAt == nil || !conversation.TitleUpdatedAt.Equal(latest.GetCompletedAt().AsTime().UTC()) {
+		t.Fatalf("expected title_updated_at %v, got %#v", latest.GetCompletedAt().AsTime().UTC(), conversation.TitleUpdatedAt)
 	}
 }
 

@@ -126,6 +126,12 @@ const getStyles = (theme: GrafanaTheme2) => ({
       borderBottom: 'none',
     },
   }),
+  toolRowDeferred: css({
+    background: `${theme.colors.action.disabledBackground}55`,
+    '&:hover': {
+      background: `${theme.colors.action.disabledBackground}75`,
+    },
+  }),
   toolRowActive: css({
     background: theme.colors.primary.transparent,
     borderLeftColor: theme.colors.primary.main,
@@ -145,11 +151,44 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.primary,
     lineHeight: 1.4,
   }),
+  toolNameDeferred: css({
+    color: theme.colors.text.secondary,
+  }),
+  toolMeta: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    flexShrink: 0,
+  }),
+  toolDeferredDot: css({
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    background: theme.colors.warning.main,
+    flexShrink: 0,
+  }),
+  toolDeferredBadge: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: `0 ${theme.spacing(0.5)}`,
+    borderRadius: theme.shape.radius.pill,
+    border: `1px solid ${theme.colors.warning.border}`,
+    background: theme.colors.warning.transparent,
+    color: theme.colors.warning.text,
+    fontSize: 10,
+    fontWeight: theme.typography.fontWeightMedium,
+    letterSpacing: '0.03em',
+    textTransform: 'uppercase' as const,
+    lineHeight: 1.6,
+  }),
   toolTokens: css({
     flexShrink: 0,
     fontSize: 11,
     color: theme.colors.text.disabled,
     fontVariantNumeric: 'tabular-nums',
+  }),
+  toolTokensDeferred: css({
+    color: theme.colors.text.secondary,
   }),
   detail: css({
     flex: 1,
@@ -178,6 +217,37 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.secondary,
     textTransform: 'uppercase' as const,
     letterSpacing: '0.04em',
+  }),
+  detailTokensRow: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    fontSize: theme.typography.bodySmall.fontSize,
+    color: theme.colors.text.secondary,
+  }),
+  detailExecutionMode: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    fontSize: theme.typography.bodySmall.fontSize,
+    color: theme.colors.text.secondary,
+  }),
+  detailExecutionModePill: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: `${theme.spacing(0.125)} ${theme.spacing(0.625)}`,
+    borderRadius: theme.shape.radius.pill,
+    border: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.action.hover,
+    color: theme.colors.text.secondary,
+    fontSize: 11,
+    fontWeight: theme.typography.fontWeightMedium,
+    lineHeight: 1.6,
+  }),
+  detailExecutionModePillDeferred: css({
+    borderColor: theme.colors.warning.border,
+    background: theme.colors.warning.transparent,
+    color: theme.colors.warning.text,
   }),
   detailDescription: css({
     fontSize: theme.typography.body.fontSize,
@@ -527,13 +597,22 @@ export default function ToolsPanel({
               <button
                 key={`${buildToolKey(tool)}:${originalIndex}`}
                 type="button"
-                className={cx(styles.toolRow, originalIndex === selectedIndex && styles.toolRowActive)}
+                className={cx(
+                  styles.toolRow,
+                  tool.deferred && styles.toolRowDeferred,
+                  originalIndex === selectedIndex && styles.toolRowActive
+                )}
                 onClick={() => setSelectedToolKey(buildToolKey(tool))}
                 aria-label={`select tool ${tool.name}`}
                 aria-pressed={originalIndex === selectedIndex}
               >
-                <span className={styles.toolName}>{tool.name}</span>
-                <span className={styles.toolTokens}>{tool.token_estimate.toLocaleString()} tok</span>
+                <span className={cx(styles.toolName, tool.deferred && styles.toolNameDeferred)}>{tool.name}</span>
+                <span className={styles.toolMeta}>
+                  {tool.deferred && <span className={styles.toolDeferredDot} aria-label="deferred tool" />}
+                  <span className={cx(styles.toolTokens, tool.deferred && styles.toolTokensDeferred)}>
+                    {tool.token_estimate.toLocaleString()} tok
+                  </span>
+                </span>
               </button>
             ))}
             {filteredTools.length === 0 && (
@@ -551,14 +630,27 @@ export default function ToolsPanel({
             <div>
               <Stack direction="row" alignItems="center" gap={1} wrap="wrap">
                 <span className={styles.detailTitle}>{selected.name}</span>
-                <Tooltip content="Approximate tokens consumed by this tool's schema definition" placement="top">
-                  <Stack direction="row" alignItems="center" gap={0.5}>
-                    <Icon name="database" size="xs" />
-                    <span>approx {selected.token_estimate.toLocaleString()} tokens</span>
-                  </Stack>
-                </Tooltip>
                 <span className={styles.detailType}>{selected.type}</span>
               </Stack>
+              <div className={styles.detailTokensRow}>
+                <Tooltip content="Estimated tokens consumed by this tool's schema definition" placement="top">
+                  <Stack direction="row" alignItems="center" gap={0.5}>
+                    <Icon name="database" size="xs" />
+                    <span>{selected.token_estimate.toLocaleString()} tokens</span>
+                  </Stack>
+                </Tooltip>
+              </div>
+              <div className={styles.detailExecutionMode}>
+                <span>Execution mode:</span>
+                <span
+                  className={cx(
+                    styles.detailExecutionModePill,
+                    selected.deferred && styles.detailExecutionModePillDeferred
+                  )}
+                >
+                  {selected.deferred ? 'Deferred' : 'Immediate'}
+                </span>
+              </div>
             </div>
 
             <div className={styles.detailTabs}>

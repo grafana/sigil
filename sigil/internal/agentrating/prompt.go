@@ -34,6 +34,7 @@ Evaluation checklist:
    - Tool names are specific and distinguishable
    - Tool descriptions are concrete and operational
    - Input schemas are clear and not overly complex
+   - Deferred tools are clearly identified and applied intentionally
    - Tool count is reasonable for reliability
    - Overlapping tools are minimized
    - High-risk tools should imply stronger guardrails
@@ -41,6 +42,7 @@ Evaluation checklist:
 4) Token budget quality
    - Total baseline context cost is reasonable
    - Any single tool should not dominate context unnecessarily
+   - Deferred tools are dynamically loaded and should be penalized less for baseline context cost than immediate tools
    - Warn explicitly when total estimated prompt+tool tokens exceed 30000
 
 5) Operational quality
@@ -72,6 +74,8 @@ func buildUserPrompt(agent Agent) string {
 	maxToolName := ""
 	maxToolTokens := 0
 	toolsWithManyParams := 0
+	deferredToolCount := 0
+	immediateToolsTotal := 0
 	for _, tool := range agent.Tools {
 		if tool.TokenEstimate > maxToolTokens {
 			maxToolTokens = tool.TokenEstimate
@@ -80,7 +84,13 @@ func buildUserPrompt(agent Agent) string {
 		if estimateParameterCount(tool.InputSchemaJSON) > 10 {
 			toolsWithManyParams++
 		}
+		if tool.Deferred {
+			deferredToolCount++
+		} else {
+			immediateToolsTotal += tool.TokenEstimate
+		}
 	}
+	baselineTotal := agent.TokenEstimate.SystemPrompt + immediateToolsTotal
 
 	var builder strings.Builder
 	builder.WriteString("<agent_profile>\n")
@@ -96,8 +106,10 @@ func buildUserPrompt(agent Agent) string {
 	builder.WriteString("  </models>\n")
 	fmt.Fprintf(
 		&builder,
-		"  <token_estimate system_prompt=\"%d\" tools_total=\"%d\" total=\"%d\" />\n",
+		"  <token_estimate system_prompt=\"%d\" tools_total=\"%d\" total=\"%d\" declared_tools_total=\"%d\" declared_total=\"%d\" />\n",
 		agent.TokenEstimate.SystemPrompt,
+		immediateToolsTotal,
+		baselineTotal,
 		agent.TokenEstimate.ToolsTotal,
 		agent.TokenEstimate.Total,
 	)
@@ -106,7 +118,10 @@ func buildUserPrompt(agent Agent) string {
 	fmt.Fprintf(&builder, "    <max_tool_tokens>%d</max_tool_tokens>\n", maxToolTokens)
 	fmt.Fprintf(&builder, "    <max_tool_name>%s</max_tool_name>\n", escapeXML(maxToolName))
 	fmt.Fprintf(&builder, "    <tools_with_more_than_10_params>%d</tools_with_more_than_10_params>\n", toolsWithManyParams)
+	fmt.Fprintf(&builder, "    <deferred_tool_count>%d</deferred_tool_count>\n", deferredToolCount)
+	fmt.Fprintf(&builder, "    <immediate_tool_count>%d</immediate_tool_count>\n", toolCount-deferredToolCount)
 	builder.WriteString("  </derived_metrics>\n")
+	builder.WriteString("  <deferred_tools_note>Deferred tools are loaded dynamically and should be penalized less for baseline context cost than immediate tools. Use tools_total and total for baseline context cost, and compare them against declared_tools_total and declared_total to understand deferred-tool overhead.</deferred_tools_note>\n")
 	builder.WriteString("  <system_prompt>\n")
 	builder.WriteString(escapeXML(agent.SystemPrompt))
 	builder.WriteString("\n  </system_prompt>\n")
@@ -117,12 +132,13 @@ func buildUserPrompt(agent Agent) string {
 		for index, tool := range agent.Tools {
 			fmt.Fprintf(
 				&builder,
-				"    <tool index=\"%d\" name=\"%s\" type=\"%s\" token_estimate=\"%d\" parameter_count=\"%d\">\n",
+				"    <tool index=\"%d\" name=\"%s\" type=\"%s\" token_estimate=\"%d\" parameter_count=\"%d\" deferred=\"%t\">\n",
 				index+1,
 				escapeXML(tool.Name),
 				escapeXML(tool.Type),
 				tool.TokenEstimate,
 				estimateParameterCount(tool.InputSchemaJSON),
+				tool.Deferred,
 			)
 			fmt.Fprintf(&builder, "      <description>%s</description>\n", escapeXML(tool.Description))
 			fmt.Fprintf(&builder, "      <input_schema_json>%s</input_schema_json>\n", escapeXML(tool.InputSchemaJSON))
