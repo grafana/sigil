@@ -607,6 +607,9 @@ export function LandingTopBar({
     let hasCached = cached != null && cached.heights.length > 0 && cached.values.length > 0;
 
     queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
       if (hasCached && cached) {
         setDisableSpineAnimation(true);
         setRequestSpineHeights(cached.heights);
