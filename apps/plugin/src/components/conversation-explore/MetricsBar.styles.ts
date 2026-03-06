@@ -17,6 +17,22 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     flexShrink: 0,
     flexWrap: 'wrap' as const,
   }),
+  backButton: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: theme.spacing(0.5),
+    border: 'none',
+    background: 'none',
+    cursor: 'pointer',
+    color: theme.colors.text.secondary,
+    borderRadius: theme.shape.radius.default,
+    transition: 'color 120ms ease',
+    marginRight: `-${theme.spacing(1)}`,
+    '&:hover': {
+      color: theme.colors.text.primary,
+    },
+  }),
   conversationId: css({
     fontFamily: theme.typography.fontFamilyMonospace,
     fontSize: theme.typography.bodySmall.fontSize,

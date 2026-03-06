@@ -93,6 +93,26 @@ describe('ConversationPage', () => {
     expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-b');
   });
 
+  it('prefers stored conversation title over the URL fallback', async () => {
+    const dataSource = createDataSource('conv-b');
+    dataSource.getConversationDetail.mockResolvedValue({
+      conversation_id: 'conv-b',
+      conversation_title: 'Incident: stored title',
+      user_id: 'user-42',
+      generation_count: 2,
+      first_generation_at: '2026-02-01T10:00:00Z',
+      last_generation_at: '2026-02-01T10:01:00Z',
+      generations: [],
+      annotations: [],
+    });
+
+    renderPage(dataSource, '/conversations/conv-b/view?conversationTitle=URL+title');
+
+    expect(await screen.findByText('Conversation')).toBeInTheDocument();
+    expect(screen.getByText('Conversation').parentElement).toHaveTextContent('Incident: stored title');
+    expect(screen.getByText('conv-b')).toBeInTheDocument();
+  });
+
   it('loads conversation for deep links outside the list', async () => {
     const dataSource = createDataSource('does-not-exist');
     const { router } = renderPage(dataSource, '/conversations/does-not-exist/view');

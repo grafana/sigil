@@ -23,6 +23,7 @@ export type MetricsBarProps = {
   generationCount: number;
   isSaved?: boolean;
   onToggleSave?: () => void;
+  onBack?: () => void;
 };
 
 type ConversationLabelProps = {
@@ -142,6 +143,7 @@ export default function MetricsBar({
   generationCount,
   isSaved = false,
   onToggleSave,
+  onBack,
 }: MetricsBarProps) {
   const styles = useStyles2(getStyles);
   const [openModel, setOpenModel] = useState<{ key: string; anchorRect: DOMRect } | null>(null);
@@ -181,6 +183,13 @@ export default function MetricsBar({
 
   return (
     <div className={styles.container}>
+      {onBack && (
+        <Tooltip content="Back" placement="bottom">
+          <button type="button" className={styles.backButton} onClick={onBack} aria-label="Go back">
+            <Icon name="arrow-left" size="md" />
+          </button>
+        </Tooltip>
+      )}
       <Tooltip content={conversationLabel} placement="bottom">
         <ConversationLabel
           key={conversationLabel}

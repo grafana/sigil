@@ -161,14 +161,16 @@ type EvalTemplateVersionModel struct {
 func (EvalTemplateVersionModel) TableName() string { return "eval_template_versions" }
 
 type ConversationModel struct {
-	ID                uint64    `gorm:"primaryKey;autoIncrement"`
-	TenantID          string    `gorm:"size:128;not null;uniqueIndex:ux_conversations_tenant_conversation,priority:1;index:idx_conversations_tenant_updated_at,priority:1"`
-	ConversationID    string    `gorm:"size:255;not null;uniqueIndex:ux_conversations_tenant_conversation,priority:2"`
-	FirstGenerationAt time.Time `gorm:"type:datetime(6);not null;default:CURRENT_TIMESTAMP(6)"`
-	LastGenerationAt  time.Time `gorm:"type:datetime(6);not null"`
-	GenerationCount   int       `gorm:"not null;default:0"`
-	CreatedAt         time.Time `gorm:"type:datetime(6);not null;autoCreateTime"`
-	UpdatedAt         time.Time `gorm:"type:datetime(6);not null;autoUpdateTime;index:idx_conversations_tenant_updated_at,priority:2"`
+	ID                uint64     `gorm:"primaryKey;autoIncrement"`
+	TenantID          string     `gorm:"size:128;not null;uniqueIndex:ux_conversations_tenant_conversation,priority:1;index:idx_conversations_tenant_updated_at,priority:1"`
+	ConversationID    string     `gorm:"size:255;not null;uniqueIndex:ux_conversations_tenant_conversation,priority:2"`
+	ConversationTitle *string    `gorm:"size:1024"`
+	TitleUpdatedAt    *time.Time `gorm:"type:datetime(6)"`
+	FirstGenerationAt time.Time  `gorm:"type:datetime(6);not null;default:CURRENT_TIMESTAMP(6)"`
+	LastGenerationAt  time.Time  `gorm:"type:datetime(6);not null"`
+	GenerationCount   int        `gorm:"not null;default:0"`
+	CreatedAt         time.Time  `gorm:"type:datetime(6);not null;autoCreateTime"`
+	UpdatedAt         time.Time  `gorm:"type:datetime(6);not null;autoUpdateTime;index:idx_conversations_tenant_updated_at,priority:2"`
 }
 
 func (ConversationModel) TableName() string {

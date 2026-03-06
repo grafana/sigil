@@ -152,9 +152,19 @@ func buildRows(tenantID string, generation *sigilv1.Generation) (GenerationModel
 	if conversationID != "" {
 		conversationPtr = &conversationID
 		now := time.Now().UTC()
+		conversationTitle := storage.ConversationTitleFromGeneration(generation)
+		var conversationTitlePtr *string
+		var titleUpdatedAt *time.Time
+		if conversationTitle != "" {
+			conversationTitlePtr = &conversationTitle
+			titleAt := createdAt
+			titleUpdatedAt = &titleAt
+		}
 		conversationRow = &ConversationModel{
 			TenantID:          tenantID,
 			ConversationID:    conversationID,
+			ConversationTitle: conversationTitlePtr,
+			TitleUpdatedAt:    titleUpdatedAt,
 			FirstGenerationAt: createdAt,
 			LastGenerationAt:  createdAt,
 			GenerationCount:   1,
@@ -185,7 +195,27 @@ func upsertConversation(tx *gorm.DB, conversation *ConversationModel) error {
 			"generation_count":    gorm.Expr("generation_count + 1"),
 			"first_generation_at": gorm.Expr("LEAST(first_generation_at, ?)", conversation.FirstGenerationAt),
 			"last_generation_at":  gorm.Expr("GREATEST(last_generation_at, ?)", conversation.LastGenerationAt),
-			"updated_at":          conversation.UpdatedAt,
+			"conversation_title": gorm.Expr(
+				`CASE
+					WHEN ? IS NOT NULL AND (title_updated_at IS NULL OR title_updated_at <= ?)
+					THEN ?
+					ELSE conversation_title
+				END`,
+				conversation.ConversationTitle,
+				conversation.TitleUpdatedAt,
+				conversation.ConversationTitle,
+			),
+			"title_updated_at": gorm.Expr(
+				`CASE
+					WHEN ? IS NOT NULL AND (title_updated_at IS NULL OR title_updated_at <= ?)
+					THEN ?
+					ELSE title_updated_at
+				END`,
+				conversation.ConversationTitle,
+				conversation.TitleUpdatedAt,
+				conversation.TitleUpdatedAt,
+			),
+			"updated_at": conversation.UpdatedAt,
 		}),
 	}).Create(conversation).Error
 }
