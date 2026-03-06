@@ -25,7 +25,7 @@ func NewDiscovery() *Discovery {
 
 func DiscoverFromEnv() *Discovery {
 	discovery := NewDiscovery()
-	httpClient := &http.Client{Timeout: 30 * time.Second}
+	httpClient := &http.Client{Timeout: 2 * time.Minute}
 
 	registerOpenAIFromEnv(discovery, httpClient)
 	registerAzureFromEnv(discovery, httpClient)
