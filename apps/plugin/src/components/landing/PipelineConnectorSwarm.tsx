@@ -287,8 +287,8 @@ const connectorSwarmTravel = keyframes({
 });
 
 const connectorSwarmPulse = keyframes({
-  '0%': { filter: 'brightness(0.92)' },
-  '100%': { filter: 'brightness(1.25)' },
+  '0%': { filter: 'var(--spark-filter-start, brightness(0.92))' },
+  '100%': { filter: 'var(--spark-filter-end, brightness(1.25))' },
 });
 
 type PipelineConnectorSwarmProps = {
@@ -394,7 +394,8 @@ export function PipelineConnectorSwarm({
               '--spark-curve-d': `${spark.curveD}px`,
               '--spark-curve-e': `${spark.curveE}px`,
               '--spark-opacity': `${spark.opacity}`,
-              filter: `blur(${effectiveBlurPx}px)`,
+              '--spark-filter-start': `blur(${effectiveBlurPx}px) brightness(0.92)`,
+              '--spark-filter-end': `blur(${effectiveBlurPx}px) brightness(1.25)`,
               backgroundColor: color,
               boxShadow: `0 0 ${effectiveGlowBlurPx}px ${effectiveGlowSpreadPx}px ${color}${effectiveGlowAlpha}`,
             } as React.CSSProperties
