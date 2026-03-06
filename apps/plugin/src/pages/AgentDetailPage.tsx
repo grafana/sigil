@@ -344,7 +344,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   tabContentLayout: css({
     display: 'grid',
-    gridTemplateColumns: '150px minmax(0, 1fr)',
+    gridTemplateColumns: '190px minmax(0, 1fr)',
     gap: theme.spacing(2),
     alignItems: 'start',
     '@media (max-width: 900px)': {
@@ -990,6 +990,14 @@ function getNonDeferredToolTokens(detail: AgentDetail): number {
   return detail.tools.reduce((sum, tool) => sum + (tool.deferred ? 0 : tool.token_estimate), 0);
 }
 
+function getDeferredToolTokens(detail: AgentDetail): number {
+  return detail.tools.reduce((sum, tool) => sum + (tool.deferred ? tool.token_estimate : 0), 0);
+}
+
+function getDeclaredToolTokens(detail: AgentDetail): number {
+  return detail.tools.reduce((sum, tool) => sum + tool.token_estimate, 0);
+}
+
 function getEffectiveTotalTokens(detail: AgentDetail): number {
   return detail.token_estimate.system_prompt + getNonDeferredToolTokens(detail);
 }
@@ -1448,6 +1456,8 @@ export default function AgentDetailPage({
 
   const agentStateContext = useMemo(() => (detail ? buildAgentStateContext(detail) : ''), [detail]);
   const nonDeferredToolTokens = useMemo(() => (detail ? getNonDeferredToolTokens(detail) : 0), [detail]);
+  const deferredToolTokens = useMemo(() => (detail ? getDeferredToolTokens(detail) : 0), [detail]);
+  const declaredToolTokens = useMemo(() => (detail ? getDeclaredToolTokens(detail) : 0), [detail]);
   const effectiveTotalTokens = useMemo(() => (detail ? getEffectiveTotalTokens(detail) : 0), [detail]);
   const scrollToPromptAnalysis = useCallback(() => {
     promptAnalysisSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -2010,12 +2020,28 @@ export default function AgentDetailPage({
           <div className={styles.tabSidebar} aria-label="Tools stats">
             <div className={styles.tabSidebarStats}>
               <TopStat
-                label="TOOLS TOKENS"
+                label="TOOL TOKENS"
                 value={nonDeferredToolTokens}
                 loading={false}
                 normalFontSize
                 rightAlignContent
-                helpTooltip="Estimated tokens consumed by non-deferred tool schemas included in the initial context for this version."
+                helpTooltip="Estimated tokens consumed by immediate, non-deferred tool schemas included in the initial context for this version."
+              />
+              <TopStat
+                label="DEFERRED TOKENS"
+                value={deferredToolTokens}
+                loading={false}
+                normalFontSize
+                rightAlignContent
+                helpTooltip="Estimated tokens consumed by deferred tool schemas that are loaded dynamically instead of included in the initial context."
+              />
+              <TopStat
+                label="TOTAL TOOL TOKENS"
+                value={declaredToolTokens}
+                loading={false}
+                normalFontSize
+                rightAlignContent
+                helpTooltip="Estimated tokens consumed by all tool schemas combined, including both immediate and deferred tools."
               />
               <TopStat
                 label="TOTAL TOKENS"

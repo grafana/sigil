@@ -327,8 +327,10 @@ describe('AgentDetailPage', () => {
     }
 
     fireEvent.click(screen.getByRole('tab', { name: 'Tools' }));
-    expect(await screen.findByText('TOOLS TOKENS')).toBeInTheDocument();
-    expect(screen.getByLabelText('TOOLS TOKENS help')).toBeInTheDocument();
+    expect(await screen.findByText('TOOL TOKENS')).toBeInTheDocument();
+    expect(screen.getByLabelText('TOOL TOKENS help')).toBeInTheDocument();
+    expect(screen.getByLabelText('DEFERRED TOKENS help')).toBeInTheDocument();
+    expect(screen.getByLabelText('TOTAL TOOL TOKENS help')).toBeInTheDocument();
   });
 
   it('excludes deferred tools from tools and total token stats', async () => {
@@ -388,9 +390,10 @@ describe('AgentDetailPage', () => {
     expect(await screen.findByText('TOTAL TOKENS')).toBeInTheDocument();
     expect(screen.getByText('7')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: 'Tools' }));
-    expect(await screen.findByText('TOOLS TOKENS')).toBeInTheDocument();
+    expect(await screen.findByText('TOOL TOKENS')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
-    expect(screen.queryByText('17')).not.toBeInTheDocument();
+    expect(screen.getByText('10')).toBeInTheDocument();
+    expect(screen.getByText('13')).toBeInTheDocument();
   });
 
   it('defaults to markdown and keeps markdown when tokenize is enabled', async () => {
