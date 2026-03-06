@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -17,7 +18,7 @@ const GlobalTenantID = evalpkg.GlobalTenantID
 // templates that exist but don't yet have the current predefined version.
 func BootstrapPredefinedTemplates(ctx context.Context, store evalpkg.TemplateStore) error {
 	for _, templateID := range predefined.DeprecatedTemplateIDs() {
-		if err := store.DeleteTemplate(ctx, GlobalTenantID, templateID); err != nil {
+		if err := store.DeleteTemplate(ctx, GlobalTenantID, templateID); err != nil && !errors.Is(err, evalpkg.ErrNotFound) {
 			return fmt.Errorf("delete deprecated template %s: %w", templateID, err)
 		}
 	}

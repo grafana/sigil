@@ -146,3 +146,30 @@ func TestBootstrapPredefinedTemplatesDeletesDeprecatedGlobals(t *testing.T) {
 		t.Fatal("expected groundedness global template to be created")
 	}
 }
+
+type bootstrapNotFoundDeleteStore struct {
+	*memoryTemplateStore
+}
+
+func (s *bootstrapNotFoundDeleteStore) DeleteTemplate(_ context.Context, tenantID, templateID string) error {
+	if tenantID == GlobalTenantID && templateID == "sigil.hallucination" {
+		return evalpkg.ErrNotFound
+	}
+	return s.memoryTemplateStore.DeleteTemplate(context.Background(), tenantID, templateID)
+}
+
+func TestBootstrapPredefinedTemplatesIgnoresMissingDeprecatedGlobals(t *testing.T) {
+	store := &bootstrapNotFoundDeleteStore{memoryTemplateStore: newMemoryTemplateStore()}
+
+	if err := BootstrapPredefinedTemplates(context.Background(), store); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	got, err := store.GetGlobalTemplate(context.Background(), "sigil.groundedness")
+	if err != nil {
+		t.Fatalf("get groundedness template: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected groundedness global template to be created")
+	}
+}
