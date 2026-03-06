@@ -170,7 +170,7 @@ function AiAttributePills({ entries }: { entries: Array<{ key: string; value: st
   }
 
   return (
-    <div className={styles.aiAttributePills}>
+    <div className={styles.pillsContainer}>
       {entries.map(({ key, value }) => (
         <span key={key} className={styles.aiAttributePill}>
           <span className={styles.aiAttributePillKey}>{key}</span>
@@ -189,7 +189,7 @@ function AttributePills({ entries }: { entries: Array<{ key: string; value: stri
   }
 
   return (
-    <div className={styles.attributePills}>
+    <div className={styles.pillsContainer}>
       {entries.map(({ key, value }) => (
         <span key={key} className={styles.attributePill}>
           <span className={styles.attributePillKey}>{key}</span>

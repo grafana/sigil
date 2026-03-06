@@ -285,12 +285,7 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     borderColor: theme.colors.primary.border,
     background: theme.colors.action.hover,
   }),
-  aiAttributePills: css({
-    display: 'flex',
-    flexWrap: 'wrap' as const,
-    gap: theme.spacing(0.5),
-  }),
-  attributePills: css({
+  pillsContainer: css({
     display: 'flex',
     flexWrap: 'wrap' as const,
     gap: theme.spacing(0.5),

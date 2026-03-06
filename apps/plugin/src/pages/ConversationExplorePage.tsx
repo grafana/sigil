@@ -868,7 +868,7 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     const paddingMs = 5 * 60 * 1000;
     const from = dateTime(Math.max(0, startMs - paddingMs));
     const to = dateTime(Math.max(startMs + 1, endMs + paddingMs));
-    return { from, to, raw: { from, to } };
+    return { from, to, raw: { from: from.toISOString(), to: to.toISOString() } };
   }, [traceOverlaySpan]);
 
   const setSelectedNodeId = useCallback(
