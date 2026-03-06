@@ -33,9 +33,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
 
 function useAgentDetailPageNav(): NavModelItem | undefined {
   const location = useLocation();
-  const agentDetailMatch = location.pathname.match(
-    new RegExp(`${PLUGIN_BASE}/${ROUTES.Agents}/name/([^/]+)`)
-  );
+  const agentDetailMatch = location.pathname.match(new RegExp(`${PLUGIN_BASE}/${ROUTES.Agents}/name/([^/]+)`));
   const matchedName = agentDetailMatch ? decodeURIComponent(agentDetailMatch[1]) : undefined;
   const isAnonymous = location.pathname.endsWith(`/${ROUTES.Agents}/anonymous`);
 

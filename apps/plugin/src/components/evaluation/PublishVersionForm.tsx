@@ -18,6 +18,7 @@ import { focusInvalidFieldFromMap } from '../../evaluation/focusFirstInvalid';
 import { parseSchemaConfig, validateSharedForm } from '../../evaluation/formValidation';
 import { formatHeuristicStringList, parseHeuristicStringListInput } from '../../evaluation/heuristicConfig';
 import { nextVersion } from '../../evaluation/versionUtils';
+import JudgeProviderModelFields from './JudgeProviderModelFields';
 import { getSectionTitleStyles } from './sectionStyles';
 import PromptTemplateTextarea from './PromptTemplateTextarea';
 
@@ -426,31 +427,16 @@ export default function PublishVersionForm({
               </Text>
             </div>
             <div className={styles.twoColumnGrid}>
-              <Field label="Provider" description="Optional. Override the default judge provider.">
-                <Select<string>
-                  className={styles.compactControl}
-                  options={providerOptions}
-                  value={provider || undefined}
-                  onChange={(v) => {
-                    setProvider(v?.value ?? '');
-                    setModel('');
-                    setModelOptions([]);
-                  }}
-                  isClearable
-                  placeholder="Default"
-                />
-              </Field>
-              <Field label="Model" description="Optional. Override the default judge model.">
-                <Select<string>
-                  className={styles.compactControl}
-                  options={modelOptions}
-                  value={model || undefined}
-                  onChange={(v) => setModel(v?.value ?? '')}
-                  isClearable
-                  allowCustomValue
-                  placeholder="Default"
-                />
-              </Field>
+              <JudgeProviderModelFields
+                compactControlClassName={styles.compactControl}
+                provider={provider}
+                model={model}
+                providerOptions={providerOptions}
+                modelOptions={modelOptions}
+                setProvider={setProvider}
+                setModel={setModel}
+                setModelOptions={setModelOptions}
+              />
             </div>
             <Field
               label="System prompt"

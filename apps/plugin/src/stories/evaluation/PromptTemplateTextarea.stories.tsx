@@ -34,3 +34,12 @@ export const Empty = {
     placeholder: 'You evaluate one assistant response.',
   },
 };
+
+export const MixedTemplateVars = {
+  render: Render,
+  args: {
+    initialValue:
+      'You are a rigorous evaluator.\n\nConversation ID: {{conversation_id}}\nUser input: {{input}}\nAssistant output: {{output}}',
+    placeholder: 'Conversation ID: {{conversation_id}}',
+  },
+};

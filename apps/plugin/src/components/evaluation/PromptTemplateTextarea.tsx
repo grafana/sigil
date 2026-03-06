@@ -38,6 +38,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
   textarea: css({
     position: 'relative',
     zIndex: 1,
+    display: 'block',
+    boxSizing: 'border-box',
+    margin: 0,
     width: '100%',
     minHeight: 180,
     padding: theme.spacing(1, 2),
@@ -45,7 +48,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     lineHeight: theme.typography.body.lineHeight,
     border: 'none',
     background: 'transparent',
-    color: 'transparent',
+    color: theme.colors.text.primary,
     caretColor: theme.colors.text.primary,
     resize: 'none' as const,
     overflow: 'hidden',
@@ -57,10 +60,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
   overlay: css({
     position: 'absolute',
     inset: 0,
+    boxSizing: 'border-box',
     padding: theme.spacing(1, 2),
     fontSize: theme.typography.body.fontSize,
     lineHeight: theme.typography.body.lineHeight,
-    color: theme.colors.text.primary,
+    color: 'transparent',
     fontFamily: theme.typography.fontFamilyMonospace,
     whiteSpace: 'pre-wrap' as const,
     wordBreak: 'break-word' as const,
@@ -71,8 +75,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.secondary,
   }),
   templateVar: css({
-    color: theme.colors.warning.text,
-    fontWeight: theme.typography.fontWeightMedium,
+    color: 'transparent',
+    background: theme.colors.warning.transparent,
+    borderRadius: theme.shape.radius.default,
+    boxShadow: `inset 0 0 0 1px ${theme.colors.warning.border}`,
   }),
 });
 
