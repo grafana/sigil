@@ -97,6 +97,7 @@ type searchCandidate struct {
 // optional feedback and eval summaries for batch lookup callers.
 type ConversationBatchMetadata struct {
 	ConversationID    string                              `json:"conversation_id"`
+	ConversationTitle string                              `json:"conversation_title,omitempty"`
 	GenerationCount   int                                 `json:"generation_count"`
 	FirstGenerationAt time.Time                           `json:"first_generation_at"`
 	LastGenerationAt  time.Time                           `json:"last_generation_at"`
@@ -1321,6 +1322,7 @@ func (s *Service) ListConversationBatchMetadataForTenant(
 		}
 		item := ConversationBatchMetadata{
 			ConversationID:    conversationID,
+			ConversationTitle: row.ConversationTitle,
 			GenerationCount:   row.GenerationCount,
 			FirstGenerationAt: row.FirstGenerationAt.UTC(),
 			LastGenerationAt:  row.LastGenerationAt.UTC(),

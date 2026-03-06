@@ -4,6 +4,7 @@ import type { GrafanaTheme2 } from '@grafana/data';
 import { Alert, Spinner, useStyles2 } from '@grafana/ui';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
+import { resolveConversationTitleFromTelemetry } from '../conversation/conversationTitle';
 import { createTempoTraceFetcher } from '../conversation/fetchTrace';
 import { type TraceFetcher } from '../conversation/loader';
 import { findSpanBySelectionID, getSelectionID } from '../conversation/spans';
@@ -206,6 +207,11 @@ export default function ConversationPage(props: ConversationPageProps) {
     [searchParams, setSearchParams]
   );
 
+  const conversationTitleFromTelemetry = useMemo(
+    () => resolveConversationTitleFromTelemetry(allGenerations, conversationData?.spans ?? []),
+    [allGenerations, conversationData]
+  );
+
   const conversationSummary = useMemo<ConversationSearchResult | null>(() => {
     if (!conversationData) {
       return null;
@@ -215,6 +221,7 @@ export default function ConversationPage(props: ConversationPageProps) {
       conversation_id: conversationData.conversationID,
       conversation_title:
         conversationData.conversationTitle?.trim() ||
+        conversationTitleFromTelemetry ||
         (conversationTitleFromURL.length > 0 ? conversationTitleFromURL : undefined),
       user_id: conversationData.userID,
       generation_count: conversationData.generationCount,
@@ -228,7 +235,7 @@ export default function ConversationPage(props: ConversationPageProps) {
       rating_summary: conversationData.ratingSummary ?? undefined,
       annotation_count: conversationData.annotations.length,
     };
-  }, [conversationData, allGenerations, conversationTitleFromURL]);
+  }, [conversationData, allGenerations, conversationTitleFromTelemetry, conversationTitleFromURL]);
 
   return (
     <div className={styles.pageContainer}>

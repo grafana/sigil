@@ -64,13 +64,6 @@
     },
     {
       "type": "page",
-      "name": "Conversations",
-      "path": "/a/grafana-sigil-app/conversations/:conversationID/detail",
-      "action": "grafana-sigil-app.data:read",
-      "addToNav": false
-    },
-    {
-      "type": "page",
       "name": "Conversation explore",
       "path": "/a/grafana-sigil-app/conversations/:conversationID/explore",
       "action": "grafana-sigil-app.data:read",
@@ -105,13 +98,6 @@
       "action": "grafana-sigil-app.data:read",
       "addToNav": true,
       "defaultNav": false
-    },
-    {
-      "type": "page",
-      "name": "Conversations (old)",
-      "path": "/a/grafana-sigil-app/conversations-old",
-      "action": "grafana-sigil-app.data:read",
-      "addToNav": false
     },
     {
       "type": "page",

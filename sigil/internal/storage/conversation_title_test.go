@@ -89,6 +89,20 @@ func TestConversationTitleFromGeneration(t *testing.T) {
 			}),
 			want: "Legacy incident",
 		},
+		{
+			name: "does not read title from output payload",
+			generation: &sigilv1.Generation{
+				Output: []*sigilv1.Message{
+					{
+						Role: sigilv1.MessageRole_MESSAGE_ROLE_ASSISTANT,
+						Parts: []*sigilv1.Part{
+							{Payload: &sigilv1.Part_Text{Text: "```json\n{\"title\":\"Understanding data shape\",\"category\":\"Learn\"}\n```"}},
+						},
+					},
+				},
+			},
+			want: "",
+		},
 	}
 
 	for _, tt := range tests {
