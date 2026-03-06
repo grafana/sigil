@@ -1463,9 +1463,6 @@ export default function AgentDetailPage({
   );
 
   const agentStateContext = useMemo(() => (detail ? buildAgentStateContext(detail) : ''), [detail]);
-  const scrollToPromptAnalysis = useCallback(() => {
-    promptAnalysisSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, []);
 
   const hasInsightResults = promptInsights !== null && promptInsights.status === 'completed';
   const hasRatingResult = initialRating !== null && initialRating.status === 'completed';
@@ -2051,8 +2048,7 @@ export default function AgentDetailPage({
                       agentName={agentName}
                       version={activeVersion}
                       agentStateContext={agentStateContext}
-                      contentView={systemPromptView === 'diff' ? 'diff' : 'markdown'}
-                      onRerun={scrollToPromptAnalysis}
+                      contentView="markdown"
                       onResultChange={handleRatingResultChange}
                       dataSource={dataSource}
                       initialResult={initialRating}

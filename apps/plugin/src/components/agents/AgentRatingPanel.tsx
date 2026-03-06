@@ -15,7 +15,6 @@ export type AgentRatingPanelProps = {
   version?: string;
   agentStateContext?: string;
   contentView?: 'preview' | 'markdown';
-  onRerun?: () => void;
   onResultChange?: (result: AgentRatingResponse | null) => void;
   dataSource?: AgentsDataSource;
   initialResult?: AgentRatingResponse | null;
@@ -547,7 +546,6 @@ const AgentRatingPanel = forwardRef<AgentRatingPanelHandle, AgentRatingPanelProp
     version,
     agentStateContext = '',
     contentView = 'preview',
-    onRerun,
     onResultChange,
     dataSource = defaultAgentsDataSource,
     initialResult = null,
@@ -766,11 +764,6 @@ const AgentRatingPanel = forwardRef<AgentRatingPanelHandle, AgentRatingPanelProp
       setError(err instanceof Error ? err.message : 'Failed to evaluate agent');
     }
   }, [agentName, dataSource, onResultChange, startPolling, stopPolling, version]);
-
-  const onClickRerun = useCallback(() => {
-    onRerun?.();
-    void runRating();
-  }, [onRerun, runRating]);
 
   const onExplainSuggestion = useCallback(
     (suggestion: AgentRatingSuggestion) => {

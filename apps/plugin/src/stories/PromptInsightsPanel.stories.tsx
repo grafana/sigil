@@ -1,4 +1,3 @@
-import React from 'react';
 import PromptInsightsPanel from '../components/agents/PromptInsightsPanel';
 import type { AgentsDataSource } from '../agents/api';
 import type { PromptInsightsResponse } from '../agents/types';
