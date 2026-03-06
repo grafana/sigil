@@ -17,10 +17,8 @@ function getStyles() {
   return {
     page: css({
       position: 'relative',
-      width: 'calc(100% + 32px)',
+      width: '100%',
       minHeight: '100vh',
-      marginLeft: -16,
-      marginRight: -16,
       overflow: 'hidden',
       borderRadius: 0,
     }),
