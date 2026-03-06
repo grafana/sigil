@@ -842,21 +842,26 @@ export function LandingTopBar({
           )}
           <div className={cx(styles.heroCard, showRequestSpines && styles.heroCardWithSpines)}>
             <div className={styles.heroCardContent}>
+              <div className={styles.heroHeader}>
+                <div>
+                  <div className={styles.introducingLabel}>Introducing</div>
+                  <h1 className={styles.productHeading}>Grafana Sigil</h1>
+                </div>
+                <LinkButton
+                  className={styles.githubButton}
+                  href="https://github.com/grafana/sigil"
+                  icon="github"
+                  variant="secondary"
+                  size="sm"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  GitHub
+                </LinkButton>
+              </div>
               <div>
-                <div className={styles.introducingLabel}>Introducing</div>
-                <h1 className={styles.productHeading}>Grafana Sigil</h1>
                 <div className={styles.heroSubRow}>
-                  <Text color="secondary">Actually useful AI O11y &middot; Open source</Text>
-                  <LinkButton
-                    href="https://github.com/grafana/sigil"
-                    icon="github"
-                    variant="secondary"
-                    size="sm"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    GitHub
-                  </LinkButton>
+                  <Text color="secondary">Actually useful AI O11y</Text>
                 </div>
               </div>
               <div className={styles.heroPipeline}>
@@ -887,10 +892,10 @@ export function LandingTopBar({
                       </div>
                       <div className={styles.pipelineStepTitle}>Instrument</div>
                     </div>
-                    <Text variant="h5">Zero-config automatic tracing</Text>
+                    <Text variant="h5">Zero-config tracing</Text>
                     <Text color="secondary" variant="body">
-                      Drop-in SDKs for Go, Python, TypeScript, Java and .NET. Capture every LLM call, token count, and
-                      latency out of the box.
+                      Drop-in SDKs for Go, Python, TypeScript, Java, and .NET. Capture every LLM call, token, and
+                      latency.
                     </Text>
                   </div>
                 </div>
@@ -928,10 +933,10 @@ export function LandingTopBar({
                       </div>
                       <div className={styles.pipelineStepTitle}>Observe</div>
                     </div>
-                    <Text variant="h5">Full-stack AI observability</Text>
+                    <Text variant="h5">AI observability</Text>
                     <Text color="secondary" variant="body">
-                      Monitor latency, tokens, cost, and errors across all providers and models. Track conversations,
-                      agents, and generations in real time.
+                      Track latency, tokens, cost, and errors across providers and models. Follow conversations, agents,
+                      and generations in real time.
                     </Text>
                   </div>
                 </div>
@@ -969,10 +974,10 @@ export function LandingTopBar({
                       </div>
                       <div className={styles.pipelineStepTitle}>Evaluate</div>
                     </div>
-                    <Text variant="h5">Automated quality scoring</Text>
+                    <Text variant="h5">Automatic quality scoring</Text>
                     <Text color="secondary" variant="body">
-                      LLM judges, regex, JSON schema, or custom heuristics. Surface quality signals and act on them with
-                      dashboards and alerts.
+                      Use LLM judges, regex, JSON schema, or custom heuristics. Turn quality signals into dashboards and
+                      alerts.
                     </Text>
                   </div>
                 </div>
@@ -1538,6 +1543,13 @@ function getStyles(theme: GrafanaTheme2) {
       flexDirection: 'column',
       gap: theme.spacing(2),
     }),
+    heroHeader: css({
+      label: 'landingTopBar-heroHeader',
+      display: 'flex',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: theme.spacing(2),
+    }),
     introducingLabel: css({
       label: 'landingTopBar-introducingLabel',
       display: 'inline-block',
@@ -1548,10 +1560,7 @@ function getStyles(theme: GrafanaTheme2) {
       fontSize: 11,
       lineHeight: 1,
       color: '#5794F2',
-      background: 'rgba(87, 148, 242, 0.1)',
-      padding: `${theme.spacing(0.5)} ${theme.spacing(1)}`,
-      borderRadius: theme.shape.radius.pill,
-      border: '1px solid rgba(87, 148, 242, 0.2)',
+      padding: 0,
     }),
     heroSubRow: css({
       label: 'landingTopBar-heroSubRow',
@@ -1559,6 +1568,14 @@ function getStyles(theme: GrafanaTheme2) {
       alignItems: 'center',
       gap: theme.spacing(2),
       marginTop: theme.spacing(0.5),
+    }),
+    githubButton: css({
+      label: 'landingTopBar-githubButton',
+      marginTop: theme.spacing(0.5),
+      '& svg': {
+        width: 18,
+        height: 18,
+      },
     }),
     productHeading: css({
       label: 'landingTopBar-productHeading',
@@ -1568,9 +1585,7 @@ function getStyles(theme: GrafanaTheme2) {
       fontSize: '2.4rem',
       lineHeight: 1.1,
       whiteSpace: 'nowrap',
-      background: 'linear-gradient(135deg, #5794F2 0%, #B877D9 50%, #FF9830 100%)',
-      WebkitBackgroundClip: 'text',
-      WebkitTextFillColor: 'transparent',
+      color: theme.colors.text.primary,
     }),
     heroPipeline: css({
       label: 'landingTopBar-heroPipeline',
@@ -1591,11 +1606,10 @@ function getStyles(theme: GrafanaTheme2) {
       border: `1px solid ${theme.colors.border.weak}`,
       background: theme.isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
       overflow: 'hidden',
-      transition: 'border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease',
+      transition: 'border-color 0.25s ease, box-shadow 0.25s ease',
       '&:hover': {
         borderColor: theme.colors.border.medium,
         boxShadow: theme.isDark ? '0 4px 24px rgba(0,0,0,0.4)' : '0 4px 24px rgba(0,0,0,0.08)',
-        transform: 'translateY(-2px)',
       },
     }),
     pipelineStepAccent: css({
