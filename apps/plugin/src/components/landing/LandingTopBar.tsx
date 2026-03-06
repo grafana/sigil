@@ -1632,9 +1632,11 @@ function getStyles(theme: GrafanaTheme2) {
     pipelineStepSwarm: css({
       label: 'landingTopBar-pipelineStepSwarm',
       inset: 0,
-      opacity: 0.08,
       mixBlendMode: theme.isDark ? 'screen' : 'normal',
-      zIndex: 2,
+      '&&': {
+        opacity: 0.08,
+        zIndex: 2,
+      },
     }),
     pipelineStepAccent: css({
       label: 'landingTopBar-pipelineStepAccent',
