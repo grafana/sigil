@@ -516,8 +516,26 @@ function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProp
     }
 
     let cancelled = false;
-    let timerId: number | undefined;
+    let retryTimeoutId: number | undefined;
+    let intervalId: number | undefined;
     let observer: MutationObserver | undefined;
+
+    const clearRetryTimeout = () => {
+      if (retryTimeoutId !== undefined) {
+        window.clearTimeout(retryTimeoutId);
+        retryTimeoutId = undefined;
+      }
+    };
+
+    const stopAll = () => {
+      cancelled = true;
+      observer?.disconnect();
+      clearRetryTimeout();
+      if (intervalId !== undefined) {
+        window.clearInterval(intervalId);
+        intervalId = undefined;
+      }
+    };
 
     const focusSpan = (): boolean => {
       if (cancelled || !hostRef.current) {
@@ -537,7 +555,8 @@ function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProp
           targetToggle.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
         }
 
-        timerId = window.setTimeout(() => {
+        clearRetryTimeout();
+        retryTimeoutId = window.setTimeout(() => {
           if (!cancelled) {
             void focusSpan();
           }
@@ -560,7 +579,7 @@ function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProp
 
     observer = new MutationObserver(() => {
       if (focusSpan()) {
-        observer?.disconnect();
+        stopAll();
       }
     });
 
@@ -572,22 +591,13 @@ function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProp
     });
 
     focusSpan();
-    timerId = window.setInterval(() => {
+    intervalId = window.setInterval(() => {
       if (focusSpan()) {
-        observer?.disconnect();
-        if (timerId !== undefined) {
-          window.clearInterval(timerId);
-        }
+        stopAll();
       }
     }, 250);
 
-    return () => {
-      cancelled = true;
-      observer?.disconnect();
-      if (timerId !== undefined) {
-        window.clearInterval(timerId);
-      }
-    };
+    return stopAll;
   }, [normalizedSpanId, scene, traceId]);
 
   if (!tempoDatasourceUID) {

@@ -792,9 +792,6 @@ export default function GenerationView({
   );
 
   const traceTargetSpan = node.span;
-  const hasAttributeSection = Boolean(
-    node.span && (node.span.resourceAttributes.size > 0 || node.span.attributes.size > 0)
-  );
   const visibleAttributeCount = useMemo(() => {
     if (!node.span) {
       return 0;
@@ -804,6 +801,7 @@ export default function GenerationView({
       collectAttributeEntries(node.span.attributes).length
     );
   }, [node.span]);
+  const hasAttributeSection = visibleAttributeCount > 0;
 
   const navigatePrev = useCallback(() => {
     if (adjacent?.previous) {
