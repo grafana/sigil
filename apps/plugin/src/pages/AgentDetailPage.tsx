@@ -2,19 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { css, cx } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import {
-  Alert,
-  Badge,
-  Button,
-  Icon,
-  Spinner,
-  Tab,
-  TabsBar,
-  Text,
-  Tooltip,
-  useStyles2,
-  useTheme2,
-} from '@grafana/ui';
+import { Alert, Badge, Button, Icon, Spinner, Tab, TabsBar, Text, Tooltip, useStyles2, useTheme2 } from '@grafana/ui';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../agents/api';
 import type { AgentDetail, AgentRatingResponse, AgentVersionListItem } from '../agents/types';
 import ModelCardPopover from '../components/conversations/ModelCardPopover';
@@ -120,6 +108,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     padding: theme.spacing(2.5, 2, 2.5, 2),
     '@media (max-width: 900px)': {
       gridTemplateColumns: '1fr',
+      padding: theme.spacing(2, 1.25, 2, 1.25),
+    },
+    '@media (max-width: 640px)': {
+      padding: theme.spacing(1.5, 1, 1.75, 1),
     },
   }),
   heroTitleRow: css({
@@ -128,10 +120,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
     alignItems: 'start',
     gap: theme.spacing(2),
     '@media (max-width: 1200px)': {
-      gridTemplateColumns: 'auto minmax(220px, 1fr)',
+      gridTemplateColumns: 'auto minmax(0, 1fr)',
+      columnGap: theme.spacing(1.5),
+      rowGap: theme.spacing(1.25),
     },
     '@media (max-width: 900px)': {
       gridTemplateColumns: '1fr',
+      rowGap: theme.spacing(1),
     },
   }),
   heroTitleMeta: css({
@@ -153,6 +148,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
     width: '100%',
     marginTop: theme.spacing(0.75),
     alignItems: 'stretch',
+    '@media (max-width: 1200px)': {
+      gridColumn: '1 / -1',
+      marginTop: theme.spacing(0.5),
+    },
+    '@media (max-width: 900px)': {
+      marginTop: theme.spacing(0.25),
+    },
   }),
   heroTopStatsRow: css({
     display: 'flex',
@@ -161,9 +163,17 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: theme.spacing(2),
     width: '100%',
     '@media (max-width: 1200px)': {
-      justifyContent: 'flex-start',
-      alignItems: 'stretch',
-      flexDirection: 'column' as const,
+      display: 'grid',
+      gridTemplateColumns: 'minmax(0, 1fr) auto',
+      gridTemplateAreas: '"spacer rating" "versions versions"',
+      alignItems: 'start',
+      columnGap: theme.spacing(1.25),
+      rowGap: theme.spacing(0.75),
+    },
+    '@media (max-width: 640px)': {
+      gridTemplateColumns: '1fr',
+      gridTemplateAreas: '"rating" "versions"',
+      alignItems: 'start',
     },
   }),
   heroVersionsPanel: css({
@@ -171,6 +181,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     minWidth: 0,
     width: '100%',
     '@media (max-width: 1200px)': {
+      gridArea: 'versions',
       flex: '1 1 auto',
       alignSelf: 'stretch',
     },
@@ -238,15 +249,17 @@ const getStyles = (theme: GrafanaTheme2) => ({
     '@media (max-width: 1400px)': {
       gridColumn: '4 / 5',
     },
-    '@media (max-width: 900px)': {
-      gridColumn: '2 / 3',
+    '@media (max-width: 1200px)': {
+      gridArea: 'rating',
       borderLeft: 'none',
-      borderTop: `1px solid ${theme.colors.border.weak}`,
-      paddingTop: theme.spacing(1),
+      borderTop: 'none',
+      paddingTop: 0,
       paddingLeft: 0,
+      width: 'auto',
+      justifySelf: 'end',
     },
-    '@media (max-width: 640px)': {
-      gridColumn: '1 / 2',
+    '@media (max-width: 900px)': {
+      justifySelf: 'end',
     },
   }),
   latestScoreSquares: css({
@@ -256,9 +269,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     marginTop: theme.spacing(0.125),
     width: 'fit-content',
     marginLeft: 'auto',
-    '@media (max-width: 900px)': {
-      marginLeft: 0,
-    },
   }),
   latestScoreSquare: css({
     display: 'block',
@@ -280,9 +290,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     lineHeight: 1,
     textAlign: 'right' as const,
     fontVariantNumeric: 'tabular-nums',
-    '@media (max-width: 900px)': {
-      textAlign: 'left' as const,
-    },
   }),
   latestScoreValueMain: css({
     color: theme.colors.text.primary,
@@ -313,6 +320,16 @@ const getStyles = (theme: GrafanaTheme2) => ({
     height: '100%',
     borderTop: `1px solid ${theme.colors.border.weak}`,
     padding: theme.spacing(1.5),
+    '@media (max-width: 900px)': {
+      justifyContent: 'flex-start',
+      alignItems: 'flex-start',
+      gap: theme.spacing(2),
+      padding: theme.spacing(1.25),
+    },
+    '@media (max-width: 640px)': {
+      gap: theme.spacing(1.25, 1.5),
+      padding: theme.spacing(1),
+    },
   }),
   tabStatsStrip: css({
     borderRadius: theme.shape.radius.default,
@@ -527,6 +544,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     background: theme.colors.background.primary,
     boxShadow: theme.shadows.z2,
     padding: theme.spacing(0.5),
+    '@media (max-width: 900px)': {
+      width: '100%',
+      maxWidth: '100%',
+    },
   }),
   versionPickerOptions: css({
     margin: 0,
@@ -577,6 +598,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: 0,
     marginTop: theme.spacing(0.5),
     overflowX: 'auto' as const,
+    paddingBottom: theme.spacing(0.25),
+    scrollbarWidth: 'thin' as const,
   }),
   recentVersionItem: css({
     width: '100%',
@@ -585,6 +608,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     gap: theme.spacing(0.125),
+    '@media (max-width: 900px)': {
+      flex: '0 0 min(120px, 32vw)',
+      minWidth: 96,
+    },
   }),
   recentVersionItemActive: css({}),
   recentVersionBox: css({
@@ -605,6 +632,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
     transition: 'border-color 0.15s ease',
     '&:hover': {
       borderBottomColor: theme.colors.border.medium,
+    },
+    '@media (max-width: 900px)': {
+      padding: theme.spacing(0.5),
     },
   }),
   recentVersionBoxActive: css({
@@ -1563,7 +1593,11 @@ export default function AgentDetailPage({
                           </button>
                           {isVersionPickerOpen && (
                             <div className={styles.versionPickerMenu}>
-                              <ul className={styles.versionPickerOptions} role="listbox" aria-label="agent version selector">
+                              <ul
+                                className={styles.versionPickerOptions}
+                                role="listbox"
+                                aria-label="agent version selector"
+                              >
                                 {versionSelectOptions.map((option) => {
                                   const isLoadMore = option.value === LOAD_MORE_VERSIONS_VALUE;
                                   const isSelected = option.value === activeVersion;
@@ -1603,88 +1637,85 @@ export default function AgentDetailPage({
                       {recentVersions.length > 1 && (
                         <div className={styles.recentVersionsGrid}>
                           {recentVersions.map((versionItem, index) => {
-                              const rating = recentVersionRatings[versionItem.effective_version];
-                              const isSelected = activeVersion === versionItem.effective_version;
-                              const completedRating = rating?.status === 'completed' ? rating : null;
-                              const versionNumber =
-                                versionItem.declared_version_latest ||
-                                versionItem.declared_version_first ||
-                                `#${index + 1}`;
-                              const tooltipContent = (
-                                <div className={styles.versionTooltip}>
-                                  <div className={styles.versionTooltipTitle}>Version {versionNumber}</div>
-                                  <div className={styles.versionTooltipMeta}>
-                                    Last seen {formatDate(versionItem.last_seen_at)}
-                                  </div>
-                                  <div
-                                    className={styles.versionTooltipStatus}
-                                    style={{
-                                      color: completedRating
-                                        ? scoreTone(theme, completedRating.score)
-                                        : theme.colors.text.secondary,
-                                    }}
-                                  >
-                                    {completedRating ? `Rated ${completedRating.score}/10` : 'Unrated'}
-                                  </div>
+                            const rating = recentVersionRatings[versionItem.effective_version];
+                            const isSelected = activeVersion === versionItem.effective_version;
+                            const completedRating = rating?.status === 'completed' ? rating : null;
+                            const versionNumber =
+                              versionItem.declared_version_latest ||
+                              versionItem.declared_version_first ||
+                              `#${index + 1}`;
+                            const tooltipContent = (
+                              <div className={styles.versionTooltip}>
+                                <div className={styles.versionTooltipTitle}>Version {versionNumber}</div>
+                                <div className={styles.versionTooltipMeta}>
+                                  Last seen {formatDate(versionItem.last_seen_at)}
                                 </div>
-                              );
-                              return (
-                                <div key={versionItem.effective_version} className={styles.recentVersionItem}>
-                                  <Tooltip content={tooltipContent} placement="top">
-                                    <button
-                                      type="button"
+                                <div
+                                  className={styles.versionTooltipStatus}
+                                  style={{
+                                    color: completedRating
+                                      ? scoreTone(theme, completedRating.score)
+                                      : theme.colors.text.secondary,
+                                  }}
+                                >
+                                  {completedRating ? `Rated ${completedRating.score}/10` : 'Unrated'}
+                                </div>
+                              </div>
+                            );
+                            return (
+                              <div key={versionItem.effective_version} className={styles.recentVersionItem}>
+                                <Tooltip content={tooltipContent} placement="top">
+                                  <button
+                                    type="button"
+                                    className={cx(styles.recentVersionBox, isSelected && styles.recentVersionBoxActive)}
+                                    onClick={() => selectVersion(versionItem.effective_version)}
+                                    aria-label={`select version ${versionItem.effective_version}`}
+                                  >
+                                    <span
                                       className={cx(
-                                        styles.recentVersionBox,
-                                        isSelected && styles.recentVersionBoxActive
+                                        styles.recentVersionContent,
+                                        !completedRating && styles.recentVersionContentSingle
                                       )}
-                                      onClick={() => selectVersion(versionItem.effective_version)}
-                                      aria-label={`select version ${versionItem.effective_version}`}
                                     >
                                       <span
                                         className={cx(
-                                          styles.recentVersionContent,
-                                          !completedRating && styles.recentVersionContentSingle
+                                          styles.recentVersionText,
+                                          !completedRating && styles.recentVersionTextCentered
                                         )}
                                       >
                                         <span
                                           className={cx(
-                                            styles.recentVersionText,
-                                            !completedRating && styles.recentVersionTextCentered
+                                            styles.recentVersionNumber,
+                                            !completedRating && styles.recentVersionNumberCentered
                                           )}
                                         >
-                                          <span
-                                            className={cx(
-                                              styles.recentVersionNumber,
-                                              !completedRating && styles.recentVersionNumberCentered
-                                            )}
-                                          >
-                                            {versionNumber}
-                                          </span>
+                                          {versionNumber}
                                         </span>
-                                        {completedRating && (
-                                          <span
-                                            className={styles.recentVersionScore}
-                                            style={{ color: scoreTone(theme, completedRating.score) }}
-                                          >
-                                            {completedRating.score}/10
-                                          </span>
-                                        )}
                                       </span>
-                                      <span
-                                        className={cx(
-                                          styles.recentVersionTimelineMarker,
-                                          index === 0 && styles.recentVersionTimelineMarkerStart,
-                                          index === recentVersions.length - 1 && styles.recentVersionTimelineMarkerEnd
-                                        )}
-                                        aria-hidden="true"
-                                      />
-                                      <span className={styles.recentVersionRelativeTime}>
-                                        {formatRelativeDateCompact(versionItem.last_seen_at)}
-                                      </span>
-                                    </button>
-                                  </Tooltip>
-                                </div>
-                              );
+                                      {completedRating && (
+                                        <span
+                                          className={styles.recentVersionScore}
+                                          style={{ color: scoreTone(theme, completedRating.score) }}
+                                        >
+                                          {completedRating.score}/10
+                                        </span>
+                                      )}
+                                    </span>
+                                    <span
+                                      className={cx(
+                                        styles.recentVersionTimelineMarker,
+                                        index === 0 && styles.recentVersionTimelineMarkerStart,
+                                        index === recentVersions.length - 1 && styles.recentVersionTimelineMarkerEnd
+                                      )}
+                                      aria-hidden="true"
+                                    />
+                                    <span className={styles.recentVersionRelativeTime}>
+                                      {formatRelativeDateCompact(versionItem.last_seen_at)}
+                                    </span>
+                                  </button>
+                                </Tooltip>
+                              </div>
+                            );
                           })}
                         </div>
                       )}
@@ -1699,7 +1730,10 @@ export default function AgentDetailPage({
                         placement="top"
                       >
                         <div
-                          className={cx(styles.latestScoreValue, !activeHeroRating && styles.latestScoreValueUnavailable)}
+                          className={cx(
+                            styles.latestScoreValue,
+                            !activeHeroRating && styles.latestScoreValueUnavailable
+                          )}
                           aria-label={`Latest score ${activeHeroRating ? `${activeHeroRating.score}/10` : 'n/a'}`}
                         >
                           {activeHeroRating ? (
@@ -1713,8 +1747,15 @@ export default function AgentDetailPage({
                         </div>
                       </Tooltip>
                       <div
-                        className={cx(styles.latestScoreSquares, !activeHeroRating && styles.latestScoreSquaresUnavailable)}
-                        aria-label={activeHeroRating ? `Rating squares, selected ${activeScoreRounded}` : 'Rating squares unavailable'}
+                        className={cx(
+                          styles.latestScoreSquares,
+                          !activeHeroRating && styles.latestScoreSquaresUnavailable
+                        )}
+                        aria-label={
+                          activeHeroRating
+                            ? `Rating squares, selected ${activeScoreRounded}`
+                            : 'Rating squares unavailable'
+                        }
                       >
                         {Array.from({ length: 10 }, (_, idx) => {
                           const score = idx + 1;
