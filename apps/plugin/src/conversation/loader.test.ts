@@ -38,6 +38,7 @@ function makeDataSource(detail: ConversationDetail): ConversationsDataSource {
 describe('loadConversation', () => {
   it('assembles ConversationData from detail + traces', async () => {
     const detail = makeDetail({
+      conversation_title: 'Incident: stored title',
       generations: [
         {
           generation_id: 'gen-1',
@@ -71,6 +72,7 @@ describe('loadConversation', () => {
     const result = await loadConversation(dataSource, 'conv-1', fetchTrace);
 
     expect(result.conversationID).toBe('conv-1');
+    expect(result.conversationTitle).toBe('Incident: stored title');
     expect(result.generationCount).toBe(2);
     expect(result.spans).toHaveLength(1);
     expect(result.spans[0].spanID).toBe('span-root');

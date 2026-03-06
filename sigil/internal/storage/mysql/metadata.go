@@ -227,9 +227,19 @@ func normalizedNow(value time.Time) time.Time {
 }
 
 func toConversation(row ConversationModel) storage.Conversation {
+	title := ""
+	if row.ConversationTitle != nil {
+		title = strings.TrimSpace(*row.ConversationTitle)
+	}
+	titleUpdatedAt := time.Time{}
+	if row.TitleUpdatedAt != nil {
+		titleUpdatedAt = row.TitleUpdatedAt.UTC()
+	}
 	return storage.Conversation{
 		TenantID:          row.TenantID,
 		ConversationID:    row.ConversationID,
+		ConversationTitle: title,
+		TitleUpdatedAt:    titleUpdatedAt,
 		FirstGenerationAt: row.FirstGenerationAt.UTC(),
 		LastGenerationAt:  row.LastGenerationAt.UTC(),
 		GenerationCount:   row.GenerationCount,
