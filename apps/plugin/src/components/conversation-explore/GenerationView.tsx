@@ -786,6 +786,7 @@ export default function GenerationView({
   );
 
   const traceTargetSpan = node.span;
+  const hasAttributeSection = Boolean(node.span && (node.span.resourceAttributes.size > 0 || node.span.attributes.size > 0));
 
   const navigatePrev = useCallback(() => {
     if (adjacent?.previous) {
@@ -929,7 +930,15 @@ export default function GenerationView({
       <div ref={contentRef} className={styles.content}>
         {gen?.error?.message && <div className={styles.errorBanner}>{gen.error.message}</div>}
 
-        {node.span && (node.span.resourceAttributes.size > 0 || node.span.attributes.size > 0) && (
+        {!hasAttributeSection && (gen?.usage || modelName || node.durationMs > 0) && (
+          <div className={styles.attributeSummaryRow}>
+            {gen?.usage && <UsageChips generation={gen} />}
+            {modelName && <span className={styles.attributeModeChip}>{modelName}</span>}
+            <span className={styles.attributeModeChip}>{formatDuration(node.durationMs)}</span>
+          </div>
+        )}
+
+        {hasAttributeSection && node.span && (
           <Section
             title="Attributes"
             count={

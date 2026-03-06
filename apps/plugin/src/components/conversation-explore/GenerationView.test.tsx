@@ -40,6 +40,41 @@ describe('GenerationView', () => {
     expect(within(chip!).queryByText('✓')).not.toBeInTheDocument();
   });
 
+  it('keeps usage and duration visible when there is no span attribute section', () => {
+    const generation: GenerationDetail = {
+      generation_id: 'gen-orphan',
+      conversation_id: 'conv-1',
+      created_at: '2026-03-04T10:00:00Z',
+      model: { provider: 'anthropic', name: 'claude-sonnet-4-6' },
+      usage: {
+        input_tokens: 3,
+        output_tokens: 215,
+      },
+      input: [
+        {
+          role: 'MESSAGE_ROLE_USER',
+          parts: [{ text: 'hello' }],
+        },
+      ],
+    };
+    const node: FlowNode = {
+      id: 'node-orphan',
+      kind: 'generation',
+      label: 'generation',
+      durationMs: 28730,
+      startMs: 0,
+      status: 'success',
+      generation,
+      children: [],
+    };
+
+    render(<GenerationView node={node} allGenerations={[generation]} onClose={jest.fn()} />);
+
+    expect(screen.getByText(/↓3\s+↑215/)).toBeInTheDocument();
+    expect(screen.getAllByText('claude-sonnet-4-6').length).toBeGreaterThan(1);
+    expect(screen.getByText('28.73s')).toBeInTheDocument();
+  });
+
   it('hides the system prompt and shows resource and span attributes collapsed at the top', () => {
     const generation: GenerationDetail = {
       generation_id: 'gen-2',
