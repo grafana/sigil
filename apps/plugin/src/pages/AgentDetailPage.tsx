@@ -14,7 +14,7 @@ import {
 import ModelCardPopover from '../components/conversations/ModelCardPopover';
 import { getProviderColor, getProviderMeta, stripProviderPrefix } from '../components/conversations/providerMeta';
 import ToolsPanel from '../components/agents/ToolsPanel';
-import AgentRatingPanel, { type AgentRatingPanelHandle } from '../components/agents/AgentRatingPanel';
+import AgentRatingPanel from '../components/agents/AgentRatingPanel';
 import PromptInsightsPanel, {
   AnalyzeModal,
   type PromptInsightsPanelHandle,
@@ -1398,7 +1398,6 @@ export default function AgentDetailPage({
   const prevDetailRef = useRef<AgentDetail | null>(null);
 
   const insightsRef = useRef<PromptInsightsPanelHandle>(null);
-  const ratingRef = useRef<AgentRatingPanelHandle>(null);
   const highlightedPromptRef = useRef<HighlightedSystemPromptHandle>(null);
 
   const tokenizedSections = tokenizeState.versionKey === versionKey ? tokenizeState.sections : {};
@@ -1469,13 +1468,12 @@ export default function AgentDetailPage({
   const hasAnyAnalysis = hasInsightResults || hasRatingResult;
 
   const runUnifiedAnalysis = useCallback(() => {
-    if (!insightsRef.current && !ratingRef.current) {
+    if (!insightsRef.current) {
       return;
     }
     setInitialRatingLoading(true);
     setInitialRatingError('');
-    insightsRef.current?.analyze(lookback);
-    ratingRef.current?.analyze();
+    insightsRef.current.analyze(lookback);
   }, [lookback]);
 
   const handleAnalysisTriggered = useCallback(() => {
@@ -2053,7 +2051,6 @@ export default function AgentDetailPage({
                       onInsightFocus={handleInsightFocus}
                     />
                     <AgentRatingPanel
-                      ref={ratingRef}
                       agentName={agentName}
                       version={activeVersion}
                       agentStateContext={agentStateContext}
