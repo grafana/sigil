@@ -441,7 +441,7 @@ function collectAttributeEntries(attrs: SpanAttributes): Array<{ key: string; va
   const entries: Array<{ key: string; value: string }> = [];
 
   for (const [key, val] of attrs) {
-    if (key === 'user.id') {
+    if (key === 'user.id' || key === 'sigil.user.id') {
       continue;
     }
     if (val.stringValue !== undefined) {

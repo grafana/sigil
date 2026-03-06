@@ -1598,7 +1598,7 @@ func generationToResponsePayload(generation *sigilv1.Generation) (map[string]any
 	}
 	if descriptor.AgentName != "" {
 		payload["agent_effective_version"] = descriptor.EffectiveVersion
-		payload["agent_id"] = descriptor.EffectiveVersion
+		payload["agent_id"] = descriptor.AgentName
 	}
 	return payload, nil
 }

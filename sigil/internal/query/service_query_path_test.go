@@ -1070,8 +1070,8 @@ func TestGetConversationDetailForTenantIncludesAgentEffectiveVersion(t *testing.
 	if effectiveVersion == agentVersion {
 		t.Fatalf("expected effective version to differ from declared version, got %q", effectiveVersion)
 	}
-	if payload["agent_id"] != effectiveVersion {
-		t.Fatalf("expected agent_id to match effective version, got %#v", payload["agent_id"])
+	if payload["agent_id"] != "assistant" {
+		t.Fatalf("expected agent_id to match agent name, got %#v", payload["agent_id"])
 	}
 }
 
