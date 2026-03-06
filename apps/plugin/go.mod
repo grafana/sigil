@@ -3,14 +3,14 @@ module github.com/grafana/sigil/apps/plugin
 go 1.25.7
 
 require (
-	github.com/grafana/authlib v0.0.0-20260226130908-b01d89f85c4d
+	github.com/grafana/authlib v0.0.0-20260305185646-d85984ee73ca
 	github.com/grafana/grafana-plugin-sdk-go v0.290.0
 )
 
 require (
 	github.com/go-jose/go-jose/v4 v4.1.3 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
-	github.com/grafana/authlib/types v0.0.0-20260206084955-bcd399ec8b53 // indirect
+	github.com/grafana/authlib/types v0.0.0-20260304161757-e152786a5bb4 // indirect
 	github.com/grafana/dskit v0.0.0-20260304175301-5f643207fdbc // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260209200024-4cfbd4190f57 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260209200024-4cfbd4190f57 // indirect
