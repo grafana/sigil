@@ -322,27 +322,25 @@ describe('ConversationsBrowserPage', () => {
       next_cursor: '',
       has_more: false,
     });
-    dataSource.streamSearchConversations = jest
-      .fn()
-      .mockImplementationOnce(async (_request, options) => {
-        await firstBatchReady;
-        options.onResults([
-          {
-            conversation_id: 'conv-live',
-            generation_count: 2,
-            first_generation_at: '2026-02-02T09:59:00Z',
-            last_generation_at: '2026-02-02T10:00:00Z',
-            models: [],
-            agents: [],
-            error_count: 0,
-            has_errors: false,
-            trace_ids: [],
-            annotation_count: 0,
-          },
-        ]);
-        await currentDone;
-        options.onComplete({ next_cursor: '', has_more: false });
-      });
+    dataSource.streamSearchConversations = jest.fn().mockImplementationOnce(async (_request, options) => {
+      await firstBatchReady;
+      options.onResults([
+        {
+          conversation_id: 'conv-live',
+          generation_count: 2,
+          first_generation_at: '2026-02-02T09:59:00Z',
+          last_generation_at: '2026-02-02T10:00:00Z',
+          models: [],
+          agents: [],
+          error_count: 0,
+          has_errors: false,
+          trace_ids: [],
+          annotation_count: 0,
+        },
+      ]);
+      await currentDone;
+      options.onComplete({ next_cursor: '', has_more: false });
+    });
     dataSource.getConversationStats!.mockImplementationOnce(async (_request) => {
       await previousStatsDone;
       return {
@@ -375,5 +373,30 @@ describe('ConversationsBrowserPage', () => {
       resolvePreviousStats?.();
       await Promise.resolve();
     });
+  });
+
+  it('aborts in-flight stream searches on unmount', async () => {
+    let capturedSignal: AbortSignal | undefined;
+    const dataSource = createDataSource();
+    dataSource.searchConversations.mockReset();
+    dataSource.searchConversations.mockResolvedValue({
+      conversations: [],
+      next_cursor: '',
+      has_more: false,
+    });
+    dataSource.streamSearchConversations = jest.fn().mockImplementation(async (_request, options) => {
+      capturedSignal = options.signal;
+      await new Promise(() => {});
+    });
+
+    const rendered = renderPage(dataSource);
+
+    await waitFor(() => expect(dataSource.streamSearchConversations).toHaveBeenCalledTimes(1));
+    expect(capturedSignal).toBeDefined();
+    expect(capturedSignal?.aborted).toBe(false);
+
+    rendered.unmount();
+
+    expect(capturedSignal?.aborted).toBe(true);
   });
 });
