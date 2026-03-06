@@ -1,29 +1,73 @@
-import MetricsBar from '../../components/conversation-explore/MetricsBar';
 import type { ModelCard } from '../../modelcard/types';
+import MetricsBar from '../../components/conversation-explore/MetricsBar';
 import { mockTokenSummary, mockCostSummary } from './fixtures';
 
-const demoModelCard: ModelCard = {
-  model_key: 'openrouter:anthropic/claude-sonnet-4.5',
-  source: 'openrouter',
-  source_model_id: 'anthropic/claude-sonnet-4.5',
-  canonical_slug: 'anthropic/claude-sonnet-4-5',
-  name: 'claude-sonnet-4-5',
-  provider: 'anthropic',
-  pricing: {
-    prompt_usd_per_token: 0.000003,
-    completion_usd_per_token: 0.000015,
-    request_usd: null,
-    image_usd: null,
-    web_search_usd: null,
-    input_cache_read_usd_per_token: null,
-    input_cache_write_usd_per_token: null,
-  },
-  is_free: false,
-  top_provider: {},
-  first_seen_at: '2026-01-01T00:00:00Z',
-  last_seen_at: '2026-01-01T00:00:00Z',
-  refreshed_at: '2026-01-01T00:00:00Z',
-};
+const storyModelCards = new Map<string, ModelCard>([
+  [
+    'anthropic::claude-sonnet-4-5',
+    {
+      model_key: 'openrouter:anthropic/claude-sonnet-4-5',
+      source: 'openrouter',
+      source_model_id: 'anthropic/claude-sonnet-4-5',
+      canonical_slug: 'anthropic/claude-sonnet-4-5',
+      name: 'Claude Sonnet 4.5',
+      provider: 'anthropic',
+      description: "Anthropic's balanced Claude model.",
+      context_length: 200000,
+      input_modalities: ['text'],
+      output_modalities: ['text'],
+      pricing: {
+        prompt_usd_per_token: 0.000003,
+        completion_usd_per_token: 0.000015,
+        request_usd: null,
+        image_usd: null,
+        web_search_usd: null,
+        input_cache_read_usd_per_token: 0.0000003,
+        input_cache_write_usd_per_token: 0.00000375,
+      },
+      is_free: false,
+      top_provider: {
+        context_length: 200000,
+        max_completion_tokens: 64000,
+      },
+      first_seen_at: '2026-01-01T00:00:00Z',
+      last_seen_at: '2026-03-01T00:00:00Z',
+      refreshed_at: '2026-03-01T00:00:00Z',
+    },
+  ],
+  [
+    'openai::gpt-4o',
+    {
+      model_key: 'openrouter:openai/gpt-4o',
+      source: 'openrouter',
+      source_model_id: 'openai/gpt-4o',
+      canonical_slug: 'openai/gpt-4o',
+      name: 'GPT-4o',
+      provider: 'openai',
+      description: 'OpenAI flagship model.',
+      context_length: 128000,
+      input_modalities: ['text', 'image'],
+      output_modalities: ['text'],
+      pricing: {
+        prompt_usd_per_token: 0.0000025,
+        completion_usd_per_token: 0.00001,
+        request_usd: null,
+        image_usd: null,
+        web_search_usd: null,
+        input_cache_read_usd_per_token: 0.00000125,
+        input_cache_write_usd_per_token: 0.0000025,
+      },
+      is_free: false,
+      top_provider: {
+        context_length: 128000,
+        max_completion_tokens: 16384,
+      },
+      first_seen_at: '2026-01-01T00:00:00Z',
+      last_seen_at: '2026-03-01T00:00:00Z',
+      refreshed_at: '2026-03-01T00:00:00Z',
+    },
+  ],
+]);
 
 const meta = {
   title: 'Sigil/Conversation Explore/MetricsBar',
@@ -40,6 +84,7 @@ export const Default = {
     costSummary: mockCostSummary,
     models: ['claude-sonnet-4-5', 'gpt-4o'],
     modelProviders: { 'claude-sonnet-4-5': 'anthropic', 'gpt-4o': 'openai' },
+    modelCards: storyModelCards,
     errorCount: 0,
     generationCount: 3,
   },
@@ -90,6 +135,8 @@ export const Screenshot = Default;
 export const WithModelCardPopover = {
   args: {
     ...Default.args,
-    modelCards: new Map<string, ModelCard>([['anthropic::claude-sonnet-4-5', demoModelCard]]),
+    models: ['claude-sonnet-4-5'],
+    modelProviders: { 'claude-sonnet-4-5': 'anthropic' },
+    modelCards: new Map<string, ModelCard>([[ 'anthropic::claude-sonnet-4-5', storyModelCards.get('anthropic::claude-sonnet-4-5')! ]]),
   },
 };

@@ -50,6 +50,55 @@ function formatTokenCount(count: number): string {
   return String(count);
 }
 
+function withAlpha(color: string, alpha: number): string {
+  const clampedAlpha = Math.max(0, Math.min(1, alpha));
+  const hex = color.trim();
+
+  const shortMatch = /^#([0-9a-fA-F]{3})$/.exec(hex);
+  if (shortMatch) {
+    const [r, g, b] = shortMatch[1].split('').map((part) => parseInt(part + part, 16));
+    return `rgba(${r}, ${g}, ${b}, ${clampedAlpha})`;
+  }
+
+  const fullMatch = /^#([0-9a-fA-F]{6})$/.exec(hex);
+  if (fullMatch) {
+    const value = fullMatch[1];
+    const r = parseInt(value.slice(0, 2), 16);
+    const g = parseInt(value.slice(2, 4), 16);
+    const b = parseInt(value.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${clampedAlpha})`;
+  }
+
+  return color;
+}
+
+function findModelCard(
+  modelCards: Map<string, ModelCard> | undefined,
+  modelName: string,
+  provider: string,
+  displayProvider: string
+): ModelCard | null {
+  if (!modelCards || modelCards.size === 0) {
+    return null;
+  }
+
+  const exactProviderKey = `${provider}::${modelName}`;
+  const exactDisplayProviderKey = `${displayProvider}::${modelName}`;
+  if (modelCards.has(exactProviderKey)) {
+    return modelCards.get(exactProviderKey) ?? null;
+  }
+  if (modelCards.has(exactDisplayProviderKey)) {
+    return modelCards.get(exactDisplayProviderKey) ?? null;
+  }
+
+  for (const [key, card] of modelCards.entries()) {
+    if (key.endsWith(`::${modelName}`)) {
+      return card;
+    }
+  }
+  return null;
+}
+
 export default function MetricsBar({
   conversationID,
   totalDurationMs,
@@ -67,21 +116,30 @@ export default function MetricsBar({
   const [openModel, setOpenModel] = useState<{ key: string; anchorRect: DOMRect } | null>(null);
 
   const uniqueModels = Array.from(new Set(models));
-  const cardsByModelName = useMemo(() => {
-    const map = new Map<string, ModelCard>();
-    if (!modelCards) {
-      return map;
+  const modelMeta = useMemo(
+    () =>
+      uniqueModels.map((model) => {
+        const provider = modelProviders?.[model]?.trim() ?? '';
+        const displayProvider = toDisplayProvider(provider);
+        const card = findModelCard(modelCards, model, provider, displayProvider);
+        const color = getProviderColor(displayProvider);
+        const displayName = provider ? stripProviderPrefix(model, displayProvider) : model;
+        const key = `${provider || 'unknown'}::${model}`;
+        return {
+          key,
+          displayName,
+          color,
+          card,
+        };
+      }),
+    [modelCards, modelProviders, uniqueModels]
+  );
+  const activeModelCard = useMemo(() => {
+    if (!openModel) {
+      return null;
     }
-    for (const [, card] of modelCards.entries()) {
-      if (card.name && !map.has(card.name)) {
-        map.set(card.name, card);
-      }
-      if (card.source_model_id && !map.has(card.source_model_id)) {
-        map.set(card.source_model_id, card);
-      }
-    }
-    return map;
-  }, [modelCards]);
+    return modelMeta.find(({ key }) => key === openModel.key)?.card ?? null;
+  }, [modelMeta, openModel]);
 
   return (
     <div className={styles.container}>
@@ -161,48 +219,43 @@ export default function MetricsBar({
       )}
 
       <div className={styles.modelChips}>
-        {uniqueModels.map((model) => {
-          const provider = modelProviders?.[model]?.trim() ?? '';
-          const displayProvider = toDisplayProvider(provider);
-          const color = getProviderColor(displayProvider);
-          const displayName = provider ? stripProviderPrefix(model, displayProvider) : model;
-          const cardKey = provider.length > 0 ? `${provider}::${model}` : '';
-          const resolvedCard = (cardKey ? modelCards?.get(cardKey) : undefined) ?? cardsByModelName.get(model) ?? null;
-          const chipKey = `${provider || 'unknown'}::${model}`;
-          const isOpen = openModel?.key === chipKey;
+        {modelMeta.map(({ key, displayName, color, card }) => {
+          const isOpen = openModel?.key === key;
+          const chipToneStyle: React.CSSProperties = {
+            borderColor: withAlpha(color, isOpen ? 0.7 : 0.38),
+            background: withAlpha(color, isOpen ? 0.2 : 0.1),
+          };
 
           return (
-            <span key={chipKey} className={styles.modelChipAnchor}>
+            <span key={key} className={styles.modelChipAnchor}>
               <button
                 type="button"
-                className={cx(styles.modelChip, isOpen && styles.modelChipActive)}
+                className={cx(styles.modelChip, styles.modelChipButton, isOpen && styles.modelChipActive)}
+                style={chipToneStyle}
                 onClick={(event) => {
-                  if (!resolvedCard) {
+                  if (!card) {
                     return;
                   }
                   if (isOpen) {
                     setOpenModel(null);
                     return;
                   }
-                  setOpenModel({ key: chipKey, anchorRect: event.currentTarget.getBoundingClientRect() });
+                  setOpenModel({ key, anchorRect: event.currentTarget.getBoundingClientRect() });
                 }}
-                aria-label={resolvedCard ? `model card ${displayName}` : `model ${displayName}`}
-                disabled={!resolvedCard}
+                aria-label={card ? `model card ${displayName}` : `model ${displayName}`}
+                disabled={!card}
               >
                 <span className={styles.providerDot} style={{ background: color }} />
                 {displayName}
               </button>
-              {isOpen && resolvedCard && (
-                <ModelCardPopover
-                  card={resolvedCard}
-                  anchorRect={openModel?.anchorRect ?? null}
-                  onClose={() => setOpenModel(null)}
-                />
-              )}
             </span>
           );
         })}
       </div>
+
+      {openModel && activeModelCard && (
+        <ModelCardPopover card={activeModelCard} anchorRect={openModel.anchorRect} onClose={() => setOpenModel(null)} />
+      )}
     </div>
   );
 }
