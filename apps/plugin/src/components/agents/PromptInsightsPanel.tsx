@@ -3,8 +3,13 @@ import { css, cx, keyframes } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Button, Icon, Select, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../../agents/api';
-import type { PromptInsight, PromptInsightsResponse, PromptInsightsStatus } from '../../agents/types';
-import { DEFAULT_LOOKBACK, LOOKBACK_OPTIONS } from '../../agents/types';
+import {
+  DEFAULT_LOOKBACK,
+  LOOKBACK_OPTIONS,
+  type PromptInsight,
+  type PromptInsightsResponse,
+  type PromptInsightsStatus,
+} from '../../agents/types';
 
 const lookbackSelectOptions = LOOKBACK_OPTIONS.map((o) => ({ label: o.label, value: o.value }));
 
@@ -45,7 +50,15 @@ function extractErrorStatus(err: unknown): number | undefined {
 
 const PromptInsightsPanel = forwardRef<PromptInsightsPanelHandle, PromptInsightsPanelProps>(
   function PromptInsightsPanel(
-    { agentName, version, dataSource = defaultAgentsDataSource, onInsightsChange, onAnalysisTriggered, hideControls = false, onInsightFocus },
+    {
+      agentName,
+      version,
+      dataSource = defaultAgentsDataSource,
+      onInsightsChange,
+      onAnalysisTriggered,
+      hideControls = false,
+      onInsightFocus,
+    },
     ref
   ) {
     const styles = useStyles2(getStyles);
@@ -151,44 +164,47 @@ const PromptInsightsPanel = forwardRef<PromptInsightsPanelHandle, PromptInsights
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [agentName, version]);
 
-    const runAnalysis = useCallback(async (lookbackOverride?: string) => {
-      const resolvedVersion = version && version.length > 0 ? version : undefined;
-      const effectiveLookback = lookbackOverride ?? lookback;
-      const requestId = ++requestIdRef.current;
-      setRunning(true);
-      setError('');
+    const runAnalysis = useCallback(
+      async (lookbackOverride?: string) => {
+        const resolvedVersion = version && version.length > 0 ? version : undefined;
+        const effectiveLookback = lookbackOverride ?? lookback;
+        const requestId = ++requestIdRef.current;
+        setRunning(true);
+        setError('');
 
-      try {
-        const response = await dataSource.analyzePrompt(agentName, resolvedVersion, effectiveLookback);
-        if (requestIdRef.current !== requestId) {
-          return;
-        }
-        onAnalysisTriggered?.();
-        const status = normalizeStatus(response.status);
-        if (status === 'pending') {
-          startPolling(requestId);
-        } else if (status === 'completed') {
-          setResult(response);
+        try {
+          const response = await dataSource.analyzePrompt(agentName, resolvedVersion, effectiveLookback);
+          if (requestIdRef.current !== requestId) {
+            return;
+          }
+          onAnalysisTriggered?.();
+          const status = normalizeStatus(response.status);
+          if (status === 'pending') {
+            startPolling(requestId);
+          } else if (status === 'completed') {
+            setResult(response);
+            setRunning(false);
+            onInsightsChange?.(response);
+          } else {
+            setError('Analysis failed. Please try again.');
+            setRunning(false);
+          }
+        } catch (err: unknown) {
+          if (requestIdRef.current !== requestId) {
+            return;
+          }
+          console.error('Prompt insights analysis failed', { agentName, version, detail: err });
+          const statusCode = extractErrorStatus(err);
+          if (statusCode === 503) {
+            setError('No judge provider is configured. Configure a judge provider to enable prompt analysis.');
+          } else {
+            setError('Failed to start analysis.');
+          }
           setRunning(false);
-          onInsightsChange?.(response);
-        } else {
-          setError('Analysis failed. Please try again.');
-          setRunning(false);
         }
-      } catch (err: unknown) {
-        if (requestIdRef.current !== requestId) {
-          return;
-        }
-        console.error('Prompt insights analysis failed', { agentName, version, detail: err });
-        const statusCode = extractErrorStatus(err);
-        if (statusCode === 503) {
-          setError('No judge provider is configured. Configure a judge provider to enable prompt analysis.');
-        } else {
-          setError('Failed to start analysis.');
-        }
-        setRunning(false);
-      }
-    }, [agentName, version, lookback, dataSource, startPolling, onInsightsChange, onAnalysisTriggered]);
+      },
+      [agentName, version, lookback, dataSource, startPolling, onInsightsChange, onAnalysisTriggered]
+    );
 
     const toggleInsight = useCallback(
       (key: string, kind: 'strength' | 'weakness', index: number) => {
@@ -206,17 +222,14 @@ const PromptInsightsPanel = forwardRef<PromptInsightsPanelHandle, PromptInsights
       [onInsightFocus]
     );
 
-    const focusInsight = useCallback(
-      (kind: 'strength' | 'weakness', index: number) => {
-        const key = `${kind}-${index}`;
-        setExpandedInsights((prev) => new Set(prev).add(key));
-        requestAnimationFrame(() => {
-          const el = cardRefsMap.current.get(key);
-          el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        });
-      },
-      []
-    );
+    const focusInsight = useCallback((kind: 'strength' | 'weakness', index: number) => {
+      const key = `${kind}-${index}`;
+      setExpandedInsights((prev) => new Set(prev).add(key));
+      requestAnimationFrame(() => {
+        const el = cardRefsMap.current.get(key);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    }, []);
 
     useImperativeHandle(
       ref,
@@ -348,12 +361,7 @@ export function AnalyzeModal({ lookback, onLookbackChange, onConfirm, onDismiss 
   const styles = useStyles2(getModalStyles);
   return (
     <div className={styles.backdrop} role="presentation" onClick={onDismiss}>
-      <div
-        className={styles.dialog}
-        role="dialog"
-        aria-label="Analyze prompt"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className={styles.dialog} role="dialog" aria-label="Analyze prompt" onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <Text variant="h5">Analyze prompt</Text>
           <button type="button" className={styles.closeButton} onClick={onDismiss} aria-label="Close">
@@ -528,21 +536,23 @@ type InsightCardProps = {
 function InsightCard({ cardKey, item, kind, index, isExpanded, onToggle, testId, cardRefsMap }: InsightCardProps) {
   const styles = useStyles2(getStyles);
   const isStrength = kind === 'strength';
+  const cardRef = useRef<HTMLButtonElement | null>(null);
 
-  const setCardRef = useCallback(
-    (el: HTMLButtonElement | null) => {
-      if (el) {
-        cardRefsMap.current.set(cardKey, el);
-      } else {
-        cardRefsMap.current.delete(cardKey);
-      }
-    },
-    [cardKey, cardRefsMap]
-  );
+  useEffect(() => {
+    const el = cardRef.current;
+    const cardRefs = cardRefsMap.current;
+    if (!el) {
+      return;
+    }
+    cardRefs.set(cardKey, el);
+    return () => {
+      cardRefs.delete(cardKey);
+    };
+  }, [cardKey, cardRefsMap]);
 
   return (
     <button
-      ref={setCardRef}
+      ref={cardRef}
       className={cx(styles.card, isStrength ? styles.cardStrength : styles.cardWeakness)}
       onClick={() => onToggle(cardKey, kind, index)}
       data-testid={testId}

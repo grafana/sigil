@@ -8,12 +8,8 @@ const samplePrompt =
 
 const sampleInsights: PromptInsightsResponse = {
   status: 'completed',
-  strengths: [
-    { quote: 'Always explain step by step', title: 'Good reasoning', explanation: 'Agent reasons well' },
-  ],
-  weaknesses: [
-    { quote: 'Be concise', title: 'Too vague', explanation: 'Inconsistent response length' },
-  ],
+  strengths: [{ quote: 'Always explain step by step', title: 'Good reasoning', explanation: 'Agent reasons well' }],
+  weaknesses: [{ quote: 'Be concise', title: 'Too vague', explanation: 'Inconsistent response length' }],
   judge_model: 'openai/gpt-4o-mini',
   judge_latency_ms: 100,
 };
@@ -61,9 +57,7 @@ describe('HighlightedSystemPrompt', () => {
   });
 
   it('renders highlighted text when insights are available', () => {
-    render(
-      <HighlightedSystemPrompt systemPrompt={samplePrompt} insights={sampleInsights} />
-    );
+    render(<HighlightedSystemPrompt systemPrompt={samplePrompt} insights={sampleInsights} />);
     const container = screen.getByTestId('highlighted-system-prompt');
     expect(container).toBeInTheDocument();
 
@@ -94,9 +88,7 @@ describe('HighlightedSystemPrompt', () => {
   });
 
   it('adds data-insight-index attributes on mark elements', () => {
-    render(
-      <HighlightedSystemPrompt systemPrompt={samplePrompt} insights={sampleInsights} />
-    );
+    render(<HighlightedSystemPrompt systemPrompt={samplePrompt} insights={sampleInsights} />);
     const strengthMark = screen.getByTestId('prompt-insight-strength');
     expect(strengthMark.getAttribute('data-insight-index')).toBe('0');
     expect(strengthMark.getAttribute('data-insight-kind')).toBe('strength');

@@ -175,7 +175,13 @@ describe('AgentRatingPanel', () => {
     const ref = React.createRef<import('./AgentRatingPanel').AgentRatingPanelHandle>();
 
     renderPanel(
-      <AgentRatingPanel ref={ref} agentName="assistant" version="sha256:test" dataSource={dataSource} initialResult={completed} />
+      <AgentRatingPanel
+        ref={ref}
+        agentName="assistant"
+        version="sha256:test"
+        dataSource={dataSource}
+        initialResult={completed}
+      />
     );
 
     act(() => ref.current?.analyze());
@@ -504,7 +510,13 @@ describe('AgentRatingPanel', () => {
     const ref = React.createRef<import('./AgentRatingPanel').AgentRatingPanelHandle>();
 
     renderPanel(
-      <AgentRatingPanel ref={ref} agentName="assistant" version="sha256:test" dataSource={dataSource} initialResult={completed} />
+      <AgentRatingPanel
+        ref={ref}
+        agentName="assistant"
+        version="sha256:test"
+        dataSource={dataSource}
+        initialResult={completed}
+      />
     );
 
     expect(screen.getByText('Existing report should stay visible.')).toBeInTheDocument();

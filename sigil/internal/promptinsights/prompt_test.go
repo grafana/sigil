@@ -7,11 +7,11 @@ import (
 
 func TestBuildUserPrompt(t *testing.T) {
 	tests := []struct {
-		name             string
-		systemPrompt     string
-		excerpts         []ConversationExcerpt
-		wantContains     []string
-		wantNotContains  []string
+		name            string
+		systemPrompt    string
+		excerpts        []ConversationExcerpt
+		wantContains    []string
+		wantNotContains []string
 	}{
 		{
 			name:         "includes system prompt in XML",
@@ -61,8 +61,8 @@ func TestBuildUserPrompt(t *testing.T) {
 			systemPrompt: "Short prompt.",
 			excerpts: []ConversationExcerpt{
 				{
-					ConversationID: "conv-long",
-					UserInput:      strings.Repeat("a", 1000),
+					ConversationID:  "conv-long",
+					UserInput:       strings.Repeat("a", 1000),
 					AssistantOutput: strings.Repeat("b", 1000),
 				},
 			},

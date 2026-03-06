@@ -4,14 +4,25 @@ import { css, cx } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Alert, Badge, Button, Icon, Spinner, Tab, TabsBar, Text, Tooltip, useStyles2, useTheme2 } from '@grafana/ui';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../agents/api';
-import type { AgentDetail, AgentRatingResponse, AgentVersionListItem, PromptInsightsResponse } from '../agents/types';
-import { DEFAULT_LOOKBACK } from '../agents/types';
+import {
+  DEFAULT_LOOKBACK,
+  type AgentDetail,
+  type AgentRatingResponse,
+  type AgentVersionListItem,
+  type PromptInsightsResponse,
+} from '../agents/types';
 import ModelCardPopover from '../components/conversations/ModelCardPopover';
 import { getProviderColor, getProviderMeta, stripProviderPrefix } from '../components/conversations/providerMeta';
 import ToolsPanel from '../components/agents/ToolsPanel';
 import AgentRatingPanel, { type AgentRatingPanelHandle } from '../components/agents/AgentRatingPanel';
-import PromptInsightsPanel, { AnalyzeModal, type PromptInsightsPanelHandle } from '../components/agents/PromptInsightsPanel';
-import { HighlightedSystemPrompt, type HighlightedSystemPromptHandle } from '../components/agents/HighlightedSystemPrompt';
+import PromptInsightsPanel, {
+  AnalyzeModal,
+  type PromptInsightsPanelHandle,
+} from '../components/agents/PromptInsightsPanel';
+import {
+  HighlightedSystemPrompt,
+  type HighlightedSystemPromptHandle,
+} from '../components/agents/HighlightedSystemPrompt';
 import { defaultModelCardClient, type ModelCardClient } from '../modelcard/api';
 import type { ModelCard } from '../modelcard/types';
 import { resolveModelCardsFromNames } from '../modelcard/resolve';
@@ -1467,7 +1478,14 @@ export default function AgentDetailPage({
   }, [lookback]);
 
   const handleAnalysisTriggered = useCallback(() => {
-    setInitialRating({ status: 'pending', score: 0, summary: '', suggestions: [], judge_model: '', judge_latency_ms: 0 });
+    setInitialRating({
+      status: 'pending',
+      score: 0,
+      summary: '',
+      suggestions: [],
+      judge_model: '',
+      judge_latency_ms: 0,
+    });
     setInitialRatingLoading(false);
   }, []);
 
@@ -2002,10 +2020,7 @@ export default function AgentDetailPage({
                             <TokenizedText text={detail.system_prompt} encode={encode} decode={decode} />
                           </div>
                         ) : systemPromptView === 'diff' && previousVersionPrompt !== null ? (
-                          <PromptDiffView
-                            oldPrompt={previousVersionPrompt}
-                            newPrompt={detail.system_prompt}
-                          />
+                          <PromptDiffView oldPrompt={previousVersionPrompt} newPrompt={detail.system_prompt} />
                         ) : (
                           <HighlightedSystemPrompt
                             ref={highlightedPromptRef}

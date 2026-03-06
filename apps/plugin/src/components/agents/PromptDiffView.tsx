@@ -102,8 +102,7 @@ export function PromptDiffView({ oldPrompt, newPrompt, oldLabel, newLabel }: Pro
     <div className={styles.container} data-testid="prompt-diff-view">
       <div className={styles.header}>
         <Text variant="bodySmall" color="secondary">
-          Comparing{' '}
-          <strong>{oldLabel ?? 'previous version'}</strong>
+          Comparing <strong>{oldLabel ?? 'previous version'}</strong>
           {' → '}
           <strong>{newLabel ?? 'current version'}</strong>
         </Text>
@@ -111,7 +110,9 @@ export function PromptDiffView({ oldPrompt, newPrompt, oldLabel, newLabel }: Pro
           {stats.added > 0 && <span className={styles.statAdded}>+{stats.added}</span>}
           {stats.removed > 0 && <span className={styles.statRemoved}>-{stats.removed}</span>}
           {stats.added === 0 && stats.removed === 0 && (
-            <Text variant="bodySmall" color="secondary">No changes</Text>
+            <Text variant="bodySmall" color="secondary">
+              No changes
+            </Text>
           )}
         </div>
       </div>

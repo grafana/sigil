@@ -98,7 +98,12 @@ export const HighlightedSystemPrompt = forwardRef<HighlightedSystemPromptHandle,
             content={
               <div className={styles.tooltipContent}>
                 <div className={styles.tooltipHeader}>
-                  <span className={cx(styles.tooltipIcon, isStrength ? styles.tooltipIconStrength : styles.tooltipIconWeakness)}>
+                  <span
+                    className={cx(
+                      styles.tooltipIcon,
+                      isStrength ? styles.tooltipIconStrength : styles.tooltipIconWeakness
+                    )}
+                  >
                     <Icon name={isStrength ? 'check' : 'exclamation-triangle'} size="xs" />
                   </span>
                   <strong className={styles.tooltipTitle}>{range.insight.title}</strong>
@@ -141,53 +146,52 @@ export const HighlightedSystemPrompt = forwardRef<HighlightedSystemPromptHandle,
     }, [systemPrompt, ranges, styles, onInsightClick, pulsingKey]);
 
     useLayoutEffect(() => {
-      const pre = preRef.current;
-      if (!pre || ranges.length === 0) {
-        setMarkers([]);
-        return;
-      }
-
-      const scrollHeight = pre.scrollHeight;
-      if (scrollHeight <= 0) {
-        setMarkers([]);
-        return;
-      }
-
-      const nextMarkers: MarkerPosition[] = [];
-      for (const range of ranges) {
-        const mark = pre.querySelector<HTMLElement>(
-          `mark[data-insight-kind="${range.kind}"][data-insight-index="${range.sourceIndex}"]`
-        );
-        if (!mark) {
-          continue;
+      const frame = requestAnimationFrame(() => {
+        const pre = preRef.current;
+        if (!pre || ranges.length === 0) {
+          setMarkers([]);
+          return;
         }
-        nextMarkers.push({
-          topPercent: (mark.offsetTop / scrollHeight) * 100,
-          kind: range.kind,
-          insight: range.insight,
-          sourceIndex: range.sourceIndex,
-        });
-      }
-      setMarkers(nextMarkers);
+
+        const scrollHeight = pre.scrollHeight;
+        if (scrollHeight <= 0) {
+          setMarkers([]);
+          return;
+        }
+
+        const nextMarkers: MarkerPosition[] = [];
+        for (const range of ranges) {
+          const mark = pre.querySelector<HTMLElement>(
+            `mark[data-insight-kind="${range.kind}"][data-insight-index="${range.sourceIndex}"]`
+          );
+          if (!mark) {
+            continue;
+          }
+          nextMarkers.push({
+            topPercent: (mark.offsetTop / scrollHeight) * 100,
+            kind: range.kind,
+            insight: range.insight,
+            sourceIndex: range.sourceIndex,
+          });
+        }
+        setMarkers(nextMarkers);
+      });
+
+      return () => cancelAnimationFrame(frame);
     }, [ranges, segments]);
 
-    const scrollToInsight = useCallback(
-      (kind: 'strength' | 'weakness', index: number) => {
-        const pre = preRef.current;
-        if (!pre) {
-          return;
-        }
-        const mark = pre.querySelector<HTMLElement>(
-          `mark[data-insight-kind="${kind}"][data-insight-index="${index}"]`
-        );
-        if (!mark) {
-          return;
-        }
-        mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        setPulsingKey(`${kind}-${index}`);
-      },
-      []
-    );
+    const scrollToInsight = useCallback((kind: 'strength' | 'weakness', index: number) => {
+      const pre = preRef.current;
+      if (!pre) {
+        return;
+      }
+      const mark = pre.querySelector<HTMLElement>(`mark[data-insight-kind="${kind}"][data-insight-index="${index}"]`);
+      if (!mark) {
+        return;
+      }
+      mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setPulsingKey(`${kind}-${index}`);
+    }, []);
 
     useImperativeHandle(ref, () => ({ scrollToInsight }), [scrollToInsight]);
 

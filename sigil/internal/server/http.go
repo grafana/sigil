@@ -26,11 +26,11 @@ import (
 )
 
 const (
-	agentRatingEvaluationTimeout    = 3 * time.Minute
-	agentRatingPersistTimeout       = 10 * time.Second
-	promptInsightsEvaluationTimeout   = 3 * time.Minute
-	promptInsightsPersistTimeout      = 10 * time.Second
-	promptInsightsConversationLimit   = 15
+	agentRatingEvaluationTimeout       = 3 * time.Minute
+	agentRatingPersistTimeout          = 10 * time.Second
+	promptInsightsEvaluationTimeout    = 3 * time.Minute
+	promptInsightsPersistTimeout       = 10 * time.Second
+	promptInsightsConversationLimit    = 15
 	promptInsightsConversationLookback = 7 * 24 * time.Hour
 )
 
