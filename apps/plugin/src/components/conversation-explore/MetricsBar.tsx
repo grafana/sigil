@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { cx } from '@emotion/css';
 import { Icon, Tooltip, useStyles2 } from '@grafana/ui';
 import type { CostSummary, TokenSummary } from '../../conversation/aggregates';
+import type { ConversationRating, ConversationRatingSummary, ConversationRatingValue } from '../../conversation/types';
 import type { ModelCard } from '../../modelcard/types';
 import ModelCardPopover from '../conversations/ModelCardPopover';
 import { getProviderColor, stripProviderPrefix, toDisplayProvider } from '../conversations/providerMeta';
@@ -13,14 +14,18 @@ const TYPEWRITER_STEP_MS = 28;
 export type MetricsBarProps = {
   conversationID: string;
   conversationTitle?: string;
+  conversationUserId?: string;
   totalDurationMs: number;
   tokenSummary: TokenSummary | null;
   costSummary: CostSummary | null;
+  callsByAgent?: Array<{ agent: string; count: number }>;
   models: string[];
   modelProviders?: Record<string, string>;
   modelCards?: Map<string, ModelCard>;
   errorCount: number;
   generationCount: number;
+  ratingSummary?: ConversationRatingSummary | null;
+  recentRatings?: ConversationRating[];
   isSaved?: boolean;
   onToggleSave?: () => void;
   onBack?: () => void;
@@ -130,23 +135,127 @@ function findModelCard(
   return null;
 }
 
+function getStatusTooltip(errorCount: number): string {
+  if (errorCount > 0) {
+    return `${errorCount} generation${errorCount === 1 ? '' : 's'} in this conversation ${
+      errorCount === 1 ? 'has' : 'have'
+    } an error message.`;
+  }
+  return 'No generations in this conversation have an error message.';
+}
+
+function renderBreakdownTable(rows: Array<{ label: string; value: string }>): React.JSX.Element {
+  return (
+    <table style={{ borderCollapse: 'separate', borderSpacing: '0 0' }}>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.label}>
+            <th align="left" style={{ paddingRight: 24, whiteSpace: 'nowrap' }}>
+              {row.label}
+            </th>
+            <td align="right" style={{ minWidth: 72, whiteSpace: 'nowrap' }}>
+              {row.value}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function getTokenTooltip(tokenSummary: TokenSummary): React.JSX.Element {
+  return renderBreakdownTable([
+    { label: 'Input', value: formatTokenCount(tokenSummary.inputTokens) },
+    { label: 'Output', value: formatTokenCount(tokenSummary.outputTokens) },
+    { label: 'Cache read', value: formatTokenCount(tokenSummary.cacheReadTokens) },
+    { label: 'Cache write', value: formatTokenCount(tokenSummary.cacheWriteTokens) },
+    { label: 'Total', value: formatTokenCount(tokenSummary.totalTokens) },
+  ]);
+}
+
+function getCallsTooltip(callsByAgent: Array<{ agent: string; count: number }>): React.JSX.Element | string {
+  if (callsByAgent.length === 0) {
+    return 'No agent names found for these calls.';
+  }
+
+  return renderBreakdownTable(
+    callsByAgent.map(({ agent, count }) => ({
+      label: agent,
+      value: String(count),
+    }))
+  );
+}
+
+function getCostTooltip(costSummary: CostSummary): React.JSX.Element {
+  return renderBreakdownTable([
+    { label: 'Input', value: formatCost(costSummary.inputCost) },
+    { label: 'Output', value: formatCost(costSummary.outputCost) },
+    { label: 'Cache read', value: formatCost(costSummary.cacheReadCost) },
+    { label: 'Cache write', value: formatCost(costSummary.cacheWriteCost) },
+    { label: 'Total', value: formatCost(costSummary.totalCost) },
+  ]);
+}
+
+function getRatingLabel(value: ConversationRatingValue): string {
+  return value === 'CONVERSATION_RATING_VALUE_GOOD' ? 'Thumbs up' : 'Thumbs down';
+}
+
+function getRatingTooltip(
+  styles: ReturnType<typeof getStyles>,
+  value: ConversationRatingValue,
+  summary: ConversationRatingSummary | null | undefined,
+  ratings: ConversationRating[]
+): React.JSX.Element {
+  const positive = summary?.good_count ?? 0;
+  const negative = summary?.bad_count ?? 0;
+  const matchingRatings = ratings.filter((rating) => rating.rating === value);
+  const title = getRatingLabel(value);
+
+  return (
+    <div className={styles.feedbackTooltip}>
+      <div className={styles.feedbackTooltipHeader}>
+        <span>{title}</span>
+        <span className={styles.feedbackTooltipCounts}>
+          <span>↑ {positive}</span>
+          <span>↓ {negative}</span>
+        </span>
+      </div>
+      {matchingRatings.length > 0 ? (
+        <ol className={styles.feedbackTooltipList}>
+          {matchingRatings.slice(0, 3).map((rating) => {
+            const detail = rating.comment?.trim() || 'No comment';
+            return <li key={rating.rating_id}>{detail}</li>;
+          })}
+        </ol>
+      ) : (
+        <div className={styles.feedbackTooltipEmpty}>No feedback details yet.</div>
+      )}
+    </div>
+  );
+}
+
 export default function MetricsBar({
   conversationID,
   conversationTitle,
+  conversationUserId,
   totalDurationMs,
   tokenSummary,
   costSummary,
+  callsByAgent = [],
   models,
   modelProviders,
   modelCards,
   errorCount,
   generationCount,
+  ratingSummary,
+  recentRatings = [],
   isSaved = false,
   onToggleSave,
   onBack,
 }: MetricsBarProps) {
   const styles = useStyles2(getStyles);
   const [openModel, setOpenModel] = useState<{ key: string; anchorRect: DOMRect } | null>(null);
+  const statusTooltip = getStatusTooltip(errorCount);
   const normalizedConversationTitle = conversationTitle?.trim() ?? '';
   const conversationLabel = normalizedConversationTitle.length > 0 ? normalizedConversationTitle : conversationID;
   const prefersReducedMotion =
@@ -190,15 +299,26 @@ export default function MetricsBar({
           </button>
         </Tooltip>
       )}
-      <Tooltip content={conversationLabel} placement="bottom">
-        <ConversationLabel
-          key={conversationLabel}
-          label={conversationLabel}
-          animate={animateConversationLabel}
-          className={cx(styles.conversationId, animateConversationLabel && styles.conversationTitle)}
-          cursorClassName={styles.typewriterCursor}
-        />
-      </Tooltip>
+      <div className={styles.titleBlock}>
+        <Tooltip content={conversationLabel} placement="bottom">
+          <ConversationLabel
+            key={conversationLabel}
+            label={conversationLabel}
+            animate={animateConversationLabel}
+            className={cx(styles.conversationId, animateConversationLabel && styles.conversationTitle)}
+            cursorClassName={styles.typewriterCursor}
+          />
+        </Tooltip>
+        {conversationUserId?.trim() && (
+          <ConversationLabel
+            key={conversationUserId.trim()}
+            label={conversationUserId.trim()}
+            animate={animateConversationLabel}
+            className={styles.titleMeta}
+            cursorClassName={styles.titleMetaCursor}
+          />
+        )}
+      </div>
 
       <div className={styles.separator} />
 
@@ -209,23 +329,18 @@ export default function MetricsBar({
 
       <div className={styles.separator} />
 
-      <div className={styles.metric}>
-        <Icon name="exchange-alt" size="sm" />
-        <span className={styles.metricValue}>{generationCount}</span>
-        <span>{generationCount === 1 ? 'call' : 'calls'}</span>
-      </div>
+      <Tooltip content={getCallsTooltip(callsByAgent)} placement="bottom">
+        <div className={styles.metric}>
+          <Icon name="exchange-alt" size="sm" />
+          <span className={styles.metricValue}>{generationCount}</span>
+          <span>{generationCount === 1 ? 'call' : 'calls'}</span>
+        </div>
+      </Tooltip>
 
       {tokenSummary && tokenSummary.totalTokens > 0 && (
         <>
           <div className={styles.separator} />
-          <Tooltip
-            content={`In: ${formatTokenCount(tokenSummary.inputTokens)} · Out: ${formatTokenCount(tokenSummary.outputTokens)}${
-              tokenSummary.cacheReadTokens > 0 || tokenSummary.cacheWriteTokens > 0
-                ? ` · Cache read: ${formatTokenCount(tokenSummary.cacheReadTokens)} · Cache write: ${formatTokenCount(tokenSummary.cacheWriteTokens)}`
-                : ''
-            }`}
-            placement="bottom"
-          >
+          <Tooltip content={getTokenTooltip(tokenSummary)} placement="bottom">
             <div className={styles.metric}>
               <Icon name="document-info" size="sm" />
               <span className={styles.metricValue}>{formatTokenCount(tokenSummary.totalTokens)}</span>
@@ -238,38 +353,76 @@ export default function MetricsBar({
       {costSummary && costSummary.totalCost > 0 && (
         <>
           <div className={styles.separator} />
-          <div className={styles.metric}>
-            <span className={styles.metricValue}>{formatCost(costSummary.totalCost)}</span>
-          </div>
+          <Tooltip content={getCostTooltip(costSummary)} placement="bottom">
+            <div className={styles.metric}>
+              <span className={styles.metricValue}>{formatCost(costSummary.totalCost)}</span>
+              <span>cost</span>
+            </div>
+          </Tooltip>
         </>
       )}
 
       <div className={styles.separator} />
 
-      {errorCount > 0 ? (
-        <span className={`${styles.statusBadge} ${styles.statusError}`}>
-          <Icon name="exclamation-circle" size="sm" />
-          {errorCount} {errorCount === 1 ? 'error' : 'errors'}
-        </span>
-      ) : (
-        <span className={`${styles.statusBadge} ${styles.statusSuccess}`}>
-          <Icon name="check-circle" size="sm" />
-          OK
-        </span>
-      )}
-
-      {onToggleSave && (
-        <Tooltip content={isSaved ? 'Unsave conversation' : 'Save conversation'} placement="bottom">
-          <button
-            type="button"
-            className={cx(styles.saveButton, isSaved && styles.saveButtonActive)}
-            onClick={onToggleSave}
-            aria-label={isSaved ? 'unsave conversation' : 'save conversation'}
-          >
-            <Icon name={isSaved ? 'favorite' : 'star'} size="md" />
-          </button>
+      <div className={styles.compactControls}>
+        <Tooltip content={statusTooltip} placement="bottom">
+          {errorCount > 0 ? (
+            <span className={`${styles.statusBadge} ${styles.statusError}`}>
+              <Icon name="exclamation-circle" size="sm" />
+              {errorCount} {errorCount === 1 ? 'error' : 'errors'}
+            </span>
+          ) : (
+            <span className={`${styles.statusBadge} ${styles.statusSuccess}`}>
+              <Icon name="check-circle" size="sm" />
+              OK
+            </span>
+          )}
         </Tooltip>
-      )}
+
+        {ratingSummary && ratingSummary.total_count > 0 && (
+          <div className={styles.feedbackButtons} aria-label="Conversation feedback">
+            {ratingSummary.good_count > 0 && (
+              <Tooltip
+                content={getRatingTooltip(styles, 'CONVERSATION_RATING_VALUE_GOOD', ratingSummary, recentRatings)}
+                placement="bottom"
+              >
+                <span
+                  className={cx(styles.feedbackIcon, styles.feedbackIconPositive)}
+                  aria-label="Conversation has good feedback"
+                >
+                  <Icon name="thumbs-up" size="sm" />
+                </span>
+              </Tooltip>
+            )}
+            {ratingSummary.bad_count > 0 && (
+              <Tooltip
+                content={getRatingTooltip(styles, 'CONVERSATION_RATING_VALUE_BAD', ratingSummary, recentRatings)}
+                placement="bottom"
+              >
+                <span
+                  className={cx(styles.feedbackIcon, styles.feedbackIconNegative)}
+                  aria-label="Conversation has bad feedback"
+                >
+                  <Icon name="thumbs-down" size="sm" />
+                </span>
+              </Tooltip>
+            )}
+          </div>
+        )}
+
+        {onToggleSave && (
+          <Tooltip content={isSaved ? 'Unsave conversation' : 'Save conversation'} placement="bottom">
+            <button
+              type="button"
+              className={cx(styles.saveButton, isSaved && styles.saveButtonActive)}
+              onClick={onToggleSave}
+              aria-label={isSaved ? 'unsave conversation' : 'save conversation'}
+            >
+              <Icon name={isSaved ? 'favorite' : 'star'} size="md" />
+            </button>
+          </Tooltip>
+        )}
+      </div>
 
       <div className={styles.modelChips}>
         {modelMeta.map(({ key, displayName, color, card }) => {

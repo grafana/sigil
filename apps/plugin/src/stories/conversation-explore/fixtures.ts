@@ -1,6 +1,30 @@
 import type { GenerationDetail } from '../../generation/types';
 import type { FlowNode } from '../../components/conversation-explore/types';
 import type { TokenSummary, CostSummary } from '../../conversation/aggregates';
+import type { ConversationSpan } from '../../conversation/types';
+
+function makeSpan(overrides: Partial<ConversationSpan> = {}): ConversationSpan {
+  return {
+    traceID: 'trace-1',
+    spanID: 'span-1',
+    parentSpanID: '',
+    name: 'generateText',
+    kind: 'INTERNAL',
+    serviceName: 'assistant-api',
+    startTimeUnixNano: BigInt(0),
+    endTimeUnixNano: BigInt(1),
+    durationNano: BigInt(1),
+    attributes: new Map([['sigil.generation.id', { stringValue: 'gen-1' }]]),
+    resourceAttributes: new Map([
+      ['service.name', { stringValue: 'assistant-api' }],
+      ['deployment.environment', { stringValue: 'dev' }],
+      ['telemetry.sdk.language', { stringValue: 'go' }],
+    ]),
+    generation: null,
+    children: [],
+    ...overrides,
+  };
+}
 
 export const mockGenerations: GenerationDetail[] = [
   {
@@ -149,6 +173,7 @@ export const mockFlowNodes: FlowNode[] = [
         provider: 'anthropic',
         tokenCount: 4404,
         generation: mockGenerations[0],
+        span: makeSpan({ generation: mockGenerations[0] }),
         children: [
           {
             id: 'trace-1:span-2',
@@ -183,6 +208,13 @@ export const mockFlowNodes: FlowNode[] = [
         provider: 'anthropic',
         tokenCount: 2990,
         generation: mockGenerations[1],
+        span: makeSpan({
+          spanID: 'span-3',
+          startTimeUnixNano: BigInt(2),
+          endTimeUnixNano: BigInt(3),
+          generation: mockGenerations[1],
+          attributes: new Map([['sigil.generation.id', { stringValue: 'gen-2' }]]),
+        }),
         children: [],
       },
     ],
@@ -206,6 +238,18 @@ export const mockFlowNodes: FlowNode[] = [
         provider: 'openai',
         tokenCount: 1820,
         generation: mockGenerations[2],
+        span: makeSpan({
+          spanID: 'span-5',
+          serviceName: 'reviewer',
+          startTimeUnixNano: BigInt(4),
+          endTimeUnixNano: BigInt(5),
+          generation: mockGenerations[2],
+          attributes: new Map([['sigil.generation.id', { stringValue: 'gen-3' }]]),
+          resourceAttributes: new Map([
+            ['service.name', { stringValue: 'reviewer' }],
+            ['deployment.environment', { stringValue: 'dev' }],
+          ]),
+        }),
         children: [],
       },
     ],

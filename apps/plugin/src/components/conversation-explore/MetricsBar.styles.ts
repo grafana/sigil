@@ -47,6 +47,29 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     fontWeight: theme.typography.fontWeightMedium,
     color: theme.colors.text.primary,
   }),
+  titleBlock: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.25),
+    minWidth: 0,
+  }),
+  titleMeta: css({
+    fontSize: 9,
+    lineHeight: 1,
+    color: theme.colors.text.disabled,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    maxWidth: 140,
+  }),
+  titleMetaCursor: css({
+    display: 'inline-block',
+    marginLeft: theme.spacing(0.125),
+    color: theme.colors.text.disabled,
+    [theme.transitions.handleMotion('no-preference', 'reduce')]: {
+      animation: `${blink} 1s steps(1, end) infinite`,
+    },
+  }),
   typewriterCursor: css({
     display: 'inline-block',
     marginLeft: theme.spacing(0.25),
@@ -73,6 +96,7 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.primary,
     fontWeight: theme.typography.fontWeightMedium,
     fontVariantNumeric: 'tabular-nums',
+    marginRight: theme.spacing(0.25),
   }),
   modelChips: css({
     display: 'flex',
@@ -123,11 +147,17 @@ export const getStyles = (theme: GrafanaTheme2) => ({
   statusBadge: css({
     display: 'inline-flex',
     alignItems: 'center',
-    gap: theme.spacing(0.5),
-    padding: `${theme.spacing(0.25)} ${theme.spacing(1)}`,
+    gap: theme.spacing(0.375),
+    padding: `2px ${theme.spacing(0.75)}`,
     borderRadius: theme.shape.radius.pill,
     fontSize: theme.typography.bodySmall.fontSize,
     fontWeight: theme.typography.fontWeightMedium,
+  }),
+  compactControls: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    marginLeft: -4,
   }),
   statusSuccess: css({
     background: theme.colors.success.transparent,
@@ -141,12 +171,14 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing(0.5),
+    width: 22,
+    height: 22,
+    padding: 0,
     border: 'none',
     background: 'none',
     cursor: 'pointer',
     color: theme.colors.text.disabled,
-    borderRadius: theme.shape.radius.default,
+    borderRadius: 6,
     transition: 'color 120ms ease',
     '&:hover': {
       color: theme.colors.warning.main,
@@ -154,5 +186,54 @@ export const getStyles = (theme: GrafanaTheme2) => ({
   }),
   saveButtonActive: css({
     color: theme.colors.warning.main,
+  }),
+  feedbackButtons: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 2,
+    marginRight: -2,
+  }),
+  feedbackIcon: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 16,
+    height: 16,
+    color: theme.colors.text.disabled,
+    lineHeight: 0,
+  }),
+  feedbackIconPositive: css({
+    color: theme.colors.success.text,
+  }),
+  feedbackIconNegative: css({
+    color: theme.colors.error.text,
+  }),
+  feedbackTooltip: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.75),
+    minWidth: 220,
+  }),
+  feedbackTooltipHeader: css({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing(2),
+    fontWeight: theme.typography.fontWeightMedium,
+  }),
+  feedbackTooltipCounts: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.75),
+    color: theme.colors.text.secondary,
+    fontWeight: theme.typography.fontWeightRegular,
+  }),
+  feedbackTooltipList: css({
+    margin: 0,
+    paddingLeft: theme.spacing(2),
+    color: theme.colors.text.secondary,
+  }),
+  feedbackTooltipEmpty: css({
+    color: theme.colors.text.secondary,
   }),
 });

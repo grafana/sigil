@@ -1015,6 +1015,121 @@ func TestGetConversationDetailForTenantHotOnlyFanOut(t *testing.T) {
 	}
 }
 
+func TestGetConversationDetailForTenantIncludesAgentEffectiveVersion(t *testing.T) {
+	base := time.Date(2026, 2, 15, 9, 0, 0, 0, time.UTC)
+	conversationStore := &stubConversationStore{
+		items: map[string]storage.Conversation{
+			"conv-1": {
+				TenantID:         "tenant-a",
+				ConversationID:   "conv-1",
+				GenerationCount:  1,
+				CreatedAt:        base,
+				LastGenerationAt: base.Add(time.Minute),
+				UpdatedAt:        base.Add(time.Minute),
+			},
+		},
+	}
+
+	generation := testGenerationPayload("gen-1", "conv-1", base.Add(time.Minute))
+	generation.AgentVersion = "v1"
+	walReader := &stubWALReader{
+		byConversationByTenant: map[string]map[string][]*sigilv1.Generation{
+			"tenant-a": {"conv-1": {generation}},
+		},
+	}
+
+	service := NewService()
+	service.conversationStore = conversationStore
+	service.walReader = walReader
+	service.fanOutStore = storage.NewFanOutStore(walReader, nil, nil)
+
+	detail, found, err := service.GetConversationDetailForTenant(context.Background(), "tenant-a", "conv-1")
+	if err != nil {
+		t.Fatalf("get conversation detail: %v", err)
+	}
+	if !found {
+		t.Fatalf("expected conversation detail to be found")
+	}
+	if len(detail.Generations) != 1 {
+		t.Fatalf("expected one generation, got %d", len(detail.Generations))
+	}
+
+	payload := detail.Generations[0]
+	agentVersion, ok := payload["agent_version"].(string)
+	if !ok || agentVersion != "v1" {
+		t.Fatalf("expected declared agent version to be preserved, got %#v", payload["agent_version"])
+	}
+
+	effectiveVersion, ok := payload["agent_effective_version"].(string)
+	if !ok {
+		t.Fatalf("expected agent_effective_version string, got %#v", payload["agent_effective_version"])
+	}
+	if !strings.HasPrefix(effectiveVersion, "sha256:") {
+		t.Fatalf("expected agent_effective_version sha256 hash, got %q", effectiveVersion)
+	}
+	if effectiveVersion == agentVersion {
+		t.Fatalf("expected effective version to differ from declared version, got %q", effectiveVersion)
+	}
+	if payload["agent_id"] != "assistant" {
+		t.Fatalf("expected agent_id to match agent name, got %#v", payload["agent_id"])
+	}
+}
+
+func TestGetConversationDetailForTenantOmitsAgentFieldsWithoutAgentName(t *testing.T) {
+	base := time.Date(2026, 2, 15, 9, 0, 0, 0, time.UTC)
+	conversationStore := &stubConversationStore{
+		items: map[string]storage.Conversation{
+			"conv-1": {
+				TenantID:         "tenant-a",
+				ConversationID:   "conv-1",
+				GenerationCount:  1,
+				CreatedAt:        base,
+				LastGenerationAt: base.Add(time.Minute),
+				UpdatedAt:        base.Add(time.Minute),
+			},
+		},
+	}
+
+	generation := &sigilv1.Generation{
+		Id:             "gen-1",
+		ConversationId: "conv-1",
+		TraceId:        "trace-gen-1",
+		SpanId:         "span-gen-1",
+		Mode:           sigilv1.GenerationMode_GENERATION_MODE_SYNC,
+		Model:          &sigilv1.ModelRef{Provider: "openai", Name: "gpt-4o"},
+		CompletedAt:    timestamppb.New(base.Add(time.Minute)),
+	}
+	walReader := &stubWALReader{
+		byConversationByTenant: map[string]map[string][]*sigilv1.Generation{
+			"tenant-a": {"conv-1": {generation}},
+		},
+	}
+
+	service := NewService()
+	service.conversationStore = conversationStore
+	service.walReader = walReader
+	service.fanOutStore = storage.NewFanOutStore(walReader, nil, nil)
+
+	detail, found, err := service.GetConversationDetailForTenant(context.Background(), "tenant-a", "conv-1")
+	if err != nil {
+		t.Fatalf("get conversation detail: %v", err)
+	}
+	if !found {
+		t.Fatalf("expected conversation detail to be found")
+	}
+	if len(detail.Generations) != 1 {
+		t.Fatalf("expected one generation, got %d", len(detail.Generations))
+	}
+
+	payload := detail.Generations[0]
+	if _, ok := payload["agent_effective_version"]; ok {
+		t.Fatalf("expected agent_effective_version to be absent for non-agent generation, got %#v", payload["agent_effective_version"])
+	}
+	if _, ok := payload["agent_id"]; ok {
+		t.Fatalf("expected agent_id to be absent for non-agent generation, got %#v", payload["agent_id"])
+	}
+}
+
 func TestGetConversationDetailForTenantDoesNotUseConversationCreatedAtAsLowerBound(t *testing.T) {
 	ingestTime := time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)
 	backfillTime := ingestTime.Add(-45 * time.Minute)

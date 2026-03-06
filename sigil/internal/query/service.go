@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/grafana/sigil/sigil/internal/agentmeta"
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	"github.com/grafana/sigil/sigil/internal/feedback"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
@@ -1589,6 +1590,15 @@ func generationToResponsePayload(generation *sigilv1.Generation) (map[string]any
 		payload["error"] = nil
 	} else {
 		payload["error"] = map[string]any{"message": generation.GetCallError()}
+	}
+
+	descriptor, err := agentmeta.BuildDescriptor(generation)
+	if err != nil {
+		return nil, fmt.Errorf("build agent descriptor: %w", err)
+	}
+	if descriptor.AgentName != "" {
+		payload["agent_effective_version"] = descriptor.EffectiveVersion
+		payload["agent_id"] = descriptor.AgentName
 	}
 	return payload, nil
 }

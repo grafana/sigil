@@ -41,4 +41,14 @@ export const WithScoreTooltip = {
   },
 };
 
+export const WithResourceAttributes = {
+  args: {
+    node: generationNode,
+    allGenerations: mockGenerations,
+    onClose: () => {
+      // Storybook interaction-only callback.
+    },
+  },
+};
+
 export const Screenshot = Default;

@@ -82,6 +82,7 @@
     "@grafana/data": "^12.3.2",
     "@grafana/i18n": "^12.3.2",
     "@grafana/runtime": "^12.3.2",
+    "@grafana/scenes": "^7.0.3",
     "@grafana/schema": "^12.3.2",
     "@grafana/ui": "^12.3.2",
     "gpt-tokenizer": "^3.4.0",

@@ -1,19 +1,9 @@
+import { decodeBase64Utf8 } from '../../conversation/base64';
+
 const BASE64_RE = /^[A-Za-z0-9+/\n\r]+=*$/;
 
 function looksLikeBase64(value: string): boolean {
   return value.length >= 64 && BASE64_RE.test(value);
-}
-
-function tryDecodeBase64(value: string): string | null {
-  try {
-    const decoded = atob(value);
-    if (/^[\x20-\x7E\s]*$/.test(decoded)) {
-      return decoded;
-    }
-  } catch {
-    // not valid base64
-  }
-  return null;
 }
 
 function tryPrettyJSON(value: string): string | null {
@@ -40,7 +30,7 @@ function formatBytes(bytes: number): string {
  * undecodable binary blobs with a human-readable placeholder.
  */
 export function formatToolContent(value: string): string {
-  const decoded = tryDecodeBase64(value);
+  const decoded = decodeBase64Utf8(value);
   if (decoded !== null) {
     return tryPrettyJSON(decoded) ?? decoded;
   }

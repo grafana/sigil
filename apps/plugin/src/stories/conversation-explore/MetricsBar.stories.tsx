@@ -140,6 +140,42 @@ export const WithConversationTitle = {
   },
 };
 
+export const WithFeedback = {
+  args: {
+    ...Default.args,
+    ratingSummary: {
+      total_count: 3,
+      good_count: 2,
+      bad_count: 1,
+      latest_rating: 'CONVERSATION_RATING_VALUE_GOOD',
+      has_bad_rating: true,
+    },
+    recentRatings: [
+      {
+        rating_id: 'rating-3',
+        conversation_id: 'conv-abc-123-def-456',
+        rating: 'CONVERSATION_RATING_VALUE_GOOD',
+        comment: 'Clear answer.',
+        created_at: '2026-03-06T10:03:00Z',
+      },
+      {
+        rating_id: 'rating-2',
+        conversation_id: 'conv-abc-123-def-456',
+        rating: 'CONVERSATION_RATING_VALUE_BAD',
+        comment: 'Missed the actual problem.',
+        created_at: '2026-03-06T10:02:00Z',
+      },
+      {
+        rating_id: 'rating-1',
+        conversation_id: 'conv-abc-123-def-456',
+        rating: 'CONVERSATION_RATING_VALUE_GOOD',
+        comment: 'Useful trace summary.',
+        created_at: '2026-03-06T10:01:00Z',
+      },
+    ],
+  },
+};
+
 export const Screenshot = Default;
 
 export const WithModelCardPopover = {
