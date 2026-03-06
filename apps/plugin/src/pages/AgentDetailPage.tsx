@@ -160,15 +160,20 @@ const getStyles = (theme: GrafanaTheme2) => ({
     justifyContent: 'space-between',
     gap: theme.spacing(2),
     width: '100%',
-    '@media (max-width: 900px)': {
+    '@media (max-width: 1200px)': {
       justifyContent: 'flex-start',
-      flexWrap: 'wrap' as const,
+      alignItems: 'stretch',
+      flexDirection: 'column' as const,
     },
   }),
   heroVersionsPanel: css({
     flex: 1,
     minWidth: 0,
     width: '100%',
+    '@media (max-width: 1200px)': {
+      flex: '1 1 auto',
+      alignSelf: 'stretch',
+    },
   }),
   heroEyebrow: css({
     textTransform: 'uppercase' as const,
@@ -236,6 +241,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
     '@media (max-width: 900px)': {
       gridColumn: '2 / 3',
       borderLeft: 'none',
+      borderTop: `1px solid ${theme.colors.border.weak}`,
+      paddingTop: theme.spacing(1),
       paddingLeft: 0,
     },
     '@media (max-width: 640px)': {
@@ -249,6 +256,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
     marginTop: theme.spacing(0.125),
     width: 'fit-content',
     marginLeft: 'auto',
+    '@media (max-width: 900px)': {
+      marginLeft: 0,
+    },
   }),
   latestScoreSquare: css({
     display: 'block',
@@ -270,6 +280,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
     lineHeight: 1,
     textAlign: 'right' as const,
     fontVariantNumeric: 'tabular-nums',
+    '@media (max-width: 900px)': {
+      textAlign: 'left' as const,
+    },
   }),
   latestScoreValueMain: css({
     color: theme.colors.text.primary,
@@ -462,9 +475,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
     alignItems: 'center',
     justifyContent: 'flex-start',
     gap: theme.spacing(1),
+    width: '100%',
   }),
   versionPickerAnchor: css({
     position: 'relative' as const,
+    '@media (max-width: 900px)': {
+      width: '100%',
+    },
   }),
   versionPickerToggle: css({
     display: 'inline-flex',
@@ -483,11 +500,20 @@ const getStyles = (theme: GrafanaTheme2) => ({
       borderColor: theme.colors.border.medium,
       background: theme.colors.action.hover,
     },
+    '@media (max-width: 900px)': {
+      width: '100%',
+      justifyContent: 'space-between',
+    },
   }),
   versionPickerLabel: css({
     maxWidth: 260,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
+    minWidth: 0,
+    '@media (max-width: 900px)': {
+      maxWidth: 'none',
+      flex: 1,
+    },
   }),
   versionPickerMenu: css({
     position: 'absolute' as const,
