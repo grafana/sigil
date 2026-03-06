@@ -17,6 +17,8 @@ import { useCascadingFilterOptions } from '../hooks/useCascadingFilterOptions';
 import { PageInsightBar } from '../components/insight/PageInsightBar';
 import { hasResponseData } from '../components/insight/summarize';
 import { PLUGIN_BASE, ROUTES } from '../constants';
+import { type ConversationsDataSource, defaultConversationsDataSource } from '../conversation/api';
+import { LowestPassRateConversationsTable } from '../components/dashboard/LowestPassRateConversationsTable';
 import {
   type EvalBreakdownDimension,
   type EvalFilters,
@@ -34,6 +36,7 @@ import {
 
 export type EvalResultsPageProps = {
   dataSource?: DashboardDataSource;
+  conversationsDataSource?: ConversationsDataSource;
 };
 
 type LatencyPercentile = 'p50' | 'p95' | 'p99';
@@ -60,7 +63,10 @@ const timeseriesDefaults = { fillOpacity: 6, showPoints: 'never', lineWidth: 2 }
 const chartLegend = { displayMode: 'list', placement: 'bottom', calcs: [] };
 const tooltipOptions = { mode: 'multi', sort: 'desc' };
 
-export default function EvalResultsPage({ dataSource = defaultDashboardDataSource }: EvalResultsPageProps) {
+export default function EvalResultsPage({
+  dataSource = defaultDashboardDataSource,
+  conversationsDataSource = defaultConversationsDataSource,
+}: EvalResultsPageProps) {
   const styles = useStyles2(getStyles);
   const { timeRange, filters, setTimeRange, setFilters } = useFilterUrlState();
   const [breakdownBy, setBreakdownBy] = useState<EvalBreakdownDimension>('evaluator');
@@ -303,18 +309,25 @@ export default function EvalResultsPage({ dataSource = defaultDashboardDataSourc
 
   if (allLoaded && !hasData) {
     return (
-      <div className={styles.emptyState}>
-        <Icon name="graph-bar" size="xxxl" className={styles.emptyIcon} />
-        <Text variant="h4">No evaluation results yet</Text>
-        <Text color="secondary" textAlignment="center">
-          Evaluation results will appear here once the pipeline is running. Create evaluators to define scoring
-          criteria, then set up rules to connect them to your LLM traffic.
-        </Text>
-        <Link to={`${PLUGIN_BASE}/${ROUTES.Evaluation}`}>
-          <Button variant="primary" icon="arrow-right">
-            Set up evaluation
-          </Button>
-        </Link>
+      <div className={styles.wrapper}>
+        <div className={styles.emptyState}>
+          <Icon name="graph-bar" size="xxxl" className={styles.emptyIcon} />
+          <Text variant="h4">No evaluation results yet</Text>
+          <Text color="secondary" textAlignment="center">
+            Evaluation results will appear here once the pipeline is running. Create evaluators to define scoring
+            criteria, then set up rules to connect them to your LLM traffic.
+          </Text>
+          <Link to={`${PLUGIN_BASE}/${ROUTES.Evaluation}`}>
+            <Button variant="primary" icon="arrow-right">
+              Set up evaluation
+            </Button>
+          </Link>
+        </div>
+        <LowestPassRateConversationsTable
+          conversationsDataSource={conversationsDataSource}
+          timeRange={timeRange}
+          filters={dashFilters}
+        />
       </div>
     );
   }
@@ -479,6 +492,13 @@ export default function EvalResultsPage({ dataSource = defaultDashboardDataSourc
             }
           />
         </div>
+
+        {/* Row 3: Lowest pass rate conversations */}
+        <LowestPassRateConversationsTable
+          conversationsDataSource={conversationsDataSource}
+          timeRange={timeRange}
+          filters={dashFilters}
+        />
       </div>
     </div>
   );

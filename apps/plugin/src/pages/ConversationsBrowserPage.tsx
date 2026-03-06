@@ -3,6 +3,7 @@ import { css } from '@emotion/css';
 import { dateTime, type GrafanaTheme2, type SelectableValue } from '@grafana/data';
 import { Alert, Select, useStyles2 } from '@grafana/ui';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { getConversationPassRate } from '../conversation/aggregates';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
 import { buildConversationSearchFilter } from '../conversation/filters';
 import type { ConversationSearchResult, ConversationStatsResponse } from '../conversation/types';
@@ -70,6 +71,17 @@ function sortConversations(
       }
       case 'tokens':
         return getConversationTotalTokens(b) - getConversationTotalTokens(a);
+      case 'evals': {
+        const aHasEvals = a.eval_summary && a.eval_summary.pass_count + a.eval_summary.fail_count > 0;
+        const bHasEvals = b.eval_summary && b.eval_summary.pass_count + b.eval_summary.fail_count > 0;
+        if (aHasEvals && !bHasEvals) {
+          return -1;
+        }
+        if (!aHasEvals && bHasEvals) {
+          return 1;
+        }
+        return (getConversationPassRate(a) ?? 1) - (getConversationPassRate(b) ?? 1);
+      }
       case 'time':
       default:
         return Date.parse(b.last_generation_at) - Date.parse(a.last_generation_at);

@@ -1,5 +1,5 @@
 import type { GenerationCostResult, GenerationDetail } from '../generation/types';
-import type { ConversationData, ConversationSpan } from './types';
+import type { ConversationData, ConversationSearchResult, ConversationSpan } from './types';
 import { getSpanType, type SpanType } from './spans';
 
 export type TokenSummary = {
@@ -187,6 +187,22 @@ export function getSpanSummary(data: ConversationData): SpanSummary {
     frameworkSpans: counts.framework,
     otherSpans: counts.unknown,
   };
+}
+
+/**
+ * Returns the pass rate (0–1) for a conversation search result, or null if
+ * the conversation has no evaluation data. Callers that need a numeric
+ * fallback can use `?? <default>`.
+ */
+export function getConversationPassRate(c: ConversationSearchResult): number | null {
+  if (!c.eval_summary) {
+    return null;
+  }
+  const total = c.eval_summary.pass_count + c.eval_summary.fail_count;
+  if (total === 0) {
+    return null;
+  }
+  return c.eval_summary.pass_count / total;
 }
 
 export function getConversationDuration(data: ConversationData): bigint {
