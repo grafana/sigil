@@ -2,7 +2,18 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { css, cx } from '@emotion/css';
 import { useAssistant } from '@grafana/assistant';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Button, Card, HorizontalGroup, Icon, IconButton, LinkButton, Stack, Text, Tooltip, useStyles2 } from '@grafana/ui';
+import {
+  Button,
+  Card,
+  HorizontalGroup,
+  Icon,
+  IconButton,
+  LinkButton,
+  Stack,
+  Text,
+  Tooltip,
+  useStyles2,
+} from '@grafana/ui';
 import { useNavigate } from 'react-router-dom';
 import { defaultAgentsDataSource } from '../../agents/api';
 import { defaultConversationsDataSource } from '../../conversation/api';
@@ -543,7 +554,10 @@ export function LandingTopBar({
             <Stack direction="column" gap={2}>
               <div className={styles.sideCardMutedHeading}>
                 <Text color="secondary">AUTOINSTRUMENTATION</Text>
-                <Tooltip content="We provide skills and prompts that guide AI to do the instrumentation work for you." placement="top">
+                <Tooltip
+                  content="We provide skills and prompts that guide AI to do the instrumentation work for you."
+                  placement="top"
+                >
                   <span className={styles.sideCardInfoIcon} aria-label="Autoinstrumentation help">
                     <Icon name="info-circle" size="sm" />
                   </span>
@@ -1174,6 +1188,7 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'inline-flex',
       alignItems: 'center',
       color: theme.colors.text.primary,
+      '--ide-logo-size': '28px',
     }),
     modalBackdrop: css({
       label: 'landingTopBar-modalBackdrop',
@@ -1231,9 +1246,8 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'inline-flex',
       alignItems: 'center',
       color: theme.colors.text.primary,
+      '--ide-logo-size': '72px',
       '& svg, & img, & span': {
-        width: 72,
-        height: 72,
         display: 'block',
       },
     }),
@@ -1329,11 +1343,8 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'inline-flex',
       alignItems: 'center',
       color: theme.colors.text.primary,
+      '--ide-logo-size': '14px',
       marginRight: theme.spacing(0.5),
-      '& svg, & img, & span': {
-        width: 14,
-        height: 14,
-      },
     }),
   };
 }

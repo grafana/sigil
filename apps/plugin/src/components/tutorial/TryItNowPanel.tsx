@@ -181,6 +181,7 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'inline-flex',
       alignItems: 'center',
       color: theme.colors.text.primary,
+      '--ide-logo-size': '28px',
     }),
     modalBackdrop: css({
       position: 'fixed',
@@ -231,9 +232,8 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'inline-flex',
       alignItems: 'center',
       color: theme.colors.text.primary,
+      '--ide-logo-size': '72px',
       '& svg, & img, & span': {
-        width: 72,
-        height: 72,
         display: 'block',
       },
     }),
@@ -326,11 +326,8 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'inline-flex',
       alignItems: 'center',
       color: theme.colors.text.primary,
+      '--ide-logo-size': '14px',
       marginRight: theme.spacing(0.5),
-      '& svg, & img, & span': {
-        width: 14,
-        height: 14,
-      },
     }),
   };
 }

@@ -20,8 +20,8 @@ function MaskLogo({ size, src, label }: MaskLogoProps) {
       role="img"
       aria-label={label}
       style={{
-        width: size,
-        height: size,
+        width: `var(--ide-logo-size, ${size}px)`,
+        height: `var(--ide-logo-size, ${size}px)`,
         display: 'inline-block',
         backgroundColor: 'currentColor',
         maskImage: `url(${src})`,
