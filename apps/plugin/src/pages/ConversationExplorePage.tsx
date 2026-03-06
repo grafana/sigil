@@ -803,7 +803,6 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   const [panelWidth, setPanelWidth] = useState(340);
   const [traceDrawerWidth, setTraceDrawerWidth] = useState(720);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const sidebarCollapsedRef = useRef(sidebarCollapsed);
   const sidebarCollapsedBeforeTraceRef = useRef(false);
   const traceDrawerOpenRef = useRef(false);
   const rightPanelContentRef = useRef<HTMLDivElement | null>(null);
@@ -924,23 +923,23 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   );
 
   useEffect(() => {
-    sidebarCollapsedRef.current = sidebarCollapsed;
-  }, [sidebarCollapsed]);
-
-  useEffect(() => {
     traceDrawerOpenRef.current = traceOverlaySpan != null;
   }, [traceOverlaySpan]);
 
   const handleOpenTraceDrawer = useCallback((span: ConversationSpan) => {
-    if (!traceDrawerOpenRef.current) {
-      sidebarCollapsedBeforeTraceRef.current = sidebarCollapsedRef.current;
-    }
+    setSidebarCollapsed((wasCollapsed) => {
+      if (!traceDrawerOpenRef.current) {
+        sidebarCollapsedBeforeTraceRef.current = wasCollapsed;
+        traceDrawerOpenRef.current = true;
+      }
+      return true;
+    });
     pendingTraceDrawerAutosizeRef.current = true;
-    setSidebarCollapsed(true);
     setTraceOverlaySpan(span);
   }, []);
 
   const handleCloseTraceDrawer = useCallback(() => {
+    traceDrawerOpenRef.current = false;
     setTraceOverlaySpan(null);
     setSidebarCollapsed(sidebarCollapsedBeforeTraceRef.current);
   }, []);
