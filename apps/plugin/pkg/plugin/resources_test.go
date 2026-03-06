@@ -2358,19 +2358,19 @@ func TestAnalyzePromptFetchesExcerptsAndForwardsToSigil(t *testing.T) {
 	var receivedUpstreamBody []byte
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		switch {
-		case r.URL.Path == "/api/datasources/proxy/uid/tempo/api/search":
+		switch r.URL.Path {
+		case "/api/datasources/proxy/uid/tempo/api/search":
 			_, _ = io.WriteString(w, buildTempoSearchResponse([]tempoSearchTraceFixture{
 				{TraceID: "trace-1", StartTimeUnixNano: "1739609400000000000", ConversationID: "conv-1", GenerationID: "gen-1", Model: "gpt-4o", Agent: "test-agent", UserID: "user-1"},
 				{TraceID: "trace-2", StartTimeUnixNano: "1739609300000000000", ConversationID: "conv-2", GenerationID: "gen-2", Model: "gpt-4o", Agent: "test-agent", UserID: "user-2"},
 			}))
-		case r.URL.Path == "/api/v1/conversations:batch-metadata":
+		case "/api/v1/conversations:batch-metadata":
 			_, _ = io.WriteString(w, `{"items":[{"conversation_id":"conv-1","generation_count":2,"first_generation_at":"2025-02-15T08:00:00Z","last_generation_at":"2025-02-15T09:00:00Z","annotation_count":0},{"conversation_id":"conv-2","generation_count":1,"first_generation_at":"2025-02-15T07:00:00Z","last_generation_at":"2025-02-15T07:30:00Z","annotation_count":0}],"missing_conversation_ids":[]}`)
-		case r.URL.Path == "/api/v1/conversations/conv-1":
+		case "/api/v1/conversations/conv-1":
 			_, _ = io.WriteString(w, `{"conversation_id":"conv-1","generations":[{"agent_name":"test-agent","input":[{"parts":[{"text":"Hello agent"}]}],"output":[{"parts":[{"text":"Hi there!"}]}]},{"agent_name":"test-agent","input":[{"parts":[{"text":"Follow up"}]}],"output":[{"parts":[{"tool_call":{"name":"search"}}]}]}],"annotations":[]}`)
-		case r.URL.Path == "/api/v1/conversations/conv-2":
+		case "/api/v1/conversations/conv-2":
 			_, _ = io.WriteString(w, `{"conversation_id":"conv-2","generations":[{"agent_name":"test-agent","input":[{"parts":[{"text":"Question"}]}],"output":[{"parts":[{"text":"Answer"}]}]}],"annotations":[]}`)
-		case r.URL.Path == "/api/v1/agents:analyze-prompt-with-excerpts":
+		case "/api/v1/agents:analyze-prompt-with-excerpts":
 			receivedUpstreamBody, _ = io.ReadAll(r.Body)
 			_, _ = io.WriteString(w, `{"status":"pending","strengths":[],"weaknesses":[]}`)
 		default:
