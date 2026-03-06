@@ -150,7 +150,8 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     [allGenerations, conversationData?.spans]
   );
 
-  const conversationTitle = conversationData?.conversationTitle?.trim() || conversationTitleFromTelemetry || conversationTitleFromURL;
+  const conversationTitle =
+    conversationData?.conversationTitle?.trim() || conversationTitleFromTelemetry || conversationTitleFromURL;
 
   const {
     isSaved,
