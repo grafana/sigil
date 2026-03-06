@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { css, cx, keyframes } from '@emotion/css';
+import { css, cx } from '@emotion/css';
 import { useAssistant } from '@grafana/assistant';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Button, Card, Icon, IconButton, LinkButton, Stack, Text, Tooltip, useStyles2 } from '@grafana/ui';
@@ -28,6 +28,7 @@ import {
 import { defaultEvaluationDataSource } from '../../evaluation/api';
 import { useFilterUrlState } from '../../hooks/useFilterUrlState';
 import { ideTabs, buildCursorPromptDeeplink, downloadTextFile, renderIdeActionLogo } from '../../ide/ideUtils';
+import { PipelineConnectorSwarm } from './PipelineConnectorSwarm';
 
 type IdeKey = InstrumentationPromptIde;
 
@@ -874,13 +875,7 @@ export function LandingTopBar({
                       </Text>
                     </div>
                   </div>
-                  <div className={styles.pipelineConnector} aria-hidden>
-                    <div className={styles.pipelineConnectorTrack} />
-                    <div
-                      className={styles.pipelineConnectorDot}
-                      style={{ background: '#5794F2', boxShadow: '0 0 8px 2px rgba(87,148,242,0.4)' }}
-                    />
-                  </div>
+                  <PipelineConnectorSwarm color="#5794F2" />
                   <div className={styles.pipelineStep}>
                     <div
                       className={styles.pipelineStepAccent}
@@ -915,13 +910,7 @@ export function LandingTopBar({
                       </Text>
                     </div>
                   </div>
-                  <div className={styles.pipelineConnector} aria-hidden>
-                    <div className={styles.pipelineConnectorTrack} />
-                    <div
-                      className={cx(styles.pipelineConnectorDot, styles.pipelineConnectorDotDelayed)}
-                      style={{ background: '#B877D9', boxShadow: '0 0 8px 2px rgba(184,119,217,0.4)' }}
-                    />
-                  </div>
+                  <PipelineConnectorSwarm color="#B877D9" delayed />
                   <div className={styles.pipelineStep}>
                     <div
                       className={styles.pipelineStepAccent}
@@ -1297,13 +1286,6 @@ function normalizeToSpineHeights(values: number[], targetCount: number): number[
   return bucketed.map((v) => MIN_H + ((v - minVal) / (maxVal - minVal)) * (MAX_H - MIN_H));
 }
 
-const connectorTravel = keyframes({
-  '0%': { left: -3, opacity: 0 },
-  '15%': { opacity: 1 },
-  '85%': { opacity: 1 },
-  '100%': { left: 'calc(100% - 3px)', opacity: 0 },
-});
-
 function getStyles(theme: GrafanaTheme2) {
   return {
     compactBar: css({
@@ -1652,39 +1634,6 @@ function getStyles(theme: GrafanaTheme2) {
       fontWeight: theme.typography.fontWeightMedium,
       color: theme.colors.text.primary,
       lineHeight: 1.3,
-    }),
-    pipelineConnector: css({
-      label: 'landingTopBar-pipelineConnector',
-      position: 'relative',
-      display: 'flex',
-      alignItems: 'center',
-      alignSelf: 'center',
-      width: 48,
-      height: 2,
-      flexShrink: 0,
-      '@container landing-top-bar (max-width: 900px)': {
-        display: 'none',
-      },
-    }),
-    pipelineConnectorTrack: css({
-      label: 'landingTopBar-pipelineConnectorTrack',
-      position: 'absolute',
-      inset: 0,
-      borderTop: `1px dashed ${theme.isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.15)'}`,
-    }),
-    pipelineConnectorDot: css({
-      label: 'landingTopBar-pipelineConnectorDot',
-      position: 'absolute',
-      width: 6,
-      height: 6,
-      borderRadius: '50%',
-      top: '50%',
-      transform: 'translateY(-50%)',
-      animation: `${connectorTravel} 2.4s ease-in-out infinite`,
-    }),
-    pipelineConnectorDotDelayed: css({
-      label: 'landingTopBar-pipelineConnectorDotDelayed',
-      animationDelay: '1.2s',
     }),
     assistantRowDash: css({
       label: 'landingTopBar-assistantRowDash',
