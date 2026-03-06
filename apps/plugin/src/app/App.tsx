@@ -25,11 +25,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     height: '100%',
     overflow: 'hidden',
   }),
-  fullHeightRouteContainer: css({
-    position: 'relative',
-    height: '100%',
-    overflow: 'hidden',
-  }),
   hidePluginHeader: css({
     '& > [class*="page-header"]': {
       display: 'none',
@@ -109,7 +104,7 @@ export default function App(props: AppRootProps) {
         <Route
           path={ROUTES.PlaygroundSparkles}
           element={
-            <div className={styles.fullHeightRouteContainer}>
+            <div className={styles.conversationsRouteContainer}>
               <PlaygroundSparklesPage />
             </div>
           }
