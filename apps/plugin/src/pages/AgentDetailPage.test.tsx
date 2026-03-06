@@ -329,8 +329,7 @@ describe('AgentDetailPage', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Tools' }));
     expect(await screen.findByText('TOOL TOKENS')).toBeInTheDocument();
     expect(screen.getByLabelText('TOOL TOKENS help')).toBeInTheDocument();
-    expect(screen.getByLabelText('DEFERRED TOKENS help')).toBeInTheDocument();
-    expect(screen.getByLabelText('TOTAL TOOL TOKENS help')).toBeInTheDocument();
+    expect(screen.queryByLabelText('DEFERRED TOKENS help')).not.toBeInTheDocument();
   });
 
   it('excludes deferred tools from tools and total token stats', async () => {
@@ -393,7 +392,25 @@ describe('AgentDetailPage', () => {
     expect(await screen.findByText('TOOL TOKENS')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('10')).toBeInTheDocument();
-    expect(screen.getByText('13')).toBeInTheDocument();
+    expect(screen.queryByText('TOTAL TOOL TOKENS')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^13$/)).not.toBeInTheDocument();
+  });
+
+  it('hides deferred token stat when there are no deferred tools', async () => {
+    const dataSource = createDataSource();
+
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('AGE')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Tools' }));
+    expect(await screen.findByText('TOOL TOKENS')).toBeInTheDocument();
+    expect(screen.queryByText('DEFERRED TOKENS')).not.toBeInTheDocument();
   });
 
   it('defaults to markdown and keeps markdown when tokenize is enabled', async () => {
