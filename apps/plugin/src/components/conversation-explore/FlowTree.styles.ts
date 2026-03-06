@@ -35,7 +35,7 @@ export const getStyles = (theme: GrafanaTheme2) => ({
   toolbarRow: css({
     display: 'flex',
     alignItems: 'center',
-    gap: theme.spacing(0.5),
+    gap: theme.spacing(1),
   }),
   toolbarLabel: css({
     fontSize: 10,

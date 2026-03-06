@@ -1,6 +1,6 @@
 import React from 'react';
 import { cx } from '@emotion/css';
-import { Tooltip, useStyles2 } from '@grafana/ui';
+import { Icon, Tooltip, useStyles2 } from '@grafana/ui';
 import type { GenerationCostResult } from '../../generation/types';
 import { modelAccentColor, resolveModelKey, extractModelFromLabel, type FlowNode } from './types';
 import { getStyles } from './MiniTimeline.styles';
@@ -11,6 +11,7 @@ export type MiniTimelineProps = {
   selectedNodeId: string | null;
   onSelectNode: (node: FlowNode | null) => void;
   generationCosts?: Map<string, GenerationCostResult>;
+  onCollapse?: () => void;
 };
 
 function flattenLeaves(nodes: FlowNode[]): FlowNode[] {
@@ -89,45 +90,61 @@ export default function MiniTimeline({
   selectedNodeId,
   onSelectNode,
   generationCosts,
+  onCollapse,
 }: MiniTimelineProps) {
   const styles = useStyles2(getStyles);
 
-  if (totalDurationMs <= 0) {
+  const hasTimeline = totalDurationMs > 0;
+
+  if (!hasTimeline && !onCollapse) {
     return null;
   }
 
-  const leaves = flattenLeaves(nodes);
+  const leaves = hasTimeline ? flattenLeaves(nodes) : [];
 
   return (
     <div className={styles.container}>
-      <div className={styles.label}>Timeline</div>
-      <div className={styles.track}>
-        {leaves.map((node) => {
-          const left = (node.startMs / totalDurationMs) * 100;
-          const width = Math.max((node.durationMs / totalDurationMs) * 100, 0.5);
-          const color = barColor(node);
+      <div className={styles.header}>
+        <span className={styles.label}>Timeline</span>
+        {onCollapse && (
+          <Tooltip content="Hide sidebar" placement="top">
+            <button type="button" className={styles.collapseButton} onClick={onCollapse} aria-label="Collapse sidebar">
+              <Icon name="angle-left" size="sm" />
+            </button>
+          </Tooltip>
+        )}
+      </div>
+      {hasTimeline && (
+        <>
+          <div className={styles.track}>
+            {leaves.map((node) => {
+              const left = (node.startMs / totalDurationMs) * 100;
+              const width = Math.max((node.durationMs / totalDurationMs) * 100, 0.5);
+              const color = barColor(node);
 
-          return (
-            <Tooltip key={node.id} content={buildTooltip(node, generationCosts)} placement="top">
-              <div
-                className={cx(styles.bar, node.id === selectedNodeId && styles.barSelected)}
-                style={{
-                  left: `${left}%`,
-                  width: `${width}%`,
-                  background: color,
-                }}
-                onClick={() => onSelectNode(node.id === selectedNodeId ? null : node)}
-                role="button"
-                aria-label={`${node.label} ${formatMs(node.durationMs)}`}
-              />
-            </Tooltip>
-          );
-        })}
-      </div>
-      <div className={styles.timeAxis}>
-        <span className={styles.timeTick}>0s</span>
-        <span className={styles.timeTick}>{formatMs(totalDurationMs)}</span>
-      </div>
+              return (
+                <Tooltip key={node.id} content={buildTooltip(node, generationCosts)} placement="top">
+                  <div
+                    className={cx(styles.bar, node.id === selectedNodeId && styles.barSelected)}
+                    style={{
+                      left: `${left}%`,
+                      width: `${width}%`,
+                      background: color,
+                    }}
+                    onClick={() => onSelectNode(node.id === selectedNodeId ? null : node)}
+                    role="button"
+                    aria-label={`${node.label} ${formatMs(node.durationMs)}`}
+                  />
+                </Tooltip>
+              );
+            })}
+          </div>
+          <div className={styles.timeAxis}>
+            <span className={styles.timeTick}>0s</span>
+            <span className={styles.timeTick}>{formatMs(totalDurationMs)}</span>
+          </div>
+        </>
+      )}
     </div>
   );
 }
