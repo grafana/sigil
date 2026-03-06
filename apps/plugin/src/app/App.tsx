@@ -7,6 +7,7 @@ import { Route, Routes, useLocation } from 'react-router-dom';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 
 const LandingPage = React.lazy(() => import('../pages/LandingPage'));
+const PlaygroundSparklesPage = React.lazy(() => import('../pages/PlaygroundSparklesPage'));
 const DashboardPage = React.lazy(() => import('../pages/DashboardPage'));
 const TutorialPage = React.lazy(() => import('../pages/TutorialPage'));
 const ConversationsBrowserPage = React.lazy(() => import('../pages/ConversationsBrowserPage'));
@@ -26,6 +27,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
     '& > [class*="page-header"]': {
       display: 'none',
     },
+  }),
+  fullBleedPageInner: css({
+    padding: '0 !important',
   }),
 });
 
@@ -66,6 +70,7 @@ export default function App(props: AppRootProps) {
     };
   }, [props.meta.name, agentDetailPageNav]);
   const shouldHidePluginHeader = location.pathname.includes(`/${ROUTES.Conversations}`);
+  const shouldUseFullBleedPageInner = location.pathname.includes(`/${ROUTES.PlaygroundSparkles}`);
 
   React.useEffect(() => {
     const pageInner = document.querySelector('[class*="page-inner"]');
@@ -77,15 +82,29 @@ export default function App(props: AppRootProps) {
     } else {
       pageInner.classList.remove(styles.hidePluginHeader);
     }
+    if (shouldUseFullBleedPageInner) {
+      pageInner.classList.add(styles.fullBleedPageInner);
+    } else {
+      pageInner.classList.remove(styles.fullBleedPageInner);
+    }
     return () => {
       pageInner.classList.remove(styles.hidePluginHeader);
+      pageInner.classList.remove(styles.fullBleedPageInner);
     };
-  }, [shouldHidePluginHeader, styles.hidePluginHeader]);
+  }, [shouldHidePluginHeader, shouldUseFullBleedPageInner, styles.hidePluginHeader, styles.fullBleedPageInner]);
 
   return (
     <PluginPage renderTitle={() => <></>} background="canvas" pageNav={pageNav}>
       <Routes>
         <Route path={ROUTES.Root} element={<LandingPage />} />
+        <Route
+          path={ROUTES.PlaygroundSparkles}
+          element={
+            <div className={styles.conversationsRouteContainer}>
+              <PlaygroundSparklesPage />
+            </div>
+          }
+        />
         <Route path={ROUTES.Analytics} element={<DashboardPage />} />
         <Route path={`${ROUTES.Tutorial}/*`} element={<TutorialPage />} />
         <Route

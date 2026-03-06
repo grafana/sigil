@@ -832,16 +832,19 @@ export function LandingTopBar({
                 <div className={styles.heroHeader}>
                   <div className={styles.heroHeaderTitle}>
                     <div className={styles.introducingLabel}>Introducing</div>
-                    <h1 className={styles.productHeading}>Grafana Sigil</h1>
-                  </div>
-                </div>
-                <div>
-                  <div className={styles.heroSubRow}>
-                    <Text color="secondary">Actually useful AI O11y</Text>
+                    <div className={styles.productHeadingRow}>
+                      <h1 className={styles.productHeading}>Grafana Sigil</h1>
+                      <div className={styles.productTagline}>
+                        <Text color="secondary">Actually useful AI O11y</Text>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div className={styles.heroPipeline}>
-                  <div className={styles.pipelineStep}>
+                  <div
+                    className={styles.pipelineStep}
+                    style={{ boxShadow: '0 -6px 18px rgba(87, 148, 242, 0.11), 0 0 6px rgba(87, 148, 242, 0.05)' }}
+                  >
                     <PipelineConnectorSwarm
                       color="#5794F2"
                       mode="section"
@@ -883,7 +886,10 @@ export function LandingTopBar({
                     </div>
                   </div>
                   <PipelineConnectorSwarm color="#5794F2" />
-                  <div className={styles.pipelineStep}>
+                  <div
+                    className={styles.pipelineStep}
+                    style={{ boxShadow: '0 -6px 18px rgba(184, 119, 217, 0.11), 0 0 6px rgba(184, 119, 217, 0.05)' }}
+                  >
                     <PipelineConnectorSwarm
                       color="#B877D9"
                       mode="section"
@@ -925,7 +931,10 @@ export function LandingTopBar({
                     </div>
                   </div>
                   <PipelineConnectorSwarm color="#B877D9" delayed />
-                  <div className={styles.pipelineStep}>
+                  <div
+                    className={styles.pipelineStep}
+                    style={{ boxShadow: '0 -6px 18px rgba(255, 152, 48, 0.11), 0 0 6px rgba(255, 152, 48, 0.05)' }}
+                  >
                     <PipelineConnectorSwarm
                       color="#FF9830"
                       mode="section"
@@ -1419,7 +1428,7 @@ function getStyles(theme: GrafanaTheme2) {
       overflow: 'hidden',
       cursor: 'pointer',
       transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
-      background: theme.colors.background.primary,
+      background: theme.colors.background.secondary,
       '&:hover': {
         borderColor: theme.colors.primary.border,
         boxShadow: theme.shadows.z2,
@@ -1439,8 +1448,8 @@ function getStyles(theme: GrafanaTheme2) {
       alignItems: 'center',
       justifyContent: 'center',
       flex: 1,
-      minHeight: 250,
-      background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+      minHeight: 200,
+      background: theme.colors.background.secondary,
     }),
     videoPlayIcon: css({
       label: 'landingTopBar-videoPlayIcon',
@@ -1506,9 +1515,7 @@ function getStyles(theme: GrafanaTheme2) {
       paddingTop: theme.spacing(2.5),
       paddingLeft: theme.spacing(3),
       paddingRight: theme.spacing(3),
-      background: theme.isDark
-        ? `linear-gradient(145deg, ${theme.colors.background.primary} 0%, rgba(22, 27, 45, 0.95) 50%, ${theme.colors.background.secondary} 100%)`
-        : `linear-gradient(145deg, ${theme.colors.background.primary} 0%, ${theme.colors.background.secondary} 100%)`,
+      background: theme.colors.background.secondary,
       border: `1px solid ${theme.colors.border.weak}`,
       '&::before': {
         content: '""',
@@ -1554,12 +1561,13 @@ function getStyles(theme: GrafanaTheme2) {
       color: '#5794F2',
       padding: 0,
     }),
-    heroSubRow: css({
-      label: 'landingTopBar-heroSubRow',
+    productHeadingRow: css({
+      label: 'landingTopBar-productHeadingRow',
       display: 'flex',
-      alignItems: 'center',
+      alignItems: 'baseline',
+      flexWrap: 'wrap',
       gap: theme.spacing(2),
-      marginTop: '-2px',
+      marginTop: theme.spacing(0.5),
     }),
     githubButtonWrap: css({
       label: 'landingTopBar-githubButtonWrap',
@@ -1592,14 +1600,17 @@ function getStyles(theme: GrafanaTheme2) {
       whiteSpace: 'nowrap',
       color: theme.colors.text.primary,
     }),
+    productTagline: css({
+      label: 'landingTopBar-productTagline',
+      whiteSpace: 'nowrap',
+    }),
     heroPipeline: css({
       label: 'landingTopBar-heroPipeline',
       display: 'flex',
       alignItems: 'stretch',
       gap: 0,
       marginTop: theme.spacing(1.5),
-      flex: 1,
-      minHeight: 0,
+      flex: 'none',
       position: 'relative',
       isolation: 'isolate',
       '@container landing-top-bar (max-width: 900px)': {
@@ -1615,7 +1626,9 @@ function getStyles(theme: GrafanaTheme2) {
       position: 'relative',
       borderRadius: theme.shape.radius.default,
       border: `1px solid ${theme.colors.border.weak}`,
-      background: theme.isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
+      background: theme.isDark ? 'rgba(31, 38, 56, 0.5)' : 'rgba(255, 255, 255, 0.62)',
+      backdropFilter: 'blur(6px) saturate(1.06)',
+      WebkitBackdropFilter: 'blur(6px) saturate(1.06)',
       overflow: 'hidden',
       '& > *': {
         position: 'relative',
