@@ -7,6 +7,7 @@ import { Route, Routes, useLocation } from 'react-router-dom';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 
 const LandingPage = React.lazy(() => import('../pages/LandingPage'));
+const PlaygroundSparklesPage = React.lazy(() => import('../pages/PlaygroundSparklesPage'));
 const DashboardPage = React.lazy(() => import('../pages/DashboardPage'));
 const TutorialPage = React.lazy(() => import('../pages/TutorialPage'));
 const ConversationsBrowserPage = React.lazy(() => import('../pages/ConversationsBrowserPage'));
@@ -90,6 +91,7 @@ export default function App(props: AppRootProps) {
     <PluginPage renderTitle={() => <></>} background="canvas" pageNav={pageNav}>
       <Routes>
         <Route path={ROUTES.Root} element={<LandingPage />} />
+        <Route path={ROUTES.PlaygroundSparkles} element={<PlaygroundSparklesPage />} />
         <Route path={ROUTES.Analytics} element={<DashboardPage />} />
         <Route path={`${ROUTES.Tutorial}/*`} element={<TutorialPage />} />
         <Route
