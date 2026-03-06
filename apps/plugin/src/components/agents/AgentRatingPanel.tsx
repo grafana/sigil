@@ -1100,7 +1100,9 @@ export default function AgentRatingPanel({
                         <div className={styles.suggestionDescriptionRow}>
                           <div className={cx(styles.suggestionDescription, styles.suggestionDescriptionText)}>
                             {isPreviewView ? (
-                              <MarkdownPreview markdown={toSuccinctText(suggestion.description, SUGGESTION_MAX_CHARS)} />
+                              <MarkdownPreview
+                                markdown={toSuccinctText(suggestion.description, SUGGESTION_MAX_CHARS)}
+                              />
                             ) : (
                               toSuccinctText(suggestion.description, SUGGESTION_MAX_CHARS)
                             )}
