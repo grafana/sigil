@@ -197,6 +197,42 @@ describe('PageInsightBar', () => {
     expect(mockGenerate).toHaveBeenCalledTimes(2);
   });
 
+  it('periodic timer does not regenerate when data context is unchanged', () => {
+    jest.useFakeTimers();
+    mockGenerate.mockImplementation(({ onComplete }: { onComplete: (r: string) => void }) => {
+      onComplete('- Initial insight');
+    });
+
+    render(<PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="same data" />);
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+    mockGenerate.mockClear();
+
+    jest.advanceTimersByTime(6 * 60 * 1000);
+    expect(mockGenerate).not.toHaveBeenCalled();
+
+    jest.useRealTimers();
+  });
+
+  it('periodic timer regenerates when data context changed without exact cache', () => {
+    jest.useFakeTimers();
+    mockGenerate.mockImplementation(({ onComplete }: { onComplete: (r: string) => void }) => {
+      onComplete('- Initial insight');
+    });
+
+    const { rerender } = render(
+      <PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="initial data" />
+    );
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+    mockGenerate.mockClear();
+
+    rerender(<PageInsightBar prompt="Analyze this" origin="test-origin" dataContext="changed data" />);
+
+    jest.advanceTimersByTime(6 * 60 * 1000);
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+
+    jest.useRealTimers();
+  });
+
   it('does not regenerate on reload when fallback cache is fresher than 5m', () => {
     mockGenerate.mockImplementation(({ onComplete }: { onComplete: (r: string) => void }) => {
       onComplete('- Fresh insight');

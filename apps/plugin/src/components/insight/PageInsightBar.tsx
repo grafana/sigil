@@ -150,11 +150,13 @@ export function PageInsightBar({
         return;
       }
       const cacheKey = buildCacheKey(prompt, origin, systemPrompt, dataContext);
-      const fallbackCacheKey = buildFallbackCacheKey(prompt, origin, systemPrompt);
       const exactCached = readCachedInsight(cacheKey);
+      if (exactCached) {
+        return;
+      }
+      const fallbackCacheKey = buildFallbackCacheKey(prompt, origin, systemPrompt);
       const fallbackCached = readCachedInsight(fallbackCacheKey);
-      const latestCached = pickNewestCachedInsight(exactCached, fallbackCached);
-      const cacheAgeMs = latestCached ? Date.now() - latestCached.generatedAt : Number.POSITIVE_INFINITY;
+      const cacheAgeMs = fallbackCached ? Date.now() - fallbackCached.generatedAt : Number.POSITIVE_INFINITY;
       if (cacheAgeMs >= REFRESH_INTERVAL_MS) {
         runGenerate(dataContext, cacheKey, fallbackCacheKey);
       }
