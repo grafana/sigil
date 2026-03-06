@@ -392,7 +392,13 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
               },
             })
           : buildConversationStats(
-              await fetchRangeConversations(dataSource, previousFromISO, previousToISO, filterString, abortController.signal),
+              await fetchRangeConversations(
+                dataSource,
+                previousFromISO,
+                previousToISO,
+                filterString,
+                abortController.signal
+              ),
               timeRange.from.valueOf()
             );
         if (requestVersionRef.current !== requestVersion) {
