@@ -39,13 +39,40 @@ type LoaderProps = {
 
 export const Loader = ({ showText = true, lines, align = 'center' }: LoaderProps) => {
   const styles = useStyles2(getStyles);
+  const activeLines = useMemo(() => (lines && lines.length > 0 ? lines : DEFAULT_TYPEWRITER_LINES), [lines]);
+  const typewriterKey = useMemo(() => activeLines.join('\n'), [activeLines]);
+
+  return (
+    <div className={align === 'left' ? styles.rootLeft : styles.root}>
+      <div className={styles.container} role="progressbar" aria-label="loading conversation">
+        <span className={styles.bar}></span>
+        <span className={styles.bar}></span>
+        <span className={styles.bar}></span>
+        <span className={styles.bar}></span>
+        <span className={styles.bar}></span>
+        <span className={styles.particle}></span>
+        <span className={styles.particle}></span>
+        <span className={styles.particle}></span>
+        <span className={styles.particle}></span>
+        <span className={styles.particle}></span>
+      </div>
+      {showText ? <Typewriter key={typewriterKey} lines={activeLines} /> : null}
+    </div>
+  );
+};
+
+type TypewriterProps = {
+  lines: string[];
+};
+
+const Typewriter = ({ lines }: TypewriterProps) => {
+  const styles = useStyles2(getStyles);
   const [lineIndex, setLineIndex] = useState(0);
   const [charCount, setCharCount] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
-  const activeLines = useMemo(() => (lines && lines.length > 0 ? lines : DEFAULT_TYPEWRITER_LINES), [lines]);
-  const normalizedLineIndex = lineIndex % activeLines.length;
+  const normalizedLineIndex = lineIndex % lines.length;
 
-  const currentLine = useMemo(() => activeLines[normalizedLineIndex] ?? '', [activeLines, normalizedLineIndex]);
+  const currentLine = useMemo(() => lines[normalizedLineIndex] ?? '', [lines, normalizedLineIndex]);
 
   useEffect(() => {
     const atLineEnd = charCount >= currentLine.length;
@@ -69,7 +96,7 @@ export const Loader = ({ showText = true, lines, align = 'center' }: LoaderProps
         }
 
         setIsDeleting(false);
-        setLineIndex((index) => (index + 1) % activeLines.length);
+        setLineIndex((index) => (index + 1) % lines.length);
       },
       atLineEnd && !isDeleting
         ? FULL_LINE_PAUSE_MS
@@ -83,28 +110,12 @@ export const Loader = ({ showText = true, lines, align = 'center' }: LoaderProps
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [activeLines.length, charCount, currentLine.length, isDeleting]);
+  }, [lines.length, charCount, currentLine.length, isDeleting]);
 
   return (
-    <div className={align === 'left' ? styles.rootLeft : styles.root}>
-      <div className={styles.container} role="progressbar" aria-label="loading conversation">
-        <span className={styles.bar}></span>
-        <span className={styles.bar}></span>
-        <span className={styles.bar}></span>
-        <span className={styles.bar}></span>
-        <span className={styles.bar}></span>
-        <span className={styles.particle}></span>
-        <span className={styles.particle}></span>
-        <span className={styles.particle}></span>
-        <span className={styles.particle}></span>
-        <span className={styles.particle}></span>
-      </div>
-      {showText ? (
-        <div className={styles.typewriterRow} aria-live="polite">
-          <span>{currentLine.slice(0, charCount)}</span>
-          <span className={styles.cursor}>|</span>
-        </div>
-      ) : null}
+    <div className={styles.typewriterRow} aria-live="polite">
+      <span>{currentLine.slice(0, charCount)}</span>
+      <span className={styles.cursor}>|</span>
     </div>
   );
 };

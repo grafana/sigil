@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import ConversationsBrowserPage from './ConversationsBrowserPage';
 import ConversationPage from './ConversationPage';
@@ -127,7 +127,64 @@ function createDataSource(): MockConversationsDataSource {
     }),
     getSearchTags: jest.fn(async (_from: string, _to: string) => []),
     getSearchTagValues: jest.fn(async (_tag: string, _from: string, _to: string) => []),
+    getConversationStats: jest.fn(async (_request) => ({
+      totalConversations: 0,
+      totalTokens: 0,
+      avgCallsPerConversation: 0,
+      activeLast7d: 0,
+      ratedConversations: 0,
+      badRatedPct: 0,
+    })),
   };
+}
+
+function createStreamingDataSource(): MockConversationsDataSource {
+  const currentConversations = [
+    {
+      conversation_id: 'conv-stream-b',
+      generation_count: 3,
+      first_generation_at: '2026-02-01T10:00:00Z',
+      last_generation_at: '2026-02-01T10:00:00Z',
+      models: [],
+      agents: [],
+      error_count: 0,
+      has_errors: false,
+      trace_ids: [],
+      annotation_count: 0,
+    },
+    {
+      conversation_id: 'conv-stream-a',
+      generation_count: 1,
+      first_generation_at: '2026-02-02T10:00:00Z',
+      last_generation_at: '2026-02-02T10:00:00Z',
+      models: [],
+      agents: [],
+      error_count: 0,
+      has_errors: false,
+      trace_ids: [],
+      annotation_count: 0,
+    },
+  ];
+
+  const dataSource = createDataSource();
+  dataSource.searchConversations.mockReset();
+  dataSource.searchConversations.mockResolvedValue({
+    conversations: [],
+    next_cursor: '',
+    has_more: false,
+  });
+  dataSource.streamSearchConversations = jest
+    .fn()
+    .mockImplementationOnce(async (_request, options) => {
+      options.onResults([currentConversations[0]]);
+      options.onResults([currentConversations[1]]);
+      options.onComplete({ next_cursor: '', has_more: false });
+    })
+    .mockImplementationOnce(async (_request, options) => {
+      options.onComplete({ next_cursor: '', has_more: false });
+    });
+
+  return dataSource;
 }
 
 const mockDashboardDataSource: DashboardDataSource = {
@@ -173,7 +230,8 @@ describe('ConversationsBrowserPage', () => {
     const dataSource = createDataSource();
     const { router } = renderPage(dataSource);
 
-    await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalledTimes(1));
+    expect(dataSource.getConversationStats).toHaveBeenCalledTimes(1);
     expect(dataSource.searchConversations.mock.calls[0][0].select).toContain('span.sigil.sdk.name');
     expect(dataSource.searchConversations.mock.calls[0][0].select).toContain('span.gen_ai.usage.input_tokens');
     expect(dataSource.searchConversations.mock.calls[0][0].select).toContain('span.gen_ai.usage.output_tokens');
@@ -231,5 +289,114 @@ describe('ConversationsBrowserPage', () => {
     expect(router.state.location.search).toContain('conversationTitle=Incident%3A+authentication+failures');
     expect(await screen.findByText('Incident: authentication failures')).toBeInTheDocument();
     expect(screen.getByText('Conversation').parentElement).toHaveTextContent('conv-b');
+  });
+
+  it('uses streaming search when the data source provides it', async () => {
+    const dataSource = createStreamingDataSource();
+    renderPage(dataSource);
+
+    expect(await screen.findByLabelText('select conversation conv-stream-a')).toBeInTheDocument();
+    await waitFor(() => expect(dataSource.streamSearchConversations).toHaveBeenCalledTimes(1));
+    expect(dataSource.getConversationStats).toHaveBeenCalledTimes(1);
+    expect(dataSource.searchConversations).not.toHaveBeenCalled();
+  });
+
+  it('starts previous-window stats only after the first current stream batch', async () => {
+    let resolveFirstBatch: (() => void) | undefined;
+    const firstBatchReady = new Promise<void>((resolve) => {
+      resolveFirstBatch = resolve;
+    });
+    let resolveCurrent: (() => void) | undefined;
+    const currentDone = new Promise<void>((resolve) => {
+      resolveCurrent = resolve;
+    });
+    let resolvePreviousStats: (() => void) | undefined;
+    const previousStatsDone = new Promise<void>((resolve) => {
+      resolvePreviousStats = resolve;
+    });
+
+    const dataSource = createDataSource();
+    dataSource.searchConversations.mockReset();
+    dataSource.searchConversations.mockResolvedValue({
+      conversations: [],
+      next_cursor: '',
+      has_more: false,
+    });
+    dataSource.streamSearchConversations = jest.fn().mockImplementationOnce(async (_request, options) => {
+      await firstBatchReady;
+      options.onResults([
+        {
+          conversation_id: 'conv-live',
+          generation_count: 2,
+          first_generation_at: '2026-02-02T09:59:00Z',
+          last_generation_at: '2026-02-02T10:00:00Z',
+          models: [],
+          agents: [],
+          error_count: 0,
+          has_errors: false,
+          trace_ids: [],
+          annotation_count: 0,
+        },
+      ]);
+      await currentDone;
+      options.onComplete({ next_cursor: '', has_more: false });
+    });
+    dataSource.getConversationStats!.mockImplementationOnce(async (_request) => {
+      await previousStatsDone;
+      return {
+        totalConversations: 12,
+        totalTokens: 2400,
+        avgCallsPerConversation: 2,
+        activeLast7d: 12,
+        ratedConversations: 3,
+        badRatedPct: 33,
+      };
+    });
+
+    renderPage(dataSource);
+
+    await waitFor(() => expect(dataSource.streamSearchConversations).toHaveBeenCalledTimes(1));
+    expect(dataSource.getConversationStats).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveFirstBatch?.();
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByLabelText('select conversation conv-live')).toBeInTheDocument();
+    expect(screen.queryByLabelText('loading conversations')).not.toBeInTheDocument();
+    expect(screen.getByText('Loaded 1 conversations')).toBeInTheDocument();
+    expect(dataSource.getConversationStats).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveCurrent?.();
+      resolvePreviousStats?.();
+      await Promise.resolve();
+    });
+  });
+
+  it('aborts in-flight stream searches on unmount', async () => {
+    let capturedSignal: AbortSignal | undefined;
+    const dataSource = createDataSource();
+    dataSource.searchConversations.mockReset();
+    dataSource.searchConversations.mockResolvedValue({
+      conversations: [],
+      next_cursor: '',
+      has_more: false,
+    });
+    dataSource.streamSearchConversations = jest.fn().mockImplementation(async (_request, options) => {
+      capturedSignal = options.signal;
+      await new Promise(() => {});
+    });
+
+    const rendered = renderPage(dataSource);
+
+    await waitFor(() => expect(dataSource.streamSearchConversations).toHaveBeenCalledTimes(1));
+    expect(capturedSignal).toBeDefined();
+    expect(capturedSignal?.aborted).toBe(false);
+
+    rendered.unmount();
+
+    expect(capturedSignal?.aborted).toBe(true);
   });
 });

@@ -29,6 +29,7 @@ describe('ToolsPanel', () => {
     expect(screen.getByText('Execution mode:')).toBeInTheDocument();
     expect(screen.getByText('Deferred')).toBeInTheDocument();
     expect(screen.getByLabelText('deferred tool')).toBeInTheDocument();
+    expect(screen.queryByText(/^DEFERRED$/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /select tool sync_lookup/i }));
 

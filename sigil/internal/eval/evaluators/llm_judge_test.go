@@ -127,7 +127,7 @@ func TestLLMJudgeEvaluatorUsesLegacyDefaultPrompts(t *testing.T) {
 				t.Fatalf("evaluate llm judge: %v", err)
 			}
 
-			wantSystemPrompt := "You are an evaluation judge. For number scores, use a 1-10 integer scale (1 = very poor, 10 = excellent) unless the output key description specifies otherwise."
+			wantSystemPrompt := defaultLLMJudgeSystemPrompt
 			if gotSystemPrompt != wantSystemPrompt {
 				t.Fatalf("expected default system prompt, got %q", gotSystemPrompt)
 			}

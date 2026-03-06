@@ -11,7 +11,7 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     alignItems: 'center',
     gap: theme.spacing(2),
-    padding: `${theme.spacing(1.5)} ${theme.spacing(2)}`,
+    padding: `${theme.spacing(1.5)} 20px`,
     borderBottom: `1px solid ${theme.colors.border.weak}`,
     background: theme.colors.background.primary,
     flexShrink: 0,

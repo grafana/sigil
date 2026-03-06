@@ -273,6 +273,29 @@ describe('AgentRatingPanel', () => {
     expect(screen.queryByRole('dialog', { name: /rating summary/i })).not.toBeInTheDocument();
   });
 
+  it('keeps findings scrollable while actions stay outside the findings region', () => {
+    const completed = createCompletedRating('Short summary');
+    completed.suggestions = Array.from({ length: 12 }, (_, index) => ({
+      severity: index < 4 ? 'high' : index < 8 ? 'medium' : 'low',
+      category: 'tools',
+      title: `Suggestion ${index + 1}`,
+      description: `Detailed recommendation ${index + 1} for improving tool routing and prompt clarity.`,
+    }));
+    const dataSource = createDataSource({});
+
+    renderPanel(
+      <AgentRatingPanel agentName="assistant" version="sha256:test" dataSource={dataSource} initialResult={completed} />
+    );
+
+    const findings = screen.getByLabelText('Agent rating findings');
+    const actions = screen.getByLabelText('Agent rating actions');
+
+    expect(within(findings).queryByRole('button', { name: /rewrite prompt/i })).not.toBeInTheDocument();
+    expect(within(findings).queryByRole('button', { name: /re-run/i })).not.toBeInTheDocument();
+    expect(within(actions).getByRole('button', { name: /rewrite prompt/i })).toBeInTheDocument();
+    expect(within(actions).getByRole('button', { name: /re-run/i })).toBeInTheDocument();
+  });
+
   it('opens assistant from summary modal explain action', async () => {
     const completed = createCompletedRating('Prompt is mostly clear but tool boundaries are vague.');
     completed.suggestions = [

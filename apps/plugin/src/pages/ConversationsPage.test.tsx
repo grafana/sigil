@@ -61,15 +61,24 @@ function createDataSource(overrides?: Partial<MockConversationsDataSource>): Moc
 
   const defaultTags: SearchTag[] = [{ key: 'model', scope: 'well-known', description: 'Model name' }];
 
-  return {
+  const dataSource = {
     listConversations: jest.fn(async () => ({ items: [] })),
     searchConversations: jest.fn(async (_request: ConversationSearchRequest) => buildSearchResponse([])),
+    streamSearchConversations: jest.fn(async (request, options) => {
+      const response = await dataSource.searchConversations(request);
+      options.onResults(response.conversations ?? []);
+      options.onComplete({
+        next_cursor: response.next_cursor,
+        has_more: response.has_more,
+      });
+    }),
     getConversationDetail: jest.fn(async (_conversationID: string) => defaultConversationDetail),
     getGeneration: jest.fn(async (_generationID: string) => ({ generation_id: 'unused', conversation_id: 'unused' })),
     getSearchTags: jest.fn(async (_from: string, _to: string) => defaultTags),
     getSearchTagValues: jest.fn(async (_tag: string, _from: string, _to: string) => ['gpt-4o']),
     ...overrides,
   };
+  return dataSource;
 }
 
 function createDeferred<T>() {
@@ -206,6 +215,80 @@ describe('ConversationsPage', () => {
 
     expect(screen.queryByLabelText('select conversation conv-slow')).not.toBeInTheDocument();
     expect(dataSource.getConversationDetail).not.toHaveBeenCalledWith('conv-slow');
+  });
+
+  it('renders streamed results before completion and loads first detail immediately', async () => {
+    const completeSearch = createDeferred<void>();
+    const dataSource = createDataSource({
+      streamSearchConversations: jest.fn(async (_request, options) => {
+        options.onResults([makeConversation('conv-stream-1')]);
+        await completeSearch.promise;
+        options.onResults([makeConversation('conv-stream-2')]);
+        options.onComplete({ next_cursor: 'cursor-2', has_more: true });
+      }),
+    });
+
+    render(
+      <MemoryRouter>
+        <ConversationsPage dataSource={dataSource} />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByLabelText('apply filters'));
+
+    expect(await screen.findByLabelText('select conversation conv-stream-1')).toBeInTheDocument();
+    await waitFor(() => expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-stream-1'));
+    expect(screen.queryByLabelText('select conversation conv-stream-2')).not.toBeInTheDocument();
+
+    await act(async () => {
+      completeSearch.resolve();
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByLabelText('select conversation conv-stream-2')).toBeInTheDocument();
+    expect(await screen.findByLabelText('load more conversations')).toBeInTheDocument();
+  });
+
+  it('rolls back partial append results and preserves pagination when streaming load-more fails', async () => {
+    const dataSource = createDataSource({
+      searchConversations: jest.fn(async (_request: ConversationSearchRequest) =>
+        buildSearchResponse([makeConversation('conv-1')], 'cursor-1', true)
+      ),
+      streamSearchConversations: jest
+        .fn()
+        .mockImplementationOnce(async (_request, options) => {
+          options.onResults([makeConversation('conv-1')]);
+          options.onComplete({ next_cursor: 'cursor-1', has_more: true });
+        })
+        .mockImplementationOnce(async (_request, options) => {
+          options.onResults([makeConversation('conv-2')]);
+          throw new Error('stream failed');
+        })
+        .mockImplementationOnce(async (_request, options) => {
+          options.onResults([makeConversation('conv-3')]);
+          options.onComplete({ next_cursor: '', has_more: false });
+        }),
+    });
+
+    render(
+      <MemoryRouter>
+        <ConversationsPage dataSource={dataSource} />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByLabelText('apply filters'));
+    expect(await screen.findByLabelText('select conversation conv-1')).toBeInTheDocument();
+    expect(await screen.findByLabelText('load more conversations')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('load more conversations'));
+
+    expect(await screen.findByText(/stream failed/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText('select conversation conv-2')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('load more conversations')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('load more conversations'));
+    expect(await screen.findByLabelText('select conversation conv-3')).toBeInTheDocument();
+    expect(screen.queryByLabelText('load more conversations')).not.toBeInTheDocument();
   });
 
   it('keeps latest tag suggestions when older tag request resolves last', async () => {

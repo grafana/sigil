@@ -20,6 +20,7 @@ export type TopStatProps = {
   to?: string;
   linkLabel?: string;
   helpTooltip?: string | React.ReactElement;
+  rightAlignContent?: boolean;
 };
 
 const DEFAULT_COMPARISON_LABEL = 'one hour ago';
@@ -39,6 +40,7 @@ export function TopStat({
   to,
   linkLabel,
   helpTooltip,
+  rightAlignContent = false,
 }: TopStatProps) {
   const styles = useStyles2(getStyles);
 
@@ -79,11 +81,20 @@ export function TopStat({
   }
 
   return (
-    <div className={cx(styles.topStat, compact && styles.topStatCompact)}>
-      <div className={styles.topStatLabelRow}>
-        <span className={styles.topStatLabelGroup}>
+    <div
+      className={cx(styles.topStat, compact && styles.topStatCompact, rightAlignContent && styles.topStatRightAligned)}
+    >
+      <div className={cx(styles.topStatLabelRow, rightAlignContent && styles.topStatLabelRowRightAligned)}>
+        <span className={cx(styles.topStatLabelGroup, rightAlignContent && styles.topStatLabelGroupRightAligned)}>
+          {helpTooltip && rightAlignContent && (
+            <Tooltip content={helpTooltip} placement="top">
+              <span className={styles.topStatHelpIcon} aria-label={`${label} help`}>
+                <Icon name="info-circle" size="sm" />
+              </span>
+            </Tooltip>
+          )}
           <span className={cx(styles.topStatLabel, compact && styles.topStatLabelCompact)}>{label}</span>
-          {helpTooltip && (
+          {helpTooltip && !rightAlignContent && (
             <Tooltip content={helpTooltip} placement="top">
               <span className={styles.topStatHelpIcon} aria-label={`${label} help`}>
                 <Icon name="info-circle" size="sm" />
@@ -97,12 +108,19 @@ export function TopStat({
           </Link>
         )}
       </div>
-      <div className={cx(styles.topStatRow, compact && styles.topStatRowCompact)}>
+      <div
+        className={cx(
+          styles.topStatRow,
+          compact && styles.topStatRowCompact,
+          rightAlignContent && styles.topStatRowRightAligned
+        )}
+      >
         <span
           className={cx(
             styles.topStatValue,
             compact && styles.topStatValueCompact,
-            normalFontSize && styles.topStatValueNormalFont
+            normalFontSize && styles.topStatValueNormalFont,
+            rightAlignContent && styles.topStatValueRightAligned
           )}
         >
           {loading ? '–' : (displayValue ?? formatStatValue(value, unit))}
@@ -123,6 +141,10 @@ function getStyles(theme: GrafanaTheme2) {
     topStatCompact: css({
       gap: theme.spacing(0.75),
     }),
+    topStatRightAligned: css({
+      alignItems: 'flex-end',
+      textAlign: 'right',
+    }),
     topStatLabelRow: css({
       display: 'flex',
       alignItems: 'center',
@@ -130,11 +152,17 @@ function getStyles(theme: GrafanaTheme2) {
       gap: theme.spacing(1),
       minHeight: theme.spacing(3),
     }),
+    topStatLabelRowRightAligned: css({
+      justifyContent: 'flex-end',
+    }),
     topStatLabelGroup: css({
       display: 'inline-flex',
       alignItems: 'center',
       gap: theme.spacing(0.5),
       minWidth: 0,
+    }),
+    topStatLabelGroupRightAligned: css({
+      justifyContent: 'flex-end',
     }),
     topStatHelpIcon: css({
       display: 'inline-flex',
@@ -173,6 +201,9 @@ function getStyles(theme: GrafanaTheme2) {
       alignItems: 'center',
       gap: theme.spacing(1),
     }),
+    topStatRowRightAligned: css({
+      justifyContent: 'flex-end',
+    }),
     topStatRowCompact: css({
       gap: theme.spacing(0.5),
     }),
@@ -189,6 +220,9 @@ function getStyles(theme: GrafanaTheme2) {
     topStatValueNormalFont: css({
       fontSize: theme.typography.body.fontSize,
       lineHeight: 1.3,
+    }),
+    topStatValueRightAligned: css({
+      textAlign: 'right',
     }),
     changeBadge: css({
       display: 'inline-flex',

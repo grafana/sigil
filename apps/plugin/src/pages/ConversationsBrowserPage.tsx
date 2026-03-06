@@ -5,7 +5,7 @@ import { Alert, Select, useStyles2 } from '@grafana/ui';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
 import { buildConversationSearchFilter } from '../conversation/filters';
-import type { ConversationSearchResult } from '../conversation/types';
+import type { ConversationSearchResult, ConversationStatsResponse } from '../conversation/types';
 import { type DashboardDataSource, defaultDashboardDataSource } from '../dashboard/api';
 import { type ConversationOrderBy, conversationOrderByLabel, CONVERSATION_ORDER_BY_VALUES } from '../dashboard/types';
 import { useFilterUrlState } from '../hooks/useFilterUrlState';
@@ -19,6 +19,7 @@ import ConversationListPanel from '../components/conversations/ConversationListP
 import { ConversationTimelineHistogram } from '../components/conversations/ConversationTimelineHistogram';
 import { buildConversationExploreRoute, ROUTES } from '../constants';
 import { PageInsightBar } from '../components/insight/PageInsightBar';
+import { isAbortError } from '../utils/http';
 
 export type ConversationsBrowserPageProps = {
   dataSource?: ConversationsDataSource;
@@ -43,13 +44,15 @@ function getConversationTotalTokens(conversation: ConversationSearchResult): num
   return inputNum + outputNum;
 }
 
-type ConversationStats = {
-  totalConversations: number;
-  totalTokens: number;
-  avgCallsPerConversation: number;
-  activeLast7d: number;
-  ratedConversations: number;
-  badRatedPct: number;
+type ConversationStats = ConversationStatsResponse;
+
+const EMPTY_CONVERSATION_STATS: ConversationStats = {
+  totalConversations: 0,
+  totalTokens: 0,
+  avgCallsPerConversation: 0,
+  activeLast7d: 0,
+  ratedConversations: 0,
+  badRatedPct: 0,
 };
 
 function sortConversations(
@@ -78,14 +81,16 @@ async function fetchRangeConversations(
   dataSource: ConversationsDataSource,
   fromISO: string,
   toISO: string,
-  filterString: string
+  filterString: string,
+  signal?: AbortSignal,
+  onBatch?: (batch: ConversationSearchResult[]) => void
 ): Promise<ConversationSearchResult[]> {
   let cursor = '';
-  let hasMore = true;
   const conversations: ConversationSearchResult[] = [];
 
-  while (hasMore) {
-    const response = await dataSource.searchConversations({
+  while (true) {
+    signal?.throwIfAborted();
+    const request = {
       filters: filterString,
       select: DEFAULT_SEARCH_SELECT_FIELDS,
       time_range: {
@@ -94,10 +99,38 @@ async function fetchRangeConversations(
       },
       page_size: 100,
       cursor,
-    });
-    conversations.push(...(response.conversations ?? []));
+    };
+
+    if (dataSource.streamSearchConversations) {
+      let nextCursor = '';
+      let hasMore = false;
+      await dataSource.streamSearchConversations(request, {
+        signal,
+        onResults(batch) {
+          const safeBatch = batch ?? [];
+          conversations.push(...safeBatch);
+          onBatch?.(safeBatch);
+        },
+        onComplete(response) {
+          nextCursor = response.next_cursor ?? '';
+          hasMore = Boolean(response.has_more && nextCursor.length > 0);
+        },
+      });
+      if (!hasMore) {
+        break;
+      }
+      cursor = nextCursor;
+      continue;
+    }
+
+    const response = await dataSource.searchConversations(request);
+    const batch = response.conversations ?? [];
+    conversations.push(...batch);
+    onBatch?.(batch);
     cursor = response.next_cursor ?? '';
-    hasMore = Boolean(response.has_more && cursor.length > 0);
+    if (!response.has_more || cursor.length === 0) {
+      break;
+    }
   }
 
   return conversations;
@@ -143,11 +176,17 @@ const getStyles = (theme: GrafanaTheme2) => ({
     position: 'absolute',
     inset: 0,
     display: 'grid',
-    gridTemplateRows: 'auto auto auto minmax(0, 1fr)',
+    gridTemplateRows: 'auto minmax(0, 1fr)',
     gap: theme.spacing(1),
     minHeight: 0,
     overflow: 'hidden',
     overscrollBehavior: 'none' as const,
+  }),
+  topSection: css({
+    label: 'conversationsBrowserPage-topSection',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(1),
   }),
   insightRow: css({
     label: 'conversationsBrowserPage-insightRow',
@@ -156,7 +195,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     label: 'conversationsBrowserPage-summarySection',
     borderBottom: `1px solid ${theme.colors.border.weak}`,
     background: theme.colors.background.primary,
-    padding: theme.spacing(0, 2, 0),
+    padding: 0,
     boxShadow: 'inset 0 8px 8px -8px rgba(0, 0, 0, 0.22)',
     flex: '0 0 auto',
   }),
@@ -164,14 +203,22 @@ const getStyles = (theme: GrafanaTheme2) => ({
     label: 'conversationsBrowserPage-controlsRow',
     margin: theme.spacing(0.5, 0, 0, 0),
     width: '100%',
-    padding: theme.spacing(1, 0),
+    padding: theme.spacing(1, 2),
     boxShadow: 'inset 0 10px 10px -10px rgba(0, 0, 0, 0.3)',
   }),
   statsGrid: css({
     label: 'conversationsBrowserPage-statsGrid',
     display: 'flex',
+    flexWrap: 'wrap' as const,
     gap: theme.spacing(4),
-    padding: theme.spacing(1.5, 0),
+    padding: `${theme.spacing(1.5)} 20px`,
+    minWidth: 0,
+  }),
+  progressRow: css({
+    label: 'conversationsBrowserPage-progressRow',
+    padding: theme.spacing(0, 0, 1),
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.bodySmall.fontSize,
   }),
   errorAlert: css({
     label: 'conversationsBrowserPage-errorAlert',
@@ -245,10 +292,14 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   );
 
   const [rawConversations, setRawConversations] = useState<ConversationSearchResult[]>([]);
-  const [previousConversations, setPreviousConversations] = useState<ConversationSearchResult[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [previousConversationStats, setPreviousConversationStats] =
+    useState<ConversationStats>(EMPTY_CONVERSATION_STATS);
+  const [loadingCurrent, setLoadingCurrent] = useState<boolean>(true);
+  const [streamingCurrent, setStreamingCurrent] = useState<boolean>(true);
+  const [loadingPrevious, setLoadingPrevious] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const requestVersionRef = useRef<number>(0);
+  const loadAbortControllerRef = useRef<AbortController | null>(null);
 
   const filterString = useMemo(() => buildConversationSearchFilter(filters), [filters]);
 
@@ -257,53 +308,144 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   const loadConversations = useCallback(async (): Promise<void> => {
     requestVersionRef.current += 1;
     const requestVersion = requestVersionRef.current;
-    setLoading(true);
+    loadAbortControllerRef.current?.abort();
+    const abortController = new AbortController();
+    loadAbortControllerRef.current = abortController;
+    let releasePreviousStats: (() => void) | undefined;
+    const previousStatsReady = new Promise<void>((resolve) => {
+      releasePreviousStats = resolve;
+    });
+    setLoadingCurrent(true);
+    setStreamingCurrent(true);
+    setLoadingPrevious(true);
     setErrorMessage('');
-    try {
-      const currentFromMs = timeRange.from.valueOf();
-      const currentToMs = timeRange.to.valueOf();
-      const windowMs = currentToMs - currentFromMs;
-      const previousFromISO = dateTime(currentFromMs - windowMs).toISOString();
-      const previousToISO = dateTime(currentToMs - windowMs).toISOString();
-      const [results, previousRangeConversations] = await Promise.all([
-        fetchRangeConversations(dataSource, timeRange.from.toISOString(), timeRange.to.toISOString(), filterString),
-        fetchRangeConversations(dataSource, previousFromISO, previousToISO, filterString),
-      ]);
-      if (requestVersionRef.current !== requestVersion) {
-        return;
+    setRawConversations([]);
+    setPreviousConversationStats(EMPTY_CONVERSATION_STATS);
+
+    const currentFromMs = timeRange.from.valueOf();
+    const currentToMs = timeRange.to.valueOf();
+    const windowMs = currentToMs - currentFromMs;
+    const previousFromISO = dateTime(currentFromMs - windowMs).toISOString();
+    const previousToISO = dateTime(currentToMs - windowMs).toISOString();
+
+    void (async () => {
+      try {
+        let sawBatch = false;
+        const results = await fetchRangeConversations(
+          dataSource,
+          timeRange.from.toISOString(),
+          timeRange.to.toISOString(),
+          filterString,
+          abortController.signal,
+          (batch) => {
+            if (requestVersionRef.current !== requestVersion || batch.length === 0) {
+              return;
+            }
+            sawBatch = true;
+            releasePreviousStats?.();
+            releasePreviousStats = undefined;
+            setRawConversations((current) => [...current, ...batch]);
+            setLoadingCurrent(false);
+          }
+        );
+        if (requestVersionRef.current !== requestVersion) {
+          return;
+        }
+        if (!sawBatch) {
+          setRawConversations(results);
+        }
+      } catch (error) {
+        if (requestVersionRef.current !== requestVersion || isAbortError(error)) {
+          return;
+        }
+        setErrorMessage(error instanceof Error ? error.message : 'failed to load conversations');
+        setRawConversations([]);
+      } finally {
+        releasePreviousStats?.();
+        releasePreviousStats = undefined;
+        if (requestVersionRef.current !== requestVersion) {
+          return;
+        }
+        if (loadAbortControllerRef.current === abortController) {
+          loadAbortControllerRef.current = null;
+        }
+        setLoadingCurrent(false);
+        setStreamingCurrent(false);
       }
-      setRawConversations(results);
-      setPreviousConversations(previousRangeConversations);
-    } catch (error) {
-      if (requestVersionRef.current !== requestVersion) {
-        return;
+    })();
+
+    void (async () => {
+      try {
+        await previousStatsReady;
+        if (requestVersionRef.current !== requestVersion) {
+          return;
+        }
+        const stats = dataSource.getConversationStats
+          ? await dataSource.getConversationStats({
+              filters: filterString,
+              time_range: {
+                from: previousFromISO,
+                to: previousToISO,
+              },
+            })
+          : buildConversationStats(
+              await fetchRangeConversations(
+                dataSource,
+                previousFromISO,
+                previousToISO,
+                filterString,
+                abortController.signal
+              ),
+              timeRange.from.valueOf()
+            );
+        if (requestVersionRef.current !== requestVersion) {
+          return;
+        }
+        setPreviousConversationStats(stats);
+      } catch (error) {
+        if (requestVersionRef.current !== requestVersion || isAbortError(error)) {
+          return;
+        }
+        setErrorMessage((current) =>
+          current.length > 0 ? current : error instanceof Error ? error.message : 'failed to load conversations'
+        );
+        setPreviousConversationStats(EMPTY_CONVERSATION_STATS);
+      } finally {
+        if (requestVersionRef.current !== requestVersion) {
+          return;
+        }
+        setLoadingPrevious(false);
       }
-      setErrorMessage(error instanceof Error ? error.message : 'failed to load conversations');
-      setRawConversations([]);
-      setPreviousConversations([]);
-    } finally {
-      if (requestVersionRef.current !== requestVersion) {
-        return;
-      }
-      setLoading(false);
-    }
+    })();
   }, [dataSource, timeRange, filterString]);
 
   useEffect(() => {
     void loadConversations();
   }, [loadConversations]);
 
+  useEffect(() => {
+    return () => {
+      loadAbortControllerRef.current?.abort();
+    };
+  }, []);
+
   const conversationStats = useMemo(
     () => buildConversationStats(conversations, timeRange.to.valueOf()),
     [conversations, timeRange]
   );
-  const previousConversationStats = useMemo(
-    () => buildConversationStats(previousConversations, timeRange.from.valueOf()),
-    [previousConversations, timeRange]
-  );
+
+  const loadingDisplayedCurrentStats = loadingCurrent && conversations.length === 0;
+
+  const loadedConversationCount = conversations.length;
+  const currentConversationProgress = useMemo(() => {
+    if (!streamingCurrent) {
+      return '';
+    }
+    return `Loaded ${loadedConversationCount} conversations`;
+  }, [loadedConversationCount, streamingCurrent]);
 
   const conversationInsightDataContext = useMemo(() => {
-    if (loading || conversations.length === 0) {
+    if (loadingCurrent || streamingCurrent || loadingPrevious || conversations.length === 0) {
       return null;
     }
     const s = conversationStats;
@@ -322,7 +464,7 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
       `Unique models: ${[...modelSet].join(', ') || 'none'}`,
       `Unique providers: ${[...providerSet].join(', ') || 'none'}`,
     ].join('\n');
-  }, [loading, conversations, conversationStats, previousConversationStats]);
+  }, [loadingCurrent, streamingCurrent, loadingPrevious, conversations, conversationStats, previousConversationStats]);
 
   const [modelCards, setModelCards] = useState<Map<string, ModelCard>>(new Map());
 
@@ -372,113 +514,118 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
 
   return (
     <div className={styles.pageContainer}>
-      <div className={styles.summarySection}>
-        <div className={styles.controlsRow}>
-          <FilterToolbar
-            timeRange={timeRange}
-            filters={filters}
-            providerOptions={providerOptions}
-            modelOptions={modelOptions}
-            agentOptions={agentOptions}
-            labelKeyOptions={labelKeyOptions}
-            labelsLoading={labelsLoading}
-            dataSource={dashboardDS}
-            from={from}
-            to={to}
-            onTimeRangeChange={setTimeRange}
-            onFiltersChange={setFilters}
-            hideLabelFilters
-            fillWidth
-          >
-            <Select<ConversationOrderBy>
-              options={orderByOptions}
-              value={orderBy === 'time' ? null : orderBy}
-              onChange={setOrderBy}
-              placeholder="Order by"
-              prefix={orderBy !== 'time' ? 'Order by' : undefined}
-              width={28}
+      <div className={styles.topSection}>
+        <div className={styles.summarySection}>
+          <div className={styles.controlsRow}>
+            <FilterToolbar
+              timeRange={timeRange}
+              filters={filters}
+              providerOptions={providerOptions}
+              modelOptions={modelOptions}
+              agentOptions={agentOptions}
+              labelKeyOptions={labelKeyOptions}
+              labelsLoading={labelsLoading}
+              dataSource={dashboardDS}
+              from={from}
+              to={to}
+              onTimeRangeChange={setTimeRange}
+              onFiltersChange={setFilters}
+              hideLabelFilters
+              fillWidth
+            >
+              <Select<ConversationOrderBy>
+                options={orderByOptions}
+                value={orderBy === 'time' ? null : orderBy}
+                onChange={setOrderBy}
+                placeholder="Order by"
+                prefix={orderBy !== 'time' ? 'Order by' : undefined}
+                width={28}
+              />
+            </FilterToolbar>
+          </div>
+          <div className={styles.statsGrid}>
+            <TopStat
+              label="Conversations"
+              value={conversationStats.totalConversations}
+              loading={loadingDisplayedCurrentStats}
+              prevValue={previousConversationStats.totalConversations}
+              prevLoading={loadingPrevious}
+              comparisonLabel="in previous window"
             />
-          </FilterToolbar>
+            <TopStat
+              label="Tokens"
+              value={conversationStats.totalTokens}
+              loading={loadingDisplayedCurrentStats}
+              prevValue={previousConversationStats.totalTokens}
+              prevLoading={loadingPrevious}
+              comparisonLabel="in previous window"
+            />
+            <TopStat
+              label="Avg Calls / Conversation"
+              value={conversationStats.avgCallsPerConversation}
+              loading={loadingDisplayedCurrentStats}
+              prevValue={previousConversationStats.avgCallsPerConversation}
+              prevLoading={loadingPrevious}
+              comparisonLabel="in previous window"
+            />
+            <TopStat
+              label="Active Conversations (7d)"
+              value={conversationStats.activeLast7d}
+              loading={loadingDisplayedCurrentStats}
+              prevValue={previousConversationStats.activeLast7d}
+              prevLoading={loadingPrevious}
+              comparisonLabel="in previous window"
+            />
+            <TopStat
+              label="Rated Conversations"
+              value={conversationStats.ratedConversations}
+              loading={loadingDisplayedCurrentStats}
+              prevValue={previousConversationStats.ratedConversations}
+              prevLoading={loadingPrevious}
+              comparisonLabel="in previous window"
+            />
+            <TopStat
+              label="Bad-Rated %"
+              value={conversationStats.badRatedPct}
+              unit="percent"
+              loading={loadingDisplayedCurrentStats}
+              prevValue={previousConversationStats.badRatedPct}
+              prevLoading={loadingPrevious}
+              invertChange
+              comparisonLabel="in previous window"
+            />
+          </div>
+          {currentConversationProgress.length > 0 && (
+            <div className={styles.progressRow}>{currentConversationProgress}</div>
+          )}
+          {errorMessage.length > 0 && (
+            <Alert className={styles.errorAlert} severity="error" title="Conversation query failed">
+              {errorMessage}
+            </Alert>
+          )}
         </div>
-        <div className={styles.statsGrid}>
-          <TopStat
-            label="Conversations"
-            value={conversationStats.totalConversations}
-            loading={loading}
-            prevValue={previousConversationStats.totalConversations}
-            prevLoading={loading}
-            comparisonLabel="in previous window"
-          />
-          <TopStat
-            label="Tokens"
-            value={conversationStats.totalTokens}
-            loading={loading}
-            prevValue={previousConversationStats.totalTokens}
-            prevLoading={loading}
-            comparisonLabel="in previous window"
-          />
-          <TopStat
-            label="Avg Calls / Conversation"
-            value={conversationStats.avgCallsPerConversation}
-            loading={loading}
-            prevValue={previousConversationStats.avgCallsPerConversation}
-            prevLoading={loading}
-            comparisonLabel="in previous window"
-          />
-          <TopStat
-            label="Active Conversations (7d)"
-            value={conversationStats.activeLast7d}
-            loading={loading}
-            prevValue={previousConversationStats.activeLast7d}
-            prevLoading={loading}
-            comparisonLabel="in previous window"
-          />
-          <TopStat
-            label="Rated Conversations"
-            value={conversationStats.ratedConversations}
-            loading={loading}
-            prevValue={previousConversationStats.ratedConversations}
-            prevLoading={loading}
-            comparisonLabel="in previous window"
-          />
-          <TopStat
-            label="Bad-Rated %"
-            value={conversationStats.badRatedPct}
-            unit="percent"
-            loading={loading}
-            prevValue={previousConversationStats.badRatedPct}
-            prevLoading={loading}
-            invertChange
-            comparisonLabel="in previous window"
-          />
-        </div>
-        {errorMessage.length > 0 && (
-          <Alert className={styles.errorAlert} severity="error" title="Conversation query failed">
-            {errorMessage}
-          </Alert>
-        )}
-      </div>
 
-      <div className={styles.insightRow}>
-        <PageInsightBar
-          prompt="Analyze these conversation metrics. Flag quality concerns, unusual patterns, or notable trends vs the previous period."
-          origin="sigil-plugin/conversations-browser-insight"
-          dataContext={conversationInsightDataContext}
+        <div className={styles.insightRow}>
+          <PageInsightBar
+            prompt="Analyze these conversation metrics. Flag quality concerns, unusual patterns, or notable trends vs the previous period."
+            origin="sigil-plugin/conversations-browser-insight"
+            dataContext={conversationInsightDataContext}
+          />
+        </div>
+
+        <ConversationTimelineHistogram
+          conversations={conversations}
+          timeRange={timeRange}
+          loading={loadingCurrent}
+          onTimeRangeChange={setTimeRange}
         />
       </div>
-
-      <ConversationTimelineHistogram
-        conversations={conversations}
-        timeRange={timeRange}
-        loading={loading}
-        onTimeRangeChange={setTimeRange}
-      />
 
       <div className={styles.listPanel}>
         <ConversationListPanel
           conversations={conversations}
           selectedConversationId=""
-          loading={loading}
+          loading={loadingCurrent}
           hasMore={false}
           loadingMore={false}
           showExtendedColumns

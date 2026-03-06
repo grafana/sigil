@@ -3,7 +3,7 @@ import { css } from '@emotion/css';
 import type { AppRootProps, GrafanaTheme2, NavModelItem } from '@grafana/data';
 import { PluginPage } from '@grafana/runtime';
 import { useStyles2 } from '@grafana/ui';
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes, useLocation } from 'react-router-dom';
 import { ROUTES } from '../constants';
 
 const LandingPage = React.lazy(() => import('../pages/LandingPage'));
@@ -24,10 +24,16 @@ const getStyles = (theme: GrafanaTheme2) => ({
     height: '100%',
     overflow: 'hidden',
   }),
+  hidePluginHeader: css({
+    '& > [class*="page-header"]': {
+      display: 'none',
+    },
+  }),
 });
 
 export default function App(props: AppRootProps) {
   const styles = useStyles2(getStyles);
+  const location = useLocation();
   const pageNav = React.useMemo<NavModelItem>(
     () => ({
       text: props.meta.name,
@@ -38,6 +44,24 @@ export default function App(props: AppRootProps) {
     }),
     [props.meta.name]
   );
+  const shouldHidePluginHeader =
+    location.pathname.includes(`/${ROUTES.Conversations}`) &&
+    !location.pathname.includes(`/${ROUTES.ConversationsOld}`);
+
+  React.useEffect(() => {
+    const pageInner = document.querySelector('[class*="page-inner"]');
+    if (!(pageInner instanceof HTMLElement)) {
+      return;
+    }
+    if (shouldHidePluginHeader) {
+      pageInner.classList.add(styles.hidePluginHeader);
+    } else {
+      pageInner.classList.remove(styles.hidePluginHeader);
+    }
+    return () => {
+      pageInner.classList.remove(styles.hidePluginHeader);
+    };
+  }, [shouldHidePluginHeader, styles.hidePluginHeader]);
 
   return (
     <PluginPage renderTitle={() => <></>} background="canvas" pageNav={pageNav}>

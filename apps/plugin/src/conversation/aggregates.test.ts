@@ -116,7 +116,7 @@ describe('getTokenSummary', () => {
     expect(summary.outputTokens).toBe(150);
     expect(summary.cacheReadTokens).toBe(20);
     expect(summary.reasoningTokens).toBe(10);
-    expect(summary.totalTokens).toBe(450);
+    expect(summary.totalTokens).toBe(470);
   });
 
   it('handles generations without usage', () => {
@@ -135,6 +135,8 @@ describe('getTokenSummary', () => {
             input_tokens: '7507575' as unknown as number,
             output_tokens: '3103131' as unknown as number,
             total_tokens: '10610706' as unknown as number,
+            cache_read_input_tokens: '150' as unknown as number,
+            cache_write_input_tokens: '75' as unknown as number,
           },
         }),
       ],
@@ -142,7 +144,27 @@ describe('getTokenSummary', () => {
     const summary = getTokenSummary(data);
     expect(summary.inputTokens).toBe(7507575);
     expect(summary.outputTokens).toBe(3103131);
-    expect(summary.totalTokens).toBe(10610706);
+    expect(summary.cacheReadTokens).toBe(150);
+    expect(summary.cacheWriteTokens).toBe(75);
+    expect(summary.totalTokens).toBe(10610931);
+  });
+
+  it('ignores provider total_tokens when computing the headline total', () => {
+    const data = makeData({
+      orphanGenerations: [
+        makeGen({
+          usage: {
+            input_tokens: 100,
+            output_tokens: 50,
+            total_tokens: 9999,
+            cache_read_input_tokens: 25,
+            cache_write_input_tokens: 10,
+          },
+        }),
+      ],
+    });
+    const summary = getTokenSummary(data);
+    expect(summary.totalTokens).toBe(185);
   });
 });
 

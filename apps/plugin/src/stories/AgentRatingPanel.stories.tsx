@@ -145,3 +145,23 @@ export const LongSummaryClickable = {
     },
   },
 };
+
+export const ScrollableFindings = {
+  args: {
+    initialResult: {
+      status: 'completed',
+      score: 6,
+      summary:
+        'The agent is functional but the findings list is long enough that the report area should scroll independently from the action row.',
+      suggestions: Array.from({ length: 12 }, (_, index) => ({
+        category: index % 2 === 0 ? 'tools' : 'workflow',
+        severity: index < 4 ? 'high' : index < 8 ? 'medium' : 'low',
+        title: `Scrollable finding ${index + 1}`,
+        description:
+          'This longer recommendation exists to exercise the report layout so the findings pane scrolls while the bottom actions remain fixed and accessible.',
+      })),
+      judge_model: 'openai/gpt-4o-mini',
+      judge_latency_ms: 410,
+    },
+  },
+};

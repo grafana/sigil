@@ -102,3 +102,74 @@ func TestBootstrapPredefinedTemplates(t *testing.T) {
 		t.Errorf("expected idempotent count %d, got %d", len(templates), len(templates2))
 	}
 }
+
+func TestBootstrapPredefinedTemplatesDeletesDeprecatedGlobals(t *testing.T) {
+	store := newMemoryTemplateStore()
+	ctx := context.Background()
+
+	deprecated := evalpkg.TemplateDefinition{
+		TenantID:      GlobalTenantID,
+		TemplateID:    "sigil.hallucination",
+		Scope:         evalpkg.TemplateScopeGlobal,
+		LatestVersion: "2026-03-04",
+		Kind:          evalpkg.EvaluatorKindLLMJudge,
+		Description:   "Deprecated hallucination template",
+	}
+	version := evalpkg.TemplateVersion{
+		TenantID:   GlobalTenantID,
+		TemplateID: "sigil.hallucination",
+		Version:    "2026-03-04",
+		Config:     map[string]any{"max_tokens": 256, "temperature": 0.0},
+		OutputKeys: []evalpkg.OutputKey{{Key: "hallucination", Type: evalpkg.ScoreTypeNumber}},
+	}
+	if err := store.CreateTemplate(ctx, deprecated, version); err != nil {
+		t.Fatalf("create deprecated template: %v", err)
+	}
+
+	if err := BootstrapPredefinedTemplates(ctx, store); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	gotDeprecated, err := store.GetGlobalTemplate(context.Background(), "sigil.hallucination")
+	if err != nil {
+		t.Fatalf("get deprecated template: %v", err)
+	}
+	if gotDeprecated != nil {
+		t.Fatal("expected deprecated global template to be removed")
+	}
+
+	gotGroundedness, err := store.GetGlobalTemplate(context.Background(), "sigil.groundedness")
+	if err != nil {
+		t.Fatalf("get groundedness template: %v", err)
+	}
+	if gotGroundedness == nil {
+		t.Fatal("expected groundedness global template to be created")
+	}
+}
+
+type bootstrapNotFoundDeleteStore struct {
+	*memoryTemplateStore
+}
+
+func (s *bootstrapNotFoundDeleteStore) DeleteTemplate(_ context.Context, tenantID, templateID string) error {
+	if tenantID == GlobalTenantID && templateID == "sigil.hallucination" {
+		return evalpkg.ErrNotFound
+	}
+	return s.memoryTemplateStore.DeleteTemplate(context.Background(), tenantID, templateID)
+}
+
+func TestBootstrapPredefinedTemplatesIgnoresMissingDeprecatedGlobals(t *testing.T) {
+	store := &bootstrapNotFoundDeleteStore{memoryTemplateStore: newMemoryTemplateStore()}
+
+	if err := BootstrapPredefinedTemplates(context.Background(), store); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	got, err := store.GetGlobalTemplate(context.Background(), "sigil.groundedness")
+	if err != nil {
+		t.Fatalf("get groundedness template: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected groundedness global template to be created")
+	}
+}

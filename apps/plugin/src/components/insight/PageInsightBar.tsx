@@ -392,6 +392,8 @@ function getStyles(theme: GrafanaTheme2) {
     width: '100%',
     background: theme.colors.background.secondary,
     overflow: 'hidden' as const,
+    marginBottom: 0,
+    borderRadius: 0,
   };
 
   return {
@@ -409,7 +411,7 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      padding: theme.spacing(1, 1.5),
+      padding: theme.spacing(1, 2),
       height: COLLAPSED_HEIGHT,
       flexShrink: 0,
     }),
@@ -487,7 +489,7 @@ function getStyles(theme: GrafanaTheme2) {
       lineHeight: 1,
     }),
     body: css({
-      padding: theme.spacing(1.5),
+      padding: theme.spacing(0, 2, 2),
       flex: 1,
       minHeight: 0,
       overflow: 'visible',

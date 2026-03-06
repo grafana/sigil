@@ -35,6 +35,7 @@ This folder stores durable engineering decisions for Sigil.
 - [`2026-03-02-evaluator-templates.md`](2026-03-02-evaluator-templates.md) (active)
 - [`2026-03-03-backend-operational-metrics-baseline.md`](2026-03-03-backend-operational-metrics-baseline.md) (active)
 - [`2026-03-04-agent-catalog-versioning.md`](2026-03-04-agent-catalog-versioning.md) (active)
+- [`2026-03-05-streaming-conversation-search.md`](2026-03-05-streaming-conversation-search.md) (completed)
 
 ## Drafts
 

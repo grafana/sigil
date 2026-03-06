@@ -5,6 +5,7 @@ import type { CostSummary, TokenSummary } from '../../conversation/aggregates';
 import type { ModelCard } from '../../modelcard/types';
 import ModelCardPopover from '../conversations/ModelCardPopover';
 import { getProviderColor, stripProviderPrefix, toDisplayProvider } from '../conversations/providerMeta';
+import { withAlpha } from '../conversations/jaegerTree/serviceColors';
 import { getStyles } from './MetricsBar.styles';
 
 const TYPEWRITER_STEP_MS = 28;
@@ -93,26 +94,12 @@ function formatTokenCount(count: number): string {
   return String(count);
 }
 
-function withAlpha(color: string, alpha: number): string {
+function toAlphaHex(alpha: number): string {
   const clampedAlpha = Math.max(0, Math.min(1, alpha));
-  const hex = color.trim();
-
-  const shortMatch = /^#([0-9a-fA-F]{3})$/.exec(hex);
-  if (shortMatch) {
-    const [r, g, b] = shortMatch[1].split('').map((part) => parseInt(part + part, 16));
-    return `rgba(${r}, ${g}, ${b}, ${clampedAlpha})`;
-  }
-
-  const fullMatch = /^#([0-9a-fA-F]{6})$/.exec(hex);
-  if (fullMatch) {
-    const value = fullMatch[1];
-    const r = parseInt(value.slice(0, 2), 16);
-    const g = parseInt(value.slice(2, 4), 16);
-    const b = parseInt(value.slice(4, 6), 16);
-    return `rgba(${r}, ${g}, ${b}, ${clampedAlpha})`;
-  }
-
-  return color;
+  return Math.round(clampedAlpha * 255)
+    .toString(16)
+    .padStart(2, '0')
+    .toUpperCase();
 }
 
 function findModelCard(
@@ -166,7 +153,7 @@ export default function MetricsBar({
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const animateConversationLabel = normalizedConversationTitle.length > 0 && !prefersReducedMotion;
 
-  const uniqueModels = Array.from(new Set(models));
+  const uniqueModels = useMemo(() => Array.from(new Set(models)), [models]);
   const modelMeta = useMemo(
     () =>
       uniqueModels.map((model) => {
@@ -279,8 +266,8 @@ export default function MetricsBar({
         {modelMeta.map(({ key, displayName, color, card }) => {
           const isOpen = openModel?.key === key;
           const chipToneStyle: React.CSSProperties = {
-            borderColor: withAlpha(color, isOpen ? 0.7 : 0.38),
-            background: withAlpha(color, isOpen ? 0.2 : 0.1),
+            borderColor: withAlpha(color, toAlphaHex(isOpen ? 0.7 : 0.38)),
+            background: withAlpha(color, toAlphaHex(isOpen ? 0.2 : 0.1)),
           };
 
           return (

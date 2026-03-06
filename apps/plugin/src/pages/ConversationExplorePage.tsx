@@ -42,6 +42,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
     overflow: 'hidden',
     background: theme.colors.background.canvas,
   }),
+  topSection: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(1),
+    padding: theme.spacing(1, 0),
+    flexShrink: 0,
+  }),
   spinnerWrap: css({
     flex: 1,
     display: 'flex',
@@ -53,7 +60,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     padding: theme.spacing(2),
   }),
   insightRow: css({
-    padding: theme.spacing(0, 1.5),
+    paddingBottom: '2px',
     flexShrink: 0,
   }),
   contentArea: css({
@@ -459,26 +466,28 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
           <Button onClick={handleConfirmSave}>Save</Button>
         </Modal.ButtonRow>
       </Modal>
-      <MetricsBar
-        conversationID={conversationID}
-        conversationTitle={conversationTitle}
-        totalDurationMs={totalDurationMs}
-        tokenSummary={tokenSummary}
-        costSummary={costSummary}
-        models={models}
-        modelProviders={modelProviders}
-        modelCards={modelCards}
-        errorCount={errorCount}
-        generationCount={conversationData.generationCount}
-        isSaved={isSaved}
-        onToggleSave={saveLoading ? undefined : handleToggleSave}
-      />
-      <div className={styles.insightRow}>
-        <PageInsightBar
-          prompt="Analyze this single conversation trace. Flag expensive operations, errors, unusual patterns, or optimization opportunities."
-          origin="sigil-plugin/conversation-explore-insight"
-          dataContext={exploreInsightDataContext}
+      <div className={styles.topSection}>
+        <MetricsBar
+          conversationID={conversationID}
+          conversationTitle={conversationTitle}
+          totalDurationMs={totalDurationMs}
+          tokenSummary={tokenSummary}
+          costSummary={costSummary}
+          models={models}
+          modelProviders={modelProviders}
+          modelCards={modelCards}
+          errorCount={errorCount}
+          generationCount={conversationData.generationCount}
+          isSaved={isSaved}
+          onToggleSave={saveLoading ? undefined : handleToggleSave}
         />
+        <div className={styles.insightRow}>
+          <PageInsightBar
+            prompt="Analyze this single conversation trace. Flag expensive operations, errors, unusual patterns, or optimization opportunities."
+            origin="sigil-plugin/conversation-explore-insight"
+            dataContext={exploreInsightDataContext}
+          />
+        </div>
       </div>
       <div className={styles.contentArea}>
         <div className={styles.leftPanel} style={{ width: panelWidth }}>

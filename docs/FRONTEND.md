@@ -15,7 +15,8 @@ Purpose: define plugin UI architecture, proxy boundaries, and frame-compatibilit
 - Keep plugin code under `apps/plugin/src`.
 - Frontend query calls must go through plugin backend resources only.
 - Frontend must not call Sigil API query endpoints directly.
-- Use `getBackendSrv().fetch()` for plugin-to-backend calls.
+- Use `getBackendSrv().fetch()` for plugin-to-backend calls by default.
+- Exception: browser `fetch()` is allowed for the conversation search streaming route because the page must consume incremental NDJSON chunks.
 
 ## Proxy Contract
 
@@ -23,6 +24,7 @@ Current plugin query contract:
 
 - Frontend query entrypoints:
   - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/search`
+  - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/search/stream`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}`
   - `GET /api/plugins/grafana-sigil-app/resources/query/generations/{generation_id}`
@@ -86,6 +88,7 @@ Conversation search and search-tag discovery are plugin-owned orchestration flow
 
 - plugin backend queries Tempo directly through Grafana datasource proxy (`/api/datasources/proxy/uid/{tempo_uid}/...`)
 - plugin backend hydrates conversation metadata via Sigil `POST /api/v1/conversations:batch-metadata`
+- plugin backend exposes both buffered JSON search and NDJSON streaming search for the same conversation-search semantics
 
 Legacy placeholders removed:
 
@@ -101,6 +104,7 @@ Sigil plugin query routes enforce action-based RBAC in the plugin backend:
 - `grafana-sigil-app.data:read`
   - `GET /query/conversations`
   - `POST /query/conversations/search`
+  - `POST /query/conversations/search/stream`
   - `GET /query/conversations/{conversation_id}`
   - `GET /query/conversations/{conversation_id}/ratings`
   - `GET /query/conversations/{conversation_id}/annotations`
@@ -157,6 +161,7 @@ See `docs/references/grafana-query-response-shapes.md`.
   - when resolve maps cloud-provider model IDs to catalog IDs (for example Bedrock IDs mapping to `anthropic/*` cards), keep original provider/model labels in UI and show mapping as supplemental context
 - Conversations:
   - query conversations with expression filters and selectable attributes
+  - progressively append streamed conversation search rows on the main conversations page while preserving the existing cursor contract at stream completion
   - display optional `conversation_title` labels from Tempo span attribute `sigil.conversation.title` (latest matching span wins; fallback to conversation id)
   - display optional conversation `user_id` labels from Tempo span attribute `user.id` (latest matching span wins)
   - support cursor pagination in list view

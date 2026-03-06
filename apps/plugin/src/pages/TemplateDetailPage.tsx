@@ -6,6 +6,7 @@ import { Alert, Badge, Button, ConfirmModal, Spinner, Stack, Text, useStyles2 } 
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
 import {
+  buildForkEvaluatorConfig,
   EVALUATOR_KIND_LABELS,
   getKindBadgeColor,
   type EvalFormState,
@@ -270,7 +271,7 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
     const prefill: Partial<Evaluator> = {
       evaluator_id: '',
       kind: template.kind,
-      config: template.config ?? {},
+      config: buildForkEvaluatorConfig(template.kind, template.config),
       output_keys: template.output_keys ?? [],
       version: '',
     };
@@ -359,7 +360,7 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
               Publish New Version
             </Button>
           )}
-          <Button variant="secondary" icon="code-branch" onClick={handleFork}>
+          <Button variant="primary" icon="code-branch" onClick={handleFork}>
             Fork to Evaluator
           </Button>
           {template.scope === 'tenant' && (
@@ -371,18 +372,11 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
       </div>
 
       {activeForm === 'none' && (
-        <div className={styles.detailCard}>
-          <div className={styles.detailCardHeader}>
-            <div className={styles.sectionTitle}>Current configuration</div>
-          </div>
-          <div className={styles.detailCardBody}>
-            <TemplateConfigSummary
-              kind={template.kind}
-              config={template.config ?? {}}
-              outputKeys={template.output_keys ?? []}
-            />
-          </div>
-        </div>
+        <TemplateConfigSummary
+          kind={template.kind}
+          config={template.config ?? {}}
+          outputKeys={template.output_keys ?? []}
+        />
       )}
 
       {activeForm === 'publish' && (

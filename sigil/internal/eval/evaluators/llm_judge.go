@@ -15,6 +15,12 @@ import (
 
 var numberExtractor = regexp.MustCompile(`[-+]?[0-9]*\.?[0-9]+`)
 
+const (
+	defaultLLMJudgeSystemPrompt = "You evaluate one assistant response. Use only the user input and assistant output. Follow the score field description exactly. Be strict. If uncertain, choose the lower score."
+	defaultLLMJudgeUserPrompt   = "User input:\n{{input}}\n\nAssistant output:\n{{output}}"
+	defaultLLMJudgeMaxTokens    = 128
+)
+
 type LLMJudgeEvaluator struct {
 	discovery    *judges.Discovery
 	defaultModel string
@@ -45,11 +51,11 @@ func (e *LLMJudgeEvaluator) Evaluate(ctx context.Context, input EvalInput, defin
 		return nil, evalpkg.Permanent(fmt.Errorf("judge provider %q is not configured", providerID))
 	}
 
-	systemPrompt := renderTemplate(configString(definition.Config, "system_prompt", "You are an evaluation judge. For number scores, use a 1-10 integer scale (1 = very poor, 10 = excellent) unless the output key description specifies otherwise."), input)
-	userPrompt := renderTemplate(configString(definition.Config, "user_prompt", "User input:\n{{input}}\n\nAssistant output:\n{{output}}"), input)
+	systemPrompt := renderTemplate(configString(definition.Config, "system_prompt", defaultLLMJudgeSystemPrompt), input)
+	userPrompt := renderTemplate(configString(definition.Config, "user_prompt", defaultLLMJudgeUserPrompt), input)
 	maxTokens, _ := configInt(definition.Config, "max_tokens")
 	if maxTokens <= 0 {
-		maxTokens = 256
+		maxTokens = defaultLLMJudgeMaxTokens
 	}
 	temperature := configFloat(definition.Config, "temperature", 0)
 	timeoutMs, _ := configInt(definition.Config, "timeout_ms")

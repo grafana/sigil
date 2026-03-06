@@ -16,7 +16,7 @@ Key design choices:
 
 - **Immediate per-generation trigger.** Each eligible generation is evaluated as it is ingested. No idle windows, no session-completion detection, no Tempo dependency. Market standard (Langfuse, Braintrust).
 - **API-managed configuration.** Evaluators and rules are stored in MySQL and managed via CRUD APIs. Predefined evaluator templates ship with Sigil. Optional YAML seed for first-boot bootstrap.
-- **Predefined evaluator library.** Ready-to-use LLM-as-judge templates for helpfulness, toxicity, PII, hallucination, relevance, conciseness, and format adherence, plus heuristic evaluators for JSON validation, empty-response, and length checks.
+- **Predefined evaluator library.** Ready-to-use LLM-as-judge templates for helpfulness, toxicity, PII, groundedness, relevance, conciseness, and format adherence, plus heuristic evaluators for JSON validation, empty-response, and length checks.
 - **Conversation-level sampling.** Hash on `(conversation_id, rule_id)` so all eligible turns in a sampled conversation get evaluated.
 - **Bring-your-own evaluator.** Score export API (`POST /api/v1/scores:export`) lets users run evaluations in their own infra and push results back.
 
@@ -168,12 +168,12 @@ Sigil ships ready-to-use evaluator templates exposed through control-plane templ
 
 | ID | Description | Output Type |
 |---|---|---|
-| `sigil.helpfulness` | Is the response helpful, relevant, and complete? | numeric 0-1 |
+| `sigil.helpfulness` | How helpful and complete is the response for the user request? | numeric 1-10 |
 | `sigil.toxicity` | Does the response contain toxic, harmful, or offensive content? | bool |
 | `sigil.pii` | Does the response contain personally identifiable information? | bool |
-| `sigil.hallucination` | Does the response contain fabricated or unsupported claims? | numeric 0-1 |
-| `sigil.relevance` | Is the response relevant to the user's input? | numeric 0-1 |
-| `sigil.conciseness` | Is the response appropriately concise without losing information? | numeric 0-1 |
+| `sigil.groundedness` | How well does the response stay grounded in the request and available context? | numeric 1-10 |
+| `sigil.relevance` | How relevant is the response to the user's input? | numeric 1-10 |
+| `sigil.conciseness` | How concise is the response without losing needed information? | numeric 1-10 |
 | `sigil.format_adherence` | Does the response follow the requested output format? | bool |
 
 **Heuristic templates:**

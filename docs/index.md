@@ -31,6 +31,7 @@ This is the canonical navigation map for repository documentation.
 - Design docs: [`design-docs/index.md`](design-docs/index.md)
   - Backend operational metrics baseline (active): `design-docs/2026-03-03-backend-operational-metrics-baseline.md`
   - Agent catalog versioning and APIs (active): `design-docs/2026-03-04-agent-catalog-versioning.md`
+  - Streaming conversation search (completed): `design-docs/2026-03-05-streaming-conversation-search.md`
   - Vercel AI SDK integration design (completed): `design-docs/2026-02-22-sdk-vercel-ai-sdk-integration.md`
   - Framework integration design (completed): `design-docs/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
   - Drafts: `design-docs/drafts/`
@@ -69,6 +70,7 @@ This is the canonical navigation map for repository documentation.
   - Sigil image and plugin artifact publish delivery: `exec-plans/completed/2026-03-02-sigil-image-and-plugin-publish.md`
   - Sigil automatic dev/ops Argo deployment delivery: `exec-plans/completed/2026-03-05-sigil-cd-dev-ops-auto-deploy.md`
   - Query cold-read hardening delivery: `exec-plans/completed/2026-03-05-query-cold-read-hardening.md`
+  - Streaming conversation search delivery: `exec-plans/completed/2026-03-05-streaming-conversation-search.md`
   - Runtime role split and distributed Helm topology delivery: `exec-plans/completed/2026-03-02-runtime-role-split.md`
   - Conversation details Jaeger-style tree port: `exec-plans/completed/2026-03-03-conversation-jaeger-tree.md`
   - Eval saved conversations: `exec-plans/completed/2026-03-04-eval-saved-conversations.md`
@@ -95,6 +97,7 @@ This is the canonical navigation map for repository documentation.
     - `exec-plans/completed/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
     - `exec-plans/completed/2026-03-02-sigil-image-and-plugin-publish.md`
     - `exec-plans/completed/2026-03-05-sigil-cd-dev-ops-auto-deploy.md`
+    - `exec-plans/completed/2026-03-05-streaming-conversation-search.md`
     - `exec-plans/completed/2026-03-02-runtime-role-split.md`
     - `exec-plans/completed/2026-03-03-conversation-jaeger-tree.md`
   - Tech debt tracker: [`exec-plans/tech-debt-tracker.md`](exec-plans/tech-debt-tracker.md)

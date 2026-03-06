@@ -2,6 +2,10 @@ export function joinUrl(base: string, path: string): string {
   return `${base.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
 }
 
+export function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
+
 export function isNotFoundError(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) {
     return false;

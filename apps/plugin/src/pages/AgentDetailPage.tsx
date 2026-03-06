@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { css, cx } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Badge, Button, Icon, Select, Spinner, Text, Tooltip, useStyles2, useTheme2 } from '@grafana/ui';
+import { Alert, Badge, Button, Icon, Spinner, Tab, TabsBar, Text, Tooltip, useStyles2, useTheme2 } from '@grafana/ui';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../agents/api';
 import type { AgentDetail, AgentRatingResponse, AgentVersionListItem } from '../agents/types';
 import ModelCardPopover from '../components/conversations/ModelCardPopover';
@@ -26,6 +26,7 @@ import { TopStat } from '../components/TopStat';
 import MarkdownPreview from '../components/markdown/MarkdownPreview';
 
 const VERSION_PAGE_SIZE = 50;
+const RECENT_VERSIONS_COUNT = 8;
 const ACTIVITY_BAR_COUNT = 48;
 const ACTIVITY_REFRESH_MS = 70 * 1000;
 const EMPTY_ACTIVITY_BARS = Array.from({ length: ACTIVITY_BAR_COUNT }, () => 0);
@@ -52,6 +53,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   heroPanel: css({
     position: 'relative' as const,
+    display: 'flex',
+    flexDirection: 'column' as const,
     borderRadius: theme.shape.radius.default,
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
@@ -105,18 +108,26 @@ const getStyles = (theme: GrafanaTheme2) => ({
     padding: theme.spacing(2.5, 2, 2.5, 2),
     '@media (max-width: 900px)': {
       gridTemplateColumns: '1fr',
+      padding: theme.spacing(2, 1.25, 2, 1.25),
+    },
+    '@media (max-width: 640px)': {
+      padding: theme.spacing(1.5, 1, 1.75, 1),
     },
   }),
   heroTitleRow: css({
     display: 'grid',
     gridTemplateColumns: 'auto minmax(220px, 1fr) minmax(540px, 2fr)',
-    alignItems: 'start',
+    alignItems: 'center',
     gap: theme.spacing(2),
     '@media (max-width: 1200px)': {
-      gridTemplateColumns: 'auto minmax(220px, 1fr)',
+      gridTemplateColumns: 'auto minmax(0, 1fr)',
+      alignItems: 'start',
+      columnGap: theme.spacing(1.5),
+      rowGap: theme.spacing(1.25),
     },
     '@media (max-width: 900px)': {
       gridTemplateColumns: '1fr',
+      rowGap: theme.spacing(1),
     },
   }),
   heroTitleMeta: css({
@@ -135,7 +146,46 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     minWidth: 0,
-    marginTop: theme.spacing(0.5),
+    width: '100%',
+    marginTop: theme.spacing(0.75),
+    alignItems: 'stretch',
+    '@media (max-width: 1200px)': {
+      gridColumn: '1 / -1',
+      marginTop: theme.spacing(0.5),
+    },
+    '@media (max-width: 900px)': {
+      marginTop: theme.spacing(0.25),
+    },
+  }),
+  heroTopStatsRow: css({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing(2),
+    width: '100%',
+    '@media (max-width: 1200px)': {
+      display: 'grid',
+      gridTemplateColumns: 'minmax(0, 1fr) auto',
+      gridTemplateAreas: '"spacer rating" "versions versions"',
+      alignItems: 'start',
+      columnGap: theme.spacing(1.25),
+      rowGap: theme.spacing(0.75),
+    },
+    '@media (max-width: 640px)': {
+      gridTemplateColumns: '1fr',
+      gridTemplateAreas: '"rating" "versions"',
+      alignItems: 'start',
+    },
+  }),
+  heroVersionsPanel: css({
+    flex: 1,
+    minWidth: 0,
+    width: '100%',
+    '@media (max-width: 1200px)': {
+      gridArea: 'versions',
+      flex: '1 1 auto',
+      alignSelf: 'stretch',
+    },
   }),
   heroEyebrow: css({
     textTransform: 'uppercase' as const,
@@ -162,7 +212,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'grid',
     gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
     gap: theme.spacing(0.75, 1),
-    width: '100%',
+    width: 'auto',
     '@media (max-width: 1400px)': {
       gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
     },
@@ -179,27 +229,79 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   heroMetaStatWide: css({
     gridColumn: 'span 2',
+    justifySelf: 'end',
+    '@media (max-width: 1400px)': {
+      gridColumn: '2 / 4',
+    },
     '@media (max-width: 900px)': {
       gridColumn: 'auto',
     },
   }),
   heroMetaStatHighlight: css({
+    flexShrink: 0,
     minWidth: 0,
-    padding: theme.spacing(1, 1.25),
-    borderRadius: theme.shape.radius.default,
-    background: theme.colors.background.secondary,
-    border: `1px solid ${theme.colors.border.weak}`,
+    alignSelf: 'stretch',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    justifyContent: 'flex-end',
+    gap: theme.spacing(0.125),
+    paddingLeft: theme.spacing(3),
+    borderLeft: `1px solid ${theme.colors.border.weak}`,
+    '@media (max-width: 1400px)': {
+      gridColumn: '4 / 5',
+    },
+    '@media (max-width: 1200px)': {
+      gridArea: 'rating',
+      borderLeft: 'none',
+      borderTop: 'none',
+      paddingTop: 0,
+      paddingLeft: 0,
+      width: 'auto',
+      justifySelf: 'end',
+    },
+    '@media (max-width: 900px)': {
+      justifySelf: 'end',
+    },
   }),
-  latestScoreBlocks: css({
+  latestScoreSquares: css({
     display: 'grid',
-    gridTemplateColumns: 'repeat(10, minmax(0, 1fr))',
-    gap: 3,
-    marginTop: theme.spacing(0.5),
+    gridTemplateColumns: 'repeat(10, 10px)',
+    gap: theme.spacing(0.25),
+    marginTop: theme.spacing(0.125),
+    width: 'fit-content',
+    marginLeft: 'auto',
   }),
-  latestScoreBlock: css({
-    height: 6,
-    borderRadius: 2,
-    background: theme.colors.border.weak,
+  latestScoreSquare: css({
+    display: 'block',
+    width: 10,
+    height: 10,
+    borderRadius: 3,
+    background: 'rgba(255, 152, 48, 0.3)',
+    transition: 'all 0.2s ease',
+  }),
+  latestScoreSquareFilled: css({
+    boxShadow: 'inset 0 -1px 0 rgba(0, 0, 0, 0.18)',
+  }),
+  latestScoreSquaresUnavailable: css({
+    opacity: 0.6,
+  }),
+  latestScoreValue: css({
+    fontSize: theme.typography.h1.fontSize,
+    fontWeight: theme.typography.fontWeightMedium,
+    lineHeight: 1,
+    textAlign: 'right' as const,
+    fontVariantNumeric: 'tabular-nums',
+  }),
+  latestScoreValueMain: css({
+    color: theme.colors.text.primary,
+  }),
+  latestScoreValueSuffix: css({
+    color: theme.colors.text.secondary,
+    fontWeight: theme.typography.fontWeightRegular,
+    marginLeft: theme.spacing(0.25),
+  }),
+  latestScoreValueUnavailable: css({
+    color: theme.colors.text.secondary,
   }),
   anonymousBanner: css({
     borderRadius: theme.shape.radius.default,
@@ -208,15 +310,64 @@ const getStyles = (theme: GrafanaTheme2) => ({
     padding: `${theme.spacing(0.75)} ${theme.spacing(1.5)}`,
   }),
   statsGrid: css({
+    width: '100%',
     borderRadius: theme.shape.radius.default,
     display: 'flex',
     flexWrap: 'wrap' as const,
     justifyContent: 'center',
-    alignContent: 'center',
+    alignContent: 'flex-start',
     alignItems: 'center',
     gap: theme.spacing(4),
     height: '100%',
+    borderTop: `1px solid ${theme.colors.border.weak}`,
     padding: theme.spacing(1.5),
+    '@media (max-width: 900px)': {
+      justifyContent: 'flex-start',
+      alignItems: 'flex-start',
+      gap: theme.spacing(2),
+      padding: theme.spacing(1.25),
+    },
+    '@media (max-width: 640px)': {
+      gap: theme.spacing(1.25, 1.5),
+      padding: theme.spacing(1),
+    },
+  }),
+  tabStatsStrip: css({
+    borderRadius: theme.shape.radius.default,
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    gap: theme.spacing(3),
+    padding: theme.spacing(1, 1.5),
+  }),
+  tabStatsItem: css({
+    minWidth: 140,
+  }),
+  tabContentLayout: css({
+    display: 'grid',
+    gridTemplateColumns: '150px minmax(0, 1fr)',
+    gap: theme.spacing(2),
+    alignItems: 'start',
+    '@media (max-width: 900px)': {
+      gridTemplateColumns: '1fr',
+    },
+  }),
+  tabSidebar: css({
+    borderRadius: 0,
+    border: 'none',
+    background: 'transparent',
+    padding: theme.spacing(0.25, 0),
+  }),
+  tabSidebarStats: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(1.25),
+  }),
+  tabMainContent: css({
+    minWidth: 0,
+  }),
+  mainAreaTabs: css({
+    borderBottom: `1px solid ${theme.colors.border.weak}`,
+    marginBottom: theme.spacing(1),
   }),
   primaryPanelsRow: css({
     display: 'grid',
@@ -331,10 +482,107 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     gap: theme.spacing(0.75),
     alignItems: 'center',
+    marginTop: theme.spacing(0.75),
     [`@media (max-width: 640px)`]: {
       flexDirection: 'column' as const,
       alignItems: 'stretch',
     },
+  }),
+  versionPickerHeaderRow: css({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: theme.spacing(1),
+    width: '100%',
+  }),
+  versionPickerAnchor: css({
+    position: 'relative' as const,
+    '@media (max-width: 900px)': {
+      width: '100%',
+    },
+  }),
+  versionPickerToggle: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    border: `1px solid ${theme.colors.border.weak}`,
+    borderRadius: theme.shape.radius.default,
+    background: theme.colors.background.secondary,
+    color: theme.colors.text.primary,
+    fontSize: theme.typography.bodySmall.fontSize,
+    lineHeight: 1.2,
+    padding: theme.spacing(0.375, 0.75),
+    cursor: 'pointer',
+    whiteSpace: 'nowrap' as const,
+    '&:hover': {
+      borderColor: theme.colors.border.medium,
+      background: theme.colors.action.hover,
+    },
+    '@media (max-width: 900px)': {
+      width: '100%',
+      justifyContent: 'space-between',
+    },
+  }),
+  versionPickerLabel: css({
+    maxWidth: 260,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    minWidth: 0,
+    '@media (max-width: 900px)': {
+      maxWidth: 'none',
+      flex: 1,
+    },
+  }),
+  versionPickerMenu: css({
+    position: 'absolute' as const,
+    top: `calc(100% + ${theme.spacing(0.5)})`,
+    left: 0,
+    zIndex: 8,
+    width: 420,
+    maxWidth: 'min(92vw, 420px)',
+    borderRadius: theme.shape.radius.default,
+    border: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.primary,
+    boxShadow: theme.shadows.z2,
+    padding: theme.spacing(0.5),
+    '@media (max-width: 900px)': {
+      width: '100%',
+      maxWidth: '100%',
+    },
+  }),
+  versionPickerOptions: css({
+    margin: 0,
+    padding: 0,
+    listStyle: 'none',
+    maxHeight: 280,
+    overflowY: 'auto' as const,
+  }),
+  versionPickerOptionButton: css({
+    width: '100%',
+    border: 'none',
+    background: 'transparent',
+    textAlign: 'left' as const,
+    padding: theme.spacing(0.625, 0.75),
+    borderRadius: theme.shape.radius.default,
+    cursor: 'pointer',
+    display: 'grid',
+    gap: theme.spacing(0.125),
+    '&:hover': {
+      background: theme.colors.action.hover,
+    },
+  }),
+  versionPickerOptionButtonActive: css({
+    background: theme.colors.primary.transparent,
+  }),
+  versionPickerOptionLabel: css({
+    fontSize: theme.typography.bodySmall.fontSize,
+    color: theme.colors.text.primary,
+    lineHeight: 1.25,
+  }),
+  versionPickerOptionMeta: css({
+    fontSize: theme.typography.size.sm,
+    color: theme.colors.text.secondary,
+    lineHeight: 1.25,
   }),
   versionSelect: css({
     flex: 1,
@@ -346,17 +594,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
   recentVersionsGrid: css({
     display: 'flex',
     flexWrap: 'nowrap' as const,
+    width: '100%',
+    minWidth: '100%',
     gap: 0,
     marginTop: theme.spacing(0.5),
     overflowX: 'auto' as const,
-  }),
-  recentVersionsHeading: css({
-    marginTop: theme.spacing(1.25),
-    marginBottom: theme.spacing(0.25),
-    color: theme.colors.text.secondary,
-    fontSize: theme.typography.bodySmall.fontSize,
-    textTransform: 'uppercase' as const,
-    letterSpacing: '0.03em',
+    paddingBottom: theme.spacing(0.25),
+    scrollbarWidth: 'thin' as const,
   }),
   recentVersionItem: css({
     width: '100%',
@@ -365,6 +609,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     gap: theme.spacing(0.125),
+    '@media (max-width: 900px)': {
+      flex: '0 0 min(120px, 32vw)',
+      minWidth: 96,
+    },
   }),
   recentVersionItemActive: css({}),
   recentVersionBox: css({
@@ -373,22 +621,25 @@ const getStyles = (theme: GrafanaTheme2) => ({
     textAlign: 'left' as const,
     appearance: 'none' as const,
     outline: 'none',
-    borderRadius: theme.shape.radius.default,
+    borderRadius: 0,
     border: 'none',
-    background: theme.colors.background.canvas,
+    background: 'transparent',
     padding: theme.spacing(0.5, 0.75),
     display: 'flex',
     flexDirection: 'column' as const,
     gap: theme.spacing(0.25),
     cursor: 'pointer',
-    transition: 'background 0.15s ease',
+    borderBottom: `3px solid transparent`,
+    transition: 'border-color 0.15s ease',
     '&:hover': {
-      background: theme.colors.action.hover,
+      borderBottomColor: theme.colors.border.medium,
+    },
+    '@media (max-width: 900px)': {
+      padding: theme.spacing(0.5),
     },
   }),
   recentVersionBoxActive: css({
-    background: theme.colors.primary.transparent,
-    boxShadow: `inset 0 0 0 1px ${theme.colors.primary.border}, 0 0 0 1px ${theme.colors.primary.transparent}`,
+    borderBottomColor: theme.colors.primary.border,
   }),
   recentVersionContent: css({
     display: 'grid',
@@ -804,17 +1055,20 @@ export default function AgentDetailPage({
   const [modelCards, setModelCards] = useState<Map<string, ModelCard>>(new Map());
   const [openModel, setOpenModel] = useState<{ key: string; anchorRect: DOMRect } | null>(null);
   const [activityHeights, setActivityHeights] = useState<number[] | null>(null);
+  const [isVersionPickerOpen, setIsVersionPickerOpen] = useState(false);
   const detailRequestVersion = useRef(0);
   const versionsRequestVersion = useRef(0);
   const ratingRequestVersion = useRef(0);
   const recentRatingsRequestVersion = useRef(0);
   const recentVersionRatingsRef = useRef<Record<string, AgentRatingResponse | null>>({});
   const promptAnalysisSectionRef = useRef<HTMLDivElement | null>(null);
+  const versionPickerRef = useRef<HTMLDivElement | null>(null);
 
   const selectedVersion = searchParams.get('version')?.trim() ?? '';
   const agentName = buildAgentNameFromRoute(location.pathname, params.agentName);
   const isAnonymous = agentName.length === 0;
   const agentsTableRoute = `${PLUGIN_BASE}/${ROUTES.Agents}?tab=table`;
+  const activeVersion = selectedVersion.length > 0 ? selectedVersion : (detail?.effective_version ?? '');
 
   useEffect(() => {
     detailRequestVersion.current += 1;
@@ -1031,7 +1285,7 @@ export default function AgentDetailPage({
     return options;
   }, [loadingVersions, versionOptions, versionsCursor]);
 
-  const recentVersions = useMemo(() => versionOptions.slice(0, 5).reverse(), [versionOptions]);
+  const recentVersions = useMemo(() => versionOptions.slice(0, RECENT_VERSIONS_COUNT).reverse(), [versionOptions]);
 
   useEffect(() => {
     recentVersionRatingsRef.current = {};
@@ -1096,6 +1350,30 @@ export default function AgentDetailPage({
     setSearchParams(next, { replace: false });
   };
 
+  useEffect(() => {
+    setIsVersionPickerOpen(false);
+  }, [activeVersion]);
+
+  useEffect(() => {
+    if (!isVersionPickerOpen) {
+      return;
+    }
+    const onDocumentMouseDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+      if (versionPickerRef.current?.contains(target)) {
+        return;
+      }
+      setIsVersionPickerOpen(false);
+    };
+    document.addEventListener('mousedown', onDocumentMouseDown);
+    return () => {
+      document.removeEventListener('mousedown', onDocumentMouseDown);
+    };
+  }, [isVersionPickerOpen]);
+
   const loadMoreVersions = async () => {
     if (loadingVersions || versionsCursor.length === 0) {
       return;
@@ -1127,6 +1405,7 @@ export default function AgentDetailPage({
     encodingOverride: EncodingName | null;
   }>({ versionKey, sections: {}, encodingOverride: null });
   const [systemPromptView, setSystemPromptView] = useState<'preview' | 'markdown'>('markdown');
+  const [mainAreaTab, setMainAreaTab] = useState<'prompts' | 'tools'>('prompts');
 
   const tokenizedSections = tokenizeState.versionKey === versionKey ? tokenizeState.sections : {};
   const encodingOverride = tokenizeState.versionKey === versionKey ? tokenizeState.encodingOverride : null;
@@ -1205,7 +1484,6 @@ export default function AgentDetailPage({
     );
   }
 
-  const activeVersion = selectedVersion.length > 0 ? selectedVersion : detail.effective_version;
   const primaryModel = detail.models[0];
   const primaryModelLabel =
     primaryModel != null ? stripProviderPrefix(primaryModel.name, getProviderMeta(primaryModel.provider).label) : 'n/a';
@@ -1214,7 +1492,12 @@ export default function AgentDetailPage({
   const displayActivityHeights = activityHeights && activityHeights.length > 0 ? activityHeights : EMPTY_ACTIVITY_BARS;
   const activeHeroRating = initialRating?.status === 'completed' ? initialRating : null;
   const activeHeroRatingSummary = activeHeroRating ? firstLine(activeHeroRating.summary) : '';
-  const activeScoreFilledBlocks = activeHeroRating ? Math.max(0, Math.min(10, Math.round(activeHeroRating.score))) : 0;
+  const activeScoreRounded = activeHeroRating ? Math.max(0, Math.min(10, Math.round(activeHeroRating.score))) : 0;
+  const activeVersionItem = versionOptions.find((item) => item.effective_version === activeVersion);
+  const activeVersionLabel =
+    activeVersionItem?.declared_version_latest ||
+    activeVersionItem?.declared_version_first ||
+    `${activeVersion.replace(/^sha256:/, '').slice(0, 12)}…`;
 
   return (
     <div className={styles.page}>
@@ -1309,98 +1592,259 @@ export default function AgentDetailPage({
                   <div className={styles.badgeRow}>{isAnonymous && <Badge text="Anonymous" color="orange" />}</div>
                 </div>
                 <div className={styles.heroStatsColumn}>
-                  <div className={styles.heroMetaGrid}>
-                    <div className={styles.heroMetaStat}>
-                      <TopStat
-                        label="VERSIONS"
-                        value={versionOptions.length}
-                        loading={false}
-                        compact
-                        normalFontSize
-                        helpTooltip="Total distinct effective versions recorded for this agent."
-                      />
-                    </div>
-                    <div className={styles.heroMetaStat}>
-                      <TopStat
-                        label="DECLARED VERSION"
-                        value={0}
-                        displayValue={detail.declared_version_latest || 'n/a'}
-                        loading={false}
-                        compact
-                        normalFontSize
-                        helpTooltip="Version string reported by instrumentation."
-                      />
-                    </div>
-                    <div className={styles.heroMetaStat}>
-                      <TopStat
-                        label="MODELS"
-                        value={detail.models.length}
-                        loading={false}
-                        compact
-                        normalFontSize
-                        helpTooltip="Distinct model variants recorded for this agent version."
-                      />
-                    </div>
-                    <div className={styles.heroMetaStat}>
-                      <TopStat
-                        label="TOOLS"
-                        value={detail.tool_count}
-                        loading={false}
-                        compact
-                        normalFontSize
-                        helpTooltip="Declared tool definitions."
-                      />
-                    </div>
-                    <div className={cx(styles.heroMetaStat, styles.heroMetaStatWide)}>
-                      <TopStat
-                        label="PRIMARY MODEL"
-                        value={0}
-                        displayValue={
-                          primaryModelProvider ? `${primaryModelLabel} (${primaryModelProvider})` : primaryModelLabel
-                        }
-                        loading={false}
-                        compact
-                        normalFontSize
-                        helpTooltip="Primary model name and provider in this version."
-                      />
+                  <div className={styles.heroTopStatsRow}>
+                    <div className={styles.heroVersionsPanel}>
+                      <div className={styles.versionPickerHeaderRow}>
+                        <div className={styles.versionPickerAnchor} ref={versionPickerRef}>
+                          <button
+                            type="button"
+                            className={styles.versionPickerToggle}
+                            aria-label="toggle agent version selector"
+                            aria-expanded={isVersionPickerOpen}
+                            aria-haspopup="listbox"
+                            onClick={() => setIsVersionPickerOpen((current) => !current)}
+                          >
+                            <span className={styles.versionPickerLabel}>Version {activeVersionLabel}</span>
+                            <Icon name={isVersionPickerOpen ? 'angle-up' : 'angle-down'} size="sm" />
+                          </button>
+                          {isVersionPickerOpen && (
+                            <div className={styles.versionPickerMenu}>
+                              <ul
+                                className={styles.versionPickerOptions}
+                                role="listbox"
+                                aria-label="agent version selector"
+                              >
+                                {versionSelectOptions.map((option) => {
+                                  const isLoadMore = option.value === LOAD_MORE_VERSIONS_VALUE;
+                                  const isSelected = option.value === activeVersion;
+                                  return (
+                                    <li key={option.value}>
+                                      <button
+                                        type="button"
+                                        className={cx(
+                                          styles.versionPickerOptionButton,
+                                          isSelected && styles.versionPickerOptionButtonActive
+                                        )}
+                                        aria-label={
+                                          isLoadMore ? 'load more versions' : `select version ${option.value}`
+                                        }
+                                        onClick={() => {
+                                          if (isLoadMore) {
+                                            void loadMoreVersions();
+                                            return;
+                                          }
+                                          selectVersion(option.value);
+                                        }}
+                                        disabled={loadingVersions && isLoadMore}
+                                      >
+                                        <span className={styles.versionPickerOptionLabel}>{option.label}</span>
+                                        {option.description && (
+                                          <span className={styles.versionPickerOptionMeta}>{option.description}</span>
+                                        )}
+                                      </button>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      {recentVersions.length > 1 && (
+                        <div className={styles.recentVersionsGrid}>
+                          {recentVersions.map((versionItem, index) => {
+                            const rating = recentVersionRatings[versionItem.effective_version];
+                            const isSelected = activeVersion === versionItem.effective_version;
+                            const completedRating = rating?.status === 'completed' ? rating : null;
+                            const versionNumber =
+                              versionItem.declared_version_latest ||
+                              versionItem.declared_version_first ||
+                              `#${index + 1}`;
+                            const tooltipContent = (
+                              <div className={styles.versionTooltip}>
+                                <div className={styles.versionTooltipTitle}>Version {versionNumber}</div>
+                                <div className={styles.versionTooltipMeta}>
+                                  Last seen {formatDate(versionItem.last_seen_at)}
+                                </div>
+                                <div
+                                  className={styles.versionTooltipStatus}
+                                  style={{
+                                    color: completedRating
+                                      ? scoreTone(theme, completedRating.score)
+                                      : theme.colors.text.secondary,
+                                  }}
+                                >
+                                  {completedRating ? `Rated ${completedRating.score}/10` : 'Unrated'}
+                                </div>
+                              </div>
+                            );
+                            return (
+                              <div key={versionItem.effective_version} className={styles.recentVersionItem}>
+                                <Tooltip content={tooltipContent} placement="top">
+                                  <button
+                                    type="button"
+                                    className={cx(styles.recentVersionBox, isSelected && styles.recentVersionBoxActive)}
+                                    onClick={() => selectVersion(versionItem.effective_version)}
+                                    aria-label={`select version ${versionItem.effective_version}`}
+                                  >
+                                    <span
+                                      className={cx(
+                                        styles.recentVersionContent,
+                                        !completedRating && styles.recentVersionContentSingle
+                                      )}
+                                    >
+                                      <span
+                                        className={cx(
+                                          styles.recentVersionText,
+                                          !completedRating && styles.recentVersionTextCentered
+                                        )}
+                                      >
+                                        <span
+                                          className={cx(
+                                            styles.recentVersionNumber,
+                                            !completedRating && styles.recentVersionNumberCentered
+                                          )}
+                                        >
+                                          {versionNumber}
+                                        </span>
+                                      </span>
+                                      {completedRating && (
+                                        <span
+                                          className={styles.recentVersionScore}
+                                          style={{ color: scoreTone(theme, completedRating.score) }}
+                                        >
+                                          {completedRating.score}/10
+                                        </span>
+                                      )}
+                                    </span>
+                                    <span
+                                      className={cx(
+                                        styles.recentVersionTimelineMarker,
+                                        index === 0 && styles.recentVersionTimelineMarkerStart,
+                                        index === recentVersions.length - 1 && styles.recentVersionTimelineMarkerEnd
+                                      )}
+                                      aria-hidden="true"
+                                    />
+                                    <span className={styles.recentVersionRelativeTime}>
+                                      {formatRelativeDateCompact(versionItem.last_seen_at)}
+                                    </span>
+                                  </button>
+                                </Tooltip>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                     <div className={styles.heroMetaStatHighlight}>
-                      <TopStat
-                        label="LATEST SCORE"
-                        value={0}
-                        displayValue={activeHeroRating ? `${activeHeroRating.score}/10` : 'n/a'}
-                        loading={false}
-                        compact
-                        normalFontSize
-                        helpTooltip={
+                      <Tooltip
+                        content={
                           activeHeroRating
                             ? `Completed rating summary for selected version: ${activeHeroRatingSummary}`
                             : 'No completed rating available for selected version.'
                         }
-                      />
-                      <div className={styles.latestScoreBlocks} aria-hidden="true">
-                        {Array.from({ length: 10 }, (_, idx) => (
-                          <span
-                            key={idx}
-                            className={styles.latestScoreBlock}
-                            style={
-                              idx < activeScoreFilledBlocks
-                                ? {
-                                    backgroundColor:
-                                      idx / 9 <= 0.52
-                                        ? interpolateHex(gradientColors[0], gradientColors[1], idx / 9 / 0.52)
-                                        : interpolateHex(gradientColors[1], gradientColors[2], (idx / 9 - 0.52) / 0.48),
-                                  }
-                                : undefined
-                            }
-                          />
-                        ))}
+                        placement="top"
+                      >
+                        <div
+                          className={cx(
+                            styles.latestScoreValue,
+                            !activeHeroRating && styles.latestScoreValueUnavailable
+                          )}
+                          aria-label={`Latest score ${activeHeroRating ? `${activeHeroRating.score}/10` : 'n/a'}`}
+                        >
+                          {activeHeroRating ? (
+                            <>
+                              <span className={styles.latestScoreValueMain}>{activeHeroRating.score}</span>
+                              <span className={styles.latestScoreValueSuffix}>/10</span>
+                            </>
+                          ) : (
+                            'n/a'
+                          )}
+                        </div>
+                      </Tooltip>
+                      <div
+                        className={cx(
+                          styles.latestScoreSquares,
+                          !activeHeroRating && styles.latestScoreSquaresUnavailable
+                        )}
+                        aria-label={
+                          activeHeroRating
+                            ? `Rating squares, selected ${activeScoreRounded}`
+                            : 'Rating squares unavailable'
+                        }
+                      >
+                        {Array.from({ length: 10 }, (_, idx) => {
+                          const score = idx + 1;
+                          const isFilled = activeHeroRating ? score <= activeScoreRounded : false;
+                          return (
+                            <span
+                              key={score}
+                              className={cx(styles.latestScoreSquare, isFilled && styles.latestScoreSquareFilled)}
+                              style={isFilled ? { backgroundColor: '#FF9830' } : undefined}
+                            />
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
+          </div>
+          <div className={styles.statsGrid}>
+            <TopStat
+              label="VERSIONS"
+              value={versionOptions.length}
+              loading={false}
+              normalFontSize
+              helpTooltip="Total distinct effective versions recorded for this agent."
+            />
+            <TopStat
+              label="MODELS"
+              value={detail.models.length}
+              loading={false}
+              normalFontSize
+              helpTooltip="Distinct model variants recorded for this agent version."
+            />
+            <TopStat
+              label="PRIMARY MODEL"
+              value={0}
+              displayValue={primaryModelProvider ? `${primaryModelLabel} (${primaryModelProvider})` : primaryModelLabel}
+              loading={false}
+              normalFontSize
+              helpTooltip="Primary model name and provider in this version."
+            />
+            <TopStat
+              label="TOOLS"
+              value={detail.tool_count}
+              loading={false}
+              normalFontSize
+              helpTooltip="Declared tool definitions."
+            />
+            <TopStat
+              label="AGE"
+              value={Math.max(0, toTimestampMs(detail.last_seen_at) - toTimestampMs(detail.first_seen_at))}
+              displayValue={formatDurationCompact(detail.first_seen_at, detail.last_seen_at)}
+              loading={false}
+              normalFontSize
+              helpTooltip="Duration between first and last recorded generations for this version."
+            />
+            <TopStat
+              label="FIRST SEEN"
+              value={toTimestampMs(detail.first_seen_at)}
+              displayValue={formatDate(detail.first_seen_at)}
+              loading={false}
+              normalFontSize
+              helpTooltip="The earliest time a generation was recorded for this agent version."
+            />
+            <TopStat
+              label="LAST SEEN"
+              value={toTimestampMs(detail.last_seen_at)}
+              displayValue={formatDate(detail.last_seen_at)}
+              loading={false}
+              normalFontSize
+              helpTooltip="The most recent time any generation was recorded for this agent version."
+            />
           </div>
         </div>
       </div>
@@ -1414,301 +1858,190 @@ export default function AgentDetailPage({
         </div>
       )}
 
-      <div className={styles.primaryPanelsRow}>
-        <div className={cx(styles.panel, styles.plainPanel, styles.stretchPanel)}>
-          <div
-            className={cx(styles.panelBody, styles.plainPanelBody, styles.versionsPanelBody, styles.stretchPanelBody)}
-          >
-            <span className={styles.statsHeaderLabel}>Versions</span>
-            <div className={styles.versionControls}>
-              <div className={styles.versionSelect}>
-                <Select
-                  options={versionSelectOptions}
-                  value={activeVersion}
-                  onChange={(selected) => {
-                    if (selected?.value === LOAD_MORE_VERSIONS_VALUE) {
-                      void loadMoreVersions();
-                      return;
-                    }
-                    selectVersion(selected?.value ?? '');
-                  }}
-                  isLoading={loadingVersions}
-                  placeholder="Select a version…"
-                  aria-label="agent version selector"
-                />
-              </div>
-              <Button variant="secondary" onClick={() => selectVersion('')} disabled={selectedVersion.length === 0}>
-                Latest
-              </Button>
-            </div>
-            {recentVersions.length > 0 && (
-              <>
-                <div className={styles.recentVersionsHeading}>Recent versions</div>
-                <div className={styles.recentVersionsGrid}>
-                  {recentVersions.map((versionItem, index) => {
-                    const rating = recentVersionRatings[versionItem.effective_version];
-                    const isSelected = activeVersion === versionItem.effective_version;
-                    const completedRating = rating?.status === 'completed' ? rating : null;
-                    const versionNumber =
-                      versionItem.declared_version_latest || versionItem.declared_version_first || `#${index + 1}`;
-                    const tooltipContent = (
-                      <div className={styles.versionTooltip}>
-                        <div className={styles.versionTooltipTitle}>Version {versionNumber}</div>
-                        <div className={styles.versionTooltipMeta}>
-                          Last seen {formatDate(versionItem.last_seen_at)}
-                        </div>
-                        <div
-                          className={styles.versionTooltipStatus}
-                          style={{
-                            color: completedRating
-                              ? scoreTone(theme, completedRating.score)
-                              : theme.colors.text.secondary,
-                          }}
-                        >
-                          {completedRating ? `Rated ${completedRating.score}/10` : 'Unrated'}
-                        </div>
-                      </div>
-                    );
-                    return (
-                      <div
-                        key={versionItem.effective_version}
-                        className={cx(styles.recentVersionItem, isSelected && styles.recentVersionItemActive)}
-                      >
-                        <Tooltip content={tooltipContent} placement="top">
-                          <button
-                            type="button"
-                            className={cx(styles.recentVersionBox, isSelected && styles.recentVersionBoxActive)}
-                            onClick={() => selectVersion(versionItem.effective_version)}
-                            aria-label={`select version ${versionItem.effective_version}`}
-                          >
-                            <span
-                              className={cx(
-                                styles.recentVersionContent,
-                                !completedRating && styles.recentVersionContentSingle
-                              )}
-                            >
-                              <span
-                                className={cx(
-                                  styles.recentVersionText,
-                                  !completedRating && styles.recentVersionTextCentered
-                                )}
-                              >
-                                <span
-                                  className={cx(
-                                    styles.recentVersionNumber,
-                                    !completedRating && styles.recentVersionNumberCentered,
-                                    isSelected && styles.recentVersionNumberActive
-                                  )}
-                                >
-                                  {versionNumber}
-                                </span>
-                              </span>
-                              {completedRating && (
-                                <span
-                                  className={cx(
-                                    styles.recentVersionScore,
-                                    isSelected && styles.recentVersionScoreActive
-                                  )}
-                                  style={{ color: scoreTone(theme, completedRating.score) }}
-                                >
-                                  {completedRating.score}/10
-                                </span>
-                              )}
-                            </span>
-                            <span
-                              className={cx(
-                                styles.recentVersionTimelineMarker,
-                                index === 0 && styles.recentVersionTimelineMarkerStart,
-                                index === recentVersions.length - 1 && styles.recentVersionTimelineMarkerEnd,
-                                isSelected && styles.recentVersionTimelineMarkerActive
-                              )}
-                              aria-hidden="true"
-                            />
-                            <span
-                              className={cx(
-                                styles.recentVersionRelativeTime,
-                                isSelected && styles.recentVersionRelativeTimeActive
-                              )}
-                            >
-                              {formatRelativeDateCompact(versionItem.last_seen_at)}
-                            </span>
-                          </button>
-                        </Tooltip>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className={cx(styles.stretchPanel, styles.stretchPanelBody)}>
-          <div className={styles.statsGrid}>
-            <TopStat
-              label="GENERATIONS"
-              value={detail.generation_count}
-              loading={false}
-              helpTooltip="Total generations recorded for this agent version."
-            />
-            <TopStat
-              label="PROMPT TOKENS"
-              value={detail.token_estimate.system_prompt}
-              loading={false}
-              helpTooltip="Estimated tokens consumed by the system prompt in this version."
-            />
-            <TopStat
-              label="TOOLS TOKENS"
-              value={nonDeferredToolTokens}
-              loading={false}
-              helpTooltip="Estimated tokens consumed by non-deferred tool schemas included in the initial context for this version."
-            />
-            <TopStat
-              label="TOTAL TOKENS"
-              value={effectiveTotalTokens}
-              loading={false}
-              helpTooltip="Sum of system prompt and non-deferred tool tokens - the baseline context cost per generation."
-            />
-            <TopStat
-              label="AGE"
-              value={Math.max(0, toTimestampMs(detail.last_seen_at) - toTimestampMs(detail.first_seen_at))}
-              displayValue={formatDurationCompact(detail.first_seen_at, detail.last_seen_at)}
-              loading={false}
-              helpTooltip="Duration between first and last recorded generations for this version."
-            />
-            <TopStat
-              label="FIRST SEEN"
-              value={toTimestampMs(detail.first_seen_at)}
-              displayValue={formatDate(detail.first_seen_at)}
-              loading={false}
-              helpTooltip="The earliest time a generation was recorded for this agent version."
-            />
-            <TopStat
-              label="LAST SEEN"
-              value={toTimestampMs(detail.last_seen_at)}
-              displayValue={formatDate(detail.last_seen_at)}
-              loading={false}
-              helpTooltip="The most recent time any generation was recorded for this agent version."
-            />
-          </div>
-        </div>
+      <div className={styles.mainAreaTabs}>
+        <TabsBar>
+          <Tab label="Prompts" active={mainAreaTab === 'prompts'} onChangeTab={() => setMainAreaTab('prompts')} />
+          <Tab label="Tools" active={mainAreaTab === 'tools'} onChangeTab={() => setMainAreaTab('tools')} />
+        </TabsBar>
       </div>
 
-      <div ref={promptAnalysisSectionRef} className={cx(styles.panel, styles.stretchPanel)}>
-        <div className={styles.panelHeader}>
-          <Text weight="medium">System prompt and context analysis</Text>
-        </div>
-        <div className={cx(styles.panelBody, styles.stretchPanelBody)}>
-          <div className={styles.combinedPromptSections}>
-            <div className={styles.sectionBlock}>
-              <span className={styles.panelHeaderControls}>
-                <span className={styles.promptViewToggle} aria-label="System prompt view toggle">
-                  <button
-                    type="button"
-                    className={cx(
-                      styles.promptViewToggleButton,
-                      systemPromptView === 'preview' && styles.promptViewToggleButtonActive
-                    )}
-                    aria-pressed={systemPromptView === 'preview'}
-                    onClick={() => {
-                      if (!isSystemTokenized) {
-                        setSystemPromptView('preview');
-                      }
-                    }}
-                    disabled={isSystemTokenized}
-                  >
-                    Preview
-                  </button>
-                  <button
-                    type="button"
-                    className={cx(
-                      styles.promptViewToggleButton,
-                      systemPromptView === 'markdown' && styles.promptViewToggleButtonActive
-                    )}
-                    aria-pressed={systemPromptView === 'markdown'}
-                    onClick={() => setSystemPromptView('markdown')}
-                  >
-                    Markdown
-                  </button>
-                </span>
-                <span
-                  className={cx(styles.tokenizeBtn, tokenizedSections['system'] && styles.tokenizeBtnActive)}
-                  onClick={() => toggleSection('system')}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      toggleSection('system');
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
-                >
-                  <Icon name="brackets-curly" size="xs" />
-                  {tokenizerLoading ? 'Loading\u2026' : 'Tokenize'}
-                </span>
-                {tokenizedSections['system'] && (
-                  <select
-                    className={styles.encodingSelect}
-                    aria-label="Tokenizer encoding"
-                    value={encodingOverride ?? ''}
-                    onChange={(e) => setEncodingOverride(e.target.value ? (e.target.value as EncodingName) : null)}
-                  >
-                    <option value="">Auto ({autoEncoding.replace('_base', '')})</option>
-                    {AVAILABLE_ENCODINGS.map((enc) => (
-                      <option key={enc.value} value={enc.value}>
-                        {enc.value.replace('_base', '')}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </span>
-              <div className={styles.systemPromptContent}>
-                {detail.system_prompt.length > 0 ? (
-                  tokenizedSections['system'] && encode && decode ? (
-                    <div className={styles.systemPrompt}>
-                      <TokenizedText text={detail.system_prompt} encode={encode} decode={decode} />
-                    </div>
-                  ) : systemPromptView === 'preview' ? (
-                    <div className={styles.systemPromptPreview}>
-                      <MarkdownPreview markdown={detail.system_prompt} />
-                    </div>
-                  ) : (
-                    <pre className={styles.systemPrompt}>{detail.system_prompt}</pre>
-                  )
-                ) : (
-                  <pre className={styles.systemPrompt}>No system prompt recorded.</pre>
-                )}
-              </div>
-            </div>
-            <div className={styles.sectionBlock}>
-              <AgentRatingPanel
-                agentName={agentName}
-                version={activeVersion}
-                agentStateContext={agentStateContext}
-                contentView={isSystemTokenized ? 'markdown' : systemPromptView}
-                onRerun={scrollToPromptAnalysis}
-                onResultChange={handleRatingResultChange}
-                dataSource={dataSource}
-                initialResult={initialRating}
-                initialLoading={initialRatingLoading || initialRating?.status === 'pending'}
-                initialError={initialRatingError}
-                embedded
+      {mainAreaTab === 'prompts' && (
+        <div className={styles.tabContentLayout}>
+          <div className={styles.tabSidebar} aria-label="Prompt stats">
+            <div className={styles.tabSidebarStats}>
+              <TopStat
+                label="GENERATIONS"
+                value={detail.generation_count}
+                loading={false}
+                normalFontSize
+                rightAlignContent
+                helpTooltip="Total generations recorded for this agent version."
+              />
+              <TopStat
+                label="PROMPT TOKENS"
+                value={detail.token_estimate.system_prompt}
+                loading={false}
+                normalFontSize
+                rightAlignContent
+                helpTooltip="Estimated tokens consumed by the system prompt in this version."
+              />
+              <TopStat
+                label="TOTAL TOKENS"
+                value={effectiveTotalTokens}
+                loading={false}
+                normalFontSize
+                rightAlignContent
+                helpTooltip="Sum of system prompt and non-deferred tool tokens - the baseline context cost per generation."
               />
             </div>
           </div>
+          <div className={styles.tabMainContent}>
+            <div ref={promptAnalysisSectionRef} className={cx(styles.panel, styles.stretchPanel)}>
+              <div className={styles.panelHeader}>
+                <Text weight="medium">System prompt and context analysis</Text>
+              </div>
+              <div className={cx(styles.panelBody, styles.stretchPanelBody)}>
+                <div className={styles.combinedPromptSections}>
+                  <div className={styles.sectionBlock}>
+                    <span className={styles.panelHeaderControls}>
+                      <span className={styles.promptViewToggle} aria-label="System prompt view toggle">
+                        <button
+                          type="button"
+                          className={cx(
+                            styles.promptViewToggleButton,
+                            systemPromptView === 'preview' && styles.promptViewToggleButtonActive
+                          )}
+                          aria-pressed={systemPromptView === 'preview'}
+                          onClick={() => {
+                            if (!isSystemTokenized) {
+                              setSystemPromptView('preview');
+                            }
+                          }}
+                          disabled={isSystemTokenized}
+                        >
+                          Preview
+                        </button>
+                        <button
+                          type="button"
+                          className={cx(
+                            styles.promptViewToggleButton,
+                            systemPromptView === 'markdown' && styles.promptViewToggleButtonActive
+                          )}
+                          aria-pressed={systemPromptView === 'markdown'}
+                          onClick={() => setSystemPromptView('markdown')}
+                        >
+                          Markdown
+                        </button>
+                      </span>
+                      <span
+                        className={cx(styles.tokenizeBtn, tokenizedSections['system'] && styles.tokenizeBtnActive)}
+                        onClick={() => toggleSection('system')}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            toggleSection('system');
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                      >
+                        <Icon name="brackets-curly" size="xs" />
+                        {tokenizerLoading ? 'Loading\u2026' : 'Tokenize'}
+                      </span>
+                      {tokenizedSections['system'] && (
+                        <select
+                          className={styles.encodingSelect}
+                          aria-label="Tokenizer encoding"
+                          value={encodingOverride ?? ''}
+                          onChange={(e) =>
+                            setEncodingOverride(e.target.value ? (e.target.value as EncodingName) : null)
+                          }
+                        >
+                          <option value="">Auto ({autoEncoding.replace('_base', '')})</option>
+                          {AVAILABLE_ENCODINGS.map((enc) => (
+                            <option key={enc.value} value={enc.value}>
+                              {enc.value.replace('_base', '')}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </span>
+                    <div className={styles.systemPromptContent}>
+                      {detail.system_prompt.length > 0 ? (
+                        tokenizedSections['system'] && encode && decode ? (
+                          <div className={styles.systemPrompt}>
+                            <TokenizedText text={detail.system_prompt} encode={encode} decode={decode} />
+                          </div>
+                        ) : systemPromptView === 'preview' ? (
+                          <div className={styles.systemPromptPreview}>
+                            <MarkdownPreview markdown={detail.system_prompt} />
+                          </div>
+                        ) : (
+                          <pre className={styles.systemPrompt}>{detail.system_prompt}</pre>
+                        )
+                      ) : (
+                        <pre className={styles.systemPrompt}>No system prompt recorded.</pre>
+                      )}
+                    </div>
+                  </div>
+                  <div className={styles.sectionBlock}>
+                    <AgentRatingPanel
+                      agentName={agentName}
+                      version={activeVersion}
+                      agentStateContext={agentStateContext}
+                      contentView={isSystemTokenized ? 'markdown' : systemPromptView}
+                      onRerun={scrollToPromptAnalysis}
+                      onResultChange={handleRatingResultChange}
+                      dataSource={dataSource}
+                      initialResult={initialRating}
+                      initialLoading={initialRatingLoading || initialRating?.status === 'pending'}
+                      initialError={initialRatingError}
+                      embedded
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
-      <ToolsPanel
-        tools={detail.tools}
-        tokenized={tokenizedSections['tools']}
-        onToggleTokenize={() => toggleSection('tools')}
-        tokenizerLoading={tokenizerLoading}
-        autoEncoding={autoEncoding}
-        encodingOverride={encodingOverride}
-        onEncodingChange={setEncodingOverride}
-        encode={encode}
-        decode={decode}
-      />
+      {mainAreaTab === 'tools' && (
+        <div className={styles.tabContentLayout}>
+          <div className={styles.tabSidebar} aria-label="Tools stats">
+            <div className={styles.tabSidebarStats}>
+              <TopStat
+                label="TOOLS TOKENS"
+                value={nonDeferredToolTokens}
+                loading={false}
+                normalFontSize
+                rightAlignContent
+                helpTooltip="Estimated tokens consumed by non-deferred tool schemas included in the initial context for this version."
+              />
+              <TopStat
+                label="TOTAL TOKENS"
+                value={effectiveTotalTokens}
+                loading={false}
+                normalFontSize
+                rightAlignContent
+                helpTooltip="Sum of system prompt and non-deferred tool tokens - the baseline context cost per generation."
+              />
+            </div>
+          </div>
+          <div className={styles.tabMainContent}>
+            <ToolsPanel
+              tools={detail.tools}
+              tokenized={tokenizedSections['tools']}
+              onToggleTokenize={() => toggleSection('tools')}
+              tokenizerLoading={tokenizerLoading}
+              autoEncoding={autoEncoding}
+              encodingOverride={encodingOverride}
+              onEncodingChange={setEncodingOverride}
+              encode={encode}
+              decode={decode}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

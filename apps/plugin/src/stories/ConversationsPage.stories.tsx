@@ -41,6 +41,13 @@ const mockDataSource: ConversationsDataSource = {
     };
   },
 
+  async streamSearchConversations(_request, options) {
+    options.onResults(mockSearchResults.slice(0, 1));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    options.onResults(mockSearchResults.slice(1));
+    options.onComplete({ next_cursor: '', has_more: false });
+  },
+
   async getConversationDetail(conversationID) {
     if (conversationID === 'conv-xyz-789') {
       return mockConversationDetail;

@@ -124,10 +124,9 @@ describe('AgentDetailPage', () => {
     );
     await waitFor(() => expect(dataSource.listAgentVersions).toHaveBeenCalledWith('assistant', 50));
 
-    const versionSelector = await screen.findByLabelText('agent version selector');
-    fireEvent.keyDown(versionSelector, { key: 'ArrowDown', code: 'ArrowDown' });
+    fireEvent.click(await screen.findByLabelText('toggle agent version selector'));
     const nextVersionDescription = await screen.findByText('Declared: 1.1.0');
-    const nextVersionOption = nextVersionDescription.closest('[role="option"]');
+    const nextVersionOption = nextVersionDescription.closest('button');
     if (!nextVersionOption) {
       throw new Error('expected to find version option for declared version 1.1.0');
     }
@@ -163,6 +162,74 @@ describe('AgentDetailPage', () => {
     expect(screen.getByText('gen_ai.agent.name')).toBeInTheDocument();
   });
 
+  it('hides recent versions when only one version exists', async () => {
+    const dataSource = createDataSource();
+    dataSource.listAgentVersions = jest.fn(async () => ({
+      items: [
+        {
+          effective_version: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          declared_version_first: '1.0.0',
+          declared_version_latest: '1.0.0',
+          first_seen_at: '2026-03-04T09:00:00Z',
+          last_seen_at: '2026-03-04T10:00:00Z',
+          generation_count: 4,
+          tool_count: 1,
+          system_prompt_prefix: 'v1',
+          token_estimate: { system_prompt: 4, tools_total: 2, total: 6 },
+        },
+      ],
+      next_cursor: '',
+    }));
+
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByLabelText('toggle agent version selector')).toBeInTheDocument();
+    expect(screen.queryByLabelText('agent version selector')).not.toBeInTheDocument();
+    expect(screen.queryByText('Recent versions')).not.toBeInTheDocument();
+  });
+
+  it('shows up to eight recent versions in the top bar', async () => {
+    const dataSource = createDataSource();
+    dataSource.listAgentVersions = jest.fn(async () => ({
+      items: Array.from({ length: 12 }, (_, index) => {
+        const versionDigit = ((index % 9) + 1).toString();
+        const effectiveVersion = `sha256:${versionDigit.repeat(64)}`;
+        const hour = (index + 1).toString().padStart(2, '0');
+        return {
+          effective_version: effectiveVersion,
+          declared_version_first: `${index + 1}.0.0`,
+          declared_version_latest: `${index + 1}.0.0`,
+          first_seen_at: `2026-03-04T${hour}:00:00Z`,
+          last_seen_at: `2026-03-04T${hour}:30:00Z`,
+          generation_count: index + 1,
+          tool_count: 1,
+          system_prompt_prefix: `v${index + 1}`,
+          token_estimate: { system_prompt: 4, tools_total: 2, total: 6 },
+        };
+      }),
+      next_cursor: '',
+    }));
+
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await screen.findByLabelText('toggle agent version selector');
+    await waitFor(() => {
+      expect(screen.getAllByLabelText(/select version sha256:/i)).toHaveLength(8);
+    });
+  });
+
   it('does not show rating error alert when latest rating returns 404', async () => {
     const dataSource = createDataSource();
     dataSource.lookupAgentRating = jest.fn(async () => {
@@ -192,9 +259,10 @@ describe('AgentDetailPage', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByText('LATEST SCORE')).toBeInTheDocument();
+    await screen.findByLabelText('toggle agent version selector');
+    expect(screen.queryByText('LATEST SCORE')).not.toBeInTheDocument();
     expect(screen.getAllByText('8/10').length).toBeGreaterThan(0);
-    expect(screen.getByLabelText('LATEST SCORE help')).toBeInTheDocument();
+    expect(screen.getByLabelText('Latest score 8/10')).toBeInTheDocument();
   });
 
   it('shows compact age in top stats', async () => {
@@ -212,6 +280,30 @@ describe('AgentDetailPage', () => {
     expect(screen.getByText('2h')).toBeInTheDocument();
   });
 
+  it('switches between Prompts and Tools main tabs', async () => {
+    const dataSource = createDataSource();
+
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('System prompt and context analysis')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'select tool weather' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Tools' }));
+
+    expect(await screen.findByRole('button', { name: 'select tool weather' })).toBeInTheDocument();
+    expect(screen.queryByText('System prompt and context analysis')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Prompts' }));
+
+    expect(await screen.findByText('System prompt and context analysis')).toBeInTheDocument();
+  });
+
   it('shows info icons for all top stats', async () => {
     const dataSource = createDataSource();
 
@@ -223,19 +315,20 @@ describe('AgentDetailPage', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByText('GENERATIONS')).toBeInTheDocument();
-    const statLabels = [
-      'GENERATIONS',
-      'PROMPT TOKENS',
-      'TOOLS TOKENS',
-      'TOTAL TOKENS',
-      'AGE',
-      'FIRST SEEN',
-      'LAST SEEN',
-    ];
-    for (const label of statLabels) {
+    expect(await screen.findByText('AGE')).toBeInTheDocument();
+    const staticStatLabels = ['AGE', 'FIRST SEEN', 'LAST SEEN'];
+    for (const label of staticStatLabels) {
       expect(screen.getByLabelText(`${label} help`)).toBeInTheDocument();
     }
+
+    const promptStatLabels = ['GENERATIONS', 'PROMPT TOKENS', 'TOTAL TOKENS'];
+    for (const label of promptStatLabels) {
+      expect(screen.getByLabelText(`${label} help`)).toBeInTheDocument();
+    }
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Tools' }));
+    expect(await screen.findByText('TOOLS TOKENS')).toBeInTheDocument();
+    expect(screen.getByLabelText('TOOLS TOKENS help')).toBeInTheDocument();
   });
 
   it('excludes deferred tools from tools and total token stats', async () => {
@@ -292,9 +385,11 @@ describe('AgentDetailPage', () => {
       </MemoryRouter>
     );
 
+    expect(await screen.findByText('TOTAL TOKENS')).toBeInTheDocument();
+    expect(screen.getByText('7')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Tools' }));
     expect(await screen.findByText('TOOLS TOKENS')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
-    expect(screen.getByText('7')).toBeInTheDocument();
     expect(screen.queryByText('17')).not.toBeInTheDocument();
   });
 

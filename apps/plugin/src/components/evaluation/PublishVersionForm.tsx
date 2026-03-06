@@ -6,6 +6,7 @@ import {
   LLM_JUDGE_DEFAULT_SYSTEM_PROMPT,
   LLM_JUDGE_DEFAULT_USER_PROMPT,
   buildOutputKeyFromForm,
+  normalizedOptionalString,
   type EvalFormState,
   type EvalOutputKey,
   type EvaluatorKind,
@@ -18,6 +19,7 @@ import { parseSchemaConfig, validateSharedForm } from '../../evaluation/formVali
 import { formatHeuristicStringList, parseHeuristicStringListInput } from '../../evaluation/heuristicConfig';
 import { nextVersion } from '../../evaluation/versionUtils';
 import { getSectionTitleStyles } from './sectionStyles';
+import PromptTemplateTextarea from './PromptTemplateTextarea';
 
 export type PublishVersionFormProps = {
   kind: EvaluatorKind;
@@ -47,6 +49,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexDirection: 'column' as const,
     background: theme.colors.background.primary,
     borderRadius: theme.shape.radius.default,
+    overflow: 'hidden',
   }),
   sectionHeader: css({
     display: 'flex',
@@ -149,19 +152,15 @@ export default function PublishVersionForm({
   const [version] = useState(() => nextVersion(existingVersions));
   const [touched, setTouched] = useState(false);
 
-  const [provider, setProvider] = useState(() => String(initialConfig?.provider ?? ''));
-  const [model, setModel] = useState(() => String(initialConfig?.model ?? ''));
+  const [provider, setProvider] = useState(() => normalizedOptionalString(initialConfig?.provider) ?? '');
+  const [model, setModel] = useState(() => normalizedOptionalString(initialConfig?.model) ?? '');
   const [providerOptions, setProviderOptions] = useState<Array<SelectableValue<string>>>([]);
   const [modelOptions, setModelOptions] = useState<Array<SelectableValue<string>>>([]);
-  const [systemPrompt, setSystemPrompt] = useState(() =>
-    String(initialConfig?.system_prompt || LLM_JUDGE_DEFAULT_SYSTEM_PROMPT)
-  );
-  const [userPrompt, setUserPrompt] = useState(() =>
-    String(initialConfig?.user_prompt || LLM_JUDGE_DEFAULT_USER_PROMPT)
-  );
+  const [systemPrompt, setSystemPrompt] = useState(() => normalizedOptionalString(initialConfig?.system_prompt) ?? '');
+  const [userPrompt, setUserPrompt] = useState(() => normalizedOptionalString(initialConfig?.user_prompt) ?? '');
   const [maxTokens, setMaxTokens] = useState(() => {
     const v = initialConfig?.max_tokens;
-    return typeof v === 'number' ? v : 256;
+    return typeof v === 'number' ? v : 128;
   });
   const [temperature, setTemperature] = useState(() => {
     const v = initialConfig?.temperature;
@@ -238,10 +237,10 @@ export default function PublishVersionForm({
     switch (kind) {
       case 'llm_judge':
         return {
-          provider: provider || undefined,
-          model: model || undefined,
-          system_prompt: systemPrompt || undefined,
-          user_prompt: userPrompt || undefined,
+          provider: normalizedOptionalString(provider),
+          model: normalizedOptionalString(model),
+          system_prompt: normalizedOptionalString(systemPrompt),
+          user_prompt: normalizedOptionalString(userPrompt),
           max_tokens: maxTokens,
           temperature,
         };
@@ -457,24 +456,20 @@ export default function PublishVersionForm({
               label="System prompt"
               description="Optional. Instructions for the judge model. Uses the default prompt when blank."
             >
-              <textarea
-                className={styles.textarea}
+              <PromptTemplateTextarea
                 value={systemPrompt}
-                onChange={(e) => setSystemPrompt(e.currentTarget.value)}
+                onChange={setSystemPrompt}
                 placeholder={LLM_JUDGE_DEFAULT_SYSTEM_PROMPT}
-                rows={4}
               />
             </Field>
             <Field
               label="User prompt"
               description="Optional. Supports {{input}}, {{output}}, {{generation_id}}, {{conversation_id}}. Uses the default prompt when blank."
             >
-              <textarea
-                className={styles.textarea}
+              <PromptTemplateTextarea
                 value={userPrompt}
-                onChange={(e) => setUserPrompt(e.currentTarget.value)}
+                onChange={setUserPrompt}
                 placeholder={LLM_JUDGE_DEFAULT_USER_PROMPT}
-                rows={4}
               />
             </Field>
             <div className={styles.twoColumnGrid}>
