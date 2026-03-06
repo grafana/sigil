@@ -843,7 +843,7 @@ export function LandingTopBar({
                 <div className={styles.heroPipeline}>
                   <div
                     className={styles.pipelineStep}
-                    style={{ boxShadow: '0 -8px 24px rgba(87, 148, 242, 0.18), 0 0 8px rgba(87, 148, 242, 0.08)' }}
+                    style={{ boxShadow: '0 -6px 18px rgba(87, 148, 242, 0.11), 0 0 6px rgba(87, 148, 242, 0.05)' }}
                   >
                     <PipelineConnectorSwarm
                       color="#5794F2"
@@ -888,7 +888,7 @@ export function LandingTopBar({
                   <PipelineConnectorSwarm color="#5794F2" />
                   <div
                     className={styles.pipelineStep}
-                    style={{ boxShadow: '0 -8px 24px rgba(184, 119, 217, 0.18), 0 0 8px rgba(184, 119, 217, 0.08)' }}
+                    style={{ boxShadow: '0 -6px 18px rgba(184, 119, 217, 0.11), 0 0 6px rgba(184, 119, 217, 0.05)' }}
                   >
                     <PipelineConnectorSwarm
                       color="#B877D9"
@@ -933,7 +933,7 @@ export function LandingTopBar({
                   <PipelineConnectorSwarm color="#B877D9" delayed />
                   <div
                     className={styles.pipelineStep}
-                    style={{ boxShadow: '0 -8px 24px rgba(255, 152, 48, 0.18), 0 0 8px rgba(255, 152, 48, 0.08)' }}
+                    style={{ boxShadow: '0 -6px 18px rgba(255, 152, 48, 0.11), 0 0 6px rgba(255, 152, 48, 0.05)' }}
                   >
                     <PipelineConnectorSwarm
                       color="#FF9830"
@@ -1448,7 +1448,7 @@ function getStyles(theme: GrafanaTheme2) {
       alignItems: 'center',
       justifyContent: 'center',
       flex: 1,
-      minHeight: 250,
+      minHeight: 200,
       background: theme.colors.background.secondary,
     }),
     videoPlayIcon: css({
@@ -1607,7 +1607,7 @@ function getStyles(theme: GrafanaTheme2) {
     heroPipeline: css({
       label: 'landingTopBar-heroPipeline',
       display: 'flex',
-      alignItems: 'flex-start',
+      alignItems: 'stretch',
       gap: 0,
       marginTop: theme.spacing(1.5),
       flex: 'none',
@@ -1626,7 +1626,9 @@ function getStyles(theme: GrafanaTheme2) {
       position: 'relative',
       borderRadius: theme.shape.radius.default,
       border: `1px solid ${theme.colors.border.weak}`,
-      background: theme.colors.background.secondary,
+      background: theme.isDark ? 'rgba(31, 38, 56, 0.5)' : 'rgba(255, 255, 255, 0.62)',
+      backdropFilter: 'blur(6px) saturate(1.06)',
+      WebkitBackdropFilter: 'blur(6px) saturate(1.06)',
       overflow: 'hidden',
       '& > *': {
         position: 'relative',
