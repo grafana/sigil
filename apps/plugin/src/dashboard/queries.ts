@@ -200,6 +200,15 @@ export function requestsOverTimeQuery(
   return `sum${byClause(breakdown)}(rate(${OPERATION_DURATION}_count${sel(filters)}[${interval}]))`;
 }
 
+/** Total request count per step window, grouped by breakdown dimension. Uses increase() for integer-friendly counts in bar charts. */
+export function requestCountOverTimeQuery(
+  filters: DashboardFilters,
+  stepInterval: string,
+  breakdown: BreakdownDimension
+): string {
+  return `sum${byClause(breakdown)}(increase(${OPERATION_DURATION}_count${sel(filters)}[${stepInterval}]))`;
+}
+
 /** Error rate as percentage over time, optionally grouped by breakdown dimension. */
 export function errorRateOverTimeQuery(
   filters: DashboardFilters,

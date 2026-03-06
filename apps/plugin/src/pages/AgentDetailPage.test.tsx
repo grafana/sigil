@@ -168,6 +168,17 @@ describe('AgentDetailPage', () => {
     await waitFor(() => expect(dataSource.lookupAgent).toHaveBeenCalledWith('', undefined));
     expect(await screen.findByText(/aggregates generations where/i)).toBeInTheDocument();
     expect(screen.getByText('gen_ai.agent.name')).toBeInTheDocument();
+
+    const fixButton = screen.getByRole('button', { name: /fix in cursor/i });
+    expect(fixButton).toBeInTheDocument();
+
+    const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+    fireEvent.click(fixButton);
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    const url = openSpy.mock.calls[0][0] as string;
+    expect(url).toMatch(/^https:\/\/cursor\.com\/link\/prompt\?text=/);
+    expect(url).toContain('gen_ai.agent.name');
+    openSpy.mockRestore();
   });
 
   it('hides recent versions when only one version exists', async () => {

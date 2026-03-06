@@ -4,10 +4,8 @@ import { css, cx } from '@emotion/css';
 import { dateTime, type GrafanaTheme2 } from '@grafana/data';
 import {
   Alert,
-  Badge,
   Icon,
   Input,
-  LinkButton,
   Spinner,
   Stack,
   Tab,
@@ -47,8 +45,7 @@ const PAGE_SIZE = 24;
 const STALE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const HIGH_CHURN_THRESHOLD = 5;
 const HERO_TOP_LIMIT = 10;
-const TOP_AGENTS_LIMIT = 10;
-const CHART_HEIGHT = 250;
+const CHART_HEIGHT = 600;
 const ESTIMATED_USD_PER_TOKEN = 2.5 / 1_000_000;
 const STARRED_AGENTS_STORAGE_KEY = 'sigil.agents.starred';
 
@@ -197,12 +194,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     fontFamily: theme.typography.fontFamilyMonospace,
     whiteSpace: 'normal' as const,
     overflowWrap: 'anywhere' as const,
-  }),
-  seeMoreFooter: css({
-    display: 'flex',
-    justifyContent: 'center',
-    padding: theme.spacing(1),
-    borderTop: `1px solid ${theme.colors.border.weak}`,
   }),
   overviewEmptyState: css({
     display: 'flex',
@@ -559,111 +550,6 @@ function AgentFootprintPanel({
 }
 
 // ---------------------------------------------------------------------------
-// TopAgentsTable
-// ---------------------------------------------------------------------------
-
-type TopAgentRow = AgentListItem & { runtimeTokens: number; runtimeCostUSD: number };
-
-function TopAgentsTable({
-  items,
-  starredAgents,
-  onToggleStar,
-}: {
-  items: TopAgentRow[];
-  starredAgents: Set<string>;
-  onToggleStar: (agentName: string) => void;
-}) {
-  const styles = useStyles2(getStyles);
-
-  if (items.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className={styles.tablePanel}>
-      <div className={styles.tablePanelHeader}>
-        <span className={styles.tablePanelTitle}>Top Agents</span>
-      </div>
-      <table className={styles.overviewTable}>
-        <thead>
-          <tr className={styles.overviewHeaderRow}>
-            <th className={cx(styles.overviewHeaderCell, styles.starCell)} aria-label="Star" />
-            <th className={styles.overviewHeaderCell}>Agent</th>
-            <th className={cx(styles.overviewHeaderCell, styles.overviewHeaderCellRight)}>Generations</th>
-            <th className={cx(styles.overviewHeaderCell, styles.overviewHeaderCellRight)}>Tokens</th>
-            <th className={cx(styles.overviewHeaderCell, styles.overviewHeaderCellRight)}>Est. Cost</th>
-            <th className={cx(styles.overviewHeaderCell, styles.overviewHeaderCellRight)}>Versions</th>
-            <th className={styles.overviewHeaderCell}>Last Seen</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => {
-            const name = agentDisplayName(item);
-            const href = agentHref(name);
-            const isStarred = starredAgents.has(item.agent_name);
-            return (
-              <tr
-                key={`${item.agent_name}:${item.latest_effective_version}`}
-                className={styles.overviewTableRow}
-                onClick={(e) => {
-                  if (e.metaKey || e.ctrlKey) {
-                    window.open(href, '_blank');
-                  } else {
-                    window.location.href = href;
-                  }
-                }}
-                role="link"
-                aria-label={`view agent ${cardLabel(item)}`}
-              >
-                <td className={cx(styles.overviewTableCell, styles.starCell)}>
-                  <button
-                    className={cx(styles.starButton, isStarred && styles.starButtonActive)}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleStar(item.agent_name);
-                    }}
-                    aria-label={isStarred ? `unstar agent ${name}` : `star agent ${name}`}
-                  >
-                    <Icon name={isStarred ? 'favorite' : 'star'} size="md" />
-                  </button>
-                </td>
-                <td className={cx(styles.overviewTableCell, styles.overviewTableCellMono)}>{name}</td>
-                <td className={cx(styles.overviewTableCell, styles.overviewTableCellRight)}>
-                  {formatStatValue(item.generation_count, 'short')}
-                </td>
-                <td className={cx(styles.overviewTableCell, styles.overviewTableCellRight)}>
-                  {formatStatValue(item.runtimeTokens, 'short')}
-                </td>
-                <td className={cx(styles.overviewTableCell, styles.overviewTableCellRight)}>
-                  {formatStatValue(item.runtimeCostUSD, 'currencyUSD')}
-                </td>
-                <td className={cx(styles.overviewTableCell, styles.overviewTableCellRight)}>
-                  {item.version_count >= HIGH_CHURN_THRESHOLD ? (
-                    <Badge text={String(item.version_count)} color="orange" />
-                  ) : (
-                    item.version_count
-                  )}
-                </td>
-                <td className={styles.overviewTableCell}>
-                  <Tooltip content={new Date(item.latest_seen_at).toLocaleString()} placement="left">
-                    <span>{formatRelativeTime(item.latest_seen_at)}</span>
-                  </Tooltip>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      <div className={styles.seeMoreFooter}>
-        <LinkButton href="?tab=table" variant="secondary" fill="text" size="sm" icon="arrow-right">
-          See all agents
-        </LinkButton>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -851,30 +737,6 @@ export default function AgentsPage({
         return { name: agentDisplayName(item), tokens, costUSD };
       }),
     [summary.topByTokenFootprint, summary.usageByName]
-  );
-
-  const topAgentsData = useMemo<TopAgentRow[]>(
-    () =>
-      [...items]
-        .filter((item) => item.generation_count > 0)
-        .sort((a, b) => {
-          const aStarred = starredAgents.has(a.agent_name) ? 1 : 0;
-          const bStarred = starredAgents.has(b.agent_name) ? 1 : 0;
-          if (aStarred !== bStarred) {
-            return bStarred - aStarred;
-          }
-          return b.generation_count - a.generation_count;
-        })
-        .slice(0, TOP_AGENTS_LIMIT)
-        .map((item) => {
-          const usage = summary.usageByName.get(item.agent_name) ?? summary.usageByName.get(item.agent_name.trim());
-          return {
-            ...item,
-            runtimeTokens: usage?.tokens ?? 0,
-            runtimeCostUSD: usage?.costUSD ?? 0,
-          };
-        }),
-    [items, summary.usageByName, starredAgents]
   );
 
   const sortedItems = useMemo(
@@ -1120,9 +982,8 @@ export default function AgentsPage({
 
                 <div className={styles.grid}>
                   <AgentActivityTimeline
-                    items={items}
+                    dashboardDataSource={dashboardDataSource}
                     timeRange={timeRange}
-                    loading={loading}
                     onTimeRangeChange={setTimeRange}
                   />
 
@@ -1146,8 +1007,6 @@ export default function AgentsPage({
                     />
                   </div>
                 </div>
-
-                <TopAgentsTable items={topAgentsData} starredAgents={starredAgents} onToggleStar={toggleStar} />
               </div>
             )
           ) : (
