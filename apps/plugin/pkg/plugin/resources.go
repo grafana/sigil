@@ -625,9 +625,9 @@ func (a *App) handleLookupPromptInsights(w http.ResponseWriter, req *http.Reques
 }
 
 const (
-	analyzePromptConversationLimit    = 15
-	analyzePromptDetailBatchSize      = 5
-	analyzePromptDefaultLookback      = 7 * 24 * time.Hour
+	analyzePromptConversationLimit = 15
+	analyzePromptDetailBatchSize   = 5
+	analyzePromptDefaultLookback   = 7 * 24 * time.Hour
 )
 
 var analyzePromptValidLookbacks = map[string]time.Duration{
@@ -815,8 +815,8 @@ func (a *App) fetchConversationExcerptsParallel(
 type generationPayload = map[string]any
 
 type conversationDetailResponse struct {
-	ConversationID string               `json:"conversation_id"`
-	Generations    []generationPayload  `json:"generations"`
+	ConversationID string              `json:"conversation_id"`
+	Generations    []generationPayload `json:"generations"`
 }
 
 func extractGenerationMessageText(gen generationPayload, field string) string {
