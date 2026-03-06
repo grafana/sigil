@@ -1,21 +1,25 @@
 import React from 'react';
-import { css } from '@emotion/css';
+import { css, cx } from '@emotion/css';
 import { type GrafanaTheme2 } from '@grafana/data';
-import { Tooltip, useStyles2 } from '@grafana/ui';
+import { Icon, Tooltip, useStyles2 } from '@grafana/ui';
 import { Link } from 'react-router-dom';
 import { formatStatValue } from './dashboard/dashboardShared';
 
 export type TopStatProps = {
   label: string;
   value: number;
+  displayValue?: string;
   unit?: string;
   loading: boolean;
+  compact?: boolean;
+  normalFontSize?: boolean;
   prevValue?: number;
   prevLoading?: boolean;
   invertChange?: boolean;
   comparisonLabel?: string;
   to?: string;
   linkLabel?: string;
+  helpTooltip?: string | React.ReactElement;
 };
 
 const DEFAULT_COMPARISON_LABEL = 'one hour ago';
@@ -23,14 +27,18 @@ const DEFAULT_COMPARISON_LABEL = 'one hour ago';
 export function TopStat({
   label,
   value,
+  displayValue,
   unit,
   loading,
+  compact = false,
+  normalFontSize = false,
   prevValue,
   prevLoading,
   invertChange,
   comparisonLabel = DEFAULT_COMPARISON_LABEL,
   to,
   linkLabel,
+  helpTooltip,
 }: TopStatProps) {
   const styles = useStyles2(getStyles);
 
@@ -47,7 +55,7 @@ export function TopStat({
       const badgeClass = isGood ? styles.changeBadgeGood : styles.changeBadgeWarn;
       changeBadge = (
         <Tooltip content={`Zero ${comparisonLabel}`} placement="bottom">
-          <span className={`${styles.changeBadge} ${badgeClass}`}>new</span>
+          <span className={`${styles.changeBadge} ${badgeClass}`}>↑ 0</span>
         </Tooltip>
       );
     } else {
@@ -71,17 +79,34 @@ export function TopStat({
   }
 
   return (
-    <div className={styles.topStat}>
+    <div className={cx(styles.topStat, compact && styles.topStatCompact)}>
       <div className={styles.topStatLabelRow}>
-        <span className={styles.topStatLabel}>{label}</span>
+        <span className={styles.topStatLabelGroup}>
+          <span className={cx(styles.topStatLabel, compact && styles.topStatLabelCompact)}>{label}</span>
+          {helpTooltip && (
+            <Tooltip content={helpTooltip} placement="top">
+              <span className={styles.topStatHelpIcon} aria-label={`${label} help`}>
+                <Icon name="info-circle" size="sm" />
+              </span>
+            </Tooltip>
+          )}
+        </span>
         {to && (
           <Link to={to} className={styles.topStatDetailLink}>
             {linkLabel ?? 'View details'}
           </Link>
         )}
       </div>
-      <div className={styles.topStatRow}>
-        <span className={styles.topStatValue}>{loading ? '–' : formatStatValue(value, unit)}</span>
+      <div className={cx(styles.topStatRow, compact && styles.topStatRowCompact)}>
+        <span
+          className={cx(
+            styles.topStatValue,
+            compact && styles.topStatValueCompact,
+            normalFontSize && styles.topStatValueNormalFont
+          )}
+        >
+          {loading ? '–' : (displayValue ?? formatStatValue(value, unit))}
+        </span>
         {changeBadge}
       </div>
     </div>
@@ -95,11 +120,27 @@ function getStyles(theme: GrafanaTheme2) {
       flexDirection: 'column',
       gap: theme.spacing(0.5),
     }),
+    topStatCompact: css({
+      gap: theme.spacing(0.75),
+    }),
     topStatLabelRow: css({
       display: 'flex',
-      alignItems: 'baseline',
+      alignItems: 'center',
       justifyContent: 'space-between',
       gap: theme.spacing(1),
+      minHeight: theme.spacing(3),
+    }),
+    topStatLabelGroup: css({
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: theme.spacing(0.5),
+      minWidth: 0,
+    }),
+    topStatHelpIcon: css({
+      display: 'inline-flex',
+      alignItems: 'center',
+      color: theme.colors.text.secondary,
+      lineHeight: 1,
     }),
     topStatDetailLink: css({
       fontSize: theme.typography.bodySmall.fontSize,
@@ -122,16 +163,32 @@ function getStyles(theme: GrafanaTheme2) {
       color: theme.colors.text.secondary,
       lineHeight: 1.2,
     }),
+    topStatLabelCompact: css({
+      fontSize: theme.typography.bodySmall.fontSize,
+      lineHeight: 1.1,
+      letterSpacing: '0.02em',
+    }),
     topStatRow: css({
       display: 'flex',
       alignItems: 'center',
       gap: theme.spacing(1),
+    }),
+    topStatRowCompact: css({
+      gap: theme.spacing(0.5),
     }),
     topStatValue: css({
       fontSize: theme.typography.h3.fontSize,
       fontWeight: theme.typography.fontWeightMedium,
       color: theme.colors.text.primary,
       lineHeight: 1.2,
+    }),
+    topStatValueCompact: css({
+      fontSize: theme.typography.h5.fontSize,
+      lineHeight: 1.15,
+    }),
+    topStatValueNormalFont: css({
+      fontSize: theme.typography.body.fontSize,
+      lineHeight: 1.3,
     }),
     changeBadge: css({
       display: 'inline-flex',

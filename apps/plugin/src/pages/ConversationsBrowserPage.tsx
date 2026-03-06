@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
-import { dateTime, type GrafanaTheme2 } from '@grafana/data';
-import { Alert, useStyles2 } from '@grafana/ui';
+import { dateTime, type GrafanaTheme2, type SelectableValue } from '@grafana/data';
+import { Alert, Select, useStyles2 } from '@grafana/ui';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
+import { buildConversationSearchFilter } from '../conversation/filters';
 import type { ConversationSearchResult } from '../conversation/types';
 import { type DashboardDataSource, defaultDashboardDataSource } from '../dashboard/api';
-import type { DashboardFilters } from '../dashboard/types';
+import { type ConversationOrderBy, conversationOrderByLabel, CONVERSATION_ORDER_BY_VALUES } from '../dashboard/types';
 import { useFilterUrlState } from '../hooks/useFilterUrlState';
 import { useCascadingFilterOptions } from '../hooks/useCascadingFilterOptions';
 import { FilterToolbar } from '../components/filters/FilterToolbar';
@@ -26,52 +27,20 @@ export type ConversationsBrowserPageProps = {
 };
 
 const SDK_NAME_SELECT_KEY = 'span.sigil.sdk.name';
-const TOTAL_TOKENS_SELECT_KEY = 'span.gen_ai.usage.total_tokens';
-const DEFAULT_SEARCH_SELECT_FIELDS = [SDK_NAME_SELECT_KEY];
+const INPUT_TOKENS_SELECT_KEY = 'span.gen_ai.usage.input_tokens';
+const OUTPUT_TOKENS_SELECT_KEY = 'span.gen_ai.usage.output_tokens';
+const DEFAULT_SEARCH_SELECT_FIELDS = [SDK_NAME_SELECT_KEY, INPUT_TOKENS_SELECT_KEY, OUTPUT_TOKENS_SELECT_KEY];
 
-// Maps Prometheus metric labels to the backend's well-known filter short names
-// which resolve to the correct Tempo span attributes (e.g. provider -> span.gen_ai.provider.name).
-const promLabelToFilterKey: Record<string, string> = {
-  gen_ai_provider_name: 'provider',
-  gen_ai_request_model: 'model',
-  gen_ai_agent_name: 'agent',
-};
+const orderByOptions: Array<SelectableValue<ConversationOrderBy>> = (
+  Object.keys(conversationOrderByLabel) as ConversationOrderBy[]
+).map((key) => ({ label: conversationOrderByLabel[key], value: key }));
 
-function buildFilterClause(key: string, values: string[]): string | null {
-  if (values.length === 0) {
-    return null;
-  }
-  if (values.length === 1) {
-    return `${key} = "${values[0]}"`;
-  }
-  return `${key} =~ "${values.join('|')}"`;
-}
-
-function buildConversationSearchFilter(filters: DashboardFilters): string {
-  const parts: string[] = [];
-
-  const providerClause = buildFilterClause('provider', filters.providers);
-  if (providerClause) {
-    parts.push(providerClause);
-  }
-
-  const modelClause = buildFilterClause('model', filters.models);
-  if (modelClause) {
-    parts.push(modelClause);
-  }
-
-  const agentClause = buildFilterClause('agent', filters.agentNames);
-  if (agentClause) {
-    parts.push(agentClause);
-  }
-
-  for (const lf of filters.labelFilters) {
-    if (lf.key && lf.value) {
-      const resolvedKey = promLabelToFilterKey[lf.key] ?? lf.key;
-      parts.push(`${resolvedKey} ${lf.operator} "${lf.value}"`);
-    }
-  }
-  return parts.join(' ');
+function getConversationTotalTokens(conversation: ConversationSearchResult): number {
+  const input = conversation.selected?.[INPUT_TOKENS_SELECT_KEY];
+  const output = conversation.selected?.[OUTPUT_TOKENS_SELECT_KEY];
+  const inputNum = typeof input === 'number' ? input : 0;
+  const outputNum = typeof output === 'number' ? output : 0;
+  return inputNum + outputNum;
 }
 
 type ConversationStats = {
@@ -83,8 +52,26 @@ type ConversationStats = {
   badRatedPct: number;
 };
 
-function sortConversations(conversations: ConversationSearchResult[]): ConversationSearchResult[] {
-  return [...conversations].sort((a, b) => Date.parse(b.last_generation_at) - Date.parse(a.last_generation_at));
+function sortConversations(
+  conversations: ConversationSearchResult[],
+  orderBy: ConversationOrderBy = 'time'
+): ConversationSearchResult[] {
+  return [...conversations].sort((a, b) => {
+    switch (orderBy) {
+      case 'errors':
+        return b.error_count - a.error_count;
+      case 'duration': {
+        const aDuration = Date.parse(a.last_generation_at) - Date.parse(a.first_generation_at);
+        const bDuration = Date.parse(b.last_generation_at) - Date.parse(b.first_generation_at);
+        return bDuration - aDuration;
+      }
+      case 'tokens':
+        return getConversationTotalTokens(b) - getConversationTotalTokens(a);
+      case 'time':
+      default:
+        return Date.parse(b.last_generation_at) - Date.parse(a.last_generation_at);
+    }
+  });
 }
 
 async function fetchRangeConversations(
@@ -127,10 +114,7 @@ function buildConversationStats(conversations: ConversationSearchResult[], windo
 
   for (const conversation of conversations) {
     totalLLMCalls += conversation.generation_count;
-    const tokenValue = conversation.selected?.[TOTAL_TOKENS_SELECT_KEY];
-    if (typeof tokenValue === 'number' && Number.isFinite(tokenValue)) {
-      totalTokens += tokenValue;
-    }
+    totalTokens += getConversationTotalTokens(conversation);
     const lastActivityTs = Date.parse(conversation.last_generation_at);
     if (Number.isFinite(lastActivityTs)) {
       const ageMs = windowEndMs - lastActivityTs;
@@ -185,10 +169,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   statsGrid: css({
     label: 'conversationsBrowserPage-statsGrid',
-    display: 'grid',
-    gridTemplateColumns: 'repeat(6, 1fr)',
-    width: '100%',
-    gap: theme.spacing(0.5),
+    display: 'flex',
+    gap: theme.spacing(4),
+    padding: theme.spacing(1.5, 0),
   }),
   errorAlert: css({
     label: 'conversationsBrowserPage-errorAlert',
@@ -214,7 +197,30 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   const location = useLocation();
   const navigate = useNavigate();
 
-  const { timeRange, filters, setTimeRange, setFilters } = useFilterUrlState();
+  const { timeRange, filters, searchParams, setTimeRange, setFilters, setSearchParams } = useFilterUrlState();
+
+  const orderBy = useMemo<ConversationOrderBy>(() => {
+    const v = searchParams.get('orderBy') as ConversationOrderBy;
+    return CONVERSATION_ORDER_BY_VALUES.has(v) ? v : 'time';
+  }, [searchParams]);
+
+  const setOrderBy = useCallback(
+    (value: SelectableValue<ConversationOrderBy>) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (!value.value || value.value === 'time') {
+            next.delete('orderBy');
+          } else {
+            next.set('orderBy', value.value);
+          }
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
 
   const from = useMemo(() => Math.floor(timeRange.from.valueOf() / 1000), [timeRange]);
   const to = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);
@@ -238,13 +244,15 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
     [appBasePath]
   );
 
-  const [conversations, setConversations] = useState<ConversationSearchResult[]>([]);
+  const [rawConversations, setRawConversations] = useState<ConversationSearchResult[]>([]);
   const [previousConversations, setPreviousConversations] = useState<ConversationSearchResult[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const requestVersionRef = useRef<number>(0);
 
   const filterString = useMemo(() => buildConversationSearchFilter(filters), [filters]);
+
+  const conversations = useMemo(() => sortConversations(rawConversations, orderBy), [rawConversations, orderBy]);
 
   const loadConversations = useCallback(async (): Promise<void> => {
     requestVersionRef.current += 1;
@@ -264,14 +272,14 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
       if (requestVersionRef.current !== requestVersion) {
         return;
       }
-      setConversations(sortConversations(results));
+      setRawConversations(results);
       setPreviousConversations(previousRangeConversations);
     } catch (error) {
       if (requestVersionRef.current !== requestVersion) {
         return;
       }
       setErrorMessage(error instanceof Error ? error.message : 'failed to load conversations');
-      setConversations([]);
+      setRawConversations([]);
       setPreviousConversations([]);
     } finally {
       if (requestVersionRef.current !== requestVersion) {
@@ -380,7 +388,17 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
             onTimeRangeChange={setTimeRange}
             onFiltersChange={setFilters}
             hideLabelFilters
-          />
+            fillWidth
+          >
+            <Select<ConversationOrderBy>
+              options={orderByOptions}
+              value={orderBy === 'time' ? null : orderBy}
+              onChange={setOrderBy}
+              placeholder="Order by"
+              prefix={orderBy !== 'time' ? 'Order by' : undefined}
+              width={28}
+            />
+          </FilterToolbar>
         </div>
         <div className={styles.statsGrid}>
           <TopStat
@@ -465,6 +483,7 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
           loadingMore={false}
           showExtendedColumns
           modelCards={modelCards}
+          getConversationTokens={getConversationTotalTokens}
           getConversationHref={getConversationHref}
           onSelectConversation={onSelectConversation}
           onLoadMore={() => undefined}

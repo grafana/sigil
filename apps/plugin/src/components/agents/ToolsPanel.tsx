@@ -113,6 +113,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     textAlign: 'left' as const,
     padding: `${theme.spacing(0.75)} ${theme.spacing(1.25)}`,
     paddingLeft: `calc(${theme.spacing(1.25)} + 2px)`,
+    border: 'none',
     borderLeft: '2px solid transparent',
     borderBottom: `1px solid ${theme.colors.border.weak}`,
     cursor: 'pointer',

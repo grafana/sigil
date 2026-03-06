@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
@@ -28,6 +29,8 @@ import (
 const (
 	generationMetadataUserIDKey       = "sigil.user.id"
 	generationMetadataLegacyUserIDKey = "user.id"
+	generationMetadataConversationKey = "sigil.conversation.title"
+	generationMetadataLegacyTitleKey  = "conversation_title"
 )
 
 type Conversation struct {
@@ -84,6 +87,13 @@ type ConversationSearchResponse struct {
 	HasMore       bool                       `json:"has_more"`
 }
 
+type searchCandidate struct {
+	conversationID string
+	aggregate      *tempoConversationAggregate
+	metadata       storage.Conversation
+	traceTitle     string
+}
+
 // ConversationBatchMetadata contains conversation metadata enriched with
 // optional feedback and eval summaries for batch lookup callers.
 type ConversationBatchMetadata struct {
@@ -105,6 +115,11 @@ type ConversationDetail struct {
 	Generations       []map[string]any                    `json:"generations"`
 	RatingSummary     *feedback.ConversationRatingSummary `json:"rating_summary,omitempty"`
 	Annotations       []feedback.ConversationAnnotation   `json:"annotations"`
+}
+
+type generationTitleSnapshot struct {
+	Title     string
+	Timestamp time.Time
 }
 
 type ValidationError struct {
@@ -624,6 +639,11 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 	results := make([]ConversationSearchResult, 0, pageSize)
 	hasMore := false
 	terminatedByIterationLimit := s.maxSearchIterations > 0
+	titleLookupReader := s.fanOutStore
+	if titleLookupReader == nil && s.walReader != nil {
+		titleLookupReader = storage.NewFanOutStore(s.walReader, nil, nil)
+	}
+	generationTitleCache := make(map[string]generationTitleSnapshot)
 
 	s.debugLog("search_plan",
 		"time_from_unix", from.Unix(),
@@ -704,6 +724,8 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 		skippedMissingMetadata := 0
 		skippedMySQL := 0
 		addedThisIteration := 0
+
+		var candidates []searchCandidate
 		for _, conversationID := range orderedConversationIDs {
 			if _, seen := alreadyReturned[conversationID]; seen {
 				skippedAlreadyReturned++
@@ -724,39 +746,54 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 				continue
 			}
 
-			if len(results) >= pageSize {
+			if len(results)+len(candidates) >= pageSize {
 				foundAdditionalConversation = true
 				break
 			}
 
 			aggregate := grouped.Conversations[conversationID]
-			result := ConversationSearchResult{
-				ConversationID:    conversationID,
-				ConversationTitle: aggregate.ConversationTitle,
-				UserID:            aggregate.UserID,
-				GenerationCount:   conversationMetadata.GenerationCount,
-				FirstGenerationAt: conversationMetadata.FirstGenerationAt.UTC(),
-				LastGenerationAt:  conversationMetadata.LastGenerationAt.UTC(),
-				Models:            sortedKeysFromSet(aggregate.Models),
-				ModelProviders:    aggregate.ModelProviders,
-				Agents:            sortedKeysFromSet(aggregate.Agents),
-				ErrorCount:        aggregate.ErrorCount,
-				HasErrors:         aggregate.ErrorCount > 0,
-				TraceIDs:          sortedKeysFromSet(aggregate.TraceIDs),
-				AnnotationCount:   annotationSummaries[conversationID].AnnotationCount,
+			candidates = append(candidates, searchCandidate{
+				conversationID: conversationID,
+				aggregate:      aggregate,
+				metadata:       conversationMetadata,
+				traceTitle:     strings.TrimSpace(aggregate.ConversationTitle),
+			})
+		}
+
+		generationTitles := s.batchResolveGenerationTitles(ctx, trimmedTenantID, candidates, titleLookupReader, generationTitleCache)
+
+		for i, candidate := range candidates {
+			conversationTitle := candidate.traceTitle
+			if generationTitles[i] != "" {
+				conversationTitle = generationTitles[i]
 			}
-			if ratingSummary, ok := ratingSummaries[conversationID]; ok {
+			result := ConversationSearchResult{
+				ConversationID:    candidate.conversationID,
+				ConversationTitle: conversationTitle,
+				UserID:            candidate.aggregate.UserID,
+				GenerationCount:   candidate.metadata.GenerationCount,
+				FirstGenerationAt: candidate.metadata.FirstGenerationAt.UTC(),
+				LastGenerationAt:  candidate.metadata.LastGenerationAt.UTC(),
+				Models:            sortedKeysFromSet(candidate.aggregate.Models),
+				ModelProviders:    candidate.aggregate.ModelProviders,
+				Agents:            sortedKeysFromSet(candidate.aggregate.Agents),
+				ErrorCount:        candidate.aggregate.ErrorCount,
+				HasErrors:         candidate.aggregate.ErrorCount > 0,
+				TraceIDs:          sortedKeysFromSet(candidate.aggregate.TraceIDs),
+				AnnotationCount:   annotationSummaries[candidate.conversationID].AnnotationCount,
+			}
+			if ratingSummary, ok := ratingSummaries[candidate.conversationID]; ok {
 				copied := ratingSummary
 				result.RatingSummary = &copied
 			}
-			if evalSummary, ok := evalSummaries[conversationID]; ok {
+			if evalSummary, ok := evalSummaries[candidate.conversationID]; ok {
 				copied := evalSummary
 				result.EvalSummary = &copied
 			}
-			result.Selected = buildSelectedResultMap(aggregate.Selected)
+			result.Selected = buildSelectedResultMap(candidate.aggregate.Selected)
 
 			results = append(results, result)
-			currentPageIDs[conversationID] = struct{}{}
+			currentPageIDs[candidate.conversationID] = struct{}{}
 			addedThisIteration++
 		}
 		s.debugLog("search_iteration_candidates_applied",
@@ -1613,6 +1650,9 @@ func latestScoresToResponse(scores map[string]evalpkg.LatestScore) map[string]an
 		if score.Passed != nil {
 			entry["passed"] = *score.Passed
 		}
+		if score.EvaluatorDescription != "" {
+			entry["evaluator_description"] = score.EvaluatorDescription
+		}
 		out[key] = entry
 	}
 	return out
@@ -1674,6 +1714,230 @@ func latestConversationUserID(generations []*sigilv1.Generation) string {
 	return userID
 }
 
+func (s *Service) batchResolveGenerationTitles(
+	ctx context.Context,
+	tenantID string,
+	candidates []searchCandidate,
+	reader storage.GenerationFanOutReader,
+	cache map[string]generationTitleSnapshot,
+) []string {
+	titles := make([]string, len(candidates))
+	if reader == nil || len(candidates) == 0 {
+		return titles
+	}
+
+	type titleResult struct {
+		index        int
+		title        string
+		cacheEntries map[string]generationTitleSnapshot
+	}
+
+	resultCh := make(chan titleResult, len(candidates))
+
+	cacheSnapshot := make(map[string]generationTitleSnapshot, len(cache))
+	for k, v := range cache {
+		cacheSnapshot[k] = v
+	}
+
+	var wg sync.WaitGroup
+	for i, candidate := range candidates {
+		wg.Add(1)
+		go func(idx int, c searchCandidate) {
+			defer wg.Done()
+			localCache := make(map[string]generationTitleSnapshot, len(cacheSnapshot))
+			for k, v := range cacheSnapshot {
+				localCache[k] = v
+			}
+			title := s.resolveLatestConversationTitleFromGenerations(ctx, tenantID, c.metadata, reader, localCache)
+			if title == "" {
+				title = s.resolveConversationTitleFromGenerationIDs(ctx, tenantID, c.aggregate.GenerationIDs, reader, localCache)
+			}
+			resultCh <- titleResult{index: idx, title: title, cacheEntries: localCache}
+		}(i, candidate)
+	}
+
+	go func() {
+		wg.Wait()
+		close(resultCh)
+	}()
+
+	for result := range resultCh {
+		titles[result.index] = result.title
+		for k, v := range result.cacheEntries {
+			cache[k] = v
+		}
+	}
+
+	return titles
+}
+
+func (s *Service) resolveConversationTitleFromGenerationIDs(
+	ctx context.Context,
+	tenantID string,
+	generationIDs map[string]struct{},
+	reader storage.GenerationFanOutReader,
+	cache map[string]generationTitleSnapshot,
+) string {
+	if reader == nil || len(generationIDs) == 0 {
+		return ""
+	}
+
+	var (
+		title         string
+		latestAt      time.Time
+		bestIndex     int
+		foundSnapshot bool
+	)
+	generationIDList := sortedKeysFromSet(generationIDs)
+	for idx, generationID := range generationIDList {
+		snapshot, ok := cache[generationID]
+		if !ok {
+			generation, err := reader.GetGenerationByID(ctx, tenantID, generationID)
+			if err != nil {
+				s.debugLog(
+					"search_conversation_title_lookup_failed",
+					"tenant_id",
+					tenantID,
+					"generation_id",
+					generationID,
+					"err",
+					err.Error(),
+				)
+				cache[generationID] = generationTitleSnapshot{}
+				continue
+			}
+			snapshot = generationTitleSnapshot{
+				Title:     generationConversationTitle(generation),
+				Timestamp: generationTimestamp(generation),
+			}
+			cache[generationID] = snapshot
+		}
+		if snapshot.Title == "" {
+			continue
+		}
+		if !foundSnapshot || snapshot.Timestamp.After(latestAt) || (snapshot.Timestamp.Equal(latestAt) && idx > bestIndex) {
+			title = snapshot.Title
+			latestAt = snapshot.Timestamp
+			bestIndex = idx
+			foundSnapshot = true
+		}
+	}
+	return title
+}
+
+func (s *Service) resolveLatestConversationTitleFromGenerations(
+	ctx context.Context,
+	tenantID string,
+	conversation storage.Conversation,
+	reader storage.GenerationFanOutReader,
+	cache map[string]generationTitleSnapshot,
+) string {
+	if reader == nil {
+		return ""
+	}
+
+	conversationID := strings.TrimSpace(conversation.ConversationID)
+	if conversationID == "" {
+		return ""
+	}
+
+	var (
+		generations []*sigilv1.Generation
+		err         error
+	)
+	if plannedReader, ok := reader.(plannedConversationFanOutReader); ok {
+		plan := storage.ConversationReadPlan{
+			ExpectedGenerationCount: conversation.GenerationCount,
+		}
+		if !conversation.LastGenerationAt.IsZero() {
+			plan.To = conversation.LastGenerationAt.UTC().Add(2 * time.Minute)
+		}
+		generations, err = plannedReader.ListConversationGenerationsWithPlan(ctx, tenantID, conversationID, plan)
+	} else {
+		generations, err = reader.ListConversationGenerations(ctx, tenantID, conversationID)
+	}
+	if err != nil {
+		s.debugLog(
+			"search_conversation_title_lookup_failed",
+			"tenant_id",
+			tenantID,
+			"conversation_id",
+			conversationID,
+			"err",
+			err.Error(),
+		)
+		return ""
+	}
+	if len(generations) == 0 {
+		return ""
+	}
+
+	var (
+		title         string
+		latestAt      time.Time
+		bestIndex     int
+		foundSnapshot bool
+	)
+	for idx, generation := range generations {
+		if generation == nil {
+			continue
+		}
+		generationID := strings.TrimSpace(generation.GetId())
+		snapshot, cached := cache[generationID]
+		if !cached {
+			snapshot = generationTitleSnapshot{
+				Title:     generationConversationTitle(generation),
+				Timestamp: generationTimestamp(generation),
+			}
+			if generationID != "" {
+				cache[generationID] = snapshot
+			}
+		}
+		if snapshot.Title == "" {
+			continue
+		}
+		if !foundSnapshot || snapshot.Timestamp.After(latestAt) || (snapshot.Timestamp.Equal(latestAt) && idx > bestIndex) {
+			title = snapshot.Title
+			latestAt = snapshot.Timestamp
+			bestIndex = idx
+			foundSnapshot = true
+		}
+	}
+	return title
+}
+
+func generationConversationTitle(generation *sigilv1.Generation) string {
+	if generation == nil {
+		return ""
+	}
+	metadata := generation.GetMetadata()
+	if metadata == nil {
+		return ""
+	}
+	metadataMap := metadata.AsMap()
+	if len(metadataMap) == 0 {
+		return ""
+	}
+	if title := metadataStringFromMap(metadataMap, generationMetadataConversationKey); title != "" {
+		return title
+	}
+	if title := metadataStringFromMap(metadataMap, generationMetadataLegacyTitleKey); title != "" {
+		return title
+	}
+	rawAttributes, ok := metadataMap["attributes"]
+	if !ok {
+		return ""
+	}
+	attributes, ok := rawAttributes.(map[string]any)
+	if !ok {
+		return ""
+	}
+	if title := metadataStringFromMap(attributes, generationMetadataConversationKey); title != "" {
+		return title
+	}
+	return metadataStringFromMap(attributes, generationMetadataLegacyTitleKey)
+}
+
 func generationMetadataString(generation *sigilv1.Generation, key string) string {
 	if generation == nil {
 		return ""
@@ -1682,15 +1946,29 @@ func generationMetadataString(generation *sigilv1.Generation, key string) string
 	if metadata == nil {
 		return ""
 	}
-	raw, ok := metadata.AsMap()[key]
+	return metadataStringFromMap(metadata.AsMap(), key)
+}
+
+func metadataStringFromMap(values map[string]any, key string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	raw, ok := values[key]
 	if !ok {
 		return ""
 	}
-	asString, ok := raw.(string)
-	if !ok {
+	return normalizeMetadataString(raw)
+}
+
+func normalizeMetadataString(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	case map[string]any:
+		return normalizeMetadataString(typed["stringValue"])
+	default:
 		return ""
 	}
-	return strings.TrimSpace(asString)
 }
 
 func normalizeTempoTagKey(scope string, key string) string {

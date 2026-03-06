@@ -175,7 +175,9 @@ describe('ConversationsBrowserPage', () => {
 
     await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalledTimes(2));
     expect(dataSource.searchConversations.mock.calls[0][0].select).toContain('span.sigil.sdk.name');
-    expect(dataSource.searchConversations.mock.calls[0][0].select).toHaveLength(1);
+    expect(dataSource.searchConversations.mock.calls[0][0].select).toContain('span.gen_ai.usage.input_tokens');
+    expect(dataSource.searchConversations.mock.calls[0][0].select).toContain('span.gen_ai.usage.output_tokens');
+    expect(dataSource.searchConversations.mock.calls[0][0].select).toHaveLength(3);
 
     expect(await screen.findByLabelText('select conversation conv-a')).toBeInTheDocument();
     expect(screen.queryByText('Conversation ID')).not.toBeInTheDocument();

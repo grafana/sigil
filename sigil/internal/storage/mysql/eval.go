@@ -53,6 +53,9 @@ func (s *WALStore) CreateEvaluator(ctx context.Context, evaluator evalpkg.Evalua
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
+	if evaluator.Description != "" {
+		model.Description = &evaluator.Description
+	}
 	if evaluator.SourceTemplateID != "" {
 		model.SourceTemplateID = &evaluator.SourceTemplateID
 	}
@@ -64,6 +67,7 @@ func (s *WALStore) CreateEvaluator(ctx context.Context, evaluator evalpkg.Evalua
 		Columns: []clause.Column{{Name: "tenant_id"}, {Name: "evaluator_id"}, {Name: "version"}},
 		DoUpdates: clause.Assignments(map[string]any{
 			"kind":                    model.Kind,
+			"description":             model.Description,
 			"config_json":             model.ConfigJSON,
 			"output_keys_json":        model.OutputKeysJSON,
 			"is_predefined":           model.IsPredefined,
@@ -585,13 +589,14 @@ func (s *WALStore) GetLatestScoresByGeneration(ctx context.Context, tenantID, ge
 			return nil, err
 		}
 		out[row.ScoreKey] = evalpkg.LatestScore{
-			ScoreKey:         score.ScoreKey,
-			ScoreType:        score.ScoreType,
-			Value:            score.Value,
-			Passed:           score.Passed,
-			EvaluatorID:      score.EvaluatorID,
-			EvaluatorVersion: score.EvaluatorVersion,
-			CreatedAt:        score.CreatedAt,
+			ScoreKey:             score.ScoreKey,
+			ScoreType:            score.ScoreType,
+			Value:                score.Value,
+			Passed:               score.Passed,
+			EvaluatorID:          score.EvaluatorID,
+			EvaluatorVersion:     score.EvaluatorVersion,
+			EvaluatorDescription: score.EvaluatorDescription,
+			CreatedAt:            score.CreatedAt,
 		}
 	}
 	return out, nil
@@ -631,13 +636,14 @@ func (s *WALStore) GetLatestScoresByConversation(ctx context.Context, tenantID, 
 			return nil, err
 		}
 		genScores[row.ScoreKey] = evalpkg.LatestScore{
-			ScoreKey:         score.ScoreKey,
-			ScoreType:        score.ScoreType,
-			Value:            score.Value,
-			Passed:           score.Passed,
-			EvaluatorID:      score.EvaluatorID,
-			EvaluatorVersion: score.EvaluatorVersion,
-			CreatedAt:        score.CreatedAt,
+			ScoreKey:             score.ScoreKey,
+			ScoreType:            score.ScoreType,
+			Value:                score.Value,
+			Passed:               score.Passed,
+			EvaluatorID:          score.EvaluatorID,
+			EvaluatorVersion:     score.EvaluatorVersion,
+			EvaluatorDescription: score.EvaluatorDescription,
+			CreatedAt:            score.CreatedAt,
 		}
 	}
 	return out, nil
@@ -1001,6 +1007,9 @@ func evaluatorModelToDefinition(row EvalEvaluatorModel) (evalpkg.EvaluatorDefini
 		CreatedAt:    row.CreatedAt.UTC(),
 		UpdatedAt:    row.UpdatedAt.UTC(),
 	}
+	if row.Description != nil {
+		def.Description = *row.Description
+	}
 	if row.SourceTemplateID != nil {
 		def.SourceTemplateID = *row.SourceTemplateID
 	}
@@ -1085,6 +1094,9 @@ func scoreToModel(score evalpkg.GenerationScore) (GenerationScoreModel, error) {
 		IngestedAt:       ingestedAt,
 		MetadataJSON:     metadataJSON,
 	}
+	if value := strings.TrimSpace(score.EvaluatorDescription); value != "" {
+		model.EvaluatorDescription = &value
+	}
 	if value := strings.TrimSpace(score.ConversationID); value != "" {
 		model.ConversationID = &value
 	}
@@ -1160,6 +1172,9 @@ func scoreModelToDomain(row GenerationScoreModel) (evalpkg.GenerationScore, erro
 		Metadata:         metadata,
 		CreatedAt:        row.CreatedAt.UTC(),
 		IngestedAt:       row.IngestedAt.UTC(),
+	}
+	if row.EvaluatorDescription != nil {
+		score.EvaluatorDescription = *row.EvaluatorDescription
 	}
 	if row.ConversationID != nil {
 		score.ConversationID = *row.ConversationID

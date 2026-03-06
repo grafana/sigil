@@ -9,6 +9,7 @@ import { EvalRulesDataProvider } from '../contexts/EvalRulesDataContext';
 import { defaultEvaluationDataSource } from '../evaluation/api';
 
 const EvaluationOverviewPage = React.lazy(() => import('./EvaluationOverviewPage'));
+const EvalResultsPage = React.lazy(() => import('./EvalResultsPage'));
 const EvaluatorsPage = React.lazy(() => import('./EvaluatorsPage'));
 const CreateEvaluatorPage = React.lazy(() => import('./CreateEvaluatorPage'));
 const EditEvaluatorPage = React.lazy(() => import('./EditEvaluatorPage'));
@@ -35,6 +36,7 @@ export default function EvaluationPage() {
           <Suspense fallback={<LoadingPlaceholder text="Loading..." />}>
             <Routes>
               <Route index element={<EvaluationOverviewPage />} />
+              <Route path="results" element={<EvalResultsPage />} />
               <Route path="evaluators" element={<EvaluatorsPage />} />
               <Route path="evaluators/new" element={<CreateEvaluatorPage />} />
               <Route path="evaluators/:evaluatorID/edit" element={<EditEvaluatorPage />} />

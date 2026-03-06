@@ -117,6 +117,7 @@ export const NoCost = {
 export const SavedConversation = {
   args: {
     ...Default.args,
+    conversationTitle: 'Incident: authentication failures in eu-west-1',
     isSaved: true,
     onToggleSave: () => {},
   },
@@ -125,8 +126,16 @@ export const SavedConversation = {
 export const UnsavedConversation = {
   args: {
     ...Default.args,
+    conversationTitle: 'Incident: authentication failures in eu-west-1',
     isSaved: false,
     onToggleSave: () => {},
+  },
+};
+
+export const WithConversationTitle = {
+  args: {
+    ...Default.args,
+    conversationTitle: 'Incident: authentication failures in eu-west-1',
   },
 };
 

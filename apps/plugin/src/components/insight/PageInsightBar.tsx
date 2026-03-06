@@ -295,6 +295,7 @@ export function PageInsightBar({
 }
 
 const COLLAPSED_HEIGHT = 40;
+const EXPANDED_MIN_HEIGHT = 140;
 
 function buildCacheKey(prompt: string, origin: string, systemPrompt: string, dataContext: string): string {
   const keySource = `${origin}|${prompt}|${systemPrompt}|${dataContext}`;
@@ -391,14 +392,14 @@ function getStyles(theme: GrafanaTheme2) {
     width: '100%',
     background: theme.colors.background.secondary,
     overflow: 'hidden' as const,
-    marginBottom: theme.spacing(2),
   };
 
   return {
     bar: css({
       ...barBase,
-      minHeight: COLLAPSED_HEIGHT,
-      height: 'auto',
+      minHeight: EXPANDED_MIN_HEIGHT,
+      display: 'flex',
+      flexDirection: 'column',
     }),
     barCollapsed: css({
       ...barBase,
@@ -410,6 +411,7 @@ function getStyles(theme: GrafanaTheme2) {
       justifyContent: 'space-between',
       padding: theme.spacing(1, 1.5),
       height: COLLAPSED_HEIGHT,
+      flexShrink: 0,
     }),
     headerToggle: css({
       display: 'flex',
@@ -485,7 +487,9 @@ function getStyles(theme: GrafanaTheme2) {
       lineHeight: 1,
     }),
     body: css({
-      padding: theme.spacing(0, 1.5, 1.5),
+      padding: theme.spacing(1.5),
+      flex: 1,
+      minHeight: 0,
       overflow: 'visible',
     }),
     placeholder: css({
@@ -527,10 +531,7 @@ function getStyles(theme: GrafanaTheme2) {
       fontSize: theme.typography.body.fontSize,
       lineHeight: 1.6,
       color: theme.colors.text.secondary,
-      display: '-webkit-box',
-      WebkitLineClamp: 3,
-      WebkitBoxOrient: 'vertical',
-      overflow: 'hidden',
+      overflowWrap: 'anywhere',
       '& strong': {
         fontWeight: theme.typography.fontWeightBold,
         color: theme.colors.text.primary,

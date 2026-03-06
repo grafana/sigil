@@ -31,4 +31,14 @@ export const WithError = {
   },
 };
 
+export const WithScoreTooltip = {
+  args: {
+    node: mockFlowNodes[1].children[0],
+    allGenerations: mockGenerations,
+    onClose: () => {
+      // Storybook interaction-only callback.
+    },
+  },
+};
+
 export const Screenshot = Default;

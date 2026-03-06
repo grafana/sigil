@@ -24,35 +24,45 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   layout: css({
     display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
+    gridTemplateColumns: 'minmax(0, 3fr) minmax(360px, 2fr)',
     gridTemplateRows: '1fr',
-    gap: theme.spacing(3),
+    gap: theme.spacing(2),
     flex: 1,
     minHeight: 0,
     overflow: 'hidden',
+    '@media (max-width: 1360px)': {
+      gridTemplateColumns: '1fr',
+      gridTemplateRows: 'auto auto',
+      overflow: 'auto',
+    },
   }),
   left: css({
     overflow: 'auto',
     display: 'flex',
     flexDirection: 'column' as const,
     minHeight: 0,
-    padding: theme.spacing(0.5),
-    paddingLeft: 0,
+    minWidth: 0,
   }),
   formCard: css({
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: theme.spacing(1.5),
-    padding: theme.spacing(2),
-    background: theme.colors.background.primary,
-    boxShadow: theme.shadows.z1,
-    borderRadius: theme.shape.radius.default,
+    gap: theme.spacing(0.75),
+    padding: 0,
+    background: 'transparent',
+    minWidth: 0,
   }),
   right: css({
     display: 'flex',
     flexDirection: 'column' as const,
     minHeight: 0,
     overflow: 'hidden',
+    minWidth: 0,
+    borderLeft: `1px solid ${theme.colors.border.weak}`,
+    paddingLeft: theme.spacing(2),
+    '@media (max-width: 1360px)': {
+      borderLeft: 'none',
+      paddingLeft: 0,
+    },
   }),
   rightInner: css({
     flex: 1,
@@ -60,7 +70,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     overflow: 'hidden',
-    padding: theme.spacing(0.5, 0, 2, 2),
+    padding: 0,
   }),
   header: css({
     display: 'flex',
@@ -85,7 +95,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   headerSubtitle: css({
     marginTop: theme.spacing(0.5),
     color: theme.colors.text.secondary,
-    fontSize: theme.typography.bodySmall.fontSize,
+    fontSize: theme.typography.body.fontSize,
   }),
 });
 

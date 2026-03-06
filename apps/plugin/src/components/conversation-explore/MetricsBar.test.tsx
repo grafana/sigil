@@ -1,10 +1,22 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { ModelCard } from '../../modelcard/types';
 import MetricsBar from './MetricsBar';
 
-const baseCard: ModelCard = {
-  model_key: 'openrouter:anthropic/claude-sonnet-4-5',
+jest.mock('@grafana/ui', () => {
+  const actual = jest.requireActual('@grafana/ui');
+  return {
+    ...actual,
+    Tooltip: ({ children, content }: { children: React.ReactNode; content: React.ReactNode }) => (
+      <span data-testid="tooltip" data-content={typeof content === 'string' ? content : ''}>
+        {children}
+      </span>
+    ),
+  };
+});
+
+const modelCard: ModelCard = {
+  model_key: 'openrouter:anthropic/claude-sonnet-4.5',
   source: 'openrouter',
   source_model_id: 'anthropic/claude-sonnet-4-5',
   canonical_slug: 'anthropic/claude-sonnet-4-5',
@@ -33,9 +45,19 @@ const baseCard: ModelCard = {
   refreshed_at: '2026-03-01T00:00:00Z',
 };
 
-describe('MetricsBar', () => {
+const baseProps = {
+  conversationID: 'conv-123',
+  totalDurationMs: 2340,
+  tokenSummary: null,
+  costSummary: null,
+  models: [],
+  errorCount: 0,
+  generationCount: 2,
+};
+
+describe('MetricsBar model cards', () => {
   it('opens and closes model card popover when clicking a model chip', () => {
-    const modelCards = new Map<string, ModelCard>([['anthropic::claude-sonnet-4-5', baseCard]]);
+    const modelCards = new Map<string, ModelCard>([['anthropic::claude-sonnet-4-5', modelCard]]);
 
     render(
       <MetricsBar
@@ -62,7 +84,7 @@ describe('MetricsBar', () => {
   });
 
   it('resolves model cards by source model id fallback', () => {
-    const modelCards = new Map<string, ModelCard>([['openrouter::anthropic/claude-sonnet-4-5', baseCard]]);
+    const modelCards = new Map<string, ModelCard>([['openrouter::anthropic/claude-sonnet-4-5', modelCard]]);
 
     render(
       <MetricsBar
@@ -136,5 +158,49 @@ describe('MetricsBar', () => {
     const chip = screen.getByRole('button', { name: 'model us.anthropic.claude-haiku-4-5-20251001-v1:0' });
     const dot = chip.querySelector('span');
     expect(dot).toHaveStyle({ background: 'rgb(217, 119, 87)' });
+  });
+});
+
+describe('MetricsBar conversation title', () => {
+  let matchMediaSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    matchMediaSpy = jest.spyOn(window, 'matchMedia').mockReturnValue({
+      matches: false,
+      media: '(prefers-reduced-motion: reduce)',
+      onchange: null,
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    });
+  });
+
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+    matchMediaSpy.mockRestore();
+  });
+
+  it('shows conversation id when title is not provided', () => {
+    render(<MetricsBar {...baseProps} />);
+    expect(screen.getByText('conv-123')).toBeInTheDocument();
+    expect(screen.getAllByTestId('tooltip')[0]).toHaveAttribute('data-content', 'conv-123');
+  });
+
+  it('types conversation title on mount and keeps tooltip content as full title', () => {
+    const title = 'Incident: authentication failures';
+    render(<MetricsBar {...baseProps} conversationTitle={title} />);
+
+    expect(screen.queryByText(title)).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('tooltip')[0]).toHaveAttribute('data-content', title);
+
+    act(() => {
+      jest.advanceTimersByTime(title.length * 28 + 100);
+    });
+
+    expect(screen.getByText(title)).toBeInTheDocument();
   });
 });

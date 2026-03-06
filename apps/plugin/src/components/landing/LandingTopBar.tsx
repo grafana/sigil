@@ -17,14 +17,6 @@ import {
   buildSigilAssistantPrompt,
   withSigilProjectContextFallback,
 } from '../../content/assistantContext';
-import type { DashboardDataSource } from '../../dashboard/api';
-import { computeRateInterval, computeStep, requestsOverTimeQuery } from '../../dashboard/queries';
-import {
-  type DashboardFilters,
-  type PrometheusMatrixResult,
-  type PrometheusQueryResponse,
-  emptyFilters,
-} from '../../dashboard/types';
 import { defaultEvaluationDataSource } from '../../evaluation/api';
 import { useFilterUrlState } from '../../hooks/useFilterUrlState';
 import { ideTabs, buildCursorPromptDeeplink, downloadTextFile, renderIdeActionLogo } from '../../ide/ideUtils';
@@ -46,8 +38,6 @@ const PAGE_SIZE = 200;
 const MAX_PAGES = 10;
 const HERO_STATS_STORAGE_KEY = 'grafana-sigil-hero-stats';
 const HERO_STATS_ANIMATION_MS = 600;
-const REQUEST_SPINE_STORAGE_KEY = 'grafana-sigil-request-spine';
-const REQUEST_SPINE_CACHE_TTL_MS = 15 * 60 * 1000;
 
 type StoredHeroStats = {
   fetched_at?: number;
@@ -59,13 +49,6 @@ type StoredHeroStats = {
 type HeroStatsCache = {
   stats: HeroStatItem[];
   fetchedAt?: number;
-};
-
-type StoredRequestSpine = {
-  fetched_at: number;
-  key: string;
-  heights: number[];
-  values: number[];
 };
 
 function readHeroStatsCache(): HeroStatsCache | null {
@@ -117,47 +100,6 @@ export function buildRequestSpineCacheKey(query: string, from: number, to: numbe
     durationSec: Math.max(0, Math.floor(to - from)),
     spineCount,
   });
-}
-
-function readRequestSpineFromStorage(key: string): { heights: number[]; values: number[] } | null {
-  try {
-    const raw = localStorage.getItem(REQUEST_SPINE_STORAGE_KEY);
-    if (!raw) {
-      return null;
-    }
-    const parsed = JSON.parse(raw) as StoredRequestSpine;
-    if (
-      parsed?.key !== key ||
-      !Array.isArray(parsed.heights) ||
-      !Array.isArray(parsed.values) ||
-      typeof parsed.fetched_at !== 'number'
-    ) {
-      return null;
-    }
-    if (Date.now() - parsed.fetched_at > REQUEST_SPINE_CACHE_TTL_MS) {
-      return null;
-    }
-    return {
-      heights: parsed.heights.filter((value) => Number.isFinite(value)).map((value) => Number(value)),
-      values: parsed.values.filter((value) => Number.isFinite(value)).map((value) => Number(value)),
-    };
-  } catch {
-    return null;
-  }
-}
-
-function saveRequestSpineToStorage(key: string, heights: number[], values: number[]): void {
-  try {
-    const stored: StoredRequestSpine = {
-      fetched_at: Date.now(),
-      key,
-      heights,
-      values,
-    };
-    localStorage.setItem(REQUEST_SPINE_STORAGE_KEY, JSON.stringify(stored));
-  } catch {
-    // ignore
-  }
 }
 
 function loadHeroStatsFromStorage(): HeroStatItem[] | null {
@@ -224,104 +166,15 @@ function buildAssistantUrl(message: string): string {
 
 type LandingTopBarProps = {
   assistantOrigin: string;
-  requestsDataSource?: DashboardDataSource;
-  requestsFilters?: DashboardFilters;
+  requestsDataSource?: unknown;
   requestsFrom?: number;
   requestsTo?: number;
   compact?: boolean;
 };
 
-function extractRequestsSeries(response: PrometheusQueryResponse): number[] {
-  if (response.status !== 'success' || response.data.resultType !== 'matrix') {
-    return [];
-  }
-  const [series] = response.data.result as PrometheusMatrixResult[];
-  if (!series?.values) {
-    return [];
-  }
-  return series.values
-    .map(([, value]) => Number.parseFloat(value))
-    .filter((value) => Number.isFinite(value) && value >= 0);
-}
-
-function formatBarTime(fromSec: number, toSec: number, index: number, count: number): string {
-  const range = toSec - fromSec;
-  const tsSec = fromSec + ((index + 0.5) / count) * range;
-  const date = new Date(tsSec * 1000);
-  return date.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
-
-function formatBarDuration(fromSec: number, toSec: number, count: number): string {
-  const durationSec = (toSec - fromSec) / count;
-  if (durationSec >= 86400) {
-    return `${Math.round(durationSec / 86400)}d`;
-  }
-  if (durationSec >= 3600) {
-    return `${Math.round(durationSec / 3600)}h`;
-  }
-  if (durationSec >= 60) {
-    return `${Math.round(durationSec / 60)}m`;
-  }
-  return `${Math.round(durationSec)}s`;
-}
-
-function formatRequestStat(value: number): string {
-  if (!Number.isFinite(value) || value < 0) {
-    return '0 req/s';
-  }
-  if (value >= 100) {
-    return `${Math.round(value).toLocaleString()} req/s`;
-  }
-  if (value >= 1) {
-    return `${value.toFixed(2)} req/s`;
-  }
-  return `${value.toFixed(3)} req/s`;
-}
-
-function bucketValues(values: number[], targetCount: number): number[] {
-  if (values.length === 0 || targetCount <= 0) {
-    return [];
-  }
-  return Array.from({ length: targetCount }, (_, i) => {
-    const start = Math.floor((i * values.length) / targetCount);
-    const end = Math.max(start + 1, Math.floor(((i + 1) * values.length) / targetCount));
-    const slice = values.slice(start, end);
-    const sum = slice.reduce((acc, value) => acc + value, 0);
-    return sum / slice.length;
-  });
-}
-
-function normalizeValuesToHeights(values: number[], targetCount: number): number[] {
-  if (values.length === 0 || targetCount <= 0) {
-    return [];
-  }
-  const bucketed = bucketValues(values, targetCount);
-  const minValue = Math.min(...bucketed);
-  const maxValue = Math.max(...bucketed);
-  if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
-    return [];
-  }
-  if (Math.abs(maxValue - minValue) < 1e-9) {
-    return bucketed.map(() => 60);
-  }
-  const minHeight = 20;
-  const maxHeight = 100;
-  return bucketed.map((value) => {
-    const t = (value - minValue) / (maxValue - minValue);
-    return minHeight + t * (maxHeight - minHeight);
-  });
-}
-
 export function LandingTopBar({
   assistantOrigin,
   requestsDataSource,
-  requestsFilters = emptyFilters,
   requestsFrom,
   requestsTo,
   compact = false,
@@ -530,113 +383,6 @@ export function LandingTopBar({
 
   const gradientColors = ['#5794F2', '#B877D9', '#FF9830'] as const;
   const spineCount = 48;
-  const initialRequestSpineCache = useMemo(() => {
-    if (!requestsDataSource || to <= from) {
-      return null;
-    }
-    const step = computeStep(from, to);
-    const interval = computeRateInterval(step);
-    const query = requestsOverTimeQuery(requestsFilters, interval, 'none');
-    const cacheKey = buildRequestSpineCacheKey(query, from, to, spineCount);
-    const cached = readRequestSpineFromStorage(cacheKey);
-    if (!cached || cached.heights.length === 0 || cached.values.length === 0) {
-      return null;
-    }
-    return cached;
-  }, [requestsDataSource, requestsFilters, from, to, spineCount]);
-  const [requestSpineHeights, setRequestSpineHeights] = useState<number[] | null>(
-    () => initialRequestSpineCache?.heights ?? null
-  );
-  const [requestSpineValues, setRequestSpineValues] = useState<number[] | null>(
-    () => initialRequestSpineCache?.values ?? null
-  );
-  const [disableSpineAnimation, setDisableSpineAnimation] = useState<boolean>(() => initialRequestSpineCache != null);
-  const [requestSpineWaveReason, setRequestSpineWaveReason] = useState<null | 'loading' | 'no-data' | 'error'>(() =>
-    requestsDataSource && to > from && initialRequestSpineCache == null ? 'loading' : null
-  );
-
-  useEffect(() => {
-    if (!requestsDataSource || to <= from) {
-      queueMicrotask(() => {
-        setDisableSpineAnimation(false);
-        setRequestSpineHeights(null);
-        setRequestSpineValues(null);
-        setRequestSpineWaveReason(null);
-      });
-      return;
-    }
-    let cancelled = false;
-    const step = computeStep(from, to);
-    const interval = computeRateInterval(step);
-    const query = requestsOverTimeQuery(requestsFilters, interval, 'none');
-    const cacheKey = buildRequestSpineCacheKey(query, from, to, spineCount);
-    const cached = readRequestSpineFromStorage(cacheKey);
-    const hasCached = cached != null && cached.heights.length > 0 && cached.values.length > 0;
-
-    queueMicrotask(() => {
-      if (hasCached) {
-        setDisableSpineAnimation(true);
-        setRequestSpineHeights(cached.heights);
-        setRequestSpineValues(cached.values);
-        setRequestSpineWaveReason(null);
-      } else {
-        setDisableSpineAnimation(false);
-        setRequestSpineWaveReason('loading');
-      }
-    });
-
-    const loadRequestBars = async () => {
-      try {
-        const response = await requestsDataSource.queryRange(query, from, to, step);
-        if (cancelled) {
-          return;
-        }
-        const values = extractRequestsSeries(response);
-        const nextHeights = normalizeValuesToHeights(values, spineCount);
-        const nextValues = bucketValues(values, spineCount);
-        if (nextHeights.length > 0) {
-          setRequestSpineWaveReason(null);
-          saveRequestSpineToStorage(cacheKey, nextHeights, nextValues);
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              if (!cancelled) {
-                setDisableSpineAnimation(false);
-                setRequestSpineHeights(nextHeights);
-                setRequestSpineValues(nextValues);
-              }
-            });
-          });
-        } else {
-          if (hasCached) {
-            return;
-          }
-          setRequestSpineHeights(null);
-          setRequestSpineValues(null);
-          setRequestSpineWaveReason('no-data');
-        }
-      } catch {
-        if (!cancelled) {
-          if (hasCached) {
-            return;
-          }
-          setRequestSpineHeights(null);
-          setRequestSpineValues(null);
-          setRequestSpineWaveReason('error');
-        }
-      }
-    };
-
-    void loadRequestBars();
-
-    const intervalId = setInterval(() => {
-      void loadRequestBars();
-    }, TOP_BAR_REFRESH_INTERVAL_MS);
-
-    return () => {
-      cancelled = true;
-      clearInterval(intervalId);
-    };
-  }, [requestsDataSource, requestsFilters, from, to, spineCount]);
 
   const waveAt75Heights = useMemo(() => {
     const MIN_H = 20;
@@ -648,7 +394,7 @@ export function LandingTopBar({
     });
   }, [spineCount]);
 
-  const displayHeights = requestSpineHeights ?? waveAt75Heights;
+  const displayHeights = waveAt75Heights;
   const showRequestSpines = requestsDataSource != null && to > from;
 
   if (compact) {
@@ -662,45 +408,19 @@ export function LandingTopBar({
                 t <= 0.52
                   ? interpolateHex(gradientColors[0], gradientColors[1], t / 0.52)
                   : interpolateHex(gradientColors[1], gradientColors[2], (t - 0.52) / 0.48);
-              const stat =
-                requestSpineValues != null && i < requestSpineValues.length
-                  ? formatRequestStat(requestSpineValues[i])
-                  : null;
-              const timeStr = stat != null && to > from ? formatBarTime(from, to, i, spineCount) : null;
-              const durationStr = stat != null && to > from ? formatBarDuration(from, to, spineCount) : null;
-              const waveIssueTooltip =
-                requestSpineHeights == null && requestsDataSource != null && requestSpineWaveReason === 'error'
-                  ? 'Failed to load request data'
-                  : requestSpineHeights == null && requestsDataSource != null && requestSpineWaveReason === 'no-data'
-                    ? 'No data in this time range'
-                    : null;
-              const tooltipContent =
-                stat != null ? (
-                  <div className={styles.spineTooltipContent}>
-                    <div>{stat}</div>
-                    {timeStr != null && <div className={styles.spineTooltipTime}>{timeStr}</div>}
-                    {durationStr != null && <div className={styles.spineTooltipTime}>({durationStr})</div>}
-                  </div>
-                ) : waveIssueTooltip != null ? (
-                  waveIssueTooltip
-                ) : null;
               const bar = (
                 <div
                   className={styles.heroSpine}
                   style={{
                     transform: `scaleY(${height / 100})`,
                     backgroundColor: color,
-                    transition: disableSpineAnimation ? 'none' : undefined,
-                    transitionDelay:
-                      requestSpineHeights != null && !disableSpineAnimation ? `${Math.min(i * 6, 150)}ms` : undefined,
                   }}
                 />
               );
-              const slot = <div className={styles.heroSpineSlot}>{bar}</div>;
               return (
-                <Tooltip key={i} content={tooltipContent ?? ''} placement="top">
-                  {slot}
-                </Tooltip>
+                <div key={i} className={styles.heroSpineSlot}>
+                  {bar}
+                </div>
               );
             })}
           </div>
@@ -721,45 +441,19 @@ export function LandingTopBar({
                   t <= 0.52
                     ? interpolateHex(gradientColors[0], gradientColors[1], t / 0.52)
                     : interpolateHex(gradientColors[1], gradientColors[2], (t - 0.52) / 0.48);
-                const stat =
-                  requestSpineValues != null && i < requestSpineValues.length
-                    ? formatRequestStat(requestSpineValues[i])
-                    : null;
-                const timeStr = stat != null && to > from ? formatBarTime(from, to, i, spineCount) : null;
-                const durationStr = stat != null && to > from ? formatBarDuration(from, to, spineCount) : null;
-                const waveIssueTooltip =
-                  requestSpineHeights == null && requestsDataSource != null && requestSpineWaveReason === 'error'
-                    ? 'Failed to load request data'
-                    : requestSpineHeights == null && requestsDataSource != null && requestSpineWaveReason === 'no-data'
-                      ? 'No data in this time range'
-                      : null;
-                const tooltipContent =
-                  stat != null ? (
-                    <div className={styles.spineTooltipContent}>
-                      <div>{stat}</div>
-                      {timeStr != null && <div className={styles.spineTooltipTime}>{timeStr}</div>}
-                      {durationStr != null && <div className={styles.spineTooltipTime}>({durationStr})</div>}
-                    </div>
-                  ) : waveIssueTooltip != null ? (
-                    waveIssueTooltip
-                  ) : null;
                 const bar = (
                   <div
                     className={styles.heroSpine}
                     style={{
                       transform: `scaleY(${height / 100})`,
                       backgroundColor: color,
-                      transition: disableSpineAnimation ? 'none' : undefined,
-                      transitionDelay:
-                        requestSpineHeights != null && !disableSpineAnimation ? `${Math.min(i * 6, 150)}ms` : undefined,
                     }}
                   />
                 );
-                const slot = <div className={styles.heroSpineSlot}>{bar}</div>;
                 return (
-                  <Tooltip key={i} content={tooltipContent ?? ''} placement="top">
-                    {slot}
-                  </Tooltip>
+                  <div key={i} className={styles.heroSpineSlot}>
+                    {bar}
+                  </div>
                 );
               })}
             </div>
