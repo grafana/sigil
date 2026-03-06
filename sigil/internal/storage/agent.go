@@ -76,8 +76,14 @@ type AgentVersionCursor struct {
 	ID         uint64
 }
 
+type AgentHeadFilter struct {
+	NamePrefix string
+	SeenAfter  time.Time
+	SeenBefore time.Time
+}
+
 type AgentCatalogStore interface {
-	ListAgentHeads(ctx context.Context, tenantID string, limit int, cursor *AgentHeadCursor, namePrefix string) ([]AgentHead, *AgentHeadCursor, error)
+	ListAgentHeads(ctx context.Context, tenantID string, limit int, cursor *AgentHeadCursor, filter AgentHeadFilter) ([]AgentHead, *AgentHeadCursor, error)
 	GetAgentVersion(ctx context.Context, tenantID, agentName, effectiveVersion string) (*AgentVersion, error)
 	GetLatestAgentVersion(ctx context.Context, tenantID, agentName string) (*AgentVersion, error)
 	ListAgentVersions(ctx context.Context, tenantID, agentName string, limit int, cursor *AgentVersionCursor) ([]AgentVersionSummary, *AgentVersionCursor, error)

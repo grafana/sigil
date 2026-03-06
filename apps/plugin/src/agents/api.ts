@@ -13,7 +13,13 @@ import type {
 const queryBasePath = '/api/plugins/grafana-sigil-app/resources/query';
 
 export type AgentsDataSource = {
-  listAgents: (limit?: number, cursor?: string, namePrefix?: string) => Promise<AgentListResponse>;
+  listAgents: (
+    limit?: number,
+    cursor?: string,
+    namePrefix?: string,
+    seenAfterSec?: number,
+    seenBeforeSec?: number
+  ) => Promise<AgentListResponse>;
   lookupAgent: (name: string, version?: string) => Promise<AgentDetail>;
   listAgentVersions: (name: string, limit?: number, cursor?: string) => Promise<AgentVersionListResponse>;
   lookupAgentRating: (name: string, version?: string) => Promise<AgentRatingResponse | null>;
@@ -23,7 +29,13 @@ export type AgentsDataSource = {
 };
 
 export const defaultAgentsDataSource: AgentsDataSource = {
-  async listAgents(limit?: number, cursor?: string, namePrefix?: string) {
+  async listAgents(
+    limit?: number,
+    cursor?: string,
+    namePrefix?: string,
+    seenAfterSec?: number,
+    seenBeforeSec?: number
+  ) {
     const params = new URLSearchParams();
     if (limit != null) {
       params.set('limit', String(limit));
@@ -33,6 +45,12 @@ export const defaultAgentsDataSource: AgentsDataSource = {
     }
     if (namePrefix && namePrefix.length > 0) {
       params.set('name_prefix', namePrefix);
+    }
+    if (seenAfterSec != null) {
+      params.set('seen_after', String(seenAfterSec));
+    }
+    if (seenBeforeSec != null) {
+      params.set('seen_before', String(seenBeforeSec));
     }
 
     const qs = params.toString();

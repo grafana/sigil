@@ -366,7 +366,7 @@ func TestListAgentHeadsFiltersByCaseInsensitiveContains(t *testing.T) {
 	}
 	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", generations))
 
-	items, cursor, err := store.ListAgentHeads(context.Background(), "tenant-a", 10, nil, "AGENT")
+	items, cursor, err := store.ListAgentHeads(context.Background(), "tenant-a", 10, nil, storage.AgentHeadFilter{NamePrefix: "AGENT"})
 	if err != nil {
 		t.Fatalf("list agent heads: %v", err)
 	}

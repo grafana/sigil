@@ -413,12 +413,32 @@ func listAgents(querySvc *query.Service) http.HandlerFunc {
 			limit = value
 		}
 
+		filter := query.AgentListFilter{
+			NamePrefix: req.URL.Query().Get("name_prefix"),
+		}
+		if rawSeenAfter := strings.TrimSpace(req.URL.Query().Get("seen_after")); rawSeenAfter != "" {
+			epochSec, parseErr := strconv.ParseInt(rawSeenAfter, 10, 64)
+			if parseErr != nil || epochSec < 0 {
+				http.Error(w, "invalid seen_after", http.StatusBadRequest)
+				return
+			}
+			filter.SeenAfter = time.Unix(epochSec, 0).UTC()
+		}
+		if rawSeenBefore := strings.TrimSpace(req.URL.Query().Get("seen_before")); rawSeenBefore != "" {
+			epochSec, parseErr := strconv.ParseInt(rawSeenBefore, 10, 64)
+			if parseErr != nil || epochSec < 0 {
+				http.Error(w, "invalid seen_before", http.StatusBadRequest)
+				return
+			}
+			filter.SeenBefore = time.Unix(epochSec, 0).UTC()
+		}
+
 		items, nextCursor, err := querySvc.ListAgentsForTenant(
 			req.Context(),
 			tenantID,
 			limit,
 			req.URL.Query().Get("cursor"),
-			req.URL.Query().Get("name_prefix"),
+			filter,
 		)
 		if err != nil {
 			if query.IsValidationError(err) {

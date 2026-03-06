@@ -263,61 +263,86 @@ describe('AgentsPage', () => {
     const dataSource = createDataSource();
     const { router } = renderPage(dataSource);
 
-    await waitFor(() => expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', ''));
+    await waitFor(() =>
+      expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', '', expect.any(Number), expect.any(Number))
+    );
     fireEvent.click(await screen.findByRole('tab', { name: 'Agents' }));
 
-    fireEvent.click(await screen.findByRole('button', { name: 'open agent assistant' }));
+    fireEvent.click(await screen.findByRole('link', { name: 'open agent assistant' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/a/grafana-sigil-app/agents/name/assistant'));
   });
 
-  it('renders hero KPIs, rankings, and risk counts from loaded agents', async () => {
+  it('renders overview TopStats, breakdown panels, and risk signals from loaded agents', async () => {
     const dataSource = createDataSource();
     renderPage(dataSource);
 
-    const heroRegion = await screen.findByRole('region', { name: 'agents hero summary' });
-    expect(heroRegion).toBeInTheDocument();
-    expect(within(heroRegion).getByText('Agents')).toBeInTheDocument();
-    expect(within(heroRegion).getByText('Total generations')).toBeInTheDocument();
-    expect(within(heroRegion).getAllByText('Token usage')).toHaveLength(1);
-    expect(within(heroRegion).getByText('Agent footprint')).toBeInTheDocument();
-    expect(within(heroRegion).getByText('Avg usage per generation')).toBeInTheDocument();
-    // Only the first page is loaded in this test (2 agents): generations=5, runtime tokens=150, avg=30
-    expect(within(heroRegion).getByText('Agents').parentElement).toHaveTextContent('2');
-    expect(within(heroRegion).getByText('Total generations').parentElement).toHaveTextContent('5');
-    expect(within(heroRegion).getByLabelText('Total runtime token usage')).toHaveTextContent('150 tokens');
-    expect(within(heroRegion).getByText('Avg usage per generation').parentElement).toHaveTextContent('30');
+    await waitFor(() =>
+      expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', '', expect.any(Number), expect.any(Number))
+    );
 
-    const topByGenerationsSection = screen.getByText('Top by generations').closest('div');
-    expect(topByGenerationsSection).toBeTruthy();
-    const generationButtons = within(topByGenerationsSection as HTMLElement).getAllByRole('button');
-    expect(generationButtons.map((button) => button.textContent)).toEqual(['assistant', 'Unnamed agent bucket']);
+    expect(await screen.findByText('Total Generations')).toBeInTheDocument();
+    expect(screen.getByText('Total Tokens')).toBeInTheDocument();
+    expect(screen.getByText('Estimated Cost')).toBeInTheDocument();
 
-    const topByTokenHeading = within(heroRegion).getByText('Agent footprint');
-    const topByTokenSection = topByTokenHeading.closest('div')?.parentElement;
-    expect(topByTokenSection).toBeTruthy();
-    const tokenButtons = within(topByTokenSection as HTMLElement).getAllByRole('button');
-    expect(tokenButtons.map((button) => button.textContent)).toEqual(['assistant', 'Unnamed agent bucket']);
+    expect(screen.getByText('Top by Generations')).toBeInTheDocument();
+    expect(screen.getByText('Agent Footprint')).toBeInTheDocument();
 
-    expect(screen.getByText('anonymous buckets').parentElement).toHaveTextContent('1');
-    expect(screen.getByText('stale (> 7 days)').parentElement).toHaveTextContent('0');
-    expect(screen.getByText('high churn (5+ versions)').parentElement).toHaveTextContent('0');
+    const riskStrip = screen.getByRole('status', { name: 'risk signals' });
+    expect(within(riskStrip).getByText('anonymous buckets')).toBeInTheDocument();
+    expect(within(riskStrip).getByText('1')).toBeInTheDocument();
+
+    expect(screen.getByText('Top Agents')).toBeInTheDocument();
   });
 
-  it('keeps runtime usage KPIs based on agents with runtime metrics after loading more', async () => {
+  it('renders the top agents table with correct agent rows', async () => {
     const dataSource = createDataSource();
     renderPage(dataSource);
 
-    await waitFor(() => expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', ''));
-    fireEvent.click(await screen.findByRole('tab', { name: 'Agents' }));
-    triggerLoadMoreIntersection();
-    await waitFor(() => expect(dataSource.listAgents).toHaveBeenNthCalledWith(2, 24, 'cursor-1', ''));
+    await waitFor(() =>
+      expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', '', expect.any(Number), expect.any(Number))
+    );
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    await screen.findByText('Top Agents');
+    const tablePanel = screen.getByText('Top Agents').closest('div')!.parentElement!;
+    const agentRows = within(tablePanel)
+      .getAllByRole('link')
+      .filter((el) => el.tagName === 'TR');
+    expect(agentRows).toHaveLength(2);
+    expect(agentRows[0]).toHaveTextContent('assistant');
+    expect(agentRows[1]).toHaveTextContent('Unnamed agent bucket');
+  });
 
-    const heroRegion = await screen.findByRole('region', { name: 'agents hero summary' });
-    expect(within(heroRegion).getByText('Total generations').parentElement).toHaveTextContent('5');
-    expect(within(heroRegion).getByLabelText('Total runtime token usage')).toHaveTextContent('150 tokens');
-    expect(within(heroRegion).getByText('Avg usage per generation').parentElement).toHaveTextContent('30');
+  it('renders risk strip with all-zero signals in neutral styling', async () => {
+    const dataSource: AgentsDataSource = {
+      ...createDataSource(),
+      listAgents: jest.fn().mockResolvedValueOnce({
+        items: [
+          {
+            agent_name: 'healthy-agent',
+            latest_effective_version: 'sha256:aaaa',
+            first_seen_at: '2026-03-04T10:00:00Z',
+            latest_seen_at: '2026-03-04T11:00:00Z',
+            generation_count: 5,
+            version_count: 2,
+            tool_count: 1,
+            system_prompt_prefix: 'test',
+            token_estimate: { system_prompt: 4, tools_total: 5, total: 9 },
+          },
+        ],
+        next_cursor: '',
+      }),
+    };
+
+    renderPage(dataSource);
+    await waitFor(() => expect(dataSource.listAgents).toHaveBeenCalled());
+    await screen.findByText('Top by Generations');
+
+    const riskStrip = screen.getByRole('status', { name: 'risk signals' });
+    expect(within(riskStrip).getByText('anonymous buckets')).toBeInTheDocument();
+    expect(within(riskStrip).getByText('stale (> 7 days)')).toBeInTheDocument();
+    expect(within(riskStrip).getByText('high churn (5+ versions)')).toBeInTheDocument();
+    const zeroCounts = within(riskStrip).getAllByText('0');
+    expect(zeroCounts).toHaveLength(3);
   });
 
   it('opens anonymous route', async () => {
@@ -325,7 +350,7 @@ describe('AgentsPage', () => {
     const { router } = renderPage(dataSource);
 
     fireEvent.click(await screen.findByRole('tab', { name: 'Agents' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'open agent anonymous' }));
+    fireEvent.click(await screen.findByRole('link', { name: 'open agent anonymous' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/a/grafana-sigil-app/agents/anonymous'));
   });
 
@@ -333,44 +358,104 @@ describe('AgentsPage', () => {
     const dataSource = createDataSource();
     renderPage(dataSource);
 
-    await waitFor(() => expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', ''));
+    await waitFor(() =>
+      expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', '', expect.any(Number), expect.any(Number))
+    );
     expect(observerCallbacks).toHaveLength(0);
     fireEvent.click(await screen.findByRole('tab', { name: 'Agents' }));
     expect(observerCallbacks.length).toBeGreaterThan(0);
 
     triggerLoadMoreIntersection();
 
-    await waitFor(() => expect(dataSource.listAgents).toHaveBeenNthCalledWith(2, 24, 'cursor-1', ''));
-    expect(await screen.findByRole('button', { name: 'open agent assistant-beta' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(dataSource.listAgents).toHaveBeenNthCalledWith(
+        2,
+        24,
+        'cursor-1',
+        '',
+        expect.any(Number),
+        expect.any(Number)
+      )
+    );
+    expect(await screen.findByRole('link', { name: 'open agent assistant-beta' })).toBeInTheDocument();
   });
 
   it('filters agents by search text', async () => {
     const dataSource = createDataSource();
     renderPage(dataSource);
 
-    await waitFor(() => expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', ''));
+    await waitFor(() =>
+      expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', '', expect.any(Number), expect.any(Number))
+    );
     fireEvent.click(await screen.findByRole('tab', { name: 'Agents' }));
 
     fireEvent.change(screen.getByPlaceholderText('Search by agent name…'), { target: { value: 'assist' } });
 
-    await waitFor(() => expect(dataSource.listAgents).toHaveBeenLastCalledWith(24, '', 'assist'));
-    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
-    await waitFor(() => expect(screen.getByText('Total generations').parentElement).toHaveTextContent('0'));
-    expect(screen.getByRole('button', { name: 'open top generation agent assistant-beta' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(dataSource.listAgents).toHaveBeenLastCalledWith(24, '', 'assist', expect.any(Number), expect.any(Number))
+    );
   });
 
-  it('shows sub-cent USD precision for tiny footprint values', async () => {
+  it('toggles star on an agent and persists to localStorage', async () => {
     const dataSource = createDataSource();
     renderPage(dataSource);
 
-    const modeSelect = await screen.findByLabelText('Top prompt and tools display mode');
-    fireEvent.change(modeSelect, { target: { value: 'usd' } });
+    await waitFor(() =>
+      expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', '', expect.any(Number), expect.any(Number))
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: 'Agents' }));
 
-    await waitFor(() => {
-      const anonymousTopTokenButton = screen.getByRole('button', { name: 'open top token agent anonymous' });
-      const anonymousListItem = anonymousTopTokenButton.closest('li');
-      expect(anonymousListItem).toHaveTextContent('$0.000030');
-      expect(anonymousListItem).not.toHaveTextContent('$0.000000');
-    });
+    const starButton = await screen.findByRole('button', { name: 'star agent assistant' });
+    fireEvent.click(starButton);
+
+    expect(screen.getByRole('button', { name: 'unstar agent assistant' })).toBeInTheDocument();
+
+    const stored = JSON.parse(window.localStorage.getItem('sigil.agents.starred') ?? '[]');
+    expect(stored).toContain('assistant');
+
+    fireEvent.click(screen.getByRole('button', { name: 'unstar agent assistant' }));
+    expect(screen.getByRole('button', { name: 'star agent assistant' })).toBeInTheDocument();
+
+    const storedAfter = JSON.parse(window.localStorage.getItem('sigil.agents.starred') ?? '[]');
+    expect(storedAfter).not.toContain('assistant');
+  });
+
+  it('sorts starred agents first in the Agents tab table', async () => {
+    const dataSource = createDataSource();
+    renderPage(dataSource);
+
+    await waitFor(() =>
+      expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', '', expect.any(Number), expect.any(Number))
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: 'Agents' }));
+
+    const table = screen.getByRole('table', { name: 'agents index table' });
+    const rowsBefore = within(table)
+      .getAllByRole('link')
+      .filter((el) => el.tagName === 'TR');
+    expect(rowsBefore[0]).toHaveTextContent('assistant');
+    expect(rowsBefore[1]).toHaveTextContent('Unnamed agent bucket');
+
+    const starAnon = within(table).getByRole('button', { name: /star agent Unnamed agent bucket/i });
+    fireEvent.click(starAnon);
+
+    const rowsAfter = within(table)
+      .getAllByRole('link')
+      .filter((el) => el.tagName === 'TR');
+    expect(rowsAfter[0]).toHaveTextContent('Unnamed agent bucket');
+    expect(rowsAfter[1]).toHaveTextContent('assistant');
+  });
+
+  it('shows star buttons in the Top Agents overview table', async () => {
+    const dataSource = createDataSource();
+    renderPage(dataSource);
+
+    await waitFor(() =>
+      expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', '', expect.any(Number), expect.any(Number))
+    );
+
+    const topAgentsPanel = screen.getByText('Top Agents').closest('div')!.parentElement!;
+    const starButtons = within(topAgentsPanel).getAllByRole('button', { name: /star agent/i });
+    expect(starButtons.length).toBeGreaterThanOrEqual(2);
   });
 });
