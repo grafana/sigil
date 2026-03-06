@@ -25,10 +25,10 @@ func ConversationTitleFromGeneration(generation *sigilv1.Generation) string {
 	if len(metadataMap) == 0 {
 		return ""
 	}
-	if title := GenerationMetadataString(generation, conversationTitleKey); title != "" {
+	if title := metadataStringFromMap(metadataMap, conversationTitleKey); title != "" {
 		return title
 	}
-	if title := GenerationMetadataString(generation, legacyConversationTitleKey); title != "" {
+	if title := metadataStringFromMap(metadataMap, legacyConversationTitleKey); title != "" {
 		return title
 	}
 	rawAttributes, ok := metadataMap["attributes"]
