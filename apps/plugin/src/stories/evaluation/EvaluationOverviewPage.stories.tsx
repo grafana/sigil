@@ -209,3 +209,27 @@ export const HasEvaluatorsNoRules = {
     },
   },
 };
+
+export const DuplicateVersions = {
+  args: {
+    dataSource: {
+      ...mockDataSource,
+      listEvaluators: async () => ({
+        items: [
+          ...mockEvaluators,
+          {
+            ...mockEvaluators[0],
+            version: '2026-02-18',
+            updated_at: '2026-02-19T00:00:00Z',
+          },
+          {
+            ...mockEvaluators[1],
+            version: '2026-02-18',
+            updated_at: '2026-02-19T00:00:00Z',
+          },
+        ],
+        next_cursor: '',
+      }),
+    },
+  },
+};

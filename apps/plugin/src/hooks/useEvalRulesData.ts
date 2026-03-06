@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { EvaluationDataSource } from '../evaluation/api';
+import { fetchAllCursorPages } from '../evaluation/pagination';
 import type { Evaluator, Rule } from '../evaluation/types';
 
 export type EvalRulesData = {
@@ -36,13 +37,17 @@ export function useEvalRulesData(dataSource: EvaluationDataSource): EvalRulesDat
       setErrorMessage('');
     });
 
-    Promise.all([dataSource.listRules(), dataSource.listEvaluators(), dataSource.listPredefinedEvaluators()])
-      .then(([rulesRes, evaluatorsRes, predefinedRes]) => {
+    Promise.all([
+      fetchAllCursorPages((cursor) => dataSource.listRules(500, cursor)),
+      fetchAllCursorPages((cursor) => dataSource.listEvaluators(500, cursor)),
+      dataSource.listPredefinedEvaluators(),
+    ])
+      .then(([rules, evaluators, predefinedRes]) => {
         if (requestVersion.current !== version) {
           return;
         }
-        setRules(rulesRes.items);
-        setEvaluators([...evaluatorsRes.items, ...predefinedRes.items]);
+        setRules(rules);
+        setEvaluators([...evaluators, ...predefinedRes.items]);
         setPredefinedCount(predefinedRes.items.length);
       })
       .catch((err) => {

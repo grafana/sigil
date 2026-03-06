@@ -6,6 +6,7 @@ import { Alert, Icon, Spinner, Text, useStyles2, type IconName } from '@grafana/
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import EvalOnboarding from '../components/evaluation/EvalOnboarding';
 import SummaryCards from '../components/evaluation/SummaryCards';
+import { pickLatestVersionPerEvaluator } from '../evaluation/utils';
 import { useEvalRulesDataContext } from '../contexts/EvalRulesDataContext';
 
 const EVAL_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}`;
@@ -350,7 +351,7 @@ export default function EvaluationOverviewPage() {
 
   const activeRuleCount = rules.filter((r) => r.enabled).length;
   const disabledRuleCount = rules.length - activeRuleCount;
-  const tenantEvalCount = evaluators.filter((e) => !e.is_predefined).length;
+  const tenantEvalCount = pickLatestVersionPerEvaluator(evaluators.filter((e) => !e.is_predefined)).length;
   const hasEvaluators = tenantEvalCount > 0;
 
   if (loading) {
@@ -393,9 +394,9 @@ export default function EvaluationOverviewPage() {
             How Sigil evaluates your AI applications
           </Text>
           <Text variant="body" color="secondary">
-            Sigil evaluates LLM and agentic systems to capture{' '}
+            Sigil evaluates LLM and agentic applications to capture{' '}
             <span className={styles.glowPhrase}>hidden behaviors</span>, turn them into signals, and surface insights
-            about your AI applications directly in Grafana.
+            directly in Grafana.
           </Text>
         </div>
         <div className={styles.infoGrid}>
