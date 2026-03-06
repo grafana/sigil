@@ -1469,9 +1469,12 @@ export default function AgentDetailPage({
   const hasAnyAnalysis = hasInsightResults || hasRatingResult;
 
   const runUnifiedAnalysis = useCallback(() => {
-    insightsRef.current?.analyze(lookback);
+    if (!insightsRef.current) {
+      return;
+    }
     setInitialRatingLoading(true);
     setInitialRatingError('');
+    insightsRef.current.analyze(lookback);
   }, [lookback]);
 
   const handleAnalysisTriggered = useCallback(() => {
@@ -1483,6 +1486,10 @@ export default function AgentDetailPage({
       judge_model: '',
       judge_latency_ms: 0,
     });
+    setInitialRatingLoading(false);
+  }, []);
+
+  const handleAnalysisStartFailed = useCallback(() => {
     setInitialRatingLoading(false);
   }, []);
 
@@ -2040,6 +2047,7 @@ export default function AgentDetailPage({
                       dataSource={dataSource}
                       onInsightsChange={setPromptInsights}
                       onAnalysisTriggered={handleAnalysisTriggered}
+                      onAnalysisStartFailed={handleAnalysisStartFailed}
                       hideControls
                       onInsightFocus={handleInsightFocus}
                     />

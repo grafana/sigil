@@ -19,6 +19,7 @@ export type PromptInsightsPanelProps = {
   dataSource?: AgentsDataSource;
   onInsightsChange?: (insights: PromptInsightsResponse | null) => void;
   onAnalysisTriggered?: () => void;
+  onAnalysisStartFailed?: () => void;
   hideControls?: boolean;
   onInsightFocus?: (kind: 'strength' | 'weakness', index: number) => void;
 };
@@ -56,6 +57,7 @@ const PromptInsightsPanel = forwardRef<PromptInsightsPanelHandle, PromptInsights
       dataSource = defaultAgentsDataSource,
       onInsightsChange,
       onAnalysisTriggered,
+      onAnalysisStartFailed,
       hideControls = false,
       onInsightFocus,
     },
@@ -194,6 +196,7 @@ const PromptInsightsPanel = forwardRef<PromptInsightsPanelHandle, PromptInsights
             return;
           }
           console.error('Prompt insights analysis failed', { agentName, version, detail: err });
+          onAnalysisStartFailed?.();
           const statusCode = extractErrorStatus(err);
           if (statusCode === 503) {
             setError('No judge provider is configured. Configure a judge provider to enable prompt analysis.');
@@ -203,7 +206,7 @@ const PromptInsightsPanel = forwardRef<PromptInsightsPanelHandle, PromptInsights
           setRunning(false);
         }
       },
-      [agentName, version, lookback, dataSource, startPolling, onInsightsChange, onAnalysisTriggered]
+      [agentName, version, lookback, dataSource, startPolling, onInsightsChange, onAnalysisTriggered, onAnalysisStartFailed]
     );
 
     const toggleInsight = useCallback(

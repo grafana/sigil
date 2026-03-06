@@ -427,4 +427,35 @@ describe('AgentDetailPage', () => {
     expect(analyzeBtn).toBeInTheDocument();
     expect(analyzeBtn.textContent).toMatch(/re-analyze|analyze agent/i);
   });
+
+  it('clears rating loading when unified analysis fails to start', async () => {
+    const dataSource = createDataSource();
+    let rejectAnalyze: ((reason?: unknown) => void) | undefined;
+    dataSource.analyzePrompt = jest.fn(
+      () =>
+        new Promise((_, reject) => {
+          rejectAnalyze = reject;
+        })
+    );
+
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByTestId('unified-analyze-button'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Analyze' }));
+
+    expect(await screen.findByRole('progressbar', { name: /loading conversation/i })).toBeInTheDocument();
+
+    rejectAnalyze?.(new Error('backend unavailable'));
+
+    expect(await screen.findByText('Failed to start analysis.')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole('progressbar', { name: /loading conversation/i })).not.toBeInTheDocument();
+    });
+  });
 });
