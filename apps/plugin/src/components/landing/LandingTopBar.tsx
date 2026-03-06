@@ -694,6 +694,7 @@ export function LandingTopBar({
                   tooltip="Send"
                   className={styles.askSubmitButton}
                   disabled={assistantInput.trim().length === 0}
+                  type="button"
                   onClick={openAssistant}
                 />
               </form>
