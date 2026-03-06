@@ -1,11 +1,4 @@
-import React, {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-  useState,
-} from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { css, cx, keyframes } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Button, Icon, Select, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
@@ -182,11 +175,7 @@ const PromptInsightsPanel = forwardRef<PromptInsightsPanelHandle, PromptInsights
         setError('');
 
         try {
-          const response = await dataSource.analyzePrompt(
-            agentName,
-            resolvedVersion,
-            effectiveLookback
-          );
+          const response = await dataSource.analyzePrompt(agentName, resolvedVersion, effectiveLookback);
           if (requestIdRef.current !== requestId) {
             return;
           }
@@ -210,9 +199,7 @@ const PromptInsightsPanel = forwardRef<PromptInsightsPanelHandle, PromptInsights
           onAnalysisStartFailed?.();
           const statusCode = extractErrorStatus(err);
           if (statusCode === 503) {
-            setError(
-              'No judge provider is configured. Configure a judge provider to enable prompt analysis.'
-            );
+            setError('No judge provider is configured. Configure a judge provider to enable prompt analysis.');
           } else {
             setError('Failed to start analysis.');
           }
@@ -275,12 +262,7 @@ const PromptInsightsPanel = forwardRef<PromptInsightsPanelHandle, PromptInsights
               <Text variant="bodySmall" weight="medium">
                 Prompt insights
               </Text>
-              {hasResult && (
-                <CountBadges
-                  strengths={result.strengths.length}
-                  weaknesses={result.weaknesses.length}
-                />
-              )}
+              {hasResult && <CountBadges strengths={result.strengths.length} weaknesses={result.weaknesses.length} />}
             </div>
             <div className={styles.headerRight}>
               <Button
@@ -335,10 +317,7 @@ const PromptInsightsPanel = forwardRef<PromptInsightsPanelHandle, PromptInsights
                 <Text variant="bodySmall" weight="medium">
                   Prompt insights
                 </Text>
-                <CountBadges
-                  strengths={result.strengths.length}
-                  weaknesses={result.weaknesses.length}
-                />
+                <CountBadges strengths={result.strengths.length} weaknesses={result.weaknesses.length} />
               </div>
             )}
             <InsightGroup
@@ -361,8 +340,7 @@ const PromptInsightsPanel = forwardRef<PromptInsightsPanelHandle, PromptInsights
               <div className={styles.meta}>
                 <Text variant="bodySmall" color="secondary">
                   {result.judge_model}
-                  {result.judge_latency_ms > 0 &&
-                    ` · ${(result.judge_latency_ms / 1000).toFixed(1)}s`}
+                  {result.judge_latency_ms > 0 && ` · ${(result.judge_latency_ms / 1000).toFixed(1)}s`}
                 </Text>
               </div>
             )}
@@ -394,29 +372,14 @@ type AnalyzeModalProps = {
   onDismiss: () => void;
 };
 
-export function AnalyzeModal({
-  lookback,
-  onLookbackChange,
-  onConfirm,
-  onDismiss,
-}: AnalyzeModalProps) {
+export function AnalyzeModal({ lookback, onLookbackChange, onConfirm, onDismiss }: AnalyzeModalProps) {
   const styles = useStyles2(getModalStyles);
   return (
     <div className={styles.backdrop} role="presentation" onClick={onDismiss}>
-      <div
-        className={styles.dialog}
-        role="dialog"
-        aria-label="Analyze prompt"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className={styles.dialog} role="dialog" aria-label="Analyze prompt" onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <Text variant="h5">Analyze prompt</Text>
-          <button
-            type="button"
-            className={styles.closeButton}
-            onClick={onDismiss}
-            aria-label="Close"
-          >
+          <button type="button" className={styles.closeButton} onClick={onDismiss} aria-label="Close">
             <Icon name="times" />
           </button>
         </div>
@@ -540,14 +503,7 @@ type InsightGroupProps = {
   cardRefsMap: React.RefObject<Map<string, HTMLButtonElement>>;
 };
 
-function InsightGroup({
-  title,
-  items,
-  kind,
-  expandedKeys,
-  onToggle,
-  cardRefsMap,
-}: InsightGroupProps) {
+function InsightGroup({ title, items, kind, expandedKeys, onToggle, cardRefsMap }: InsightGroupProps) {
   const styles = useStyles2(getStyles);
 
   if (items.length === 0) {
@@ -592,16 +548,7 @@ type InsightCardProps = {
   cardRefsMap: React.RefObject<Map<string, HTMLButtonElement>>;
 };
 
-function InsightCard({
-  cardKey,
-  item,
-  kind,
-  index,
-  isExpanded,
-  onToggle,
-  testId,
-  cardRefsMap,
-}: InsightCardProps) {
+function InsightCard({ cardKey, item, kind, index, isExpanded, onToggle, testId, cardRefsMap }: InsightCardProps) {
   const styles = useStyles2(getStyles);
   const isStrength = kind === 'strength';
   const cardRef = useRef<HTMLButtonElement | null>(null);
@@ -626,12 +573,7 @@ function InsightCard({
       data-testid={testId}
     >
       <div className={styles.cardHeader}>
-        <span
-          className={cx(
-            styles.cardIcon,
-            isStrength ? styles.cardIconStrength : styles.cardIconWeakness
-          )}
-        >
+        <span className={cx(styles.cardIcon, isStrength ? styles.cardIconStrength : styles.cardIconWeakness)}>
           <Icon name={isStrength ? 'check' : 'exclamation-triangle'} size="xs" />
         </span>
         <Text variant="bodySmall">{item.title}</Text>
