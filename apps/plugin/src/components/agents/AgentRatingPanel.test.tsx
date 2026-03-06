@@ -309,7 +309,7 @@ describe('AgentRatingPanel', () => {
     expect(within(findings).queryByRole('button', { name: /rewrite prompt/i })).not.toBeInTheDocument();
     expect(within(findings).queryByRole('button', { name: /re-run/i })).not.toBeInTheDocument();
     expect(within(actions).getByRole('button', { name: /rewrite prompt/i })).toBeInTheDocument();
-    expect(within(actions).getByRole('button', { name: /re-run/i })).toBeInTheDocument();
+    expect(within(actions).queryByRole('button', { name: /re-run/i })).not.toBeInTheDocument();
   });
 
   it('opens assistant from summary modal explain action', async () => {
