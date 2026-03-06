@@ -27,6 +27,7 @@ import {
 import { defaultEvaluationDataSource } from '../../evaluation/api';
 import { useFilterUrlState } from '../../hooks/useFilterUrlState';
 import { ideTabs, buildCursorPromptDeeplink, downloadTextFile, renderIdeActionLogo } from '../../ide/ideUtils';
+import videoPreviewImg from '../../img/video-preview.png';
 
 type IdeKey = InstrumentationPromptIde;
 
@@ -1014,15 +1015,15 @@ export function LandingTopBar({
         <div className={styles.heroSideHeaderBlock}>
           <div className={styles.videoCard}>
             <div className={styles.videoPreview}>
+              <img src={videoPreviewImg} alt="" className={styles.videoPreviewImage} />
+              <div className={styles.videoOverlayText}>
+                <span className={styles.videoOverlayTitle}>See Sigil in action</span>
+                <span className={styles.videoOverlaySubtitle}>From first trace to first eval in under 5 minutes</span>
+              </div>
               <div className={styles.videoPlayIcon} data-play-icon="">
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M8 5v14l11-7z" />
                 </svg>
-              </div>
-              <div className={styles.videoComingSoon}>
-                <Text color="secondary" variant="bodySmall">
-                  Video coming soon
-                </Text>
               </div>
             </div>
           </div>
@@ -1419,15 +1420,16 @@ function getStyles(theme: GrafanaTheme2) {
       flex: 1,
       minHeight: 0,
       width: '100%',
-      border: `1px solid ${theme.colors.border.weak}`,
+      border: '2px solid #1e2535',
       borderRadius: theme.shape.radius.default,
       overflow: 'hidden',
       cursor: 'pointer',
       transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
       background: theme.colors.background.primary,
+      boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)',
       '&:hover': {
-        borderColor: theme.colors.primary.border,
-        boxShadow: theme.shadows.z2,
+        borderColor: 'rgba(255, 255, 255, 0.25)',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
       },
       '&:hover [data-play-icon]': {
         transform: 'scale(1.1)',
@@ -1445,10 +1447,50 @@ function getStyles(theme: GrafanaTheme2) {
       justifyContent: 'center',
       flex: 1,
       minHeight: 250,
+      overflow: 'hidden',
       background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+    }),
+    videoPreviewImage: css({
+      label: 'landingTopBar-videoPreviewImage',
+      position: 'absolute',
+      inset: 0,
+      width: '100%',
+      height: '100%',
+      objectFit: 'cover',
+      filter: 'blur(1.5px)',
+    }),
+    videoOverlayText: css({
+      label: 'landingTopBar-videoOverlayText',
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: theme.spacing(0.75),
+      padding: `${theme.spacing(3)} ${theme.spacing(2.5)}`,
+      background: 'linear-gradient(to bottom, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0) 100%)',
+      zIndex: 1,
+    }),
+    videoOverlayTitle: css({
+      label: 'landingTopBar-videoOverlayTitle',
+      fontSize: theme.typography.h4.fontSize,
+      fontWeight: theme.typography.fontWeightBold,
+      lineHeight: 1.2,
+      background: 'linear-gradient(135deg, #5794F2 0%, #B877D9 50%, #FF9830 100%)',
+      WebkitBackgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+    }),
+    videoOverlaySubtitle: css({
+      label: 'landingTopBar-videoOverlaySubtitle',
+      color: 'rgba(255, 255, 255, 0.75)',
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: theme.typography.fontWeightMedium,
+      letterSpacing: '0.02em',
     }),
     videoPlayIcon: css({
       label: 'landingTopBar-videoPlayIcon',
+      position: 'relative',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -1459,14 +1501,6 @@ function getStyles(theme: GrafanaTheme2) {
       backdropFilter: 'blur(8px)',
       color: '#fff',
       transition: 'transform 0.2s ease',
-    }),
-    videoComingSoon: css({
-      label: 'landingTopBar-videoComingSoon',
-      position: 'absolute',
-      bottom: theme.spacing(1.5),
-      left: '50%',
-      transform: 'translateX(-50%)',
-      opacity: 0.7,
     }),
     sideActions: css({
       label: 'landingTopBar-sideActions',
