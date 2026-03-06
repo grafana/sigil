@@ -245,33 +245,6 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
     },
     [setSearchParams]
   );
-  const setEvaluatorView = useCallback(
-    (value: EvaluatorListView) => {
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          next.set('evaluator_view', value);
-          return next;
-        },
-        { replace: true }
-      );
-    },
-    [setSearchParams]
-  );
-  const setTemplateView = useCallback(
-    (value: TemplateListView) => {
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          next.set('template_view', value);
-          return next;
-        },
-        { replace: true }
-      );
-    },
-    [setSearchParams]
-  );
-
   const [allTemplates, setAllTemplates] = useState<TemplateDefinition[]>([]);
   const [tenantEvaluators, setTenantEvaluators] = useState<Evaluator[]>([]);
   const [evaluatorPage, setEvaluatorPage] = useState(0);
@@ -287,6 +260,35 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
   const requestVersion = useRef(0);
   const deferredEvaluatorSearch = useDeferredValue(evaluatorSearch.trim().toLowerCase());
   const deferredTemplateSearch = useDeferredValue(templateSearch.trim().toLowerCase());
+
+  const setEvaluatorView = useCallback(
+    (value: EvaluatorListView) => {
+      setEvaluatorPage(0);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set('evaluator_view', value);
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
+  const setTemplateView = useCallback(
+    (value: TemplateListView) => {
+      setTemplatePage(0);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set('template_view', value);
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
 
   useEffect(() => {
     requestVersion.current += 1;
@@ -328,12 +330,14 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
       });
   }, [dataSource, templateScopeFilter]);
 
-  const sortedTemplates = [...allTemplates].sort((a, b) => {
-    if (a.scope !== b.scope) {
-      return a.scope === 'global' ? -1 : 1;
-    }
-    return a.template_id.localeCompare(b.template_id);
-  });
+  const sortedTemplates = useMemo(() => {
+    return [...allTemplates].sort((a, b) => {
+      if (a.scope !== b.scope) {
+        return a.scope === 'global' ? -1 : 1;
+      }
+      return a.template_id.localeCompare(b.template_id);
+    });
+  }, [allTemplates]);
   const evaluatorView: EvaluatorListView =
     evaluatorViewParam === 'cards' || evaluatorViewParam === 'table' ? evaluatorViewParam : 'cards';
   const templateView: TemplateListView =
