@@ -69,11 +69,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     WebkitLineClamp: 2,
     WebkitBoxOrient: 'vertical' as const,
   }),
-  outputKeys: css({
-    display: 'flex',
-    flexWrap: 'wrap' as const,
-    gap: theme.spacing(0.375),
-  }),
   footer: css({
     marginTop: 'auto',
     display: 'flex',
@@ -147,13 +142,6 @@ export default function EvaluatorCardGrid({ evaluators, onSelect, onDelete }: Ev
                 {evaluator.description || '—'}
               </Text>
             </div>
-
-            <div className={styles.outputKeys}>
-              {evaluator.output_keys.map((ok) => (
-                <Badge key={ok.key} text={`${ok.key}: ${ok.type}`} color="blue" />
-              ))}
-            </div>
-
             <div className={styles.footer}>
               <div className={styles.footerActions}>
                 <Button
