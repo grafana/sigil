@@ -265,10 +265,10 @@ export default function MetricsBar({
       <div className={styles.modelChips}>
         {modelMeta.map(({ key, displayName, color, card }) => {
           const isOpen = openModel?.key === key;
-          const chipToneStyle: React.CSSProperties = {
-            borderColor: withAlpha(color, toAlphaHex(isOpen ? 0.7 : 0.38)),
-            background: withAlpha(color, toAlphaHex(isOpen ? 0.2 : 0.1)),
-          };
+          const chipToneStyle = {
+            '--chip-border-color': withAlpha(color, toAlphaHex(isOpen ? 0.7 : 0.38)),
+            '--chip-bg': withAlpha(color, toAlphaHex(isOpen ? 0.2 : 0.1)),
+          } as React.CSSProperties;
 
           return (
             <span key={key} className={styles.modelChipAnchor}>
