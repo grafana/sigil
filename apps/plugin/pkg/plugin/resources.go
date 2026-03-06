@@ -420,6 +420,61 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 	_, _ = io.Copy(w, resp.Body)
 }
 
+func (a *App) handleProxyWithBody(w http.ResponseWriter, req *http.Request, path string, method string, body []byte) {
+	ctx, span := pluginProxyTracer.Start(
+		req.Context(),
+		"sigil.plugin.proxy.sigil",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("http.request.method", method),
+			attribute.String("url.path", path),
+		),
+	)
+	defer span.End()
+
+	upstream := strings.TrimRight(a.apiURL, "/") + path
+
+	proxyReq, err := http.NewRequestWithContext(ctx, method, upstream, bytes.NewReader(body))
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "build request")
+		writeStub(w, http.StatusInternalServerError, path, fmt.Sprintf("build request: %v", err))
+		return
+	}
+	proxyReq.Header = req.Header.Clone()
+	proxyReq.Header.Set("Content-Type", "application/json")
+	if a.apiAuthToken != "" {
+		proxyReq.SetBasicAuth(a.tenantID, a.apiAuthToken)
+	}
+	injectTenantHeaders(proxyReq, a.tenantID)
+	injectOperatorIdentityHeaders(proxyReq, method, path)
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(proxyReq.Header))
+
+	resp, err := a.client.Do(proxyReq)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "upstream unavailable")
+		writeStub(w, http.StatusBadGateway, path, fmt.Sprintf("upstream unavailable: %v", err))
+		return
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			_ = closeErr
+		}
+	}()
+
+	copyUpstreamResponseHeaders(w.Header(), resp.Header)
+	if w.Header().Get("Content-Type") == "" {
+		w.Header().Set("Content-Type", "application/json")
+	}
+	w.WriteHeader(resp.StatusCode)
+	span.SetAttributes(attribute.Int("http.response.status_code", resp.StatusCode))
+	if resp.StatusCode >= http.StatusInternalServerError {
+		span.SetStatus(codes.Error, http.StatusText(resp.StatusCode))
+	}
+	_, _ = io.Copy(w, resp.Body)
+}
+
 func (a *App) handleGrafanaProxy(w http.ResponseWriter, req *http.Request, path string, method string) {
 	if req.Method != method {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -569,8 +624,255 @@ func (a *App) handleLookupPromptInsights(w http.ResponseWriter, req *http.Reques
 	a.handleProxy(w, req, "/api/v1/agents:prompt-insights", http.MethodGet)
 }
 
+const (
+	analyzePromptConversationLimit = 15
+	analyzePromptDetailBatchSize   = 5
+	analyzePromptDefaultLookback   = 7 * 24 * time.Hour
+)
+
+var analyzePromptValidLookbacks = map[string]time.Duration{
+	"6h":  6 * time.Hour,
+	"12h": 12 * time.Hour,
+	"1d":  24 * time.Hour,
+	"3d":  3 * 24 * time.Hour,
+	"7d":  7 * 24 * time.Hour,
+}
+
+func parseAnalyzePromptLookback(raw string) time.Duration {
+	if d, ok := analyzePromptValidLookbacks[strings.TrimSpace(raw)]; ok {
+		return d
+	}
+	return analyzePromptDefaultLookback
+}
+
+type analyzePromptPluginRequest struct {
+	AgentName string `json:"agent_name"`
+	Version   string `json:"version,omitempty"`
+	Model     string `json:"model,omitempty"`
+	Lookback  string `json:"lookback,omitempty"`
+}
+
+type analyzePromptExcerpt struct {
+	ConversationID  string `json:"conversation_id"`
+	GenerationCount int    `json:"generation_count"`
+	HasErrors       bool   `json:"has_errors"`
+	ToolCallCount   int    `json:"tool_call_count"`
+	UserInput       string `json:"user_input"`
+	AssistantOutput string `json:"assistant_output"`
+}
+
+type analyzePromptWithExcerptsUpstream struct {
+	AgentName string                 `json:"agent_name"`
+	Version   string                 `json:"version,omitempty"`
+	Model     string                 `json:"model,omitempty"`
+	Excerpts  []analyzePromptExcerpt `json:"excerpts"`
+}
+
 func (a *App) handleAnalyzePrompt(w http.ResponseWriter, req *http.Request) {
-	a.handleProxy(w, req, "/api/v1/agents:analyze-prompt", http.MethodPost)
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var payload analyzePromptPluginRequest
+	if req.Body != nil {
+		decoder := json.NewDecoder(req.Body)
+		if err := decoder.Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+	}
+
+	agentName := strings.TrimSpace(payload.AgentName)
+	if agentName == "" {
+		http.Error(w, "agent_name is required", http.StatusBadRequest)
+		return
+	}
+
+	// req.Body is consumed by the decoder above, so re-encode for fallback paths.
+	rawBody, err := json.Marshal(payload)
+	if err != nil {
+		http.Error(w, "failed to re-encode request body", http.StatusInternalServerError)
+		return
+	}
+
+	if !a.hasGrafanaDatasourceProxyTarget(a.tempoDatasourceUID) {
+		a.handleProxyWithBody(w, req, "/api/v1/agents:analyze-prompt", http.MethodPost, rawBody)
+		return
+	}
+
+	lookback := parseAnalyzePromptLookback(payload.Lookback)
+	now := time.Now().UTC()
+	searchPayload := conversationSearchRequest{
+		Filters: fmt.Sprintf("agent = %q", agentName),
+		TimeRange: conversationSearchTimeRange{
+			From: now.Add(-lookback),
+			To:   now,
+		},
+		PageSize: analyzePromptConversationLimit,
+	}
+
+	searchResp, err := a.searchConversations(req, searchPayload)
+	if err != nil {
+		backend.Logger.Warn("analyze-prompt: conversation search failed, falling back to proxy",
+			"agent_name", agentName,
+			"error", err,
+		)
+		a.handleProxyWithBody(w, req, "/api/v1/agents:analyze-prompt", http.MethodPost, rawBody)
+		return
+	}
+
+	excerpts := a.fetchConversationExcerptsParallel(req, agentName, searchResp.Conversations)
+
+	upstream := analyzePromptWithExcerptsUpstream{
+		AgentName: payload.AgentName,
+		Version:   payload.Version,
+		Model:     payload.Model,
+		Excerpts:  excerpts,
+	}
+
+	body, err := json.Marshal(upstream)
+	if err != nil {
+		http.Error(w, "failed to encode upstream request", http.StatusInternalServerError)
+		return
+	}
+	a.handleProxyWithBody(w, req, "/api/v1/agents:analyze-prompt-with-excerpts", http.MethodPost, body)
+}
+
+func (a *App) fetchConversationExcerptsParallel(
+	req *http.Request,
+	agentName string,
+	conversations []conversationSearchResult,
+) []analyzePromptExcerpt {
+	if len(conversations) == 0 {
+		return []analyzePromptExcerpt{}
+	}
+
+	type indexedExcerpt struct {
+		index   int
+		excerpt analyzePromptExcerpt
+	}
+
+	results := make(chan indexedExcerpt, len(conversations))
+	sem := make(chan struct{}, analyzePromptDetailBatchSize)
+
+	for i, conv := range conversations {
+		sem <- struct{}{}
+		go func(idx int, conversationID string, hasErrors bool) {
+			defer func() { <-sem }()
+
+			var detail conversationDetailResponse
+			if err := a.doSigilJSONRequest(
+				req,
+				http.MethodGet,
+				fmt.Sprintf("/api/v1/conversations/%s", url.PathEscape(conversationID)),
+				nil, nil, &detail,
+			); err != nil {
+				backend.Logger.Debug("analyze-prompt: failed to fetch conversation detail",
+					"conversation_id", conversationID,
+					"error", err,
+				)
+				return
+			}
+
+			agentGens := make([]generationPayload, 0)
+			for _, g := range detail.Generations {
+				if an, _ := g["agent_name"].(string); an == agentName {
+					agentGens = append(agentGens, g)
+				}
+			}
+			if len(agentGens) == 0 {
+				return
+			}
+
+			excerpt := analyzePromptExcerpt{
+				ConversationID:  conversationID,
+				GenerationCount: len(agentGens),
+				HasErrors:       hasErrors,
+				UserInput:       extractGenerationMessageText(agentGens[0], "input"),
+				AssistantOutput: extractGenerationMessageText(agentGens[0], "output"),
+			}
+			for _, g := range agentGens {
+				excerpt.ToolCallCount += countGenerationToolCalls(g)
+			}
+
+			results <- indexedExcerpt{index: idx, excerpt: excerpt}
+		}(i, conv.ConversationID, conv.HasErrors)
+	}
+
+	for i := 0; i < cap(sem); i++ {
+		sem <- struct{}{}
+	}
+	close(results)
+
+	excerpts := make([]analyzePromptExcerpt, 0, len(conversations))
+	collected := make([]indexedExcerpt, 0, len(conversations))
+	for r := range results {
+		collected = append(collected, r)
+	}
+	sort.Slice(collected, func(i, j int) bool {
+		return collected[i].index < collected[j].index
+	})
+	for _, c := range collected {
+		excerpts = append(excerpts, c.excerpt)
+	}
+	return excerpts
+}
+
+type generationPayload = map[string]any
+
+type conversationDetailResponse struct {
+	ConversationID string              `json:"conversation_id"`
+	Generations    []generationPayload `json:"generations"`
+}
+
+func extractGenerationMessageText(gen generationPayload, field string) string {
+	messages, ok := gen[field].([]any)
+	if !ok || len(messages) == 0 {
+		return ""
+	}
+	msg, ok := messages[0].(map[string]any)
+	if !ok {
+		return ""
+	}
+	parts, ok := msg["parts"].([]any)
+	if !ok || len(parts) == 0 {
+		return ""
+	}
+	part, ok := parts[0].(map[string]any)
+	if !ok {
+		return ""
+	}
+	text, _ := part["text"].(string)
+	return text
+}
+
+func countGenerationToolCalls(gen generationPayload) int {
+	output, ok := gen["output"].([]any)
+	if !ok {
+		return 0
+	}
+	count := 0
+	for _, msg := range output {
+		m, ok := msg.(map[string]any)
+		if !ok {
+			continue
+		}
+		parts, ok := m["parts"].([]any)
+		if !ok {
+			continue
+		}
+		for _, part := range parts {
+			p, ok := part.(map[string]any)
+			if !ok {
+				continue
+			}
+			if _, hasToolCall := p["tool_call"]; hasToolCall {
+				count++
+			}
+		}
+	}
+	return count
 }
 
 func (a *App) handleEvalEvaluators(w http.ResponseWriter, req *http.Request) {

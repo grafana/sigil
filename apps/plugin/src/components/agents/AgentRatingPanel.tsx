@@ -1,7 +1,7 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { css, cx } from '@emotion/css';
+import { css, cx, keyframes } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Badge, Button, Icon, Text, useStyles2, useTheme2 } from '@grafana/ui';
+import { Alert, Badge, Button, Icon, Spinner, Text, Tooltip, useStyles2, useTheme2 } from '@grafana/ui';
 import { createAssistantContextItem, useAssistant, useInlineAssistant } from '@grafana/assistant';
 import { useSearchParams } from 'react-router-dom';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../../agents/api';
@@ -34,14 +34,6 @@ const SUMMARY_MAX_CHARS = 160;
 const SUGGESTION_MAX_CHARS = 110;
 const MAX_SUGGESTIONS_TOTAL = 10;
 const SUGGESTION_QUERY_PARAM = 'suggestion';
-const RATING_LOADER_LINES = [
-  'Inspecting system prompt structure...',
-  'Reviewing tool schema clarity...',
-  'Checking prompt-tool alignment...',
-  'Scoring context efficiency and token budget...',
-  'Analyzing instruction quality and constraints...',
-  'Drafting targeted optimization suggestions...',
-];
 const REWRITE_SYSTEM_PROMPT = [
   'You are an expert prompt engineer.',
   'Given the current agent context and analysis report, rewrite the system prompt to improve quality and safety.',
@@ -54,6 +46,11 @@ const REWRITE_SYSTEM_PROMPT = [
   '## Why this is better',
   '- <3-6 concise bullets tied to report findings>',
 ].join('\n');
+
+const shimmer = keyframes({
+  '0%': { transform: 'translateX(-100%)' },
+  '100%': { transform: 'translateX(250%)' },
+});
 
 const getStyles = (theme: GrafanaTheme2) => ({
   panel: css({
@@ -68,194 +65,249 @@ const getStyles = (theme: GrafanaTheme2) => ({
   embeddedRoot: css({
     display: 'flex',
     flexDirection: 'column' as const,
-    height: '100%',
-    minHeight: 280,
   }),
   body: css({
     display: 'flex',
     flexDirection: 'column' as const,
     flex: 1,
     minHeight: 0,
-    gap: theme.spacing(1.5),
+    gap: theme.spacing(0.75),
     padding: theme.spacing(1.5),
   }),
-  empty: css({
+  bodyEmbedded: css({
+    padding: 0,
+  }),
+  header: css({
     display: 'flex',
-    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing(1),
+    flexWrap: 'wrap' as const,
+  }),
+  headerLeft: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+    minWidth: 0,
+  }),
+  headerRight: css({
+    display: 'flex',
+    alignItems: 'center',
     gap: theme.spacing(1),
   }),
-  emptyList: css({
-    margin: 0,
-    paddingLeft: theme.spacing(2),
-    color: theme.colors.text.secondary,
+  summaryRow: css({
     display: 'flex',
-    flexDirection: 'column' as const,
+    alignItems: 'center',
+    gap: theme.spacing(1),
+    flexWrap: 'wrap' as const,
+  }),
+  metricBadges: css({
+    display: 'flex',
+    alignItems: 'center',
     gap: theme.spacing(0.5),
+    flexWrap: 'wrap' as const,
   }),
-  emptyListItem: css({
-    lineHeight: 1.45,
+  metricBadge: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.25),
+    padding: `${theme.spacing(0.125)} ${theme.spacing(0.625)}`,
+    borderRadius: 10,
+    fontSize: theme.typography.bodySmall.fontSize,
+    fontWeight: theme.typography.fontWeightMedium,
+    lineHeight: 1.4,
   }),
-  actionArea: css({
-    display: 'flex',
-    flexDirection: 'column' as const,
-    alignItems: 'flex-start',
-    gap: theme.spacing(0.75),
+  metricBadgeStrong: css({
+    backgroundColor: `${theme.colors.success.main}1A`,
+    color: theme.colors.success.text,
+  }),
+  metricBadgeMixed: css({
+    backgroundColor: `${theme.colors.warning.main}1A`,
+    color: theme.colors.warning.text,
+  }),
+  metricBadgeWeak: css({
+    backgroundColor: `${theme.colors.error.main}1A`,
+    color: theme.colors.error.text,
+  }),
+  metricBadgeNeutral: css({
+    backgroundColor: theme.colors.action.hover,
+    color: theme.colors.text.secondary,
   }),
   loading: css({
     display: 'flex',
     justifyContent: 'flex-start',
     marginTop: theme.spacing(1),
   }),
-  scoreRow: css({
-    display: 'flex',
-    alignItems: 'center',
-    gap: theme.spacing(1),
-    flexWrap: 'wrap' as const,
-  }),
-  scoreMetaStat: css({
-    marginLeft: 'auto',
+  progressState: css({
     display: 'flex',
     flexDirection: 'column' as const,
-    alignItems: 'flex-end',
-    gap: theme.spacing(0.125),
-    minWidth: 0,
-    [`@media (max-width: 640px)`]: {
-      width: '100%',
-      marginLeft: 0,
-      alignItems: 'flex-start',
-    },
+    gap: theme.spacing(0.5),
   }),
-  scoreMetaLabel: css({
-    color: theme.colors.text.secondary,
-    fontSize: theme.typography.bodySmall.fontSize,
-    textTransform: 'uppercase' as const,
-    letterSpacing: '0.03em',
-    lineHeight: 1.2,
+  progressBar: css({
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: theme.colors.border.weak,
+    overflow: 'hidden',
+    position: 'relative' as const,
   }),
-  scoreMetaValue: css({
-    color: theme.colors.text.primary,
-    fontSize: theme.typography.bodySmall.fontSize,
-    lineHeight: 1.25,
-    fontVariantNumeric: 'tabular-nums',
+  progressBarFill: css({
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    height: '100%',
+    width: '30%',
+    borderRadius: 1,
+    background: `linear-gradient(90deg, ${theme.colors.primary.main}, ${theme.colors.primary.shade})`,
+    animation: `${shimmer} 1.5s ease-in-out infinite`,
   }),
-  summary: css({
+  error: css({
     display: 'flex',
     alignItems: 'center',
-    flexWrap: 'wrap' as const,
-    gap: theme.spacing(0.25),
-    color: theme.colors.text.primary,
-    lineHeight: 1.5,
-    background: `${theme.colors.background.canvas}40`,
-    borderRadius: 0,
-    padding: theme.spacing(1.5, 3.5),
-    marginTop: theme.spacing(2),
-    marginBottom: theme.spacing(0.75),
-    marginLeft: theme.spacing(-2),
-    marginRight: theme.spacing(-2),
+    gap: theme.spacing(0.5),
+    color: theme.colors.error.text,
   }),
-  summaryPrefix: css({
-    color: theme.colors.text.secondary,
-    fontWeight: theme.typography.fontWeightMedium,
+  emptyHint: css({
+    padding: theme.spacing(0.25, 0),
   }),
-  summaryStatusIcon: css({
-    display: 'inline-flex',
-    alignItems: 'center',
-  }),
-  summaryTextButton: css({
-    display: 'inline-flex',
-    alignItems: 'center',
-    border: 'none',
-    background: 'transparent',
-    padding: 0,
-    margin: 0,
-    color: 'inherit',
-    cursor: 'pointer',
-    textAlign: 'left' as const,
-    textDecoration: 'none',
-    textDecorationColor: `${theme.colors.text.secondary}80`,
-    textUnderlineOffset: '0.12em',
-    '&:hover': {
-      textDecoration: 'underline',
-      textDecorationColor: theme.colors.text.primary,
-    },
-  }),
-  summaryExplainLink: css({
-    marginLeft: theme.spacing(0.75),
-    border: 'none',
-    background: 'transparent',
-    padding: 0,
-    color: theme.colors.text.secondary,
-    cursor: 'pointer',
-    fontSize: theme.typography.bodySmall.fontSize,
-    textDecoration: 'underline',
-    '&:hover': {
-      color: theme.colors.text.primary,
-    },
+  results: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(1),
+    minHeight: 0,
+    flex: 1,
   }),
   reportBody: css({
     display: 'flex',
     flexDirection: 'column' as const,
-    flex: 1,
     minHeight: 0,
+    flex: 1,
   }),
   reportScrollArea: css({
     flex: 1,
-    minHeight: 280,
+    minHeight: 220,
     maxHeight: 580,
-    overflowY: 'auto',
-    paddingLeft: theme.spacing(0.5),
-    paddingRight: theme.spacing(0.5),
-    paddingTop: theme.spacing(0.5),
-    paddingBottom: theme.spacing(0.5),
-  }),
-  suggestionGroup: css({
+    overflowY: 'auto' as const,
     display: 'flex',
     flexDirection: 'column' as const,
     gap: theme.spacing(1),
+    paddingRight: theme.spacing(0.25),
   }),
-  suggestionCard: css({
-    padding: theme.spacing(1, 0),
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: theme.spacing(1),
+  reportScrollAreaEmbedded: css({
+    minHeight: 0,
+    maxHeight: 'none',
+    overflowY: 'visible' as const,
+    paddingRight: 0,
   }),
-  suggestionCardCompact: css({
-    paddingTop: theme.spacing(0.625),
-    paddingBottom: theme.spacing(0.75),
-    gap: theme.spacing(0.75),
-  }),
-  suggestionRow: css({
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: theme.spacing(0.5),
-  }),
-  suggestionContent: css({
+  group: css({
     display: 'flex',
     flexDirection: 'column' as const,
     gap: theme.spacing(0.5),
+  }),
+  groupCards: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.375),
+  }),
+  card: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    borderRadius: theme.shape.radius.default,
+    borderLeft: '3px solid transparent',
+    background: theme.colors.background.primary,
+    transition: 'background 0.15s ease, box-shadow 0.15s ease',
+    minWidth: 0,
+  }),
+  cardButton: css({
+    all: 'unset',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    cursor: 'pointer',
+    '&:hover': {
+      background: theme.colors.action.hover,
+      boxShadow: theme.shadows.z1,
+    },
+    '&:focus-visible': {
+      outline: `2px solid ${theme.colors.primary.border}`,
+      outlineOffset: -2,
+    },
+  }),
+  cardStatic: css({
+    cursor: 'default',
+  }),
+  cardStrong: css({
+    borderLeftColor: theme.colors.success.main,
+  }),
+  cardMixed: css({
+    borderLeftColor: theme.colors.warning.main,
+  }),
+  cardWeak: css({
+    borderLeftColor: theme.colors.error.main,
+  }),
+  cardLow: css({
+    borderLeftColor: theme.colors.info.main,
+  }),
+  cardHeader: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    padding: theme.spacing(0.625, 0.75),
+    minWidth: 0,
+  }),
+  cardIcon: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 20,
+    height: 20,
+    borderRadius: '50%',
+    flexShrink: 0,
+  }),
+  cardIconStrong: css({
+    color: theme.colors.success.text,
+    backgroundColor: `${theme.colors.success.main}1A`,
+  }),
+  cardIconMixed: css({
+    color: theme.colors.warning.text,
+    backgroundColor: `${theme.colors.warning.main}1A`,
+  }),
+  cardIconWeak: css({
+    color: theme.colors.error.text,
+    backgroundColor: `${theme.colors.error.main}1A`,
+  }),
+  cardIconLow: css({
+    color: theme.colors.info.text,
+    backgroundColor: `${theme.colors.info.main}1A`,
+  }),
+  cardTextBlock: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.125),
     minWidth: 0,
     flex: 1,
   }),
-  suggestionTitleLine: css({
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: theme.spacing(0.5),
-    minWidth: 0,
-    flexWrap: 'wrap' as const,
+  cardTitle: css({
+    color: theme.colors.text.primary,
+    fontWeight: theme.typography.fontWeightMedium,
+    lineHeight: 1.35,
+    overflowWrap: 'anywhere' as const,
   }),
-  suggestionTitleMain: css({
+  cardMeta: css({
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.bodySmall.fontSize,
+    lineHeight: 1.3,
+    overflowWrap: 'anywhere' as const,
+  }),
+  inlineToneBadge: css({
     display: 'inline-flex',
     alignItems: 'center',
-    gap: theme.spacing(0.5),
-    minWidth: 0,
-    flex: '0 1 auto',
-  }),
-  suggestionOrdinal: css({
-    color: theme.colors.text.primary,
-    fontWeight: theme.typography.fontWeightBold,
-    fontVariantNumeric: 'tabular-nums',
-    lineHeight: 1.2,
-    minWidth: theme.spacing(1.5),
+    gap: theme.spacing(0.25),
+    marginLeft: theme.spacing(0.5),
+    padding: `${theme.spacing(0.125)} ${theme.spacing(0.5)}`,
+    borderRadius: 999,
+    fontSize: theme.typography.bodySmall.fontSize,
+    fontWeight: theme.typography.fontWeightMedium,
+    lineHeight: 1.3,
+    flexShrink: 0,
   }),
   suggestionSeverityLabel: css({
     display: 'inline-flex',
@@ -268,66 +320,18 @@ const getStyles = (theme: GrafanaTheme2) => ({
     textTransform: 'uppercase' as const,
     lineHeight: 1.2,
     flexShrink: 0,
-    marginTop: theme.spacing(0.125),
     whiteSpace: 'nowrap' as const,
   }),
-  suggestionTitleButton: css({
-    display: 'inline-flex',
-    alignItems: 'center',
-    border: 'none',
-    background: 'transparent',
-    padding: 0,
-    margin: 0,
-    color: 'inherit',
-    cursor: 'pointer',
-    textAlign: 'left' as const,
-    minWidth: 0,
-    flex: '0 1 auto',
-    '&:hover': {
-      textDecoration: 'underline',
-    },
-  }),
-  suggestionTitleText: css({
-    fontWeight: theme.typography.fontWeightMedium,
-    color: theme.colors.text.primary,
-    whiteSpace: 'normal' as const,
-    overflowWrap: 'anywhere',
-  }),
-  suggestionSeverityDot: css({
-    width: 8,
-    height: 8,
-    borderRadius: '50%',
-    flexShrink: 0,
-    marginRight: theme.spacing(0.25),
-  }),
-  suggestionCategory: css({
-    fontSize: theme.typography.bodySmall.fontSize,
+  chevron: css({
+    marginLeft: theme.spacing(0.25),
     color: theme.colors.text.secondary,
-    textTransform: 'uppercase' as const,
-    letterSpacing: '0.03em',
-    lineHeight: 1.2,
-    marginBottom: theme.spacing(0.5),
+    flexShrink: 0,
   }),
-  suggestionDescription: css({
+  cardBody: css({
+    padding: theme.spacing(0, 0.75, 0.75, 0.75),
+    paddingLeft: `calc(${theme.spacing(0.75)} + 20px + ${theme.spacing(0.5)})`,
     color: theme.colors.text.secondary,
     lineHeight: 1.45,
-  }),
-  suggestionDescriptionRow: css({
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: theme.spacing(0.75),
-  }),
-  suggestionDescriptionText: css({
-    flex: 1,
-    minWidth: 0,
-  }),
-  analysisWarning: css({
-    background: 'transparent !important',
-    border: 'none !important',
-    boxShadow: 'none !important',
-  }),
-  actionNote: css({
-    margin: 0,
   }),
   panelActions: css({
     display: 'flex',
@@ -337,9 +341,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     marginTop: theme.spacing(1),
     paddingTop: theme.spacing(1),
     borderTop: `1px solid ${theme.colors.border.weak}`,
-  }),
-  rerunButton: css({
-    marginLeft: 'auto',
   }),
   modalBackdrop: css({
     position: 'fixed' as const,
@@ -354,7 +355,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   modal: css({
     width: 'min(720px, 100%)',
     maxHeight: '85vh',
-    overflow: 'auto',
+    overflow: 'auto' as const,
     borderRadius: theme.shape.radius.default,
     border: `1px solid ${theme.colors.border.weak}`,
     background: theme.colors.background.primary,
@@ -375,6 +376,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
     alignItems: 'center',
     gap: theme.spacing(0.5),
     minWidth: 0,
+  }),
+  suggestionSeverityDot: css({
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    flexShrink: 0,
+    marginRight: theme.spacing(0.25),
   }),
   modalCloseButton: css({
     border: 'none',
@@ -414,20 +422,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     background: theme.colors.background.primary,
     padding: theme.spacing(1),
     maxHeight: '50vh',
-    overflow: 'auto',
+    overflow: 'auto' as const,
     color: theme.colors.text.primary,
   }),
 });
-
-function summaryStatusTone(theme: GrafanaTheme2, score: number): string {
-  if (score >= 7) {
-    return theme.colors.text.primary;
-  }
-  if (score >= 5) {
-    return theme.colors.warning.text;
-  }
-  return theme.colors.error.text;
-}
 
 function summaryStatusIconName(score: number): 'check' | 'exclamation-triangle' {
   return score >= 7 ? 'check' : 'exclamation-triangle';
@@ -710,17 +708,16 @@ const AgentRatingPanel = forwardRef<AgentRatingPanelHandle, AgentRatingPanelProp
     return severityOrder.flatMap((severity) => groupedSuggestions[severity]);
   }, [groupedSuggestions]);
 
-  const renderedSuggestions = useMemo(() => {
-    return orderedSuggestions.map((suggestion, index) => {
-      const categoryLabel = formatSuggestionCategory(suggestion.category);
-      const prevCategoryLabel = index > 0 ? formatSuggestionCategory(orderedSuggestions[index - 1].category) : '';
-      return {
-        suggestion,
-        index,
-        categoryLabel,
-        showCategory: index === 0 || categoryLabel.toLowerCase() !== prevCategoryLabel.toLowerCase(),
-      };
-    });
+  const suggestionSections = useMemo(() => {
+    return severityOrder
+      .map((severity) => ({
+        severity,
+        title: formatSeverityHeading(severity),
+        items: orderedSuggestions
+          .map((suggestion, index) => ({ suggestion, index }))
+          .filter((item) => normalizeSeverity(item.suggestion.severity) === severity),
+      }))
+      .filter((section) => section.items.length > 0);
   }, [orderedSuggestions]);
 
   const selectedSuggestionIndexRaw = searchParams.get(SUGGESTION_QUERY_PARAM)?.trim() ?? '';
@@ -997,137 +994,133 @@ const AgentRatingPanel = forwardRef<AgentRatingPanelHandle, AgentRatingPanelProp
     ? String(rewriteAssistant.content ?? '')
     : rewriteMarkdown;
 
+  const totalFindingCount = orderedSuggestions.length + (completedResult?.token_warning ? 1 : 0);
+
   const panelBody = (
-    <>
-      <div className={styles.body}>
-        {running && (
-          <div className={styles.loading}>
-            <Loader lines={RATING_LOADER_LINES} align="left" />
-          </div>
-        )}
-
-        {error.length > 0 && (
-          <Alert severity="error" title="Agent rating failed">
-            {error}
-          </Alert>
-        )}
-
-        {!running && !completedResult && !hideGenerateCta && (
-          <div className={styles.empty}>
-            <Text variant="bodySmall" color="secondary">
-              Run a compact analysis of prompt clarity, tool quality, and token risk.
+    <div className={cx(styles.body, embedded && styles.bodyEmbedded)}>
+      {!hideGenerateCta && (
+        <div className={styles.header}>
+          <div className={styles.headerLeft}>
+            <Text variant="bodySmall" weight="medium">
+              Prompt rating
             </Text>
-            <div className={styles.actionArea}>
-              <Button onClick={() => void runRating()} icon="star" variant="primary">
-                Generate analysis
-              </Button>
-              <div className={styles.actionNote}>
-                <Text variant="bodySmall" color="secondary">
-                  Usually finishes in under 1 minute.
-                </Text>
-              </div>
-            </div>
+            {completedResult && <RatingBadges score={completedResult.score} findings={totalFindingCount} />}
           </div>
-        )}
+          <div className={styles.headerRight}>
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={running ? undefined : 'search'}
+              onClick={() => void runRating()}
+              disabled={running}
+            >
+              {running ? (
+                <>
+                  <Spinner inline size="xs" /> Analyzing&hellip;
+                </>
+              ) : completedResult ? (
+                'Re-analyze'
+              ) : (
+                'Generate analysis'
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
 
-        {!running && completedResult && (
+      {running && (
+        <div className={styles.progressState}>
+          <div className={styles.progressBar} role="progressbar" aria-label="Generating rating">
+            <div className={styles.progressBarFill} />
+          </div>
+          <Text variant="bodySmall" color="secondary">
+            Reviewing prompt structure, tool quality, and token budget.
+          </Text>
+        </div>
+      )}
+
+      {error.length > 0 && (
+        <div className={styles.error}>
+          <Icon name="exclamation-triangle" size="sm" />
+          <Text variant="bodySmall" color="error">
+            {error}
+          </Text>
+        </div>
+      )}
+
+      {!running && !completedResult && !hideGenerateCta && (
+        <div className={styles.emptyHint}>
+          <Text variant="bodySmall" color="secondary">
+            Evaluate prompt clarity, tool design, and token risk with the same structured view as prompt insights.
+          </Text>
+        </div>
+      )}
+
+      {!running && completedResult && (
+        <div className={styles.results}>
+          {hideGenerateCta && (
+            <div className={styles.summaryRow}>
+              <Text variant="bodySmall" weight="medium">
+                Prompt rating
+              </Text>
+              <RatingBadges score={completedResult.score} findings={totalFindingCount} />
+            </div>
+          )}
+
           <div className={styles.reportBody}>
-            <div className={styles.reportScrollArea} aria-label="Agent rating findings">
-              <div className={styles.scoreRow}>
-                <div className={styles.scoreMetaStat}>
-                  <span className={styles.scoreMetaLabel}>Evaluated by</span>
-                  <span className={styles.scoreMetaValue}>
-                    {completedResult.judge_model} · {completedResult.judge_latency_ms}ms
-                  </span>
+            <div
+              className={cx(styles.reportScrollArea, embedded && styles.reportScrollAreaEmbedded)}
+              aria-label="Agent rating findings"
+            >
+              <div className={styles.group}>
+                <Text variant="bodySmall" weight="medium" color="secondary">
+                  Overview
+                </Text>
+                <div className={styles.groupCards}>
+                  <RatingSummaryCard
+                    score={completedResult.score}
+                    summary={succinctSummary}
+                    judgeModel={completedResult.judge_model}
+                    judgeLatencyMs={completedResult.judge_latency_ms}
+                    onOpen={openSummaryModal}
+                  />
                 </div>
               </div>
 
-              <div className={styles.summary}>
-                <span className={styles.summaryPrefix}>tl;dr:</span>
-                <span className={styles.summaryStatusIcon}>
-                  <Icon
-                    name={summaryStatusIconName(completedResult.score)}
-                    size="sm"
-                    style={{ color: summaryStatusTone(theme, completedResult.score) }}
-                  />
-                </span>
-                <button
-                  type="button"
-                  className={styles.summaryTextButton}
-                  onClick={openSummaryModal}
-                  aria-label="Open full rating summary"
-                >
-                  {succinctSummary}
-                </button>
-                <button type="button" className={styles.summaryExplainLink} onClick={onExplainReport}>
-                  Explain
-                </button>
-              </div>
-
               {completedResult.token_warning && completedResult.token_warning.length > 0 && (
-                <Alert className={styles.analysisWarning} severity="warning" title="Token budget warning">
-                  {completedResult.token_warning}
-                </Alert>
+                <div className={styles.group}>
+                  <Text variant="bodySmall" weight="medium" color="secondary">
+                    Warnings
+                  </Text>
+                  <div className={styles.groupCards}>
+                    <RatingWarningCard warning={completedResult.token_warning} />
+                  </div>
+                </div>
               )}
 
-              {renderedSuggestions.map(({ suggestion, index, categoryLabel, showCategory }) => {
-                const normalizedSeverity = normalizeSeverity(suggestion.severity);
-                return (
-                  <div
-                    key={`${toSuggestionKey(suggestion)}:${index}`}
-                    className={cx(styles.suggestionCard, !showCategory ? styles.suggestionCardCompact : undefined)}
-                  >
-                    <div className={styles.suggestionRow}>
-                      <div className={styles.suggestionContent}>
-                        {showCategory && <span className={styles.suggestionCategory}>{categoryLabel}</span>}
-                        <span className={styles.suggestionTitleLine}>
-                          <span className={styles.suggestionTitleMain}>
-                            <span className={styles.suggestionOrdinal} aria-hidden>
-                              {index + 1}.
-                            </span>
-                            <button
-                              type="button"
-                              className={styles.suggestionTitleButton}
-                              onClick={() => openSuggestionModal(index)}
-                              aria-label={`Open suggestion ${suggestion.title}`}
-                            >
-                              <span className={styles.suggestionTitleText}>{suggestion.title}</span>
-                            </button>
-                          </span>
-                          <span
-                            className={styles.suggestionSeverityLabel}
-                            style={severityLabelStyle(theme, normalizedSeverity)}
-                          >
-                            {normalizedSeverity}
-                          </span>
-                        </span>
-                        <div className={styles.suggestionDescriptionRow}>
-                          <div className={cx(styles.suggestionDescription, styles.suggestionDescriptionText)}>
-                            {isPreviewView ? (
-                              <MarkdownPreview
-                                markdown={toSuccinctText(suggestion.description, SUGGESTION_MAX_CHARS)}
-                              />
-                            ) : (
-                              toSuccinctText(suggestion.description, SUGGESTION_MAX_CHARS)
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+              {suggestionSections.map((section) => (
+                <RatingSuggestionSection
+                  key={section.severity}
+                  title={section.title}
+                  severity={section.severity}
+                  items={section.items}
+                  onOpen={openSuggestionModal}
+                />
+              ))}
             </div>
 
             <div className={styles.panelActions} aria-label="Agent rating actions">
+              <Button variant="secondary" icon="ai" onClick={onExplainReport}>
+                Explain
+              </Button>
               <Button variant="secondary" icon="ai" onClick={openRewriteModal}>
                 Rewrite prompt
               </Button>
             </div>
           </div>
-        )}
-      </div>
-    </>
+        </div>
+      )}
+    </div>
   );
 
   return (
@@ -1275,6 +1268,207 @@ const AgentRatingPanel = forwardRef<AgentRatingPanelHandle, AgentRatingPanelProp
     </div>
   );
 });
+
+function scoreToneKey(score: number): 'strong' | 'mixed' | 'weak' {
+  if (score >= 7) {
+    return 'strong';
+  }
+  if (score >= 5) {
+    return 'mixed';
+  }
+  return 'weak';
+}
+
+function formatJudgeMeta(judgeModel: string, judgeLatencyMs: number): string {
+  const model = judgeModel.trim();
+  if (!model) {
+    return 'Judge unavailable';
+  }
+  if (judgeLatencyMs > 0) {
+    return `${model} · ${(judgeLatencyMs / 1000).toFixed(1)}s`;
+  }
+  return model;
+}
+
+function formatSeverityHeading(severity: 'high' | 'medium' | 'low'): string {
+  if (severity === 'high') {
+    return 'High priority';
+  }
+  if (severity === 'medium') {
+    return 'Medium priority';
+  }
+  return 'Low priority';
+}
+
+function severityIconName(severity: 'high' | 'medium' | 'low'): 'exclamation-triangle' | 'info-circle' {
+  if (severity === 'low') {
+    return 'info-circle';
+  }
+  return 'exclamation-triangle';
+}
+
+function RatingBadges({ score, findings }: { score: number; findings: number }) {
+  const styles = useStyles2(getStyles);
+  const tone = scoreToneKey(score);
+  return (
+    <div className={styles.metricBadges}>
+      <Tooltip content={`Overall rating ${score}/10`}>
+        <span
+          className={cx(
+            styles.metricBadge,
+            tone === 'strong'
+              ? styles.metricBadgeStrong
+              : tone === 'mixed'
+                ? styles.metricBadgeMixed
+                : styles.metricBadgeWeak
+          )}
+        >
+          <Icon name={summaryStatusIconName(score)} size="xs" />
+          <span>{score}/10</span>
+        </span>
+      </Tooltip>
+      <Tooltip content={`${findings} finding${findings !== 1 ? 's' : ''}`}>
+        <span className={cx(styles.metricBadge, styles.metricBadgeNeutral)}>
+          <Icon name="exclamation-triangle" size="xs" />
+          <span>{findings}</span>
+        </span>
+      </Tooltip>
+    </div>
+  );
+}
+
+type RatingSummaryCardProps = {
+  score: number;
+  summary: string;
+  judgeModel: string;
+  judgeLatencyMs: number;
+  onOpen: () => void;
+};
+
+function RatingSummaryCard({ score, summary, judgeModel, judgeLatencyMs, onOpen }: RatingSummaryCardProps) {
+  const styles = useStyles2(getStyles);
+  const tone = scoreToneKey(score);
+  return (
+    <button
+      type="button"
+      className={cx(
+        styles.card,
+        styles.cardButton,
+        tone === 'strong' ? styles.cardStrong : tone === 'mixed' ? styles.cardMixed : styles.cardWeak
+      )}
+      onClick={onOpen}
+      aria-label="Open full rating summary"
+    >
+      <div className={styles.cardHeader}>
+        <span
+          className={cx(
+            styles.cardIcon,
+            tone === 'strong' ? styles.cardIconStrong : tone === 'mixed' ? styles.cardIconMixed : styles.cardIconWeak
+          )}
+        >
+          <Icon name={summaryStatusIconName(score)} size="xs" />
+        </span>
+        <div className={styles.cardTextBlock}>
+          <span className={styles.cardTitle}>Overall rating</span>
+          <span className={styles.cardMeta}>{formatJudgeMeta(judgeModel, judgeLatencyMs)}</span>
+        </div>
+        <span
+          className={cx(
+            styles.inlineToneBadge,
+            tone === 'strong'
+              ? styles.metricBadgeStrong
+              : tone === 'mixed'
+                ? styles.metricBadgeMixed
+                : styles.metricBadgeWeak
+          )}
+        >
+          {score}/10
+        </span>
+        <Icon name="angle-right" size="sm" className={styles.chevron} />
+      </div>
+      <div className={styles.cardBody}>
+        <Text variant="bodySmall" color="secondary">
+          {summary}
+        </Text>
+      </div>
+    </button>
+  );
+}
+
+function RatingWarningCard({ warning }: { warning: string }) {
+  const styles = useStyles2(getStyles);
+  return (
+    <div className={cx(styles.card, styles.cardStatic, styles.cardMixed)}>
+      <div className={styles.cardHeader}>
+        <span className={cx(styles.cardIcon, styles.cardIconMixed)}>
+          <Icon name="exclamation-triangle" size="xs" />
+        </span>
+        <div className={styles.cardTextBlock}>
+          <span className={styles.cardTitle}>Token budget warning</span>
+          <span className={styles.cardMeta}>This rating flagged baseline context size as a likely risk.</span>
+        </div>
+      </div>
+      <div className={styles.cardBody}>
+        <Text variant="bodySmall" color="secondary">
+          {warning}
+        </Text>
+      </div>
+    </div>
+  );
+}
+
+type RatingSuggestionSectionProps = {
+  title: string;
+  severity: 'high' | 'medium' | 'low';
+  items: Array<{ suggestion: AgentRatingSuggestion; index: number }>;
+  onOpen: (index: number) => void;
+};
+
+function RatingSuggestionSection({ title, severity, items, onOpen }: RatingSuggestionSectionProps) {
+  const styles = useStyles2(getStyles);
+  const theme = useTheme2();
+  const toneClass = severity === 'high' ? styles.cardWeak : severity === 'medium' ? styles.cardMixed : styles.cardLow;
+  const iconClass =
+    severity === 'high' ? styles.cardIconWeak : severity === 'medium' ? styles.cardIconMixed : styles.cardIconLow;
+
+  return (
+    <div className={styles.group}>
+      <Text variant="bodySmall" weight="medium" color="secondary">
+        {title}
+      </Text>
+      <div className={styles.groupCards}>
+        {items.map(({ suggestion, index }) => (
+          <button
+            key={`${toSuggestionKey(suggestion)}:${index}`}
+            type="button"
+            className={cx(styles.card, styles.cardButton, toneClass)}
+            onClick={() => onOpen(index)}
+            aria-label={`Open suggestion ${suggestion.title}`}
+          >
+            <div className={styles.cardHeader}>
+              <span className={cx(styles.cardIcon, iconClass)}>
+                <Icon name={severityIconName(severity)} size="xs" />
+              </span>
+              <div className={styles.cardTextBlock}>
+                <span className={styles.cardTitle}>{suggestion.title}</span>
+                <span className={styles.cardMeta}>{formatSuggestionCategory(suggestion.category)}</span>
+              </div>
+              <span className={styles.suggestionSeverityLabel} style={severityLabelStyle(theme, severity)}>
+                {severity}
+              </span>
+              <Icon name="angle-right" size="sm" className={styles.chevron} />
+            </div>
+            <div className={styles.cardBody}>
+              <Text variant="bodySmall" color="secondary">
+                {toSuccinctText(suggestion.description, SUGGESTION_MAX_CHARS)}
+              </Text>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default AgentRatingPanel;
 

@@ -126,7 +126,7 @@ describe('AgentRatingPanel', () => {
       />
     );
 
-    expect(screen.getByRole('progressbar', { name: /loading conversation/i })).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: /generating rating/i })).toBeInTheDocument();
     await waitFor(() => expect(lookupAgentRating).toHaveBeenCalledTimes(1));
 
     await act(async () => {
@@ -188,7 +188,7 @@ describe('AgentRatingPanel', () => {
 
     await waitFor(() => expect(rateAgent).toHaveBeenCalledWith('assistant', 'sha256:test'));
     await waitFor(() => expect(lookupAgentRating).toHaveBeenCalledTimes(1));
-    expect(screen.getByRole('progressbar', { name: /loading conversation/i })).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: /generating rating/i })).toBeInTheDocument();
 
     await act(async () => {
       jest.advanceTimersByTime(5000);

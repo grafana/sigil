@@ -153,10 +153,13 @@ func RegisterQueryRoutes(
 	}
 	if piOpts.Analyzer != nil && piOpts.Store != nil {
 		mux.Handle("/api/v1/agents:analyze-prompt", protectedMiddleware(http.HandlerFunc(analyzePrompt(querySvc, piOpts.Analyzer, piOpts.Store, rater, ratingStore, logger))))
+		mux.Handle("/api/v1/agents:analyze-prompt-with-excerpts", protectedMiddleware(http.HandlerFunc(analyzePromptWithExcerpts(querySvc, piOpts.Analyzer, piOpts.Store, rater, ratingStore, logger))))
 	} else if piOpts.Store != nil {
-		mux.Handle("/api/v1/agents:analyze-prompt", protectedMiddleware(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		noJudge := func(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, "prompt analysis is unavailable: no judge provider is configured", http.StatusServiceUnavailable)
-		})))
+		}
+		mux.Handle("/api/v1/agents:analyze-prompt", protectedMiddleware(http.HandlerFunc(noJudge)))
+		mux.Handle("/api/v1/agents:analyze-prompt-with-excerpts", protectedMiddleware(http.HandlerFunc(noJudge)))
 	}
 }
 
@@ -884,6 +887,22 @@ type analyzePromptRequest struct {
 	Lookback  string `json:"lookback,omitempty"`
 }
 
+type conversationExcerptPayload struct {
+	ConversationID  string `json:"conversation_id"`
+	GenerationCount int    `json:"generation_count"`
+	HasErrors       bool   `json:"has_errors"`
+	ToolCallCount   int    `json:"tool_call_count"`
+	UserInput       string `json:"user_input"`
+	AssistantOutput string `json:"assistant_output"`
+}
+
+type analyzePromptWithExcerptsRequest struct {
+	AgentName string                       `json:"agent_name"`
+	Version   string                       `json:"version,omitempty"`
+	Model     string                       `json:"model,omitempty"`
+	Excerpts  []conversationExcerptPayload `json:"excerpts"`
+}
+
 func analyzePrompt(
 	querySvc *query.Service,
 	analyzer *promptinsights.Analyzer,
@@ -1041,6 +1060,231 @@ func evaluateUnifiedAnalysis(
 		modelOverride,
 		lookback,
 	)
+
+	if rater != nil && ratingStore != nil && ratingInput != nil {
+		evaluateAgentRating(
+			logger,
+			rater,
+			ratingStore,
+			tenantID,
+			agentName,
+			effectiveVersion,
+			*ratingInput,
+			modelOverride,
+		)
+	}
+}
+
+func analyzePromptWithExcerpts(
+	querySvc *query.Service,
+	analyzer *promptinsights.Analyzer,
+	insightsStore promptinsights.Store,
+	rater *agentrating.Rater,
+	ratingStore agentrating.LatestStore,
+	logger kitlog.Logger,
+) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		tenantID, err := tenant.TenantID(req.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		var payload analyzePromptWithExcerptsRequest
+		if req.Body == nil {
+			http.Error(w, "request body is required", http.StatusBadRequest)
+			return
+		}
+		decoder := json.NewDecoder(req.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&payload); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+		if err := jsonutil.EnsureEOF(decoder); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		agentDetail, found, err := querySvc.GetAgentDetailForTenant(req.Context(), tenantID, payload.AgentName, payload.Version)
+		if err != nil {
+			if query.IsValidationError(err) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if !found {
+			http.NotFound(w, req)
+			return
+		}
+
+		existing, err := insightsStore.GetPromptInsights(
+			req.Context(),
+			tenantID,
+			agentDetail.AgentName,
+			agentDetail.EffectiveVersion,
+		)
+		if err != nil {
+			http.Error(w, "failed to read existing prompt insights", http.StatusInternalServerError)
+			return
+		}
+		if existing != nil && promptinsights.NormalizeStatus(existing.Status) == promptinsights.StatusPending {
+			existing.Status = promptinsights.StatusPending
+			writeJSON(w, http.StatusAccepted, existing)
+			return
+		}
+
+		pending := promptinsights.PromptInsights{
+			Status:     promptinsights.StatusPending,
+			Strengths:  []promptinsights.Insight{},
+			Weaknesses: []promptinsights.Insight{},
+		}
+		if err := insightsStore.UpsertPromptInsights(
+			req.Context(),
+			tenantID,
+			agentDetail.AgentName,
+			agentDetail.EffectiveVersion,
+			pending,
+		); err != nil {
+			http.Error(w, "failed to persist pending prompt insights", http.StatusInternalServerError)
+			return
+		}
+
+		var ratingInput *agentrating.Agent
+		if rater != nil && ratingStore != nil {
+			pendingRating := agentrating.Rating{
+				Status:      agentrating.RatingStatusPending,
+				Suggestions: []agentrating.Suggestion{},
+			}
+			if err := ratingStore.UpsertAgentVersionRating(
+				req.Context(),
+				tenantID,
+				agentDetail.AgentName,
+				agentDetail.EffectiveVersion,
+				pendingRating,
+			); err != nil {
+				_ = level.Error(logger).Log(
+					"msg", "failed to persist pending agent rating during unified analysis",
+					"tenant_id", tenantID,
+					"agent_name", agentDetail.AgentName,
+					"effective_version", agentDetail.EffectiveVersion,
+					"err", err,
+				)
+			} else {
+				input := mapAgentDetailToRatingAgent(agentDetail)
+				ratingInput = &input
+			}
+		}
+
+		excerpts := make([]promptinsights.ConversationExcerpt, len(payload.Excerpts))
+		for i, e := range payload.Excerpts {
+			excerpts[i] = promptinsights.ConversationExcerpt{
+				ConversationID:  e.ConversationID,
+				GenerationCount: e.GenerationCount,
+				HasErrors:       e.HasErrors,
+				ToolCallCount:   e.ToolCallCount,
+				UserInput:       e.UserInput,
+				AssistantOutput: e.AssistantOutput,
+			}
+		}
+
+		writeJSON(w, http.StatusAccepted, pending)
+
+		go evaluatePromptInsightsWithExcerpts(
+			logger,
+			analyzer,
+			insightsStore,
+			rater,
+			ratingStore,
+			ratingInput,
+			tenantID,
+			agentDetail.AgentName,
+			agentDetail.EffectiveVersion,
+			agentDetail.SystemPrompt,
+			payload.Model,
+			excerpts,
+		)
+	}
+}
+
+func evaluatePromptInsightsWithExcerpts(
+	logger kitlog.Logger,
+	analyzer *promptinsights.Analyzer,
+	insightsStore promptinsights.Store,
+	rater *agentrating.Rater,
+	ratingStore agentrating.LatestStore,
+	ratingInput *agentrating.Agent,
+	tenantID string,
+	agentName string,
+	effectiveVersion string,
+	systemPrompt string,
+	modelOverride string,
+	excerpts []promptinsights.ConversationExcerpt,
+) {
+	failedInsights := promptinsights.PromptInsights{
+		Status:     promptinsights.StatusFailed,
+		Strengths:  []promptinsights.Insight{},
+		Weaknesses: []promptinsights.Insight{},
+	}
+
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			_ = level.Error(logger).Log(
+				"msg", "prompt insights background evaluation panicked",
+				"tenant_id", tenantID,
+				"agent_name", agentName,
+				"effective_version", effectiveVersion,
+				"panic", recovered,
+			)
+			_ = upsertPromptInsightsWithTimeout(insightsStore, tenantID, agentName, effectiveVersion, failedInsights)
+		}
+	}()
+
+	evalCtx, cancel := context.WithTimeout(context.Background(), promptInsightsEvaluationTimeout)
+	defer cancel()
+
+	result, err := analyzer.Analyze(evalCtx, systemPrompt, excerpts, modelOverride)
+	if err != nil {
+		_ = level.Error(logger).Log(
+			"msg", "prompt insights background evaluation failed",
+			"tenant_id", tenantID,
+			"agent_name", agentName,
+			"effective_version", effectiveVersion,
+			"model_override", modelOverride,
+			"timeout", errors.Is(evalCtx.Err(), context.DeadlineExceeded),
+			"err", err,
+		)
+		_ = upsertPromptInsightsWithTimeout(insightsStore, tenantID, agentName, effectiveVersion, failedInsights)
+		return
+	}
+	if result == nil {
+		_ = level.Error(logger).Log(
+			"msg", "prompt insights background evaluation returned nil",
+			"tenant_id", tenantID,
+			"agent_name", agentName,
+			"effective_version", effectiveVersion,
+		)
+		_ = upsertPromptInsightsWithTimeout(insightsStore, tenantID, agentName, effectiveVersion, failedInsights)
+		return
+	}
+
+	result.Status = promptinsights.StatusCompleted
+	if err := upsertPromptInsightsWithTimeout(insightsStore, tenantID, agentName, effectiveVersion, *result); err != nil {
+		_ = level.Error(logger).Log(
+			"msg", "failed to persist completed prompt insights",
+			"tenant_id", tenantID,
+			"agent_name", agentName,
+			"effective_version", effectiveVersion,
+			"err", err,
+		)
+	}
 
 	if rater != nil && ratingStore != nil && ratingInput != nil {
 		evaluateAgentRating(

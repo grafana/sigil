@@ -407,12 +407,23 @@ const getStyles = (theme: GrafanaTheme2) => ({
   combinedPromptSections: css({
     display: 'flex',
     gap: theme.spacing(2),
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
     flexWrap: 'wrap' as const,
+    minHeight: 0,
   }),
   sectionBlock: css({
     flex: '1 1 420px',
     minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    minHeight: 0,
+  }),
+  analysisSectionBlock: css({
+    '@media (min-width: 1200px)': {
+      maxHeight: 'clamp(420px, 68vh, 760px)',
+      overflowY: 'auto' as const,
+      paddingRight: theme.spacing(0.25),
+    },
   }),
   sectionTitle: css({
     marginBottom: theme.spacing(1),
@@ -783,8 +794,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   systemPrompt: css({
     margin: 0,
-    maxHeight: 580,
-    overflow: 'auto',
     whiteSpace: 'pre-wrap' as const,
     borderRadius: theme.shape.radius.default,
     border: `1px solid ${theme.colors.border.weak}`,
@@ -796,7 +805,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.primary,
   }),
   systemPromptContent: css({
+    flex: 1,
     minHeight: 0,
+    maxHeight: 'clamp(360px, 60vh, 700px)',
+    overflowY: 'auto' as const,
   }),
   modelChipsRow: css({
     display: 'flex',
@@ -2025,7 +2037,7 @@ export default function AgentDetailPage({
                       )}
                     </div>
                   </div>
-                  <div className={styles.sectionBlock}>
+                  <div className={cx(styles.sectionBlock, styles.analysisSectionBlock)}>
                     <PromptInsightsPanel
                       ref={insightsRef}
                       agentName={agentName}
