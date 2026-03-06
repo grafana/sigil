@@ -1,6 +1,6 @@
 import React from 'react';
 import type { InstrumentationPromptIde } from '../content/cursorInstrumentationPrompt';
-import { ClaudeCodeLogo, CopilotLogo, CursorLogo } from '../components/landing/IdeLogos';
+import { ClaudeCodeLogo, CopilotLogo, CursorLogo } from '../components/landing/IDELogos';
 
 export type IdeTab = {
   key: InstrumentationPromptIde;

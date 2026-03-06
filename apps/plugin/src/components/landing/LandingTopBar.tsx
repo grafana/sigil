@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { css, cx } from '@emotion/css';
 import { useAssistant } from '@grafana/assistant';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Button, Card, HorizontalGroup, IconButton, LinkButton, Stack, Text, Tooltip, useStyles2 } from '@grafana/ui';
+import { Button, Card, HorizontalGroup, Icon, IconButton, LinkButton, Stack, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import { useNavigate } from 'react-router-dom';
 import { defaultAgentsDataSource } from '../../agents/api';
 import { defaultConversationsDataSource } from '../../conversation/api';
@@ -543,6 +543,11 @@ export function LandingTopBar({
             <Stack direction="column" gap={2}>
               <div className={styles.sideCardMutedHeading}>
                 <Text color="secondary">AUTOINSTRUMENTATION</Text>
+                <Tooltip content="We provide skills and prompts that guide AI to do the instrumentation work for you." placement="top">
+                  <span className={styles.sideCardInfoIcon} aria-label="Autoinstrumentation help">
+                    <Icon name="info-circle" size="sm" />
+                  </span>
+                </Tooltip>
               </div>
               <Text color="secondary">
                 Use our coding agent skill to instrument your codebase. Then select coding agent.
@@ -579,12 +584,24 @@ export function LandingTopBar({
             onClick={(event) => event.stopPropagation()}
           >
             <Stack direction="column" gap={2}>
-              <HorizontalGroup justify="space-between">
-                <Text element="h4">{selectedIdeConfig.label}</Text>
-                <Button variant="secondary" size="sm" onClick={() => setIsAgentModalOpen(false)}>
-                  Close
+              <div className={styles.modalHeader}>
+                <div className={styles.modalTitleRow}>
+                  <span className={styles.modalTitleLogo}>{selectedIdeConfig.logo}</span>
+                  <div className={styles.modalHeadingBlock}>
+                    <span className={styles.modalKicker}>AUTOINSTRUMENTATION</span>
+                    <Text element="h4">{`with ${selectedIdeConfig.label}`}</Text>
+                  </div>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className={styles.modalCloseButton}
+                  aria-label="Close instrumentation dialog"
+                  onClick={() => setIsAgentModalOpen(false)}
+                >
+                  X
                 </Button>
-              </HorizontalGroup>
+              </div>
               <Text>{selectedIdeConfig.blurb}</Text>
               {selectedIdeConfig.tips.length > 0 && (
                 <ul className={styles.bulletList}>
@@ -599,6 +616,9 @@ export function LandingTopBar({
                     <code>{selectedPrompt}</code>
                   </pre>
                 </div>
+              </div>
+              <div className={styles.modalActionRow}>
+                <span className={styles.modalDisclaimer}>AI can make mistakes, always check your work.</span>
                 <div className={styles.promptIconActions}>
                   <IconButton
                     name="download-alt"
@@ -616,23 +636,21 @@ export function LandingTopBar({
                     className={styles.promptIconButton}
                     onClick={() => void navigator.clipboard.writeText(selectedPrompt)}
                   />
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      if (selectedIde === 'cursor') {
+                        window.open(cursorDeeplink, '_blank', 'noopener');
+                        return;
+                      }
+                      void navigator.clipboard.writeText(selectedPrompt);
+                    }}
+                  >
+                    <span className={styles.instrumentButtonLogo}>{renderIdeActionLogo(selectedIde)}</span>
+                    {selectedIde === 'cursor' ? 'Instrument in Cursor' : 'Copy prompt'}
+                  </Button>
                 </div>
               </div>
-              <HorizontalGroup justify="flex-end" className={styles.modalActionRow}>
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    if (selectedIde === 'cursor') {
-                      window.open(cursorDeeplink, '_blank', 'noopener');
-                      return;
-                    }
-                    void navigator.clipboard.writeText(selectedPrompt);
-                  }}
-                >
-                  <span className={styles.instrumentButtonLogo}>{renderIdeActionLogo(selectedIde)}</span>
-                  {selectedIde === 'cursor' ? 'Instrument in Cursor' : 'Copy prompt'}
-                </Button>
-              </HorizontalGroup>
             </Stack>
           </div>
         </div>
@@ -902,11 +920,20 @@ function getStyles(theme: GrafanaTheme2) {
     sideCardMutedHeading: css({
       label: 'landingTopBar-sideCardMutedHeading',
       margin: 0,
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: theme.spacing(0.75),
       textTransform: 'uppercase',
       letterSpacing: '0.06em',
       fontSize: theme.typography.h6.fontSize,
       lineHeight: theme.typography.h6.lineHeight,
       fontWeight: theme.typography.fontWeightBold,
+    }),
+    sideCardInfoIcon: css({
+      display: 'inline-flex',
+      alignItems: 'center',
+      color: theme.colors.text.secondary,
+      cursor: 'help',
     }),
     heroCard: css({
       label: 'landingTopBar-heroCard',
@@ -1146,6 +1173,7 @@ function getStyles(theme: GrafanaTheme2) {
       label: 'landingTopBar-ideTabLogo',
       display: 'inline-flex',
       alignItems: 'center',
+      color: theme.colors.text.primary,
     }),
     modalBackdrop: css({
       label: 'landingTopBar-modalBackdrop',
@@ -1168,6 +1196,69 @@ function getStyles(theme: GrafanaTheme2) {
       padding: theme.spacing(3),
       boxShadow: theme.shadows.z3,
     }),
+    modalTitleRow: css({
+      label: 'landingTopBar-modalTitleRow',
+      display: 'inline-flex',
+      alignItems: 'flex-start',
+      gap: theme.spacing(1.5),
+    }),
+    modalHeader: css({
+      label: 'landingTopBar-modalHeader',
+      display: 'flex',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: theme.spacing(2),
+      marginTop: theme.spacing(-0.5),
+    }),
+    modalHeadingBlock: css({
+      label: 'landingTopBar-modalHeadingBlock',
+      display: 'grid',
+      gap: theme.spacing(0.5),
+      minWidth: 0,
+    }),
+    modalKicker: css({
+      label: 'landingTopBar-modalKicker',
+      margin: 0,
+      color: theme.colors.text.secondary,
+      textTransform: 'uppercase',
+      letterSpacing: '0.08em',
+      fontSize: theme.typography.bodySmall.fontSize,
+      lineHeight: 1.2,
+      fontWeight: theme.typography.fontWeightMedium,
+    }),
+    modalTitleLogo: css({
+      label: 'landingTopBar-modalTitleLogo',
+      display: 'inline-flex',
+      alignItems: 'center',
+      color: theme.colors.text.primary,
+      '& svg, & img, & span': {
+        width: 72,
+        height: 72,
+        display: 'block',
+      },
+    }),
+    modalCloseButton: css({
+      label: 'landingTopBar-modalCloseButton',
+      minWidth: 'auto',
+      padding: 0,
+      lineHeight: 1,
+      fontWeight: theme.typography.fontWeightBold,
+      fontSize: theme.typography.h4.fontSize,
+      border: 'none',
+      background: 'transparent',
+      boxShadow: 'none',
+      color: theme.colors.text.secondary,
+      marginTop: theme.spacing(-0.5),
+      '&:hover': {
+        background: 'transparent',
+        border: 'none',
+        color: theme.colors.text.primary,
+      },
+      '&:focus-visible': {
+        outline: `2px solid ${theme.colors.primary.main}`,
+        outlineOffset: theme.spacing(0.5),
+      },
+    }),
     promptPreview: css({
       label: 'landingTopBar-promptPreview',
       margin: 0,
@@ -1187,10 +1278,7 @@ function getStyles(theme: GrafanaTheme2) {
     }),
     promptSummaryRow: css({
       label: 'landingTopBar-promptSummaryRow',
-      display: 'grid',
-      gridTemplateColumns: '1fr auto',
-      alignItems: 'start',
-      gap: theme.spacing(1),
+      display: 'block',
     }),
     promptContent: css({
       label: 'landingTopBar-promptContent',
@@ -1224,16 +1312,27 @@ function getStyles(theme: GrafanaTheme2) {
       label: 'landingTopBar-modalActionRow',
       width: '100%',
       display: 'flex',
-      justifyContent: 'flex-end',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: theme.spacing(1.5),
+    }),
+    modalDisclaimer: css({
+      label: 'landingTopBar-modalDisclaimer',
+      flex: 1,
+      textAlign: 'left',
+      color: theme.colors.text.secondary,
+      fontSize: theme.typography.bodySmall.fontSize,
+      lineHeight: theme.typography.bodySmall.lineHeight,
     }),
     instrumentButtonLogo: css({
       label: 'landingTopBar-instrumentButtonLogo',
       display: 'inline-flex',
       alignItems: 'center',
+      color: theme.colors.text.primary,
       marginRight: theme.spacing(0.5),
-      '& svg': {
-        width: 20,
-        height: 20,
+      '& svg, & img, & span': {
+        width: 14,
+        height: 14,
       },
     }),
   };

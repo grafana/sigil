@@ -4,7 +4,7 @@ import type { GrafanaTheme2 } from '@grafana/data';
 import { useStyles2 } from '@grafana/ui';
 import { useAssistant } from '@grafana/assistant';
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
-import { TryItNowPanel } from '../components/tutorial/TryItNowPanel';
+import { AutoinstrumentationPanel } from '../components/tutorial/TryItNowPanel';
 import {
   buildSigilAssistantContextItems,
   buildSigilAssistantPrompt,
@@ -403,7 +403,7 @@ function AutoinstrumentationBody() {
         <li>Works for greenfield and existing codebases alike.</li>
         <li>See results immediately in the Sigil UI.</li>
       </ul>
-      <TryItNowPanel />
+      <AutoinstrumentationPanel />
     </>
   );
 }

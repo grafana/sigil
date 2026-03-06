@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Button, HorizontalGroup, IconButton, Stack, Text, useStyles2 } from '@grafana/ui';
+import { Button, IconButton, Stack, Text, useStyles2 } from '@grafana/ui';
 import {
   getInstrumentationPrompt,
   getInstrumentationPromptFilename,
@@ -9,7 +9,7 @@ import {
 } from '../../content/cursorInstrumentationPrompt';
 import { ideTabs, buildCursorPromptDeeplink, downloadTextFile, renderIdeActionLogo } from '../../ide/ideUtils';
 
-export function TryItNowPanel() {
+export function AutoinstrumentationPanel() {
   const styles = useStyles2(getStyles);
   const [selectedIde, setSelectedIde] = useState<InstrumentationPromptIde>('cursor');
   const [isAgentModalOpen, setIsAgentModalOpen] = useState(false);
@@ -51,12 +51,24 @@ export function TryItNowPanel() {
             onClick={(event) => event.stopPropagation()}
           >
             <Stack direction="column" gap={2}>
-              <HorizontalGroup justify="space-between">
-                <Text element="h4">{selectedIdeConfig.label}</Text>
-                <Button variant="secondary" size="sm" onClick={() => setIsAgentModalOpen(false)}>
-                  Close
+              <div className={styles.modalHeader}>
+                <div className={styles.modalTitleRow}>
+                  <span className={styles.modalTitleLogo}>{selectedIdeConfig.logo}</span>
+                  <div className={styles.modalHeadingBlock}>
+                    <span className={styles.modalKicker}>AUTOINSTRUMENTATION</span>
+                    <Text element="h4">{`with ${selectedIdeConfig.label}`}</Text>
+                  </div>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className={styles.modalCloseButton}
+                  aria-label="Close instrumentation dialog"
+                  onClick={() => setIsAgentModalOpen(false)}
+                >
+                  X
                 </Button>
-              </HorizontalGroup>
+              </div>
               <Text>{selectedIdeConfig.blurb}</Text>
               {selectedIdeConfig.tips.length > 0 && (
                 <ul className={styles.bulletList}>
@@ -71,6 +83,9 @@ export function TryItNowPanel() {
                     <code>{selectedPrompt}</code>
                   </pre>
                 </div>
+              </div>
+              <div className={styles.modalActionRow}>
+                <span className={styles.modalDisclaimer}>AI can make mistakes, always check your work.</span>
                 <div className={styles.promptIconActions}>
                   <IconButton
                     name="download-alt"
@@ -88,23 +103,21 @@ export function TryItNowPanel() {
                     className={styles.promptIconButton}
                     onClick={() => void navigator.clipboard.writeText(selectedPrompt)}
                   />
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      if (selectedIde === 'cursor') {
+                        window.open(cursorDeeplink, '_blank', 'noopener');
+                        return;
+                      }
+                      void navigator.clipboard.writeText(selectedPrompt);
+                    }}
+                  >
+                    <span className={styles.instrumentButtonLogo}>{renderIdeActionLogo(selectedIde)}</span>
+                    {selectedIde === 'cursor' ? 'Instrument in Cursor' : 'Copy prompt'}
+                  </Button>
                 </div>
               </div>
-              <HorizontalGroup justify="flex-end" className={styles.modalActionRow}>
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    if (selectedIde === 'cursor') {
-                      window.open(cursorDeeplink, '_blank', 'noopener');
-                      return;
-                    }
-                    void navigator.clipboard.writeText(selectedPrompt);
-                  }}
-                >
-                  <span className={styles.instrumentButtonLogo}>{renderIdeActionLogo(selectedIde)}</span>
-                  {selectedIde === 'cursor' ? 'Instrument in Cursor' : 'Copy prompt'}
-                </Button>
-              </HorizontalGroup>
             </Stack>
           </div>
         </div>
@@ -167,6 +180,7 @@ function getStyles(theme: GrafanaTheme2) {
     ideTabLogo: css({
       display: 'inline-flex',
       alignItems: 'center',
+      color: theme.colors.text.primary,
     }),
     modalBackdrop: css({
       position: 'fixed',
@@ -186,6 +200,63 @@ function getStyles(theme: GrafanaTheme2) {
       background: theme.colors.background.primary,
       padding: theme.spacing(3),
       boxShadow: theme.shadows.z3,
+    }),
+    modalTitleRow: css({
+      display: 'inline-flex',
+      alignItems: 'flex-start',
+      gap: theme.spacing(1.5),
+    }),
+    modalHeader: css({
+      display: 'flex',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: theme.spacing(2),
+      marginTop: theme.spacing(-0.5),
+    }),
+    modalHeadingBlock: css({
+      display: 'grid',
+      gap: theme.spacing(0.5),
+      minWidth: 0,
+    }),
+    modalKicker: css({
+      margin: 0,
+      color: theme.colors.text.secondary,
+      textTransform: 'uppercase',
+      letterSpacing: '0.08em',
+      fontSize: theme.typography.bodySmall.fontSize,
+      lineHeight: 1.2,
+      fontWeight: theme.typography.fontWeightMedium,
+    }),
+    modalTitleLogo: css({
+      display: 'inline-flex',
+      alignItems: 'center',
+      color: theme.colors.text.primary,
+      '& svg, & img, & span': {
+        width: 72,
+        height: 72,
+        display: 'block',
+      },
+    }),
+    modalCloseButton: css({
+      minWidth: 'auto',
+      padding: 0,
+      lineHeight: 1,
+      fontWeight: theme.typography.fontWeightBold,
+      fontSize: theme.typography.h4.fontSize,
+      border: 'none',
+      background: 'transparent',
+      boxShadow: 'none',
+      color: theme.colors.text.secondary,
+      marginTop: theme.spacing(-0.5),
+      '&:hover': {
+        background: 'transparent',
+        border: 'none',
+        color: theme.colors.text.primary,
+      },
+      '&:focus-visible': {
+        outline: `2px solid ${theme.colors.primary.main}`,
+        outlineOffset: theme.spacing(0.5),
+      },
     }),
     bulletList: css({
       margin: 0,
@@ -210,10 +281,7 @@ function getStyles(theme: GrafanaTheme2) {
       },
     }),
     promptSummaryRow: css({
-      display: 'grid',
-      gridTemplateColumns: '1fr auto',
-      alignItems: 'start',
-      gap: theme.spacing(1),
+      display: 'block',
     }),
     promptContent: css({
       display: 'grid',
@@ -243,15 +311,25 @@ function getStyles(theme: GrafanaTheme2) {
     modalActionRow: css({
       width: '100%',
       display: 'flex',
-      justifyContent: 'flex-end',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: theme.spacing(1.5),
+    }),
+    modalDisclaimer: css({
+      flex: 1,
+      textAlign: 'left',
+      color: theme.colors.text.secondary,
+      fontSize: theme.typography.bodySmall.fontSize,
+      lineHeight: theme.typography.bodySmall.lineHeight,
     }),
     instrumentButtonLogo: css({
       display: 'inline-flex',
       alignItems: 'center',
+      color: theme.colors.text.primary,
       marginRight: theme.spacing(0.5),
-      '& svg': {
-        width: 20,
-        height: 20,
+      '& svg, & img, & span': {
+        width: 14,
+        height: 14,
       },
     }),
   };

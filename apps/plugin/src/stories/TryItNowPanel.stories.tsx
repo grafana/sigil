@@ -1,11 +1,11 @@
 import React from 'react';
-import { TryItNowPanel } from '../components/tutorial/TryItNowPanel';
+import { AutoinstrumentationPanel } from '../components/tutorial/TryItNowPanel';
 
 export default {
-  title: 'Tutorial/TryItNowPanel',
-  component: TryItNowPanel,
+  title: 'Tutorial/AutoinstrumentationPanel',
+  component: AutoinstrumentationPanel,
 };
 
 export const Default = {
-  render: () => <TryItNowPanel />,
+  render: () => <AutoinstrumentationPanel />,
 };
