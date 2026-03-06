@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Text, useStyles2 } from '@grafana/ui';
+import { LinkButton, Text, useStyles2 } from '@grafana/ui';
 import { TopStat } from '../components/TopStat';
 import { DashboardSummaryBar } from '../components/dashboard/DashboardSummaryBar';
 import { usePrometheusQuery } from '../components/dashboard/usePrometheusQuery';
@@ -144,8 +144,18 @@ export default function LandingPage() {
         spineHeights={requestsSparkline}
       />
       <section className={styles.section} aria-label="Analytics overview highlights">
-        <div className={styles.timeLabel}>
-          <Text color="secondary">Last 24 hours</Text>
+        <div className={styles.sectionHeader}>
+          <LinkButton
+            href={`${PLUGIN_BASE}/${ROUTES.Analytics}?tab=overview`}
+            variant="secondary"
+            fill="outline"
+            size="md"
+          >
+            Go to analytics
+          </LinkButton>
+          <div className={styles.timeLabel}>
+            <Text color="secondary">Highlights from the last 24 hours</Text>
+          </div>
         </div>
         <DashboardSummaryBar>
           <TopStat
@@ -223,6 +233,12 @@ function getStyles(theme: GrafanaTheme2) {
     }),
     timeLabel: css({
       opacity: 0.7,
+    }),
+    sectionHeader: css({
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: theme.spacing(1),
     }),
   };
 }
