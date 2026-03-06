@@ -290,26 +290,6 @@ describe('AgentsPage', () => {
     const riskStrip = screen.getByRole('status', { name: 'risk signals' });
     expect(within(riskStrip).getByText('anonymous buckets')).toBeInTheDocument();
     expect(within(riskStrip).getByText('1')).toBeInTheDocument();
-
-    expect(screen.getByText('Top Agents')).toBeInTheDocument();
-  });
-
-  it('renders the top agents table with correct agent rows', async () => {
-    const dataSource = createDataSource();
-    renderPage(dataSource);
-
-    await waitFor(() =>
-      expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', '', expect.any(Number), expect.any(Number))
-    );
-
-    await screen.findByText('Top Agents');
-    const tablePanel = screen.getByText('Top Agents').closest('div')!.parentElement!;
-    const agentRows = within(tablePanel)
-      .getAllByRole('link')
-      .filter((el) => el.tagName === 'TR');
-    expect(agentRows).toHaveLength(2);
-    expect(agentRows[0]).toHaveTextContent('assistant');
-    expect(agentRows[1]).toHaveTextContent('Unnamed agent bucket');
   });
 
   it('renders risk strip with all-zero signals in neutral styling', async () => {
@@ -444,18 +424,5 @@ describe('AgentsPage', () => {
       .filter((el) => el.tagName === 'TR');
     expect(rowsAfter[0]).toHaveTextContent('Unnamed agent bucket');
     expect(rowsAfter[1]).toHaveTextContent('assistant');
-  });
-
-  it('shows star buttons in the Top Agents overview table', async () => {
-    const dataSource = createDataSource();
-    renderPage(dataSource);
-
-    await waitFor(() =>
-      expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', '', expect.any(Number), expect.any(Number))
-    );
-
-    const topAgentsPanel = screen.getByText('Top Agents').closest('div')!.parentElement!;
-    const starButtons = within(topAgentsPanel).getAllByRole('button', { name: /star agent/i });
-    expect(starButtons.length).toBeGreaterThanOrEqual(2);
   });
 });

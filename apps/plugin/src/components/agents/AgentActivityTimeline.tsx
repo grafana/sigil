@@ -4,6 +4,7 @@ import { useStyles2 } from '@grafana/ui';
 import {
   dateTime,
   FieldType,
+  MutableDataFrame,
   ThresholdsMode,
   type AbsoluteTimeRange,
   type DataFrame,
@@ -11,92 +12,58 @@ import {
   type GrafanaTheme2,
   type TimeRange,
 } from '@grafana/data';
-import type { AgentListItem } from '../../agents/types';
+import type { DashboardDataSource } from '../../dashboard/api';
+import { requestCountOverTimeQuery } from '../../dashboard/queries';
+import { emptyFilters, type PrometheusMatrixResult, type PrometheusQueryResponse } from '../../dashboard/types';
+import { usePrometheusQuery } from '../dashboard/usePrometheusQuery';
 import { MetricPanel } from '../dashboard/MetricPanel';
 
 const PANEL_HEIGHT = 220;
-const MIN_BUCKETS = 12;
-const MAX_BUCKETS = 60;
+const TARGET_BARS = 40;
 
-export function computeBucketCount(rangeMs: number): number {
-  const oneMinute = 60_000;
-  const oneHour = 3_600_000;
-  const oneDay = 86_400_000;
-
-  if (rangeMs <= 10 * oneMinute) {
-    return MIN_BUCKETS;
-  }
-  if (rangeMs <= oneHour) {
-    return 20;
-  }
-  if (rangeMs <= 6 * oneHour) {
-    return 30;
-  }
-  if (rangeMs <= oneDay) {
-    return 40;
-  }
-  return MAX_BUCKETS;
+function computeBarStep(fromSec: number, toSec: number): number {
+  const rangeSec = toSec - fromSec;
+  return Math.max(Math.ceil(rangeSec / TARGET_BARS), 60);
 }
 
-function bucketAgentActivity(items: AgentListItem[], fromMs: number, toMs: number, bucketCount: number): number[] {
-  const rangeMs = toMs - fromMs;
-  if (rangeMs <= 0 || bucketCount <= 0) {
+function matrixToStackedDataFrames(response: PrometheusQueryResponse): DataFrame[] {
+  if (response.data.resultType !== 'matrix') {
     return [];
   }
+  const results = response.data.result as PrometheusMatrixResult[];
 
-  const bucketWidth = rangeMs / bucketCount;
-  const counts = new Array<number>(bucketCount).fill(0);
-
-  for (const item of items) {
-    const ts = Date.parse(item.latest_seen_at);
-    if (!Number.isFinite(ts) || ts < fromMs || ts > toMs) {
-      continue;
+  const totals = results.map((series) => {
+    let sum = 0;
+    for (const [, val] of series.values) {
+      sum += parseFloat(val) || 0;
     }
-    let idx = Math.floor((ts - fromMs) / bucketWidth);
-    if (idx < 0) {
-      idx = 0;
+    return { series, sum };
+  });
+  totals.sort((a, b) => b.sum - a.sum);
+
+  return totals.map(({ series }) => {
+    const agentName = series.metric.gen_ai_agent_name || 'anonymous';
+    const times: number[] = [];
+    const values: number[] = [];
+    for (const [ts, val] of series.values) {
+      times.push(ts * 1000);
+      const v = parseFloat(val);
+      values.push(Number.isFinite(v) ? Math.round(v) : 0);
     }
-    if (idx >= bucketCount) {
-      idx = bucketCount - 1;
-    }
-    counts[idx] += 1;
-  }
-
-  return counts;
-}
-
-function buildDataFrames(items: AgentListItem[], fromMs: number, toMs: number, bucketCount: number): DataFrame[] {
-  const rangeMs = toMs - fromMs;
-  if (rangeMs <= 0 || bucketCount <= 0) {
-    return [];
-  }
-
-  const bucketWidth = rangeMs / bucketCount;
-  const times = new Array<number>(bucketCount);
-  for (let i = 0; i < bucketCount; i++) {
-    times[i] = fromMs + i * bucketWidth + bucketWidth / 2;
-  }
-
-  const counts = bucketAgentActivity(items, fromMs, toMs, bucketCount);
-  if (counts.length === 0) {
-    return [];
-  }
-
-  return [
-    {
-      name: 'Agent activity',
-      length: times.length,
+    return new MutableDataFrame({
+      name: agentName,
       fields: [
-        { name: 'Time', type: FieldType.time, values: times, config: {} },
+        { name: 'Time', type: FieldType.time, values: times },
         {
           name: 'Value',
           type: FieldType.number,
-          values: counts,
-          config: { displayName: 'Agents active' },
+          values,
+          labels: series.metric,
+          config: { displayName: agentName },
         },
       ],
-    },
-  ];
+    });
+  });
 }
 
 const noThresholds = {
@@ -105,8 +72,8 @@ const noThresholds = {
 };
 
 const panelOptions = {
-  legend: { displayMode: 'hidden' },
-  tooltip: { mode: 'single', sort: 'none' },
+  legend: { displayMode: 'list', placement: 'bottom', calcs: [] },
+  tooltip: { mode: 'multi', sort: 'desc' },
 };
 
 const fieldConfig: FieldConfigSource = {
@@ -121,7 +88,7 @@ const fieldConfig: FieldConfigSource = {
       fillOpacity: 70,
       lineWidth: 0,
       gradientMode: 'none',
-      stacking: { mode: 'none' },
+      stacking: { mode: 'normal', group: 'A' },
       barAlignment: 0,
       thresholdsStyle: { mode: 'off' },
     },
@@ -130,22 +97,35 @@ const fieldConfig: FieldConfigSource = {
 };
 
 export type AgentActivityTimelineProps = {
-  items: AgentListItem[];
+  dashboardDataSource: DashboardDataSource;
   timeRange: TimeRange;
-  loading: boolean;
+  loading?: boolean;
   onTimeRangeChange?: (timeRange: TimeRange) => void;
 };
 
-export function AgentActivityTimeline({ items, timeRange, loading, onTimeRangeChange }: AgentActivityTimelineProps) {
+export function AgentActivityTimeline({
+  dashboardDataSource,
+  timeRange,
+  loading: externalLoading,
+  onTimeRangeChange,
+}: AgentActivityTimelineProps) {
   const styles = useStyles2(getStyles);
-  const fromMs = timeRange.from.valueOf();
-  const toMs = timeRange.to.valueOf();
-  const bucketCount = useMemo(() => computeBucketCount(toMs - fromMs), [fromMs, toMs]);
+  const fromSec = Math.floor(timeRange.from.valueOf() / 1000);
+  const toSec = Math.floor(timeRange.to.valueOf() / 1000);
+  const step = useMemo(() => computeBarStep(fromSec, toSec), [fromSec, toSec]);
+  const stepInterval = `${step}s`;
+  const query = useMemo(() => requestCountOverTimeQuery(emptyFilters, stepInterval, 'agent'), [stepInterval]);
 
-  const dataFrames = useMemo(
-    () => buildDataFrames(items, fromMs, toMs, bucketCount),
-    [items, fromMs, toMs, bucketCount]
-  );
+  const { data, loading: queryLoading } = usePrometheusQuery(dashboardDataSource, query, fromSec, toSec, 'range', step);
+
+  const dataFrames = useMemo(() => {
+    if (!data) {
+      return [];
+    }
+    return matrixToStackedDataFrames(data);
+  }, [data]);
+
+  const isLoading = queryLoading || (externalLoading ?? false);
 
   const handlePanelTimeRangeChange = useCallback(
     (abs: AbsoluteTimeRange) => {
@@ -163,10 +143,10 @@ export function AgentActivityTimeline({ items, timeRange, loading, onTimeRangeCh
     <div className={styles.container}>
       <MetricPanel
         title="Agent activity over time"
-        description="Based on latest seen timestamps for currently loaded agents."
+        description="Generation count per interval, broken down by agent."
         pluginId="timeseries"
         data={dataFrames}
-        loading={loading}
+        loading={isLoading}
         height={PANEL_HEIGHT}
         timeRange={timeRange}
         onChangeTimeRange={onTimeRangeChange ? handlePanelTimeRangeChange : undefined}

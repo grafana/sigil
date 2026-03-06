@@ -39,6 +39,8 @@ import { getTokenizeControlStyles } from '../components/tokenizer/tokenizeContro
 import { TopStat } from '../components/TopStat';
 import { PromptDiffView } from '../components/agents/PromptDiffView';
 import { normalizeValuesToHeights } from '../utils/seriesBuckets';
+import { buildCursorPromptDeeplink } from '../ide/ideUtils';
+import { CursorLogo } from '../components/landing/IDELogos';
 
 const VERSION_PAGE_SIZE = 50;
 const RECENT_VERSIONS_COUNT = 8;
@@ -323,6 +325,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     border: `1px solid ${theme.colors.warning.border}`,
     background: theme.colors.warning.transparent,
     padding: `${theme.spacing(0.75)} ${theme.spacing(1.5)}`,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing(2),
   }),
   statsGrid: css({
     width: '100%',
@@ -1901,6 +1907,22 @@ export default function AgentDetailPage({
             This bucket aggregates generations where <code>gen_ai.agent.name</code> was missing. Treat versions here as
             diagnostic clusters.
           </Text>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              const prompt = [
+                'The `gen_ai.agent.name` attribute is missing from my LLM generations.',
+                'Find where I make LLM / AI generation calls and ensure every call sets `gen_ai.agent.name`',
+                'using the Sigil SDK. Look at `ARCHITECTURE.md` and `docs/references/semantic-conventions.md`',
+                'for the expected attributes and SDK usage patterns.',
+              ].join(' ');
+              window.open(buildCursorPromptDeeplink(prompt), '_blank', 'noopener');
+            }}
+          >
+            <CursorLogo size={14} />
+            &nbsp;Fix in Cursor
+          </Button>
         </div>
       )}
 
