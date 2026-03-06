@@ -301,12 +301,17 @@ func (s *Service) executeItem(ctx context.Context, item evalpkg.WorkItem) {
 		return
 	}
 
-	model := generation.GetResponseModel()
+	evalModel := generation.GetResponseModel()
 	agentName := generation.GetAgentName()
-	observeExecution(item.TenantID, item.EvaluatorID, kind, item.RuleID, "success", model, agentName)
-	observeExecutionDuration(item.TenantID, item.EvaluatorID, kind, item.RuleID, time.Since(startedAt))
+	var genModel, genProvider string
+	if m := generation.GetModel(); m != nil {
+		genModel = m.GetName()
+		genProvider = m.GetProvider()
+	}
+	observeExecution(item.TenantID, item.EvaluatorID, kind, item.RuleID, "success", evalModel, genModel, genProvider, agentName)
+	observeExecutionDuration(item.TenantID, item.EvaluatorID, kind, item.RuleID, time.Since(startedAt), evalModel, genModel, genProvider, agentName)
 	for _, score := range scores {
-		observeProducedScore(item.TenantID, item.EvaluatorID, kind, item.RuleID, score.ScoreKey, score.Passed, model, agentName)
+		observeProducedScore(item.TenantID, item.EvaluatorID, kind, item.RuleID, score.ScoreKey, score.Passed, evalModel, genModel, genProvider, agentName)
 	}
 }
 
@@ -327,7 +332,7 @@ func (s *Service) failItem(ctx context.Context, item evalpkg.WorkItem, kind stri
 	if requeued {
 		observeRetry(item.TenantID, item.EvaluatorID, kind, item.RuleID)
 	}
-	observeExecution(item.TenantID, item.EvaluatorID, kind, item.RuleID, "failed", "", "")
+	observeExecution(item.TenantID, item.EvaluatorID, kind, item.RuleID, "failed", "", "", "", "")
 }
 
 func (s *Service) requeueCanceledItem(ctx context.Context, item evalpkg.WorkItem, cause error) {
