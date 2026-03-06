@@ -13,6 +13,18 @@ import (
 )
 
 const defaultJudgeModel = "openai/gpt-4o-mini"
+const maxJudgeParseAttempts = 3
+
+func effectiveBaselineTokenTotal(agent Agent) int {
+	immediateToolsTotal := 0
+	for _, tool := range agent.Tools {
+		if tool.Deferred {
+			continue
+		}
+		immediateToolsTotal += tool.TokenEstimate
+	}
+	return agent.TokenEstimate.SystemPrompt + immediateToolsTotal
+}
 
 type providerResolver interface {
 	Client(providerID string) (judges.JudgeClient, bool)
@@ -75,7 +87,7 @@ func (r *Rater) RateWithModel(ctx context.Context, agent Agent, modelOverride st
 		return nil, NewValidationError(fmt.Sprintf("judge provider %q is not configured", providerID))
 	}
 
-	judgeRequest := judges.JudgeRequest{
+	baseJudgeRequest := judges.JudgeRequest{
 		SystemPrompt: evaluatorSystemPrompt,
 		UserPrompt:   buildUserPrompt(agent),
 		Model:        modelName,
@@ -84,32 +96,50 @@ func (r *Rater) RateWithModel(ctx context.Context, agent Agent, modelOverride st
 		OutputSchema: ratingOutputSchema(),
 		Thinking:     r.thinkingConfig(),
 	}
-	judgeResponse, err := client.Judge(ctx, judgeRequest)
-	if err != nil && judgeRequest.Thinking.ModeOrDefault() == judges.ThinkingModePrefer && judges.IsThinkingUnsupportedError(err) {
-		judgeRequest.Thinking.Mode = judges.ThinkingModeOff
-		judgeResponse, err = client.Judge(ctx, judgeRequest)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("run agent rating judge: %w", err)
-	}
+	var lastParseErr error
+	var lastJudgeResponse judges.JudgeResponse
 
-	rating, err := parseJudgeRatingOutput(judgeResponse.Text)
-	if err != nil {
-		return nil, fmt.Errorf("parse judge response: %w", err)
-	}
-	rating.JudgeLatencyMs = judgeResponse.LatencyMs
-	rating.JudgeModel = providerID + "/" + modelName
-	if returnedModel := strings.TrimSpace(judgeResponse.Model); returnedModel != "" {
-		if strings.Contains(returnedModel, "/") {
-			rating.JudgeModel = returnedModel
-		} else {
-			rating.JudgeModel = providerID + "/" + returnedModel
+	for attempt := 1; attempt <= maxJudgeParseAttempts; attempt++ {
+		judgeRequest := baseJudgeRequest
+		if attempt > 1 && lastParseErr != nil {
+			judgeRequest.SystemPrompt = evaluatorSystemPrompt + "\n\n" + buildParseRetryInstruction(lastParseErr)
 		}
+
+		judgeResponse, err := client.Judge(ctx, judgeRequest)
+		if err != nil && judgeRequest.Thinking.ModeOrDefault() == judges.ThinkingModePrefer && judges.IsThinkingUnsupportedError(err) {
+			judgeRequest.Thinking.Mode = judges.ThinkingModeOff
+			judgeResponse, err = client.Judge(ctx, judgeRequest)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("run agent rating judge: %w", err)
+		}
+
+		lastJudgeResponse = judgeResponse
+		rating, err := parseJudgeRatingOutput(judgeResponse.Text)
+		if err != nil {
+			lastParseErr = err
+			if attempt < maxJudgeParseAttempts {
+				continue
+			}
+			return nil, fmt.Errorf("parse judge response: %w (response_preview=%q)", err, judgeResponsePreview(judgeResponse.Text))
+		}
+
+		rating.JudgeLatencyMs = judgeResponse.LatencyMs
+		rating.JudgeModel = providerID + "/" + modelName
+		if returnedModel := strings.TrimSpace(judgeResponse.Model); returnedModel != "" {
+			if strings.Contains(returnedModel, "/") {
+				rating.JudgeModel = returnedModel
+			} else {
+				rating.JudgeModel = providerID + "/" + returnedModel
+			}
+		}
+
+		applyTokenWarning(agent, &rating)
+		rating.Status = RatingStatusCompleted
+		return &rating, nil
 	}
 
-	applyTokenWarning(agent, &rating)
-	rating.Status = RatingStatusCompleted
-	return &rating, nil
+	return nil, fmt.Errorf("parse judge response: %w (response_preview=%q)", lastParseErr, judgeResponsePreview(lastJudgeResponse.Text))
 }
 
 func (r *Rater) resolveJudgeTarget(modelOverride string) (string, string, error) {
@@ -162,15 +192,16 @@ func parseJudgeRatingOutput(raw string) (Rating, error) {
 		return Rating{}, fmt.Errorf("judge response is empty")
 	}
 
-	decoder := json.NewDecoder(strings.NewReader(trimmed))
-	decoder.UseNumber()
-
-	var output judgeRatingOutput
-	if err := decoder.Decode(&output); err != nil {
-		return Rating{}, err
-	}
-	if err := jsonutil.EnsureEOF(decoder); err != nil {
-		return Rating{}, err
+	output, err := decodeJudgeRatingOutput(trimmed)
+	if err != nil {
+		extracted := extractJSONObjectEnvelope(trimmed)
+		if extracted == "" || extracted == trimmed {
+			return Rating{}, err
+		}
+		output, err = decodeJudgeRatingOutput(extracted)
+		if err != nil {
+			return Rating{}, err
+		}
 	}
 
 	score, err := parseScore(output.Score)
@@ -189,6 +220,84 @@ func parseJudgeRatingOutput(raw string) (Rating, error) {
 		Suggestions:  suggestions,
 		TokenWarning: strings.TrimSpace(output.TokenWarning),
 	}, nil
+}
+
+func decodeJudgeRatingOutput(raw string) (judgeRatingOutput, error) {
+	decoder := json.NewDecoder(strings.NewReader(raw))
+	decoder.UseNumber()
+
+	var output judgeRatingOutput
+	if err := decoder.Decode(&output); err != nil {
+		return judgeRatingOutput{}, err
+	}
+	if err := jsonutil.EnsureEOF(decoder); err != nil {
+		return judgeRatingOutput{}, err
+	}
+	return output, nil
+}
+
+func extractJSONObjectEnvelope(raw string) string {
+	start := -1
+	depth := 0
+	inString := false
+	escaped := false
+
+	for i, r := range raw {
+		if start < 0 {
+			if r == '{' {
+				start = i
+				depth = 1
+			}
+			continue
+		}
+
+		if escaped {
+			escaped = false
+			continue
+		}
+		if inString {
+			switch r {
+			case '\\':
+				escaped = true
+			case '"':
+				inString = false
+			}
+			continue
+		}
+
+		switch r {
+		case '"':
+			inString = true
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return raw[start : i+1]
+			}
+		}
+	}
+
+	return ""
+}
+
+func buildParseRetryInstruction(err error) string {
+	return fmt.Sprintf(
+		"Your previous response could not be parsed as valid JSON (%s). Return exactly one complete JSON object matching the schema. Do not include markdown, code fences, commentary, or trailing text.",
+		strings.TrimSpace(err.Error()),
+	)
+}
+
+func judgeResponsePreview(raw string) string {
+	normalized := strings.Join(strings.Fields(strings.TrimSpace(raw)), " ")
+	if normalized == "" {
+		return ""
+	}
+	const maxPreviewChars = 240
+	if len(normalized) <= maxPreviewChars {
+		return normalized
+	}
+	return normalized[:maxPreviewChars] + "..."
 }
 
 func parseScore(rawScore json.Number) (int, error) {
@@ -288,13 +397,13 @@ func applyTokenWarning(agent Agent, rating *Rating) {
 	if strings.TrimSpace(rating.TokenWarning) != "" {
 		return
 	}
-	if agent.TokenEstimate.Total <= tokenWarningThreshold {
+	if effectiveBaselineTokenTotal(agent) <= tokenWarningThreshold {
 		return
 	}
 
 	rating.TokenWarning = fmt.Sprintf(
-		"Estimated baseline context is %d tokens; costs and instruction-following reliability can degrade above %d tokens.",
-		agent.TokenEstimate.Total,
+		"Estimated baseline context is %d tokens excluding deferred tools; costs and instruction-following reliability can degrade above %d tokens.",
+		effectiveBaselineTokenTotal(agent),
 		tokenWarningThreshold,
 	)
 }

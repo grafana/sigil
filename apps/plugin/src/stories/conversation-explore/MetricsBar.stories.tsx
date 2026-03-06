@@ -146,6 +146,8 @@ export const WithModelCardPopover = {
     ...Default.args,
     models: ['claude-sonnet-4-5'],
     modelProviders: { 'claude-sonnet-4-5': 'anthropic' },
-    modelCards: new Map<string, ModelCard>([[ 'anthropic::claude-sonnet-4-5', storyModelCards.get('anthropic::claude-sonnet-4-5')! ]]),
+    modelCards: new Map<string, ModelCard>([
+      ['anthropic::claude-sonnet-4-5', storyModelCards.get('anthropic::claude-sonnet-4-5')!],
+    ]),
   },
 };

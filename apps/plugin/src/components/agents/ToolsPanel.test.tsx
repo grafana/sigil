@@ -26,11 +26,12 @@ describe('ToolsPanel', () => {
   it('shows deferred tool metadata in list and detail', () => {
     render(<ToolsPanel tools={tools} />);
 
-    expect(screen.getByText('Execution mode: Deferred')).toBeInTheDocument();
+    expect(screen.getByText('Execution mode:')).toBeInTheDocument();
     expect(screen.getByText('Deferred')).toBeInTheDocument();
+    expect(screen.getByLabelText('deferred tool')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /select tool sync_lookup/i }));
 
-    expect(screen.getByText('Execution mode: Immediate')).toBeInTheDocument();
+    expect(screen.getByText('Immediate')).toBeInTheDocument();
   });
 });

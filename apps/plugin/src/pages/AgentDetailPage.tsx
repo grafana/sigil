@@ -735,6 +735,14 @@ function firstLine(text: string): string {
   return line ?? 'No summary available.';
 }
 
+function getNonDeferredToolTokens(detail: AgentDetail): number {
+  return detail.tools.reduce((sum, tool) => sum + (tool.deferred ? 0 : tool.token_estimate), 0);
+}
+
+function getEffectiveTotalTokens(detail: AgentDetail): number {
+  return detail.token_estimate.system_prompt + getNonDeferredToolTokens(detail);
+}
+
 function buildAgentStateContext(detail: AgentDetail): string {
   const modelLines = detail.models.length
     ? detail.models.map(
@@ -742,8 +750,13 @@ function buildAgentStateContext(detail: AgentDetail): string {
       )
     : ['  None recorded.'];
   const toolLines = detail.tools.length
-    ? detail.tools.map((tool, index) => `  ${index + 1}. ${tool.name} (${tool.type}, ${tool.token_estimate} tokens)`)
+    ? detail.tools.map(
+        (tool, index) =>
+          `  ${index + 1}. ${tool.name} (${tool.type}, ${tool.token_estimate} tokens${tool.deferred ? ', deferred' : ''})`
+      )
     : ['  None recorded.'];
+  const nonDeferredToolTokens = getNonDeferredToolTokens(detail);
+  const effectiveTotalTokens = getEffectiveTotalTokens(detail);
   return [
     '- Declared version (latest): ' + (detail.declared_version_latest || 'n/a'),
     '- Declared version (first): ' + (detail.declared_version_first || 'n/a'),
@@ -753,9 +766,9 @@ function buildAgentStateContext(detail: AgentDetail): string {
     '- Token estimate: system=' +
       detail.token_estimate.system_prompt +
       ', tools=' +
-      detail.token_estimate.tools_total +
+      nonDeferredToolTokens +
       ', total=' +
-      detail.token_estimate.total,
+      effectiveTotalTokens,
     '- Models:',
     ...modelLines,
     '- Tools:',
@@ -1155,6 +1168,8 @@ export default function AgentDetailPage({
   );
 
   const agentStateContext = useMemo(() => (detail ? buildAgentStateContext(detail) : ''), [detail]);
+  const nonDeferredToolTokens = useMemo(() => (detail ? getNonDeferredToolTokens(detail) : 0), [detail]);
+  const effectiveTotalTokens = useMemo(() => (detail ? getEffectiveTotalTokens(detail) : 0), [detail]);
   const scrollToPromptAnalysis = useCallback(() => {
     promptAnalysisSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
@@ -1544,15 +1559,15 @@ export default function AgentDetailPage({
             />
             <TopStat
               label="TOOLS TOKENS"
-              value={detail.token_estimate.tools_total}
+              value={nonDeferredToolTokens}
               loading={false}
-              helpTooltip="Estimated tokens consumed by all tool schemas combined in this version."
+              helpTooltip="Estimated tokens consumed by non-deferred tool schemas included in the initial context for this version."
             />
             <TopStat
               label="TOTAL TOKENS"
-              value={detail.token_estimate.total}
+              value={effectiveTotalTokens}
               loading={false}
-              helpTooltip="Sum of system prompt and tool tokens - the baseline context cost per generation."
+              helpTooltip="Sum of system prompt and non-deferred tool tokens - the baseline context cost per generation."
             />
             <TopStat
               label="AGE"
