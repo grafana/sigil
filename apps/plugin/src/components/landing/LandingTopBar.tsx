@@ -14,7 +14,12 @@ import {
 } from '../../content/cursorInstrumentationPrompt';
 import type { DashboardDataSource } from '../../dashboard/api';
 import { computeRateInterval, computeStep, requestsOverTimeQuery } from '../../dashboard/queries';
-import { type DashboardFilters, type PrometheusMatrixResult, type PrometheusQueryResponse, emptyFilters } from '../../dashboard/types';
+import {
+  type DashboardFilters,
+  type PrometheusMatrixResult,
+  type PrometheusQueryResponse,
+  emptyFilters,
+} from '../../dashboard/types';
 import {
   buildSigilAssistantContextItems,
   buildSigilAssistantPrompt,
@@ -542,7 +547,9 @@ export function LandingTopBar({
   const [requestSpineHeights, setRequestSpineHeights] = useState<number[] | null>(
     () => initialRequestSpineCache?.heights ?? null
   );
-  const [requestSpineValues, setRequestSpineValues] = useState<number[] | null>(() => initialRequestSpineCache?.values ?? null);
+  const [requestSpineValues, setRequestSpineValues] = useState<number[] | null>(
+    () => initialRequestSpineCache?.values ?? null
+  );
   const [disableSpineAnimation, setDisableSpineAnimation] = useState<boolean>(() => initialRequestSpineCache != null);
   const [requestSpineWaveReason, setRequestSpineWaveReason] = useState<null | 'loading' | 'no-data' | 'error'>(() =>
     requestsDataSource && to > from && initialRequestSpineCache == null ? 'loading' : null
@@ -564,10 +571,10 @@ export function LandingTopBar({
     const query = requestsOverTimeQuery(requestsFilters, interval, 'none');
     const cacheKey = buildRequestSpineCacheKey(query, from, to, spineCount);
     const cached = readRequestSpineFromStorage(cacheKey);
-    const hasCached = cached != null && cached.heights.length > 0 && cached.values.length > 0;
+    let hasCached = cached != null && cached.heights.length > 0 && cached.values.length > 0;
 
     queueMicrotask(() => {
-      if (hasCached) {
+      if (hasCached && cached) {
         setDisableSpineAnimation(true);
         setRequestSpineHeights(cached.heights);
         setRequestSpineValues(cached.values);
@@ -588,6 +595,7 @@ export function LandingTopBar({
         const nextHeights = normalizeValuesToHeights(values, spineCount);
         const nextValues = bucketValues(values, spineCount);
         if (nextHeights.length > 0) {
+          hasCached = true;
           setRequestSpineWaveReason(null);
           saveRequestSpineToStorage(cacheKey, nextHeights, nextValues);
           requestAnimationFrame(() => {
@@ -656,7 +664,9 @@ export function LandingTopBar({
                   ? interpolateHex(gradientColors[0], gradientColors[1], t / 0.52)
                   : interpolateHex(gradientColors[1], gradientColors[2], (t - 0.52) / 0.48);
               const stat =
-                requestSpineValues != null && i < requestSpineValues.length ? formatRequestStat(requestSpineValues[i]) : null;
+                requestSpineValues != null && i < requestSpineValues.length
+                  ? formatRequestStat(requestSpineValues[i])
+                  : null;
               const timeStr = stat != null && to > from ? formatBarTime(from, to, i, spineCount) : null;
               const durationStr = stat != null && to > from ? formatBarDuration(from, to, spineCount) : null;
               const waveIssueTooltip =
@@ -713,7 +723,9 @@ export function LandingTopBar({
                     ? interpolateHex(gradientColors[0], gradientColors[1], t / 0.52)
                     : interpolateHex(gradientColors[1], gradientColors[2], (t - 0.52) / 0.48);
                 const stat =
-                  requestSpineValues != null && i < requestSpineValues.length ? formatRequestStat(requestSpineValues[i]) : null;
+                  requestSpineValues != null && i < requestSpineValues.length
+                    ? formatRequestStat(requestSpineValues[i])
+                    : null;
                 const timeStr = stat != null && to > from ? formatBarTime(from, to, i, spineCount) : null;
                 const durationStr = stat != null && to > from ? formatBarDuration(from, to, spineCount) : null;
                 const waveIssueTooltip =
