@@ -1469,12 +1469,13 @@ export default function AgentDetailPage({
   const hasAnyAnalysis = hasInsightResults || hasRatingResult;
 
   const runUnifiedAnalysis = useCallback(() => {
-    if (!insightsRef.current) {
+    if (!insightsRef.current && !ratingRef.current) {
       return;
     }
     setInitialRatingLoading(true);
     setInitialRatingError('');
-    insightsRef.current.analyze(lookback);
+    insightsRef.current?.analyze(lookback);
+    ratingRef.current?.analyze();
   }, [lookback]);
 
   const handleAnalysisTriggered = useCallback(() => {

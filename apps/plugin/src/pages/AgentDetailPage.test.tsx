@@ -428,6 +428,39 @@ describe('AgentDetailPage', () => {
     expect(analyzeBtn.textContent).toMatch(/re-analyze|analyze agent/i);
   });
 
+  it('starts both prompt insights and rating analysis from unified analyze', async () => {
+    const dataSource = createDataSource();
+    dataSource.analyzePrompt = jest.fn(async () => ({
+      status: 'pending',
+      strengths: [],
+      weaknesses: [],
+      judge_model: '',
+      judge_latency_ms: 0,
+    }));
+    dataSource.rateAgent = jest.fn(async () => ({
+      status: 'pending',
+      score: 0,
+      summary: '',
+      suggestions: [],
+      judge_model: '',
+      judge_latency_ms: 0,
+    }));
+
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByTestId('unified-analyze-button'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Analyze' }));
+
+    await waitFor(() => expect(dataSource.analyzePrompt).toHaveBeenCalledWith('assistant', expect.any(String), '7d'));
+    await waitFor(() => expect(dataSource.rateAgent).toHaveBeenCalledWith('assistant', expect.any(String)));
+  });
+
   it('clears rating loading when unified analysis fails to start', async () => {
     const dataSource = createDataSource();
     let rejectAnalyze: ((reason?: unknown) => void) | undefined;
