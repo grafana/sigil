@@ -15,6 +15,7 @@ import type {
 import FilterBar from '../components/FilterBar';
 import ConversationListPanel from '../components/conversations/ConversationListPanel';
 import GenerationViewerPanel from '../components/generation/GenerationViewerPanel';
+import { isAbortError } from '../utils/http';
 
 export type ConversationsPageProps = {
   dataSource?: ConversationsDataSource;
@@ -53,10 +54,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
 
 const DEFAULT_FROM = 'now-24h';
 const DEFAULT_TO = 'now';
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === 'AbortError';
-}
 
 function parseTimeRange(params: URLSearchParams): TimeRange {
   const rawFrom = params.get('from') || DEFAULT_FROM;

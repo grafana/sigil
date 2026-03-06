@@ -19,6 +19,7 @@ import ConversationListPanel from '../components/conversations/ConversationListP
 import { ConversationTimelineHistogram } from '../components/conversations/ConversationTimelineHistogram';
 import { buildConversationExploreRoute, ROUTES } from '../constants';
 import { PageInsightBar } from '../components/insight/PageInsightBar';
+import { isAbortError } from '../utils/http';
 
 export type ConversationsBrowserPageProps = {
   dataSource?: ConversationsDataSource;
@@ -34,10 +35,6 @@ const DEFAULT_SEARCH_SELECT_FIELDS = [SDK_NAME_SELECT_KEY, INPUT_TOKENS_SELECT_K
 const orderByOptions: Array<SelectableValue<ConversationOrderBy>> = (
   Object.keys(conversationOrderByLabel) as ConversationOrderBy[]
 ).map((key) => ({ label: conversationOrderByLabel[key], value: key }));
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === 'AbortError';
-}
 
 function getConversationTotalTokens(conversation: ConversationSearchResult): number {
   const input = conversation.selected?.[INPUT_TOKENS_SELECT_KEY];
