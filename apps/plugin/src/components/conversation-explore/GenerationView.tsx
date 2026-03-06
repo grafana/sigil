@@ -317,7 +317,7 @@ function UsageChips({ generation }: { generation: GenerationDetail }) {
       {hasCache && (
         <>
           <span className={styles.usageSep}>│</span>
-          {`cache ↓${formatNumber(cacheW)}  ↑${formatNumber(cacheR)}`}
+          {`cache ↓${formatNumber(cacheR)}  ↑${formatNumber(cacheW)}`}
         </>
       )}
       {reasoning > 0 && (
@@ -787,6 +787,12 @@ export default function GenerationView({
 
   const traceTargetSpan = node.span;
   const hasAttributeSection = Boolean(node.span && (node.span.resourceAttributes.size > 0 || node.span.attributes.size > 0));
+  const visibleAttributeCount = useMemo(() => {
+    if (!node.span) {
+      return 0;
+    }
+    return collectAttributeEntries(node.span.resourceAttributes).length + collectAttributeEntries(node.span.attributes).length;
+  }, [node.span]);
 
   const navigatePrev = useCallback(() => {
     if (adjacent?.previous) {
@@ -941,11 +947,7 @@ export default function GenerationView({
         {hasAttributeSection && node.span && (
           <Section
             title="Attributes"
-            count={
-              node.span.resourceAttributes.size > 0 || node.span.attributes.size > 0
-                ? `${node.span.resourceAttributes.size + node.span.attributes.size}`
-                : undefined
-            }
+            count={visibleAttributeCount > 0 ? `${visibleAttributeCount}` : undefined}
             defaultExpanded={false}
             headerExtra={
               <div className={styles.attributeSummaryRow}>
