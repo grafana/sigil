@@ -785,8 +785,9 @@ export function LandingTopBar({
 
   return (
     <>
-      <div className={styles.pageFlow}>
-        <div className={styles.heroBlock}>
+      <div className={styles.responsiveContainer}>
+        <div className={styles.pageFlow}>
+          <div className={styles.heroBlock}>
           {showRequestSpines ? (
             <div className={styles.heroSpines} aria-hidden>
               {displayHeights.map((height, i) => {
@@ -843,7 +844,7 @@ export function LandingTopBar({
           <div className={cx(styles.heroCard, showRequestSpines && styles.heroCardWithSpines)}>
             <div className={styles.heroCardContent}>
               <div className={styles.heroHeader}>
-                <div>
+                <div className={styles.heroHeaderTitle}>
                   <div className={styles.introducingLabel}>Introducing</div>
                   <h1 className={styles.productHeading}>Grafana Sigil</h1>
                 </div>
@@ -1087,6 +1088,7 @@ export function LandingTopBar({
               </div>
             </Stack>
           </Card>
+          </div>
         </div>
       </div>
 
@@ -1354,9 +1356,16 @@ function getStyles(theme: GrafanaTheme2) {
       gap: theme.spacing(2),
       boxSizing: 'border-box',
       marginTop: theme.spacing(-2),
-      '@media (max-width: 1200px)': {
+      '@container landing-top-bar (max-width: 1200px)': {
         gridTemplateColumns: '1fr',
       },
+    }),
+    responsiveContainer: css({
+      label: 'landingTopBar-responsiveContainer',
+      containerType: 'inline-size',
+      containerName: 'landing-top-bar',
+      width: '100%',
+      minWidth: 0,
     }),
     heroBlock: css({
       label: 'landingTopBar-heroBlock',
@@ -1545,10 +1554,12 @@ function getStyles(theme: GrafanaTheme2) {
     }),
     heroHeader: css({
       label: 'landingTopBar-heroHeader',
-      display: 'flex',
-      alignItems: 'flex-start',
-      justifyContent: 'space-between',
-      gap: theme.spacing(2),
+      position: 'relative',
+      paddingRight: theme.spacing(12),
+    }),
+    heroHeaderTitle: css({
+      label: 'landingTopBar-heroHeaderTitle',
+      minWidth: 0,
     }),
     introducingLabel: css({
       label: 'landingTopBar-introducingLabel',
@@ -1567,11 +1578,14 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'flex',
       alignItems: 'center',
       gap: theme.spacing(2),
-      marginTop: theme.spacing(0.5),
+      marginTop: '-2px',
     }),
     githubButton: css({
       label: 'landingTopBar-githubButton',
-      marginTop: theme.spacing(0.5),
+      position: 'absolute',
+      bottom: 0,
+      right: 0,
+      marginTop: 0,
       '& svg': {
         width: 18,
         height: 18,
@@ -1595,6 +1609,10 @@ function getStyles(theme: GrafanaTheme2) {
       marginTop: theme.spacing(1.5),
       flex: 1,
       minHeight: 0,
+      '@container landing-top-bar (max-width: 900px)': {
+        flexDirection: 'column',
+        gap: theme.spacing(1),
+      },
     }),
     pipelineStep: css({
       label: 'landingTopBar-pipelineStep',
@@ -1610,6 +1628,9 @@ function getStyles(theme: GrafanaTheme2) {
       '&:hover': {
         borderColor: theme.colors.border.medium,
         boxShadow: theme.isDark ? '0 4px 24px rgba(0,0,0,0.4)' : '0 4px 24px rgba(0,0,0,0.08)',
+      },
+      '@container landing-top-bar (max-width: 900px)': {
+        flex: 'none',
       },
     }),
     pipelineStepAccent: css({
@@ -1657,6 +1678,9 @@ function getStyles(theme: GrafanaTheme2) {
       width: 48,
       height: 2,
       flexShrink: 0,
+      '@container landing-top-bar (max-width: 900px)': {
+        display: 'none',
+      },
     }),
     pipelineConnectorTrack: css({
       label: 'landingTopBar-pipelineConnectorTrack',
