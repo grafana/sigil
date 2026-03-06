@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { cx } from '@emotion/css';
 import { Icon, Tooltip, useStyles2 } from '@grafana/ui';
 import type { CostSummary, TokenSummary } from '../../conversation/aggregates';
+import type { ConversationRating, ConversationRatingSummary, ConversationRatingValue } from '../../conversation/types';
 import type { ModelCard } from '../../modelcard/types';
 import ModelCardPopover from '../conversations/ModelCardPopover';
 import { getProviderColor, stripProviderPrefix, toDisplayProvider } from '../conversations/providerMeta';
@@ -23,6 +24,8 @@ export type MetricsBarProps = {
   modelCards?: Map<string, ModelCard>;
   errorCount: number;
   generationCount: number;
+  ratingSummary?: ConversationRatingSummary | null;
+  recentRatings?: ConversationRating[];
   isSaved?: boolean;
   onToggleSave?: () => void;
   onBack?: () => void;
@@ -193,6 +196,44 @@ function getCostTooltip(costSummary: CostSummary): React.JSX.Element {
   ]);
 }
 
+function getRatingLabel(value: ConversationRatingValue): string {
+  return value === 'CONVERSATION_RATING_VALUE_GOOD' ? 'Thumbs up' : 'Thumbs down';
+}
+
+function getRatingTooltip(
+  styles: ReturnType<typeof getStyles>,
+  value: ConversationRatingValue,
+  summary: ConversationRatingSummary | null | undefined,
+  ratings: ConversationRating[]
+): React.JSX.Element {
+  const positive = summary?.good_count ?? 0;
+  const negative = summary?.bad_count ?? 0;
+  const matchingRatings = ratings.filter((rating) => rating.rating === value);
+  const title = getRatingLabel(value);
+
+  return (
+    <div className={styles.feedbackTooltip}>
+      <div className={styles.feedbackTooltipHeader}>
+        <span>{title}</span>
+        <span className={styles.feedbackTooltipCounts}>
+          <span>↑ {positive}</span>
+          <span>↓ {negative}</span>
+        </span>
+      </div>
+      {matchingRatings.length > 0 ? (
+        <ol className={styles.feedbackTooltipList}>
+          {matchingRatings.slice(0, 3).map((rating) => {
+            const detail = rating.comment?.trim() || 'No comment';
+            return <li key={rating.rating_id}>{detail}</li>;
+          })}
+        </ol>
+      ) : (
+        <div className={styles.feedbackTooltipEmpty}>No feedback details yet.</div>
+      )}
+    </div>
+  );
+}
+
 export default function MetricsBar({
   conversationID,
   conversationTitle,
@@ -206,6 +247,8 @@ export default function MetricsBar({
   modelCards,
   errorCount,
   generationCount,
+  ratingSummary,
+  recentRatings = [],
   isSaved = false,
   onToggleSave,
   onBack,
@@ -321,32 +364,65 @@ export default function MetricsBar({
 
       <div className={styles.separator} />
 
-      <Tooltip content={statusTooltip} placement="bottom">
-        {errorCount > 0 ? (
-          <span className={`${styles.statusBadge} ${styles.statusError}`}>
-            <Icon name="exclamation-circle" size="sm" />
-            {errorCount} {errorCount === 1 ? 'error' : 'errors'}
-          </span>
-        ) : (
-          <span className={`${styles.statusBadge} ${styles.statusSuccess}`}>
-            <Icon name="check-circle" size="sm" />
-            OK
-          </span>
-        )}
-      </Tooltip>
-
-      {onToggleSave && (
-        <Tooltip content={isSaved ? 'Unsave conversation' : 'Save conversation'} placement="bottom">
-          <button
-            type="button"
-            className={cx(styles.saveButton, isSaved && styles.saveButtonActive)}
-            onClick={onToggleSave}
-            aria-label={isSaved ? 'unsave conversation' : 'save conversation'}
-          >
-            <Icon name={isSaved ? 'favorite' : 'star'} size="md" />
-          </button>
+      <div className={styles.compactControls}>
+        <Tooltip content={statusTooltip} placement="bottom">
+          {errorCount > 0 ? (
+            <span className={`${styles.statusBadge} ${styles.statusError}`}>
+              <Icon name="exclamation-circle" size="sm" />
+              {errorCount} {errorCount === 1 ? 'error' : 'errors'}
+            </span>
+          ) : (
+            <span className={`${styles.statusBadge} ${styles.statusSuccess}`}>
+              <Icon name="check-circle" size="sm" />
+              OK
+            </span>
+          )}
         </Tooltip>
-      )}
+
+        {ratingSummary && ratingSummary.total_count > 0 && (
+          <div className={styles.feedbackButtons} aria-label="Conversation feedback">
+            {ratingSummary.good_count > 0 && (
+              <Tooltip
+                content={getRatingTooltip(styles, 'CONVERSATION_RATING_VALUE_GOOD', ratingSummary, recentRatings)}
+                placement="bottom"
+              >
+                <span
+                  className={cx(styles.feedbackIcon, styles.feedbackIconPositive)}
+                  aria-label="Conversation has good feedback"
+                >
+                  <Icon name="thumbs-up" size="sm" />
+                </span>
+              </Tooltip>
+            )}
+            {ratingSummary.bad_count > 0 && (
+              <Tooltip
+                content={getRatingTooltip(styles, 'CONVERSATION_RATING_VALUE_BAD', ratingSummary, recentRatings)}
+                placement="bottom"
+              >
+                <span
+                  className={cx(styles.feedbackIcon, styles.feedbackIconNegative)}
+                  aria-label="Conversation has bad feedback"
+                >
+                  <Icon name="thumbs-down" size="sm" />
+                </span>
+              </Tooltip>
+            )}
+          </div>
+        )}
+
+        {onToggleSave && (
+          <Tooltip content={isSaved ? 'Unsave conversation' : 'Save conversation'} placement="bottom">
+            <button
+              type="button"
+              className={cx(styles.saveButton, isSaved && styles.saveButtonActive)}
+              onClick={onToggleSave}
+              aria-label={isSaved ? 'unsave conversation' : 'save conversation'}
+            >
+              <Icon name={isSaved ? 'favorite' : 'star'} size="md" />
+            </button>
+          </Tooltip>
+        )}
+      </div>
 
       <div className={styles.modelChips}>
         {modelMeta.map(({ key, displayName, color, card }) => {

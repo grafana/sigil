@@ -17,7 +17,7 @@ import { defaultConversationsDataSource, type ConversationsDataSource } from '..
 import { resolveConversationUserId } from '../conversation/userIdentity';
 import { createTempoTraceFetcher } from '../conversation/fetchTrace';
 import type { TraceFetcher } from '../conversation/loader';
-import type { ConversationSpan } from '../conversation/types';
+import type { ConversationRating, ConversationSpan } from '../conversation/types';
 import { plugin } from '../module';
 import { defaultModelCardClient, type ModelCardClient } from '../modelcard/api';
 import { resolveConversationTitleFromTelemetry } from '../conversation/conversationTitle';
@@ -666,6 +666,7 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   const conversationTitle =
     conversationData?.conversationTitle?.trim() || conversationTitleFromTelemetry || conversationTitleFromURL;
   const conversationUserId = useMemo(() => resolveConversationUserId(conversationData), [conversationData]);
+  const [recentRatings, setRecentRatings] = useState<ConversationRating[]>([]);
 
   const {
     isSaved,
@@ -676,6 +677,33 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   const defaultSaveName = conversationTitle || conversationID;
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [saveName, setSaveName] = useState('');
+
+  useEffect(() => {
+    if (!conversationID || !dataSource.listConversationRatings) {
+      setRecentRatings([]);
+      return;
+    }
+
+    let cancelled = false;
+    void dataSource
+      .listConversationRatings(conversationID, 5)
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+        setRecentRatings(response.items ?? []);
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+        setRecentRatings([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationID, dataSource]);
 
   const handleToggleSave = useCallback(() => {
     if (!isSaved) {
@@ -1120,6 +1148,8 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
           modelCards={modelCards}
           errorCount={errorCount}
           generationCount={conversationData.generationCount}
+          ratingSummary={conversationData.ratingSummary}
+          recentRatings={recentRatings}
           isSaved={isSaved}
           onToggleSave={saveLoading ? undefined : handleToggleSave}
           onBack={() => navigate(-1)}

@@ -36,6 +36,26 @@ export type ConversationRating = {
   created_at: string;
 };
 
+export type ConversationRatingsListResponse = {
+  items: ConversationRating[];
+  next_cursor?: string;
+};
+
+export type CreateConversationRatingRequest = {
+  rating_id: string;
+  rating: ConversationRatingValue;
+  comment?: string;
+  metadata?: Record<string, unknown>;
+  generation_id?: string;
+  rater_id?: string;
+  source?: string;
+};
+
+export type CreateConversationRatingResponse = {
+  rating: ConversationRating;
+  summary: ConversationRatingSummary;
+};
+
 export type ConversationTimelineEventKind = 'rating' | 'annotation';
 
 export type ConversationTimelineEvent = {

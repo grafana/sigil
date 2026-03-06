@@ -56,6 +56,32 @@ const baseProps = {
   generationCount: 2,
 };
 
+const feedbackProps = {
+  ratingSummary: {
+    total_count: 3,
+    good_count: 2,
+    bad_count: 1,
+    latest_rating: 'CONVERSATION_RATING_VALUE_GOOD' as const,
+    has_bad_rating: true,
+  },
+  recentRatings: [
+    {
+      rating_id: 'rating-3',
+      conversation_id: 'conv-123',
+      rating: 'CONVERSATION_RATING_VALUE_GOOD' as const,
+      comment: 'Clear answer.',
+      created_at: '2026-03-06T10:03:00Z',
+    },
+    {
+      rating_id: 'rating-2',
+      conversation_id: 'conv-123',
+      rating: 'CONVERSATION_RATING_VALUE_BAD' as const,
+      comment: 'Missed the issue.',
+      created_at: '2026-03-06T10:02:00Z',
+    },
+  ],
+};
+
 describe('MetricsBar model cards', () => {
   it('opens and closes model card popover when clicking a model chip', () => {
     const modelCards = new Map<string, ModelCard>([['anthropic::claude-sonnet-4-5', modelCard]]);
@@ -304,5 +330,50 @@ describe('MetricsBar conversation title', () => {
             element.getAttribute('data-content') === '2 generations in this conversation have an error message.'
         )
     ).toHaveAttribute('data-content', '2 generations in this conversation have an error message.');
+  });
+
+  it('renders compact feedback icons only when counts exist', () => {
+    render(<MetricsBar {...baseProps} {...feedbackProps} />);
+
+    expect(screen.getByLabelText('Conversation has good feedback')).toBeInTheDocument();
+    expect(screen.getByLabelText('Conversation has bad feedback')).toBeInTheDocument();
+  });
+
+  it('shows rating counts and recent details in feedback tooltips', () => {
+    render(<MetricsBar {...baseProps} {...feedbackProps} />);
+
+    expect(screen.getByText('Thumbs up')).toBeInTheDocument();
+    expect(screen.getByText('Thumbs down')).toBeInTheDocument();
+    expect(screen.getAllByText('↑ 2')).toHaveLength(2);
+    expect(screen.getAllByText('↓ 1')).toHaveLength(2);
+    expect(screen.getByText('Clear answer.')).toBeInTheDocument();
+    expect(screen.getByText('Missed the issue.')).toBeInTheDocument();
+  });
+
+  it('shows only bad feedback icon when no good ratings exist', () => {
+    render(
+      <MetricsBar
+        {...baseProps}
+        ratingSummary={{
+          total_count: 1,
+          good_count: 0,
+          bad_count: 1,
+          latest_rating: 'CONVERSATION_RATING_VALUE_BAD',
+          has_bad_rating: true,
+        }}
+        recentRatings={[
+          {
+            rating_id: 'rating-1',
+            conversation_id: 'conv-123',
+            rating: 'CONVERSATION_RATING_VALUE_BAD',
+            comment: 'Wrong recommendation.',
+            created_at: '2026-03-06T10:01:00Z',
+          },
+        ]}
+      />
+    );
+
+    expect(screen.queryByLabelText('Conversation has good feedback')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Conversation has bad feedback')).toBeInTheDocument();
   });
 });

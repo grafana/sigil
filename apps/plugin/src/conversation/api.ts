@@ -4,10 +4,13 @@ import type {
   ConversationDetail,
   ConversationListResponse,
   GenerationLookupHints,
+  CreateConversationRatingRequest,
+  CreateConversationRatingResponse,
   ConversationSearchRequest,
   ConversationSearchResponse,
   ConversationStatsRequest,
   ConversationStatsResponse,
+  ConversationRatingsListResponse,
   GenerationDetail,
   SearchTag,
   SearchTagValuesResponse,
@@ -177,6 +180,15 @@ export type ConversationsDataSource = {
   ) => Promise<void>;
   getConversationStats?: (request: ConversationStatsRequest) => Promise<ConversationStatsResponse>;
   getConversationDetail: (conversationID: string) => Promise<ConversationDetail>;
+  listConversationRatings?: (
+    conversationID: string,
+    limit?: number,
+    cursor?: string
+  ) => Promise<ConversationRatingsListResponse>;
+  createConversationRating?: (
+    conversationID: string,
+    request: CreateConversationRatingRequest
+  ) => Promise<CreateConversationRatingResponse>;
   getGeneration: (generationID: string, hints?: GenerationLookupHints) => Promise<GenerationDetail>;
   getSearchTags: (from: string, to: string) => Promise<SearchTag[]>;
   getSearchTagValues: (tag: string, from: string, to: string) => Promise<string[]>;
@@ -210,6 +222,33 @@ export const defaultConversationsDataSource: ConversationsDataSource = {
       getBackendSrv().fetch<ConversationDetail>({
         method: 'GET',
         url: `${queryBasePath}/conversations/${encodeURIComponent(conversationID)}`,
+      })
+    );
+    return response.data;
+  },
+
+  async listConversationRatings(conversationID, limit = 10, cursor) {
+    const params = new URLSearchParams();
+    params.set('limit', String(limit));
+    if (cursor && cursor.length > 0) {
+      params.set('cursor', cursor);
+    }
+
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<ConversationRatingsListResponse>({
+        method: 'GET',
+        url: `${queryBasePath}/conversations/${encodeURIComponent(conversationID)}/ratings?${params.toString()}`,
+      })
+    );
+    return response.data;
+  },
+
+  async createConversationRating(conversationID, request) {
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<CreateConversationRatingResponse>({
+        method: 'POST',
+        url: `${queryBasePath}/conversations/${encodeURIComponent(conversationID)}/ratings`,
+        data: request,
       })
     );
     return response.data;
