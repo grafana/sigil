@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import AgentDetailPage from './AgentDetailPage';
 import type { AgentsDataSource } from '../agents/api';
+import type { PromptInsightsResponse } from '../agents/types';
 
 function LocationProbe() {
   const location = useLocation();
@@ -518,7 +519,7 @@ describe('AgentDetailPage', () => {
       weaknesses: [],
       judge_model: '',
       judge_latency_ms: 0,
-    }));
+    } satisfies PromptInsightsResponse));
     render(
       <MemoryRouter initialEntries={['/agents/name/assistant']}>
         <Routes>
