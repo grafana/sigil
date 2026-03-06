@@ -25,16 +25,17 @@ describe('Loader', () => {
     expect(row?.textContent).toContain('EF');
 
     rerender(<Loader showText lines={['WXYZ', 'QRST']} />);
+    const nextRow = container.querySelector('[aria-live="polite"]');
 
     // On prop change we should restart from the first new line.
-    expect(row?.textContent).toContain('|');
-    expect(row?.textContent).not.toContain('Q');
+    expect(nextRow?.textContent).toContain('|');
+    expect(nextRow?.textContent).not.toContain('Q');
 
     act(() => {
       jest.advanceTimersByTime(50);
     });
 
-    expect(row?.textContent).toContain('W');
-    expect(row?.textContent).not.toContain('Q');
+    expect(nextRow?.textContent).toContain('W');
+    expect(nextRow?.textContent).not.toContain('Q');
   });
 });
