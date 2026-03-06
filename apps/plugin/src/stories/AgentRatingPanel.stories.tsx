@@ -139,6 +139,36 @@ export const HideGenerateCta = {
   },
 };
 
+export const EmbeddedSummary = {
+  args: {
+    embedded: true,
+    hideGenerateCta: true,
+    initialResult: {
+      status: 'completed',
+      score: 8,
+      summary: 'Clear overall direction with a few high-priority improvements around tool boundaries and context size.',
+      suggestions: [
+        {
+          category: 'tools',
+          severity: 'high',
+          title: 'Make tool eligibility explicit',
+          description: 'Spell out when tools should and should not be called so the agent has fewer ambiguous paths.',
+        },
+        {
+          category: 'tokens',
+          severity: 'medium',
+          title: 'Trim baseline context',
+          description: 'Move rarely used guidance out of the always-loaded prompt to reduce token cost and confusion.',
+        },
+      ],
+      token_warning:
+        'Estimated baseline context is 31800 tokens; consider moving infrequent guidance out of the default prompt.',
+      judge_model: 'anthropic/claude-sonnet-4-5',
+      judge_latency_ms: 260,
+    },
+  },
+};
+
 export const LongSummaryClickable = {
   args: {
     initialResult: {
