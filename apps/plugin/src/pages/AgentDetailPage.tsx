@@ -151,14 +151,14 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexDirection: 'column' as const,
     minWidth: 0,
     width: '100%',
-    marginTop: theme.spacing(0.5),
+    marginTop: theme.spacing(0.75),
     alignItems: 'stretch',
   }),
   heroTopStatsRow: css({
     display: 'flex',
-    alignItems: 'stretch',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: theme.spacing(1.5),
+    gap: theme.spacing(2),
     width: '100%',
     '@media (max-width: 900px)': {
       justifyContent: 'flex-start',
@@ -169,16 +169,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flex: 1,
     minWidth: 0,
     width: '100%',
-    marginRight: theme.spacing(1),
-  }),
-  heroVersionsTitle: css({
-    display: 'block',
-    color: theme.colors.text.secondary,
-    fontSize: theme.typography.bodySmall.fontSize,
-    lineHeight: 1.2,
-    textTransform: 'uppercase' as const,
-    letterSpacing: '0.03em',
-    fontWeight: theme.typography.fontWeightMedium,
   }),
   heroEyebrow: css({
     textTransform: 'uppercase' as const,
@@ -233,27 +223,46 @@ const getStyles = (theme: GrafanaTheme2) => ({
   heroMetaStatHighlight: css({
     flexShrink: 0,
     minWidth: 0,
-    marginLeft: theme.spacing(1),
+    alignSelf: 'stretch',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    justifyContent: 'flex-end',
+    gap: theme.spacing(0.125),
+    paddingLeft: theme.spacing(2),
+    borderLeft: `1px solid ${theme.colors.border.weak}`,
     '@media (max-width: 1400px)': {
       gridColumn: '4 / 5',
     },
     '@media (max-width: 900px)': {
       gridColumn: '2 / 3',
+      borderLeft: 'none',
+      paddingLeft: 0,
     },
     '@media (max-width: 640px)': {
       gridColumn: '1 / 2',
     },
   }),
-  latestScoreBlocks: css({
+  latestScoreSquares: css({
     display: 'grid',
-    gridTemplateColumns: 'repeat(10, minmax(0, 1fr))',
-    gap: 3,
-    marginTop: theme.spacing(0.5),
+    gridTemplateColumns: 'repeat(10, 10px)',
+    gap: theme.spacing(0.25),
+    marginTop: theme.spacing(0.125),
+    width: 'fit-content',
+    marginLeft: 'auto',
   }),
-  latestScoreBlock: css({
-    height: 6,
-    borderRadius: 2,
-    background: theme.colors.border.weak,
+  latestScoreSquare: css({
+    display: 'block',
+    width: 10,
+    height: 10,
+    borderRadius: 3,
+    background: 'rgba(255, 152, 48, 0.3)',
+    transition: 'all 0.2s ease',
+  }),
+  latestScoreSquareFilled: css({
+    boxShadow: 'inset 0 -1px 0 rgba(0, 0, 0, 0.18)',
+  }),
+  latestScoreSquaresUnavailable: css({
+    opacity: 0.6,
   }),
   latestScoreValue: css({
     fontSize: theme.typography.h1.fontSize,
@@ -261,6 +270,14 @@ const getStyles = (theme: GrafanaTheme2) => ({
     lineHeight: 1,
     textAlign: 'right' as const,
     fontVariantNumeric: 'tabular-nums',
+  }),
+  latestScoreValueMain: css({
+    color: theme.colors.text.primary,
+  }),
+  latestScoreValueSuffix: css({
+    color: theme.colors.text.secondary,
+    fontWeight: theme.typography.fontWeightRegular,
+    marginLeft: theme.spacing(0.25),
   }),
   latestScoreValueUnavailable: css({
     color: theme.colors.text.secondary,
@@ -443,7 +460,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   versionPickerHeaderRow: css({
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     gap: theme.spacing(1),
   }),
   versionPickerAnchor: css({
@@ -475,7 +492,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   versionPickerMenu: css({
     position: 'absolute' as const,
     top: `calc(100% + ${theme.spacing(0.5)})`,
-    right: 0,
+    left: 0,
     zIndex: 8,
     width: 420,
     maxWidth: 'min(92vw, 420px)',
@@ -1403,7 +1420,7 @@ export default function AgentDetailPage({
   const displayActivityHeights = activityHeights && activityHeights.length > 0 ? activityHeights : EMPTY_ACTIVITY_BARS;
   const activeHeroRating = initialRating?.status === 'completed' ? initialRating : null;
   const activeHeroRatingSummary = activeHeroRating ? firstLine(activeHeroRating.summary) : '';
-  const activeScoreFilledBlocks = activeHeroRating ? Math.max(0, Math.min(10, Math.round(activeHeroRating.score))) : 0;
+  const activeScoreRounded = activeHeroRating ? Math.max(1, Math.min(10, Math.round(activeHeroRating.score))) : 0;
   const activeVersionItem = versionOptions.find((item) => item.effective_version === activeVersion);
   const activeVersionLabel =
     activeVersionItem?.declared_version_latest ??
@@ -1506,7 +1523,6 @@ export default function AgentDetailPage({
                   <div className={styles.heroTopStatsRow}>
                     <div className={styles.heroVersionsPanel}>
                       <div className={styles.versionPickerHeaderRow}>
-                        <span className={styles.heroVersionsTitle}>Versions</span>
                         <div className={styles.versionPickerAnchor} ref={versionPickerRef}>
                           <button
                             type="button"
@@ -1658,29 +1674,33 @@ export default function AgentDetailPage({
                       >
                         <div
                           className={cx(styles.latestScoreValue, !activeHeroRating && styles.latestScoreValueUnavailable)}
-                          style={activeHeroRating ? { color: scoreTone(theme, activeHeroRating.score) } : undefined}
                           aria-label={`Latest score ${activeHeroRating ? `${activeHeroRating.score}/10` : 'n/a'}`}
                         >
-                          {activeHeroRating ? `${activeHeroRating.score}/10` : 'n/a'}
+                          {activeHeroRating ? (
+                            <>
+                              <span className={styles.latestScoreValueMain}>{activeHeroRating.score}</span>
+                              <span className={styles.latestScoreValueSuffix}>/10</span>
+                            </>
+                          ) : (
+                            'n/a'
+                          )}
                         </div>
                       </Tooltip>
-                      <div className={styles.latestScoreBlocks} aria-hidden="true">
-                        {Array.from({ length: 10 }, (_, idx) => (
-                          <span
-                            key={idx}
-                            className={styles.latestScoreBlock}
-                            style={
-                              idx < activeScoreFilledBlocks
-                                ? {
-                                    backgroundColor:
-                                      idx / 9 <= 0.52
-                                        ? interpolateHex(gradientColors[0], gradientColors[1], idx / 9 / 0.52)
-                                        : interpolateHex(gradientColors[1], gradientColors[2], (idx / 9 - 0.52) / 0.48),
-                                  }
-                                : undefined
-                            }
-                          />
-                        ))}
+                      <div
+                        className={cx(styles.latestScoreSquares, !activeHeroRating && styles.latestScoreSquaresUnavailable)}
+                        aria-label={activeHeroRating ? `Rating squares, selected ${activeScoreRounded}` : 'Rating squares unavailable'}
+                      >
+                        {Array.from({ length: 10 }, (_, idx) => {
+                          const score = idx + 1;
+                          const isFilled = activeHeroRating ? score <= activeScoreRounded : false;
+                          return (
+                            <span
+                              key={score}
+                              className={cx(styles.latestScoreSquare, isFilled && styles.latestScoreSquareFilled)}
+                              style={isFilled ? { backgroundColor: '#FF9830' } : undefined}
+                            />
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
