@@ -20,7 +20,6 @@ type ThreadEntry = {
 
 function buildThread(generations: GenerationDetail[]): ThreadEntry[] {
   const entries: ThreadEntry[] = [];
-  const seenSystemPrompts = new Set<string>();
 
   for (let gIdx = 0; gIdx < generations.length; gIdx++) {
     const gen = generations[gIdx];
@@ -30,15 +29,6 @@ function buildThread(generations: GenerationDetail[]): ThreadEntry[] {
       const agent = gen.agent_name ?? '';
       const label = [agent, model].filter(Boolean).join(' · ') || `generation ${gIdx + 1}`;
       entries.push({ key: `div-${gen.generation_id}`, kind: 'divider', dividerLabel: label });
-    }
-
-    if (gen.system_prompt && !seenSystemPrompts.has(gen.system_prompt)) {
-      seenSystemPrompts.add(gen.system_prompt);
-      entries.push({
-        key: `sys-${gen.generation_id}`,
-        kind: 'message',
-        parts: [{ text: gen.system_prompt }],
-      });
     }
 
     const allMessages: Message[] = [...(gen.input ?? []), ...(gen.output ?? [])];

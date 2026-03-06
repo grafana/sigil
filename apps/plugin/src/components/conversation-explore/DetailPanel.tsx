@@ -1,5 +1,6 @@
 import React from 'react';
 import { useStyles2 } from '@grafana/ui';
+import type { ConversationSpan } from '../../conversation/types';
 import type { GenerationCostResult, GenerationDetail } from '../../generation/types';
 import type { FlowNode } from './types';
 import ChatThread from './ChatThread';
@@ -15,6 +16,9 @@ export type DetailPanelProps = {
   onDeselectNode: () => void;
   onNavigateToGeneration?: (generationId: string) => void;
   scrollToToolCallId?: string | null;
+  onOpenTraceDrawer?: (span: ConversationSpan) => void;
+  onCloseTraceDrawer?: () => void;
+  isTraceDrawerOpen?: boolean;
 };
 
 export default function DetailPanel({
@@ -25,6 +29,9 @@ export default function DetailPanel({
   onDeselectNode,
   onNavigateToGeneration,
   scrollToToolCallId,
+  onOpenTraceDrawer,
+  onCloseTraceDrawer,
+  isTraceDrawerOpen,
 }: DetailPanelProps) {
   const styles = useStyles2(getStyles);
 
@@ -44,6 +51,9 @@ export default function DetailPanel({
           onClose={onDeselectNode}
           onNavigateToGeneration={onNavigateToGeneration}
           scrollToToolCallId={scrollToToolCallId}
+          onOpenTraceDrawer={onOpenTraceDrawer}
+          onCloseTraceDrawer={onCloseTraceDrawer}
+          isTraceDrawerOpen={isTraceDrawerOpen}
         />
       ) : (
         <ChatThread generations={allGenerations} />

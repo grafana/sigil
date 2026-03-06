@@ -47,6 +47,29 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     fontWeight: theme.typography.fontWeightMedium,
     color: theme.colors.text.primary,
   }),
+  titleBlock: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 1,
+    minWidth: 0,
+  }),
+  titleMeta: css({
+    fontSize: 9,
+    lineHeight: 1,
+    color: theme.colors.text.disabled,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    maxWidth: 140,
+  }),
+  titleMetaCursor: css({
+    display: 'inline-block',
+    marginLeft: theme.spacing(0.125),
+    color: theme.colors.text.disabled,
+    [theme.transitions.handleMotion('no-preference', 'reduce')]: {
+      animation: `${blink} 1s steps(1, end) infinite`,
+    },
+  }),
   typewriterCursor: css({
     display: 'inline-block',
     marginLeft: theme.spacing(0.25),
@@ -73,6 +96,7 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.primary,
     fontWeight: theme.typography.fontWeightMedium,
     fontVariantNumeric: 'tabular-nums',
+    marginRight: theme.spacing(0.25),
   }),
   modelChips: css({
     display: 'flex',

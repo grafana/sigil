@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cx } from '@emotion/css';
 import { Icon, Toggletip, Tooltip, useStyles2 } from '@grafana/ui';
+import { getDataSourceSrv } from '@grafana/runtime';
 import {
   formatScoreValue,
   type GenerationDetail,
@@ -9,6 +10,9 @@ import {
   type Part,
 } from '../../generation/types';
 import type { ConversationSpan } from '../../conversation/types';
+import { getSelectionID } from '../../conversation/spans';
+import { plugin } from '../../module';
+import { buildAgentDetailHref } from '../dashboard/ViewAgentsLink';
 import type { FlowNode } from './types';
 import { getStyles } from './GenerationView.styles';
 import { renderTextWithXml } from './CollapsibleXml';
@@ -23,6 +27,9 @@ export type GenerationViewProps = {
   onClose: () => void;
   onNavigateToGeneration?: (generationId: string) => void;
   scrollToToolCallId?: string | null;
+  onOpenTraceDrawer?: (span: ConversationSpan) => void;
+  onCloseTraceDrawer?: () => void;
+  isTraceDrawerOpen?: boolean;
 };
 
 function formatDuration(ms: number): string {
@@ -33,8 +40,24 @@ function formatDuration(ms: number): string {
 }
 
 const numberFmt = new Intl.NumberFormat('en-US');
+const effectiveVersionPattern = /^sha256:[0-9a-f]{64}$/i;
+
 function formatNumber(n: number): string {
   return numberFmt.format(n);
+}
+
+function resolveEffectiveVersion(generation: GenerationDetail): string {
+  const candidates = [generation.agent_id, generation.agent_effective_version, generation.agent_version];
+  for (const candidate of candidates) {
+    const trimmed = candidate?.trim() ?? '';
+    if (trimmed.length === 0) {
+      continue;
+    }
+    if (effectiveVersionPattern.test(trimmed)) {
+      return trimmed.toLowerCase();
+    }
+  }
+  return '';
 }
 
 function roleToLabel(role: string): string {
@@ -54,6 +77,7 @@ function Section({
   title,
   count,
   defaultExpanded = true,
+  headerExtra,
   tokenized,
   onToggleTokenize,
   autoEncoding,
@@ -65,6 +89,7 @@ function Section({
   title: string;
   count?: string;
   defaultExpanded?: boolean;
+  headerExtra?: React.ReactNode;
   tokenized?: boolean;
   onToggleTokenize?: () => void;
   autoEncoding?: EncodingName;
@@ -79,15 +104,18 @@ function Section({
   return (
     <div className={styles.section}>
       <div className={styles.sectionHeader} onClick={() => setExpanded((p) => !p)}>
-        <Icon
-          name="angle-right"
-          size="sm"
-          className={cx(styles.sectionChevron, expanded && styles.sectionChevronExpanded)}
-        />
-        {title}
-        {count && <span className={styles.sectionCount}>({count})</span>}
+        <div className={styles.sectionHeaderTitle}>
+          <Icon
+            name="angle-right"
+            size="sm"
+            className={cx(styles.sectionChevron, expanded && styles.sectionChevronExpanded)}
+          />
+          {title}
+          {count && <span className={styles.sectionCount}>({count})</span>}
+        </div>
+        {headerExtra && <div className={styles.sectionHeaderCenter}>{headerExtra}</div>}
         {onToggleTokenize && (
-          <span style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto' }}>
+          <span className={styles.sectionHeaderActions}>
             <span
               className={cx(styles.tokenizeBtn, tokenized && styles.tokenizeBtnActive)}
               onClick={(e) => {
@@ -126,6 +154,48 @@ function Section({
         )}
       </div>
       {expanded && <div className={styles.sectionContent}>{children}</div>}
+    </div>
+  );
+}
+
+function isAiPillKey(key: string): boolean {
+  return key.startsWith('gen_ai.') || key.startsWith('sigil.');
+}
+
+function AiAttributePills({ entries }: { entries: Array<{ key: string; value: string }> }) {
+  const styles = useStyles2(getStyles);
+
+  if (entries.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className={styles.aiAttributePills}>
+      {entries.map(({ key, value }) => (
+        <span key={key} className={styles.aiAttributePill}>
+          <span className={styles.aiAttributePillKey}>{key}</span>
+          <span>{value}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function AttributePills({ entries }: { entries: Array<{ key: string; value: string }> }) {
+  const styles = useStyles2(getStyles);
+
+  if (entries.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className={styles.attributePills}>
+      {entries.map(({ key, value }) => (
+        <span key={key} className={styles.attributePill}>
+          <span className={styles.attributePillKey}>{key}</span>
+          <span>{value}</span>
+        </span>
+      ))}
     </div>
   );
 }
@@ -247,7 +317,7 @@ function UsageChips({ generation }: { generation: GenerationDetail }) {
       {hasCache && (
         <>
           <span className={styles.usageSep}>│</span>
-          {`cache ↓${formatNumber(cacheR)}  ↑${formatNumber(cacheW)}`}
+          {`cache ↓${formatNumber(cacheW)}  ↑${formatNumber(cacheR)}`}
         </>
       )}
       {reasoning > 0 && (
@@ -260,21 +330,38 @@ function UsageChips({ generation }: { generation: GenerationDetail }) {
   );
 }
 
+function getStringAttribute(
+  attrs: Map<string, { stringValue?: string; intValue?: string; doubleValue?: number; boolValue?: boolean }>,
+  key: string
+): string | undefined {
+  const value = attrs.get(key);
+  return value?.stringValue?.trim() || undefined;
+}
+
+function formatOperationMode(rawValue: string | undefined): string | null {
+  if (!rawValue) {
+    return null;
+  }
+
+  const normalized = rawValue.trim();
+  return normalized || null;
+}
+
 function AgentContextLabel({ generation, fallbackModel }: { generation: GenerationDetail; fallbackModel?: string }) {
   const styles = useStyles2(getStyles);
 
   const agentName = generation.agent_name;
-  const model = generation.model?.name ?? fallbackModel;
   const parts: string[] = [];
   if (agentName) {
     parts.push(agentName);
   }
-  if (model && model !== agentName) {
-    parts.push(model);
-  }
   const label = parts.join(' · ');
   if (!label) {
-    return null;
+    const model = generation.model?.name ?? fallbackModel;
+    if (!model) {
+      return null;
+    }
+    return <span className={styles.barMeta}>{model}</span>;
   }
 
   const tools = generation.tools ?? [];
@@ -286,7 +373,7 @@ function AgentContextLabel({ generation, fallbackModel }: { generation: Generati
   if (generation.stop_reason) {
     extraTags.push(`stop: ${generation.stop_reason}`);
   }
-  const hasExtra = extraTags.length > 0 || systemPrompt || tools.length > 0;
+  const hasExtra = extraTags.length > 0 || !!systemPrompt || tools.length > 0;
 
   if (!hasExtra) {
     return <span className={styles.agentLabel}>{label}</span>;
@@ -303,7 +390,6 @@ function AgentContextLabel({ generation, fallbackModel }: { generation: Generati
           ))}
         </div>
       )}
-
       {systemPrompt && (
         <div className={styles.tipSection}>
           <div className={styles.tipSectionLabel}>System Prompt</div>
@@ -312,7 +398,6 @@ function AgentContextLabel({ generation, fallbackModel }: { generation: Generati
           </div>
         </div>
       )}
-
       {tools.length > 0 && (
         <div className={styles.tipSection}>
           <div className={styles.tipSectionLabel}>Tools ({tools.length})</div>
@@ -337,27 +422,47 @@ function AgentContextLabel({ generation, fallbackModel }: { generation: Generati
   );
 }
 
-function buildTracesDrilldownUrl(span: ConversationSpan, generationId: string): string {
-  const url = new URL('/a/grafana-exploretraces-app/explore', window.location.origin);
-  url.searchParams.set('from', 'now-30m');
-  url.searchParams.set('to', 'now');
-  url.searchParams.set('timezone', 'browser');
-  url.searchParams.set('var-primarySignal', 'true');
-  url.searchParams.set('var-filters', `span.sigil.generation.id|=|${generationId}`);
-  url.searchParams.set('var-metric', 'rate');
-  url.searchParams.set('var-groupBy', 'resource.service.name');
-  url.searchParams.set('var-durationPercentiles', '0.9');
-  url.searchParams.set('actionView', 'traceList');
-  url.searchParams.set('traceId', span.traceID);
-  url.searchParams.set('spanId', span.spanID);
-  return url.pathname + url.search;
+function buildVersionedAgentHref(agentName: string, effectiveVersion?: string): string {
+  const href = buildAgentDetailHref(agentName);
+  if (!effectiveVersion) {
+    return href;
+  }
+  const params = new URLSearchParams({ version: effectiveVersion });
+  return `${href}?${params.toString()}`;
 }
 
-function SpanAttributesSection({ span, drilldownUrl }: { span: ConversationSpan; drilldownUrl: string | undefined }) {
+function AgentDetailButton({ generation }: { generation?: GenerationDetail }) {
   const styles = useStyles2(getStyles);
+  const agentName = generation?.agent_name?.trim();
+
+  if (!generation || !agentName) {
+    return null;
+  }
+
+  const effectiveVersion = resolveEffectiveVersion(generation);
+  const href = buildVersionedAgentHref(agentName, effectiveVersion);
+  const label = effectiveVersion
+    ? `Open agent page: ${agentName} (${effectiveVersion})`
+    : `Open agent page: ${agentName}`;
+
+  return (
+    <Tooltip content={label} placement="top">
+      <a href={href} className={styles.agentDetailButton} aria-label={label}>
+        <Icon name="user" size="sm" />
+      </a>
+    </Tooltip>
+  );
+}
+
+function collectAttributeEntries(
+  attrs: Map<string, { stringValue?: string; intValue?: string; doubleValue?: number; boolValue?: boolean }>
+): Array<{ key: string; value: string }> {
   const entries: Array<{ key: string; value: string }> = [];
 
-  for (const [key, val] of span.attributes) {
+  for (const [key, val] of attrs) {
+    if (key === 'user.id') {
+      continue;
+    }
     if (val.stringValue !== undefined) {
       entries.push({ key, value: val.stringValue });
     } else if (val.intValue !== undefined) {
@@ -369,26 +474,64 @@ function SpanAttributesSection({ span, drilldownUrl }: { span: ConversationSpan;
     }
   }
 
-  if (entries.length === 0 && !drilldownUrl) {
+  return entries;
+}
+
+type AttributeTab = 'genai' | 'resource' | 'attributes';
+
+function AttributeSections({ span }: { span: ConversationSpan }) {
+  const styles = useStyles2(getStyles);
+  const [selectedTab, setSelectedTab] = useState<AttributeTab>('genai');
+
+  const resourceEntries = useMemo(() => collectAttributeEntries(span.resourceAttributes), [span.resourceAttributes]);
+  const spanEntries = useMemo(() => collectAttributeEntries(span.attributes), [span.attributes]);
+
+  const genAiEntries = useMemo(
+    () =>
+      [...resourceEntries, ...spanEntries].filter(({ key }) => isAiPillKey(key)).sort((a, b) => a.key.localeCompare(b.key)),
+    [resourceEntries, spanEntries]
+  );
+  const plainResourceEntries = useMemo(
+    () => resourceEntries.filter(({ key }) => !isAiPillKey(key)).sort((a, b) => a.key.localeCompare(b.key)),
+    [resourceEntries]
+  );
+  const plainSpanEntries = useMemo(
+    () => spanEntries.filter(({ key }) => !isAiPillKey(key)).sort((a, b) => a.key.localeCompare(b.key)),
+    [spanEntries]
+  );
+
+  const tabs: Array<{ id: AttributeTab; label: string; count: number }> = [
+    { id: 'genai', label: 'Gen AI', count: genAiEntries.length },
+    { id: 'resource', label: 'Resource', count: plainResourceEntries.length },
+    { id: 'attributes', label: 'Attributes', count: plainSpanEntries.length },
+  ].filter((tab) => tab.count > 0);
+  const activeTab = tabs.some((tab) => tab.id === selectedTab) ? selectedTab : tabs[0]?.id;
+
+  if (tabs.length === 0) {
     return null;
   }
 
+  const activeEntries =
+    activeTab === 'genai' ? genAiEntries : activeTab === 'resource' ? plainResourceEntries : plainSpanEntries;
+
   return (
-    <div className={styles.attrGrid}>
-      {drilldownUrl && (
-        <a href={drilldownUrl} className={styles.drilldownLink}>
-          <Icon name="external-link-alt" size="sm" />
-          View in Traces Drilldown
-        </a>
-      )}
-      {entries.map(({ key, value }) => (
-        <div key={key} className={styles.attrItem}>
-          <span className={styles.attrLabel}>{key}</span>
-          <span className={styles.messageText} style={{ fontSize: 12 }}>
-            {value}
-          </span>
-        </div>
-      ))}
+    <div className={styles.attributeSections}>
+      <div className={styles.attributeTabs} role="tablist" aria-label="Attribute groups">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            className={cx(styles.attributeTab, activeTab === tab.id && styles.attributeTabActive)}
+            onClick={() => setSelectedTab(tab.id)}
+          >
+            {tab.label}
+            <span className={styles.sectionCount}>({tab.count})</span>
+          </button>
+        ))}
+      </div>
+      {activeTab === 'genai' ? <AiAttributePills entries={activeEntries} /> : <AttributePills entries={activeEntries} />}
     </div>
   );
 }
@@ -585,10 +728,20 @@ export default function GenerationView({
   onClose,
   onNavigateToGeneration,
   scrollToToolCallId,
+  onOpenTraceDrawer,
+  onCloseTraceDrawer,
+  isTraceDrawerOpen = false,
 }: GenerationViewProps) {
   const styles = useStyles2(getStyles);
   const gen = useMemo(() => resolveGeneration(node, allGenerations), [node, allGenerations]);
   const modelName = gen?.model?.name ?? node.model ?? undefined;
+  const tempoLogoUrl = useMemo(() => {
+    const tempoUid = (plugin.meta.jsonData as { tempoDatasourceUID?: string } | undefined)?.tempoDatasourceUID?.trim();
+    if (!tempoUid) {
+      return null;
+    }
+    return getDataSourceSrv().getInstanceSettings(tempoUid)?.meta?.info?.logos?.small ?? null;
+  }, []);
 
   const inputMessages = useMemo(() => gen?.input ?? [], [gen?.input]);
   const outputMessages = gen?.output ?? [];
@@ -650,16 +803,8 @@ export default function GenerationView({
     [genId]
   );
 
-  const tracesDrilldownUrl = useMemo(() => {
-    if (!node.span) {
-      return undefined;
-    }
-    const generationId = gen?.generation_id ?? node.span.attributes.get('sigil.generation.id')?.stringValue;
-    if (!generationId) {
-      return undefined;
-    }
-    return buildTracesDrilldownUrl(node.span, generationId);
-  }, [node.span, gen?.generation_id]);
+  const traceTargetSpan = node.span;
+  const operationMode = formatOperationMode(node.span ? getStringAttribute(node.span.attributes, 'gen_ai.operation.name') : undefined);
 
   const navigatePrev = useCallback(() => {
     if (adjacent?.previous) {
@@ -673,6 +818,17 @@ export default function GenerationView({
     }
   }, [adjacent, onNavigateToGeneration]);
 
+  const toggleTraceDrawer = useCallback(() => {
+    if (!traceTargetSpan) {
+      return;
+    }
+    if (isTraceDrawerOpen) {
+      onCloseTraceDrawer?.();
+      return;
+    }
+    onOpenTraceDrawer?.(traceTargetSpan);
+  }, [isTraceDrawerOpen, onCloseTraceDrawer, onOpenTraceDrawer, traceTargetSpan]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -684,15 +840,18 @@ export default function GenerationView({
       ) {
         return;
       }
-      if (e.key === 'a' && adjacent?.previous) {
+      const key = e.key.toLowerCase();
+      if (key === 'a' && adjacent?.previous) {
         navigatePrev();
-      } else if (e.key === 'd' && adjacent?.next) {
+      } else if (key === 'd' && adjacent?.next) {
         navigateNext();
+      } else if (key === 't' && traceTargetSpan) {
+        toggleTraceDrawer();
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [adjacent, navigatePrev, navigateNext]);
+  }, [adjacent, navigatePrev, navigateNext, toggleTraceDrawer, traceTargetSpan]);
 
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -739,13 +898,29 @@ export default function GenerationView({
             <div />
           )}
           <div className={styles.navCenter}>
+            {traceTargetSpan && (
+              <Tooltip content="Open the trace drawer and focus the current span. Press T." placement="top">
+                <button
+                  type="button"
+                  className={styles.traceAction}
+                  aria-label={`Open trace drawer for span ${getSelectionID(traceTargetSpan)} (T)`}
+                  onClick={toggleTraceDrawer}
+                >
+                  {tempoLogoUrl ? (
+                    <img src={tempoLogoUrl} alt="" aria-hidden="true" className={styles.traceActionLogo} />
+                  ) : (
+                    <Icon name="gf-traces" size="sm" />
+                  )}
+                  <kbd className={styles.kbd}>T</kbd>
+                </button>
+              </Tooltip>
+            )}
             {gen ? (
               <AgentContextLabel generation={gen} fallbackModel={modelName} />
             ) : (
               modelName && <span className={styles.barMeta}>{modelName}</span>
             )}
-            {gen?.usage && <UsageChips generation={gen} />}
-            <span className={styles.barMeta}>{formatDuration(node.durationMs)}</span>
+            <AgentDetailButton generation={gen} />
             {adjacent && (
               <span className={styles.barMeta}>
                 {adjacent.currentIndex + 1}/{adjacent.total}
@@ -773,27 +948,30 @@ export default function GenerationView({
       <div ref={contentRef} className={styles.content}>
         {gen?.error?.message && <div className={styles.errorBanner}>{gen.error.message}</div>}
 
-        {gen?.latest_scores && Object.keys(gen.latest_scores).length > 0 && (
-          <Section title="Evaluations" count={String(Object.keys(gen.latest_scores).length)}>
-            <ScoreChips scores={gen.latest_scores} />
+        {node.span && (node.span.resourceAttributes.size > 0 || node.span.attributes.size > 0) && (
+          <Section
+            title="Attributes"
+            count={
+              node.span.resourceAttributes.size > 0 || node.span.attributes.size > 0
+                ? `${node.span.resourceAttributes.size + node.span.attributes.size}`
+                : undefined
+            }
+            defaultExpanded={false}
+            headerExtra={
+              <div className={styles.attributeSummaryRow}>
+                {gen?.usage && <UsageChips generation={gen} />}
+                {modelName && <span className={styles.attributeModeChip}>{modelName}</span>}
+                <span className={styles.attributeModeChip}>{formatDuration(node.durationMs)}</span>
+              </div>
+            }
+          >
+            <AttributeSections span={node.span} />
           </Section>
         )}
 
-        {gen?.system_prompt && (
-          <Section
-            title="System Prompt"
-            tokenized={tokenizedSections['system']}
-            onToggleTokenize={() => toggleSection('system')}
-            autoEncoding={autoEncoding}
-            encodingOverride={encodingOverride}
-            onEncodingChange={setEncodingOverride}
-            tokenizerLoading={tokenizerLoading}
-          >
-            {tokenizedSections['system'] && encode && decode ? (
-              <TokenizedText text={gen.system_prompt} encode={encode} decode={decode} />
-            ) : (
-              <div className={styles.messageText}>{gen.system_prompt}</div>
-            )}
+        {gen?.latest_scores && Object.keys(gen.latest_scores).length > 0 && (
+          <Section title="Evaluations" count={String(Object.keys(gen.latest_scores).length)}>
+            <ScoreChips scores={gen.latest_scores} />
           </Section>
         )}
 
@@ -840,12 +1018,6 @@ export default function GenerationView({
                 decode={decode}
               />
             ))}
-          </Section>
-        )}
-
-        {node.span && (
-          <Section title="Span Attributes" count={String(node.span.attributes.size)} defaultExpanded={!gen}>
-            <SpanAttributesSection span={node.span} drilldownUrl={tracesDrilldownUrl} />
           </Section>
         )}
       </div>

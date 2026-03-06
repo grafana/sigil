@@ -77,6 +77,8 @@ export type GenerationDetail = {
   };
   agent_name?: string;
   agent_version?: string;
+  agent_effective_version?: string;
+  agent_id?: string;
   system_prompt?: string;
   input?: Message[];
   output?: Message[];

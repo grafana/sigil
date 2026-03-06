@@ -10,6 +10,7 @@ jest.mock('@grafana/ui', () => {
     Tooltip: ({ children, content }: { children: React.ReactNode; content: React.ReactNode }) => (
       <span data-testid="tooltip" data-content={typeof content === 'string' ? content : ''}>
         {children}
+        {typeof content === 'string' ? null : <span data-testid="tooltip-content">{content}</span>}
       </span>
     ),
   };
@@ -179,7 +180,9 @@ describe('MetricsBar conversation title', () => {
   });
 
   afterEach(() => {
-    jest.runOnlyPendingTimers();
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
     jest.useRealTimers();
     matchMediaSpy.mockRestore();
   });
@@ -202,5 +205,104 @@ describe('MetricsBar conversation title', () => {
     });
 
     expect(screen.getByText(title)).toBeInTheDocument();
+  });
+
+  it('shows user id under the conversation title when provided', () => {
+    const title = 'Incident: authentication failures';
+    render(<MetricsBar {...baseProps} conversationTitle={title} conversationUserId="jess@example.com" />);
+
+    act(() => {
+      jest.advanceTimersByTime(title.length * 28 + 100);
+    });
+
+    expect(screen.getByText(title)).toBeInTheDocument();
+    expect(screen.getByText('jess@example.com')).toBeInTheDocument();
+  });
+
+  it('shows a cost breakdown table in the tooltip', () => {
+    render(
+      <MetricsBar
+        {...baseProps}
+        costSummary={{
+          inputCost: 0.1,
+          outputCost: 0.12,
+          cacheReadCost: 0.01,
+          cacheWriteCost: 0.03,
+          totalCost: 0.26,
+        }}
+      />
+    );
+
+    expect(screen.getByText('Input')).toBeInTheDocument();
+    expect(screen.getByText('Output')).toBeInTheDocument();
+    expect(screen.getByText('Cache read')).toBeInTheDocument();
+    expect(screen.getByText('Cache write')).toBeInTheDocument();
+    expect(screen.getAllByText('$0.26')).toHaveLength(2);
+  });
+
+  it('shows a token breakdown table in the tooltip', () => {
+    render(
+      <MetricsBar
+        {...baseProps}
+        tokenSummary={{
+          inputTokens: 1200,
+          outputTokens: 800,
+          cacheReadTokens: 300,
+          cacheWriteTokens: 100,
+          reasoningTokens: 0,
+          totalTokens: 2400,
+        }}
+      />
+    );
+
+    expect(screen.getByText('Input')).toBeInTheDocument();
+    expect(screen.getByText('Output')).toBeInTheDocument();
+    expect(screen.getByText('Cache read')).toBeInTheDocument();
+    expect(screen.getByText('Cache write')).toBeInTheDocument();
+    expect(screen.getAllByText('2.4k')).toHaveLength(2);
+    expect(screen.getByText('tokens')).toBeInTheDocument();
+  });
+
+  it('shows a calls by agent breakdown table in the tooltip', () => {
+    render(
+      <MetricsBar
+        {...baseProps}
+        callsByAgent={[
+          { agent: 'assistant', count: 3 },
+          { agent: 'planner', count: 1 },
+        ]}
+      />
+    );
+
+    expect(screen.getByText('assistant')).toBeInTheDocument();
+    expect(screen.getByText('planner')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('calls')).toBeInTheDocument();
+  });
+
+  it('explains the success status badge on hover', () => {
+    render(<MetricsBar {...baseProps} />);
+
+    expect(
+      screen
+        .getAllByTestId('tooltip')
+        .find((element) => element.getAttribute('data-content') === 'No generations in this conversation have an error message.')
+    ).toHaveAttribute(
+      'data-content',
+      'No generations in this conversation have an error message.'
+    );
+  });
+
+  it('explains the error status badge on hover', () => {
+    render(<MetricsBar {...baseProps} errorCount={2} />);
+
+    expect(
+      screen
+        .getAllByTestId('tooltip')
+        .find((element) => element.getAttribute('data-content') === '2 generations in this conversation have an error message.')
+    ).toHaveAttribute(
+      'data-content',
+      '2 generations in this conversation have an error message.'
+    );
   });
 });
