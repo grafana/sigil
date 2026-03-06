@@ -113,6 +113,32 @@ describe('ConversationPage', () => {
     expect(screen.getByText('conv-b')).toBeInTheDocument();
   });
 
+  it('falls back to the latest generation metadata title when stored title is missing', async () => {
+    const dataSource = createDataSource('conv-b');
+    dataSource.getConversationDetail.mockResolvedValue({
+      conversation_id: 'conv-b',
+      user_id: 'user-42',
+      generation_count: 1,
+      first_generation_at: '2026-02-01T10:00:00Z',
+      last_generation_at: '2026-02-01T10:01:00Z',
+      generations: [
+        {
+          generation_id: 'conv-b-gen-1',
+          conversation_id: 'conv-b',
+          created_at: '2026-02-01T10:01:00Z',
+          metadata: { 'sigil.conversation.title': 'Recovered from metadata' },
+        },
+      ],
+      annotations: [],
+    });
+
+    renderPage(dataSource, '/conversations/conv-b/view');
+
+    expect(await screen.findByText('Conversation')).toBeInTheDocument();
+    expect(screen.getByText('Conversation').parentElement).toHaveTextContent('Recovered from metadata');
+    expect(screen.getByText('Conversation').parentElement).toHaveTextContent('conv-b');
+  });
+
   it('loads conversation for deep links outside the list', async () => {
     const dataSource = createDataSource('does-not-exist');
     const { router } = renderPage(dataSource, '/conversations/does-not-exist/view');

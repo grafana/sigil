@@ -195,12 +195,13 @@ func TestConversationBatchMetadataEndpoint(t *testing.T) {
 	conversationStore := &testConversationStore{
 		items: []storage.Conversation{
 			{
-				TenantID:         "fake",
-				ConversationID:   "conv-1",
-				LastGenerationAt: time.Date(2026, 2, 15, 9, 0, 0, 0, time.UTC),
-				GenerationCount:  2,
-				CreatedAt:        time.Date(2026, 2, 15, 8, 0, 0, 0, time.UTC),
-				UpdatedAt:        time.Date(2026, 2, 15, 9, 0, 0, 0, time.UTC),
+				TenantID:          "fake",
+				ConversationID:    "conv-1",
+				ConversationTitle: "Incident: batch metadata title",
+				LastGenerationAt:  time.Date(2026, 2, 15, 9, 0, 0, 0, time.UTC),
+				GenerationCount:   2,
+				CreatedAt:         time.Date(2026, 2, 15, 8, 0, 0, 0, time.UTC),
+				UpdatedAt:         time.Date(2026, 2, 15, 9, 0, 0, 0, time.UTC),
 			},
 		},
 	}
@@ -235,6 +236,9 @@ func TestConversationBatchMetadataEndpoint(t *testing.T) {
 	}
 	if !strings.Contains(resp.Body.String(), `"conversation_id":"conv-1"`) {
 		t.Fatalf("expected conversation metadata in response, body=%s", resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"conversation_title":"Incident: batch metadata title"`) {
+		t.Fatalf("expected conversation title in response, body=%s", resp.Body.String())
 	}
 	if !strings.Contains(resp.Body.String(), `"missing_conversation_ids":["conv-missing"]`) {
 		t.Fatalf("expected missing conversation ids in response, body=%s", resp.Body.String())

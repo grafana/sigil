@@ -291,6 +291,45 @@ describe('ConversationsBrowserPage', () => {
     expect(screen.getByText('Conversation').parentElement).toHaveTextContent('conv-b');
   });
 
+  it('uses the title returned by search for the listing without fetching conversation detail', async () => {
+    const dataSource = createDataSource();
+    dataSource.searchConversations = jest
+      .fn()
+      .mockResolvedValueOnce({
+        conversations: [
+          {
+            conversation_id: 'conv-b',
+            conversation_title: 'Recovered search title',
+            generation_count: 3,
+            first_generation_at: '2026-02-01T10:00:00Z',
+            last_generation_at: '2026-02-01T10:00:00Z',
+            models: [],
+            agents: [],
+            error_count: 0,
+            has_errors: false,
+            trace_ids: [],
+            annotation_count: 0,
+          },
+        ],
+        next_cursor: '',
+        has_more: false,
+      })
+      .mockResolvedValueOnce({
+        conversations: [],
+        next_cursor: '',
+        has_more: false,
+      });
+
+    const { router } = renderPage(dataSource);
+
+    expect(await screen.findByText('Recovered search title')).toBeInTheDocument();
+    expect(dataSource.getConversationDetail).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText('select conversation conv-b'));
+
+    expect(router.state.location.pathname).toBe('/conversations/conv-b/explore');
+    expect(router.state.location.search).toContain('conversationTitle=Recovered+search+title');
+  });
+
   it('uses streaming search when the data source provides it', async () => {
     const dataSource = createStreamingDataSource();
     renderPage(dataSource);

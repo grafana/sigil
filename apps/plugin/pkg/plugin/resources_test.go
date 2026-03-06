@@ -1030,9 +1030,9 @@ func TestCallResourceStreamsConversationSearchResults(t *testing.T) {
 			}
 			switch strings.Join(payload.ConversationIDs, ",") {
 			case "conv-1":
-				_, _ = io.WriteString(w, `{"items":[{"conversation_id":"conv-1","generation_count":6,"first_generation_at":"2025-02-15T08:00:00Z","last_generation_at":"2025-02-15T09:30:00Z","annotation_count":0}],"missing_conversation_ids":[]}`)
+				_, _ = io.WriteString(w, `{"items":[{"conversation_id":"conv-1","conversation_title":"Incident: first streamed title","generation_count":6,"first_generation_at":"2025-02-15T08:00:00Z","last_generation_at":"2025-02-15T09:30:00Z","annotation_count":0}],"missing_conversation_ids":[]}`)
 			case "conv-2":
-				_, _ = io.WriteString(w, `{"items":[{"conversation_id":"conv-2","generation_count":1,"first_generation_at":"2025-02-15T07:50:00Z","last_generation_at":"2025-02-15T08:10:00Z","annotation_count":0}],"missing_conversation_ids":[]}`)
+				_, _ = io.WriteString(w, `{"items":[{"conversation_id":"conv-2","conversation_title":"Incident: second streamed title","generation_count":1,"first_generation_at":"2025-02-15T07:50:00Z","last_generation_at":"2025-02-15T08:10:00Z","annotation_count":0}],"missing_conversation_ids":[]}`)
 			default:
 				http.Error(w, "unexpected conversation ids", http.StatusBadRequest)
 			}
@@ -1075,6 +1075,9 @@ func TestCallResourceStreamsConversationSearchResults(t *testing.T) {
 	if first.Type != "results" || len(first.Conversations) != 1 || first.Conversations[0].ConversationID != "conv-1" {
 		t.Fatalf("unexpected first stream chunk: %+v", first)
 	}
+	if first.Conversations[0].ConversationTitle != "Incident: first streamed title" {
+		t.Fatalf("expected title on first stream chunk, got %+v", first.Conversations[0])
+	}
 
 	var second conversationSearchStreamResultsEvent
 	if err := json.Unmarshal(bytes.TrimSpace(responses[1].Body), &second); err != nil {
@@ -1082,6 +1085,9 @@ func TestCallResourceStreamsConversationSearchResults(t *testing.T) {
 	}
 	if second.Type != "results" || len(second.Conversations) != 1 || second.Conversations[0].ConversationID != "conv-2" {
 		t.Fatalf("unexpected second stream chunk: %+v", second)
+	}
+	if second.Conversations[0].ConversationTitle != "Incident: second streamed title" {
+		t.Fatalf("expected title on second stream chunk, got %+v", second.Conversations[0])
 	}
 
 	var complete conversationSearchStreamCompleteEvent

@@ -169,7 +169,7 @@ describe('ConversationListPanel', () => {
       />
     );
     expect(screen.getByText('Follow-up: outage postmortem')).toBeInTheDocument();
-    expect(screen.getByText('conv-abcdef-1234567890')).toBeInTheDocument();
+    expect(screen.queryByText('conv-abcdef-1234567890')).not.toBeInTheDocument();
   });
 
   it('shows user ID in compact mode when available', () => {
