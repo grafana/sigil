@@ -96,3 +96,42 @@ export type AgentRatingResponse = {
   judge_model: string;
   judge_latency_ms: number;
 };
+
+export type PromptInsight = {
+  quote: string;
+  title: string;
+  explanation: string;
+};
+
+export type PromptInsightsStatus = 'pending' | 'completed' | 'failed';
+
+export type PromptInsightsResponse = {
+  status: PromptInsightsStatus;
+  strengths: PromptInsight[];
+  weaknesses: PromptInsight[];
+  judge_model: string;
+  judge_latency_ms: number;
+};
+
+export type AnalyzePromptRequest = {
+  agent_name: string;
+  version?: string;
+  model?: string;
+  lookback?: string;
+};
+
+export type LookbackOption = {
+  label: string;
+  value: string;
+  description: string;
+};
+
+export const LOOKBACK_OPTIONS: LookbackOption[] = [
+  { label: '6 hours', value: '6h', description: 'Last 6 hours' },
+  { label: '12 hours', value: '12h', description: 'Last 12 hours' },
+  { label: '1 day', value: '1d', description: 'Last day' },
+  { label: '3 days', value: '3d', description: 'Last 3 days' },
+  { label: '7 days', value: '7d', description: 'Last 7 days' },
+];
+
+export const DEFAULT_LOOKBACK = '7d';

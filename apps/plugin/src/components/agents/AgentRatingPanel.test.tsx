@@ -74,6 +74,14 @@ function createDataSource(overrides: Partial<AgentsDataSource>): AgentsDataSourc
     listAgentVersions: async () => ({ items: [], next_cursor: '' }) satisfies AgentVersionListResponse,
     lookupAgentRating: async () => null,
     rateAgent: async () => createCompletedRating(),
+    lookupPromptInsights: jest.fn().mockResolvedValue(null),
+    analyzePrompt: jest.fn().mockResolvedValue({
+      status: 'completed',
+      strengths: [],
+      weaknesses: [],
+      judge_model: '',
+      judge_latency_ms: 0,
+    }),
     ...overrides,
   };
 }
@@ -150,7 +158,7 @@ describe('AgentRatingPanel', () => {
     expect(await screen.findByText('Rating became available after trigger.')).toBeInTheDocument();
   });
 
-  it('keeps polling when lookup briefly returns 404 after rerun', async () => {
+  it('keeps polling when lookup briefly returns 404 after rerun via ref', async () => {
     const completed = createCompletedRating('Existing report remains while rerun starts.');
     const rateAgent = jest
       .fn<Promise<AgentRatingResponse>, [string, string?]>()
@@ -164,11 +172,19 @@ describe('AgentRatingPanel', () => {
       lookupAgentRating,
     });
 
+    const ref = React.createRef<import('./AgentRatingPanel').AgentRatingPanelHandle>();
+
     renderPanel(
-      <AgentRatingPanel agentName="assistant" version="sha256:test" dataSource={dataSource} initialResult={completed} />
+      <AgentRatingPanel
+        ref={ref}
+        agentName="assistant"
+        version="sha256:test"
+        dataSource={dataSource}
+        initialResult={completed}
+      />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /re-run/i }));
+    act(() => ref.current?.analyze());
 
     await waitFor(() => expect(rateAgent).toHaveBeenCalledWith('assistant', 'sha256:test'));
     await waitFor(() => expect(lookupAgentRating).toHaveBeenCalledTimes(1));
@@ -293,7 +309,7 @@ describe('AgentRatingPanel', () => {
     expect(within(findings).queryByRole('button', { name: /rewrite prompt/i })).not.toBeInTheDocument();
     expect(within(findings).queryByRole('button', { name: /re-run/i })).not.toBeInTheDocument();
     expect(within(actions).getByRole('button', { name: /rewrite prompt/i })).toBeInTheDocument();
-    expect(within(actions).getByRole('button', { name: /re-run/i })).toBeInTheDocument();
+    expect(within(actions).queryByRole('button', { name: /re-run/i })).not.toBeInTheDocument();
   });
 
   it('opens assistant from summary modal explain action', async () => {
@@ -507,21 +523,28 @@ describe('AgentRatingPanel', () => {
     );
   });
 
-  it('keeps last completed report visible when re-run fails', async () => {
+  it('keeps last completed report visible when re-run fails via ref', async () => {
     const dataSource = createDataSource({
       rateAgent: jest.fn(async () => {
         throw new Error('backend unavailable');
       }),
     });
     const completed = createCompletedRating('Existing report should stay visible.');
+    const ref = React.createRef<import('./AgentRatingPanel').AgentRatingPanelHandle>();
 
     renderPanel(
-      <AgentRatingPanel agentName="assistant" version="sha256:test" dataSource={dataSource} initialResult={completed} />
+      <AgentRatingPanel
+        ref={ref}
+        agentName="assistant"
+        version="sha256:test"
+        dataSource={dataSource}
+        initialResult={completed}
+      />
     );
 
     expect(screen.getByText('Existing report should stay visible.')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /re-run/i }));
+    act(() => ref.current?.analyze());
 
     expect(await screen.findByText('backend unavailable')).toBeInTheDocument();
     expect(screen.getByText('Existing report should stay visible.')).toBeInTheDocument();
@@ -534,30 +557,28 @@ describe('AgentRatingPanel', () => {
     );
   });
 
-  it('calls onRerun callback before starting rerun', async () => {
-    const onRerun = jest.fn();
+  it('exposes analyze via ref for external triggering', async () => {
     const rateAgent = jest
       .fn<Promise<AgentRatingResponse>, [string, string?]>()
       .mockResolvedValue(createCompletedRating());
     const dataSource = createDataSource({ rateAgent });
+    const ref = React.createRef<import('./AgentRatingPanel').AgentRatingPanelHandle>();
 
     renderPanel(
       <AgentRatingPanel
+        ref={ref}
         agentName="assistant"
         version="sha256:test"
         dataSource={dataSource}
         initialResult={createCompletedRating('Existing report')}
-        onRerun={onRerun}
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /re-run/i }));
-
-    expect(onRerun).toHaveBeenCalledTimes(1);
+    act(() => ref.current?.analyze());
     await waitFor(() => expect(rateAgent).toHaveBeenCalledWith('assistant', 'sha256:test'));
   });
 
-  it('keeps rerun request alive when parent syncs onResultChange', async () => {
+  it('keeps rerun request alive when parent syncs onResultChange via ref', async () => {
     const initial = createCompletedRating('Existing report');
     const pending = createPendingRating();
     const refreshed = createCompletedRating('Fresh rerun result');
@@ -566,11 +587,13 @@ describe('AgentRatingPanel', () => {
       .fn<Promise<AgentRatingResponse | null>, [string, string?]>()
       .mockResolvedValue(refreshed);
     const dataSource = createDataSource({ rateAgent, lookupAgentRating });
+    const ref = React.createRef<import('./AgentRatingPanel').AgentRatingPanelHandle>();
 
     function Harness() {
       const [rating, setRating] = React.useState<AgentRatingResponse | null>(initial);
       return (
         <AgentRatingPanel
+          ref={ref}
           agentName="assistant"
           version="sha256:test"
           dataSource={dataSource}
@@ -582,10 +605,21 @@ describe('AgentRatingPanel', () => {
 
     renderPanel(<Harness />);
 
-    fireEvent.click(screen.getByRole('button', { name: /re-run/i }));
+    act(() => ref.current?.analyze());
 
     await waitFor(() => expect(rateAgent).toHaveBeenCalledWith('assistant', 'sha256:test'));
     await waitFor(() => expect(lookupAgentRating).toHaveBeenCalledTimes(1));
     expect(await screen.findByText('Fresh rerun result')).toBeInTheDocument();
+  });
+
+  it('hides empty state when hideGenerateCta is true', () => {
+    const dataSource = createDataSource({});
+
+    renderPanel(
+      <AgentRatingPanel agentName="assistant" version="sha256:test" dataSource={dataSource} hideGenerateCta />
+    );
+
+    expect(screen.queryByText(/run.*analysis/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /generate analysis/i })).not.toBeInTheDocument();
   });
 });

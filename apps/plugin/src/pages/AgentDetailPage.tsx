@@ -4,11 +4,25 @@ import { css, cx } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Alert, Badge, Button, Icon, Spinner, Tab, TabsBar, Text, Tooltip, useStyles2, useTheme2 } from '@grafana/ui';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../agents/api';
-import type { AgentDetail, AgentRatingResponse, AgentVersionListItem } from '../agents/types';
+import {
+  DEFAULT_LOOKBACK,
+  type AgentDetail,
+  type AgentRatingResponse,
+  type AgentVersionListItem,
+  type PromptInsightsResponse,
+} from '../agents/types';
 import ModelCardPopover from '../components/conversations/ModelCardPopover';
 import { getProviderColor, getProviderMeta, stripProviderPrefix } from '../components/conversations/providerMeta';
 import ToolsPanel from '../components/agents/ToolsPanel';
 import AgentRatingPanel from '../components/agents/AgentRatingPanel';
+import PromptInsightsPanel, {
+  AnalyzeModal,
+  type PromptInsightsPanelHandle,
+} from '../components/agents/PromptInsightsPanel';
+import {
+  HighlightedSystemPrompt,
+  type HighlightedSystemPromptHandle,
+} from '../components/agents/HighlightedSystemPrompt';
 import { defaultModelCardClient, type ModelCardClient } from '../modelcard/api';
 import type { ModelCard } from '../modelcard/types';
 import { resolveModelCardsFromNames } from '../modelcard/resolve';
@@ -23,7 +37,7 @@ import { useTokenizer } from '../components/tokenizer/useTokenizer';
 import { getEncoding, AVAILABLE_ENCODINGS, type EncodingName } from '../components/tokenizer/encodingMap';
 import { getTokenizeControlStyles } from '../components/tokenizer/tokenizeControls.styles';
 import { TopStat } from '../components/TopStat';
-import MarkdownPreview from '../components/markdown/MarkdownPreview';
+import { PromptDiffView } from '../components/agents/PromptDiffView';
 
 const VERSION_PAGE_SIZE = 50;
 const RECENT_VERSIONS_COUNT = 8;
@@ -390,16 +404,14 @@ const getStyles = (theme: GrafanaTheme2) => ({
     alignItems: 'stretch',
   }),
   combinedPromptSections: css({
-    display: 'grid',
+    display: 'flex',
     gap: theme.spacing(2),
-    gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
-    alignItems: 'stretch',
+    alignItems: 'flex-start',
+    flexWrap: 'wrap' as const,
   }),
   sectionBlock: css({
+    flex: '1 1 420px',
     minWidth: 0,
-    display: 'flex',
-    flexDirection: 'column' as const,
-    minHeight: 0,
   }),
   sectionTitle: css({
     marginBottom: theme.spacing(1),
@@ -770,9 +782,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   systemPrompt: css({
     margin: 0,
-    minHeight: 280,
     maxHeight: 580,
-    height: '100%',
     overflow: 'auto',
     whiteSpace: 'pre-wrap' as const,
     borderRadius: theme.shape.radius.default,
@@ -784,20 +794,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     lineHeight: 1.6,
     color: theme.colors.text.primary,
   }),
-  systemPromptPreview: css({
-    margin: 0,
-    minHeight: 280,
-    maxHeight: 580,
-    height: '100%',
-    overflow: 'auto',
-    borderRadius: theme.shape.radius.default,
-    border: `1px solid ${theme.colors.border.weak}`,
-    background: theme.colors.background.primary,
-    padding: theme.spacing(1.5),
-    color: theme.colors.text.primary,
-  }),
   systemPromptContent: css({
-    flex: 1,
     minHeight: 0,
   }),
   modelChipsRow: css({
@@ -1408,22 +1405,37 @@ export default function AgentDetailPage({
     sections: Record<string, boolean>;
     encodingOverride: EncodingName | null;
   }>({ versionKey, sections: {}, encodingOverride: null });
-  const [systemPromptView, setSystemPromptView] = useState<'preview' | 'markdown'>('markdown');
+  const [systemPromptView, setSystemPromptView] = useState<'markdown' | 'tokenize' | 'diff'>('markdown');
   const [mainAreaTab, setMainAreaTab] = useState<'prompts' | 'tools'>('prompts');
+  const [promptInsights, setPromptInsights] = useState<PromptInsightsResponse | null>(null);
+  const [lookback, setLookback] = useState(DEFAULT_LOOKBACK);
+  const [analyzeModalOpen, setAnalyzeModalOpen] = useState(false);
+  const [previousVersionPrompt, setPreviousVersionPrompt] = useState<string | null>(null);
+  const prevAgentNameRef = useRef(agentName);
+  const prevDetailRef = useRef<AgentDetail | null>(null);
+
+  const insightsRef = useRef<PromptInsightsPanelHandle>(null);
+  const highlightedPromptRef = useRef<HighlightedSystemPromptHandle>(null);
 
   const tokenizedSections = tokenizeState.versionKey === versionKey ? tokenizeState.sections : {};
   const encodingOverride = tokenizeState.versionKey === versionKey ? tokenizeState.encodingOverride : null;
-  const isSystemTokenized = Boolean(tokenizedSections['system']);
 
   const activeEncoding = encodingOverride ?? autoEncoding;
   const anyTokenized = Object.values(tokenizedSections).some(Boolean);
   const { encode, decode, isLoading: tokenizerLoading } = useTokenizer(anyTokenized ? activeEncoding : null);
 
   useEffect(() => {
-    if (isSystemTokenized && systemPromptView !== 'markdown') {
-      setSystemPromptView('markdown');
+    if (agentName !== prevAgentNameRef.current) {
+      setPreviousVersionPrompt(null);
+      prevDetailRef.current = null;
+      prevAgentNameRef.current = agentName;
+      return;
     }
-  }, [isSystemTokenized, systemPromptView]);
+    if (detail && prevDetailRef.current && detail.effective_version !== prevDetailRef.current.effective_version) {
+      setPreviousVersionPrompt(prevDetailRef.current.system_prompt);
+    }
+    prevDetailRef.current = detail;
+  }, [agentName, detail]);
 
   const setEncodingOverride = useCallback(
     (enc: EncodingName | null) => {
@@ -1450,13 +1462,63 @@ export default function AgentDetailPage({
     [versionKey]
   );
 
+  const setPromptView = useCallback(
+    (mode: 'markdown' | 'tokenize' | 'diff') => {
+      setSystemPromptView(mode);
+      setTokenizeState((prev) => {
+        const sections = prev.versionKey === versionKey ? { ...prev.sections } : {};
+        sections['system'] = mode === 'tokenize';
+        return {
+          versionKey,
+          sections,
+          encodingOverride: prev.versionKey === versionKey ? prev.encodingOverride : null,
+        };
+      });
+    },
+    [versionKey]
+  );
+
   const agentStateContext = useMemo(() => (detail ? buildAgentStateContext(detail) : ''), [detail]);
+
+  const hasInsightResults = promptInsights !== null && promptInsights.status === 'completed';
+  const hasRatingResult = initialRating !== null && initialRating.status === 'completed';
+  const hasAnyAnalysis = hasInsightResults || hasRatingResult;
+
+  const runUnifiedAnalysis = useCallback(() => {
+    if (!insightsRef.current) {
+      return;
+    }
+    setInitialRatingLoading(true);
+    setInitialRatingError('');
+    insightsRef.current.analyze(lookback);
+  }, [lookback]);
+
+  const handleAnalysisTriggered = useCallback(() => {
+    setInitialRating({
+      status: 'pending',
+      score: 0,
+      summary: '',
+      suggestions: [],
+      judge_model: '',
+      judge_latency_ms: 0,
+    });
+    setInitialRatingLoading(false);
+  }, []);
+
+  const handleAnalysisStartFailed = useCallback(() => {
+    setInitialRatingLoading(false);
+  }, []);
+
+  const handleInsightFocus = useCallback((kind: 'strength' | 'weakness', index: number) => {
+    highlightedPromptRef.current?.scrollToInsight(kind, index);
+  }, []);
+
+  const handleHighlightClick = useCallback((_insight: unknown, kind: 'strength' | 'weakness', index: number) => {
+    insightsRef.current?.focusInsight(kind, index);
+  }, []);
   const nonDeferredToolTokens = useMemo(() => (detail ? getNonDeferredToolTokens(detail) : 0), [detail]);
   const deferredToolTokens = useMemo(() => (detail ? getDeferredToolTokens(detail) : 0), [detail]);
   const effectiveTotalTokens = useMemo(() => (detail ? getEffectiveTotalTokens(detail) : 0), [detail]);
-  const scrollToPromptAnalysis = useCallback(() => {
-    promptAnalysisSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, []);
   const handleRatingResultChange = useCallback((nextRating: AgentRatingResponse | null) => {
     if (nextRating === null) {
       return;
@@ -1901,11 +1963,20 @@ export default function AgentDetailPage({
             </div>
           </div>
           <div className={styles.tabMainContent}>
-            <div ref={promptAnalysisSectionRef} className={cx(styles.panel, styles.stretchPanel)}>
+            <div ref={promptAnalysisSectionRef} className={styles.panel}>
               <div className={styles.panelHeader}>
                 <Text weight="medium">System prompt and context analysis</Text>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon="search"
+                  onClick={() => setAnalyzeModalOpen(true)}
+                  data-testid="unified-analyze-button"
+                >
+                  {hasAnyAnalysis ? 'Re-analyze' : 'Analyze agent'}
+                </Button>
               </div>
-              <div className={cx(styles.panelBody, styles.stretchPanelBody)}>
+              <div className={styles.panelBody}>
                 <div className={styles.combinedPromptSections}>
                   <div className={styles.sectionBlock}>
                     <span className={styles.panelHeaderControls}>
@@ -1914,45 +1985,40 @@ export default function AgentDetailPage({
                           type="button"
                           className={cx(
                             styles.promptViewToggleButton,
-                            systemPromptView === 'preview' && styles.promptViewToggleButtonActive
+                            systemPromptView === 'markdown' && styles.promptViewToggleButtonActive
                           )}
-                          aria-pressed={systemPromptView === 'preview'}
-                          onClick={() => {
-                            if (!isSystemTokenized) {
-                              setSystemPromptView('preview');
-                            }
-                          }}
-                          disabled={isSystemTokenized}
+                          aria-pressed={systemPromptView === 'markdown'}
+                          onClick={() => setPromptView('markdown')}
                         >
-                          Preview
+                          Markdown
                         </button>
                         <button
                           type="button"
                           className={cx(
                             styles.promptViewToggleButton,
-                            systemPromptView === 'markdown' && styles.promptViewToggleButtonActive
+                            systemPromptView === 'tokenize' && styles.promptViewToggleButtonActive
                           )}
-                          aria-pressed={systemPromptView === 'markdown'}
-                          onClick={() => setSystemPromptView('markdown')}
+                          aria-pressed={systemPromptView === 'tokenize'}
+                          onClick={() => setPromptView('tokenize')}
                         >
-                          Markdown
+                          Tokenize
                         </button>
+                        {previousVersionPrompt !== null && (
+                          <button
+                            type="button"
+                            className={cx(
+                              styles.promptViewToggleButton,
+                              systemPromptView === 'diff' && styles.promptViewToggleButtonActive
+                            )}
+                            aria-pressed={systemPromptView === 'diff'}
+                            onClick={() => setPromptView(systemPromptView === 'diff' ? 'markdown' : 'diff')}
+                            data-testid="diff-toggle-button"
+                          >
+                            Diff
+                          </button>
+                        )}
                       </span>
-                      <span
-                        className={cx(styles.tokenizeBtn, tokenizedSections['system'] && styles.tokenizeBtnActive)}
-                        onClick={() => toggleSection('system')}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            toggleSection('system');
-                          }
-                        }}
-                        role="button"
-                        tabIndex={0}
-                      >
-                        <Icon name="brackets-curly" size="xs" />
-                        {tokenizerLoading ? 'Loading\u2026' : 'Tokenize'}
-                      </span>
-                      {tokenizedSections['system'] && (
+                      {systemPromptView === 'tokenize' && (
                         <select
                           className={styles.encodingSelect}
                           aria-label="Tokenizer encoding"
@@ -1972,16 +2038,20 @@ export default function AgentDetailPage({
                     </span>
                     <div className={styles.systemPromptContent}>
                       {detail.system_prompt.length > 0 ? (
-                        tokenizedSections['system'] && encode && decode ? (
+                        systemPromptView === 'tokenize' && encode && decode ? (
                           <div className={styles.systemPrompt}>
                             <TokenizedText text={detail.system_prompt} encode={encode} decode={decode} />
                           </div>
-                        ) : systemPromptView === 'preview' ? (
-                          <div className={styles.systemPromptPreview}>
-                            <MarkdownPreview markdown={detail.system_prompt} />
-                          </div>
+                        ) : systemPromptView === 'diff' && previousVersionPrompt !== null ? (
+                          <PromptDiffView oldPrompt={previousVersionPrompt} newPrompt={detail.system_prompt} />
                         ) : (
-                          <pre className={styles.systemPrompt}>{detail.system_prompt}</pre>
+                          <HighlightedSystemPrompt
+                            ref={highlightedPromptRef}
+                            systemPrompt={detail.system_prompt}
+                            insights={promptInsights}
+                            className={styles.systemPrompt}
+                            onInsightClick={handleHighlightClick}
+                          />
                         )
                       ) : (
                         <pre className={styles.systemPrompt}>No system prompt recorded.</pre>
@@ -1989,18 +2059,29 @@ export default function AgentDetailPage({
                     </div>
                   </div>
                   <div className={styles.sectionBlock}>
+                    <PromptInsightsPanel
+                      ref={insightsRef}
+                      agentName={agentName}
+                      version={activeVersion}
+                      dataSource={dataSource}
+                      onInsightsChange={setPromptInsights}
+                      onAnalysisTriggered={handleAnalysisTriggered}
+                      onAnalysisStartFailed={handleAnalysisStartFailed}
+                      hideControls
+                      onInsightFocus={handleInsightFocus}
+                    />
                     <AgentRatingPanel
                       agentName={agentName}
                       version={activeVersion}
                       agentStateContext={agentStateContext}
-                      contentView={isSystemTokenized ? 'markdown' : systemPromptView}
-                      onRerun={scrollToPromptAnalysis}
+                      contentView="markdown"
                       onResultChange={handleRatingResultChange}
                       dataSource={dataSource}
                       initialResult={initialRating}
                       initialLoading={initialRatingLoading || initialRating?.status === 'pending'}
                       initialError={initialRatingError}
                       embedded
+                      hideGenerateCta
                     />
                   </div>
                 </div>
@@ -2048,6 +2129,18 @@ export default function AgentDetailPage({
             />
           </div>
         </div>
+      )}
+
+      {analyzeModalOpen && (
+        <AnalyzeModal
+          lookback={lookback}
+          onLookbackChange={setLookback}
+          onConfirm={() => {
+            setAnalyzeModalOpen(false);
+            runUnifiedAnalysis();
+          }}
+          onDismiss={() => setAnalyzeModalOpen(false)}
+        />
       )}
     </div>
   );
