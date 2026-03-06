@@ -128,4 +128,30 @@ describe('ConversationExplorePage', () => {
       expect(drawer).toHaveStyle({ width: '500px' });
     });
   });
+
+  it('restores the original sidebar state after repeated trace opens', async () => {
+    render(
+      <MemoryRouter initialEntries={['/conversations/conv-1/explore']}>
+        <Routes>
+          <Route path="/conversations/:conversationID/explore" element={<ConversationExplorePage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const openTraceButton = screen.getByRole('button', { name: 'Open trace' });
+
+    fireEvent.click(openTraceButton);
+    fireEvent.click(openTraceButton);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Close trace drawer' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close trace drawer' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('separator', { name: 'Resize flow panel' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Expand sidebar' })).not.toBeInTheDocument();
+    });
+  });
 });
