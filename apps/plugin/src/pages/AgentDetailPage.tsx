@@ -38,6 +38,7 @@ import { getEncoding, AVAILABLE_ENCODINGS, type EncodingName } from '../componen
 import { getTokenizeControlStyles } from '../components/tokenizer/tokenizeControls.styles';
 import { TopStat } from '../components/TopStat';
 import { PromptDiffView } from '../components/agents/PromptDiffView';
+import { bucketValues, normalizeValuesToHeights } from '../utils/seriesBuckets';
 
 const VERSION_PAGE_SIZE = 50;
 const RECENT_VERSIONS_COUNT = 8;
@@ -885,40 +886,6 @@ function extractSeries(response: PrometheusQueryResponse): number[] {
   return series.values
     .map(([, value]) => Number.parseFloat(value))
     .filter((value) => Number.isFinite(value) && value >= 0);
-}
-
-function bucketValues(values: number[], targetCount: number): number[] {
-  if (values.length === 0 || targetCount <= 0) {
-    return [];
-  }
-  return Array.from({ length: targetCount }, (_, i) => {
-    const start = Math.floor((i * values.length) / targetCount);
-    const end = Math.max(start + 1, Math.floor(((i + 1) * values.length) / targetCount));
-    const slice = values.slice(start, end);
-    const sum = slice.reduce((acc, value) => acc + value, 0);
-    return sum / slice.length;
-  });
-}
-
-function normalizeValuesToHeights(values: number[], targetCount: number): number[] {
-  if (values.length === 0 || targetCount <= 0) {
-    return [];
-  }
-  const bucketed = bucketValues(values, targetCount);
-  const minValue = Math.min(...bucketed);
-  const maxValue = Math.max(...bucketed);
-  if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
-    return [];
-  }
-  if (Math.abs(maxValue - minValue) < 1e-9) {
-    return bucketed.map(() => 60);
-  }
-  const minHeight = 20;
-  const maxHeight = 100;
-  return bucketed.map((value) => {
-    const t = (value - minValue) / (maxValue - minValue);
-    return minHeight + t * (maxHeight - minHeight);
-  });
 }
 
 function scoreTone(theme: GrafanaTheme2, score: number): string {
