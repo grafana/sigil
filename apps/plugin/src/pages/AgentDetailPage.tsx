@@ -228,7 +228,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexDirection: 'column' as const,
     justifyContent: 'flex-end',
     gap: theme.spacing(0.125),
-    paddingLeft: theme.spacing(2),
+    paddingLeft: theme.spacing(3),
     borderLeft: `1px solid ${theme.colors.border.weak}`,
     '@media (max-width: 1400px)': {
       gridColumn: '4 / 5',
