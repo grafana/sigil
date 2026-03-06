@@ -12,7 +12,7 @@ ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
 ENV PIP_CACHE_DIR=/opt/pip-cache
 ENV GRADLE_USER_HOME=/opt/gradle-cache
 
-COPY --from=golang:1.26-bookworm@sha256:2a0ba12e116687098780d3ce700f9ce3cb340783779646aafbabed748fa6677c /usr/local/go/ /usr/local/go/
+COPY --from=golang:1.26-bookworm@sha256:c7a82e9e2df2fea5d8cb62a16aa6f796d2b2ed81ccad4ddd2bc9f0d22936c3f2 /usr/local/go/ /usr/local/go/
 COPY --from=mcr.microsoft.com/dotnet/sdk:8.0-bookworm-slim /usr/share/dotnet/ /usr/share/dotnet/
 RUN ln -sf /usr/share/dotnet/dotnet /usr/bin/dotnet \
   && dotnet --info >/dev/null
