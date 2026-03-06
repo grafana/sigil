@@ -4,6 +4,7 @@ import type { GrafanaTheme2 } from '@grafana/data';
 import { useStyles2 } from '@grafana/ui';
 import { useAssistant } from '@grafana/assistant';
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
+import { SparklesBackground } from '../components/landing/SparklesBackground';
 import { AutoinstrumentationPanel } from '../components/tutorial/TryItNowPanel';
 import {
   buildSigilAssistantContextItems,
@@ -319,6 +320,7 @@ export default function TutorialPage() {
 
   return (
     <div className={styles.page}>
+      <SparklesBackground className={styles.pageSparklesLayer} withGradient={false} />
       <article className={styles.card} style={cardStyle}>
         <header className={styles.topBar}>
           <h1 className={styles.title}>{slide.title}</h1>
@@ -764,12 +766,21 @@ function getStyles(theme: GrafanaTheme2) {
 
   return {
     page: css({
+      position: 'relative',
       minHeight: '100%',
-      width: '100%',
+      width: 'calc(100% + 32px)',
       display: 'flex',
       alignItems: 'flex-start',
       justifyContent: 'center',
-      padding: theme.spacing(5),
+      marginLeft: -16,
+      marginRight: -16,
+      padding: 0,
+      overflow: 'hidden',
+    }),
+    pageSparklesLayer: css({
+      position: 'absolute',
+      inset: 0,
+      zIndex: 0,
     }),
     card: css({
       width: 'min(1200px, 100%)',
@@ -779,6 +790,7 @@ function getStyles(theme: GrafanaTheme2) {
       background: theme.colors.background.primary,
       boxShadow: theme.shadows.z3,
       position: 'relative',
+      zIndex: 1,
       overflow: 'hidden',
       padding: theme.spacing(6, 7, 4),
       display: 'flex',

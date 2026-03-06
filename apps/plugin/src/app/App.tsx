@@ -25,10 +25,18 @@ const getStyles = (theme: GrafanaTheme2) => ({
     height: '100%',
     overflow: 'hidden',
   }),
+  fullHeightRouteContainer: css({
+    position: 'relative',
+    height: '100%',
+    overflow: 'hidden',
+  }),
   hidePluginHeader: css({
     '& > [class*="page-header"]': {
       display: 'none',
     },
+  }),
+  fullBleedPageInner: css({
+    padding: '0 !important',
   }),
 });
 
@@ -71,6 +79,7 @@ export default function App(props: AppRootProps) {
   const shouldHidePluginHeader =
     location.pathname.includes(`/${ROUTES.Conversations}`) &&
     !location.pathname.includes(`/${ROUTES.ConversationsOld}`);
+  const shouldUseFullBleedPageInner = location.pathname.includes(`/${ROUTES.PlaygroundSparkles}`);
 
   React.useEffect(() => {
     const pageInner = document.querySelector('[class*="page-inner"]');
@@ -82,16 +91,29 @@ export default function App(props: AppRootProps) {
     } else {
       pageInner.classList.remove(styles.hidePluginHeader);
     }
+    if (shouldUseFullBleedPageInner) {
+      pageInner.classList.add(styles.fullBleedPageInner);
+    } else {
+      pageInner.classList.remove(styles.fullBleedPageInner);
+    }
     return () => {
       pageInner.classList.remove(styles.hidePluginHeader);
+      pageInner.classList.remove(styles.fullBleedPageInner);
     };
-  }, [shouldHidePluginHeader, styles.hidePluginHeader]);
+  }, [shouldHidePluginHeader, shouldUseFullBleedPageInner, styles.hidePluginHeader, styles.fullBleedPageInner]);
 
   return (
     <PluginPage renderTitle={() => <></>} background="canvas" pageNav={pageNav}>
       <Routes>
         <Route path={ROUTES.Root} element={<LandingPage />} />
-        <Route path={ROUTES.PlaygroundSparkles} element={<PlaygroundSparklesPage />} />
+        <Route
+          path={ROUTES.PlaygroundSparkles}
+          element={
+            <div className={styles.fullHeightRouteContainer}>
+              <PlaygroundSparklesPage />
+            </div>
+          }
+        />
         <Route path={ROUTES.Analytics} element={<DashboardPage />} />
         <Route path={`${ROUTES.Tutorial}/*`} element={<TutorialPage />} />
         <Route

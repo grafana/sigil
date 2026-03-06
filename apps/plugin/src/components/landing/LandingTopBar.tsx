@@ -1506,9 +1506,7 @@ function getStyles(theme: GrafanaTheme2) {
       paddingTop: theme.spacing(2.5),
       paddingLeft: theme.spacing(3),
       paddingRight: theme.spacing(3),
-      background: theme.isDark
-        ? `linear-gradient(145deg, ${theme.colors.background.primary} 0%, rgba(22, 27, 45, 0.95) 50%, ${theme.colors.background.secondary} 100%)`
-        : `linear-gradient(145deg, ${theme.colors.background.primary} 0%, ${theme.colors.background.secondary} 100%)`,
+      background: theme.colors.background.primary,
       border: `1px solid ${theme.colors.border.weak}`,
       '&::before': {
         content: '""',

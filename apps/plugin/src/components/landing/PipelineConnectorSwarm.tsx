@@ -300,6 +300,7 @@ type PipelineConnectorSwarmProps = {
   sizeScale?: number;
   durationScale?: number;
   seed?: number;
+  maxSparks?: number;
 };
 
 function seededUnit(seed: number, index: number, salt: number): number {
@@ -320,6 +321,7 @@ export function PipelineConnectorSwarm({
   sizeScale,
   durationScale,
   seed,
+  maxSparks,
 }: PipelineConnectorSwarmProps) {
   const styles = useStyles2(getStyles);
   const connectorDelay = delaySec ?? (delayed ? 0.45 : 0);
@@ -364,6 +366,12 @@ export function PipelineConnectorSwarm({
       };
     });
   }, [mode, seed]);
+  const renderSparks = React.useMemo(() => {
+    if (typeof maxSparks === 'number' && Number.isFinite(maxSparks) && maxSparks > 0) {
+      return seededSparks.slice(0, Math.floor(maxSparks));
+    }
+    return seededSparks;
+  }, [seededSparks, maxSparks]);
 
   return (
     <div
@@ -375,7 +383,7 @@ export function PipelineConnectorSwarm({
       }
       aria-hidden
     >
-      {seededSparks.map((spark, index) => (
+      {renderSparks.map((spark, index) => (
         <div
           key={`${color}-${index}`}
           className={styles.spark}
