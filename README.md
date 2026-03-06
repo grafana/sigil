@@ -1,7 +1,7 @@
 # Grafana Sigil
 
 <p align="center">
-  <img src="./logo.png" alt="Grafana Sigil logo" width="280" />
+  <img src="./assets/readme/sigil-tri-shot.svg" alt="Sigil landing, analytics, and conversation explore views" width="100%" />
 </p>
 
 Sigil is an open-source AI observability project from Grafana.
