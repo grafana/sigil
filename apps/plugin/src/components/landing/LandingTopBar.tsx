@@ -1624,7 +1624,6 @@ function getStyles(theme: GrafanaTheme2) {
       transition: 'border-color 0.25s ease, box-shadow 0.25s ease',
       '&:hover': {
         borderColor: theme.colors.border.medium,
-        boxShadow: theme.isDark ? '0 4px 24px rgba(0,0,0,0.4)' : '0 4px 24px rgba(0,0,0,0.08)',
       },
       '@container landing-top-bar (max-width: 900px)': {
         flex: 'none',
