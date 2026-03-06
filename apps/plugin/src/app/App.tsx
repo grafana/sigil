@@ -4,7 +4,7 @@ import type { AppRootProps, GrafanaTheme2, NavModelItem } from '@grafana/data';
 import { PluginPage } from '@grafana/runtime';
 import { useStyles2 } from '@grafana/ui';
 import { Route, Routes, useLocation } from 'react-router-dom';
-import { ROUTES } from '../constants';
+import { PLUGIN_BASE, ROUTES } from '../constants';
 
 const LandingPage = React.lazy(() => import('../pages/LandingPage'));
 const DashboardPage = React.lazy(() => import('../pages/DashboardPage'));
@@ -31,19 +31,44 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
+function useAgentDetailPageNav(): NavModelItem | undefined {
+  const location = useLocation();
+  const agentDetailMatch = location.pathname.match(
+    new RegExp(`${PLUGIN_BASE}/${ROUTES.Agents}/name/([^/]+)`)
+  );
+  const matchedName = agentDetailMatch ? decodeURIComponent(agentDetailMatch[1]) : undefined;
+  const isAnonymous = location.pathname.endsWith(`/${ROUTES.Agents}/anonymous`);
+
+  return React.useMemo(() => {
+    if (!matchedName && !isAnonymous) {
+      return undefined;
+    }
+    return {
+      text: isAnonymous ? 'Unnamed agent bucket' : matchedName!,
+      parentItem: {
+        text: 'Agents',
+        url: `${PLUGIN_BASE}/${ROUTES.Agents}`,
+      },
+    };
+  }, [matchedName, isAnonymous]);
+}
+
 export default function App(props: AppRootProps) {
   const styles = useStyles2(getStyles);
   const location = useLocation();
-  const pageNav = React.useMemo<NavModelItem>(
-    () => ({
+  const agentDetailPageNav = useAgentDetailPageNav();
+  const pageNav = React.useMemo<NavModelItem>(() => {
+    if (agentDetailPageNav) {
+      return agentDetailPageNav;
+    }
+    return {
       text: props.meta.name,
       subTitle: undefined,
       img: undefined,
       icon: undefined,
       hideFromBreadcrumbs: true,
-    }),
-    [props.meta.name]
-  );
+    };
+  }, [props.meta.name, agentDetailPageNav]);
   const shouldHidePluginHeader =
     location.pathname.includes(`/${ROUTES.Conversations}`) &&
     !location.pathname.includes(`/${ROUTES.ConversationsOld}`);
