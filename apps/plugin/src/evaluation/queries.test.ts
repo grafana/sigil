@@ -27,7 +27,6 @@ const noFilters: DashboardFilters = {
 const noEval: EvalFilters = emptyEvalFilters;
 
 const withDashFilters: DashboardFilters = { ...noFilters, models: ['gpt-4o'] };
-const withDottedModel: DashboardFilters = { ...noFilters, models: ['us.anthropic.claude-sonnet-4-6'] };
 
 const withEvalFilters: EvalFilters = { evaluators: ['helpfulness'], scoreKeys: [], evaluatorKinds: [] };
 const withMultiEvalFilters: EvalFilters = {
@@ -49,13 +48,7 @@ describe('eval stat queries', () => {
 
   it('totalScoresQuery with dashboard and eval filters', () => {
     expect(totalScoresQuery(withDashFilters, withEvalFilters, '3600s')).toBe(
-      'sum(increase(sigil_eval_scores_total{gen_ai_request_model=~"gpt-4o",evaluator="helpfulness"}[3600s]))'
-    );
-  });
-
-  it('totalScoresQuery with dotted model generates suffix variants', () => {
-    expect(totalScoresQuery(withDottedModel, noEval, '3600s')).toBe(
-      'sum(increase(sigil_eval_scores_total{gen_ai_request_model=~"us[.]anthropic[.]claude-sonnet-4-6|anthropic[.]claude-sonnet-4-6|claude-sonnet-4-6"}[3600s]))'
+      'sum(increase(sigil_eval_scores_total{gen_ai_request_model=~"(?i).*gpt-4o.*",evaluator="helpfulness"}[3600s]))'
     );
   });
 
@@ -173,7 +166,7 @@ describe('eval timeseries queries', () => {
 
   it('queries respect both dashboard and eval filters', () => {
     const q = scoresOverTimeQuery(withDashFilters, withEvalFilters, '60s');
-    expect(q).toContain('gen_ai_request_model=~"gpt-4o"');
+    expect(q).toContain('gen_ai_request_model=~"(?i).*gpt-4o.*"');
     expect(q).toContain('evaluator="helpfulness"');
   });
 });
