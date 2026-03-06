@@ -606,13 +606,13 @@ describe('AgentDetailPage', () => {
     fireEvent.click(await screen.findByTestId('unified-analyze-button'));
     fireEvent.click(await screen.findByRole('button', { name: 'Analyze' }));
 
-    expect(await screen.findByRole('progressbar', { name: /loading conversation/i })).toBeInTheDocument();
+    expect(await screen.findByRole('progressbar', { name: /generating rating/i })).toBeInTheDocument();
 
     rejectAnalyze?.(new Error('backend unavailable'));
 
     expect(await screen.findByText('Failed to start analysis.')).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.queryByRole('progressbar', { name: /loading conversation/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('progressbar', { name: /generating rating/i })).not.toBeInTheDocument();
     });
   });
 });
