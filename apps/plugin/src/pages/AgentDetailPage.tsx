@@ -614,7 +614,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
       minWidth: 96,
     },
   }),
-  recentVersionItemActive: css({}),
   recentVersionBox: css({
     width: '100%',
     minWidth: 0,
@@ -674,10 +673,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
   recentVersionNumberCentered: css({
     textAlign: 'center' as const,
   }),
-  recentVersionNumberActive: css({
-    color: theme.colors.primary.text,
-    fontWeight: theme.typography.fontWeightBold,
-  }),
   recentVersionRelativeTime: css({
     fontSize: theme.typography.size.sm,
     color: theme.colors.text.secondary,
@@ -685,10 +680,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     whiteSpace: 'nowrap' as const,
     textAlign: 'center' as const,
     width: '100%',
-  }),
-  recentVersionRelativeTimeActive: css({
-    color: theme.colors.primary.text,
-    fontWeight: theme.typography.fontWeightMedium,
   }),
   recentVersionTimelineMarker: css({
     position: 'relative' as const,
@@ -730,22 +721,12 @@ const getStyles = (theme: GrafanaTheme2) => ({
       right: '50%',
     },
   }),
-  recentVersionTimelineMarkerActive: css({
-    '&::after': {
-      borderColor: theme.colors.primary.border,
-      background: theme.colors.primary.main,
-      boxShadow: `0 0 0 2px ${theme.colors.primary.transparent}`,
-    },
-  }),
   recentVersionScore: css({
     justifySelf: 'start',
     fontWeight: theme.typography.fontWeightMedium,
     fontVariantNumeric: 'tabular-nums',
     fontSize: theme.typography.size.sm,
     lineHeight: 1.2,
-  }),
-  recentVersionScoreActive: css({
-    fontWeight: theme.typography.fontWeightBold,
   }),
   versionTooltip: css({
     display: 'flex',

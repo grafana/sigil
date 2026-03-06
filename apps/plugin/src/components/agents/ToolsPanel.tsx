@@ -179,12 +179,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     textTransform: 'uppercase' as const,
     letterSpacing: '0.04em',
   }),
-  detailDescription: css({
-    fontSize: theme.typography.body.fontSize,
-    lineHeight: theme.typography.body.lineHeight,
-    color: theme.colors.text.secondary,
-    whiteSpace: 'pre-wrap' as const,
-  }),
   sectionLabel: css({
     fontSize: theme.typography.bodySmall.fontSize,
     color: theme.colors.text.secondary,
