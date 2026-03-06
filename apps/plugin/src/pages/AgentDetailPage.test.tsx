@@ -141,7 +141,9 @@ describe('AgentDetailPage', () => {
     fireEvent.click(nextVersionOption);
 
     await waitFor(() => {
-      const locationSearch = decodeURIComponent(screen.getByTestId('location-search').textContent ?? '');
+      const locationSearch = decodeURIComponent(
+        screen.getByTestId('location-search').textContent ?? ''
+      );
       expect(locationSearch).toContain(
         'version=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
       );
@@ -160,7 +162,10 @@ describe('AgentDetailPage', () => {
     render(
       <MemoryRouter initialEntries={['/agents/anonymous']}>
         <Routes>
-          <Route path="/agents/anonymous" element={<AgentDetailPage dataSource={dataSource} />} />
+          <Route
+            path="/agents/anonymous"
+            element={<AgentDetailPage dataSource={dataSource} />}
+          />
         </Routes>
       </MemoryRouter>
     );
@@ -192,7 +197,10 @@ describe('AgentDetailPage', () => {
     render(
       <MemoryRouter initialEntries={['/agents/name/assistant']}>
         <Routes>
-          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+          <Route
+            path="/agents/name/:agentName"
+            element={<AgentDetailPage dataSource={dataSource} />}
+          />
         </Routes>
       </MemoryRouter>
     );
@@ -227,7 +235,10 @@ describe('AgentDetailPage', () => {
     render(
       <MemoryRouter initialEntries={['/agents/name/assistant']}>
         <Routes>
-          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+          <Route
+            path="/agents/name/:agentName"
+            element={<AgentDetailPage dataSource={dataSource} />}
+          />
         </Routes>
       </MemoryRouter>
     );
@@ -247,7 +258,10 @@ describe('AgentDetailPage', () => {
     render(
       <MemoryRouter initialEntries={['/agents/name/assistant']}>
         <Routes>
-          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+          <Route
+            path="/agents/name/:agentName"
+            element={<AgentDetailPage dataSource={dataSource} />}
+          />
         </Routes>
       </MemoryRouter>
     );
@@ -262,7 +276,10 @@ describe('AgentDetailPage', () => {
     render(
       <MemoryRouter initialEntries={['/agents/name/assistant']}>
         <Routes>
-          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+          <Route
+            path="/agents/name/:agentName"
+            element={<AgentDetailPage dataSource={dataSource} />}
+          />
         </Routes>
       </MemoryRouter>
     );
@@ -279,7 +296,10 @@ describe('AgentDetailPage', () => {
     render(
       <MemoryRouter initialEntries={['/agents/name/assistant']}>
         <Routes>
-          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+          <Route
+            path="/agents/name/:agentName"
+            element={<AgentDetailPage dataSource={dataSource} />}
+          />
         </Routes>
       </MemoryRouter>
     );
@@ -294,7 +314,10 @@ describe('AgentDetailPage', () => {
     render(
       <MemoryRouter initialEntries={['/agents/name/assistant']}>
         <Routes>
-          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+          <Route
+            path="/agents/name/:agentName"
+            element={<AgentDetailPage dataSource={dataSource} />}
+          />
         </Routes>
       </MemoryRouter>
     );
@@ -318,7 +341,10 @@ describe('AgentDetailPage', () => {
     render(
       <MemoryRouter initialEntries={['/agents/name/assistant']}>
         <Routes>
-          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+          <Route
+            path="/agents/name/:agentName"
+            element={<AgentDetailPage dataSource={dataSource} />}
+          />
         </Routes>
       </MemoryRouter>
     );
@@ -389,7 +415,10 @@ describe('AgentDetailPage', () => {
     render(
       <MemoryRouter initialEntries={['/agents/name/assistant']}>
         <Routes>
-          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+          <Route
+            path="/agents/name/:agentName"
+            element={<AgentDetailPage dataSource={dataSource} />}
+          />
         </Routes>
       </MemoryRouter>
     );
@@ -410,7 +439,10 @@ describe('AgentDetailPage', () => {
     render(
       <MemoryRouter initialEntries={['/agents/name/assistant']}>
         <Routes>
-          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+          <Route
+            path="/agents/name/:agentName"
+            element={<AgentDetailPage dataSource={dataSource} />}
+          />
         </Routes>
       </MemoryRouter>
     );
@@ -436,7 +468,10 @@ describe('AgentDetailPage', () => {
     render(
       <MemoryRouter initialEntries={['/agents/name/assistant']}>
         <Routes>
-          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+          <Route
+            path="/agents/name/:agentName"
+            element={<AgentDetailPage dataSource={dataSource} />}
+          />
         </Routes>
       </MemoryRouter>
     );
@@ -475,22 +510,25 @@ describe('AgentDetailPage', () => {
     render(
       <MemoryRouter initialEntries={['/agents/name/assistant']}>
         <Routes>
-          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+          <Route
+            path="/agents/name/:agentName"
+            element={<AgentDetailPage dataSource={dataSource} />}
+          />
         </Routes>
       </MemoryRouter>
     );
 
     await waitFor(() => {
-      const versionedCalls = (dataSource.lookupAgentRating as jest.Mock).mock.calls.filter(([, version]) =>
-        Boolean(version)
+      const versionedCalls = (dataSource.lookupAgentRating as jest.Mock).mock.calls.filter(
+        ([, version]) => Boolean(version)
       );
       expect(versionedCalls).toHaveLength(2);
     });
 
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    const versionedCalls = (dataSource.lookupAgentRating as jest.Mock).mock.calls.filter(([, version]) =>
-      Boolean(version)
+    const versionedCalls = (dataSource.lookupAgentRating as jest.Mock).mock.calls.filter(
+      ([, version]) => Boolean(version)
     );
     expect(versionedCalls).toHaveLength(2);
   });
@@ -501,7 +539,10 @@ describe('AgentDetailPage', () => {
     render(
       <MemoryRouter initialEntries={['/agents/name/assistant']}>
         <Routes>
-          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+          <Route
+            path="/agents/name/:agentName"
+            element={<AgentDetailPage dataSource={dataSource} />}
+          />
         </Routes>
       </MemoryRouter>
     );
@@ -523,7 +564,10 @@ describe('AgentDetailPage', () => {
     render(
       <MemoryRouter initialEntries={['/agents/name/assistant']}>
         <Routes>
-          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+          <Route
+            path="/agents/name/:agentName"
+            element={<AgentDetailPage dataSource={dataSource} />}
+          />
         </Routes>
       </MemoryRouter>
     );
@@ -531,7 +575,60 @@ describe('AgentDetailPage', () => {
     fireEvent.click(await screen.findByTestId('unified-analyze-button'));
     fireEvent.click(await screen.findByRole('button', { name: 'Analyze' }));
 
-    await waitFor(() => expect(dataSource.analyzePrompt).toHaveBeenCalledWith('assistant', expect.any(String), '7d'));
+    await waitFor(() =>
+      expect(dataSource.analyzePrompt).toHaveBeenCalledWith(
+        'assistant',
+        expect.any(String),
+        '7d'
+      )
+    );
+    expect(dataSource.rateAgent).not.toHaveBeenCalled();
+  });
+
+  it('polls for the unified rating result after analysis is triggered', async () => {
+    const completedRating = {
+      status: 'completed' as const,
+      score: 9,
+      summary: 'Rating arrived after unified analysis.',
+      suggestions: [],
+      judge_model: 'openai/gpt-4o-mini',
+      judge_latency_ms: 77,
+    };
+    const dataSource = createDataSource();
+    dataSource.lookupAgentRating = jest
+      .fn()
+      .mockRejectedValueOnce({ status: 404, data: { message: 'not found' } })
+      .mockResolvedValue(completedRating);
+    dataSource.analyzePrompt = jest.fn(async () => ({
+      status: 'completed',
+      strengths: [],
+      weaknesses: [],
+      judge_model: '',
+      judge_latency_ms: 0,
+    }));
+
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route
+            path="/agents/name/:agentName"
+            element={<AgentDetailPage dataSource={dataSource} />}
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await screen.findByTestId('unified-analyze-button');
+    await waitFor(() => expect(dataSource.lookupAgentRating).toHaveBeenCalled());
+    const lookupCallsBeforeAnalyze = (dataSource.lookupAgentRating as jest.Mock).mock.calls.length;
+
+    fireEvent.click(screen.getByTestId('unified-analyze-button'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Analyze' }));
+
+    await waitFor(() =>
+      expect((dataSource.lookupAgentRating as jest.Mock).mock.calls.length).toBeGreaterThan(lookupCallsBeforeAnalyze)
+    );
+    expect(await screen.findByText('Rating arrived after unified analysis.')).toBeInTheDocument();
     expect(dataSource.rateAgent).not.toHaveBeenCalled();
   });
 
@@ -548,7 +645,10 @@ describe('AgentDetailPage', () => {
     render(
       <MemoryRouter initialEntries={['/agents/name/assistant']}>
         <Routes>
-          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+          <Route
+            path="/agents/name/:agentName"
+            element={<AgentDetailPage dataSource={dataSource} />}
+          />
         </Routes>
       </MemoryRouter>
     );
@@ -556,13 +656,17 @@ describe('AgentDetailPage', () => {
     fireEvent.click(await screen.findByTestId('unified-analyze-button'));
     fireEvent.click(await screen.findByRole('button', { name: 'Analyze' }));
 
-    expect(await screen.findByRole('progressbar', { name: /loading conversation/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('progressbar', { name: /loading conversation/i })
+    ).toBeInTheDocument();
 
     rejectAnalyze?.(new Error('backend unavailable'));
 
     expect(await screen.findByText('Failed to start analysis.')).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.queryByRole('progressbar', { name: /loading conversation/i })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('progressbar', { name: /loading conversation/i })
+      ).not.toBeInTheDocument();
     });
   });
 });
