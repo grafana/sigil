@@ -8,6 +8,7 @@ import type { BreakdownDimension, DashboardFilters } from '../../dashboard/types
 import { computeStep, computeRateInterval, computeRangeDuration } from '../../dashboard/queries';
 import { matrixToDataFrames, vectorToStatValue } from '../../dashboard/transforms';
 import { BreakdownStatPanel, formatWindowLabel } from './dashboardShared';
+import { ViewConversationsLink } from './ViewConversationsLink';
 import { usePrometheusQuery } from './usePrometheusQuery';
 import { MetricPanel } from './MetricPanel';
 import { TopStat } from '../TopStat';
@@ -370,6 +371,7 @@ export function DashboardEvalGrid({
               },
               overrides: [],
             }}
+            actions={<ViewConversationsLink timeRange={timeRange} filters={filters} orderBy="evals" />}
           />
           <BreakdownStatPanel
             title="Scores by Evaluator"
@@ -428,6 +430,7 @@ export function DashboardEvalGrid({
               },
               overrides: [],
             }}
+            actions={<ViewConversationsLink timeRange={timeRange} filters={filters} orderBy="evals" />}
           />
         </div>
 

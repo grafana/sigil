@@ -716,10 +716,10 @@ export function DashboardGrid({
           />
         </div>
 
-        {/* Row 3: Consumption */}
+        {/* Row 3: Usage */}
         <div className={styles.panelRowChartStat}>
           <MetricPanel
-            title="Consumption"
+            title="Usage"
             pluginId="timeseries"
             height={CHART_HEIGHT}
             timeRange={timeRange}

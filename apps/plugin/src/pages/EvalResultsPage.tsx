@@ -19,6 +19,7 @@ import { hasResponseData } from '../components/insight/summarize';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { type ConversationsDataSource, defaultConversationsDataSource } from '../conversation/api';
 import { LowestPassRateConversationsTable } from '../components/dashboard/LowestPassRateConversationsTable';
+import { ViewConversationsLink } from '../components/dashboard/ViewConversationsLink';
 import {
   type EvalBreakdownDimension,
   type EvalFilters,
@@ -426,6 +427,7 @@ export default function EvalResultsPage({
               },
               overrides: [],
             }}
+            actions={<ViewConversationsLink timeRange={timeRange} filters={dashFilters} orderBy="evals" />}
           />
           <BreakdownStatPanel
             title="Scores by Breakdown"
