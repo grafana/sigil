@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import AgentDetailPage from './AgentDetailPage';
 import type { AgentsDataSource } from '../agents/api';
-import type { AgentRatingResponse } from '../agents/types';
+import type { PromptInsightsResponse } from '../agents/types';
 
 function LocationProbe() {
   const location = useLocation();
@@ -89,6 +89,14 @@ function createDataSource(): AgentsDataSource {
       ],
       next_cursor: '',
     })),
+    lookupPromptInsights: jest.fn().mockResolvedValue(null),
+    analyzePrompt: jest.fn().mockResolvedValue({
+      status: 'completed',
+      strengths: [],
+      weaknesses: [],
+      judge_model: '',
+      judge_latency_ms: 0,
+    }),
   };
 }
 
@@ -413,10 +421,9 @@ describe('AgentDetailPage', () => {
     expect(screen.queryByText('DEFERRED TOKENS')).not.toBeInTheDocument();
   });
 
-  it('defaults to markdown and keeps markdown when tokenize is enabled', async () => {
+  it('defaults to markdown view and toggles between markdown and tokenize', async () => {
     const dataSource = createDataSource();
     const lookupAgent = dataSource.lookupAgent;
-    const lookupAgentRating = dataSource.lookupAgentRating;
     dataSource.lookupAgent = jest.fn(async (name: string, version?: string) => {
       const detail = await lookupAgent(name, version);
       return {
@@ -424,26 +431,6 @@ describe('AgentDetailPage', () => {
         system_prompt: '# Prompt heading\n\nUse **bold** and [Docs](https://grafana.com/docs).\n\n- First bullet',
         system_prompt_prefix: '# Prompt heading',
       };
-    });
-    dataSource.lookupAgentRating = jest.fn(async (name: string, version?: string) => {
-      const rating = await lookupAgentRating(name, version);
-      const nextRating: AgentRatingResponse = {
-        ...rating,
-        status: 'completed' as const,
-        score: 8,
-        summary: 'Summary with **emphasis**.',
-        suggestions: [
-          {
-            severity: 'medium',
-            category: 'clarity',
-            title: 'Use clearer constraints',
-            description: 'Add **strict constraints** for tool execution.',
-          },
-        ],
-        judge_model: 'openai/gpt-4o-mini',
-        judge_latency_ms: 88,
-      };
-      return nextRating;
     });
 
     render(
@@ -456,27 +443,17 @@ describe('AgentDetailPage', () => {
 
     expect(await screen.findByText(/# Prompt heading/)).toBeInTheDocument();
     expect(screen.getByText(/- First bullet/)).toBeInTheDocument();
-    expect(screen.getByText(/\*\*strict constraints\*\*/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    const tokenizeButton = screen.getByRole('button', { name: 'Tokenize' });
+    expect(tokenizeButton).toHaveAttribute('aria-pressed', 'false');
 
-    expect(await screen.findByText('Prompt heading')).toBeInTheDocument();
-    expect(screen.queryByText('# Prompt heading')).not.toBeInTheDocument();
-    expect(screen.getByText('bold', { selector: 'strong' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Docs' })).toHaveAttribute('href', 'https://grafana.com/docs');
-    expect(screen.getByText('strict constraints', { selector: 'strong' })).toBeInTheDocument();
+    fireEvent.click(tokenizeButton);
+    expect(tokenizeButton).toHaveAttribute('aria-pressed', 'true');
 
     fireEvent.click(screen.getByRole('button', { name: 'Markdown' }));
 
     expect(await screen.findByText(/# Prompt heading/)).toBeInTheDocument();
     expect(screen.getByText(/- First bullet/)).toBeInTheDocument();
-    expect(screen.getByText(/\*\*strict constraints\*\*/)).toBeInTheDocument();
-
-    fireEvent.click(screen.getAllByRole('button', { name: 'Tokenize' })[0]);
-    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
-
-    expect(screen.getByText(/# Prompt heading/)).toBeInTheDocument();
-    expect(screen.queryByText('Prompt heading')).not.toBeInTheDocument();
   });
 
   it('does not retry recent version ratings forever after lookup failures', async () => {
@@ -518,25 +495,124 @@ describe('AgentDetailPage', () => {
     expect(versionedCalls).toHaveLength(2);
   });
 
-  it('scrolls to system prompt and context analysis when re-running analysis', async () => {
+  it('renders unified analyze button in prompt panel header', async () => {
     const dataSource = createDataSource();
-    const scrollIntoViewSpy = jest.fn();
-    const originalScrollIntoView = Element.prototype.scrollIntoView;
-    Element.prototype.scrollIntoView = scrollIntoViewSpy;
-    try {
-      render(
-        <MemoryRouter initialEntries={['/agents/name/assistant']}>
-          <Routes>
-            <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
-          </Routes>
-        </MemoryRouter>
-      );
 
-      fireEvent.click(await screen.findByRole('button', { name: /re-run/i }));
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
 
-      expect(scrollIntoViewSpy).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
-    } finally {
-      Element.prototype.scrollIntoView = originalScrollIntoView;
-    }
+    const analyzeBtn = await screen.findByTestId('unified-analyze-button');
+    expect(analyzeBtn).toBeInTheDocument();
+    expect(analyzeBtn.textContent).toMatch(/re-analyze|analyze agent/i);
+  });
+
+  it('starts unified analysis without separately triggering agent rating', async () => {
+    const dataSource = createDataSource();
+    dataSource.analyzePrompt = jest.fn(
+      async () =>
+        ({
+          status: 'pending',
+          strengths: [],
+          weaknesses: [],
+          judge_model: '',
+          judge_latency_ms: 0,
+        }) satisfies PromptInsightsResponse
+    );
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByTestId('unified-analyze-button'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Analyze' }));
+
+    await waitFor(() => expect(dataSource.analyzePrompt).toHaveBeenCalledWith('assistant', expect.any(String), '7d'));
+    expect(dataSource.rateAgent).not.toHaveBeenCalled();
+  });
+
+  it('polls for the unified rating result after analysis is triggered', async () => {
+    const completedRating = {
+      status: 'completed' as const,
+      score: 9,
+      summary: 'Rating arrived after unified analysis.',
+      suggestions: [],
+      judge_model: 'openai/gpt-4o-mini',
+      judge_latency_ms: 77,
+    };
+    const dataSource = createDataSource();
+    dataSource.lookupAgentRating = jest
+      .fn()
+      .mockRejectedValueOnce({ status: 404, data: { message: 'not found' } })
+      .mockResolvedValue(completedRating);
+    dataSource.analyzePrompt = jest.fn(
+      async () =>
+        ({
+          status: 'completed',
+          strengths: [],
+          weaknesses: [],
+          judge_model: '',
+          judge_latency_ms: 0,
+        }) satisfies PromptInsightsResponse
+    );
+
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await screen.findByTestId('unified-analyze-button');
+    await waitFor(() => expect(dataSource.lookupAgentRating).toHaveBeenCalled());
+    const lookupCallsBeforeAnalyze = (dataSource.lookupAgentRating as jest.Mock).mock.calls.length;
+
+    fireEvent.click(screen.getByTestId('unified-analyze-button'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Analyze' }));
+
+    await waitFor(() =>
+      expect((dataSource.lookupAgentRating as jest.Mock).mock.calls.length).toBeGreaterThan(lookupCallsBeforeAnalyze)
+    );
+    expect(await screen.findByText('Rating arrived after unified analysis.')).toBeInTheDocument();
+    expect(dataSource.rateAgent).not.toHaveBeenCalled();
+  });
+
+  it('clears rating loading when unified analysis fails to start', async () => {
+    const dataSource = createDataSource();
+    let rejectAnalyze: ((reason?: unknown) => void) | undefined;
+    dataSource.analyzePrompt = jest.fn(
+      () =>
+        new Promise((_, reject) => {
+          rejectAnalyze = reject;
+        })
+    );
+
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByTestId('unified-analyze-button'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Analyze' }));
+
+    expect(await screen.findByRole('progressbar', { name: /loading conversation/i })).toBeInTheDocument();
+
+    rejectAnalyze?.(new Error('backend unavailable'));
+
+    expect(await screen.findByText('Failed to start analysis.')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole('progressbar', { name: /loading conversation/i })).not.toBeInTheDocument();
+    });
   });
 });

@@ -145,6 +145,14 @@ function createDataSource(): AgentsDataSource {
       judge_model: 'openai/gpt-4o-mini',
       judge_latency_ms: 100,
     })),
+    lookupPromptInsights: jest.fn().mockResolvedValue(null),
+    analyzePrompt: jest.fn().mockResolvedValue({
+      status: 'completed',
+      strengths: [],
+      weaknesses: [],
+      judge_model: '',
+      judge_latency_ms: 0,
+    }),
   };
 }
 

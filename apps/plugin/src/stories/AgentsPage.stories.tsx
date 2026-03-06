@@ -63,6 +63,14 @@ const mockDataSource: AgentsDataSource = {
   rateAgent: async () => {
     throw new Error('not implemented in AgentsPage story');
   },
+  lookupPromptInsights: async () => null,
+  analyzePrompt: async () => ({
+    status: 'completed',
+    strengths: [],
+    weaknesses: [],
+    judge_model: '',
+    judge_latency_ms: 0,
+  }),
 };
 
 const mockDashboardDataSource: DashboardDataSource = {
