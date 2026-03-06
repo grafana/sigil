@@ -2442,9 +2442,11 @@ func TestAnalyzePromptFetchesExcerptsAndForwardsToSigil(t *testing.T) {
 }
 
 func TestAnalyzePromptFallsBackToProxyWithoutTempo(t *testing.T) {
+	var receivedBody []byte
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/api/v1/agents:analyze-prompt" {
+			receivedBody, _ = io.ReadAll(r.Body)
 			_, _ = io.WriteString(w, `{"status":"pending","strengths":[],"weaknesses":[]}`)
 			return
 		}
@@ -2471,6 +2473,16 @@ func TestAnalyzePromptFallsBackToProxyWithoutTempo(t *testing.T) {
 	}
 	if !strings.Contains(string(resp.Body), `"status":"pending"`) {
 		t.Fatalf("expected pending status from proxy fallback, body=%s", resp.Body)
+	}
+	if len(receivedBody) == 0 {
+		t.Fatal("expected upstream to receive request body, got empty body")
+	}
+	var forwarded analyzePromptPluginRequest
+	if err := json.Unmarshal(receivedBody, &forwarded); err != nil {
+		t.Fatalf("decode forwarded body: %v", err)
+	}
+	if forwarded.AgentName != "test-agent" {
+		t.Fatalf("expected forwarded agent_name 'test-agent', got %q", forwarded.AgentName)
 	}
 }
 

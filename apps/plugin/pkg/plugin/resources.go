@@ -689,8 +689,15 @@ func (a *App) handleAnalyzePrompt(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// req.Body is consumed by the decoder above, so re-encode for fallback paths.
+	rawBody, err := json.Marshal(payload)
+	if err != nil {
+		http.Error(w, "failed to re-encode request body", http.StatusInternalServerError)
+		return
+	}
+
 	if !a.hasGrafanaDatasourceProxyTarget(a.tempoDatasourceUID) {
-		a.handleProxy(w, req, "/api/v1/agents:analyze-prompt", http.MethodPost)
+		a.handleProxyWithBody(w, req, "/api/v1/agents:analyze-prompt", http.MethodPost, rawBody)
 		return
 	}
 
@@ -711,7 +718,7 @@ func (a *App) handleAnalyzePrompt(w http.ResponseWriter, req *http.Request) {
 			"agent_name", agentName,
 			"error", err,
 		)
-		a.handleProxy(w, req, "/api/v1/agents:analyze-prompt", http.MethodPost)
+		a.handleProxyWithBody(w, req, "/api/v1/agents:analyze-prompt", http.MethodPost, rawBody)
 		return
 	}
 
