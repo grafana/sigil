@@ -3,21 +3,13 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, Button, ConfirmModal, IconButton, Stack, Text, useStyles2 } from '@grafana/ui';
 import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type Evaluator } from '../../evaluation/types';
+import { formatShortDate } from './formatShortDate';
 
 export type EvaluatorCardGridProps = {
   evaluators: Evaluator[];
   onSelect?: (evaluatorID: string) => void;
   onDelete?: (evaluatorID: string) => void;
 };
-
-function formatDate(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-  } catch {
-    return iso;
-  }
-}
 
 const getStyles = (theme: GrafanaTheme2) => ({
   grid: css({
@@ -134,7 +126,7 @@ export default function EvaluatorCardGrid({ evaluators, onSelect, onDelete }: Ev
 
             <div className={styles.meta}>
               <span className={styles.metaText}>Version {evaluator.version}</span>
-              <span className={styles.metaText}>Created {formatDate(evaluator.created_at)}</span>
+              <span className={styles.metaText}>Created {formatShortDate(evaluator.created_at)}</span>
             </div>
 
             <div className={styles.description}>

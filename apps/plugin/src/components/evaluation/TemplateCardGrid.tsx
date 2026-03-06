@@ -3,6 +3,7 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, Button, ConfirmModal, IconButton, Stack, Text, useStyles2 } from '@grafana/ui';
 import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type TemplateDefinition } from '../../evaluation/types';
+import { formatShortDate } from './formatShortDate';
 
 export type TemplateCardGridProps = {
   templates: TemplateDefinition[];
@@ -10,15 +11,6 @@ export type TemplateCardGridProps = {
   onDelete?: (templateID: string) => void;
   onFork?: (templateID: string) => void;
 };
-
-function formatDate(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-  } catch {
-    return iso;
-  }
-}
 
 const getStyles = (theme: GrafanaTheme2) => ({
   grid: css({
@@ -147,7 +139,7 @@ export default function TemplateCardGrid({ templates, onSelect, onDelete, onFork
 
               <div className={styles.meta}>
                 <span className={styles.metaText}>Version {template.latest_version}</span>
-                <span className={styles.metaText}>Created {formatDate(template.created_at)}</span>
+                <span className={styles.metaText}>Created {formatShortDate(template.created_at)}</span>
               </div>
 
               <div className={styles.description}>
