@@ -38,7 +38,7 @@ import { getEncoding, AVAILABLE_ENCODINGS, type EncodingName } from '../componen
 import { getTokenizeControlStyles } from '../components/tokenizer/tokenizeControls.styles';
 import { TopStat } from '../components/TopStat';
 import { PromptDiffView } from '../components/agents/PromptDiffView';
-import { bucketValues, normalizeValuesToHeights } from '../utils/seriesBuckets';
+import { normalizeValuesToHeights } from '../utils/seriesBuckets';
 
 const VERSION_PAGE_SIZE = 50;
 const RECENT_VERSIONS_COUNT = 8;
