@@ -10,11 +10,7 @@ type SparklesBackgroundProps = {
   withTopAccent?: boolean;
 };
 
-export function SparklesBackground({
-  className,
-  withGradient = true,
-  withTopAccent = false,
-}: SparklesBackgroundProps) {
+export function SparklesBackground({ className, withGradient = true, withTopAccent = false }: SparklesBackgroundProps) {
   const styles = useStyles2(getStyles);
 
   return (
