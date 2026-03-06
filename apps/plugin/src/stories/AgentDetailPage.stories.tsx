@@ -159,6 +159,14 @@ const mockDataSource: AgentsDataSource = {
     judge_model: 'openai/gpt-4o-mini',
     judge_latency_ms: 320,
   }),
+  lookupPromptInsights: async () => null,
+  analyzePrompt: async () => ({
+    status: 'completed',
+    strengths: [],
+    weaknesses: [],
+    judge_model: '',
+    judge_latency_ms: 0,
+  }),
 };
 
 const meta = {

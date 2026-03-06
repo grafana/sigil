@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { css, cx } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Alert, Badge, Button, Icon, Text, useStyles2, useTheme2 } from '@grafana/ui';
@@ -22,6 +22,11 @@ export type AgentRatingPanelProps = {
   initialLoading?: boolean;
   initialError?: string;
   embedded?: boolean;
+  hideGenerateCta?: boolean;
+};
+
+export type AgentRatingPanelHandle = {
+  analyze: () => void;
 };
 
 const severityOrder = ['high', 'medium', 'low'] as const;
@@ -536,19 +541,23 @@ function logRatingGenerationFailure(agentName: string, version: string | undefin
   });
 }
 
-export default function AgentRatingPanel({
-  agentName,
-  version,
-  agentStateContext = '',
-  contentView = 'preview',
-  onRerun,
-  onResultChange,
-  dataSource = defaultAgentsDataSource,
-  initialResult = null,
-  initialLoading = false,
-  initialError = '',
-  embedded = false,
-}: AgentRatingPanelProps) {
+const AgentRatingPanel = forwardRef<AgentRatingPanelHandle, AgentRatingPanelProps>(function AgentRatingPanel(
+  {
+    agentName,
+    version,
+    agentStateContext = '',
+    contentView = 'preview',
+    onRerun,
+    onResultChange,
+    dataSource = defaultAgentsDataSource,
+    initialResult = null,
+    initialLoading = false,
+    initialError = '',
+    embedded = false,
+    hideGenerateCta = false,
+  },
+  ref
+) {
   const styles = useStyles2(getStyles);
   const theme = useTheme2();
   const assistant = useAssistant();
@@ -977,6 +986,8 @@ export default function AgentRatingPanel({
     setRewriteModalOpen(false);
   }, []);
 
+  useImperativeHandle(ref, () => ({ analyze: () => void runRating() }), [runRating]);
+
   const displayedRewriteMarkdown = rewriteAssistant.isGenerating
     ? String(rewriteAssistant.content ?? '')
     : rewriteMarkdown;
@@ -996,7 +1007,7 @@ export default function AgentRatingPanel({
           </Alert>
         )}
 
-        {!running && !completedResult && (
+        {!running && !completedResult && !hideGenerateCta && (
           <div className={styles.empty}>
             <Text variant="bodySmall" color="secondary">
               Run a compact analysis of prompt clarity, tool quality, and token risk.
@@ -1102,9 +1113,6 @@ export default function AgentRatingPanel({
             <div className={styles.panelActions}>
               <Button variant="secondary" icon="ai" onClick={openRewriteModal}>
                 Rewrite prompt
-              </Button>
-              <Button onClick={onClickRerun} icon="sync" variant="secondary" className={styles.rerunButton}>
-                Re-run
               </Button>
             </div>
           </div>
@@ -1257,7 +1265,9 @@ export default function AgentRatingPanel({
       )}
     </div>
   );
-}
+});
+
+export default AgentRatingPanel;
 
 function buildAssistantUrl(message: string): string {
   const url = new URL('/a/grafana-assistant-app', window.location.origin);

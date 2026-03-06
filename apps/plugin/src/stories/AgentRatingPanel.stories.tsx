@@ -23,6 +23,14 @@ const mockDataSource: AgentsDataSource = {
     judge_model: 'openai/gpt-4o-mini',
     judge_latency_ms: 280,
   }),
+  lookupPromptInsights: async () => null,
+  analyzePrompt: async () => ({
+    status: 'completed',
+    strengths: [],
+    weaknesses: [],
+    judge_model: '',
+    judge_latency_ms: 0,
+  }),
 };
 
 const meta = {
@@ -122,6 +130,12 @@ export const PoorScoreManySuggestions = {
       judge_model: 'openai/gpt-4o-mini',
       judge_latency_ms: 440,
     },
+  },
+};
+
+export const HideGenerateCta = {
+  args: {
+    hideGenerateCta: true,
   },
 };
 

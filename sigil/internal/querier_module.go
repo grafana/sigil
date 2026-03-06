@@ -20,6 +20,7 @@ import (
 	evalworker "github.com/grafana/sigil/sigil/internal/eval/worker"
 	"github.com/grafana/sigil/sigil/internal/feedback"
 	"github.com/grafana/sigil/sigil/internal/modelcards"
+	"github.com/grafana/sigil/sigil/internal/promptinsights"
 	"github.com/grafana/sigil/sigil/internal/query"
 	"github.com/grafana/sigil/sigil/internal/server"
 	"github.com/grafana/sigil/sigil/internal/storage"
@@ -128,8 +129,15 @@ func newQuerierModule(
 	if store, ok := generationStore.(agentrating.LatestStore); ok {
 		agentRatingStore = store
 	}
+	var promptInsightsAnalyzer *promptinsights.Analyzer
+	var promptInsightsStore promptinsights.Store
+	if store, ok := generationStore.(promptinsights.Store); ok {
+		promptInsightsStore = store
+	}
+
 	if _, ok := discovery.Client(agentRatingProviderID); ok {
 		agentRater = agentrating.NewRaterWithTarget(discovery, agentRatingProviderID, agentRatingModelName)
+		promptInsightsAnalyzer = promptinsights.NewAnalyzer(discovery, agentRatingProviderID+"/"+agentRatingModelName)
 	} else {
 		_ = level.Warn(logger).Log(
 			"msg", "agent rating disabled because configured judge provider is unavailable",
@@ -248,6 +256,10 @@ func newQuerierModule(
 				modelCardSvc,
 				logger,
 				protectedMiddleware,
+				server.PromptInsightsOption{
+					Analyzer: promptInsightsAnalyzer,
+					Store:    promptInsightsStore,
+				},
 			)
 			server.RegisterSettingsRoutes(mux, tenantSettingsSvc, protectedMiddleware)
 			evalcontrol.RegisterHTTPRoutes(mux, controlSvc, templateSvc, testSvc, protectedMiddleware)

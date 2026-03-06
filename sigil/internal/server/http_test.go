@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
 	"github.com/grafana/sigil/sigil/internal/modelcards"
+	"github.com/grafana/sigil/sigil/internal/promptinsights"
 	"github.com/grafana/sigil/sigil/internal/query"
 	"github.com/grafana/sigil/sigil/internal/storage"
 	"github.com/grafana/sigil/sigil/internal/tenantauth"
@@ -1537,6 +1539,174 @@ func (s *testAgentCatalogStore) ListAgentVersionModels(_ context.Context, _ stri
 
 func (s *testAgentCatalogStore) ListAgentVersions(_ context.Context, _ string, _ string, _ int, _ *storage.AgentVersionCursor) ([]storage.AgentVersionSummary, *storage.AgentVersionCursor, error) {
 	return s.versions, s.nextVersionCursor, nil
+}
+
+type testPromptInsightsStore struct {
+	mu                   sync.Mutex
+	insights             *promptinsights.PromptInsights
+	lastTenantID         string
+	lastAgentName        string
+	lastEffectiveVersion string
+}
+
+func (s *testPromptInsightsStore) UpsertPromptInsights(_ context.Context, _, _, _ string, insights promptinsights.PromptInsights) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	copied := insights
+	s.insights = &copied
+	return nil
+}
+
+func (s *testPromptInsightsStore) GetPromptInsights(_ context.Context, tenantID, agentName, effectiveVersion string) (*promptinsights.PromptInsights, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.lastTenantID = tenantID
+	s.lastAgentName = agentName
+	s.lastEffectiveVersion = effectiveVersion
+	if s.insights == nil {
+		return nil, nil
+	}
+	copied := *s.insights
+	return &copied, nil
+}
+
+func TestLookupPromptInsightsEndpointReturnsStoredResult(t *testing.T) {
+	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
+		AgentCatalogStore: &testAgentCatalogStore{
+			latestVersion: &storage.AgentVersion{
+				AgentName:          "assistant",
+				EffectiveVersion:   "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				SystemPrompt:       "You are concise.",
+				SystemPromptPrefix: "You are concise.",
+				ToolCount:          0,
+				TokenEstimateTotal: 40,
+				GenerationCount:    2,
+				FirstSeenAt:        time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC),
+				LastSeenAt:         time.Date(2026, 3, 4, 11, 0, 0, 0, time.UTC),
+				ToolsJSON:          "[]",
+			},
+		},
+		FeedbackStore: feedback.NewMemoryStore(),
+	})
+	if err != nil {
+		t.Fatalf("new query service: %v", err)
+	}
+
+	insightsStore := &testPromptInsightsStore{
+		insights: &promptinsights.PromptInsights{
+			Status: promptinsights.StatusCompleted,
+			Strengths: []promptinsights.Insight{
+				{Quote: "You are concise", Title: "Clear role", Explanation: "Well-defined role."},
+			},
+			Weaknesses:     []promptinsights.Insight{},
+			JudgeModel:     "openai/gpt-4o-mini",
+			JudgeLatencyMs: 200,
+		},
+	}
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterQueryRoutes(
+		mux,
+		querySvc,
+		nil,
+		nil,
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		kitlog.NewNopLogger(),
+		protected,
+		PromptInsightsOption{Store: insightsStore},
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/agents:prompt-insights?name=assistant", nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"status":"completed"`) {
+		t.Fatalf("expected completed status in response, body=%s", resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"You are concise"`) {
+		t.Fatalf("expected insight quote in response, body=%s", resp.Body.String())
+	}
+	if insightsStore.lastEffectiveVersion != "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" {
+		t.Fatalf("expected lookup for resolved effective version, got %q", insightsStore.lastEffectiveVersion)
+	}
+}
+
+func TestLookupPromptInsightsEndpointReturnsNotFoundWhenEmpty(t *testing.T) {
+	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
+		AgentCatalogStore: &testAgentCatalogStore{
+			latestVersion: &storage.AgentVersion{
+				AgentName:          "assistant",
+				EffectiveVersion:   "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				SystemPrompt:       "You are concise.",
+				SystemPromptPrefix: "You are concise.",
+				ToolCount:          0,
+				TokenEstimateTotal: 40,
+				GenerationCount:    2,
+				FirstSeenAt:        time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC),
+				LastSeenAt:         time.Date(2026, 3, 4, 11, 0, 0, 0, time.UTC),
+				ToolsJSON:          "[]",
+			},
+		},
+		FeedbackStore: feedback.NewMemoryStore(),
+	})
+	if err != nil {
+		t.Fatalf("new query service: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterQueryRoutes(
+		mux,
+		querySvc,
+		nil,
+		nil,
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		kitlog.NewNopLogger(),
+		protected,
+		PromptInsightsOption{Store: &testPromptInsightsStore{}},
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/agents:prompt-insights?name=assistant", nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d body=%s", resp.Code, resp.Body.String())
+	}
+}
+
+func TestParseLookback(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected time.Duration
+	}{
+		{"6h", 6 * time.Hour},
+		{"12h", 12 * time.Hour},
+		{"1d", 24 * time.Hour},
+		{"3d", 3 * 24 * time.Hour},
+		{"7d", 7 * 24 * time.Hour},
+		{" 7d ", 7 * 24 * time.Hour},
+		{"", 7 * 24 * time.Hour},
+		{"invalid", 7 * 24 * time.Hour},
+		{"30d", 7 * 24 * time.Hour},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("input=%q", tt.input), func(t *testing.T) {
+			got := parseLookback(tt.input)
+			if got != tt.expected {
+				t.Errorf("parseLookback(%q) = %v, want %v", tt.input, got, tt.expected)
+			}
+		})
+	}
 }
 
 func stringPtr(value string) *string {

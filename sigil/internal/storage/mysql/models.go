@@ -279,6 +279,25 @@ func (AgentVersionRatingModel) TableName() string {
 	return "agent_version_ratings"
 }
 
+type AgentPromptInsightsModel struct {
+	ID               uint64    `gorm:"primaryKey;autoIncrement"`
+	TenantID         string    `gorm:"size:128;not null;uniqueIndex:ux_agent_prompt_insights_tenant_name_version,priority:1"`
+	AgentName        string    `gorm:"size:191;not null;default:'';uniqueIndex:ux_agent_prompt_insights_tenant_name_version,priority:2"`
+	EffectiveVersion string    `gorm:"size:71;not null;uniqueIndex:ux_agent_prompt_insights_tenant_name_version,priority:3"`
+	Status           string    `gorm:"size:16;not null;default:'completed'"`
+	StrengthsJSON    string    `gorm:"type:json;not null"`
+	WeaknessesJSON   string    `gorm:"type:json;not null"`
+	JudgeModel       string    `gorm:"size:255;not null"`
+	JudgeLatencyMs   int64     `gorm:"not null;default:0"`
+	AnalyzedAt       time.Time `gorm:"type:datetime(6);not null"`
+	CreatedAt        time.Time `gorm:"type:datetime(6);not null;autoCreateTime"`
+	UpdatedAt        time.Time `gorm:"type:datetime(6);not null;autoUpdateTime"`
+}
+
+func (AgentPromptInsightsModel) TableName() string {
+	return "agent_prompt_insights"
+}
+
 type ConversationRatingModel struct {
 	ID             uint64    `gorm:"primaryKey;autoIncrement"`
 	TenantID       string    `gorm:"size:128;not null;uniqueIndex:ux_conversation_ratings_tenant_rating,priority:1;index:idx_conversation_ratings_tenant_conv_created,priority:1;index:idx_conversation_ratings_tenant_conv_rating_created,priority:1;index:idx_conversation_ratings_tenant_rating_created,priority:1"`

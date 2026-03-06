@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"regexp"
@@ -19,14 +20,34 @@ import (
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
 	"github.com/grafana/sigil/sigil/internal/jsonutil"
 	"github.com/grafana/sigil/sigil/internal/modelcards"
+	"github.com/grafana/sigil/sigil/internal/promptinsights"
 	"github.com/grafana/sigil/sigil/internal/query"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 const (
-	agentRatingEvaluationTimeout = 3 * time.Minute
-	agentRatingPersistTimeout    = 10 * time.Second
+	agentRatingEvaluationTimeout    = 3 * time.Minute
+	agentRatingPersistTimeout       = 10 * time.Second
+	promptInsightsEvaluationTimeout   = 3 * time.Minute
+	promptInsightsPersistTimeout      = 10 * time.Second
+	promptInsightsConversationLimit   = 15
+	promptInsightsConversationLookback = 7 * 24 * time.Hour
 )
+
+var validLookbacks = map[string]time.Duration{
+	"6h":  6 * time.Hour,
+	"12h": 12 * time.Hour,
+	"1d":  24 * time.Hour,
+	"3d":  3 * 24 * time.Hour,
+	"7d":  7 * 24 * time.Hour,
+}
+
+func parseLookback(raw string) time.Duration {
+	if d, ok := validLookbacks[strings.TrimSpace(raw)]; ok {
+		return d
+	}
+	return promptInsightsConversationLookback
+}
 
 func RegisterRoutes(
 	mux *http.ServeMux,
@@ -90,6 +111,7 @@ func RegisterQueryRoutes(
 	modelCardSvc *modelcards.Service,
 	logger kitlog.Logger,
 	protectedMiddleware func(http.Handler) http.Handler,
+	promptInsightsOpts ...PromptInsightsOption,
 ) {
 	if mux == nil || querySvc == nil {
 		return
@@ -121,6 +143,27 @@ func RegisterQueryRoutes(
 		mux.Handle("/api/v1/model-cards:sources", protectedMiddleware(http.HandlerFunc(listModelCardSources(modelCardSvc))))
 		mux.Handle("/api/v1/model-cards:refresh", protectedMiddleware(http.HandlerFunc(refreshModelCards(modelCardSvc))))
 	}
+
+	var piOpts PromptInsightsOption
+	if len(promptInsightsOpts) > 0 {
+		piOpts = promptInsightsOpts[0]
+	}
+	if piOpts.Store != nil {
+		mux.Handle("/api/v1/agents:prompt-insights", protectedMiddleware(http.HandlerFunc(lookupPromptInsights(querySvc, piOpts.Store))))
+	}
+	if piOpts.Analyzer != nil && piOpts.Store != nil {
+		mux.Handle("/api/v1/agents:analyze-prompt", protectedMiddleware(http.HandlerFunc(analyzePrompt(querySvc, piOpts.Analyzer, piOpts.Store, rater, ratingStore, logger))))
+	} else if piOpts.Store != nil {
+		mux.Handle("/api/v1/agents:analyze-prompt", protectedMiddleware(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			http.Error(w, "prompt analysis is unavailable: no judge provider is configured", http.StatusServiceUnavailable)
+		})))
+	}
+}
+
+// PromptInsightsOption carries optional dependencies for prompt insights routes.
+type PromptInsightsOption struct {
+	Analyzer *promptinsights.Analyzer
+	Store    promptinsights.Store
 }
 
 func health(w http.ResponseWriter, _ *http.Request) {
@@ -830,6 +873,447 @@ func mapAgentDetailToRatingAgent(item query.AgentDetail) agentrating.Agent {
 			ToolsTotal:   item.TokenEstimate.ToolsTotal,
 			Total:        item.TokenEstimate.Total,
 		},
+	}
+}
+
+type analyzePromptRequest struct {
+	AgentName string `json:"agent_name"`
+	Version   string `json:"version,omitempty"`
+	Model     string `json:"model,omitempty"`
+	Lookback  string `json:"lookback,omitempty"`
+}
+
+func analyzePrompt(
+	querySvc *query.Service,
+	analyzer *promptinsights.Analyzer,
+	insightsStore promptinsights.Store,
+	rater *agentrating.Rater,
+	ratingStore agentrating.LatestStore,
+	logger kitlog.Logger,
+) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		tenantID, err := tenant.TenantID(req.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		var payload analyzePromptRequest
+		if req.Body == nil {
+			http.Error(w, "request body is required", http.StatusBadRequest)
+			return
+		}
+		decoder := json.NewDecoder(req.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&payload); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+		if err := jsonutil.EnsureEOF(decoder); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		agentDetail, found, err := querySvc.GetAgentDetailForTenant(req.Context(), tenantID, payload.AgentName, payload.Version)
+		if err != nil {
+			if query.IsValidationError(err) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if !found {
+			http.NotFound(w, req)
+			return
+		}
+
+		existing, err := insightsStore.GetPromptInsights(
+			req.Context(),
+			tenantID,
+			agentDetail.AgentName,
+			agentDetail.EffectiveVersion,
+		)
+		if err != nil {
+			http.Error(w, "failed to read existing prompt insights", http.StatusInternalServerError)
+			return
+		}
+		if existing != nil && promptinsights.NormalizeStatus(existing.Status) == promptinsights.StatusPending {
+			existing.Status = promptinsights.StatusPending
+			writeJSON(w, http.StatusAccepted, existing)
+			return
+		}
+
+		pending := promptinsights.PromptInsights{
+			Status:     promptinsights.StatusPending,
+			Strengths:  []promptinsights.Insight{},
+			Weaknesses: []promptinsights.Insight{},
+		}
+		if err := insightsStore.UpsertPromptInsights(
+			req.Context(),
+			tenantID,
+			agentDetail.AgentName,
+			agentDetail.EffectiveVersion,
+			pending,
+		); err != nil {
+			http.Error(w, "failed to persist pending prompt insights", http.StatusInternalServerError)
+			return
+		}
+
+		var ratingInput *agentrating.Agent
+		if rater != nil && ratingStore != nil {
+			pendingRating := agentrating.Rating{
+				Status:      agentrating.RatingStatusPending,
+				Suggestions: []agentrating.Suggestion{},
+			}
+			if err := ratingStore.UpsertAgentVersionRating(
+				req.Context(),
+				tenantID,
+				agentDetail.AgentName,
+				agentDetail.EffectiveVersion,
+				pendingRating,
+			); err != nil {
+				_ = level.Error(logger).Log(
+					"msg", "failed to persist pending agent rating during unified analysis",
+					"tenant_id", tenantID,
+					"agent_name", agentDetail.AgentName,
+					"effective_version", agentDetail.EffectiveVersion,
+					"err", err,
+				)
+			} else {
+				input := mapAgentDetailToRatingAgent(agentDetail)
+				ratingInput = &input
+			}
+		}
+
+		writeJSON(w, http.StatusAccepted, pending)
+
+		go evaluateUnifiedAnalysis(
+			logger,
+			querySvc,
+			analyzer,
+			insightsStore,
+			rater,
+			ratingStore,
+			ratingInput,
+			tenantID,
+			agentDetail.AgentName,
+			agentDetail.EffectiveVersion,
+			agentDetail.SystemPrompt,
+			payload.Model,
+			parseLookback(payload.Lookback),
+		)
+	}
+}
+
+// evaluateUnifiedAnalysis runs prompt insights first, then agent rating
+// sequentially in a single goroutine to avoid concurrent judge API calls.
+func evaluateUnifiedAnalysis(
+	logger kitlog.Logger,
+	querySvc *query.Service,
+	analyzer *promptinsights.Analyzer,
+	insightsStore promptinsights.Store,
+	rater *agentrating.Rater,
+	ratingStore agentrating.LatestStore,
+	ratingInput *agentrating.Agent,
+	tenantID string,
+	agentName string,
+	effectiveVersion string,
+	systemPrompt string,
+	modelOverride string,
+	lookback time.Duration,
+) {
+	evaluatePromptInsights(
+		logger,
+		querySvc,
+		analyzer,
+		insightsStore,
+		tenantID,
+		agentName,
+		effectiveVersion,
+		systemPrompt,
+		modelOverride,
+		lookback,
+	)
+
+	if rater != nil && ratingStore != nil && ratingInput != nil {
+		evaluateAgentRating(
+			logger,
+			rater,
+			ratingStore,
+			tenantID,
+			agentName,
+			effectiveVersion,
+			*ratingInput,
+			modelOverride,
+		)
+	}
+}
+
+func evaluatePromptInsights(
+	logger kitlog.Logger,
+	querySvc *query.Service,
+	analyzer *promptinsights.Analyzer,
+	insightsStore promptinsights.Store,
+	tenantID string,
+	agentName string,
+	effectiveVersion string,
+	systemPrompt string,
+	modelOverride string,
+	lookback time.Duration,
+) {
+	failedInsights := promptinsights.PromptInsights{
+		Status:     promptinsights.StatusFailed,
+		Strengths:  []promptinsights.Insight{},
+		Weaknesses: []promptinsights.Insight{},
+	}
+
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			_ = level.Error(logger).Log(
+				"msg", "prompt insights background evaluation panicked",
+				"tenant_id", tenantID,
+				"agent_name", agentName,
+				"effective_version", effectiveVersion,
+				"panic", recovered,
+			)
+			_ = upsertPromptInsightsWithTimeout(insightsStore, tenantID, agentName, effectiveVersion, failedInsights)
+		}
+	}()
+
+	evalCtx, cancel := context.WithTimeout(context.Background(), promptInsightsEvaluationTimeout)
+	defer cancel()
+
+	excerpts, err := fetchConversationExcerpts(evalCtx, querySvc, tenantID, agentName, lookback)
+	if err != nil {
+		_ = level.Error(logger).Log(
+			"msg", "prompt insights failed to fetch conversations",
+			"tenant_id", tenantID,
+			"agent_name", agentName,
+			"err", err,
+		)
+		_ = upsertPromptInsightsWithTimeout(insightsStore, tenantID, agentName, effectiveVersion, failedInsights)
+		return
+	}
+
+	result, err := analyzer.Analyze(evalCtx, systemPrompt, excerpts, modelOverride)
+	if err != nil {
+		_ = level.Error(logger).Log(
+			"msg", "prompt insights background evaluation failed",
+			"tenant_id", tenantID,
+			"agent_name", agentName,
+			"effective_version", effectiveVersion,
+			"model_override", modelOverride,
+			"timeout", errors.Is(evalCtx.Err(), context.DeadlineExceeded),
+			"err", err,
+		)
+		_ = upsertPromptInsightsWithTimeout(insightsStore, tenantID, agentName, effectiveVersion, failedInsights)
+		return
+	}
+	if result == nil {
+		_ = level.Error(logger).Log(
+			"msg", "prompt insights background evaluation returned nil",
+			"tenant_id", tenantID,
+			"agent_name", agentName,
+			"effective_version", effectiveVersion,
+		)
+		_ = upsertPromptInsightsWithTimeout(insightsStore, tenantID, agentName, effectiveVersion, failedInsights)
+		return
+	}
+
+	result.Status = promptinsights.StatusCompleted
+	if err := upsertPromptInsightsWithTimeout(insightsStore, tenantID, agentName, effectiveVersion, *result); err != nil {
+		_ = level.Error(logger).Log(
+			"msg", "failed to persist completed prompt insights",
+			"tenant_id", tenantID,
+			"agent_name", agentName,
+			"effective_version", effectiveVersion,
+			"err", err,
+		)
+	}
+}
+
+func fetchConversationExcerpts(ctx context.Context, querySvc *query.Service, tenantID, agentName string, lookback time.Duration) ([]promptinsights.ConversationExcerpt, error) {
+	filterExpr := fmt.Sprintf("agent = %q", agentName)
+
+	now := time.Now().UTC()
+	searchReq := query.ConversationSearchRequest{
+		Filters: filterExpr,
+		TimeRange: query.ConversationSearchTimeRange{
+			From: now.Add(-lookback),
+			To:   now,
+		},
+		PageSize: promptInsightsConversationLimit,
+	}
+
+	searchResp, err := querySvc.SearchConversationsForTenant(ctx, tenantID, searchReq)
+	if err != nil {
+		return nil, fmt.Errorf("search conversations: %w", err)
+	}
+
+	excerpts := make([]promptinsights.ConversationExcerpt, 0, len(searchResp.Conversations))
+	for _, conv := range searchResp.Conversations {
+		detail, found, err := querySvc.GetConversationDetailForTenant(ctx, tenantID, conv.ConversationID)
+		if err != nil || !found {
+			continue
+		}
+
+		agentGens := make([]map[string]any, 0)
+		for _, g := range detail.Generations {
+			if an, _ := g["agent_name"].(string); an == agentName {
+				agentGens = append(agentGens, g)
+			}
+		}
+
+		if len(agentGens) == 0 {
+			continue
+		}
+
+		excerpt := promptinsights.ConversationExcerpt{
+			ConversationID:  conv.ConversationID,
+			GenerationCount: len(agentGens),
+			HasErrors:       conv.HasErrors,
+		}
+
+		firstGen := agentGens[0]
+		excerpt.UserInput = extractFirstMessageText(firstGen, "input")
+		excerpt.AssistantOutput = extractFirstMessageText(firstGen, "output")
+		for _, g := range agentGens {
+			excerpt.ToolCallCount += countToolCalls(g)
+		}
+
+		excerpts = append(excerpts, excerpt)
+	}
+
+	return excerpts, nil
+}
+
+func extractFirstMessageText(generation map[string]any, field string) string {
+	messages, ok := generation[field].([]any)
+	if !ok || len(messages) == 0 {
+		return ""
+	}
+	msg, ok := messages[0].(map[string]any)
+	if !ok {
+		return ""
+	}
+	parts, ok := msg["parts"].([]any)
+	if !ok || len(parts) == 0 {
+		return ""
+	}
+	part, ok := parts[0].(map[string]any)
+	if !ok {
+		return ""
+	}
+	text, _ := part["text"].(string)
+	return text
+}
+
+func countToolCalls(generation map[string]any) int {
+	output, ok := generation["output"].([]any)
+	if !ok {
+		return 0
+	}
+	count := 0
+	for _, msg := range output {
+		m, ok := msg.(map[string]any)
+		if !ok {
+			continue
+		}
+		parts, ok := m["parts"].([]any)
+		if !ok {
+			continue
+		}
+		for _, part := range parts {
+			p, ok := part.(map[string]any)
+			if !ok {
+				continue
+			}
+			if _, hasToolCall := p["tool_call"]; hasToolCall {
+				count++
+			}
+		}
+	}
+	return count
+}
+
+func upsertPromptInsightsWithTimeout(
+	store promptinsights.Store,
+	tenantID string,
+	agentName string,
+	effectiveVersion string,
+	insights promptinsights.PromptInsights,
+) error {
+	persistCtx, cancel := context.WithTimeout(context.Background(), promptInsightsPersistTimeout)
+	defer cancel()
+	return store.UpsertPromptInsights(persistCtx, tenantID, agentName, effectiveVersion, insights)
+}
+
+func lookupPromptInsights(querySvc *query.Service, insightsStore promptinsights.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		tenantID, err := tenant.TenantID(req.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		rawNames, hasName := req.URL.Query()["name"]
+		if !hasName {
+			http.Error(w, "name query param is required", http.StatusBadRequest)
+			return
+		}
+
+		agentName := ""
+		if len(rawNames) > 0 {
+			agentName = rawNames[0]
+		}
+
+		agentDetail, found, err := querySvc.GetAgentDetailForTenant(
+			req.Context(),
+			tenantID,
+			agentName,
+			req.URL.Query().Get("version"),
+		)
+		if err != nil {
+			if query.IsValidationError(err) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if !found {
+			http.NotFound(w, req)
+			return
+		}
+
+		insights, err := insightsStore.GetPromptInsights(
+			req.Context(),
+			tenantID,
+			agentDetail.AgentName,
+			agentDetail.EffectiveVersion,
+		)
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if insights == nil {
+			http.NotFound(w, req)
+			return
+		}
+		insights.Status = promptinsights.NormalizeStatus(insights.Status)
+
+		writeJSON(w, http.StatusOK, insights)
 	}
 }
 
