@@ -1477,11 +1477,11 @@ export default function AgentDetailPage({
   const displayActivityHeights = activityHeights && activityHeights.length > 0 ? activityHeights : EMPTY_ACTIVITY_BARS;
   const activeHeroRating = initialRating?.status === 'completed' ? initialRating : null;
   const activeHeroRatingSummary = activeHeroRating ? firstLine(activeHeroRating.summary) : '';
-  const activeScoreRounded = activeHeroRating ? Math.max(1, Math.min(10, Math.round(activeHeroRating.score))) : 0;
+  const activeScoreRounded = activeHeroRating ? Math.max(0, Math.min(10, Math.round(activeHeroRating.score))) : 0;
   const activeVersionItem = versionOptions.find((item) => item.effective_version === activeVersion);
   const activeVersionLabel =
-    activeVersionItem?.declared_version_latest ??
-    activeVersionItem?.declared_version_first ??
+    activeVersionItem?.declared_version_latest ||
+    activeVersionItem?.declared_version_first ||
     `${activeVersion.replace(/^sha256:/, '').slice(0, 12)}…`;
 
   return (
