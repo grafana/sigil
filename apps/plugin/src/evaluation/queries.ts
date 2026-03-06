@@ -1,4 +1,4 @@
-import { buildLabelSelector, escapePrometheusRegex } from '../dashboard/queries';
+import { escapePrometheusRegex } from '../dashboard/queries';
 import type { DashboardFilters } from '../dashboard/types';
 
 const SCORES_TOTAL = 'sigil_eval_scores_total';
@@ -52,9 +52,15 @@ function multiMatcher(label: string, values: string[]): string {
 function evalLabelSelector(dashFilters: DashboardFilters, evalFilters: EvalFilters, extra?: string): string {
   const parts: string[] = [];
 
-  const dashPart = buildLabelSelector(dashFilters);
-  if (dashPart) {
-    parts.push(dashPart);
+  // Eval metrics use gen_ai_request_provider (not gen_ai_provider_name).
+  if (dashFilters.providers.length > 0) {
+    parts.push(multiMatcher('gen_ai_request_provider', dashFilters.providers));
+  }
+  if (dashFilters.models.length > 0) {
+    parts.push(multiMatcher('gen_ai_request_model', dashFilters.models));
+  }
+  if (dashFilters.agentNames.length > 0) {
+    parts.push(multiMatcher('gen_ai_agent_name', dashFilters.agentNames));
   }
 
   if (evalFilters.evaluators.length > 0) {
