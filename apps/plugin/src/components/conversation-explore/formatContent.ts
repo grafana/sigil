@@ -6,10 +6,6 @@ function looksLikeBase64(value: string): boolean {
   return value.length >= 64 && BASE64_RE.test(value);
 }
 
-function tryDecodeBase64(value: string): string | null {
-  return decodeBase64Utf8(value);
-}
-
 function tryPrettyJSON(value: string): string | null {
   try {
     return JSON.stringify(JSON.parse(value), null, 2);
@@ -34,7 +30,7 @@ function formatBytes(bytes: number): string {
  * undecodable binary blobs with a human-readable placeholder.
  */
 export function formatToolContent(value: string): string {
-  const decoded = tryDecodeBase64(value);
+  const decoded = decodeBase64Utf8(value);
   if (decoded !== null) {
     return tryPrettyJSON(decoded) ?? decoded;
   }
