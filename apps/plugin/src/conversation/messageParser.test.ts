@@ -1,10 +1,20 @@
 import { decodeBase64Json, formatJson, humanizeRole, parseMessages } from './messageParser';
 import type { MessageRole } from './types';
 
+function encodeUtf8Base64(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  return btoa(String.fromCharCode(...bytes));
+}
+
 describe('decodeBase64Json', () => {
   it('decodes valid base64 to UTF-8 string', () => {
     const encoded = btoa('{"key":"value"}');
     expect(decodeBase64Json(encoded)).toBe('{"key":"value"}');
+  });
+
+  it('decodes non-ascii UTF-8 strings', () => {
+    const encoded = encodeUtf8Base64('{"message":"café ☕"}');
+    expect(decodeBase64Json(encoded)).toBe('{"message":"café ☕"}');
   });
 
   it('returns raw string when base64 decode fails', () => {
@@ -119,6 +129,20 @@ describe('parseMessages', () => {
   it('parses tool_result with base64 content_json', () => {
     const contentJson = '{"results":[1,2,3]}';
     const encoded = btoa(contentJson);
+    const raw = [
+      {
+        role: 'MESSAGE_ROLE_TOOL',
+        parts: [{ tool_result: { tool_call_id: 'tc-1', name: 'search', content_json: encoded } }],
+      },
+    ];
+    const result = parseMessages(raw);
+    expect(result).toHaveLength(1);
+    expect(result[0].parts[0].tool_result?.content_json).toBe(contentJson);
+  });
+
+  it('parses tool_result with UTF-8 content_json', () => {
+    const contentJson = '{"message":"café ☕"}';
+    const encoded = encodeUtf8Base64(contentJson);
     const raw = [
       {
         role: 'MESSAGE_ROLE_TOOL',

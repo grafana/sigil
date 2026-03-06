@@ -1,3 +1,5 @@
+import { decodeBase64Utf8 } from '../../conversation/base64';
+
 const BASE64_RE = /^[A-Za-z0-9+/\n\r]+=*$/;
 
 function looksLikeBase64(value: string): boolean {
@@ -5,15 +7,7 @@ function looksLikeBase64(value: string): boolean {
 }
 
 function tryDecodeBase64(value: string): string | null {
-  try {
-    const decoded = atob(value);
-    if (/^[\x20-\x7E\s]*$/.test(decoded)) {
-      return decoded;
-    }
-  } catch {
-    // not valid base64
-  }
-  return null;
+  return decodeBase64Utf8(value);
 }
 
 function tryPrettyJSON(value: string): string | null {

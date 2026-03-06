@@ -1,11 +1,8 @@
 import type { Message, MessageRole, Part, ToolCallPart, ToolResultPart } from './types';
+import { decodeBase64Utf8 } from './base64';
 
 export function decodeBase64Json(encoded: string): string {
-  try {
-    return atob(encoded);
-  } catch {
-    return encoded;
-  }
+  return decodeBase64Utf8(encoded) ?? encoded;
 }
 
 export function humanizeRole(role: MessageRole): string {
