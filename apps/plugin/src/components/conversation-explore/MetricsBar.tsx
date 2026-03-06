@@ -143,7 +143,7 @@ function getStatusTooltip(errorCount: number): string {
 
 function renderBreakdownTable(
   rows: Array<{ label: string; value: string }>
-): React.ReactNode {
+): React.JSX.Element {
   return (
     <table style={{ borderCollapse: 'separate', borderSpacing: '0 0' }}>
       <tbody>
@@ -162,7 +162,7 @@ function renderBreakdownTable(
   );
 }
 
-function getTokenTooltip(tokenSummary: TokenSummary): React.ReactNode {
+function getTokenTooltip(tokenSummary: TokenSummary): React.JSX.Element {
   return renderBreakdownTable([
     { label: 'Input', value: formatTokenCount(tokenSummary.inputTokens) },
     { label: 'Output', value: formatTokenCount(tokenSummary.outputTokens) },
@@ -172,7 +172,7 @@ function getTokenTooltip(tokenSummary: TokenSummary): React.ReactNode {
   ]);
 }
 
-function getCallsTooltip(callsByAgent: Array<{ agent: string; count: number }>): React.ReactNode {
+function getCallsTooltip(callsByAgent: Array<{ agent: string; count: number }>): React.JSX.Element | string {
   if (callsByAgent.length === 0) {
     return 'No agent names found for these calls.';
   }
@@ -185,7 +185,7 @@ function getCallsTooltip(callsByAgent: Array<{ agent: string; count: number }>):
   );
 }
 
-function getCostTooltip(costSummary: CostSummary): React.ReactNode {
+function getCostTooltip(costSummary: CostSummary): React.JSX.Element {
   return renderBreakdownTable([
     { label: 'Input', value: formatCost(costSummary.inputCost) },
     { label: 'Output', value: formatCost(costSummary.outputCost) },

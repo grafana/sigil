@@ -9,7 +9,7 @@ import {
   type Message,
   type Part,
 } from '../../generation/types';
-import type { ConversationSpan } from '../../conversation/types';
+import type { ConversationSpan, SpanAttributes } from '../../conversation/types';
 import { getSelectionID } from '../../conversation/spans';
 import { plugin } from '../../module';
 import { buildAgentDetailHref } from '../dashboard/ViewAgentsLink';
@@ -330,23 +330,6 @@ function UsageChips({ generation }: { generation: GenerationDetail }) {
   );
 }
 
-function getStringAttribute(
-  attrs: Map<string, { stringValue?: string; intValue?: string; doubleValue?: number; boolValue?: boolean }>,
-  key: string
-): string | undefined {
-  const value = attrs.get(key);
-  return value?.stringValue?.trim() || undefined;
-}
-
-function formatOperationMode(rawValue: string | undefined): string | null {
-  if (!rawValue) {
-    return null;
-  }
-
-  const normalized = rawValue.trim();
-  return normalized || null;
-}
-
 function AgentContextLabel({ generation, fallbackModel }: { generation: GenerationDetail; fallbackModel?: string }) {
   const styles = useStyles2(getStyles);
 
@@ -454,9 +437,7 @@ function AgentDetailButton({ generation }: { generation?: GenerationDetail }) {
   );
 }
 
-function collectAttributeEntries(
-  attrs: Map<string, { stringValue?: string; intValue?: string; doubleValue?: number; boolValue?: boolean }>
-): Array<{ key: string; value: string }> {
+function collectAttributeEntries(attrs: SpanAttributes): Array<{ key: string; value: string }> {
   const entries: Array<{ key: string; value: string }> = [];
 
   for (const [key, val] of attrs) {
@@ -468,7 +449,7 @@ function collectAttributeEntries(
     } else if (val.intValue !== undefined) {
       entries.push({ key, value: val.intValue });
     } else if (val.doubleValue !== undefined) {
-      entries.push({ key, value: val.doubleValue });
+      entries.push({ key, value: String(val.doubleValue) });
     } else if (val.boolValue !== undefined) {
       entries.push({ key, value: String(val.boolValue) });
     }
@@ -500,14 +481,15 @@ function AttributeSections({ span }: { span: ConversationSpan }) {
     [spanEntries]
   );
 
-  const tabs: Array<{ id: AttributeTab; label: string; count: number }> = [
+  const tabs = [
     { id: 'genai', label: 'Gen AI', count: genAiEntries.length },
     { id: 'resource', label: 'Resource', count: plainResourceEntries.length },
     { id: 'attributes', label: 'Attributes', count: plainSpanEntries.length },
-  ].filter((tab) => tab.count > 0);
-  const activeTab = tabs.some((tab) => tab.id === selectedTab) ? selectedTab : tabs[0]?.id;
+  ] satisfies Array<{ id: AttributeTab; label: string; count: number }>;
+  const visibleTabs = tabs.filter((tab) => tab.count > 0);
+  const activeTab = visibleTabs.some((tab) => tab.id === selectedTab) ? selectedTab : visibleTabs[0]?.id;
 
-  if (tabs.length === 0) {
+  if (visibleTabs.length === 0) {
     return null;
   }
 
@@ -517,7 +499,7 @@ function AttributeSections({ span }: { span: ConversationSpan }) {
   return (
     <div className={styles.attributeSections}>
       <div className={styles.attributeTabs} role="tablist" aria-label="Attribute groups">
-        {tabs.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
@@ -804,7 +786,6 @@ export default function GenerationView({
   );
 
   const traceTargetSpan = node.span;
-  const operationMode = formatOperationMode(node.span ? getStringAttribute(node.span.attributes, 'gen_ai.operation.name') : undefined);
 
   const navigatePrev = useCallback(() => {
     if (adjacent?.previous) {

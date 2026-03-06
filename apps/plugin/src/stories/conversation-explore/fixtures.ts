@@ -11,9 +11,9 @@ function makeSpan(overrides: Partial<ConversationSpan> = {}): ConversationSpan {
     name: 'generateText',
     kind: 'INTERNAL',
     serviceName: 'assistant-api',
-    startTimeUnixNano: 0n,
-    endTimeUnixNano: 1n,
-    durationNano: 1n,
+    startTimeUnixNano: BigInt(0),
+    endTimeUnixNano: BigInt(1),
+    durationNano: BigInt(1),
     attributes: new Map([['sigil.generation.id', { stringValue: 'gen-1' }]]),
     resourceAttributes: new Map([
       ['service.name', { stringValue: 'assistant-api' }],
@@ -210,8 +210,8 @@ export const mockFlowNodes: FlowNode[] = [
         generation: mockGenerations[1],
         span: makeSpan({
           spanID: 'span-3',
-          startTimeUnixNano: 2n,
-          endTimeUnixNano: 3n,
+          startTimeUnixNano: BigInt(2),
+          endTimeUnixNano: BigInt(3),
           generation: mockGenerations[1],
           attributes: new Map([['sigil.generation.id', { stringValue: 'gen-2' }]]),
         }),
@@ -241,8 +241,8 @@ export const mockFlowNodes: FlowNode[] = [
         span: makeSpan({
           spanID: 'span-5',
           serviceName: 'reviewer',
-          startTimeUnixNano: 4n,
-          endTimeUnixNano: 5n,
+          startTimeUnixNano: BigInt(4),
+          endTimeUnixNano: BigInt(5),
           generation: mockGenerations[2],
           attributes: new Map([['sigil.generation.id', { stringValue: 'gen-3' }]]),
           resourceAttributes: new Map([

@@ -64,9 +64,9 @@ describe('GenerationView', () => {
       name: 'generateText',
       kind: 'INTERNAL',
       serviceName: 'sigil',
-      startTimeUnixNano: 0n,
-      endTimeUnixNano: 1n,
-      durationNano: 1n,
+      startTimeUnixNano: BigInt(0),
+      endTimeUnixNano: BigInt(1),
+      durationNano: BigInt(1),
       attributes: new Map([
         ['span.kind', { stringValue: 'llm' }],
         ['gen_ai.operation.name', { stringValue: 'streamText' }],
