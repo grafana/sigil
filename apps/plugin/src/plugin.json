@@ -101,13 +101,6 @@
     },
     {
       "type": "page",
-      "name": "Conversations (old)",
-      "path": "/a/grafana-sigil-app/conversations-old",
-      "action": "grafana-sigil-app.data:read",
-      "addToNav": false
-    },
-    {
-      "type": "page",
       "icon": "cog",
       "name": "Configuration",
       "path": "/plugins/grafana-sigil-app",

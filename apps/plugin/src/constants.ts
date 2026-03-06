@@ -7,7 +7,6 @@ export const ROUTES = {
   Conversations: 'conversations',
   ConversationsView: 'conversations/:conversationID/view',
   ConversationsExplore: 'conversations/:conversationID/explore',
-  ConversationsOld: 'conversations-old',
   Agents: 'agents',
   AgentDetailByName: 'agents/name/:agentName',
   AgentDetailAnonymous: 'agents/anonymous',
