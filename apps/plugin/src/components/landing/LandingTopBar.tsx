@@ -842,6 +842,13 @@ export function LandingTopBar({
                 </div>
                 <div className={styles.heroPipeline}>
                   <div className={styles.pipelineStep}>
+                    <PipelineConnectorSwarm
+                      color="#5794F2"
+                      mode="section"
+                      className={styles.pipelineStepSwarm}
+                      delaySec={0.1}
+                      seed={101}
+                    />
                     <div
                       className={styles.pipelineStepAccent}
                       style={{ background: 'linear-gradient(90deg, #5794F2 0%, #73B9FF 100%)' }}
@@ -877,6 +884,13 @@ export function LandingTopBar({
                   </div>
                   <PipelineConnectorSwarm color="#5794F2" />
                   <div className={styles.pipelineStep}>
+                    <PipelineConnectorSwarm
+                      color="#B877D9"
+                      mode="section"
+                      className={styles.pipelineStepSwarm}
+                      delaySec={0.35}
+                      seed={202}
+                    />
                     <div
                       className={styles.pipelineStepAccent}
                       style={{ background: 'linear-gradient(90deg, #B877D9 0%, #D4A5F5 100%)' }}
@@ -912,6 +926,13 @@ export function LandingTopBar({
                   </div>
                   <PipelineConnectorSwarm color="#B877D9" delayed />
                   <div className={styles.pipelineStep}>
+                    <PipelineConnectorSwarm
+                      color="#FF9830"
+                      mode="section"
+                      className={styles.pipelineStepSwarm}
+                      delaySec={0.65}
+                      seed={303}
+                    />
                     <div
                       className={styles.pipelineStepAccent}
                       style={{ background: 'linear-gradient(90deg, #FF9830 0%, #FFB870 100%)' }}
@@ -1312,6 +1333,8 @@ function getStyles(theme: GrafanaTheme2) {
       gap: theme.spacing(2),
       boxSizing: 'border-box',
       marginTop: theme.spacing(-2),
+      position: 'relative',
+      zIndex: 1,
       '@container landing-top-bar (max-width: 1200px)': {
         gridTemplateColumns: '1fr',
       },
@@ -1320,6 +1343,8 @@ function getStyles(theme: GrafanaTheme2) {
       label: 'landingTopBar-responsiveContainer',
       containerType: 'inline-size',
       containerName: 'landing-top-bar',
+      position: 'relative',
+      isolation: 'isolate',
       width: '100%',
       minWidth: 0,
     }),
@@ -1575,6 +1600,8 @@ function getStyles(theme: GrafanaTheme2) {
       marginTop: theme.spacing(1.5),
       flex: 1,
       minHeight: 0,
+      position: 'relative',
+      isolation: 'isolate',
       '@container landing-top-bar (max-width: 900px)': {
         flexDirection: 'column',
         gap: theme.spacing(1),
@@ -1590,6 +1617,10 @@ function getStyles(theme: GrafanaTheme2) {
       border: `1px solid ${theme.colors.border.weak}`,
       background: theme.isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
       overflow: 'hidden',
+      '& > *': {
+        position: 'relative',
+        zIndex: 1,
+      },
       transition: 'border-color 0.25s ease, box-shadow 0.25s ease',
       '&:hover': {
         borderColor: theme.colors.border.medium,
@@ -1598,6 +1629,13 @@ function getStyles(theme: GrafanaTheme2) {
       '@container landing-top-bar (max-width: 900px)': {
         flex: 'none',
       },
+    }),
+    pipelineStepSwarm: css({
+      label: 'landingTopBar-pipelineStepSwarm',
+      inset: 0,
+      opacity: 0.08,
+      mixBlendMode: theme.isDark ? 'screen' : 'normal',
+      zIndex: 2,
     }),
     pipelineStepAccent: css({
       label: 'landingTopBar-pipelineStepAccent',
