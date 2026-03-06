@@ -27,9 +27,12 @@ import {
 } from '../../evaluation/queries';
 import { PLUGIN_BASE, ROUTES } from '../../constants';
 import { hasResponseData } from '../insight/summarize';
+import { type ConversationsDataSource, defaultConversationsDataSource } from '../../conversation/api';
+import { LowestPassRateConversationsTable } from './LowestPassRateConversationsTable';
 
 export type DashboardEvalGridProps = {
   dataSource: DashboardDataSource;
+  conversationsDataSource?: ConversationsDataSource;
   filters: DashboardFilters;
   breakdownBy: BreakdownDimension;
   from: number;
@@ -52,6 +55,7 @@ const tooltipOptions = { mode: 'multi', sort: 'desc' };
 
 export function DashboardEvalGrid({
   dataSource,
+  conversationsDataSource = defaultConversationsDataSource,
   filters,
   breakdownBy,
   from,
@@ -302,18 +306,25 @@ export function DashboardEvalGrid({
 
   if (allLoaded && !hasData) {
     return (
-      <div className={styles.emptyState}>
-        <Icon name="check-circle" size="xxxl" className={styles.emptyIcon} />
-        <Text variant="h4">No evaluation data yet</Text>
-        <Text color="secondary" textAlignment="center">
-          Set up evaluators and create rules to start scoring your LLM generations automatically. Results will appear
-          here once the evaluation pipeline is running.
-        </Text>
-        <Link to={`${PLUGIN_BASE}/${ROUTES.Evaluation}`}>
-          <Button variant="primary" icon="arrow-right">
-            Set up evaluation
-          </Button>
-        </Link>
+      <div className={styles.gridWrapper}>
+        <div className={styles.emptyState}>
+          <Icon name="check-circle" size="xxxl" className={styles.emptyIcon} />
+          <Text variant="h4">No evaluation data yet</Text>
+          <Text color="secondary" textAlignment="center">
+            Set up evaluators and create rules to start scoring your LLM generations automatically. Results will appear
+            here once the evaluation pipeline is running.
+          </Text>
+          <Link to={`${PLUGIN_BASE}/${ROUTES.Evaluation}`}>
+            <Button variant="primary" icon="arrow-right">
+              Set up evaluation
+            </Button>
+          </Link>
+        </div>
+        <LowestPassRateConversationsTable
+          conversationsDataSource={conversationsDataSource}
+          timeRange={timeRange}
+          filters={filters}
+        />
       </div>
     );
   }
@@ -465,6 +476,12 @@ export function DashboardEvalGrid({
             }}
           />
         </div>
+
+        <LowestPassRateConversationsTable
+          conversationsDataSource={conversationsDataSource}
+          timeRange={timeRange}
+          filters={filters}
+        />
       </div>
     </div>
   );

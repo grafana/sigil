@@ -170,13 +170,20 @@ export const breakdownToPromLabel: Record<BreakdownDimension, string> = {
 
 // Conversation ordering options (used in conversations browser page)
 
-export type ConversationOrderBy = 'time' | 'errors' | 'duration' | 'tokens';
+export type ConversationOrderBy = 'time' | 'errors' | 'duration' | 'tokens' | 'evals';
 
 export const conversationOrderByLabel: Record<ConversationOrderBy, string> = {
   time: 'Recent',
   errors: 'Errors',
   duration: 'Duration',
   tokens: 'Tokens',
+  evals: 'Lowest Pass Rate',
 };
 
-export const CONVERSATION_ORDER_BY_VALUES = new Set<ConversationOrderBy>(['time', 'errors', 'duration', 'tokens']);
+export const CONVERSATION_ORDER_BY_VALUES = new Set<ConversationOrderBy>([
+  'time',
+  'errors',
+  'duration',
+  'tokens',
+  'evals',
+]);

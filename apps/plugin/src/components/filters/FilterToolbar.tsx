@@ -166,7 +166,7 @@ export function FilterToolbar({
             isClearable
             allowCustomValue
             isSearchable
-            width="auto"
+            width={fillWidth ? undefined : 'auto'}
           />
           <MultiSelect<string>
             className={fillWidth ? styles.multiSelectFill : styles.multiSelect}
@@ -178,7 +178,7 @@ export function FilterToolbar({
             isClearable
             allowCustomValue
             isSearchable
-            width="auto"
+            width={fillWidth ? undefined : 'auto'}
           />
           <MultiSelect<string>
             className={fillWidth ? styles.multiSelectFill : styles.multiSelect}
@@ -190,7 +190,7 @@ export function FilterToolbar({
             isClearable
             allowCustomValue
             isSearchable
-            width="auto"
+            width={fillWidth ? undefined : 'auto'}
           />
           {!hideLabelFilters && (
             <LabelFilterInput

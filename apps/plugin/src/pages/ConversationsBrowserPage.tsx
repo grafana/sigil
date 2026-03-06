@@ -55,6 +55,17 @@ const EMPTY_CONVERSATION_STATS: ConversationStats = {
   badRatedPct: 0,
 };
 
+function getConversationPassRate(c: ConversationSearchResult): number {
+  if (!c.eval_summary) {
+    return 1;
+  }
+  const total = c.eval_summary.pass_count + c.eval_summary.fail_count;
+  if (total === 0) {
+    return 1;
+  }
+  return c.eval_summary.pass_count / total;
+}
+
 function sortConversations(
   conversations: ConversationSearchResult[],
   orderBy: ConversationOrderBy = 'time'
@@ -70,6 +81,17 @@ function sortConversations(
       }
       case 'tokens':
         return getConversationTotalTokens(b) - getConversationTotalTokens(a);
+      case 'evals': {
+        const aHasEvals = a.eval_summary && a.eval_summary.pass_count + a.eval_summary.fail_count > 0;
+        const bHasEvals = b.eval_summary && b.eval_summary.pass_count + b.eval_summary.fail_count > 0;
+        if (aHasEvals && !bHasEvals) {
+          return -1;
+        }
+        if (!aHasEvals && bHasEvals) {
+          return 1;
+        }
+        return getConversationPassRate(a) - getConversationPassRate(b);
+      }
       case 'time':
       default:
         return Date.parse(b.last_generation_at) - Date.parse(a.last_generation_at);

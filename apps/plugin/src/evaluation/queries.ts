@@ -49,12 +49,48 @@ function multiMatcher(label: string, values: string[]): string {
   return `${label}=~"${pattern}"`;
 }
 
+/**
+ * Eval metrics may store model names without provider/region prefixes
+ * (e.g. "claude-sonnet-4-6" vs "us.anthropic.claude-sonnet-4-6").
+ * Generate all dot-separated suffix variants so the filter matches both forms.
+ */
+function evalModelMatcher(models: string[]): string {
+  const variants = new Set<string>();
+  for (const model of models) {
+    const trimmed = model.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const dotParts = trimmed.split('.');
+    for (let i = 0; i < dotParts.length; i++) {
+      variants.add(dotParts.slice(i).join('.'));
+    }
+  }
+  if (variants.size === 0) {
+    return '';
+  }
+  const pattern = [...variants].map(escapePrometheusRegex).join('|');
+  return `gen_ai_request_model=~"${pattern}"`;
+}
+
 function evalLabelSelector(dashFilters: DashboardFilters, evalFilters: EvalFilters, extra?: string): string {
   const parts: string[] = [];
 
-  const dashPart = buildLabelSelector(dashFilters);
-  if (dashPart) {
-    parts.push(dashPart);
+  // Eval metrics may use short model names; use suffix matching.
+  if (dashFilters.models.length > 0) {
+    parts.push(evalModelMatcher(dashFilters.models));
+  }
+
+  // Eval metrics don't carry gen_ai_provider_name, so skip provider filters.
+  // Delegate agent and label filters to buildLabelSelector.
+  const agentAndLabelPart = buildLabelSelector({
+    providers: [],
+    models: [],
+    agentNames: dashFilters.agentNames,
+    labelFilters: dashFilters.labelFilters,
+  });
+  if (agentAndLabelPart) {
+    parts.push(agentAndLabelPart);
   }
 
   if (evalFilters.evaluators.length > 0) {
