@@ -12,7 +12,7 @@ import (
 
 var _ storage.AgentCatalogStore = (*WALStore)(nil)
 
-func (s *WALStore) ListAgentHeads(ctx context.Context, tenantID string, limit int, cursor *storage.AgentHeadCursor, namePrefix string) ([]storage.AgentHead, *storage.AgentHeadCursor, error) {
+func (s *WALStore) ListAgentHeads(ctx context.Context, tenantID string, limit int, cursor *storage.AgentHeadCursor, filter storage.AgentHeadFilter) ([]storage.AgentHead, *storage.AgentHeadCursor, error) {
 	if strings.TrimSpace(tenantID) == "" {
 		return nil, nil, errors.New("tenant id is required")
 	}
@@ -24,10 +24,16 @@ func (s *WALStore) ListAgentHeads(ctx context.Context, tenantID string, limit in
 	}
 
 	query := s.db.WithContext(ctx).Model(&AgentHeadModel{}).Where("tenant_id = ?", tenantID)
-	trimmedPrefix := strings.TrimSpace(namePrefix)
+	trimmedPrefix := strings.TrimSpace(filter.NamePrefix)
 	if trimmedPrefix != "" {
 		escaped := strings.ToLower(escapeLikePattern(trimmedPrefix))
 		query = query.Where("LOWER(agent_name) LIKE ?", "%"+escaped+"%")
+	}
+	if !filter.SeenAfter.IsZero() {
+		query = query.Where("latest_seen_at >= ?", filter.SeenAfter.UTC())
+	}
+	if !filter.SeenBefore.IsZero() {
+		query = query.Where("latest_seen_at <= ?", filter.SeenBefore.UTC())
 	}
 	if cursor != nil && !cursor.LatestSeenAt.IsZero() {
 		query = query.Where(

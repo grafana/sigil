@@ -4,8 +4,10 @@ import { css, cx } from '@emotion/css';
 import { dateTime, type GrafanaTheme2 } from '@grafana/data';
 import {
   Alert,
+  Badge,
   Icon,
   Input,
+  LinkButton,
   Spinner,
   Stack,
   Tab,
@@ -14,37 +16,41 @@ import {
   TimeRangePicker,
   Tooltip,
   useStyles2,
+  useTheme2,
 } from '@grafana/ui';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../agents/api';
 import type { AgentListItem } from '../agents/types';
 import { buildAgentDetailByNameRoute, buildAnonymousAgentDetailRoute, PLUGIN_BASE } from '../constants';
-import { formatDateShort } from '../utils/date';
 import { AgentActivityTimeline } from '../components/agents/AgentActivityTimeline';
 import { defaultDashboardDataSource, type DashboardDataSource } from '../dashboard/api';
 import { computeRangeDuration, tokensByModelAndTypeQuery } from '../dashboard/queries';
 import { emptyFilters, type PrometheusQueryResponse } from '../dashboard/types';
-import { extractResolvePairs } from '../components/dashboard/dashboardShared';
+import {
+  extractResolvePairs,
+  BreakdownStatPanel,
+  getBreakdownStatPanelStyles,
+  getBarPalette,
+  stringHash,
+  formatStatValue,
+  formatRelativeTime,
+} from '../components/dashboard/dashboardShared';
 import { useResolvedModelPricing } from '../components/dashboard/useResolvedModelPricing';
 import { usePrometheusQuery } from '../components/dashboard/usePrometheusQuery';
 import { lookupPricing } from '../dashboard/cost';
-import {
-  default as TokenCostBox,
-  TOKEN_COST_MODE_CHANGE_EVENT,
-  TOKEN_COST_MODE_STORAGE_KEY,
-  type TokenCostMode,
-} from '../components/agents/TokenCostBox';
+import { buildAgentDetailHref } from '../components/dashboard/ViewAgentsLink';
 import { PageInsightBar } from '../components/insight/PageInsightBar';
 import { useFilterUrlState } from '../hooks/useFilterUrlState';
+import { DashboardSummaryBar } from '../components/dashboard/DashboardSummaryBar';
+import { TopStat } from '../components/TopStat';
 
 const PAGE_SIZE = 24;
 const STALE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const HIGH_CHURN_THRESHOLD = 5;
 const HERO_TOP_LIMIT = 10;
+const TOP_AGENTS_LIMIT = 10;
+const CHART_HEIGHT = 250;
 const ESTIMATED_USD_PER_TOKEN = 2.5 / 1_000_000;
-const compactNumberFormatter = new Intl.NumberFormat('en-US', {
-  notation: 'compact',
-  maximumFractionDigits: 1,
-});
+const STARRED_AGENTS_STORAGE_KEY = 'sigil.agents.starred';
 
 export type AgentsPageProps = {
   dataSource?: AgentsDataSource;
@@ -52,6 +58,10 @@ export type AgentsPageProps = {
 };
 
 type AgentsPageTab = 'info' | 'table';
+
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
 
 const getStyles = (theme: GrafanaTheme2) => ({
   page: css({
@@ -68,6 +78,143 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: theme.spacing(2),
     flexWrap: 'wrap' as const,
   }),
+
+  // --- Overview grid layout ---
+  gridWrapper: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(1),
+  }),
+  grid: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(3),
+    flex: 1,
+    minWidth: 0,
+  }),
+  panelRowEqual: css({
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: theme.spacing(1),
+  }),
+
+  // --- Risk signal strip ---
+  riskStrip: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(2),
+    padding: theme.spacing(0.75, 2),
+    flexWrap: 'wrap' as const,
+  }),
+  riskSignal: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    fontSize: theme.typography.bodySmall.fontSize,
+    color: theme.colors.text.secondary,
+    padding: theme.spacing(0.25, 1),
+    borderRadius: 999,
+    border: `1px solid ${theme.colors.border.weak}`,
+    background: 'transparent',
+    whiteSpace: 'nowrap' as const,
+  }),
+  riskSignalWarning: css({
+    color: theme.colors.warning.text,
+    border: `1px solid ${theme.colors.warning.border}`,
+    background: theme.colors.warning.transparent,
+  }),
+  riskSignalValue: css({
+    fontWeight: theme.typography.fontWeightMedium,
+  }),
+
+  // --- Footprint panel dual-value ---
+  footprintSecondary: css({
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.body.fontSize,
+    fontWeight: theme.typography.fontWeightRegular,
+    marginLeft: theme.spacing(0.5),
+  }),
+  footprintCostSuffix: css({
+    color: theme.colors.text.disabled,
+    marginLeft: theme.spacing(0.25),
+  }),
+
+  // --- Top agents table (overview) ---
+  tablePanel: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    background: theme.colors.background.primary,
+    border: `1px solid ${theme.colors.border.weak}`,
+    borderRadius: theme.shape.radius.default,
+    overflow: 'hidden',
+  }),
+  tablePanelHeader: css({
+    padding: theme.spacing(1.5, 2),
+    borderBottom: `1px solid ${theme.colors.border.weak}`,
+  }),
+  tablePanelTitle: css({
+    display: 'block',
+    fontSize: theme.typography.h6.fontSize,
+    fontWeight: theme.typography.fontWeightMedium,
+    color: theme.colors.text.primary,
+  }),
+  overviewTable: css({
+    width: '100%',
+    borderCollapse: 'collapse' as const,
+  }),
+  overviewHeaderRow: css({
+    borderBottom: `2px solid ${theme.colors.border.medium}`,
+  }),
+  overviewHeaderCell: css({
+    padding: theme.spacing(1, 1.5),
+    textAlign: 'left' as const,
+    fontSize: theme.typography.bodySmall.fontSize,
+    fontWeight: theme.typography.fontWeightMedium,
+    color: theme.colors.text.secondary,
+    whiteSpace: 'nowrap' as const,
+  }),
+  overviewHeaderCellRight: css({
+    textAlign: 'right' as const,
+  }),
+  overviewTableRow: css({
+    borderBottom: `1px solid ${theme.colors.border.weak}`,
+    cursor: 'pointer',
+    transition: 'background 0.1s ease',
+    '&:hover': {
+      background: theme.colors.action.hover,
+    },
+  }),
+  overviewTableCell: css({
+    padding: theme.spacing(1, 1.5),
+    fontSize: theme.typography.bodySmall.fontSize,
+    verticalAlign: 'middle' as const,
+  }),
+  overviewTableCellRight: css({
+    textAlign: 'right' as const,
+    fontVariantNumeric: 'tabular-nums',
+  }),
+  overviewTableCellMono: css({
+    fontFamily: theme.typography.fontFamilyMonospace,
+    whiteSpace: 'normal' as const,
+    overflowWrap: 'anywhere' as const,
+  }),
+  seeMoreFooter: css({
+    display: 'flex',
+    justifyContent: 'center',
+    padding: theme.spacing(1),
+    borderTop: `1px solid ${theme.colors.border.weak}`,
+  }),
+  overviewEmptyState: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing(1),
+    padding: theme.spacing(4),
+    color: theme.colors.text.secondary,
+  }),
+
+  // --- Agents tab ---
   searchRow: css({
     display: 'flex',
     gap: theme.spacing(1),
@@ -77,231 +224,54 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flex: 1,
     maxWidth: 400,
   }),
-  heroWrap: css({
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: theme.spacing(2),
-    width: '100%',
-  }),
-  hero: css({
-    width: '100%',
-    border: `1px solid ${theme.colors.border.medium}`,
-    borderRadius: theme.shape.radius.default,
-    background: theme.colors.background.secondary,
-    padding: theme.spacing(2),
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: theme.spacing(2),
-  }),
-  heroKpis: css({
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-    gap: theme.spacing(1.5),
-  }),
-  heroKpiCard: css({
-    border: `1px solid ${theme.colors.border.weak}`,
-    borderRadius: theme.shape.radius.default,
-    padding: theme.spacing(1.5),
-    background: theme.colors.background.primary,
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: theme.spacing(0.5),
-  }),
-  heroKpiLabel: css({
-    fontSize: theme.typography.bodySmall.fontSize,
-    color: theme.colors.text.secondary,
-  }),
-  labelWithHelp: css({
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: theme.spacing(0.5),
-  }),
-  helpIcon: css({
-    color: theme.colors.text.secondary,
-  }),
-  heroKpiValue: css({
-    fontSize: theme.typography.h3.fontSize,
-    lineHeight: 1.1,
-    fontWeight: theme.typography.fontWeightMedium,
-    color: theme.colors.text.primary,
-    fontVariantNumeric: 'tabular-nums',
-  }),
-  heroBody: css({
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-    gap: theme.spacing(1.5),
-    alignItems: 'start',
-  }),
-  heroSection: css({
-    border: `1px solid ${theme.colors.border.weak}`,
-    borderRadius: theme.shape.radius.default,
-    padding: theme.spacing(1.5),
-    background: theme.colors.background.primary,
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: theme.spacing(1),
-  }),
-  heroSectionTitle: css({
-    fontSize: theme.typography.body.fontSize,
-    fontWeight: theme.typography.fontWeightMedium,
-    color: theme.colors.text.primary,
-  }),
-  heroSectionHeading: css({
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: theme.spacing(1),
-  }),
-  footprintModeSelect: css({
-    boxSizing: 'border-box',
-    minHeight: 28,
-    height: 28,
-    background: theme.colors.background.primary,
-    color: theme.colors.text.secondary,
-    border: `1px solid ${theme.colors.border.weak}`,
-    borderRadius: theme.shape.radius.default,
-    padding: `0 ${theme.spacing(0.5)}`,
-    fontSize: theme.typography.body.fontSize,
-    fontVariantNumeric: 'tabular-nums',
-    lineHeight: '24px',
-    cursor: 'pointer',
-    width: 96,
-  }),
-  rankList: css({
-    margin: 0,
-    padding: 0,
-    listStyle: 'none',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: theme.spacing(0.75),
-  }),
-  rankItem: css({
-    display: 'grid',
-    gridTemplateColumns: 'minmax(0, 1fr) auto',
-    gap: theme.spacing(1),
-    alignItems: 'center',
-  }),
-  rankButton: css({
-    padding: 0,
-    border: 0,
-    background: 'none',
-    color: theme.colors.text.link,
-    cursor: 'pointer',
-    textAlign: 'left' as const,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap' as const,
-    '&:hover': {
-      textDecoration: 'underline',
-    },
-    '&:focus-visible': {
-      outline: `2px solid ${theme.colors.primary.main}`,
-      outlineOffset: 2,
-      borderRadius: theme.shape.radius.default,
-    },
-  }),
-  rankValue: css({
-    fontVariantNumeric: 'tabular-nums',
-    color: theme.colors.text.primary,
-    fontSize: theme.typography.body.fontSize,
-    whiteSpace: 'nowrap' as const,
-  }),
-  rankValueNumber: css({
-    color: theme.colors.text.primary,
-    fontWeight: theme.typography.fontWeightMedium,
-  }),
-  rankValueMuted: css({
-    color: theme.colors.text.secondary,
-  }),
-  rankValueAffix: css({
-    color: theme.colors.text.secondary,
-    fontSize: theme.typography.bodySmall.fontSize,
-  }),
-  riskList: css({
-    margin: 0,
-    padding: 0,
-    listStyle: 'none',
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-    gap: theme.spacing(1),
-  }),
-  riskItem: css({
-    border: `1px solid ${theme.colors.border.weak}`,
-    borderRadius: theme.shape.radius.default,
-    padding: theme.spacing(1),
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: theme.spacing(0.25),
-  }),
-  riskValue: css({
-    fontSize: theme.typography.h4.fontSize,
-    lineHeight: 1,
-    fontVariantNumeric: 'tabular-nums',
-    fontWeight: theme.typography.fontWeightMedium,
-    color: theme.colors.text.primary,
-  }),
-  riskLabel: css({
-    fontSize: theme.typography.bodySmall.fontSize,
-    color: theme.colors.text.secondary,
-  }),
-  tableWrap: css({
-    border: `1px solid ${theme.colors.border.medium}`,
-    borderRadius: theme.shape.radius.default,
+  agentsTableWrap: css({
     overflowX: 'auto',
-    background: theme.colors.background.secondary,
   }),
-  table: css({
+  agentsTable: css({
     width: '100%',
     borderCollapse: 'collapse' as const,
     minWidth: 880,
   }),
-  th: css({
-    textAlign: 'left' as const,
-    padding: `${theme.spacing(1)} ${theme.spacing(1.5)}`,
-    borderBottom: `1px solid ${theme.colors.border.weak}`,
-    color: theme.colors.text.secondary,
-    fontSize: theme.typography.bodySmall.fontSize,
-    fontWeight: theme.typography.fontWeightMedium,
-    whiteSpace: 'nowrap' as const,
-  }),
-  centeredColumn: css({
-    textAlign: 'center' as const,
-  }),
-  tr: css({
-    borderBottom: `1px solid ${theme.colors.border.weak}`,
-    '&:last-child': {
-      borderBottom: 'none',
-    },
-  }),
   anonymousRow: css({
-    background: theme.colors.warning.transparent,
-  }),
-  td: css({
-    padding: `${theme.spacing(1)} ${theme.spacing(1.5)}`,
-    verticalAlign: 'top' as const,
-    whiteSpace: 'nowrap' as const,
+    borderLeft: `3px solid ${theme.colors.warning.main}`,
   }),
   promptCell: css({
     maxWidth: 360,
     whiteSpace: 'normal' as const,
     color: theme.colors.text.secondary,
+    overflowWrap: 'anywhere' as const,
   }),
-  openButton: css({
-    padding: 0,
-    border: 0,
+
+  // --- Star button ---
+  starCell: css({
+    width: 32,
+    textAlign: 'center' as const,
+    padding: theme.spacing(0.5),
+  }),
+  starButton: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: theme.spacing(0.25),
+    border: 'none',
     background: 'none',
-    color: theme.colors.text.link,
     cursor: 'pointer',
-    textAlign: 'left' as const,
+    color: theme.colors.text.disabled,
+    borderRadius: theme.shape.radius.default,
+    transition: 'color 0.15s ease',
     '&:hover': {
-      textDecoration: 'underline',
+      color: theme.colors.warning.text,
     },
     '&:focus-visible': {
       outline: `2px solid ${theme.colors.primary.main}`,
-      outlineOffset: 2,
-      borderRadius: theme.shape.radius.default,
+      outlineOffset: 1,
     },
   }),
+  starButtonActive: css({
+    color: theme.colors.warning.text,
+  }),
+
+  // --- Shared ---
   loading: css({
     display: 'flex',
     justifyContent: 'center',
@@ -325,6 +295,57 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
+// ---------------------------------------------------------------------------
+// Starred agents (localStorage)
+// ---------------------------------------------------------------------------
+
+function readStarredAgents(): Set<string> {
+  try {
+    const raw = window.localStorage.getItem(STARRED_AGENTS_STORAGE_KEY);
+    if (!raw) {
+      return new Set();
+    }
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return new Set(parsed.filter((v): v is string => typeof v === 'string'));
+    }
+  } catch {
+    // Ignore corrupt or unavailable storage.
+  }
+  return new Set();
+}
+
+function writeStarredAgents(starred: Set<string>): void {
+  try {
+    window.localStorage.setItem(STARRED_AGENTS_STORAGE_KEY, JSON.stringify([...starred]));
+  } catch {
+    // Ignore storage write errors.
+  }
+}
+
+function useStarredAgents(): [Set<string>, (agentName: string) => void] {
+  const [starred, setStarred] = useState<Set<string>>(() => readStarredAgents());
+
+  const toggle = useCallback((agentName: string) => {
+    setStarred((prev) => {
+      const next = new Set(prev);
+      if (next.has(agentName)) {
+        next.delete(agentName);
+      } else {
+        next.add(agentName);
+      }
+      writeStarredAgents(next);
+      return next;
+    });
+  }, []);
+
+  return [starred, toggle];
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 function cardLabel(item: AgentListItem): string {
   if (item.agent_name.trim().length > 0) {
     return item.agent_name;
@@ -332,60 +353,12 @@ function cardLabel(item: AgentListItem): string {
   return 'anonymous';
 }
 
-function formatCompactNumber(value: number): string {
-  return compactNumberFormatter.format(value);
+function agentDisplayName(item: AgentListItem): string {
+  return item.agent_name.trim().length > 0 ? item.agent_name : 'Unnamed agent bucket';
 }
 
-function formatUSD(value: number): string {
-  const absValue = Math.abs(value);
-  const decimals = absValue < 0.01 ? 6 : absValue < 1 ? 4 : 2;
-  return `$${value.toFixed(decimals)}`;
-}
-
-function splitMutedZeroPrefix(value: string): { leading: string; rest: string } {
-  const isNegative = value.startsWith('-');
-  const unsigned = isNegative ? value.slice(1) : value;
-  if (!unsigned.startsWith('0.')) {
-    return { leading: '', rest: value };
-  }
-
-  let firstSignificantIndex = 2;
-  while (firstSignificantIndex < unsigned.length && unsigned[firstSignificantIndex] === '0') {
-    firstSignificantIndex += 1;
-  }
-  if (firstSignificantIndex === 2) {
-    return { leading: '', rest: value };
-  }
-
-  const leading = `${isNegative ? '-' : ''}${unsigned.slice(0, firstSignificantIndex)}`;
-  const rest = unsigned.slice(firstSignificantIndex);
-  return { leading, rest };
-}
-
-function readInitialTopFootprintMode(): TokenCostMode {
-  if (typeof window === 'undefined') {
-    return 'tokens';
-  }
-  try {
-    const stored = window.localStorage.getItem(TOKEN_COST_MODE_STORAGE_KEY);
-    return stored === 'usd' ? 'usd' : 'tokens';
-  } catch {
-    return 'tokens';
-  }
-}
-
-function LabelWithHelp({ label, help, className }: { label: string; help: string; className?: string }) {
-  const styles = useStyles2(getStyles);
-  return (
-    <span className={cx(styles.labelWithHelp, className)}>
-      {label}
-      <Tooltip content={help}>
-        <span aria-label={`${label} help`}>
-          <Icon name="info-circle" size="sm" className={styles.helpIcon} />
-        </span>
-      </Tooltip>
-    </span>
-  );
+function agentHref(displayName: string): string {
+  return buildAgentDetailHref(displayName === 'Unnamed agent bucket' ? '' : displayName);
 }
 
 function aggregateAgentUsageByName(
@@ -430,12 +403,277 @@ function aggregateAgentUsageByName(
   return usageByName;
 }
 
+function buildSyntheticVector(
+  entries: Array<{ name: string; value: number }>,
+  labelKey: string
+): PrometheusQueryResponse {
+  return {
+    status: 'success',
+    data: {
+      resultType: 'vector',
+      result: entries.map((e) => ({
+        metric: { [labelKey]: e.name },
+        value: [0, String(e.value)] as [number, string],
+      })),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// RiskSignalStrip
+// ---------------------------------------------------------------------------
+
+type RiskSignal = { icon: 'eye-slash' | 'clock-nine' | 'sync'; value: number; label: string };
+
+function RiskSignalStrip({
+  anonymousCount,
+  staleCount,
+  highChurnCount,
+}: {
+  anonymousCount: number;
+  staleCount: number;
+  highChurnCount: number;
+}) {
+  const styles = useStyles2(getStyles);
+
+  const signals: RiskSignal[] = [
+    { icon: 'eye-slash', value: anonymousCount, label: 'anonymous buckets' },
+    { icon: 'clock-nine', value: staleCount, label: 'stale (> 7 days)' },
+    { icon: 'sync', value: highChurnCount, label: `high churn (${HIGH_CHURN_THRESHOLD}+ versions)` },
+  ];
+
+  return (
+    <div className={styles.riskStrip} role="status" aria-label="risk signals">
+      {signals.map((signal) => (
+        <span key={signal.icon} className={cx(styles.riskSignal, signal.value > 0 && styles.riskSignalWarning)}>
+          <Icon name={signal.icon} size="sm" />
+          <span className={styles.riskSignalValue}>{signal.value}</span>
+          {signal.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AgentFootprintPanel
+// ---------------------------------------------------------------------------
+
+type FootprintItem = {
+  name: string;
+  tokens: number;
+  costUSD: number;
+};
+
+function AgentFootprintPanel({
+  title,
+  items,
+  totalTokens,
+  totalCostUSD,
+  loading,
+  height,
+  getItemHref,
+}: {
+  title: string;
+  items: FootprintItem[];
+  totalTokens: number;
+  totalCostUSD: number;
+  loading: boolean;
+  height: number;
+  getItemHref?: (name: string) => string;
+}) {
+  const bsp = useStyles2(getBreakdownStatPanelStyles);
+  const pageStyles = useStyles2(getStyles);
+  const theme = useTheme2();
+  const palette = useMemo(() => getBarPalette(theme), [theme]);
+
+  const fmtTokens = (v: number) => formatStatValue(v, 'short');
+  const fmtCost = (v: number) => formatStatValue(v, 'currencyUSD');
+
+  if (loading) {
+    return (
+      <div className={bsp.bspPanel} style={{ height }}>
+        <div className={bsp.bspHeader}>
+          <span className={bsp.bspTitle}>{title}</span>
+        </div>
+        <div className={bsp.bspCenter}>
+          <Spinner size="lg" />
+        </div>
+      </div>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className={bsp.bspPanel} style={{ height }}>
+        <div className={bsp.bspHeader}>
+          <span className={bsp.bspTitle}>{title}</span>
+        </div>
+        <div className={bsp.bspCenter}>
+          <span className={bsp.bspBigValue}>{fmtTokens(0)}</span>
+        </div>
+      </div>
+    );
+  }
+
+  const maxTokens = items.reduce((max, i) => Math.max(max, i.tokens), 0);
+
+  return (
+    <div className={bsp.bspPanel} style={{ height }}>
+      <div className={bsp.bspHeader}>
+        <span className={bsp.bspTitle}>{title}</span>
+        <div className={bsp.bspValueRow}>
+          <span className={bsp.bspBigValue}>{fmtTokens(totalTokens)}</span>
+          <span className={pageStyles.footprintSecondary}>{fmtCost(totalCostUSD)}</span>
+        </div>
+      </div>
+      <div className={bsp.bspList}>
+        {items.map((item) => {
+          const barWidth = maxTokens > 0 ? (item.tokens / maxTokens) * 100 : 0;
+          const color = palette[stringHash(item.name) % palette.length];
+          return (
+            <div key={item.name} className={bsp.bspBarRow}>
+              <div className={bsp.bspBarMeta}>
+                <span className={bsp.bspBarDot} style={{ background: color }} />
+                {getItemHref ? (
+                  <a href={getItemHref(item.name)} className={`${bsp.bspBarName} ${bsp.bspBarNameClickable}`}>
+                    {item.name}
+                  </a>
+                ) : (
+                  <span className={bsp.bspBarName}>{item.name}</span>
+                )}
+                <span className={bsp.bspBarValue}>
+                  {fmtTokens(item.tokens)}
+                  <span className={pageStyles.footprintCostSuffix}>&nbsp;·&nbsp;{fmtCost(item.costUSD)}</span>
+                </span>
+              </div>
+              <div className={bsp.bspBarTrack}>
+                <div className={bsp.bspBarFill} style={{ width: `${barWidth}%`, background: color }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// TopAgentsTable
+// ---------------------------------------------------------------------------
+
+type TopAgentRow = AgentListItem & { runtimeTokens: number; runtimeCostUSD: number };
+
+function TopAgentsTable({
+  items,
+  starredAgents,
+  onToggleStar,
+}: {
+  items: TopAgentRow[];
+  starredAgents: Set<string>;
+  onToggleStar: (agentName: string) => void;
+}) {
+  const styles = useStyles2(getStyles);
+
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className={styles.tablePanel}>
+      <div className={styles.tablePanelHeader}>
+        <span className={styles.tablePanelTitle}>Top Agents</span>
+      </div>
+      <table className={styles.overviewTable}>
+        <thead>
+          <tr className={styles.overviewHeaderRow}>
+            <th className={cx(styles.overviewHeaderCell, styles.starCell)} aria-label="Star" />
+            <th className={styles.overviewHeaderCell}>Agent</th>
+            <th className={cx(styles.overviewHeaderCell, styles.overviewHeaderCellRight)}>Generations</th>
+            <th className={cx(styles.overviewHeaderCell, styles.overviewHeaderCellRight)}>Tokens</th>
+            <th className={cx(styles.overviewHeaderCell, styles.overviewHeaderCellRight)}>Est. Cost</th>
+            <th className={cx(styles.overviewHeaderCell, styles.overviewHeaderCellRight)}>Versions</th>
+            <th className={styles.overviewHeaderCell}>Last Seen</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => {
+            const name = agentDisplayName(item);
+            const href = agentHref(name);
+            const isStarred = starredAgents.has(item.agent_name);
+            return (
+              <tr
+                key={`${item.agent_name}:${item.latest_effective_version}`}
+                className={styles.overviewTableRow}
+                onClick={(e) => {
+                  if (e.metaKey || e.ctrlKey) {
+                    window.open(href, '_blank');
+                  } else {
+                    window.location.href = href;
+                  }
+                }}
+                role="link"
+                aria-label={`view agent ${cardLabel(item)}`}
+              >
+                <td className={cx(styles.overviewTableCell, styles.starCell)}>
+                  <button
+                    className={cx(styles.starButton, isStarred && styles.starButtonActive)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleStar(item.agent_name);
+                    }}
+                    aria-label={isStarred ? `unstar agent ${name}` : `star agent ${name}`}
+                  >
+                    <Icon name={isStarred ? 'favorite' : 'star'} size="md" />
+                  </button>
+                </td>
+                <td className={cx(styles.overviewTableCell, styles.overviewTableCellMono)}>{name}</td>
+                <td className={cx(styles.overviewTableCell, styles.overviewTableCellRight)}>
+                  {formatStatValue(item.generation_count, 'short')}
+                </td>
+                <td className={cx(styles.overviewTableCell, styles.overviewTableCellRight)}>
+                  {formatStatValue(item.runtimeTokens, 'short')}
+                </td>
+                <td className={cx(styles.overviewTableCell, styles.overviewTableCellRight)}>
+                  {formatStatValue(item.runtimeCostUSD, 'currencyUSD')}
+                </td>
+                <td className={cx(styles.overviewTableCell, styles.overviewTableCellRight)}>
+                  {item.version_count >= HIGH_CHURN_THRESHOLD ? (
+                    <Badge text={String(item.version_count)} color="orange" />
+                  ) : (
+                    item.version_count
+                  )}
+                </td>
+                <td className={styles.overviewTableCell}>
+                  <Tooltip content={new Date(item.latest_seen_at).toLocaleString()} placement="left">
+                    <span>{formatRelativeTime(item.latest_seen_at)}</span>
+                  </Tooltip>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className={styles.seeMoreFooter}>
+        <LinkButton href="?tab=table" variant="secondary" fill="text" size="sm" icon="arrow-right">
+          See all agents
+        </LinkButton>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
 export default function AgentsPage({
   dataSource = defaultAgentsDataSource,
   dashboardDataSource = defaultDashboardDataSource,
 }: AgentsPageProps) {
   const styles = useStyles2(getStyles);
   const navigate = useNavigate();
+  const [starredAgents, toggleStar] = useStarredAgents();
 
   const { timeRange, setTimeRange, searchParams, setSearchParams: setUrlParams } = useFilterUrlState();
 
@@ -447,21 +685,21 @@ export default function AgentsPage({
   const searchInput = searchParams.get('search') ?? '';
   const [namePrefix, setNamePrefix] = useState('');
   const activeTab: AgentsPageTab = searchParams.get('tab') === 'table' ? 'table' : 'info';
-  const [topFootprintMode, setTopFootprintMode] = useState<TokenCostMode>(() => readInitialTopFootprintMode());
   const requestVersion = useRef(0);
   const inFlightLoadMore = useRef(false);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
-  const telemetryFromSec = Math.floor(timeRange.from.valueOf() / 1000);
-  const telemetryToSec = Math.floor(timeRange.to.valueOf() / 1000);
+
+  const rangeFromSec = Math.floor(timeRange.from.valueOf() / 1000);
+  const rangeToSec = Math.floor(timeRange.to.valueOf() / 1000);
   const telemetryRangeDuration = useMemo(
-    () => computeRangeDuration(telemetryFromSec, telemetryToSec),
-    [telemetryFromSec, telemetryToSec]
+    () => computeRangeDuration(rangeFromSec, rangeToSec),
+    [rangeFromSec, rangeToSec]
   );
   const usageByModelAndType = usePrometheusQuery(
     dashboardDataSource,
     tokensByModelAndTypeQuery(emptyFilters, telemetryRangeDuration, 'agent'),
-    telemetryFromSec,
-    telemetryToSec,
+    rangeFromSec,
+    rangeToSec,
     'instant'
   );
   const resolvePairs = useMemo(() => extractResolvePairs(usageByModelAndType.data), [usageByModelAndType.data]);
@@ -473,45 +711,6 @@ export default function AgentsPage({
     }, 250);
     return () => clearTimeout(timeout);
   }, [searchInput]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(TOKEN_COST_MODE_STORAGE_KEY, topFootprintMode);
-      window.dispatchEvent(
-        new CustomEvent(TOKEN_COST_MODE_CHANGE_EVENT, {
-          detail: { storageKey: TOKEN_COST_MODE_STORAGE_KEY, mode: topFootprintMode },
-        })
-      );
-    } catch {
-      // Ignore storage write errors in restricted environments.
-    }
-  }, [topFootprintMode]);
-
-  useEffect(() => {
-    function onModeChange(event: Event) {
-      const customEvent = event as CustomEvent<{ storageKey?: string; mode?: TokenCostMode }>;
-      if (customEvent.detail?.storageKey !== TOKEN_COST_MODE_STORAGE_KEY) {
-        return;
-      }
-      if (customEvent.detail.mode === 'tokens' || customEvent.detail.mode === 'usd') {
-        setTopFootprintMode(customEvent.detail.mode);
-      }
-    }
-
-    function onStorage(event: StorageEvent) {
-      if (event.key !== TOKEN_COST_MODE_STORAGE_KEY) {
-        return;
-      }
-      setTopFootprintMode(event.newValue === 'usd' ? 'usd' : 'tokens');
-    }
-
-    window.addEventListener(TOKEN_COST_MODE_CHANGE_EVENT, onModeChange as EventListener);
-    window.addEventListener('storage', onStorage);
-    return () => {
-      window.removeEventListener(TOKEN_COST_MODE_CHANGE_EVENT, onModeChange as EventListener);
-      window.removeEventListener('storage', onStorage);
-    };
-  }, []);
 
   useEffect(() => {
     requestVersion.current += 1;
@@ -528,7 +727,7 @@ export default function AgentsPage({
     });
 
     dataSource
-      .listAgents(PAGE_SIZE, '', namePrefix)
+      .listAgents(PAGE_SIZE, '', namePrefix, rangeFromSec, rangeToSec)
       .then((response) => {
         if (requestVersion.current !== version) {
           return;
@@ -550,7 +749,9 @@ export default function AgentsPage({
         }
         setLoading(false);
       });
-  }, [dataSource, namePrefix]);
+  }, [dataSource, namePrefix, rangeFromSec, rangeToSec]);
+
+  // --- Summary computation ---
 
   const summary = useMemo(() => {
     const rangeFrom = timeRange.from.valueOf();
@@ -627,6 +828,67 @@ export default function AgentsPage({
     };
   }, [items, resolvedPricing.pricingMap, timeRange, usageByModelAndType.data]);
 
+  // --- Derived data for overview panels ---
+
+  const topByGensSyntheticData = useMemo<PrometheusQueryResponse>(
+    () =>
+      buildSyntheticVector(
+        summary.topByGenerations.map((item) => ({
+          name: agentDisplayName(item),
+          value: item.generation_count,
+        })),
+        'agent_name'
+      ),
+    [summary.topByGenerations]
+  );
+
+  const footprintItems = useMemo<FootprintItem[]>(
+    () =>
+      summary.topByTokenFootprint.map((item) => {
+        const usage = summary.usageByName.get(item.agent_name) ?? summary.usageByName.get(item.agent_name.trim());
+        const tokens = usage ? usage.tokens : item.token_estimate.total;
+        const costUSD = usage ? usage.costUSD : item.token_estimate.total * ESTIMATED_USD_PER_TOKEN;
+        return { name: agentDisplayName(item), tokens, costUSD };
+      }),
+    [summary.topByTokenFootprint, summary.usageByName]
+  );
+
+  const topAgentsData = useMemo<TopAgentRow[]>(
+    () =>
+      [...items]
+        .filter((item) => item.generation_count > 0)
+        .sort((a, b) => {
+          const aStarred = starredAgents.has(a.agent_name) ? 1 : 0;
+          const bStarred = starredAgents.has(b.agent_name) ? 1 : 0;
+          if (aStarred !== bStarred) {
+            return bStarred - aStarred;
+          }
+          return b.generation_count - a.generation_count;
+        })
+        .slice(0, TOP_AGENTS_LIMIT)
+        .map((item) => {
+          const usage = summary.usageByName.get(item.agent_name) ?? summary.usageByName.get(item.agent_name.trim());
+          return {
+            ...item,
+            runtimeTokens: usage?.tokens ?? 0,
+            runtimeCostUSD: usage?.costUSD ?? 0,
+          };
+        }),
+    [items, summary.usageByName, starredAgents]
+  );
+
+  const sortedItems = useMemo(
+    () =>
+      [...items].sort((a, b) => {
+        const aStarred = starredAgents.has(a.agent_name) ? 1 : 0;
+        const bStarred = starredAgents.has(b.agent_name) ? 1 : 0;
+        return bStarred - aStarred;
+      }),
+    [items, starredAgents]
+  );
+
+  // --- AI insight context ---
+
   const agentInsightDataContext = useMemo(() => {
     if (loading || items.length === 0) {
       return null;
@@ -657,6 +919,8 @@ export default function AgentsPage({
       `Top agents by token footprint:\n${topFootprint}`,
     ].join('\n');
   }, [loading, items.length, summary]);
+
+  // --- Event handlers ---
 
   const handleOpenAgent = (item: AgentListItem) => {
     const route =
@@ -710,7 +974,7 @@ export default function AgentsPage({
     const version = requestVersion.current;
     setLoadingMore(true);
     try {
-      const response = await dataSource.listAgents(PAGE_SIZE, nextCursor, namePrefix);
+      const response = await dataSource.listAgents(PAGE_SIZE, nextCursor, namePrefix, rangeFromSec, rangeToSec);
       if (requestVersion.current !== version) {
         return;
       }
@@ -725,7 +989,7 @@ export default function AgentsPage({
       inFlightLoadMore.current = false;
       setLoadingMore(false);
     }
-  }, [dataSource, loadingMore, namePrefix, nextCursor]);
+  }, [dataSource, loadingMore, namePrefix, nextCursor, rangeFromSec, rangeToSec]);
 
   useEffect(() => {
     if (
@@ -751,13 +1015,14 @@ export default function AgentsPage({
       },
       {
         root: null,
-        // Start loading before the sentinel reaches the viewport edge.
         rootMargin: '200px 0px',
       }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, [activeTab, loadMore, loading, loadingMore, nextCursor]);
+
+  // --- Render ---
 
   return (
     <div className={styles.page}>
@@ -811,60 +1076,49 @@ export default function AgentsPage({
                 <Text color="secondary">No agents matched this search in the current tenant.</Text>
               </div>
             ) : (
-              <div className={styles.heroWrap}>
+              <div className={styles.gridWrapper}>
+                <DashboardSummaryBar>
+                  <TopStat
+                    label="Agents"
+                    value={summary.seenInRangeCount}
+                    loading={false}
+                    helpTooltip="Agents with latest_seen_at inside the selected time range."
+                  />
+                  <TopStat
+                    label="Total Generations"
+                    value={summary.totalGenerations}
+                    loading={false}
+                    helpTooltip="Sum of generation_count for agents with runtime token usage."
+                  />
+                  <TopStat
+                    label="Total Tokens"
+                    value={summary.totalTokens}
+                    unit="short"
+                    loading={usageByModelAndType.loading}
+                    helpTooltip="Runtime token usage across loaded agents in the selected time range."
+                  />
+                  <TopStat
+                    label="Estimated Cost"
+                    value={summary.totalCostUSD}
+                    unit="currencyUSD"
+                    loading={usageByModelAndType.loading || resolvedPricing.loading}
+                    helpTooltip="Estimated cost based on resolved model pricing and runtime token usage."
+                  />
+                </DashboardSummaryBar>
+
+                <RiskSignalStrip
+                  anonymousCount={summary.anonymousCount}
+                  staleCount={summary.staleCount}
+                  highChurnCount={summary.highChurnCount}
+                />
+
                 <PageInsightBar
                   prompt="Analyze this agent fleet overview. Flag concentration risks, anomalies in usage patterns, or agents that need attention."
                   origin="sigil-plugin/agents-insight"
                   dataContext={agentInsightDataContext}
                 />
-                <section className={styles.hero} aria-label="agents hero summary">
-                  <div className={styles.heroKpis}>
-                    <div className={styles.heroKpiCard}>
-                      <LabelWithHelp
-                        label="Agents"
-                        help="Number of loaded agents with latest_seen_at inside the selected time range."
-                        className={styles.heroKpiLabel}
-                      />
-                      <span className={styles.heroKpiValue}>{summary.seenInRangeCount.toLocaleString()}</span>
-                    </div>
-                    <div className={styles.heroKpiCard}>
-                      <LabelWithHelp
-                        label="Total generations"
-                        help="Sum of generation_count for loaded agents with runtime token usage in the selected time range."
-                        className={styles.heroKpiLabel}
-                      />
-                      <span className={styles.heroKpiValue}>{summary.totalGenerations.toLocaleString()}</span>
-                    </div>
-                    <div className={styles.heroKpiCard}>
-                      <LabelWithHelp
-                        label="Token usage"
-                        help="Runtime token usage across loaded agents in the selected time range, grouped by agent name."
-                        className={styles.heroKpiLabel}
-                      />
-                      <span className={styles.heroKpiValue}>
-                        <TokenCostBox
-                          tokenCount={summary.totalTokens}
-                          costUSD={summary.totalCostUSD}
-                          ariaLabel="Total runtime token usage"
-                        />
-                      </span>
-                    </div>
-                    <div className={styles.heroKpiCard}>
-                      <LabelWithHelp
-                        label="Avg usage per generation"
-                        help="Runtime tokens divided by generations from loaded agents with runtime usage in the selected time range."
-                        className={styles.heroKpiLabel}
-                      />
-                      <span className={styles.heroKpiValue}>
-                        <TokenCostBox
-                          tokenCount={summary.averageTokensPerGeneration}
-                          costUSD={summary.averageCostPerGenerationUSD}
-                          ariaLabel="Average prompt and tools footprint per generation"
-                        />
-                      </span>
-                    </div>
-                  </div>
 
+                <div className={styles.grid}>
                   <AgentActivityTimeline
                     items={items}
                     timeRange={timeRange}
@@ -872,135 +1126,28 @@ export default function AgentsPage({
                     onTimeRangeChange={setTimeRange}
                   />
 
-                  <div className={styles.heroBody}>
-                    <div className={styles.heroSection}>
-                      <h4 className={styles.heroSectionTitle}>
-                        <LabelWithHelp
-                          label="Top by generations"
-                          help="Top loaded agents ranked by generation_count in descending order."
-                        />
-                      </h4>
-                      <ul className={styles.rankList}>
-                        {summary.topByGenerations.map((item) => (
-                          <li
-                            key={`gen:${item.agent_name}:${item.latest_effective_version}`}
-                            className={styles.rankItem}
-                          >
-                            <button
-                              type="button"
-                              className={styles.rankButton}
-                              onClick={() => handleOpenAgent(item)}
-                              aria-label={`open top generation agent ${cardLabel(item)}`}
-                            >
-                              {item.agent_name.trim().length > 0 ? item.agent_name : 'Unnamed agent bucket'}
-                            </button>
-                            <span className={styles.rankValue}>{formatCompactNumber(item.generation_count)}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <div className={styles.heroSection}>
-                      <div className={styles.heroSectionHeading}>
-                        <h4 className={styles.heroSectionTitle}>
-                          <LabelWithHelp
-                            label="Agent footprint"
-                            help="Top loaded agents ranked by runtime token usage in the selected time range."
-                          />
-                        </h4>
-                        <select
-                          aria-label="Top prompt and tools display mode"
-                          value={topFootprintMode}
-                          onChange={(event) => setTopFootprintMode(event.currentTarget.value as TokenCostMode)}
-                          className={styles.footprintModeSelect}
-                        >
-                          <option value="tokens">tokens</option>
-                          <option value="usd">USD</option>
-                        </select>
-                      </div>
-                      <ul className={styles.rankList}>
-                        {summary.topByTokenFootprint.map((item) => {
-                          const usage =
-                            summary.usageByName.get(item.agent_name) ?? summary.usageByName.get(item.agent_name.trim());
-                          const tokenValue = usage ? usage.tokens : item.token_estimate.total;
-                          const costValue = usage ? usage.costUSD : item.token_estimate.total * ESTIMATED_USD_PER_TOKEN;
-                          const usdValue = formatUSD(costValue).slice(1);
-                          const usdParts = splitMutedZeroPrefix(usdValue);
-                          return (
-                            <li
-                              key={`tok:${item.agent_name}:${item.latest_effective_version}`}
-                              className={styles.rankItem}
-                            >
-                              <button
-                                type="button"
-                                className={styles.rankButton}
-                                onClick={() => handleOpenAgent(item)}
-                                aria-label={`open top token agent ${cardLabel(item)}`}
-                              >
-                                {item.agent_name.trim().length > 0 ? item.agent_name : 'Unnamed agent bucket'}
-                              </button>
-                              <span className={styles.rankValue}>
-                                {topFootprintMode === 'usd' ? (
-                                  <>
-                                    <span className={styles.rankValueAffix}>$</span>
-                                    {usdParts.leading.length > 0 && (
-                                      <span className={styles.rankValueMuted}>{usdParts.leading}</span>
-                                    )}
-                                    <span className={styles.rankValueNumber}>
-                                      {usdParts.rest.length > 0 ? usdParts.rest : '0'}
-                                    </span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <span className={styles.rankValueNumber}>
-                                      {Math.round(tokenValue).toLocaleString()}
-                                    </span>{' '}
-                                    <span className={styles.rankValueAffix}>tokens</span>
-                                  </>
-                                )}
-                              </span>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-
-                    <div className={styles.heroSection}>
-                      <h4 className={styles.heroSectionTitle}>
-                        <LabelWithHelp
-                          label="Risk and health"
-                          help="Quick risk signals derived from loaded agents: anonymous naming, stale recency, and version churn."
-                        />
-                      </h4>
-                      <ul className={styles.riskList}>
-                        <li className={styles.riskItem}>
-                          <span className={styles.riskValue}>{summary.anonymousCount.toLocaleString()}</span>
-                          <LabelWithHelp
-                            label="anonymous buckets"
-                            help="Count of loaded rows where agent_name is empty and grouped as unnamed bucket."
-                            className={styles.riskLabel}
-                          />
-                        </li>
-                        <li className={styles.riskItem}>
-                          <span className={styles.riskValue}>{summary.staleCount.toLocaleString()}</span>
-                          <LabelWithHelp
-                            label="stale (> 7 days)"
-                            help="Count of loaded agents whose latest_seen_at is more than 7 days older than the selected range end."
-                            className={styles.riskLabel}
-                          />
-                        </li>
-                        <li className={styles.riskItem}>
-                          <span className={styles.riskValue}>{summary.highChurnCount.toLocaleString()}</span>
-                          <LabelWithHelp
-                            label={`high churn (${HIGH_CHURN_THRESHOLD}+ versions)`}
-                            help={`Count of loaded agents with version_count >= ${HIGH_CHURN_THRESHOLD}.`}
-                            className={styles.riskLabel}
-                          />
-                        </li>
-                      </ul>
-                    </div>
+                  <div className={styles.panelRowEqual}>
+                    <BreakdownStatPanel
+                      title="Top by Generations"
+                      data={topByGensSyntheticData}
+                      loading={false}
+                      breakdownLabel="agent_name"
+                      height={CHART_HEIGHT}
+                      getItemHref={agentHref}
+                    />
+                    <AgentFootprintPanel
+                      title="Agent Footprint"
+                      items={footprintItems}
+                      totalTokens={summary.totalTokens}
+                      totalCostUSD={summary.totalCostUSD}
+                      loading={usageByModelAndType.loading || resolvedPricing.loading}
+                      height={CHART_HEIGHT}
+                      getItemHref={agentHref}
+                    />
                   </div>
-                </section>
+                </div>
+
+                <TopAgentsTable items={topAgentsData} starredAgents={starredAgents} onToggleStar={toggleStar} />
               </div>
             )
           ) : (
@@ -1028,43 +1175,67 @@ export default function AgentsPage({
                 </div>
               ) : (
                 <>
-                  <div className={styles.tableWrap}>
-                    <table className={styles.table} aria-label="agents index table">
+                  <div className={cx(styles.tablePanel, styles.agentsTableWrap)}>
+                    <table className={styles.agentsTable} aria-label="agents index table">
                       <thead>
-                        <tr>
-                          <th className={styles.th}>Agent</th>
-                          <th className={styles.th}>Latest seen</th>
-                          <th className={cx(styles.th, styles.centeredColumn)}>Versions</th>
-                          <th className={cx(styles.th, styles.centeredColumn)}>Tools</th>
-                          <th className={cx(styles.th, styles.centeredColumn)}>Generations</th>
-                          <th className={styles.th}>Prompt prefix</th>
+                        <tr className={styles.overviewHeaderRow}>
+                          <th className={cx(styles.overviewHeaderCell, styles.starCell)} aria-label="Star" />
+                          <th className={styles.overviewHeaderCell}>Agent</th>
+                          <th className={styles.overviewHeaderCell}>Latest seen</th>
+                          <th className={cx(styles.overviewHeaderCell, styles.overviewHeaderCellRight)}>Versions</th>
+                          <th className={cx(styles.overviewHeaderCell, styles.overviewHeaderCellRight)}>Tools</th>
+                          <th className={cx(styles.overviewHeaderCell, styles.overviewHeaderCellRight)}>Generations</th>
+                          <th className={styles.overviewHeaderCell}>Prompt prefix</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {items.map((item) => {
+                        {sortedItems.map((item) => {
                           const isAnonymous = item.agent_name.trim().length === 0;
+                          const name = agentDisplayName(item);
+                          const href = agentHref(name);
+                          const isStarred = starredAgents.has(item.agent_name);
                           return (
                             <tr
                               key={`${item.agent_name}:${item.latest_effective_version}`}
-                              className={cx(styles.tr, isAnonymous && styles.anonymousRow)}
+                              className={cx(styles.overviewTableRow, isAnonymous && styles.anonymousRow)}
+                              onClick={(e) => {
+                                if (e.metaKey || e.ctrlKey) {
+                                  window.open(href, '_blank');
+                                } else {
+                                  handleOpenAgent(item);
+                                }
+                              }}
+                              role="link"
+                              aria-label={`open agent ${cardLabel(item)}`}
                             >
-                              <td className={styles.td}>
+                              <td className={cx(styles.overviewTableCell, styles.starCell)}>
                                 <button
-                                  type="button"
-                                  className={styles.openButton}
-                                  onClick={() => handleOpenAgent(item)}
-                                  aria-label={`open agent ${cardLabel(item)}`}
+                                  className={cx(styles.starButton, isStarred && styles.starButtonActive)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleStar(item.agent_name);
+                                  }}
+                                  aria-label={isStarred ? `unstar agent ${name}` : `star agent ${name}`}
                                 >
-                                  {isAnonymous ? 'Unnamed agent bucket' : item.agent_name}
+                                  <Icon name={isStarred ? 'favorite' : 'star'} size="md" />
                                 </button>
                               </td>
-                              <td className={styles.td}>{formatDateShort(item.latest_seen_at)}</td>
-                              <td className={cx(styles.td, styles.centeredColumn)}>{item.version_count}</td>
-                              <td className={cx(styles.td, styles.centeredColumn)}>{item.tool_count}</td>
-                              <td className={cx(styles.td, styles.centeredColumn)}>
-                                {item.generation_count.toLocaleString()}
+                              <td className={cx(styles.overviewTableCell, styles.overviewTableCellMono)}>{name}</td>
+                              <td className={styles.overviewTableCell}>
+                                <Tooltip content={new Date(item.latest_seen_at).toLocaleString()} placement="left">
+                                  <span>{formatRelativeTime(item.latest_seen_at)}</span>
+                                </Tooltip>
                               </td>
-                              <td className={cx(styles.td, styles.promptCell)}>
+                              <td className={cx(styles.overviewTableCell, styles.overviewTableCellRight)}>
+                                {item.version_count}
+                              </td>
+                              <td className={cx(styles.overviewTableCell, styles.overviewTableCellRight)}>
+                                {item.tool_count}
+                              </td>
+                              <td className={cx(styles.overviewTableCell, styles.overviewTableCellRight)}>
+                                {formatStatValue(item.generation_count, 'short')}
+                              </td>
+                              <td className={cx(styles.overviewTableCell, styles.promptCell)}>
                                 {item.system_prompt_prefix.length > 0 ? item.system_prompt_prefix : '-'}
                               </td>
                             </tr>

@@ -39,7 +39,7 @@ func TestListAgentsForTenantWithCursor(t *testing.T) {
 		t.Fatalf("new service: %v", err)
 	}
 
-	items, nextCursor, err := svc.ListAgentsForTenant(context.Background(), "tenant-a", 50, "", "")
+	items, nextCursor, err := svc.ListAgentsForTenant(context.Background(), "tenant-a", 50, "", AgentListFilter{})
 	if err != nil {
 		t.Fatalf("list agents: %v", err)
 	}
@@ -66,13 +66,13 @@ func TestListAgentsForTenantRejectsCursorFilterMismatch(t *testing.T) {
 		LatestSeenNanos: time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC).UnixNano(),
 		AgentName:       "assistant",
 		HeadID:          42,
-		FilterHash:      buildAgentListFilterHash("different"),
+		FilterHash:      buildAgentListFilterHash("different", time.Time{}, time.Time{}),
 	})
 	if err != nil {
 		t.Fatalf("encode cursor: %v", err)
 	}
 
-	_, _, err = svc.ListAgentsForTenant(context.Background(), "tenant-a", 10, cursor, "assistant")
+	_, _, err = svc.ListAgentsForTenant(context.Background(), "tenant-a", 10, cursor, AgentListFilter{NamePrefix: "assistant"})
 	if err == nil || !IsValidationError(err) {
 		t.Fatalf("expected validation error for mismatched cursor filter, got %v", err)
 	}
@@ -223,7 +223,7 @@ type stubAgentCatalogStore struct {
 	lastVersionsLimit int
 }
 
-func (s *stubAgentCatalogStore) ListAgentHeads(_ context.Context, _ string, limit int, _ *storage.AgentHeadCursor, _ string) ([]storage.AgentHead, *storage.AgentHeadCursor, error) {
+func (s *stubAgentCatalogStore) ListAgentHeads(_ context.Context, _ string, limit int, _ *storage.AgentHeadCursor, _ storage.AgentHeadFilter) ([]storage.AgentHead, *storage.AgentHeadCursor, error) {
 	s.lastLimit = limit
 	return s.heads, s.nextCursor, nil
 }

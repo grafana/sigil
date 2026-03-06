@@ -1561,7 +1561,7 @@ func (s *testAgentRatingStore) Upserts() []agentrating.Rating {
 	return out
 }
 
-func (s *testAgentCatalogStore) ListAgentHeads(_ context.Context, _ string, _ int, _ *storage.AgentHeadCursor, _ string) ([]storage.AgentHead, *storage.AgentHeadCursor, error) {
+func (s *testAgentCatalogStore) ListAgentHeads(_ context.Context, _ string, _ int, _ *storage.AgentHeadCursor, _ storage.AgentHeadFilter) ([]storage.AgentHead, *storage.AgentHeadCursor, error) {
 	return s.heads, s.nextCursor, nil
 }
 

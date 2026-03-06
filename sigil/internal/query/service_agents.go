@@ -100,12 +100,18 @@ type agentVersionListCursor struct {
 	FilterHash    string `json:"filter_hash"`
 }
 
-func (s *Service) ListAgentsForTenant(ctx context.Context, tenantID string, limit int, cursor, namePrefix string) ([]AgentListItem, string, error) {
+type AgentListFilter struct {
+	NamePrefix string
+	SeenAfter  time.Time
+	SeenBefore time.Time
+}
+
+func (s *Service) ListAgentsForTenant(ctx context.Context, tenantID string, limit int, cursor string, filter AgentListFilter) ([]AgentListItem, string, error) {
 	ctx, span := queryServiceTracer.Start(ctx, "sigil.query.list_agents")
 	defer span.End()
 
 	trimmedTenantID := strings.TrimSpace(tenantID)
-	trimmedPrefix := strings.TrimSpace(namePrefix)
+	trimmedPrefix := strings.TrimSpace(filter.NamePrefix)
 	if trimmedTenantID == "" {
 		err := NewValidationError("tenant id is required")
 		recordQuerySpanError(span, err)
@@ -117,7 +123,7 @@ func (s *Service) ListAgentsForTenant(ctx context.Context, tenantID string, limi
 		return nil, "", err
 	}
 	pageSize := normalizeAgentListPageSize(limit)
-	filterHash := buildAgentListFilterHash(trimmedPrefix)
+	filterHash := buildAgentListFilterHash(trimmedPrefix, filter.SeenAfter, filter.SeenBefore)
 	cursorState, err := decodeAgentListCursor(cursor)
 	if err != nil {
 		validationErr := NewValidationError("invalid cursor")
@@ -135,6 +141,8 @@ func (s *Service) ListAgentsForTenant(ctx context.Context, tenantID string, limi
 		attribute.Int("sigil.query.limit", pageSize),
 		attribute.String("sigil.query.agent_name_prefix", trimmedPrefix),
 		attribute.Bool("sigil.query.cursor_provided", strings.TrimSpace(cursor) != ""),
+		attribute.Bool("sigil.query.seen_after_set", !filter.SeenAfter.IsZero()),
+		attribute.Bool("sigil.query.seen_before_set", !filter.SeenBefore.IsZero()),
 	)
 
 	var storeCursor *storage.AgentHeadCursor
@@ -146,7 +154,12 @@ func (s *Service) ListAgentsForTenant(ctx context.Context, tenantID string, limi
 		}
 	}
 
-	heads, nextStoreCursor, err := s.agentCatalogStore.ListAgentHeads(ctx, trimmedTenantID, pageSize, storeCursor, trimmedPrefix)
+	storeFilter := storage.AgentHeadFilter{
+		NamePrefix: trimmedPrefix,
+		SeenAfter:  filter.SeenAfter,
+		SeenBefore: filter.SeenBefore,
+	}
+	heads, nextStoreCursor, err := s.agentCatalogStore.ListAgentHeads(ctx, trimmedTenantID, pageSize, storeCursor, storeFilter)
 	if err != nil {
 		recordQuerySpanError(span, err)
 		return nil, "", err
@@ -407,9 +420,18 @@ func normalizeAgentListPageSize(value int) int {
 	return value
 }
 
-func buildAgentListFilterHash(namePrefix string) string {
-	sum := sha256.Sum256([]byte(strings.TrimSpace(namePrefix)))
-	return hex.EncodeToString(sum[:])
+func buildAgentListFilterHash(namePrefix string, seenAfter, seenBefore time.Time) string {
+	h := sha256.New()
+	h.Write([]byte(strings.TrimSpace(namePrefix)))
+	h.Write([]byte{0})
+	if !seenAfter.IsZero() {
+		h.Write([]byte(seenAfter.UTC().Format(time.RFC3339)))
+	}
+	h.Write([]byte{0})
+	if !seenBefore.IsZero() {
+		h.Write([]byte(seenBefore.UTC().Format(time.RFC3339)))
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 func buildAgentVersionsFilterHash(agentName string) string {

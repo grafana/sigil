@@ -140,6 +140,14 @@
   },
   "roles": [
     {
+      "grants": ["Viewer"],
+      "role": {
+        "name": "Sigil Viewer",
+        "description": "Read access to Sigil landing page and tutorial.",
+        "permissions": [{ "action": "plugins.app:access", "scope": "plugins:id:grafana-sigil-app" }]
+      }
+    },
+    {
       "grants": ["Editor", "Admin"],
       "role": {
         "name": "Sigil Reader",
