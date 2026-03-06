@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import type { DashboardDataSource } from '../../dashboard/api';
 import { defaultAgentsDataSource } from '../../agents/api';
 import type { AgentListItem } from '../../agents/types';
 import { defaultConversationsDataSource } from '../../conversation/api';
@@ -203,6 +204,51 @@ describe('LandingTopBar hero stats polling', () => {
     expect(secondCurrentTo).toBeGreaterThan(firstCurrentTo);
     expect(secondCurrentFrom - firstCurrentFrom).toBe(70_000);
     expect(secondCurrentTo - firstCurrentTo).toBe(70_000);
+  });
+});
+
+describe('LandingTopBar request spines', () => {
+  it('loads request spine bars from the dashboard datasource', async () => {
+    const queryRange = jest.fn(async () => ({
+      status: 'success' as const,
+      data: {
+        resultType: 'matrix' as const,
+        result: [
+          {
+            metric: {},
+            values: [
+              [1700000000, '1.5'],
+              [1700000060, '2.0'],
+              [1700000120, '3.5'],
+            ],
+          },
+        ],
+      },
+    }));
+    const requestsDataSource = {
+      queryRange,
+      queryInstant: jest.fn(),
+      labels: jest.fn(),
+      labelValues: jest.fn(),
+      resolveModelCards: jest.fn(),
+    } satisfies DashboardDataSource;
+
+    await act(async () => {
+      render(
+        <MemoryRouter>
+          <LandingTopBar
+            assistantOrigin="test-origin"
+            requestsDataSource={requestsDataSource}
+            requestsFrom={1_700_000_000}
+            requestsTo={1_700_000_360}
+          />
+        </MemoryRouter>
+      );
+    });
+
+    await waitFor(() => {
+      expect(queryRange).toHaveBeenCalledTimes(1);
+    });
   });
 });
 
