@@ -148,6 +148,7 @@ func TestRequiredPermissionAction(t *testing.T) {
 			{method: http.MethodGet, path: "/query/conversations"},
 			{method: http.MethodPost, path: "/query/conversations/search"},
 			{method: http.MethodPost, path: "/query/conversations/search/stream"},
+			{method: http.MethodPost, path: "/query/conversations/stats"},
 			{method: http.MethodGet, path: "/query/conversations/c-1"},
 			{method: http.MethodGet, path: "/query/conversations/c-1/ratings"},
 			{method: http.MethodGet, path: "/query/conversations/c-1/annotations"},
