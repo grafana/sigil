@@ -27,6 +27,9 @@ const noFilters: DashboardFilters = {
 const noEval: EvalFilters = emptyEvalFilters;
 
 const withDashFilters: DashboardFilters = { ...noFilters, models: ['gpt-4o'] };
+const withProviderFilter: DashboardFilters = { ...noFilters, providers: ['openai'] };
+const withProviderAndModel: DashboardFilters = { ...noFilters, providers: ['openai'], models: ['gpt-4o'] };
+const withMultiProviders: DashboardFilters = { ...noFilters, providers: ['openai', 'anthropic'] };
 
 const withEvalFilters: EvalFilters = { evaluators: ['helpfulness'], scoreKeys: [], evaluatorKinds: [] };
 const withMultiEvalFilters: EvalFilters = {
@@ -48,7 +51,25 @@ describe('eval stat queries', () => {
 
   it('totalScoresQuery with dashboard and eval filters', () => {
     expect(totalScoresQuery(withDashFilters, withEvalFilters, '3600s')).toBe(
-      'sum(increase(sigil_eval_scores_total{gen_ai_request_model=~"(?i).*gpt-4o.*",evaluator="helpfulness"}[3600s]))'
+      'sum(increase(sigil_eval_scores_total{gen_ai_request_model="gpt-4o",evaluator="helpfulness"}[3600s]))'
+    );
+  });
+
+  it('totalScoresQuery with provider filter uses gen_ai_request_provider', () => {
+    expect(totalScoresQuery(withProviderFilter, noEval, '3600s')).toBe(
+      'sum(increase(sigil_eval_scores_total{gen_ai_request_provider="openai"}[3600s]))'
+    );
+  });
+
+  it('totalScoresQuery with provider and model filters', () => {
+    expect(totalScoresQuery(withProviderAndModel, withEvalFilters, '3600s')).toBe(
+      'sum(increase(sigil_eval_scores_total{gen_ai_request_provider="openai",gen_ai_request_model="gpt-4o",evaluator="helpfulness"}[3600s]))'
+    );
+  });
+
+  it('totalScoresQuery with multiple providers', () => {
+    expect(totalScoresQuery(withMultiProviders, noEval, '3600s')).toBe(
+      'sum(increase(sigil_eval_scores_total{gen_ai_request_provider=~"openai|anthropic"}[3600s]))'
     );
   });
 
@@ -166,7 +187,13 @@ describe('eval timeseries queries', () => {
 
   it('queries respect both dashboard and eval filters', () => {
     const q = scoresOverTimeQuery(withDashFilters, withEvalFilters, '60s');
-    expect(q).toContain('gen_ai_request_model=~"(?i).*gpt-4o.*"');
+    expect(q).toContain('gen_ai_request_model="gpt-4o"');
     expect(q).toContain('evaluator="helpfulness"');
+  });
+
+  it('provider filter applies to timeseries queries', () => {
+    const q = passRateOverTimeQuery(withProviderFilter, noEval, '60s');
+    expect(q).toContain('gen_ai_request_provider="openai"');
+    expect(q).not.toContain('gen_ai_provider_name');
   });
 });
