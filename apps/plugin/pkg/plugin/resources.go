@@ -359,6 +359,14 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	a.doSigilProxy(w, req, path, method, req.Body, req.URL.RawQuery, "")
+}
+
+func (a *App) handleProxyWithBody(w http.ResponseWriter, req *http.Request, path string, method string, body []byte) {
+	a.doSigilProxy(w, req, path, method, bytes.NewReader(body), "", "application/json")
+}
+
+func (a *App) doSigilProxy(w http.ResponseWriter, req *http.Request, path string, method string, body io.Reader, rawQuery string, contentType string) {
 	ctx, span := pluginProxyTracer.Start(
 		req.Context(),
 		"sigil.plugin.proxy.sigil",
@@ -371,14 +379,10 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 	defer span.End()
 
 	upstream := strings.TrimRight(a.apiURL, "/") + path
-	if req.URL.RawQuery != "" {
-		upstream += "?" + req.URL.RawQuery
+	if rawQuery != "" {
+		upstream += "?" + rawQuery
 	}
 
-	var body io.Reader
-	if req.Body != nil {
-		body = req.Body
-	}
 	proxyReq, err := http.NewRequestWithContext(ctx, method, upstream, body)
 	if err != nil {
 		span.RecordError(err)
@@ -387,62 +391,9 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 		return
 	}
 	proxyReq.Header = req.Header.Clone()
-	if a.apiAuthToken != "" {
-		proxyReq.SetBasicAuth(a.tenantID, a.apiAuthToken)
+	if contentType != "" {
+		proxyReq.Header.Set("Content-Type", contentType)
 	}
-	injectTenantHeaders(proxyReq, a.tenantID)
-	injectOperatorIdentityHeaders(proxyReq, method, path)
-	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(proxyReq.Header))
-
-	resp, err := a.client.Do(proxyReq)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "upstream unavailable")
-		writeStub(w, http.StatusBadGateway, path, fmt.Sprintf("upstream unavailable: %v", err))
-		return
-	}
-	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			// Best-effort close after response handling; no recovery path here.
-			_ = closeErr
-		}
-	}()
-
-	copyUpstreamResponseHeaders(w.Header(), resp.Header)
-	if w.Header().Get("Content-Type") == "" {
-		w.Header().Set("Content-Type", "application/json")
-	}
-	w.WriteHeader(resp.StatusCode)
-	span.SetAttributes(attribute.Int("http.response.status_code", resp.StatusCode))
-	if resp.StatusCode >= http.StatusInternalServerError {
-		span.SetStatus(codes.Error, http.StatusText(resp.StatusCode))
-	}
-	_, _ = io.Copy(w, resp.Body)
-}
-
-func (a *App) handleProxyWithBody(w http.ResponseWriter, req *http.Request, path string, method string, body []byte) {
-	ctx, span := pluginProxyTracer.Start(
-		req.Context(),
-		"sigil.plugin.proxy.sigil",
-		trace.WithSpanKind(trace.SpanKindClient),
-		trace.WithAttributes(
-			attribute.String("http.request.method", method),
-			attribute.String("url.path", path),
-		),
-	)
-	defer span.End()
-
-	upstream := strings.TrimRight(a.apiURL, "/") + path
-
-	proxyReq, err := http.NewRequestWithContext(ctx, method, upstream, bytes.NewReader(body))
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "build request")
-		writeStub(w, http.StatusInternalServerError, path, fmt.Sprintf("build request: %v", err))
-		return
-	}
-	proxyReq.Header = req.Header.Clone()
-	proxyReq.Header.Set("Content-Type", "application/json")
 	if a.apiAuthToken != "" {
 		proxyReq.SetBasicAuth(a.tenantID, a.apiAuthToken)
 	}
