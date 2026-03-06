@@ -10,6 +10,10 @@ Sigil is an open-source AI observability project from Grafana.
 
 It combines OpenTelemetry traces with normalized LLM generation data, so you can inspect conversations, completions, and traces in one place.
 
+<p align="center">
+  <img src="./assets/readme/sigil-tri-shot.svg" alt="Sigil landing, analytics, and agents views" width="100%" />
+</p>
+
 ## What You Get
 
 - Grafana app plugin (`/apps/plugin`) for conversations, completions, traces, and settings.
