@@ -6,6 +6,8 @@ import type {
   AgentRatingRequest,
   AgentRatingResponse,
   AgentVersionListResponse,
+  AnalyzePromptRequest,
+  PromptInsightsResponse,
 } from './types';
 
 const queryBasePath = '/api/plugins/grafana-sigil-app/resources/query';
@@ -16,6 +18,8 @@ export type AgentsDataSource = {
   listAgentVersions: (name: string, limit?: number, cursor?: string) => Promise<AgentVersionListResponse>;
   lookupAgentRating: (name: string, version?: string) => Promise<AgentRatingResponse | null>;
   rateAgent: (name: string, version?: string) => Promise<AgentRatingResponse>;
+  lookupPromptInsights: (name: string, version?: string) => Promise<PromptInsightsResponse | null>;
+  analyzePrompt: (name: string, version?: string, lookback?: string) => Promise<PromptInsightsResponse>;
 };
 
 export const defaultAgentsDataSource: AgentsDataSource = {
@@ -106,6 +110,49 @@ export const defaultAgentsDataSource: AgentsDataSource = {
       getBackendSrv().fetch<AgentRatingResponse>({
         method: 'POST',
         url: `${queryBasePath}/agents/rate`,
+        data: payload,
+      })
+    );
+    return response.data;
+  },
+
+  async lookupPromptInsights(name: string, version?: string) {
+    const params = new URLSearchParams();
+    params.set('name', name);
+    if (version && version.length > 0) {
+      params.set('version', version);
+    }
+
+    try {
+      const response = await lastValueFrom(
+        getBackendSrv().fetch<PromptInsightsResponse>({
+          method: 'GET',
+          url: `${queryBasePath}/agents/prompt-insights?${params.toString()}`,
+          showErrorAlert: false,
+        })
+      );
+      return response.data;
+    } catch (err: unknown) {
+      if (extractStatusCode(err) === 404) {
+        return null;
+      }
+      throw err;
+    }
+  },
+
+  async analyzePrompt(name: string, version?: string, lookback?: string) {
+    const payload: AnalyzePromptRequest = { agent_name: name };
+    if (version && version.length > 0) {
+      payload.version = version;
+    }
+    if (lookback && lookback.length > 0) {
+      payload.lookback = lookback;
+    }
+
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<PromptInsightsResponse>({
+        method: 'POST',
+        url: `${queryBasePath}/agents/analyze-prompt`,
         data: payload,
       })
     );

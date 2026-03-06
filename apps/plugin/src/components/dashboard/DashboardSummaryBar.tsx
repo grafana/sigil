@@ -20,6 +20,10 @@ function getStyles(theme: GrafanaTheme2) {
       gap: theme.spacing(4),
       padding: theme.spacing(0.5, 2, 1.5),
       flexWrap: 'wrap',
+      '& > *': {
+        flex: '1 1 0',
+        minWidth: 0,
+      },
     }),
   };
 }

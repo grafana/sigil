@@ -124,6 +124,10 @@ func requiredPermissionAction(method string, path string) (string, bool) {
 		return permissionDataRead, true
 	case method == http.MethodPost && path == "/query/agents/rate":
 		return permissionEvalWrite, true
+	case method == http.MethodGet && path == "/query/agents/prompt-insights":
+		return permissionDataRead, true
+	case method == http.MethodPost && path == "/query/agents/analyze-prompt":
+		return permissionEvalWrite, true
 	case strings.HasPrefix(path, "/eval/") || path == "/eval:test":
 		return permissionForEvalRoute(method, path)
 	default:
@@ -561,6 +565,14 @@ func (a *App) handleRateAgent(w http.ResponseWriter, req *http.Request) {
 	a.handleProxy(w, req, "/api/v1/agents:rate", http.MethodPost)
 }
 
+func (a *App) handleLookupPromptInsights(w http.ResponseWriter, req *http.Request) {
+	a.handleProxy(w, req, "/api/v1/agents:prompt-insights", http.MethodGet)
+}
+
+func (a *App) handleAnalyzePrompt(w http.ResponseWriter, req *http.Request) {
+	a.handleProxy(w, req, "/api/v1/agents:analyze-prompt", http.MethodPost)
+}
+
 func (a *App) handleEvalEvaluators(w http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case http.MethodGet:
@@ -798,6 +810,8 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/query/agents/versions", a.withAuthorization(a.handleListAgentVersions))
 	mux.HandleFunc("/query/agents/rating", a.withAuthorization(a.handleLookupAgentRating))
 	mux.HandleFunc("/query/agents/rate", a.withAuthorization(a.handleRateAgent))
+	mux.HandleFunc("/query/agents/prompt-insights", a.withAuthorization(a.handleLookupPromptInsights))
+	mux.HandleFunc("/query/agents/analyze-prompt", a.withAuthorization(a.handleAnalyzePrompt))
 
 	mux.HandleFunc("/eval/evaluators", a.withAuthorization(a.handleEvalEvaluators))
 	mux.HandleFunc("/eval/evaluators/", a.withAuthorization(a.handleEvalEvaluatorByID))

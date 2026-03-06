@@ -21,9 +21,11 @@ export type TopStatProps = {
   linkLabel?: string;
   helpTooltip?: string | React.ReactElement;
   rightAlignContent?: boolean;
+  size?: 'default' | 'large';
+  sparklineData?: number[];
 };
 
-const DEFAULT_COMPARISON_LABEL = 'one hour ago';
+const DEFAULT_COMPARISON_LABEL = 'previous 24 hours';
 
 export function TopStat({
   label,
@@ -41,6 +43,8 @@ export function TopStat({
   linkLabel,
   helpTooltip,
   rightAlignContent = false,
+  size = 'default',
+  sparklineData,
 }: TopStatProps) {
   const styles = useStyles2(getStyles);
 
@@ -80,31 +84,25 @@ export function TopStat({
     }
   }
 
-  return (
-    <div
-      className={cx(styles.topStat, compact && styles.topStatCompact, rightAlignContent && styles.topStatRightAligned)}
-    >
+  const helpIcon = helpTooltip ? (
+    <Tooltip content={helpTooltip} placement="top">
+      <span className={styles.topStatHelpIcon} aria-label={`${label} help`}>
+        <Icon name="info-circle" size="sm" />
+      </span>
+    </Tooltip>
+  ) : null;
+
+  const content = (
+    <>
       <div className={cx(styles.topStatLabelRow, rightAlignContent && styles.topStatLabelRowRightAligned)}>
         <span className={cx(styles.topStatLabelGroup, rightAlignContent && styles.topStatLabelGroupRightAligned)}>
-          {helpTooltip && rightAlignContent && (
-            <Tooltip content={helpTooltip} placement="top">
-              <span className={styles.topStatHelpIcon} aria-label={`${label} help`}>
-                <Icon name="info-circle" size="sm" />
-              </span>
-            </Tooltip>
-          )}
+          {helpIcon && rightAlignContent && helpIcon}
           <span className={cx(styles.topStatLabel, compact && styles.topStatLabelCompact)}>{label}</span>
-          {helpTooltip && !rightAlignContent && (
-            <Tooltip content={helpTooltip} placement="top">
-              <span className={styles.topStatHelpIcon} aria-label={`${label} help`}>
-                <Icon name="info-circle" size="sm" />
-              </span>
-            </Tooltip>
-          )}
+          {helpIcon && !rightAlignContent && helpIcon}
         </span>
-        {to && (
+        {to && linkLabel && (
           <Link to={to} className={styles.topStatDetailLink}>
-            {linkLabel ?? 'View details'}
+            {linkLabel}
           </Link>
         )}
       </div>
@@ -117,7 +115,7 @@ export function TopStat({
       >
         <span
           className={cx(
-            styles.topStatValue,
+            size === 'large' ? styles.topStatValueLarge : styles.topStatValue,
             compact && styles.topStatValueCompact,
             normalFontSize && styles.topStatValueNormalFont,
             rightAlignContent && styles.topStatValueRightAligned
@@ -127,7 +125,68 @@ export function TopStat({
         </span>
         {changeBadge}
       </div>
+      {sparklineData !== undefined && (
+        <div className={styles.sparklineSlot}>
+          {sparklineData.length > 1 ? (
+            <MiniSparkline data={sparklineData} />
+          ) : (
+            <div className={styles.sparklineSkeleton} />
+          )}
+        </div>
+      )}
+    </>
+  );
+
+  if (to && !linkLabel) {
+    return (
+      <Link
+        to={to}
+        className={cx(
+          styles.topStat,
+          styles.topStatClickable,
+          compact && styles.topStatCompact,
+          rightAlignContent && styles.topStatRightAligned
+        )}
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <div
+      className={cx(styles.topStat, compact && styles.topStatCompact, rightAlignContent && styles.topStatRightAligned)}
+    >
+      {content}
     </div>
+  );
+}
+
+const SPARKLINE_W = 120;
+const SPARKLINE_H = 24;
+
+function MiniSparkline({ data }: { data: number[] }) {
+  const styles = useStyles2(getStyles);
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const points = data
+    .map((v, i) => {
+      const x = (i / (data.length - 1)) * SPARKLINE_W;
+      const y = SPARKLINE_H - ((v - min) / range) * (SPARKLINE_H - 2) - 1;
+      return `${x},${y}`;
+    })
+    .join(' ');
+
+  return (
+    <svg
+      className={styles.sparkline}
+      viewBox={`0 0 ${SPARKLINE_W} ${SPARKLINE_H}`}
+      preserveAspectRatio="none"
+      aria-hidden
+    >
+      <polyline points={points} />
+    </svg>
   );
 }
 
@@ -186,6 +245,16 @@ function getStyles(theme: GrafanaTheme2) {
         borderColor: theme.colors.border.medium,
       },
     }),
+    topStatClickable: css({
+      textDecoration: 'none',
+      borderRadius: theme.shape.radius.default,
+      padding: theme.spacing(1.5, 2),
+      margin: theme.spacing(-1.5, -2),
+      transition: 'background 0.15s ease',
+      '&:hover': {
+        background: theme.colors.action.hover,
+      },
+    }),
     topStatLabel: css({
       fontSize: theme.typography.bodySmall.fontSize,
       color: theme.colors.text.secondary,
@@ -212,6 +281,14 @@ function getStyles(theme: GrafanaTheme2) {
       fontWeight: theme.typography.fontWeightMedium,
       color: theme.colors.text.primary,
       lineHeight: 1.2,
+      fontVariantNumeric: 'tabular-nums',
+    }),
+    topStatValueLarge: css({
+      fontSize: theme.typography.h2.fontSize,
+      fontWeight: theme.typography.fontWeightBold,
+      color: theme.colors.text.primary,
+      lineHeight: 1.1,
+      fontVariantNumeric: 'tabular-nums',
     }),
     topStatValueCompact: css({
       fontSize: theme.typography.h5.fontSize,
@@ -249,6 +326,34 @@ function getStyles(theme: GrafanaTheme2) {
       color: theme.colors.text.secondary,
       border: `1px solid ${theme.colors.border.weak}`,
       background: 'transparent',
+    }),
+    sparklineSlot: css({
+      height: SPARKLINE_H,
+      marginTop: theme.spacing(0.5),
+    }),
+    sparklineSkeleton: css({
+      width: SPARKLINE_W,
+      height: SPARKLINE_H,
+      borderRadius: theme.shape.radius.default,
+      background: `linear-gradient(90deg, ${theme.colors.action.hover} 25%, ${theme.colors.border.weak} 50%, ${theme.colors.action.hover} 75%)`,
+      backgroundSize: '200% 100%',
+      animation: 'sparkline-shimmer 1.8s ease-in-out infinite',
+      '@keyframes sparkline-shimmer': {
+        '0%': { backgroundPosition: '200% 0' },
+        '100%': { backgroundPosition: '-200% 0' },
+      },
+    }),
+    sparkline: css({
+      width: SPARKLINE_W,
+      height: SPARKLINE_H,
+      display: 'block',
+      '& polyline': {
+        fill: 'none',
+        stroke: theme.colors.primary.main,
+        strokeWidth: 1.5,
+        strokeLinejoin: 'round',
+        strokeLinecap: 'round',
+      },
     }),
   };
 }

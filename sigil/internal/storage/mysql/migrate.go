@@ -35,6 +35,7 @@ func (s *WALStore) AutoMigrate(ctx context.Context) error {
 		&AgentVersionModelUsageModel{},
 		&AgentHeadModel{},
 		&AgentVersionRatingModel{},
+		&AgentPromptInsightsModel{},
 		&ConversationRatingModel{},
 		&ConversationRatingSummaryModel{},
 		&ConversationAnnotationModel{},
