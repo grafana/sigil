@@ -5,13 +5,21 @@ const SCORES_TOTAL = 'sigil_eval_scores_total';
 const EXECUTIONS_TOTAL = 'sigil_eval_executions_total';
 const DURATION_SECONDS = 'sigil_eval_duration_seconds';
 
-export type EvalBreakdownDimension = 'none' | 'evaluator' | 'score_key' | 'evaluator_kind' | 'model' | 'agent';
+export type EvalBreakdownDimension =
+  | 'none'
+  | 'evaluator'
+  | 'score_key'
+  | 'evaluator_kind'
+  | 'provider'
+  | 'model'
+  | 'agent';
 
 export const evalBreakdownLabel: Record<EvalBreakdownDimension, string> = {
   none: 'None',
   evaluator: 'Evaluator',
   score_key: 'Score Key',
   evaluator_kind: 'Kind',
+  provider: 'Provider',
   model: 'Model',
   agent: 'Agent',
 };
@@ -21,6 +29,7 @@ const evalBreakdownToPromLabel: Record<EvalBreakdownDimension, string> = {
   evaluator: 'evaluator',
   score_key: 'score_key',
   evaluator_kind: 'evaluator_kind',
+  provider: 'gen_ai_request_provider',
   model: 'gen_ai_request_model',
   agent: 'gen_ai_agent_name',
 };

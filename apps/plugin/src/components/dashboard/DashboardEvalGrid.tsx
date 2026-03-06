@@ -18,8 +18,6 @@ import {
   evalDurationStatQuery,
   totalExecutionsQuery,
   passRateOverTimeQuery,
-  passedOverTimeQuery,
-  failedOverTimeQuery,
   scoresOverTimeQuery,
   evalDurationOverTimeQuery,
   executionsIncreaseQuery,
@@ -65,7 +63,14 @@ export function DashboardEvalGrid({
 }: DashboardEvalGridProps) {
   const styles = useStyles2(getStyles);
   const evalFilters = emptyEvalFilters;
-  const evalBreakdown = breakdownBy === 'none' ? 'none' : breakdownBy === 'agent' ? 'agent' : 'model';
+  const evalBreakdown =
+    breakdownBy === 'none'
+      ? 'none'
+      : breakdownBy === 'provider'
+        ? 'provider'
+        : breakdownBy === 'agent'
+          ? 'agent'
+          : 'model';
 
   const handlePanelTimeRangeChange = useCallback(
     (abs: AbsoluteTimeRange) => {
@@ -155,26 +160,10 @@ export function DashboardEvalGrid({
     step
   );
 
-  // --- Score volume (passed/failed stacked or by breakdown) ---
-  const passedOverTime = usePrometheusQuery(
+  // --- Score volume (total or by breakdown) ---
+  const scoresOverTime = usePrometheusQuery(
     dataSource,
-    hasBreakdown ? '' : passedOverTimeQuery(filters, evalFilters, interval),
-    from,
-    to,
-    'range',
-    step
-  );
-  const failedOverTime = usePrometheusQuery(
-    dataSource,
-    hasBreakdown ? '' : failedOverTimeQuery(filters, evalFilters, interval),
-    from,
-    to,
-    'range',
-    step
-  );
-  const scoresBroken = usePrometheusQuery(
-    dataSource,
-    hasBreakdown ? scoresOverTimeQuery(filters, evalFilters, interval, evalBreakdown) : '',
+    scoresOverTimeQuery(filters, evalFilters, interval, evalBreakdown),
     from,
     to,
     'range',
@@ -217,43 +206,8 @@ export function DashboardEvalGrid({
   );
 
   const scoresData = useMemo(() => {
-    if (hasBreakdown) {
-      return scoresBroken.data ? matrixToDataFrames(scoresBroken.data) : [];
-    }
-    const frames = [];
-    if (passedOverTime.data) {
-      const f = matrixToDataFrames(passedOverTime.data);
-      for (const frame of f) {
-        frame.name = 'Passed';
-        if (frame.fields[1]) {
-          frame.fields[1].config = {
-            ...frame.fields[1].config,
-            displayName: 'Passed',
-            color: { mode: 'fixed', fixedColor: 'green' },
-          };
-        }
-      }
-      frames.push(...f);
-    }
-    if (failedOverTime.data) {
-      const f = matrixToDataFrames(failedOverTime.data);
-      for (const frame of f) {
-        frame.name = 'Failed';
-        if (frame.fields[1]) {
-          frame.fields[1].config = {
-            ...frame.fields[1].config,
-            displayName: 'Failed',
-            color: { mode: 'fixed', fixedColor: 'red' },
-          };
-        }
-      }
-      frames.push(...f);
-    }
-    return frames;
-  }, [hasBreakdown, scoresBroken.data, passedOverTime.data, failedOverTime.data]);
-
-  const scoresLoading = hasBreakdown ? scoresBroken.loading : passedOverTime.loading || failedOverTime.loading;
-  const scoresError = hasBreakdown ? scoresBroken.error : passedOverTime.error || failedOverTime.error;
+    return scoresOverTime.data ? matrixToDataFrames(scoresOverTime.data) : [];
+  }, [scoresOverTime.data]);
 
   const execsData = useMemo(() => {
     if (hasBreakdown) {
@@ -403,8 +357,8 @@ export function DashboardEvalGrid({
             height={CHART_HEIGHT}
             timeRange={timeRange}
             onChangeTimeRange={handlePanelTimeRangeChange}
-            loading={scoresLoading}
-            error={scoresError}
+            loading={scoresOverTime.loading}
+            error={scoresOverTime.error}
             data={scoresData}
             options={{ legend: chartLegend, tooltip: tooltipOptions }}
             fieldConfig={{
