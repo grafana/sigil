@@ -291,6 +291,26 @@ describe('ConversationsPage', () => {
     expect(screen.queryByLabelText('load more conversations')).not.toBeInTheDocument();
   });
 
+  it('clears partial results when initial streaming search fails mid-stream', async () => {
+    const dataSource = createDataSource({
+      streamSearchConversations: jest.fn(async (_request, options) => {
+        options.onResults([makeConversation('conv-partial')]);
+        throw new Error('initial stream failed');
+      }),
+    });
+
+    render(
+      <MemoryRouter>
+        <ConversationsPage dataSource={dataSource} />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByLabelText('apply filters'));
+
+    expect(await screen.findByText(/initial stream failed/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText('select conversation conv-partial')).not.toBeInTheDocument();
+  });
+
   it('keeps latest tag suggestions when older tag request resolves last', async () => {
     const slowTags = createDeferred<SearchTag[]>();
     const fastTags = createDeferred<SearchTag[]>();

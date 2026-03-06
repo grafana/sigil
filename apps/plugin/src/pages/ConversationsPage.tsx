@@ -229,8 +229,10 @@ export default function ConversationsPage(props: ConversationsPageProps) {
         setNextCursor(previousCursor);
         setHasMore(previousHasMore);
       } else {
+        setSearchResults([]);
         setNextCursor('');
         setHasMore(false);
+        setSelectedConversationID('');
       }
     } finally {
       if (searchRequestVersion.current !== requestVersion) {

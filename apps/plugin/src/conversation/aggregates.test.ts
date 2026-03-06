@@ -116,7 +116,7 @@ describe('getTokenSummary', () => {
     expect(summary.outputTokens).toBe(150);
     expect(summary.cacheReadTokens).toBe(20);
     expect(summary.reasoningTokens).toBe(10);
-    expect(summary.totalTokens).toBe(470);
+    expect(summary.totalTokens).toBe(450);
   });
 
   it('handles generations without usage', () => {
@@ -146,10 +146,10 @@ describe('getTokenSummary', () => {
     expect(summary.outputTokens).toBe(3103131);
     expect(summary.cacheReadTokens).toBe(150);
     expect(summary.cacheWriteTokens).toBe(75);
-    expect(summary.totalTokens).toBe(10610931);
+    expect(summary.totalTokens).toBe(10610706);
   });
 
-  it('ignores provider total_tokens when computing the headline total', () => {
+  it('computes totalTokens as input + output without double-counting cache tokens', () => {
     const data = makeData({
       orphanGenerations: [
         makeGen({
@@ -164,7 +164,7 @@ describe('getTokenSummary', () => {
       ],
     });
     const summary = getTokenSummary(data);
-    expect(summary.totalTokens).toBe(185);
+    expect(summary.totalTokens).toBe(150);
   });
 });
 

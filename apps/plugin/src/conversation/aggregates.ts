@@ -47,7 +47,7 @@ function addUsageToSummary(summary: TokenSummary, gen: GenerationDetail): void {
   summary.cacheReadTokens += cacheReadTokens;
   summary.cacheWriteTokens += cacheWriteTokens;
   summary.reasoningTokens += toFiniteTokenNumber(u.reasoning_tokens);
-  summary.totalTokens += inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens;
+  summary.totalTokens += inputTokens + outputTokens;
 }
 
 export function getAllGenerations(data: ConversationData): GenerationDetail[] {
