@@ -50,7 +50,7 @@ export const getStyles = (theme: GrafanaTheme2) => ({
   titleBlock: css({
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: 1,
+    gap: theme.spacing(0.25),
     minWidth: 0,
   }),
   titleMeta: css({

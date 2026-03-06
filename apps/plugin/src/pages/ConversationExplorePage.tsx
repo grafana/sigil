@@ -454,6 +454,16 @@ function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProp
     let cancelled = false;
     let timerId: number | undefined;
     let observer: MutationObserver | undefined;
+    let collapseAttempts = 0;
+    const MAX_COLLAPSE_ATTEMPTS = 120;
+
+    const stopCollapse = () => {
+      observer?.disconnect();
+      if (timerId !== undefined) {
+        window.clearInterval(timerId);
+        timerId = undefined;
+      }
+    };
 
     const collapseOverview = (): boolean => {
       if (cancelled || !hostRef.current) {
@@ -479,7 +489,7 @@ function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProp
 
     observer = new MutationObserver(() => {
       if (collapseOverview()) {
-        observer?.disconnect();
+        stopCollapse();
       }
     });
 
@@ -491,11 +501,9 @@ function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProp
     });
 
     timerId = window.setInterval(() => {
-      if (collapseOverview()) {
-        observer?.disconnect();
-        if (timerId !== undefined) {
-          window.clearInterval(timerId);
-        }
+      collapseAttempts++;
+      if (collapseOverview() || collapseAttempts >= MAX_COLLAPSE_ATTEMPTS) {
+        stopCollapse();
       }
     }, 150);
 
@@ -503,10 +511,7 @@ function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProp
 
     return () => {
       cancelled = true;
-      observer?.disconnect();
-      if (timerId !== undefined) {
-        window.clearInterval(timerId);
-      }
+      stopCollapse();
     };
   }, [normalizedSpanId, scene, traceId]);
 
@@ -519,6 +524,8 @@ function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProp
     let retryTimeoutId: number | undefined;
     let intervalId: number | undefined;
     let observer: MutationObserver | undefined;
+    let focusAttempts = 0;
+    const MAX_FOCUS_ATTEMPTS = 120;
 
     const clearRetryTimeout = () => {
       if (retryTimeoutId !== undefined) {
@@ -592,7 +599,8 @@ function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProp
 
     focusSpan();
     intervalId = window.setInterval(() => {
-      if (focusSpan()) {
+      focusAttempts++;
+      if (focusSpan() || focusAttempts >= MAX_FOCUS_ATTEMPTS) {
         stopAll();
       }
     }, 250);
