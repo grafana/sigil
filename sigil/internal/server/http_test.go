@@ -1723,6 +1723,197 @@ func TestLookupPromptInsightsEndpointReturnsNotFoundWhenEmpty(t *testing.T) {
 	}
 }
 
+func TestAnalyzePromptWithExcerptsReturnsAccepted(t *testing.T) {
+	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
+		AgentCatalogStore: &testAgentCatalogStore{
+			latestVersion: &storage.AgentVersion{
+				AgentName:          "assistant",
+				EffectiveVersion:   "sha256:aaaa",
+				SystemPrompt:       "You are helpful.",
+				SystemPromptPrefix: "You are helpful.",
+				ToolCount:          0,
+				TokenEstimateTotal: 30,
+				GenerationCount:    5,
+				FirstSeenAt:        time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC),
+				LastSeenAt:         time.Date(2026, 3, 4, 11, 0, 0, 0, time.UTC),
+				ToolsJSON:          "[]",
+			},
+		},
+		FeedbackStore: feedback.NewMemoryStore(),
+	})
+	if err != nil {
+		t.Fatalf("new query service: %v", err)
+	}
+
+	insightsStore := &testPromptInsightsStore{}
+
+	discovery := judges.NewDiscovery()
+	analyzer := promptinsights.NewAnalyzer(discovery, "openai/gpt-4o-mini")
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterQueryRoutes(
+		mux,
+		querySvc,
+		nil,
+		nil,
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		kitlog.NewNopLogger(),
+		protected,
+		PromptInsightsOption{Analyzer: analyzer, Store: insightsStore},
+	)
+
+	body := `{
+		"agent_name": "assistant",
+		"excerpts": [
+			{
+				"conversation_id": "conv-1",
+				"generation_count": 3,
+				"has_errors": false,
+				"tool_call_count": 1,
+				"user_input": "hello",
+				"assistant_output": "hi there"
+			}
+		]
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents:analyze-prompt-with-excerpts", bytes.NewBufferString(body))
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"status":"pending"`) {
+		t.Fatalf("expected pending status, body=%s", resp.Body.String())
+	}
+
+	insightsStore.mu.Lock()
+	stored := insightsStore.insights
+	insightsStore.mu.Unlock()
+	if stored == nil {
+		t.Fatal("expected pending insights to be persisted")
+	}
+	if stored.Status != promptinsights.StatusPending {
+		t.Fatalf("expected pending status in store, got %q", stored.Status)
+	}
+}
+
+func TestAnalyzePromptWithExcerptsRejectsUnknownFields(t *testing.T) {
+	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
+		AgentCatalogStore: &testAgentCatalogStore{
+			latestVersion: &storage.AgentVersion{
+				AgentName:          "assistant",
+				EffectiveVersion:   "sha256:aaaa",
+				SystemPrompt:       "You are helpful.",
+				SystemPromptPrefix: "You are helpful.",
+				ToolCount:          0,
+				TokenEstimateTotal: 30,
+				GenerationCount:    5,
+				FirstSeenAt:        time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC),
+				LastSeenAt:         time.Date(2026, 3, 4, 11, 0, 0, 0, time.UTC),
+				ToolsJSON:          "[]",
+			},
+		},
+		FeedbackStore: feedback.NewMemoryStore(),
+	})
+	if err != nil {
+		t.Fatalf("new query service: %v", err)
+	}
+
+	discovery := judges.NewDiscovery()
+	analyzer := promptinsights.NewAnalyzer(discovery, "openai/gpt-4o-mini")
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterQueryRoutes(
+		mux,
+		querySvc,
+		nil,
+		nil,
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		kitlog.NewNopLogger(),
+		protected,
+		PromptInsightsOption{Analyzer: analyzer, Store: &testPromptInsightsStore{}},
+	)
+
+	body := `{"agent_name":"assistant","unknown_field":true}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents:analyze-prompt-with-excerpts", bytes.NewBufferString(body))
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", resp.Code, resp.Body.String())
+	}
+}
+
+func TestAnalyzePromptWithExcerptsReturnsPendingWhenAlreadyRunning(t *testing.T) {
+	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
+		AgentCatalogStore: &testAgentCatalogStore{
+			latestVersion: &storage.AgentVersion{
+				AgentName:          "assistant",
+				EffectiveVersion:   "sha256:aaaa",
+				SystemPrompt:       "You are helpful.",
+				SystemPromptPrefix: "You are helpful.",
+				ToolCount:          0,
+				TokenEstimateTotal: 30,
+				GenerationCount:    5,
+				FirstSeenAt:        time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC),
+				LastSeenAt:         time.Date(2026, 3, 4, 11, 0, 0, 0, time.UTC),
+				ToolsJSON:          "[]",
+			},
+		},
+		FeedbackStore: feedback.NewMemoryStore(),
+	})
+	if err != nil {
+		t.Fatalf("new query service: %v", err)
+	}
+
+	insightsStore := &testPromptInsightsStore{
+		insights: &promptinsights.PromptInsights{
+			Status:     promptinsights.StatusPending,
+			Strengths:  []promptinsights.Insight{},
+			Weaknesses: []promptinsights.Insight{},
+		},
+	}
+
+	discovery := judges.NewDiscovery()
+	analyzer := promptinsights.NewAnalyzer(discovery, "openai/gpt-4o-mini")
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterQueryRoutes(
+		mux,
+		querySvc,
+		nil,
+		nil,
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		kitlog.NewNopLogger(),
+		protected,
+		PromptInsightsOption{Analyzer: analyzer, Store: insightsStore},
+	)
+
+	body := `{"agent_name":"assistant","excerpts":[]}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents:analyze-prompt-with-excerpts", bytes.NewBufferString(body))
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"status":"pending"`) {
+		t.Fatalf("expected pending status, body=%s", resp.Body.String())
+	}
+}
+
 func TestParseLookback(t *testing.T) {
 	tests := []struct {
 		input    string

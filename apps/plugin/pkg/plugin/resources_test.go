@@ -431,6 +431,14 @@ func TestCallResource(t *testing.T) {
 			_, _ = io.WriteString(w, `{"items":[{"conversation_id":"conv-1","generation_count":2,"first_generation_at":"2026-02-15T08:00:00Z","last_generation_at":"2026-02-15T09:00:00Z","annotation_count":0}],"missing_conversation_ids":[]}`)
 		case "/api/v1/conversations/c-1":
 			_, _ = io.WriteString(w, `{"conversation_id":"c-1"}`)
+		case "/api/v1/conversations/conv-1":
+			_, _ = io.WriteString(w, `{"conversation_id":"conv-1","generations":[{"agent_name":"assistant","input":[{"parts":[{"text":"user msg"}]}],"output":[{"parts":[{"text":"assistant reply"}]}]}],"annotations":[]}`)
+		case "/api/v1/agents:analyze-prompt-with-excerpts":
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			_, _ = io.WriteString(w, `{"status":"pending","strengths":[],"weaknesses":[]}`)
 		case "/api/v1/generations/gen-1":
 			_, _ = io.WriteString(w, `{"generation_id":"gen-1"}`)
 		case "/api/datasources/uid/prometheus/resources/api/v1/query":
@@ -847,7 +855,7 @@ func TestCallResource(t *testing.T) {
 			path:      "query/agents/analyze-prompt",
 			reqBody:   []byte(`{"agent_name":"assistant"}`),
 			expStatus: http.StatusOK,
-			expBody:   []byte(`{"status":"completed","strengths":[],"weaknesses":[],"judge_model":"openai/gpt-4o-mini","judge_latency_ms":100}`),
+			expBody:   []byte(`{"status":"pending","strengths":[],"weaknesses":[]}`),
 		},
 		{
 			name:      "model cards post not allowed",
@@ -2343,6 +2351,126 @@ func TestCallResourceInjectsCombinedAuthOnSigilProxy(t *testing.T) {
 	})
 	if sender.Status != http.StatusOK {
 		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)
+	}
+}
+
+func TestAnalyzePromptFetchesExcerptsAndForwardsToSigil(t *testing.T) {
+	var receivedUpstreamBody []byte
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/api/datasources/proxy/uid/tempo/api/search":
+			_, _ = io.WriteString(w, buildTempoSearchResponse([]tempoSearchTraceFixture{
+				{TraceID: "trace-1", StartTimeUnixNano: "1739609400000000000", ConversationID: "conv-1", GenerationID: "gen-1", Model: "gpt-4o", Agent: "test-agent", UserID: "user-1"},
+				{TraceID: "trace-2", StartTimeUnixNano: "1739609300000000000", ConversationID: "conv-2", GenerationID: "gen-2", Model: "gpt-4o", Agent: "test-agent", UserID: "user-2"},
+			}))
+		case r.URL.Path == "/api/v1/conversations:batch-metadata":
+			_, _ = io.WriteString(w, `{"items":[{"conversation_id":"conv-1","generation_count":2,"first_generation_at":"2025-02-15T08:00:00Z","last_generation_at":"2025-02-15T09:00:00Z","annotation_count":0},{"conversation_id":"conv-2","generation_count":1,"first_generation_at":"2025-02-15T07:00:00Z","last_generation_at":"2025-02-15T07:30:00Z","annotation_count":0}],"missing_conversation_ids":[]}`)
+		case r.URL.Path == "/api/v1/conversations/conv-1":
+			_, _ = io.WriteString(w, `{"conversation_id":"conv-1","generations":[{"agent_name":"test-agent","input":[{"parts":[{"text":"Hello agent"}]}],"output":[{"parts":[{"text":"Hi there!"}]}]},{"agent_name":"test-agent","input":[{"parts":[{"text":"Follow up"}]}],"output":[{"parts":[{"tool_call":{"name":"search"}}]}]}],"annotations":[]}`)
+		case r.URL.Path == "/api/v1/conversations/conv-2":
+			_, _ = io.WriteString(w, `{"conversation_id":"conv-2","generations":[{"agent_name":"test-agent","input":[{"parts":[{"text":"Question"}]}],"output":[{"parts":[{"text":"Answer"}]}]}],"annotations":[]}`)
+		case r.URL.Path == "/api/v1/agents:analyze-prompt-with-excerpts":
+			receivedUpstreamBody, _ = io.ReadAll(r.Body)
+			_, _ = io.WriteString(w, `{"status":"pending","strengths":[],"weaknesses":[]}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+	app.apiURL = upstream.URL
+	app.grafanaAppURL = upstream.URL
+	app.grafanaServiceAccountToken = "sa-token"
+	app.tempoDatasourceUID = "tempo"
+
+	resp := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodPost,
+		Path:   "query/agents/analyze-prompt",
+		Body:   []byte(`{"agent_name":"test-agent","lookback":"7d"}`),
+	})
+
+	if resp.Status != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", resp.Status, resp.Body)
+	}
+
+	if len(receivedUpstreamBody) == 0 {
+		t.Fatal("expected upstream to receive analyze-prompt-with-excerpts request")
+	}
+
+	var upstreamPayload analyzePromptWithExcerptsUpstream
+	if err := json.Unmarshal(receivedUpstreamBody, &upstreamPayload); err != nil {
+		t.Fatalf("decode upstream body: %v", err)
+	}
+	if upstreamPayload.AgentName != "test-agent" {
+		t.Fatalf("expected agent_name test-agent, got %q", upstreamPayload.AgentName)
+	}
+	if len(upstreamPayload.Excerpts) != 2 {
+		t.Fatalf("expected 2 excerpts, got %d", len(upstreamPayload.Excerpts))
+	}
+
+	first := upstreamPayload.Excerpts[0]
+	if first.ConversationID != "conv-1" {
+		t.Fatalf("expected first excerpt conv-1, got %q", first.ConversationID)
+	}
+	if first.GenerationCount != 2 {
+		t.Fatalf("expected 2 generations in first excerpt, got %d", first.GenerationCount)
+	}
+	if first.UserInput != "Hello agent" {
+		t.Fatalf("expected user input 'Hello agent', got %q", first.UserInput)
+	}
+	if first.AssistantOutput != "Hi there!" {
+		t.Fatalf("expected assistant output 'Hi there!', got %q", first.AssistantOutput)
+	}
+	if first.ToolCallCount != 1 {
+		t.Fatalf("expected 1 tool call, got %d", first.ToolCallCount)
+	}
+
+	second := upstreamPayload.Excerpts[1]
+	if second.ConversationID != "conv-2" {
+		t.Fatalf("expected second excerpt conv-2, got %q", second.ConversationID)
+	}
+	if second.UserInput != "Question" {
+		t.Fatalf("expected user input 'Question', got %q", second.UserInput)
+	}
+}
+
+func TestAnalyzePromptFallsBackToProxyWithoutTempo(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/api/v1/agents:analyze-prompt" {
+			_, _ = io.WriteString(w, `{"status":"pending","strengths":[],"weaknesses":[]}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+	app.apiURL = upstream.URL
+
+	resp := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodPost,
+		Path:   "query/agents/analyze-prompt",
+		Body:   []byte(`{"agent_name":"test-agent"}`),
+	})
+
+	if resp.Status != http.StatusOK {
+		t.Fatalf("expected 200 from proxy fallback, got %d body=%s", resp.Status, resp.Body)
+	}
+	if !strings.Contains(string(resp.Body), `"status":"pending"`) {
+		t.Fatalf("expected pending status from proxy fallback, body=%s", resp.Body)
 	}
 }
 
