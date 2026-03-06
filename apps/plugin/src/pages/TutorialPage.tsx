@@ -742,6 +742,8 @@ function NextStepsGraphic({
 }
 
 function getStyles(theme: GrafanaTheme2) {
+  const pageHorizontalPadding = theme.spacing(2);
+  const pageHorizontalBleed = theme.spacing(4);
   const backgroundDriftIn = keyframes({
     '0%': {
       transform: 'translate(-10px, 10px)',
@@ -768,12 +770,12 @@ function getStyles(theme: GrafanaTheme2) {
     page: css({
       position: 'relative',
       minHeight: '100%',
-      width: 'calc(100% + 32px)',
+      width: `calc(100% + ${pageHorizontalBleed})`,
       display: 'flex',
       alignItems: 'flex-start',
       justifyContent: 'center',
-      marginLeft: -16,
-      marginRight: -16,
+      marginLeft: `calc(-1 * ${pageHorizontalPadding})`,
+      marginRight: `calc(-1 * ${pageHorizontalPadding})`,
       padding: 0,
       overflow: 'hidden',
     }),
