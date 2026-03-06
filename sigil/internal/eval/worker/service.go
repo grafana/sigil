@@ -309,7 +309,7 @@ func (s *Service) executeItem(ctx context.Context, item evalpkg.WorkItem) {
 		genProvider = m.GetProvider()
 	}
 	observeExecution(item.TenantID, item.EvaluatorID, kind, item.RuleID, "success", evalModel, genModel, genProvider, agentName)
-	observeExecutionDuration(item.TenantID, item.EvaluatorID, kind, item.RuleID, time.Since(startedAt))
+	observeExecutionDuration(item.TenantID, item.EvaluatorID, kind, item.RuleID, time.Since(startedAt), evalModel, genModel, genProvider, agentName)
 	for _, score := range scores {
 		observeProducedScore(item.TenantID, item.EvaluatorID, kind, item.RuleID, score.ScoreKey, score.Passed, evalModel, genModel, genProvider, agentName)
 	}

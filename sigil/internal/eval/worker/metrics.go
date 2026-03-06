@@ -17,7 +17,7 @@ var (
 		Name:    "sigil_eval_duration_seconds",
 		Help:    "Evaluation execution duration in seconds.",
 		Buckets: prometheus.DefBuckets,
-	}, []string{"tenant_id", "evaluator", "evaluator_kind", "rule"})
+	}, []string{"tenant_id", "evaluator", "evaluator_kind", "rule", "eval_ai_request_model", "gen_ai_request_model", "gen_ai_request_provider", "gen_ai_agent_name"})
 	evalScoresTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "sigil_eval_scores_total",
 		Help: "Scores emitted by evaluation workers partitioned by tenant, evaluator, kind, rule, key, pass/fail, eval model, generation model, provider, and agent.",
@@ -80,8 +80,8 @@ func observeExecution(tenantID, evaluatorID, evaluatorKind, ruleID, status, eval
 	evalExecutionsTotal.WithLabelValues(tenantID, evaluatorID, evaluatorKind, ruleID, status, evalModel, genModel, provider, agentName).Inc()
 }
 
-func observeExecutionDuration(tenantID, evaluatorID, evaluatorKind, ruleID string, duration time.Duration) {
-	evalDurationSeconds.WithLabelValues(tenantID, evaluatorID, evaluatorKind, ruleID).Observe(duration.Seconds())
+func observeExecutionDuration(tenantID, evaluatorID, evaluatorKind, ruleID string, duration time.Duration, evalModel, genModel, provider, agentName string) {
+	evalDurationSeconds.WithLabelValues(tenantID, evaluatorID, evaluatorKind, ruleID, evalModel, genModel, provider, agentName).Observe(duration.Seconds())
 }
 
 func observeProducedScore(tenantID, evaluatorID, evaluatorKind, ruleID, scoreKey string, passed *bool, evalModel, genModel, provider, agentName string) {
