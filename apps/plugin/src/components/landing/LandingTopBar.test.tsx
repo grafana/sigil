@@ -333,10 +333,10 @@ describe('LandingTopBar assistant context', () => {
       );
     });
 
-    fireEvent.change(screen.getByPlaceholderText('Ask me anything about Sigil'), {
+    const assistantInput = screen.getByRole('textbox');
+    fireEvent.change(assistantInput, {
       target: { value: 'How does Sigil work?' },
     });
-    const assistantInput = screen.getByPlaceholderText('Ask me anything about Sigil');
     fireEvent.submit(assistantInput.closest('form')!);
 
     expect(mockOpenAssistant).toHaveBeenCalledWith(
@@ -364,7 +364,7 @@ describe('LandingTopBar assistant context', () => {
       );
     });
 
-    const input = screen.getByPlaceholderText('Ask me anything about Sigil');
+    const input = screen.getByRole('textbox');
     fireEvent.change(input, {
       target: { value: 'Tell me about Sigil' },
     });

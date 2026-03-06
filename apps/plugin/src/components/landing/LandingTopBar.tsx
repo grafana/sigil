@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { css, cx } from '@emotion/css';
+import { css, cx, keyframes } from '@emotion/css';
 import { useAssistant } from '@grafana/assistant';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Button, Card, HorizontalGroup, IconButton, LinkButton, Stack, Text, Tooltip, useStyles2 } from '@grafana/ui';
-import { useNavigate } from 'react-router-dom';
+import { Button, Card, HorizontalGroup, IconButton, LinkButton, Stack, Text, useStyles2 } from '@grafana/ui';
+
 import { defaultAgentsDataSource } from '../../agents/api';
 import { defaultConversationsDataSource } from '../../conversation/api';
 import { PLUGIN_BASE, ROUTES } from '../../constants';
@@ -31,13 +31,14 @@ import { ideTabs, buildCursorPromptDeeplink, downloadTextFile, renderIdeActionLo
 
 type IdeKey = InstrumentationPromptIde;
 
-type HeroStatItem = {
+export type HeroStatItem = {
   label: string;
   route: string;
   cta: string;
   current: number;
   previous: number;
   loading: boolean;
+  sparklineData?: number[];
 };
 
 const METRIC_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -209,10 +210,6 @@ function interpolateHex(a: string, b: string, t: number): string {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
 }
 
-function buildFakeDocUrl(pathname: string): string {
-  return new URL(pathname, 'https://docs.example.com').toString();
-}
-
 function buildAssistantUrl(message: string): string {
   const url = new URL('/a/grafana-assistant-app', window.location.origin);
   url.searchParams.set('command', 'useAssistant');
@@ -229,6 +226,8 @@ type LandingTopBarProps = {
   requestsFrom?: number;
   requestsTo?: number;
   compact?: boolean;
+  onHeroStats?: (stats: HeroStatItem[]) => void;
+  spineHeights?: number[];
 };
 
 function extractRequestsSeries(response: PrometheusQueryResponse): number[] {
@@ -318,6 +317,61 @@ function normalizeValuesToHeights(values: number[], targetCount: number): number
   });
 }
 
+const TYPEWRITER_PROMPTS = [
+  'How do I instrument my app with Sigil?',
+  'What is Sigil and how does it work?',
+  'How do I set up evaluation rules?',
+  'What telemetry does Sigil collect?',
+  'How do I connect my LLM provider?',
+  'What SDKs are available?',
+];
+const TYPEWRITER_TYPE_MS = 45;
+const TYPEWRITER_PAUSE_MS = 2500;
+const TYPEWRITER_DELETE_MS = 25;
+
+function useTypewriterPlaceholder(paused: boolean): string {
+  const [text, setText] = useState('');
+  const stateRef = useRef({ promptIndex: 0, charIndex: 0, deleting: false });
+
+  useEffect(() => {
+    if (paused) {
+      return;
+    }
+    let timer: ReturnType<typeof setTimeout>;
+
+    const tick = () => {
+      const state = stateRef.current;
+      const prompt = TYPEWRITER_PROMPTS[state.promptIndex];
+
+      if (!state.deleting) {
+        if (state.charIndex < prompt.length) {
+          state.charIndex += 1;
+          setText(prompt.slice(0, state.charIndex));
+          timer = setTimeout(tick, TYPEWRITER_TYPE_MS);
+        } else {
+          state.deleting = true;
+          timer = setTimeout(tick, TYPEWRITER_PAUSE_MS);
+        }
+      } else {
+        if (state.charIndex > 0) {
+          state.charIndex -= 1;
+          setText(prompt.slice(0, state.charIndex));
+          timer = setTimeout(tick, TYPEWRITER_DELETE_MS);
+        } else {
+          state.deleting = false;
+          state.promptIndex = (state.promptIndex + 1) % TYPEWRITER_PROMPTS.length;
+          timer = setTimeout(tick, TYPEWRITER_TYPE_MS * 4);
+        }
+      }
+    };
+
+    timer = setTimeout(tick, TYPEWRITER_TYPE_MS * 4);
+    return () => clearTimeout(timer);
+  }, [paused]);
+
+  return text;
+}
+
 export function LandingTopBar({
   assistantOrigin,
   requestsDataSource,
@@ -325,10 +379,11 @@ export function LandingTopBar({
   requestsFrom,
   requestsTo,
   compact = false,
+  onHeroStats,
+  spineHeights,
 }: LandingTopBarProps) {
   const styles = useStyles2(getStyles);
   const assistant = useAssistant();
-  const navigate = useNavigate();
   const { timeRange } = useFilterUrlState();
   const dashboardFrom = useMemo(() => Math.floor(timeRange.from.valueOf() / 1000), [timeRange]);
   const dashboardTo = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);
@@ -337,6 +392,7 @@ export function LandingTopBar({
   const [assistantInput, setAssistantInput] = useState('');
   const [selectedIde, setSelectedIde] = useState<IdeKey>('cursor');
   const [isAgentModalOpen, setIsAgentModalOpen] = useState(false);
+  const typewriterPlaceholder = useTypewriterPlaceholder(assistantInput.length > 0);
   const [heroStats, setHeroStats] = useState<HeroStatItem[]>(() => {
     const stored = loadHeroStatsFromStorage();
     if (stored) {
@@ -360,7 +416,8 @@ export function LandingTopBar({
 
   useEffect(() => {
     heroStatsRef.current = heroStats;
-  }, [heroStats]);
+    onHeroStats?.(heroStats);
+  }, [heroStats, onHeroStats]);
 
   useEffect(() => {
     return () => {
@@ -425,25 +482,31 @@ export function LandingTopBar({
       const previousTo = new Date(now - METRIC_WINDOW_MS);
 
       try {
-        const [conversationCurrent, conversationPrevious, agentCounts, evaluatorCounts] = await Promise.all([
-          countConversationsInRange(currentFrom, currentTo),
-          countConversationsInRange(previousFrom, previousTo),
-          countAgentsSeenInWindows(currentFrom, currentTo, previousFrom, previousTo),
-          countEvaluatorsUpdatedInWindows(currentFrom, currentTo, previousFrom, previousTo),
+        const [convCurrentTs, convPreviousTs, agentTs, evalTs] = await Promise.all([
+          listConversationTimestamps(currentFrom, currentTo),
+          listConversationTimestamps(previousFrom, previousTo),
+          listAgentSeenTimestamps(),
+          listEvaluatorUpdatedTimestamps(),
         ]);
 
         if (cancelled) {
           return;
         }
 
-        const next = [
+        const currentMin = currentFrom.getTime();
+        const currentMax = currentTo.getTime();
+        const agentCounts = countInWindows(agentTs, currentFrom, currentTo, previousFrom, previousTo);
+        const evaluatorCounts = countInWindows(evalTs, currentFrom, currentTo, previousFrom, previousTo);
+
+        const next: HeroStatItem[] = [
           {
             label: 'Conversations',
             route: ROUTES.Conversations,
             cta: 'View conversations',
-            current: conversationCurrent,
-            previous: conversationPrevious,
+            current: convCurrentTs.length,
+            previous: convPreviousTs.length,
             loading: false,
+            sparklineData: timestampsToSparkline(convCurrentTs, currentMin, currentMax),
           },
           {
             label: 'Agents',
@@ -452,6 +515,7 @@ export function LandingTopBar({
             current: agentCounts.current,
             previous: agentCounts.previous,
             loading: false,
+            sparklineData: timestampsToSparkline(agentTs, currentMin, currentMax),
           },
           {
             label: 'Evaluations',
@@ -460,6 +524,7 @@ export function LandingTopBar({
             current: evaluatorCounts.current,
             previous: evaluatorCounts.previous,
             loading: false,
+            sparklineData: timestampsToSparkline(evalTs, currentMin, currentMax),
           },
         ];
         if (heroStatsAnimationFrameRef.current != null) {
@@ -493,6 +558,7 @@ export function LandingTopBar({
             current: Math.round(item.current + (animationTo[index].current - item.current) * eased),
             previous: Math.round(item.previous + (animationTo[index].previous - item.previous) * eased),
             loading: false,
+            sparklineData: animationTo[index].sparklineData,
           }));
           setHeroStats(frame);
 
@@ -639,7 +705,7 @@ export function LandingTopBar({
     };
   }, [requestsDataSource, requestsFilters, from, to, spineCount]);
 
-  const waveAt75Heights = useMemo(() => {
+  const fallbackHeights = useMemo(() => {
     const MIN_H = 20;
     const MAX_H = 100;
     return Array.from({ length: spineCount }, (_, i) => {
@@ -649,7 +715,15 @@ export function LandingTopBar({
     });
   }, [spineCount]);
 
-  const displayHeights = requestSpineHeights ?? waveAt75Heights;
+  const displayHeights = useMemo(() => {
+    if (requestSpineHeights && requestSpineHeights.length > 0) {
+      return requestSpineHeights;
+    }
+    if (!spineHeights || spineHeights.length === 0) {
+      return fallbackHeights;
+    }
+    return normalizeToSpineHeights(spineHeights, spineCount);
+  }, [requestSpineHeights, spineHeights, spineCount, fallbackHeights]);
   const showRequestSpines = requestsDataSource != null && to > from;
 
   if (compact) {
@@ -769,34 +843,140 @@ export function LandingTopBar({
           )}
           <div className={cx(styles.heroCard, showRequestSpines && styles.heroCardWithSpines)}>
             <div className={styles.heroCardContent}>
-              <div className={styles.heroHeader}>
-                <div>
-                  <div className={styles.introducingLabel}>Introducing</div>
-                  <h1 className={styles.productHeading}>Grafana Sigil</h1>
-                  <Text color="secondary">Actually useful AI O11y</Text>
+              <div>
+                <div className={styles.introducingLabel}>Introducing</div>
+                <h1 className={styles.productHeading}>Grafana Sigil</h1>
+                <div className={styles.heroSubRow}>
+                  <Text color="secondary">Actually useful AI O11y &middot; Open source</Text>
+                  <LinkButton
+                    href="https://github.com/grafana/sigil"
+                    icon="github"
+                    variant="secondary"
+                    size="sm"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    GitHub
+                  </LinkButton>
                 </div>
-                <ul className={styles.heroLearnMoreList}>
-                  {heroStats.map((item) => (
-                    <li key={item.label}>
-                      <button
-                        type="button"
-                        className={styles.heroStatLink}
-                        onClick={() => void navigate(`${PLUGIN_BASE}/${item.route}`)}
+              </div>
+              <div className={styles.heroPipeline}>
+                <div className={styles.pipelineStep}>
+                  <div
+                    className={styles.pipelineStepAccent}
+                    style={{ background: 'linear-gradient(90deg, #5794F2 0%, #73B9FF 100%)' }}
+                  />
+                  <div className={styles.pipelineStepInner}>
+                    <div className={styles.pipelineStepHeader}>
+                      <div
+                        className={styles.pipelineStepIcon}
+                        style={{ color: '#5794F2', background: 'rgba(87, 148, 242, 0.12)' }}
                       >
-                        <span className={styles.heroStatLabel}>{item.label}</span>
-                        <span className={styles.heroStatRow}>
-                          <span className={styles.heroStatValue}>
-                            {item.loading ? '...' : item.current.toLocaleString()}
-                          </span>
-                          {!item.loading && (
-                            <ComparisonBadge current={item.current} previous={item.previous} styles={styles} />
-                          )}
-                        </span>
-                        <span className={styles.heroStatCta}>{item.cta}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <polyline points="16 18 22 12 16 6" />
+                          <polyline points="8 6 2 12 8 18" />
+                        </svg>
+                      </div>
+                      <div className={styles.pipelineStepTitle}>Instrument</div>
+                    </div>
+                    <Text variant="h5">Zero-config automatic tracing</Text>
+                    <Text color="secondary" variant="body">
+                      Drop-in SDKs for Go, Python, TypeScript, Java and .NET. Capture every LLM call, token count, and
+                      latency out of the box.
+                    </Text>
+                  </div>
+                </div>
+                <div className={styles.pipelineConnector} aria-hidden>
+                  <div className={styles.pipelineConnectorTrack} />
+                  <div
+                    className={styles.pipelineConnectorDot}
+                    style={{ background: '#5794F2', boxShadow: '0 0 8px 2px rgba(87,148,242,0.4)' }}
+                  />
+                </div>
+                <div className={styles.pipelineStep}>
+                  <div
+                    className={styles.pipelineStepAccent}
+                    style={{ background: 'linear-gradient(90deg, #B877D9 0%, #D4A5F5 100%)' }}
+                  />
+                  <div className={styles.pipelineStepInner}>
+                    <div className={styles.pipelineStepHeader}>
+                      <div
+                        className={styles.pipelineStepIcon}
+                        style={{ color: '#B877D9', background: 'rgba(184, 119, 217, 0.12)' }}
+                      >
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                      </div>
+                      <div className={styles.pipelineStepTitle}>Observe</div>
+                    </div>
+                    <Text variant="h5">Full-stack AI observability</Text>
+                    <Text color="secondary" variant="body">
+                      Monitor latency, tokens, cost, and errors across all providers and models. Track conversations,
+                      agents, and generations in real time.
+                    </Text>
+                  </div>
+                </div>
+                <div className={styles.pipelineConnector} aria-hidden>
+                  <div className={styles.pipelineConnectorTrack} />
+                  <div
+                    className={cx(styles.pipelineConnectorDot, styles.pipelineConnectorDotDelayed)}
+                    style={{ background: '#B877D9', boxShadow: '0 0 8px 2px rgba(184,119,217,0.4)' }}
+                  />
+                </div>
+                <div className={styles.pipelineStep}>
+                  <div
+                    className={styles.pipelineStepAccent}
+                    style={{ background: 'linear-gradient(90deg, #FF9830 0%, #FFB870 100%)' }}
+                  />
+                  <div className={styles.pipelineStepInner}>
+                    <div className={styles.pipelineStepHeader}>
+                      <div
+                        className={styles.pipelineStepIcon}
+                        style={{ color: '#FF9830', background: 'rgba(255, 152, 48, 0.12)' }}
+                      >
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                          <polyline points="22 4 12 14.01 9 11.01" />
+                        </svg>
+                      </div>
+                      <div className={styles.pipelineStepTitle}>Evaluate</div>
+                    </div>
+                    <Text variant="h5">Automated quality scoring</Text>
+                    <Text color="secondary" variant="body">
+                      LLM judges, regex, JSON schema, or custom heuristics. Surface quality signals and act on them with
+                      dashboards and alerts.
+                    </Text>
+                  </div>
+                </div>
               </div>
               <form
                 className={styles.assistantRowDash}
@@ -812,9 +992,9 @@ export function LandingTopBar({
                   value={assistantInput}
                   onChange={(event) => setAssistantInput(event.currentTarget.value)}
                   onKeyDown={handleAssistantInputKeyDown}
-                  placeholder="Ask me anything about Sigil"
+                  placeholder={typewriterPlaceholder}
                   className={styles.assistantInput}
-                  rows={3}
+                  rows={1}
                 />
                 <IconButton
                   name="enter"
@@ -824,7 +1004,8 @@ export function LandingTopBar({
                   tooltip="Send"
                   className={styles.askSubmitButton}
                   disabled={assistantInput.trim().length === 0}
-                  type="submit"
+                  type="button"
+                  onClick={openAssistant}
                 />
               </form>
             </div>
@@ -832,20 +1013,41 @@ export function LandingTopBar({
         </div>
 
         <div className={styles.heroSideHeaderBlock}>
-          <HorizontalGroup className={styles.heroSideActions}>
-            <LinkButton href={`${PLUGIN_BASE}/${ROUTES.Tutorial}`} icon="play" variant="primary">
-              Tutorial (NEW)
+          <div className={styles.videoCard}>
+            <div className={styles.videoPreview}>
+              <div className={styles.videoPlayIcon} data-play-icon="">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </div>
+              <div className={styles.videoComingSoon}>
+                <Text color="secondary" variant="bodySmall">
+                  Video coming soon
+                </Text>
+              </div>
+            </div>
+          </div>
+          <div className={styles.sideActions}>
+            <LinkButton
+              href={`${PLUGIN_BASE}/${ROUTES.Tutorial}`}
+              icon="play"
+              variant="primary"
+              fill="outline"
+              className={styles.sideActionButton}
+            >
+              Start tutorial
             </LinkButton>
             <LinkButton
-              href={buildFakeDocUrl('/sigil/get-started')}
+              href="https://github.com/grafana/sigil#readme"
               icon="book-open"
               variant="secondary"
               target="_blank"
               rel="noreferrer"
+              className={styles.sideActionButton}
             >
               Read docs
             </LinkButton>
-          </HorizontalGroup>
+          </div>
           <Card className={styles.heroSideCard}>
             <Stack direction="column" gap={2}>
               <div className={styles.sideCardMutedHeading}>
@@ -948,48 +1150,10 @@ export function LandingTopBar({
   );
 }
 
-function ComparisonBadge({
-  current,
-  previous,
-  styles,
-}: {
-  current: number;
-  previous: number;
-  styles: ReturnType<typeof getStyles>;
-}) {
-  if (previous === 0 && current === 0) {
-    return (
-      <Tooltip content="No change from previous window" placement="bottom">
-        <span className={`${styles.changeBadge} ${styles.changeBadgeNeutral}`}>→ 0%</span>
-      </Tooltip>
-    );
-  }
-
-  if (previous === 0) {
-    return null;
-  }
-
-  const pctChange = ((current - previous) / Math.abs(previous)) * 100;
-  const isUp = pctChange > 0;
-  const arrow = pctChange === 0 ? '→' : isUp ? '↑' : '↓';
-  const sign = isUp ? '+' : '';
-  const badgeClass =
-    pctChange === 0 ? styles.changeBadgeNeutral : isUp ? styles.changeBadgeGood : styles.changeBadgeWarn;
-  const tooltipText = `${previous.toLocaleString()} in previous window`;
-  return (
-    <Tooltip content={tooltipText} placement="bottom">
-      <span className={`${styles.changeBadge} ${badgeClass}`}>
-        {arrow} {sign}
-        {pctChange.toFixed(1)}%
-      </span>
-    </Tooltip>
-  );
-}
-
-async function countConversationsInRange(from: Date, to: Date): Promise<number> {
+async function listConversationTimestamps(from: Date, to: Date): Promise<number[]> {
   let cursor = '';
-  let total = 0;
   let pages = 0;
+  const timestamps: number[] = [];
   while (pages < MAX_PAGES) {
     const response = await defaultConversationsDataSource.searchConversations({
       filters: '',
@@ -1001,20 +1165,40 @@ async function countConversationsInRange(from: Date, to: Date): Promise<number> 
       page_size: PAGE_SIZE,
       cursor: cursor.length > 0 ? cursor : undefined,
     });
-    total += response.conversations.length;
+    for (const conv of response.conversations) {
+      timestamps.push(Date.parse(conv.first_generation_at));
+    }
     if (!response.has_more || !response.next_cursor) {
       break;
     }
     cursor = response.next_cursor;
     pages += 1;
   }
-  return total;
+  return timestamps;
 }
 
 type WindowCounts = {
   current: number;
   previous: number;
 };
+
+const SPARKLINE_BUCKETS = 16;
+
+function timestampsToSparkline(timestamps: number[], fromMs: number, toMs: number): number[] {
+  const range = toMs - fromMs;
+  if (range <= 0) {
+    return [];
+  }
+  const buckets = new Array<number>(SPARKLINE_BUCKETS).fill(0);
+  for (const ts of timestamps) {
+    if (ts < fromMs || ts > toMs) {
+      continue;
+    }
+    const idx = Math.min(Math.floor(((ts - fromMs) / range) * SPARKLINE_BUCKETS), SPARKLINE_BUCKETS - 1);
+    buckets[idx] += 1;
+  }
+  return buckets;
+}
 
 function countInWindows(
   timestamps: number[],
@@ -1092,15 +1276,32 @@ export async function countAgentsSeenInWindows(
   return countInWindows(timestamps, currentFrom, currentTo, previousFrom, previousTo);
 }
 
-async function countEvaluatorsUpdatedInWindows(
-  currentFrom: Date,
-  currentTo: Date,
-  previousFrom: Date,
-  previousTo: Date
-): Promise<WindowCounts> {
-  const timestamps = await listEvaluatorUpdatedTimestamps();
-  return countInWindows(timestamps, currentFrom, currentTo, previousFrom, previousTo);
+function normalizeToSpineHeights(values: number[], targetCount: number): number[] {
+  if (values.length === 0 || targetCount <= 0) {
+    return [];
+  }
+  const bucketed = Array.from({ length: targetCount }, (_, i) => {
+    const start = Math.floor((i * values.length) / targetCount);
+    const end = Math.max(start + 1, Math.floor(((i + 1) * values.length) / targetCount));
+    const slice = values.slice(start, end);
+    return slice.reduce((acc, v) => acc + v, 0) / slice.length;
+  });
+  const minVal = Math.min(...bucketed);
+  const maxVal = Math.max(...bucketed);
+  if (!Number.isFinite(minVal) || !Number.isFinite(maxVal) || Math.abs(maxVal - minVal) < 1e-9) {
+    return bucketed.map(() => 60);
+  }
+  const MIN_H = 20;
+  const MAX_H = 100;
+  return bucketed.map((v) => MIN_H + ((v - minVal) / (maxVal - minVal)) * (MAX_H - MIN_H));
 }
+
+const connectorTravel = keyframes({
+  '0%': { left: -3, opacity: 0 },
+  '15%': { opacity: 1 },
+  '85%': { opacity: 1 },
+  '100%': { left: 'calc(100% - 3px)', opacity: 0 },
+});
 
 function getStyles(theme: GrafanaTheme2) {
   return {
@@ -1123,9 +1324,9 @@ function getStyles(theme: GrafanaTheme2) {
     pageFlow: css({
       label: 'landingTopBar-pageFlow',
       display: 'grid',
-      gridTemplateColumns: 'minmax(0, 1fr) minmax(400px, 480px)',
+      gridTemplateColumns: 'minmax(0, 3fr) minmax(300px, 2fr)',
       alignItems: 'stretch',
-      gap: theme.spacing(3),
+      gap: theme.spacing(2),
       boxSizing: 'border-box',
       marginTop: theme.spacing(-2),
       '@media (max-width: 1200px)': {
@@ -1186,25 +1387,79 @@ function getStyles(theme: GrafanaTheme2) {
     }),
     heroSideHeaderBlock: css({
       label: 'landingTopBar-heroSideHeaderBlock',
-      position: 'sticky',
-      top: theme.spacing(2),
-      alignSelf: 'stretch',
-      display: 'grid',
-      gridTemplateRows: 'auto 1fr',
-      gap: theme.spacing(3),
+      display: 'flex',
+      flexDirection: 'column',
+      gap: theme.spacing(2),
+      paddingTop: 32,
+    }),
+    videoCard: css({
+      label: 'landingTopBar-videoCard',
+      display: 'flex',
+      flexDirection: 'column',
+      flex: 1,
       minHeight: 0,
-      '@media (max-width: 1200px)': {
-        position: 'static',
+      width: '100%',
+      border: `1px solid ${theme.colors.border.weak}`,
+      borderRadius: theme.shape.radius.default,
+      overflow: 'hidden',
+      cursor: 'pointer',
+      transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
+      background: theme.colors.background.primary,
+      '&:hover': {
+        borderColor: theme.colors.primary.border,
+        boxShadow: theme.shadows.z2,
+      },
+      '&:hover [data-play-icon]': {
+        transform: 'scale(1.1)',
+      },
+      '&:focus-visible': {
+        outline: `2px solid ${theme.colors.primary.main}`,
+        outlineOffset: 2,
       },
     }),
-    heroSideActions: css({
-      label: 'landingTopBar-heroSideActions',
-      margin: 0,
+    videoPreview: css({
+      label: 'landingTopBar-videoPreview',
+      position: 'relative',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flex: 1,
+      minHeight: 250,
+      background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+    }),
+    videoPlayIcon: css({
+      label: 'landingTopBar-videoPlayIcon',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: 72,
+      height: 72,
+      borderRadius: theme.shape.radius.circle,
+      background: 'rgba(255, 255, 255, 0.15)',
+      backdropFilter: 'blur(8px)',
+      color: '#fff',
+      transition: 'transform 0.2s ease',
+    }),
+    videoComingSoon: css({
+      label: 'landingTopBar-videoComingSoon',
+      position: 'absolute',
+      bottom: theme.spacing(1.5),
+      left: '50%',
+      transform: 'translateX(-50%)',
+      opacity: 0.7,
+    }),
+    sideActions: css({
+      label: 'landingTopBar-sideActions',
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: theme.spacing(1),
+    }),
+    sideActionButton: css({
+      label: 'landingTopBar-sideActionButton',
+      justifyContent: 'center',
     }),
     heroSideCard: css({
       label: 'landingTopBar-heroSideCard',
-      height: '100%',
-      minHeight: 0,
     }),
     sideCardMutedHeading: css({
       label: 'landingTopBar-sideCardMutedHeading',
@@ -1220,12 +1475,17 @@ function getStyles(theme: GrafanaTheme2) {
       position: 'relative',
       flex: 1,
       minHeight: 0,
+      display: 'flex',
+      flexDirection: 'column',
       borderRadius: theme.shape.radius.default,
       overflow: 'hidden',
-      paddingTop: theme.spacing(2),
+      paddingTop: theme.spacing(2.5),
       paddingLeft: theme.spacing(3),
       paddingRight: theme.spacing(3),
-      background: `linear-gradient(135deg, ${theme.colors.background.primary} 0%, ${theme.colors.background.secondary} 100%)`,
+      background: theme.isDark
+        ? `linear-gradient(145deg, ${theme.colors.background.primary} 0%, rgba(22, 27, 45, 0.95) 50%, ${theme.colors.background.secondary} 100%)`
+        : `linear-gradient(145deg, ${theme.colors.background.primary} 0%, ${theme.colors.background.secondary} 100%)`,
+      border: `1px solid ${theme.colors.border.weak}`,
       '&::before': {
         content: '""',
         position: 'absolute',
@@ -1240,167 +1500,174 @@ function getStyles(theme: GrafanaTheme2) {
       label: 'landingTopBar-heroCardWithSpines',
       borderTopLeftRadius: 0,
       borderTopRightRadius: 0,
+      borderTop: 'none',
     }),
     heroCardContent: css({
       label: 'landingTopBar-heroCardContent',
-      height: '100%',
-      minHeight: 0,
+      flex: 1,
       display: 'flex',
       flexDirection: 'column',
       gap: theme.spacing(2),
     }),
     introducingLabel: css({
       label: 'landingTopBar-introducingLabel',
+      display: 'inline-block',
       marginTop: 0,
       textTransform: 'uppercase',
-      letterSpacing: '0.08em',
-      fontWeight: theme.typography.fontWeightMedium,
-      fontSize: theme.typography.bodySmall.fontSize,
-      lineHeight: 1.1,
+      letterSpacing: '0.1em',
+      fontWeight: theme.typography.fontWeightBold,
+      fontSize: 11,
+      lineHeight: 1,
       color: '#5794F2',
+      background: 'rgba(87, 148, 242, 0.1)',
+      padding: `${theme.spacing(0.5)} ${theme.spacing(1)}`,
+      borderRadius: theme.shape.radius.pill,
+      border: '1px solid rgba(87, 148, 242, 0.2)',
     }),
-    heroHeader: css({
-      label: 'landingTopBar-heroHeader',
-      display: 'grid',
-      gridTemplateColumns: 'minmax(0, 1fr) auto',
-      alignItems: 'start',
+    heroSubRow: css({
+      label: 'landingTopBar-heroSubRow',
+      display: 'flex',
+      alignItems: 'center',
       gap: theme.spacing(2),
-      '@media (max-width: 900px)': {
-        gridTemplateColumns: '1fr',
-      },
-    }),
-    heroLearnMoreList: css({
-      label: 'landingTopBar-heroLearnMoreList',
-      margin: 0,
-      paddingLeft: 0,
-      listStyle: 'none',
-      display: 'grid',
-      gridTemplateColumns: 'repeat(3, max-content)',
-      gap: theme.spacing(0.5),
-      justifySelf: 'end',
-      alignSelf: 'center',
-      '@media (max-width: 900px)': {
-        gridTemplateColumns: '1fr',
-        justifySelf: 'start',
-      },
-    }),
-    heroStatLink: css({
-      display: 'flex',
-      flexDirection: 'column',
-      gap: theme.spacing(0.5),
-      border: 0,
-      background: 'none',
-      padding: theme.spacing(1, 2),
-      borderRadius: theme.shape.radius.default,
-      textAlign: 'right',
-      cursor: 'pointer',
-      '&:hover': {
-        background: theme.colors.action.hover,
-      },
-      '&:focus-visible': {
-        outline: `2px solid ${theme.colors.primary.main}`,
-        outlineOffset: 2,
-      },
-    }),
-    heroStatLabel: css({
-      color: theme.colors.text.secondary,
-      fontSize: theme.typography.bodySmall.fontSize,
-      fontWeight: theme.typography.fontWeightRegular,
-      lineHeight: 1.2,
-    }),
-    heroStatRow: css({
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'flex-end',
-      gap: theme.spacing(1),
-    }),
-    heroStatValue: css({
-      color: theme.colors.text.primary,
-      fontVariantNumeric: 'tabular-nums',
-      fontWeight: theme.typography.fontWeightMedium,
-      fontSize: theme.typography.h3.fontSize,
-      lineHeight: 1.2,
-    }),
-    heroStatCta: css({
-      color: theme.colors.text.link,
-      fontSize: theme.typography.bodySmall.fontSize,
-      lineHeight: 1.2,
-    }),
-    changeBadge: css({
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: theme.spacing(0.25),
-      fontSize: theme.typography.bodySmall.fontSize,
-      fontWeight: theme.typography.fontWeightMedium,
-      padding: theme.spacing(0.25, 1),
-      borderRadius: 999,
-      lineHeight: 1.4,
-      whiteSpace: 'nowrap',
-      textDecoration: 'none',
-    }),
-    changeBadgeGood: css({
-      color: theme.colors.success.text,
-      border: `1px solid ${theme.colors.success.border}`,
-      background: theme.colors.success.transparent,
-    }),
-    changeBadgeWarn: css({
-      color: theme.colors.warning.text,
-      border: `1px solid ${theme.colors.warning.border}`,
-      background: theme.colors.warning.transparent,
-    }),
-    changeBadgeNeutral: css({
-      color: theme.colors.text.secondary,
-      border: `1px solid ${theme.colors.border.weak}`,
-      background: 'transparent',
+      marginTop: theme.spacing(0.5),
     }),
     productHeading: css({
       label: 'landingTopBar-productHeading',
       margin: 0,
       fontFamily: theme.typography.fontFamily,
       fontWeight: theme.typography.fontWeightBold,
-      fontSize: '2.2rem',
+      fontSize: '2.4rem',
       lineHeight: 1.1,
-      color: theme.colors.text.primary,
       whiteSpace: 'nowrap',
+      background: 'linear-gradient(135deg, #5794F2 0%, #B877D9 50%, #FF9830 100%)',
+      WebkitBackgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+    }),
+    heroPipeline: css({
+      label: 'landingTopBar-heroPipeline',
+      display: 'flex',
+      alignItems: 'stretch',
+      gap: 0,
+      marginTop: theme.spacing(1.5),
+      flex: 1,
+      minHeight: 0,
+    }),
+    pipelineStep: css({
+      label: 'landingTopBar-pipelineStep',
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+      position: 'relative',
+      borderRadius: theme.shape.radius.default,
+      border: `1px solid ${theme.colors.border.weak}`,
+      background: theme.isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
+      overflow: 'hidden',
+      transition: 'border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease',
+      '&:hover': {
+        borderColor: theme.colors.border.medium,
+        boxShadow: theme.isDark ? '0 4px 24px rgba(0,0,0,0.4)' : '0 4px 24px rgba(0,0,0,0.08)',
+        transform: 'translateY(-2px)',
+      },
+    }),
+    pipelineStepAccent: css({
+      label: 'landingTopBar-pipelineStepAccent',
+      height: 3,
+      width: '100%',
+      flexShrink: 0,
+    }),
+    pipelineStepInner: css({
+      label: 'landingTopBar-pipelineStepInner',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: theme.spacing(1),
+      padding: theme.spacing(1.5),
+    }),
+    pipelineStepHeader: css({
+      label: 'landingTopBar-pipelineStepHeader',
+      display: 'flex',
+      alignItems: 'center',
+      gap: theme.spacing(1),
+    }),
+    pipelineStepIcon: css({
+      label: 'landingTopBar-pipelineStepIcon',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+      width: 36,
+      height: 36,
+      borderRadius: theme.shape.radius.default,
+    }),
+    pipelineStepTitle: css({
+      label: 'landingTopBar-pipelineStepTitle',
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: theme.typography.fontWeightMedium,
+      color: theme.colors.text.primary,
+      lineHeight: 1.3,
+    }),
+    pipelineConnector: css({
+      label: 'landingTopBar-pipelineConnector',
+      position: 'relative',
+      display: 'flex',
+      alignItems: 'center',
+      alignSelf: 'center',
+      width: 48,
+      height: 2,
+      flexShrink: 0,
+    }),
+    pipelineConnectorTrack: css({
+      label: 'landingTopBar-pipelineConnectorTrack',
+      position: 'absolute',
+      inset: 0,
+      borderTop: `1px dashed ${theme.isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.15)'}`,
+    }),
+    pipelineConnectorDot: css({
+      label: 'landingTopBar-pipelineConnectorDot',
+      position: 'absolute',
+      width: 6,
+      height: 6,
+      borderRadius: '50%',
+      top: '50%',
+      transform: 'translateY(-50%)',
+      animation: `${connectorTravel} 2.4s ease-in-out infinite`,
+    }),
+    pipelineConnectorDotDelayed: css({
+      label: 'landingTopBar-pipelineConnectorDotDelayed',
+      animationDelay: '1.2s',
     }),
     assistantRowDash: css({
       label: 'landingTopBar-assistantRowDash',
       display: 'grid',
       gridTemplateColumns: '1fr auto',
       gap: theme.spacing(1),
-      flex: 1,
       width: `calc(100% + ${theme.spacing(6)})`,
       marginLeft: theme.spacing(-3),
       marginRight: theme.spacing(-3),
       marginTop: 'auto',
-      marginBottom: theme.spacing(-2),
-      alignItems: 'stretch',
-      minHeight: 96,
-      borderTop: `1px solid ${theme.colors.border.medium}`,
-      paddingTop: theme.spacing(0.75),
+      alignItems: 'center',
+      borderTop: `1px solid ${theme.colors.border.weak}`,
+      paddingTop: theme.spacing(1.5),
       paddingRight: theme.spacing(3),
-      paddingBottom: theme.spacing(4.5),
+      paddingBottom: theme.spacing(1.5),
       paddingLeft: theme.spacing(3),
-      background: theme.colors.background.secondary,
     }),
     assistantInput: css({
       label: 'landingTopBar-assistantInput',
       width: '100%',
-      height: '100%',
       border: 'none',
       background: 'transparent',
       boxShadow: 'none',
       paddingLeft: 0,
       paddingRight: 0,
       paddingTop: theme.spacing(0.75),
-      paddingBottom: 0,
-      minHeight: 56,
-      maxHeight: 128,
+      paddingBottom: theme.spacing(0.75),
+      minHeight: 0,
+      maxHeight: 80,
       resize: 'none',
       overflowY: 'auto',
       fontFamily: theme.typography.fontFamily,
-      fontSize: theme.typography.h6.fontSize,
-      lineHeight: theme.typography.h6.lineHeight,
+      fontSize: theme.typography.body.fontSize,
+      lineHeight: theme.typography.body.lineHeight,
       color: theme.colors.text.primary,
       '&::placeholder': {
         color: theme.colors.text.secondary,
