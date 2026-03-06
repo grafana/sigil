@@ -7,7 +7,6 @@ import {
   Badge,
   Button,
   Icon,
-  Select,
   Spinner,
   Tab,
   TabsBar,
@@ -39,6 +38,7 @@ import { TopStat } from '../components/TopStat';
 import MarkdownPreview from '../components/markdown/MarkdownPreview';
 
 const VERSION_PAGE_SIZE = 50;
+const RECENT_VERSIONS_COUNT = 8;
 const ACTIVITY_BAR_COUNT = 48;
 const ACTIVITY_REFRESH_MS = 70 * 1000;
 const EMPTY_ACTIVITY_BARS = Array.from({ length: ACTIVITY_BAR_COUNT }, () => 0);
@@ -150,14 +150,14 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     minWidth: 0,
+    width: '100%',
     marginTop: theme.spacing(0.5),
-    marginLeft: 'auto',
-    alignItems: 'flex-end',
+    alignItems: 'stretch',
   }),
   heroTopStatsRow: css({
     display: 'flex',
-    alignItems: 'flex-start',
-    justifyContent: 'flex-end',
+    alignItems: 'stretch',
+    justifyContent: 'space-between',
     gap: theme.spacing(1.5),
     width: '100%',
     '@media (max-width: 900px)': {
@@ -166,12 +166,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
     },
   }),
   heroVersionsPanel: css({
-    minWidth: 520,
-    maxWidth: 760,
+    flex: 1,
+    minWidth: 0,
+    width: '100%',
+    marginRight: theme.spacing(1),
   }),
   heroVersionsTitle: css({
     display: 'block',
-    marginBottom: theme.spacing(0.5),
     color: theme.colors.text.secondary,
     fontSize: theme.typography.bodySmall.fontSize,
     lineHeight: 1.2,
@@ -230,8 +231,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
     },
   }),
   heroMetaStatHighlight: css({
+    flexShrink: 0,
     minWidth: 0,
-    justifySelf: 'end',
     marginLeft: theme.spacing(1),
     '@media (max-width: 1400px)': {
       gridColumn: '4 / 5',
@@ -253,6 +254,16 @@ const getStyles = (theme: GrafanaTheme2) => ({
     height: 6,
     borderRadius: 2,
     background: theme.colors.border.weak,
+  }),
+  latestScoreValue: css({
+    fontSize: theme.typography.h1.fontSize,
+    fontWeight: theme.typography.fontWeightMedium,
+    lineHeight: 1,
+    textAlign: 'right' as const,
+    fontVariantNumeric: 'tabular-nums',
+  }),
+  latestScoreValueUnavailable: css({
+    color: theme.colors.text.secondary,
   }),
   anonymousBanner: css({
     borderRadius: theme.shape.radius.default,
@@ -423,10 +434,90 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     gap: theme.spacing(0.75),
     alignItems: 'center',
+    marginTop: theme.spacing(0.75),
     [`@media (max-width: 640px)`]: {
       flexDirection: 'column' as const,
       alignItems: 'stretch',
     },
+  }),
+  versionPickerHeaderRow: css({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing(1),
+  }),
+  versionPickerAnchor: css({
+    position: 'relative' as const,
+  }),
+  versionPickerToggle: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    border: `1px solid ${theme.colors.border.weak}`,
+    borderRadius: theme.shape.radius.default,
+    background: theme.colors.background.secondary,
+    color: theme.colors.text.primary,
+    fontSize: theme.typography.bodySmall.fontSize,
+    lineHeight: 1.2,
+    padding: theme.spacing(0.375, 0.75),
+    cursor: 'pointer',
+    whiteSpace: 'nowrap' as const,
+    '&:hover': {
+      borderColor: theme.colors.border.medium,
+      background: theme.colors.action.hover,
+    },
+  }),
+  versionPickerLabel: css({
+    maxWidth: 260,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  }),
+  versionPickerMenu: css({
+    position: 'absolute' as const,
+    top: `calc(100% + ${theme.spacing(0.5)})`,
+    right: 0,
+    zIndex: 8,
+    width: 420,
+    maxWidth: 'min(92vw, 420px)',
+    borderRadius: theme.shape.radius.default,
+    border: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.primary,
+    boxShadow: theme.shadows.z2,
+    padding: theme.spacing(0.5),
+  }),
+  versionPickerOptions: css({
+    margin: 0,
+    padding: 0,
+    listStyle: 'none',
+    maxHeight: 280,
+    overflowY: 'auto' as const,
+  }),
+  versionPickerOptionButton: css({
+    width: '100%',
+    border: 'none',
+    background: 'transparent',
+    textAlign: 'left' as const,
+    padding: theme.spacing(0.625, 0.75),
+    borderRadius: theme.shape.radius.default,
+    cursor: 'pointer',
+    display: 'grid',
+    gap: theme.spacing(0.125),
+    '&:hover': {
+      background: theme.colors.action.hover,
+    },
+  }),
+  versionPickerOptionButtonActive: css({
+    background: theme.colors.primary.transparent,
+  }),
+  versionPickerOptionLabel: css({
+    fontSize: theme.typography.bodySmall.fontSize,
+    color: theme.colors.text.primary,
+    lineHeight: 1.25,
+  }),
+  versionPickerOptionMeta: css({
+    fontSize: theme.typography.size.sm,
+    color: theme.colors.text.secondary,
+    lineHeight: 1.25,
   }),
   versionSelect: css({
     flex: 1,
@@ -877,17 +968,20 @@ export default function AgentDetailPage({
   const [modelCards, setModelCards] = useState<Map<string, ModelCard>>(new Map());
   const [openModel, setOpenModel] = useState<{ key: string; anchorRect: DOMRect } | null>(null);
   const [activityHeights, setActivityHeights] = useState<number[] | null>(null);
+  const [isVersionPickerOpen, setIsVersionPickerOpen] = useState(false);
   const detailRequestVersion = useRef(0);
   const versionsRequestVersion = useRef(0);
   const ratingRequestVersion = useRef(0);
   const recentRatingsRequestVersion = useRef(0);
   const recentVersionRatingsRef = useRef<Record<string, AgentRatingResponse | null>>({});
   const promptAnalysisSectionRef = useRef<HTMLDivElement | null>(null);
+  const versionPickerRef = useRef<HTMLDivElement | null>(null);
 
   const selectedVersion = searchParams.get('version')?.trim() ?? '';
   const agentName = buildAgentNameFromRoute(location.pathname, params.agentName);
   const isAnonymous = agentName.length === 0;
   const agentsTableRoute = `${PLUGIN_BASE}/${ROUTES.Agents}?tab=table`;
+  const activeVersion = selectedVersion.length > 0 ? selectedVersion : (detail?.effective_version ?? '');
 
   useEffect(() => {
     detailRequestVersion.current += 1;
@@ -1104,7 +1198,7 @@ export default function AgentDetailPage({
     return options;
   }, [loadingVersions, versionOptions, versionsCursor]);
 
-  const recentVersions = useMemo(() => versionOptions.slice(0, 5).reverse(), [versionOptions]);
+  const recentVersions = useMemo(() => versionOptions.slice(0, RECENT_VERSIONS_COUNT).reverse(), [versionOptions]);
 
   useEffect(() => {
     recentVersionRatingsRef.current = {};
@@ -1168,6 +1262,30 @@ export default function AgentDetailPage({
     }
     setSearchParams(next, { replace: false });
   };
+
+  useEffect(() => {
+    setIsVersionPickerOpen(false);
+  }, [activeVersion]);
+
+  useEffect(() => {
+    if (!isVersionPickerOpen) {
+      return;
+    }
+    const onDocumentMouseDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+      if (versionPickerRef.current?.contains(target)) {
+        return;
+      }
+      setIsVersionPickerOpen(false);
+    };
+    document.addEventListener('mousedown', onDocumentMouseDown);
+    return () => {
+      document.removeEventListener('mousedown', onDocumentMouseDown);
+    };
+  }, [isVersionPickerOpen]);
 
   const loadMoreVersions = async () => {
     if (loadingVersions || versionsCursor.length === 0) {
@@ -1277,7 +1395,6 @@ export default function AgentDetailPage({
     );
   }
 
-  const activeVersion = selectedVersion.length > 0 ? selectedVersion : detail.effective_version;
   const primaryModel = detail.models[0];
   const primaryModelLabel =
     primaryModel != null ? stripProviderPrefix(primaryModel.name, getProviderMeta(primaryModel.provider).label) : 'n/a';
@@ -1287,6 +1404,11 @@ export default function AgentDetailPage({
   const activeHeroRating = initialRating?.status === 'completed' ? initialRating : null;
   const activeHeroRatingSummary = activeHeroRating ? firstLine(activeHeroRating.summary) : '';
   const activeScoreFilledBlocks = activeHeroRating ? Math.max(0, Math.min(10, Math.round(activeHeroRating.score))) : 0;
+  const activeVersionItem = versionOptions.find((item) => item.effective_version === activeVersion);
+  const activeVersionLabel =
+    activeVersionItem?.declared_version_latest ??
+    activeVersionItem?.declared_version_first ??
+    `${activeVersion.replace(/^sha256:/, '').slice(0, 12)}…`;
 
   return (
     <div className={styles.page}>
@@ -1383,31 +1505,58 @@ export default function AgentDetailPage({
                 <div className={styles.heroStatsColumn}>
                   <div className={styles.heroTopStatsRow}>
                     <div className={styles.heroVersionsPanel}>
-                      <span className={styles.heroVersionsTitle}>Versions</span>
-                      <div className={styles.versionControls}>
-                        <div className={styles.versionSelect}>
-                          <Select
-                            options={versionSelectOptions}
-                            value={activeVersion}
-                            onChange={(selected) => {
-                              if (selected?.value === LOAD_MORE_VERSIONS_VALUE) {
-                                void loadMoreVersions();
-                                return;
-                              }
-                              selectVersion(selected?.value ?? '');
-                            }}
-                            isLoading={loadingVersions}
-                            placeholder="Select a version…"
-                            aria-label="agent version selector"
-                          />
+                      <div className={styles.versionPickerHeaderRow}>
+                        <span className={styles.heroVersionsTitle}>Versions</span>
+                        <div className={styles.versionPickerAnchor} ref={versionPickerRef}>
+                          <button
+                            type="button"
+                            className={styles.versionPickerToggle}
+                            aria-label="toggle agent version selector"
+                            aria-expanded={isVersionPickerOpen}
+                            aria-haspopup="listbox"
+                            onClick={() => setIsVersionPickerOpen((current) => !current)}
+                          >
+                            <span className={styles.versionPickerLabel}>Version {activeVersionLabel}</span>
+                            <Icon name={isVersionPickerOpen ? 'angle-up' : 'angle-down'} size="sm" />
+                          </button>
+                          {isVersionPickerOpen && (
+                            <div className={styles.versionPickerMenu}>
+                              <ul className={styles.versionPickerOptions} role="listbox" aria-label="agent version selector">
+                                {versionSelectOptions.map((option) => {
+                                  const isLoadMore = option.value === LOAD_MORE_VERSIONS_VALUE;
+                                  const isSelected = option.value === activeVersion;
+                                  return (
+                                    <li key={option.value}>
+                                      <button
+                                        type="button"
+                                        className={cx(
+                                          styles.versionPickerOptionButton,
+                                          isSelected && styles.versionPickerOptionButtonActive
+                                        )}
+                                        aria-label={
+                                          isLoadMore ? 'load more versions' : `select version ${option.value}`
+                                        }
+                                        onClick={() => {
+                                          if (isLoadMore) {
+                                            void loadMoreVersions();
+                                            return;
+                                          }
+                                          selectVersion(option.value);
+                                        }}
+                                        disabled={loadingVersions && isLoadMore}
+                                      >
+                                        <span className={styles.versionPickerOptionLabel}>{option.label}</span>
+                                        {option.description && (
+                                          <span className={styles.versionPickerOptionMeta}>{option.description}</span>
+                                        )}
+                                      </button>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+                          )}
                         </div>
-                        <Button
-                          variant="secondary"
-                          onClick={() => selectVersion('')}
-                          disabled={selectedVersion.length === 0}
-                        >
-                          Latest
-                        </Button>
                       </div>
                       {recentVersions.length > 1 && (
                         <div className={styles.recentVersionsGrid}>
@@ -1499,20 +1648,22 @@ export default function AgentDetailPage({
                       )}
                     </div>
                     <div className={styles.heroMetaStatHighlight}>
-                      <TopStat
-                        label="LATEST SCORE"
-                        value={0}
-                        displayValue={activeHeroRating ? `${activeHeroRating.score}/10` : 'n/a'}
-                        loading={false}
-                        compact
-                        normalFontSize
-                        rightAlignContent
-                        helpTooltip={
+                      <Tooltip
+                        content={
                           activeHeroRating
                             ? `Completed rating summary for selected version: ${activeHeroRatingSummary}`
                             : 'No completed rating available for selected version.'
                         }
-                      />
+                        placement="top"
+                      >
+                        <div
+                          className={cx(styles.latestScoreValue, !activeHeroRating && styles.latestScoreValueUnavailable)}
+                          style={activeHeroRating ? { color: scoreTone(theme, activeHeroRating.score) } : undefined}
+                          aria-label={`Latest score ${activeHeroRating ? `${activeHeroRating.score}/10` : 'n/a'}`}
+                        >
+                          {activeHeroRating ? `${activeHeroRating.score}/10` : 'n/a'}
+                        </div>
+                      </Tooltip>
                       <div className={styles.latestScoreBlocks} aria-hidden="true">
                         {Array.from({ length: 10 }, (_, idx) => (
                           <span
