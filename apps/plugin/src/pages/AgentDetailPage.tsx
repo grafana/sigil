@@ -344,7 +344,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   tabContentLayout: css({
     display: 'grid',
-    gridTemplateColumns: '190px minmax(0, 1fr)',
+    gridTemplateColumns: '150px minmax(0, 1fr)',
     gap: theme.spacing(2),
     alignItems: 'start',
     '@media (max-width: 900px)': {
