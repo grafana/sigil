@@ -847,22 +847,25 @@ export function LandingTopBar({
             )}
             <div className={cx(styles.heroCard, showRequestSpines && styles.heroCardWithSpines)}>
               <div className={styles.heroCardContent}>
-                <div className={styles.heroHeader}>
-                  <div className={styles.heroHeaderTitle}>
-                    <div className={styles.introducingLabel}>Introducing</div>
-                    <h1 className={styles.productHeading}>Grafana Sigil</h1>
-                  </div>
+                <div className={styles.githubButtonWrap}>
                   <LinkButton
                     className={styles.githubButton}
                     href="https://github.com/grafana/sigil"
                     icon="github"
                     variant="secondary"
+                    fill="text"
                     size="sm"
                     target="_blank"
                     rel="noreferrer"
                   >
-                    GitHub
+                    <span className={styles.githubLabel}>grafana/sigil</span>
                   </LinkButton>
+                </div>
+                <div className={styles.heroHeader}>
+                  <div className={styles.heroHeaderTitle}>
+                    <div className={styles.introducingLabel}>Introducing</div>
+                    <h1 className={styles.productHeading}>Grafana Sigil</h1>
+                  </div>
                 </div>
                 <div>
                   <div className={styles.heroSubRow}>
@@ -1559,7 +1562,7 @@ function getStyles(theme: GrafanaTheme2) {
     heroHeader: css({
       label: 'landingTopBar-heroHeader',
       position: 'relative',
-      paddingRight: theme.spacing(12),
+      paddingRight: theme.spacing(16),
     }),
     heroHeaderTitle: css({
       label: 'landingTopBar-heroHeaderTitle',
@@ -1584,16 +1587,26 @@ function getStyles(theme: GrafanaTheme2) {
       gap: theme.spacing(2),
       marginTop: '-2px',
     }),
+    githubButtonWrap: css({
+      label: 'landingTopBar-githubButtonWrap',
+      position: 'absolute',
+      marginTop: theme.spacing(1.5),
+      right: theme.spacing(2),
+      zIndex: 1,
+    }),
     githubButton: css({
       label: 'landingTopBar-githubButton',
-      position: 'absolute',
-      bottom: 0,
-      right: 0,
-      marginTop: 0,
+      minWidth: 'auto',
       '& svg': {
-        width: 18,
-        height: 18,
+        width: 22,
+        height: 22,
       },
+    }),
+    githubLabel: css({
+      label: 'landingTopBar-githubLabel',
+      fontFamily: theme.typography.fontFamilyMonospace,
+      fontSize: theme.typography.bodySmall.fontSize,
+      lineHeight: theme.typography.bodySmall.lineHeight,
     }),
     productHeading: css({
       label: 'landingTopBar-productHeading',
