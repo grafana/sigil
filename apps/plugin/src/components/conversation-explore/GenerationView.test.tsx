@@ -293,6 +293,9 @@ describe('GenerationView', () => {
 
     render(<GenerationView node={node} allGenerations={[generation]} onClose={jest.fn()} />);
 
+    // Header count should reflect deduplicated total (2 unique AI keys), not raw sum (4)
+    expect(screen.getByText('(2)')).toBeInTheDocument();
+
     fireEvent.click(screen.getByText('Attributes'));
 
     const pills = screen.getAllByText('gen_ai.system');

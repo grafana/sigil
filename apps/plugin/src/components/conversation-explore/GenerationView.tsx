@@ -803,9 +803,25 @@ export default function GenerationView({
     if (!node.span) {
       return 0;
     }
+    const resourceEntries = collectAttributeEntries(node.span.resourceAttributes);
+    const spanEntries = collectAttributeEntries(node.span.attributes);
+
+    const aiKeys = new Set<string>();
+    for (const e of resourceEntries) {
+      if (isAiPillKey(e.key)) {
+        aiKeys.add(e.key);
+      }
+    }
+    for (const e of spanEntries) {
+      if (isAiPillKey(e.key)) {
+        aiKeys.add(e.key);
+      }
+    }
+
     return (
-      collectAttributeEntries(node.span.resourceAttributes).length +
-      collectAttributeEntries(node.span.attributes).length
+      aiKeys.size +
+      resourceEntries.filter((e) => !isAiPillKey(e.key)).length +
+      spanEntries.filter((e) => !isAiPillKey(e.key)).length
     );
   }, [node.span]);
   const hasAttributeSection = visibleAttributeCount > 0;
