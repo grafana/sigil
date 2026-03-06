@@ -5,7 +5,6 @@ import cursorLogo from '../../img/ide-logos/cursor.svg';
 
 type LogoProps = {
   size?: number;
-  withBackground?: boolean;
 };
 
 type MaskLogoProps = {
@@ -37,7 +36,7 @@ function MaskLogo({ size, src, label }: MaskLogoProps) {
   );
 }
 
-export function CursorLogo({ size = 28, withBackground: _withBackground = true }: LogoProps) {
+export function CursorLogo({ size = 28 }: LogoProps) {
   return <MaskLogo size={size} src={cursorLogo} label="Cursor logo" />;
 }
 
