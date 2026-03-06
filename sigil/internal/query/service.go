@@ -1699,9 +1699,9 @@ func latestConversationUserID(generations []*sigilv1.Generation) string {
 	bestIndex := -1
 	found := false
 	for idx, generation := range generations {
-		candidate := generationMetadataString(generation, generationMetadataUserIDKey)
+		candidate := storage.GenerationMetadataString(generation, generationMetadataUserIDKey)
 		if candidate == "" {
-			candidate = generationMetadataString(generation, generationMetadataLegacyUserIDKey)
+			candidate = storage.GenerationMetadataString(generation, generationMetadataLegacyUserIDKey)
 		}
 		if candidate == "" {
 			continue
@@ -1810,7 +1810,7 @@ func (s *Service) resolveConversationTitleFromGenerationIDs(
 				continue
 			}
 			snapshot = generationTitleSnapshot{
-				Title:     generationConversationTitle(generation),
+				Title:     storage.ConversationTitleFromGeneration(generation),
 				Timestamp: generationTimestamp(generation),
 			}
 			cache[generationID] = snapshot
@@ -1889,7 +1889,7 @@ func (s *Service) resolveLatestConversationTitleFromGenerations(
 		snapshot, cached := cache[generationID]
 		if !cached {
 			snapshot = generationTitleSnapshot{
-				Title:     generationConversationTitle(generation),
+				Title:     storage.ConversationTitleFromGeneration(generation),
 				Timestamp: generationTimestamp(generation),
 			}
 			if generationID != "" {
@@ -1907,43 +1907,6 @@ func (s *Service) resolveLatestConversationTitleFromGenerations(
 		}
 	}
 	return title
-}
-
-func generationConversationTitle(generation *sigilv1.Generation) string {
-	return storage.ConversationTitleFromGeneration(generation)
-}
-
-func generationMetadataString(generation *sigilv1.Generation, key string) string {
-	if generation == nil {
-		return ""
-	}
-	metadata := generation.GetMetadata()
-	if metadata == nil {
-		return ""
-	}
-	return metadataStringFromMap(metadata.AsMap(), key)
-}
-
-func metadataStringFromMap(values map[string]any, key string) string {
-	if len(values) == 0 {
-		return ""
-	}
-	raw, ok := values[key]
-	if !ok {
-		return ""
-	}
-	return normalizeMetadataString(raw)
-}
-
-func normalizeMetadataString(value any) string {
-	switch typed := value.(type) {
-	case string:
-		return strings.TrimSpace(typed)
-	case map[string]any:
-		return normalizeMetadataString(typed["stringValue"])
-	default:
-		return ""
-	}
 }
 
 func normalizeTempoTagKey(scope string, key string) string {

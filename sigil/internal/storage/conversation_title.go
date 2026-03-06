@@ -11,6 +11,8 @@ const (
 	legacyConversationTitleKey = "conversation_title"
 )
 
+// ConversationTitleFromGeneration extracts a normalized conversation title from
+// generation metadata, including legacy attribute nesting.
 func ConversationTitleFromGeneration(generation *sigilv1.Generation) string {
 	if generation == nil {
 		return ""
@@ -23,10 +25,10 @@ func ConversationTitleFromGeneration(generation *sigilv1.Generation) string {
 	if len(metadataMap) == 0 {
 		return ""
 	}
-	if title := metadataStringFromMap(metadataMap, conversationTitleKey); title != "" {
+	if title := GenerationMetadataString(generation, conversationTitleKey); title != "" {
 		return title
 	}
-	if title := metadataStringFromMap(metadataMap, legacyConversationTitleKey); title != "" {
+	if title := GenerationMetadataString(generation, legacyConversationTitleKey); title != "" {
 		return title
 	}
 	rawAttributes, ok := metadataMap["attributes"]
@@ -41,6 +43,19 @@ func ConversationTitleFromGeneration(generation *sigilv1.Generation) string {
 		return title
 	}
 	return metadataStringFromMap(attributes, legacyConversationTitleKey)
+}
+
+// GenerationMetadataString returns the normalized string value for a top-level
+// generation metadata key.
+func GenerationMetadataString(generation *sigilv1.Generation, key string) string {
+	if generation == nil {
+		return ""
+	}
+	metadata := generation.GetMetadata()
+	if metadata == nil {
+		return ""
+	}
+	return metadataStringFromMap(metadata.AsMap(), key)
 }
 
 func metadataStringFromMap(values map[string]any, key string) string {
