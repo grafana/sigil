@@ -86,53 +86,62 @@ function LocationProbe() {
 }
 
 function createDataSource(): AgentsDataSource {
+  const agentListResponse = {
+    items: [
+      {
+        agent_name: 'assistant',
+        latest_effective_version: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        latest_declared_version: '1.2.0',
+        first_seen_at: '2026-03-04T10:00:00Z',
+        latest_seen_at: '2026-03-04T11:00:00Z',
+        generation_count: 3,
+        version_count: 2,
+        tool_count: 1,
+        system_prompt_prefix: 'You are concise',
+        token_estimate: { system_prompt: 4, tools_total: 5, total: 9 },
+      },
+      {
+        agent_name: '',
+        latest_effective_version: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        first_seen_at: '2026-03-04T09:00:00Z',
+        latest_seen_at: '2026-03-04T11:00:00Z',
+        generation_count: 2,
+        version_count: 2,
+        tool_count: 0,
+        system_prompt_prefix: 'anonymous prompt',
+        token_estimate: { system_prompt: 2, tools_total: 0, total: 2 },
+      },
+    ],
+    next_cursor: 'cursor-1',
+  };
+  const loadMoreResponse = {
+    items: [
+      {
+        agent_name: 'assistant-beta',
+        latest_effective_version: 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+        first_seen_at: '2026-03-04T08:00:00Z',
+        latest_seen_at: '2026-03-04T11:10:00Z',
+        generation_count: 1,
+        version_count: 1,
+        tool_count: 2,
+        system_prompt_prefix: 'beta prompt',
+        token_estimate: { system_prompt: 3, tools_total: 4, total: 7 },
+      },
+    ],
+    next_cursor: '',
+  };
+  const staleCountResponse = { items: [], next_cursor: '' };
+
   return {
-    listAgents: jest
-      .fn()
-      .mockResolvedValueOnce({
-        items: [
-          {
-            agent_name: 'assistant',
-            latest_effective_version: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-            latest_declared_version: '1.2.0',
-            first_seen_at: '2026-03-04T10:00:00Z',
-            latest_seen_at: '2026-03-04T11:00:00Z',
-            generation_count: 3,
-            version_count: 2,
-            tool_count: 1,
-            system_prompt_prefix: 'You are concise',
-            token_estimate: { system_prompt: 4, tools_total: 5, total: 9 },
-          },
-          {
-            agent_name: '',
-            latest_effective_version: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-            first_seen_at: '2026-03-04T09:00:00Z',
-            latest_seen_at: '2026-03-04T11:00:00Z',
-            generation_count: 2,
-            version_count: 2,
-            tool_count: 0,
-            system_prompt_prefix: 'anonymous prompt',
-            token_estimate: { system_prompt: 2, tools_total: 0, total: 2 },
-          },
-        ],
-        next_cursor: 'cursor-1',
-      })
-      .mockResolvedValueOnce({
-        items: [
-          {
-            agent_name: 'assistant-beta',
-            latest_effective_version: 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
-            first_seen_at: '2026-03-04T08:00:00Z',
-            latest_seen_at: '2026-03-04T11:10:00Z',
-            generation_count: 1,
-            version_count: 1,
-            tool_count: 2,
-            system_prompt_prefix: 'beta prompt',
-            token_estimate: { system_prompt: 3, tools_total: 4, total: 7 },
-          },
-        ],
-        next_cursor: '',
-      }),
+    listAgents: jest.fn().mockImplementation((_limit, cursor, _namePrefix, seenAfterSec, _seenBeforeSec) => {
+      if (seenAfterSec === undefined) {
+        return Promise.resolve(staleCountResponse);
+      }
+      if (cursor === 'cursor-1') {
+        return Promise.resolve(loadMoreResponse);
+      }
+      return Promise.resolve(agentListResponse);
+    }),
     lookupAgent: jest.fn(async () => {
       throw new Error('not used in AgentsPage tests');
     }),
@@ -313,23 +322,29 @@ describe('AgentsPage', () => {
   });
 
   it('renders risk strip with all-zero signals in neutral styling', async () => {
+    const healthyAgentResponse = {
+      items: [
+        {
+          agent_name: 'healthy-agent',
+          latest_effective_version: 'sha256:aaaa',
+          first_seen_at: '2026-03-04T10:00:00Z',
+          latest_seen_at: '2026-03-04T11:00:00Z',
+          generation_count: 5,
+          version_count: 2,
+          tool_count: 1,
+          system_prompt_prefix: 'test',
+          token_estimate: { system_prompt: 4, tools_total: 5, total: 9 },
+        },
+      ],
+      next_cursor: '',
+    };
     const dataSource: AgentsDataSource = {
       ...createDataSource(),
-      listAgents: jest.fn().mockResolvedValueOnce({
-        items: [
-          {
-            agent_name: 'healthy-agent',
-            latest_effective_version: 'sha256:aaaa',
-            first_seen_at: '2026-03-04T10:00:00Z',
-            latest_seen_at: '2026-03-04T11:00:00Z',
-            generation_count: 5,
-            version_count: 2,
-            tool_count: 1,
-            system_prompt_prefix: 'test',
-            token_estimate: { system_prompt: 4, tools_total: 5, total: 9 },
-          },
-        ],
-        next_cursor: '',
+      listAgents: jest.fn().mockImplementation((_limit, _cursor, _namePrefix, seenAfterSec) => {
+        if (seenAfterSec === undefined) {
+          return Promise.resolve({ items: [], next_cursor: '' });
+        }
+        return Promise.resolve(healthyAgentResponse);
       }),
     };
 
@@ -368,14 +383,7 @@ describe('AgentsPage', () => {
     triggerLoadMoreIntersection();
 
     await waitFor(() =>
-      expect(dataSource.listAgents).toHaveBeenNthCalledWith(
-        2,
-        24,
-        'cursor-1',
-        '',
-        expect.any(Number),
-        expect.any(Number)
-      )
+      expect(dataSource.listAgents).toHaveBeenCalledWith(24, 'cursor-1', '', expect.any(Number), expect.any(Number))
     );
     expect(await screen.findByRole('link', { name: 'open agent assistant-beta' })).toBeInTheDocument();
   });
@@ -392,7 +400,7 @@ describe('AgentsPage', () => {
     fireEvent.change(screen.getByPlaceholderText('Search by agent name…'), { target: { value: 'assist' } });
 
     await waitFor(() =>
-      expect(dataSource.listAgents).toHaveBeenLastCalledWith(24, '', 'assist', expect.any(Number), expect.any(Number))
+      expect(dataSource.listAgents).toHaveBeenCalledWith(24, '', 'assist', expect.any(Number), expect.any(Number))
     );
   });
 

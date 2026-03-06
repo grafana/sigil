@@ -682,6 +682,7 @@ export default function AgentsPage({
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [staleAgentCount, setStaleAgentCount] = useState(0);
   const searchInput = searchParams.get('search') ?? '';
   const [namePrefix, setNamePrefix] = useState('');
   const activeTab: AgentsPageTab = searchParams.get('tab') === 'table' ? 'table' : 'info';
@@ -691,6 +692,7 @@ export default function AgentsPage({
 
   const rangeFromSec = Math.floor(timeRange.from.valueOf() / 1000);
   const rangeToSec = Math.floor(timeRange.to.valueOf() / 1000);
+  const staleThresholdSec = rangeToSec - Math.floor(STALE_WINDOW_MS / 1000);
   const telemetryRangeDuration = useMemo(
     () => computeRangeDuration(rangeFromSec, rangeToSec),
     [rangeFromSec, rangeToSec]
@@ -751,6 +753,27 @@ export default function AgentsPage({
       });
   }, [dataSource, namePrefix, rangeFromSec, rangeToSec]);
 
+  useEffect(() => {
+    let cancelled = false;
+    dataSource
+      .listAgents(PAGE_SIZE, '', namePrefix, undefined, staleThresholdSec)
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+        setStaleAgentCount(response.items?.length ?? 0);
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+        setStaleAgentCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dataSource, namePrefix, staleThresholdSec]);
+
   // --- Summary computation ---
 
   const summary = useMemo(() => {
@@ -759,7 +782,6 @@ export default function AgentsPage({
     const usageByName = aggregateAgentUsageByName(usageByModelAndType.data, resolvedPricing.pricingMap);
     let anonymousCount = 0;
     let seenInRangeCount = 0;
-    let staleCount = 0;
     let highChurnCount = 0;
     let totalGenerationsWithRuntime = 0;
     let totalRuntimeTokens = 0;
@@ -772,9 +794,6 @@ export default function AgentsPage({
       if (Number.isFinite(latestSeenAtMs)) {
         if (latestSeenAtMs >= rangeFrom && latestSeenAtMs <= rangeTo) {
           seenInRangeCount += 1;
-        }
-        if (rangeTo - latestSeenAtMs > STALE_WINDOW_MS) {
-          staleCount += 1;
         }
       }
       if (item.version_count >= HIGH_CHURN_THRESHOLD) {
@@ -814,7 +833,7 @@ export default function AgentsPage({
       namedAgents: items.length - anonymousCount,
       anonymousCount,
       seenInRangeCount,
-      staleCount,
+      staleCount: staleAgentCount,
       highChurnCount,
       totalGenerations: totalGenerationsWithRuntime,
       totalTokens,
@@ -826,7 +845,7 @@ export default function AgentsPage({
       topByTokenFootprint,
       usageByName,
     };
-  }, [items, resolvedPricing.pricingMap, timeRange, usageByModelAndType.data]);
+  }, [items, resolvedPricing.pricingMap, staleAgentCount, timeRange, usageByModelAndType.data]);
 
   // --- Derived data for overview panels ---
 
