@@ -1163,6 +1163,7 @@ type conversationEvalSummary struct {
 
 type conversationSearchResult struct {
 	ConversationID    string                     `json:"conversation_id"`
+	ConversationTitle string                     `json:"conversation_title,omitempty"`
 	UserID            string                     `json:"user_id,omitempty"`
 	GenerationCount   int                        `json:"generation_count"`
 	FirstGenerationAt time.Time                  `json:"first_generation_at"`
@@ -1227,6 +1228,7 @@ type conversationBatchMetadataRequest struct {
 
 type conversationBatchMetadata struct {
 	ConversationID    string                     `json:"conversation_id"`
+	ConversationTitle string                     `json:"conversation_title,omitempty"`
 	GenerationCount   int                        `json:"generation_count"`
 	FirstGenerationAt time.Time                  `json:"first_generation_at"`
 	LastGenerationAt  time.Time                  `json:"last_generation_at"`
@@ -1716,6 +1718,7 @@ func (a *App) runConversationSearch(
 				aggregate := grouped.Conversations[conversationID]
 				result := conversationSearchResult{
 					ConversationID:    conversationID,
+					ConversationTitle: strings.TrimSpace(conversationMetadata.ConversationTitle),
 					UserID:            aggregate.UserID,
 					GenerationCount:   conversationMetadata.GenerationCount,
 					FirstGenerationAt: conversationMetadata.FirstGenerationAt.UTC(),

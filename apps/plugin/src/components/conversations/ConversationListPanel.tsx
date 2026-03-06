@@ -691,14 +691,6 @@ export default function ConversationListPanel({
                         ) : (
                           <span className={styles.idCellPrimary}>{conversation.conversation_id}</span>
                         )}
-                        {hasTitle &&
-                          (conversation.conversation_id.length > 40 ? (
-                            <Tooltip content={conversation.conversation_id}>
-                              <span className={styles.idCellSecondary}>{truncateId(conversation.conversation_id)}</span>
-                            </Tooltip>
-                          ) : (
-                            <span className={styles.idCellSecondary}>{conversation.conversation_id}</span>
-                          ))}
                         {userID.length > 0 && (
                           <Tooltip content={userID}>
                             <span className={styles.idCellSecondary}>{userID}</span>

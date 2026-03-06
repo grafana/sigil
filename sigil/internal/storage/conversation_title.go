@@ -18,31 +18,27 @@ func ConversationTitleFromGeneration(generation *sigilv1.Generation) string {
 		return ""
 	}
 	metadata := generation.GetMetadata()
-	if metadata == nil {
-		return ""
+	if metadata != nil {
+		metadataMap := metadata.AsMap()
+		if title := metadataStringFromMap(metadataMap, conversationTitleKey); title != "" {
+			return title
+		}
+		if title := metadataStringFromMap(metadataMap, legacyConversationTitleKey); title != "" {
+			return title
+		}
+		rawAttributes, ok := metadataMap["attributes"]
+		if ok {
+			if attributes, ok := rawAttributes.(map[string]any); ok {
+				if title := metadataStringFromMap(attributes, conversationTitleKey); title != "" {
+					return title
+				}
+				if title := metadataStringFromMap(attributes, legacyConversationTitleKey); title != "" {
+					return title
+				}
+			}
+		}
 	}
-	metadataMap := metadata.AsMap()
-	if len(metadataMap) == 0 {
-		return ""
-	}
-	if title := metadataStringFromMap(metadataMap, conversationTitleKey); title != "" {
-		return title
-	}
-	if title := metadataStringFromMap(metadataMap, legacyConversationTitleKey); title != "" {
-		return title
-	}
-	rawAttributes, ok := metadataMap["attributes"]
-	if !ok {
-		return ""
-	}
-	attributes, ok := rawAttributes.(map[string]any)
-	if !ok {
-		return ""
-	}
-	if title := metadataStringFromMap(attributes, conversationTitleKey); title != "" {
-		return title
-	}
-	return metadataStringFromMap(attributes, legacyConversationTitleKey)
+	return ""
 }
 
 // GenerationMetadataString returns the normalized string value for a top-level
