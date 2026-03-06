@@ -117,10 +117,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
   heroTitleRow: css({
     display: 'grid',
     gridTemplateColumns: 'auto minmax(220px, 1fr) minmax(540px, 2fr)',
-    alignItems: 'start',
+    alignItems: 'center',
     gap: theme.spacing(2),
     '@media (max-width: 1200px)': {
       gridTemplateColumns: 'auto minmax(0, 1fr)',
+      alignItems: 'start',
       columnGap: theme.spacing(1.5),
       rowGap: theme.spacing(1.25),
     },
@@ -158,7 +159,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   heroTopStatsRow: css({
     display: 'flex',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: theme.spacing(2),
     width: '100%',
