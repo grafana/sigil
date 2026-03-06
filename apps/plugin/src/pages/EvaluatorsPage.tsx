@@ -1,8 +1,19 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
-import { Alert, Button, Icon, RadioButtonGroup, Select, Spinner, Text, useStyles2, type IconName } from '@grafana/ui';
+import {
+  Alert,
+  Button,
+  Icon,
+  Input,
+  RadioButtonGroup,
+  Select,
+  Spinner,
+  Text,
+  useStyles2,
+  type IconName,
+} from '@grafana/ui';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
 import { fetchAllCursorPages } from '../evaluation/pagination';
@@ -94,6 +105,16 @@ const getStyles = (theme: GrafanaTheme2) => {
       color: theme.colors.text.secondary,
       marginTop: theme.spacing(-1),
     }),
+    searchRow: css({
+      display: 'flex',
+      alignItems: 'center',
+      gap: theme.spacing(1),
+      flexWrap: 'wrap' as const,
+    }),
+    searchInput: css({
+      width: '100%',
+      maxWidth: 360,
+    }),
     loading: css({
       display: 'flex',
       justifyContent: 'center',
@@ -154,6 +175,16 @@ const getStyles = (theme: GrafanaTheme2) => {
       alignItems: 'center',
       gap: theme.spacing(1),
       fontSize: theme.typography.bodySmall.fontSize,
+      color: theme.colors.text.secondary,
+    }),
+    filteredEmpty: css({
+      display: 'flex',
+      alignItems: 'center',
+      gap: theme.spacing(1),
+      padding: theme.spacing(2, 2.5),
+      borderRadius: theme.shape.radius.default,
+      border: `1px solid ${theme.colors.border.weak}`,
+      background: theme.colors.background.primary,
       color: theme.colors.text.secondary,
     }),
     featureIcon: css({
@@ -248,9 +279,13 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
   const [evaluatorTablePageSize, setEvaluatorTablePageSize] = useState(25);
   const [templateCardPageSize, setTemplateCardPageSize] = useState(10);
   const [templateTablePageSize, setTemplateTablePageSize] = useState(25);
+  const [evaluatorSearch, setEvaluatorSearch] = useState('');
+  const [templateSearch, setTemplateSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const requestVersion = useRef(0);
+  const deferredEvaluatorSearch = useDeferredValue(evaluatorSearch.trim().toLowerCase());
+  const deferredTemplateSearch = useDeferredValue(templateSearch.trim().toLowerCase());
 
   useEffect(() => {
     requestVersion.current += 1;
@@ -304,18 +339,26 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
     templateViewParam === 'cards' || templateViewParam === 'table' ? templateViewParam : 'cards';
   const activeEvaluatorPageSize = evaluatorView === 'cards' ? evaluatorCardPageSize : evaluatorTablePageSize;
   const activeTemplatePageSize = templateView === 'cards' ? templateCardPageSize : templateTablePageSize;
-  const evaluatorPageCount = Math.max(1, Math.ceil(tenantEvaluators.length / activeEvaluatorPageSize));
-  const templatePageCount = Math.max(1, Math.ceil(sortedTemplates.length / activeTemplatePageSize));
+  const filteredEvaluators = useMemo(
+    () => tenantEvaluators.filter((evaluator) => matchesEvaluator(evaluator, deferredEvaluatorSearch)),
+    [deferredEvaluatorSearch, tenantEvaluators]
+  );
+  const filteredTemplates = useMemo(
+    () => sortedTemplates.filter((template) => matchesTemplate(template, deferredTemplateSearch)),
+    [deferredTemplateSearch, sortedTemplates]
+  );
+  const evaluatorPageCount = Math.max(1, Math.ceil(filteredEvaluators.length / activeEvaluatorPageSize));
+  const templatePageCount = Math.max(1, Math.ceil(filteredTemplates.length / activeTemplatePageSize));
   const clampedEvaluatorPage = Math.min(evaluatorPage, evaluatorPageCount - 1);
   const clampedTemplatePage = Math.min(templatePage, templatePageCount - 1);
   const visibleEvaluators = useMemo(() => {
     const start = clampedEvaluatorPage * activeEvaluatorPageSize;
-    return tenantEvaluators.slice(start, start + activeEvaluatorPageSize);
-  }, [activeEvaluatorPageSize, clampedEvaluatorPage, tenantEvaluators]);
+    return filteredEvaluators.slice(start, start + activeEvaluatorPageSize);
+  }, [activeEvaluatorPageSize, clampedEvaluatorPage, filteredEvaluators]);
   const visibleTemplates = useMemo(() => {
     const start = clampedTemplatePage * activeTemplatePageSize;
-    return sortedTemplates.slice(start, start + activeTemplatePageSize);
-  }, [activeTemplatePageSize, clampedTemplatePage, sortedTemplates]);
+    return filteredTemplates.slice(start, start + activeTemplatePageSize);
+  }, [activeTemplatePageSize, clampedTemplatePage, filteredTemplates]);
 
   const handleForkTemplate = async (templateID: string) => {
     try {
@@ -360,10 +403,10 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
     );
   }
 
-  const evaluatorRangeStart = tenantEvaluators.length === 0 ? 0 : clampedEvaluatorPage * activeEvaluatorPageSize + 1;
-  const evaluatorRangeEnd = Math.min((clampedEvaluatorPage + 1) * activeEvaluatorPageSize, tenantEvaluators.length);
-  const templateRangeStart = sortedTemplates.length === 0 ? 0 : clampedTemplatePage * activeTemplatePageSize + 1;
-  const templateRangeEnd = Math.min((clampedTemplatePage + 1) * activeTemplatePageSize, sortedTemplates.length);
+  const evaluatorRangeStart = filteredEvaluators.length === 0 ? 0 : clampedEvaluatorPage * activeEvaluatorPageSize + 1;
+  const evaluatorRangeEnd = Math.min((clampedEvaluatorPage + 1) * activeEvaluatorPageSize, filteredEvaluators.length);
+  const templateRangeStart = filteredTemplates.length === 0 ? 0 : clampedTemplatePage * activeTemplatePageSize + 1;
+  const templateRangeEnd = Math.min((clampedTemplatePage + 1) * activeTemplatePageSize, filteredTemplates.length);
 
   return (
     <div className={styles.pageContainer}>
@@ -396,9 +439,41 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
             Custom evaluators you have created or forked from the template library.
           </Text>
         </div>
+        {tenantEvaluators.length > 0 && (
+          <div className={styles.searchRow}>
+            <div className={styles.searchInput}>
+              <Input
+                prefix={<Icon name="search" />}
+                suffix={
+                  evaluatorSearch.length > 0 ? (
+                    <Icon
+                      name="times"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => {
+                        setEvaluatorPage(0);
+                        setEvaluatorSearch('');
+                      }}
+                    />
+                  ) : undefined
+                }
+                value={evaluatorSearch}
+                placeholder="Search evaluators..."
+                onChange={(event: React.FormEvent<HTMLInputElement>) => {
+                  setEvaluatorPage(0);
+                  setEvaluatorSearch(event.currentTarget.value);
+                }}
+              />
+            </div>
+          </div>
+        )}
 
         {tenantEvaluators.length === 0 ? (
           <EvaluatorsEmptyState onCreateEvaluator={() => navigate(`${EVAL_BASE}/evaluators/new`)} />
+        ) : filteredEvaluators.length === 0 ? (
+          <div className={styles.filteredEmpty}>
+            <Icon name="search" />
+            <Text color="secondary">No evaluators matched this search.</Text>
+          </div>
         ) : (
           <>
             {evaluatorView === 'cards' ? (
@@ -431,7 +506,7 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
             <div className={styles.paginationBar}>
               <div className={styles.paginationMeta}>
                 <Text variant="bodySmall" color="secondary">
-                  Showing {evaluatorRangeStart}-{evaluatorRangeEnd} of {tenantEvaluators.length}
+                  Showing {evaluatorRangeStart}-{evaluatorRangeEnd} of {filteredEvaluators.length}
                 </Text>
                 <Button
                   variant="secondary"
@@ -507,9 +582,41 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
             reusable template.
           </Text>
         </div>
+        {sortedTemplates.length > 0 && (
+          <div className={styles.searchRow}>
+            <div className={styles.searchInput}>
+              <Input
+                prefix={<Icon name="search" />}
+                suffix={
+                  templateSearch.length > 0 ? (
+                    <Icon
+                      name="times"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => {
+                        setTemplatePage(0);
+                        setTemplateSearch('');
+                      }}
+                    />
+                  ) : undefined
+                }
+                value={templateSearch}
+                placeholder="Search templates..."
+                onChange={(event: React.FormEvent<HTMLInputElement>) => {
+                  setTemplatePage(0);
+                  setTemplateSearch(event.currentTarget.value);
+                }}
+              />
+            </div>
+          </div>
+        )}
 
         {sortedTemplates.length === 0 ? (
           <TemplatesEmptyState onCreateTemplate={() => navigate(`${EVAL_BASE}/templates/new`)} />
+        ) : filteredTemplates.length === 0 ? (
+          <div className={styles.filteredEmpty}>
+            <Icon name="search" />
+            <Text color="secondary">No templates matched this search.</Text>
+          </div>
         ) : (
           <>
             {templateView === 'cards' ? (
@@ -530,7 +637,7 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
             <div className={styles.paginationBar}>
               <div className={styles.paginationMeta}>
                 <Text variant="bodySmall" color="secondary">
-                  Showing {templateRangeStart}-{templateRangeEnd} of {sortedTemplates.length}
+                  Showing {templateRangeStart}-{templateRangeEnd} of {filteredTemplates.length}
                 </Text>
                 <Button
                   variant="secondary"
@@ -619,6 +726,39 @@ const TEMPLATE_HINTS: Array<{ icon: IconName; label: string }> = [
   { icon: 'history', label: 'Versioned with changelog tracking' },
   { icon: 'users-alt', label: 'Shareable across your organization' },
 ];
+
+function matchesEvaluator(evaluator: Evaluator, needle: string): boolean {
+  if (needle === '') {
+    return true;
+  }
+  const haystack = [
+    evaluator.evaluator_id,
+    evaluator.version,
+    evaluator.kind,
+    evaluator.description ?? '',
+    ...evaluator.output_keys.flatMap((key) => [key.key, key.description ?? '']),
+  ]
+    .join(' ')
+    .toLowerCase();
+  return haystack.includes(needle);
+}
+
+function matchesTemplate(template: TemplateDefinition, needle: string): boolean {
+  if (needle === '') {
+    return true;
+  }
+  const haystack = [
+    template.template_id,
+    template.latest_version,
+    template.kind,
+    template.scope,
+    template.description ?? '',
+    ...(template.output_keys ?? []).flatMap((key) => [key.key, key.description ?? '']),
+  ]
+    .join(' ')
+    .toLowerCase();
+  return haystack.includes(needle);
+}
 
 function TemplatesEmptyState({ onCreateTemplate }: { onCreateTemplate: () => void }) {
   const styles = useStyles2(getStyles);

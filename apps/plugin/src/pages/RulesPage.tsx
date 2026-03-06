@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useDeferredValue, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
-import { Alert, Button, Icon, Select, Spinner, Text, useStyles2 } from '@grafana/ui';
+import { Alert, Button, Icon, Input, Select, Spinner, Text, useStyles2 } from '@grafana/ui';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import RuleTable from '../components/evaluation/RuleTable';
 import { useEvalRulesDataContext } from '../contexts/EvalRulesDataContext';
@@ -35,6 +35,16 @@ const getStyles = (theme: GrafanaTheme2) => ({
   sectionDescription: css({
     color: theme.colors.text.secondary,
     marginTop: theme.spacing(-1),
+  }),
+  searchRow: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+    flexWrap: 'wrap' as const,
+  }),
+  searchInput: css({
+    width: '100%',
+    maxWidth: 360,
   }),
   empty: css({
     display: 'flex',
@@ -97,6 +107,16 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.secondary,
     fontSize: theme.typography.bodySmall.fontSize,
   }),
+  filteredEmpty: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+    padding: theme.spacing(2, 2.5),
+    borderRadius: theme.shape.radius.default,
+    border: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.primary,
+    color: theme.colors.text.secondary,
+  }),
   loading: css({
     display: 'flex',
     justifyContent: 'center',
@@ -136,13 +156,19 @@ export default function RulesPage() {
   const { rules, evaluators, loading, errorMessage, setErrorMessage, handleToggle } = useEvalRulesDataContext();
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
+  const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search.trim().toLowerCase());
 
-  const pageCount = Math.max(1, Math.ceil(rules.length / pageSize));
+  const filteredRules = useMemo(
+    () => rules.filter((rule) => matchesRule(rule, deferredSearch)),
+    [deferredSearch, rules]
+  );
+  const pageCount = Math.max(1, Math.ceil(filteredRules.length / pageSize));
   const clampedPage = Math.min(page, pageCount - 1);
   const visibleRules = useMemo(() => {
     const start = clampedPage * pageSize;
-    return rules.slice(start, start + pageSize);
-  }, [clampedPage, pageSize, rules]);
+    return filteredRules.slice(start, start + pageSize);
+  }, [clampedPage, filteredRules, pageSize]);
 
   const handleClick = (ruleID: string) => {
     navigate(`${EVAL_RULES_BASE}/${encodeURIComponent(ruleID)}`);
@@ -158,8 +184,8 @@ export default function RulesPage() {
     );
   }
 
-  const rangeStart = rules.length === 0 ? 0 : clampedPage * pageSize + 1;
-  const rangeEnd = Math.min((clampedPage + 1) * pageSize, rules.length);
+  const rangeStart = filteredRules.length === 0 ? 0 : clampedPage * pageSize + 1;
+  const rangeEnd = Math.min((clampedPage + 1) * pageSize, filteredRules.length);
 
   return (
     <div className={styles.pageContainer}>
@@ -191,6 +217,33 @@ export default function RulesPage() {
             generations.
           </Text>
         </div>
+        {rules.length > 0 && (
+          <div className={styles.searchRow}>
+            <div className={styles.searchInput}>
+              <Input
+                prefix={<Icon name="search" />}
+                suffix={
+                  search.length > 0 ? (
+                    <Icon
+                      name="times"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => {
+                        setPage(0);
+                        setSearch('');
+                      }}
+                    />
+                  ) : undefined
+                }
+                value={search}
+                placeholder="Search rules..."
+                onChange={(event: React.FormEvent<HTMLInputElement>) => {
+                  setPage(0);
+                  setSearch(event.currentTarget.value);
+                }}
+              />
+            </div>
+          </div>
+        )}
 
         {rules.length === 0 ? (
           <div className={styles.empty}>
@@ -232,13 +285,18 @@ export default function RulesPage() {
               Create your first rule
             </Button>
           </div>
+        ) : filteredRules.length === 0 ? (
+          <div className={styles.filteredEmpty}>
+            <Icon name="search" />
+            <Text color="secondary">No rules matched this search.</Text>
+          </div>
         ) : (
           <>
             <RuleTable rules={visibleRules} evaluators={evaluators} onToggle={handleToggle} onClick={handleClick} />
             <div className={styles.paginationBar}>
               <div className={styles.paginationMeta}>
                 <Text variant="bodySmall" color="secondary">
-                  Showing {rangeStart}-{rangeEnd} of {rules.length}
+                  Showing {rangeStart}-{rangeEnd} of {filteredRules.length}
                 </Text>
                 <Button
                   variant="secondary"
@@ -281,4 +339,18 @@ export default function RulesPage() {
       </div>
     </div>
   );
+}
+
+function matchesRule(
+  rule: { rule_id: string; selector: string; match: Record<string, string | string[]>; evaluator_ids: string[] },
+  needle: string
+): boolean {
+  if (needle === '') {
+    return true;
+  }
+  const matchText = Object.entries(rule.match)
+    .flatMap(([key, value]) => [key, ...(Array.isArray(value) ? value : [value])])
+    .join(' ');
+  const haystack = [rule.rule_id, rule.selector, ...rule.evaluator_ids, matchText].join(' ').toLowerCase();
+  return haystack.includes(needle);
 }
