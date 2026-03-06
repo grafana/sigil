@@ -605,7 +605,7 @@ describe('AgentDetailPage', () => {
       weaknesses: [],
       judge_model: '',
       judge_latency_ms: 0,
-    }));
+    } satisfies PromptInsightsResponse));
 
     render(
       <MemoryRouter initialEntries={['/agents/name/assistant']}>
