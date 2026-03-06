@@ -175,10 +175,6 @@ func (a *App) handleListConversations(w http.ResponseWriter, req *http.Request) 
 
 func (a *App) handleConversationRoutes(w http.ResponseWriter, req *http.Request) {
 	id := strings.TrimPrefix(req.URL.Path, "/query/conversations/")
-	if id == "stats" {
-		a.handleConversationStats(w, req)
-		return
-	}
 	if id == "" || strings.Contains(id, "/") {
 		parts := strings.Split(id, "/")
 		if len(parts) != 2 || parts[0] == "" || (parts[1] != "ratings" && parts[1] != "annotations") {
@@ -907,6 +903,7 @@ const conversationSearchMetadataChunkSize = 100
 const conversationSearchStreamOverfetchMultiplier = searchcore.DefaultTempoOverfetchMultiplier * 2
 const conversationSearchInputTokensSelectKey = "span.gen_ai.usage.input_tokens"
 const conversationSearchOutputTokensSelectKey = "span.gen_ai.usage.output_tokens"
+const maxStatsSearchPages = 1000
 
 type conversationBatchMetadataRequest struct {
 	ConversationIDs []string `json:"conversation_ids"`
@@ -1205,6 +1202,9 @@ func (a *App) searchConversationStats(req *http.Request, payload conversationSea
 		}
 		request.Cursor = response.NextCursor
 		pageIndex++
+		if pageIndex >= maxStatsSearchPages {
+			break
+		}
 	}
 
 	if stats.TotalConversations > 0 {
