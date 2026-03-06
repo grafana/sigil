@@ -56,12 +56,36 @@ func flattenMessages(messages []*sigilv1.Message) string {
 			continue
 		}
 		for _, part := range message.GetParts() {
-			if text := strings.TrimSpace(part.GetText()); text != "" {
-				parts = append(parts, text)
+			if flattened := flattenPart(part); flattened != "" {
+				parts = append(parts, flattened)
 			}
 		}
 	}
 	return strings.Join(parts, "\n")
+}
+
+func flattenPart(part *sigilv1.Part) string {
+	if part == nil {
+		return ""
+	}
+	if text := strings.TrimSpace(part.GetText()); text != "" {
+		return text
+	}
+	if toolCall := part.GetToolCall(); toolCall != nil {
+		name := strings.TrimSpace(toolCall.GetName())
+		input := strings.TrimSpace(string(toolCall.GetInputJson()))
+		switch {
+		case name != "" && input != "":
+			return "[tool_call] " + name + " " + input
+		case name != "":
+			return "[tool_call] " + name
+		case input != "":
+			return "[tool_call] " + input
+		default:
+			return "[tool_call]"
+		}
+	}
+	return ""
 }
 
 // OutputKeyMeta holds the resolved fields from the first output key definition.

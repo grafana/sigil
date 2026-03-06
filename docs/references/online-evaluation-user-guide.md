@@ -144,6 +144,9 @@ Each evaluator currently supports exactly one output key.
 - `{{conversation_id}}`
 
 `{{input}}` and `{{output}}` are normalized text extracted from the generation payload.
+Text parts are included verbatim. Assistant `tool_call` parts are serialized as lines like
+`[tool_call] <name> <input_json>` so tool-call generations can be judged without losing
+the selected tool and arguments.
 
 ## Rule Configuration
 
