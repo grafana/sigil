@@ -3,7 +3,7 @@ import { css } from '@emotion/css';
 import { AppEvents, type GrafanaTheme2 } from '@grafana/data';
 import { Alert, Button, Input, Modal, useStyles2 } from '@grafana/ui';
 import { getAppEvents } from '@grafana/runtime';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
 import { createTempoTraceFetcher } from '../conversation/fetchTrace';
 import type { TraceFetcher } from '../conversation/loader';
@@ -119,6 +119,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
 
 export default function ConversationExplorePage(props: ConversationExplorePageProps) {
   const styles = useStyles2(getStyles);
+  const navigate = useNavigate();
   const { conversationID = '' } = useParams<{ conversationID?: string }>();
 
   const dataSource = props.dataSource ?? defaultConversationsDataSource;
@@ -480,6 +481,7 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
           generationCount={conversationData.generationCount}
           isSaved={isSaved}
           onToggleSave={saveLoading ? undefined : handleToggleSave}
+          onBack={() => navigate(-1)}
         />
         <div className={styles.insightRow}>
           <PageInsightBar

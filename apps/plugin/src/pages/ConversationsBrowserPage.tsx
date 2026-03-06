@@ -507,7 +507,7 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
 
   const onSelectConversation = useCallback(
     (conversationID: string, conversationTitle?: string) => {
-      void navigate(getConversationHref(conversationID, conversationTitle), { replace: true });
+      void navigate(getConversationHref(conversationID, conversationTitle));
     },
     [getConversationHref, navigate]
   );

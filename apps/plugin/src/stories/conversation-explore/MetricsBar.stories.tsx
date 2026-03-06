@@ -87,6 +87,7 @@ export const Default = {
     modelCards: storyModelCards,
     errorCount: 0,
     generationCount: 3,
+    onBack: () => {},
   },
 };
 
