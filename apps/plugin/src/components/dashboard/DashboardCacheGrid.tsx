@@ -42,6 +42,8 @@ import { buildConversationSearchFilter } from '../../conversation/filters';
 import type { ConversationSearchResult } from '../../conversation/types';
 import { PLUGIN_BASE, ROUTES, buildConversationExploreRoute } from '../../constants';
 import { ViewConversationsLink } from './ViewConversationsLink';
+import { buildAgentDetailHref } from './ViewAgentsLink';
+import { useModelCardBreakdownPopover } from './useModelCardBreakdownPopover';
 import { PageInsightBar } from '../insight/PageInsightBar';
 import { summarizeVector, summarizeMatrix, hasResponseData } from '../insight/summarize';
 import { DashboardSummaryBar } from './DashboardSummaryBar';
@@ -79,6 +81,7 @@ export function DashboardCacheGrid({
   const styles = useStyles2(getStyles);
   const hasBreakdown = breakdownBy !== 'none';
   const breakdownPromLabel = hasBreakdown ? breakdownToPromLabel[breakdownBy] : undefined;
+  const agentItemHref = useMemo(() => (breakdownBy === 'agent' ? buildAgentDetailHref : undefined), [breakdownBy]);
 
   const handlePanelTimeRangeChange = useCallback(
     (abs: AbsoluteTimeRange) => {
@@ -212,6 +215,15 @@ export function DashboardCacheGrid({
     to,
     'instant'
   );
+
+  const { onModelClick: onCacheModelClick, modelPopoverElement: cacheModelPopoverElement } =
+    useModelCardBreakdownPopover('model', cacheByModelData.data);
+  const { onModelClick, modelPopoverElement } = useModelCardBreakdownPopover(
+    breakdownBy,
+    cacheTokensByBreakdownAndType.data
+  );
+  const { onModelClick: onCacheReadModelClick, modelPopoverElement: cacheReadModelPopoverElement } =
+    useModelCardBreakdownPopover(breakdownBy, cacheReadByBreakdown.data);
 
   // --- Derived values ---
   const cacheReadValue = cacheReadStat.data ? vectorToStatValue(cacheReadStat.data) : 0;
@@ -411,6 +423,7 @@ export function DashboardCacheGrid({
             height={CHART_HEIGHT}
             unit="percent"
             aggregation="avg"
+            onItemClick={onCacheModelClick}
           />
         </div>
 
@@ -445,6 +458,8 @@ export function DashboardCacheGrid({
             height={CHART_HEIGHT}
             segmentLabel={hasBreakdown ? 'gen_ai_token_type' : undefined}
             segmentNames={hasBreakdown ? ['cache_read', 'cache_write'] : undefined}
+            getItemHref={agentItemHref}
+            onItemClick={onModelClick}
           />
         </div>
 
@@ -478,6 +493,8 @@ export function DashboardCacheGrid({
               error={cacheReadByBreakdown.error}
               breakdownLabel={breakdownPromLabel}
               height={CHART_HEIGHT}
+              getItemHref={agentItemHref}
+              onItemClick={onCacheReadModelClick}
             />
           </div>
         )}
@@ -492,6 +509,9 @@ export function DashboardCacheGrid({
         timeRange={timeRange}
         filters={filters}
       />
+      {cacheModelPopoverElement}
+      {modelPopoverElement}
+      {cacheReadModelPopoverElement}
     </div>
   );
 }

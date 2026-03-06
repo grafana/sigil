@@ -1,13 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { css, keyframes } from '@emotion/css';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
-import { Alert, Button, Field, Icon, Select, Spinner, Stack, Text, useStyles2 } from '@grafana/ui';
+import { Alert, Button, Field, Select, Spinner, Stack, Text, useStyles2 } from '@grafana/ui';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../../conversation/api';
 import type { GenerationLookupHints } from '../../conversation/types';
 import type { GenerationDetail, Message } from '../../generation/types';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../../evaluation/api';
 import type { EvalOutputKey, EvalTestResponse, EvaluatorKind } from '../../evaluation/types';
+import { buildConversationExploreRoute, PLUGIN_BASE } from '../../constants';
 import ChatMessage from '../chat/ChatMessage';
+import { getSectionTitleStyles } from './sectionStyles';
 import GenerationPicker from './GenerationPicker';
 import TestResultDisplay from './TestResultDisplay';
 
@@ -50,17 +52,19 @@ const getStyles = (theme: GrafanaTheme2) => {
       flexDirection: 'column' as const,
       overflow: 'hidden',
       background: theme.colors.background.primary,
-      boxShadow: theme.shadows.z1,
-      borderRadius: '6px',
+      borderRadius: theme.shape.radius.default,
     }),
     header: css({
       display: 'flex',
       alignItems: 'center',
       gap: theme.spacing(1),
-      padding: theme.spacing(2),
-      borderBottom: `1px solid ${theme.colors.border.medium}`,
-      background: theme.colors.background.secondary,
+      padding: theme.spacing(0.75, 1.25, 0.25),
+      borderBottom: `1px solid ${theme.colors.border.weak}`,
+      background: theme.colors.background.primary,
       flexShrink: 0,
+    }),
+    sectionTitle: css({
+      ...getSectionTitleStyles(theme),
     }),
     body: css({
       display: 'flex',
@@ -68,8 +72,8 @@ const getStyles = (theme: GrafanaTheme2) => {
       flex: 1,
       minHeight: 0,
       overflowY: 'auto' as const,
-      gap: theme.spacing(1.5),
-      padding: theme.spacing(2),
+      gap: theme.spacing(1),
+      padding: theme.spacing(1, 1.25),
       background: theme.colors.background.primary,
     }),
     previewThread: css({
@@ -82,6 +86,13 @@ const getStyles = (theme: GrafanaTheme2) => {
       background: theme.colors.background.canvas,
       border: `1px solid ${theme.colors.border.weak}`,
       borderRadius: theme.shape.radius.default,
+    }),
+    generationMetaRow: css({
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: theme.spacing(1),
+      flexWrap: 'wrap' as const,
     }),
     runButtonWrapper: css({
       display: 'inline-block',
@@ -197,18 +208,16 @@ export default function EvalTestPanel({
   };
 
   const allMessages: Message[] = generation ? [...(generation.input ?? []), ...(generation.output ?? [])] : [];
+  const conversationId = generation?.conversation_id ?? generationLookupHintsRef.current?.conversation_id;
 
   return (
     <div className={styles.card}>
       <div className={styles.header}>
-        <Stack direction="row" gap={1} alignItems="center">
-          <Icon name="play" size="sm" />
-          <Text weight="medium">Test</Text>
-        </Stack>
+        <div className={styles.sectionTitle}>Test</div>
       </div>
 
       <div className={styles.body}>
-        <Text variant="bodySmall" color="secondary">
+        <Text variant="body" color="secondary">
           Pick a generation and run this config against it.
         </Text>
 
@@ -254,11 +263,26 @@ export default function EvalTestPanel({
 
         {generation && (
           <>
-            <Text variant="bodySmall" color="secondary">
-              {generation.model?.provider ?? ''} {generation.model?.name ?? '\u2014'} &middot;{' '}
-              {generation.created_at ? new Date(generation.created_at).toLocaleString() : ''}
-            </Text>
-            <Text variant="bodySmall" weight="medium">
+            <div className={styles.generationMetaRow}>
+              <Text variant="body" color="secondary">
+                {generation.model?.provider ?? ''} {generation.model?.name ?? '\u2014'} &middot;{' '}
+                {generation.created_at ? new Date(generation.created_at).toLocaleString() : ''}
+              </Text>
+              {conversationId && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon="external-link-alt"
+                  onClick={() =>
+                    window.open(`${PLUGIN_BASE}/${buildConversationExploreRoute(conversationId)}`, '_blank', 'noopener')
+                  }
+                  aria-label={`open conversation ${conversationId}`}
+                >
+                  Open conversation
+                </Button>
+              )}
+            </div>
+            <Text variant="body" weight="medium">
               Preview test
             </Text>
             {allMessages.length > 0 ? (

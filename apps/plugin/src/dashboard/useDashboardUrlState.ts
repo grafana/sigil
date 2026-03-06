@@ -4,7 +4,7 @@ import { type BreakdownDimension, type DashboardFilters, type DashboardTab } fro
 import { useFilterUrlState } from '../hooks/useFilterUrlState';
 
 const BREAKDOWN_VALUES = new Set<BreakdownDimension>(['none', 'provider', 'model', 'agent']);
-const TAB_VALUES = new Set<DashboardTab>(['overview', 'performance', 'errors', 'usage']);
+const TAB_VALUES = new Set<DashboardTab>(['overview', 'performance', 'errors', 'usage', 'evaluation']);
 
 const TAB_MIGRATION: Record<string, DashboardTab> = {
   consumption: 'usage',

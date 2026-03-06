@@ -8,6 +8,7 @@ import { defaultConversationsDataSource, type ConversationsDataSource } from '..
 import { createTempoTraceFetcher } from '../conversation/fetchTrace';
 import type { TraceFetcher } from '../conversation/loader';
 import { defaultModelCardClient, type ModelCardClient } from '../modelcard/api';
+import { resolveConversationTitleFromTelemetry } from '../conversation/conversationTitle';
 import { useConversationData } from '../hooks/useConversationData';
 import { useSavedConversation } from '../hooks/useSavedConversation';
 import {
@@ -125,7 +126,7 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   const modelCardClient = props.modelCardClient ?? defaultModelCardClient;
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const conversationTitle = searchParams.get('conversationTitle') ?? '';
+  const conversationTitleFromURL = (searchParams.get('conversationTitle') ?? '').trim();
 
   const {
     conversationData,
@@ -143,6 +144,13 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     traceFetcher,
     modelCardClient,
   });
+
+  const conversationTitleFromTelemetry = useMemo(
+    () => resolveConversationTitleFromTelemetry(allGenerations, conversationData?.spans ?? []),
+    [allGenerations, conversationData?.spans]
+  );
+
+  const conversationTitle = conversationTitleFromTelemetry ?? conversationTitleFromURL;
 
   const {
     isSaved,
@@ -461,6 +469,7 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
       <div className={styles.topSection}>
         <MetricsBar
           conversationID={conversationID}
+          conversationTitle={conversationTitle}
           totalDurationMs={totalDurationMs}
           tokenSummary={tokenSummary}
           costSummary={costSummary}

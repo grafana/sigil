@@ -25,6 +25,7 @@ import {
   formatWindowLabel,
 } from './dashboardShared';
 import { ViewConversationsLink, buildConversationsUrl } from './ViewConversationsLink';
+import { ViewAgentsLink, buildAgentDetailHref } from './ViewAgentsLink';
 import { TopStat } from '../TopStat';
 import { calculateTotalCost, calculateTotalCostByGroup, calculateCostTimeSeries } from '../../dashboard/cost';
 import {
@@ -52,6 +53,7 @@ import { matrixToDataFrames, vectorToStatValue } from '../../dashboard/transform
 import { usePrometheusQuery } from './usePrometheusQuery';
 import { MetricPanel } from './MetricPanel';
 import { useResolvedModelPricing } from './useResolvedModelPricing';
+import { useModelCardBreakdownPopover } from './useModelCardBreakdownPopover';
 import { PageInsightBar } from '../insight/PageInsightBar';
 import { summarizeVector, summarizeMatrix, hasResponseData } from '../insight/summarize';
 import { DashboardSummaryBar } from './DashboardSummaryBar';
@@ -329,6 +331,9 @@ export function DashboardGrid({
 
   const breakdownPromLabel = hasBreakdown ? breakdownToPromLabel[breakdownBy] : undefined;
   const costGroupByLabel = breakdownPromLabel;
+  const agentItemHref = useMemo(() => (breakdownBy === 'agent' ? buildAgentDetailHref : undefined), [breakdownBy]);
+
+  const { onModelClick, modelPopoverElement } = useModelCardBreakdownPopover(breakdownBy, totalOpsStat.data);
 
   const costByBreakdownData = useMemo<PrometheusQueryResponse | null>(() => {
     if (costMode !== 'usd' || !costTokensData) {
@@ -611,6 +616,8 @@ export function DashboardGrid({
             error={totalOpsStat.error}
             breakdownLabel={breakdownPromLabel}
             height={CHART_HEIGHT}
+            getItemHref={agentItemHref}
+            onItemClick={onModelClick}
           />
           <MetricPanel
             title="Requests/s"
@@ -631,7 +638,12 @@ export function DashboardGrid({
               },
               overrides: [],
             }}
-            actions={<ViewConversationsLink timeRange={timeRange} filters={filters} orderBy="time" />}
+            actions={
+              <>
+                {breakdownBy === 'agent' && <ViewAgentsLink />}
+                <ViewConversationsLink timeRange={timeRange} filters={filters} orderBy="time" />
+              </>
+            }
           />
           <MetricPanel
             title="Error rate"
@@ -793,6 +805,8 @@ export function DashboardGrid({
             unit={costMode === 'tokens' ? 'short' : 'currencyUSD'}
             segmentLabel={isTokenByType && hasBreakdown ? 'gen_ai_token_type' : undefined}
             segmentNames={isTokenByType && hasBreakdown ? drilldownTypes : undefined}
+            getItemHref={agentItemHref}
+            onItemClick={onModelClick}
           />
         </div>
       </div>
@@ -802,6 +816,7 @@ export function DashboardGrid({
         timeRange={timeRange}
         filters={filters}
       />
+      {modelPopoverElement}
     </div>
   );
 }

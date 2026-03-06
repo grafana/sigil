@@ -84,6 +84,7 @@ export const defaultAgentsDataSource: AgentsDataSource = {
         getBackendSrv().fetch<AgentRatingResponse>({
           method: 'GET',
           url: `${queryBasePath}/agents/rating?${params.toString()}`,
+          showErrorAlert: false,
         })
       );
       return response.data;

@@ -31,6 +31,12 @@ export const Evaluators = {
   },
 };
 
+export const Results = {
+  parameters: {
+    initialPath: '/a/grafana-sigil-app/evaluation/results',
+  },
+};
+
 export const Rules = {
   parameters: {
     initialPath: '/a/grafana-sigil-app/evaluation/rules',

@@ -123,7 +123,6 @@ export default function LandingPage() {
       <LandingTopBar
         assistantOrigin={ASSISTANT_ORIGIN}
         requestsDataSource={defaultDashboardDataSource}
-        requestsFilters={emptyFilters}
         requestsFrom={from}
         requestsTo={to}
       />

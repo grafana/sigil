@@ -1,7 +1,19 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import MetricsBar from './MetricsBar';
 import type { ModelCard } from '../../modelcard/types';
+
+jest.mock('@grafana/ui', () => {
+  const actual = jest.requireActual('@grafana/ui');
+  return {
+    ...actual,
+    Tooltip: ({ children, content }: { children: React.ReactNode; content: React.ReactNode }) => (
+      <span data-testid="tooltip" data-content={typeof content === 'string' ? content : ''}>
+        {children}
+      </span>
+    ),
+  };
+});
 
 const modelCard: ModelCard = {
   model_key: 'openrouter:anthropic/claude-sonnet-4.5',
@@ -26,7 +38,17 @@ const modelCard: ModelCard = {
   refreshed_at: '2026-01-01T00:00:00Z',
 };
 
-describe('MetricsBar', () => {
+const baseProps = {
+  conversationID: 'conv-123',
+  totalDurationMs: 2340,
+  tokenSummary: null,
+  costSummary: null,
+  models: [],
+  errorCount: 0,
+  generationCount: 2,
+};
+
+describe('MetricsBar model cards', () => {
   it('opens model card popover when model chip has a resolved card', () => {
     const cards = new Map<string, ModelCard>([['anthropic::claude-sonnet-4-5', modelCard]]);
 
@@ -65,5 +87,49 @@ describe('MetricsBar', () => {
     );
 
     expect(screen.getByRole('button', { name: 'model claude-sonnet-4-5' })).toBeDisabled();
+  });
+});
+
+describe('MetricsBar conversation title', () => {
+  let matchMediaSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    matchMediaSpy = jest.spyOn(window, 'matchMedia').mockReturnValue({
+      matches: false,
+      media: '(prefers-reduced-motion: reduce)',
+      onchange: null,
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    });
+  });
+
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+    matchMediaSpy.mockRestore();
+  });
+
+  it('shows conversation id when title is not provided', () => {
+    render(<MetricsBar {...baseProps} />);
+    expect(screen.getByText('conv-123')).toBeInTheDocument();
+    expect(screen.getAllByTestId('tooltip')[0]).toHaveAttribute('data-content', 'conv-123');
+  });
+
+  it('types conversation title on mount and keeps tooltip content as full title', () => {
+    const title = 'Incident: authentication failures';
+    render(<MetricsBar {...baseProps} conversationTitle={title} />);
+
+    expect(screen.queryByText(title)).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('tooltip')[0]).toHaveAttribute('data-content', title);
+
+    act(() => {
+      jest.advanceTimersByTime(title.length * 28 + 100);
+    });
+
+    expect(screen.getByText(title)).toBeInTheDocument();
   });
 });

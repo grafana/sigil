@@ -180,6 +180,10 @@ export type BreakdownStatPanelProps = {
   aggregateOverride?: number;
   segmentLabel?: string;
   segmentNames?: string[];
+  /** When set, item names render as `<a>` links. Returns the href for a given item name (e.g. agent detail URL). */
+  getItemHref?: (name: string) => string;
+  /** When set, item names render as clickable buttons. Fires on click with name and mouse event (e.g. open model card popover). Takes precedence over getItemHref. */
+  onItemClick?: (name: string, event: React.MouseEvent<HTMLButtonElement>) => void;
 };
 
 export function BreakdownStatPanel({
@@ -194,6 +198,8 @@ export function BreakdownStatPanel({
   aggregateOverride,
   segmentLabel,
   segmentNames,
+  getItemHref,
+  onItemClick,
 }: BreakdownStatPanelProps) {
   const styles = useStyles2(getBreakdownStatPanelStyles);
   const theme = useTheme2();
@@ -332,7 +338,21 @@ export function BreakdownStatPanel({
             return (
               <div key={item.name} className={styles.bspBarRow}>
                 <div className={styles.bspBarMeta}>
-                  <span className={styles.bspBarName}>{item.name}</span>
+                  {onItemClick ? (
+                    <button
+                      type="button"
+                      className={`${styles.bspBarName} ${styles.bspBarNameClickable}`}
+                      onClick={(e) => onItemClick(item.name, e)}
+                    >
+                      {item.name}
+                    </button>
+                  ) : getItemHref ? (
+                    <a href={getItemHref(item.name)} className={`${styles.bspBarName} ${styles.bspBarNameClickable}`}>
+                      {item.name}
+                    </a>
+                  ) : (
+                    <span className={styles.bspBarName}>{item.name}</span>
+                  )}
                   <span className={styles.bspBarValue}>{formatVal(item.total)}</span>
                 </div>
                 <div className={styles.bspBarTrack}>
@@ -411,7 +431,21 @@ export function BreakdownStatPanel({
             <div key={item.name} className={styles.bspBarRow}>
               <div className={styles.bspBarMeta}>
                 <span className={styles.bspBarDot} style={{ background: item.color }} />
-                <span className={styles.bspBarName}>{item.name}</span>
+                {onItemClick ? (
+                  <button
+                    type="button"
+                    className={`${styles.bspBarName} ${styles.bspBarNameClickable}`}
+                    onClick={(e) => onItemClick(item.name, e)}
+                  >
+                    {item.name}
+                  </button>
+                ) : getItemHref ? (
+                  <a href={getItemHref(item.name)} className={`${styles.bspBarName} ${styles.bspBarNameClickable}`}>
+                    {item.name}
+                  </a>
+                ) : (
+                  <span className={styles.bspBarName}>{item.name}</span>
+                )}
                 <span className={styles.bspBarValue}>{formatVal(item.value)}</span>
               </div>
               <div className={styles.bspBarTrack}>
@@ -496,6 +530,20 @@ export function getBreakdownStatPanelStyles(theme: GrafanaTheme2) {
       overflow: 'hidden',
       textOverflow: 'ellipsis',
       whiteSpace: 'nowrap',
+    }),
+    bspBarNameClickable: css({
+      textDecoration: 'none',
+      color: 'inherit',
+      background: 'none',
+      border: 'none',
+      padding: 0,
+      font: 'inherit',
+      cursor: 'pointer',
+      textAlign: 'left',
+      '&:hover': {
+        color: theme.colors.text.link,
+        textDecoration: 'underline',
+      },
     }),
     bspBarValue: css({
       color: theme.colors.text.secondary,

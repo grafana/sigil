@@ -3,7 +3,7 @@ import { css, keyframes } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { useStyles2 } from '@grafana/ui';
 
-const TYPEWRITER_LINES = [
+const DEFAULT_TYPEWRITER_LINES = [
   'Crunching telemetry data...',
   'Analyzing AI traces...',
   'Decoding telemetry patterns...',
@@ -33,15 +33,19 @@ const EMPTY_LINE_PAUSE_MS = 260;
 
 type LoaderProps = {
   showText?: boolean;
+  lines?: string[];
+  align?: 'center' | 'left';
 };
 
-export const Loader = ({ showText = true }: LoaderProps) => {
+export const Loader = ({ showText = true, lines, align = 'center' }: LoaderProps) => {
   const styles = useStyles2(getStyles);
   const [lineIndex, setLineIndex] = useState(0);
   const [charCount, setCharCount] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
+  const activeLines = useMemo(() => (lines && lines.length > 0 ? lines : DEFAULT_TYPEWRITER_LINES), [lines]);
+  const normalizedLineIndex = lineIndex % activeLines.length;
 
-  const currentLine = useMemo(() => TYPEWRITER_LINES[lineIndex] ?? '', [lineIndex]);
+  const currentLine = useMemo(() => activeLines[normalizedLineIndex] ?? '', [activeLines, normalizedLineIndex]);
 
   useEffect(() => {
     const atLineEnd = charCount >= currentLine.length;
@@ -65,7 +69,7 @@ export const Loader = ({ showText = true }: LoaderProps) => {
         }
 
         setIsDeleting(false);
-        setLineIndex((index) => (index + 1) % TYPEWRITER_LINES.length);
+        setLineIndex((index) => (index + 1) % activeLines.length);
       },
       atLineEnd && !isDeleting
         ? FULL_LINE_PAUSE_MS
@@ -79,10 +83,10 @@ export const Loader = ({ showText = true }: LoaderProps) => {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [charCount, currentLine.length, isDeleting]);
+  }, [activeLines.length, charCount, currentLine.length, isDeleting]);
 
   return (
-    <div className={styles.root}>
+    <div className={align === 'left' ? styles.rootLeft : styles.root}>
       <div className={styles.container} role="progressbar" aria-label="loading conversation">
         <span className={styles.bar}></span>
         <span className={styles.bar}></span>
@@ -154,6 +158,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     alignItems: 'center',
+  }),
+  rootLeft: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'flex-start',
   }),
   container: css({
     display: 'flex',

@@ -17,4 +17,10 @@ describe('TopStat', () => {
     const badge = screen.getByText('0.0%', { exact: false });
     expect(badge).toHaveTextContent('→ 0.0%');
   });
+
+  it('renders a help icon when helpTooltip is provided', () => {
+    render(<TopStat label="Total Ops" value={100} loading={false} helpTooltip="Help text" />);
+
+    expect(screen.getByLabelText('Total Ops help')).toBeInTheDocument();
+  });
 });

@@ -11,8 +11,8 @@ import (
 var (
 	evalExecutionsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "sigil_eval_executions_total",
-		Help: "Total number of evaluator executions partitioned by tenant, evaluator, kind, rule, and status.",
-	}, []string{"tenant_id", "evaluator", "evaluator_kind", "rule", "status"})
+		Help: "Total number of evaluator executions partitioned by tenant, evaluator, kind, rule, status, model, and agent.",
+	}, []string{"tenant_id", "evaluator", "evaluator_kind", "rule", "status", "gen_ai_request_model", "gen_ai_agent_name"})
 	evalDurationSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "sigil_eval_duration_seconds",
 		Help:    "Evaluation execution duration in seconds.",
@@ -20,8 +20,8 @@ var (
 	}, []string{"tenant_id", "evaluator", "evaluator_kind", "rule"})
 	evalScoresTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "sigil_eval_scores_total",
-		Help: "Scores emitted by evaluation workers partitioned by tenant, evaluator, kind, rule, key, and pass/fail.",
-	}, []string{"tenant_id", "evaluator", "evaluator_kind", "rule", "score_key", "passed"})
+		Help: "Scores emitted by evaluation workers partitioned by tenant, evaluator, kind, rule, key, pass/fail, model, and agent.",
+	}, []string{"tenant_id", "evaluator", "evaluator_kind", "rule", "score_key", "passed", "gen_ai_request_model", "gen_ai_agent_name"})
 	evalQueueDepth = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "sigil_eval_queue_depth",
 		Help: "Current evaluation queue depth partitioned by tenant and work-item status.",
@@ -76,20 +76,20 @@ var (
 	}, []string{"tenant_id"})
 )
 
-func observeExecution(tenantID, evaluatorID, evaluatorKind, ruleID, status string) {
-	evalExecutionsTotal.WithLabelValues(tenantID, evaluatorID, evaluatorKind, ruleID, status).Inc()
+func observeExecution(tenantID, evaluatorID, evaluatorKind, ruleID, status, model, agentName string) {
+	evalExecutionsTotal.WithLabelValues(tenantID, evaluatorID, evaluatorKind, ruleID, status, model, agentName).Inc()
 }
 
 func observeExecutionDuration(tenantID, evaluatorID, evaluatorKind, ruleID string, duration time.Duration) {
 	evalDurationSeconds.WithLabelValues(tenantID, evaluatorID, evaluatorKind, ruleID).Observe(duration.Seconds())
 }
 
-func observeProducedScore(tenantID, evaluatorID, evaluatorKind, ruleID, scoreKey string, passed *bool) {
+func observeProducedScore(tenantID, evaluatorID, evaluatorKind, ruleID, scoreKey string, passed *bool, model, agentName string) {
 	passedValue := "unknown"
 	if passed != nil {
 		passedValue = strconv.FormatBool(*passed)
 	}
-	evalScoresTotal.WithLabelValues(tenantID, evaluatorID, evaluatorKind, ruleID, scoreKey, passedValue).Inc()
+	evalScoresTotal.WithLabelValues(tenantID, evaluatorID, evaluatorKind, ruleID, scoreKey, passedValue, model, agentName).Inc()
 }
 
 func setQueueDepth(tenantID, status string, count int64) {
