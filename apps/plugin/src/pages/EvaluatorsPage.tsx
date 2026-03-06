@@ -228,23 +228,6 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
   const templateScopeFilter = searchParams.get('scope') ?? '';
   const evaluatorViewParam = searchParams.get('evaluator_view');
   const templateViewParam = searchParams.get('template_view');
-  const setTemplateScopeFilter = useCallback(
-    (value: string) => {
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          if (value === '') {
-            next.delete('scope');
-          } else {
-            next.set('scope', value);
-          }
-          return next;
-        },
-        { replace: true }
-      );
-    },
-    [setSearchParams]
-  );
   const [allTemplates, setAllTemplates] = useState<TemplateDefinition[]>([]);
   const [tenantEvaluators, setTenantEvaluators] = useState<Evaluator[]>([]);
   const [evaluatorPage, setEvaluatorPage] = useState(0);
@@ -260,6 +243,26 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
   const requestVersion = useRef(0);
   const deferredEvaluatorSearch = useDeferredValue(evaluatorSearch.trim().toLowerCase());
   const deferredTemplateSearch = useDeferredValue(templateSearch.trim().toLowerCase());
+
+  const setTemplateScopeFilter = useCallback(
+    (value: string) => {
+      setEvaluatorPage(0);
+      setTemplatePage(0);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (value === '') {
+            next.delete('scope');
+          } else {
+            next.set('scope', value);
+          }
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
 
   const setEvaluatorView = useCallback(
     (value: EvaluatorListView) => {
