@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2, TimeRange } from '@grafana/data';
 import { Badge, Icon, LinkButton, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
+import { getConversationPassRate } from '../../conversation/aggregates';
 import type { ConversationsDataSource } from '../../conversation/api';
 import { buildConversationSearchFilter } from '../../conversation/filters';
 import type { ConversationSearchResult } from '../../conversation/types';
@@ -16,17 +17,6 @@ export type LowestPassRateConversationsTableProps = {
   timeRange: TimeRange;
   filters: DashboardFilters;
 };
-
-function getConversationPassRate(c: ConversationSearchResult): number | null {
-  if (!c.eval_summary) {
-    return null;
-  }
-  const total = c.eval_summary.pass_count + c.eval_summary.fail_count;
-  if (total === 0) {
-    return null;
-  }
-  return c.eval_summary.pass_count / total;
-}
 
 function buildSeeMoreUrl(timeRange: TimeRange, filters: DashboardFilters): string {
   const params = new URLSearchParams();
