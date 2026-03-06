@@ -69,8 +69,34 @@ export function buildOutputKeyFromForm(input: OutputKeyFormInput): EvalOutputKey
 
 /** Backend defaults applied when config fields are omitted. */
 export const LLM_JUDGE_DEFAULT_SYSTEM_PROMPT =
-  'You are an evaluation judge. For number scores, use a 1-10 integer scale (1 = very poor, 10 = excellent) unless the output key description specifies otherwise.';
+  'You evaluate one assistant response. Use only the user input and assistant output. Follow the score field description exactly. Be strict. If uncertain, choose the lower score.';
 export const LLM_JUDGE_DEFAULT_USER_PROMPT = 'User input:\n{{input}}\n\nAssistant output:\n{{output}}';
+
+export function normalizedOptionalString(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed === '' ? undefined : trimmed;
+}
+
+export function buildForkEvaluatorConfig(
+  kind: EvaluatorKind,
+  config: Record<string, unknown> | undefined
+): Record<string, unknown> {
+  const nextConfig = { ...(config ?? {}) };
+  if (kind !== 'llm_judge') {
+    return nextConfig;
+  }
+
+  if (normalizedOptionalString(nextConfig.system_prompt) == null) {
+    nextConfig.system_prompt = LLM_JUDGE_DEFAULT_SYSTEM_PROMPT;
+  }
+  if (normalizedOptionalString(nextConfig.user_prompt) == null) {
+    nextConfig.user_prompt = LLM_JUDGE_DEFAULT_USER_PROMPT;
+  }
+  return nextConfig;
+}
 
 export type Evaluator = {
   evaluator_id: string;

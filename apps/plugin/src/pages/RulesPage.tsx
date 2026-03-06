@@ -1,13 +1,18 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { css } from '@emotion/css';
-import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Button, Icon, Spinner, Text, useStyles2 } from '@grafana/ui';
+import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
+import { Alert, Button, Icon, Select, Spinner, Text, useStyles2 } from '@grafana/ui';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import RuleTable from '../components/evaluation/RuleTable';
 import { useEvalRulesDataContext } from '../contexts/EvalRulesDataContext';
 
 const EVAL_RULES_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}/rules`;
+const RULE_PAGE_SIZE_OPTIONS: Array<SelectableValue<number>> = [
+  { label: '25', value: 25 },
+  { label: '50', value: 50 },
+  { label: '100', value: 100 },
+];
 
 const getStyles = (theme: GrafanaTheme2) => ({
   pageContainer: css({
@@ -98,6 +103,30 @@ const getStyles = (theme: GrafanaTheme2) => ({
     alignItems: 'center',
     padding: theme.spacing(4),
   }),
+  paginationBar: css({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing(1.5),
+    flexWrap: 'wrap' as const,
+    paddingTop: theme.spacing(0.5),
+  }),
+  paginationMeta: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.75),
+    flexWrap: 'wrap' as const,
+    color: theme.colors.text.secondary,
+  }),
+  paginationControls: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+    flexWrap: 'wrap' as const,
+  }),
+  pageSizeControl: css({
+    minWidth: 88,
+  }),
 });
 
 export default function RulesPage() {
@@ -105,6 +134,15 @@ export default function RulesPage() {
   const navigate = useNavigate();
 
   const { rules, evaluators, loading, errorMessage, setErrorMessage, handleToggle } = useEvalRulesDataContext();
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
+
+  const pageCount = Math.max(1, Math.ceil(rules.length / pageSize));
+  const clampedPage = Math.min(page, pageCount - 1);
+  const visibleRules = useMemo(() => {
+    const start = clampedPage * pageSize;
+    return rules.slice(start, start + pageSize);
+  }, [clampedPage, pageSize, rules]);
 
   const handleClick = (ruleID: string) => {
     navigate(`${EVAL_RULES_BASE}/${encodeURIComponent(ruleID)}`);
@@ -119,6 +157,9 @@ export default function RulesPage() {
       </div>
     );
   }
+
+  const rangeStart = rules.length === 0 ? 0 : clampedPage * pageSize + 1;
+  const rangeEnd = Math.min((clampedPage + 1) * pageSize, rules.length);
 
   return (
     <div className={styles.pageContainer}>
@@ -192,7 +233,50 @@ export default function RulesPage() {
             </Button>
           </div>
         ) : (
-          <RuleTable rules={rules} evaluators={evaluators} onToggle={handleToggle} onClick={handleClick} />
+          <>
+            <RuleTable rules={visibleRules} evaluators={evaluators} onToggle={handleToggle} onClick={handleClick} />
+            <div className={styles.paginationBar}>
+              <div className={styles.paginationMeta}>
+                <Text variant="bodySmall" color="secondary">
+                  Showing {rangeStart}-{rangeEnd} of {rules.length}
+                </Text>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={clampedPage >= pageCount - 1}
+                  onClick={() => setPage((prev) => Math.min(prev + 1, pageCount - 1))}
+                >
+                  Next
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={clampedPage === 0}
+                  onClick={() => setPage((prev) => Math.max(prev - 1, 0))}
+                >
+                  Previous
+                </Button>
+              </div>
+              <div className={styles.paginationControls}>
+                <Text variant="bodySmall" color="secondary">
+                  Per page
+                </Text>
+                <Select
+                  className={styles.pageSizeControl}
+                  options={RULE_PAGE_SIZE_OPTIONS}
+                  value={pageSize}
+                  onChange={(option) => {
+                    const nextValue = option?.value;
+                    if (typeof nextValue !== 'number') {
+                      return;
+                    }
+                    setPage(0);
+                    setPageSize(nextValue);
+                  }}
+                />
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>

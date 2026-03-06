@@ -28,7 +28,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   header: css({
     display: 'grid',
-    gridTemplateColumns: '2fr 100px 100px 160px 120px 40px',
+    gridTemplateColumns: 'minmax(0, 2.5fr) 100px minmax(120px, 140px) minmax(0, 3fr) minmax(0, 160px) 120px 40px',
     gap: theme.spacing(2),
     padding: theme.spacing(1, 2),
     background: theme.colors.background.secondary,
@@ -37,12 +37,15 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   row: css({
     display: 'grid',
-    gridTemplateColumns: '2fr 100px 100px 160px 120px 40px',
+    gridTemplateColumns: 'minmax(0, 2.5fr) 100px minmax(120px, 140px) minmax(0, 3fr) minmax(0, 160px) 120px 40px',
     gap: theme.spacing(2),
     padding: theme.spacing(1, 2),
     alignItems: 'center',
     borderBottom: `1px solid ${theme.colors.border.weak}`,
     cursor: 'pointer',
+    '& > *': {
+      minWidth: 0,
+    },
     '&:hover': {
       background: theme.colors.action.hover,
     },
@@ -50,10 +53,14 @@ const getStyles = (theme: GrafanaTheme2) => ({
   rowSelected: css({
     background: theme.colors.action.hover,
   }),
+  evaluatorId: css({
+    minWidth: 0,
+  }),
   outputKeys: css({
     display: 'flex',
     flexWrap: 'wrap' as const,
     gap: theme.spacing(0.5),
+    minWidth: 0,
   }),
 });
 
@@ -89,6 +96,9 @@ export default function EvaluatorTable({ evaluators, selectedEvaluatorID, onSele
             Version
           </Text>
           <Text weight="medium" variant="bodySmall">
+            Description
+          </Text>
+          <Text weight="medium" variant="bodySmall">
             Output keys
           </Text>
           <Text weight="medium" variant="bodySmall">
@@ -105,12 +115,17 @@ export default function EvaluatorTable({ evaluators, selectedEvaluatorID, onSele
             onClick={() => onSelect?.(evaluator.evaluator_id)}
             role="row"
           >
-            <Text truncate>{evaluator.evaluator_id}</Text>
+            <div className={styles.evaluatorId}>
+              <Text truncate>{evaluator.evaluator_id}</Text>
+            </div>
             <div>
               <Badge text={EVALUATOR_KIND_LABELS[evaluator.kind]} color={getKindBadgeColor(evaluator.kind)} />
             </div>
             <Text color="secondary" variant="bodySmall">
               {evaluator.version}
+            </Text>
+            <Text color="secondary" variant="bodySmall" truncate>
+              {evaluator.description || '—'}
             </Text>
             <div className={styles.outputKeys}>
               {evaluator.output_keys.map((ok) => (

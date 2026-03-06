@@ -16,6 +16,12 @@ const GlobalTenantID = evalpkg.GlobalTenantID
 // Idempotent: creates templates that don't exist, and publishes new versions for
 // templates that exist but don't yet have the current predefined version.
 func BootstrapPredefinedTemplates(ctx context.Context, store evalpkg.TemplateStore) error {
+	for _, templateID := range predefined.DeprecatedTemplateIDs() {
+		if err := store.DeleteTemplate(ctx, GlobalTenantID, templateID); err != nil {
+			return fmt.Errorf("delete deprecated template %s: %w", templateID, err)
+		}
+	}
+
 	for _, def := range predefined.Templates() {
 		existing, err := store.GetGlobalTemplate(ctx, def.EvaluatorID)
 		if err != nil {

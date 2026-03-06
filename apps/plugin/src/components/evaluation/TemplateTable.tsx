@@ -47,6 +47,18 @@ const getStyles = (theme: GrafanaTheme2) => ({
       background: theme.colors.action.hover,
     },
   }),
+  rowGlobal: css({
+    borderLeft: '2px solid rgba(255, 166, 0, 0.35)',
+    '&:hover': {
+      borderLeftColor: 'rgba(255, 166, 0, 0.55)',
+    },
+  }),
+  rowTenant: css({
+    borderLeft: '2px solid rgba(61, 113, 217, 0.28)',
+    '&:hover': {
+      borderLeftColor: 'rgba(61, 113, 217, 0.46)',
+    },
+  }),
   templateId: css({
     display: 'flex',
     alignItems: 'center',
@@ -106,7 +118,7 @@ export default function TemplateTable({ templates, onSelect, onDelete, onFork }:
         {templates.map((template) => (
           <div
             key={template.template_id}
-            className={styles.row}
+            className={`${styles.row} ${template.scope === 'global' ? styles.rowGlobal : styles.rowTenant}`}
             onClick={() => onSelect?.(template.template_id)}
             role="row"
           >

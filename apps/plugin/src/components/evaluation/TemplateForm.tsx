@@ -7,6 +7,7 @@ import {
   LLM_JUDGE_DEFAULT_SYSTEM_PROMPT,
   LLM_JUDGE_DEFAULT_USER_PROMPT,
   buildOutputKeyFromForm,
+  normalizedOptionalString,
   type CreateTemplateRequest,
   type EvalFormState,
   type EvalOutputKey,
@@ -19,6 +20,7 @@ import { parseSchemaConfig, validateSharedForm } from '../../evaluation/formVali
 import { parseHeuristicStringListInput } from '../../evaluation/heuristicConfig';
 import { isValidResourceID, INVALID_ID_MESSAGE } from '../../evaluation/utils';
 import { getSectionTitleStyles } from './sectionStyles';
+import PromptTemplateTextarea from './PromptTemplateTextarea';
 
 export type TemplateFormProps = {
   onSubmit: (req: CreateTemplateRequest) => void;
@@ -48,6 +50,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexDirection: 'column' as const,
     background: theme.colors.background.primary,
     borderRadius: theme.shape.radius.default,
+    overflow: 'hidden',
   }),
   sectionHeader: css({
     display: 'flex',
@@ -159,7 +162,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
   const [modelOptions, setModelOptions] = useState<Array<SelectableValue<string>>>([]);
   const [systemPrompt, setSystemPrompt] = useState('');
   const [userPrompt, setUserPrompt] = useState('');
-  const [maxTokens, setMaxTokens] = useState(256);
+  const [maxTokens, setMaxTokens] = useState(128);
   const [temperature, setTemperature] = useState(0);
 
   useEffect(() => {
@@ -216,10 +219,10 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
     switch (kind) {
       case 'llm_judge':
         return {
-          provider: provider || undefined,
-          model: model || undefined,
-          system_prompt: systemPrompt || undefined,
-          user_prompt: userPrompt || undefined,
+          provider: normalizedOptionalString(provider),
+          model: normalizedOptionalString(model),
+          system_prompt: normalizedOptionalString(systemPrompt),
+          user_prompt: normalizedOptionalString(userPrompt),
           max_tokens: maxTokens,
           temperature,
         };
@@ -483,24 +486,20 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
               label="System prompt"
               description="Optional. Instructions for the judge model. Uses the default prompt when blank."
             >
-              <textarea
-                className={styles.textarea}
+              <PromptTemplateTextarea
                 value={systemPrompt}
-                onChange={(e) => setSystemPrompt(e.currentTarget.value)}
+                onChange={setSystemPrompt}
                 placeholder={LLM_JUDGE_DEFAULT_SYSTEM_PROMPT}
-                rows={4}
               />
             </Field>
             <Field
               label="User prompt"
               description="Optional. Supports {{input}}, {{output}}, {{generation_id}}, {{conversation_id}}. Uses the default prompt when blank."
             >
-              <textarea
-                className={styles.textarea}
+              <PromptTemplateTextarea
                 value={userPrompt}
-                onChange={(e) => setUserPrompt(e.currentTarget.value)}
+                onChange={setUserPrompt}
                 placeholder={LLM_JUDGE_DEFAULT_USER_PROMPT}
-                rows={4}
               />
             </Field>
             <div className={styles.twoColumnGrid}>

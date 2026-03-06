@@ -7,6 +7,7 @@ import {
   LLM_JUDGE_DEFAULT_SYSTEM_PROMPT,
   LLM_JUDGE_DEFAULT_USER_PROMPT,
   buildOutputKeyFromForm,
+  normalizedOptionalString,
   type CreateEvaluatorRequest,
   type EvalFormState,
   type EvalOutputKey,
@@ -21,6 +22,7 @@ import { formatHeuristicStringList, parseHeuristicStringListInput } from '../../
 import { isValidResourceID, INVALID_ID_MESSAGE } from '../../evaluation/utils';
 import { nextVersion } from '../../evaluation/versionUtils';
 import { getSectionTitleStyles } from './sectionStyles';
+import PromptTemplateTextarea from './PromptTemplateTextarea';
 
 export type EvaluatorFormProps = {
   initialEvaluator?: Evaluator;
@@ -56,6 +58,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexDirection: 'column' as const,
     background: theme.colors.background.primary,
     borderRadius: theme.shape.radius.default,
+    overflow: 'hidden',
   }),
   sectionHeader: css({
     display: 'flex',
@@ -179,9 +182,9 @@ function parseEvaluatorToFormState(
     version: nextVersion(versionsToAvoid.length > 0 ? versionsToAvoid : undefined),
     kind: e.kind ?? 'llm_judge',
     description: e.description ?? '',
-    systemPrompt: (cfg.system_prompt as string) || LLM_JUDGE_DEFAULT_SYSTEM_PROMPT,
-    userPrompt: (cfg.user_prompt as string) || LLM_JUDGE_DEFAULT_USER_PROMPT,
-    maxTokens: (cfg.max_tokens as number) ?? 256,
+    systemPrompt: normalizedOptionalString(cfg.system_prompt) ?? '',
+    userPrompt: normalizedOptionalString(cfg.user_prompt) ?? '',
+    maxTokens: (cfg.max_tokens as number) ?? 128,
     temperature: (cfg.temperature as number) ?? 0,
     schemaJson: typeof cfg.schema === 'object' ? JSON.stringify(cfg.schema, null, 2) : '{}',
     pattern: (cfg.pattern as string) ?? '',
@@ -231,17 +234,17 @@ export default function EvaluatorForm({
   // llm_judge: provider, model, system_prompt, user_prompt, max_tokens, temperature
   const [provider, setProvider] = useState(() => {
     const cfg = seedEvaluator?.config;
-    return (cfg?.provider as string) ?? '';
+    return normalizedOptionalString(cfg?.provider) ?? '';
   });
   const [model, setModel] = useState(() => {
     const cfg = seedEvaluator?.config;
-    return (cfg?.model as string) ?? '';
+    return normalizedOptionalString(cfg?.model) ?? '';
   });
   const [providerOptions, setProviderOptions] = useState<Array<SelectableValue<string>>>([]);
   const [modelOptions, setModelOptions] = useState<Array<SelectableValue<string>>>([]);
   const [systemPrompt, setSystemPrompt] = useState(initialState?.systemPrompt ?? '');
   const [userPrompt, setUserPrompt] = useState(initialState?.userPrompt ?? '');
-  const [maxTokens, setMaxTokens] = useState(initialState?.maxTokens ?? 256);
+  const [maxTokens, setMaxTokens] = useState(initialState?.maxTokens ?? 128);
   const [temperature, setTemperature] = useState(initialState?.temperature ?? 0);
 
   // Load judge providers on mount
@@ -319,10 +322,10 @@ export default function EvaluatorForm({
     switch (kind) {
       case 'llm_judge':
         return {
-          provider: provider || undefined,
-          model: model || undefined,
-          system_prompt: systemPrompt || undefined,
-          user_prompt: userPrompt || undefined,
+          provider: normalizedOptionalString(provider),
+          model: normalizedOptionalString(model),
+          system_prompt: normalizedOptionalString(systemPrompt),
+          user_prompt: normalizedOptionalString(userPrompt),
           max_tokens: maxTokens,
           temperature: temperature,
         };
@@ -577,24 +580,20 @@ export default function EvaluatorForm({
               label="System prompt"
               description="Optional. Instructions for the judge model. Uses the default prompt when blank."
             >
-              <textarea
-                className={styles.textarea}
+              <PromptTemplateTextarea
                 value={systemPrompt}
-                onChange={(e) => setSystemPrompt(e.currentTarget.value)}
-                placeholder="You are an expert evaluator assessing the helpfulness of AI assistant responses. Consider accuracy, relevance, completeness, and clarity."
-                rows={4}
+                onChange={setSystemPrompt}
+                placeholder={LLM_JUDGE_DEFAULT_SYSTEM_PROMPT}
               />
             </Field>
             <Field
               label="User prompt"
               description="Optional. Supports {{input}}, {{output}}, {{generation_id}}, {{conversation_id}}. Uses the default prompt when blank."
             >
-              <textarea
-                className={styles.textarea}
+              <PromptTemplateTextarea
                 value={userPrompt}
-                onChange={(e) => setUserPrompt(e.currentTarget.value)}
-                placeholder={'User input:\n{{input}}\n\nAssistant output:\n{{output}}'}
-                rows={4}
+                onChange={setUserPrompt}
+                placeholder={LLM_JUDGE_DEFAULT_USER_PROMPT}
               />
             </Field>
             <div className={styles.twoColumnGrid}>
