@@ -53,7 +53,7 @@ func TestServiceFailHandlingTransientAndPermanent(t *testing.T) {
 			service.evaluators[evalpkg.EvaluatorKindHeuristic] = &workerFakeEvaluator{kind: evalpkg.EvaluatorKindHeuristic, err: test.evaluatorErr}
 
 			retryBefore := testutil.ToFloat64(evalRetriesTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1"))
-			failedBefore := testutil.ToFloat64(evalExecutionsTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "failed", "", ""))
+			failedBefore := testutil.ToFloat64(evalExecutionsTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "failed", "", "", "", ""))
 
 			service.runCycle(context.Background())
 
@@ -71,7 +71,7 @@ func TestServiceFailHandlingTransientAndPermanent(t *testing.T) {
 			}
 
 			retryAfter := testutil.ToFloat64(evalRetriesTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1"))
-			failedAfter := testutil.ToFloat64(evalExecutionsTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "failed", "", ""))
+			failedAfter := testutil.ToFloat64(evalExecutionsTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "failed", "", "", "", ""))
 			if failedAfter-failedBefore != 1 {
 				t.Fatalf("expected failed execution counter increment by 1, got before=%f after=%f", failedBefore, failedAfter)
 			}
@@ -191,13 +191,13 @@ func TestServiceMetricsIncrementOnSuccess(t *testing.T) {
 		outputs: []evaluators.ScoreOutput{{Key: "k", Type: evalpkg.ScoreTypeBool, Value: evalpkg.BoolValue(true), Passed: boolPtr(true)}},
 	}
 
-	execBefore := testutil.ToFloat64(evalExecutionsTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "success", "", ""))
-	scoreBefore := testutil.ToFloat64(evalScoresTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "k", "true", "", ""))
+	execBefore := testutil.ToFloat64(evalExecutionsTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "success", "", "", "", ""))
+	scoreBefore := testutil.ToFloat64(evalScoresTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "k", "true", "", "", "", ""))
 
 	service.runCycle(context.Background())
 
-	execAfter := testutil.ToFloat64(evalExecutionsTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "success", "", ""))
-	scoreAfter := testutil.ToFloat64(evalScoresTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "k", "true", "", ""))
+	execAfter := testutil.ToFloat64(evalExecutionsTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "success", "", "", "", ""))
+	scoreAfter := testutil.ToFloat64(evalScoresTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "k", "true", "", "", "", ""))
 	if execAfter-execBefore != 1 {
 		t.Fatalf("expected success execution counter increment by 1, got before=%f after=%f", execBefore, execAfter)
 	}
@@ -240,13 +240,13 @@ func TestServiceCompletionFailureIsHandledAsFailure(t *testing.T) {
 		outputs: []evaluators.ScoreOutput{{Key: "k", Type: evalpkg.ScoreTypeBool, Value: evalpkg.BoolValue(true), Passed: boolPtr(true)}},
 	}
 
-	successBefore := testutil.ToFloat64(evalExecutionsTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "success", "", ""))
-	failedBefore := testutil.ToFloat64(evalExecutionsTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "failed", "", ""))
+	successBefore := testutil.ToFloat64(evalExecutionsTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "success", "", "", "", ""))
+	failedBefore := testutil.ToFloat64(evalExecutionsTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "failed", "", "", "", ""))
 
 	service.runCycle(context.Background())
 
-	successAfter := testutil.ToFloat64(evalExecutionsTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "success", "", ""))
-	failedAfter := testutil.ToFloat64(evalExecutionsTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "failed", "", ""))
+	successAfter := testutil.ToFloat64(evalExecutionsTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "success", "", "", "", ""))
+	failedAfter := testutil.ToFloat64(evalExecutionsTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "failed", "", "", "", ""))
 	if successAfter-successBefore != 0 {
 		t.Fatalf("expected no success increment when completion fails, got before=%f after=%f", successBefore, successAfter)
 	}
