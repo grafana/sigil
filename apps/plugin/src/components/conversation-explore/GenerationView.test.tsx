@@ -250,4 +250,96 @@ describe('GenerationView', () => {
     expect(screen.getByText('fe-grafana-assistant')).toBeInTheDocument();
     expect(screen.getByText('1/2')).toBeInTheDocument();
   });
+
+  it('deduplicates AI attribute pills when same key appears in both resource and span attributes', () => {
+    const generation: GenerationDetail = {
+      generation_id: 'gen-dup',
+      conversation_id: 'conv-1',
+      created_at: '2026-03-04T10:00:00Z',
+      input: [{ role: 'MESSAGE_ROLE_USER', parts: [{ text: 'hi' }] }],
+    };
+    const span: ConversationSpan = {
+      traceID: 'trace-dup',
+      spanID: 'span-dup',
+      parentSpanID: '',
+      name: 'generateText',
+      kind: 'INTERNAL',
+      serviceName: 'sigil',
+      startTimeUnixNano: BigInt(0),
+      endTimeUnixNano: BigInt(1),
+      durationNano: BigInt(1),
+      attributes: new Map([
+        ['gen_ai.system', { stringValue: 'openai' }],
+        ['sigil.conversation.id', { stringValue: 'span-conv-id' }],
+      ]),
+      resourceAttributes: new Map([
+        ['gen_ai.system', { stringValue: 'azure' }],
+        ['sigil.conversation.id', { stringValue: 'resource-conv-id' }],
+      ]),
+      generation,
+      children: [],
+    };
+    const node: FlowNode = {
+      id: 'node-dup',
+      kind: 'generation',
+      label: 'generation',
+      durationMs: 50,
+      startMs: 0,
+      status: 'success',
+      generation,
+      span,
+      children: [],
+    };
+
+    render(<GenerationView node={node} allGenerations={[generation]} onClose={jest.fn()} />);
+
+    fireEvent.click(screen.getByText('Attributes'));
+
+    const pills = screen.getAllByText('gen_ai.system');
+    expect(pills).toHaveLength(1);
+    expect(screen.getByText('openai')).toBeInTheDocument();
+    expect(screen.queryByText('azure')).not.toBeInTheDocument();
+
+    const sigilPills = screen.getAllByText('sigil.conversation.id');
+    expect(sigilPills).toHaveLength(1);
+    expect(screen.getByText('span-conv-id')).toBeInTheDocument();
+    expect(screen.queryByText('resource-conv-id')).not.toBeInTheDocument();
+  });
+
+  it('does not use agent_id as an effective version candidate', () => {
+    const generation: GenerationDetail = {
+      generation_id: 'gen-no-agent-id',
+      conversation_id: 'conv-1',
+      created_at: '2026-03-04T10:00:00Z',
+      agent_name: 'assistant',
+      agent_id: 'assistant',
+      agent_effective_version: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      input: [{ role: 'MESSAGE_ROLE_USER', parts: [{ text: 'hi' }] }],
+    };
+    const node: FlowNode = {
+      id: 'node-no-agent-id',
+      kind: 'generation',
+      label: 'generation',
+      durationMs: 100,
+      startMs: 0,
+      status: 'success',
+      generation,
+      children: [],
+    };
+
+    render(
+      <GenerationView
+        node={node}
+        allGenerations={[generation, { ...generation, generation_id: 'gen-other' }]}
+        onClose={jest.fn()}
+      />
+    );
+
+    const link = screen.getByRole('link', {
+      name: /Open agent page: assistant/,
+    });
+    expect(link.getAttribute('href')).toContain(
+      'version=sha256%3Abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+    );
+  });
 });

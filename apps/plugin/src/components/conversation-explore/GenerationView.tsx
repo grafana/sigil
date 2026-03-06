@@ -47,7 +47,7 @@ function formatNumber(n: number): string {
 }
 
 function resolveEffectiveVersion(generation: GenerationDetail): string {
-  const candidates = [generation.agent_id, generation.agent_effective_version, generation.agent_version];
+  const candidates = [generation.agent_effective_version, generation.agent_version];
   for (const candidate of candidates) {
     const trimmed = candidate?.trim() ?? '';
     if (trimmed.length === 0) {
@@ -467,13 +467,20 @@ function AttributeSections({ span }: { span: ConversationSpan }) {
   const resourceEntries = useMemo(() => collectAttributeEntries(span.resourceAttributes), [span.resourceAttributes]);
   const spanEntries = useMemo(() => collectAttributeEntries(span.attributes), [span.attributes]);
 
-  const genAiEntries = useMemo(
-    () =>
-      [...resourceEntries, ...spanEntries]
-        .filter(({ key }) => isAiPillKey(key))
-        .sort((a, b) => a.key.localeCompare(b.key)),
-    [resourceEntries, spanEntries]
-  );
+  const genAiEntries = useMemo(() => {
+    const merged = new Map<string, { key: string; value: string }>();
+    for (const entry of resourceEntries) {
+      if (isAiPillKey(entry.key)) {
+        merged.set(entry.key, entry);
+      }
+    }
+    for (const entry of spanEntries) {
+      if (isAiPillKey(entry.key)) {
+        merged.set(entry.key, entry);
+      }
+    }
+    return Array.from(merged.values()).sort((a, b) => a.key.localeCompare(b.key));
+  }, [resourceEntries, spanEntries]);
   const plainResourceEntries = useMemo(
     () => resourceEntries.filter(({ key }) => !isAiPillKey(key)).sort((a, b) => a.key.localeCompare(b.key)),
     [resourceEntries]
