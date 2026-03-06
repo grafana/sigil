@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { AppEvents, type GrafanaTheme2 } from '@grafana/data';
-import { Alert, Button, Input, Modal, useStyles2 } from '@grafana/ui';
+import { Alert, Button, Icon, Input, Modal, Tooltip, useStyles2 } from '@grafana/ui';
 import { getAppEvents } from '@grafana/runtime';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
@@ -76,6 +76,31 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexShrink: 0,
     background: theme.colors.background.primary,
     overflow: 'hidden',
+  }),
+  collapsedRail: css({
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    flexShrink: 0,
+    width: 28,
+    paddingTop: theme.spacing(1),
+    background: theme.colors.background.primary,
+    borderRight: `1px solid ${theme.colors.border.weak}`,
+  }),
+  expandButton: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: theme.spacing(0.5),
+    border: 'none',
+    background: 'none',
+    cursor: 'pointer',
+    color: theme.colors.text.disabled,
+    borderRadius: theme.shape.radius.default,
+    transition: 'color 120ms ease',
+    '&:hover': {
+      color: theme.colors.text.primary,
+    },
   }),
   resizeHandle: css({
     width: 4,
@@ -286,6 +311,7 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   const MIN_PANEL_WIDTH = 260;
   const MAX_PANEL_WIDTH = 700;
   const [panelWidth, setPanelWidth] = useState(340);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const dragging = useRef(false);
 
   const handleResizeStart = useCallback(
@@ -493,35 +519,53 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
         </div>
       </div>
       <div className={styles.contentArea}>
-        <div className={styles.leftPanel} style={{ width: panelWidth }}>
-          <MiniTimeline
-            nodes={flowNodes}
-            totalDurationMs={totalDurationMs}
-            selectedNodeId={selectedNodeId}
-            onSelectNode={handleSelectNode}
-            generationCosts={generationCosts}
-          />
-          <FlowTree
-            nodes={flowNodes}
-            loading={tracesLoading}
-            selectedNodeId={selectedNodeId}
-            onSelectNode={handleSelectNode}
-            generationCosts={generationCosts}
-            groupBy={flowGroupBy}
-            onGroupByChange={setFlowGroupBy}
-            sortBy={flowSortBy}
-            onSortByChange={setFlowSortBy}
-            searchQuery={flowSearchQuery}
-            onSearchQueryChange={setFlowSearchQuery}
-          />
-        </div>
-        <div
-          className={styles.resizeHandle}
-          onMouseDown={handleResizeStart}
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize flow panel"
-        />
+        {sidebarCollapsed ? (
+          <div className={styles.collapsedRail}>
+            <Tooltip content="Show sidebar" placement="right">
+              <button
+                type="button"
+                className={styles.expandButton}
+                onClick={() => setSidebarCollapsed(false)}
+                aria-label="Expand sidebar"
+              >
+                <Icon name="angle-right" size="md" />
+              </button>
+            </Tooltip>
+          </div>
+        ) : (
+          <>
+            <div className={styles.leftPanel} style={{ width: panelWidth }}>
+              <MiniTimeline
+                nodes={flowNodes}
+                totalDurationMs={totalDurationMs}
+                selectedNodeId={selectedNodeId}
+                onSelectNode={handleSelectNode}
+                generationCosts={generationCosts}
+                onCollapse={() => setSidebarCollapsed(true)}
+              />
+              <FlowTree
+                nodes={flowNodes}
+                loading={tracesLoading}
+                selectedNodeId={selectedNodeId}
+                onSelectNode={handleSelectNode}
+                generationCosts={generationCosts}
+                groupBy={flowGroupBy}
+                onGroupByChange={setFlowGroupBy}
+                sortBy={flowSortBy}
+                onSortByChange={setFlowSortBy}
+                searchQuery={flowSearchQuery}
+                onSearchQueryChange={setFlowSearchQuery}
+              />
+            </div>
+            <div
+              className={styles.resizeHandle}
+              onMouseDown={handleResizeStart}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize flow panel"
+            />
+          </>
+        )}
         <div className={styles.rightPanel}>
           <div className={styles.rightPanelContent}>
             <div className={styles.detailPanelWrap}>
