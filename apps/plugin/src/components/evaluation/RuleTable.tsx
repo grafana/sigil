@@ -15,6 +15,7 @@ export type RuleTableProps = {
   evaluators: Evaluator[];
   onToggle?: (ruleID: string, enabled: boolean) => void;
   onClick?: (ruleID: string) => void;
+  showToggle?: boolean;
 };
 
 function getSelectorLabel(selector: Rule['selector']): string {
@@ -37,7 +38,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   header: css({
     display: 'grid',
-    gridTemplateColumns: '48px 2fr 140px 2fr 80px 2fr',
     gap: theme.spacing(2),
     padding: theme.spacing(1, 2),
     background: theme.colors.background.secondary,
@@ -46,7 +46,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   row: css({
     display: 'grid',
-    gridTemplateColumns: '48px 2fr 140px 2fr 80px 2fr',
     gap: theme.spacing(2),
     padding: theme.spacing(1, 2),
     alignItems: 'center',
@@ -74,15 +73,18 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function RuleTable({ rules, evaluators, onToggle, onClick }: RuleTableProps) {
+export default function RuleTable({ rules, evaluators, onToggle, onClick, showToggle = true }: RuleTableProps) {
   const styles = useStyles2(getStyles);
+  const gridTemplateColumns = showToggle ? '48px 2fr 140px 2fr 80px 2fr' : '2fr 140px 2fr 80px 2fr';
 
   return (
     <div className={styles.table}>
-      <div className={styles.header}>
-        <Text weight="medium" variant="bodySmall">
-          On
-        </Text>
+      <div className={styles.header} style={{ gridTemplateColumns }}>
+        {showToggle && (
+          <Text weight="medium" variant="bodySmall">
+            On
+          </Text>
+        )}
         <Text weight="medium" variant="bodySmall">
           Rule ID
         </Text>
@@ -111,15 +113,23 @@ export default function RuleTable({ rules, evaluators, onToggle, onClick }: Rule
         });
 
         return (
-          <div key={rule.rule_id} className={styles.row} onClick={() => onClick?.(rule.rule_id)} role="row">
-            <div onClick={(e) => e.stopPropagation()}>
-              <Switch
-                value={rule.enabled}
-                onChange={(e) => onToggle?.(rule.rule_id, e.currentTarget.checked)}
-                disabled={onToggle == null}
-                aria-label={`Toggle rule ${rule.rule_id}`}
-              />
-            </div>
+          <div
+            key={rule.rule_id}
+            className={styles.row}
+            style={{ gridTemplateColumns }}
+            onClick={() => onClick?.(rule.rule_id)}
+            role="row"
+          >
+            {showToggle && (
+              <div onClick={(e) => e.stopPropagation()}>
+                <Switch
+                  value={rule.enabled}
+                  onChange={(e) => onToggle?.(rule.rule_id, e.currentTarget.checked)}
+                  disabled={onToggle == null}
+                  aria-label={`Toggle rule ${rule.rule_id}`}
+                />
+              </div>
+            )}
             <div className={styles.ruleId}>
               <Text weight="medium" truncate>
                 {rule.rule_id}

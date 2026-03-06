@@ -5,6 +5,7 @@ import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
 import { Alert, Button, Icon, Input, Select, Spinner, Text, useStyles2 } from '@grafana/ui';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import RuleTable from '../components/evaluation/RuleTable';
+import { PageInsightBar } from '../components/insight/PageInsightBar';
 import { useEvalRulesDataContext } from '../contexts/EvalRulesDataContext';
 
 const EVAL_RULES_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}/rules`;
@@ -163,6 +164,35 @@ export default function RulesPage() {
     () => rules.filter((rule) => matchesRule(rule, deferredSearch)),
     [deferredSearch, rules]
   );
+  const rulesInsightDataContext = useMemo(() => {
+    if (loading || rules.length === 0) {
+      return null;
+    }
+    const activeRules = rules.filter((rule) => rule.enabled);
+    const selectors = Array.from(new Set(rules.map((rule) => rule.selector))).sort();
+    const sampleRates = rules.map((rule) => rule.sample_rate);
+    const avgSampleRate = sampleRates.reduce((sum, value) => sum + value, 0) / sampleRates.length;
+    return [
+      `Total rules: ${rules.length}`,
+      `Active rules: ${activeRules.length}`,
+      `Disabled rules: ${rules.length - activeRules.length}`,
+      `Visible rules: ${filteredRules.length}`,
+      `Evaluator options: ${evaluators.length}`,
+      `Selectors in use: ${selectors.join(', ') || '(none)'}`,
+      `Average sample rate: ${avgSampleRate.toFixed(2)}`,
+      `Sample rate range: ${Math.min(...sampleRates).toFixed(2)} to ${Math.max(...sampleRates).toFixed(2)}`,
+      `Search query: ${deferredSearch || '(none)'}`,
+      `Visible rules: ${
+        filteredRules
+          .slice(0, 12)
+          .map(
+            (rule) =>
+              `${rule.rule_id} [selector=${rule.selector}, enabled=${rule.enabled}, sample_rate=${rule.sample_rate}, evaluators=${rule.evaluator_ids.join('|') || '(none)'}]`
+          )
+          .join(', ') || '(none)'
+      }`,
+    ].join('\n');
+  }, [deferredSearch, evaluators.length, filteredRules, loading, rules]);
   const pageCount = Math.max(1, Math.ceil(filteredRules.length / pageSize));
   const clampedPage = Math.min(page, pageCount - 1);
   const visibleRules = useMemo(() => {
@@ -193,6 +223,14 @@ export default function RulesPage() {
         <Alert severity="error" title="Error" onRemove={() => setErrorMessage('')}>
           <Text>{errorMessage}</Text>
         </Alert>
+      )}
+
+      {rulesInsightDataContext && (
+        <PageInsightBar
+          prompt="Analyze this evaluation rules page. Focus on missing traffic coverage, disabled or weakly sampled rules, selector imbalance, and missing evaluator attachments. Call out likely duplicate or overlapping rules only if the context strongly suggests it. Give concrete next steps and skip anything that looks normal."
+          origin="sigil-plugin/evaluation-rules-insight"
+          dataContext={rulesInsightDataContext}
+        />
       )}
 
       <div className={styles.section}>

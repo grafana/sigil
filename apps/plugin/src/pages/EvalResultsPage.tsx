@@ -14,6 +14,7 @@ import { TopStat } from '../components/TopStat';
 import { FilterToolbar } from '../components/filters/FilterToolbar';
 import { useFilterUrlState } from '../hooks/useFilterUrlState';
 import { useCascadingFilterOptions } from '../hooks/useCascadingFilterOptions';
+import { PageInsightBar } from '../components/insight/PageInsightBar';
 import { hasResponseData } from '../components/insight/summarize';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import {
@@ -257,6 +258,48 @@ export default function EvalResultsPage({ dataSource = defaultDashboardDataSourc
 
   const allLoaded = !topTotalScores.loading && !scoresByBreakdown.loading;
   const hasData = hasResponseData(topTotalScores.data) || hasResponseData(scoresByBreakdown.data);
+  const resultsInsightDataContext = useMemo(() => {
+    if (!allLoaded || !hasData) {
+      return null;
+    }
+    const scoreDelta = totalScoresValue - prevTotalScoresValue;
+    const passRateDelta = passRateValue - prevPassRateValue;
+    const durationDelta = durationValue - prevDurationValue;
+    return [
+      `Total scores: ${totalScoresValue}`,
+      `Previous total scores: ${prevTotalScoresValue}`,
+      `Total score delta: ${scoreDelta}`,
+      `Pass rate: ${passRateValue}`,
+      `Previous pass rate: ${prevPassRateValue}`,
+      `Pass rate delta: ${passRateDelta}`,
+      `Eval duration p95 seconds: ${durationValue}`,
+      `Previous eval duration p95 seconds: ${prevDurationValue}`,
+      `Eval duration delta seconds: ${durationDelta}`,
+      `Breakdown: ${breakdownBy}`,
+      `Latency percentile: ${latencyPercentile}`,
+      `Comparison label: ${comparisonLabel}`,
+      `Providers selected: ${filters.providers.join(', ') || '(all)'}`,
+      `Models selected: ${filters.models.join(', ') || '(all)'}`,
+      `Agents selected: ${filters.agentNames.join(', ') || '(all)'}`,
+      `Time range seconds: ${windowSize}`,
+    ].join('\n');
+  }, [
+    allLoaded,
+    breakdownBy,
+    comparisonLabel,
+    durationValue,
+    filters.agentNames,
+    filters.models,
+    filters.providers,
+    hasData,
+    latencyPercentile,
+    passRateValue,
+    prevDurationValue,
+    prevPassRateValue,
+    prevTotalScoresValue,
+    totalScoresValue,
+    windowSize,
+  ]);
 
   if (allLoaded && !hasData) {
     return (
@@ -278,6 +321,14 @@ export default function EvalResultsPage({ dataSource = defaultDashboardDataSourc
 
   return (
     <div className={styles.wrapper}>
+      {resultsInsightDataContext && (
+        <PageInsightBar
+          prompt="Analyze these evaluation results. Compare the current window to the previous period and focus on meaningful changes in pass rate, score volume, evaluation duration, and breakdown outliers. Call out concrete anomalies or improvement opportunities, and skip anything that looks normal."
+          origin="sigil-plugin/evaluation-results-insight"
+          dataContext={resultsInsightDataContext}
+        />
+      )}
+
       <FilterToolbar
         timeRange={timeRange}
         filters={filters}

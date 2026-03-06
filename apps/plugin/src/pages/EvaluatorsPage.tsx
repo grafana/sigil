@@ -28,6 +28,7 @@ import EvaluatorTable from '../components/evaluation/EvaluatorTable';
 import EvaluatorCardGrid from '../components/evaluation/EvaluatorCardGrid';
 import TemplateTable from '../components/evaluation/TemplateTable';
 import TemplateCardGrid from '../components/evaluation/TemplateCardGrid';
+import { PageInsightBar } from '../components/insight/PageInsightBar';
 
 const EVAL_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}`;
 type EvaluatorListView = 'table' | 'cards';
@@ -50,9 +51,9 @@ const TEMPLATE_VIEW_OPTIONS: Array<{ label: string; value: TemplateListView }> =
 ];
 
 const CARD_PAGE_SIZE_OPTIONS: Array<SelectableValue<number>> = [
-  { label: '10', value: 10 },
-  { label: '20', value: 20 },
+  { label: '15', value: 15 },
   { label: '30', value: 30 },
+  { label: '45', value: 45 },
 ];
 
 const TABLE_PAGE_SIZE_OPTIONS: Array<SelectableValue<number>> = [
@@ -275,9 +276,9 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
   const [tenantEvaluators, setTenantEvaluators] = useState<Evaluator[]>([]);
   const [evaluatorPage, setEvaluatorPage] = useState(0);
   const [templatePage, setTemplatePage] = useState(0);
-  const [evaluatorCardPageSize, setEvaluatorCardPageSize] = useState(10);
+  const [evaluatorCardPageSize, setEvaluatorCardPageSize] = useState(15);
   const [evaluatorTablePageSize, setEvaluatorTablePageSize] = useState(25);
-  const [templateCardPageSize, setTemplateCardPageSize] = useState(10);
+  const [templateCardPageSize, setTemplateCardPageSize] = useState(15);
   const [templateTablePageSize, setTemplateTablePageSize] = useState(25);
   const [evaluatorSearch, setEvaluatorSearch] = useState('');
   const [templateSearch, setTemplateSearch] = useState('');
@@ -347,6 +348,59 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
     () => sortedTemplates.filter((template) => matchesTemplate(template, deferredTemplateSearch)),
     [deferredTemplateSearch, sortedTemplates]
   );
+  const evaluatorInsightDataContext = useMemo(() => {
+    if (loading) {
+      return null;
+    }
+    const globalTemplates = sortedTemplates.filter((template) => template.scope === 'global').length;
+    const tenantTemplates = sortedTemplates.length - globalTemplates;
+    const evaluatorKinds = tenantEvaluators.reduce<Record<string, number>>((acc, evaluator) => {
+      acc[evaluator.kind] = (acc[evaluator.kind] ?? 0) + 1;
+      return acc;
+    }, {});
+    const templateKinds = sortedTemplates.reduce<Record<string, number>>((acc, template) => {
+      acc[template.kind] = (acc[template.kind] ?? 0) + 1;
+      return acc;
+    }, {});
+    return [
+      `Tenant evaluators: ${tenantEvaluators.length}`,
+      `Visible evaluators: ${filteredEvaluators.length}`,
+      `Evaluator kinds: ${
+        Object.entries(evaluatorKinds)
+          .map(([kind, count]) => `${kind}=${count}`)
+          .join(', ') || '(none)'
+      }`,
+      `Evaluator search: ${deferredEvaluatorSearch || '(none)'}`,
+      `Visible evaluator IDs: ${
+        filteredEvaluators
+          .slice(0, 10)
+          .map(
+            (evaluator) => `${evaluator.evaluator_id} [kind=${evaluator.kind}, outputs=${evaluator.output_keys.length}]`
+          )
+          .join(', ') || '(none)'
+      }`,
+      `Templates available to fork: ${sortedTemplates.length}`,
+      `Global templates: ${globalTemplates}`,
+      `Tenant templates: ${tenantTemplates}`,
+      `Template kinds: ${
+        Object.entries(templateKinds)
+          .map(([kind, count]) => `${kind}=${count}`)
+          .join(', ') || '(none)'
+      }`,
+      `Visible templates after filters: ${filteredTemplates.length}`,
+      `Template search: ${deferredTemplateSearch || '(none)'}`,
+      `Template scope filter: ${templateScopeFilter || 'all'}`,
+    ].join('\n');
+  }, [
+    deferredEvaluatorSearch,
+    deferredTemplateSearch,
+    filteredEvaluators,
+    filteredTemplates,
+    loading,
+    sortedTemplates,
+    templateScopeFilter,
+    tenantEvaluators,
+  ]);
   const evaluatorPageCount = Math.max(1, Math.ceil(filteredEvaluators.length / activeEvaluatorPageSize));
   const templatePageCount = Math.max(1, Math.ceil(filteredTemplates.length / activeTemplatePageSize));
   const clampedEvaluatorPage = Math.min(evaluatorPage, evaluatorPageCount - 1);
@@ -414,6 +468,14 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
         <Alert severity="error" title="Error" onRemove={() => setErrorMessage('')}>
           <Text>{errorMessage}</Text>
         </Alert>
+      )}
+
+      {evaluatorInsightDataContext && (
+        <PageInsightBar
+          prompt="Analyze these evaluators. Focus on gaps in evaluator kind coverage, sparse tenant evaluator coverage, weak output coverage, and concrete evaluator opportunities to add, improve, or consolidate. Use template availability only as secondary context for what could be forked. Skip anything that looks normal."
+          origin="sigil-plugin/evaluators-insight"
+          dataContext={evaluatorInsightDataContext}
+        />
       )}
 
       {/* Your Evaluators */}

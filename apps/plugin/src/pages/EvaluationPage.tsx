@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes, useLocation } from 'react-router-dom';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { LoadingPlaceholder, Stack, useStyles2 } from '@grafana/ui';
@@ -26,12 +26,14 @@ const getStyles = (theme: GrafanaTheme2) => ({
 
 export default function EvaluationPage() {
   const styles = useStyles2(getStyles);
+  const location = useLocation();
+  const showPipelineBanner = !location.pathname.endsWith('/evaluation');
 
   return (
     <EvalRulesDataProvider dataSource={defaultEvaluationDataSource}>
       <div className={styles.page}>
         <Stack direction="column" gap={2}>
-          <EvalPipelineBanner />
+          {showPipelineBanner && <EvalPipelineBanner />}
           <EvalTabBar />
           <Suspense fallback={<LoadingPlaceholder text="Loading..." />}>
             <Routes>
