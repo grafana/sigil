@@ -76,9 +76,9 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     padding: `${theme.spacing(0.25)} ${theme.spacing(0.75)}`,
     borderRadius: '12px',
     fontSize: theme.typography.bodySmall.fontSize,
-    background: theme.colors.background.secondary,
+    background: `var(--chip-bg, ${theme.colors.background.secondary})`,
     color: theme.colors.text.primary,
-    border: `1px solid ${theme.colors.border.medium}`,
+    border: `1px solid var(--chip-border-color, ${theme.colors.border.medium})`,
     transition: 'border-color 0.15s, background 0.15s',
     '&:hover:not(:disabled)': {
       borderColor: theme.colors.text.secondary,
