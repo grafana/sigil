@@ -388,9 +388,9 @@ function getStyles(theme: GrafanaTheme2) {
       '& p': {
         margin: `${theme.spacing(1)} 0`,
         maxWidth: 'none',
-        fontSize: 'clamp(5.4rem, 10vw, 9.4rem)',
-        lineHeight: 1.3,
-        fontWeight: 500,
+        fontSize: 'clamp(1.5rem, 2.9vw, 2.7rem)',
+        lineHeight: 1.45,
+        fontWeight: 600,
       },
       '& strong, & b': {
         fontWeight: 800,
