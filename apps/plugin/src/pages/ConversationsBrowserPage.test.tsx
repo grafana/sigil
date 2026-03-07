@@ -234,8 +234,12 @@ describe('ConversationsBrowserPage', () => {
     expect(dataSource.getConversationStats).toHaveBeenCalledTimes(1);
     expect(dataSource.searchConversations.mock.calls[0][0].select).toContain('span.gen_ai.usage.input_tokens');
     expect(dataSource.searchConversations.mock.calls[0][0].select).toContain('span.gen_ai.usage.output_tokens');
-    expect(dataSource.searchConversations.mock.calls[0][0].select).toContain('span.gen_ai.usage.cache_read_input_tokens');
-    expect(dataSource.searchConversations.mock.calls[0][0].select).toContain('span.gen_ai.usage.cache_write_input_tokens');
+    expect(dataSource.searchConversations.mock.calls[0][0].select).toContain(
+      'span.gen_ai.usage.cache_read_input_tokens'
+    );
+    expect(dataSource.searchConversations.mock.calls[0][0].select).toContain(
+      'span.gen_ai.usage.cache_write_input_tokens'
+    );
     expect(dataSource.searchConversations.mock.calls[0][0].select).toContain('span.gen_ai.usage.reasoning_tokens');
     expect(dataSource.searchConversations.mock.calls[0][0].select).toHaveLength(5);
 
