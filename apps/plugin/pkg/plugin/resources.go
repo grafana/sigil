@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -1146,20 +1145,6 @@ type conversationSearchRequest struct {
 	Cursor    string                      `json:"cursor"`
 }
 
-type conversationListItem struct {
-	ID               string                     `json:"id"`
-	Title            string                     `json:"title,omitempty"`
-	LastGenerationAt time.Time                  `json:"last_generation_at"`
-	GenerationCount  int                        `json:"generation_count"`
-	CreatedAt        time.Time                  `json:"created_at"`
-	UpdatedAt        time.Time                  `json:"updated_at"`
-	RatingSummary    *conversationRatingSummary `json:"rating_summary,omitempty"`
-}
-
-type conversationListResponse struct {
-	Items []conversationListItem `json:"items"`
-}
-
 type conversationRatingSummary struct {
 	TotalCount    int       `json:"total_count"`
 	GoodCount     int       `json:"good_count"`
@@ -1561,13 +1546,6 @@ func (a *App) searchConversations(req *http.Request, payload conversationSearchR
 }
 
 func (a *App) searchConversationStats(req *http.Request, payload conversationSearchRequest) (conversationStatsResponse, error) {
-	var response conversationStatsResponse
-	if err := a.doSigilJSONRequest(req, http.MethodPost, "/api/v1/conversations/stats", nil, payload, &response); err == nil {
-		return response, nil
-	} else if !canFallbackProjectionSearchError(err) {
-		return conversationStatsResponse{}, err
-	}
-
 	_, to, err := normalizeConversationSearchTimeRange(payload.TimeRange)
 	if err != nil {
 		return conversationStatsResponse{}, err
@@ -1596,17 +1574,17 @@ func (a *App) searchConversationStats(req *http.Request, payload conversationSea
 	pageIndex := 0
 
 	for {
-		response, err := a.searchConversations(req, request)
+		state, err := a.runConversationSearch(req, request, nil)
 		if err != nil {
 			return conversationStatsResponse{}, err
 		}
-		pageCalls, pageBadRated := accumulateConversationStats(&stats, response.Conversations, to)
+		pageCalls, pageBadRated := accumulateConversationStats(&stats, state.Results, to)
 		totalCalls += pageCalls
 		badRatedConversations += pageBadRated
-		if !response.HasMore || strings.TrimSpace(response.NextCursor) == "" {
+		if !state.HasMore || strings.TrimSpace(state.NextCursor) == "" {
 			break
 		}
-		request.Cursor = response.NextCursor
+		request.Cursor = state.NextCursor
 		pageIndex++
 		if pageIndex >= maxStatsSearchPages {
 			break
@@ -1728,15 +1706,6 @@ func (a *App) runConversationSearch(
 	}
 	if strings.TrimSpace(payload.Cursor) != "" && cursor.FilterHash != filterHash {
 		return conversationSearchState{}, newSearchValidationError("cursor no longer matches current filters")
-	}
-	if canUseConversationProjectionFastPath(parsedFilters, selectFields) {
-		state, err := a.runConversationProjectionSearch(req, parsedFilters, selectFields, from, to, pageSize, cursor, filterHash, emit)
-		if err == nil {
-			return state, nil
-		}
-		if !canFallbackProjectionSearchError(err) {
-			return conversationSearchState{}, err
-		}
 	}
 
 	traceQL, err := searchcore.BuildTraceQL(parsedFilters, selectFields)
@@ -1909,15 +1878,10 @@ func conversationSearchNeedsTempo(payload conversationSearchRequest) (bool, erro
 	if err := searchcore.ValidateMySQLFilterTerms(parsedFilters.MySQLTerms); err != nil {
 		return false, newSearchValidationError(err.Error())
 	}
-	selectFields, err := searchcore.NormalizeSelectFields(payload.Select)
-	if err != nil {
+	if _, err := searchcore.NormalizeSelectFields(payload.Select); err != nil {
 		return false, newSearchValidationError(err.Error())
 	}
-	return !canUseConversationProjectionFastPath(parsedFilters, selectFields), nil
-}
-
-func canUseConversationProjectionFastPath(parsedFilters searchcore.ParsedFilters, selectFields []searchcore.SelectField) bool {
-	return false
+	return true, nil
 }
 
 func canFallbackProjectionSearchError(err error) bool {
@@ -1931,381 +1895,6 @@ func canFallbackProjectionSearchError(err error) bool {
 	default:
 		return false
 	}
-}
-
-func (a *App) runConversationProjectionSearch(
-	req *http.Request,
-	parsedFilters searchcore.ParsedFilters,
-	selectFields []searchcore.SelectField,
-	from time.Time,
-	to time.Time,
-	pageSize int,
-	cursor searchcore.ConversationSearchCursor,
-	filterHash string,
-	emit func([]conversationSearchResult) error,
-) (conversationSearchState, error) {
-	candidates, err := a.listProjectionConversationMetadata(req, parsedFilters, from, to)
-	if err != nil {
-		return conversationSearchState{}, err
-	}
-
-	alreadyReturned := make(map[string]struct{}, len(cursor.ReturnedConversations))
-	for _, conversationID := range cursor.ReturnedConversations {
-		alreadyReturned[conversationID] = struct{}{}
-	}
-
-	results := make([]conversationSearchResult, 0, pageSize)
-	hasMore := false
-
-	for start := 0; start < len(candidates); start += conversationSearchMetadataChunkSize {
-		end := start + conversationSearchMetadataChunkSize
-		if end > len(candidates) {
-			end = len(candidates)
-		}
-
-		batch := make([]conversationSearchResult, 0, min(pageSize-len(results), end-start))
-		for _, metadata := range candidates[start:end] {
-			if _, seen := alreadyReturned[metadata.ConversationID]; seen {
-				continue
-			}
-			if len(results) >= pageSize {
-				hasMore = true
-				break
-			}
-			result := conversationSearchResult{
-				ConversationID:    metadata.ConversationID,
-				ConversationTitle: strings.TrimSpace(metadata.ConversationTitle),
-				UserID:            strings.TrimSpace(metadata.UserID),
-				GenerationCount:   metadata.GenerationCount,
-				FirstGenerationAt: metadata.FirstGenerationAt.UTC(),
-				LastGenerationAt:  metadata.LastGenerationAt.UTC(),
-				Models:            append([]string{}, metadata.Models...),
-				ModelProviders:    cloneStringMap(metadata.ModelProviders),
-				Agents:            append([]string{}, metadata.Agents...),
-				TraceIDs:          []string{},
-				ErrorCount:        metadata.ErrorCount,
-				HasErrors:         metadata.HasErrors,
-				AnnotationCount:   metadata.AnnotationCount,
-				Selected:          projectionSelectedFields(metadata, selectFields),
-			}
-			if metadata.RatingSummary != nil {
-				copied := *metadata.RatingSummary
-				result.RatingSummary = &copied
-			}
-			if metadata.EvalSummary != nil {
-				copied := *metadata.EvalSummary
-				result.EvalSummary = &copied
-			}
-			results = append(results, result)
-			batch = append(batch, result)
-		}
-
-		if len(batch) > 0 && emit != nil {
-			if err := emit(batch); err != nil {
-				return conversationSearchState{}, err
-			}
-		}
-		if hasMore {
-			break
-		}
-	}
-
-	nextCursor := ""
-	if hasMore {
-		returnedConversations := make([]string, 0, len(alreadyReturned)+len(results))
-		for conversationID := range alreadyReturned {
-			returnedConversations = append(returnedConversations, conversationID)
-		}
-		for _, result := range results {
-			returnedConversations = append(returnedConversations, result.ConversationID)
-		}
-		nextCursor, err = searchcore.EncodeConversationSearchCursor(searchcore.ConversationSearchCursor{
-			EndNanos:              to.UnixNano(),
-			ReturnedConversations: returnedConversations,
-			FilterHash:            filterHash,
-		})
-		if err != nil {
-			return conversationSearchState{}, err
-		}
-	}
-
-	return conversationSearchState{
-		Results:    results,
-		NextCursor: nextCursor,
-		HasMore:    hasMore,
-	}, nil
-}
-
-func (a *App) searchConversationProjectionStats(
-	req *http.Request,
-	parsedFilters searchcore.ParsedFilters,
-	from time.Time,
-	to time.Time,
-) (conversationStatsResponse, error) {
-	candidates, err := a.listProjectionConversationMetadata(req, parsedFilters, from, to)
-	if err != nil {
-		return conversationStatsResponse{}, err
-	}
-
-	stats := conversationStatsResponse{}
-	totalCalls := 0
-	badRatedConversations := 0
-	for _, metadata := range candidates {
-		stats.TotalConversations++
-		totalCalls += metadata.GenerationCount
-		stats.TotalTokens += float64(metadata.TotalTokens)
-
-		lastActivity := metadata.LastGenerationAt.UTC()
-		age := to.Sub(lastActivity)
-		if !lastActivity.IsZero() && age >= 0 && age <= 7*24*time.Hour {
-			stats.ActiveLast7d++
-		}
-		if metadata.RatingSummary != nil && metadata.RatingSummary.TotalCount > 0 {
-			stats.RatedConversations++
-			if metadata.RatingSummary.HasBadRating {
-				badRatedConversations++
-			}
-		}
-	}
-	if stats.TotalConversations > 0 {
-		stats.AvgCallsPerConversation = float64(totalCalls) / float64(stats.TotalConversations)
-	}
-	if stats.RatedConversations > 0 {
-		stats.BadRatedPct = (float64(badRatedConversations) / float64(stats.RatedConversations)) * 100
-	}
-	return stats, nil
-}
-
-func (a *App) listProjectionConversationMetadata(
-	req *http.Request,
-	parsedFilters searchcore.ParsedFilters,
-	from time.Time,
-	to time.Time,
-) ([]conversationBatchMetadata, error) {
-	rows, err := a.fetchConversationProjection(req)
-	if err != nil {
-		return nil, err
-	}
-	if len(rows) == 0 {
-		return []conversationBatchMetadata{}, nil
-	}
-
-	sort.Slice(rows, func(i, j int) bool {
-		left := rows[i]
-		right := rows[j]
-		if !left.LastGenerationAt.Equal(right.LastGenerationAt) {
-			return left.LastGenerationAt.After(right.LastGenerationAt)
-		}
-		if !left.UpdatedAt.Equal(right.UpdatedAt) {
-			return left.UpdatedAt.After(right.UpdatedAt)
-		}
-		return left.ID < right.ID
-	})
-
-	candidateIDs := make([]string, 0, len(rows))
-	for _, row := range rows {
-		if strings.TrimSpace(row.ID) == "" {
-			continue
-		}
-		if row.LastGenerationAt.UTC().Before(from) {
-			break
-		}
-		if !searchcore.MatchesGenerationCountFilters(row.GenerationCount, parsedFilters.MySQLTerms) {
-			continue
-		}
-		candidateIDs = append(candidateIDs, row.ID)
-	}
-	if len(candidateIDs) == 0 {
-		return []conversationBatchMetadata{}, nil
-	}
-
-	out := make([]conversationBatchMetadata, 0, len(candidateIDs))
-	for start := 0; start < len(candidateIDs); start += conversationSearchMetadataChunkSize {
-		end := start + conversationSearchMetadataChunkSize
-		if end > len(candidateIDs) {
-			end = len(candidateIDs)
-		}
-		chunkIDs := candidateIDs[start:end]
-		metadataByConversation, err := a.fetchConversationBatchMetadata(req, chunkIDs)
-		if err != nil {
-			return nil, err
-		}
-		for _, conversationID := range chunkIDs {
-			metadata, ok := metadataByConversation[conversationID]
-			if !ok || !projectionConversationOverlapsRange(metadata, from, to) {
-				continue
-			}
-			if !projectionConversationMatchesFilters(metadata, parsedFilters) {
-				continue
-			}
-			out = append(out, metadata)
-		}
-	}
-
-	return out, nil
-}
-
-func projectionConversationOverlapsRange(metadata conversationBatchMetadata, from, to time.Time) bool {
-	start := metadata.FirstGenerationAt.UTC()
-	end := metadata.LastGenerationAt.UTC()
-	if end.Before(from) {
-		return false
-	}
-	if start.After(to) {
-		return false
-	}
-	return true
-}
-
-func projectionSupportsTempoTerm(term searchcore.FilterTerm) bool {
-	switch strings.TrimSpace(term.RawKey) {
-	case "model", "provider", "agent":
-		switch term.Operator {
-		case searchcore.FilterOperatorEqual, searchcore.FilterOperatorNotEqual, searchcore.FilterOperatorRegex:
-			return strings.TrimSpace(term.Value) != ""
-		default:
-			return false
-		}
-	case "status":
-		return term.Operator == searchcore.FilterOperatorEqual && strings.EqualFold(strings.TrimSpace(term.Value), "error")
-	default:
-		return false
-	}
-}
-
-func projectionSupportsSelectField(field searchcore.SelectField) bool {
-	switch strings.TrimSpace(field.ResolvedKey) {
-	case conversationSearchInputTokensSelectKey,
-		conversationSearchOutputTokensSelectKey,
-		conversationSearchCacheReadTokensSelectKey,
-		conversationSearchCacheWriteTokensSelectKey,
-		conversationSearchReasoningTokensSelectKey:
-		return true
-	default:
-		return false
-	}
-}
-
-func projectionConversationMatchesFilters(metadata conversationBatchMetadata, parsedFilters searchcore.ParsedFilters) bool {
-	if !searchcore.MatchesGenerationCountFilters(metadata.GenerationCount, parsedFilters.MySQLTerms) {
-		return false
-	}
-	for _, term := range parsedFilters.TempoTerms {
-		if !projectionTempoTermMatches(metadata, term) {
-			return false
-		}
-	}
-	return true
-}
-
-func projectionTempoTermMatches(metadata conversationBatchMetadata, term searchcore.FilterTerm) bool {
-	switch strings.TrimSpace(term.RawKey) {
-	case "model":
-		return projectionStringSliceMatches(metadata.Models, term)
-	case "provider":
-		return projectionStringSliceMatches(projectionProviderValues(metadata.ModelProviders), term)
-	case "agent":
-		return projectionStringSliceMatches(metadata.Agents, term)
-	case "status":
-		return metadata.ErrorCount > 0 && strings.EqualFold(strings.TrimSpace(term.Value), "error")
-	default:
-		return false
-	}
-}
-
-func projectionStringSliceMatches(values []string, term searchcore.FilterTerm) bool {
-	if len(values) == 0 {
-		return false
-	}
-
-	target := strings.TrimSpace(term.Value)
-	switch term.Operator {
-	case searchcore.FilterOperatorEqual:
-		for _, value := range values {
-			if value == target {
-				return true
-			}
-		}
-		return false
-	case searchcore.FilterOperatorNotEqual:
-		for _, value := range values {
-			if value != target {
-				return true
-			}
-		}
-		return false
-	case searchcore.FilterOperatorRegex:
-		pattern, err := regexp.Compile(target)
-		if err != nil {
-			return false
-		}
-		for _, value := range values {
-			if pattern.MatchString(value) {
-				return true
-			}
-		}
-		return false
-	default:
-		return false
-	}
-}
-
-func projectionProviderValues(modelProviders map[string]string) []string {
-	if len(modelProviders) == 0 {
-		return []string{}
-	}
-	seen := make(map[string]struct{}, len(modelProviders))
-	values := make([]string, 0, len(modelProviders))
-	for _, provider := range modelProviders {
-		normalized := strings.TrimSpace(provider)
-		if normalized == "" {
-			continue
-		}
-		if _, ok := seen[normalized]; ok {
-			continue
-		}
-		seen[normalized] = struct{}{}
-		values = append(values, normalized)
-	}
-	sort.Strings(values)
-	return values
-}
-
-func projectionSelectedFields(metadata conversationBatchMetadata, selectFields []searchcore.SelectField) map[string]any {
-	if len(selectFields) == 0 {
-		return nil
-	}
-
-	selected := make(map[string]any, len(selectFields))
-	for _, field := range selectFields {
-		switch strings.TrimSpace(field.ResolvedKey) {
-		case conversationSearchInputTokensSelectKey:
-			selected[field.Key] = float64(metadata.InputTokens)
-		case conversationSearchOutputTokensSelectKey:
-			selected[field.Key] = float64(metadata.OutputTokens)
-		case conversationSearchCacheReadTokensSelectKey:
-			selected[field.Key] = float64(metadata.CacheReadTokens)
-		case conversationSearchCacheWriteTokensSelectKey:
-			selected[field.Key] = float64(metadata.CacheWriteTokens)
-		case conversationSearchReasoningTokensSelectKey:
-			selected[field.Key] = float64(metadata.ReasoningTokens)
-		}
-	}
-	if len(selected) == 0 {
-		return nil
-	}
-	return selected
-}
-
-func cloneStringMap(values map[string]string) map[string]string {
-	if len(values) == 0 {
-		return nil
-	}
-	cloned := make(map[string]string, len(values))
-	for key, value := range values {
-		cloned[key] = value
-	}
-	return cloned
 }
 
 func decodeConversationSearchRequest(req *http.Request) (conversationSearchRequest, error) {
@@ -2431,17 +2020,6 @@ func (a *App) fetchConversationBatchMetadata(req *http.Request, conversationIDs 
 		out[conversationID] = item
 	}
 	return out, nil
-}
-
-func (a *App) fetchConversationProjection(req *http.Request) ([]conversationListItem, error) {
-	var response conversationListResponse
-	if err := a.doSigilJSONRequest(req, http.MethodGet, "/api/v1/conversations", nil, nil, &response); err != nil {
-		return nil, err
-	}
-	if response.Items == nil {
-		return []conversationListItem{}, nil
-	}
-	return response.Items, nil
 }
 
 func (a *App) doSigilJSONRequest(
