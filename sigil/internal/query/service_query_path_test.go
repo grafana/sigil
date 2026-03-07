@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	"github.com/grafana/sigil/sigil/internal/feedback"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	"github.com/grafana/sigil/sigil/internal/storage"
@@ -101,6 +102,10 @@ func TestSearchConversationsForTenantAppliesTempoAndMySQLFilters(t *testing.T) {
 				TenantID:         "tenant-a",
 				ConversationID:   "conv-1",
 				GenerationCount:  5,
+				Models:           []string{"gpt-4o", "gpt-5"},
+				ModelProviders:   map[string]string{"gpt-4o": "openai", "gpt-5": "anthropic"},
+				Agents:           []string{"assistant", "router"},
+				ErrorCount:       4,
 				CreatedAt:        base.Add(-20 * time.Minute),
 				LastGenerationAt: base.Add(-10 * time.Minute),
 				UpdatedAt:        base.Add(-10 * time.Minute),
@@ -135,6 +140,7 @@ func TestSearchConversationsForTenantAppliesTempoAndMySQLFilters(t *testing.T) {
 	traceWithTitle.SpanSets[0].Spans[0].Attributes = append(
 		traceWithTitle.SpanSets[0].Spans[0].Attributes,
 		TempoAttribute{Key: "sigil.conversation.title", Value: tempoStringValue("Escalation: billing outage")},
+		TempoAttribute{Key: "gen_ai.provider.name", Value: tempoStringValue("openai")},
 		TempoAttribute{Key: "user.id", Value: tempoStringValue("user-responder")},
 	)
 	service.tempoClient = &stubTempoClient{
@@ -174,6 +180,18 @@ func TestSearchConversationsForTenantAppliesTempoAndMySQLFilters(t *testing.T) {
 	if item.GenerationCount != 5 {
 		t.Fatalf("expected generation_count=5, got %d", item.GenerationCount)
 	}
+	if len(item.Models) != 2 || item.Models[0] != "gpt-4o" || item.Models[1] != "gpt-5" {
+		t.Fatalf("expected lifetime models from projection metadata, got %#v", item.Models)
+	}
+	if len(item.ModelProviders) != 2 || item.ModelProviders["gpt-4o"] != "openai" || item.ModelProviders["gpt-5"] != "anthropic" {
+		t.Fatalf("expected lifetime model providers from projection metadata, got %#v", item.ModelProviders)
+	}
+	if len(item.Agents) != 2 || item.Agents[0] != "assistant" || item.Agents[1] != "router" {
+		t.Fatalf("expected lifetime agents from projection metadata, got %#v", item.Agents)
+	}
+	if item.ErrorCount != 4 {
+		t.Fatalf("expected lifetime error_count=4 from projection metadata, got %d", item.ErrorCount)
+	}
 	if !item.HasErrors {
 		t.Fatalf("expected has_errors=true due tempo error field")
 	}
@@ -185,17 +203,79 @@ func TestSearchConversationsForTenantAppliesTempoAndMySQLFilters(t *testing.T) {
 	}
 }
 
-func TestSearchConversationsForTenantUsesGenerationTitleWhenTempoTitleMissing(t *testing.T) {
+func TestSearchConversationsForTenantUsesProjectionTokenCountersForSelectedFields(t *testing.T) {
 	base := time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)
 	conversationStore := &stubConversationStore{
 		items: map[string]storage.Conversation{
 			"conv-1": {
 				TenantID:         "tenant-a",
 				ConversationID:   "conv-1",
-				GenerationCount:  1,
-				CreatedAt:        base.Add(-5 * time.Minute),
-				LastGenerationAt: base.Add(-2 * time.Minute),
-				UpdatedAt:        base.Add(-2 * time.Minute),
+				GenerationCount:  2,
+				InputTokens:      100,
+				OutputTokens:     40,
+				CacheReadTokens:  20,
+				CacheWriteTokens: 5,
+				ReasoningTokens:  7,
+				CreatedAt:        base.Add(-20 * time.Minute),
+				LastGenerationAt: base.Add(-10 * time.Minute),
+				UpdatedAt:        base.Add(-10 * time.Minute),
+			},
+		},
+	}
+
+	service := NewServiceWithStores(conversationStore, feedback.NewMemoryStore())
+	service.tempoClient = &stubTempoClient{
+		searchResponses: []*TempoSearchResponse{{
+			Traces: []TempoTrace{
+				newTempoTrace("trace-1", base.Add(-2*time.Minute), "conv-1", "gen-1", "gpt-4o", "assistant", ""),
+			},
+		}},
+	}
+
+	response, err := service.SearchConversationsForTenant(context.Background(), "tenant-a", ConversationSearchRequest{
+		Filters: `model = "gpt-4o"`,
+		Select: []string{
+			"span.gen_ai.usage.input_tokens",
+			"span.gen_ai.usage.output_tokens",
+			"span.gen_ai.usage.cache_read_input_tokens",
+			"span.gen_ai.usage.cache_write_input_tokens",
+			"span.gen_ai.usage.reasoning_tokens",
+		},
+		PageSize: 20,
+		TimeRange: ConversationSearchTimeRange{
+			From: base.Add(-time.Hour),
+			To:   base,
+		},
+	})
+	if err != nil {
+		t.Fatalf("search conversations: %v", err)
+	}
+	if len(response.Conversations) != 1 {
+		t.Fatalf("expected one conversation, got %d", len(response.Conversations))
+	}
+
+	selected := response.Conversations[0].Selected
+	if selected["span.gen_ai.usage.input_tokens"] != float64(100) ||
+		selected["span.gen_ai.usage.output_tokens"] != float64(40) ||
+		selected["span.gen_ai.usage.cache_read_input_tokens"] != float64(20) ||
+		selected["span.gen_ai.usage.cache_write_input_tokens"] != float64(5) ||
+		selected["span.gen_ai.usage.reasoning_tokens"] != float64(7) {
+		t.Fatalf("expected projection token counters in selected fields, got %#v", selected)
+	}
+}
+
+func TestSearchConversationsForTenantUsesStoredProjectionTitleWhenTempoTitleMissing(t *testing.T) {
+	base := time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)
+	conversationStore := &stubConversationStore{
+		items: map[string]storage.Conversation{
+			"conv-1": {
+				TenantID:          "tenant-a",
+				ConversationID:    "conv-1",
+				ConversationTitle: "Incident: stored projection title",
+				GenerationCount:   1,
+				CreatedAt:         base.Add(-5 * time.Minute),
+				LastGenerationAt:  base.Add(-2 * time.Minute),
+				UpdatedAt:         base.Add(-2 * time.Minute),
 			},
 		},
 	}
@@ -235,11 +315,11 @@ func TestSearchConversationsForTenantUsesGenerationTitleWhenTempoTitleMissing(t 
 	if len(response.Conversations) != 1 {
 		t.Fatalf("expected one conversation, got %d", len(response.Conversations))
 	}
-	if response.Conversations[0].ConversationTitle != "Incident: generation-backed title" {
-		t.Fatalf("expected conversation title from generation metadata, got %q", response.Conversations[0].ConversationTitle)
+	if response.Conversations[0].ConversationTitle != "Incident: stored projection title" {
+		t.Fatalf("expected conversation title from projection metadata, got %q", response.Conversations[0].ConversationTitle)
 	}
-	if len(walReader.requestedGenerationIDs) == 0 || walReader.requestedGenerationIDs[0] != "gen-1" {
-		t.Fatalf("expected generation title lookup via wal reader, got %#v", walReader.requestedGenerationIDs)
+	if len(walReader.requestedGenerationIDs) != 0 {
+		t.Fatalf("expected no generation title lookup via wal reader, got %#v", walReader.requestedGenerationIDs)
 	}
 }
 
@@ -301,19 +381,23 @@ func TestSearchConversationsForTenantDoesNotUseGenerationOutputTitleWhenMetadata
 	if response.Conversations[0].ConversationTitle != "" {
 		t.Fatalf("expected empty conversation title when only output payload has a title, got %q", response.Conversations[0].ConversationTitle)
 	}
+	if len(walReader.requestedGenerationIDs) != 0 {
+		t.Fatalf("expected no generation title lookup via wal reader, got %#v", walReader.requestedGenerationIDs)
+	}
 }
 
-func TestSearchConversationsForTenantPrefersGenerationTitleOverTempoTitle(t *testing.T) {
+func TestSearchConversationsForTenantPrefersStoredProjectionTitleOverTempoTitle(t *testing.T) {
 	base := time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)
 	conversationStore := &stubConversationStore{
 		items: map[string]storage.Conversation{
 			"conv-1": {
-				TenantID:         "tenant-a",
-				ConversationID:   "conv-1",
-				GenerationCount:  1,
-				CreatedAt:        base.Add(-5 * time.Minute),
-				LastGenerationAt: base.Add(-2 * time.Minute),
-				UpdatedAt:        base.Add(-2 * time.Minute),
+				TenantID:          "tenant-a",
+				ConversationID:    "conv-1",
+				ConversationTitle: "Incident: stored title",
+				GenerationCount:   1,
+				CreatedAt:         base.Add(-5 * time.Minute),
+				LastGenerationAt:  base.Add(-2 * time.Minute),
+				UpdatedAt:         base.Add(-2 * time.Minute),
 			},
 		},
 	}
@@ -357,22 +441,26 @@ func TestSearchConversationsForTenantPrefersGenerationTitleOverTempoTitle(t *tes
 	if len(response.Conversations) != 1 {
 		t.Fatalf("expected one conversation, got %d", len(response.Conversations))
 	}
-	if response.Conversations[0].ConversationTitle != "Incident: generation title" {
-		t.Fatalf("expected generation title to win over tempo title, got %q", response.Conversations[0].ConversationTitle)
+	if response.Conversations[0].ConversationTitle != "Incident: stored title" {
+		t.Fatalf("expected stored title to win over tempo title, got %q", response.Conversations[0].ConversationTitle)
+	}
+	if len(walReader.requestedGenerationIDs) != 0 {
+		t.Fatalf("expected no generation title lookup via wal reader, got %#v", walReader.requestedGenerationIDs)
 	}
 }
 
-func TestSearchConversationsForTenantPrefersLatestGenerationTitleOverLatestSpanTitle(t *testing.T) {
+func TestSearchConversationsForTenantPrefersStoredProjectionTitleOverLatestSpanTitle(t *testing.T) {
 	base := time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)
 	conversationStore := &stubConversationStore{
 		items: map[string]storage.Conversation{
 			"conv-1": {
-				TenantID:         "tenant-a",
-				ConversationID:   "conv-1",
-				GenerationCount:  2,
-				CreatedAt:        base.Add(-8 * time.Minute),
-				LastGenerationAt: base.Add(-time.Minute),
-				UpdatedAt:        base.Add(-time.Minute),
+				TenantID:          "tenant-a",
+				ConversationID:    "conv-1",
+				ConversationTitle: "Incident: stored title",
+				GenerationCount:   2,
+				CreatedAt:         base.Add(-8 * time.Minute),
+				LastGenerationAt:  base.Add(-time.Minute),
+				UpdatedAt:         base.Add(-time.Minute),
 			},
 		},
 	}
@@ -425,11 +513,11 @@ func TestSearchConversationsForTenantPrefersLatestGenerationTitleOverLatestSpanT
 	if len(response.Conversations) != 1 {
 		t.Fatalf("expected one conversation, got %d", len(response.Conversations))
 	}
-	if response.Conversations[0].ConversationTitle != "Incident: latest generation title" {
-		t.Fatalf("expected latest generation title to win, got %q", response.Conversations[0].ConversationTitle)
+	if response.Conversations[0].ConversationTitle != "Incident: stored title" {
+		t.Fatalf("expected stored title to win, got %q", response.Conversations[0].ConversationTitle)
 	}
-	if len(walReader.requestedConversationIDs) == 0 || walReader.requestedConversationIDs[0] != "conv-1" {
-		t.Fatalf("expected conversation generation lookup, got %#v", walReader.requestedConversationIDs)
+	if len(walReader.requestedConversationIDs) != 0 {
+		t.Fatalf("expected no conversation generation lookup, got %#v", walReader.requestedConversationIDs)
 	}
 }
 
@@ -1474,7 +1562,18 @@ func TestListConversationBatchMetadataForTenant(t *testing.T) {
 				TenantID:          "tenant-a",
 				ConversationID:    "conv-1",
 				ConversationTitle: "Incident: stored batch title",
+				UserID:            "user-42",
 				GenerationCount:   3,
+				Models:            []string{"gpt-5"},
+				ModelProviders:    map[string]string{"gpt-5": "openai"},
+				Agents:            []string{"assistant"},
+				ErrorCount:        2,
+				InputTokens:       120,
+				OutputTokens:      45,
+				CacheReadTokens:   12,
+				CacheWriteTokens:  8,
+				ReasoningTokens:   5,
+				TotalTokens:       190,
 				CreatedAt:         base.Add(-time.Hour),
 				LastGenerationAt:  base.Add(-5 * time.Minute),
 				UpdatedAt:         base.Add(-5 * time.Minute),
@@ -1519,6 +1618,24 @@ func TestListConversationBatchMetadataForTenant(t *testing.T) {
 	if item.GenerationCount != 3 {
 		t.Fatalf("unexpected generation count: %d", item.GenerationCount)
 	}
+	if item.UserID != "user-42" {
+		t.Fatalf("unexpected user id: %q", item.UserID)
+	}
+	if len(item.Models) != 1 || item.Models[0] != "gpt-5" {
+		t.Fatalf("unexpected models: %#v", item.Models)
+	}
+	if item.ModelProviders["gpt-5"] != "openai" {
+		t.Fatalf("unexpected model providers: %#v", item.ModelProviders)
+	}
+	if len(item.Agents) != 1 || item.Agents[0] != "assistant" {
+		t.Fatalf("unexpected agents: %#v", item.Agents)
+	}
+	if item.ErrorCount != 2 || !item.HasErrors {
+		t.Fatalf("unexpected error summary: count=%d has_errors=%v", item.ErrorCount, item.HasErrors)
+	}
+	if item.InputTokens != 120 || item.OutputTokens != 45 || item.CacheReadTokens != 12 || item.CacheWriteTokens != 8 || item.ReasoningTokens != 5 || item.TotalTokens != 190 {
+		t.Fatalf("unexpected token totals: %+v", item)
+	}
 	if item.AnnotationCount != 1 {
 		t.Fatalf("unexpected annotation count: %d", item.AnnotationCount)
 	}
@@ -1530,6 +1647,153 @@ func TestListConversationBatchMetadataForTenant(t *testing.T) {
 	}
 	if conversationStore.getConversationCalls != 0 {
 		t.Fatalf("expected no per-id conversation lookups, got %d", conversationStore.getConversationCalls)
+	}
+}
+
+func TestListConversationProjectionPageForTenantUsesProjectionStore(t *testing.T) {
+	base := time.Date(2026, 2, 16, 10, 0, 0, 0, time.UTC)
+	ratedAt := base.Add(-time.Minute)
+	store := &stubConversationStore{
+		projectionPages: [][]storage.ConversationProjectionPageItem{
+			{
+				{
+					Conversation: storage.Conversation{
+						TenantID:          "tenant-a",
+						ConversationID:    "conv-2",
+						ConversationTitle: "Projection row",
+						UserID:            "user-2",
+						GenerationCount:   3,
+						FirstGenerationAt: base.Add(-10 * time.Minute),
+						LastGenerationAt:  base.Add(-2 * time.Minute),
+						Models:            []string{"gpt-5"},
+						ModelProviders:    map[string]string{"gpt-5": "openai"},
+						Agents:            []string{"assistant"},
+						ErrorCount:        1,
+						InputTokens:       11,
+						OutputTokens:      7,
+						CacheReadTokens:   5,
+						CacheWriteTokens:  3,
+						ReasoningTokens:   2,
+						TotalTokens:       28,
+					},
+					RatingSummary: &feedback.ConversationRatingSummary{
+						TotalCount:    1,
+						BadCount:      1,
+						LatestRating:  feedback.RatingValueBad,
+						LatestRatedAt: ratedAt,
+						HasBadRating:  true,
+					},
+					AnnotationCount: 2,
+				},
+			},
+		},
+	}
+
+	service, err := NewServiceWithDependencies(ServiceDependencies{
+		ConversationStore: store,
+		EvalSummaryStore: &stubEvalSummaryStore{
+			summaries: map[string]evalpkg.ConversationEvalSummary{
+				"conv-2": {
+					TotalScores: 4,
+					PassCount:   3,
+					FailCount:   1,
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new query service: %v", err)
+	}
+
+	items, hasMore, err := service.ListConversationProjectionPageForTenant(
+		context.Background(),
+		"tenant-a",
+		base.Add(-time.Hour),
+		base,
+		50,
+		[]string{"conv-1", "conv-1", "conv-0"},
+	)
+	if err != nil {
+		t.Fatalf("list projection page: %v", err)
+	}
+	if hasMore {
+		t.Fatalf("expected projection page has_more=false, got %v", hasMore)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected one projection item, got %d", len(items))
+	}
+	item := items[0]
+	if item.ConversationID != "conv-2" {
+		t.Fatalf("expected conversation id conv-2, got %q", item.ConversationID)
+	}
+	if item.AnnotationCount != 2 {
+		t.Fatalf("expected annotation count 2, got %d", item.AnnotationCount)
+	}
+	if item.RatingSummary == nil || !item.RatingSummary.HasBadRating {
+		t.Fatalf("expected bad rating summary, got %#v", item.RatingSummary)
+	}
+	if item.EvalSummary == nil || item.EvalSummary.TotalScores != 4 {
+		t.Fatalf("expected eval summary total_scores=4, got %#v", item.EvalSummary)
+	}
+	if store.projectionPageCalls != 1 {
+		t.Fatalf("expected one projection page call, got %d", store.projectionPageCalls)
+	}
+	if got := store.projectionPageExcludedIDsByCall[0]; len(got) != 2 || got[0] != "conv-0" || got[1] != "conv-1" {
+		t.Fatalf("expected sorted deduped excluded ids, got %#v", got)
+	}
+}
+
+func TestListConversationProjectionPageForTenantFallbackUsesWindowOverlap(t *testing.T) {
+	base := time.Date(2026, 2, 16, 10, 0, 0, 0, time.UTC)
+	baseStore := &stubConversationStore{
+		items: map[string]storage.Conversation{
+			"conv-1": {
+				TenantID:          "tenant-a",
+				ConversationID:    "conv-1",
+				ConversationTitle: "Overlapping activity",
+				GenerationCount:   2,
+				FirstGenerationAt: base.Add(-30 * time.Minute),
+				LastGenerationAt:  base.Add(30 * time.Minute),
+				CreatedAt:         base.Add(-30 * time.Minute),
+				UpdatedAt:         base.Add(30 * time.Minute),
+			},
+			"conv-2": {
+				TenantID:          "tenant-a",
+				ConversationID:    "conv-2",
+				ConversationTitle: "Too old",
+				GenerationCount:   1,
+				FirstGenerationAt: base.Add(-2 * time.Hour),
+				LastGenerationAt:  base.Add(-90 * time.Minute),
+				CreatedAt:         base.Add(-2 * time.Hour),
+				UpdatedAt:         base.Add(-90 * time.Minute),
+			},
+		},
+	}
+	store := &stubConversationStoreWithoutProjection{baseStore: baseStore}
+
+	service, err := NewServiceWithDependencies(ServiceDependencies{
+		ConversationStore: store,
+	})
+	if err != nil {
+		t.Fatalf("new query service: %v", err)
+	}
+
+	items, hasMore, err := service.ListConversationProjectionPageForTenant(
+		context.Background(),
+		"tenant-a",
+		base.Add(-15*time.Minute),
+		base.Add(15*time.Minute),
+		50,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("list projection page fallback: %v", err)
+	}
+	if hasMore {
+		t.Fatalf("expected has_more=false, got %v", hasMore)
+	}
+	if len(items) != 1 || items[0].ConversationID != "conv-1" {
+		t.Fatalf("expected overlapping conversation to be included, got %#v", items)
 	}
 }
 
@@ -1571,9 +1835,28 @@ func (s *stubTempoClient) SearchTagValues(_ context.Context, _ string, tag strin
 }
 
 type stubConversationStore struct {
-	items                 map[string]storage.Conversation
-	getConversationCalls  int
-	getConversationsCalls int
+	items                           map[string]storage.Conversation
+	projectionPages                 [][]storage.ConversationProjectionPageItem
+	projectionPageCalls             int
+	projectionPageExcludedIDsByCall [][]string
+	getConversationCalls            int
+	getConversationsCalls           int
+}
+
+type stubConversationStoreWithoutProjection struct {
+	baseStore *stubConversationStore
+}
+
+func (s *stubConversationStoreWithoutProjection) ListConversations(ctx context.Context, tenantID string) ([]storage.Conversation, error) {
+	return s.baseStore.ListConversations(ctx, tenantID)
+}
+
+func (s *stubConversationStoreWithoutProjection) GetConversation(ctx context.Context, tenantID, conversationID string) (*storage.Conversation, error) {
+	return s.baseStore.GetConversation(ctx, tenantID, conversationID)
+}
+
+func (s *stubConversationStoreWithoutProjection) GetConversations(ctx context.Context, tenantID string, conversationIDs []string) ([]storage.Conversation, error) {
+	return s.baseStore.GetConversations(ctx, tenantID, conversationIDs)
 }
 
 func (s *stubConversationStore) ListConversations(_ context.Context, tenantID string) ([]storage.Conversation, error) {
@@ -1611,6 +1894,28 @@ func (s *stubConversationStore) GetConversations(_ context.Context, tenantID str
 		out = append(out, item)
 	}
 	return out, nil
+}
+
+func (s *stubConversationStore) ListConversationProjectionPage(_ context.Context, tenantID string, filter storage.ConversationProjectionPageQuery) ([]storage.ConversationProjectionPageItem, bool, error) {
+	s.projectionPageCalls++
+	excluded := append([]string{}, filter.ExcludeConversationIDs...)
+	s.projectionPageExcludedIDsByCall = append(s.projectionPageExcludedIDsByCall, excluded)
+	if len(s.projectionPages) == 0 {
+		return []storage.ConversationProjectionPageItem{}, false, nil
+	}
+	callIndex := s.projectionPageCalls - 1
+	if callIndex >= len(s.projectionPages) {
+		return []storage.ConversationProjectionPageItem{}, false, nil
+	}
+
+	page := make([]storage.ConversationProjectionPageItem, 0, len(s.projectionPages[callIndex]))
+	for _, item := range s.projectionPages[callIndex] {
+		if item.Conversation.TenantID != tenantID {
+			continue
+		}
+		page = append(page, item)
+	}
+	return page, callIndex < len(s.projectionPages)-1, nil
 }
 
 type stubWALReader struct {

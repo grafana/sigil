@@ -428,7 +428,7 @@ func TestCallResource(t *testing.T) {
 				http.Error(w, "missing conversation ids", http.StatusBadRequest)
 				return
 			}
-			_, _ = io.WriteString(w, `{"items":[{"conversation_id":"conv-1","generation_count":2,"first_generation_at":"2026-02-15T08:00:00Z","last_generation_at":"2026-02-15T09:00:00Z","annotation_count":0}],"missing_conversation_ids":[]}`)
+			_, _ = io.WriteString(w, `{"items":[{"conversation_id":"conv-1","user_id":"user-42","generation_count":2,"first_generation_at":"2026-02-15T08:00:00Z","last_generation_at":"2026-02-15T09:00:00Z","models":["gpt-4o"],"model_providers":{"gpt-4o":"openai"},"agents":["assistant"],"error_count":0,"has_errors":false,"annotation_count":0}],"missing_conversation_ids":[]}`)
 		case "/api/v1/conversations/c-1":
 			_, _ = io.WriteString(w, `{"conversation_id":"c-1"}`)
 		case "/api/v1/conversations/conv-1":
@@ -699,7 +699,7 @@ func TestCallResource(t *testing.T) {
 			method:    http.MethodPost,
 			path:      "query/conversations/search",
 			expStatus: http.StatusOK,
-			reqBody:   []byte(`{"filters":"model=\"gpt-4o\"","time_range":{"from":"2026-02-14T00:00:00Z","to":"2026-02-16T00:00:00Z"},"page_size":20}`),
+			reqBody:   []byte(`{"filters":"model=\"gpt-4o\"","select":["span.sigil.sdk.name"],"time_range":{"from":"2026-02-14T00:00:00Z","to":"2026-02-16T00:00:00Z"},"page_size":20}`),
 			expBodyContains: []string{
 				`"conversation_id":"conv-1"`,
 				`"user_id":"user-42"`,
@@ -1099,6 +1099,152 @@ func TestCallResourceStreamsConversationSearchResults(t *testing.T) {
 	}
 }
 
+func TestCallResourceStreamsConversationSearchResultsViaBackendStreamProxy(t *testing.T) {
+	streamRequests := 0
+	tempoRequests := 0
+	projectionListRequests := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/conversations/search/stream":
+			streamRequests++
+			w.Header().Set("Content-Type", "application/x-ndjson")
+			_, _ = io.WriteString(w, `{"type":"results","conversations":[{"conversation_id":"conv-2","conversation_title":"Escalation two","user_id":"user-2","generation_count":3,"first_generation_at":"2025-02-15T09:00:00Z","last_generation_at":"2025-02-15T09:30:00Z","models":["claude-3.7-sonnet"],"model_providers":{"claude-3.7-sonnet":"anthropic"},"agents":["router"],"trace_ids":[],"error_count":2,"has_errors":true,"annotation_count":2,"rating_summary":{"total_count":1,"good_count":0,"bad_count":1,"has_bad_rating":true}}]}`+"\n")
+			_, _ = io.WriteString(w, `{"type":"complete","has_more":false}`+"\n")
+		case "/api/datasources/proxy/uid/tempo/api/search":
+			tempoRequests++
+			http.Error(w, "tempo should not be called", http.StatusInternalServerError)
+		case "/api/v1/conversations":
+			projectionListRequests++
+			http.Error(w, "projection fallback should not be called", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+	app.apiURL = upstream.URL
+	app.grafanaAppURL = upstream.URL
+	app.grafanaServiceAccountToken = "sa-token"
+	app.tempoDatasourceUID = "tempo"
+
+	responses := callResourceStreamWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodPost,
+		Path:   "query/conversations/search/stream",
+		Body:   []byte(`{"filters":"generation_count >= 1","select":[],"time_range":{"from":"2025-02-15T07:00:00Z","to":"2025-02-15T10:00:00Z"},"page_size":2}`),
+	})
+	if len(responses) != 1 {
+		t.Fatalf("expected one proxied stream response, got %d", len(responses))
+	}
+	if streamRequests != 1 {
+		t.Fatalf("expected one backend stream request, got %d", streamRequests)
+	}
+	if tempoRequests != 0 {
+		t.Fatalf("expected backend stream proxy to avoid tempo, got %d tempo requests", tempoRequests)
+	}
+	if projectionListRequests != 0 {
+		t.Fatalf("expected backend stream proxy to avoid projection fallback, got %d projection list requests", projectionListRequests)
+	}
+
+	lines := bytes.Split(bytes.TrimSpace(responses[0].Body), []byte("\n"))
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 ndjson stream lines, got %d body=%s", len(lines), string(responses[0].Body))
+	}
+
+	var first conversationSearchStreamResultsEvent
+	if err := json.Unmarshal(bytes.TrimSpace(lines[0]), &first); err != nil {
+		t.Fatalf("decode first stream chunk: %v", err)
+	}
+	if first.Type != "results" || len(first.Conversations) != 1 {
+		t.Fatalf("unexpected first stream chunk: %+v", first)
+	}
+	if first.Conversations[0].ConversationID != "conv-2" {
+		t.Fatalf("expected proxied conversation result, got %+v", first.Conversations)
+	}
+	if first.Conversations[0].ConversationTitle != "Escalation two" || first.Conversations[0].AnnotationCount != 2 {
+		t.Fatalf("expected proxied fields to be preserved, got %+v", first.Conversations[0])
+	}
+
+	var complete conversationSearchStreamCompleteEvent
+	if err := json.Unmarshal(bytes.TrimSpace(lines[1]), &complete); err != nil {
+		t.Fatalf("decode completion stream chunk: %v", err)
+	}
+	if complete.Type != "complete" || complete.HasMore {
+		t.Fatalf("unexpected completion chunk: %+v", complete)
+	}
+}
+
+func TestCallResourceStreamsConversationSearchFallbackUsesTempoWhenBackendStreamUnsupported(t *testing.T) {
+	projectionListRequests := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/conversations/search/stream":
+			http.Error(w, "not implemented", http.StatusNotImplemented)
+		case "/api/datasources/proxy/uid/tempo/api/search":
+			_, _ = io.WriteString(w, buildTempoSearchResponse([]tempoSearchTraceFixture{
+				{TraceID: "trace-1", StartTimeUnixNano: "1739610600000000000", ConversationID: "conv-1", GenerationID: "gen-1a", Model: "gpt-5", Agent: "assistant"},
+			}))
+		case "/api/v1/conversations":
+			projectionListRequests++
+			http.Error(w, "projection fallback should not be called", http.StatusInternalServerError)
+		case "/api/v1/conversations:batch-metadata":
+			_, _ = io.WriteString(w, `{"items":[
+				{"conversation_id":"conv-1","conversation_title":"OpenAI route","generation_count":1,"first_generation_at":"2025-02-15T08:00:00Z","last_generation_at":"2025-02-15T08:10:00Z","models":["gpt-5"],"model_providers":{"gpt-5":"openai"},"agents":["assistant"],"error_count":0,"has_errors":false,"annotation_count":0}
+			],"missing_conversation_ids":[]}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+	app.apiURL = upstream.URL
+	app.grafanaAppURL = upstream.URL
+	app.grafanaServiceAccountToken = "sa-token"
+	app.tempoDatasourceUID = "tempo"
+
+	responses := callResourceStreamWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodPost,
+		Path:   "query/conversations/search/stream",
+		Body:   []byte(`{"filters":"provider = \"openai\"","select":[],"time_range":{"from":"2025-02-15T07:00:00Z","to":"2025-02-15T10:00:00Z"},"page_size":10}`),
+	})
+	if len(responses) == 0 {
+		t.Fatal("expected streamed fallback responses")
+	}
+	if projectionListRequests != 0 {
+		t.Fatalf("expected fallback to avoid local projection list calls, got %d", projectionListRequests)
+	}
+
+	combinedBody := make([]byte, 0)
+	for _, response := range responses {
+		combinedBody = append(combinedBody, response.Body...)
+	}
+
+	lines := bytes.Split(bytes.TrimSpace(combinedBody), []byte("\n"))
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 ndjson stream lines, got %d body=%s", len(lines), string(combinedBody))
+	}
+
+	var first conversationSearchStreamResultsEvent
+	if err := json.Unmarshal(bytes.TrimSpace(lines[0]), &first); err != nil {
+		t.Fatalf("decode first stream chunk: %v", err)
+	}
+	if len(first.Conversations) != 1 || first.Conversations[0].ConversationID != "conv-1" {
+		t.Fatalf("expected provider filter to keep only conv-1, got %+v", first.Conversations)
+	}
+}
+
 func TestCallResourceStreamsConversationSearchResultsAcrossMetadataChunks(t *testing.T) {
 	fixtures := make([]tempoSearchTraceFixture, 0, conversationSearchMetadataChunkSize+1)
 	for i := 0; i < conversationSearchMetadataChunkSize+1; i++ {
@@ -1342,6 +1488,107 @@ func TestCallResourceConversationStatsAggregatesSearchResults(t *testing.T) {
 	}
 	if stats.BadRatedPct != 50 {
 		t.Fatalf("expected bad rated pct 50, got %f", stats.BadRatedPct)
+	}
+}
+
+func TestCallResourceConversationStatsFallsBackToTempoSearchWhenBackendStatsUnsupported(t *testing.T) {
+	tempoRequests := 0
+	projectionListRequests := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/conversations/stats":
+			http.Error(w, "not implemented", http.StatusNotImplemented)
+		case "/api/v1/conversations/search":
+			http.Error(w, "not implemented", http.StatusNotImplemented)
+		case "/api/datasources/proxy/uid/tempo/api/search":
+			tempoRequests++
+			switch tempoRequests {
+			case 1:
+				_, _ = io.WriteString(w, buildTempoSearchResponse([]tempoSearchTraceFixture{
+					{TraceID: "trace-1", StartTimeUnixNano: "1739609400000000000", ConversationID: "conv-1", GenerationID: "gen-1a"},
+					{TraceID: "trace-2", StartTimeUnixNano: "1739609399000000000", ConversationID: "conv-1", GenerationID: "gen-1b"},
+					{TraceID: "trace-3", StartTimeUnixNano: "1739609300000000000", ConversationID: "conv-2", GenerationID: "gen-2a"},
+				}))
+			default:
+				_, _ = io.WriteString(w, `{"traces":[]}`)
+			}
+		case "/api/v1/conversations":
+			projectionListRequests++
+			http.Error(w, "projection fallback should not be called", http.StatusInternalServerError)
+		case "/api/v1/conversations:batch-metadata":
+			var payload struct {
+				ConversationIDs []string `json:"conversation_ids"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				http.Error(w, "invalid request body", http.StatusBadRequest)
+				return
+			}
+			switch strings.Join(payload.ConversationIDs, ",") {
+			case "conv-1,conv-2":
+				_, _ = io.WriteString(w, `{"items":[
+					{"conversation_id":"conv-1","conversation_title":"Escalation one","generation_count":2,"first_generation_at":"2025-02-15T08:00:00Z","last_generation_at":"2025-02-15T09:30:00Z","annotation_count":0,"rating_summary":{"total_count":1,"good_count":0,"bad_count":1,"has_bad_rating":true}},
+					{"conversation_id":"conv-2","conversation_title":"Escalation two","generation_count":1,"first_generation_at":"2025-02-15T07:50:00Z","last_generation_at":"2025-02-15T08:10:00Z","annotation_count":0}
+				],"missing_conversation_ids":[]}`)
+			default:
+				http.Error(w, "unexpected conversation ids", http.StatusBadRequest)
+			}
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+	app.apiURL = upstream.URL
+	app.grafanaAppURL = upstream.URL
+	app.grafanaServiceAccountToken = "sa-token"
+	app.tempoDatasourceUID = "tempo"
+
+	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodPost,
+		Path:   "query/conversations/stats",
+		Body: []byte(`{
+			"filters":"generation_count >= 1",
+			"time_range":{"from":"2025-02-15T07:00:00Z","to":"2025-02-15T10:00:00Z"}
+		}`),
+	})
+	if response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, response.Status)
+	}
+	if tempoRequests == 0 {
+		t.Fatalf("expected Tempo fallback when backend stats/search endpoints are unsupported")
+	}
+	if projectionListRequests != 0 {
+		t.Fatalf("expected fallback to avoid local projection list calls, got %d", projectionListRequests)
+	}
+
+	var stats conversationStatsResponse
+	if err := json.Unmarshal(bytes.TrimSpace(response.Body), &stats); err != nil {
+		t.Fatalf("decode stats response: %v", err)
+	}
+	if stats.TotalConversations != 2 {
+		t.Fatalf("expected 2 conversations, got %d", stats.TotalConversations)
+	}
+	if stats.TotalTokens != 0 {
+		t.Fatalf("expected 0 tokens without selected values in fixture, got %f", stats.TotalTokens)
+	}
+	if stats.AvgCallsPerConversation != 1.5 {
+		t.Fatalf("expected avg calls 1.5, got %f", stats.AvgCallsPerConversation)
+	}
+	if stats.ActiveLast7d != 2 {
+		t.Fatalf("expected 2 active conversations, got %d", stats.ActiveLast7d)
+	}
+	if stats.RatedConversations != 1 {
+		t.Fatalf("expected 1 rated conversation, got %d", stats.RatedConversations)
+	}
+	if stats.BadRatedPct != 100 {
+		t.Fatalf("expected bad rated pct 100, got %f", stats.BadRatedPct)
 	}
 }
 

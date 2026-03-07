@@ -86,9 +86,22 @@ Current plugin query contract:
 
 Conversation search and search-tag discovery are plugin-owned orchestration flows:
 
-- plugin backend queries Tempo directly through Grafana datasource proxy (`/api/datasources/proxy/uid/{tempo_uid}/...`)
-- plugin backend hydrates conversation metadata via Sigil `POST /api/v1/conversations:batch-metadata`
-- plugin backend exposes both buffered JSON search and NDJSON streaming search for the same conversation-search semantics
+- plugin backend exposes buffered JSON search and NDJSON streaming search routes for the same conversation-search semantics
+- plugin backend proxies conversation search/search-stream/stats to Sigil when the Sigil endpoints are available
+- plugin backend uses Grafana Tempo datasource proxy directly only for:
+  - legacy fallback when the Sigil search endpoints are not available
+  - raw Tempo proxy routes (`/query/proxy/tempo/...`)
+
+Conversation search routing rules:
+
+- `time_range` selects conversations that have at least one generation in the requested window.
+- Returned search summary fields are lifetime/current conversation summaries from the MySQL projection, not values restricted to the matched window.
+- MySQL projection fast path is used for browse-safe conversation filters available in projection, including `generation_count`, `provider`, `model`, `agent`, `status=error`, and projected token select fields.
+- Projection `!=` filters on `provider`, `model`, and `agent` are full-conversation exclusions: the target must be absent from the conversation summary.
+- Tempo is used only when hit selection depends on unsupported trace predicates such as arbitrary `span.*`, `resource.*`, tool filters, or other deep search conditions.
+- Projection summaries are not backfilled. This change does not provide or support a backfill migration. On upgraded deployments, older conversations may temporarily show partial lifetime summaries or token counters until those rows are refreshed by new ingest. This is intentional and accepted.
+
+Reason: the product contract is "find conversations that were active in this window, then return their current conversation summary." The MySQL projection stores that summary directly, while Tempo is only needed when MySQL cannot identify the matching conversation set.
 
 Legacy placeholders removed:
 

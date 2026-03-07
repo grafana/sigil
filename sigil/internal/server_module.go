@@ -193,6 +193,17 @@ func (w *statusCapturingResponseWriter) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
 }
 
+func (w *statusCapturingResponseWriter) Flush() {
+	if w == nil || w.ResponseWriter == nil {
+		return
+	}
+	flusher, ok := w.ResponseWriter.(http.Flusher)
+	if !ok {
+		return
+	}
+	flusher.Flush()
+}
+
 func (w *statusCapturingResponseWriter) WriteHeader(statusCode int) {
 	w.statusCode = statusCode
 	w.ResponseWriter.WriteHeader(statusCode)

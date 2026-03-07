@@ -133,7 +133,16 @@ Current query endpoints:
   - `GET /api/v1/conversations/{conversation_id}/annotations`
   - `POST /api/v1/conversations/{conversation_id}/annotations`
 
-Conversation search and tag discovery are plugin-owned flows that call Tempo through Grafana datasource proxy APIs and then hydrate rows via Sigil `POST /api/v1/conversations:batch-metadata`.
+Conversation search routes are plugin resource endpoints that proxy to Sigil search APIs when available.
+
+Search backend selection rules:
+
+- `time_range` determines which conversations are eligible by requiring at least one generation in the selected window.
+- Search response summary fields are lifetime/current conversation summaries from the MySQL projection.
+- Sigil may answer browse-safe conversation searches from the MySQL conversation projection, including `generation_count`, `provider`, `model`, `agent`, `status=error`, and projected token select fields.
+- Projection `!=` filters on `provider`, `model`, and `agent` are full-conversation exclusions against the projected summary.
+- Sigil uses Tempo only when the query includes unsupported trace predicates or selects, such as arbitrary `span.*`, `resource.*`, or tool predicates.
+- The plugin should not reconstruct projection search semantics locally; if the Sigil search endpoints are unavailable, it falls back to the older Tempo orchestration path.
 
 Plugin integration for these Sigil routes is now implemented through plugin resource proxy prefixes.
 

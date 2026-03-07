@@ -1360,7 +1360,6 @@ func TestRemovedSearchAndProxyRoutesReturnNotFound(t *testing.T) {
 		path   string
 		status int
 	}{
-		{method: http.MethodPost, path: "/api/v1/conversations/search", status: http.StatusMethodNotAllowed},
 		{method: http.MethodGet, path: "/api/v1/search/tags", status: http.StatusNotFound},
 		{method: http.MethodGet, path: "/api/v1/search/tag/model/values", status: http.StatusNotFound},
 		{method: http.MethodGet, path: "/api/v1/proxy/prometheus/api/v1/query?query=up", status: http.StatusNotFound},

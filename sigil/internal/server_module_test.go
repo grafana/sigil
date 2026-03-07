@@ -233,6 +233,21 @@ func TestStatusCapturingResponseWriterUnwrapAllowsResponseControllerFlush(t *tes
 	}
 }
 
+func TestStatusCapturingResponseWriterImplementsFlusherWhenWrappedWriterDoes(t *testing.T) {
+	base := &flushTrackingResponseWriter{}
+	wrapped := &statusCapturingResponseWriter{ResponseWriter: base}
+
+	flusher, ok := any(wrapped).(http.Flusher)
+	if !ok {
+		t.Fatalf("expected wrapped writer to implement http.Flusher")
+	}
+	flusher.Flush()
+
+	if !base.flushed {
+		t.Fatalf("expected underlying writer Flush to be called")
+	}
+}
+
 func TestWithHTTPTracingUsesRoutePatternForWildcardRoute(t *testing.T) {
 	spanRecorder := tracetest.NewSpanRecorder()
 	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder))

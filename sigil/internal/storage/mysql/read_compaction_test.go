@@ -318,3 +318,82 @@ func TestListConversationsWithFeedbackFilters(t *testing.T) {
 		t.Fatalf("unexpected no-signals filter result: %#v", noSignals)
 	}
 }
+
+func TestListConversationProjectionPage(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	base := time.Date(2026, 2, 12, 21, 0, 0, 0, time.UTC)
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{
+		testGeneration("gen-page-1", "conv-page-1", base),
+		testGeneration("gen-page-2", "conv-page-2", base.Add(time.Minute)),
+		testGeneration("gen-page-3", "conv-page-3", base.Add(2*time.Minute)),
+		testGeneration("gen-page-4a", "conv-page-4", base.Add(30*time.Second)),
+		testGeneration("gen-page-4b", "conv-page-4", base.Add(10*time.Minute)),
+	}))
+
+	if _, _, err := store.CreateConversationRating(context.Background(), "tenant-a", "conv-page-3", feedback.CreateConversationRatingInput{
+		RatingID: "rat-page-1",
+		Rating:   feedback.RatingValueBad,
+	}); err != nil {
+		t.Fatalf("create rating: %v", err)
+	}
+	if _, _, err := store.CreateConversationAnnotation(context.Background(), "tenant-a", "conv-page-2", feedback.OperatorIdentity{
+		OperatorID: "operator-1",
+	}, feedback.CreateConversationAnnotationInput{
+		AnnotationID:   "ann-page-1",
+		AnnotationType: feedback.AnnotationTypeNote,
+	}); err != nil {
+		t.Fatalf("create annotation: %v", err)
+	}
+
+	page, hasMore, err := store.ListConversationProjectionPage(context.Background(), "tenant-a", storage.ConversationProjectionPageQuery{
+		From:  base.Add(-time.Minute),
+		To:    base.Add(5 * time.Minute),
+		Limit: 2,
+	})
+	if err != nil {
+		t.Fatalf("list projection page: %v", err)
+	}
+	if !hasMore {
+		t.Fatalf("expected has_more=true for first page")
+	}
+	if len(page) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(page))
+	}
+	if page[0].Conversation.ConversationID != "conv-page-3" || page[1].Conversation.ConversationID != "conv-page-2" {
+		t.Fatalf("expected recency ordering, got %#v", []string{
+			page[0].Conversation.ConversationID,
+			page[1].Conversation.ConversationID,
+		})
+	}
+	if page[0].RatingSummary == nil || !page[0].RatingSummary.HasBadRating {
+		t.Fatalf("expected joined bad rating summary on conv-page-3, got %#v", page[0].RatingSummary)
+	}
+	if page[1].AnnotationCount != 1 {
+		t.Fatalf("expected joined annotation_count=1 on conv-page-2, got %d", page[1].AnnotationCount)
+	}
+
+	nextPage, hasMore, err := store.ListConversationProjectionPage(context.Background(), "tenant-a", storage.ConversationProjectionPageQuery{
+		From:                   base.Add(-time.Minute),
+		To:                     base.Add(5 * time.Minute),
+		Limit:                  2,
+		ExcludeConversationIDs: []string{"conv-page-3", "conv-page-2"},
+	})
+	if err != nil {
+		t.Fatalf("list next projection page: %v", err)
+	}
+	if hasMore {
+		t.Fatalf("expected has_more=false for final page")
+	}
+	if len(nextPage) != 2 {
+		t.Fatalf("expected 2 rows on final page, got %#v", nextPage)
+	}
+	if nextPage[0].Conversation.ConversationID != "conv-page-4" || nextPage[1].Conversation.ConversationID != "conv-page-1" {
+		t.Fatalf("expected final page with conv-page-1, got %#v", nextPage)
+	}
+}

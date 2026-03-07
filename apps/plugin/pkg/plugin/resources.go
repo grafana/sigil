@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -1145,6 +1146,20 @@ type conversationSearchRequest struct {
 	Cursor    string                      `json:"cursor"`
 }
 
+type conversationListItem struct {
+	ID               string                     `json:"id"`
+	Title            string                     `json:"title,omitempty"`
+	LastGenerationAt time.Time                  `json:"last_generation_at"`
+	GenerationCount  int                        `json:"generation_count"`
+	CreatedAt        time.Time                  `json:"created_at"`
+	UpdatedAt        time.Time                  `json:"updated_at"`
+	RatingSummary    *conversationRatingSummary `json:"rating_summary,omitempty"`
+}
+
+type conversationListResponse struct {
+	Items []conversationListItem `json:"items"`
+}
+
 type conversationRatingSummary struct {
 	TotalCount    int       `json:"total_count"`
 	GoodCount     int       `json:"good_count"`
@@ -1169,6 +1184,7 @@ type conversationSearchResult struct {
 	FirstGenerationAt time.Time                  `json:"first_generation_at"`
 	LastGenerationAt  time.Time                  `json:"last_generation_at"`
 	Models            []string                   `json:"models"`
+	ModelProviders    map[string]string          `json:"model_providers,omitempty"`
 	Agents            []string                   `json:"agents"`
 	ErrorCount        int                        `json:"error_count"`
 	HasErrors         bool                       `json:"has_errors"`
@@ -1220,6 +1236,9 @@ const conversationSearchMetadataChunkSize = 100
 const conversationSearchStreamOverfetchMultiplier = searchcore.DefaultTempoOverfetchMultiplier * 2
 const conversationSearchInputTokensSelectKey = "span.gen_ai.usage.input_tokens"
 const conversationSearchOutputTokensSelectKey = "span.gen_ai.usage.output_tokens"
+const conversationSearchCacheReadTokensSelectKey = "span.gen_ai.usage.cache_read_input_tokens"
+const conversationSearchCacheWriteTokensSelectKey = "span.gen_ai.usage.cache_write_input_tokens"
+const conversationSearchReasoningTokensSelectKey = "span.gen_ai.usage.reasoning_tokens"
 const maxStatsSearchPages = 1000
 
 type conversationBatchMetadataRequest struct {
@@ -1229,9 +1248,21 @@ type conversationBatchMetadataRequest struct {
 type conversationBatchMetadata struct {
 	ConversationID    string                     `json:"conversation_id"`
 	ConversationTitle string                     `json:"conversation_title,omitempty"`
+	UserID            string                     `json:"user_id,omitempty"`
 	GenerationCount   int                        `json:"generation_count"`
 	FirstGenerationAt time.Time                  `json:"first_generation_at"`
 	LastGenerationAt  time.Time                  `json:"last_generation_at"`
+	Models            []string                   `json:"models"`
+	ModelProviders    map[string]string          `json:"model_providers,omitempty"`
+	Agents            []string                   `json:"agents"`
+	ErrorCount        int                        `json:"error_count"`
+	HasErrors         bool                       `json:"has_errors"`
+	InputTokens       int64                      `json:"input_tokens"`
+	OutputTokens      int64                      `json:"output_tokens"`
+	CacheReadTokens   int64                      `json:"cache_read_tokens"`
+	CacheWriteTokens  int64                      `json:"cache_write_tokens"`
+	ReasoningTokens   int64                      `json:"reasoning_tokens"`
+	TotalTokens       int64                      `json:"total_tokens"`
 	RatingSummary     *conversationRatingSummary `json:"rating_summary,omitempty"`
 	AnnotationCount   int                        `json:"annotation_count"`
 	EvalSummary       *conversationEvalSummary   `json:"eval_summary,omitempty"`
@@ -1272,18 +1303,26 @@ func (a *App) handleSearchConversations(w http.ResponseWriter, req *http.Request
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !a.hasGrafanaDatasourceProxyTarget(a.tempoDatasourceUID) {
-		http.Error(w, "grafana tempo datasource proxy is not configured", http.StatusServiceUnavailable)
+	if handled, err := a.tryProxySearchRequest(w, req, "/api/v1/conversations/search"); handled {
+		if err != nil {
+			a.writeSearchError(w, "/query/conversations/search", err)
+		}
 		return
 	}
 
-	var payload conversationSearchRequest
-	if req.Body != nil {
-		decoder := json.NewDecoder(req.Body)
-		if err := decoder.Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
-			http.Error(w, "invalid request body", http.StatusBadRequest)
-			return
-		}
+	payload, err := decodeConversationSearchRequest(req)
+	if err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	needsTempo, err := conversationSearchNeedsTempo(payload)
+	if err != nil {
+		a.writeSearchError(w, "/query/conversations/search", err)
+		return
+	}
+	if needsTempo && !a.hasGrafanaDatasourceProxyTarget(a.tempoDatasourceUID) {
+		http.Error(w, "grafana tempo datasource proxy is not configured", http.StatusServiceUnavailable)
+		return
 	}
 
 	response, err := a.searchConversations(req, payload)
@@ -1299,8 +1338,10 @@ func (a *App) handleSearchConversationsStream(w http.ResponseWriter, req *http.R
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !a.hasGrafanaDatasourceProxyTarget(a.tempoDatasourceUID) {
-		http.Error(w, "grafana tempo datasource proxy is not configured", http.StatusServiceUnavailable)
+	if handled, err := a.tryProxyStreamingSearchRequest(w, req, "/api/v1/conversations/search/stream"); handled {
+		if err != nil {
+			a.writeSearchError(w, "/query/conversations/search/stream", err)
+		}
 		return
 	}
 
@@ -1313,6 +1354,15 @@ func (a *App) handleSearchConversationsStream(w http.ResponseWriter, req *http.R
 	payload, err := decodeConversationSearchRequest(req)
 	if err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	needsTempo, err := conversationSearchNeedsTempo(payload)
+	if err != nil {
+		a.writeSearchError(w, "/query/conversations/search/stream", err)
+		return
+	}
+	if needsTempo && !a.hasGrafanaDatasourceProxyTarget(a.tempoDatasourceUID) {
+		http.Error(w, "grafana tempo datasource proxy is not configured", http.StatusServiceUnavailable)
 		return
 	}
 	started := false
@@ -1363,14 +1413,25 @@ func (a *App) handleConversationStats(w http.ResponseWriter, req *http.Request) 
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !a.hasGrafanaDatasourceProxyTarget(a.tempoDatasourceUID) {
-		http.Error(w, "grafana tempo datasource proxy is not configured", http.StatusServiceUnavailable)
+	if handled, err := a.tryProxySearchRequest(w, req, "/api/v1/conversations/stats"); handled {
+		if err != nil {
+			a.writeSearchError(w, "/query/conversations/stats", err)
+		}
 		return
 	}
 
 	payload, err := decodeConversationSearchRequest(req)
 	if err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	needsTempo, err := conversationSearchNeedsTempo(payload)
+	if err != nil {
+		a.writeSearchError(w, "/query/conversations/stats", err)
+		return
+	}
+	if needsTempo && !a.hasGrafanaDatasourceProxyTarget(a.tempoDatasourceUID) {
+		http.Error(w, "grafana tempo datasource proxy is not configured", http.StatusServiceUnavailable)
 		return
 	}
 	stats, err := a.searchConversationStats(req, payload)
@@ -1481,6 +1542,13 @@ func (a *App) handleSearchTagValues(w http.ResponseWriter, req *http.Request) {
 }
 
 func (a *App) searchConversations(req *http.Request, payload conversationSearchRequest) (conversationSearchResponse, error) {
+	var response conversationSearchResponse
+	if err := a.doSigilJSONRequest(req, http.MethodPost, "/api/v1/conversations/search", nil, payload, &response); err == nil {
+		return response, nil
+	} else if !canFallbackProjectionSearchError(err) {
+		return conversationSearchResponse{}, err
+	}
+
 	state, err := a.runConversationSearch(req, payload, nil)
 	if err != nil {
 		return conversationSearchResponse{}, err
@@ -1493,16 +1561,36 @@ func (a *App) searchConversations(req *http.Request, payload conversationSearchR
 }
 
 func (a *App) searchConversationStats(req *http.Request, payload conversationSearchRequest) (conversationStatsResponse, error) {
+	var response conversationStatsResponse
+	if err := a.doSigilJSONRequest(req, http.MethodPost, "/api/v1/conversations/stats", nil, payload, &response); err == nil {
+		return response, nil
+	} else if !canFallbackProjectionSearchError(err) {
+		return conversationStatsResponse{}, err
+	}
+
 	_, to, err := normalizeConversationSearchTimeRange(payload.TimeRange)
 	if err != nil {
 		return conversationStatsResponse{}, err
+	}
+	parsedFilters, err := searchcore.ParseFilterExpression(payload.Filters)
+	if err != nil {
+		return conversationStatsResponse{}, newSearchValidationError(err.Error())
+	}
+	if err := searchcore.ValidateMySQLFilterTerms(parsedFilters.MySQLTerms); err != nil {
+		return conversationStatsResponse{}, newSearchValidationError(err.Error())
 	}
 
 	stats := conversationStatsResponse{}
 	totalCalls := 0
 	badRatedConversations := 0
 	request := payload
-	request.Select = []string{conversationSearchInputTokensSelectKey, conversationSearchOutputTokensSelectKey}
+	request.Select = []string{
+		conversationSearchInputTokensSelectKey,
+		conversationSearchOutputTokensSelectKey,
+		conversationSearchCacheReadTokensSelectKey,
+		conversationSearchCacheWriteTokensSelectKey,
+		conversationSearchReasoningTokensSelectKey,
+	}
 	request.PageSize = searchcore.MaxConversationSearchPageSize
 	request.Cursor = ""
 	pageIndex := 0
@@ -1551,6 +1639,9 @@ func accumulateConversationStats(
 		totalCalls += conversation.GenerationCount
 		stats.TotalTokens += conversationSelectedNumber(conversation.Selected, conversationSearchInputTokensSelectKey)
 		stats.TotalTokens += conversationSelectedNumber(conversation.Selected, conversationSearchOutputTokensSelectKey)
+		stats.TotalTokens += conversationSelectedNumber(conversation.Selected, conversationSearchCacheReadTokensSelectKey)
+		stats.TotalTokens += conversationSelectedNumber(conversation.Selected, conversationSearchCacheWriteTokensSelectKey)
+		stats.TotalTokens += conversationSelectedNumber(conversation.Selected, conversationSearchReasoningTokensSelectKey)
 
 		lastActivity := conversation.LastGenerationAt.UTC()
 		if !lastActivity.IsZero() {
@@ -1637,6 +1728,15 @@ func (a *App) runConversationSearch(
 	}
 	if strings.TrimSpace(payload.Cursor) != "" && cursor.FilterHash != filterHash {
 		return conversationSearchState{}, newSearchValidationError("cursor no longer matches current filters")
+	}
+	if canUseConversationProjectionFastPath(parsedFilters, selectFields) {
+		state, err := a.runConversationProjectionSearch(req, parsedFilters, selectFields, from, to, pageSize, cursor, filterHash, emit)
+		if err == nil {
+			return state, nil
+		}
+		if !canFallbackProjectionSearchError(err) {
+			return conversationSearchState{}, err
+		}
 	}
 
 	traceQL, err := searchcore.BuildTraceQL(parsedFilters, selectFields)
@@ -1801,6 +1901,413 @@ func (a *App) runConversationSearch(
 	}, nil
 }
 
+func conversationSearchNeedsTempo(payload conversationSearchRequest) (bool, error) {
+	parsedFilters, err := searchcore.ParseFilterExpression(payload.Filters)
+	if err != nil {
+		return false, newSearchValidationError(err.Error())
+	}
+	if err := searchcore.ValidateMySQLFilterTerms(parsedFilters.MySQLTerms); err != nil {
+		return false, newSearchValidationError(err.Error())
+	}
+	selectFields, err := searchcore.NormalizeSelectFields(payload.Select)
+	if err != nil {
+		return false, newSearchValidationError(err.Error())
+	}
+	return !canUseConversationProjectionFastPath(parsedFilters, selectFields), nil
+}
+
+func canUseConversationProjectionFastPath(parsedFilters searchcore.ParsedFilters, selectFields []searchcore.SelectField) bool {
+	return false
+}
+
+func canFallbackProjectionSearchError(err error) bool {
+	upstreamErr := (*upstreamHTTPError)(nil)
+	if !errors.As(err, &upstreamErr) {
+		return false
+	}
+	switch upstreamErr.StatusCode {
+	case http.StatusNotFound, http.StatusMethodNotAllowed, http.StatusNotImplemented:
+		return true
+	default:
+		return false
+	}
+}
+
+func (a *App) runConversationProjectionSearch(
+	req *http.Request,
+	parsedFilters searchcore.ParsedFilters,
+	selectFields []searchcore.SelectField,
+	from time.Time,
+	to time.Time,
+	pageSize int,
+	cursor searchcore.ConversationSearchCursor,
+	filterHash string,
+	emit func([]conversationSearchResult) error,
+) (conversationSearchState, error) {
+	candidates, err := a.listProjectionConversationMetadata(req, parsedFilters, from, to)
+	if err != nil {
+		return conversationSearchState{}, err
+	}
+
+	alreadyReturned := make(map[string]struct{}, len(cursor.ReturnedConversations))
+	for _, conversationID := range cursor.ReturnedConversations {
+		alreadyReturned[conversationID] = struct{}{}
+	}
+
+	results := make([]conversationSearchResult, 0, pageSize)
+	hasMore := false
+
+	for start := 0; start < len(candidates); start += conversationSearchMetadataChunkSize {
+		end := start + conversationSearchMetadataChunkSize
+		if end > len(candidates) {
+			end = len(candidates)
+		}
+
+		batch := make([]conversationSearchResult, 0, min(pageSize-len(results), end-start))
+		for _, metadata := range candidates[start:end] {
+			if _, seen := alreadyReturned[metadata.ConversationID]; seen {
+				continue
+			}
+			if len(results) >= pageSize {
+				hasMore = true
+				break
+			}
+			result := conversationSearchResult{
+				ConversationID:    metadata.ConversationID,
+				ConversationTitle: strings.TrimSpace(metadata.ConversationTitle),
+				UserID:            strings.TrimSpace(metadata.UserID),
+				GenerationCount:   metadata.GenerationCount,
+				FirstGenerationAt: metadata.FirstGenerationAt.UTC(),
+				LastGenerationAt:  metadata.LastGenerationAt.UTC(),
+				Models:            append([]string{}, metadata.Models...),
+				ModelProviders:    cloneStringMap(metadata.ModelProviders),
+				Agents:            append([]string{}, metadata.Agents...),
+				TraceIDs:          []string{},
+				ErrorCount:        metadata.ErrorCount,
+				HasErrors:         metadata.HasErrors,
+				AnnotationCount:   metadata.AnnotationCount,
+				Selected:          projectionSelectedFields(metadata, selectFields),
+			}
+			if metadata.RatingSummary != nil {
+				copied := *metadata.RatingSummary
+				result.RatingSummary = &copied
+			}
+			if metadata.EvalSummary != nil {
+				copied := *metadata.EvalSummary
+				result.EvalSummary = &copied
+			}
+			results = append(results, result)
+			batch = append(batch, result)
+		}
+
+		if len(batch) > 0 && emit != nil {
+			if err := emit(batch); err != nil {
+				return conversationSearchState{}, err
+			}
+		}
+		if hasMore {
+			break
+		}
+	}
+
+	nextCursor := ""
+	if hasMore {
+		returnedConversations := make([]string, 0, len(alreadyReturned)+len(results))
+		for conversationID := range alreadyReturned {
+			returnedConversations = append(returnedConversations, conversationID)
+		}
+		for _, result := range results {
+			returnedConversations = append(returnedConversations, result.ConversationID)
+		}
+		nextCursor, err = searchcore.EncodeConversationSearchCursor(searchcore.ConversationSearchCursor{
+			EndNanos:              to.UnixNano(),
+			ReturnedConversations: returnedConversations,
+			FilterHash:            filterHash,
+		})
+		if err != nil {
+			return conversationSearchState{}, err
+		}
+	}
+
+	return conversationSearchState{
+		Results:    results,
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
+	}, nil
+}
+
+func (a *App) searchConversationProjectionStats(
+	req *http.Request,
+	parsedFilters searchcore.ParsedFilters,
+	from time.Time,
+	to time.Time,
+) (conversationStatsResponse, error) {
+	candidates, err := a.listProjectionConversationMetadata(req, parsedFilters, from, to)
+	if err != nil {
+		return conversationStatsResponse{}, err
+	}
+
+	stats := conversationStatsResponse{}
+	totalCalls := 0
+	badRatedConversations := 0
+	for _, metadata := range candidates {
+		stats.TotalConversations++
+		totalCalls += metadata.GenerationCount
+		stats.TotalTokens += float64(metadata.TotalTokens)
+
+		lastActivity := metadata.LastGenerationAt.UTC()
+		age := to.Sub(lastActivity)
+		if !lastActivity.IsZero() && age >= 0 && age <= 7*24*time.Hour {
+			stats.ActiveLast7d++
+		}
+		if metadata.RatingSummary != nil && metadata.RatingSummary.TotalCount > 0 {
+			stats.RatedConversations++
+			if metadata.RatingSummary.HasBadRating {
+				badRatedConversations++
+			}
+		}
+	}
+	if stats.TotalConversations > 0 {
+		stats.AvgCallsPerConversation = float64(totalCalls) / float64(stats.TotalConversations)
+	}
+	if stats.RatedConversations > 0 {
+		stats.BadRatedPct = (float64(badRatedConversations) / float64(stats.RatedConversations)) * 100
+	}
+	return stats, nil
+}
+
+func (a *App) listProjectionConversationMetadata(
+	req *http.Request,
+	parsedFilters searchcore.ParsedFilters,
+	from time.Time,
+	to time.Time,
+) ([]conversationBatchMetadata, error) {
+	rows, err := a.fetchConversationProjection(req)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return []conversationBatchMetadata{}, nil
+	}
+
+	sort.Slice(rows, func(i, j int) bool {
+		left := rows[i]
+		right := rows[j]
+		if !left.LastGenerationAt.Equal(right.LastGenerationAt) {
+			return left.LastGenerationAt.After(right.LastGenerationAt)
+		}
+		if !left.UpdatedAt.Equal(right.UpdatedAt) {
+			return left.UpdatedAt.After(right.UpdatedAt)
+		}
+		return left.ID < right.ID
+	})
+
+	candidateIDs := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if strings.TrimSpace(row.ID) == "" {
+			continue
+		}
+		if row.LastGenerationAt.UTC().Before(from) {
+			break
+		}
+		if !searchcore.MatchesGenerationCountFilters(row.GenerationCount, parsedFilters.MySQLTerms) {
+			continue
+		}
+		candidateIDs = append(candidateIDs, row.ID)
+	}
+	if len(candidateIDs) == 0 {
+		return []conversationBatchMetadata{}, nil
+	}
+
+	out := make([]conversationBatchMetadata, 0, len(candidateIDs))
+	for start := 0; start < len(candidateIDs); start += conversationSearchMetadataChunkSize {
+		end := start + conversationSearchMetadataChunkSize
+		if end > len(candidateIDs) {
+			end = len(candidateIDs)
+		}
+		chunkIDs := candidateIDs[start:end]
+		metadataByConversation, err := a.fetchConversationBatchMetadata(req, chunkIDs)
+		if err != nil {
+			return nil, err
+		}
+		for _, conversationID := range chunkIDs {
+			metadata, ok := metadataByConversation[conversationID]
+			if !ok || !projectionConversationOverlapsRange(metadata, from, to) {
+				continue
+			}
+			if !projectionConversationMatchesFilters(metadata, parsedFilters) {
+				continue
+			}
+			out = append(out, metadata)
+		}
+	}
+
+	return out, nil
+}
+
+func projectionConversationOverlapsRange(metadata conversationBatchMetadata, from, to time.Time) bool {
+	start := metadata.FirstGenerationAt.UTC()
+	end := metadata.LastGenerationAt.UTC()
+	if end.Before(from) {
+		return false
+	}
+	if start.After(to) {
+		return false
+	}
+	return true
+}
+
+func projectionSupportsTempoTerm(term searchcore.FilterTerm) bool {
+	switch strings.TrimSpace(term.RawKey) {
+	case "model", "provider", "agent":
+		switch term.Operator {
+		case searchcore.FilterOperatorEqual, searchcore.FilterOperatorNotEqual, searchcore.FilterOperatorRegex:
+			return strings.TrimSpace(term.Value) != ""
+		default:
+			return false
+		}
+	case "status":
+		return term.Operator == searchcore.FilterOperatorEqual && strings.EqualFold(strings.TrimSpace(term.Value), "error")
+	default:
+		return false
+	}
+}
+
+func projectionSupportsSelectField(field searchcore.SelectField) bool {
+	switch strings.TrimSpace(field.ResolvedKey) {
+	case conversationSearchInputTokensSelectKey,
+		conversationSearchOutputTokensSelectKey,
+		conversationSearchCacheReadTokensSelectKey,
+		conversationSearchCacheWriteTokensSelectKey,
+		conversationSearchReasoningTokensSelectKey:
+		return true
+	default:
+		return false
+	}
+}
+
+func projectionConversationMatchesFilters(metadata conversationBatchMetadata, parsedFilters searchcore.ParsedFilters) bool {
+	if !searchcore.MatchesGenerationCountFilters(metadata.GenerationCount, parsedFilters.MySQLTerms) {
+		return false
+	}
+	for _, term := range parsedFilters.TempoTerms {
+		if !projectionTempoTermMatches(metadata, term) {
+			return false
+		}
+	}
+	return true
+}
+
+func projectionTempoTermMatches(metadata conversationBatchMetadata, term searchcore.FilterTerm) bool {
+	switch strings.TrimSpace(term.RawKey) {
+	case "model":
+		return projectionStringSliceMatches(metadata.Models, term)
+	case "provider":
+		return projectionStringSliceMatches(projectionProviderValues(metadata.ModelProviders), term)
+	case "agent":
+		return projectionStringSliceMatches(metadata.Agents, term)
+	case "status":
+		return metadata.ErrorCount > 0 && strings.EqualFold(strings.TrimSpace(term.Value), "error")
+	default:
+		return false
+	}
+}
+
+func projectionStringSliceMatches(values []string, term searchcore.FilterTerm) bool {
+	if len(values) == 0 {
+		return false
+	}
+
+	target := strings.TrimSpace(term.Value)
+	switch term.Operator {
+	case searchcore.FilterOperatorEqual:
+		for _, value := range values {
+			if value == target {
+				return true
+			}
+		}
+		return false
+	case searchcore.FilterOperatorNotEqual:
+		for _, value := range values {
+			if value != target {
+				return true
+			}
+		}
+		return false
+	case searchcore.FilterOperatorRegex:
+		pattern, err := regexp.Compile(target)
+		if err != nil {
+			return false
+		}
+		for _, value := range values {
+			if pattern.MatchString(value) {
+				return true
+			}
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+func projectionProviderValues(modelProviders map[string]string) []string {
+	if len(modelProviders) == 0 {
+		return []string{}
+	}
+	seen := make(map[string]struct{}, len(modelProviders))
+	values := make([]string, 0, len(modelProviders))
+	for _, provider := range modelProviders {
+		normalized := strings.TrimSpace(provider)
+		if normalized == "" {
+			continue
+		}
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		values = append(values, normalized)
+	}
+	sort.Strings(values)
+	return values
+}
+
+func projectionSelectedFields(metadata conversationBatchMetadata, selectFields []searchcore.SelectField) map[string]any {
+	if len(selectFields) == 0 {
+		return nil
+	}
+
+	selected := make(map[string]any, len(selectFields))
+	for _, field := range selectFields {
+		switch strings.TrimSpace(field.ResolvedKey) {
+		case conversationSearchInputTokensSelectKey:
+			selected[field.Key] = float64(metadata.InputTokens)
+		case conversationSearchOutputTokensSelectKey:
+			selected[field.Key] = float64(metadata.OutputTokens)
+		case conversationSearchCacheReadTokensSelectKey:
+			selected[field.Key] = float64(metadata.CacheReadTokens)
+		case conversationSearchCacheWriteTokensSelectKey:
+			selected[field.Key] = float64(metadata.CacheWriteTokens)
+		case conversationSearchReasoningTokensSelectKey:
+			selected[field.Key] = float64(metadata.ReasoningTokens)
+		}
+	}
+	if len(selected) == 0 {
+		return nil
+	}
+	return selected
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
+}
+
 func decodeConversationSearchRequest(req *http.Request) (conversationSearchRequest, error) {
 	var payload conversationSearchRequest
 	if req.Body == nil {
@@ -1926,6 +2433,17 @@ func (a *App) fetchConversationBatchMetadata(req *http.Request, conversationIDs 
 	return out, nil
 }
 
+func (a *App) fetchConversationProjection(req *http.Request) ([]conversationListItem, error) {
+	var response conversationListResponse
+	if err := a.doSigilJSONRequest(req, http.MethodGet, "/api/v1/conversations", nil, nil, &response); err != nil {
+		return nil, err
+	}
+	if response.Items == nil {
+		return []conversationListItem{}, nil
+	}
+	return response.Items, nil
+}
+
 func (a *App) doSigilJSONRequest(
 	req *http.Request,
 	method string,
@@ -1949,6 +2467,111 @@ func (a *App) doSigilJSONRequest(
 		return fmt.Errorf("decode sigil response: %w", err)
 	}
 	return nil
+}
+
+func (a *App) tryProxySearchRequest(w http.ResponseWriter, req *http.Request, path string) (bool, error) {
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		return true, fmt.Errorf("read request body: %w", err)
+	}
+	req.Body = io.NopCloser(bytes.NewReader(body))
+
+	responseBody, err := a.doSigilRequest(req, req.Method, path, nil, body)
+	if err != nil {
+		if canFallbackProjectionSearchError(err) {
+			req.Body = io.NopCloser(bytes.NewReader(body))
+			return false, nil
+		}
+		return true, err
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(responseBody)
+	return true, nil
+}
+
+func (a *App) tryProxyStreamingSearchRequest(w http.ResponseWriter, req *http.Request, path string) (bool, error) {
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		return true, fmt.Errorf("read request body: %w", err)
+	}
+	req.Body = io.NopCloser(bytes.NewReader(body))
+
+	ctx, span := pluginProxyTracer.Start(
+		req.Context(),
+		"sigil.plugin.proxy.sigil.stream",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("http.request.method", req.Method),
+			attribute.String("url.path", path),
+		),
+	)
+	defer span.End()
+
+	upstream := strings.TrimRight(a.apiURL, "/") + path
+	proxyReq, err := http.NewRequestWithContext(ctx, req.Method, upstream, bytes.NewReader(body))
+	if err != nil {
+		return true, fmt.Errorf("build request: %w", err)
+	}
+	proxyReq.Header = req.Header.Clone()
+	proxyReq.Header.Set("Content-Type", "application/json")
+	if a.apiAuthToken != "" {
+		proxyReq.SetBasicAuth(a.tenantID, a.apiAuthToken)
+	}
+	injectTenantHeaders(proxyReq, a.tenantID)
+	injectOperatorIdentityHeaders(proxyReq, req.Method, path)
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(proxyReq.Header))
+
+	resp, err := a.client.Do(proxyReq)
+	if err != nil {
+		return true, err
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	if resp.StatusCode >= http.StatusBadRequest {
+		payload, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return true, readErr
+		}
+		err = &upstreamHTTPError{StatusCode: resp.StatusCode, Body: payload}
+		if canFallbackProjectionSearchError(err) {
+			req.Body = io.NopCloser(bytes.NewReader(body))
+			return false, nil
+		}
+		return true, err
+	}
+
+	copyUpstreamResponseHeaders(w.Header(), resp.Header)
+	if w.Header().Get("Content-Type") == "" {
+		w.Header().Set("Content-Type", "application/x-ndjson")
+	}
+	w.WriteHeader(resp.StatusCode)
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		_, copyErr := io.Copy(w, resp.Body)
+		return true, copyErr
+	}
+
+	buffer := make([]byte, 32*1024)
+	for {
+		n, readErr := resp.Body.Read(buffer)
+		if n > 0 {
+			if _, writeErr := w.Write(buffer[:n]); writeErr != nil {
+				return true, writeErr
+			}
+			flusher.Flush()
+		}
+		if readErr == nil {
+			continue
+		}
+		if errors.Is(readErr, io.EOF) {
+			break
+		}
+		return true, readErr
+	}
+	return true, nil
 }
 
 func (a *App) doGrafanaJSONRequest(
