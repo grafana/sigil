@@ -15,7 +15,7 @@ importers:
         version: 11.13.5
       '@grafana/assistant':
         specifier: ^0.1.19
-        version: 0.1.19(f804b365bdda32ab8fe97a6711287d4d)
+        version: 0.1.19(d8552819478fa81a7ee20dc6add14afb)
       '@grafana/data':
         specifier: ^12.3.2
         version: 12.4.0(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
@@ -24,16 +24,16 @@ importers:
         version: 12.4.0(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       '@grafana/runtime':
         specifier: ^12.3.2
-        version: 12.4.0(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+        version: 12.4.0(@babel/core@7.29.0)(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       '@grafana/scenes':
         specifier: ^7.0.3
-        version: 7.1.0(@babel/core@7.29.0)(@grafana/data@12.4.0(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/e2e-selectors@12.4.0)(@grafana/i18n@12.4.0(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/runtime@12.4.0(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/schema@12.4.0)(@grafana/ui@12.4.0(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react-router-dom@7.13.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)
+        version: 7.1.1(@babel/core@7.29.0)(@grafana/data@12.4.0(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/e2e-selectors@12.4.0)(@grafana/i18n@12.4.0(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/runtime@12.4.0(@babel/core@7.29.0)(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/schema@12.4.0)(@grafana/ui@12.4.0(@babel/core@7.29.0)(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react-router-dom@7.13.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)
       '@grafana/schema':
         specifier: ^12.3.2
         version: 12.4.0
       '@grafana/ui':
         specifier: ^12.3.2
-        version: 12.4.0(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+        version: 12.4.0(@babel/core@7.29.0)(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       gpt-tokenizer:
         specifier: ^3.4.0
         version: 3.4.0
@@ -1077,8 +1077,8 @@ packages:
       react: ^18.0.0
       react-dom: ^18.0.0
 
-  '@grafana/scenes@7.1.0':
-    resolution: {integrity: sha512-spi7PqSTb/N7t8G1THO0dpJhHwZ2J5TS4kO7C8mEUeuWEvkvrU+8XgVwAqhYPFOmFwrDqPXZZAQ4mVdjoezBLw==}
+  '@grafana/scenes@7.1.1':
+    resolution: {integrity: sha512-vFfx+ZlzikrjOQIBp8Xh5tsHy77xKV6w/zkkTD+DtAflxQ+fOLnqomDXLSQUJFRitq8FKR1l0KPZl6BoFymmgA==}
     peerDependencies:
       '@grafana/data': '>=11.6'
       '@grafana/e2e-selectors': '>=11.6'
@@ -8412,12 +8412,12 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@grafana/assistant@0.1.19(f804b365bdda32ab8fe97a6711287d4d)':
+  '@grafana/assistant@0.1.19(d8552819478fa81a7ee20dc6add14afb)':
     dependencies:
       '@grafana/data': 12.4.0(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
-      '@grafana/runtime': 12.4.0(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
-      '@grafana/scenes': 7.1.0(@babel/core@7.29.0)(@grafana/data@12.4.0(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/e2e-selectors@12.4.0)(@grafana/i18n@12.4.0(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/runtime@12.4.0(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/schema@12.4.0)(@grafana/ui@12.4.0(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react-router-dom@7.13.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)
-      '@grafana/ui': 12.4.0(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+      '@grafana/runtime': 12.4.0(@babel/core@7.29.0)(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+      '@grafana/scenes': 7.1.1(@babel/core@7.29.0)(@grafana/data@12.4.0(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/e2e-selectors@12.4.0)(@grafana/i18n@12.4.0(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/runtime@12.4.0(@babel/core@7.29.0)(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/schema@12.4.0)(@grafana/ui@12.4.0(@babel/core@7.29.0)(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react-router-dom@7.13.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)
+      '@grafana/ui': 12.4.0(@babel/core@7.29.0)(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       react: 19.2.4
       rxjs: 7.8.2
 
@@ -8523,13 +8523,13 @@ snapshots:
       uuid: 13.0.0
       yaml: 2.8.2
 
-  '@grafana/runtime@12.4.0(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)':
+  '@grafana/runtime@12.4.0(@babel/core@7.29.0)(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)':
     dependencies:
       '@grafana/data': 12.4.0(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       '@grafana/e2e-selectors': 12.4.0
       '@grafana/faro-web-sdk': 1.19.0
       '@grafana/schema': 12.4.0
-      '@grafana/ui': 12.4.0(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+      '@grafana/ui': 12.4.0(@babel/core@7.29.0)(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       '@openfeature/core': 1.9.2
       '@openfeature/ofrep-web-provider': 0.3.5(@openfeature/core@1.9.2)(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))
       '@openfeature/react-sdk': 1.2.1(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(react@19.2.4)
@@ -8543,6 +8543,7 @@ snapshots:
       rxjs: 7.8.2
       tslib: 2.8.1
     transitivePeerDependencies:
+      - '@babel/core'
       - '@openfeature/web-sdk'
       - '@types/react'
       - dayjs
@@ -8552,7 +8553,7 @@ snapshots:
       - supports-color
       - typescript
 
-  '@grafana/scenes@7.1.0(@babel/core@7.29.0)(@grafana/data@12.4.0(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/e2e-selectors@12.4.0)(@grafana/i18n@12.4.0(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/runtime@12.4.0(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/schema@12.4.0)(@grafana/ui@12.4.0(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react-router-dom@7.13.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)':
+  '@grafana/scenes@7.1.1(@babel/core@7.29.0)(@grafana/data@12.4.0(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/e2e-selectors@12.4.0)(@grafana/i18n@12.4.0(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/runtime@12.4.0(@babel/core@7.29.0)(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/schema@12.4.0)(@grafana/ui@12.4.0(@babel/core@7.29.0)(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react-router-dom@7.13.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)':
     dependencies:
       '@emotion/css': 11.10.5(@babel/core@7.29.0)
       '@emotion/react': 11.10.5(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4)
@@ -8560,9 +8561,9 @@ snapshots:
       '@grafana/data': 12.4.0(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       '@grafana/e2e-selectors': 12.4.0
       '@grafana/i18n': 12.4.0(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
-      '@grafana/runtime': 12.4.0(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+      '@grafana/runtime': 12.4.0(@babel/core@7.29.0)(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       '@grafana/schema': 12.4.0
-      '@grafana/ui': 12.4.0(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+      '@grafana/ui': 12.4.0(@babel/core@7.29.0)(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       '@leeoniya/ufuzzy': 1.0.19
       '@tanstack/react-virtual': 3.13.21(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       history: 4.10.1
@@ -8571,7 +8572,7 @@ snapshots:
       react-dom: 19.2.4(react@19.2.4)
       react-grid-layout: 1.5.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react-router-dom: 7.13.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      react-select: 5.10.2(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      react-select: 5.10.2(@babel/core@7.29.0)(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react-use: 17.6.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react-virtualized-auto-sizer: 1.0.26(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       rxjs: 7.8.2
@@ -8587,7 +8588,7 @@ snapshots:
 
   '@grafana/tsconfig@2.0.1': {}
 
-  '@grafana/ui@12.4.0(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)':
+  '@grafana/ui@12.4.0(@babel/core@7.29.0)(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)':
     dependencies:
       '@emotion/css': 11.13.5
       '@emotion/react': 11.14.0(@types/react@19.2.14)(react@19.2.4)
@@ -8646,7 +8647,7 @@ snapshots:
       react-loading-skeleton: 3.5.0(react@19.2.4)
       react-router-dom: 5.3.4(react@19.2.4)
       react-router-dom-v5-compat: 6.30.3(react-dom@19.2.4(react@19.2.4))(react-router-dom@5.3.4(react@19.2.4))(react@19.2.4)
-      react-select: 5.10.2(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      react-select: 5.10.2(@babel/core@7.29.0)(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react-table: 7.8.0(react@19.2.4)
       react-transition-group: 4.4.5(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react-use: 17.6.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -8661,6 +8662,7 @@ snapshots:
       uuid: 11.1.0
       uwrap: 0.1.2
     transitivePeerDependencies:
+      - '@babel/core'
       - '@types/react'
       - dayjs
       - eslint
@@ -14901,11 +14903,11 @@ snapshots:
     optionalDependencies:
       react-dom: 19.2.4(react@19.2.4)
 
-  react-select@5.10.2(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+  react-select@5.10.2(@babel/core@7.29.0)(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       '@babel/runtime': 7.28.6
       '@emotion/cache': 11.14.0
-      '@emotion/react': 11.14.0(@types/react@19.2.14)(react@19.2.4)
+      '@emotion/react': 11.10.5(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4)
       '@floating-ui/dom': 1.7.6
       '@types/react-transition-group': 4.4.12(@types/react@19.2.14)
       memoize-one: 6.0.0
@@ -14915,6 +14917,7 @@ snapshots:
       react-transition-group: 4.4.5(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       use-isomorphic-layout-effect: 1.2.1(@types/react@19.2.14)(react@19.2.4)
     transitivePeerDependencies:
+      - '@babel/core'
       - '@types/react'
       - supports-color
 
