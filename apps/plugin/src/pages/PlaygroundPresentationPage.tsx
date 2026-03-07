@@ -4,6 +4,7 @@ import type { GrafanaTheme2 } from '@grafana/data';
 import { Button, useStyles2 } from '@grafana/ui';
 import { useSearchParams } from 'react-router-dom';
 import { SparklesBackground } from '../components/landing/SparklesBackground';
+import MarkdownPreview from '../components/markdown/MarkdownPreview';
 
 export default function PlaygroundPresentationPage() {
   const styles = useStyles2(getStyles);
@@ -45,7 +46,9 @@ export default function PlaygroundPresentationPage() {
   return (
     <div className={styles.page} onDoubleClick={startEditing}>
       <SparklesBackground className={styles.presentationLayer} withGradient />
-      <div className={styles.centerText}>{text}</div>
+      <div className={styles.centerText}>
+        <MarkdownPreview markdown={text} className={styles.markdownContent} />
+      </div>
       {isEditing && (
         <div className={styles.editPanelBackdrop}>
           <form
@@ -53,9 +56,6 @@ export default function PlaygroundPresentationPage() {
             onSubmit={handleSubmit}
             onDoubleClick={(event) => event.stopPropagation()}
           >
-            <label className={styles.editLabel} htmlFor="presentation-text-editor">
-              Edit text
-            </label>
             <textarea
               id="presentation-text-editor"
               ref={textareaRef}
@@ -115,6 +115,25 @@ function getStyles(theme: GrafanaTheme2) {
       textShadow: `0 0 24px ${theme.colors.background.primary}`,
       wordBreak: 'break-word' as const,
     }),
+    markdownContent: css({
+      width: 'min(90vw, 1200px)',
+      fontSize: 'inherit',
+      lineHeight: 'inherit',
+      fontWeight: 'inherit',
+      '& h1, & h2, & h3, & h4, & h5, & h6, & p, & li': {
+        fontSize: 'inherit',
+        lineHeight: 'inherit',
+        fontWeight: 'inherit',
+      },
+      '& ul, & ol': {
+        display: 'inline-block',
+        textAlign: 'left' as const,
+      },
+      '& p, & ul, & ol, & pre': {
+        marginTop: theme.spacing(1),
+        marginBottom: theme.spacing(1),
+      },
+    }),
     editPanelBackdrop: css({
       position: 'absolute',
       inset: 0,
@@ -137,12 +156,6 @@ function getStyles(theme: GrafanaTheme2) {
       border: `1px solid ${theme.colors.border.medium}`,
       background: theme.colors.background.primary,
       boxShadow: theme.shadows.z3,
-    }),
-    editLabel: css({
-      color: theme.colors.text.secondary,
-      fontSize: theme.typography.bodySmall.fontSize,
-      lineHeight: theme.typography.bodySmall.lineHeight,
-      fontWeight: theme.typography.fontWeightMedium,
     }),
     textarea: css({
       width: '100%',
