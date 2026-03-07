@@ -24,7 +24,7 @@ type HorizontalAlign = 'left' | 'middle' | 'right';
 
 const AI_HIGHLIGHT_COLORS = ['#5794F2', '#B877D9', '#FF9830'] as const;
 const HIGHLIGHT_HUE_ROTATIONS = [-16, -10, -6, 0, 6, 10, 16] as const;
-const TYPEWRITER_CARET_TOKEN = 'sigil-typewriter-caret-token';
+const TYPEWRITER_CARET_TOKEN = 'SIGILTYPEWRITERCARETTOKEN9F8D2B';
 const DEFAULT_EFFECT_SPEED = 1;
 const MIN_EFFECT_SPEED = 0.25;
 const MAX_EFFECT_SPEED = 4;
@@ -266,7 +266,6 @@ export default function PlaygroundPresentationPage() {
   const [isReplaying, setIsReplaying] = React.useState(false);
   const [isReplayButtonVisible, setIsReplayButtonVisible] = React.useState(false);
   const [typedText, setTypedText] = React.useState('');
-  const [isTyping, setIsTyping] = React.useState(true);
   const [isCursorVisible, setIsCursorVisible] = React.useState(true);
   const [showEditHint, setShowEditHint] = React.useState(true);
   const [isEditHintVisible, setIsEditHintVisible] = React.useState(false);
@@ -292,26 +291,23 @@ export default function PlaygroundPresentationPage() {
   const markdownText = isReplaying
     ? ''
     : isTypewriterEffect
-      ? `${typedText} _${TYPEWRITER_CARET_TOKEN}_`
+      ? `${typedText}${TYPEWRITER_CARET_TOKEN}`
       : text;
 
   React.useEffect(() => {
     if (isReplaying) {
       setTypedText('');
-      setIsTyping(false);
       return;
     }
 
     if (!isTypewriterEffect) {
       setTypedText(text);
-      setIsTyping(false);
       return;
     }
 
     let cancelled = false;
     let timeoutId: number | undefined;
     setTypedText('');
-    setIsTyping(true);
 
     const runTypewriter = (index: number) => {
       if (cancelled) {
@@ -319,7 +315,6 @@ export default function PlaygroundPresentationPage() {
       }
 
       if (index >= text.length) {
-        setIsTyping(false);
         return;
       }
 
@@ -513,7 +508,6 @@ export default function PlaygroundPresentationPage() {
     setIsReplayButtonVisible(false);
     setIsReplaying(true);
     setTypedText('');
-    setIsTyping(false);
     setIsCursorVisible(false);
 
     replayTimeoutRef.current = window.setTimeout(() => {
@@ -521,6 +515,31 @@ export default function PlaygroundPresentationPage() {
       setIsReplaying(false);
     }, 2000);
   }, [isReplaying]);
+
+  const renderTypewriterTextFragment = React.useCallback(
+    (textFragment: string, key: string) => {
+      if (!textFragment.includes(TYPEWRITER_CARET_TOKEN)) {
+        return textFragment;
+      }
+
+      const segments = textFragment.split(TYPEWRITER_CARET_TOKEN);
+      return (
+        <React.Fragment key={key}>
+          {segments.map((segment, index) => (
+            <React.Fragment key={`${key}-${index}`}>
+              {segment}
+              {index < segments.length - 1 && (
+                <span className={styles.typewriterCaret(isCursorVisible)} aria-hidden>
+                  |
+                </span>
+              )}
+            </React.Fragment>
+          ))}
+        </React.Fragment>
+      );
+    },
+    [isCursorVisible, styles]
+  );
 
   return (
     <div
@@ -534,6 +553,7 @@ export default function PlaygroundPresentationPage() {
         <MarkdownPreview
           markdown={markdownText}
           className={styles.markdownContent(horizontalAlign)}
+          renderTextFragment={renderTypewriterTextFragment}
           renderUnderline={(underlineText, key, index) => {
             const baseColor = AI_HIGHLIGHT_COLORS[index % AI_HIGHLIGHT_COLORS.length];
             const hueRotation = highlightHueRotations[key] ?? 0;
@@ -555,13 +575,6 @@ export default function PlaygroundPresentationPage() {
             );
           }}
           renderEm={(emText, key, index) => {
-            if (emText === TYPEWRITER_CARET_TOKEN) {
-              return (
-                <span key={key} className={styles.typewriterCaret(isCursorVisible)} aria-hidden>
-                  |
-                </span>
-              );
-            }
             const baseColor = AI_HIGHLIGHT_COLORS[index % AI_HIGHLIGHT_COLORS.length];
             const hueRotation = highlightHueRotations[key] ?? 0;
             const highlightColor = rotateHexHue(baseColor, hueRotation);
