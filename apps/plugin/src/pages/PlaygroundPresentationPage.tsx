@@ -203,8 +203,8 @@ function getStyles(theme: GrafanaTheme2) {
       wordBreak: 'break-word' as const,
     }),
     markdownContent: css({
-      width: 'min(95vw, 1440px)',
-      margin: '0 auto',
+      width: '100%',
+      margin: 0,
       transform: 'none',
       textAlign: 'left' as const,
       color: theme.colors.text.primary,
@@ -218,21 +218,21 @@ function getStyles(theme: GrafanaTheme2) {
         textShadow: `0 0 14px ${theme.colors.primary.main}`,
       },
       '& h1': {
-        fontSize: 'clamp(3rem, 8vw, 7rem)',
+        fontSize: 'clamp(2.4rem, 6.5vw, 5.8rem)',
         lineHeight: 1.05,
       },
       '& h2': {
-        fontSize: 'clamp(2.5rem, 6vw, 5rem)',
+        fontSize: 'clamp(2.1rem, 5.2vw, 4.4rem)',
         lineHeight: 1.08,
       },
       '& h3, & h4, & h5, & h6': {
-        fontSize: 'clamp(2rem, 4.8vw, 3.6rem)',
+        fontSize: 'clamp(1.8rem, 4.2vw, 3.2rem)',
         lineHeight: 1.12,
       },
       '& p': {
         margin: `${theme.spacing(1)} 0`,
-        maxWidth: '72ch',
-        fontSize: 'clamp(4.8rem, 9vw, 8.5rem)',
+        maxWidth: 'none',
+        fontSize: 'clamp(5.4rem, 10vw, 9.4rem)',
         lineHeight: 1.3,
         fontWeight: 500,
       },
@@ -243,13 +243,13 @@ function getStyles(theme: GrafanaTheme2) {
       '& ul, & ol': {
         margin: `${theme.spacing(2)} 0`,
         paddingLeft: theme.spacing(8),
-        maxWidth: '70ch',
+        maxWidth: 'none',
         listStylePosition: 'outside' as const,
         textAlign: 'left' as const,
       },
       '& li': {
         marginBottom: theme.spacing(2),
-        fontSize: 'clamp(1.25rem, 2.4vw, 2.2rem)',
+        fontSize: 'clamp(1.5rem, 2.9vw, 2.7rem)',
         lineHeight: 1.45,
         fontWeight: 600,
       },
