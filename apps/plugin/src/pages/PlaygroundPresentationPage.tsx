@@ -18,8 +18,113 @@ type PresentationSparklesProps = {
   withGlow?: boolean;
 };
 
+type PresentationEffect = 'none' | 'typewriter';
+type VerticalAlign = 'top' | 'middle' | 'bottom';
+type HorizontalAlign = 'left' | 'middle' | 'right';
+
 const AI_HIGHLIGHT_COLORS = ['#5794F2', '#B877D9', '#FF9830'] as const;
 const HIGHLIGHT_HUE_ROTATIONS = [-16, -10, -6, 0, 6, 10, 16] as const;
+const DEFAULT_EFFECT_SPEED = 1;
+const MIN_EFFECT_SPEED = 0.25;
+const MAX_EFFECT_SPEED = 4;
+const EFFECT_SPEED_OPTIONS = [
+  { label: 'Slow', value: 0.7 },
+  { label: 'Medium', value: 1 },
+  { label: 'Fast', value: 1.6 },
+  { label: 'Very fast', value: 2.4 },
+] as const;
+const POSITION_SEGMENTS: Array<{
+  key: string;
+  label: string;
+  valign: VerticalAlign;
+  halign: HorizontalAlign;
+}> = [
+  { key: 'top-left', label: 'Top left', valign: 'top', halign: 'left' },
+  { key: 'top-middle', label: 'Top middle', valign: 'top', halign: 'middle' },
+  { key: 'top-right', label: 'Top right', valign: 'top', halign: 'right' },
+  { key: 'middle-left', label: 'Middle left', valign: 'middle', halign: 'left' },
+  { key: 'middle-middle', label: 'Middle', valign: 'middle', halign: 'middle' },
+  { key: 'middle-right', label: 'Middle right', valign: 'middle', halign: 'right' },
+  { key: 'bottom-left', label: 'Bottom left', valign: 'bottom', halign: 'left' },
+  { key: 'bottom-middle', label: 'Bottom middle', valign: 'bottom', halign: 'middle' },
+  { key: 'bottom-right', label: 'Bottom right', valign: 'bottom', halign: 'right' },
+];
+
+type EffectSpeedPreset = (typeof EFFECT_SPEED_OPTIONS)[number]['label'];
+type EffectSpeedOption = (typeof EFFECT_SPEED_OPTIONS)[number];
+
+function parseEffectSpeed(rawValue: string | null): number {
+  const parsed = Number.parseFloat(rawValue ?? '');
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_EFFECT_SPEED;
+  }
+  return Math.min(MAX_EFFECT_SPEED, Math.max(MIN_EFFECT_SPEED, parsed));
+}
+
+function parseVerticalAlign(rawValue: string | null): VerticalAlign {
+  if (rawValue === 'middle' || rawValue === 'bottom') {
+    return rawValue;
+  }
+  return 'top';
+}
+
+function parseHorizontalAlign(rawValue: string | null): HorizontalAlign {
+  if (rawValue === 'middle' || rawValue === 'right') {
+    return rawValue;
+  }
+  return 'left';
+}
+
+function toCrossAxisAlign(value: HorizontalAlign): 'flex-start' | 'center' | 'flex-end' {
+  if (value === 'middle') {
+    return 'center';
+  }
+  if (value === 'right') {
+    return 'flex-end';
+  }
+  return 'flex-start';
+}
+
+function toMainAxisAlign(value: VerticalAlign): 'flex-start' | 'center' | 'flex-end' {
+  if (value === 'middle') {
+    return 'center';
+  }
+  if (value === 'bottom') {
+    return 'flex-end';
+  }
+  return 'flex-start';
+}
+
+function toTextAlign(value: HorizontalAlign): 'left' | 'center' | 'right' {
+  if (value === 'middle') {
+    return 'center';
+  }
+  if (value === 'right') {
+    return 'right';
+  }
+  return 'left';
+}
+
+function effectSpeedLabelFromValue(speed: number): EffectSpeedPreset {
+  let closest: EffectSpeedOption = EFFECT_SPEED_OPTIONS[0];
+  let closestDistance = Math.abs(speed - closest.value);
+
+  for (let i = 1; i < EFFECT_SPEED_OPTIONS.length; i++) {
+    const candidate = EFFECT_SPEED_OPTIONS[i];
+    const distance = Math.abs(speed - candidate.value);
+    if (distance < closestDistance) {
+      closest = candidate;
+      closestDistance = distance;
+    }
+  }
+
+  return closest.label;
+}
+
+function effectSpeedValueFromLabel(label: EffectSpeedPreset): number {
+  const found = EFFECT_SPEED_OPTIONS.find((option) => option.label === label);
+  return found?.value ?? DEFAULT_EFFECT_SPEED;
+}
 
 function seedFromString(value: string): number {
   let hash = 2166136261;
@@ -156,6 +261,9 @@ export default function PlaygroundPresentationPage() {
   const styles = useStyles2(getStyles);
   const [searchParams, setSearchParams] = useSearchParams();
   const [isEditing, setIsEditing] = React.useState(false);
+  const [replayRunId, setReplayRunId] = React.useState(0);
+  const [isReplaying, setIsReplaying] = React.useState(false);
+  const [isReplayButtonVisible, setIsReplayButtonVisible] = React.useState(false);
   const [typedText, setTypedText] = React.useState('');
   const [isTyping, setIsTyping] = React.useState(true);
   const [isCursorVisible, setIsCursorVisible] = React.useState(true);
@@ -164,13 +272,37 @@ export default function PlaygroundPresentationPage() {
   const [isEditHintFading, setIsEditHintFading] = React.useState(false);
   const [isTitleFlurryActive, setIsTitleFlurryActive] = React.useState(true);
   const [draftText, setDraftText] = React.useState('');
+  const [draftEffect, setDraftEffect] = React.useState<PresentationEffect>('none');
+  const [draftEffectSpeedLabel, setDraftEffectSpeedLabel] = React.useState<EffectSpeedPreset>('Medium');
+  const [draftVerticalAlign, setDraftVerticalAlign] = React.useState<VerticalAlign>('top');
+  const [draftHorizontalAlign, setDraftHorizontalAlign] = React.useState<HorizontalAlign>('left');
   const [boostedBoldKeys, setBoostedBoldKeys] = React.useState<Record<string, boolean>>({});
   const [highlightHueRotations, setHighlightHueRotations] = React.useState<Record<string, number>>({});
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const boldBoostTimeoutsRef = React.useRef<Map<string, number>>(new Map());
+  const replayTimeoutRef = React.useRef<number | undefined>(undefined);
   const text = searchParams.get('text')?.trim() || 'Presentation playground';
+  const effectParam = searchParams.get('effect');
+  const effect: PresentationEffect = effectParam === 'typewriter' ? 'typewriter' : 'none';
+  const isTypewriterEffect = effect === 'typewriter';
+  const effectSpeed = parseEffectSpeed(searchParams.get('effectSpeed'));
+  const verticalAlign = parseVerticalAlign(searchParams.get('valign'));
+  const horizontalAlign = parseHorizontalAlign(searchParams.get('halign'));
+  const markdownText = isReplaying ? '' : isTypewriterEffect ? `${typedText}${isTyping || isCursorVisible ? ' |' : ''}` : text;
 
   React.useEffect(() => {
+    if (isReplaying) {
+      setTypedText('');
+      setIsTyping(false);
+      return;
+    }
+
+    if (!isTypewriterEffect) {
+      setTypedText(text);
+      setIsTyping(false);
+      return;
+    }
+
     let cancelled = false;
     let timeoutId: number | undefined;
     setTypedText('');
@@ -192,7 +324,8 @@ export default function PlaygroundPresentationPage() {
       const isPauseChar = '.!?;:,\n'.includes(char);
       const baseDelay = 16 + Math.floor(Math.random() * 85);
       const pauseDelay = isPauseChar ? 80 + Math.floor(Math.random() * 160) : 0;
-      timeoutId = window.setTimeout(() => runTypewriter(index + 1), baseDelay + pauseDelay);
+      const nextDelay = Math.max(8, Math.round((baseDelay + pauseDelay) / effectSpeed));
+      timeoutId = window.setTimeout(() => runTypewriter(index + 1), nextDelay);
     };
 
     timeoutId = window.setTimeout(() => runTypewriter(0), 120);
@@ -203,9 +336,15 @@ export default function PlaygroundPresentationPage() {
         window.clearTimeout(timeoutId);
       }
     };
-  }, [text]);
+  }, [effectSpeed, isReplaying, isTypewriterEffect, replayRunId, text]);
 
   React.useEffect(() => {
+    if (!isTypewriterEffect || isReplaying) {
+      setIsCursorVisible(false);
+      return;
+    }
+
+    setIsCursorVisible(true);
     const cursorInterval = window.setInterval(() => {
       setIsCursorVisible((current) => !current);
     }, 460);
@@ -213,7 +352,7 @@ export default function PlaygroundPresentationPage() {
     return () => {
       window.clearInterval(cursorInterval);
     };
-  }, []);
+  }, [isReplaying, isTypewriterEffect, replayRunId]);
 
   React.useEffect(() => {
     if (!isEditing || !textareaRef.current) {
@@ -244,6 +383,7 @@ export default function PlaygroundPresentationPage() {
   }, []);
 
   React.useEffect(() => {
+    setIsTitleFlurryActive(true);
     const flurryTimeout = window.setTimeout(() => {
       setIsTitleFlurryActive(false);
     }, 2800);
@@ -251,7 +391,7 @@ export default function PlaygroundPresentationPage() {
     return () => {
       window.clearTimeout(flurryTimeout);
     };
-  }, []);
+  }, [replayRunId]);
 
   React.useEffect(() => {
     const timeoutMap = boldBoostTimeoutsRef.current;
@@ -263,13 +403,25 @@ export default function PlaygroundPresentationPage() {
     };
   }, []);
 
+  React.useEffect(() => {
+    return () => {
+      if (replayTimeoutRef.current !== undefined) {
+        window.clearTimeout(replayTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const startEditing = React.useCallback(() => {
     setShowEditHint(false);
     setIsEditHintVisible(false);
     setIsEditHintFading(false);
     setDraftText(text);
+    setDraftEffect(effect);
+    setDraftEffectSpeedLabel(effectSpeedLabelFromValue(effectSpeed));
+    setDraftVerticalAlign(verticalAlign);
+    setDraftHorizontalAlign(horizontalAlign);
     setIsEditing(true);
-  }, [text]);
+  }, [effect, effectSpeed, horizontalAlign, text, verticalAlign]);
 
   const handleSubmit = React.useCallback(
     (event: React.FormEvent<HTMLFormElement>) => {
@@ -281,10 +433,36 @@ export default function PlaygroundPresentationPage() {
       } else {
         nextParams.delete('text');
       }
+      if (draftEffect === 'typewriter') {
+        nextParams.set('effect', 'typewriter');
+        const normalizedEffectSpeed = effectSpeedValueFromLabel(draftEffectSpeedLabel).toString();
+        nextParams.set('effectSpeed', normalizedEffectSpeed);
+      } else {
+        nextParams.delete('effect');
+        nextParams.delete('effectSpeed');
+      }
+      if (draftVerticalAlign === 'top') {
+        nextParams.delete('valign');
+      } else {
+        nextParams.set('valign', draftVerticalAlign);
+      }
+      if (draftHorizontalAlign === 'left') {
+        nextParams.delete('halign');
+      } else {
+        nextParams.set('halign', draftHorizontalAlign);
+      }
       setSearchParams(nextParams);
       setIsEditing(false);
     },
-    [draftText, searchParams, setSearchParams]
+    [
+      draftEffect,
+      draftEffectSpeedLabel,
+      draftHorizontalAlign,
+      draftText,
+      draftVerticalAlign,
+      searchParams,
+      setSearchParams,
+    ]
   );
 
   const triggerBoldSparkleBoost = React.useCallback((key: string) => {
@@ -303,13 +481,54 @@ export default function PlaygroundPresentationPage() {
     boldBoostTimeoutsRef.current.set(key, timeoutId);
   }, []);
 
+  const handleMouseMove = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (isEditing || isReplaying) {
+      setIsReplayButtonVisible(false);
+      return;
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const distanceFromRight = rect.right - event.clientX;
+    const distanceFromBottom = rect.bottom - event.clientY;
+    const isWithinCornerBounds =
+      distanceFromRight >= 0 && distanceFromBottom >= 0 && distanceFromRight <= 180 && distanceFromBottom <= 180;
+    const isWithinCornerRadius = Math.hypot(distanceFromRight, distanceFromBottom) <= 190;
+    setIsReplayButtonVisible(isWithinCornerBounds && isWithinCornerRadius);
+  }, [isEditing, isReplaying]);
+
+  const handleReplay = React.useCallback(() => {
+    if (isReplaying) {
+      return;
+    }
+
+    if (replayTimeoutRef.current !== undefined) {
+      window.clearTimeout(replayTimeoutRef.current);
+    }
+
+    setIsReplayButtonVisible(false);
+    setIsReplaying(true);
+    setTypedText('');
+    setIsTyping(false);
+    setIsCursorVisible(false);
+
+    replayTimeoutRef.current = window.setTimeout(() => {
+      setReplayRunId((current) => current + 1);
+      setIsReplaying(false);
+    }, 2000);
+  }, [isReplaying]);
+
   return (
-    <div className={styles.page} onDoubleClick={startEditing}>
+    <div
+      className={styles.page}
+      onDoubleClick={startEditing}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => setIsReplayButtonVisible(false)}
+    >
       <SparklesBackground className={styles.presentationLayer} withGradient />
-      <div className={styles.centerText}>
+      <div key={`content-${replayRunId}`} className={styles.centerText(verticalAlign, horizontalAlign)}>
         <MarkdownPreview
-          markdown={`${typedText}${isTyping || isCursorVisible ? ' |' : ''}`}
-          className={styles.markdownContent}
+          markdown={markdownText}
+          className={styles.markdownContent(horizontalAlign)}
           renderUnderline={(underlineText, key, index) => {
             const baseColor = AI_HIGHLIGHT_COLORS[index % AI_HIGHLIGHT_COLORS.length];
             const hueRotation = highlightHueRotations[key] ?? 0;
@@ -481,6 +700,11 @@ export default function PlaygroundPresentationPage() {
       {!isEditing && showEditHint && (
         <div className={styles.editHint(isEditHintVisible, isEditHintFading)}>(double-click to edit)</div>
       )}
+      {!isEditing && !isReplaying && (
+        <button type="button" className={styles.replayButton(isReplayButtonVisible)} onClick={handleReplay} aria-label="Replay">
+          <span className={styles.replayIcon} aria-hidden />
+        </button>
+      )}
       {isEditing && (
         <div className={styles.editPanelBackdrop}>
           <form
@@ -488,25 +712,89 @@ export default function PlaygroundPresentationPage() {
             onSubmit={handleSubmit}
             onDoubleClick={(event) => event.stopPropagation()}
           >
-            <textarea
-              id="presentation-text-editor"
-              ref={textareaRef}
-              className={styles.textarea}
-              value={draftText}
-              onChange={(event) => setDraftText(event.currentTarget.value)}
-              rows={6}
-            />
-            <div className={styles.actions}>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setIsEditing(false);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button type="submit">Save</Button>
+            <div className={styles.editContent}>
+              <div className={styles.editorColumn}>
+                <textarea
+                  id="presentation-text-editor"
+                  ref={textareaRef}
+                  className={styles.textarea}
+                  value={draftText}
+                  onChange={(event) => setDraftText(event.currentTarget.value)}
+                  rows={6}
+                />
+                <div className={styles.actions}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setIsEditing(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit">Save</Button>
+                </div>
+              </div>
+              <div className={styles.editSidebar}>
+                <label htmlFor="presentation-effect-editor" className={styles.effectLabel}>
+                  Effect
+                </label>
+                <select
+                  id="presentation-effect-editor"
+                  className={styles.effectSelect}
+                  value={draftEffect}
+                  onChange={(event) => setDraftEffect(event.currentTarget.value as PresentationEffect)}
+                >
+                  <option value="none">None</option>
+                  <option value="typewriter">Typewriter</option>
+                </select>
+                <label htmlFor="presentation-effect-speed-editor" className={styles.effectLabel}>
+                  Effect speed
+                </label>
+                <select
+                  id="presentation-effect-speed-editor"
+                  className={styles.effectSpeedInput}
+                  value={draftEffectSpeedLabel}
+                  onChange={(event) => setDraftEffectSpeedLabel(event.currentTarget.value as EffectSpeedPreset)}
+                  disabled={draftEffect !== 'typewriter'}
+                >
+                  {EFFECT_SPEED_OPTIONS.map((option) => (
+                    <option key={option.label} value={option.label}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <label className={styles.effectLabel} id="presentation-position-label">
+                  Position
+                </label>
+                <div
+                  className={styles.positionGrid}
+                  role="radiogroup"
+                  aria-labelledby="presentation-position-label"
+                >
+                  {POSITION_SEGMENTS.map((segment) => {
+                    const isSelected =
+                      draftVerticalAlign === segment.valign && draftHorizontalAlign === segment.halign;
+                    return (
+                      <button
+                        key={segment.key}
+                        type="button"
+                        className={styles.positionSegment(isSelected)}
+                        role="radio"
+                        aria-checked={isSelected}
+                        aria-label={segment.label}
+                        title={segment.label}
+                        onClick={() => {
+                          setDraftVerticalAlign(segment.valign);
+                          setDraftHorizontalAlign(segment.halign);
+                        }}
+                      >
+                        <span className={styles.positionSegmentDot(isSelected)} />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </form>
         </div>
@@ -532,28 +820,32 @@ function getStyles(theme: GrafanaTheme2) {
       inset: 0,
       zIndex: 1,
     }),
-    centerText: css({
-      position: 'absolute',
-      inset: 0,
-      zIndex: 2,
-      display: 'flex',
-      alignItems: 'flex-start',
-      justifyContent: 'center',
-      textAlign: 'left' as const,
-      pointerEvents: 'none',
-      padding: `${theme.spacing(8)} ${theme.spacing(10)} ${theme.spacing(6)}`,
-      color: theme.colors.text.primary,
-      fontSize: 'clamp(1.5rem, 2.8vw, 2.5rem)',
-      lineHeight: 1.25,
-      fontWeight: theme.typography.fontWeightMedium,
-      textShadow: `0 12px 36px ${theme.colors.background.primary}`,
-      wordBreak: 'break-word' as const,
-    }),
-    markdownContent: css({
+    centerText: (valign: VerticalAlign, halign: HorizontalAlign) =>
+      css({
+        position: 'absolute',
+        inset: 0,
+        zIndex: 2,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: toCrossAxisAlign(halign),
+        justifyContent: toMainAxisAlign(valign),
+        textAlign: toTextAlign(halign),
+        pointerEvents: 'none',
+        padding: `${theme.spacing(8)} ${theme.spacing(10)} ${theme.spacing(6)}`,
+        color: theme.colors.text.primary,
+        fontSize: 'clamp(1.5rem, 2.8vw, 2.5rem)',
+        lineHeight: 1.25,
+        fontWeight: theme.typography.fontWeightMedium,
+        textShadow: `0 12px 36px ${theme.colors.background.primary}`,
+        wordBreak: 'break-word' as const,
+      }),
+    markdownContent: (halign: HorizontalAlign) =>
+      css({
       width: '100%',
+      maxWidth: '100%',
       margin: 0,
       transform: 'none',
-      textAlign: 'left' as const,
+      textAlign: toTextAlign(halign),
       color: theme.colors.text.primary,
       '& h1, & h2, & h3, & h4, & h5, & h6': {
         marginTop: 0,
@@ -607,7 +899,7 @@ function getStyles(theme: GrafanaTheme2) {
       '& pre': {
         margin: `0 0 ${markdownBlockSpacing} 0`,
         maxWidth: '80vw',
-        textAlign: 'left' as const,
+        textAlign: toTextAlign(halign),
       },
     }),
     emHighlight: (highlightColor: string) =>
@@ -670,16 +962,39 @@ function getStyles(theme: GrafanaTheme2) {
       maxWidth: 640,
       display: 'flex',
       flexDirection: 'column',
-      gap: theme.spacing(1.5),
       padding: theme.spacing(2),
       borderRadius: theme.shape.radius.default,
       border: `1px solid ${theme.colors.border.medium}`,
       background: theme.colors.background.primary,
       boxShadow: theme.shadows.z3,
+      minHeight: 360,
+    }),
+    editContent: css({
+      display: 'grid',
+      gridTemplateColumns: 'minmax(0, 1fr) 220px',
+      gap: theme.spacing(2),
+      alignItems: 'stretch',
+      minHeight: 0,
+      flex: 1,
+    }),
+    editSidebar: css({
+      display: 'flex',
+      flexDirection: 'column',
+      gap: theme.spacing(1),
+      borderLeft: `1px solid ${theme.colors.border.weak}`,
+      paddingLeft: theme.spacing(2),
+      minHeight: '100%',
+    }),
+    editorColumn: css({
+      display: 'flex',
+      flexDirection: 'column',
+      minHeight: 0,
+      gap: theme.spacing(1.5),
     }),
     textarea: css({
       width: '100%',
-      minHeight: 160,
+      height: '100%',
+      minHeight: 260,
       resize: 'vertical' as const,
       borderRadius: theme.shape.radius.default,
       border: `1px solid ${theme.colors.border.medium}`,
@@ -694,10 +1009,87 @@ function getStyles(theme: GrafanaTheme2) {
         outlineOffset: 1,
       },
     }),
+    effectLabel: css({
+      fontSize: theme.typography.bodySmall.fontSize,
+      lineHeight: theme.typography.bodySmall.lineHeight,
+      fontWeight: theme.typography.fontWeightMedium,
+      color: theme.colors.text.secondary,
+    }),
+    effectSelect: css({
+      width: '100%',
+      minHeight: theme.spacing(4.5),
+      borderRadius: theme.shape.radius.default,
+      border: `1px solid ${theme.colors.border.medium}`,
+      background: theme.colors.background.canvas,
+      color: theme.colors.text.primary,
+      padding: `0 ${theme.spacing(1)}`,
+      fontFamily: theme.typography.fontFamily,
+      fontSize: theme.typography.body.fontSize,
+      lineHeight: '1.2',
+      '&:focus': {
+        outline: `2px solid ${theme.colors.primary.main}`,
+        outlineOffset: 1,
+      },
+    }),
+    effectSpeedInput: css({
+      width: '100%',
+      minHeight: theme.spacing(4.5),
+      borderRadius: theme.shape.radius.default,
+      border: `1px solid ${theme.colors.border.medium}`,
+      background: theme.colors.background.canvas,
+      color: theme.colors.text.primary,
+      padding: `0 ${theme.spacing(1)}`,
+      fontFamily: theme.typography.fontFamily,
+      fontSize: theme.typography.body.fontSize,
+      lineHeight: '1.2',
+      '&:focus': {
+        outline: `2px solid ${theme.colors.primary.main}`,
+        outlineOffset: 1,
+      },
+      '&:disabled': {
+        opacity: 0.6,
+        cursor: 'not-allowed',
+      },
+    }),
+    positionGrid: css({
+      display: 'grid',
+      gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+      gap: theme.spacing(0.75),
+      padding: theme.spacing(0.5),
+      borderRadius: theme.shape.radius.default,
+      border: `1px solid ${theme.colors.border.medium}`,
+      background: theme.colors.background.canvas,
+    }),
+    positionSegment: (isSelected: boolean) =>
+      css({
+        minHeight: theme.spacing(4),
+        borderRadius: theme.shape.radius.default,
+        border: `1px solid ${isSelected ? theme.colors.primary.main : theme.colors.border.weak}`,
+        background: isSelected ? theme.colors.primary.transparent : 'transparent',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        padding: 0,
+        transition: 'border-color 150ms ease, background-color 150ms ease',
+        '&:focus-visible': {
+          outline: `2px solid ${theme.colors.primary.main}`,
+          outlineOffset: 1,
+        },
+      }),
+    positionSegmentDot: (isSelected: boolean) =>
+      css({
+        width: theme.spacing(1),
+        height: theme.spacing(1),
+        borderRadius: '50%',
+        background: isSelected ? theme.colors.primary.text : theme.colors.text.secondary,
+        opacity: isSelected ? 1 : 0.6,
+      }),
     actions: css({
       display: 'flex',
       justifyContent: 'flex-end',
       gap: theme.spacing(1),
+      marginTop: 'auto',
     }),
     editHint: (isVisible: boolean, isFading: boolean) =>
       css({
@@ -714,6 +1106,38 @@ function getStyles(theme: GrafanaTheme2) {
       textShadow: `0 8px 24px ${theme.colors.background.primary}`,
       pointerEvents: 'none',
       userSelect: 'none' as const,
+    }),
+    replayButton: (isVisible: boolean) =>
+      css({
+        position: 'absolute',
+        right: theme.spacing(3),
+        bottom: theme.spacing(3),
+        zIndex: 3,
+        width: 'auto',
+        height: 'auto',
+        border: 'none',
+        background: 'transparent',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: theme.colors.text.primary,
+        cursor: 'pointer',
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? 'translateY(0)' : 'translateY(4px)',
+        transition: 'opacity 220ms ease, transform 220ms ease',
+        pointerEvents: isVisible ? 'auto' : 'none',
+        '&:focus-visible': {
+          outline: `2px solid ${theme.colors.primary.main}`,
+          outlineOffset: 2,
+        },
+      }),
+    replayIcon: css({
+      width: 0,
+      height: 0,
+      borderTop: '7px solid transparent',
+      borderBottom: '7px solid transparent',
+      borderLeft: `12px solid currentColor`,
+      marginLeft: '2px',
     }),
     boldSparkleWrap: css({
       position: 'relative',
