@@ -10,6 +10,9 @@ export default function PlaygroundPresentationPage() {
   const styles = useStyles2(getStyles);
   const [searchParams, setSearchParams] = useSearchParams();
   const [isEditing, setIsEditing] = React.useState(false);
+  const [showEditHint, setShowEditHint] = React.useState(true);
+  const [isEditHintVisible, setIsEditHintVisible] = React.useState(false);
+  const [isEditHintFading, setIsEditHintFading] = React.useState(false);
   const [draftText, setDraftText] = React.useState('');
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const text = searchParams.get('text')?.trim() || 'Presentation playground';
@@ -22,7 +25,30 @@ export default function PlaygroundPresentationPage() {
     textareaRef.current.select();
   }, [isEditing]);
 
+  React.useEffect(() => {
+    const fadeInTimeout = window.setTimeout(() => {
+      setIsEditHintVisible(true);
+    }, 80);
+
+    const fadeTimeout = window.setTimeout(() => {
+      setIsEditHintFading(true);
+    }, 2600);
+
+    const hintTimeout = window.setTimeout(() => {
+      setShowEditHint(false);
+    }, 3500);
+
+    return () => {
+      window.clearTimeout(fadeInTimeout);
+      window.clearTimeout(fadeTimeout);
+      window.clearTimeout(hintTimeout);
+    };
+  }, []);
+
   const startEditing = React.useCallback(() => {
+    setShowEditHint(false);
+    setIsEditHintVisible(false);
+    setIsEditHintFading(false);
     setDraftText(text);
     setIsEditing(true);
   }, [text]);
@@ -49,6 +75,9 @@ export default function PlaygroundPresentationPage() {
       <div className={styles.centerText}>
         <MarkdownPreview markdown={text} className={styles.markdownContent} />
       </div>
+      {!isEditing && showEditHint && (
+        <div className={styles.editHint(isEditHintVisible, isEditHintFading)}>(double-click to edit)</div>
+      )}
       {isEditing && (
         <div className={styles.editPanelBackdrop}>
           <form
@@ -212,6 +241,22 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'flex',
       justifyContent: 'flex-end',
       gap: theme.spacing(1),
+    }),
+    editHint: (isVisible: boolean, isFading: boolean) =>
+      css({
+      position: 'absolute',
+      top: theme.spacing(3),
+      right: theme.spacing(4),
+      zIndex: 2,
+      color: theme.colors.text.primary,
+      opacity: isFading ? 0 : isVisible ? 0.8 : 0,
+      transition: 'opacity 800ms ease',
+      fontSize: 'clamp(1.1rem, 2.2vw, 1.7rem)',
+      lineHeight: 1.1,
+      fontWeight: theme.typography.fontWeightBold,
+      textShadow: `0 8px 24px ${theme.colors.background.primary}`,
+      pointerEvents: 'none',
+      userSelect: 'none' as const,
     }),
   };
 }
