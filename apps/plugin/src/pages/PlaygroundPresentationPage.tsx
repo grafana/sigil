@@ -5,13 +5,13 @@ import { Button, useStyles2 } from '@grafana/ui';
 import { useSearchParams } from 'react-router-dom';
 import { SparklesBackground } from '../components/landing/SparklesBackground';
 
-export default function PlaygroundSparklesPage() {
+export default function PlaygroundPresentationPage() {
   const styles = useStyles2(getStyles);
   const [searchParams, setSearchParams] = useSearchParams();
   const [isEditing, setIsEditing] = React.useState(false);
   const [draftText, setDraftText] = React.useState('');
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
-  const text = searchParams.get('text')?.trim() || 'Sparkles playground';
+  const text = searchParams.get('text')?.trim() || 'Presentation playground';
 
   React.useEffect(() => {
     if (!isEditing || !textareaRef.current) {
@@ -44,16 +44,20 @@ export default function PlaygroundSparklesPage() {
 
   return (
     <div className={styles.page} onDoubleClick={startEditing}>
-      <SparklesBackground className={styles.sparklesLayer} withGradient />
+      <SparklesBackground className={styles.presentationLayer} withGradient />
       <div className={styles.centerText}>{text}</div>
       {isEditing && (
         <div className={styles.editPanelBackdrop}>
-          <form className={styles.editPanel} onSubmit={handleSubmit} onDoubleClick={(event) => event.stopPropagation()}>
-            <label className={styles.editLabel} htmlFor="sparkles-text-editor">
+          <form
+            className={styles.editPanel}
+            onSubmit={handleSubmit}
+            onDoubleClick={(event) => event.stopPropagation()}
+          >
+            <label className={styles.editLabel} htmlFor="presentation-text-editor">
               Edit text
             </label>
             <textarea
-              id="sparkles-text-editor"
+              id="presentation-text-editor"
               ref={textareaRef}
               className={styles.textarea}
               value={draftText}
@@ -89,7 +93,7 @@ function getStyles(theme: GrafanaTheme2) {
       overflow: 'hidden',
       borderRadius: 0,
     }),
-    sparklesLayer: css({
+    presentationLayer: css({
       position: 'absolute',
       inset: 0,
       zIndex: 1,

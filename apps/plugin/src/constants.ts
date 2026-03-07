@@ -2,7 +2,7 @@ export const PLUGIN_BASE = '/a/grafana-sigil-app';
 
 export const ROUTES = {
   Root: '',
-  PlaygroundSparkles: 'playground/sparkles',
+  PlaygroundPresentation: 'playground/presentation',
   Analytics: 'analytics',
   Tutorial: 'tutorial',
   Conversations: 'conversations',

@@ -7,7 +7,7 @@ import { Route, Routes, useLocation } from 'react-router-dom';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 
 const LandingPage = React.lazy(() => import('../pages/LandingPage'));
-const PlaygroundSparklesPage = React.lazy(() => import('../pages/PlaygroundSparklesPage'));
+const PlaygroundPresentationPage = React.lazy(() => import('../pages/PlaygroundPresentationPage'));
 const DashboardPage = React.lazy(() => import('../pages/DashboardPage'));
 const TutorialPage = React.lazy(() => import('../pages/TutorialPage'));
 const ConversationsBrowserPage = React.lazy(() => import('../pages/ConversationsBrowserPage'));
@@ -37,7 +37,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     height: '100%',
     overflow: 'hidden',
   }),
-  sparklesRouteWrapper: css({
+  presentationRouteWrapper: css({
     flex: 1,
     minHeight: 0,
     height: '100%',
@@ -68,35 +68,35 @@ function useAgentDetailPageNav(): NavModelItem | undefined {
   }, [matchedName, isAnonymous]);
 }
 
-function usePlaygroundSparklesPageNav(): NavModelItem | undefined {
+function usePlaygroundPresentationPageNav(): NavModelItem | undefined {
   const location = useLocation();
-  const isSparkles = location.pathname.includes(`/${ROUTES.PlaygroundSparkles}`);
+  const isPresentation = location.pathname.includes(`/${ROUTES.PlaygroundPresentation}`);
 
   return React.useMemo(() => {
-    if (!isSparkles) {
+    if (!isPresentation) {
       return undefined;
     }
     return {
-      text: 'Sparkles',
+      text: 'Presentation',
       parentItem: {
         text: 'Sigil',
         url: PLUGIN_BASE,
       },
     };
-  }, [isSparkles]);
+  }, [isPresentation]);
 }
 
 export default function App(props: AppRootProps) {
   const styles = useStyles2(getStyles);
   const location = useLocation();
   const agentDetailPageNav = useAgentDetailPageNav();
-  const playgroundSparklesPageNav = usePlaygroundSparklesPageNav();
+  const playgroundPresentationPageNav = usePlaygroundPresentationPageNav();
   const pageNav = React.useMemo<NavModelItem>(() => {
     if (agentDetailPageNav) {
       return agentDetailPageNav;
     }
-    if (playgroundSparklesPageNav) {
-      return playgroundSparklesPageNav;
+    if (playgroundPresentationPageNav) {
+      return playgroundPresentationPageNav;
     }
     return {
       text: props.meta.name,
@@ -105,11 +105,11 @@ export default function App(props: AppRootProps) {
       icon: undefined,
       hideFromBreadcrumbs: true,
     };
-  }, [props.meta.name, agentDetailPageNav, playgroundSparklesPageNav]);
+  }, [props.meta.name, agentDetailPageNav, playgroundPresentationPageNav]);
   const shouldHidePluginHeader =
     location.pathname.includes(`/${ROUTES.Conversations}`) ||
-    location.pathname.includes(`/${ROUTES.PlaygroundSparkles}`);
-  const shouldUseFullBleedPageInner = location.pathname.includes(`/${ROUTES.PlaygroundSparkles}`);
+    location.pathname.includes(`/${ROUTES.PlaygroundPresentation}`);
+  const shouldUseFullBleedPageInner = location.pathname.includes(`/${ROUTES.PlaygroundPresentation}`);
 
   React.useEffect(() => {
     const pageInner = document.querySelector('[class*="page-inner"]');
@@ -137,10 +137,10 @@ export default function App(props: AppRootProps) {
       <Routes>
         <Route path={ROUTES.Root} element={<LandingPage />} />
         <Route
-          path={ROUTES.PlaygroundSparkles}
+          path={ROUTES.PlaygroundPresentation}
           element={
-            <div className={styles.sparklesRouteWrapper}>
-              <PlaygroundSparklesPage />
+            <div className={styles.presentationRouteWrapper}>
+              <PlaygroundPresentationPage />
             </div>
           }
         />
