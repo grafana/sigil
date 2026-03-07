@@ -12,6 +12,10 @@ type PresentationSparklesProps = {
   seed: number;
   delaySec?: number;
   className?: string;
+  durationScale?: number;
+  sizeScale?: number;
+  maxSparks?: number;
+  withGlow?: boolean;
 };
 
 function seedFromString(value: string): number {
@@ -23,14 +27,23 @@ function seedFromString(value: string): number {
   return Math.abs(hash) + 1;
 }
 
-function PresentationSparkles({ color, seed, delaySec, className }: PresentationSparklesProps) {
+function PresentationSparkles({
+  color,
+  seed,
+  delaySec,
+  className,
+  durationScale = 1.6,
+  sizeScale = 1.1,
+  maxSparks = 4,
+  withGlow = false,
+}: PresentationSparklesProps) {
   return (
     <FastSparkles
       color={color}
-      durationScale={1.6}
-      sizeScale={1.1}
-      maxSparks={4}
-      withGlow={false}
+      durationScale={durationScale}
+      sizeScale={sizeScale}
+      maxSparks={maxSparks}
+      withGlow={withGlow}
       seed={seed}
       delaySec={delaySec}
       className={className}
@@ -45,8 +58,11 @@ export default function PlaygroundPresentationPage() {
   const [showEditHint, setShowEditHint] = React.useState(true);
   const [isEditHintVisible, setIsEditHintVisible] = React.useState(false);
   const [isEditHintFading, setIsEditHintFading] = React.useState(false);
+  const [isTitleFlurryActive, setIsTitleFlurryActive] = React.useState(true);
   const [draftText, setDraftText] = React.useState('');
+  const [boostedBoldKeys, setBoostedBoldKeys] = React.useState<Record<string, boolean>>({});
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const boldBoostTimeoutsRef = React.useRef<Map<string, number>>(new Map());
   const text = searchParams.get('text')?.trim() || 'Presentation playground';
 
   React.useEffect(() => {
@@ -77,6 +93,26 @@ export default function PlaygroundPresentationPage() {
     };
   }, []);
 
+  React.useEffect(() => {
+    const flurryTimeout = window.setTimeout(() => {
+      setIsTitleFlurryActive(false);
+    }, 2800);
+
+    return () => {
+      window.clearTimeout(flurryTimeout);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const timeoutMap = boldBoostTimeoutsRef.current;
+    return () => {
+      for (const timeoutId of timeoutMap.values()) {
+        window.clearTimeout(timeoutId);
+      }
+      timeoutMap.clear();
+    };
+  }, []);
+
   const startEditing = React.useCallback(() => {
     setShowEditHint(false);
     setIsEditHintVisible(false);
@@ -101,6 +137,22 @@ export default function PlaygroundPresentationPage() {
     [draftText, searchParams, setSearchParams]
   );
 
+  const triggerBoldSparkleBoost = React.useCallback((key: string) => {
+    const existingTimeout = boldBoostTimeoutsRef.current.get(key);
+    if (existingTimeout !== undefined) {
+      window.clearTimeout(existingTimeout);
+    }
+
+    setBoostedBoldKeys((current) => ({ ...current, [key]: true }));
+
+    const timeoutId = window.setTimeout(() => {
+      setBoostedBoldKeys((current) => ({ ...current, [key]: false }));
+      boldBoostTimeoutsRef.current.delete(key);
+    }, 2800);
+
+    boldBoostTimeoutsRef.current.set(key, timeoutId);
+  }, []);
+
   return (
     <div className={styles.page} onDoubleClick={startEditing}>
       <SparklesBackground className={styles.presentationLayer} withGradient />
@@ -108,26 +160,129 @@ export default function PlaygroundPresentationPage() {
         <MarkdownPreview
           markdown={text}
           className={styles.markdownContent}
+          renderHeading={({ level, text: headingText, key, className, children }) => {
+            const HeadingTag = `h${level}` as keyof React.JSX.IntrinsicElements;
+            if (level !== 1) {
+              return (
+                <HeadingTag key={key} className={className}>
+                  {children}
+                </HeadingTag>
+              );
+            }
+
+            const baseSeed = seedFromString(`${key}:${headingText}`);
+            return (
+              <HeadingTag key={key} className={className}>
+                <span className={styles.titleSparkleWrap}>
+                  <span className={styles.titleSparkleText}>{children}</span>
+                  <span className={styles.titleSparkleLayer} aria-hidden>
+                    <PresentationSparkles color="#5794F2" seed={baseSeed + 5} className={styles.titleSparkleSwarm} />
+                    <PresentationSparkles
+                      color="#B877D9"
+                      seed={baseSeed + 17}
+                      delaySec={0.2}
+                      className={styles.titleSparkleSwarm}
+                    />
+                    <PresentationSparkles
+                      color="#FF9830"
+                      seed={baseSeed + 31}
+                      delaySec={0.4}
+                      className={styles.titleSparkleSwarm}
+                    />
+                  </span>
+                  <span className={styles.titleBoostedSparkleLayer(isTitleFlurryActive)} aria-hidden>
+                    <PresentationSparkles
+                      color="#5794F2"
+                      seed={baseSeed + 53}
+                      className={styles.titleBoostedSparkleSwarm}
+                      durationScale={0.48}
+                      sizeScale={1.3}
+                      maxSparks={12}
+                      withGlow
+                    />
+                    <PresentationSparkles
+                      color="#B877D9"
+                      seed={baseSeed + 71}
+                      delaySec={0.1}
+                      className={styles.titleBoostedSparkleSwarm}
+                      durationScale={0.52}
+                      sizeScale={1.3}
+                      maxSparks={12}
+                      withGlow
+                    />
+                    <PresentationSparkles
+                      color="#FF9830"
+                      seed={baseSeed + 89}
+                      delaySec={0.2}
+                      className={styles.titleBoostedSparkleSwarm}
+                      durationScale={0.56}
+                      sizeScale={1.35}
+                      maxSparks={12}
+                      withGlow
+                    />
+                  </span>
+                </span>
+              </HeadingTag>
+            );
+          }}
           renderStrong={(strongText, key) => {
             const baseSeed = seedFromString(key);
+            const isBoosted = Boolean(boostedBoldKeys[key]);
             return (
-              <strong key={key} className={styles.boldSparkleWrap}>
+              <strong
+                key={key}
+                className={styles.boldSparkleWrap}
+                onClick={() => {
+                  triggerBoldSparkleBoost(key);
+                }}
+              >
                 <span className={styles.boldSparkleText}>{strongText}</span>
-              <span className={styles.boldSparkleLayer} aria-hidden>
+                <span className={styles.boldSparkleLayer} aria-hidden>
                   <PresentationSparkles color="#5794F2" seed={baseSeed + 11} className={styles.boldSparkleSwarm} />
-                <PresentationSparkles
-                  color="#B877D9"
+                  <PresentationSparkles
+                    color="#B877D9"
                     seed={baseSeed + 29}
-                  delaySec={0.22}
-                  className={styles.boldSparkleSwarm}
-                />
-                <PresentationSparkles
-                  color="#FF9830"
+                    delaySec={0.22}
+                    className={styles.boldSparkleSwarm}
+                  />
+                  <PresentationSparkles
+                    color="#FF9830"
                     seed={baseSeed + 47}
-                  delaySec={0.44}
-                  className={styles.boldSparkleSwarm}
-                />
-              </span>
+                    delaySec={0.44}
+                    className={styles.boldSparkleSwarm}
+                  />
+                </span>
+                <span className={styles.boostedSparkleLayer(isBoosted)} aria-hidden>
+                  <PresentationSparkles
+                    color="#5794F2"
+                    seed={baseSeed + 71}
+                    className={styles.boostedSparkleSwarm}
+                    durationScale={0.55}
+                    sizeScale={1.2}
+                    maxSparks={10}
+                    withGlow
+                  />
+                  <PresentationSparkles
+                    color="#B877D9"
+                    seed={baseSeed + 89}
+                    delaySec={0.1}
+                    className={styles.boostedSparkleSwarm}
+                    durationScale={0.6}
+                    sizeScale={1.2}
+                    maxSparks={10}
+                    withGlow
+                  />
+                  <PresentationSparkles
+                    color="#FF9830"
+                    seed={baseSeed + 107}
+                    delaySec={0.2}
+                    className={styles.boostedSparkleSwarm}
+                    durationScale={0.65}
+                    sizeScale={1.25}
+                    maxSparks={10}
+                    withGlow
+                  />
+                </span>
               </strong>
             );
           }}
@@ -218,15 +373,16 @@ function getStyles(theme: GrafanaTheme2) {
         textShadow: `0 0 14px ${theme.colors.primary.main}`,
       },
       '& h1': {
-        fontSize: 'clamp(2.4rem, 6.5vw, 5.8rem)',
+        fontSize: 'clamp(2rem, 5.2vw, 4.8rem)',
         lineHeight: 1.05,
+        marginBottom: theme.spacing(6),
       },
       '& h2': {
-        fontSize: 'clamp(2.1rem, 5.2vw, 4.4rem)',
+        fontSize: 'clamp(1.8rem, 4.4vw, 3.8rem)',
         lineHeight: 1.08,
       },
       '& h3, & h4, & h5, & h6': {
-        fontSize: 'clamp(1.8rem, 4.2vw, 3.2rem)',
+        fontSize: 'clamp(1.55rem, 3.6vw, 2.8rem)',
         lineHeight: 1.12,
       },
       '& p': {
@@ -331,6 +487,8 @@ function getStyles(theme: GrafanaTheme2) {
       color: theme.colors.text.maxContrast,
       overflow: 'visible',
       isolation: 'isolate',
+      pointerEvents: 'auto',
+      cursor: 'pointer',
     }),
     boldSparkleText: css({
       position: 'relative',
@@ -360,6 +518,96 @@ function getStyles(theme: GrafanaTheme2) {
       '&&': {
         overflow: 'visible',
         opacity: 1,
+      },
+    }),
+    boostedSparkleLayer: (isActive: boolean) =>
+      css({
+        position: 'absolute',
+        left: '-0.25em',
+        right: '-0.25em',
+        top: '-0.14em',
+        height: '1.28em',
+        pointerEvents: 'none',
+        zIndex: 1,
+        opacity: isActive ? 1 : 0,
+        transition: 'opacity 1100ms ease-out',
+        overflow: 'visible',
+      }),
+    boostedSparkleSwarm: css({
+      position: 'absolute',
+      inset: 0,
+      width: '100%',
+      height: '100%',
+      display: 'block',
+      overflow: 'visible',
+      '&, & > div': {
+        pointerEvents: 'none',
+      },
+      '&&': {
+        overflow: 'visible',
+      },
+    }),
+    titleSparkleWrap: css({
+      position: 'relative',
+      display: 'inline-block',
+      overflow: 'visible',
+      isolation: 'isolate',
+    }),
+    titleSparkleText: css({
+      position: 'relative',
+      zIndex: 2,
+    }),
+    titleSparkleLayer: css({
+      position: 'absolute',
+      left: '-0.2em',
+      right: '-0.2em',
+      top: '-0.1em',
+      height: '1.2em',
+      pointerEvents: 'none',
+      zIndex: 1,
+      opacity: 1,
+      overflow: 'visible',
+    }),
+    titleSparkleSwarm: css({
+      position: 'absolute',
+      inset: 0,
+      width: '100%',
+      height: '100%',
+      display: 'block',
+      overflow: 'visible',
+      '&, & > div': {
+        pointerEvents: 'none',
+      },
+      '&&': {
+        overflow: 'visible',
+        opacity: 1,
+      },
+    }),
+    titleBoostedSparkleLayer: (isActive: boolean) =>
+      css({
+        position: 'absolute',
+        left: '-0.28em',
+        right: '-0.28em',
+        top: '-0.14em',
+        height: '1.32em',
+        pointerEvents: 'none',
+        zIndex: 1,
+        opacity: isActive ? 1 : 0,
+        transition: 'opacity 1400ms ease-out',
+        overflow: 'visible',
+      }),
+    titleBoostedSparkleSwarm: css({
+      position: 'absolute',
+      inset: 0,
+      width: '100%',
+      height: '100%',
+      display: 'block',
+      overflow: 'visible',
+      '&, & > div': {
+        pointerEvents: 'none',
+      },
+      '&&': {
+        overflow: 'visible',
       },
     }),
   };

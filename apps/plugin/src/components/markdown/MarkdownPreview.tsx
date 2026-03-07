@@ -14,6 +14,13 @@ export type MarkdownPreviewProps = {
   markdown: string;
   className?: string;
   renderStrong?: (text: string, key: string) => React.ReactNode;
+  renderHeading?: (args: {
+    level: 1 | 2 | 3 | 4 | 5 | 6;
+    text: string;
+    key: string;
+    className: string;
+    children: React.ReactNode[];
+  }) => React.ReactNode;
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -66,7 +73,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function MarkdownPreview({ markdown, className, renderStrong }: MarkdownPreviewProps) {
+export default function MarkdownPreview({ markdown, className, renderStrong, renderHeading }: MarkdownPreviewProps) {
   const styles = useStyles2(getStyles);
   const blocks = useMemo(() => parseMarkdownBlocks(markdown), [markdown]);
 
@@ -75,9 +82,20 @@ export default function MarkdownPreview({ markdown, className, renderStrong }: M
       {blocks.map((block, index) => {
         if (block.type === 'heading') {
           const HeadingTag = `h${block.level}` as keyof React.JSX.IntrinsicElements;
+          const headingKey = `heading-${index}`;
+          const children = renderInlineMarkdown(block.text, headingKey, styles, renderStrong);
+          if (renderHeading) {
+            return renderHeading({
+              level: block.level,
+              text: block.text,
+              key: headingKey,
+              className: styles.heading,
+              children,
+            });
+          }
           return (
-            <HeadingTag key={`heading-${index}`} className={styles.heading}>
-              {renderInlineMarkdown(block.text, `heading-${index}`, styles, renderStrong)}
+            <HeadingTag key={headingKey} className={styles.heading}>
+              {children}
             </HeadingTag>
           );
         }
