@@ -156,6 +156,9 @@ export default function PlaygroundPresentationPage() {
   const styles = useStyles2(getStyles);
   const [searchParams, setSearchParams] = useSearchParams();
   const [isEditing, setIsEditing] = React.useState(false);
+  const [typedText, setTypedText] = React.useState('');
+  const [isTyping, setIsTyping] = React.useState(true);
+  const [isCursorVisible, setIsCursorVisible] = React.useState(true);
   const [showEditHint, setShowEditHint] = React.useState(true);
   const [isEditHintVisible, setIsEditHintVisible] = React.useState(false);
   const [isEditHintFading, setIsEditHintFading] = React.useState(false);
@@ -166,6 +169,51 @@ export default function PlaygroundPresentationPage() {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const boldBoostTimeoutsRef = React.useRef<Map<string, number>>(new Map());
   const text = searchParams.get('text')?.trim() || 'Presentation playground';
+
+  React.useEffect(() => {
+    let cancelled = false;
+    let timeoutId: number | undefined;
+    setTypedText('');
+    setIsTyping(true);
+
+    const runTypewriter = (index: number) => {
+      if (cancelled) {
+        return;
+      }
+
+      if (index >= text.length) {
+        setIsTyping(false);
+        return;
+      }
+
+      setTypedText(text.slice(0, index + 1));
+
+      const char = text[index];
+      const isPauseChar = '.!?;:,\n'.includes(char);
+      const baseDelay = 16 + Math.floor(Math.random() * 85);
+      const pauseDelay = isPauseChar ? 80 + Math.floor(Math.random() * 160) : 0;
+      timeoutId = window.setTimeout(() => runTypewriter(index + 1), baseDelay + pauseDelay);
+    };
+
+    timeoutId = window.setTimeout(() => runTypewriter(0), 120);
+
+    return () => {
+      cancelled = true;
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [text]);
+
+  React.useEffect(() => {
+    const cursorInterval = window.setInterval(() => {
+      setIsCursorVisible((current) => !current);
+    }, 460);
+
+    return () => {
+      window.clearInterval(cursorInterval);
+    };
+  }, []);
 
   React.useEffect(() => {
     if (!isEditing || !textareaRef.current) {
@@ -260,8 +308,28 @@ export default function PlaygroundPresentationPage() {
       <SparklesBackground className={styles.presentationLayer} withGradient />
       <div className={styles.centerText}>
         <MarkdownPreview
-          markdown={text}
+          markdown={`${typedText}${isTyping || isCursorVisible ? ' |' : ''}`}
           className={styles.markdownContent}
+          renderUnderline={(underlineText, key, index) => {
+            const baseColor = AI_HIGHLIGHT_COLORS[index % AI_HIGHLIGHT_COLORS.length];
+            const hueRotation = highlightHueRotations[key] ?? 0;
+            const highlightColor = rotateHexHue(baseColor, hueRotation);
+            return (
+              <span
+                key={key}
+                className={styles.underlineHighlight(highlightColor)}
+                onClick={() => {
+                  setHighlightHueRotations((current) => {
+                    const currentRotation = current[key] ?? 0;
+                    const nextRotation = pickNextHueRotation(currentRotation);
+                    return { ...current, [key]: nextRotation };
+                  });
+                }}
+              >
+                {underlineText}
+              </span>
+            );
+          }}
           renderEm={(emText, key, index) => {
             const baseColor = AI_HIGHLIGHT_COLORS[index % AI_HIGHLIGHT_COLORS.length];
             const hueRotation = highlightHueRotations[key] ?? 0;
@@ -558,6 +626,29 @@ function getStyles(theme: GrafanaTheme2) {
           bottom: '-0.12em',
           borderRadius: theme.shape.radius.default,
           background: `linear-gradient(174deg, ${hexToRgba(highlightColor, 0.28)} 0%, ${hexToRgba(highlightColor, 0.18)} 100%)`,
+          transform: 'rotate(-0.8deg)',
+          zIndex: -1,
+          pointerEvents: 'none',
+        },
+      }),
+    underlineHighlight: (highlightColor: string) =>
+      css({
+        position: 'relative',
+        zIndex: 0,
+        pointerEvents: 'auto',
+        cursor: 'pointer',
+        textDecorationLine: 'underline',
+        textDecorationThickness: '0.08em',
+        textUnderlineOffset: '0.1em',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          left: '-0.3em',
+          right: '-0.3em',
+          top: '-0.2em',
+          bottom: '-0.18em',
+          borderRadius: theme.shape.radius.default,
+          background: `linear-gradient(174deg, ${hexToRgba(highlightColor, 0.22)} 0%, ${hexToRgba(highlightColor, 0.12)} 100%)`,
           transform: 'rotate(-0.8deg)',
           zIndex: -1,
           pointerEvents: 'none',
