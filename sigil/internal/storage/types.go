@@ -1,6 +1,10 @@
 package storage
 
-import "time"
+import (
+	"time"
+
+	"github.com/grafana/sigil/sigil/internal/feedback"
+)
 
 type Block struct {
 	ID          string
@@ -44,9 +48,41 @@ type Conversation struct {
 	ConversationID    string
 	ConversationTitle string
 	TitleUpdatedAt    time.Time
+	UserID            string
+	UserIDUpdatedAt   time.Time
 	FirstGenerationAt time.Time
 	LastGenerationAt  time.Time
 	GenerationCount   int
+	Agents            []string
+	Models            []string
+	ModelProviders    map[string]string
+	ErrorCount        int
+	InputTokens       int64
+	OutputTokens      int64
+	CacheReadTokens   int64
+	CacheWriteTokens  int64
+	ReasoningTokens   int64
+	TotalTokens       int64
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
+}
+
+type ConversationProjectionPageQuery struct {
+	From                   time.Time
+	To                     time.Time
+	Limit                  int
+	ExcludeConversationIDs []string
+}
+
+type ConversationProjectionEvalSummary struct {
+	TotalScores int
+	PassCount   int
+	FailCount   int
+}
+
+type ConversationProjectionPageItem struct {
+	Conversation    Conversation
+	RatingSummary   *feedback.ConversationRatingSummary
+	AnnotationCount int
+	EvalSummary     *ConversationProjectionEvalSummary
 }

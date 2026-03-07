@@ -28,10 +28,18 @@ export type ConversationsBrowserPageProps = {
   modelCardClient?: ModelCardClient;
 };
 
-const SDK_NAME_SELECT_KEY = 'span.sigil.sdk.name';
 const INPUT_TOKENS_SELECT_KEY = 'span.gen_ai.usage.input_tokens';
 const OUTPUT_TOKENS_SELECT_KEY = 'span.gen_ai.usage.output_tokens';
-const DEFAULT_SEARCH_SELECT_FIELDS = [SDK_NAME_SELECT_KEY, INPUT_TOKENS_SELECT_KEY, OUTPUT_TOKENS_SELECT_KEY];
+const CACHE_READ_TOKENS_SELECT_KEY = 'span.gen_ai.usage.cache_read_input_tokens';
+const CACHE_WRITE_TOKENS_SELECT_KEY = 'span.gen_ai.usage.cache_write_input_tokens';
+const REASONING_TOKENS_SELECT_KEY = 'span.gen_ai.usage.reasoning_tokens';
+const DEFAULT_SEARCH_SELECT_FIELDS = [
+  INPUT_TOKENS_SELECT_KEY,
+  OUTPUT_TOKENS_SELECT_KEY,
+  CACHE_READ_TOKENS_SELECT_KEY,
+  CACHE_WRITE_TOKENS_SELECT_KEY,
+  REASONING_TOKENS_SELECT_KEY,
+];
 
 const orderByOptions: Array<SelectableValue<ConversationOrderBy>> = (
   Object.keys(conversationOrderByLabel) as ConversationOrderBy[]
@@ -40,9 +48,15 @@ const orderByOptions: Array<SelectableValue<ConversationOrderBy>> = (
 function getConversationTotalTokens(conversation: ConversationSearchResult): number {
   const input = conversation.selected?.[INPUT_TOKENS_SELECT_KEY];
   const output = conversation.selected?.[OUTPUT_TOKENS_SELECT_KEY];
+  const cacheRead = conversation.selected?.[CACHE_READ_TOKENS_SELECT_KEY];
+  const cacheWrite = conversation.selected?.[CACHE_WRITE_TOKENS_SELECT_KEY];
+  const reasoning = conversation.selected?.[REASONING_TOKENS_SELECT_KEY];
   const inputNum = typeof input === 'number' ? input : 0;
   const outputNum = typeof output === 'number' ? output : 0;
-  return inputNum + outputNum;
+  const cacheReadNum = typeof cacheRead === 'number' ? cacheRead : 0;
+  const cacheWriteNum = typeof cacheWrite === 'number' ? cacheWrite : 0;
+  const reasoningNum = typeof reasoning === 'number' ? reasoning : 0;
+  return inputNum + outputNum + cacheReadNum + cacheWriteNum + reasoningNum;
 }
 
 type ConversationStats = ConversationStatsResponse;

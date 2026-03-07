@@ -3,11 +3,11 @@ package mysql
 import "time"
 
 type GenerationModel struct {
-	ID               uint64     `gorm:"primaryKey;autoIncrement;index:idx_generations_tenant_compacted_claimed_created,priority:5;index:idx_generations_tenant_compacted_compacted_at_id,priority:4"`
-	TenantID         string     `gorm:"size:128;not null;uniqueIndex:ux_generations_tenant_generation,priority:1;index:idx_generations_tenant_conversation_created,priority:1;index:idx_generations_tenant_compacted_claimed_created,priority:1;index:idx_generations_tenant_compacted_compacted_at_id,priority:1"`
+	ID               uint64     `gorm:"primaryKey;autoIncrement;index:idx_generations_tenant_created_id_conversation,priority:3,sort:desc;index:idx_generations_tenant_compacted_claimed_created,priority:5;index:idx_generations_tenant_compacted_compacted_at_id,priority:4"`
+	TenantID         string     `gorm:"size:128;not null;uniqueIndex:ux_generations_tenant_generation,priority:1;index:idx_generations_tenant_conversation_created,priority:1;index:idx_generations_tenant_created_id_conversation,priority:1;index:idx_generations_tenant_compacted_claimed_created,priority:1;index:idx_generations_tenant_compacted_compacted_at_id,priority:1"`
 	GenerationID     string     `gorm:"size:255;not null;uniqueIndex:ux_generations_tenant_generation,priority:2"`
-	ConversationID   *string    `gorm:"size:255;index:idx_generations_tenant_conversation_created,priority:2"`
-	CreatedAt        time.Time  `gorm:"type:datetime(6);not null;index:idx_generations_tenant_conversation_created,priority:3;index:idx_generations_tenant_compacted_claimed_created,priority:4"`
+	ConversationID   *string    `gorm:"size:255;index:idx_generations_tenant_conversation_created,priority:2;index:idx_generations_tenant_created_id_conversation,priority:4"`
+	CreatedAt        time.Time  `gorm:"type:datetime(6);not null;index:idx_generations_tenant_conversation_created,priority:3;index:idx_generations_tenant_created_id_conversation,priority:2,sort:desc;index:idx_generations_tenant_compacted_claimed_created,priority:4"`
 	Payload          []byte     `gorm:"type:mediumblob;not null"`
 	PayloadSizeBytes int        `gorm:"not null"`
 	Compacted        bool       `gorm:"not null;default:false;index:idx_generations_tenant_compacted_claimed_created,priority:2;index:idx_generations_tenant_compacted_compacted_at_id,priority:2"`
@@ -161,16 +161,28 @@ type EvalTemplateVersionModel struct {
 func (EvalTemplateVersionModel) TableName() string { return "eval_template_versions" }
 
 type ConversationModel struct {
-	ID                uint64     `gorm:"primaryKey;autoIncrement"`
-	TenantID          string     `gorm:"size:128;not null;uniqueIndex:ux_conversations_tenant_conversation,priority:1;index:idx_conversations_tenant_updated_at,priority:1"`
-	ConversationID    string     `gorm:"size:255;not null;uniqueIndex:ux_conversations_tenant_conversation,priority:2"`
-	ConversationTitle *string    `gorm:"size:1024"`
-	TitleUpdatedAt    *time.Time `gorm:"type:datetime(6)"`
-	FirstGenerationAt time.Time  `gorm:"type:datetime(6);not null;default:CURRENT_TIMESTAMP(6)"`
-	LastGenerationAt  time.Time  `gorm:"type:datetime(6);not null"`
-	GenerationCount   int        `gorm:"not null;default:0"`
-	CreatedAt         time.Time  `gorm:"type:datetime(6);not null;autoCreateTime"`
-	UpdatedAt         time.Time  `gorm:"type:datetime(6);not null;autoUpdateTime;index:idx_conversations_tenant_updated_at,priority:2"`
+	ID                 uint64     `gorm:"primaryKey;autoIncrement;index:idx_conversations_tenant_last_generation_id,priority:3,sort:desc"`
+	TenantID           string     `gorm:"size:128;not null;uniqueIndex:ux_conversations_tenant_conversation,priority:1;index:idx_conversations_tenant_updated_at,priority:1;index:idx_conversations_tenant_last_generation_id,priority:1"`
+	ConversationID     string     `gorm:"size:255;not null;uniqueIndex:ux_conversations_tenant_conversation,priority:2"`
+	ConversationTitle  *string    `gorm:"size:1024"`
+	TitleUpdatedAt     *time.Time `gorm:"type:datetime(6)"`
+	UserID             *string    `gorm:"size:255"`
+	UserIDUpdatedAt    *time.Time `gorm:"type:datetime(6)"`
+	FirstGenerationAt  time.Time  `gorm:"type:datetime(6);not null;default:CURRENT_TIMESTAMP(6)"`
+	LastGenerationAt   time.Time  `gorm:"type:datetime(6);not null;index:idx_conversations_tenant_last_generation_id,priority:2,sort:desc"`
+	GenerationCount    int        `gorm:"not null;default:0"`
+	AgentsJSON         string     `gorm:"type:json"`
+	ModelsJSON         string     `gorm:"type:json"`
+	ModelProvidersJSON string     `gorm:"type:json"`
+	ErrorCount         int        `gorm:"not null;default:0"`
+	InputTokens        int64      `gorm:"not null;default:0"`
+	OutputTokens       int64      `gorm:"not null;default:0"`
+	CacheReadTokens    int64      `gorm:"not null;default:0"`
+	CacheWriteTokens   int64      `gorm:"not null;default:0"`
+	ReasoningTokens    int64      `gorm:"not null;default:0"`
+	TotalTokens        int64      `gorm:"not null;default:0"`
+	CreatedAt          time.Time  `gorm:"type:datetime(6);not null;autoCreateTime"`
+	UpdatedAt          time.Time  `gorm:"type:datetime(6);not null;autoUpdateTime;index:idx_conversations_tenant_updated_at,priority:2"`
 }
 
 func (ConversationModel) TableName() string {

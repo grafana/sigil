@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -299,6 +300,100 @@ func TestSaveBatchConversationProjectionStoresLatestNonEmptyTitle(t *testing.T) 
 	}
 	if conversation.TitleUpdatedAt == nil || !conversation.TitleUpdatedAt.Equal(latest.GetCompletedAt().AsTime().UTC()) {
 		t.Fatalf("expected title_updated_at %v, got %#v", latest.GetCompletedAt().AsTime().UTC(), conversation.TitleUpdatedAt)
+	}
+}
+
+func TestSaveBatchConversationProjectionAggregatesSummaryFields(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	older := testGeneration("gen-1", "conv-summary", time.Date(2026, 2, 12, 18, 0, 0, 0, time.UTC))
+	older.AgentName = "planner"
+	older.CallError = "provider failed"
+	older.Tags = map[string]string{conversationProjectionErrorTypeTag: "provider_error"}
+	older.Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{
+		conversationProjectionUserIDKey: structpb.NewStringValue("user-older"),
+	}}
+	older.Usage = &sigilv1.TokenUsage{
+		InputTokens:          100,
+		OutputTokens:         40,
+		CacheReadInputTokens: 15,
+		ReasoningTokens:      5,
+	}
+
+	latest := testGeneration("gen-2", "conv-summary", time.Date(2026, 2, 12, 18, 5, 0, 0, time.UTC))
+	latest.AgentName = "responder"
+	latest.Model = &sigilv1.ModelRef{Provider: "anthropic", Name: "claude-3.7-sonnet"}
+	latest.Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{
+		conversationProjectionLegacyUserIDKey: structpb.NewStringValue("user-latest"),
+	}}
+	latest.Usage = &sigilv1.TokenUsage{
+		InputTokens:           20,
+		OutputTokens:          10,
+		CacheWriteInputTokens: 7,
+	}
+
+	stale := testGeneration("gen-3", "conv-summary", time.Date(2026, 2, 12, 18, 3, 0, 0, time.UTC))
+	stale.AgentName = "planner"
+	stale.Metadata = &structpb.Struct{Fields: map[string]*structpb.Value{
+		conversationProjectionUserIDKey: structpb.NewStringValue("user-stale"),
+	}}
+	stale.Usage = &sigilv1.TokenUsage{
+		TotalTokens: 9,
+	}
+
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{older, latest}))
+	requireNoBatchErrors(t, store.SaveBatch(context.Background(), "tenant-a", []*sigilv1.Generation{stale}))
+
+	conversation, err := store.GetConversation(context.Background(), "tenant-a", "conv-summary")
+	if err != nil {
+		t.Fatalf("get conversation: %v", err)
+	}
+	if conversation == nil {
+		t.Fatal("expected conversation projection")
+	}
+	if conversation.GenerationCount != 3 {
+		t.Fatalf("expected generation_count 3, got %d", conversation.GenerationCount)
+	}
+	if conversation.UserID != "user-latest" {
+		t.Fatalf("expected latest user_id %q, got %q", "user-latest", conversation.UserID)
+	}
+	if !conversation.UserIDUpdatedAt.Equal(latest.GetCompletedAt().AsTime().UTC()) {
+		t.Fatalf("expected user_id_updated_at %v, got %v", latest.GetCompletedAt().AsTime().UTC(), conversation.UserIDUpdatedAt)
+	}
+	if got := strings.Join(conversation.Agents, ","); got != "planner,responder" {
+		t.Fatalf("expected agents planner,responder, got %q", got)
+	}
+	if got := strings.Join(conversation.Models, ","); got != "claude-3.7-sonnet,gpt-5" {
+		t.Fatalf("expected sorted models, got %q", got)
+	}
+	if conversation.ModelProviders["gpt-5"] != "openai" || conversation.ModelProviders["claude-3.7-sonnet"] != "anthropic" {
+		t.Fatalf("unexpected model providers: %#v", conversation.ModelProviders)
+	}
+	if conversation.ErrorCount != 1 {
+		t.Fatalf("expected error_count 1, got %d", conversation.ErrorCount)
+	}
+	if conversation.InputTokens != 120 {
+		t.Fatalf("expected input tokens 120, got %d", conversation.InputTokens)
+	}
+	if conversation.OutputTokens != 50 {
+		t.Fatalf("expected output tokens 50, got %d", conversation.OutputTokens)
+	}
+	if conversation.CacheReadTokens != 15 {
+		t.Fatalf("expected cache read tokens 15, got %d", conversation.CacheReadTokens)
+	}
+	if conversation.CacheWriteTokens != 7 {
+		t.Fatalf("expected cache write tokens 7, got %d", conversation.CacheWriteTokens)
+	}
+	if conversation.ReasoningTokens != 5 {
+		t.Fatalf("expected reasoning tokens 5, got %d", conversation.ReasoningTokens)
+	}
+	if conversation.TotalTokens != 206 {
+		t.Fatalf("expected total tokens 206, got %d", conversation.TotalTokens)
 	}
 }
 

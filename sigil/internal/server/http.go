@@ -134,6 +134,9 @@ func RegisterQueryRoutes(
 		mux.Handle("/api/v1/agents:rate", protectedMiddleware(http.HandlerFunc(rateAgent(querySvc, rater, ratingStore, logger))))
 	}
 	mux.Handle("/api/v1/conversations:batch-metadata", protectedMiddleware(http.HandlerFunc(batchConversationMetadata(querySvc))))
+	mux.Handle("/api/v1/conversations/search", protectedMiddleware(http.HandlerFunc(searchConversations(querySvc))))
+	mux.Handle("/api/v1/conversations/search/stream", protectedMiddleware(http.HandlerFunc(streamSearchConversations(querySvc))))
+	mux.Handle("/api/v1/conversations/stats", protectedMiddleware(http.HandlerFunc(conversationStats(querySvc))))
 	mux.Handle("/api/v1/conversations", protectedMiddleware(http.HandlerFunc(listConversations(querySvc))))
 	mux.Handle("/api/v1/conversations/", protectedMiddleware(http.HandlerFunc(conversationRoutes(querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled))))
 

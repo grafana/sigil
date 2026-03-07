@@ -98,9 +98,21 @@ type searchCandidate struct {
 type ConversationBatchMetadata struct {
 	ConversationID    string                              `json:"conversation_id"`
 	ConversationTitle string                              `json:"conversation_title,omitempty"`
+	UserID            string                              `json:"user_id,omitempty"`
 	GenerationCount   int                                 `json:"generation_count"`
 	FirstGenerationAt time.Time                           `json:"first_generation_at"`
 	LastGenerationAt  time.Time                           `json:"last_generation_at"`
+	Models            []string                            `json:"models"`
+	ModelProviders    map[string]string                   `json:"model_providers,omitempty"`
+	Agents            []string                            `json:"agents"`
+	ErrorCount        int                                 `json:"error_count"`
+	HasErrors         bool                                `json:"has_errors"`
+	InputTokens       int64                               `json:"input_tokens"`
+	OutputTokens      int64                               `json:"output_tokens"`
+	CacheReadTokens   int64                               `json:"cache_read_tokens"`
+	CacheWriteTokens  int64                               `json:"cache_write_tokens"`
+	ReasoningTokens   int64                               `json:"reasoning_tokens"`
+	TotalTokens       int64                               `json:"total_tokens"`
 	RatingSummary     *feedback.ConversationRatingSummary `json:"rating_summary,omitempty"`
 	AnnotationCount   int                                 `json:"annotation_count"`
 	EvalSummary       *evalpkg.ConversationEvalSummary    `json:"eval_summary,omitempty"`
@@ -178,6 +190,10 @@ type batchConversationStore interface {
 
 type filteredConversationStore interface {
 	ListConversationsWithFeedbackFilters(ctx context.Context, tenantID string, hasBadRating, hasAnnotations *bool) ([]storage.Conversation, error)
+}
+
+type projectionConversationPageStore interface {
+	ListConversationProjectionPage(ctx context.Context, tenantID string, filter storage.ConversationProjectionPageQuery) ([]storage.ConversationProjectionPageItem, bool, error)
 }
 
 type ServiceDependencies struct {
@@ -640,12 +656,6 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 	results := make([]ConversationSearchResult, 0, pageSize)
 	hasMore := false
 	terminatedByIterationLimit := s.maxSearchIterations > 0
-	titleLookupReader := s.fanOutStore
-	if titleLookupReader == nil && s.walReader != nil {
-		titleLookupReader = storage.NewFanOutStore(s.walReader, nil, nil)
-	}
-	generationTitleCache := make(map[string]generationTitleSnapshot)
-
 	s.debugLog("search_plan",
 		"time_from_unix", from.Unix(),
 		"time_to_unix", to.Unix(),
@@ -761,28 +771,50 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 			})
 		}
 
-		generationTitles := s.batchResolveGenerationTitles(ctx, trimmedTenantID, candidates, titleLookupReader, generationTitleCache)
-
-		for i, candidate := range candidates {
+		for _, candidate := range candidates {
 			conversationTitle := strings.TrimSpace(candidate.metadata.ConversationTitle)
-			if conversationTitle == "" && generationTitles[i] != "" {
-				conversationTitle = generationTitles[i]
-			}
 			if conversationTitle == "" {
+				// Projection titles are ingest-time only. We do not backfill historical
+				// conversation_title values from stored generations, so older rows may
+				// legitimately fall back to the Tempo span title or stay blank.
 				conversationTitle = candidate.traceTitle
+			}
+			userID := strings.TrimSpace(candidate.metadata.UserID)
+			if userID == "" {
+				userID = candidate.aggregate.UserID
+			}
+			// Search returns current/lifetime conversation summaries, not match-window
+			// summaries. Projection metadata is authoritative here by design. We do not
+			// backfill historical rows, so upgraded deployments may show partial
+			// lifetime summaries for older conversations until they receive new ingest.
+			models := append([]string{}, candidate.metadata.Models...)
+			if len(models) == 0 {
+				models = sortedKeysFromSet(candidate.aggregate.Models)
+			}
+			modelProviders := cloneStringMap(candidate.metadata.ModelProviders)
+			if len(modelProviders) == 0 {
+				modelProviders = cloneStringMap(candidate.aggregate.ModelProviders)
+			}
+			agents := append([]string{}, candidate.metadata.Agents...)
+			if len(agents) == 0 {
+				agents = sortedKeysFromSet(candidate.aggregate.Agents)
+			}
+			errorCount := candidate.metadata.ErrorCount
+			if candidate.aggregate.ErrorCount > errorCount {
+				errorCount = candidate.aggregate.ErrorCount
 			}
 			result := ConversationSearchResult{
 				ConversationID:    candidate.conversationID,
 				ConversationTitle: conversationTitle,
-				UserID:            candidate.aggregate.UserID,
+				UserID:            userID,
 				GenerationCount:   candidate.metadata.GenerationCount,
 				FirstGenerationAt: candidate.metadata.FirstGenerationAt.UTC(),
 				LastGenerationAt:  candidate.metadata.LastGenerationAt.UTC(),
-				Models:            sortedKeysFromSet(candidate.aggregate.Models),
-				ModelProviders:    candidate.aggregate.ModelProviders,
-				Agents:            sortedKeysFromSet(candidate.aggregate.Agents),
-				ErrorCount:        candidate.aggregate.ErrorCount,
-				HasErrors:         candidate.aggregate.ErrorCount > 0,
+				Models:            models,
+				ModelProviders:    modelProviders,
+				Agents:            agents,
+				ErrorCount:        errorCount,
+				HasErrors:         errorCount > 0,
 				TraceIDs:          sortedKeysFromSet(candidate.aggregate.TraceIDs),
 				AnnotationCount:   annotationSummaries[candidate.conversationID].AnnotationCount,
 			}
@@ -794,7 +826,11 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 				copied := evalSummary
 				result.EvalSummary = &copied
 			}
-			result.Selected = buildSelectedResultMap(candidate.aggregate.Selected)
+			// Token select fields follow the same lifetime-summary contract as the rest
+			// of the conversation row on this path. We intentionally prefer projection
+			// counters and do not preserve historical Tempo-only values for unbackfilled
+			// conversations.
+			result.Selected = buildSelectedResultMapWithConversationMetadata(candidate.aggregate.Selected, candidate.metadata, selectFields)
 
 			results = append(results, result)
 			currentPageIDs[candidate.conversationID] = struct{}{}
@@ -1323,9 +1359,21 @@ func (s *Service) ListConversationBatchMetadataForTenant(
 		item := ConversationBatchMetadata{
 			ConversationID:    conversationID,
 			ConversationTitle: row.ConversationTitle,
+			UserID:            row.UserID,
 			GenerationCount:   row.GenerationCount,
 			FirstGenerationAt: row.FirstGenerationAt.UTC(),
 			LastGenerationAt:  row.LastGenerationAt.UTC(),
+			Models:            append([]string{}, row.Models...),
+			ModelProviders:    cloneStringMap(row.ModelProviders),
+			Agents:            append([]string{}, row.Agents...),
+			ErrorCount:        row.ErrorCount,
+			HasErrors:         row.ErrorCount > 0,
+			InputTokens:       row.InputTokens,
+			OutputTokens:      row.OutputTokens,
+			CacheReadTokens:   row.CacheReadTokens,
+			CacheWriteTokens:  row.CacheWriteTokens,
+			ReasoningTokens:   row.ReasoningTokens,
+			TotalTokens:       row.TotalTokens,
 			AnnotationCount:   annotationSummaries[conversationID].AnnotationCount,
 		}
 		if summary, ok := ratingSummaries[conversationID]; ok {
@@ -1422,54 +1470,46 @@ func (s *Service) loadConversationSearchMetadata(
 ) (map[string]storage.Conversation, map[string]feedback.ConversationRatingSummary, map[string]feedback.ConversationAnnotationSummary, map[string]evalpkg.ConversationEvalSummary, error) {
 	uniqueConversationIDs := dedupeAndSortStrings(conversationIDs)
 	metadata := make(map[string]storage.Conversation, len(uniqueConversationIDs))
-	for _, conversationID := range uniqueConversationIDs {
-		conversation, err := s.conversationStore.GetConversation(ctx, tenantID, conversationID)
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-		if conversation == nil {
-			continue
-		}
-		metadata[conversationID] = *conversation
-	}
-
 	ratingSummaries := make(map[string]feedback.ConversationRatingSummary)
-	if s.ratingSummaryStore != nil && len(metadata) > 0 {
-		lookupIDs := make([]string, 0, len(metadata))
-		for conversationID := range metadata {
-			lookupIDs = append(lookupIDs, conversationID)
-		}
-		summaries, err := s.ratingSummaryStore.ListConversationRatingSummaries(ctx, tenantID, lookupIDs)
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-		ratingSummaries = summaries
-	}
-
 	annotationSummaries := make(map[string]feedback.ConversationAnnotationSummary)
-	if s.annotationSummaryStore != nil && len(metadata) > 0 {
-		lookupIDs := make([]string, 0, len(metadata))
-		for conversationID := range metadata {
-			lookupIDs = append(lookupIDs, conversationID)
-		}
-		summaries, err := s.annotationSummaryStore.ListConversationAnnotationSummaries(ctx, tenantID, lookupIDs)
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-		annotationSummaries = summaries
+	evalSummaries := make(map[string]evalpkg.ConversationEvalSummary)
+	if len(uniqueConversationIDs) == 0 {
+		return metadata, ratingSummaries, annotationSummaries, evalSummaries, nil
 	}
 
-	evalSummaries := make(map[string]evalpkg.ConversationEvalSummary)
-	if s.evalSummaryStore != nil && len(metadata) > 0 {
-		lookupIDs := make([]string, 0, len(metadata))
-		for conversationID := range metadata {
-			lookupIDs = append(lookupIDs, conversationID)
+	items, _, err := s.ListConversationBatchMetadataForTenant(ctx, tenantID, uniqueConversationIDs)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	for _, item := range items {
+		metadata[item.ConversationID] = storage.Conversation{
+			TenantID:          tenantID,
+			ConversationID:    item.ConversationID,
+			ConversationTitle: item.ConversationTitle,
+			UserID:            item.UserID,
+			FirstGenerationAt: item.FirstGenerationAt.UTC(),
+			LastGenerationAt:  item.LastGenerationAt.UTC(),
+			GenerationCount:   item.GenerationCount,
+			Models:            append([]string{}, item.Models...),
+			ModelProviders:    cloneStringMap(item.ModelProviders),
+			Agents:            append([]string{}, item.Agents...),
+			ErrorCount:        item.ErrorCount,
+			InputTokens:       item.InputTokens,
+			OutputTokens:      item.OutputTokens,
+			CacheReadTokens:   item.CacheReadTokens,
+			CacheWriteTokens:  item.CacheWriteTokens,
+			ReasoningTokens:   item.ReasoningTokens,
+			TotalTokens:       item.TotalTokens,
 		}
-		summaries, err := s.evalSummaryStore.ListConversationEvalSummaries(ctx, tenantID, lookupIDs)
-		if err != nil {
-			return nil, nil, nil, nil, err
+		if item.RatingSummary != nil {
+			ratingSummaries[item.ConversationID] = *item.RatingSummary
 		}
-		evalSummaries = summaries
+		annotationSummaries[item.ConversationID] = feedback.ConversationAnnotationSummary{
+			AnnotationCount: item.AnnotationCount,
+		}
+		if item.EvalSummary != nil {
+			evalSummaries[item.ConversationID] = *item.EvalSummary
+		}
 	}
 
 	return metadata, ratingSummaries, annotationSummaries, evalSummaries, nil
@@ -1558,6 +1598,38 @@ func buildSelectedResultMap(selected map[string]*tempoSelectedAggregation) map[s
 			continue
 		}
 		out[key] = sortedKeysFromSet(aggregation.DistinctValues)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func buildSelectedResultMapWithConversationMetadata(
+	selected map[string]*tempoSelectedAggregation,
+	conversation storage.Conversation,
+	selectFields []SelectField,
+) map[string]any {
+	out := buildSelectedResultMap(selected)
+	for _, field := range selectFields {
+		if strings.TrimSpace(field.Key) == "" {
+			continue
+		}
+		if out == nil {
+			out = make(map[string]any, len(selectFields))
+		}
+		switch strings.TrimSpace(field.ResolvedKey) {
+		case "span.gen_ai.usage.input_tokens":
+			out[field.Key] = float64(conversation.InputTokens)
+		case "span.gen_ai.usage.output_tokens":
+			out[field.Key] = float64(conversation.OutputTokens)
+		case "span.gen_ai.usage.cache_read_input_tokens":
+			out[field.Key] = float64(conversation.CacheReadTokens)
+		case "span.gen_ai.usage.cache_write_input_tokens":
+			out[field.Key] = float64(conversation.CacheWriteTokens)
+		case "span.gen_ai.usage.reasoning_tokens":
+			out[field.Key] = float64(conversation.ReasoningTokens)
+		}
 	}
 	if len(out) == 0 {
 		return nil
@@ -1973,6 +2045,17 @@ func toConversation(row storage.Conversation) Conversation {
 		CreatedAt:        row.CreatedAt.UTC(),
 		UpdatedAt:        row.UpdatedAt.UTC(),
 	}
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func matchesConversationFilter(item Conversation, filter ConversationListFilter) bool {

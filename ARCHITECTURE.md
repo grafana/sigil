@@ -117,10 +117,15 @@ Design doc: `docs/design-docs/2026-02-13-sdk-metrics-and-telemetry-pipeline.md`
 
 ## Query Model
 
-- Tempo is the search index for conversation discovery via TraceQL.
+- Conversation search is hybrid:
+  - MySQL projection is the fast path for browse-safe cases that can be answered from materialized conversation data plus in-window generation existence.
+  - Tempo remains the hit-selection path for deep trace predicates and unsupported selects.
 - MySQL/object storage is the hydration layer for generation payloads.
-- Conversation-level aggregates (models, agents, error counts) are computed at query time from Tempo span results.
+- Tempo-backed search now hydrates conversation metadata from the MySQL conversation projection instead of cold-storage / generation reads.
 - MySQL `conversations` table provides authoritative metadata (`generation_count`) used for conversation-level filters.
+- Search contract: `time_range` determines which conversations are eligible by requiring at least one generation in the selected window, while returned summary fields such as models, providers, agents, errors, and token counters are lifetime/current conversation summaries from the MySQL projection.
+- Projection `!=` filters on summary fields such as `provider`, `model`, and `agent` are full-conversation exclusions: the value must be absent from the conversation summary, not merely absent from one matching generation.
+- Backward-compatibility note: projection summary fields are ingest-time only and are not backfilled for older rows. This change does not provide or support a backfill migration. On upgraded deployments, historical conversations may show partial lifetime summaries until new ingest refreshes those projection rows. This is an accepted tradeoff in the current design.
 - Query access from the plugin frontend is plugin-proxy-only.
 
 Design doc: `docs/design-docs/2026-02-15-conversation-query-path.md`
@@ -142,10 +147,14 @@ Design doc: `docs/design-docs/2026-02-15-conversation-query-path.md`
 ### Query access path
 
 1. Frontend sends query request to plugin backend resource endpoint.
-2. Plugin backend applies tenant/header behavior, executes conversation search + search tag discovery directly against Tempo via Grafana datasource proxy, and calls Sigil only for metadata hydration.
-   - Main conversations page may use the plugin-owned streaming search route (`POST /query/conversations/search/stream`) which returns NDJSON result chunks followed by a final cursor payload.
+2. Plugin backend applies tenant/header behavior and proxies conversation search/search-stream/stats requests to Sigil when those endpoints are available.
+   - Main conversations page may use the streaming route (`POST /query/conversations/search/stream`) which returns NDJSON result chunks followed by a final cursor payload.
+   - If the Sigil search endpoints are unavailable on an older backend, the plugin falls back to the legacy Tempo orchestration path rather than reimplementing approximate projection semantics locally.
 3. Sigil API query path:
-   - conversation batch metadata: hydrate conversation summaries (`generation_count`, timestamps, feedback summary, eval summary) for plugin-provided IDs.
+   - conversation search / stream / stats:
+     - use MySQL projection for browse-safe conversation queries, currently time window + recency + conversation-level filters available in projection such as `generation_count`, `provider`, `model`, `agent`, `status=error`, and projected token select fields
+     - use Tempo when hit selection depends on unsupported span/resource predicates, tool filters, or other deep trace search conditions
+   - conversation batch metadata: hydrate conversation summaries (`generation_count`, timestamps, feedback summary, eval summary) for plugin-provided IDs and Tempo result sets.
    - conversation detail: direct MySQL/object storage fan-out read by conversation ID, return all hydrated generations.
    - generation detail: direct MySQL/object storage read by generation ID.
 

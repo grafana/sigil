@@ -32,14 +32,30 @@ func (s *WALStore) CreateManualConversation(ctx context.Context, tenantID, conve
 	}
 
 	now := time.Now()
+	models := make([]string, 0, len(generations))
+	modelProviders := make(map[string]string, len(generations))
+	for _, generation := range generations {
+		modelName := strings.TrimSpace(generation.Model.Name)
+		modelProvider := strings.TrimSpace(generation.Model.Provider)
+		if modelName == "" {
+			continue
+		}
+		models = append(models, modelName)
+		if modelProvider != "" {
+			modelProviders[modelName] = modelProvider
+		}
+	}
 
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		convRow := ConversationModel{
-			TenantID:          tenantID,
-			ConversationID:    conversationID,
-			GenerationCount:   len(generations),
-			FirstGenerationAt: now,
-			LastGenerationAt:  now,
+			TenantID:           tenantID,
+			ConversationID:     conversationID,
+			GenerationCount:    len(generations),
+			FirstGenerationAt:  now,
+			LastGenerationAt:   now,
+			AgentsJSON:         mustEncodeStringSlice(nil),
+			ModelsJSON:         mustEncodeStringSlice(models),
+			ModelProvidersJSON: mustEncodeStringMap(modelProviders),
 		}
 		if err := tx.Create(&convRow).Error; err != nil {
 			return fmt.Errorf("create conversation: %w", err)
