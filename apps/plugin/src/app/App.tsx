@@ -30,6 +30,18 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   fullBleedPageInner: css({
     padding: '0 !important',
+    margin: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: 0,
+  }),
+  sparklesRouteWrapper: css({
+    flex: 1,
+    minHeight: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    position: 'relative',
+    overflow: 'hidden',
   }),
 });
 
@@ -53,13 +65,35 @@ function useAgentDetailPageNav(): NavModelItem | undefined {
   }, [matchedName, isAnonymous]);
 }
 
+function usePlaygroundSparklesPageNav(): NavModelItem | undefined {
+  const location = useLocation();
+  const isSparkles = location.pathname.includes(`/${ROUTES.PlaygroundSparkles}`);
+
+  return React.useMemo(() => {
+    if (!isSparkles) {
+      return undefined;
+    }
+    return {
+      text: 'Sparkles',
+      parentItem: {
+        text: 'Sigil',
+        url: PLUGIN_BASE,
+      },
+    };
+  }, [isSparkles]);
+}
+
 export default function App(props: AppRootProps) {
   const styles = useStyles2(getStyles);
   const location = useLocation();
   const agentDetailPageNav = useAgentDetailPageNav();
+  const playgroundSparklesPageNav = usePlaygroundSparklesPageNav();
   const pageNav = React.useMemo<NavModelItem>(() => {
     if (agentDetailPageNav) {
       return agentDetailPageNav;
+    }
+    if (playgroundSparklesPageNav) {
+      return playgroundSparklesPageNav;
     }
     return {
       text: props.meta.name,
@@ -68,7 +102,7 @@ export default function App(props: AppRootProps) {
       icon: undefined,
       hideFromBreadcrumbs: true,
     };
-  }, [props.meta.name, agentDetailPageNav]);
+  }, [props.meta.name, agentDetailPageNav, playgroundSparklesPageNav]);
   const shouldHidePluginHeader = location.pathname.includes(`/${ROUTES.Conversations}`);
   const shouldUseFullBleedPageInner = location.pathname.includes(`/${ROUTES.PlaygroundSparkles}`);
 
@@ -100,7 +134,7 @@ export default function App(props: AppRootProps) {
         <Route
           path={ROUTES.PlaygroundSparkles}
           element={
-            <div className={styles.conversationsRouteContainer}>
+            <div className={styles.sparklesRouteWrapper}>
               <PlaygroundSparklesPage />
             </div>
           }
