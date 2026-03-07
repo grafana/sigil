@@ -264,12 +264,11 @@ export default function PlaygroundPresentationPage() {
   const [isEditing, setIsEditing] = React.useState(false);
   const [replayRunId, setReplayRunId] = React.useState(0);
   const [isReplaying, setIsReplaying] = React.useState(false);
-  const [isReplayButtonVisible, setIsReplayButtonVisible] = React.useState(false);
+  const [isCornerControlsVisible, setIsCornerControlsVisible] = React.useState(false);
+  const [isIntroControlsVisible, setIsIntroControlsVisible] = React.useState(true);
+  const [isIntroControlsFading, setIsIntroControlsFading] = React.useState(false);
   const [typedText, setTypedText] = React.useState('');
   const [isCursorVisible, setIsCursorVisible] = React.useState(true);
-  const [showEditHint, setShowEditHint] = React.useState(true);
-  const [isEditHintVisible, setIsEditHintVisible] = React.useState(false);
-  const [isEditHintFading, setIsEditHintFading] = React.useState(false);
   const [isTitleFlurryActive, setIsTitleFlurryActive] = React.useState(true);
   const [draftText, setDraftText] = React.useState('');
   const [draftEffect, setDraftEffect] = React.useState<PresentationEffect>('none');
@@ -363,22 +362,18 @@ export default function PlaygroundPresentationPage() {
   }, [isEditing]);
 
   React.useEffect(() => {
-    const fadeInTimeout = window.setTimeout(() => {
-      setIsEditHintVisible(true);
-    }, 80);
-
     const fadeTimeout = window.setTimeout(() => {
-      setIsEditHintFading(true);
-    }, 2600);
+      setIsIntroControlsFading(true);
+    }, 3000);
 
-    const hintTimeout = window.setTimeout(() => {
-      setShowEditHint(false);
-    }, 3500);
+    const hideTimeout = window.setTimeout(() => {
+      setIsIntroControlsVisible(false);
+      setIsIntroControlsFading(false);
+    }, 3600);
 
     return () => {
-      window.clearTimeout(fadeInTimeout);
       window.clearTimeout(fadeTimeout);
-      window.clearTimeout(hintTimeout);
+      window.clearTimeout(hideTimeout);
     };
   }, []);
 
@@ -412,9 +407,6 @@ export default function PlaygroundPresentationPage() {
   }, []);
 
   const startEditing = React.useCallback(() => {
-    setShowEditHint(false);
-    setIsEditHintVisible(false);
-    setIsEditHintFading(false);
     setDraftText(text);
     setDraftEffect(effect);
     setDraftEffectSpeedLabel(effectSpeedLabelFromValue(effectSpeed));
@@ -483,7 +475,11 @@ export default function PlaygroundPresentationPage() {
 
   const handleMouseMove = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (isEditing || isReplaying) {
-      setIsReplayButtonVisible(false);
+      setIsCornerControlsVisible(false);
+      return;
+    }
+
+    if (isIntroControlsVisible) {
       return;
     }
 
@@ -493,8 +489,8 @@ export default function PlaygroundPresentationPage() {
     const isWithinCornerBounds =
       distanceFromRight >= 0 && distanceFromBottom >= 0 && distanceFromRight <= 180 && distanceFromBottom <= 180;
     const isWithinCornerRadius = Math.hypot(distanceFromRight, distanceFromBottom) <= 190;
-    setIsReplayButtonVisible(isWithinCornerBounds && isWithinCornerRadius);
-  }, [isEditing, isReplaying]);
+    setIsCornerControlsVisible(isWithinCornerBounds && isWithinCornerRadius);
+  }, [isEditing, isIntroControlsVisible, isReplaying]);
 
   const handleReplay = React.useCallback(() => {
     if (isReplaying) {
@@ -505,7 +501,7 @@ export default function PlaygroundPresentationPage() {
       window.clearTimeout(replayTimeoutRef.current);
     }
 
-    setIsReplayButtonVisible(false);
+    setIsCornerControlsVisible(false);
     setIsReplaying(true);
     setTypedText('');
     setIsCursorVisible(false);
@@ -541,12 +537,13 @@ export default function PlaygroundPresentationPage() {
     [isCursorVisible, styles]
   );
 
+  const isControlsVisible = isIntroControlsVisible || isCornerControlsVisible;
+
   return (
     <div
       className={styles.page}
-      onDoubleClick={startEditing}
       onMouseMove={handleMouseMove}
-      onMouseLeave={() => setIsReplayButtonVisible(false)}
+      onMouseLeave={() => setIsCornerControlsVisible(false)}
     >
       <SparklesBackground className={styles.presentationLayer} withGradient />
       <div key={`content-${replayRunId}`} className={styles.centerText(verticalAlign, horizontalAlign)}>
@@ -722,21 +719,31 @@ export default function PlaygroundPresentationPage() {
           }}
         />
       </div>
-      {!isEditing && showEditHint && (
-        <div className={styles.editHint(isEditHintVisible, isEditHintFading)}>(double-click to edit)</div>
-      )}
       {!isEditing && !isReplaying && (
-        <button type="button" className={styles.replayButton(isReplayButtonVisible)} onClick={handleReplay} aria-label="Replay">
-          <span className={styles.replayIcon} aria-hidden />
-        </button>
+        <div className={styles.controls(isControlsVisible, isIntroControlsFading)}>
+          <button
+            type="button"
+            className={styles.controlButton}
+            onClick={startEditing}
+            aria-label="Edit presentation"
+            title="Edit presentation"
+          >
+            <span className={styles.editIcon} aria-hidden />
+          </button>
+          <button
+            type="button"
+            className={styles.controlButton}
+            onClick={handleReplay}
+            aria-label="Replay"
+            title="Replay"
+          >
+            <span className={styles.replayIcon} aria-hidden />
+          </button>
+        </div>
       )}
       {isEditing && (
         <div className={styles.editPanelBackdrop}>
-          <form
-            className={styles.editPanel}
-            onSubmit={handleSubmit}
-            onDoubleClick={(event) => event.stopPropagation()}
-          >
+          <form className={styles.editPanel} onSubmit={handleSubmit}>
             <div className={styles.editContent}>
               <div className={styles.editorColumn}>
                 <textarea
@@ -1134,46 +1141,68 @@ function getStyles(theme: GrafanaTheme2) {
       gap: theme.spacing(1),
       marginTop: 'auto',
     }),
-    editHint: (isVisible: boolean, isFading: boolean) =>
-      css({
-      position: 'absolute',
-      top: theme.spacing(3),
-      right: theme.spacing(4),
-      zIndex: 2,
-      color: theme.colors.text.primary,
-      opacity: isFading ? 0 : isVisible ? 0.8 : 0,
-      transition: 'opacity 800ms ease',
-      fontSize: 'clamp(1.1rem, 2.2vw, 1.7rem)',
-      lineHeight: 1.1,
-      fontWeight: theme.typography.fontWeightBold,
-      textShadow: `0 8px 24px ${theme.colors.background.primary}`,
-      pointerEvents: 'none',
-      userSelect: 'none' as const,
-    }),
-    replayButton: (isVisible: boolean) =>
+    controls: (isVisible: boolean, isFading: boolean) =>
       css({
         position: 'absolute',
         right: theme.spacing(3),
         bottom: theme.spacing(3),
         zIndex: 3,
-        width: 'auto',
-        height: 'auto',
-        border: 'none',
-        background: 'transparent',
         display: 'inline-flex',
         alignItems: 'center',
-        justifyContent: 'center',
+        gap: theme.spacing(2),
         color: theme.colors.text.primary,
-        cursor: 'pointer',
-        opacity: isVisible ? 1 : 0,
-        transform: isVisible ? 'translateY(0)' : 'translateY(4px)',
+        opacity: isVisible && !isFading ? 1 : 0,
+        transform: isVisible && !isFading ? 'translateY(0)' : 'translateY(4px)',
         transition: 'opacity 220ms ease, transform 220ms ease',
-        pointerEvents: isVisible ? 'auto' : 'none',
-        '&:focus-visible': {
-          outline: `2px solid ${theme.colors.primary.main}`,
-          outlineOffset: 2,
-        },
+        pointerEvents: isVisible && !isFading ? 'auto' : 'none',
       }),
+    controlButton: css({
+      width: 'auto',
+      height: 'auto',
+      border: 'none',
+      background: 'transparent',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: theme.colors.text.primary,
+      cursor: 'pointer',
+      padding: 0,
+      '&:focus-visible': {
+        outline: `2px solid ${theme.colors.primary.main}`,
+        outlineOffset: 2,
+      },
+    }),
+    editIcon: css({
+      position: 'relative',
+      width: 14,
+      height: 14,
+      display: 'inline-block',
+      '&::before': {
+        content: '""',
+        position: 'absolute',
+        left: 0,
+        top: 7,
+        width: 11,
+        height: 3,
+        borderRadius: 1,
+        background: 'currentColor',
+        transform: 'rotate(-45deg)',
+        transformOrigin: 'left center',
+      },
+      '&::after': {
+        content: '""',
+        position: 'absolute',
+        left: 7,
+        top: 2,
+        width: 0,
+        height: 0,
+        borderTop: '3px solid transparent',
+        borderBottom: '3px solid transparent',
+        borderLeft: '4px solid currentColor',
+        transform: 'rotate(-45deg)',
+        transformOrigin: 'left center',
+      },
+    }),
     replayIcon: css({
       width: 0,
       height: 0,
