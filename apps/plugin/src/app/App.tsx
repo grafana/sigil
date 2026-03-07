@@ -34,10 +34,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column',
     minHeight: 0,
+    height: '100%',
+    overflow: 'hidden',
   }),
   sparklesRouteWrapper: css({
     flex: 1,
     minHeight: 0,
+    height: '100%',
     display: 'flex',
     flexDirection: 'column',
     position: 'relative',
@@ -103,7 +106,9 @@ export default function App(props: AppRootProps) {
       hideFromBreadcrumbs: true,
     };
   }, [props.meta.name, agentDetailPageNav, playgroundSparklesPageNav]);
-  const shouldHidePluginHeader = location.pathname.includes(`/${ROUTES.Conversations}`);
+  const shouldHidePluginHeader =
+    location.pathname.includes(`/${ROUTES.Conversations}`) ||
+    location.pathname.includes(`/${ROUTES.PlaygroundSparkles}`);
   const shouldUseFullBleedPageInner = location.pathname.includes(`/${ROUTES.PlaygroundSparkles}`);
 
   React.useEffect(() => {

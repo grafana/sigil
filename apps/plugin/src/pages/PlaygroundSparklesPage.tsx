@@ -22,7 +22,8 @@ function getStyles(theme: GrafanaTheme2) {
     page: css({
       position: 'relative',
       width: '100%',
-      minHeight: '100vh',
+      height: '100%',
+      minHeight: 0,
       overflow: 'hidden',
       borderRadius: 0,
     }),
