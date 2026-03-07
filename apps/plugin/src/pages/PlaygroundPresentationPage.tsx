@@ -18,6 +18,9 @@ type PresentationSparklesProps = {
   withGlow?: boolean;
 };
 
+const AI_HIGHLIGHT_COLORS = ['#5794F2', '#B877D9', '#FF9830'] as const;
+const HIGHLIGHT_HUE_ROTATIONS = [-16, -10, -6, 0, 6, 10, 16] as const;
+
 function seedFromString(value: string): number {
   let hash = 2166136261;
   for (let i = 0; i < value.length; i++) {
@@ -25,6 +28,104 @@ function seedFromString(value: string): number {
     hash = Math.imul(hash, 16777619);
   }
   return Math.abs(hash) + 1;
+}
+
+function hexToRgba(hexColor: string, alpha: number): string {
+  const normalizedHex = hexColor.replace('#', '');
+  const r = Number.parseInt(normalizedHex.slice(0, 2), 16);
+  const g = Number.parseInt(normalizedHex.slice(2, 4), 16);
+  const b = Number.parseInt(normalizedHex.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function hexToRgb(hexColor: string): { r: number; g: number; b: number } {
+  const normalizedHex = hexColor.replace('#', '');
+  return {
+    r: Number.parseInt(normalizedHex.slice(0, 2), 16),
+    g: Number.parseInt(normalizedHex.slice(2, 4), 16),
+    b: Number.parseInt(normalizedHex.slice(4, 6), 16),
+  };
+}
+
+function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: number } {
+  const nr = r / 255;
+  const ng = g / 255;
+  const nb = b / 255;
+  const max = Math.max(nr, ng, nb);
+  const min = Math.min(nr, ng, nb);
+  const l = (max + min) / 2;
+  let h = 0;
+  let s = 0;
+  const d = max - min;
+
+  if (d !== 0) {
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case nr:
+        h = (ng - nb) / d + (ng < nb ? 6 : 0);
+        break;
+      case ng:
+        h = (nb - nr) / d + 2;
+        break;
+      default:
+        h = (nr - ng) / d + 4;
+    }
+    h *= 60;
+  }
+
+  return { h, s, l };
+}
+
+function hslToRgb(h: number, s: number, l: number): { r: number; g: number; b: number } {
+  const hueToRgb = (p: number, q: number, t: number): number => {
+    let nt = t;
+    if (nt < 0) {
+      nt += 1;
+    }
+    if (nt > 1) {
+      nt -= 1;
+    }
+    if (nt < 1 / 6) {
+      return p + (q - p) * 6 * nt;
+    }
+    if (nt < 1 / 2) {
+      return q;
+    }
+    if (nt < 2 / 3) {
+      return p + (q - p) * (2 / 3 - nt) * 6;
+    }
+    return p;
+  };
+
+  if (s === 0) {
+    const gray = Math.round(l * 255);
+    return { r: gray, g: gray, b: gray };
+  }
+
+  const normalizedHue = ((h % 360) + 360) % 360;
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const hk = normalizedHue / 360;
+
+  return {
+    r: Math.round(hueToRgb(p, q, hk + 1 / 3) * 255),
+    g: Math.round(hueToRgb(p, q, hk) * 255),
+    b: Math.round(hueToRgb(p, q, hk - 1 / 3) * 255),
+  };
+}
+
+function rotateHexHue(hexColor: string, degrees: number): string {
+  const { r, g, b } = hexToRgb(hexColor);
+  const { h, s, l } = rgbToHsl(r, g, b);
+  const nextHue = h + degrees;
+  const rotated = hslToRgb(nextHue, s, l);
+  return `rgb(${rotated.r}, ${rotated.g}, ${rotated.b})`;
+}
+
+function pickNextHueRotation(currentRotation = 0): number {
+  const options = HIGHLIGHT_HUE_ROTATIONS.filter((rotation) => rotation !== currentRotation);
+  const randomIndex = Math.floor(Math.random() * options.length);
+  return options[randomIndex];
 }
 
 function PresentationSparkles({
@@ -61,6 +162,7 @@ export default function PlaygroundPresentationPage() {
   const [isTitleFlurryActive, setIsTitleFlurryActive] = React.useState(true);
   const [draftText, setDraftText] = React.useState('');
   const [boostedBoldKeys, setBoostedBoldKeys] = React.useState<Record<string, boolean>>({});
+  const [highlightHueRotations, setHighlightHueRotations] = React.useState<Record<string, number>>({});
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const boldBoostTimeoutsRef = React.useRef<Map<string, number>>(new Map());
   const text = searchParams.get('text')?.trim() || 'Presentation playground';
@@ -160,6 +262,26 @@ export default function PlaygroundPresentationPage() {
         <MarkdownPreview
           markdown={text}
           className={styles.markdownContent}
+          renderEm={(emText, key, index) => {
+            const baseColor = AI_HIGHLIGHT_COLORS[index % AI_HIGHLIGHT_COLORS.length];
+            const hueRotation = highlightHueRotations[key] ?? 0;
+            const highlightColor = rotateHexHue(baseColor, hueRotation);
+            return (
+              <em
+                key={key}
+                className={styles.emHighlight(highlightColor)}
+                onClick={() => {
+                  setHighlightHueRotations((current) => {
+                    const currentRotation = current[key] ?? 0;
+                    const nextRotation = pickNextHueRotation(currentRotation);
+                    return { ...current, [key]: nextRotation };
+                  });
+                }}
+              >
+                {emText}
+              </em>
+            );
+          }}
           renderHeading={({ level, text: headingText, key, className, children }) => {
             const HeadingTag = `h${level}` as keyof React.JSX.IntrinsicElements;
             if (level !== 1) {
@@ -326,6 +448,8 @@ export default function PlaygroundPresentationPage() {
 }
 
 function getStyles(theme: GrafanaTheme2) {
+  const markdownBlockSpacing = theme.spacing(6);
+
   return {
     page: css({
       position: 'relative',
@@ -364,8 +488,8 @@ function getStyles(theme: GrafanaTheme2) {
       textAlign: 'left' as const,
       color: theme.colors.text.primary,
       '& h1, & h2, & h3, & h4, & h5, & h6': {
-        marginTop: theme.spacing(1),
-        marginBottom: theme.spacing(3.5),
+        marginTop: 0,
+        marginBottom: markdownBlockSpacing,
         fontFamily: '"Poppins", "Avenir Next", "Segoe UI", sans-serif',
         letterSpacing: '-0.02em',
         fontWeight: 700,
@@ -375,7 +499,6 @@ function getStyles(theme: GrafanaTheme2) {
       '& h1': {
         fontSize: 'clamp(2rem, 5.2vw, 4.8rem)',
         lineHeight: 1.05,
-        marginBottom: theme.spacing(6),
       },
       '& h2': {
         fontSize: 'clamp(1.8rem, 4.4vw, 3.8rem)',
@@ -386,7 +509,7 @@ function getStyles(theme: GrafanaTheme2) {
         lineHeight: 1.12,
       },
       '& p': {
-        margin: `${theme.spacing(1)} 0`,
+        margin: `0 0 ${markdownBlockSpacing} 0`,
         maxWidth: 'none',
         fontSize: 'clamp(1.5rem, 2.9vw, 2.7rem)',
         lineHeight: 1.45,
@@ -397,7 +520,7 @@ function getStyles(theme: GrafanaTheme2) {
         color: theme.colors.text.maxContrast,
       },
       '& ul, & ol': {
-        margin: `${theme.spacing(2)} 0`,
+        margin: `0 0 ${markdownBlockSpacing} 0`,
         paddingLeft: theme.spacing(8),
         maxWidth: 'none',
         listStylePosition: 'outside' as const,
@@ -414,11 +537,32 @@ function getStyles(theme: GrafanaTheme2) {
         fontWeight: 700,
       },
       '& pre': {
-        margin: `${theme.spacing(2)} 0`,
+        margin: `0 0 ${markdownBlockSpacing} 0`,
         maxWidth: '80vw',
         textAlign: 'left' as const,
       },
     }),
+    emHighlight: (highlightColor: string) =>
+      css({
+        fontStyle: 'normal',
+        position: 'relative',
+        zIndex: 0,
+        pointerEvents: 'auto',
+        cursor: 'pointer',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          left: '-0.2em',
+          right: '-0.2em',
+          top: '-0.14em',
+          bottom: '-0.12em',
+          borderRadius: theme.shape.radius.default,
+          background: `linear-gradient(174deg, ${hexToRgba(highlightColor, 0.28)} 0%, ${hexToRgba(highlightColor, 0.18)} 100%)`,
+          transform: 'rotate(-0.8deg)',
+          zIndex: -1,
+          pointerEvents: 'none',
+        },
+      }),
     editPanelBackdrop: css({
       position: 'absolute',
       inset: 0,

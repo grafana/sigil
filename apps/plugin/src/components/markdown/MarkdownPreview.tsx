@@ -14,6 +14,7 @@ export type MarkdownPreviewProps = {
   markdown: string;
   className?: string;
   renderStrong?: (text: string, key: string) => React.ReactNode;
+  renderEm?: (text: string, key: string, index: number) => React.ReactNode;
   renderHeading?: (args: {
     level: 1 | 2 | 3 | 4 | 5 | 6;
     text: string;
@@ -73,7 +74,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function MarkdownPreview({ markdown, className, renderStrong, renderHeading }: MarkdownPreviewProps) {
+export default function MarkdownPreview({ markdown, className, renderStrong, renderEm, renderHeading }: MarkdownPreviewProps) {
   const styles = useStyles2(getStyles);
   const blocks = useMemo(() => parseMarkdownBlocks(markdown), [markdown]);
 
@@ -83,7 +84,7 @@ export default function MarkdownPreview({ markdown, className, renderStrong, ren
         if (block.type === 'heading') {
           const HeadingTag = `h${block.level}` as keyof React.JSX.IntrinsicElements;
           const headingKey = `heading-${index}`;
-          const children = renderInlineMarkdown(block.text, headingKey, styles, renderStrong);
+          const children = renderInlineMarkdown(block.text, headingKey, styles, renderStrong, renderEm);
           if (renderHeading) {
             return renderHeading({
               level: block.level,
@@ -105,7 +106,7 @@ export default function MarkdownPreview({ markdown, className, renderStrong, ren
             <ul key={`ul-${index}`} className={styles.list}>
               {block.items.map((item, itemIndex) => (
                 <li key={`${itemIndex}:${item}`} className={styles.listItem}>
-                  {renderInlineMarkdown(item, `ul-${index}-${itemIndex}`, styles, renderStrong)}
+                  {renderInlineMarkdown(item, `ul-${index}-${itemIndex}`, styles, renderStrong, renderEm)}
                 </li>
               ))}
             </ul>
@@ -117,7 +118,7 @@ export default function MarkdownPreview({ markdown, className, renderStrong, ren
             <ol key={`ol-${index}`} className={styles.list}>
               {block.items.map((item, itemIndex) => (
                 <li key={`${itemIndex}:${item}`} className={styles.listItem}>
-                  {renderInlineMarkdown(item, `ol-${index}-${itemIndex}`, styles, renderStrong)}
+                  {renderInlineMarkdown(item, `ol-${index}-${itemIndex}`, styles, renderStrong, renderEm)}
                 </li>
               ))}
             </ol>
@@ -134,7 +135,7 @@ export default function MarkdownPreview({ markdown, className, renderStrong, ren
 
         return (
           <p key={`paragraph-${index}`} className={styles.paragraph}>
-            {renderInlineMarkdown(block.text, `paragraph-${index}`, styles, renderStrong)}
+            {renderInlineMarkdown(block.text, `paragraph-${index}`, styles, renderStrong, renderEm)}
           </p>
         );
       })}
@@ -146,7 +147,8 @@ function renderInlineMarkdown(
   text: string,
   keyPrefix: string,
   styles: ReturnType<typeof getStyles>,
-  renderStrong?: (text: string, key: string) => React.ReactNode
+  renderStrong?: (text: string, key: string) => React.ReactNode,
+  renderEm?: (text: string, key: string, index: number) => React.ReactNode
 ): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
   const pattern =
@@ -154,6 +156,7 @@ function renderInlineMarkdown(
 
   let cursor = 0;
   let tokenIndex = 0;
+  let emIndex = 0;
 
   for (const match of text.matchAll(pattern)) {
     const fullMatch = match[0];
@@ -197,7 +200,14 @@ function renderInlineMarkdown(
         parts.push(<strong key={strongKey}>{strongText}</strong>);
       }
     } else if (match[7] || match[8]) {
-      parts.push(<em key={`${keyPrefix}-em-${tokenIndex}`}>{match[7] ?? match[8]}</em>);
+      const emText = match[7] ?? match[8];
+      const emKey = `${keyPrefix}-em-${tokenIndex}`;
+      if (renderEm) {
+        parts.push(renderEm(emText, emKey, emIndex));
+      } else {
+        parts.push(<em key={emKey}>{emText}</em>);
+      }
+      emIndex++;
     } else if (match[9]) {
       parts.push(<del key={`${keyPrefix}-del-${tokenIndex}`}>{match[9]}</del>);
     } else {
