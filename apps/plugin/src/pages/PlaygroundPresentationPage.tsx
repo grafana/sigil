@@ -24,6 +24,7 @@ type HorizontalAlign = 'left' | 'middle' | 'right';
 
 const AI_HIGHLIGHT_COLORS = ['#5794F2', '#B877D9', '#FF9830'] as const;
 const HIGHLIGHT_HUE_ROTATIONS = [-16, -10, -6, 0, 6, 10, 16] as const;
+const TYPEWRITER_CARET_TOKEN = 'sigil-typewriter-caret-token';
 const DEFAULT_EFFECT_SPEED = 1;
 const MIN_EFFECT_SPEED = 0.25;
 const MAX_EFFECT_SPEED = 4;
@@ -288,7 +289,11 @@ export default function PlaygroundPresentationPage() {
   const effectSpeed = parseEffectSpeed(searchParams.get('effectSpeed'));
   const verticalAlign = parseVerticalAlign(searchParams.get('valign'));
   const horizontalAlign = parseHorizontalAlign(searchParams.get('halign'));
-  const markdownText = isReplaying ? '' : isTypewriterEffect ? `${typedText}${isTyping || isCursorVisible ? ' |' : ''}` : text;
+  const markdownText = isReplaying
+    ? ''
+    : isTypewriterEffect
+      ? `${typedText} _${TYPEWRITER_CARET_TOKEN}_`
+      : text;
 
   React.useEffect(() => {
     if (isReplaying) {
@@ -550,6 +555,13 @@ export default function PlaygroundPresentationPage() {
             );
           }}
           renderEm={(emText, key, index) => {
+            if (emText === TYPEWRITER_CARET_TOKEN) {
+              return (
+                <span key={key} className={styles.typewriterCaret(isCursorVisible)} aria-hidden>
+                  |
+                </span>
+              );
+            }
             const baseColor = AI_HIGHLIGHT_COLORS[index % AI_HIGHLIGHT_COLORS.length];
             const hueRotation = highlightHueRotations[key] ?? 0;
             const highlightColor = rotateHexHue(baseColor, hueRotation);
@@ -736,34 +748,40 @@ export default function PlaygroundPresentationPage() {
                 </div>
               </div>
               <div className={styles.editSidebar}>
-                <label htmlFor="presentation-effect-editor" className={styles.effectLabel}>
-                  Effect
-                </label>
-                <select
-                  id="presentation-effect-editor"
-                  className={styles.effectSelect}
-                  value={draftEffect}
-                  onChange={(event) => setDraftEffect(event.currentTarget.value as PresentationEffect)}
-                >
-                  <option value="none">None</option>
-                  <option value="typewriter">Typewriter</option>
-                </select>
-                <label htmlFor="presentation-effect-speed-editor" className={styles.effectLabel}>
-                  Effect speed
-                </label>
-                <select
-                  id="presentation-effect-speed-editor"
-                  className={styles.effectSpeedInput}
-                  value={draftEffectSpeedLabel}
-                  onChange={(event) => setDraftEffectSpeedLabel(event.currentTarget.value as EffectSpeedPreset)}
-                  disabled={draftEffect !== 'typewriter'}
-                >
-                  {EFFECT_SPEED_OPTIONS.map((option) => (
-                    <option key={option.label} value={option.label}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                <div className={styles.effectRow}>
+                  <div className={styles.effectField}>
+                    <label htmlFor="presentation-effect-editor" className={styles.effectLabel}>
+                      Effect
+                    </label>
+                    <select
+                      id="presentation-effect-editor"
+                      className={styles.effectSelect}
+                      value={draftEffect}
+                      onChange={(event) => setDraftEffect(event.currentTarget.value as PresentationEffect)}
+                    >
+                      <option value="none">None</option>
+                      <option value="typewriter">Typewriter</option>
+                    </select>
+                  </div>
+                  <div className={styles.effectField}>
+                    <label htmlFor="presentation-effect-speed-editor" className={styles.effectLabel}>
+                      Speed
+                    </label>
+                    <select
+                      id="presentation-effect-speed-editor"
+                      className={styles.effectSpeedInput}
+                      value={draftEffectSpeedLabel}
+                      onChange={(event) => setDraftEffectSpeedLabel(event.currentTarget.value as EffectSpeedPreset)}
+                      disabled={draftEffect !== 'typewriter'}
+                    >
+                      {EFFECT_SPEED_OPTIONS.map((option) => (
+                        <option key={option.label} value={option.label}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
                 <label className={styles.effectLabel} id="presentation-position-label">
                   Position
                 </label>
@@ -985,6 +1003,18 @@ function getStyles(theme: GrafanaTheme2) {
       paddingLeft: theme.spacing(2),
       minHeight: '100%',
     }),
+    effectRow: css({
+      display: 'grid',
+      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+      gap: theme.spacing(1),
+      alignItems: 'end',
+    }),
+    effectField: css({
+      display: 'flex',
+      flexDirection: 'column',
+      gap: theme.spacing(0.5),
+      minWidth: 0,
+    }),
     editorColumn: css({
       display: 'flex',
       flexDirection: 'column',
@@ -1139,6 +1169,16 @@ function getStyles(theme: GrafanaTheme2) {
       borderLeft: `12px solid currentColor`,
       marginLeft: '2px',
     }),
+    typewriterCaret: (isVisible: boolean) =>
+      css({
+        display: 'inline-block',
+        width: '0.38em',
+        marginLeft: '0.15em',
+        opacity: isVisible ? 1 : 0,
+        transition: 'opacity 140ms linear',
+        pointerEvents: 'none',
+        userSelect: 'none' as const,
+      }),
     boldSparkleWrap: css({
       position: 'relative',
       display: 'inline-block',
