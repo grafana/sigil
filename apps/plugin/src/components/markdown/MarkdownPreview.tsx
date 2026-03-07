@@ -13,6 +13,7 @@ type MarkdownBlock =
 export type MarkdownPreviewProps = {
   markdown: string;
   className?: string;
+  renderStrong?: (text: string, key: string) => React.ReactNode;
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -65,7 +66,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function MarkdownPreview({ markdown, className }: MarkdownPreviewProps) {
+export default function MarkdownPreview({ markdown, className, renderStrong }: MarkdownPreviewProps) {
   const styles = useStyles2(getStyles);
   const blocks = useMemo(() => parseMarkdownBlocks(markdown), [markdown]);
 
@@ -76,7 +77,7 @@ export default function MarkdownPreview({ markdown, className }: MarkdownPreview
           const HeadingTag = `h${block.level}` as keyof React.JSX.IntrinsicElements;
           return (
             <HeadingTag key={`heading-${index}`} className={styles.heading}>
-              {renderInlineMarkdown(block.text, `heading-${index}`, styles)}
+              {renderInlineMarkdown(block.text, `heading-${index}`, styles, renderStrong)}
             </HeadingTag>
           );
         }
@@ -86,7 +87,7 @@ export default function MarkdownPreview({ markdown, className }: MarkdownPreview
             <ul key={`ul-${index}`} className={styles.list}>
               {block.items.map((item, itemIndex) => (
                 <li key={`${itemIndex}:${item}`} className={styles.listItem}>
-                  {renderInlineMarkdown(item, `ul-${index}-${itemIndex}`, styles)}
+                  {renderInlineMarkdown(item, `ul-${index}-${itemIndex}`, styles, renderStrong)}
                 </li>
               ))}
             </ul>
@@ -98,7 +99,7 @@ export default function MarkdownPreview({ markdown, className }: MarkdownPreview
             <ol key={`ol-${index}`} className={styles.list}>
               {block.items.map((item, itemIndex) => (
                 <li key={`${itemIndex}:${item}`} className={styles.listItem}>
-                  {renderInlineMarkdown(item, `ol-${index}-${itemIndex}`, styles)}
+                  {renderInlineMarkdown(item, `ol-${index}-${itemIndex}`, styles, renderStrong)}
                 </li>
               ))}
             </ol>
@@ -115,7 +116,7 @@ export default function MarkdownPreview({ markdown, className }: MarkdownPreview
 
         return (
           <p key={`paragraph-${index}`} className={styles.paragraph}>
-            {renderInlineMarkdown(block.text, `paragraph-${index}`, styles)}
+            {renderInlineMarkdown(block.text, `paragraph-${index}`, styles, renderStrong)}
           </p>
         );
       })}
@@ -126,7 +127,8 @@ export default function MarkdownPreview({ markdown, className }: MarkdownPreview
 function renderInlineMarkdown(
   text: string,
   keyPrefix: string,
-  styles: ReturnType<typeof getStyles>
+  styles: ReturnType<typeof getStyles>,
+  renderStrong?: (text: string, key: string) => React.ReactNode
 ): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
   const pattern =
@@ -169,7 +171,13 @@ function renderInlineMarkdown(
         </code>
       );
     } else if (match[5] || match[6]) {
-      parts.push(<strong key={`${keyPrefix}-strong-${tokenIndex}`}>{match[5] ?? match[6]}</strong>);
+      const strongText = match[5] ?? match[6];
+      const strongKey = `${keyPrefix}-strong-${tokenIndex}`;
+      if (renderStrong) {
+        parts.push(renderStrong(strongText, strongKey));
+      } else {
+        parts.push(<strong key={strongKey}>{strongText}</strong>);
+      }
     } else if (match[7] || match[8]) {
       parts.push(<em key={`${keyPrefix}-em-${tokenIndex}`}>{match[7] ?? match[8]}</em>);
     } else if (match[9]) {

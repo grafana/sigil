@@ -3,8 +3,40 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Button, useStyles2 } from '@grafana/ui';
 import { useSearchParams } from 'react-router-dom';
+import { FastSparkles } from '../components/landing/FastSparkles';
 import { SparklesBackground } from '../components/landing/SparklesBackground';
 import MarkdownPreview from '../components/markdown/MarkdownPreview';
+
+type PresentationSparklesProps = {
+  color: string;
+  seed: number;
+  delaySec?: number;
+  className?: string;
+};
+
+function seedFromString(value: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return Math.abs(hash) + 1;
+}
+
+function PresentationSparkles({ color, seed, delaySec, className }: PresentationSparklesProps) {
+  return (
+    <FastSparkles
+      color={color}
+      durationScale={1.6}
+      sizeScale={1.1}
+      maxSparks={4}
+      withGlow={false}
+      seed={seed}
+      delaySec={delaySec}
+      className={className}
+    />
+  );
+}
 
 export default function PlaygroundPresentationPage() {
   const styles = useStyles2(getStyles);
@@ -73,7 +105,33 @@ export default function PlaygroundPresentationPage() {
     <div className={styles.page} onDoubleClick={startEditing}>
       <SparklesBackground className={styles.presentationLayer} withGradient />
       <div className={styles.centerText}>
-        <MarkdownPreview markdown={text} className={styles.markdownContent} />
+        <MarkdownPreview
+          markdown={text}
+          className={styles.markdownContent}
+          renderStrong={(strongText, key) => {
+            const baseSeed = seedFromString(key);
+            return (
+              <strong key={key} className={styles.boldSparkleWrap}>
+                <span className={styles.boldSparkleText}>{strongText}</span>
+              <span className={styles.boldSparkleLayer} aria-hidden>
+                  <PresentationSparkles color="#5794F2" seed={baseSeed + 11} className={styles.boldSparkleSwarm} />
+                <PresentationSparkles
+                  color="#B877D9"
+                    seed={baseSeed + 29}
+                  delaySec={0.22}
+                  className={styles.boldSparkleSwarm}
+                />
+                <PresentationSparkles
+                  color="#FF9830"
+                    seed={baseSeed + 47}
+                  delaySec={0.44}
+                  className={styles.boldSparkleSwarm}
+                />
+              </span>
+              </strong>
+            );
+          }}
+        />
       </div>
       {!isEditing && showEditHint && (
         <div className={styles.editHint(isEditHintVisible, isEditHintFading)}>(double-click to edit)</div>
@@ -152,7 +210,7 @@ function getStyles(theme: GrafanaTheme2) {
       color: theme.colors.text.primary,
       '& h1, & h2, & h3, & h4, & h5, & h6': {
         marginTop: theme.spacing(1),
-        marginBottom: theme.spacing(2),
+        marginBottom: theme.spacing(3.5),
         fontFamily: '"Poppins", "Avenir Next", "Segoe UI", sans-serif',
         letterSpacing: '-0.02em',
         fontWeight: 700,
@@ -174,7 +232,7 @@ function getStyles(theme: GrafanaTheme2) {
       '& p': {
         margin: `${theme.spacing(1)} 0`,
         maxWidth: '72ch',
-        fontSize: 'clamp(1.65rem, 3.1vw, 2.9rem)',
+        fontSize: 'clamp(4.8rem, 9vw, 8.5rem)',
         lineHeight: 1.3,
         fontWeight: 500,
       },
@@ -184,7 +242,7 @@ function getStyles(theme: GrafanaTheme2) {
       },
       '& ul, & ol': {
         margin: `${theme.spacing(2)} 0`,
-        paddingLeft: theme.spacing(6),
+        paddingLeft: theme.spacing(8),
         maxWidth: '70ch',
         listStylePosition: 'outside' as const,
         textAlign: 'left' as const,
@@ -265,6 +323,44 @@ function getStyles(theme: GrafanaTheme2) {
       textShadow: `0 8px 24px ${theme.colors.background.primary}`,
       pointerEvents: 'none',
       userSelect: 'none' as const,
+    }),
+    boldSparkleWrap: css({
+      position: 'relative',
+      display: 'inline-block',
+      fontWeight: 800,
+      color: theme.colors.text.maxContrast,
+      overflow: 'visible',
+      isolation: 'isolate',
+    }),
+    boldSparkleText: css({
+      position: 'relative',
+      zIndex: 2,
+    }),
+    boldSparkleLayer: css({
+      position: 'absolute',
+      left: '-0.18em',
+      right: '-0.18em',
+      top: '-0.08em',
+      height: '1.12em',
+      pointerEvents: 'none',
+      zIndex: 1,
+      opacity: 1,
+      overflow: 'visible',
+    }),
+    boldSparkleSwarm: css({
+      position: 'absolute',
+      inset: 0,
+      width: '100%',
+      height: '100%',
+      display: 'block',
+      overflow: 'visible',
+      '&, & > div': {
+        pointerEvents: 'none',
+      },
+      '&&': {
+        overflow: 'visible',
+        opacity: 1,
+      },
     }),
   };
 }
