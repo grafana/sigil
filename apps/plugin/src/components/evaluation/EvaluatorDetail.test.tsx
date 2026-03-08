@@ -26,7 +26,7 @@ describe('EvaluatorDetail', () => {
       screen.getByText(/You evaluate one assistant response\. Use only the user input and assistant output\./)
     ).toBeInTheDocument();
     expect(screen.getByText(/Latest user message:/)).toBeInTheDocument();
-    expect(screen.getByText('{{input}}')).toBeInTheDocument();
-    expect(screen.getByText('{{output}}')).toBeInTheDocument();
+    expect(screen.getByText('{{latest_user_message}}')).toBeInTheDocument();
+    expect(screen.getByText('{{assistant_response}}')).toBeInTheDocument();
   });
 });

@@ -15,7 +15,7 @@ Online evaluation adds configurable, asynchronous scoring to Sigil. Evaluators r
 Key design choices:
 
 - **Immediate per-generation trigger.** Each eligible generation is evaluated as it is ingested. No idle windows, no session-completion detection, no Tempo dependency. Market standard (Langfuse, Braintrust).
-- **API-managed configuration.** Evaluators and rules are stored in MySQL and managed via CRUD APIs. Predefined evaluator templates ship with Sigil. Optional YAML seed for first-boot bootstrap.
+- **API-managed configuration.** Evaluators, rules, and tenant templates are stored in MySQL and managed via CRUD APIs. Predefined evaluator defaults ship with Sigil in code. Optional YAML seed for first-boot bootstrap.
 - **Predefined evaluator library.** Ready-to-use LLM-as-judge templates for helpfulness, toxicity, PII, groundedness, relevance, conciseness, and format adherence, plus heuristic evaluators for JSON validation, empty-response, and length checks.
 - **Conversation-level sampling.** Hash on `(conversation_id, rule_id)` so all eligible turns in a sampled conversation get evaluated.
 - **Bring-your-own evaluator.** Score export API (`POST /api/v1/scores:export`) lets users run evaluations in their own infra and push results back.
@@ -443,7 +443,7 @@ Evaluators and rules are stored in MySQL and managed via the control plane APIs.
 
 ### YAML Seed (Optional Bootstrap)
 
-On first boot, if `sigil-eval-seed.yaml` exists, Sigil loads it and inserts evaluators + rules into the DB. After that, the DB is the source of truth. Predefined templates are available through template APIs and are not auto-seeded per tenant.
+On first boot, if `sigil-eval-seed.yaml` exists, Sigil loads it and inserts evaluators + rules into the DB. After that, the DB is the source of truth for tenant-managed evaluators, rules, and templates. Predefined evaluators remain read-only defaults loaded from Sigil's built-in registry and are not seeded into the template tables, but they are still exposed through template list/detail APIs as read-only global templates.
 
 Example seed file:
 

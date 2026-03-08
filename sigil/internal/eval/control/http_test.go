@@ -759,93 +759,6 @@ func TestForkPredefinedEvaluatorReturnsInternalServerErrorOnStoreFailure(t *test
 	}
 }
 
-func TestPredefinedEndpoints_BackwardsCompatible_WithTemplateStore(t *testing.T) {
-	templateStore := newMemoryTemplateStore()
-	if err := BootstrapPredefinedTemplates(context.Background(), templateStore); err != nil {
-		t.Fatalf("bootstrap predefined templates: %v", err)
-	}
-
-	evalStore := newMemoryControlStore()
-	service := NewService(evalStore, nil, WithTemplateStore(templateStore))
-	mux := newEvalMux(service)
-
-	// List predefined evaluators — should return all 11 templates with correct shape.
-	listResp := doRequest(mux, http.MethodGet, "/api/v1/eval/predefined/evaluators", "")
-	if listResp.Code != http.StatusOK {
-		t.Fatalf("expected 200 list predefined evaluators, got %d body=%s", listResp.Code, listResp.Body.String())
-	}
-
-	var listBody struct {
-		Items []evalpkg.EvaluatorDefinition `json:"items"`
-	}
-	if err := json.Unmarshal(listResp.Body.Bytes(), &listBody); err != nil {
-		t.Fatalf("decode list response: %v", err)
-	}
-	if len(listBody.Items) != 10 {
-		t.Errorf("expected 10 predefined evaluators from templates table, got %d", len(listBody.Items))
-	}
-
-	// Verify response shape for each item.
-	foundHelpfulness := false
-	for _, item := range listBody.Items {
-		if !item.IsPredefined {
-			t.Errorf("expected is_predefined=true for %q", item.EvaluatorID)
-		}
-		if item.TenantID != "" {
-			t.Errorf("expected empty tenant_id for predefined, got %q", item.TenantID)
-		}
-		if item.EvaluatorID == "" {
-			t.Error("expected non-empty evaluator_id")
-		}
-		if item.Version == "" {
-			t.Error("expected non-empty version")
-		}
-		if item.Kind == "" {
-			t.Error("expected non-empty kind")
-		}
-		if len(item.OutputKeys) == 0 {
-			t.Errorf("expected non-empty output_keys for %q", item.EvaluatorID)
-		}
-		if item.EvaluatorID == "sigil.helpfulness" {
-			foundHelpfulness = true
-		}
-	}
-	if !foundHelpfulness {
-		t.Error("expected sigil.helpfulness in predefined list")
-	}
-
-	// Fork with template store — should set lineage fields.
-	forkPayload := `{
-		"evaluator_id":"custom.helpfulness",
-		"version":"2026-02-18",
-		"config":{"provider":"google","model":"gemini-2.0-flash"}
-	}`
-	forkResp := doRequest(mux, http.MethodPost, "/api/v1/eval/predefined/evaluators/sigil.helpfulness:fork", forkPayload)
-	if forkResp.Code != http.StatusOK {
-		t.Fatalf("expected 200 fork predefined evaluator, got %d body=%s", forkResp.Code, forkResp.Body.String())
-	}
-
-	var forked evalpkg.EvaluatorDefinition
-	if err := json.Unmarshal(forkResp.Body.Bytes(), &forked); err != nil {
-		t.Fatalf("decode fork response: %v", err)
-	}
-	if forked.EvaluatorID != "custom.helpfulness" {
-		t.Errorf("expected evaluator_id=custom.helpfulness, got %q", forked.EvaluatorID)
-	}
-	if forked.SourceTemplateID != "sigil.helpfulness" {
-		t.Errorf("expected source_template_id=sigil.helpfulness, got %q", forked.SourceTemplateID)
-	}
-	if forked.SourceTemplateVersion != predefined.DefaultTemplateVersion {
-		t.Errorf("expected source_template_version=%s, got %q", predefined.DefaultTemplateVersion, forked.SourceTemplateVersion)
-	}
-	if forked.Config["provider"] != "google" {
-		t.Errorf("expected config.provider=google, got %v", forked.Config["provider"])
-	}
-	if forked.IsPredefined {
-		t.Error("expected forked evaluator is_predefined=false")
-	}
-}
-
 func TestPredefinedEndpoints_FallbackToHardcoded_WithNilTemplateStore(t *testing.T) {
 	mux, _, _ := newEvalHTTPEnv(t) // No template store — should use hardcoded.
 
@@ -869,7 +782,7 @@ func TestPredefinedEndpoints_FallbackToHardcoded_WithNilTemplateStore(t *testing
 		}
 	}
 
-	// Fork should work using hardcoded fallback (no lineage fields).
+	// Fork should set lineage back to the predefined source.
 	forkPayload := `{
 		"evaluator_id":"custom.helpfulness_fallback",
 		"config":{"provider":"openai"}
@@ -883,61 +796,11 @@ func TestPredefinedEndpoints_FallbackToHardcoded_WithNilTemplateStore(t *testing
 	if err := json.Unmarshal(forkResp.Body.Bytes(), &forked); err != nil {
 		t.Fatalf("decode fork response: %v", err)
 	}
-	if forked.SourceTemplateID != "" {
-		t.Errorf("expected empty source_template_id in hardcoded fallback, got %q", forked.SourceTemplateID)
+	if forked.SourceTemplateID != "sigil.helpfulness" {
+		t.Errorf("expected source_template_id=sigil.helpfulness, got %q", forked.SourceTemplateID)
 	}
-}
-
-func TestPredefinedEndpoints_TemplateStoreFallbackToHardcoded(t *testing.T) {
-	// Template store present but empty (no bootstrap) — simulates a transient DB
-	// error at startup where BootstrapPredefinedTemplates fails but
-	// WithTemplateStore is still registered.
-	emptyTemplateStore := newMemoryTemplateStore()
-	evalStore := newMemoryControlStore()
-	service := NewService(evalStore, nil, WithTemplateStore(emptyTemplateStore))
-	mux := newEvalMux(service)
-
-	// List should fall back to hardcoded templates when store returns empty.
-	listResp := doRequest(mux, http.MethodGet, "/api/v1/eval/predefined/evaluators", "")
-	if listResp.Code != http.StatusOK {
-		t.Fatalf("expected 200 list predefined evaluators, got %d body=%s", listResp.Code, listResp.Body.String())
-	}
-	var listBody struct{ Items []evalpkg.EvaluatorDefinition }
-	if err := json.Unmarshal(listResp.Body.Bytes(), &listBody); err != nil {
-		t.Fatalf("decode list response: %v", err)
-	}
-	if len(listBody.Items) == 0 {
-		t.Fatal("expected hardcoded predefined evaluators from fallback, got empty list")
-	}
-	for _, item := range listBody.Items {
-		if !item.IsPredefined {
-			t.Errorf("expected is_predefined=true for %q", item.EvaluatorID)
-		}
-	}
-
-	// Fork should succeed via hardcoded fallback.
-	forkPayload := `{
-		"evaluator_id":"custom.helpfulness_from_hardcoded",
-		"config":{"provider":"openai"}
-	}`
-	forkResp := doRequest(mux, http.MethodPost, "/api/v1/eval/predefined/evaluators/sigil.helpfulness:fork", forkPayload)
-	if forkResp.Code != http.StatusOK {
-		t.Fatalf("expected 200 fork via hardcoded fallback, got %d body=%s", forkResp.Code, forkResp.Body.String())
-	}
-
-	var forked evalpkg.EvaluatorDefinition
-	if err := json.Unmarshal(forkResp.Body.Bytes(), &forked); err != nil {
-		t.Fatalf("decode fork response: %v", err)
-	}
-	if forked.EvaluatorID != "custom.helpfulness_from_hardcoded" {
-		t.Errorf("expected evaluator_id=custom.helpfulness_from_hardcoded, got %q", forked.EvaluatorID)
-	}
-	// Hardcoded fallback produces no lineage fields.
-	if forked.SourceTemplateID != "" {
-		t.Errorf("expected empty source_template_id from hardcoded fallback, got %q", forked.SourceTemplateID)
-	}
-	if forked.SourceTemplateVersion != "" {
-		t.Errorf("expected empty source_template_version from hardcoded fallback, got %q", forked.SourceTemplateVersion)
+	if forked.SourceTemplateVersion != predefined.DefaultTemplateVersion {
+		t.Errorf("expected source_template_version=%s, got %q", predefined.DefaultTemplateVersion, forked.SourceTemplateVersion)
 	}
 }
 

@@ -334,12 +334,7 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
   }, [dataSource, templateScopeFilter]);
 
   const sortedTemplates = useMemo(() => {
-    return [...allTemplates].sort((a, b) => {
-      if (a.scope !== b.scope) {
-        return a.scope === 'global' ? -1 : 1;
-      }
-      return a.template_id.localeCompare(b.template_id);
-    });
+    return [...allTemplates].sort((a, b) => a.template_id.localeCompare(b.template_id));
   }, [allTemplates]);
   const evaluatorView: EvaluatorListView =
     evaluatorViewParam === 'cards' || evaluatorViewParam === 'table' ? evaluatorViewParam : 'cards';
@@ -359,8 +354,6 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
     if (loading) {
       return null;
     }
-    const globalTemplates = sortedTemplates.filter((template) => template.scope === 'global').length;
-    const tenantTemplates = sortedTemplates.length - globalTemplates;
     const evaluatorKinds = tenantEvaluators.reduce<Record<string, number>>((acc, evaluator) => {
       acc[evaluator.kind] = (acc[evaluator.kind] ?? 0) + 1;
       return acc;
@@ -387,8 +380,6 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
           .join(', ') || '(none)'
       }`,
       `Templates available to fork: ${sortedTemplates.length}`,
-      `Global templates: ${globalTemplates}`,
-      `Tenant templates: ${tenantTemplates}`,
       `Template kinds: ${
         Object.entries(templateKinds)
           .map(([kind, count]) => `${kind}=${count}`)

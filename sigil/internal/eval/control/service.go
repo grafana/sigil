@@ -48,10 +48,9 @@ type JudgeDiscovery interface {
 }
 
 type Service struct {
-	store         controlStore
-	templateStore evalpkg.TemplateStore
-	discovery     JudgeDiscovery
-	previewStore  storage.RecentGenerationLister
+	store        controlStore
+	discovery    JudgeDiscovery
+	previewStore storage.RecentGenerationLister
 	// previewWindowHrs is in hours and controls preview sampling window when previewStore is configured.
 	previewWindowHrs int
 	now              func() time.Time
@@ -129,14 +128,6 @@ func NewServiceWithPreview(store controlStore, discovery JudgeDiscovery, preview
 // ServiceOption configures optional dependencies on Service.
 type ServiceOption func(*Service)
 
-// WithTemplateStore configures the Service to read predefined evaluators
-// from the templates table instead of hardcoded Go templates.
-func WithTemplateStore(ts evalpkg.TemplateStore) ServiceOption {
-	return func(s *Service) {
-		s.templateStore = ts
-	}
-}
-
 // WithPreview configures preview data source and lookback window.
 func WithPreview(previewStore storage.RecentGenerationLister, previewWindowHrs int) ServiceOption {
 	return func(s *Service) {
@@ -181,13 +172,6 @@ func (s *Service) ListEvaluators(ctx context.Context, tenantID string, limit int
 }
 
 func (s *Service) ListPredefinedEvaluators(ctx context.Context) []evalpkg.EvaluatorDefinition {
-	if s.templateStore != nil {
-		// Fall through to hardcoded templates on store error or empty result,
-		// so predefined evaluators are always available.
-		if items, err := s.listPredefinedFromTemplates(ctx); err == nil && len(items) > 0 {
-			return items
-		}
-	}
 	return s.listPredefinedFromHardcoded()
 }
 
@@ -204,111 +188,11 @@ func (s *Service) listPredefinedFromHardcoded() []evalpkg.EvaluatorDefinition {
 	return out
 }
 
-func (s *Service) listPredefinedFromTemplates(ctx context.Context) ([]evalpkg.EvaluatorDefinition, error) {
-	globalScope := evalpkg.TemplateScopeGlobal
-	templates, _, err := s.templateStore.ListTemplates(ctx, GlobalTenantID, &globalScope, 500, 0)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]evalpkg.EvaluatorDefinition, 0, len(templates))
-	for _, tmpl := range templates {
-		ver, err := s.templateStore.GetLatestTemplateVersion(ctx, tmpl.TenantID, tmpl.TemplateID)
-		if err != nil || ver == nil {
-			continue
-		}
-		out = append(out, evalpkg.EvaluatorDefinition{
-			EvaluatorID:  tmpl.TemplateID,
-			Version:      ver.Version,
-			Kind:         tmpl.Kind,
-			Config:       ver.Config,
-			OutputKeys:   ver.OutputKeys,
-			IsPredefined: true,
-		})
-	}
-	return out, nil
-}
-
 func (s *Service) ForkPredefinedEvaluator(ctx context.Context, tenantID, templateID string, request ForkPredefinedEvaluatorRequest) (evalpkg.EvaluatorDefinition, error) {
 	if s.store == nil {
 		return evalpkg.EvaluatorDefinition{}, errors.New("eval store is required")
 	}
-
-	if s.templateStore != nil {
-		if result, err := s.forkFromTemplateStore(ctx, tenantID, templateID, request); err == nil {
-			return result, nil
-		} else if !isTemplateFallbackError(err) {
-			return evalpkg.EvaluatorDefinition{}, err
-		}
-		// Fall through to hardcoded templates on lookup failure.
-	}
 	return s.forkFromHardcoded(ctx, tenantID, templateID, request)
-}
-
-// templateFallbackError signals that the template store lookup failed and we
-// should fall back to the hardcoded predefined templates.
-type templateFallbackError struct{ cause error }
-
-func (e templateFallbackError) Error() string { return e.cause.Error() }
-func (e templateFallbackError) Unwrap() error { return e.cause }
-
-func isTemplateFallbackError(err error) bool {
-	var target templateFallbackError
-	return errors.As(err, &target)
-}
-
-func (s *Service) forkFromTemplateStore(ctx context.Context, tenantID, templateID string, request ForkPredefinedEvaluatorRequest) (evalpkg.EvaluatorDefinition, error) {
-	trimmedTemplateID := strings.TrimSpace(templateID)
-	tmpl, err := s.templateStore.GetGlobalTemplate(ctx, trimmedTemplateID)
-	if err != nil {
-		return evalpkg.EvaluatorDefinition{}, err
-	}
-	if tmpl == nil {
-		return evalpkg.EvaluatorDefinition{}, templateFallbackError{
-			cause: fmt.Errorf("global template %q not found in store", trimmedTemplateID),
-		}
-	}
-
-	ver, err := s.templateStore.GetLatestTemplateVersion(ctx, tmpl.TenantID, tmpl.TemplateID)
-	if err != nil {
-		return evalpkg.EvaluatorDefinition{}, err
-	}
-	if ver == nil {
-		return evalpkg.EvaluatorDefinition{}, templateFallbackError{
-			cause: fmt.Errorf("no version for global template %q", trimmedTemplateID),
-		}
-	}
-
-	evaluatorID := strings.TrimSpace(request.EvaluatorID)
-	if evaluatorID == "" {
-		return evalpkg.EvaluatorDefinition{}, newValidationError(errors.New("evaluator_id is required"))
-	}
-	version := strings.TrimSpace(request.Version)
-	if version == "" {
-		version = ver.Version
-	}
-
-	forkConfig := cloneMap(ver.Config)
-	for key, value := range request.Config {
-		forkConfig[key] = value
-	}
-
-	outputKeys := ver.OutputKeys
-	if len(request.OutputKeys) > 0 {
-		outputKeys = request.OutputKeys
-	}
-
-	fork := evalpkg.EvaluatorDefinition{
-		TenantID:              strings.TrimSpace(tenantID),
-		EvaluatorID:           evaluatorID,
-		Version:               version,
-		Kind:                  tmpl.Kind,
-		Config:                forkConfig,
-		OutputKeys:            outputKeys,
-		IsPredefined:          false,
-		SourceTemplateID:      tmpl.TemplateID,
-		SourceTemplateVersion: ver.Version,
-	}
-	return s.CreateEvaluator(ctx, fork.TenantID, fork)
 }
 
 func (s *Service) forkFromHardcoded(ctx context.Context, tenantID, templateID string, request ForkPredefinedEvaluatorRequest) (evalpkg.EvaluatorDefinition, error) {
@@ -337,13 +221,15 @@ func (s *Service) forkFromHardcoded(ctx context.Context, tenantID, templateID st
 	}
 
 	fork := evalpkg.EvaluatorDefinition{
-		TenantID:     strings.TrimSpace(tenantID),
-		EvaluatorID:  evaluatorID,
-		Version:      version,
-		Kind:         template.Kind,
-		Config:       forkConfig,
-		OutputKeys:   outputKeys,
-		IsPredefined: false,
+		TenantID:              strings.TrimSpace(tenantID),
+		EvaluatorID:           evaluatorID,
+		Version:               version,
+		Kind:                  template.Kind,
+		Config:                forkConfig,
+		OutputKeys:            outputKeys,
+		IsPredefined:          false,
+		SourceTemplateID:      template.EvaluatorID,
+		SourceTemplateVersion: template.Version,
 	}
 	return s.CreateEvaluator(ctx, fork.TenantID, fork)
 }

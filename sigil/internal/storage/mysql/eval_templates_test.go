@@ -188,7 +188,7 @@ func TestTemplateStoreCRUD(t *testing.T) {
 	}
 }
 
-func TestTemplateStoreGlobalVisibility(t *testing.T) {
+func TestTemplateStoreListTemplatesIsTenantOnly(t *testing.T) {
 	store, cleanup := newTestWALStore(t)
 	defer cleanup()
 
@@ -196,16 +196,16 @@ func TestTemplateStoreGlobalVisibility(t *testing.T) {
 		t.Fatalf("auto migrate: %v", err)
 	}
 
-	// Create a global template.
+	// Create a legacy global template directly in the table.
 	err := store.CreateTemplate(context.Background(), evalpkg.TemplateDefinition{
-		TenantID:      evalpkg.GlobalTenantID,
+		TenantID:      "global",
 		TemplateID:    "tmpl.global-safety",
 		Scope:         evalpkg.TemplateScopeGlobal,
 		LatestVersion: "v1",
 		Kind:          evalpkg.EvaluatorKindLLMJudge,
 		Description:   "Global safety evaluator",
 	}, evalpkg.TemplateVersion{
-		TenantID:   evalpkg.GlobalTenantID,
+		TenantID:   "global",
 		TemplateID: "tmpl.global-safety",
 		Version:    "v1",
 		Config:     map[string]any{"provider": "openai", "model": "gpt-4o"},
@@ -233,49 +233,28 @@ func TestTemplateStoreGlobalVisibility(t *testing.T) {
 		t.Fatalf("create tenant template: %v", err)
 	}
 
-	// Listing from tenant-b should see both the global and tenant template.
+	// Listing from tenant-b should only see tenant-b templates.
 	items, _, err := store.ListTemplates(context.Background(), "tenant-b", nil, 50, 0)
 	if err != nil {
 		t.Fatalf("list templates from tenant-b: %v", err)
 	}
-	if len(items) != 2 {
-		t.Fatalf("expected 2 templates (global + tenant), got %d", len(items))
+	if len(items) != 1 {
+		t.Fatalf("expected 1 tenant template, got %d", len(items))
+	}
+	if items[0].TemplateID != "tmpl.tenant-quality" {
+		t.Errorf("expected tenant template, got %q", items[0].TemplateID)
 	}
 
-	// Listing from tenant-c (no templates of its own) should see the global template.
+	// Listing from tenant-c (no templates of its own) should not see global templates.
 	items, _, err = store.ListTemplates(context.Background(), "tenant-c", nil, 50, 0)
 	if err != nil {
 		t.Fatalf("list templates from tenant-c: %v", err)
 	}
-	if len(items) != 1 {
-		t.Fatalf("expected 1 global template for tenant-c, got %d", len(items))
-	}
-	if items[0].TemplateID != "tmpl.global-safety" {
-		t.Errorf("expected global template, got %q", items[0].TemplateID)
+	if len(items) != 0 {
+		t.Fatalf("expected 0 templates for tenant-c, got %d", len(items))
 	}
 
-	// GetGlobalTemplate should find it.
-	global, err := store.GetGlobalTemplate(context.Background(), "tmpl.global-safety")
-	if err != nil {
-		t.Fatalf("get global template: %v", err)
-	}
-	if global == nil {
-		t.Fatal("expected global template to exist")
-	}
-	if global.TenantID != evalpkg.GlobalTenantID {
-		t.Errorf("expected tenant_id %q, got %q", evalpkg.GlobalTenantID, global.TenantID)
-	}
-
-	// GetGlobalTemplate should not find tenant templates.
-	notGlobal, err := store.GetGlobalTemplate(context.Background(), "tmpl.tenant-quality")
-	if err != nil {
-		t.Fatalf("get global template for tenant template: %v", err)
-	}
-	if notGlobal != nil {
-		t.Error("expected tenant template to not be found via GetGlobalTemplate")
-	}
-
-	// CountActiveTemplates counts tenant-only, not global.
+	// CountActiveTemplates counts tenant-only.
 	count, err := store.CountActiveTemplates(context.Background(), "tenant-b")
 	if err != nil {
 		t.Fatalf("count active templates tenant-b: %v", err)
@@ -293,15 +272,15 @@ func TestTemplateStoreScopeFilter(t *testing.T) {
 		t.Fatalf("auto migrate: %v", err)
 	}
 
-	// Create a global template.
+	// Create a legacy global template directly in the table.
 	err := store.CreateTemplate(context.Background(), evalpkg.TemplateDefinition{
-		TenantID:      evalpkg.GlobalTenantID,
+		TenantID:      "global",
 		TemplateID:    "tmpl.global-one",
 		Scope:         evalpkg.TemplateScopeGlobal,
 		LatestVersion: "v1",
 		Kind:          evalpkg.EvaluatorKindLLMJudge,
 	}, evalpkg.TemplateVersion{
-		TenantID:   evalpkg.GlobalTenantID,
+		TenantID:   "global",
 		TemplateID: "tmpl.global-one",
 		Version:    "v1",
 		Config:     map[string]any{},
@@ -329,7 +308,7 @@ func TestTemplateStoreScopeFilter(t *testing.T) {
 		t.Fatalf("create tenant template: %v", err)
 	}
 
-	// Filter by scope=tenant should exclude global.
+	// Filter by scope=tenant should return only tenant templates.
 	tenantScope := evalpkg.TemplateScopeTenant
 	items, _, err := store.ListTemplates(context.Background(), "tenant-d", &tenantScope, 50, 0)
 	if err != nil {
@@ -342,17 +321,14 @@ func TestTemplateStoreScopeFilter(t *testing.T) {
 		t.Errorf("expected tenant template, got %q", items[0].TemplateID)
 	}
 
-	// Filter by scope=global should exclude tenant.
+	// Filter by scope=global should return nothing because global templates are not listed.
 	globalScope := evalpkg.TemplateScopeGlobal
 	items, _, err = store.ListTemplates(context.Background(), "tenant-d", &globalScope, 50, 0)
 	if err != nil {
 		t.Fatalf("list templates with global scope: %v", err)
 	}
-	if len(items) != 1 {
-		t.Fatalf("expected 1 global-scoped template, got %d", len(items))
-	}
-	if items[0].TemplateID != "tmpl.global-one" {
-		t.Errorf("expected global template, got %q", items[0].TemplateID)
+	if len(items) != 0 {
+		t.Fatalf("expected 0 global-scoped templates, got %d", len(items))
 	}
 }
 

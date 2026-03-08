@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
+	"github.com/grafana/sigil/sigil/internal/eval/predefined"
 )
 
 // evaluatorCreator abstracts evaluator creation with validation and metrics refresh.
@@ -29,6 +31,69 @@ type TemplateService struct {
 // go through full validation and metrics refresh.
 func NewTemplateService(store evalpkg.TemplateStore, evalCreator evaluatorCreator) *TemplateService {
 	return &TemplateService{store: store, evalCreator: evalCreator, now: time.Now}
+}
+
+func predefinedTemplateDefinition(template predefined.Template) evalpkg.TemplateDefinition {
+	return evalpkg.TemplateDefinition{
+		TemplateID:    template.EvaluatorID,
+		Scope:         evalpkg.TemplateScopeGlobal,
+		LatestVersion: template.Version,
+		Kind:          template.Kind,
+		Description:   template.Description,
+	}
+}
+
+func predefinedTemplateVersion(template predefined.Template) evalpkg.TemplateVersion {
+	return evalpkg.TemplateVersion{
+		TemplateID: template.EvaluatorID,
+		Version:    template.Version,
+		Config:     cloneMap(template.Config),
+		OutputKeys: append([]evalpkg.OutputKey(nil), template.OutputKeys...),
+	}
+}
+
+func findPredefinedTemplateDefinition(templateID string) (evalpkg.TemplateDefinition, evalpkg.TemplateVersion, bool) {
+	trimmedTemplateID := strings.TrimSpace(templateID)
+	if trimmedTemplateID == "" {
+		return evalpkg.TemplateDefinition{}, evalpkg.TemplateVersion{}, false
+	}
+	for _, template := range predefined.Templates() {
+		if template.EvaluatorID == trimmedTemplateID {
+			return predefinedTemplateDefinition(template), predefinedTemplateVersion(template), true
+		}
+	}
+	return evalpkg.TemplateDefinition{}, evalpkg.TemplateVersion{}, false
+}
+
+func paginateTemplateDefinitions(items []evalpkg.TemplateDefinition, limit int, cursor uint64) ([]evalpkg.TemplateDefinition, uint64) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Scope != items[j].Scope {
+			return items[i].Scope == evalpkg.TemplateScopeGlobal
+		}
+		return items[i].TemplateID < items[j].TemplateID
+	})
+
+	start := int(cursor)
+	if start >= len(items) {
+		return []evalpkg.TemplateDefinition{}, 0
+	}
+
+	end := start + limit
+	if end > len(items) {
+		end = len(items)
+	}
+	nextCursor := uint64(0)
+	if end < len(items) {
+		nextCursor = uint64(end)
+	}
+	return append([]evalpkg.TemplateDefinition(nil), items[start:end]...), nextCursor
 }
 
 // CreateTemplateRequest is the input for creating a new template with its initial version.
@@ -116,8 +181,8 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, tenantID string, r
 	return &tmpl, nil
 }
 
-// GetTemplate retrieves a template and its latest version. It checks tenant scope first,
-// then falls back to global scope.
+// GetTemplate retrieves a template and its latest version. Tenant templates are
+// stored in the DB; predefined templates are synthesized from the built-in registry.
 func (s *TemplateService) GetTemplate(ctx context.Context, tenantID, templateID string) (*evalpkg.TemplateDefinition, *evalpkg.TemplateVersion, error) {
 	trimmedTenantID := strings.TrimSpace(tenantID)
 	trimmedTemplateID := strings.TrimSpace(templateID)
@@ -127,13 +192,11 @@ func (s *TemplateService) GetTemplate(ctx context.Context, tenantID, templateID 
 		return nil, nil, err
 	}
 	if tmpl == nil {
-		tmpl, err = s.store.GetGlobalTemplate(ctx, trimmedTemplateID)
-		if err != nil {
-			return nil, nil, err
+		predefTmpl, predefVer, ok := findPredefinedTemplateDefinition(trimmedTemplateID)
+		if !ok {
+			return nil, nil, nil
 		}
-	}
-	if tmpl == nil {
-		return nil, nil, nil
+		return &predefTmpl, &predefVer, nil
 	}
 
 	ver, err := s.store.GetLatestTemplateVersion(ctx, tmpl.TenantID, trimmedTemplateID)
@@ -143,28 +206,32 @@ func (s *TemplateService) GetTemplate(ctx context.Context, tenantID, templateID 
 	return tmpl, ver, nil
 }
 
-// ListTemplates returns templates visible to the tenant, optionally filtered by scope.
+// ListTemplates returns tenant-managed templates plus synthesized predefined
+// global templates when the scope filter allows them.
 func (s *TemplateService) ListTemplates(ctx context.Context, tenantID string, scope *evalpkg.TemplateScope, limit int, cursor uint64) ([]evalpkg.TemplateDefinition, uint64, error) {
-	return s.store.ListTemplates(ctx, strings.TrimSpace(tenantID), scope, limit, cursor)
+	trimmedTenantID := strings.TrimSpace(tenantID)
+	tenantItems, _, err := s.store.ListTemplates(ctx, trimmedTenantID, scope, 10000, 0)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	items := append([]evalpkg.TemplateDefinition(nil), tenantItems...)
+	if scope == nil || *scope == evalpkg.TemplateScopeGlobal {
+		for _, template := range predefined.Templates() {
+			items = append(items, predefinedTemplateDefinition(template))
+		}
+	}
+
+	paged, nextCursor := paginateTemplateDefinitions(items, limit, cursor)
+	return paged, nextCursor, nil
 }
 
-// DeleteTemplate soft-deletes a tenant template. Global templates cannot be deleted.
+// DeleteTemplate soft-deletes a tenant template. Predefined global templates cannot be deleted.
 func (s *TemplateService) DeleteTemplate(ctx context.Context, tenantID, templateID string) error {
 	trimmedTenantID := strings.TrimSpace(tenantID)
 	trimmedTemplateID := strings.TrimSpace(templateID)
 
-	tmpl, err := s.store.GetTemplate(ctx, trimmedTenantID, trimmedTemplateID)
-	if err != nil {
-		return err
-	}
-	if tmpl == nil {
-		// Check if it is a global template -- if so, forbid deletion.
-		tmpl, err = s.store.GetGlobalTemplate(ctx, trimmedTemplateID)
-		if err != nil {
-			return err
-		}
-	}
-	if tmpl != nil && tmpl.Scope == evalpkg.TemplateScopeGlobal {
+	if _, _, ok := findPredefinedTemplateDefinition(trimmedTemplateID); ok {
 		return newValidationError(errors.New("cannot delete global templates"))
 	}
 	return s.store.DeleteTemplate(ctx, trimmedTenantID, trimmedTemplateID)
@@ -194,6 +261,9 @@ func (s *TemplateService) PublishVersion(ctx context.Context, tenantID, template
 		return nil, err
 	}
 	if tmpl == nil {
+		if _, _, ok := findPredefinedTemplateDefinition(trimmedTemplateID); ok {
+			return nil, newValidationError(errors.New("cannot publish versions for global templates"))
+		}
 		return nil, newValidationError(fmt.Errorf("template %q not found", trimmedTemplateID))
 	}
 
@@ -222,35 +292,29 @@ func (s *TemplateService) PublishVersion(ctx context.Context, tenantID, template
 	return &ver, nil
 }
 
-// GetTemplateVersion retrieves a specific version. Tries tenant scope first, then global.
+// GetTemplateVersion retrieves a specific version for a template. Predefined
+// global templates intentionally expose no version history entries.
 func (s *TemplateService) GetTemplateVersion(ctx context.Context, tenantID, templateID, version string) (*evalpkg.TemplateVersion, error) {
 	trimmedTenantID := strings.TrimSpace(tenantID)
 	trimmedTemplateID := strings.TrimSpace(templateID)
 	trimmedVersion := strings.TrimSpace(version)
 
-	ver, err := s.store.GetTemplateVersion(ctx, trimmedTenantID, trimmedTemplateID, trimmedVersion)
-	if err != nil {
-		return nil, err
+	if _, _, ok := findPredefinedTemplateDefinition(trimmedTemplateID); ok {
+		return nil, nil
 	}
-	if ver != nil {
-		return ver, nil
-	}
-	return s.store.GetTemplateVersion(ctx, GlobalTenantID, trimmedTemplateID, trimmedVersion)
+	return s.store.GetTemplateVersion(ctx, trimmedTenantID, trimmedTemplateID, trimmedVersion)
 }
 
-// ListTemplateVersions returns all versions for a template. Tries tenant scope first, then global.
+// ListTemplateVersions returns all versions for a template. Predefined global
+// templates intentionally return no version history entries.
 func (s *TemplateService) ListTemplateVersions(ctx context.Context, tenantID, templateID string) ([]evalpkg.TemplateVersion, error) {
 	trimmedTenantID := strings.TrimSpace(tenantID)
 	trimmedTemplateID := strings.TrimSpace(templateID)
 
-	versions, err := s.store.ListTemplateVersions(ctx, trimmedTenantID, trimmedTemplateID)
-	if err != nil {
-		return nil, err
+	if _, _, ok := findPredefinedTemplateDefinition(trimmedTemplateID); ok {
+		return []evalpkg.TemplateVersion{}, nil
 	}
-	if len(versions) > 0 {
-		return versions, nil
-	}
-	return s.store.ListTemplateVersions(ctx, GlobalTenantID, trimmedTemplateID)
+	return s.store.ListTemplateVersions(ctx, trimmedTenantID, trimmedTemplateID)
 }
 
 // ForkTemplate creates a concrete evaluator from a template version, applying optional config overrides.
@@ -270,7 +334,7 @@ func (s *TemplateService) ForkTemplate(ctx context.Context, tenantID, templateID
 		return nil, newValidationError(err)
 	}
 
-	// Resolve template (tenant first, then global).
+	// Resolve tenant or predefined template.
 	tmpl, _, err := s.GetTemplate(ctx, trimmedTenantID, trimmedTemplateID)
 	if err != nil {
 		return nil, err
@@ -286,18 +350,21 @@ func (s *TemplateService) ForkTemplate(ctx context.Context, tenantID, templateID
 	}
 
 	// Fetch the version config.
-	ver, err := s.store.GetTemplateVersion(ctx, tmpl.TenantID, trimmedTemplateID, versionStr)
-	if err != nil {
-		return nil, err
-	}
-	if ver == nil {
-		ver, err = s.store.GetTemplateVersion(ctx, GlobalTenantID, trimmedTemplateID, versionStr)
+	var ver *evalpkg.TemplateVersion
+	if tmpl.Scope == evalpkg.TemplateScopeGlobal {
+		_, predefinedVersion, ok := findPredefinedTemplateDefinition(trimmedTemplateID)
+		if !ok || versionStr != tmpl.LatestVersion {
+			return nil, newValidationError(fmt.Errorf("template version %q not found for template %q", versionStr, trimmedTemplateID))
+		}
+		ver = &predefinedVersion
+	} else {
+		ver, err = s.store.GetTemplateVersion(ctx, tmpl.TenantID, trimmedTemplateID, versionStr)
 		if err != nil {
 			return nil, err
 		}
-	}
-	if ver == nil {
-		return nil, newValidationError(fmt.Errorf("template version %q not found for template %q", versionStr, trimmedTemplateID))
+		if ver == nil {
+			return nil, newValidationError(fmt.Errorf("template version %q not found for template %q", versionStr, trimmedTemplateID))
+		}
 	}
 
 	// Shallow-merge request config over template version config.

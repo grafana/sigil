@@ -138,6 +138,10 @@ Design doc: `docs/design-docs/2026-02-15-conversation-query-path.md`
 - `GET /api/v1/model-cards:sources` -- model-card source freshness/status metadata.
 - `GET /api/v1/settings` and `PUT /api/v1/settings/datasources` -- tenant-scoped datasource settings for query proxy behavior.
 - Optional Grafana datasource-proxy path for server-side Tempo reads (`SIGIL_GRAFANA_URL`, `SIGIL_GRAFANA_SA_TOKEN`, `SIGIL_GRAFANA_TEMPO_DATASOURCE_UID`).
+- Evaluation control plane split:
+  - predefined evaluators are read-only defaults loaded from `sigil/internal/eval/predefined`
+  - template CRUD/versioning in `eval_templates` and `eval_template_versions` stores tenant templates
+  - predefined defaults are also exposed through template APIs as read-only synthetic `scope=global` entries
 
 ### Query access path
 

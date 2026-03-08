@@ -87,10 +87,14 @@ Responses:
 
 ### `GET /api/v1/eval/predefined/evaluators`
 
-List built-in evaluator templates.
+List built-in evaluator defaults shipped with Sigil.
 
 Response:
 - `items`: predefined evaluator definitions
+
+Notes:
+- These evaluators are loaded from the hardcoded predefined registry in Sigil, not from template-table rows.
+- They are read-only; versioning and CRUD for tenant templates use `/api/v1/eval/templates*`.
 
 ### `POST /api/v1/eval/predefined/evaluators/{template_id}:fork`
 
@@ -104,6 +108,24 @@ Request fields:
 
 Response:
 - created evaluator object (`200 OK`)
+
+Notes:
+- Forking preserves `source_template_id` and `source_template_version` lineage on the created tenant evaluator.
+
+## Tenant Templates
+
+### `GET /api/v1/eval/templates?limit=&cursor=&scope=`
+
+List tenant-managed templates with cursor pagination.
+
+Response:
+- `items`
+- `next_cursor`
+
+Notes:
+- Template storage and versioning are tenant-managed only.
+- Predefined evaluator defaults also appear in template list/detail responses as read-only `scope=global` templates so the UI can present one shared catalog.
+- Global predefined templates expose config and latest version metadata, but no version-history entries and no mutating operations.
 
 ## Rules
 

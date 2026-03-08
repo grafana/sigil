@@ -27,7 +27,7 @@ function PublishVersionFormWrapper() {
         kind="llm_judge"
         initialConfig={{
           system_prompt: 'You are grading helpfulness.',
-          user_prompt: 'Latest user message:\n{{input}}\n\nAssistant response:\n{{output}}',
+          user_prompt: 'Latest user message:\n{{latest_user_message}}\n\nAssistant response:\n{{assistant_response}}',
           max_tokens: 256,
           temperature: 0,
         }}

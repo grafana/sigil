@@ -54,7 +54,7 @@ func TestLLMJudgeEvaluatorParsesNumericJSON(t *testing.T) {
 	}
 }
 
-func TestLLMJudgeEvaluatorUsesLegacyDefaultPrompts(t *testing.T) {
+func TestLLMJudgeEvaluatorUsesExplicitDefaultPrompts(t *testing.T) {
 	tests := []struct {
 		name   string
 		config map[string]any

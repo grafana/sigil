@@ -170,12 +170,6 @@ func newQuerierModule(
 		var templateStore evalpkg.TemplateStore
 		if ts, ok := generationStore.(evalpkg.TemplateStore); ok {
 			templateStore = ts
-			if err := evalcontrol.BootstrapPredefinedTemplates(ctx, templateStore); err != nil {
-				_ = level.Warn(logger).Log("msg", "failed to bootstrap predefined templates", "err", err)
-			} else {
-				_ = level.Info(logger).Log("msg", "predefined templates bootstrapped")
-			}
-			controlOpts = append(controlOpts, evalcontrol.WithTemplateStore(templateStore))
 		}
 
 		if lister, ok := generationStore.(storage.RecentGenerationLister); ok {

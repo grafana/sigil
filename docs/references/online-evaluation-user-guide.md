@@ -175,10 +175,10 @@ Default fallback prompt:
 
 ```text
 Latest user message:
-{{input}}
+{{latest_user_message}}
 
 Assistant response:
-{{output}}
+{{assistant_response}}
 ```
 
 ## Rule Configuration
@@ -222,6 +222,8 @@ All eval endpoints are tenant-scoped protected routes; send `X-Scope-OrgID`.
 curl -s -H 'X-Scope-OrgID: tenant-a' \
   http://localhost:8080/api/v1/eval/predefined/evaluators
 ```
+
+Predefined evaluators are shipped defaults loaded from Sigil's built-in registry. They are read-only and do not come from the tenant template tables.
 
 ### 2. Fork a template into a tenant evaluator
 

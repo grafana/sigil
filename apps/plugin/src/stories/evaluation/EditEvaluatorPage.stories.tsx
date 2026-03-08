@@ -19,7 +19,8 @@ const mockEvaluator: Evaluator = {
   kind: 'llm_judge',
   config: {
     system_prompt: 'You are an expert evaluator.',
-    user_prompt: 'Score from 1-10.\n\nLatest user message: {{input}}\nAssistant response: {{output}}',
+    user_prompt:
+      'Score from 1-10.\n\nLatest user message: {{latest_user_message}}\nAssistant response: {{assistant_response}}',
     max_tokens: 256,
     temperature: 0,
   },

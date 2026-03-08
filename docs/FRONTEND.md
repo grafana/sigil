@@ -173,7 +173,7 @@ See `docs/references/grafana-query-response-shapes.md`.
     - `components/conversations/jaegerTree/collapseState.ts` for collapse/expand behavior parity
   - keep the tree customization surface plugin-owned via `renderNode` callback on `SigilSpanTree`
 - Evaluation:
-  - manage evaluators: browse predefined templates, fork/customize, create custom, list and delete tenant evaluators
+  - manage evaluators: browse predefined evaluators, fork/customize them into tenant evaluators, create custom evaluators, and manage tenant template versions
   - manage rules: create with selector/match/sample-rate/evaluator config, enable/disable, list and delete
   - visualize evaluation pipeline: render each rule as a horizontal flow (selector → match → sample → evaluators)
   - preview rule matching: dry-run rule criteria against recent traffic to show matching generation counts and samples

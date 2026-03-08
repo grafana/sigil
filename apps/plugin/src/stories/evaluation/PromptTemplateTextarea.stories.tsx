@@ -23,8 +23,8 @@ export const UserPrompt = {
   render: Render,
   args: {
     initialValue:
-      'Latest user message:\n{{input}}\n\nAssistant response:\n{{output}}\n\nTool calls:\n{{tool_calls}}\n\nCall error:\n{{call_error}}',
-    placeholder: 'Latest user message:\n{{input}}\n\nAssistant response:\n{{output}}',
+      'Latest user message:\n{{latest_user_message}}\n\nAssistant response:\n{{assistant_response}}\n\nTool calls:\n{{tool_calls}}\n\nCall error:\n{{call_error}}',
+    placeholder: 'Latest user message:\n{{latest_user_message}}\n\nAssistant response:\n{{assistant_response}}',
   },
 };
 

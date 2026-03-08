@@ -139,26 +139,6 @@ func (s *WALStore) GetTemplate(ctx context.Context, tenantID, templateID string)
 	return &out, nil
 }
 
-func (s *WALStore) GetGlobalTemplate(ctx context.Context, templateID string) (*evalpkg.TemplateDefinition, error) {
-	if strings.TrimSpace(templateID) == "" {
-		return nil, errors.New("template id is required")
-	}
-
-	var row EvalTemplateModel
-	err := s.db.WithContext(ctx).
-		Where("tenant_id = ? AND template_id = ? AND deleted_at IS NULL", evalpkg.GlobalTenantID, templateID).
-		First(&row).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("get global template: %w", err)
-	}
-
-	out := modelToTemplate(row)
-	return &out, nil
-}
-
 func (s *WALStore) ListTemplates(ctx context.Context, tenantID string, scope *evalpkg.TemplateScope, limit int, cursor uint64) ([]evalpkg.TemplateDefinition, uint64, error) {
 	if strings.TrimSpace(tenantID) == "" {
 		return nil, 0, errors.New("tenant id is required")
@@ -171,7 +151,7 @@ func (s *WALStore) ListTemplates(ctx context.Context, tenantID string, scope *ev
 	}
 
 	query := s.db.WithContext(ctx).
-		Where("(tenant_id = ? OR scope = ?) AND deleted_at IS NULL", tenantID, string(evalpkg.TemplateScopeGlobal)).
+		Where("tenant_id = ? AND deleted_at IS NULL", tenantID).
 		Order("id ASC").
 		Limit(limit + 1)
 	if cursor > 0 {

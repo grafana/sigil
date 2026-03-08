@@ -7,15 +7,23 @@ import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type Evaluator } from '../../
 export type EvaluatorCardGridProps = {
   evaluators: Evaluator[];
   onSelect?: (evaluatorID: string) => void;
+  onPrimaryAction?: (evaluatorID: string) => void;
+  primaryActionLabel?: string;
   onDelete?: (evaluatorID: string) => void;
 };
 
 function formatDate(iso: string): string {
+  if (!iso) {
+    return '—';
+  }
   try {
     const d = new Date(iso);
+    if (Number.isNaN(d.getTime()) || d.getUTCFullYear() <= 1) {
+      return '—';
+    }
     return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   } catch {
-    return iso;
+    return '—';
   }
 }
 
@@ -83,9 +91,16 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function EvaluatorCardGrid({ evaluators, onSelect, onDelete }: EvaluatorCardGridProps) {
+export default function EvaluatorCardGrid({
+  evaluators,
+  onSelect,
+  onPrimaryAction,
+  primaryActionLabel = 'Edit',
+  onDelete,
+}: EvaluatorCardGridProps) {
   const styles = useStyles2(getStyles);
   const [pendingDeleteID, setPendingDeleteID] = useState<string | null>(null);
+  const handlePrimaryAction = onPrimaryAction ?? onSelect;
 
   return (
     <>
@@ -109,9 +124,12 @@ export default function EvaluatorCardGrid({ evaluators, onSelect, onDelete }: Ev
             key={evaluator.evaluator_id}
             className={styles.card}
             onClick={() => onSelect?.(evaluator.evaluator_id)}
-            role="button"
-            tabIndex={0}
+            role={onSelect ? 'button' : undefined}
+            tabIndex={onSelect ? 0 : undefined}
             onKeyDown={(e) => {
+              if (!onSelect) {
+                return;
+              }
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 onSelect?.(evaluator.evaluator_id);
@@ -147,12 +165,13 @@ export default function EvaluatorCardGrid({ evaluators, onSelect, onDelete }: Ev
                 <Button
                   variant="secondary"
                   size="sm"
+                  disabled={!handlePrimaryAction}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onSelect?.(evaluator.evaluator_id);
+                    handlePrimaryAction?.(evaluator.evaluator_id);
                   }}
                 >
-                  Edit
+                  {primaryActionLabel}
                 </Button>
                 {onDelete && (
                   <IconButton

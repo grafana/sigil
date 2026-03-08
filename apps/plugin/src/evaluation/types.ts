@@ -70,7 +70,8 @@ export function buildOutputKeyFromForm(input: OutputKeyFormInput): EvalOutputKey
 /** Backend defaults applied when config fields are omitted. */
 export const LLM_JUDGE_DEFAULT_SYSTEM_PROMPT =
   'You evaluate one assistant response. Use only the user input and assistant output. Follow the score field description exactly. Be strict. If uncertain, choose the lower score.';
-export const LLM_JUDGE_DEFAULT_USER_PROMPT = 'Latest user message:\n{{input}}\n\nAssistant response:\n{{output}}';
+export const LLM_JUDGE_DEFAULT_USER_PROMPT =
+  'Latest user message:\n{{latest_user_message}}\n\nAssistant response:\n{{assistant_response}}';
 export const LLM_JUDGE_USER_PROMPT_VARIABLES_DESCRIPTION =
   'Supports key variables like {{latest_user_message}}, {{assistant_response}}, {{system_prompt}}, {{tool_calls}}, {{tool_results}}, {{tools}}, {{assistant_sequence}}, {{stop_reason}}, and {{call_error}}. Check the online evaluation docs for the full variable list and rendering details. Uses the default prompt when blank.';
 

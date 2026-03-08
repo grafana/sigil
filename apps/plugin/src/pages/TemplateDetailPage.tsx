@@ -412,44 +412,46 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
         </div>
       )}
 
-      <div className={styles.bottomSections}>
-        <div className={styles.detailCard}>
-          <div className={styles.detailCardHeader}>
-            <div className={styles.sectionTitle}>Version history</div>
-          </div>
-          <div className={styles.detailCardBody}>
-            <VersionHistoryTable
-              versions={template.versions ?? []}
-              selectedVersions={selectedVersions}
-              onToggleSelect={handleToggleVersionSelect}
-            />
-          </div>
-        </div>
-
-        {compareLeft && compareRight && (
+      {template.scope === 'tenant' && (
+        <div className={styles.bottomSections}>
           <div className={styles.detailCard}>
             <div className={styles.detailCardHeader}>
-              <div className={styles.sectionTitle}>Version compare</div>
+              <div className={styles.sectionTitle}>Version history</div>
             </div>
             <div className={styles.detailCardBody}>
-              <VersionCompare
-                left={{
-                  version: compareLeft.version,
-                  changelog: compareLeft.changelog,
-                  config: compareLeft.config,
-                  outputKeys: compareLeft.output_keys,
-                }}
-                right={{
-                  version: compareRight.version,
-                  changelog: compareRight.changelog,
-                  config: compareRight.config,
-                  outputKeys: compareRight.output_keys,
-                }}
+              <VersionHistoryTable
+                versions={template.versions ?? []}
+                selectedVersions={selectedVersions}
+                onToggleSelect={handleToggleVersionSelect}
               />
             </div>
           </div>
-        )}
-      </div>
+
+          {compareLeft && compareRight && (
+            <div className={styles.detailCard}>
+              <div className={styles.detailCardHeader}>
+                <div className={styles.sectionTitle}>Version compare</div>
+              </div>
+              <div className={styles.detailCardBody}>
+                <VersionCompare
+                  left={{
+                    version: compareLeft.version,
+                    changelog: compareLeft.changelog,
+                    config: compareLeft.config,
+                    outputKeys: compareLeft.output_keys,
+                  }}
+                  right={{
+                    version: compareRight.version,
+                    changelog: compareRight.changelog,
+                    config: compareRight.config,
+                    outputKeys: compareRight.output_keys,
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

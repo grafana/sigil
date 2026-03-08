@@ -10,6 +10,7 @@ import (
 	"time"
 
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
+	"github.com/grafana/sigil/sigil/internal/eval/predefined"
 )
 
 func newTemplateTestEnv(t *testing.T) (*TemplateService, *memoryTemplateStore, *memoryControlStore) {
@@ -399,30 +400,9 @@ func TestTemplateService_DeleteTemplate(t *testing.T) {
 }
 
 func TestTemplateService_DeleteTemplate_Global(t *testing.T) {
-	svc, ts, _ := newTemplateTestEnv(t)
+	svc, _, _ := newTemplateTestEnv(t)
 
-	// Seed a global template directly in the store.
-	now := time.Now().UTC()
-	if err := ts.CreateTemplate(context.Background(), evalpkg.TemplateDefinition{
-		TenantID:      GlobalTenantID,
-		TemplateID:    "global_template",
-		Scope:         evalpkg.TemplateScopeGlobal,
-		LatestVersion: "2026-03-01",
-		Kind:          evalpkg.EvaluatorKindLLMJudge,
-		CreatedAt:     now,
-		UpdatedAt:     now,
-	}, evalpkg.TemplateVersion{
-		TenantID:   GlobalTenantID,
-		TemplateID: "global_template",
-		Version:    "2026-03-01",
-		Config:     map[string]any{"provider": "openai"},
-		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
-		CreatedAt:  now,
-	}); err != nil {
-		t.Fatalf("seed global template: %v", err)
-	}
-
-	err := svc.DeleteTemplate(context.Background(), "tenant_1", "global_template")
+	err := svc.DeleteTemplate(context.Background(), "tenant_1", "sigil.helpfulness")
 	if err == nil {
 		t.Fatal("expected error when deleting global template")
 	}
@@ -434,107 +414,28 @@ func TestTemplateService_DeleteTemplate_Global(t *testing.T) {
 	}
 }
 
-func TestTemplateService_Get_TenantShadowsGlobal(t *testing.T) {
-	svc, ts, _ := newTemplateTestEnv(t)
-
-	now := time.Now().UTC()
-
-	// Create global template.
-	if err := ts.CreateTemplate(context.Background(), evalpkg.TemplateDefinition{
-		TenantID:      GlobalTenantID,
-		TemplateID:    "shared_template",
-		Scope:         evalpkg.TemplateScopeGlobal,
-		LatestVersion: "2026-01-01",
-		Kind:          evalpkg.EvaluatorKindLLMJudge,
-		Description:   "global version",
-		CreatedAt:     now,
-		UpdatedAt:     now,
-	}, evalpkg.TemplateVersion{
-		TenantID:   GlobalTenantID,
-		TemplateID: "shared_template",
-		Version:    "2026-01-01",
-		Config:     map[string]any{"source": "global"},
-		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
-		CreatedAt:  now,
-	}); err != nil {
-		t.Fatalf("seed global template: %v", err)
-	}
-
-	// Create tenant template with same ID.
-	_, err := svc.CreateTemplate(context.Background(), "tenant_1", CreateTemplateRequest{
-		TemplateID:  "shared_template",
-		Kind:        "llm_judge",
-		Description: "tenant version",
-		Version:     "2026-03-01",
-		Config:      map[string]any{"source": "tenant"},
-		OutputKeys:  []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
-	})
-	if err != nil {
-		t.Fatalf("create tenant template: %v", err)
-	}
-
-	tmpl, ver, err := svc.GetTemplate(context.Background(), "tenant_1", "shared_template")
-	if err != nil {
-		t.Fatalf("get template: %v", err)
-	}
-	if tmpl == nil {
-		t.Fatal("expected template to be found")
-	}
-	if tmpl.Scope != evalpkg.TemplateScopeTenant {
-		t.Errorf("expected tenant template to shadow global, got scope=%q", tmpl.Scope)
-	}
-	if tmpl.Description != "tenant version" {
-		t.Errorf("expected tenant description, got %q", tmpl.Description)
-	}
-	if ver == nil || ver.Config["source"] != "tenant" {
-		t.Errorf("expected tenant version config, got %v", ver)
-	}
-}
-
 func TestTemplateService_List(t *testing.T) {
-	svc, ts, _ := newTemplateTestEnv(t)
+	svc, _, _ := newTemplateTestEnv(t)
 
-	now := time.Now().UTC()
-
-	// Create global template.
-	if err := ts.CreateTemplate(context.Background(), evalpkg.TemplateDefinition{
-		TenantID:      GlobalTenantID,
-		TemplateID:    "global_template",
-		Scope:         evalpkg.TemplateScopeGlobal,
-		LatestVersion: "2026-01-01",
-		Kind:          evalpkg.EvaluatorKindLLMJudge,
-		CreatedAt:     now,
-		UpdatedAt:     now,
-	}, evalpkg.TemplateVersion{
-		TenantID:   GlobalTenantID,
-		TemplateID: "global_template",
-		Version:    "2026-01-01",
-		Config:     map[string]any{"source": "global"},
-		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
-		CreatedAt:  now,
-	}); err != nil {
-		t.Fatalf("seed global template: %v", err)
+	for _, id := range []string{"tenant_template_a", "tenant_template_b"} {
+		_, err := svc.CreateTemplate(context.Background(), "tenant_1", CreateTemplateRequest{
+			TemplateID: id,
+			Kind:       "heuristic",
+			Version:    "2026-03-01",
+			Config:     map[string]any{"source": "tenant"},
+			OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeBool}},
+		})
+		if err != nil {
+			t.Fatalf("create tenant template %s: %v", id, err)
+		}
 	}
 
-	// Create tenant template.
-	_, err := svc.CreateTemplate(context.Background(), "tenant_1", CreateTemplateRequest{
-		TemplateID: "tenant_template",
-		Kind:       "heuristic",
-		Version:    "2026-03-01",
-		Config:     map[string]any{"source": "tenant"},
-		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeBool}},
-	})
-	if err != nil {
-		t.Fatalf("create tenant template: %v", err)
-	}
-
-	// List all (no scope filter) should include both.
 	items, _, err := svc.ListTemplates(context.Background(), "tenant_1", nil, 50, 0)
 	if err != nil {
 		t.Fatalf("list templates: %v", err)
 	}
-	if len(items) < 2 {
-		t.Fatalf("expected at least 2 templates (global + tenant), got %d", len(items))
+	if len(items) < 3 {
+		t.Fatalf("expected tenant templates plus predefined globals, got %d", len(items))
 	}
 
 	ids := make([]string, 0, len(items))
@@ -542,11 +443,38 @@ func TestTemplateService_List(t *testing.T) {
 		ids = append(ids, item.TemplateID)
 	}
 	sort.Strings(ids)
-	if !slices.Contains(ids, "global_template") {
-		t.Errorf("expected global_template in list, got %v", ids)
+	if !slices.Contains(ids, "tenant_template_a") || !slices.Contains(ids, "tenant_template_b") {
+		t.Errorf("expected tenant templates in list, got %v", ids)
 	}
-	if !slices.Contains(ids, "tenant_template") {
-		t.Errorf("expected tenant_template in list, got %v", ids)
+	if !slices.Contains(ids, "sigil.helpfulness") {
+		t.Errorf("expected predefined global template in list, got %v", ids)
+	}
+}
+
+func TestTemplateService_Get_PredefinedGlobal(t *testing.T) {
+	svc, _, _ := newTemplateTestEnv(t)
+
+	tmpl, ver, err := svc.GetTemplate(context.Background(), "tenant_1", "sigil.helpfulness")
+	if err != nil {
+		t.Fatalf("get template: %v", err)
+	}
+	if tmpl == nil {
+		t.Fatal("expected predefined template to exist")
+	}
+	if tmpl.Scope != evalpkg.TemplateScopeGlobal {
+		t.Errorf("expected scope=global, got %q", tmpl.Scope)
+	}
+	if tmpl.TemplateID != "sigil.helpfulness" {
+		t.Errorf("expected sigil.helpfulness, got %q", tmpl.TemplateID)
+	}
+	if ver == nil {
+		t.Fatal("expected predefined template config to be returned")
+	}
+	if ver.Version != predefined.DefaultTemplateVersion {
+		t.Errorf("expected version=%s, got %q", predefined.DefaultTemplateVersion, ver.Version)
+	}
+	if len(ver.Config) == 0 {
+		t.Error("expected predefined config")
 	}
 }
 
@@ -555,7 +483,7 @@ type memoryTemplateStore struct {
 	templates       map[string]evalpkg.TemplateDefinition // key: tenantID|templateID
 	versions        map[string]evalpkg.TemplateVersion    // key: tenantID|templateID|version
 	createErr       error                                 // injected error for CreateTemplate
-	getErr          error                                 // injected error for GetTemplate/GetGlobalTemplate
+	getErr          error                                 // injected error for GetTemplate
 	listErr         error                                 // injected error for ListTemplates
 	listVersionsErr error                                 // injected error for ListTemplateVersions
 }
@@ -592,18 +520,6 @@ func (s *memoryTemplateStore) GetTemplate(_ context.Context, tenantID, templateI
 	return &copied, nil
 }
 
-func (s *memoryTemplateStore) GetGlobalTemplate(_ context.Context, templateID string) (*evalpkg.TemplateDefinition, error) {
-	if s.getErr != nil {
-		return nil, s.getErr
-	}
-	tmpl, ok := s.templates[templateKey(GlobalTenantID, templateID)]
-	if !ok || tmpl.DeletedAt != nil {
-		return nil, nil
-	}
-	copied := tmpl
-	return &copied, nil
-}
-
 func (s *memoryTemplateStore) ListTemplates(_ context.Context, tenantID string, scope *evalpkg.TemplateScope, limit int, cursor uint64) ([]evalpkg.TemplateDefinition, uint64, error) {
 	if s.listErr != nil {
 		return nil, 0, s.listErr
@@ -613,8 +529,7 @@ func (s *memoryTemplateStore) ListTemplates(_ context.Context, tenantID string, 
 		if tmpl.DeletedAt != nil {
 			continue
 		}
-		// Include tenant templates and global templates visible to this tenant.
-		if tmpl.TenantID != tenantID && tmpl.Scope != evalpkg.TemplateScopeGlobal {
+		if tmpl.TenantID != tenantID {
 			continue
 		}
 		if scope != nil && tmpl.Scope != *scope {

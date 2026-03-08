@@ -12,11 +12,17 @@ export type TemplateTableProps = {
 };
 
 function formatDate(iso: string): string {
+  if (!iso) {
+    return '—';
+  }
   try {
     const d = new Date(iso);
+    if (Number.isNaN(d.getTime()) || d.getUTCFullYear() <= 1) {
+      return '—';
+    }
     return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   } catch {
-    return iso;
+    return '—';
   }
 }
 

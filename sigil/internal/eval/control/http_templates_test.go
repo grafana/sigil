@@ -1,15 +1,12 @@
 package control
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 
-	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	"github.com/grafana/sigil/sigil/internal/tenantauth"
 )
 
@@ -159,7 +156,7 @@ func TestTemplateHTTPListAll(t *testing.T) {
 }
 
 func TestTemplateHTTPListWithScopeFilter(t *testing.T) {
-	mux, ts, _ := newTemplateHTTPEnv(t)
+	mux, _, _ := newTemplateHTTPEnv(t)
 
 	// Create a tenant template.
 	payload := `{
@@ -172,27 +169,6 @@ func TestTemplateHTTPListWithScopeFilter(t *testing.T) {
 	resp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates", payload)
 	if resp.Code != http.StatusOK {
 		t.Fatalf("expected 200 create tenant template, got %d body=%s", resp.Code, resp.Body.String())
-	}
-
-	// Seed a global template directly in the store.
-	now := time.Now().UTC()
-	if err := ts.CreateTemplate(context.Background(), evalpkg.TemplateDefinition{
-		TenantID:      GlobalTenantID,
-		TemplateID:    "global_template",
-		Scope:         evalpkg.TemplateScopeGlobal,
-		LatestVersion: "2026-01-01",
-		Kind:          evalpkg.EvaluatorKindLLMJudge,
-		CreatedAt:     now,
-		UpdatedAt:     now,
-	}, evalpkg.TemplateVersion{
-		TenantID:   GlobalTenantID,
-		TemplateID: "global_template",
-		Version:    "2026-01-01",
-		Config:     map[string]any{"source": "global"},
-		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
-		CreatedAt:  now,
-	}); err != nil {
-		t.Fatalf("seed global template: %v", err)
 	}
 
 	// Filter by tenant scope — should only return the tenant template.
@@ -212,6 +188,22 @@ func TestTemplateHTTPListWithScopeFilter(t *testing.T) {
 	first := items[0].(map[string]any)
 	if first["template_id"] != "tenant_template" {
 		t.Errorf("expected tenant_template, got %v", first["template_id"])
+	}
+	globalOnlyResp := doRequest(mux, http.MethodGet, "/api/v1/eval/templates?scope=global", "")
+	if globalOnlyResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 list with global scope filter, got %d body=%s", globalOnlyResp.Code, globalOnlyResp.Body.String())
+	}
+
+	var globalOnlyBody map[string]any
+	if err := json.Unmarshal(globalOnlyResp.Body.Bytes(), &globalOnlyBody); err != nil {
+		t.Fatalf("decode global-scope list response: %v", err)
+	}
+	globalItems, ok := globalOnlyBody["items"].([]any)
+	if !ok {
+		t.Fatalf("expected items array, got %v", globalOnlyBody["items"])
+	}
+	if len(globalItems) == 0 {
+		t.Fatal("expected predefined global templates for global scope filter")
 	}
 }
 
@@ -252,31 +244,36 @@ func TestTemplateHTTPDelete(t *testing.T) {
 	}
 }
 
-func TestTemplateHTTPDeleteGlobalRejected(t *testing.T) {
-	mux, ts, _ := newTemplateHTTPEnv(t)
+func TestTemplateHTTPGetPredefinedGlobal(t *testing.T) {
+	mux, _, _ := newTemplateHTTPEnv(t)
 
-	// Seed a global template.
-	now := time.Now().UTC()
-	if err := ts.CreateTemplate(context.Background(), evalpkg.TemplateDefinition{
-		TenantID:      GlobalTenantID,
-		TemplateID:    "global_template",
-		Scope:         evalpkg.TemplateScopeGlobal,
-		LatestVersion: "2026-01-01",
-		Kind:          evalpkg.EvaluatorKindLLMJudge,
-		CreatedAt:     now,
-		UpdatedAt:     now,
-	}, evalpkg.TemplateVersion{
-		TenantID:   GlobalTenantID,
-		TemplateID: "global_template",
-		Version:    "2026-01-01",
-		Config:     map[string]any{"provider": "openai"},
-		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
-		CreatedAt:  now,
-	}); err != nil {
-		t.Fatalf("seed global template: %v", err)
+	resp := doRequest(mux, http.MethodGet, "/api/v1/eval/templates/sigil.helpfulness", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200 get predefined template, got %d body=%s", resp.Code, resp.Body.String())
 	}
 
-	deleteResp := doRequest(mux, http.MethodDelete, "/api/v1/eval/templates/global_template", "")
+	var body map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode get response: %v", err)
+	}
+	if body["scope"] != "global" {
+		t.Errorf("expected scope=global, got %v", body["scope"])
+	}
+	if body["template_id"] != "sigil.helpfulness" {
+		t.Errorf("expected sigil.helpfulness, got %v", body["template_id"])
+	}
+	if body["config"] == nil {
+		t.Fatalf("expected predefined config in get response, body=%s", resp.Body.String())
+	}
+	if versions, ok := body["versions"].([]any); !ok || len(versions) != 0 {
+		t.Errorf("expected no version history entries for predefined global, got %v", body["versions"])
+	}
+}
+
+func TestTemplateHTTPDeleteGlobalRejected(t *testing.T) {
+	mux, _, _ := newTemplateHTTPEnv(t)
+
+	deleteResp := doRequest(mux, http.MethodDelete, "/api/v1/eval/templates/sigil.helpfulness", "")
 	if deleteResp.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 delete global template, got %d body=%s", deleteResp.Code, deleteResp.Body.String())
 	}

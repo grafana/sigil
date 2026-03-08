@@ -111,9 +111,6 @@ type RuleDefinition struct {
 	UpdatedAt    time.Time      `json:"updated_at"`
 }
 
-// GlobalTenantID is the sentinel tenant ID used for global-scope templates.
-const GlobalTenantID = "global"
-
 // TemplateScope controls visibility of a template.
 type TemplateScope string
 
@@ -298,7 +295,6 @@ type SavedConversationStore interface {
 type TemplateStore interface {
 	CreateTemplate(ctx context.Context, tmpl TemplateDefinition, version TemplateVersion) error
 	GetTemplate(ctx context.Context, tenantID, templateID string) (*TemplateDefinition, error)
-	GetGlobalTemplate(ctx context.Context, templateID string) (*TemplateDefinition, error)
 	ListTemplates(ctx context.Context, tenantID string, scope *TemplateScope, limit int, cursor uint64) ([]TemplateDefinition, uint64, error)
 	DeleteTemplate(ctx context.Context, tenantID, templateID string) error
 	CountActiveTemplates(ctx context.Context, tenantID string) (int64, error)
