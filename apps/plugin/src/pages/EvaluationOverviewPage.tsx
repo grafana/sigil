@@ -406,6 +406,7 @@ export default function EvaluationOverviewPage() {
   const disabledRuleCount = rules.length - activeRuleCount;
   const tenantEvalCount = pickLatestVersionPerEvaluator(evaluators.filter((e) => !e.is_predefined)).length;
   const hasEvaluators = tenantEvalCount > 0;
+  const isFirstTimeSetup = rules.length === 0 && !hasEvaluators;
 
   if (loading) {
     return (
@@ -413,24 +414,6 @@ export default function EvaluationOverviewPage() {
         <div className={styles.loading}>
           <Spinner />
         </div>
-      </div>
-    );
-  }
-
-  if (rules.length === 0) {
-    return (
-      <div className={styles.pageContainer}>
-        {errorMessage.length > 0 && (
-          <Alert severity="error" title="Error" onRemove={() => setErrorMessage('')}>
-            <Text>{errorMessage}</Text>
-          </Alert>
-        )}
-        <EvaluationInfoPanel styles={styles} />
-        <EvalOnboarding
-          hasEvaluators={hasEvaluators}
-          onGoToEvaluators={() => navigate(`${EVAL_BASE}/evaluators`)}
-          onGoToCreateRule={() => navigate(`${EVAL_BASE}/rules/new`)}
-        />
       </div>
     );
   }
@@ -443,16 +426,30 @@ export default function EvaluationOverviewPage() {
         </Alert>
       )}
       <EvaluationInfoPanel styles={styles} />
-
-      <SummaryCards
-        activeRules={activeRuleCount}
-        disabledRules={disabledRuleCount}
-        totalEvaluators={tenantEvalCount}
-        predefinedTemplates={predefinedCount}
-        onBrowseRules={() => navigate(`${EVAL_BASE}/rules`)}
-        onBrowseEvaluators={() => navigate(`${EVAL_BASE}/evaluators`)}
-        onBrowseTemplates={() => navigate(`${EVAL_BASE}/evaluators?template_view=cards`)}
-      />
+      {isFirstTimeSetup ? (
+        <EvalOnboarding
+          hasEvaluators={hasEvaluators}
+          onGoToEvaluators={() => navigate(`${EVAL_BASE}/evaluators`)}
+          onGoToCreateRule={() => navigate(`${EVAL_BASE}/rules/new`)}
+        />
+      ) : (
+        <SummaryCards
+          activeRules={activeRuleCount}
+          disabledRules={disabledRuleCount}
+          totalEvaluators={tenantEvalCount}
+          predefinedTemplates={predefinedCount}
+          onBrowseRules={() => navigate(`${EVAL_BASE}/rules`)}
+          onBrowseEvaluators={() => navigate(`${EVAL_BASE}/evaluators`)}
+          onBrowseTemplates={() => navigate(`${EVAL_BASE}/evaluators?template_view=cards`)}
+        />
+      )}
+      {rules.length === 0 && hasEvaluators && (
+        <EvalOnboarding
+          hasEvaluators={hasEvaluators}
+          onGoToEvaluators={() => navigate(`${EVAL_BASE}/evaluators`)}
+          onGoToCreateRule={() => navigate(`${EVAL_BASE}/rules/new`)}
+        />
+      )}
     </div>
   );
 }

@@ -16,17 +16,14 @@ const getStyles = (theme: GrafanaTheme2) => {
     container: css({
       display: 'flex',
       flexDirection: 'column' as const,
-      alignItems: 'center',
-      gap: theme.spacing(5),
-      padding: theme.spacing(6, 2),
-      maxWidth: 860,
-      margin: '0 auto',
+      width: '100%',
+      gap: theme.spacing(2),
     }),
 
     stepsContainer: css({
       display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: theme.spacing(3),
+      gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+      gap: theme.spacing(2),
       width: '100%',
     }),
 
@@ -34,27 +31,30 @@ const getStyles = (theme: GrafanaTheme2) => {
       position: 'relative' as const,
       display: 'flex',
       flexDirection: 'column' as const,
-      gap: theme.spacing(2),
-      padding: theme.spacing(3),
+      gap: theme.spacing(1.5),
+      padding: theme.spacing(2.25),
       borderRadius: theme.shape.radius.default,
       background: theme.colors.background.primary,
       border: `1px solid ${theme.colors.border.weak}`,
-      transition: 'border-color 0.2s, box-shadow 0.2s',
+      transition: 'border-color 0.2s, box-shadow 0.2s, transform 0.2s',
       '&:hover': {
         borderColor: theme.colors.border.medium,
         boxShadow: theme.shadows.z1,
+        transform: 'translateY(-1px)',
       },
     }),
 
     stepCardActive: css({
-      borderColor: theme.colors.primary.border,
+      borderLeft: isDark ? '4px solid rgba(87, 148, 242, 0.78)' : '4px solid rgba(87, 148, 242, 0.82)',
+      borderColor: isDark ? 'rgba(87, 148, 242, 0.22)' : 'rgba(87, 148, 242, 0.24)',
       '&:hover': {
-        borderColor: theme.colors.primary.border,
+        borderColor: isDark ? 'rgba(87, 148, 242, 0.3)' : 'rgba(87, 148, 242, 0.32)',
       },
     }),
 
     stepCardMuted: css({
-      opacity: 0.6,
+      borderLeft: isDark ? '4px solid rgba(184, 119, 217, 0.42)' : '4px solid rgba(184, 119, 217, 0.5)',
+      borderColor: isDark ? 'rgba(184, 119, 217, 0.16)' : 'rgba(184, 119, 217, 0.18)',
     }),
 
     stepNumber: css({
@@ -100,8 +100,8 @@ const getStyles = (theme: GrafanaTheme2) => {
 
     stepDescription: css({
       color: theme.colors.text.secondary,
-      lineHeight: 1.6,
-      fontSize: theme.typography.body.fontSize,
+      lineHeight: 1.55,
+      fontSize: theme.typography.bodySmall.fontSize,
     }),
 
     stepFeatures: css({
@@ -139,10 +139,10 @@ type EvalTypeConfig = {
 };
 
 const EVAL_TYPES: EvalTypeConfig[] = [
-  { icon: 'brain', label: 'LLM Judge -- use an LLM to score quality, relevance, safety' },
-  { icon: 'brackets-curly', label: 'JSON Schema -- validate structured output format' },
-  { icon: 'code-branch', label: 'Regex -- pattern-match on response content' },
-  { icon: 'check-square', label: 'Heuristic -- length checks, non-empty, custom rules' },
+  { icon: 'brain', label: 'LLM Judge — use an LLM to score quality, relevance, safety' },
+  { icon: 'brackets-curly', label: 'JSON Schema — validate structured output format' },
+  { icon: 'code-branch', label: 'Regex — pattern-match on response content' },
+  { icon: 'check-square', label: 'Heuristic — length checks, non-empty, custom rules' },
 ];
 
 type RuleFeatureConfig = {

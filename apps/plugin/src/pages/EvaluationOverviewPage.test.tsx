@@ -278,5 +278,29 @@ describe('EvaluationOverviewPage', () => {
 
     expect(await screen.findByText('How Sigil evaluates your AI applications')).toBeInTheDocument();
     expect(screen.getByText('Set up evaluators')).toBeInTheDocument();
+    expect(screen.getByText('Create rules')).toBeInTheDocument();
+    expect(screen.queryByText('Active rules')).not.toBeInTheDocument();
+    expect(screen.queryByText('Predefined templates')).not.toBeInTheDocument();
+  });
+
+  it('keeps summary cards and shows onboarding when evaluators exist but no rules are configured', async () => {
+    const noRulesDataSource = createDataSource();
+    noRulesDataSource.listRules = async () => ({ items: [], next_cursor: '' });
+
+    render(
+      <MemoryRouter>
+        <EvalRulesDataProvider dataSource={noRulesDataSource}>
+          <EvaluationOverviewPage />
+        </EvalRulesDataProvider>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('How Sigil evaluates your AI applications')).toBeInTheDocument();
+    expect(screen.getByText('Active rules')).toBeInTheDocument();
+    expect(screen.getByText('Disabled rules')).toBeInTheDocument();
+    expect(screen.getByText('Evaluators')).toBeInTheDocument();
+    expect(screen.getByText('Predefined templates')).toBeInTheDocument();
+    expect(screen.getByText('Set up evaluators')).toBeInTheDocument();
+    expect(screen.getByText('Create rules')).toBeInTheDocument();
   });
 });
