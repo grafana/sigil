@@ -3,6 +3,7 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, Button, ConfirmModal, IconButton, Text, useStyles2 } from '@grafana/ui';
 import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type TemplateDefinition } from '../../evaluation/types';
+import { formatDateShort } from '../../utils/date';
 
 export type TemplateTableProps = {
   templates: TemplateDefinition[];
@@ -10,21 +11,6 @@ export type TemplateTableProps = {
   onDelete?: (templateID: string) => void;
   onFork?: (templateID: string) => void;
 };
-
-function formatDate(iso: string): string {
-  if (!iso) {
-    return '—';
-  }
-  try {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime()) || d.getUTCFullYear() <= 1) {
-      return '—';
-    }
-    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-  } catch {
-    return '—';
-  }
-}
 
 const getStyles = (theme: GrafanaTheme2) => ({
   table: css({
@@ -146,7 +132,10 @@ export default function TemplateTable({ templates, onSelect, onDelete, onFork }:
               {template.description || '—'}
             </Text>
             <Text color="secondary" variant="bodySmall">
-              {formatDate(template.created_at)}
+              {formatDateShort(template.created_at, {
+                fallback: '—',
+                format: { year: 'numeric', month: 'short', day: 'numeric' },
+              })}
             </Text>
             <div className={styles.actions}>
               {onFork && (

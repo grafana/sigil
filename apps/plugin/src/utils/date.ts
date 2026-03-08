@@ -1,7 +1,17 @@
-export function formatDateShort(iso: string): string {
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) {
-    return 'n/a';
+type FormatDateShortOptions = {
+  fallback?: string;
+  format?: Intl.DateTimeFormatOptions;
+};
+
+export function formatDateShort(iso: string, options: FormatDateShortOptions = {}): string {
+  const { fallback = 'n/a', format } = options;
+  if (!iso) {
+    return fallback;
   }
-  return parsed.toLocaleDateString();
+
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime()) || parsed.getUTCFullYear() <= 1) {
+    return fallback;
+  }
+  return parsed.toLocaleDateString(undefined, format);
 }

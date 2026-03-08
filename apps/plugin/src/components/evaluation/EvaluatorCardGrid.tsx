@@ -3,6 +3,7 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, Button, ConfirmModal, IconButton, Stack, Text, useStyles2 } from '@grafana/ui';
 import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type Evaluator } from '../../evaluation/types';
+import { formatDateShort } from '../../utils/date';
 
 export type EvaluatorCardGridProps = {
   evaluators: Evaluator[];
@@ -11,21 +12,6 @@ export type EvaluatorCardGridProps = {
   primaryActionLabel?: string;
   onDelete?: (evaluatorID: string) => void;
 };
-
-function formatDate(iso: string): string {
-  if (!iso) {
-    return '—';
-  }
-  try {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime()) || d.getUTCFullYear() <= 1) {
-      return '—';
-    }
-    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-  } catch {
-    return '—';
-  }
-}
 
 const getStyles = (theme: GrafanaTheme2) => ({
   grid: css({
@@ -152,7 +138,13 @@ export default function EvaluatorCardGrid({
 
             <div className={styles.meta}>
               <span className={styles.metaText}>Version {evaluator.version}</span>
-              <span className={styles.metaText}>Created {formatDate(evaluator.created_at)}</span>
+              <span className={styles.metaText}>
+                Created{' '}
+                {formatDateShort(evaluator.created_at, {
+                  fallback: '—',
+                  format: { year: 'numeric', month: 'short', day: 'numeric' },
+                })}
+              </span>
             </div>
 
             <div className={styles.description}>

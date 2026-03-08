@@ -210,9 +210,18 @@ func (s *TemplateService) GetTemplate(ctx context.Context, tenantID, templateID 
 // global templates when the scope filter allows them.
 func (s *TemplateService) ListTemplates(ctx context.Context, tenantID string, scope *evalpkg.TemplateScope, limit int, cursor uint64) ([]evalpkg.TemplateDefinition, uint64, error) {
 	trimmedTenantID := strings.TrimSpace(tenantID)
-	tenantItems, _, err := s.store.ListTemplates(ctx, trimmedTenantID, scope, 10000, 0)
-	if err != nil {
-		return nil, 0, err
+	tenantItems := make([]evalpkg.TemplateDefinition, 0)
+	storeCursor := uint64(0)
+	for {
+		page, nextStoreCursor, err := s.store.ListTemplates(ctx, trimmedTenantID, scope, 500, storeCursor)
+		if err != nil {
+			return nil, 0, err
+		}
+		tenantItems = append(tenantItems, page...)
+		if nextStoreCursor == 0 {
+			break
+		}
+		storeCursor = nextStoreCursor
 	}
 
 	items := append([]evalpkg.TemplateDefinition(nil), tenantItems...)

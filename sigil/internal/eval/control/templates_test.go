@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"sort"
 	"strings"
@@ -448,6 +449,53 @@ func TestTemplateService_List(t *testing.T) {
 	}
 	if !slices.Contains(ids, "sigil.helpfulness") {
 		t.Errorf("expected predefined global template in list, got %v", ids)
+	}
+}
+
+func TestTemplateService_List_DoesNotTruncateTenantTemplates(t *testing.T) {
+	svc, store, _ := newTemplateTestEnv(t)
+
+	const totalTemplates = 10005
+	lastTemplateID := fmt.Sprintf("tenant_template_%05d", totalTemplates-1)
+	for i := 0; i < totalTemplates; i++ {
+		templateID := fmt.Sprintf("tenant_template_%05d", i)
+		store.templates[templateKey("tenant_1", templateID)] = evalpkg.TemplateDefinition{
+			TenantID:      "tenant_1",
+			TemplateID:    templateID,
+			Scope:         evalpkg.TemplateScopeTenant,
+			LatestVersion: "2026-03-01",
+			Kind:          evalpkg.EvaluatorKindHeuristic,
+		}
+	}
+
+	scope := evalpkg.TemplateScopeTenant
+	cursor := uint64(0)
+	totalSeen := 0
+	sawLastTemplate := false
+
+	for page := 0; page < 100; page++ {
+		items, nextCursor, err := svc.ListTemplates(context.Background(), "tenant_1", &scope, 500, cursor)
+		if err != nil {
+			t.Fatalf("list templates: %v", err)
+		}
+		totalSeen += len(items)
+		for _, item := range items {
+			if item.TemplateID == lastTemplateID {
+				sawLastTemplate = true
+				break
+			}
+		}
+		if nextCursor == 0 {
+			break
+		}
+		cursor = nextCursor
+	}
+
+	if totalSeen != totalTemplates {
+		t.Fatalf("expected to paginate all %d tenant templates, got %d", totalTemplates, totalSeen)
+	}
+	if !sawLastTemplate {
+		t.Fatalf("expected to see %q in paginated results", lastTemplateID)
 	}
 }
 

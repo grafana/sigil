@@ -3,6 +3,7 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, ConfirmModal, IconButton, Text, useStyles2 } from '@grafana/ui';
 import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type Evaluator } from '../../evaluation/types';
+import { formatDateShort } from '../../utils/date';
 
 export type EvaluatorTableProps = {
   evaluators: Evaluator[];
@@ -10,21 +11,6 @@ export type EvaluatorTableProps = {
   onSelect?: (evaluatorID: string) => void;
   onDelete?: (evaluatorID: string) => void;
 };
-
-function formatDate(iso: string): string {
-  if (!iso) {
-    return '—';
-  }
-  try {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime()) || d.getUTCFullYear() <= 1) {
-      return '—';
-    }
-    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-  } catch {
-    return '—';
-  }
-}
 
 const getStyles = (theme: GrafanaTheme2) => ({
   table: css({
@@ -139,7 +125,10 @@ export default function EvaluatorTable({ evaluators, selectedEvaluatorID, onSele
               ))}
             </div>
             <Text color="secondary" variant="bodySmall">
-              {formatDate(evaluator.created_at)}
+              {formatDateShort(evaluator.created_at, {
+                fallback: '—',
+                format: { year: 'numeric', month: 'short', day: 'numeric' },
+              })}
             </Text>
             {onDelete && (
               <IconButton
