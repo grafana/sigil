@@ -1310,12 +1310,16 @@ func (a *App) handleSearchConversations(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	response, err := a.searchConversations(req, payload)
+	state, err := a.runConversationSearch(req, payload, nil)
 	if err != nil {
 		a.writeSearchError(w, "/query/conversations/search", err)
 		return
 	}
-	writeJSONResponse(w, http.StatusOK, response)
+	writeJSONResponse(w, http.StatusOK, conversationSearchResponse{
+		Conversations: state.Results,
+		NextCursor:    state.NextCursor,
+		HasMore:       state.HasMore,
+	})
 }
 
 func (a *App) handleSearchConversationsStream(w http.ResponseWriter, req *http.Request) {
