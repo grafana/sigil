@@ -35,7 +35,17 @@ jest.mock('../components/insight/PageInsightBar', () => ({
   PageInsightBar: () => null,
 }));
 
-function createDataSource(): EvaluationDataSource {
+type EvaluatorsPageTestDataSource = {
+  dataSource: EvaluationDataSource;
+  listRulesMock: jest.Mock<Promise<{ items: Rule[]; next_cursor: string }>, [number | undefined, string | undefined]>;
+  listEvaluatorsMock: jest.Mock<
+    Promise<{ items: Evaluator[]; next_cursor: string }>,
+    [number | undefined, string | undefined]
+  >;
+  deleteEvaluatorMock: jest.Mock<Promise<void>, [string]>;
+};
+
+function createDataSource(): EvaluatorsPageTestDataSource {
   const rules: Rule[] = [];
   const tenantEvaluators: Evaluator[] = [
     {
@@ -61,7 +71,7 @@ function createDataSource(): EvaluationDataSource {
     .mockResolvedValue({ items: [], next_cursor: '' });
   const deleteEvaluator = jest.fn<Promise<void>, [string]>().mockResolvedValue();
 
-  return {
+  const dataSource: EvaluationDataSource = {
     listEvaluators,
     createEvaluator: async (_request: CreateEvaluatorRequest) => tenantEvaluators[0],
     getEvaluator: async (_evaluatorID: string) => tenantEvaluators[0],
@@ -154,11 +164,18 @@ function createDataSource(): EvaluationDataSource {
     createManualConversation: async (_request: CreateManualConversationRequest): Promise<SavedConversation> =>
       ({}) as SavedConversation,
   };
+
+  return {
+    dataSource,
+    listRulesMock: listRules,
+    listEvaluatorsMock: listEvaluators,
+    deleteEvaluatorMock: deleteEvaluator,
+  };
 }
 
 describe('EvaluatorsPage', () => {
   it('refetches shared evaluation data after deleting an evaluator', async () => {
-    const dataSource = createDataSource();
+    const { dataSource, listRulesMock, listEvaluatorsMock, deleteEvaluatorMock } = createDataSource();
 
     render(
       <MemoryRouter>
@@ -170,15 +187,15 @@ describe('EvaluatorsPage', () => {
 
     expect(await screen.findByText('eval.alpha')).toBeInTheDocument();
 
-    const initialRuleCalls = dataSource.listRules.mock.calls.length;
-    const initialEvaluatorCalls = dataSource.listEvaluators.mock.calls.length;
+    const initialRuleCalls = listRulesMock.mock.calls.length;
+    const initialEvaluatorCalls = listEvaluatorsMock.mock.calls.length;
 
     fireEvent.click(screen.getByLabelText('Delete'));
     const confirmDialog = await screen.findByRole('dialog');
     fireEvent.click(within(confirmDialog).getByRole('button', { name: 'Delete' }));
 
-    await waitFor(() => expect(dataSource.deleteEvaluator).toHaveBeenCalledWith('eval.alpha'));
-    await waitFor(() => expect(dataSource.listRules.mock.calls.length).toBeGreaterThan(initialRuleCalls));
-    await waitFor(() => expect(dataSource.listEvaluators.mock.calls.length).toBeGreaterThan(initialEvaluatorCalls));
+    await waitFor(() => expect(deleteEvaluatorMock).toHaveBeenCalledWith('eval.alpha'));
+    await waitFor(() => expect(listRulesMock.mock.calls.length).toBeGreaterThan(initialRuleCalls));
+    await waitFor(() => expect(listEvaluatorsMock.mock.calls.length).toBeGreaterThan(initialEvaluatorCalls));
   });
 });

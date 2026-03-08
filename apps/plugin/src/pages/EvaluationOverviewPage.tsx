@@ -399,14 +399,18 @@ function EvaluationInfoPanel({ styles }: { styles: ReturnType<typeof getStyles> 
   return (
     <section className={styles.infoPanel} aria-label="How evaluation works">
       <div className={styles.infoHeader}>
-        <Text element="h4" weight="medium" className={styles.infoTitle}>
-          How Sigil evaluates your AI applications
-        </Text>
-        <Text variant="body" color="secondary" className={styles.infoDescription}>
-          Sigil evaluates LLM and agentic applications to capture{' '}
-          <span className={styles.glowPhrase}>hidden behaviors</span>, turn them into signals, and surface insights
-          directly in Grafana.
-        </Text>
+        <div className={styles.infoTitle}>
+          <Text element="h4" weight="medium">
+            How Sigil evaluates your AI applications
+          </Text>
+        </div>
+        <div className={styles.infoDescription}>
+          <Text variant="body" color="secondary">
+            Sigil evaluates LLM and agentic applications to capture{' '}
+            <span className={styles.glowPhrase}>hidden behaviors</span>, turn them into signals, and surface insights
+            directly in Grafana.
+          </Text>
+        </div>
       </div>
       <div className={styles.infoGrid}>
         {EVALUATION_FLOW_STEPS.map((step, index) => (

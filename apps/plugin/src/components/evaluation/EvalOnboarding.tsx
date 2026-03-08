@@ -1,7 +1,7 @@
 import React from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Button, Icon, Text, useStyles2, type IconName } from '@grafana/ui';
+import { Button, Icon, useStyles2, type IconName } from '@grafana/ui';
 
 export type EvalOnboardingProps = {
   hasEvaluators: boolean;
