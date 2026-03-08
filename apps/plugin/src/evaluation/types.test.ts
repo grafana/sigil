@@ -53,11 +53,12 @@ describe('buildForkEvaluatorConfig', () => {
   });
 
   it('keeps the judge variable help focused on primary variables and docs', () => {
-    expect(LLM_JUDGE_USER_PROMPT_VARIABLES_DESCRIPTION).toContain('{{input}}');
     expect(LLM_JUDGE_USER_PROMPT_VARIABLES_DESCRIPTION).toContain('{{assistant_sequence}}');
     expect(LLM_JUDGE_USER_PROMPT_VARIABLES_DESCRIPTION).toContain('{{tools}}');
     expect(LLM_JUDGE_USER_PROMPT_VARIABLES_DESCRIPTION).toContain('{{stop_reason}}');
     expect(LLM_JUDGE_USER_PROMPT_VARIABLES_DESCRIPTION).toContain('Check the online evaluation docs');
+    expect(LLM_JUDGE_USER_PROMPT_VARIABLES_DESCRIPTION).not.toContain('{{input}}');
+    expect(LLM_JUDGE_USER_PROMPT_VARIABLES_DESCRIPTION).not.toContain('{{output}}');
     expect(LLM_JUDGE_USER_PROMPT_VARIABLES_DESCRIPTION).not.toContain('{{metadata}}');
     expect(LLM_JUDGE_USER_PROMPT_VARIABLES_DESCRIPTION).not.toContain('{{response_model}}');
   });
