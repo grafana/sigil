@@ -2,7 +2,12 @@ import React from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, Text, useStyles2 } from '@grafana/ui';
-import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type Evaluator } from '../../evaluation/types';
+import {
+  EVALUATOR_KIND_LABELS,
+  getEffectiveLLMJudgePrompts,
+  getKindBadgeColor,
+  type Evaluator,
+} from '../../evaluation/types';
 
 export type EvaluatorDetailProps = {
   evaluator: Evaluator;
@@ -69,8 +74,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
 export default function EvaluatorDetail({ evaluator }: EvaluatorDetailProps) {
   const styles = useStyles2(getStyles);
 
-  const systemPrompt = evaluator.config?.system_prompt as string | undefined;
-  const userPrompt = evaluator.config?.user_prompt as string | undefined;
+  const { systemPrompt, userPrompt } = getEffectiveLLMJudgePrompts(evaluator.config);
 
   return (
     <div className={styles.container}>
@@ -125,32 +129,28 @@ export default function EvaluatorDetail({ evaluator }: EvaluatorDetailProps) {
         </div>
       </div>
 
-      {evaluator.kind === 'llm_judge' && (systemPrompt != null || userPrompt != null) && (
+      {evaluator.kind === 'llm_judge' && (
         <>
-          {systemPrompt != null && (
-            <div className={styles.section}>
-              <div className={styles.sectionHeader}>
-                <Text weight="medium" variant="bodySmall">
-                  System prompt
-                </Text>
-              </div>
-              <pre className={styles.sectionBody}>
-                <code>{highlightTemplateVars(systemPrompt, styles.templateVar)}</code>
-              </pre>
+          <div className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <Text weight="medium" variant="bodySmall">
+                System prompt
+              </Text>
             </div>
-          )}
-          {userPrompt != null && (
-            <div className={styles.section}>
-              <div className={styles.sectionHeader}>
-                <Text weight="medium" variant="bodySmall">
-                  User prompt
-                </Text>
-              </div>
-              <pre className={styles.sectionBody}>
-                <code>{highlightTemplateVars(userPrompt, styles.templateVar)}</code>
-              </pre>
+            <pre className={styles.sectionBody}>
+              <code>{highlightTemplateVars(systemPrompt, styles.templateVar)}</code>
+            </pre>
+          </div>
+          <div className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <Text weight="medium" variant="bodySmall">
+                User prompt
+              </Text>
             </div>
-          )}
+            <pre className={styles.sectionBody}>
+              <code>{highlightTemplateVars(userPrompt, styles.templateVar)}</code>
+            </pre>
+          </div>
         </>
       )}
 

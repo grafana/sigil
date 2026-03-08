@@ -6,6 +6,7 @@ import {
   EVALUATOR_KIND_LABELS,
   LLM_JUDGE_DEFAULT_SYSTEM_PROMPT,
   LLM_JUDGE_DEFAULT_USER_PROMPT,
+  LLM_JUDGE_USER_PROMPT_VARIABLES_DESCRIPTION,
   buildOutputKeyFromForm,
   normalizedOptionalString,
   type CreateTemplateRequest,
@@ -478,10 +479,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
                 placeholder={LLM_JUDGE_DEFAULT_SYSTEM_PROMPT}
               />
             </Field>
-            <Field
-              label="User prompt"
-              description="Optional. Supports {{input}}, {{output}}, {{generation_id}}, {{conversation_id}}. Uses the default prompt when blank."
-            >
+            <Field label="User prompt" description={LLM_JUDGE_USER_PROMPT_VARIABLES_DESCRIPTION}>
               <PromptTemplateTextarea
                 value={userPrompt}
                 onChange={setUserPrompt}

@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-03-04
+last_reviewed: 2026-03-07
 source_of_truth: true
 audience: contributors
 ---
@@ -178,6 +178,8 @@ See `docs/references/grafana-query-response-shapes.md`.
   - visualize evaluation pipeline: render each rule as a horizontal flow (selector → match → sample → evaluators)
   - preview rule matching: dry-run rule criteria against recent traffic to show matching generation counts and samples
   - support two-level navigation: overview, evaluators, and rules sub-pages under a single Evaluation nav entry
+  - use shared effective-prompt fallback for `llm_judge` forms, summaries, and detail views so omitted prompts still display the backend defaults
+  - explain the `llm_judge` variable model in authoring surfaces: simple variables render plain text, structured variables render tagged fragments, and empty structured values disappear
 - Agents:
   - list tenant agent heads with prefix search and cursor pagination
   - surface unnamed-agent bucket explicitly with warning treatment

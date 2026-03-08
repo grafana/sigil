@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-03-05
+last_reviewed: 2026-03-07
 source_of_truth: true
 audience: both
 ---
@@ -389,6 +389,7 @@ Key characteristics:
 - **API-managed configuration**: evaluators and rules stored in MySQL, managed via CRUD APIs. Predefined evaluator templates are exposed through dedicated template APIs and forked into tenant evaluators.
 - **Conversation-level sampling**: deterministic hash on `(conversation_id, rule_id)` ensures all eligible turns in a sampled conversation get evaluated.
 - **Built-in evaluator kinds**: `llm_judge`, `json_schema`, `regex`, `heuristic`.
+- **Typed judge prompt context**: `llm_judge` prompts resolve against typed generation telemetry such as latest user message, assistant response, tool calls/results, assistant reasoning, and ordered mixed-block output.
 - **External scores via API**: `POST /api/v1/scores:export` for bring-your-own evaluator workflows.
 
 Design doc: `docs/design-docs/2026-02-17-online-evaluation.md`

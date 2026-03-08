@@ -1,6 +1,7 @@
 package predefined
 
 import (
+	"strings"
 	"testing"
 
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
@@ -17,6 +18,66 @@ func TestLLMJudgeTemplatesDoNotHardcodeProviderOrModel(t *testing.T) {
 		}
 		if _, exists := template.Config["model"]; exists {
 			t.Fatalf("template %q should not hardcode model", template.EvaluatorID)
+		}
+	}
+}
+
+func TestLLMJudgeTemplatesDefineSpecificSystemPrompt(t *testing.T) {
+	for _, template := range Templates() {
+		if template.Kind != evalpkg.EvaluatorKindLLMJudge {
+			continue
+		}
+
+		rawPrompt, ok := template.Config["system_prompt"]
+		if !ok {
+			t.Fatalf("template %q should define system_prompt", template.EvaluatorID)
+		}
+		prompt, ok := rawPrompt.(string)
+		if !ok {
+			t.Fatalf("template %q system_prompt should be a string", template.EvaluatorID)
+		}
+		if strings.TrimSpace(prompt) == "" {
+			t.Fatalf("template %q system_prompt should not be empty", template.EvaluatorID)
+		}
+	}
+}
+
+func TestLLMJudgeTemplatesDefineSpecificUserPrompt(t *testing.T) {
+	for _, template := range Templates() {
+		if template.Kind != evalpkg.EvaluatorKindLLMJudge {
+			continue
+		}
+
+		rawPrompt, ok := template.Config["user_prompt"]
+		if !ok {
+			t.Fatalf("template %q should define user_prompt", template.EvaluatorID)
+		}
+		prompt, ok := rawPrompt.(string)
+		if !ok {
+			t.Fatalf("template %q user_prompt should be a string", template.EvaluatorID)
+		}
+		if strings.TrimSpace(prompt) == "" {
+			t.Fatalf("template %q user_prompt should not be empty", template.EvaluatorID)
+		}
+	}
+}
+
+func TestGroundednessAndFormatAdherencePromptsIncludeRicherContext(t *testing.T) {
+	expected := map[string][]string{
+		"sigil.groundedness":     {"{{system_prompt}}", "{{user_history}}", "{{tool_results}}", "{{assistant_response}}"},
+		"sigil.format_adherence": {"{{system_prompt}}", "{{user_history}}", "{{assistant_response}}"},
+	}
+
+	for _, template := range Templates() {
+		required, ok := expected[template.EvaluatorID]
+		if !ok {
+			continue
+		}
+		prompt, _ := template.Config["user_prompt"].(string)
+		for _, variable := range required {
+			if !strings.Contains(prompt, variable) {
+				t.Fatalf("template %q user_prompt should contain %q, got %q", template.EvaluatorID, variable, prompt)
+			}
 		}
 	}
 }

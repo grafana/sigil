@@ -11,6 +11,7 @@ import (
 
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	"github.com/grafana/sigil/sigil/internal/eval/evaluators/judges"
+	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 )
 
 func TestLLMJudgeEvaluatorParsesNumericJSON(t *testing.T) {
@@ -131,11 +132,247 @@ func TestLLMJudgeEvaluatorUsesLegacyDefaultPrompts(t *testing.T) {
 			if gotSystemPrompt != wantSystemPrompt {
 				t.Fatalf("expected default system prompt, got %q", gotSystemPrompt)
 			}
-			wantUserPrompt := "User input:\nWhat is two plus two?\n\nAssistant output:\nIt is four."
+			wantUserPrompt := "Latest user message:\nWhat is two plus two?\n\nAssistant response:\nIt is four."
 			if gotUserPrompt != wantUserPrompt {
 				t.Fatalf("expected default user prompt %q, got %q", wantUserPrompt, gotUserPrompt)
 			}
 		})
+	}
+}
+
+func TestRenderTemplateUsesDeveloperFacingAliases(t *testing.T) {
+	input := EvalInput{
+		GenerationID:   "gen-1",
+		ConversationID: "conv-1",
+		Generation: &sigilv1.Generation{
+			Id:              "gen-1",
+			ConversationId:  "conv-1",
+			SystemPrompt:    "Be concise.",
+			StopReason:      "end_turn",
+			Tools: []*sigilv1.ToolDefinition{{
+				Name:            "search",
+				Type:            "function",
+				Description:     "Search docs",
+				InputSchemaJson: []byte(`{"type":"object","properties":{"query":{"type":"string"},"limit":{"type":"integer"}},"required":["query"]}`),
+			}},
+			Input: []*sigilv1.Message{
+				{Role: sigilv1.MessageRole_MESSAGE_ROLE_USER, Parts: []*sigilv1.Part{textPart("First question")}},
+				{Role: sigilv1.MessageRole_MESSAGE_ROLE_TOOL, Parts: []*sigilv1.Part{toolResultPart("call-1", "search", `{"hits":2}`, false, "tool_result")}},
+				{Role: sigilv1.MessageRole_MESSAGE_ROLE_USER, Parts: []*sigilv1.Part{textPart("Final question")}},
+			},
+			Output: []*sigilv1.Message{{
+				Role: sigilv1.MessageRole_MESSAGE_ROLE_ASSISTANT,
+				Parts: []*sigilv1.Part{
+					thinkingPart("Need to search first", "thinking"),
+					toolCallPart("call-1", "search", `{"query":"sigil"}`, "tool_call"),
+					textPart("Here is the answer."),
+				},
+			}},
+		},
+	}
+
+	rendered := renderTemplate(strings.Join([]string{
+		"Input={{input}}",
+		"Output={{output}}",
+		"Latest={{latest_user_message}}",
+		"Response={{assistant_response}}",
+		"System={{system_prompt}}",
+		"Calls={{tool_calls}}",
+		"Results={{tool_results}}",
+		"Thinking={{assistant_thinking}}",
+		"Sequence={{assistant_sequence}}",
+		"CallError={{call_error}}",
+		"Tools={{tools}}",
+		"Stop={{stop_reason}}",
+		"IDs={{generation_id}}/{{conversation_id}}",
+	}, "\n"), input)
+
+	checks := []string{
+		"Input=Final question",
+		"Output=Here is the answer.",
+		"Latest=Final question",
+		"Response=Here is the answer.",
+		"System=Be concise.",
+		"<tool_call name=\"search\" id=\"call-1\" provider_type=\"tool_call\">",
+		"<tool_result name=\"search\" id=\"call-1\" provider_type=\"tool_result\">",
+		"<thinking provider_type=\"thinking\">Need to search first</thinking>",
+		"<text>Here is the answer.</text>",
+		"<tool name=\"search\" type=\"function\">",
+		"properties: limit, query; required: query",
+		"Stop=end_turn",
+		"IDs=gen-1/conv-1",
+	}
+	for _, check := range checks {
+		if !strings.Contains(rendered, check) {
+			t.Fatalf("expected rendered template to contain %q, got:\n%s", check, rendered)
+		}
+	}
+}
+
+func TestRenderTemplateKeepsSimpleVariablesComposableAndOmitsEmptyCompoundValues(t *testing.T) {
+	input := EvalInput{
+		Generation: &sigilv1.Generation{
+			Input: []*sigilv1.Message{
+				{Role: sigilv1.MessageRole_MESSAGE_ROLE_USER, Parts: []*sigilv1.Part{textPart("Hello")}},
+			},
+			Output: []*sigilv1.Message{
+				{Role: sigilv1.MessageRole_MESSAGE_ROLE_ASSISTANT, Parts: []*sigilv1.Part{textPart("Hi there")}},
+			},
+		},
+	}
+
+	rendered := renderTemplate("The user said: {{latest_user_message}}\nTool calls:\n{{tool_calls}}\n\nTool results:\n{{tool_results}}", input)
+	if strings.Contains(rendered, "<latest_user_message>") {
+		t.Fatalf("expected simple variable to render as plain text, got %q", rendered)
+	}
+	if strings.Contains(rendered, "<tool_call") || strings.Contains(rendered, "<tool_result") {
+		t.Fatalf("expected empty compound variables to omit tags, got %q", rendered)
+	}
+	if !strings.Contains(rendered, "The user said: Hello") {
+		t.Fatalf("expected latest_user_message content, got %q", rendered)
+	}
+}
+
+func TestRenderTemplateLeavesUnsupportedAdvancedVariablesUntouched(t *testing.T) {
+	input := EvalInput{
+		Generation: &sigilv1.Generation{
+			Input:  []*sigilv1.Message{{Role: sigilv1.MessageRole_MESSAGE_ROLE_USER, Parts: []*sigilv1.Part{textPart("Need a summary")}}},
+			Output: []*sigilv1.Message{{Role: sigilv1.MessageRole_MESSAGE_ROLE_ASSISTANT, Parts: []*sigilv1.Part{textPart("Here is the summary.")}}},
+		},
+	}
+
+	rendered := renderTemplate("{{input_messages}} {{output_messages}} {{tools}} {{metadata}} {{response_model}}", input)
+	for _, unresolved := range []string{
+		"{{input_messages}}",
+		"{{output_messages}}",
+		"{{metadata}}",
+		"{{response_model}}",
+	} {
+		if !strings.Contains(rendered, unresolved) {
+			t.Fatalf("expected unsupported variable %q to remain untouched, got:\n%s", unresolved, rendered)
+		}
+	}
+}
+
+func TestRenderTemplateRendersStopReason(t *testing.T) {
+	input := EvalInput{
+		Generation: &sigilv1.Generation{
+			StopReason: "max_tokens",
+		},
+	}
+
+	rendered := renderTemplate("Stop={{stop_reason}}", input)
+	if !strings.Contains(rendered, "Stop=max_tokens") {
+		t.Fatalf("expected stop_reason to resolve, got:\n%s", rendered)
+	}
+}
+
+func TestRenderTemplateRendersErrorAlias(t *testing.T) {
+	input := EvalInput{
+		Generation: &sigilv1.Generation{
+			CallError: "provider timeout",
+		},
+	}
+
+	rendered := renderTemplate("Error={{error}}", input)
+	if !strings.Contains(rendered, "Error=provider timeout") {
+		t.Fatalf("expected error alias to resolve, got:\n%s", rendered)
+	}
+}
+
+func TestRenderTemplateRendersCompactTools(t *testing.T) {
+	input := EvalInput{
+		Generation: &sigilv1.Generation{
+			Tools: []*sigilv1.ToolDefinition{
+				{
+					Name:            "search",
+					Type:            "function",
+					Description:     "Search docs",
+					InputSchemaJson: []byte(`{"type":"object","properties":{"query":{"type":"string"},"filters":{"type":"object","properties":{"lang":{"type":"string"}}}},"required":["query"]}`),
+				},
+				{
+					Name:            "opaque",
+					InputSchemaJson: []byte(`not-json`),
+				},
+			},
+		},
+	}
+
+	rendered := renderTemplate("Tools:\n{{tools}}", input)
+	if !strings.Contains(rendered, "properties: filters, query; required: query") {
+		t.Fatalf("expected compact schema summary, got:\n%s", rendered)
+	}
+	if strings.Contains(rendered, `"filters":{"type":"object"`) {
+		t.Fatalf("expected full tool schema JSON to be omitted, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "<tool name=\"opaque\">") || !strings.Contains(rendered, "<input_schema_summary>schema_present=true</input_schema_summary>") {
+		t.Fatalf("expected invalid schema fallback summary, got:\n%s", rendered)
+	}
+}
+
+func TestLLMJudgeEvaluatorDefaultPromptUsesLatestUserMessageAlias(t *testing.T) {
+	var gotUserPrompt string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		var payload struct {
+			Messages []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		if err := json.Unmarshal(body, &payload); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if len(payload.Messages) > 1 {
+			gotUserPrompt = payload.Messages[1].Content
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"1"}}],"model":"judge-model","usage":{"prompt_tokens":12,"completion_tokens":8}}`))
+	}))
+	defer server.Close()
+
+	t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_BASE_URL", server.URL)
+	t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_API_KEY", "test")
+	t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_ENABLED", "true")
+	discovery := judges.DiscoverFromEnv()
+	evaluator := NewLLMJudgeEvaluator(discovery, "openai-compat/judge-model")
+
+	_, err := evaluator.Evaluate(context.Background(), EvalInput{
+		GenerationID:   "gen-1",
+		ConversationID: "conv-1",
+		Generation: &sigilv1.Generation{
+			Id:             "gen-1",
+			ConversationId: "conv-1",
+			Input: []*sigilv1.Message{
+				{Role: sigilv1.MessageRole_MESSAGE_ROLE_USER, Parts: []*sigilv1.Part{textPart("Earlier question")}},
+				{Role: sigilv1.MessageRole_MESSAGE_ROLE_USER, Parts: []*sigilv1.Part{textPart("Latest question")}},
+			},
+			Output: []*sigilv1.Message{
+				{Role: sigilv1.MessageRole_MESSAGE_ROLE_ASSISTANT, Parts: []*sigilv1.Part{textPart("Latest answer")}},
+			},
+		},
+	}, evalpkg.EvaluatorDefinition{
+		Kind: evalpkg.EvaluatorKindLLMJudge,
+		Config: map[string]any{
+			"provider": "openai-compat",
+			"model":    "judge-model",
+		},
+		OutputKeys: []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeNumber}},
+	})
+	if err != nil {
+		t.Fatalf("evaluate llm judge: %v", err)
+	}
+
+	want := "Latest user message:\nLatest question\n\nAssistant response:\nLatest answer"
+	if gotUserPrompt != want {
+		t.Fatalf("expected default user prompt %q, got %q", want, gotUserPrompt)
 	}
 }
 
@@ -176,6 +413,40 @@ func TestParseJudgeResponseBoolFallback(t *testing.T) {
 				t.Fatalf("expected passed=nil (caller infers), got %v", *passed)
 			}
 		})
+	}
+}
+
+func textPart(value string) *sigilv1.Part {
+	return &sigilv1.Part{Payload: &sigilv1.Part_Text{Text: value}}
+}
+
+func thinkingPart(value, providerType string) *sigilv1.Part {
+	return &sigilv1.Part{
+		Metadata: &sigilv1.PartMetadata{ProviderType: providerType},
+		Payload:  &sigilv1.Part_Thinking{Thinking: value},
+	}
+}
+
+func toolCallPart(id, name, inputJSON, providerType string) *sigilv1.Part {
+	return &sigilv1.Part{
+		Metadata: &sigilv1.PartMetadata{ProviderType: providerType},
+		Payload: &sigilv1.Part_ToolCall{ToolCall: &sigilv1.ToolCall{
+			Id:        id,
+			Name:      name,
+			InputJson: []byte(inputJSON),
+		}},
+	}
+}
+
+func toolResultPart(id, name, content string, isError bool, providerType string) *sigilv1.Part {
+	return &sigilv1.Part{
+		Metadata: &sigilv1.PartMetadata{ProviderType: providerType},
+		Payload: &sigilv1.Part_ToolResult{ToolResult: &sigilv1.ToolResult{
+			ToolCallId: id,
+			Name:       name,
+			Content:    content,
+			IsError:    isError,
+		}},
 	}
 }
 

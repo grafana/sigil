@@ -8,7 +8,7 @@ const mockLLMJudge: Evaluator = {
   config: {
     system_prompt:
       'You evaluate one assistant response. Use only the user input and assistant output. Follow the score field description exactly. Be strict. If uncertain, choose the lower score.',
-    user_prompt: 'User input:\n{{input}}\n\nAssistant output:\n{{output}}',
+    user_prompt: 'Latest user message:\n{{input}}\n\nAssistant response:\n{{output}}',
     max_tokens: 128,
     temperature: 0,
   },
@@ -34,7 +34,7 @@ const mockStringJudge: Evaluator = {
   kind: 'llm_judge',
   config: {
     system_prompt: 'Classify the severity of the issue in the response.',
-    user_prompt: 'Input: {{input}}\n\nOutput: {{output}}\n\nClassify severity.',
+    user_prompt: 'Latest user message: {{input}}\n\nAssistant response: {{output}}\n\nClassify severity.',
   },
   output_keys: [
     {

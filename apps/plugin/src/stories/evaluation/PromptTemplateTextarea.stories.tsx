@@ -22,8 +22,9 @@ function Render(args: StoryArgs) {
 export const UserPrompt = {
   render: Render,
   args: {
-    initialValue: 'User input:\n{{input}}\n\nAssistant output:\n{{output}}\n\nConversation:\n{{conversation_id}}',
-    placeholder: 'User input:\n{{input}}\n\nAssistant output:\n{{output}}',
+    initialValue:
+      'Latest user message:\n{{input}}\n\nAssistant response:\n{{output}}\n\nTool calls:\n{{tool_calls}}\n\nCall error:\n{{call_error}}',
+    placeholder: 'Latest user message:\n{{input}}\n\nAssistant response:\n{{output}}',
   },
 };
 
@@ -39,7 +40,7 @@ export const MixedTemplateVars = {
   render: Render,
   args: {
     initialValue:
-      'You are a rigorous evaluator.\n\nConversation ID: {{conversation_id}}\nUser input: {{input}}\nAssistant output: {{output}}',
+      'You are a rigorous evaluator.\n\nLatest user message: {{latest_user_message}}\nAssistant sequence:\n{{assistant_sequence}}\n\nTools:\n{{tools}}',
     placeholder: 'Conversation ID: {{conversation_id}}',
   },
 };

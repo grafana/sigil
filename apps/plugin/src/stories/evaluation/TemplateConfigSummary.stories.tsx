@@ -13,7 +13,7 @@ export const LLMJudge = {
     config: {
       system_prompt:
         'You evaluate one assistant response. Use only the user input and assistant output. Follow the score field description exactly. Be strict. If uncertain, choose the lower score.',
-      user_prompt: 'User input:\n{{input}}\n\nAssistant output:\n{{output}}',
+      user_prompt: 'Latest user message:\n{{input}}\n\nAssistant response:\n{{output}}',
       max_tokens: 128,
       temperature: 0,
     },

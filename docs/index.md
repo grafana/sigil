@@ -98,6 +98,7 @@ This is the canonical navigation map for repository documentation.
     - `exec-plans/completed/2026-03-02-sigil-image-and-plugin-publish.md`
     - `exec-plans/completed/2026-03-05-sigil-cd-dev-ops-auto-deploy.md`
     - `exec-plans/completed/2026-03-05-streaming-conversation-search.md`
+    - `exec-plans/completed/2026-03-07-llm-judge-prompt-context-refresh.md`
     - `exec-plans/completed/2026-03-02-runtime-role-split.md`
     - `exec-plans/completed/2026-03-03-conversation-jaeger-tree.md`
   - Tech debt tracker: [`exec-plans/tech-debt-tracker.md`](exec-plans/tech-debt-tracker.md)

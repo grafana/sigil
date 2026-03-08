@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: completed
-last_reviewed: 2026-02-17
+last_reviewed: 2026-03-07
 source_of_truth: true
 audience: both
 ---
@@ -89,6 +89,35 @@ If a user adds to a conversation hours or days later, the new eligible generatio
 ### Built-in Evaluator Kinds
 
 **`llm_judge`**: Prompt template + judge model config. Returns numeric score (0-1) with explanation. Strict timeouts and token limits. Stable prompt hashing for reproducibility.
+
+`llm_judge` prompt context is derived from the normalized `Generation` payload rather than a single lossy flattened blob. The primary authoring surface is developer-facing:
+
+- `latest_user_message`
+- `user_history`
+- `assistant_response`
+- `assistant_thinking`
+- `assistant_sequence`
+- `tool_calls`
+- `tool_results`
+- `tools`
+- `stop_reason`
+- `system_prompt`
+- `call_error`
+
+Compatibility aliases remain available:
+
+- `input` -> `latest_user_message`
+- `output` -> `assistant_response`
+- `error` -> `call_error`
+
+Rendering rules:
+
+- simple variables render as plain text
+- structured variables render as compact tagged text fragments
+- empty variables render as empty string
+- `tools` renders a compact tool inventory with schema summaries rather than full schema bodies
+
+This keeps prompts composable inside user-authored prose while still exposing mixed-block agent behavior and tool context when evaluators need it.
 
 Supported judge providers (v1):
 
@@ -462,7 +491,7 @@ The eval worker runs as a separate runtime target (`eval-worker`) using the dski
 
 1. **Claim**: select work items where `status = 'queued' AND scheduled_at <= now()` with row lock.
 2. **Load**: fetch generation payload from MySQL hot store.
-3. **Build input**: extract evaluator input from normalized payload (prompt, response, tool_calls, metadata) with truncation limits.
+3. **Build input**: resolve evaluator prompt variables from the normalized generation payload (latest user message, user history, assistant response, tool calls/results, tools, assistant sequence, stop reason, system prompt, and call error) with truncation limits.
 4. **Execute**: dispatch to the appropriate evaluator kind.
 5. **Write**: insert score rows into `generation_scores` (idempotent by `score_id`).
 6. **Update**: mark work item as `success` or `failed`.

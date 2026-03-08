@@ -3,8 +3,7 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, Text, useStyles2 } from '@grafana/ui';
 import {
-  LLM_JUDGE_DEFAULT_SYSTEM_PROMPT,
-  LLM_JUDGE_DEFAULT_USER_PROMPT,
+  getEffectiveLLMJudgePrompts,
   normalizedOptionalString,
   type EvalOutputKey,
   type EvaluatorKind,
@@ -145,8 +144,7 @@ export default function TemplateConfigSummary({ kind, config, outputKeys }: Temp
   const ok = outputKeys[0];
   const provider = normalizedOptionalString(config.provider);
   const model = normalizedOptionalString(config.model);
-  const systemPrompt = normalizedOptionalString(config.system_prompt) ?? LLM_JUDGE_DEFAULT_SYSTEM_PROMPT;
-  const userPrompt = normalizedOptionalString(config.user_prompt) ?? LLM_JUDGE_DEFAULT_USER_PROMPT;
+  const { systemPrompt, userPrompt } = getEffectiveLLMJudgePrompts(config);
   const maxTokens =
     typeof config.max_tokens === 'number' && Number.isFinite(config.max_tokens) && config.max_tokens > 0
       ? config.max_tokens

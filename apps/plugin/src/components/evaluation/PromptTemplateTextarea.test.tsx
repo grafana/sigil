@@ -21,7 +21,13 @@ describe('PromptTemplateTextarea', () => {
   });
 
   it('renders the real textarea text while using the overlay only for variable highlighting', () => {
-    render(<PromptTemplateTextarea value={'User input: {{input}}'} onChange={jest.fn()} placeholder="Type a prompt" />);
+    render(
+      <PromptTemplateTextarea
+        value={'Latest user message: {{input}}'}
+        onChange={jest.fn()}
+        placeholder="Type a prompt"
+      />
+    );
 
     const textarea = screen.getByRole('textbox');
     const variable = screen.getByText('{{input}}');

@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-03-02
+last_reviewed: 2026-03-07
 source_of_truth: true
 audience: both
 ---
@@ -138,15 +138,48 @@ Each evaluator currently supports exactly one output key.
 ### LLM Template Variables
 
 `llm_judge` prompt templates support:
-- `{{input}}`
-- `{{output}}`
+- primary variables:
+  - `{{latest_user_message}}`
+  - `{{user_history}}`
+  - `{{assistant_response}}`
+  - `{{assistant_thinking}}`
+  - `{{assistant_sequence}}`
+  - `{{system_prompt}}`
+  - `{{tool_calls}}`
+  - `{{tool_results}}`
+  - `{{tools}}`
+  - `{{stop_reason}}`
+  - `{{call_error}}`
+- compatibility aliases:
+  - `{{input}}` -> `{{latest_user_message}}`
+  - `{{output}}` -> `{{assistant_response}}`
+  - `{{error}}` -> `{{call_error}}`
 - `{{generation_id}}`
 - `{{conversation_id}}`
 
-`{{input}}` and `{{output}}` are normalized text extracted from the generation payload.
-Text parts are included verbatim. Assistant `tool_call` parts are serialized as lines like
-`[tool_call] <name> <input_json>` so tool-call generations can be judged without losing
-the selected tool and arguments.
+Rendering rules:
+- simple variables such as `latest_user_message`, `assistant_response`, `system_prompt`, and `call_error` render as plain text
+- structured variables such as `tool_calls`, `tool_results`, `assistant_thinking`, `assistant_sequence`, `user_history`, and `tools` render as compact tagged text fragments with stable ordering
+- empty variables render as an empty string
+
+Semantics:
+- `latest_user_message` is the last user-role text message from `generation.input`
+- `user_history` is all user-role text from `generation.input`, in order
+- `assistant_response` is visible assistant text from `generation.output`
+- `assistant_sequence` preserves the emitted output-part order for mixed-block providers
+- `tools` is the configured tool inventory with compact schema summaries
+- `stop_reason` is the provider/model stop or finish reason captured on the generation
+- no implicit conversation-history variable is provided beyond `user_history`
+
+Default fallback prompt:
+
+```text
+Latest user message:
+{{input}}
+
+Assistant response:
+{{output}}
+```
 
 ## Rule Configuration
 

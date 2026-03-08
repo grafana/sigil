@@ -14,10 +14,11 @@ import (
 )
 
 var numberExtractor = regexp.MustCompile(`[-+]?[0-9]*\.?[0-9]+`)
+var llmJudgeTemplateVarPattern = regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_]+)\s*\}\}`)
 
 const (
 	defaultLLMJudgeSystemPrompt = "You evaluate one assistant response. Use only the user input and assistant output. Follow the score field description exactly. Be strict. If uncertain, choose the lower score."
-	defaultLLMJudgeUserPrompt   = "User input:\n{{input}}\n\nAssistant output:\n{{output}}"
+	defaultLLMJudgeUserPrompt   = "Latest user message:\n{{input}}\n\nAssistant response:\n{{output}}"
 	defaultLLMJudgeMaxTokens    = 128
 )
 
@@ -160,11 +161,19 @@ func resolveJudgeTarget(config map[string]any, defaultModel string) (string, str
 }
 
 func renderTemplate(template string, input EvalInput) string {
-	output := strings.ReplaceAll(template, "{{input}}", input.InputText)
-	output = strings.ReplaceAll(output, "{{output}}", input.ResponseText)
-	output = strings.ReplaceAll(output, "{{generation_id}}", input.GenerationID)
-	output = strings.ReplaceAll(output, "{{conversation_id}}", input.ConversationID)
-	return output
+	vars := buildLLMJudgeTemplateVars(input)
+	return llmJudgeTemplateVarPattern.ReplaceAllStringFunc(template, func(match string) string {
+		parts := llmJudgeTemplateVarPattern.FindStringSubmatch(match)
+		if len(parts) != 2 {
+			return match
+		}
+		name := strings.TrimSpace(parts[1])
+		value, ok := vars[name]
+		if !ok {
+			return match
+		}
+		return value
+	})
 }
 
 func parseJudgeResponse(raw string, scoreKey string, scoreType evalpkg.ScoreType) (evalpkg.ScoreValue, *bool, string, error) {
