@@ -56,6 +56,33 @@ func TestProjectionStringSliceMatchesNotEqualExcludesMixedValues(t *testing.T) {
 	}
 }
 
+func TestProjectionStringSliceMatchesEmptyValues(t *testing.T) {
+	tests := []struct {
+		name     string
+		operator query.FilterOperator
+		want     bool
+	}{
+		{name: "equal on empty returns false", operator: query.FilterOperatorEqual, want: false},
+		{name: "not_equal on empty returns true", operator: query.FilterOperatorNotEqual, want: true},
+		{name: "regex on empty returns false", operator: query.FilterOperatorRegex, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			term := query.FilterTerm{
+				RawKey:   "provider",
+				Operator: tt.operator,
+				Value:    "openai",
+			}
+			if got := projectionStringSliceMatches(nil, term); got != tt.want {
+				t.Fatalf("projectionStringSliceMatches(nil, %v) = %v, want %v", tt.operator, got, tt.want)
+			}
+			if got := projectionStringSliceMatches([]string{}, term); got != tt.want {
+				t.Fatalf("projectionStringSliceMatches([], %v) = %v, want %v", tt.operator, got, tt.want)
+			}
+		})
+	}
+}
+
 type stubProjectionStatsConversationStore struct {
 	page []storage.ConversationProjectionPageItem
 }

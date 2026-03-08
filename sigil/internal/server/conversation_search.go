@@ -639,7 +639,7 @@ func projectionTempoTermMatches(metadata query.ConversationBatchMetadata, term q
 
 func projectionStringSliceMatches(values []string, term query.FilterTerm) bool {
 	if len(values) == 0 {
-		return false
+		return term.Operator == query.FilterOperatorNotEqual
 	}
 
 	target := strings.TrimSpace(term.Value)
