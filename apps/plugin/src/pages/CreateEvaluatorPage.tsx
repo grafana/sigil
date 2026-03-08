@@ -4,6 +4,7 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Alert, Badge, Text, useStyles2 } from '@grafana/ui';
 import { PLUGIN_BASE, ROUTES } from '../constants';
+import { useOptionalEvalRulesDataContext } from '../contexts/EvalRulesDataContext';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
 import type { CreateEvaluatorRequest, EvalFormState, Evaluator } from '../evaluation/types';
 import EvaluatorForm from '../components/evaluation/EvaluatorForm';
@@ -104,6 +105,7 @@ export default function CreateEvaluatorPage(props: CreateEvaluatorPageProps) {
   const styles = useStyles2(getStyles);
   const navigate = useNavigate();
   const location = useLocation();
+  const evalRulesContext = useOptionalEvalRulesDataContext();
 
   // When navigating from "Fork template", location.state carries the template data.
   const prefill = useMemo<Partial<Evaluator> | undefined>(() => {
@@ -121,6 +123,7 @@ export default function CreateEvaluatorPage(props: CreateEvaluatorPageProps) {
   const handleSubmit = async (req: CreateEvaluatorRequest) => {
     try {
       await dataSource.createEvaluator(req);
+      evalRulesContext?.refetch();
       navigate(`${EVAL_BASE}/evaluators`);
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Failed to create evaluator');

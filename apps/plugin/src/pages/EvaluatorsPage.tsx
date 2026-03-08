@@ -29,6 +29,7 @@ import EvaluatorCardGrid from '../components/evaluation/EvaluatorCardGrid';
 import TemplateTable from '../components/evaluation/TemplateTable';
 import TemplateCardGrid from '../components/evaluation/TemplateCardGrid';
 import { PageInsightBar } from '../components/insight/PageInsightBar';
+import { useOptionalEvalRulesDataContext } from '../contexts/EvalRulesDataContext';
 
 const EVAL_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}`;
 type EvaluatorListView = 'table' | 'cards';
@@ -223,6 +224,7 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
   const dataSource = props.dataSource ?? defaultEvaluationDataSource;
   const styles = useStyles2(getStyles);
   const navigate = useNavigate();
+  const evalRulesContext = useOptionalEvalRulesDataContext();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const templateScopeFilter = searchParams.get('scope') ?? '';
@@ -544,6 +546,7 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
                   try {
                     await dataSource.deleteEvaluator(id);
                     setTenantEvaluators((prev) => prev.filter((e) => e.evaluator_id !== id));
+                    evalRulesContext?.refetch();
                   } catch (err) {
                     setErrorMessage(err instanceof Error ? err.message : 'Failed to delete evaluator');
                   }
@@ -557,6 +560,7 @@ export default function EvaluatorsPage(props: EvaluatorsPageProps) {
                   try {
                     await dataSource.deleteEvaluator(id);
                     setTenantEvaluators((prev) => prev.filter((e) => e.evaluator_id !== id));
+                    evalRulesContext?.refetch();
                   } catch (err) {
                     setErrorMessage(err instanceof Error ? err.message : 'Failed to delete evaluator');
                   }

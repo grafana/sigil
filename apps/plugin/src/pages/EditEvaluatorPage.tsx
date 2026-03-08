@@ -11,6 +11,7 @@ import EvalTestPanel from '../components/evaluation/EvalTestPanel';
 import VersionHistoryTable from '../components/evaluation/VersionHistoryTable';
 import VersionCompare from '../components/evaluation/VersionCompare';
 import { getSectionTitleStyles } from '../components/evaluation/sectionStyles';
+import { useOptionalEvalRulesDataContext } from '../contexts/EvalRulesDataContext';
 
 const EVAL_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}`;
 
@@ -145,6 +146,7 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
   const styles = useStyles2(getStyles);
   const navigate = useNavigate();
   const { evaluatorID } = useParams<{ evaluatorID: string }>();
+  const evalRulesContext = useOptionalEvalRulesDataContext();
 
   const [evaluator, setEvaluator] = useState<Awaited<ReturnType<typeof dataSource.getEvaluator>> | null>(null);
   const [formState, setFormState] = useState<EvalFormState>({
@@ -246,6 +248,7 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
   const handleSubmit = async (req: CreateEvaluatorRequest) => {
     try {
       await dataSource.createEvaluator(req);
+      evalRulesContext?.refetch();
       navigate(`${EVAL_BASE}/evaluators`);
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Failed to update evaluator');

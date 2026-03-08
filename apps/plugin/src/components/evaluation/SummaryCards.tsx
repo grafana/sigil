@@ -14,8 +14,6 @@ export type SummaryCardsProps = {
 };
 
 const getStyles = (theme: GrafanaTheme2) => {
-  const isDark = theme.isDark;
-
   return {
     card: css({
       flex: 1,
@@ -27,40 +25,33 @@ const getStyles = (theme: GrafanaTheme2) => {
       flexDirection: 'column' as const,
       gap: theme.spacing(0.75),
       boxShadow: theme.isDark ? '0 8px 20px rgba(0, 0, 0, 0.18)' : '0 8px 18px rgba(15, 23, 42, 0.04)',
+      background: theme.colors.background.primary,
     }),
     cardActive: css({
-      background: isDark
-        ? 'linear-gradient(135deg, rgba(115, 191, 105, 0.1), rgba(115, 191, 105, 0.025))'
-        : 'linear-gradient(135deg, rgba(115, 191, 105, 0.085), rgba(115, 191, 105, 0.02))',
-      borderColor: isDark ? 'rgba(115, 191, 105, 0.22)' : 'rgba(115, 191, 105, 0.24)',
+      borderLeft: '2px solid rgba(87, 148, 242, 0.42)',
     }),
     cardDisabled: css({
-      background: isDark
-        ? 'linear-gradient(135deg, rgba(255, 152, 48, 0.095), rgba(255, 152, 48, 0.03))'
-        : 'linear-gradient(135deg, rgba(255, 152, 48, 0.08), rgba(255, 152, 48, 0.022))',
-      borderColor: isDark ? 'rgba(255, 152, 48, 0.2)' : 'rgba(255, 152, 48, 0.22)',
+      borderLeft: '2px solid rgba(255, 179, 87, 0.42)',
     }),
     cardEvaluators: css({
-      background: isDark
-        ? 'linear-gradient(135deg, rgba(138, 109, 245, 0.1), rgba(138, 109, 245, 0.03))'
-        : 'linear-gradient(135deg, rgba(138, 109, 245, 0.085), rgba(138, 109, 245, 0.022))',
-      borderColor: isDark ? 'rgba(138, 109, 245, 0.22)' : 'rgba(138, 109, 245, 0.24)',
+      borderLeft: '2px solid rgba(184, 119, 217, 0.42)',
     }),
     cardTemplates: css({
-      background: isDark
-        ? 'linear-gradient(135deg, rgba(61, 113, 217, 0.1), rgba(61, 113, 217, 0.03))'
-        : 'linear-gradient(135deg, rgba(61, 113, 217, 0.085), rgba(61, 113, 217, 0.022))',
-      borderColor: isDark ? 'rgba(61, 113, 217, 0.22)' : 'rgba(61, 113, 217, 0.24)',
+      borderLeft: '2px solid rgba(255, 152, 48, 0.42)',
     }),
     number: css({
       fontSize: theme.typography.h2.fontSize,
       fontWeight: theme.typography.fontWeightBold,
       color: theme.colors.text.primary,
-      lineHeight: 1.2,
+      lineHeight: 1.1,
+      fontVariantNumeric: 'tabular-nums',
     }),
     label: css({
       color: theme.colors.text.secondary,
       fontSize: theme.typography.bodySmall.fontSize,
+      textTransform: 'uppercase' as const,
+      letterSpacing: '0.04em',
+      fontWeight: theme.typography.fontWeightMedium,
     }),
     description: css({
       color: theme.colors.text.secondary,

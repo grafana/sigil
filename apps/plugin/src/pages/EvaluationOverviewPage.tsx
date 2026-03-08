@@ -12,13 +12,18 @@ import { useEvalRulesDataContext } from '../contexts/EvalRulesDataContext';
 const EVAL_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}`;
 const SIGIL_BAR_BLUE = '#5794F2';
 const SIGIL_BAR_PURPLE = '#B877D9';
+const SIGIL_BAR_PINK = '#E06BB6';
 const SIGIL_BAR_ORANGE = '#FF9830';
+const FLOW_CYCLE_SECONDS = 6;
+const FLOW_STEP_DELAY_SECONDS = FLOW_CYCLE_SECONDS / 4;
+const FLOW_CONNECTOR_OFFSET_SECONDS = 0.8;
 
 const connectorSparkTravel = keyframes({
-  '0%': { opacity: 0, transform: 'translate3d(0, -50%, 0) scale(0.75)' },
-  '12%': { opacity: 1, transform: 'translate3d(0, -50%, 0) scale(1)' },
-  '70%': { opacity: 0.9, transform: 'translate3d(28px, -50%, 0) scale(1)' },
-  '100%': { opacity: 0, transform: 'translate3d(38px, -50%, 0) scale(0.7)' },
+  '0%, 100%': { opacity: 0, transform: 'translate3d(0, -50%, 0) scale(0.75)' },
+  '8%': { opacity: 0, transform: 'translate3d(0, -50%, 0) scale(0.78)' },
+  '14%': { opacity: 1, transform: 'translate3d(0, -50%, 0) scale(1)' },
+  '30%': { opacity: 0.95, transform: 'translate3d(24px, -50%, 0) scale(1)' },
+  '38%': { opacity: 0, transform: 'translate3d(38px, -50%, 0) scale(0.7)' },
 });
 
 const nodeChargePulse = keyframes({
@@ -66,20 +71,35 @@ const getStyles = (theme: GrafanaTheme2) => ({
     padding: theme.spacing(2.5),
     borderRadius: theme.shape.radius.default,
     border: `1px solid ${theme.colors.border.weak}`,
-    background: theme.isDark
-      ? `linear-gradient(135deg, rgba(87, 148, 242, 0.08), rgba(184, 119, 217, 0.08), rgba(255, 152, 48, 0.07))`
-      : `linear-gradient(135deg, rgba(87, 148, 242, 0.05), rgba(184, 119, 217, 0.05), rgba(255, 152, 48, 0.045))`,
+    background: theme.colors.background.secondary,
+    boxShadow: 'none',
   }),
   infoHeader: css({
     position: 'relative' as const,
     zIndex: 1,
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: theme.spacing(0.5),
+    gap: theme.spacing(0.75),
+  }),
+  infoTitle: css({
+    fontSize: '1.55rem',
+    lineHeight: 1.14,
+    '@media (min-width: 900px)': {
+      fontSize: '2.05rem',
+      lineHeight: 1.12,
+    },
+  }),
+  infoDescription: css({
+    fontSize: theme.typography.h6.fontSize,
+    lineHeight: theme.typography.h6.lineHeight,
+    '@media (min-width: 900px)': {
+      fontSize: '1.02rem',
+      lineHeight: 1.55,
+    },
   }),
   glowPhrase: css({
     display: 'inline-block',
-    fontSize: '1.04em',
+    fontSize: '1.02em',
     fontWeight: theme.typography.fontWeightBold,
     background: `linear-gradient(45deg, ${SIGIL_BAR_BLUE}, ${SIGIL_BAR_PURPLE}, ${SIGIL_BAR_ORANGE}, ${SIGIL_BAR_PURPLE})`,
     backgroundSize: '300% 300%',
@@ -93,28 +113,40 @@ const getStyles = (theme: GrafanaTheme2) => ({
     position: 'relative' as const,
     zIndex: 1,
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-    gap: theme.spacing(1.5),
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    gap: theme.spacing(1.75),
     '@media (min-width: 900px)': {
-      gap: theme.spacing(2.75),
+      gap: theme.spacing(3),
     },
   }),
   infoStep: css({
     position: 'relative' as const,
     overflow: 'visible' as const,
     display: 'flex',
-    gap: theme.spacing(1.25),
-    padding: theme.spacing(1.5),
+    gap: theme.spacing(1.5),
+    padding: theme.spacing(1.75),
     borderRadius: theme.shape.radius.default,
-    border: theme.isDark ? '1px solid rgba(255, 255, 255, 0.08)' : `1px solid rgba(87, 148, 242, 0.12)`,
-    background: theme.isDark
-      ? 'linear-gradient(180deg, rgba(28, 22, 36, 0.78), rgba(24, 20, 31, 0.72))'
-      : 'linear-gradient(180deg, rgba(255, 250, 253, 0.96), rgba(249, 244, 249, 0.94))',
-    boxShadow: theme.isDark
-      ? '0 10px 24px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.03)'
-      : '0 8px 20px rgba(87, 148, 242, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.6)',
-    backdropFilter: 'blur(10px)',
+    border: `1px solid ${theme.colors.border.weak}`,
+    background: theme.isDark ? 'rgba(31, 38, 56, 0.5)' : 'rgba(255, 255, 255, 0.62)',
+    backdropFilter: 'blur(6px) saturate(1.06)',
+    WebkitBackdropFilter: 'blur(6px) saturate(1.06)',
     minWidth: 0,
+    '& > *': {
+      position: 'relative',
+      zIndex: 1,
+    },
+    '&::before': {
+      content: '""',
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      height: 3,
+      borderTopLeftRadius: theme.shape.radius.default,
+      borderTopRightRadius: theme.shape.radius.default,
+      background: 'var(--sigil-step-accent)',
+      opacity: 0.9,
+    },
   }),
   infoStepAura: css({
     position: 'absolute' as const,
@@ -122,32 +154,28 @@ const getStyles = (theme: GrafanaTheme2) => ({
     borderRadius: theme.shape.radius.default,
     opacity: 0,
     pointerEvents: 'none' as const,
-    animation: `${nodeChargePulse} 5.2s ease-out infinite`,
-    zIndex: -1,
+    animation: `${nodeChargePulse} ${FLOW_CYCLE_SECONDS}s ease-out infinite`,
+    zIndex: 0,
   }),
   infoStepAuraSelect: css({
     boxShadow: theme.isDark
-      ? '0 0 0 1px rgba(87, 148, 242, 0.24), 0 0 12px rgba(87, 148, 242, 0.1)'
-      : '0 0 0 1px rgba(87, 148, 242, 0.16), 0 0 10px rgba(87, 148, 242, 0.08)',
-    background: theme.isDark ? 'rgba(87, 148, 242, 0.04)' : 'rgba(87, 148, 242, 0.025)',
+      ? '0 0 0 1px rgba(87, 148, 242, 0.18), 0 0 8px rgba(87, 148, 242, 0.06)'
+      : '0 0 0 1px rgba(87, 148, 242, 0.12), 0 0 6px rgba(87, 148, 242, 0.05)',
   }),
   infoStepAuraEvaluate: css({
     boxShadow: theme.isDark
-      ? '0 0 0 1px rgba(184, 119, 217, 0.24), 0 0 12px rgba(184, 119, 217, 0.1)'
-      : '0 0 0 1px rgba(184, 119, 217, 0.16), 0 0 10px rgba(184, 119, 217, 0.08)',
-    background: theme.isDark ? 'rgba(184, 119, 217, 0.04)' : 'rgba(184, 119, 217, 0.025)',
+      ? '0 0 0 1px rgba(184, 119, 217, 0.18), 0 0 8px rgba(184, 119, 217, 0.06)'
+      : '0 0 0 1px rgba(184, 119, 217, 0.12), 0 0 6px rgba(184, 119, 217, 0.05)',
   }),
   infoStepAuraStore: css({
     boxShadow: theme.isDark
-      ? '0 0 0 1px rgba(255, 152, 48, 0.22), 0 0 10px rgba(255, 152, 48, 0.09)'
-      : '0 0 0 1px rgba(255, 152, 48, 0.15), 0 0 8px rgba(255, 152, 48, 0.07)',
-    background: theme.isDark ? 'rgba(255, 152, 48, 0.035)' : 'rgba(255, 152, 48, 0.02)',
+      ? '0 0 0 1px rgba(224, 107, 182, 0.18), 0 0 8px rgba(224, 107, 182, 0.06)'
+      : '0 0 0 1px rgba(224, 107, 182, 0.12), 0 0 6px rgba(224, 107, 182, 0.05)',
   }),
   infoStepAuraInspect: css({
     boxShadow: theme.isDark
-      ? '0 0 0 1px rgba(255, 152, 48, 0.22), 0 0 10px rgba(255, 152, 48, 0.09)'
-      : '0 0 0 1px rgba(255, 152, 48, 0.15), 0 0 8px rgba(255, 152, 48, 0.07)',
-    background: theme.isDark ? 'rgba(255, 152, 48, 0.035)' : 'rgba(255, 152, 48, 0.02)',
+      ? '0 0 0 1px rgba(255, 152, 48, 0.18), 0 0 8px rgba(255, 152, 48, 0.06)'
+      : '0 0 0 1px rgba(255, 152, 48, 0.12), 0 0 6px rgba(255, 152, 48, 0.05)',
   }),
   infoConnector: css({
     display: 'none',
@@ -171,16 +199,14 @@ const getStyles = (theme: GrafanaTheme2) => ({
     height: 2,
     borderRadius: 999,
     transform: 'translateY(-50%)',
-    background: theme.isDark
-      ? 'linear-gradient(90deg, rgba(87, 148, 242, 0.22), rgba(184, 119, 217, 0.26), rgba(255, 152, 48, 0.18))'
-      : 'linear-gradient(90deg, rgba(87, 148, 242, 0.18), rgba(184, 119, 217, 0.22), rgba(255, 152, 48, 0.14))',
+    background: 'var(--sigil-connector-gradient)',
     '&::after': {
       content: '""',
       position: 'absolute',
       inset: 0,
       borderRadius: 999,
       filter: 'blur(3px)',
-      opacity: 0.25,
+      opacity: 0.14,
       background: 'inherit',
     },
   }),
@@ -191,8 +217,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
     width: 6,
     height: 6,
     borderRadius: 999,
+    opacity: 0,
     transform: 'translateY(-50%)',
-    animation: `${connectorSparkTravel} 5.2s ease-out infinite`,
+    animation: `${connectorSparkTravel} ${FLOW_CYCLE_SECONDS}s linear infinite`,
     boxShadow: '0 0 6px currentColor',
     zIndex: 1,
   }),
@@ -205,8 +232,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: SIGIL_BAR_PURPLE,
   }),
   infoConnectorSparkStore: css({
-    background: SIGIL_BAR_ORANGE,
-    color: SIGIL_BAR_ORANGE,
+    background: SIGIL_BAR_PINK,
+    color: SIGIL_BAR_PINK,
   }),
   infoConnectorSparkInspect: css({
     background: SIGIL_BAR_ORANGE,
@@ -215,8 +242,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
   infoStepIcon: css({
     position: 'relative' as const,
     flexShrink: 0,
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -231,7 +258,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     borderRadius: 1,
     transform: 'rotate(45deg)',
     opacity: 0,
-    animation: `${runeFlicker} 5.2s ease-out infinite`,
+    animation: `${runeFlicker} ${FLOW_CYCLE_SECONDS}s ease-out infinite`,
     pointerEvents: 'none' as const,
     boxShadow: '0 0 5px currentColor',
   }),
@@ -244,33 +271,33 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: SIGIL_BAR_PURPLE,
   }),
   infoStepRuneStore: css({
-    background: SIGIL_BAR_ORANGE,
-    color: SIGIL_BAR_ORANGE,
+    background: SIGIL_BAR_PINK,
+    color: SIGIL_BAR_PINK,
   }),
   infoStepRuneInspect: css({
     background: SIGIL_BAR_ORANGE,
     color: SIGIL_BAR_ORANGE,
   }),
   infoStepSelect: css({
-    background: theme.isDark ? 'rgba(87, 148, 242, 0.12)' : 'rgba(87, 148, 242, 0.1)',
+    background: 'rgba(87, 148, 242, 0.12)',
     color: SIGIL_BAR_BLUE,
   }),
   infoStepEvaluate: css({
-    background: theme.isDark ? 'rgba(184, 119, 217, 0.12)' : 'rgba(184, 119, 217, 0.1)',
+    background: 'rgba(184, 119, 217, 0.12)',
     color: SIGIL_BAR_PURPLE,
   }),
   infoStepStore: css({
-    background: theme.isDark ? 'rgba(255, 152, 48, 0.12)' : 'rgba(255, 152, 48, 0.1)',
-    color: SIGIL_BAR_ORANGE,
+    background: 'rgba(224, 107, 182, 0.12)',
+    color: SIGIL_BAR_PINK,
   }),
   infoStepInspect: css({
-    background: theme.isDark ? 'rgba(255, 152, 48, 0.12)' : 'rgba(255, 152, 48, 0.1)',
+    background: 'rgba(255, 152, 48, 0.12)',
     color: SIGIL_BAR_ORANGE,
   }),
   infoStepBody: css({
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: theme.spacing(0.5),
+    gap: theme.spacing(0.625),
     minWidth: 0,
   }),
   loading: css({
@@ -343,14 +370,39 @@ const STEP_RUNE_CLASS_BY_TONE: Record<
   infoStepInspect: 'infoStepRuneInspect',
 };
 
+const STEP_ACCENT_BY_TONE: Record<(typeof EVALUATION_FLOW_STEPS)[number]['toneClass'], string> = {
+  infoStepSelect: SIGIL_BAR_BLUE,
+  infoStepEvaluate: SIGIL_BAR_PURPLE,
+  infoStepStore: SIGIL_BAR_PINK,
+  infoStepInspect: SIGIL_BAR_ORANGE,
+};
+
+const STEP_SHADOW_BY_TONE: Record<(typeof EVALUATION_FLOW_STEPS)[number]['toneClass'], string> = {
+  infoStepSelect: '0 -6px 18px rgba(87, 148, 242, 0.11), 0 0 6px rgba(87, 148, 242, 0.05)',
+  infoStepEvaluate: '0 -6px 18px rgba(184, 119, 217, 0.11), 0 0 6px rgba(184, 119, 217, 0.05)',
+  infoStepStore: '0 -6px 18px rgba(224, 107, 182, 0.11), 0 0 6px rgba(224, 107, 182, 0.05)',
+  infoStepInspect: '0 -6px 18px rgba(255, 152, 48, 0.11), 0 0 6px rgba(255, 152, 48, 0.05)',
+};
+
+function withAlpha(hex: string, alpha: number): string {
+  const normalized = hex.replace('#', '');
+  if (normalized.length !== 6) {
+    return hex;
+  }
+  const r = parseInt(normalized.slice(0, 2), 16);
+  const g = parseInt(normalized.slice(2, 4), 16);
+  const b = parseInt(normalized.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 function EvaluationInfoPanel({ styles }: { styles: ReturnType<typeof getStyles> }) {
   return (
     <section className={styles.infoPanel} aria-label="How evaluation works">
       <div className={styles.infoHeader}>
-        <Text element="h4" weight="medium">
+        <Text element="h4" weight="medium" className={styles.infoTitle}>
           How Sigil evaluates your AI applications
         </Text>
-        <Text variant="body" color="secondary">
+        <Text variant="body" color="secondary" className={styles.infoDescription}>
           Sigil evaluates LLM and agentic applications to capture{' '}
           <span className={styles.glowPhrase}>hidden behaviors</span>, turn them into signals, and surface insights
           directly in Grafana.
@@ -358,34 +410,53 @@ function EvaluationInfoPanel({ styles }: { styles: ReturnType<typeof getStyles> 
       </div>
       <div className={styles.infoGrid}>
         {EVALUATION_FLOW_STEPS.map((step, index) => (
-          <div key={step.title} className={styles.infoStep}>
+          <div
+            key={step.title}
+            className={styles.infoStep}
+            style={
+              {
+                ['--sigil-step-accent' as string]: STEP_ACCENT_BY_TONE[step.toneClass],
+                boxShadow: STEP_SHADOW_BY_TONE[step.toneClass],
+              } as React.CSSProperties
+            }
+          >
             <span
               className={`${styles.infoStepAura} ${styles[STEP_AURA_CLASS_BY_TONE[step.toneClass]]}`}
-              style={{ animationDelay: `${index * 0.8}s` }}
+              style={{ animationDelay: `${index * FLOW_STEP_DELAY_SECONDS}s` }}
               aria-hidden="true"
             />
             <div className={`${styles.infoStepIcon} ${styles[step.toneClass]}`}>
               <Icon name={step.icon} size="sm" />
               <span
                 className={`${styles.infoStepRune} ${styles[STEP_RUNE_CLASS_BY_TONE[step.toneClass]]}`}
-                style={{ animationDelay: `${index * 0.8}s` }}
+                style={{ animationDelay: `${index * FLOW_STEP_DELAY_SECONDS}s` }}
                 aria-hidden="true"
               />
             </div>
             <div className={styles.infoStepBody}>
-              <Text variant="bodySmall" weight="medium">
+              <Text variant="body" weight="medium">
                 {step.title}
               </Text>
-              <Text variant="bodySmall" color="secondary">
+              <Text variant="body" color="secondary">
                 {step.description}
               </Text>
             </div>
             {index < EVALUATION_FLOW_STEPS.length - 1 && (
               <span className={styles.infoConnector} aria-hidden="true">
-                <span className={styles.infoConnectorLine} />
+                <span
+                  className={styles.infoConnectorLine}
+                  style={
+                    {
+                      ['--sigil-connector-gradient' as string]: `linear-gradient(90deg, ${withAlpha(
+                        STEP_ACCENT_BY_TONE[step.toneClass],
+                        0.24
+                      )} 0%, ${withAlpha(STEP_ACCENT_BY_TONE[EVALUATION_FLOW_STEPS[index + 1].toneClass], 0.18)} 100%)`,
+                    } as React.CSSProperties
+                  }
+                />
                 <span
                   className={`${styles.infoConnectorSpark} ${styles[CONNECTOR_TONE_CLASS_BY_STEP[step.toneClass]]}`}
-                  style={{ animationDelay: `${index * 0.8}s` }}
+                  style={{ animationDelay: `${index * FLOW_STEP_DELAY_SECONDS + FLOW_CONNECTOR_OFFSET_SECONDS}s` }}
                 />
               </span>
             )}
