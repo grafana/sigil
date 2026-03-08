@@ -343,6 +343,59 @@ const STEP_RUNE_CLASS_BY_TONE: Record<
   infoStepInspect: 'infoStepRuneInspect',
 };
 
+function EvaluationInfoPanel({ styles }: { styles: ReturnType<typeof getStyles> }) {
+  return (
+    <section className={styles.infoPanel} aria-label="How evaluation works">
+      <div className={styles.infoHeader}>
+        <Text element="h4" weight="medium">
+          How Sigil evaluates your AI applications
+        </Text>
+        <Text variant="body" color="secondary">
+          Sigil evaluates LLM and agentic applications to capture{' '}
+          <span className={styles.glowPhrase}>hidden behaviors</span>, turn them into signals, and surface insights
+          directly in Grafana.
+        </Text>
+      </div>
+      <div className={styles.infoGrid}>
+        {EVALUATION_FLOW_STEPS.map((step, index) => (
+          <div key={step.title} className={styles.infoStep}>
+            <span
+              className={`${styles.infoStepAura} ${styles[STEP_AURA_CLASS_BY_TONE[step.toneClass]]}`}
+              style={{ animationDelay: `${index * 0.8}s` }}
+              aria-hidden="true"
+            />
+            <div className={`${styles.infoStepIcon} ${styles[step.toneClass]}`}>
+              <Icon name={step.icon} size="sm" />
+              <span
+                className={`${styles.infoStepRune} ${styles[STEP_RUNE_CLASS_BY_TONE[step.toneClass]]}`}
+                style={{ animationDelay: `${index * 0.8}s` }}
+                aria-hidden="true"
+              />
+            </div>
+            <div className={styles.infoStepBody}>
+              <Text variant="bodySmall" weight="medium">
+                {step.title}
+              </Text>
+              <Text variant="bodySmall" color="secondary">
+                {step.description}
+              </Text>
+            </div>
+            {index < EVALUATION_FLOW_STEPS.length - 1 && (
+              <span className={styles.infoConnector} aria-hidden="true">
+                <span className={styles.infoConnectorLine} />
+                <span
+                  className={`${styles.infoConnectorSpark} ${styles[CONNECTOR_TONE_CLASS_BY_STEP[step.toneClass]]}`}
+                  style={{ animationDelay: `${index * 0.8}s` }}
+                />
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function EvaluationOverviewPage() {
   const styles = useStyles2(getStyles);
   const navigate = useNavigate();
@@ -372,6 +425,7 @@ export default function EvaluationOverviewPage() {
             <Text>{errorMessage}</Text>
           </Alert>
         )}
+        <EvaluationInfoPanel styles={styles} />
         <EvalOnboarding
           hasEvaluators={hasEvaluators}
           onGoToEvaluators={() => navigate(`${EVAL_BASE}/evaluators`)}
@@ -388,54 +442,7 @@ export default function EvaluationOverviewPage() {
           <Text>{errorMessage}</Text>
         </Alert>
       )}
-      <section className={styles.infoPanel} aria-label="How evaluation works">
-        <div className={styles.infoHeader}>
-          <Text element="h4" weight="medium">
-            How Sigil evaluates your AI applications
-          </Text>
-          <Text variant="body" color="secondary">
-            Sigil evaluates LLM and agentic applications to capture{' '}
-            <span className={styles.glowPhrase}>hidden behaviors</span>, turn them into signals, and surface insights
-            directly in Grafana.
-          </Text>
-        </div>
-        <div className={styles.infoGrid}>
-          {EVALUATION_FLOW_STEPS.map((step, index) => (
-            <div key={step.title} className={styles.infoStep}>
-              <span
-                className={`${styles.infoStepAura} ${styles[STEP_AURA_CLASS_BY_TONE[step.toneClass]]}`}
-                style={{ animationDelay: `${index * 0.8}s` }}
-                aria-hidden="true"
-              />
-              <div className={`${styles.infoStepIcon} ${styles[step.toneClass]}`}>
-                <Icon name={step.icon} size="sm" />
-                <span
-                  className={`${styles.infoStepRune} ${styles[STEP_RUNE_CLASS_BY_TONE[step.toneClass]]}`}
-                  style={{ animationDelay: `${index * 0.8}s` }}
-                  aria-hidden="true"
-                />
-              </div>
-              <div className={styles.infoStepBody}>
-                <Text variant="bodySmall" weight="medium">
-                  {step.title}
-                </Text>
-                <Text variant="bodySmall" color="secondary">
-                  {step.description}
-                </Text>
-              </div>
-              {index < EVALUATION_FLOW_STEPS.length - 1 && (
-                <span className={styles.infoConnector} aria-hidden="true">
-                  <span className={styles.infoConnectorLine} />
-                  <span
-                    className={`${styles.infoConnectorSpark} ${styles[CONNECTOR_TONE_CLASS_BY_STEP[step.toneClass]]}`}
-                    style={{ animationDelay: `${index * 0.8}s` }}
-                  />
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-      </section>
+      <EvaluationInfoPanel styles={styles} />
 
       <SummaryCards
         activeRules={activeRuleCount}

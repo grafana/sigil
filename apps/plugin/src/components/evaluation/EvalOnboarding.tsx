@@ -1,5 +1,5 @@
 import React from 'react';
-import { css, keyframes } from '@emotion/css';
+import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Button, Icon, Text, useStyles2, type IconName } from '@grafana/ui';
 
@@ -8,11 +8,6 @@ export type EvalOnboardingProps = {
   onGoToEvaluators: () => void;
   onGoToCreateRule: () => void;
 };
-
-const pulseGlow = keyframes({
-  '0%, 100%': { opacity: 0.6 },
-  '50%': { opacity: 1 },
-});
 
 const getStyles = (theme: GrafanaTheme2) => {
   const isDark = theme.isDark;
@@ -26,88 +21,6 @@ const getStyles = (theme: GrafanaTheme2) => {
       padding: theme.spacing(6, 2),
       maxWidth: 860,
       margin: '0 auto',
-    }),
-
-    heroSection: css({
-      display: 'flex',
-      flexDirection: 'column' as const,
-      alignItems: 'center',
-      gap: theme.spacing(2),
-      textAlign: 'center' as const,
-    }),
-
-    heroTitle: css({
-      fontSize: theme.typography.h3.fontSize,
-      fontWeight: theme.typography.fontWeightMedium,
-      color: theme.colors.text.primary,
-      lineHeight: 1.3,
-    }),
-
-    heroSubtitle: css({
-      maxWidth: 520,
-      color: theme.colors.text.secondary,
-      lineHeight: 1.6,
-    }),
-
-    pipelineVisual: css({
-      display: 'flex',
-      alignItems: 'center',
-      gap: theme.spacing(1.5),
-      padding: theme.spacing(3, 4),
-      borderRadius: theme.shape.radius.default,
-      background: isDark
-        ? 'linear-gradient(135deg, rgba(61, 113, 217, 0.06), rgba(138, 109, 245, 0.06))'
-        : 'linear-gradient(135deg, rgba(61, 113, 217, 0.04), rgba(138, 109, 245, 0.04))',
-      border: `1px solid ${theme.colors.border.weak}`,
-    }),
-
-    pipelineNode: css({
-      display: 'flex',
-      flexDirection: 'column' as const,
-      alignItems: 'center',
-      gap: theme.spacing(0.75),
-    }),
-
-    pipelineIcon: css({
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      width: 48,
-      height: 48,
-      borderRadius: theme.shape.radius.default,
-      border: `1px solid ${theme.colors.border.weak}`,
-      transition: 'all 0.2s',
-    }),
-
-    pipelineIconIngest: css({
-      background: isDark ? 'rgba(115, 191, 105, 0.1)' : 'rgba(115, 191, 105, 0.08)',
-      color: 'rgb(115, 191, 105)',
-    }),
-
-    pipelineIconEval: css({
-      background: isDark ? 'rgba(138, 109, 245, 0.1)' : 'rgba(138, 109, 245, 0.08)',
-      color: 'rgb(138, 109, 245)',
-    }),
-
-    pipelineIconScore: css({
-      background: isDark ? 'rgba(255, 152, 48, 0.1)' : 'rgba(255, 152, 48, 0.08)',
-      color: 'rgb(255, 152, 48)',
-    }),
-
-    pipelineIconDash: css({
-      background: isDark ? 'rgba(61, 113, 217, 0.1)' : 'rgba(61, 113, 217, 0.08)',
-      color: 'rgb(61, 113, 217)',
-    }),
-
-    pipelineLabel: css({
-      fontSize: theme.typography.bodySmall.fontSize,
-      color: theme.colors.text.secondary,
-      whiteSpace: 'nowrap' as const,
-    }),
-
-    pipelineArrow: css({
-      color: theme.colors.text.disabled,
-      animation: `${pulseGlow} 2s ease-in-out infinite`,
     }),
 
     stepsContainer: css({
@@ -220,19 +133,6 @@ const getStyles = (theme: GrafanaTheme2) => {
   };
 };
 
-type PipelineStepConfig = {
-  icon: IconName;
-  label: string;
-  styleKey: 'pipelineIconIngest' | 'pipelineIconEval' | 'pipelineIconScore' | 'pipelineIconDash';
-};
-
-const PIPELINE_STEPS: PipelineStepConfig[] = [
-  { icon: 'database', label: 'LLM traffic', styleKey: 'pipelineIconIngest' },
-  { icon: 'filter', label: 'Select & match', styleKey: 'pipelineIconDash' },
-  { icon: 'check-circle', label: 'Evaluate', styleKey: 'pipelineIconEval' },
-  { icon: 'graph-bar', label: 'Score & alert', styleKey: 'pipelineIconScore' },
-];
-
 type EvalTypeConfig = {
   icon: IconName;
   label: string;
@@ -262,29 +162,6 @@ export default function EvalOnboarding({ hasEvaluators, onGoToEvaluators, onGoTo
 
   return (
     <div className={styles.container}>
-      <div className={styles.heroSection}>
-        <div className={styles.pipelineVisual}>
-          {PIPELINE_STEPS.map((step, i) => (
-            <React.Fragment key={step.label}>
-              {i > 0 && <Icon name="arrow-right" size="md" className={styles.pipelineArrow} />}
-              <div className={styles.pipelineNode}>
-                <div className={`${styles.pipelineIcon} ${styles[step.styleKey]}`}>
-                  <Icon name={step.icon} size="xl" />
-                </div>
-                <span className={styles.pipelineLabel}>{step.label}</span>
-              </div>
-            </React.Fragment>
-          ))}
-        </div>
-        <h3 className={styles.heroTitle}>Automated evaluation for your LLM&nbsp;pipeline</h3>
-        <div className={styles.heroSubtitle}>
-          <Text color="secondary">
-            Score every generation in real time. Set up evaluators to define how quality is measured, then create rules
-            to connect them to your traffic.
-          </Text>
-        </div>
-      </div>
-
       <div className={styles.stepsContainer}>
         <div className={`${styles.stepCard} ${hasEvaluators ? '' : styles.stepCardActive}`}>
           <div className={styles.stepHeader}>

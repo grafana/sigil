@@ -261,4 +261,22 @@ describe('EvaluationOverviewPage', () => {
     expect(evaluatorsLabel.parentElement).toHaveTextContent('3');
     expect(evaluatorsLabel.parentElement).not.toHaveTextContent('5');
   });
+
+  it('shows the evaluation info panel in the fully empty overview state', async () => {
+    const emptyDataSource = createDataSource();
+    emptyDataSource.listRules = async () => ({ items: [], next_cursor: '' });
+    emptyDataSource.listEvaluators = async () => ({ items: [], next_cursor: '' });
+    emptyDataSource.listPredefinedEvaluators = async () => ({ items: [], next_cursor: '' });
+
+    render(
+      <MemoryRouter>
+        <EvalRulesDataProvider dataSource={emptyDataSource}>
+          <EvaluationOverviewPage />
+        </EvalRulesDataProvider>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('How Sigil evaluates your AI applications')).toBeInTheDocument();
+    expect(screen.getByText('Set up evaluators')).toBeInTheDocument();
+  });
 });
