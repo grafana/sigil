@@ -233,6 +233,27 @@ func TestRenderTemplateKeepsSimpleVariablesComposableAndOmitsEmptyCompoundValues
 	}
 }
 
+func TestRenderTemplateEscapesUserHistoryContent(t *testing.T) {
+	input := EvalInput{
+		Generation: &sigilv1.Generation{
+			Input: []*sigilv1.Message{
+				{Role: sigilv1.MessageRole_MESSAGE_ROLE_USER, Parts: []*sigilv1.Part{textPart("if a < b && c > d")}},
+			},
+		},
+	}
+
+	rendered := renderTemplate("History:\n{{user_history}}", input)
+	if !strings.Contains(rendered, "<message index=\"1\">") {
+		t.Fatalf("expected user_history message wrapper, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "if a &lt; b &amp;&amp; c &gt; d") {
+		t.Fatalf("expected escaped user_history content, got:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "if a < b && c > d\n</message>") {
+		t.Fatalf("expected raw user_history content to be escaped inside tags, got:\n%s", rendered)
+	}
+}
+
 func TestRenderTemplateLeavesUnsupportedAdvancedVariablesUntouched(t *testing.T) {
 	input := EvalInput{
 		Generation: &sigilv1.Generation{

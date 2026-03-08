@@ -82,7 +82,7 @@ func renderUserHistory(messages []*sigilv1.Message) string {
 		if rendered == "" {
 			continue
 		}
-		blocks = append(blocks, fmt.Sprintf("<message index=\"%d\">\n%s\n</message>", index, rendered))
+		blocks = append(blocks, fmt.Sprintf("<message index=\"%d\">\n%s\n</message>", index, escapeTagText(rendered)))
 		index++
 	}
 	return strings.Join(blocks, "\n")
