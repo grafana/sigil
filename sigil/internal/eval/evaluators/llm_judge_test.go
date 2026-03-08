@@ -145,10 +145,10 @@ func TestRenderTemplateUsesDeveloperFacingAliases(t *testing.T) {
 		GenerationID:   "gen-1",
 		ConversationID: "conv-1",
 		Generation: &sigilv1.Generation{
-			Id:              "gen-1",
-			ConversationId:  "conv-1",
-			SystemPrompt:    "Be concise.",
-			StopReason:      "end_turn",
+			Id:             "gen-1",
+			ConversationId: "conv-1",
+			SystemPrompt:   "Be concise.",
+			StopReason:     "end_turn",
 			Tools: []*sigilv1.ToolDefinition{{
 				Name:            "search",
 				Type:            "function",
