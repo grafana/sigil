@@ -192,8 +192,10 @@ func extractExploreGenerations(
 
 		traceID := stringField(generation, "trace_id")
 		spanID := stringField(generation, "span_id")
-		if traceID != "" && spanID != "" {
-			generationSpanKeys[traceID+":"+spanID] = struct{}{}
+		normalizedTraceID := normalizeConversationExploreTraceID(traceID)
+		normalizedSpanID := normalizeConversationExploreSpanID(spanID)
+		if normalizedTraceID != "" && normalizedSpanID != "" {
+			generationSpanKeys[normalizedTraceID+":"+normalizedSpanID] = struct{}{}
 		}
 		if traceID == "" {
 			continue

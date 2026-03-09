@@ -13,6 +13,7 @@ import type {
   SpanKind,
 } from './types';
 import type { GenerationDetail } from '../generation/types';
+import { normalizeTraceID, normalizeSpanID } from './ids';
 
 export type TraceFetchOptions = {
   timeRange?: Pick<TimeRange, 'from' | 'to'>;
@@ -214,8 +215,10 @@ function buildConversationSpansFromExplore(
   const matchedGenerationIDs = new Set<string>();
 
   for (const generation of generations) {
-    if (generation.trace_id && generation.span_id) {
-      generationBySpan.set(`${generation.trace_id}:${generation.span_id}`, generation);
+    const normalizedTraceID = normalizeTraceID(generation.trace_id);
+    const normalizedSpanID = normalizeSpanID(generation.span_id);
+    if (normalizedTraceID && normalizedSpanID) {
+      generationBySpan.set(`${normalizedTraceID}:${normalizedSpanID}`, generation);
     }
   }
 

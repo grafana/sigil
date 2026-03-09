@@ -1,27 +1,15 @@
 import { lastValueFrom } from 'rxjs';
 import { getBackendSrv } from '@grafana/runtime';
 import type { TraceFetchOptions, TraceFetcher } from './loader';
+import { toUnixSeconds } from './timeRange';
 
 type FetchError = {
   status?: number;
 };
 
-function toUnixSeconds(value: unknown): string | null {
-  if (value == null) {
-    return null;
-  }
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return String(Math.floor(value / 1000));
-  }
-  if (typeof value === 'string') {
-    const parsed = Date.parse(value);
-    return Number.isNaN(parsed) ? null : String(Math.floor(parsed / 1000));
-  }
-  if (typeof value === 'object' && typeof (value as { valueOf?: () => number }).valueOf === 'function') {
-    const parsed = Number((value as { valueOf: () => number }).valueOf());
-    return Number.isFinite(parsed) ? String(Math.floor(parsed / 1000)) : null;
-  }
-  return null;
+function toUnixSecondsString(value: unknown): string | null {
+  const result = toUnixSeconds(value);
+  return result !== undefined ? String(result) : null;
 }
 
 function buildTempoTraceURL(traceID: string, options?: TraceFetchOptions): string {
@@ -29,8 +17,8 @@ function buildTempoTraceURL(traceID: string, options?: TraceFetchOptions): strin
     `/api/plugins/grafana-sigil-app/resources/query/proxy/tempo/api/v2/traces/${encodeURIComponent(traceID)}`,
     window.location.origin
   );
-  const start = toUnixSeconds(options?.timeRange?.from);
-  const end = toUnixSeconds(options?.timeRange?.to);
+  const start = toUnixSecondsString(options?.timeRange?.from);
+  const end = toUnixSecondsString(options?.timeRange?.to);
   if (start) {
     url.searchParams.set('start', start);
   }
