@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, ConfirmModal, IconButton, Text, useStyles2 } from '@grafana/ui';
+import DataTable, { type ColumnDef } from '../shared/DataTable';
 import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type Evaluator } from '../../evaluation/types';
 
 export type EvaluatorTableProps = {
@@ -27,38 +28,6 @@ function formatDate(iso: string): string {
 }
 
 const getStyles = (theme: GrafanaTheme2) => ({
-  table: css({
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 0,
-  }),
-  header: css({
-    display: 'grid',
-    gridTemplateColumns: 'minmax(0, 2.5fr) 100px minmax(120px, 140px) minmax(0, 3fr) minmax(0, 160px) 120px 40px',
-    gap: theme.spacing(2),
-    padding: theme.spacing(1, 2),
-    background: theme.colors.background.secondary,
-    borderBottom: `1px solid ${theme.colors.border.medium}`,
-    alignItems: 'center',
-  }),
-  row: css({
-    display: 'grid',
-    gridTemplateColumns: 'minmax(0, 2.5fr) 100px minmax(120px, 140px) minmax(0, 3fr) minmax(0, 160px) 120px 40px',
-    gap: theme.spacing(2),
-    padding: theme.spacing(1, 2),
-    alignItems: 'center',
-    borderBottom: `1px solid ${theme.colors.border.weak}`,
-    cursor: 'pointer',
-    '& > *': {
-      minWidth: 0,
-    },
-    '&:hover': {
-      background: theme.colors.action.hover,
-    },
-  }),
-  rowSelected: css({
-    background: theme.colors.action.hover,
-  }),
   evaluatorId: css({
     minWidth: 0,
   }),
@@ -73,6 +42,93 @@ const getStyles = (theme: GrafanaTheme2) => ({
 export default function EvaluatorTable({ evaluators, selectedEvaluatorID, onSelect, onDelete }: EvaluatorTableProps) {
   const styles = useStyles2(getStyles);
   const [pendingDeleteID, setPendingDeleteID] = useState<string | null>(null);
+
+  const columns = useMemo(() => {
+    const cols: Array<ColumnDef<Evaluator>> = [
+      {
+        id: 'evaluator_id',
+        header: 'Evaluator ID',
+        width: 240,
+        cell: (evaluator: Evaluator) => (
+          <div className={styles.evaluatorId}>
+            <Text weight="medium" truncate>
+              {evaluator.evaluator_id}
+            </Text>
+          </div>
+        ),
+      },
+      {
+        id: 'kind',
+        header: 'Kind',
+        width: 125,
+        cell: (evaluator: Evaluator) => (
+          <Badge text={EVALUATOR_KIND_LABELS[evaluator.kind]} color={getKindBadgeColor(evaluator.kind)} />
+        ),
+      },
+      {
+        id: 'version',
+        header: 'Version',
+        width: 140,
+        cell: (evaluator: Evaluator) => (
+          <Text color="secondary" variant="bodySmall">
+            {evaluator.version}
+          </Text>
+        ),
+      },
+      {
+        id: 'description',
+        header: 'Description',
+        minWidth: 120,
+        cell: (evaluator: Evaluator) => (
+          <Text color="secondary" variant="bodySmall" truncate>
+            {evaluator.description || '—'}
+          </Text>
+        ),
+      },
+      {
+        id: 'output_keys',
+        header: 'Output keys',
+        width: 210,
+        cell: (evaluator: Evaluator) => (
+          <div className={styles.outputKeys}>
+            {evaluator.output_keys.map((ok) => (
+              <Badge key={ok.key} text={`${ok.key}: ${ok.type}`} color="blue" />
+            ))}
+          </div>
+        ),
+      },
+      {
+        id: 'created',
+        header: 'Created',
+        width: 120,
+        cell: (evaluator: Evaluator) => (
+          <Text color="secondary" variant="bodySmall">
+            {formatDate(evaluator.created_at)}
+          </Text>
+        ),
+      },
+    ];
+
+    if (onDelete) {
+      cols.push({
+        id: 'actions',
+        header: '',
+        width: 56,
+        cell: (evaluator: Evaluator) => (
+          <IconButton
+            name="trash-alt"
+            tooltip="Delete"
+            onClick={(e) => {
+              e.stopPropagation();
+              setPendingDeleteID(evaluator.evaluator_id);
+            }}
+          />
+        ),
+      });
+    }
+
+    return cols;
+  }, [onDelete, styles.evaluatorId, styles.outputKeys]);
 
   return (
     <>
@@ -90,70 +146,14 @@ export default function EvaluatorTable({ evaluators, selectedEvaluatorID, onSele
         }}
         onDismiss={() => setPendingDeleteID(null)}
       />
-      <div className={styles.table}>
-        <div className={styles.header}>
-          <Text weight="medium" variant="bodySmall">
-            Evaluator ID
-          </Text>
-          <Text weight="medium" variant="bodySmall">
-            Kind
-          </Text>
-          <Text weight="medium" variant="bodySmall">
-            Version
-          </Text>
-          <Text weight="medium" variant="bodySmall">
-            Description
-          </Text>
-          <Text weight="medium" variant="bodySmall">
-            Output keys
-          </Text>
-          <Text weight="medium" variant="bodySmall">
-            Created
-          </Text>
-          <div />
-        </div>
-        {evaluators.map((evaluator) => (
-          <div
-            key={evaluator.evaluator_id}
-            className={
-              selectedEvaluatorID === evaluator.evaluator_id ? `${styles.row} ${styles.rowSelected}` : styles.row
-            }
-            onClick={() => onSelect?.(evaluator.evaluator_id)}
-            role="row"
-          >
-            <div className={styles.evaluatorId}>
-              <Text truncate>{evaluator.evaluator_id}</Text>
-            </div>
-            <div>
-              <Badge text={EVALUATOR_KIND_LABELS[evaluator.kind]} color={getKindBadgeColor(evaluator.kind)} />
-            </div>
-            <Text color="secondary" variant="bodySmall">
-              {evaluator.version}
-            </Text>
-            <Text color="secondary" variant="bodySmall" truncate>
-              {evaluator.description || '—'}
-            </Text>
-            <div className={styles.outputKeys}>
-              {evaluator.output_keys.map((ok) => (
-                <Badge key={ok.key} text={`${ok.key}: ${ok.type}`} color="blue" />
-              ))}
-            </div>
-            <Text color="secondary" variant="bodySmall">
-              {formatDate(evaluator.created_at)}
-            </Text>
-            {onDelete && (
-              <IconButton
-                name="trash-alt"
-                tooltip="Delete"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPendingDeleteID(evaluator.evaluator_id);
-                }}
-              />
-            )}
-          </div>
-        ))}
-      </div>
+      <DataTable<Evaluator>
+        columns={columns}
+        data={evaluators}
+        keyOf={(e) => e.evaluator_id}
+        onRowClick={onSelect ? (evaluator, _e) => onSelect(evaluator.evaluator_id) : undefined}
+        isSelected={selectedEvaluatorID != null ? (e) => selectedEvaluatorID === e.evaluator_id : undefined}
+        fixedLayout
+      />
     </>
   );
 }

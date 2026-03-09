@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, Button, Checkbox, Text, useStyles2 } from '@grafana/ui';
+import DataTable, { type ColumnDef } from '../shared/DataTable';
 import type { TemplateVersionSummary } from '../../evaluation/types';
 
 export type VersionHistoryTableProps = {
@@ -21,59 +22,6 @@ function formatDate(iso: string): string {
 }
 
 const getStyles = (theme: GrafanaTheme2) => ({
-  table: css({
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: theme.spacing(0.5),
-  }),
-  headerWithActions: css({
-    display: 'grid',
-    gridTemplateColumns: '72px 130px minmax(0, 1fr) 120px 96px',
-    gap: theme.spacing(1.5),
-    padding: theme.spacing(0.5, 0.5),
-    background: 'transparent',
-    alignItems: 'center',
-  }),
-  headerNoActions: css({
-    display: 'grid',
-    gridTemplateColumns: '72px 130px minmax(0, 1fr) 120px',
-    gap: theme.spacing(1.5),
-    padding: theme.spacing(0.5, 0.5),
-    background: 'transparent',
-    alignItems: 'center',
-  }),
-  rowWithActions: css({
-    display: 'grid',
-    gridTemplateColumns: '72px 130px minmax(0, 1fr) 120px 96px',
-    gap: theme.spacing(1.5),
-    padding: theme.spacing(0.75, 0.5),
-    alignItems: 'center',
-    border: `1px solid ${theme.colors.border.weak}`,
-    borderRadius: theme.shape.radius.default,
-    transition: 'background-color 120ms ease, border-color 120ms ease',
-    '&:hover': {
-      background: theme.colors.action.hover,
-      borderColor: theme.colors.border.medium,
-    },
-  }),
-  rowNoActions: css({
-    display: 'grid',
-    gridTemplateColumns: '72px 130px minmax(0, 1fr) 120px',
-    gap: theme.spacing(1.5),
-    padding: theme.spacing(0.75, 0.5),
-    alignItems: 'center',
-    border: `1px solid ${theme.colors.border.weak}`,
-    borderRadius: theme.shape.radius.default,
-    transition: 'background-color 120ms ease, border-color 120ms ease',
-    '&:hover': {
-      background: theme.colors.action.hover,
-      borderColor: theme.colors.border.medium,
-    },
-  }),
-  rowSelected: css({
-    background: theme.colors.action.hover,
-    borderColor: theme.colors.primary.border,
-  }),
   compareCell: css({
     display: 'flex',
     justifyContent: 'center',
@@ -108,46 +56,22 @@ export default function VersionHistoryTable({
   onRollback,
 }: VersionHistoryTableProps) {
   const styles = useStyles2(getStyles);
-  const hasActions = onRollback != null;
-  const headerClassName = hasActions ? styles.headerWithActions : styles.headerNoActions;
-  const rowClassName = hasActions ? styles.rowWithActions : styles.rowNoActions;
 
-  return (
-    <div className={styles.table}>
-      <div className={headerClassName}>
-        <div className={styles.headerText}>
-          <Text weight="medium" variant="bodySmall">
-            Compare
-          </Text>
-        </div>
-        <div className={styles.headerText}>
-          <Text weight="medium" variant="bodySmall">
-            Version
-          </Text>
-        </div>
-        <div className={styles.headerText}>
-          <Text weight="medium" variant="bodySmall">
-            Changelog
-          </Text>
-        </div>
-        <div className={styles.headerText}>
-          <Text weight="medium" variant="bodySmall">
-            Created
-          </Text>
-        </div>
-        {hasActions && <div />}
-      </div>
-      {versions.length === 0 && (
-        <div className={styles.empty}>
-          <Text color="secondary" variant="bodySmall">
-            No versions yet.
-          </Text>
-        </div>
-      )}
-      {versions.map((v) => {
-        const isSelected = selectedVersions.includes(v.version);
-        return (
-          <div key={v.version} className={isSelected ? `${rowClassName} ${styles.rowSelected}` : rowClassName}>
+  const columns = useMemo((): Array<ColumnDef<TemplateVersionSummary>> => {
+    const base: Array<ColumnDef<TemplateVersionSummary>> = [
+      {
+        id: 'compare',
+        header: (
+          <span className={styles.headerText}>
+            <Text weight="medium" variant="bodySmall">
+              Compare
+            </Text>
+          </span>
+        ),
+        width: 72,
+        cell: (v: TemplateVersionSummary) => {
+          const isSelected = selectedVersions.includes(v.version);
+          return (
             <div className={styles.compareCell}>
               <Checkbox
                 value={isSelected}
@@ -155,32 +79,86 @@ export default function VersionHistoryTable({
                 disabled={selectedVersions.length >= 2 && !isSelected}
               />
             </div>
-            <div className={styles.versionCell}>
-              <Badge text={v.version} color={isSelected ? 'blue' : 'purple'} />
-            </div>
-            <div className={styles.changelogCell}>
-              <Text truncate color="secondary" variant="bodySmall">
-                {v.changelog || 'No changelog provided'}
-              </Text>
-            </div>
-            <Text color="secondary" variant="bodySmall">
-              {formatDate(v.created_at)}
+          );
+        },
+      },
+      {
+        id: 'version',
+        header: (
+          <span className={styles.headerText}>
+            <Text weight="medium" variant="bodySmall">
+              Version
             </Text>
-            {hasActions && (
-              <div className={styles.actionsCell}>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => onRollback(v.version)}
-                  tooltip="Publish a new version with this config"
-                >
-                  Rollback
-                </Button>
-              </div>
-            )}
+          </span>
+        ),
+        cell: (v: TemplateVersionSummary) => (
+          <div className={styles.versionCell}>
+            <Badge text={v.version} color={selectedVersions.includes(v.version) ? 'blue' : 'purple'} />
           </div>
-        );
-      })}
-    </div>
+        ),
+      },
+      {
+        id: 'changelog',
+        header: (
+          <span className={styles.headerText}>
+            <Text weight="medium" variant="bodySmall">
+              Changelog
+            </Text>
+          </span>
+        ),
+        cell: (v: TemplateVersionSummary) => (
+          <div className={styles.changelogCell}>
+            <Text truncate color="secondary" variant="bodySmall">
+              {v.changelog || 'No changelog provided'}
+            </Text>
+          </div>
+        ),
+      },
+      {
+        id: 'created',
+        header: (
+          <span className={styles.headerText}>
+            <Text weight="medium" variant="bodySmall">
+              Created
+            </Text>
+          </span>
+        ),
+        cell: (v: TemplateVersionSummary) => (
+          <Text color="secondary" variant="bodySmall">
+            {formatDate(v.created_at)}
+          </Text>
+        ),
+      },
+    ];
+    if (onRollback != null) {
+      base.push({
+        id: 'actions',
+        header: '',
+        cell: (v: TemplateVersionSummary) => (
+          <div className={styles.actionsCell}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => onRollback(v.version)}
+              tooltip="Publish a new version with this config"
+            >
+              Rollback
+            </Button>
+          </div>
+        ),
+      });
+    }
+    return base;
+  }, [onRollback, onToggleSelect, selectedVersions, styles]);
+
+  return (
+    <DataTable<TemplateVersionSummary>
+      columns={columns}
+      data={versions}
+      keyOf={(v) => v.version}
+      isSelected={(v) => selectedVersions.includes(v.version)}
+      emptyMessage="No versions yet."
+      panelTitle="Version history"
+    />
   );
 }

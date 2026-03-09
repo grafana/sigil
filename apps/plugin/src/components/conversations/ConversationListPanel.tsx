@@ -1,12 +1,12 @@
-import React, { useCallback, useState } from 'react';
-import { css, cx } from '@emotion/css';
+import React, { useCallback, useMemo, useState } from 'react';
+import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, Button, Icon, Spinner, Stack, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import type { ConversationSearchResult } from '../../conversation/types';
-import { inferProviderFromModelName } from '../../modelcard/resolve';
 import type { ModelCard } from '../../modelcard/types';
-import { getProviderColor, getProviderMeta, stripProviderPrefix, toDisplayProvider } from './providerMeta';
-import { buildAgentDetailHref } from '../dashboard/ViewAgentsLink';
+import DataTable, { type ColumnDef } from '../shared/DataTable';
+import AgentChipList from '../shared/AgentChipList';
+import ModelChipList from '../shared/ModelChipList';
 
 export type ConversationListPanelProps = {
   conversations: ConversationSearchResult[];
@@ -97,73 +97,7 @@ function conversationUserIDForDisplay(conversation: ConversationSearchResult): s
   return '';
 }
 
-const MAX_VISIBLE_PILLS = 3;
-
 const getStyles = (theme: GrafanaTheme2) => ({
-  table: css({
-    label: 'conversationListPanel-table',
-    width: '100%',
-    borderCollapse: 'separate' as const,
-    borderSpacing: 0,
-    tableLayout: 'fixed' as const,
-  }),
-  headerRow: css({
-    label: 'conversationListPanel-headerRow',
-  }),
-  headerCell: css({
-    label: 'conversationListPanel-headerCell',
-    padding: theme.spacing(1, 1.5),
-    textAlign: 'left' as const,
-    fontSize: theme.typography.bodySmall.fontSize,
-    fontWeight: theme.typography.fontWeightMedium,
-    color: theme.colors.text.secondary,
-    whiteSpace: 'nowrap' as const,
-    position: 'sticky' as const,
-    top: 0,
-    background: theme.colors.background.primary,
-    zIndex: 2,
-  }),
-  row: css({
-    label: 'conversationListPanel-row',
-    cursor: 'pointer',
-    transition: 'background 0.15s ease',
-    borderRadius: theme.shape.radius.default,
-    '&:hover': {
-      background: theme.colors.action.hover,
-    },
-  }),
-  rowError: css({
-    label: 'conversationListPanel-rowError',
-    '& td:first-child': {
-      position: 'relative',
-      '&::before': {
-        content: '""',
-        position: 'absolute',
-        left: 0,
-        top: '20%',
-        bottom: '20%',
-        width: 3,
-        borderRadius: 2,
-        background: theme.colors.error.main,
-      },
-    },
-  }),
-  rowSelected: css({
-    label: 'conversationListPanel-rowSelected',
-    background: theme.colors.primary.transparent,
-    '&:hover': {
-      background: theme.colors.primary.transparent,
-    },
-  }),
-  cell: css({
-    label: 'conversationListPanel-cell',
-    padding: theme.spacing(1, 1.5),
-    fontSize: theme.typography.bodySmall.fontSize,
-    verticalAlign: 'top' as const,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap' as const,
-  }),
   idCell: css({
     label: 'conversationListPanel-idCell',
     fontFamily: theme.typography.fontFamilyMonospace,
@@ -219,72 +153,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
       color: theme.colors.text.primary,
     },
   }),
-  pillList: css({
-    label: 'conversationListPanel-pillList',
-    display: 'flex',
-    flexWrap: 'wrap' as const,
-    gap: theme.spacing(0.5),
-    overflow: 'hidden',
-  }),
-  agentPill: css({
-    label: 'conversationListPanel-agentPill',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: theme.spacing(0.25),
-    padding: theme.spacing(0.25, 0.75),
-    borderRadius: theme.shape.radius.pill,
-    fontSize: theme.typography.bodySmall.fontSize,
-    lineHeight: 1,
-    whiteSpace: 'nowrap' as const,
-    maxWidth: 160,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    background: theme.colors.info.transparent,
-    color: theme.colors.info.text,
-    border: `1px solid ${theme.colors.info.border}`,
-    textDecoration: 'none',
-    cursor: 'pointer',
-    transition: 'border-color 0.15s ease',
-    '&:hover': {
-      borderColor: theme.colors.info.text,
-      textDecoration: 'underline',
-    },
-  }),
-  modelChip: css({
-    label: 'conversationListPanel-modelChip',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: theme.spacing(0.5),
-    padding: theme.spacing(0.25, 0.75),
-    borderRadius: '12px',
-    border: `1px solid ${theme.colors.border.medium}`,
-    background: theme.colors.background.secondary,
-    fontSize: theme.typography.bodySmall.fontSize,
-    lineHeight: 1,
-    whiteSpace: 'nowrap' as const,
-    maxWidth: 200,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  }),
-  modelChipDot: css({
-    label: 'conversationListPanel-modelChipDot',
-    width: 8,
-    height: 8,
-    borderRadius: '50%',
-    flexShrink: 0,
-  }),
-  overflowPill: css({
-    label: 'conversationListPanel-overflowPill',
-    display: 'inline-flex',
-    alignItems: 'center',
-    padding: theme.spacing(0.25, 0.5),
-    borderRadius: theme.shape.radius.pill,
-    fontSize: theme.typography.bodySmall.fontSize,
-    lineHeight: 1,
-    color: theme.colors.text.secondary,
-    background: theme.colors.background.secondary,
-    border: `1px solid ${theme.colors.border.weak}`,
-  }),
   ratingGroup: css({
     label: 'conversationListPanel-ratingGroup',
     display: 'flex',
@@ -320,6 +188,18 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.secondary,
     fontFamily: theme.typography.fontFamilyMonospace,
   }),
+  activityDuration: css({
+    label: 'conversationListPanel-activityDuration',
+    color: theme.colors.text.secondary,
+    fontFamily: theme.typography.fontFamilyMonospace,
+    minWidth: 48,
+    textAlign: 'right' as const,
+  }),
+  activityCalls: css({
+    label: 'conversationListPanel-activityCalls',
+    fontVariantNumeric: 'tabular-nums',
+    fontWeight: theme.typography.fontWeightBold,
+  }),
   callCountCell: css({
     label: 'conversationListPanel-callCountCell',
     fontVariantNumeric: 'tabular-nums',
@@ -351,15 +231,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     overflowX: 'auto' as const,
     overscrollBehavior: 'none' as const,
   }),
-  colLastActivity: css({ width: 100 }),
-  colConversation: css({ width: 300 }),
-  colActivity: css({ width: 140 }),
-  colAgents: css({ width: '20%' }),
-  colModels: css({ width: '20%' }),
-  colQuality: css({ width: 100 }),
-  colTokens: css({ width: 90 }),
-  colCacheHitRate: css({ width: 100 }),
-  colEval: css({ width: 90 }),
   evalBar: css({
     display: 'flex',
     flexDirection: 'column' as const,
@@ -415,91 +286,6 @@ function CopyIdButton({ id }: { id: string }) {
   );
 }
 
-function AgentPillList({ items }: { items: string[] }) {
-  const styles = useStyles2(getStyles);
-  if (items.length === 0) {
-    return <Text color="secondary">-</Text>;
-  }
-
-  const visible = items.slice(0, MAX_VISIBLE_PILLS);
-  const overflow = items.length - MAX_VISIBLE_PILLS;
-
-  return (
-    <div className={styles.pillList}>
-      {visible.map((item) => (
-        <a
-          key={item}
-          href={buildAgentDetailHref(item)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={styles.agentPill}
-          title={`Open ${item} agent page`}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Icon name="user" size="xs" />
-          {item}
-        </a>
-      ))}
-      {overflow > 0 && (
-        <Tooltip content={items.slice(MAX_VISIBLE_PILLS).join(', ')}>
-          <span className={styles.overflowPill}>+{overflow}</span>
-        </Tooltip>
-      )}
-    </div>
-  );
-}
-
-function resolveModelDisplay(
-  model: string,
-  modelCards?: Map<string, ModelCard>
-): { displayName: string; color: string } {
-  const apiProvider = inferProviderFromModelName(model);
-
-  if (modelCards && modelCards.size > 0 && apiProvider) {
-    const card = modelCards.get(`${apiProvider}::${model}`);
-    if (card) {
-      const displayProv = toDisplayProvider(card.provider);
-      const cleanName = stripProviderPrefix(card.name || card.source_model_id, getProviderMeta(displayProv).label);
-      return { displayName: cleanName, color: getProviderColor(displayProv) };
-    }
-  }
-
-  const displayProv = toDisplayProvider(apiProvider);
-  const meta = getProviderMeta(displayProv);
-  return { displayName: stripProviderPrefix(model, meta.label), color: getProviderColor(displayProv) };
-}
-
-function ModelPillList({ models, modelCards }: { models: string[]; modelCards?: Map<string, ModelCard> }) {
-  const styles = useStyles2(getStyles);
-  if (models.length === 0) {
-    return <Text color="secondary">-</Text>;
-  }
-
-  const visible = models.slice(0, MAX_VISIBLE_PILLS);
-  const overflow = models.length - MAX_VISIBLE_PILLS;
-
-  return (
-    <div className={styles.pillList}>
-      {visible.map((model) => {
-        const { displayName, color } = resolveModelDisplay(model, modelCards);
-        return (
-          <Tooltip key={model} content={model}>
-            <span className={styles.modelChip}>
-              <span className={styles.modelChipDot} style={{ background: color }} />
-              {displayName}
-            </span>
-          </Tooltip>
-        );
-      })}
-      {overflow > 0 && (
-        <Tooltip content={models.slice(MAX_VISIBLE_PILLS).join(', ')}>
-          <span className={styles.overflowPill}>+{overflow}</span>
-        </Tooltip>
-      )}
-    </div>
-  );
-}
-
 export default function ConversationListPanel({
   conversations,
   selectedConversationId,
@@ -527,6 +313,242 @@ export default function ConversationListPanel({
     [getConversationHref, onSelectConversation]
   );
 
+  const onDataTableRowClick = useCallback(
+    (conversation: ConversationSearchResult, e: React.MouseEvent) => {
+      handleRowClick(e, conversation.conversation_id, conversation.conversation_title);
+    },
+    [handleRowClick]
+  );
+
+  const compactColumns = useMemo<Array<ColumnDef<ConversationSearchResult>>>(
+    () => [
+      {
+        id: 'time',
+        header: '',
+        width: '1%',
+        cell: (conversation: ConversationSearchResult) => (
+          <Tooltip content={new Date(conversation.last_generation_at).toLocaleString()} placement="left">
+            <span className={styles.timeCell}>{formatRelativeTime(conversation.last_generation_at)}</span>
+          </Tooltip>
+        ),
+      },
+      {
+        id: 'conversation',
+        header: '',
+        cell: (conversation: ConversationSearchResult) => {
+          const displayTitle = conversationTitleForDisplay(conversation);
+          const hasTitle = displayTitle !== conversation.conversation_id;
+          const userID = conversationUserIDForDisplay(conversation);
+          return (
+            <Tooltip
+              content={
+                hasTitle ? (
+                  <>
+                    {displayTitle}
+                    <br />
+                    {conversation.conversation_id}
+                    {userID.length > 0 && (
+                      <>
+                        <br />
+                        {userID}
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {conversation.conversation_id}
+                    {userID.length > 0 && (
+                      <>
+                        <br />
+                        {userID}
+                      </>
+                    )}
+                  </>
+                )
+              }
+            >
+              <div className={styles.idCellStack}>
+                <span className={styles.idCellPrimary}>{displayTitle}</span>
+                {userID.length > 0 && <span className={styles.idCellSecondary}>{userID}</span>}
+              </div>
+            </Tooltip>
+          );
+        },
+      },
+    ],
+    [styles]
+  );
+
+  const extendedColumns = useMemo<Array<ColumnDef<ConversationSearchResult>>>(() => {
+    const cols: Array<ColumnDef<ConversationSearchResult>> = [
+      {
+        id: 'lastActivity',
+        header: 'Last activity',
+        width: 100,
+        cell: (conversation: ConversationSearchResult) => (
+          <Tooltip content={new Date(conversation.last_generation_at).toLocaleString()} placement="left">
+            <span className={styles.timeCell}>{formatRelativeTime(conversation.last_generation_at)}</span>
+          </Tooltip>
+        ),
+      },
+      {
+        id: 'conversation',
+        header: 'Conversation',
+        width: 280,
+        cell: (conversation: ConversationSearchResult) => {
+          const displayTitle = conversationTitleForDisplay(conversation);
+          const hasTitle = displayTitle !== conversation.conversation_id;
+          const userID = conversationUserIDForDisplay(conversation);
+          return (
+            <div className={styles.idCell}>
+              <div className={styles.idCellStack}>
+                {hasTitle ? (
+                  <Tooltip content={displayTitle}>
+                    <span className={styles.idCellPrimary}>{displayTitle}</span>
+                  </Tooltip>
+                ) : conversation.conversation_id.length > 40 ? (
+                  <Tooltip content={conversation.conversation_id}>
+                    <span className={styles.idCellPrimary}>{truncateId(conversation.conversation_id)}</span>
+                  </Tooltip>
+                ) : (
+                  <span className={styles.idCellPrimary}>{conversation.conversation_id}</span>
+                )}
+                {userID.length > 0 && (
+                  <Tooltip content={userID}>
+                    <span className={styles.idCellSecondary}>{userID}</span>
+                  </Tooltip>
+                )}
+              </div>
+              <CopyIdButton id={conversation.conversation_id} />
+            </div>
+          );
+        },
+      },
+      {
+        id: 'activity',
+        header: 'Activity',
+        width: 140,
+        cell: (conversation: ConversationSearchResult) => (
+          <div className={styles.groupedCell}>
+            <span className={styles.activityDuration}>
+              {formatDuration(conversation.first_generation_at, conversation.last_generation_at)}
+            </span>
+            <span className={styles.groupedSeparator}>·</span>
+            <span className={styles.activityCalls}>
+              {conversation.generation_count} {conversation.generation_count === 1 ? 'call' : 'calls'}
+            </span>
+          </div>
+        ),
+      },
+    ];
+
+    if (getConversationTokens) {
+      cols.push({
+        id: 'tokens',
+        header: 'Tokens',
+        width: 90,
+        cell: (conversation: ConversationSearchResult) => (
+          <span className={styles.durationCell}>{formatTokenCount(getConversationTokens(conversation))}</span>
+        ),
+      });
+    }
+
+    if (getConversationCacheHitRate) {
+      cols.push({
+        id: 'cacheHit',
+        header: 'Cache hit',
+        width: 100,
+        cell: (conversation: ConversationSearchResult) => (
+          <span className={styles.durationCell}>{formatCacheHitRate(getConversationCacheHitRate(conversation))}</span>
+        ),
+      });
+    }
+
+    cols.push(
+      {
+        id: 'agents',
+        header: 'Agents',
+        width: '20%',
+        cell: (conversation: ConversationSearchResult) => <AgentChipList agents={conversation.agents} />,
+      },
+      {
+        id: 'models',
+        header: 'Models',
+        width: '15%',
+        cell: (conversation: ConversationSearchResult) => (
+          <ModelChipList models={conversation.models} modelCards={modelCards} />
+        ),
+      },
+      {
+        id: 'quality',
+        header: 'Quality',
+        width: 100,
+        cell: (conversation: ConversationSearchResult) => {
+          const rating = conversation.rating_summary;
+          return (
+            <div className={styles.groupedCell}>
+              {conversation.error_count > 0 ? (
+                <Badge text={String(conversation.error_count)} color="red" />
+              ) : (
+                <Text color="secondary">-</Text>
+              )}
+              {rating != null && rating.total_count > 0 && (
+                <>
+                  <span className={styles.groupedSeparator}>·</span>
+                  <div className={styles.ratingGroup}>
+                    {rating.good_count > 0 && (
+                      <Stack direction="row" gap={0.25} alignItems="center">
+                        <Icon name="thumbs-up" size="sm" />
+                        <span>{rating.good_count}</span>
+                      </Stack>
+                    )}
+                    {rating.bad_count > 0 && (
+                      <Stack direction="row" gap={0.25} alignItems="center">
+                        <Icon name="thumbs-down" size="sm" />
+                        <span>{rating.bad_count}</span>
+                      </Stack>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        id: 'evals',
+        header: 'Evals',
+        width: 130,
+        cell: (conversation: ConversationSearchResult) => {
+          if (
+            conversation.eval_summary != null &&
+            (conversation.eval_summary.pass_count > 0 || conversation.eval_summary.fail_count > 0)
+          ) {
+            const { pass_count, fail_count } = conversation.eval_summary;
+            const total = pass_count + fail_count;
+            const pct = total > 0 ? Math.round((pass_count / total) * 100) : 0;
+            return (
+              <div className={styles.evalBar}>
+                <div className={styles.evalBarTrack}>
+                  <div className={styles.evalBarFill} style={{ width: `${pct}%` }} />
+                </div>
+                <div className={styles.evalBarLabel}>
+                  <span className={styles.evalBarPct}>{pct}%</span>
+                  <span>
+                    {pass_count}p · {fail_count}f
+                  </span>
+                </div>
+              </div>
+            );
+          }
+          return <Text color="secondary">-</Text>;
+        },
+      }
+    );
+
+    return cols;
+  }, [styles, getConversationTokens, getConversationCacheHitRate, modelCards]);
+
   if (loading) {
     return (
       <div className={styles.emptyState}>
@@ -544,247 +566,25 @@ export default function ConversationListPanel({
     );
   }
 
-  if (!showExtendedColumns) {
-    return (
-      <div className={styles.container}>
-        <div className={styles.listScroll}>
-          <table className={styles.table}>
-            <tbody>
-              {conversations.map((conversation) => {
-                const selected = conversation.conversation_id === selectedConversationId;
-                const displayTitle = conversationTitleForDisplay(conversation);
-                const hasTitle = displayTitle !== conversation.conversation_id;
-                const userID = conversationUserIDForDisplay(conversation);
-                return (
-                  <tr
-                    key={conversation.conversation_id}
-                    className={cx(
-                      styles.row,
-                      selected && styles.rowSelected,
-                      conversation.has_errors && styles.rowError
-                    )}
-                    onClick={(e) => handleRowClick(e, conversation.conversation_id, conversation.conversation_title)}
-                    role="button"
-                    aria-label={`select conversation ${conversation.conversation_id}`}
-                    aria-selected={selected}
-                  >
-                    <td className={cx(styles.cell, styles.timeCell, styles.timeCellCompact)}>
-                      <Tooltip content={new Date(conversation.last_generation_at).toLocaleString()} placement="left">
-                        <span>{formatRelativeTime(conversation.last_generation_at)}</span>
-                      </Tooltip>
-                    </td>
-                    <td className={cx(styles.cell, styles.idCellTruncated)}>
-                      <Tooltip
-                        content={
-                          hasTitle ? (
-                            <>
-                              {displayTitle}
-                              <br />
-                              {conversation.conversation_id}
-                              {userID.length > 0 && (
-                                <>
-                                  <br />
-                                  {userID}
-                                </>
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              {conversation.conversation_id}
-                              {userID.length > 0 && (
-                                <>
-                                  <br />
-                                  {userID}
-                                </>
-                              )}
-                            </>
-                          )
-                        }
-                      >
-                        <div className={styles.idCellStack}>
-                          <span className={styles.idCellPrimary}>{displayTitle}</span>
-                          {userID.length > 0 && <span className={styles.idCellSecondary}>{userID}</span>}
-                        </div>
-                      </Tooltip>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        {hasMore && (
-          <Button
-            aria-label="load more conversations"
-            onClick={onLoadMore}
-            disabled={loadingMore}
-            variant="secondary"
-            fullWidth
-          >
-            {loadingMore ? 'Loading...' : 'Load more'}
-          </Button>
-        )}
-      </div>
-    );
-  }
+  const columns = showExtendedColumns ? extendedColumns : compactColumns;
 
   return (
     <div className={styles.container}>
       <div className={styles.listScroll}>
-        <table className={styles.table}>
-          <colgroup>
-            <col className={styles.colLastActivity} />
-            <col className={styles.colConversation} />
-            <col className={styles.colActivity} />
-            {getConversationTokens && <col className={styles.colTokens} />}
-            {getConversationCacheHitRate && <col className={styles.colCacheHitRate} />}
-            <col className={styles.colAgents} />
-            <col className={styles.colModels} />
-            <col className={styles.colQuality} />
-            <col className={styles.colEval} />
-          </colgroup>
-          <thead>
-            <tr className={styles.headerRow}>
-              <th className={styles.headerCell}>Last activity</th>
-              <th className={styles.headerCell}>Conversation</th>
-              <th className={styles.headerCell}>Activity</th>
-              {getConversationTokens && <th className={styles.headerCell}>Tokens</th>}
-              {getConversationCacheHitRate && <th className={styles.headerCell}>Cache hit</th>}
-              <th className={styles.headerCell}>Agents</th>
-              <th className={styles.headerCell}>Models</th>
-              <th className={styles.headerCell}>Quality</th>
-              <th className={styles.headerCell}>Evals</th>
-            </tr>
-          </thead>
-          <tbody>
-            {conversations.map((conversation) => {
-              const selected = conversation.conversation_id === selectedConversationId;
-              const displayTitle = conversationTitleForDisplay(conversation);
-              const hasTitle = displayTitle !== conversation.conversation_id;
-              const userID = conversationUserIDForDisplay(conversation);
-              const rating = conversation.rating_summary;
-              return (
-                <tr
-                  key={conversation.conversation_id}
-                  className={cx(styles.row, selected && styles.rowSelected, conversation.has_errors && styles.rowError)}
-                  onClick={(e) => handleRowClick(e, conversation.conversation_id, conversation.conversation_title)}
-                  role="button"
-                  aria-label={`select conversation ${conversation.conversation_id}`}
-                  aria-selected={selected}
-                >
-                  <td className={cx(styles.cell, styles.timeCell)}>
-                    <Tooltip content={new Date(conversation.last_generation_at).toLocaleString()} placement="left">
-                      <span>{formatRelativeTime(conversation.last_generation_at)}</span>
-                    </Tooltip>
-                  </td>
-                  <td className={styles.cell}>
-                    <div className={styles.idCell}>
-                      <div className={styles.idCellStack}>
-                        {hasTitle ? (
-                          <Tooltip content={displayTitle}>
-                            <span className={styles.idCellPrimary}>{displayTitle}</span>
-                          </Tooltip>
-                        ) : conversation.conversation_id.length > 40 ? (
-                          <Tooltip content={conversation.conversation_id}>
-                            <span className={styles.idCellPrimary}>{truncateId(conversation.conversation_id)}</span>
-                          </Tooltip>
-                        ) : (
-                          <span className={styles.idCellPrimary}>{conversation.conversation_id}</span>
-                        )}
-                        {userID.length > 0 && (
-                          <Tooltip content={userID}>
-                            <span className={styles.idCellSecondary}>{userID}</span>
-                          </Tooltip>
-                        )}
-                      </div>
-                      <CopyIdButton id={conversation.conversation_id} />
-                    </div>
-                  </td>
-                  <td className={styles.cell}>
-                    <div className={styles.groupedCell}>
-                      <span className={styles.durationCell}>
-                        {formatDuration(conversation.first_generation_at, conversation.last_generation_at)}
-                      </span>
-                      <span className={styles.groupedSeparator}>·</span>
-                      <span className={styles.callCountCell}>{conversation.generation_count} calls</span>
-                    </div>
-                  </td>
-                  {getConversationTokens && (
-                    <td className={cx(styles.cell, styles.durationCell)}>
-                      {formatTokenCount(getConversationTokens(conversation))}
-                    </td>
-                  )}
-                  {getConversationCacheHitRate && (
-                    <td className={cx(styles.cell, styles.durationCell)}>
-                      {formatCacheHitRate(getConversationCacheHitRate(conversation))}
-                    </td>
-                  )}
-                  <td className={styles.cell}>
-                    <AgentPillList items={conversation.agents} />
-                  </td>
-                  <td className={styles.cell}>
-                    <ModelPillList models={conversation.models} modelCards={modelCards} />
-                  </td>
-                  <td className={styles.cell}>
-                    <div className={styles.groupedCell}>
-                      {conversation.error_count > 0 ? (
-                        <Badge text={String(conversation.error_count)} color="red" />
-                      ) : (
-                        <Text color="secondary">-</Text>
-                      )}
-                      {rating != null && rating.total_count > 0 && (
-                        <>
-                          <span className={styles.groupedSeparator}>·</span>
-                          <div className={styles.ratingGroup}>
-                            {rating.good_count > 0 && (
-                              <Stack direction="row" gap={0.25} alignItems="center">
-                                <Icon name="thumbs-up" size="sm" />
-                                <span>{rating.good_count}</span>
-                              </Stack>
-                            )}
-                            {rating.bad_count > 0 && (
-                              <Stack direction="row" gap={0.25} alignItems="center">
-                                <Icon name="thumbs-down" size="sm" />
-                                <span>{rating.bad_count}</span>
-                              </Stack>
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                  <td className={styles.cell}>
-                    {conversation.eval_summary != null &&
-                    (conversation.eval_summary.pass_count > 0 || conversation.eval_summary.fail_count > 0) ? (
-                      (() => {
-                        const { pass_count, fail_count } = conversation.eval_summary;
-                        const total = pass_count + fail_count;
-                        const pct = total > 0 ? Math.round((pass_count / total) * 100) : 0;
-                        return (
-                          <div className={styles.evalBar}>
-                            <div className={styles.evalBarTrack}>
-                              <div className={styles.evalBarFill} style={{ width: `${pct}%` }} />
-                            </div>
-                            <div className={styles.evalBarLabel}>
-                              <span className={styles.evalBarPct}>{pct}%</span>
-                              <span>
-                                {pass_count}p · {fail_count}f
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })()
-                    ) : (
-                      <Text color="secondary">-</Text>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <DataTable
+          columns={columns}
+          data={conversations}
+          keyOf={(c) => c.conversation_id}
+          onRowClick={onDataTableRowClick}
+          isSelected={(c) => c.conversation_id === selectedConversationId}
+          rowVariant={(c) => (c.has_errors ? 'error' : undefined)}
+          rowRole="button"
+          rowAriaLabel={(c) => `select conversation ${c.conversation_id}`}
+          showHeader={showExtendedColumns}
+          stickyHeader={showExtendedColumns}
+          fixedLayout={true}
+        />
       </div>
-
       {hasMore && (
         <Button
           aria-label="load more conversations"
