@@ -353,6 +353,8 @@ func validateManualGenerations(generations []ManualGeneration) error {
 		if err := validateManualMessages(fmt.Sprintf("generation[%d].output", idx), gen.Output); err != nil {
 			return err
 		}
+		gen.StartedAt = normalizeTimePointer(gen.StartedAt)
+		gen.CompletedAt = normalizeTimePointer(gen.CompletedAt)
 		if gen.StartedAt != nil && gen.CompletedAt != nil && gen.CompletedAt.Before(*gen.StartedAt) {
 			return fmt.Errorf("generation[%d]: completed_at must be >= started_at", idx)
 		}

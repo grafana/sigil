@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"sort"
 	"strings"
@@ -274,6 +275,29 @@ func TestTemplateService_CreateDuplicate(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("expected 'already exists' in error, got %q", err.Error())
+	}
+}
+
+func TestTemplateService_CreateTemplate_MapsStoreConflict(t *testing.T) {
+	store := newMemoryTemplateStore()
+	store.createErr = fmt.Errorf("%w: template %q already exists", evalpkg.ErrConflict, "dup_template")
+	svc := NewTemplateService(store, nil)
+
+	_, err := svc.CreateTemplate(context.Background(), "tenant_1", CreateTemplateRequest{
+		TemplateID: "dup_template",
+		Kind:       "llm_judge",
+		Version:    "2026-03-01",
+		Config:     map[string]any{"provider": "openai", "model": "gpt-4o-mini"},
+		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
+	})
+	if err == nil {
+		t.Fatal("expected conflict error")
+	}
+	if !isConflictError(err) {
+		t.Fatalf("expected conflict error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "template \"dup_template\" already exists") {
+		t.Fatalf("unexpected conflict error: %v", err)
 	}
 }
 

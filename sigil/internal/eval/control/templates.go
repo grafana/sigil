@@ -164,6 +164,9 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, tenantID string, r
 	}
 
 	if err := s.store.CreateTemplate(ctx, tmpl, ver); err != nil {
+		if errors.Is(err, evalpkg.ErrConflict) {
+			return nil, ConflictError(fmt.Sprintf("template %q already exists", templateID))
+		}
 		return nil, err
 	}
 	return &tmpl, nil

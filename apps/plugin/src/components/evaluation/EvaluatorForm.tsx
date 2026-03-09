@@ -140,6 +140,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
   validationMessage: css({
     marginTop: theme.spacing(0.25),
   }),
+  gridContents: css({
+    display: 'contents',
+  }),
+  gridValidationMessage: css({
+    gridColumn: '1 / -1',
+    marginTop: theme.spacing(0.25),
+  }),
   actions: css({
     display: 'flex',
     justifyContent: 'flex-start',
@@ -558,7 +565,7 @@ export default function EvaluatorForm({
               </Text>
             </div>
             <div className={styles.twoColumnGrid}>
-              <div ref={judgeTargetFieldRef}>
+              <div ref={judgeTargetFieldRef} className={styles.gridContents}>
                 <JudgeProviderModelFields
                   compactControlClassName={styles.compactControl}
                   provider={provider}
@@ -570,7 +577,7 @@ export default function EvaluatorForm({
                   setModelOptions={setModelOptions}
                 />
                 {showJudgeTargetError && judgeTargetError && (
-                  <div className={styles.validationMessage}>
+                  <div className={styles.gridValidationMessage}>
                     <Text variant="bodySmall" color="error">
                       {judgeTargetError}
                     </Text>

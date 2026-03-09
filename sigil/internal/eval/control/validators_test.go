@@ -245,3 +245,34 @@ func TestNormalizeTimePointer(t *testing.T) {
 		t.Fatalf("expected UTC conversion, got %v", got)
 	}
 }
+
+func TestValidateManualGenerations_NormalizesTimesToUTC(t *testing.T) {
+	loc := time.FixedZone("custom", -5*60*60)
+	startedAt := time.Date(2026, 3, 9, 12, 0, 0, 0, loc)
+	completedAt := time.Date(2026, 3, 9, 12, 1, 0, 0, loc)
+	generations := []ManualGeneration{{
+		GenerationID: "gen-1",
+		Mode:         "sync",
+		Model: ManualModelRef{
+			Provider: "openai",
+			Name:     "gpt-4o-mini",
+		},
+		Input:       []ManualMessage{{Role: "user", Content: "hello"}},
+		Output:      []ManualMessage{{Role: "assistant", Content: "world"}},
+		StartedAt:   &startedAt,
+		CompletedAt: &completedAt,
+	}}
+
+	if err := validateManualGenerations(generations); err != nil {
+		t.Fatalf("validate manual generations: %v", err)
+	}
+	if generations[0].StartedAt == nil || generations[0].CompletedAt == nil {
+		t.Fatal("expected timestamps to remain populated")
+	}
+	if generations[0].StartedAt.Location() != time.UTC {
+		t.Fatalf("expected started_at to be normalized to UTC, got %v", generations[0].StartedAt.Location())
+	}
+	if generations[0].CompletedAt.Location() != time.UTC {
+		t.Fatalf("expected completed_at to be normalized to UTC, got %v", generations[0].CompletedAt.Location())
+	}
+}

@@ -188,6 +188,38 @@ func TestTemplateStoreCRUD(t *testing.T) {
 	}
 }
 
+func TestTemplateStoreCreateTemplate_ActiveDuplicateReturnsConflict(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	create := func(version string) error {
+		return store.CreateTemplate(context.Background(), evalpkg.TemplateDefinition{
+			TenantID:      "tenant-a",
+			TemplateID:    "tmpl.helpfulness",
+			Scope:         evalpkg.TemplateScopeTenant,
+			LatestVersion: version,
+			Kind:          evalpkg.EvaluatorKindLLMJudge,
+		}, evalpkg.TemplateVersion{
+			TenantID:   "tenant-a",
+			TemplateID: "tmpl.helpfulness",
+			Version:    version,
+			Config:     map[string]any{"provider": "openai", "model": "gpt-4o-mini"},
+			OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
+		})
+	}
+
+	if err := create("v1"); err != nil {
+		t.Fatalf("first create: %v", err)
+	}
+	if err := create("v2"); !errors.Is(err, evalpkg.ErrConflict) {
+		t.Fatalf("expected ErrConflict, got %v", err)
+	}
+}
+
 func TestTemplateStoreListTemplatesIsTenantOnly(t *testing.T) {
 	store, cleanup := newTestWALStore(t)
 	defer cleanup()

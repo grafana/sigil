@@ -76,30 +76,35 @@ func (s *WALStore) CreateTemplate(ctx context.Context, tmpl evalpkg.TemplateDefi
 	}
 
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Check if a non-deleted template with this ID already exists.
 		var existing EvalTemplateModel
-		err := tx.Where("tenant_id = ? AND template_id = ? AND deleted_at IS NULL",
-			tmplModel.TenantID, tmplModel.TemplateID).First(&existing).Error
-		if err == nil {
-			return fmt.Errorf("template %q already exists", tmplModel.TemplateID)
-		}
-		if !errors.Is(err, gorm.ErrRecordNotFound) {
+		err := tx.Unscoped().
+			Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("tenant_id = ? AND template_id = ?", tmplModel.TenantID, tmplModel.TemplateID).
+			Take(&existing).Error
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			if err := tx.Create(&tmplModel).Error; err != nil {
+				if isDuplicateKeyError(err) {
+					return fmt.Errorf("%w: template %q already exists", evalpkg.ErrConflict, tmplModel.TemplateID)
+				}
+				return fmt.Errorf("create template: %w", err)
+			}
+		case err != nil:
 			return fmt.Errorf("check existing template: %w", err)
-		}
-
-		// Use upsert to handle re-creating a soft-deleted template.
-		if err := tx.Clauses(clause.OnConflict{
-			Columns: []clause.Column{{Name: "tenant_id"}, {Name: "template_id"}},
-			DoUpdates: clause.Assignments(map[string]any{
+		case existing.DeletedAt == nil:
+			return fmt.Errorf("%w: template %q already exists", evalpkg.ErrConflict, tmplModel.TemplateID)
+		default:
+			updates := map[string]any{
 				"scope":          tmplModel.Scope,
 				"latest_version": tmplModel.LatestVersion,
 				"kind":           tmplModel.Kind,
 				"description":    tmplModel.Description,
 				"deleted_at":     nil,
 				"updated_at":     now,
-			}),
-		}).Create(&tmplModel).Error; err != nil {
-			return fmt.Errorf("create template: %w", err)
+			}
+			if err := tx.Model(&EvalTemplateModel{}).Where("id = ?", existing.ID).Updates(updates).Error; err != nil {
+				return fmt.Errorf("restore template: %w", err)
+			}
 		}
 		if err := tx.Clauses(clause.OnConflict{
 			Columns: []clause.Column{{Name: "tenant_id"}, {Name: "template_id"}, {Name: "version"}},
