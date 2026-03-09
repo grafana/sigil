@@ -2552,7 +2552,7 @@ func TestCallResourceConversationExploreBuildsCompactSpanGraph(t *testing.T) {
 func TestExtractExploreGenerationsFallsBackToConversationWindow(t *testing.T) {
 	conversationWindow := conversationExploreWindowFromStrings("2026-03-06T10:00:00Z", "2026-03-06T10:05:00Z")
 
-	_, traceIDs, _, traceWindows := extractExploreGenerations(
+	traceIDs, _, traceWindows := extractExploreGenerations(
 		[]any{
 			map[string]any{
 				"generation_id":   "gen-1",
@@ -2583,7 +2583,7 @@ func TestExtractExploreGenerationsFallsBackToConversationWindow(t *testing.T) {
 func TestExtractExploreGenerationsUsesConversationEnvelopeForTraceWindows(t *testing.T) {
 	conversationWindow := conversationExploreWindowFromStrings("2026-03-06T10:00:00Z", "2026-03-06T10:05:00Z")
 
-	_, _, _, traceWindows := extractExploreGenerations(
+	_, _, traceWindows := extractExploreGenerations(
 		[]any{
 			map[string]any{
 				"generation_id":   "gen-1",

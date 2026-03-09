@@ -156,11 +156,10 @@ func (a *App) handleConversationExplore(w http.ResponseWriter, req *http.Request
 		stringField(detail, "first_generation_at"),
 		stringField(detail, "last_generation_at"),
 	)
-	generations, traceIDs, generationSpanKeys, traceWindows := extractExploreGenerations(
+	traceIDs, generationSpanKeys, traceWindows := extractExploreGenerations(
 		detail["generations"],
 		conversationWindow,
 	)
-	_ = generations
 	spans := []conversationExploreSpan{}
 	if a.hasGrafanaDatasourceProxyTarget(a.tempoDatasourceUID) && len(traceIDs) > 0 {
 		spans = a.fetchConversationExploreSpans(req, traceIDs, generationSpanKeys, traceWindows)
@@ -172,13 +171,12 @@ func (a *App) handleConversationExplore(w http.ResponseWriter, req *http.Request
 func extractExploreGenerations(
 	raw any,
 	conversationWindow conversationExploreTraceWindow,
-) ([]map[string]any, []string, map[string]struct{}, map[string]conversationExploreTraceWindow) {
+) ([]string, map[string]struct{}, map[string]conversationExploreTraceWindow) {
 	items, ok := raw.([]any)
 	if !ok || len(items) == 0 {
-		return nil, nil, map[string]struct{}{}, map[string]conversationExploreTraceWindow{}
+		return nil, map[string]struct{}{}, map[string]conversationExploreTraceWindow{}
 	}
 
-	generations := make([]map[string]any, 0, len(items))
 	traceIDs := make([]string, 0, len(items))
 	seenTraceIDs := make(map[string]struct{}, len(items))
 	generationSpanKeys := make(map[string]struct{}, len(items))
@@ -188,7 +186,6 @@ func extractExploreGenerations(
 		if !ok {
 			continue
 		}
-		generations = append(generations, generation)
 
 		traceID := stringField(generation, "trace_id")
 		spanID := stringField(generation, "span_id")
@@ -222,7 +219,7 @@ func extractExploreGenerations(
 			boundedTraceWindows[traceID] = paddedConversationExploreWindow(window.Start, window.End)
 		}
 	}
-	return generations, traceIDs, generationSpanKeys, boundedTraceWindows
+	return traceIDs, generationSpanKeys, boundedTraceWindows
 }
 
 func stringField(record map[string]any, key string) string {
@@ -748,16 +745,17 @@ func parseNanoValue(value any) (int64, bool) {
 }
 
 func normalizeSpanKind(kind any) string {
-	switch strings.TrimSpace(fmt.Sprint(kind)) {
-	case "1":
+	normalized := strings.ToUpper(strings.TrimSpace(fmt.Sprint(kind)))
+	switch normalized {
+	case "INTERNAL", "1":
 		return "INTERNAL"
-	case "2":
+	case "SERVER", "2":
 		return "SERVER"
-	case "3":
+	case "CLIENT", "3":
 		return "CLIENT"
-	case "4":
+	case "PRODUCER", "4":
 		return "PRODUCER"
-	case "5":
+	case "CONSUMER", "5":
 		return "CONSUMER"
 	default:
 		return "UNSPECIFIED"
