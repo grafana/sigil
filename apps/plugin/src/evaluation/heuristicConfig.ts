@@ -232,9 +232,13 @@ function parseHeuristicNumber(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isInteger(value)) {
     return value;
   }
-  if (typeof value === 'string' && value.trim() !== '') {
-    const parsed = Number.parseInt(value, 10);
-    if (Number.isInteger(parsed)) {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!/^\d+$/.test(trimmed)) {
+      return undefined;
+    }
+    const parsed = Number(trimmed);
+    if (Number.isSafeInteger(parsed)) {
       return parsed;
     }
   }

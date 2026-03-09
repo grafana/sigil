@@ -68,6 +68,23 @@ describe('heuristicConfig', () => {
     expect(validateHeuristicQuery(query)).toBe('Text match rules need a value');
   });
 
+  it('rejects fractional and exponent length values', () => {
+    const query = createDefaultHeuristicQuery({
+      version: 'v2',
+      root: {
+        kind: 'group',
+        operator: 'and',
+        rules: [{ kind: 'rule', type: 'min_length', value: 1 }],
+      },
+    });
+
+    query.rules = [{ ...query.rules[0], value: '1.5' }];
+    expect(validateHeuristicQuery(query)).toBe('Length rules need a non-negative value');
+
+    query.rules = [{ ...query.rules[0], value: '2e3' }];
+    expect(validateHeuristicQuery(query)).toBe('Length rules need a non-negative value');
+  });
+
   it('formats a readable nested summary', () => {
     expect(
       formatHeuristicNodeSummary({

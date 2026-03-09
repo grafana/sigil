@@ -184,8 +184,15 @@ test.describe('evaluation validation flows', () => {
           kind: 'heuristic',
           description: 'Validation test template',
           latest_version: '2026-03-09',
-          config: { not_empty: true },
-          output_keys: [{ key: 'score', type: 'bool' }],
+          config: {
+            version: 'v2',
+            root: {
+              kind: 'group',
+              operator: 'and',
+              rules: [{ kind: 'rule', type: 'not_empty' }],
+            },
+          },
+          output_keys: [{ key: 'heuristic_pass', type: 'bool' }],
           versions: [{ version: '2026-03-09', changelog: 'Initial', created_at: '2026-03-09T00:00:00Z' }],
           created_at: '2026-03-09T00:00:00Z',
           updated_at: '2026-03-09T00:00:00Z',
