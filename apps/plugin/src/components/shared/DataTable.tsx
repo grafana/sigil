@@ -224,6 +224,15 @@ export default function DataTable<T>(props: DataTableProps<T>) {
   return <>{content}</>;
 }
 
+export const getCommonCellStyles = (theme: GrafanaTheme2) => ({
+  monoCell: css({
+    fontFamily: theme.typography.fontFamilyMonospace,
+    fontSize: theme.typography.bodySmall.fontSize,
+    whiteSpace: 'normal' as const,
+    overflowWrap: 'anywhere' as const,
+  }),
+});
+
 const getStyles = (theme: GrafanaTheme2) => ({
   tablePanel: css({
     display: 'flex',

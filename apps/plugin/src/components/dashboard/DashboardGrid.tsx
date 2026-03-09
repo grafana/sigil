@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { dateTime, ThresholdsMode, type AbsoluteTimeRange, type GrafanaTheme2, type TimeRange } from '@grafana/data';
-import DataTable, { type ColumnDef } from '../shared/DataTable';
+import DataTable, { type ColumnDef, getCommonCellStyles } from '../shared/DataTable';
 import ModelChipList from '../shared/ModelChipList';
 import { Badge, Select, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import type { DashboardDataSource } from '../../dashboard/api';
@@ -878,7 +878,7 @@ function RecentConversationsTable({ conversationsDataSource, timeRange, filters 
         id: 'conversation',
         header: 'Conversation',
         cell: (c: ConversationSearchResult) => (
-          <span className={styles.idCell}>{c.conversation_title?.trim() || c.conversation_id}</span>
+          <span className={styles.monoCell}>{c.conversation_title?.trim() || c.conversation_id}</span>
         ),
       },
       { id: 'calls', header: 'LLM calls', cell: (c: ConversationSearchResult) => c.generation_count },
@@ -903,7 +903,7 @@ function RecentConversationsTable({ conversationsDataSource, timeRange, filters 
         ),
       },
     ],
-    [styles.idCell]
+    [styles.monoCell]
   );
 
   const handleRowClick = useCallback((c: ConversationSearchResult, e: React.MouseEvent) => {
@@ -944,12 +944,7 @@ function formatUtcMillis(ms: number): string {
 
 function getStyles(theme: GrafanaTheme2) {
   return {
-    idCell: css({
-      fontFamily: theme.typography.fontFamilyMonospace,
-      fontSize: theme.typography.bodySmall.fontSize,
-      whiteSpace: 'normal' as const,
-      overflowWrap: 'anywhere' as const,
-    }),
+    ...getCommonCellStyles(theme),
     gridWrapper: css({
       display: 'flex',
       flexDirection: 'column',
