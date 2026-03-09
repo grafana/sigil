@@ -540,7 +540,7 @@ export const getStyles = (theme: GrafanaTheme2) => ({
   }),
   followupSection: css({
     borderTop: `1px solid ${theme.colors.border.weak}`,
-    padding: theme.spacing(1.5),
+    paddingTop: theme.spacing(1.5),
     display: 'flex',
     flexDirection: 'column' as const,
     gap: theme.spacing(1),
@@ -548,7 +548,7 @@ export const getStyles = (theme: GrafanaTheme2) => ({
   followupInputRow: css({
     display: 'flex',
     gap: theme.spacing(0.5),
-    alignItems: 'flex-start',
+    alignItems: 'center',
   }),
   followupInput: css({
     flex: 1,
@@ -571,21 +571,8 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     },
   }),
   followupButton: css({
-    padding: `${theme.spacing(0.75)} ${theme.spacing(1.5)}`,
-    fontSize: theme.typography.bodySmall.fontSize,
-    border: 'none',
-    borderRadius: theme.shape.radius.default,
-    background: theme.colors.primary.main,
-    color: theme.colors.primary.contrastText,
-    cursor: 'pointer',
     whiteSpace: 'nowrap' as const,
-    '&:hover': {
-      background: theme.colors.primary.shade,
-    },
-    '&:disabled': {
-      opacity: 0.5,
-      cursor: 'not-allowed',
-    },
+    flexShrink: 0,
   }),
   followupResponse: css({
     whiteSpace: 'pre-wrap' as const,

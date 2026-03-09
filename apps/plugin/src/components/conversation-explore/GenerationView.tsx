@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cx } from '@emotion/css';
-import { Icon, Spinner, Toggletip, Tooltip, useStyles2 } from '@grafana/ui';
+import { Button, Icon, Spinner, Toggletip, Tooltip, useStyles2 } from '@grafana/ui';
 import { getDataSourceSrv } from '@grafana/runtime';
 import {
   formatScoreValue,
@@ -928,13 +928,14 @@ function FollowupSection({
           rows={1}
           disabled={state.loading}
         />
-        <button
+        <Button
           className={styles.followupButton}
+          size="sm"
           onClick={handleSubmit}
           disabled={state.loading || !state.input.trim()}
         >
           {state.loading ? <Spinner size="sm" /> : 'Ask'}
-        </button>
+        </Button>
       </div>
       {state.error && <div className={styles.followupError}>{state.error}</div>}
       {state.response && (

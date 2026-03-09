@@ -46,6 +46,7 @@ const defaultTraceFetcher = createTempoTraceFetcher();
 
 const getStyles = (theme: GrafanaTheme2) => ({
   pageContainer: css({
+    label: 'conversationExplorePage-pageContainer',
     position: 'absolute',
     inset: 0,
     display: 'flex',
@@ -55,13 +56,17 @@ const getStyles = (theme: GrafanaTheme2) => ({
     background: theme.colors.background.canvas,
   }),
   topSection: css({
+    label: 'conversationExplorePage-topSection',
     display: 'flex',
     flexDirection: 'column' as const,
     gap: theme.spacing(1),
-    padding: theme.spacing(1, 0),
+    padding: theme.spacing(0.75, 0),
     flexShrink: 0,
+    borderTop: `1px solid ${theme.colors.border.weak}`,
+    borderBottom: `1px solid ${theme.colors.border.weak}`,
   }),
   spinnerWrap: css({
+    label: 'conversationExplorePage-spinnerWrap',
     flex: 1,
     display: 'flex',
     alignItems: 'center',
@@ -69,13 +74,16 @@ const getStyles = (theme: GrafanaTheme2) => ({
     minHeight: 200,
   }),
   errorWrap: css({
+    label: 'conversationExplorePage-errorWrap',
     padding: theme.spacing(2),
   }),
   insightRow: css({
+    label: 'conversationExplorePage-insightRow',
     paddingBottom: '2px',
     flexShrink: 0,
   }),
   contentArea: css({
+    label: 'conversationExplorePage-contentArea',
     flex: 1,
     display: 'flex',
     flexDirection: 'row' as const,
@@ -83,6 +91,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     overflow: 'hidden',
   }),
   leftPanel: css({
+    label: 'conversationExplorePage-leftPanel',
     display: 'flex',
     flexDirection: 'column' as const,
     flexShrink: 0,
@@ -90,6 +99,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     overflow: 'hidden',
   }),
   collapsedRail: css({
+    label: 'conversationExplorePage-collapsedRail',
     display: 'flex',
     alignItems: 'flex-start',
     justifyContent: 'center',
@@ -100,6 +110,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     borderRight: `1px solid ${theme.colors.border.weak}`,
   }),
   expandButton: css({
+    label: 'conversationExplorePage-expandButton',
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -115,6 +126,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     },
   }),
   resizeHandle: css({
+    label: 'conversationExplorePage-resizeHandle',
     width: 4,
     flexShrink: 0,
     cursor: 'col-resize',
@@ -125,6 +137,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     },
   }),
   rightPanel: css({
+    label: 'conversationExplorePage-rightPanel',
     flex: 1,
     display: 'flex',
     flexDirection: 'column' as const,
@@ -132,6 +145,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     overflow: 'hidden',
   }),
   rightPanelContent: css({
+    label: 'conversationExplorePage-rightPanelContent',
     flex: 1,
     display: 'flex',
     minWidth: 0,
@@ -140,6 +154,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     position: 'relative',
   }),
   detailPanelWrap: css({
+    label: 'conversationExplorePage-detailPanelWrap',
     display: 'flex',
     flexDirection: 'column' as const,
     flex: 1,
@@ -148,12 +163,15 @@ const getStyles = (theme: GrafanaTheme2) => ({
     overflow: 'hidden',
   }),
   saveModal: css({
+    label: 'conversationExplorePage-saveModal',
     width: 400,
   }),
   saveModalInput: css({
+    label: 'conversationExplorePage-saveModalInput',
     paddingBottom: theme.spacing(0.5),
   }),
   traceDrawerPanel: css({
+    label: 'conversationExplorePage-traceDrawerPanel',
     display: 'flex',
     flexDirection: 'column' as const,
     background: theme.colors.background.primary,
@@ -163,6 +181,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexShrink: 0,
   }),
   traceDrawerHeader: css({
+    label: 'conversationExplorePage-traceDrawerHeader',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -175,6 +194,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexShrink: 0,
   }),
   traceDrawerTitle: css({
+    label: 'conversationExplorePage-traceDrawerTitle',
     display: 'flex',
     alignItems: 'center',
     gap: theme.spacing(0.375),
@@ -190,11 +210,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
     },
   }),
   traceDrawerBody: css({
+    label: 'conversationExplorePage-traceDrawerBody',
     flex: 1,
     minHeight: 0,
     overflow: 'hidden',
   }),
   tracePanelHost: css({
+    label: 'conversationExplorePage-tracePanelHost',
     height: '100%',
     minHeight: 0,
     background: theme.colors.background.primary,
@@ -221,6 +243,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     },
   }),
   tracePanelMessage: css({
+    label: 'conversationExplorePage-tracePanelMessage',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -228,6 +251,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     padding: theme.spacing(2),
   }),
   tracePanelScene: css({
+    label: 'conversationExplorePage-tracePanelScene',
     height: '100%',
     minHeight: 0,
     overflow: 'auto',
@@ -254,6 +278,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     },
   }),
   traceDrawerClose: css({
+    label: 'conversationExplorePage-traceDrawerClose',
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',

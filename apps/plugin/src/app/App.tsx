@@ -70,7 +70,9 @@ export default function App(props: AppRootProps) {
     };
   }, [props.meta.name, agentDetailPageNav]);
   const shouldHidePluginHeader = location.pathname.includes(`/${ROUTES.Conversations}`);
-  const shouldUseFullBleedPageInner = location.pathname.includes(`/${ROUTES.PlaygroundSparkles}`);
+  const shouldUseFullBleedPageInner =
+    location.pathname.includes(`/${ROUTES.PlaygroundSparkles}`) ||
+    location.pathname.includes(`/${ROUTES.Conversations}`);
 
   React.useEffect(() => {
     const pageInner = document.querySelector('[class*="page-inner"]');
