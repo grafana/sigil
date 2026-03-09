@@ -1049,7 +1049,7 @@ export function LandingTopBar({
                     </Tooltip>
                   </div>
                   <Text color="secondary">
-                    Use our coding agent skill to instrument your codebase. Then select coding agent.
+                    Use our coding agent skill to instrument your codebase.
                   </Text>
                   <div className={styles.ideTabs}>
                     {ideTabs.map((ide) => (
@@ -1439,6 +1439,7 @@ function getStyles(theme: GrafanaTheme2) {
     heroSideCard: css({
       label: 'landingTopBar-heroSideCard',
       marginTop: 'auto',
+      marginBottom: 0,
     }),
     sideCardMutedHeading: css({
       label: 'landingTopBar-sideCardMutedHeading',
