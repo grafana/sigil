@@ -706,13 +706,13 @@ function getStyles(theme: GrafanaTheme2) {
     }),
     overviewItemTitle: css({
       label: 'featureShowcase-overviewItemTitle',
-      fontSize: 11,
+      fontSize: 12,
       fontWeight: theme.typography.fontWeightMedium,
       lineHeight: 1.2,
     }),
     overviewItemDesc: css({
       label: 'featureShowcase-overviewItemDesc',
-      fontSize: 9,
+      fontSize: 11,
       lineHeight: 1.3,
       color: theme.colors.text.secondary,
       display: '-webkit-box',
