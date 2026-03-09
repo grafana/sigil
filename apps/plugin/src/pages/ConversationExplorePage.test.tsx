@@ -99,6 +99,10 @@ jest.mock('../hooks/useSavedConversation', () => ({
   })),
 }));
 
+jest.mock('../hooks/useConversationAssistantContext', () => ({
+  useConversationAssistantContext: jest.fn(),
+}));
+
 jest.mock('../components/conversation-explore/MetricsBar', () => ({
   __esModule: true,
   default: () => <div>Metrics</div>,

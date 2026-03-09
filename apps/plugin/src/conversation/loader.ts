@@ -4,6 +4,7 @@ import { parseOTLPTrace, buildSpanTree } from './spans';
 import type { ConversationData, ConversationDetail } from './types';
 
 const TRACE_FETCH_TIME_PADDING_MS = 30 * 60 * 1000;
+const TRACE_PROGRESS_UPDATE_INTERVAL_MS = 100;
 
 export type TraceFetchOptions = {
   timeRange?: Pick<TimeRange, 'from' | 'to'>;
@@ -11,11 +12,16 @@ export type TraceFetchOptions = {
 
 export type TraceFetcher = (traceID: string, options?: TraceFetchOptions) => Promise<unknown>;
 
-const TRACE_FETCH_CONCURRENCY = 5;
+const TRACE_FETCH_CONCURRENCY = 10;
 const DETAIL_RETRY_DELAYS_MS = [250, 750, 1500];
 const TRACE_EMPTY_RETRY_DELAYS_MS = [750];
 
 type TraceResult = { traceID: string; payload: unknown };
+type TraceResultListener = (result: TraceResult) => void;
+
+export type LoadConversationTracesOptions = {
+  onProgress?: (data: ConversationData) => void;
+};
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -55,6 +61,7 @@ async function fetchTracesWithConcurrency(
   traceIDs: string[],
   fetchTrace: TraceFetcher,
   options?: TraceFetchOptions,
+  onResult?: TraceResultListener,
   concurrency: number = TRACE_FETCH_CONCURRENCY
 ): Promise<TraceResult[]> {
   const results: TraceResult[] = new Array(traceIDs.length);
@@ -65,9 +72,13 @@ async function fetchTracesWithConcurrency(
       const i = nextIndex++;
       try {
         const payload = await fetchTrace(traceIDs[i], options);
-        results[i] = { traceID: traceIDs[i], payload };
+        const result = { traceID: traceIDs[i], payload };
+        results[i] = result;
+        onResult?.(result);
       } catch {
-        results[i] = { traceID: traceIDs[i], payload: null };
+        const result = { traceID: traceIDs[i], payload: null };
+        results[i] = result;
+        onResult?.(result);
       }
     }
   }
@@ -145,7 +156,8 @@ function buildConversationTraceFetchOptions(data: ConversationData): TraceFetchO
 
 export async function loadConversationTraces(
   data: ConversationData,
-  fetchTrace: TraceFetcher
+  fetchTrace: TraceFetcher,
+  loadOptions?: LoadConversationTracesOptions
 ): Promise<ConversationData> {
   const traceIDSet = new Set<string>();
   for (const gen of data.orphanGenerations) {
@@ -159,15 +171,56 @@ export async function loadConversationTraces(
     return data;
   }
 
+  const allGenerations = data.orphanGenerations;
   const fetchOptions = buildConversationTraceFetchOptions(data);
-  let tracePayloads = await fetchTracesWithConcurrency(traceIDs, fetchTrace, fetchOptions);
-  let allParsedSpans = parseTraceResults(tracePayloads);
+  const parsedSpans = parseTraceResults([]);
+  let progressTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const emitProgress = () => {
+    const { roots, orphanGenerations } = buildSpanTree(parsedSpans, allGenerations);
+    loadOptions?.onProgress?.({
+      ...data,
+      spans: roots,
+      orphanGenerations,
+    });
+  };
+
+  const scheduleProgress = () => {
+    if (!loadOptions?.onProgress || progressTimer !== undefined) {
+      return;
+    }
+    progressTimer = setTimeout(() => {
+      progressTimer = undefined;
+      emitProgress();
+    }, TRACE_PROGRESS_UPDATE_INTERVAL_MS);
+  };
+
+  const flushProgress = () => {
+    if (progressTimer !== undefined) {
+      clearTimeout(progressTimer);
+      progressTimer = undefined;
+    }
+    if (loadOptions?.onProgress && parsedSpans.length > 0) {
+      emitProgress();
+    }
+  };
+
+  const handleTraceResult = ({ traceID, payload }: TraceResult) => {
+    if (payload === null) {
+      return;
+    }
+    parsedSpans.push(...parseOTLPTrace(traceID, payload));
+    scheduleProgress();
+  };
+
+  let tracePayloads = await fetchTracesWithConcurrency(traceIDs, fetchTrace, fetchOptions, handleTraceResult);
+  let allParsedSpans = parsedSpans.length > 0 ? [...parsedSpans] : parseTraceResults(tracePayloads);
   if (allParsedSpans.length === 0) {
     // Recent conversations can arrive in projection before Tempo serves the
     // corresponding traces. Retry once before rendering an empty tree.
     for (const delay of TRACE_EMPTY_RETRY_DELAYS_MS) {
       await sleep(delay);
-      tracePayloads = await fetchTracesWithConcurrency(traceIDs, fetchTrace, fetchOptions);
+      tracePayloads = await fetchTracesWithConcurrency(traceIDs, fetchTrace, fetchOptions, handleTraceResult);
       allParsedSpans = parseTraceResults(tracePayloads);
       if (allParsedSpans.length > 0) {
         break;
@@ -175,7 +228,7 @@ export async function loadConversationTraces(
     }
   }
 
-  const allGenerations = data.orphanGenerations;
+  flushProgress();
   const { roots, orphanGenerations } = buildSpanTree(allParsedSpans, allGenerations);
 
   return {

@@ -50,6 +50,10 @@ function makeTracePayload() {
 }
 
 describe('loadConversationTraces', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('passes a padded time range to Tempo trace fetches', async () => {
     const fetchTrace: TraceFetcher = jest.fn().mockResolvedValue(makeTracePayload());
 
@@ -69,6 +73,77 @@ describe('loadConversationTraces', () => {
     const options = (fetchTrace as jest.Mock).mock.calls[0][1];
     expect(options.timeRange.from.valueOf()).toBe(dateTime('2026-03-09T12:48:03Z').valueOf());
     expect(options.timeRange.to.valueOf()).toBe(dateTime('2026-03-09T13:58:15Z').valueOf());
+  });
+
+  it('publishes partial trees as traces resolve', async () => {
+    jest.useFakeTimers();
+
+    let resolveTraceA: ((value: unknown) => void) | undefined;
+    let resolveTraceB: ((value: unknown) => void) | undefined;
+    const fetchTrace: TraceFetcher = jest.fn((traceID: string) => {
+      return new Promise((resolve) => {
+        if (traceID === 'trace-a') {
+          resolveTraceA = resolve;
+          return;
+        }
+        resolveTraceB = resolve;
+      });
+    });
+    const onProgress = jest.fn();
+    const promise = loadConversationTraces(
+      makeConversationData({
+        generationCount: 2,
+        orphanGenerations: [
+          {
+            generation_id: 'gen-a',
+            conversation_id: 'conv-1',
+            trace_id: 'trace-a',
+            span_id: 'span-a',
+          },
+          {
+            generation_id: 'gen-b',
+            conversation_id: 'conv-1',
+            trace_id: 'trace-b',
+            span_id: 'span-b',
+          },
+        ],
+      }),
+      fetchTrace,
+      { onProgress }
+    );
+
+    resolveTraceA?.(
+      makeOTLPPayload('trace-a', [
+        {
+          spanId: 'span-a',
+          parentSpanId: '',
+          name: 'first',
+          startTimeUnixNano: '1000',
+          endTimeUnixNano: '2000',
+        },
+      ])
+    );
+    await Promise.resolve();
+    await jest.advanceTimersByTimeAsync(100);
+
+    expect(onProgress).toHaveBeenCalled();
+    expect(onProgress.mock.calls[0][0].spans).toHaveLength(1);
+    expect(onProgress.mock.calls[0][0].spans[0].spanID).toBe('span-a');
+
+    resolveTraceB?.(
+      makeOTLPPayload('trace-b', [
+        {
+          spanId: 'span-b',
+          parentSpanId: '',
+          name: 'second',
+          startTimeUnixNano: '3000',
+          endTimeUnixNano: '4000',
+        },
+      ])
+    );
+
+    const result = await promise;
+    expect(result.spans).toHaveLength(2);
   });
 });
 
