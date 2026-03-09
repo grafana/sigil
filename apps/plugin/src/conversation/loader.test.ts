@@ -1,6 +1,76 @@
+import { dateTime } from '@grafana/data';
 import type { ConversationsDataSource } from './api';
-import { loadConversation, loadConversationDetail } from './loader';
-import type { ConversationDetail } from './types';
+import { loadConversation, loadConversationDetail, loadConversationTraces, type TraceFetcher } from './loader';
+import type { ConversationData, ConversationDetail } from './types';
+
+function makeConversationData(overrides: Partial<ConversationData> = {}): ConversationData {
+  return {
+    conversationID: 'conv-1',
+    conversationTitle: 'Conversation 1',
+    userID: 'user-1',
+    generationCount: 1,
+    firstGenerationAt: '2026-03-09T13:18:03Z',
+    lastGenerationAt: '2026-03-09T13:28:15Z',
+    ratingSummary: null,
+    annotations: [],
+    spans: [],
+    orphanGenerations: [
+      {
+        generation_id: 'gen-1',
+        conversation_id: 'conv-1',
+        trace_id: 'trace-1',
+        span_id: 'span-1',
+      },
+    ],
+    ...overrides,
+  };
+}
+
+function makeTracePayload() {
+  return {
+    resourceSpans: [
+      {
+        resource: { attributes: [{ key: 'service.name', value: { stringValue: 'svc' } }] },
+        scopeSpans: [
+          {
+            spans: [
+              {
+                spanId: 'span-1',
+                parentSpanId: '',
+                name: 'root span',
+                startTimeUnixNano: '1000',
+                endTimeUnixNano: '2000',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+describe('loadConversationTraces', () => {
+  it('passes a padded time range to Tempo trace fetches', async () => {
+    const fetchTrace: TraceFetcher = jest.fn().mockResolvedValue(makeTracePayload());
+
+    await loadConversationTraces(makeConversationData(), fetchTrace);
+
+    expect(fetchTrace).toHaveBeenCalledTimes(1);
+    expect(fetchTrace).toHaveBeenCalledWith(
+      'trace-1',
+      expect.objectContaining({
+        timeRange: expect.objectContaining({
+          from: expect.anything(),
+          to: expect.anything(),
+        }),
+      })
+    );
+
+    const options = (fetchTrace as jest.Mock).mock.calls[0][1];
+    expect(options.timeRange.from.valueOf()).toBe(dateTime('2026-03-09T12:48:03Z').valueOf());
+    expect(options.timeRange.to.valueOf()).toBe(dateTime('2026-03-09T13:58:15Z').valueOf());
+  });
+});
 
 function makeDetail(overrides: Partial<ConversationDetail> = {}): ConversationDetail {
   return {
@@ -83,7 +153,15 @@ describe('loadConversation', () => {
     expect(result.spans[0].children).toHaveLength(1);
     expect(result.spans[0].children[0].generation?.generation_id).toBe('gen-1');
     expect(result.orphanGenerations).toHaveLength(0);
-    expect(fetchTrace).toHaveBeenCalledWith('trace-1');
+    expect(fetchTrace).toHaveBeenCalledWith(
+      'trace-1',
+      expect.objectContaining({
+        timeRange: expect.objectContaining({
+          from: expect.anything(),
+          to: expect.anything(),
+        }),
+      })
+    );
   });
 
   it('deduplicates trace IDs', async () => {
