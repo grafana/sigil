@@ -73,7 +73,7 @@ const FEATURES: Feature[] = [
     title: 'Prompt Analysis',
     description: 'Prompt chains and quality insights.',
     color: '#B877D9',
-    href: `${PLUGIN_BASE}/${ROUTES.Conversations}`,
+    href: `${PLUGIN_BASE}/${ROUTES.Agents}`,
     icon: (
       <svg
         width="20"
