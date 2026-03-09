@@ -18,9 +18,24 @@ const (
 	maxMessageCharLen = 200_000
 )
 
-// GenerationReader loads all protobuf generations for a conversation.
-type GenerationReader interface {
-	ListConversationGenerations(ctx context.Context, tenantID, conversationID string) ([]*sigilv1.Generation, error)
+// ValidationError marks invalid request data.
+type ValidationError struct {
+	msg string
+}
+
+func (e *ValidationError) Error() string {
+	return e.msg
+}
+
+// NewValidationError constructs a validation error.
+func NewValidationError(msg string) error {
+	return &ValidationError{msg: msg}
+}
+
+// IsValidationError reports whether err wraps a ValidationError.
+func IsValidationError(err error) bool {
+	var validationErr *ValidationError
+	return errors.As(err, &validationErr)
 }
 
 type Request struct {
@@ -49,19 +64,19 @@ func NewService(discovery *judges.Discovery, defaultModel string) *Service {
 
 func (s *Service) Followup(ctx context.Context, generations []*sigilv1.Generation, req Request) (Response, error) {
 	if strings.TrimSpace(req.Message) == "" {
-		return Response{}, errors.New("message is required")
+		return Response{}, NewValidationError("message is required")
 	}
 	if strings.TrimSpace(req.GenerationID) == "" {
-		return Response{}, errors.New("generation_id is required")
+		return Response{}, NewValidationError("generation_id is required")
 	}
 	if len(generations) == 0 {
-		return Response{}, errors.New("no generations found")
+		return Response{}, NewValidationError("no generations found")
 	}
 
 	sorted := sortGenerationsByTime(generations)
 	targetIdx := findGenerationIndex(sorted, req.GenerationID)
 	if targetIdx < 0 {
-		return Response{}, fmt.Errorf("generation %q not found in conversation", req.GenerationID)
+		return Response{}, NewValidationError(fmt.Sprintf("generation %q not found in conversation", req.GenerationID))
 	}
 
 	upToTarget := sorted[:targetIdx+1]

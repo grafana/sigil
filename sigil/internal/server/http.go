@@ -372,7 +372,11 @@ func handleConversationFollowup(w http.ResponseWriter, req *http.Request, queryS
 		Model:          payload.Model,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		if followup.IsValidationError(err) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
