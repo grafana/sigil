@@ -178,54 +178,13 @@ func validateJSONSchemaObject(schema map[string]any, path string) error {
 }
 
 func validateHeuristicConfig(config map[string]any) error {
-	notEmpty := false
-	if raw, ok := config["not_empty"]; ok {
-		asBool, ok := raw.(bool)
-		if !ok {
-			return errors.New("heuristic config not_empty must be a bool")
-		}
-		notEmpty = asBool
-	}
-
-	contains := []string(nil)
-	if raw, ok := config["contains"]; ok {
-		values, err := normalizeConfigStringList(raw, "heuristic config contains")
-		if err != nil {
-			return err
-		}
-		contains = values
-		config["contains"] = values
-	}
-
-	notContains := []string(nil)
-	if raw, ok := config["not_contains"]; ok {
-		values, err := normalizeConfigStringList(raw, "heuristic config not_contains")
-		if err != nil {
-			return err
-		}
-		notContains = values
-		config["not_contains"] = values
-	}
-
-	minLength, hasMinLength, err := normalizeOptionalInt(config, "min_length")
+	parsed, err := evalpkg.ParseHeuristicConfig(config)
 	if err != nil {
 		return err
 	}
-	maxLength, hasMaxLength, err := normalizeOptionalInt(config, "max_length")
-	if err != nil {
-		return err
-	}
-	if hasMinLength && minLength < 0 {
-		return errors.New("heuristic config min_length must be >= 0")
-	}
-	if hasMaxLength && maxLength < 0 {
-		return errors.New("heuristic config max_length must be >= 0")
-	}
-	if hasMinLength && hasMaxLength && maxLength <= minLength {
-		return errors.New("heuristic config max_length must be greater than min_length")
-	}
-	if !notEmpty && len(contains) == 0 && len(notContains) == 0 && !hasMinLength && !hasMaxLength {
-		return errors.New("heuristic config requires at least one rule")
+	clear(config)
+	for key, value := range parsed.ToMap() {
+		config[key] = value
 	}
 	return nil
 }

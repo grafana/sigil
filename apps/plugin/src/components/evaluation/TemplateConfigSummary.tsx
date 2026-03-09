@@ -9,7 +9,7 @@ import {
   type EvalOutputKey,
   type EvaluatorKind,
 } from '../../evaluation/types';
-import { formatHeuristicStringList, normalizeHeuristicStringList } from '../../evaluation/heuristicConfig';
+import { formatHeuristicNodeSummary, normalizeHeuristicConfig } from '../../evaluation/heuristicConfig';
 import { getSectionTitleStyles } from './sectionStyles';
 
 export type TemplateConfigSummaryProps = {
@@ -150,8 +150,7 @@ export default function TemplateConfigSummary({ kind, config, outputKeys }: Temp
     typeof config.max_tokens === 'number' && Number.isFinite(config.max_tokens) && config.max_tokens > 0
       ? config.max_tokens
       : 128;
-  const containsValues = normalizeHeuristicStringList(config.contains);
-  const notContainsValues = normalizeHeuristicStringList(config.not_contains);
+  const heuristicConfig = kind === 'heuristic' ? normalizeHeuristicConfig(config) : undefined;
   const patternList = Array.isArray(config.patterns)
     ? config.patterns.map((value) => String(value)).filter(Boolean)
     : [];
@@ -262,37 +261,20 @@ export default function TemplateConfigSummary({ kind, config, outputKeys }: Temp
           <div className={styles.sectionBody}>
             <div className={styles.sectionText}>
               <Text variant="body" color="secondary">
-                Simple deterministic checks applied directly to the assistant response.
+                Nested deterministic checks applied directly to the assistant response.
               </Text>
             </div>
-            <div className={styles.twoColumnGrid}>
+            {heuristicConfig != null ? (
               <div className={styles.valueCard}>
-                <div className={styles.valueLabel}>Not empty</div>
-                <div className={styles.valueBlock}>{config.not_empty ? 'Yes' : 'No'}</div>
+                <div className={styles.valueLabel}>Rule tree</div>
+                <pre className={styles.codeBlock}>{formatHeuristicNodeSummary(heuristicConfig.root)}</pre>
               </div>
+            ) : (
               <div className={styles.valueCard}>
-                <div className={styles.valueLabel}>Min length</div>
-                <div className={`${styles.valueBlock} ${config.min_length == null ? styles.valueBlockMuted : ''}`}>
-                  {config.min_length != null ? String(config.min_length) : '—'}
+                <div className={styles.valueLabel}>Rule tree</div>
+                <div className={`${styles.valueBlock} ${styles.valueBlockMuted}`}>
+                  Invalid or empty heuristic config
                 </div>
-              </div>
-              <div className={styles.valueCard}>
-                <div className={styles.valueLabel}>Max length</div>
-                <div className={`${styles.valueBlock} ${config.max_length == null ? styles.valueBlockMuted : ''}`}>
-                  {config.max_length != null ? String(config.max_length) : '—'}
-                </div>
-              </div>
-            </div>
-            {containsValues.length > 0 && (
-              <div className={styles.valueCard}>
-                <div className={styles.valueLabel}>Contains</div>
-                <pre className={styles.codeBlock}>{formatHeuristicStringList(config.contains)}</pre>
-              </div>
-            )}
-            {notContainsValues.length > 0 && (
-              <div className={styles.valueCard}>
-                <div className={styles.valueLabel}>Not contains</div>
-                <pre className={styles.codeBlock}>{formatHeuristicStringList(config.not_contains)}</pre>
               </div>
             )}
           </div>

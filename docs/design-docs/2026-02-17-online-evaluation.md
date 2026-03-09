@@ -183,7 +183,7 @@ Response includes provider ID, display name, CSP variant indicator, and per-mode
 
 **`regex`**: Matches or rejects regex patterns against response text. Returns bool. No external call needed.
 
-**`heuristic`**: Simple deterministic checks: length bounds, empty response, contains/not-contains keywords. Returns bool or numeric. No external call needed.
+**`heuristic`**: Deterministic rule-tree evaluation over response text. Supports nested `and` / `or` groups with leaf rules for `not_empty`, `contains`, `not_contains`, `min_length`, and `max_length`. Returns bool. No external call needed.
 
 ### External Scores via API
 
@@ -214,6 +214,38 @@ Sigil ships ready-to-use evaluator templates exposed through control-plane templ
 | `sigil.response_length` | Is the response within configurable length bounds? | bool |
 
 Each predefined template includes prompt text (for LLM-judge), default output keys, and baseline evaluator config. Forked evaluators can override any field (including judge provider/model) before use in rules.
+
+Heuristic configs are versioned and use an explicit rule AST:
+
+```json
+{
+  "version": "v2",
+  "root": {
+    "kind": "group",
+    "operator": "and",
+    "rules": [
+      { "kind": "rule", "type": "not_empty" },
+      {
+        "kind": "group",
+        "operator": "or",
+        "rules": [
+          { "kind": "rule", "type": "contains", "value": "refund" },
+          { "kind": "rule", "type": "contains", "value": "return" }
+        ]
+      },
+      { "kind": "rule", "type": "max_length", "value": 200 }
+    ]
+  }
+}
+```
+
+Validation is enforced at the control/API boundary. Current limits:
+
+- max depth: 3 levels including the root group
+- max total nodes: 25
+- groups must contain at least one child
+- string rules require non-empty trimmed values
+- length rules require non-negative integers
 
 ## Core Objects
 

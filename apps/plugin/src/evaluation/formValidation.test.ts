@@ -1,4 +1,5 @@
 import { validateJudgeTarget, validateSharedForm } from './formValidation';
+import { createDefaultHeuristicQuery } from './heuristicConfig';
 
 describe('validateSharedForm', () => {
   const baseInput = {
@@ -10,13 +11,7 @@ describe('validateSharedForm', () => {
     maxTokens: 128,
     temperature: 0,
     schemaJson: '{}',
-    heuristic: {
-      notEmpty: false,
-      contains: '',
-      notContains: '',
-      minLength: '' as number | '',
-      maxLength: '' as number | '',
-    },
+    heuristicQuery: createDefaultHeuristicQuery(),
     output: {
       type: 'number' as const,
       passThreshold: '' as number | '',

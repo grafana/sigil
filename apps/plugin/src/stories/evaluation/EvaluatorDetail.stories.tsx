@@ -54,7 +54,14 @@ const mockHeuristic: Evaluator = {
   evaluator_id: 'sigil.response_not_empty',
   version: '2026-02-17',
   kind: 'heuristic',
-  config: {},
+  config: {
+    version: 'v2',
+    root: {
+      kind: 'group',
+      operator: 'and',
+      rules: [{ kind: 'rule', type: 'not_empty' }],
+    },
+  },
   output_keys: [{ key: 'not_empty', type: 'bool' }],
   is_predefined: true,
   created_at: '2026-02-17T00:00:00Z',

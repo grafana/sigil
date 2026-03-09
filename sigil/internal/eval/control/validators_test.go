@@ -107,6 +107,59 @@ func TestValidateRegexConfig(t *testing.T) {
 	}
 }
 
+func TestValidateHeuristicConfig(t *testing.T) {
+	t.Run("valid nested tree normalizes config", func(t *testing.T) {
+		config := map[string]any{
+			"version": "v2",
+			"root": map[string]any{
+				"kind":     "group",
+				"operator": "and",
+				"rules": []any{
+					map[string]any{"kind": "rule", "type": "not_empty"},
+					map[string]any{
+						"kind":     "group",
+						"operator": "or",
+						"rules": []any{
+							map[string]any{"kind": "rule", "type": "contains", "value": " refund "},
+							map[string]any{"kind": "rule", "type": "min_length", "value": float64(5)},
+						},
+					},
+				},
+			},
+		}
+		if err := validateHeuristicConfig(config); err != nil {
+			t.Fatalf("expected valid heuristic config, got %v", err)
+		}
+
+		if config["version"] != "v2" {
+			t.Fatalf("expected normalized version, got %#v", config["version"])
+		}
+	})
+
+	t.Run("missing version is rejected", func(t *testing.T) {
+		err := validateHeuristicConfig(map[string]any{
+			"root": map[string]any{"kind": "group", "operator": "and", "rules": []any{}},
+		})
+		if err == nil || !strings.Contains(err.Error(), "version is required") {
+			t.Fatalf("expected version error, got %v", err)
+		}
+	})
+
+	t.Run("empty groups are rejected", func(t *testing.T) {
+		err := validateHeuristicConfig(map[string]any{
+			"version": "v2",
+			"root": map[string]any{
+				"kind":     "group",
+				"operator": "and",
+				"rules":    []any{},
+			},
+		})
+		if err == nil || !strings.Contains(err.Error(), "must contain at least one node") {
+			t.Fatalf("expected empty group error, got %v", err)
+		}
+	})
+}
+
 func TestValidateLLMJudgeConfig(t *testing.T) {
 	tests := []struct {
 		name    string

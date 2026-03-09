@@ -168,7 +168,7 @@ func TestDeleteEvaluatorRejectsEnabledRuleReferences(t *testing.T) {
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
@@ -204,7 +204,7 @@ func TestCreateEvaluatorNormalizesIdentifiersWithWhitespace(t *testing.T) {
 		"evaluator_id":"  custom.helpfulness  ",
 		"version":" 2026-02-17 ",
 		"kind":"heuristic",
-		"config":{"not_empty":true},
+		"config":` + heuristicNotEmptyJSONForTest() + `,
 		"output_keys":[{"key":"helpfulness","type":"bool"}]
 	}`
 	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/evaluators", createPayload)
@@ -236,7 +236,7 @@ func TestCreateEvaluatorRejectsMultipleOutputKeys(t *testing.T) {
 		"evaluator_id":"custom.multi_output",
 		"version":"2026-02-17",
 		"kind":"heuristic",
-		"config":{"not_empty":true},
+		"config":` + heuristicNotEmptyJSONForTest() + `,
 		"output_keys":[
 			{"key":"helpfulness","type":"bool"},
 			{"key":"conciseness","type":"bool"}
@@ -260,7 +260,7 @@ func TestCreateEvaluatorMapsDuplicateStorageErrorsToConflict(t *testing.T) {
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
 	})
 	if err == nil {
@@ -279,7 +279,7 @@ func TestCreateRuleMapsDuplicateStorageErrorsToConflict(t *testing.T) {
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
@@ -310,7 +310,7 @@ func TestCreateEvaluatorReturnsInternalServerErrorOnStoreFailure(t *testing.T) {
 		"evaluator_id":"custom.helpfulness",
 		"version":"2026-02-17",
 		"kind":"heuristic",
-		"config":{"not_empty":true},
+		"config":` + heuristicNotEmptyJSONForTest() + `,
 		"output_keys":[{"key":"helpfulness","type":"bool"}]
 	}`
 	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/evaluators", createPayload)
@@ -329,7 +329,7 @@ func TestRuleCRUDHTTP(t *testing.T) {
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
@@ -381,7 +381,7 @@ func TestRuleByIDRejectsSlashInRuleID(t *testing.T) {
 	store := newMemoryControlStore()
 	if err := store.CreateEvaluator(context.Background(), evalpkg.EvaluatorDefinition{
 		TenantID: "fake", EvaluatorID: "e1", Version: "v1", Kind: evalpkg.EvaluatorKindHeuristic,
-		Config: map[string]any{}, OutputKeys: []evalpkg.OutputKey{{Key: "ok", Type: evalpkg.ScoreTypeBool}},
+		Config: heuristicNotEmptyConfigForTest(), OutputKeys: []evalpkg.OutputKey{{Key: "ok", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
 	}
@@ -402,7 +402,7 @@ func TestEnableRuleRejectsMissingEvaluators(t *testing.T) {
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
@@ -444,7 +444,7 @@ func TestCreateRuleDefaultsEnabledAndSampleRateWhenOmitted(t *testing.T) {
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
@@ -484,7 +484,7 @@ func TestCreateRuleSupportsExplicitZeroSamplingAndDisabled(t *testing.T) {
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
@@ -523,7 +523,7 @@ func TestCreateRuleReturnsInternalServerErrorOnStoreFailure(t *testing.T) {
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
@@ -553,7 +553,7 @@ func TestCreateRuleRejectsUnsupportedMatchKeys(t *testing.T) {
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
@@ -583,7 +583,7 @@ func TestCreateRuleRejectsInvalidMatchValueTypes(t *testing.T) {
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
@@ -644,7 +644,7 @@ func TestCreateRuleNormalizesRuleIDAndMatchKeysWithWhitespace(t *testing.T) {
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
@@ -691,7 +691,7 @@ func TestCreateRuleRejectsDuplicateMatchKeysAfterNormalization(t *testing.T) {
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)

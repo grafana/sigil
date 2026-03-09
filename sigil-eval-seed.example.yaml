@@ -14,7 +14,14 @@ evaluators:
   - id: custom.response_not_empty.v1
     kind: heuristic
     version: "2026-02-17"
-    not_empty: true
+    config:
+      version: v2
+      root:
+        kind: group
+        operator: and
+        rules:
+          - kind: rule
+            type: not_empty
     output:
       keys:
         - key: response_not_empty

@@ -131,7 +131,7 @@ func TestTemplateHTTPListAll(t *testing.T) {
 			"template_id":"` + id + `",
 			"kind":"heuristic",
 			"version":"2026-03-02",
-			"config":{"not_empty":true},
+			"config":` + heuristicNotEmptyJSONForTest() + `,
 			"output_keys":[{"key":"score","type":"bool"}]
 		}`
 		resp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates", payload)
@@ -163,7 +163,7 @@ func TestTemplateHTTPListWithScopeFilter(t *testing.T) {
 		"template_id":"tenant_template",
 		"kind":"heuristic",
 		"version":"2026-03-02",
-		"config":{"not_empty":true},
+		"config":` + heuristicNotEmptyJSONForTest() + `,
 		"output_keys":[{"key":"score","type":"bool"}]
 	}`
 	resp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates", payload)
@@ -224,7 +224,7 @@ func TestTemplateHTTPDelete(t *testing.T) {
 		"template_id":"deletable",
 		"kind":"heuristic",
 		"version":"2026-03-02",
-		"config":{"not_empty":true},
+		"config":` + heuristicNotEmptyJSONForTest() + `,
 		"output_keys":[{"key":"score","type":"bool"}]
 	}`
 	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates", payload)
@@ -327,7 +327,7 @@ func TestTemplateHTTPListVersions(t *testing.T) {
 		"template_id":"multi_ver",
 		"kind":"heuristic",
 		"version":"2026-03-01",
-		"config":{"not_empty":true},
+		"config":` + heuristicNotEmptyJSONForTest() + `,
 		"output_keys":[{"key":"score","type":"bool"}]
 	}`
 	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates", createPayload)
@@ -338,7 +338,7 @@ func TestTemplateHTTPListVersions(t *testing.T) {
 	// Publish a second version.
 	publishPayload := `{
 		"version":"2026-03-02",
-		"config":{"contains":["v2"]},
+		"config":` + heuristicContainsJSONForTest("v2") + `,
 		"output_keys":[{"key":"score","type":"bool"}]
 	}`
 	publishResp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates/multi_ver/versions", publishPayload)

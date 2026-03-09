@@ -10,13 +10,16 @@ import (
 func TestHeuristicEvaluator(t *testing.T) {
 	evaluator := NewHeuristicEvaluator()
 	outputs, err := evaluator.Evaluate(context.Background(), EvalInput{ResponseText: "This is an answer"}, evalpkg.EvaluatorDefinition{
-		Config: map[string]any{
-			"not_empty":    true,
-			"min_length":   5,
-			"max_length":   100,
-			"contains":     []any{"answer"},
-			"not_contains": []any{"forbidden"},
-		},
+		Config: evalpkg.NewHeuristicConfig(evalpkg.HeuristicGroupNode{
+			Operator: evalpkg.HeuristicOperatorAnd,
+			Rules: []evalpkg.HeuristicNode{
+				{Rule: &evalpkg.HeuristicRuleNode{Type: evalpkg.HeuristicRuleNotEmpty}},
+				{Rule: &evalpkg.HeuristicRuleNode{Type: evalpkg.HeuristicRuleMinLength, IntValue: 5}},
+				{Rule: &evalpkg.HeuristicRuleNode{Type: evalpkg.HeuristicRuleMaxLength, IntValue: 100}},
+				{Rule: &evalpkg.HeuristicRuleNode{Type: evalpkg.HeuristicRuleContains, StringValue: "answer"}},
+				{Rule: &evalpkg.HeuristicRuleNode{Type: evalpkg.HeuristicRuleNotContains, StringValue: "forbidden"}},
+			},
+		}),
 		OutputKeys: []evalpkg.OutputKey{{Key: "heuristic_pass", Type: evalpkg.ScoreTypeBool}},
 	})
 	if err != nil {
@@ -30,7 +33,12 @@ func TestHeuristicEvaluator(t *testing.T) {
 func TestHeuristicEvaluatorFail(t *testing.T) {
 	evaluator := NewHeuristicEvaluator()
 	outputs, err := evaluator.Evaluate(context.Background(), EvalInput{ResponseText: ""}, evalpkg.EvaluatorDefinition{
-		Config:     map[string]any{"not_empty": true},
+		Config: evalpkg.NewHeuristicConfig(evalpkg.HeuristicGroupNode{
+			Operator: evalpkg.HeuristicOperatorAnd,
+			Rules: []evalpkg.HeuristicNode{
+				{Rule: &evalpkg.HeuristicRuleNode{Type: evalpkg.HeuristicRuleNotEmpty}},
+			},
+		}),
 		OutputKeys: []evalpkg.OutputKey{{Key: "heuristic_pass", Type: evalpkg.ScoreTypeBool}},
 	})
 	if err != nil {

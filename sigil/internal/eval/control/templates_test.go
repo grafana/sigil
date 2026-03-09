@@ -463,7 +463,7 @@ func TestTemplateService_DeleteTemplate(t *testing.T) {
 		TemplateID: "my_template",
 		Kind:       "heuristic",
 		Version:    "2026-03-01",
-		Config:     map[string]any{"not_empty": true},
+		Config:     heuristicNotEmptyConfigForTest(),
 		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeBool}},
 	})
 	if err != nil {
@@ -507,7 +507,7 @@ func TestTemplateService_List(t *testing.T) {
 			TemplateID: id,
 			Kind:       "heuristic",
 			Version:    "2026-03-01",
-			Config:     map[string]any{"not_empty": true},
+			Config:     heuristicNotEmptyConfigForTest(),
 			OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeBool}},
 		})
 		if err != nil {

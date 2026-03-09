@@ -133,7 +133,12 @@ Each evaluator currently supports exactly one output key.
 | `llm_judge` | `provider`, `model`, `system_prompt`, `user_prompt`, `max_tokens`, `temperature`, `timeout_ms` | `number`, `bool`, or `string` |
 | `json_schema` | `schema` | `bool` |
 | `regex` | `pattern` or `patterns`, optional `reject=true` | `bool` |
-| `heuristic` | `not_empty`, `contains`, `not_contains`, `min_length`, `max_length` | `bool` |
+| `heuristic` | `version: "v2"` plus nested `root` AND/OR rule tree using `not_empty`, `contains`, `not_contains`, `min_length`, `max_length` | `bool` |
+
+`heuristic` note:
+- Heuristic evaluators now use a versioned rule tree with nested `and` / `or` groups.
+- Supported rule types today are `not_empty`, `contains`, `not_contains`, `min_length`, and `max_length`.
+- Length checks use the character count of `strings.TrimSpace(response_text)`.
 
 `json_schema` note:
 - Sigil currently supports a built-in JSON Schema subset: `type`, `required`, `properties`, and `items`.

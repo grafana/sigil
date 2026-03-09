@@ -15,7 +15,7 @@ import {
 } from './LandingTopBar';
 
 const mockOpenAssistant = jest.fn();
-jest.mock('@grafana/assistant', () => ({
+jest.mock('../../assistant/runtime', () => ({
   useAssistant: () => ({
     openAssistant: mockOpenAssistant,
   }),
