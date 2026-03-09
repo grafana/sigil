@@ -480,8 +480,7 @@ export function DashboardGrid({
     }
     const parts = [
       'Dashboard context:',
-      `Time range (raw): from=${String(timeRange.raw.from)}; to=${String(timeRange.raw.to)}`,
-      `Time range (UTC): from=${formatUtcMillis(from)}; to=${formatUtcMillis(to)}`,
+      `Time range: ${timeRange.from.toISOString()} to ${timeRange.to.toISOString()}`,
       `Breakdown: ${breakdownBy}`,
       `Latency percentile: ${latencyPercentile}`,
       `Cost mode: ${costMode}`,
@@ -509,8 +508,6 @@ export function DashboardGrid({
   }, [
     allDataLoading,
     breakdownBy,
-    from,
-    to,
     topTotalOps.data,
     topErrRate.data,
     hasBreakdown,
@@ -522,8 +519,8 @@ export function DashboardGrid({
     latencyTimeseries.data,
     costMode,
     tokenDrilldown,
-    timeRange.raw.from,
-    timeRange.raw.to,
+    timeRange.from,
+    timeRange.to,
     tokensTotalStat.data,
     tokensTotalByBreakdown.data,
     tokensTotalTimeseries.data,
@@ -987,14 +984,6 @@ function RecentConversationsTable({ conversationsDataSource, timeRange, filters 
       </div>
     </div>
   );
-}
-
-function formatUtcMillis(ms: number): string {
-  const dt = new Date(ms);
-  if (Number.isNaN(dt.getTime())) {
-    return 'invalid';
-  }
-  return dt.toISOString();
 }
 
 function getStyles(theme: GrafanaTheme2) {

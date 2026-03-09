@@ -1,11 +1,61 @@
 import type { PrometheusQueryResponse } from '../../dashboard/types';
 
+export function compactNumber(num: number): string {
+  if (num === 0) {
+    return '0';
+  }
+  const abs = Math.abs(num);
+  let s: string;
+  if (abs >= 1000) {
+    s = String(Math.round(num));
+  } else if (abs >= 1) {
+    s = num.toFixed(3);
+  } else {
+    s = num.toFixed(6);
+  }
+  if (s.includes('.')) {
+    s = s.replace(/0+$/, '').replace(/\.$/, '');
+  }
+  return s;
+}
+
 function formatPrometheusValue(raw: string): string {
   const num = parseFloat(raw);
   if (!Number.isFinite(num)) {
     return 'no data';
   }
-  return raw;
+  return compactNumber(num);
+}
+
+/**
+ * When all series share exactly one label key, return that key so callers
+ * can emit just the value instead of key=value for every line.
+ */
+export function findSharedLabelKey(results: Array<{ metric: Record<string, string> }>): string | null {
+  let sharedKey: string | null = null;
+  for (const r of results) {
+    const keys = Object.keys(r.metric).filter((k) => !k.startsWith('__'));
+    if (keys.length !== 1) {
+      return null;
+    }
+    if (sharedKey === null) {
+      sharedKey = keys[0];
+    } else if (sharedKey !== keys[0]) {
+      return null;
+    }
+  }
+  return sharedKey;
+}
+
+export function formatMetricLabels(metric: Record<string, string>, sharedKey: string | null): string {
+  const entries = Object.entries(metric).filter(([k]) => !k.startsWith('__'));
+  if (entries.length === 0) {
+    return 'total';
+  }
+  if (sharedKey && entries.length === 1 && entries[0][0] === sharedKey) {
+    return entries[0][1];
+  }
+  return entries.map(([k, v]) => `${k}=${v}`).join(', ');
 }
 
 export function hasResponseData(response: PrometheusQueryResponse | null | undefined): boolean {
@@ -29,14 +79,32 @@ export function summarizeVector(response: PrometheusQueryResponse | null | undef
   if (results.length === 1) {
     return `${label}: ${formatPrometheusValue(results[0].value[1])}`;
   }
-  const lines = results.map((r) => {
-    const tags = Object.entries(r.metric)
-      .filter(([k]) => !k.startsWith('__'))
-      .map(([k, v]) => `${k}=${v}`)
-      .join(', ');
-    return `  ${tags || 'total'}: ${formatPrometheusValue(r.value[1])}`;
+
+  const sharedKey = findSharedLabelKey(results);
+  const nonZero: typeof results = [];
+  let zeroCount = 0;
+  for (const r of results) {
+    const num = parseFloat(r.value[1]);
+    if (Number.isFinite(num) && num === 0) {
+      zeroCount++;
+    } else {
+      nonZero.push(r);
+    }
+  }
+
+  if (nonZero.length === 0) {
+    return `${label}: all ${zeroCount} series are 0`;
+  }
+
+  const lines = nonZero.map((r) => {
+    const tags = formatMetricLabels(r.metric, sharedKey);
+    return `  ${tags}: ${formatPrometheusValue(r.value[1])}`;
   });
-  return `${label} (by series):\n${lines.join('\n')}`;
+  if (zeroCount > 0) {
+    lines.push(`  (${zeroCount} others: 0)`);
+  }
+
+  return `${label}:\n${lines.join('\n')}`;
 }
 
 export function summarizeMatrix(response: PrometheusQueryResponse | null | undefined, label: string): string {
@@ -47,29 +115,48 @@ export function summarizeMatrix(response: PrometheusQueryResponse | null | undef
   if (results.length === 0) {
     return `${label}: no series`;
   }
-  const seriesLines: string[] = [];
-  for (const r of results) {
-    const tags = Object.entries(r.metric)
-      .filter(([k]) => !k.startsWith('__'))
-      .map(([k, v]) => `${k}=${v}`)
-      .join(', ');
-    const numericVals = r.values.map(([, v]) => parseFloat(v)).filter((n) => Number.isFinite(n));
 
+  const sharedKey = findSharedLabelKey(results);
+  const seriesLines: string[] = [];
+  let zeroSeriesCount = 0;
+
+  for (const r of results) {
+    const numericVals = r.values.map(([, v]) => parseFloat(v)).filter((n) => Number.isFinite(n));
     if (numericVals.length === 0) {
       continue;
     }
 
-    const first = numericVals[0];
-    const last = numericVals[numericVals.length - 1];
     const min = Math.min(...numericVals);
     const max = Math.max(...numericVals);
-    const avg = numericVals.reduce((sum, v) => sum + v, 0) / numericVals.length;
-    seriesLines.push(
-      `  ${tags || 'total'}: first=${first}, last=${last}, min=${min}, max=${max}, avg=${avg.toFixed(4)}, points=${numericVals.length}`
-    );
+    if (max === 0 && min === 0) {
+      zeroSeriesCount++;
+      continue;
+    }
+
+    const tags = formatMetricLabels(r.metric, sharedKey);
+    if (min === max) {
+      seriesLines.push(`  ${tags}: constant=${compactNumber(min)}`);
+    } else {
+      const first = numericVals[0];
+      const last = numericVals[numericVals.length - 1];
+      const avg = numericVals.reduce((sum, v) => sum + v, 0) / numericVals.length;
+      seriesLines.push(
+        `  ${tags}: first=${compactNumber(first)}, last=${compactNumber(last)}, min=${compactNumber(min)}, max=${compactNumber(max)}, avg=${compactNumber(avg)}`
+      );
+    }
+  }
+
+  if (seriesLines.length === 0 && zeroSeriesCount > 0) {
+    return `${label}: all ${zeroSeriesCount} series are 0`;
   }
   if (seriesLines.length === 0) {
     return `${label}: no data`;
   }
-  return `${label} (${seriesLines.length} series):\n${seriesLines.join('\n')}`;
+
+  const activeSeries = seriesLines.length;
+  if (zeroSeriesCount > 0) {
+    seriesLines.push(`  (${zeroSeriesCount} others: all zeros)`);
+  }
+
+  return `${label} (${activeSeries} series):\n${seriesLines.join('\n')}`;
 }
