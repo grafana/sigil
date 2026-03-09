@@ -124,7 +124,7 @@ export default function ConversationMetricsStrip({
     const range: TimeRange = {
       from: dateTime(minTime - padding),
       to: dateTime(maxTime + padding),
-      raw: { from: dateTime(minTime - padding), to: dateTime(maxTime + padding) },
+      raw: { from: dateTime(minTime - padding).toISOString(), to: dateTime(maxTime + padding).toISOString() },
     };
 
     return { frames: [frame], timeRange: range };

@@ -55,6 +55,13 @@ function parseFilters(params: URLSearchParams): DashboardFilters {
   };
 }
 
+function serializeRawTime(raw: string | { toISOString(): string }): string {
+  if (typeof raw === 'string') {
+    return raw;
+  }
+  return raw.toISOString();
+}
+
 function setOrDelete(params: URLSearchParams, key: string, value: string, defaultValue = ''): void {
   if (value === defaultValue) {
     params.delete(key);
@@ -92,8 +99,8 @@ export function useFilterUrlState(): FilterUrlState {
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
-          setOrDelete(next, 'from', String(tr.raw.from), DEFAULT_FROM);
-          setOrDelete(next, 'to', String(tr.raw.to), DEFAULT_TO);
+          setOrDelete(next, 'from', serializeRawTime(tr.raw.from), DEFAULT_FROM);
+          setOrDelete(next, 'to', serializeRawTime(tr.raw.to), DEFAULT_TO);
           return next;
         },
         { replace: true }

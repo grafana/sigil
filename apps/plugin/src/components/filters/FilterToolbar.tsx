@@ -224,19 +224,19 @@ export function FilterToolbar({
           const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
           const from = dateTime(timeRange.from.valueOf() - diff);
           const to = dateTime(timeRange.to.valueOf() - diff);
-          onTimeRangeChange({ from, to, raw: { from, to } });
+          onTimeRangeChange({ from, to, raw: { from: from.toISOString(), to: to.toISOString() } });
         }}
         onMoveForward={() => {
           const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
           const from = dateTime(timeRange.from.valueOf() + diff);
           const to = dateTime(timeRange.to.valueOf() + diff);
-          onTimeRangeChange({ from, to, raw: { from, to } });
+          onTimeRangeChange({ from, to, raw: { from: from.toISOString(), to: to.toISOString() } });
         }}
         onZoom={() => {
           const diff = timeRange.to.valueOf() - timeRange.from.valueOf();
           const from = dateTime(timeRange.from.valueOf() - diff / 2);
           const to = dateTime(timeRange.to.valueOf() + diff / 2);
-          onTimeRangeChange({ from, to, raw: { from, to } });
+          onTimeRangeChange({ from, to, raw: { from: from.toISOString(), to: to.toISOString() } });
         }}
         isOnCanvas
       />
