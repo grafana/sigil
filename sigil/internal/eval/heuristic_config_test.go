@@ -221,6 +221,14 @@ func TestHeuristicConfigToMap(t *testing.T) {
 	}
 }
 
+func TestHeuristicNodeToMap_ZeroValueDoesNotPanic(t *testing.T) {
+	node := HeuristicNode{}
+	got := node.ToMap()
+	if len(got) != 0 {
+		t.Fatalf("expected empty map for zero-value node, got %#v", got)
+	}
+}
+
 func repeatedRuleMaps(count int) []any {
 	rules := make([]any, 0, count)
 	for range count {

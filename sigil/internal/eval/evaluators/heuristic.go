@@ -70,6 +70,9 @@ func evaluateHeuristicNode(node evalpkg.HeuristicNode, text string, length int) 
 			return false
 		}
 	}
+	if node.Rule == nil {
+		return false
+	}
 
 	switch node.Rule.Type {
 	case evalpkg.HeuristicRuleNotEmpty:

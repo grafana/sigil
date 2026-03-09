@@ -107,6 +107,9 @@ func (n HeuristicNode) ToMap() map[string]any {
 	if n.Group != nil {
 		return n.Group.toMap()
 	}
+	if n.Rule == nil {
+		return map[string]any{}
+	}
 	return n.Rule.toMap()
 }
 

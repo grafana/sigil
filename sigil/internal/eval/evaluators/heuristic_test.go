@@ -48,3 +48,9 @@ func TestHeuristicEvaluatorFail(t *testing.T) {
 		t.Fatalf("expected heuristic failure")
 	}
 }
+
+func TestEvaluateHeuristicNode_ZeroValueReturnsFalse(t *testing.T) {
+	if evaluateHeuristicNode(evalpkg.HeuristicNode{}, "answer", 6) {
+		t.Fatalf("expected zero-value node to evaluate false")
+	}
+}
