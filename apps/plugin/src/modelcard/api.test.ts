@@ -1,6 +1,5 @@
 import { of } from 'rxjs';
-import type { ModelCardClient } from './api';
-import { defaultModelCardClient, resetModelCardClientCacheForTests } from './api';
+import { defaultModelCardClient, resetModelCardClientCacheForTests, type ModelCardClient } from './api';
 import type { ModelCard, ModelCardLookupResponse, ModelCardPricing, ModelCardResolveResponse } from './types';
 
 const backendFetchMock = jest.fn();
