@@ -56,7 +56,7 @@ func (s *TestService) RunTest(ctx context.Context, tenantID string, req EvalTest
 
 	eval, ok := s.evaluators[kind]
 	if !ok {
-		return nil, newValidationError(fmt.Errorf("no evaluator registered for kind %q", kind))
+		return nil, ValidationWrap(fmt.Errorf("no evaluator registered for kind %q", kind))
 	}
 
 	generation, err := s.reader.GetByID(ctx, tenantID, req.GenerationID)

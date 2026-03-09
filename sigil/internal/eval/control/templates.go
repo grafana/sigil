@@ -223,7 +223,7 @@ func (s *TemplateService) DeleteTemplate(ctx context.Context, tenantID, template
 	trimmedTemplateID := strings.TrimSpace(templateID)
 
 	if _, _, ok := findPredefinedTemplateDefinition(trimmedTemplateID); ok {
-		return newValidationError(errors.New("cannot delete global templates"))
+		return ValidationWrap(errors.New("cannot delete global templates"))
 	}
 	return s.store.DeleteTemplate(ctx, trimmedTenantID, trimmedTemplateID)
 }
@@ -239,7 +239,7 @@ func (s *TemplateService) PublishVersion(ctx context.Context, tenantID, template
 	}
 	if tmpl == nil {
 		if _, _, ok := findPredefinedTemplateDefinition(trimmedTemplateID); ok {
-			return nil, newValidationError(errors.New("cannot publish versions for global templates"))
+			return nil, ValidationWrap(errors.New("cannot publish versions for global templates"))
 		}
 		return nil, NotFoundError(fmt.Sprintf("template %q not found", trimmedTemplateID))
 	}

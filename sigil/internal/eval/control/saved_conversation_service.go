@@ -132,22 +132,22 @@ func (s *SavedConversationService) SaveConversation(ctx context.Context, tenantI
 	trimmedSavedBy := strings.TrimSpace(req.SavedBy)
 
 	if trimmedTenantID == "" {
-		return nil, newValidationError(errors.New("tenant id is required"))
+		return nil, ValidationWrap(errors.New("tenant id is required"))
 	}
 	if trimmedSavedID == "" {
-		return nil, newValidationError(errors.New("saved_id is required"))
+		return nil, ValidationWrap(errors.New("saved_id is required"))
 	}
 	if err := validateSavedConversationID(trimmedSavedID); err != nil {
 		return nil, ValidationWrap(err)
 	}
 	if trimmedConvID == "" {
-		return nil, newValidationError(errors.New("conversation_id is required"))
+		return nil, ValidationWrap(errors.New("conversation_id is required"))
 	}
 	if trimmedName == "" {
-		return nil, newValidationError(errors.New("name is required"))
+		return nil, ValidationWrap(errors.New("name is required"))
 	}
 	if trimmedSavedBy == "" {
-		return nil, newValidationError(errors.New("saved_by is required"))
+		return nil, ValidationWrap(errors.New("saved_by is required"))
 	}
 	if s.convLookup == nil {
 		return nil, UnavailableError("conversation lookup is not configured", errors.New("conversation lookup is not configured"))
@@ -214,19 +214,19 @@ func (s *SavedConversationService) CreateManualConversation(ctx context.Context,
 	trimmedSavedBy := strings.TrimSpace(req.SavedBy)
 
 	if trimmedTenantID == "" {
-		return nil, newValidationError(errors.New("tenant id is required"))
+		return nil, ValidationWrap(errors.New("tenant id is required"))
 	}
 	if trimmedSavedID == "" {
-		return nil, newValidationError(errors.New("saved_id is required"))
+		return nil, ValidationWrap(errors.New("saved_id is required"))
 	}
 	if err := validateSavedConversationID(trimmedSavedID); err != nil {
 		return nil, ValidationWrap(err)
 	}
 	if trimmedName == "" {
-		return nil, newValidationError(errors.New("name is required"))
+		return nil, ValidationWrap(errors.New("name is required"))
 	}
 	if trimmedSavedBy == "" {
-		return nil, newValidationError(errors.New("saved_by is required"))
+		return nil, ValidationWrap(errors.New("saved_by is required"))
 	}
 	tags, err := validateSavedConversationTags(req.Tags)
 	if err != nil {
@@ -297,7 +297,7 @@ func (s *SavedConversationService) CreateManualConversation(ctx context.Context,
 func (s *SavedConversationService) ListSavedConversations(ctx context.Context, tenantID, source string, limit int, cursor uint64) ([]evalpkg.SavedConversation, uint64, error) {
 	trimmedTenantID := strings.TrimSpace(tenantID)
 	if trimmedTenantID == "" {
-		return nil, 0, newValidationError(errors.New("tenant id is required"))
+		return nil, 0, ValidationWrap(errors.New("tenant id is required"))
 	}
 	trimmedSource := strings.TrimSpace(source)
 	if trimmedSource != "" && !evalpkg.IsValidSavedConversationSource(trimmedSource) {
@@ -311,10 +311,10 @@ func (s *SavedConversationService) GetSavedConversation(ctx context.Context, ten
 	trimmedTenantID := strings.TrimSpace(tenantID)
 	trimmedSavedID := strings.TrimSpace(savedID)
 	if trimmedTenantID == "" {
-		return nil, newValidationError(errors.New("tenant id is required"))
+		return nil, ValidationWrap(errors.New("tenant id is required"))
 	}
 	if trimmedSavedID == "" {
-		return nil, newValidationError(errors.New("saved_id is required"))
+		return nil, ValidationWrap(errors.New("saved_id is required"))
 	}
 	return s.store.GetSavedConversation(ctx, trimmedTenantID, trimmedSavedID)
 }
@@ -326,10 +326,10 @@ func (s *SavedConversationService) DeleteSavedConversation(ctx context.Context, 
 	trimmedTenantID := strings.TrimSpace(tenantID)
 	trimmedSavedID := strings.TrimSpace(savedID)
 	if trimmedTenantID == "" {
-		return newValidationError(errors.New("tenant id is required"))
+		return ValidationWrap(errors.New("tenant id is required"))
 	}
 	if trimmedSavedID == "" {
-		return newValidationError(errors.New("saved_id is required"))
+		return ValidationWrap(errors.New("saved_id is required"))
 	}
 
 	existing, err := s.store.GetSavedConversation(ctx, trimmedTenantID, trimmedSavedID)

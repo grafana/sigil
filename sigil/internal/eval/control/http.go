@@ -419,12 +419,47 @@ func decodeJSONBody(req *http.Request, out any) error {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(out); err != nil {
-		return fmt.Errorf("invalid request body: %w", err)
+		return sanitizeJSONDecodeError(err)
 	}
 	if decoder.More() {
 		return errors.New("invalid request body: multiple JSON values are not allowed")
 	}
 	return nil
+}
+
+func sanitizeJSONDecodeError(err error) error {
+	var syntaxErr *json.SyntaxError
+	if errors.As(err, &syntaxErr) {
+		return fmt.Errorf("invalid request body: malformed JSON at position %d", syntaxErr.Offset)
+	}
+
+	var typeErr *json.UnmarshalTypeError
+	if errors.As(err, &typeErr) {
+		field := sanitizeJSONFieldName(typeErr.Field)
+		if field != "" {
+			return fmt.Errorf("invalid request body: field %q has the wrong type", field)
+		}
+		return errors.New("invalid request body: field has the wrong type")
+	}
+
+	if strings.HasPrefix(err.Error(), "json: unknown field ") {
+		field := strings.TrimPrefix(err.Error(), "json: unknown field ")
+		field = strings.Trim(field, `"`)
+		return fmt.Errorf("invalid request body: unknown field %q", field)
+	}
+
+	return errors.New("invalid request body")
+}
+
+func sanitizeJSONFieldName(field string) string {
+	trimmed := strings.TrimSpace(field)
+	if trimmed == "" {
+		return ""
+	}
+	if idx := strings.LastIndex(trimmed, "."); idx >= 0 {
+		trimmed = trimmed[idx+1:]
+	}
+	return strings.TrimSpace(trimmed)
 }
 
 func parsePagination(req *http.Request) (int, uint64, error) {

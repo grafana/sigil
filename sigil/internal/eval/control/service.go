@@ -115,7 +115,7 @@ func (s *Service) CreateEvaluator(ctx context.Context, tenantID string, evaluato
 	}
 	evaluator.TenantID = strings.TrimSpace(tenantID)
 	if err := validateEvaluator(&evaluator); err != nil {
-		return evalpkg.EvaluatorDefinition{}, newValidationError(err)
+		return evalpkg.EvaluatorDefinition{}, ValidationWrap(err)
 	}
 	existing, err := s.store.GetEvaluatorVersion(ctx, evaluator.TenantID, evaluator.EvaluatorID, evaluator.Version)
 	if err != nil {
@@ -245,7 +245,7 @@ func (s *Service) DeleteEvaluator(ctx context.Context, tenantID, evaluatorID str
 		return err
 	}
 	if len(referencingRules) > 0 {
-		return newValidationError(fmt.Errorf(
+		return ValidationWrap(fmt.Errorf(
 			"cannot delete evaluator %q: referenced by enabled rules %s",
 			trimmedEvaluatorID,
 			strings.Join(referencingRules, ", "),
@@ -298,7 +298,7 @@ func (s *Service) CreateRule(ctx context.Context, tenantID string, rule evalpkg.
 	}
 	rule.TenantID = strings.TrimSpace(tenantID)
 	if err := validateRule(&rule); err != nil {
-		return evalpkg.RuleDefinition{}, newValidationError(err)
+		return evalpkg.RuleDefinition{}, ValidationWrap(err)
 	}
 	existing, err := s.store.GetRule(ctx, rule.TenantID, rule.RuleID)
 	if err != nil {
@@ -370,7 +370,7 @@ func (s *Service) UpdateRule(ctx context.Context, tenantID, ruleID string, enabl
 		rule.EvaluatorIDs = evaluatorIDs
 	}
 	if err := validateRule(rule); err != nil {
-		return nil, newValidationError(err)
+		return nil, ValidationWrap(err)
 	}
 	if rule.Enabled {
 		if err := s.validateRuleEvaluatorReferences(ctx, rule.TenantID, rule.EvaluatorIDs); err != nil {
@@ -399,7 +399,7 @@ func (s *Service) validateRuleEvaluatorReferences(ctx context.Context, tenantID 
 			return err
 		}
 		if evaluator == nil {
-			return newValidationError(fmt.Errorf("evaluator %q was not found", evaluatorID))
+			return ValidationWrap(fmt.Errorf("evaluator %q was not found", evaluatorID))
 		}
 	}
 	return nil
@@ -429,7 +429,7 @@ func (s *Service) ListJudgeModels(ctx context.Context, providerID string) ([]Jud
 		return []JudgeModel{}, nil
 	}
 	if strings.TrimSpace(providerID) == "" {
-		return nil, newValidationError(errors.New("provider query param is required"))
+		return nil, ValidationWrap(errors.New("provider query param is required"))
 	}
 	models, err := s.discovery.ListModels(ctx, strings.TrimSpace(providerID))
 	if errors.Is(err, judges.ErrProviderNotFound) {
@@ -443,11 +443,11 @@ const inputPreviewMaxLen = 200
 
 func (s *Service) PreviewRule(ctx context.Context, tenantID string, req evalpkg.RulePreviewRequest) (evalpkg.RulePreviewResponse, error) {
 	if s.previewStore == nil || s.previewWindowHrs <= 0 {
-		return evalpkg.RulePreviewResponse{}, newValidationError(errors.New("rule preview is not configured"))
+		return evalpkg.RulePreviewResponse{}, ValidationWrap(errors.New("rule preview is not configured"))
 	}
 	trimmedTenantID := strings.TrimSpace(tenantID)
 	if trimmedTenantID == "" {
-		return evalpkg.RulePreviewResponse{}, newValidationError(errors.New("tenant id is required"))
+		return evalpkg.RulePreviewResponse{}, ValidationWrap(errors.New("tenant id is required"))
 	}
 
 	selector := strings.TrimSpace(string(req.Selector))
@@ -457,10 +457,10 @@ func (s *Service) PreviewRule(ctx context.Context, tenantID string, req evalpkg.
 	switch evalpkg.Selector(selector) {
 	case evalpkg.SelectorUserVisibleTurn, evalpkg.SelectorAllAssistantGenerations, evalpkg.SelectorToolCallSteps, evalpkg.SelectorErroredGenerations:
 	default:
-		return evalpkg.RulePreviewResponse{}, newValidationError(errors.New("selector is invalid"))
+		return evalpkg.RulePreviewResponse{}, ValidationWrap(errors.New("selector is invalid"))
 	}
 	if req.SampleRate < 0 || req.SampleRate > 1 {
-		return evalpkg.RulePreviewResponse{}, newValidationError(errors.New("sample_rate must be between 0 and 1"))
+		return evalpkg.RulePreviewResponse{}, ValidationWrap(errors.New("sample_rate must be between 0 and 1"))
 	}
 	match := req.Match
 	if match == nil {
@@ -468,7 +468,7 @@ func (s *Service) PreviewRule(ctx context.Context, tenantID string, req evalpkg.
 	} else {
 		normalizedMatch, err := validateRuleMatch(match)
 		if err != nil {
-			return evalpkg.RulePreviewResponse{}, newValidationError(err)
+			return evalpkg.RulePreviewResponse{}, ValidationWrap(err)
 		}
 		match = normalizedMatch
 	}

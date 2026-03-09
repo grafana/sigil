@@ -118,10 +118,6 @@ func InternalError(message string, err error) error {
 	return newControlError(ErrInternal, message, err)
 }
 
-func newValidationError(err error) error {
-	return ValidationWrap(err)
-}
-
 func isValidationError(err error) bool {
 	return errors.Is(err, ErrValidation)
 }

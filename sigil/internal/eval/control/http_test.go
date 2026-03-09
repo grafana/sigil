@@ -132,6 +132,35 @@ func TestDecodeJSONBody_WhitespaceOnlyBodyReturnsRequiredError(t *testing.T) {
 	}
 }
 
+func TestDecodeJSONBody_UnknownFieldIsSanitized(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/eval/evaluators", bytes.NewBufferString(`{"bogus":true}`))
+
+	var payload createEvaluatorRequest
+	err := decodeJSONBody(req, &payload)
+	if err == nil {
+		t.Fatal("expected error for unknown field")
+	}
+	if got := err.Error(); got != `invalid request body: unknown field "bogus"` {
+		t.Fatalf("unexpected error: %q", got)
+	}
+}
+
+func TestDecodeJSONBody_TypeErrorDoesNotLeakStructNames(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/eval/evaluators", bytes.NewBufferString(`{"config":"wrong"}`))
+
+	var payload createEvaluatorRequest
+	err := decodeJSONBody(req, &payload)
+	if err == nil {
+		t.Fatal("expected type error")
+	}
+	if strings.Contains(err.Error(), "createEvaluatorRequest") {
+		t.Fatalf("expected sanitized type error, got %q", err.Error())
+	}
+	if got := err.Error(); got != `invalid request body: field "config" has the wrong type` {
+		t.Fatalf("unexpected error: %q", got)
+	}
+}
+
 func TestDeleteEvaluatorRejectsEnabledRuleReferences(t *testing.T) {
 	store := newMemoryControlStore()
 	if err := store.CreateEvaluator(context.Background(), evalpkg.EvaluatorDefinition{
