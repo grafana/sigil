@@ -25,8 +25,6 @@ describe('useConversationData', () => {
   });
 
   it('updates conversation data progressively while traces are still loading', async () => {
-    jest.useFakeTimers();
-
     let resolveTraceA: ((value: unknown) => void) | undefined;
     let resolveTraceB: ((value: unknown) => void) | undefined;
     const dataSource: ConversationsDataSource = {
@@ -106,7 +104,6 @@ describe('useConversationData', () => {
 
     await act(async () => {
       await Promise.resolve();
-      await jest.advanceTimersByTimeAsync(100);
     });
 
     await waitFor(() => {
@@ -140,7 +137,6 @@ describe('useConversationData', () => {
 
     await act(async () => {
       await Promise.resolve();
-      await jest.runOnlyPendingTimersAsync();
     });
 
     await waitFor(() => {

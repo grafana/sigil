@@ -1,10 +1,10 @@
 import { dateTime, type TimeRange } from '@grafana/data';
 import type { ConversationsDataSource } from './api';
 import { parseOTLPTrace, buildSpanTree } from './spans';
+import type { GenerationDetail } from '../generation/types';
 import type { ConversationData, ConversationDetail } from './types';
 
 const TRACE_FETCH_TIME_PADDING_MS = 30 * 60 * 1000;
-const TRACE_PROGRESS_UPDATE_INTERVAL_MS = 100;
 
 export type TraceFetchOptions = {
   timeRange?: Pick<TimeRange, 'from' | 'to'>;
@@ -154,19 +154,57 @@ function buildConversationTraceFetchOptions(data: ConversationData): TraceFetchO
   };
 }
 
+function generationTimestampMs(generation: GenerationDetail): number | undefined {
+  if (!generation.created_at) {
+    return undefined;
+  }
+  const parsed = Date.parse(generation.created_at);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function orderTraceIDsByOldestGeneration(generations: GenerationDetail[]): string[] {
+  const firstSeenIndex = new Map<string, number>();
+  const oldestTimestampByTraceID = new Map<string, number>();
+
+  for (const [index, generation] of generations.entries()) {
+    if (!generation.trace_id || generation.trace_id.length === 0) {
+      continue;
+    }
+    if (!firstSeenIndex.has(generation.trace_id)) {
+      firstSeenIndex.set(generation.trace_id, index);
+    }
+    const timestampMs = generationTimestampMs(generation);
+    if (timestampMs === undefined) {
+      continue;
+    }
+    const existing = oldestTimestampByTraceID.get(generation.trace_id);
+    if (existing === undefined || timestampMs < existing) {
+      oldestTimestampByTraceID.set(generation.trace_id, timestampMs);
+    }
+  }
+
+  return Array.from(firstSeenIndex.keys()).sort((left, right) => {
+    const leftTimestamp = oldestTimestampByTraceID.get(left);
+    const rightTimestamp = oldestTimestampByTraceID.get(right);
+    if (leftTimestamp !== undefined && rightTimestamp !== undefined && leftTimestamp !== rightTimestamp) {
+      return leftTimestamp - rightTimestamp;
+    }
+    if (leftTimestamp !== undefined && rightTimestamp === undefined) {
+      return -1;
+    }
+    if (leftTimestamp === undefined && rightTimestamp !== undefined) {
+      return 1;
+    }
+    return (firstSeenIndex.get(left) ?? 0) - (firstSeenIndex.get(right) ?? 0);
+  });
+}
+
 export async function loadConversationTraces(
   data: ConversationData,
   fetchTrace: TraceFetcher,
   loadOptions?: LoadConversationTracesOptions
 ): Promise<ConversationData> {
-  const traceIDSet = new Set<string>();
-  for (const gen of data.orphanGenerations) {
-    if (gen.trace_id && gen.trace_id.length > 0) {
-      traceIDSet.add(gen.trace_id);
-    }
-  }
-
-  const traceIDs = Array.from(traceIDSet);
+  const traceIDs = orderTraceIDsByOldestGeneration(data.orphanGenerations);
   if (traceIDs.length === 0) {
     return data;
   }
@@ -174,7 +212,6 @@ export async function loadConversationTraces(
   const allGenerations = data.orphanGenerations;
   const fetchOptions = buildConversationTraceFetchOptions(data);
   const parsedSpans = parseTraceResults([]);
-  let progressTimer: ReturnType<typeof setTimeout> | undefined;
 
   const emitProgress = () => {
     const { roots, orphanGenerations } = buildSpanTree(parsedSpans, allGenerations);
@@ -185,32 +222,14 @@ export async function loadConversationTraces(
     });
   };
 
-  const scheduleProgress = () => {
-    if (!loadOptions?.onProgress || progressTimer !== undefined) {
-      return;
-    }
-    progressTimer = setTimeout(() => {
-      progressTimer = undefined;
-      emitProgress();
-    }, TRACE_PROGRESS_UPDATE_INTERVAL_MS);
-  };
-
-  const flushProgress = () => {
-    if (progressTimer !== undefined) {
-      clearTimeout(progressTimer);
-      progressTimer = undefined;
-    }
-    if (loadOptions?.onProgress && parsedSpans.length > 0) {
-      emitProgress();
-    }
-  };
-
   const handleTraceResult = ({ traceID, payload }: TraceResult) => {
     if (payload === null) {
       return;
     }
     parsedSpans.push(...parseOTLPTrace(traceID, payload));
-    scheduleProgress();
+    if (loadOptions?.onProgress) {
+      emitProgress();
+    }
   };
 
   let tracePayloads = await fetchTracesWithConcurrency(traceIDs, fetchTrace, fetchOptions, handleTraceResult);
@@ -228,7 +247,6 @@ export async function loadConversationTraces(
     }
   }
 
-  flushProgress();
   const { roots, orphanGenerations } = buildSpanTree(allParsedSpans, allGenerations);
 
   return {

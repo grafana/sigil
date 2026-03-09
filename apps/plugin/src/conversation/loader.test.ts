@@ -76,8 +76,6 @@ describe('loadConversationTraces', () => {
   });
 
   it('publishes partial trees as traces resolve', async () => {
-    jest.useFakeTimers();
-
     let resolveTraceA: ((value: unknown) => void) | undefined;
     let resolveTraceB: ((value: unknown) => void) | undefined;
     const fetchTrace: TraceFetcher = jest.fn((traceID: string) => {
@@ -124,7 +122,6 @@ describe('loadConversationTraces', () => {
       ])
     );
     await Promise.resolve();
-    await jest.advanceTimersByTimeAsync(100);
 
     expect(onProgress).toHaveBeenCalled();
     expect(onProgress.mock.calls[0][0].spans).toHaveLength(1);
@@ -144,6 +141,44 @@ describe('loadConversationTraces', () => {
 
     const result = await promise;
     expect(result.spans).toHaveLength(2);
+  });
+
+  it('starts fetching traces from the oldest generation first', async () => {
+    const fetchTrace: TraceFetcher = jest.fn().mockResolvedValue(makeTracePayload());
+
+    await loadConversationTraces(
+      makeConversationData({
+        generationCount: 3,
+        orphanGenerations: [
+          {
+            generation_id: 'gen-latest',
+            conversation_id: 'conv-1',
+            trace_id: 'trace-latest',
+            span_id: 'span-latest',
+            created_at: '2026-03-09T13:30:00Z',
+          },
+          {
+            generation_id: 'gen-oldest',
+            conversation_id: 'conv-1',
+            trace_id: 'trace-oldest',
+            span_id: 'span-oldest',
+            created_at: '2026-03-09T13:10:00Z',
+          },
+          {
+            generation_id: 'gen-middle',
+            conversation_id: 'conv-1',
+            trace_id: 'trace-middle',
+            span_id: 'span-middle',
+            created_at: '2026-03-09T13:20:00Z',
+          },
+        ],
+      }),
+      fetchTrace
+    );
+
+    expect(fetchTrace).toHaveBeenNthCalledWith(1, 'trace-oldest', expect.any(Object));
+    expect(fetchTrace).toHaveBeenNthCalledWith(2, 'trace-middle', expect.any(Object));
+    expect(fetchTrace).toHaveBeenNthCalledWith(3, 'trace-latest', expect.any(Object));
   });
 });
 
