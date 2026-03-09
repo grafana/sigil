@@ -151,6 +151,74 @@ describe('ModelCardClient', () => {
     });
   });
 
+  describe('default client cache TTL', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('evicts resolve cache entries after TTL and re-fetches', async () => {
+      const resolveResponse: ModelCardResolveResponse = {
+        resolved: [
+          {
+            provider: 'openai',
+            model: 'gpt-4o',
+            status: 'resolved',
+            match_strategy: 'exact',
+            card: {
+              model_key: 'openrouter:openai/gpt-4o',
+              source_model_id: 'openai/gpt-4o',
+              pricing: basePricing,
+            },
+          },
+        ],
+        freshness: {
+          catalog_last_refreshed_at: '2026-03-03T00:00:00Z',
+          stale: false,
+          soft_stale: false,
+          hard_stale: false,
+          source_path: 'memory_live',
+        },
+      };
+
+      backendFetchMock.mockReturnValue(of({ data: resolveResponse }));
+
+      await defaultModelCardClient.resolve([{ provider: 'openai', model: 'gpt-4o' }]);
+      expect(backendFetchMock).toHaveBeenCalledTimes(1);
+
+      jest.advanceTimersByTime(5 * 60 * 1000);
+
+      await defaultModelCardClient.resolve([{ provider: 'openai', model: 'gpt-4o' }]);
+      expect(backendFetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('evicts lookup cache entries after TTL and re-fetches', async () => {
+      const lookupResponse: ModelCardLookupResponse = {
+        data: testCard,
+        freshness: {
+          catalog_last_refreshed_at: '2026-03-03T00:00:00Z',
+          stale: false,
+          soft_stale: false,
+          hard_stale: false,
+          source_path: 'memory_live',
+        },
+      };
+
+      backendFetchMock.mockReturnValue(of({ data: lookupResponse }));
+
+      await defaultModelCardClient.lookup({ modelKey: 'openrouter:openai/gpt-4o' });
+      expect(backendFetchMock).toHaveBeenCalledTimes(1);
+
+      jest.advanceTimersByTime(5 * 60 * 1000);
+
+      await defaultModelCardClient.lookup({ modelKey: 'openrouter:openai/gpt-4o' });
+      expect(backendFetchMock).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe('default client caching', () => {
     it('deduplicates identical resolve requests', async () => {
       const resolveResponse: ModelCardResolveResponse = {

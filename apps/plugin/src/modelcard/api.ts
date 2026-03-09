@@ -4,6 +4,8 @@ import type { ModelCardLookupResponse, ModelCardResolveResponse, ModelResolvePai
 
 const queryBasePath = '/api/plugins/grafana-sigil-app/resources/query';
 
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
 const resolveCache = new Map<string, Promise<ModelCardResolveResponse>>();
 const lookupCache = new Map<string, Promise<ModelCardLookupResponse>>();
 
@@ -71,6 +73,7 @@ export const defaultModelCardClient: ModelCardClient = {
     });
 
     resolveCache.set(cacheKey, promise);
+    setTimeout(() => resolveCache.delete(cacheKey), CACHE_TTL_MS);
     return promise;
   },
 
@@ -105,6 +108,7 @@ export const defaultModelCardClient: ModelCardClient = {
     });
 
     lookupCache.set(cacheKey, promise);
+    setTimeout(() => lookupCache.delete(cacheKey), CACHE_TTL_MS);
     return promise;
   },
 };
