@@ -35,6 +35,7 @@ import DetailPanel from '../components/conversation-explore/DetailPanel';
 import type { FlowNode } from '../components/conversation-explore/types';
 import { Loader } from '../components/Loader';
 import { PageInsightBar } from '../components/insight/PageInsightBar';
+import { useConversationAssistantContext } from '../hooks/useConversationAssistantContext';
 
 export type ConversationExplorePageProps = {
   dataSource?: ConversationsDataSource;
@@ -1104,6 +1105,17 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     models,
     generationCosts,
   ]);
+
+  useConversationAssistantContext({
+    conversationID,
+    conversationTitle: conversationTitle || conversationID,
+    conversationData,
+    allGenerations,
+    tokenSummary,
+    costSummary,
+    generationCosts,
+    totalDurationMs,
+  });
 
   if (loading) {
     return (
