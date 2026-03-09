@@ -23,7 +23,6 @@ import { HighlightedJson } from './HighlightedJson';
 import { TokenizedText } from '../tokenizer/TokenizedText';
 import { useTokenizer } from '../tokenizer/useTokenizer';
 import { getEncoding, AVAILABLE_ENCODINGS, type EncodingName } from '../tokenizer/encodingMap';
-import { getDisplayedInputMessages, sortGenerationsByCreatedAt } from './turnDelta';
 
 export type GenerationViewProps = {
   node: FlowNode;
@@ -692,7 +691,11 @@ function findAdjacentGenerations(
   currentGen: GenerationDetail,
   allGenerations: GenerationDetail[]
 ): AdjacentGenerations {
-  const sorted = sortGenerationsByCreatedAt(allGenerations);
+  const sorted = [...allGenerations].sort((a, b) => {
+    const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return aTime - bTime;
+  });
 
   const idx = sorted.findIndex((g) => g.generation_id === currentGen.generation_id);
   return {
@@ -700,6 +703,25 @@ function findAdjacentGenerations(
     next: idx >= 0 && idx < sorted.length - 1 ? sorted[idx + 1] : undefined,
     currentIndex: idx,
     total: sorted.length,
+  };
+}
+
+function splitInputMessages(
+  inputMessages: Message[],
+  previousGen: GenerationDetail | undefined
+): { contextCount: number; newMessages: Message[] } {
+  if (!previousGen) {
+    return { contextCount: 0, newMessages: inputMessages };
+  }
+
+  const prevCount = (previousGen.input?.length ?? 0) + (previousGen.output?.length ?? 0);
+  if (prevCount <= 0 || prevCount >= inputMessages.length) {
+    return { contextCount: 0, newMessages: inputMessages };
+  }
+
+  return {
+    contextCount: prevCount,
+    newMessages: inputMessages.slice(prevCount),
   };
 }
 
@@ -963,10 +985,12 @@ export default function GenerationView({
     () => (gen ? findAdjacentGenerations(gen, allGenerations) : undefined),
     [gen, allGenerations]
   );
-  const displayedInput = useMemo(
-    () => getDisplayedInputMessages(inputMessages, adjacent?.previous),
+  const { contextCount, newMessages } = useMemo(
+    () => splitInputMessages(inputMessages, adjacent?.previous),
     [inputMessages, adjacent?.previous]
   );
+
+  const displayedInput = contextCount > 0 ? newMessages : inputMessages;
 
   const autoEncoding = useMemo(
     () => getEncoding(gen?.model?.provider, gen?.model?.name),
