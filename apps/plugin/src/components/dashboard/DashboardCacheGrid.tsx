@@ -658,13 +658,14 @@ function SavingsTable({ items }: SavingsTableProps) {
   const theme = useTheme2();
   const palette = useMemo(() => getBarPalette(theme), [theme]);
   const maxSavings = items.length > 0 ? items[0].savings : 0;
+  const totalSavings = useMemo(() => items.reduce((s, i) => s + i.savings, 0), [items]);
 
   const columns = useMemo<Array<ColumnDef<ModelSavings>>>(
     () => [
       {
         id: 'model',
         header: 'Model',
-        cell: (item: ModelSavings) => item.model,
+        cell: (item: ModelSavings) => <ModelChipList models={[item.model]} maxVisible={1} />,
       },
       {
         id: 'savings',
@@ -697,6 +698,7 @@ function SavingsTable({ items }: SavingsTableProps) {
       data={items}
       keyOf={(item) => `${item.provider}::${item.model}`}
       panelTitle="Cache savings by model"
+      panelSubtitle={formatStatValue(totalSavings, 'currencyUSD')}
       loading={false}
       emptyIcon="piggy-bank"
       emptyMessage="No cache savings in this period."

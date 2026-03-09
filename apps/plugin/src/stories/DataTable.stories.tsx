@@ -53,6 +53,16 @@ export const WithPanel = {
   },
 };
 
+export const WithPanelSubtitle = {
+  args: {
+    columns,
+    data: sampleData,
+    keyOf: (row: SampleRow) => row.id,
+    panelTitle: 'Cache savings by model',
+    panelSubtitle: '$12.34',
+  },
+};
+
 export const Loading = {
   args: {
     columns,

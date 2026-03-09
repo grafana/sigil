@@ -35,6 +35,7 @@ export type DataTableProps<T> = {
 
   panel?: boolean;
   panelTitle?: string;
+  panelSubtitle?: React.ReactNode;
   seeMoreHref?: string;
   seeMoreLabel?: string;
 
@@ -68,6 +69,7 @@ export default function DataTable<T>(props: DataTableProps<T>) {
     ariaLabel,
     panel = false,
     panelTitle,
+    panelSubtitle,
     seeMoreHref,
     seeMoreLabel,
     loading = false,
@@ -203,6 +205,7 @@ export default function DataTable<T>(props: DataTableProps<T>) {
       <div className={cx(styles.tablePanel, className)}>
         <div className={styles.tablePanelHeader}>
           <span className={styles.panelTitle}>{panelTitle}</span>
+          {panelSubtitle != null && <div className={styles.panelSubtitle}>{panelSubtitle}</div>}
         </div>
         {content}
       </div>
@@ -226,7 +229,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexDirection: 'column' as const,
     background: theme.colors.background.primary,
     border: `1px solid ${theme.colors.border.weak}`,
-    // borderRadius: theme.shape.radius.default,
     overflow: 'hidden',
   }),
   tablePanelHeader: css({
@@ -237,6 +239,12 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'block',
     fontSize: theme.typography.h6.fontSize,
     fontWeight: theme.typography.fontWeightMedium,
+    color: theme.colors.text.primary,
+  }),
+  panelSubtitle: css({
+    marginTop: theme.spacing(0.5),
+    fontSize: theme.typography.h3.fontSize,
+    fontWeight: theme.typography.fontWeightBold,
     color: theme.colors.text.primary,
   }),
   table: css({
