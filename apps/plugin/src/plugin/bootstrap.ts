@@ -93,5 +93,5 @@ export async function bootstrap<T extends KeyValue>(plugin: AppPlugin<T>): Promi
     })
   );
 
-  providePageContext(/\/a\/grafana-sigil-app\//, contextItems);
+  providePageContext(/\/a\/grafana-sigil-app\/.+/, contextItems);
 }
