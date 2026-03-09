@@ -215,8 +215,10 @@ export function buildSpanTree(
   const matchedGenerationIDs = new Set<string>();
 
   for (const gen of generations) {
-    if (gen.trace_id && gen.span_id) {
-      genByTraceAndSpan.set(`${gen.trace_id}:${gen.span_id}`, gen);
+    const normTraceID = normalizeTraceID(gen.trace_id);
+    const normSpanID = normalizeSpanID(gen.span_id);
+    if (normTraceID && normSpanID) {
+      genByTraceAndSpan.set(`${normTraceID}:${normSpanID}`, gen);
     }
   }
 

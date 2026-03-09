@@ -340,11 +340,13 @@ function isSpanAssociatedWithGeneration(generation: GenerationLike, span: SigilS
   if (spanGenerationID.length > 0) {
     return generation.generation_id.length > 0 && spanGenerationID === generation.generation_id;
   }
-  if (generation.trace_id != null && generation.trace_id.length > 0 && generation.trace_id === span.traceID) {
-    if (generation.span_id == null || generation.span_id.length === 0) {
+  const normTraceID = normalizeTraceID(generation.trace_id);
+  if (normTraceID.length > 0 && normTraceID === span.traceID) {
+    const normSpanID = normalizeSpanID(generation.span_id);
+    if (normSpanID.length === 0) {
       return true;
     }
-    return generation.span_id === span.spanID;
+    return normSpanID === span.spanID;
   }
   return false;
 }
