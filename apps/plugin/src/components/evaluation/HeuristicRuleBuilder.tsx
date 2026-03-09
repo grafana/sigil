@@ -143,8 +143,8 @@ export default function HeuristicRuleBuilder({ query, onChange, error }: Heurist
         query={query}
         onQueryChange={handleQueryChange}
         fields={HEURISTIC_QUERY_FIELDS}
-        operators={HEURISTIC_QUERY_OPERATORS}
-        combinators={HEURISTIC_QUERY_COMBINATORS}
+        operators={[...HEURISTIC_QUERY_OPERATORS]}
+        combinators={[...HEURISTIC_QUERY_COMBINATORS]}
         controlElements={controlElements}
         getDefaultField={getDefaultHeuristicField}
         getDefaultOperator={getDefaultHeuristicOperator}
