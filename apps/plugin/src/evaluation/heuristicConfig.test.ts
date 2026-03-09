@@ -85,6 +85,13 @@ describe('heuristicConfig', () => {
     expect(validateHeuristicQuery(query)).toBe('Length rules need a non-negative value');
   });
 
+  it('throws when serializing an unknown rule operator', () => {
+    const query = createDefaultHeuristicQuery(createDefaultHeuristicConfig());
+    query.rules = [{ field: 'response', operator: 'wat' as never, value: '' }];
+
+    expect(() => heuristicQueryToConfig(query)).toThrow('Unhandled heuristic node variant');
+  });
+
   it('formats a readable nested summary', () => {
     expect(
       formatHeuristicNodeSummary({

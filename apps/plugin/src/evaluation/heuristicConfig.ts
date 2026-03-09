@@ -200,6 +200,8 @@ function configNodeToQuery(node: HeuristicNode): HeuristicQueryGroup | Heuristic
     case 'min_length':
     case 'max_length':
       return { field: HEURISTIC_QUERY_FIELD, operator: node.type, value: node.value };
+    default:
+      return assertNever(node);
   }
 }
 
@@ -225,6 +227,8 @@ function queryNodeToConfig(node: HeuristicQueryGroup | HeuristicQueryRule): Heur
     case 'min_length':
     case 'max_length':
       return { kind: 'rule', type: node.operator, value: parseHeuristicNumber(node.value) ?? 0 };
+    default:
+      return assertNever(node);
   }
 }
 
@@ -251,4 +255,8 @@ function isQueryGroup(node: HeuristicQueryGroup | HeuristicQueryRule): node is H
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value != null && !Array.isArray(value);
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled heuristic node variant: ${JSON.stringify(value)}`);
 }
