@@ -149,7 +149,13 @@ export function buildConversationAnalysisContext(input: ConversationContextInput
       duration_ms: durationMs,
       input_tokens: gen.usage?.input_tokens ?? null,
       output_tokens: gen.usage?.output_tokens ?? null,
-      total_tokens: gen.usage != null ? (gen.usage.input_tokens ?? 0) + (gen.usage.output_tokens ?? 0) : null,
+      total_tokens:
+        gen.usage != null
+          ? (gen.usage.input_tokens ?? 0) +
+            (gen.usage.output_tokens ?? 0) +
+            (gen.usage.cache_read_input_tokens ?? 0) +
+            (gen.usage.cache_write_input_tokens ?? 0)
+          : null,
       cost_usd: cost?.breakdown.totalCost ?? null,
       has_error: Boolean(gen.error?.message),
       error_message: gen.error?.message ?? null,

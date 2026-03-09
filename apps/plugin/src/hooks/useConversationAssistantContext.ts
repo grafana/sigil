@@ -1,25 +1,11 @@
 import { useEffect, useMemo } from 'react';
 import { useProvidePageContext, useProvideQuestions } from '@grafana/assistant';
-import type { TokenSummary, CostSummary } from '../conversation/aggregates';
-import type { ConversationData } from '../conversation/types';
-import type { GenerationCostResult, GenerationDetail } from '../generation/types';
 import {
   buildConversationSummaryContext,
   buildConversationAnalysisContext,
   buildConversationSystemInstructions,
   type ConversationContextInput,
 } from '../content/assistantContext';
-
-export type UseConversationAssistantContextOptions = {
-  conversationID: string;
-  conversationTitle: string;
-  conversationData: ConversationData | null;
-  allGenerations: GenerationDetail[];
-  tokenSummary: TokenSummary | null;
-  costSummary: CostSummary | null;
-  generationCosts: Map<string, GenerationCostResult>;
-  totalDurationMs?: number;
-};
 
 const URL_PATTERN = /\/a\/grafana-sigil-app\/conversations\/.+\/(view|explore)/;
 
@@ -31,7 +17,7 @@ const QUESTIONS = [
   { prompt: 'Summarize what happened in this conversation' },
 ];
 
-export function useConversationAssistantContext(opts: UseConversationAssistantContextOptions): void {
+export function useConversationAssistantContext(opts: ConversationContextInput): void {
   const {
     conversationID,
     conversationTitle,
