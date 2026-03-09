@@ -959,7 +959,7 @@ const AgentRatingPanel = forwardRef<AgentRatingPanelHandle, AgentRatingPanelProp
     setRewriteError('');
     setRewriteMarkdown('');
     rewriteAssistant.generate({
-      agentName: 'fe-inline-sigil-plugin-prompt-rewrite',
+      agentName: 'sigil-plugin-agent-rewrite',
       agentId: 'v1',
       origin: 'sigil-agent-rating-rewrite',
       prompt,
