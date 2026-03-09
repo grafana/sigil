@@ -274,13 +274,14 @@ func (s *SavedConversationService) CreateManualConversation(ctx context.Context,
 	}
 
 	if err := s.store.CreateSavedConversation(ctx, sc); err != nil {
-		if rollbackErr := s.manualDeleter.DeleteManualConversationData(ctx, trimmedTenantID, conversationID); rollbackErr != nil {
-			return nil, fmt.Errorf("create saved conversation: %w (rollback manual conversation data: %v)", err, rollbackErr)
-		}
+		var resultErr error = err
 		if errors.Is(err, evalpkg.ErrConflict) {
-			return nil, s.duplicateSavedConversationConflict(ctx, trimmedTenantID, trimmedSavedID, conversationID)
+			resultErr = s.duplicateSavedConversationConflict(ctx, trimmedTenantID, trimmedSavedID, conversationID)
 		}
-		return nil, err
+		if rollbackErr := s.manualDeleter.DeleteManualConversationData(ctx, trimmedTenantID, conversationID); rollbackErr != nil {
+			return nil, fmt.Errorf("%w (rollback manual conversation data: %v)", resultErr, rollbackErr)
+		}
+		return nil, resultErr
 	}
 
 	created, err := s.store.GetSavedConversation(ctx, trimmedTenantID, trimmedSavedID)

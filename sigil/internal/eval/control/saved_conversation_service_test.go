@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -144,6 +145,7 @@ func (m *mockManualConversationWriter) Called(tenantID, conversationID string) b
 type mockManualConversationDeleter struct {
 	mu    sync.Mutex
 	calls map[string]bool // key: tenantID + "/" + conversationID
+	err   error
 }
 
 func newMockManualConversationDeleter() *mockManualConversationDeleter {
@@ -154,7 +156,7 @@ func (m *mockManualConversationDeleter) DeleteManualConversationData(_ context.C
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.calls[tenantID+"/"+conversationID] = true
-	return nil
+	return m.err
 }
 
 func (m *mockManualConversationDeleter) Called(tenantID, conversationID string) bool {
@@ -430,6 +432,39 @@ func TestSavedConversationServiceManualCreate(t *testing.T) {
 		assert.True(t, isConflictError(err), "expected conflict error, got: %v", err)
 		assert.True(t, writer.Called("tenant-1", "conv_manual_manual-rollback"))
 		assert.True(t, deleter.Called("tenant-1", "conv_manual_manual-rollback"))
+	})
+
+	t.Run("conflict keeps detailed message when rollback also fails", func(t *testing.T) {
+		failingStore := newMockSavedConversationStore()
+		failingStore.createErr = evalpkg.ErrConflict
+		failingStore.createHook = func(_ evalpkg.SavedConversation) {
+			failingStore.data[failingStore.key("tenant-1", "saved-existing")] = &evalpkg.SavedConversation{
+				TenantID:       "tenant-1",
+				SavedID:        "saved-existing",
+				ConversationID: "conv_manual_manual-rollback",
+			}
+		}
+		writer := newMockManualConversationWriter()
+		deleter := newMockManualConversationDeleter()
+		deleter.err = errors.New("rollback failed")
+		svcWithRollback := NewSavedConversationService(failingStore, lookup, WithManualWriter(writer), WithManualDeleter(deleter))
+
+		_, err := svcWithRollback.CreateManualConversation(context.Background(), "tenant-1", CreateManualConversationRequest{
+			SavedID: "manual-rollback",
+			Name:    "Rollback",
+			SavedBy: "user-1",
+			Generations: []ManualGeneration{{
+				GenerationID: "gen-rollback-1",
+				Model:        ManualModelRef{Provider: "openai", Name: "gpt-4o-mini"},
+				Input:        []ManualMessage{{Role: "user", Content: "Hello"}},
+				Output:       []ManualMessage{{Role: "assistant", Content: "Hi"}},
+			}},
+		})
+
+		require.Error(t, err)
+		assert.True(t, isConflictError(err), "expected conflict error, got: %v", err)
+		assert.Contains(t, err.Error(), `conversation "conv_manual_manual-rollback" is already saved as "saved-existing"`)
+		assert.Contains(t, err.Error(), "rollback manual conversation data: rollback failed")
 	})
 
 	t.Run("duplicate conversation conflict reports existing saved id", func(t *testing.T) {
