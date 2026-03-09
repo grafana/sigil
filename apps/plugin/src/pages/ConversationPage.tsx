@@ -14,6 +14,7 @@ import { useConversationData } from '../hooks/useConversationData';
 import ConversationGenerations from '../components/conversations/ConversationGenerations';
 import ConversationSummaryHeader from '../components/conversations/ConversationSummaryHeader';
 import SpanDetailPanel from '../components/conversations/SpanDetailPanel';
+import { useConversationAssistantContext } from '../hooks/useConversationAssistantContext';
 
 export type ConversationPageProps = {
   dataSource?: ConversationsDataSource;
@@ -125,6 +126,7 @@ export default function ConversationPage(props: ConversationPageProps) {
     errorMessage,
     tokenSummary,
     costSummary,
+    generationCosts,
     modelCards,
     allGenerations,
   } = useConversationData({ conversationID, dataSource, traceFetcher, modelCardClient });
@@ -236,6 +238,19 @@ export default function ConversationPage(props: ConversationPageProps) {
       annotation_count: conversationData.annotations.length,
     };
   }, [conversationData, allGenerations, conversationTitleFromTelemetry, conversationTitleFromURL]);
+
+  const conversationTitle =
+    conversationData?.conversationTitle?.trim() || conversationTitleFromTelemetry || conversationTitleFromURL;
+
+  useConversationAssistantContext({
+    conversationID,
+    conversationTitle: conversationTitle || conversationID,
+    conversationData,
+    allGenerations,
+    tokenSummary,
+    costSummary,
+    generationCosts,
+  });
 
   return (
     <div className={styles.pageContainer}>
