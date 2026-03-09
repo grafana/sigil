@@ -501,7 +501,7 @@ export function DashboardCacheGrid({
         )}
 
         {/* Savings breakdown by model */}
-        <SavingsTable items={savings.byModel} />
+        {savings.byModel.length > 0 && <SavingsTable items={savings.byModel} />}
       </div>
 
       {/* Conversations with low cache utilization */}
