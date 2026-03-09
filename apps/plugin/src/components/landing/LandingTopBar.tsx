@@ -1048,9 +1048,7 @@ export function LandingTopBar({
                       </span>
                     </Tooltip>
                   </div>
-                  <Text color="secondary">
-                    Use our coding agent skill to instrument your codebase.
-                  </Text>
+                  <Text color="secondary">Use our coding agent skill to instrument your codebase.</Text>
                   <div className={styles.ideTabs}>
                     {ideTabs.map((ide) => (
                       <button
