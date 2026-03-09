@@ -24,7 +24,7 @@ const FEATURES: Feature[] = [
   {
     key: 'analytics',
     title: 'Analytics',
-    description: 'Track requests, tokens, cost, and latency across every provider and model.',
+    description: 'Requests, tokens, cost, and latency.',
     color: '#5794F2',
     href: `${PLUGIN_BASE}/${ROUTES.Analytics}`,
     icon: (
@@ -48,7 +48,7 @@ const FEATURES: Feature[] = [
   {
     key: 'evaluations',
     title: 'Online Evaluations',
-    description: 'Score every response in real time with LLM judges, regex, and custom heuristics.',
+    description: 'LLM judges, regex, and heuristics.',
     color: '#FF9830',
     href: `${PLUGIN_BASE}/${ROUTES.Evaluation}/results`,
     icon: (
@@ -71,7 +71,7 @@ const FEATURES: Feature[] = [
   {
     key: 'prompts',
     title: 'Prompt Analysis',
-    description: 'Inspect full prompt chains, tokenize inputs, and surface quality insights.',
+    description: 'Prompt chains and quality insights.',
     color: '#B877D9',
     href: `${PLUGIN_BASE}/${ROUTES.Conversations}`,
     icon: (
@@ -93,7 +93,7 @@ const FEATURES: Feature[] = [
   {
     key: 'drilldown',
     title: 'Conversation Drilldown',
-    description: 'Follow the full execution flow — every LLM call, tool use, and trace span.',
+    description: 'Flows, tool calls, and traces.',
     color: '#73BF69',
     href: `${PLUGIN_BASE}/${ROUTES.Conversations}`,
     icon: (
@@ -118,7 +118,7 @@ const FEATURES: Feature[] = [
   {
     key: 'agents',
     title: 'Agent Catalog',
-    description: 'Compare agent versions, diff prompt changes, and track quality over time.',
+    description: 'Versions, prompt diffs, quality.',
     color: '#F2495C',
     href: `${PLUGIN_BASE}/${ROUTES.Agents}`,
     icon: (
@@ -143,7 +143,7 @@ const FEATURES: Feature[] = [
   {
     key: 'conversations',
     title: 'Conversation Explorer',
-    description: 'Search, filter, and replay full AI conversation threads with evaluations.',
+    description: 'Search and filter AI threads.',
     color: '#FF6EB4',
     href: `${PLUGIN_BASE}/${ROUTES.Conversations}`,
     icon: (
@@ -298,7 +298,9 @@ export function FeatureShowcase() {
             <div className={styles.introContent}>
               <span className={styles.introTitle}>Grafana Sigil</span>
               <span className={styles.introTagline}>AI Observability for every LLM call</span>
-              <span className={styles.introSubtag}>Instrument, observe, and evaluate — all in Grafana</span>
+              <span className={styles.introSubtag}>
+                Instrument, observe, and evaluate — with <span style={{ color: '#FF9830' }}>Grafana</span>
+              </span>
             </div>
           </div>
         ) : isOverview ? (
@@ -344,7 +346,7 @@ export function FeatureShowcase() {
             </div>
             <div className={styles.overviewGradientBar} />
             <div className={styles.overviewContent}>
-              <Text variant="h4">App Features</Text>
+              <Text variant="h5">App Features</Text>
               <div className={styles.overviewGrid}>
                 {FEATURES.map((feature, i) => (
                   <button
@@ -363,9 +365,7 @@ export function FeatureShowcase() {
                     <span className={styles.overviewItemTitle} style={{ color: feature.color }}>
                       {feature.title}
                     </span>
-                    <Text variant="bodySmall" color="secondary">
-                      {feature.description}
-                    </Text>
+                    <span className={styles.overviewItemDesc}>{feature.description}</span>
                   </button>
                 ))}
               </div>
@@ -706,9 +706,19 @@ function getStyles(theme: GrafanaTheme2) {
     }),
     overviewItemTitle: css({
       label: 'featureShowcase-overviewItemTitle',
-      fontSize: theme.typography.bodySmall.fontSize,
+      fontSize: 11,
       fontWeight: theme.typography.fontWeightMedium,
+      lineHeight: 1.2,
+    }),
+    overviewItemDesc: css({
+      label: 'featureShowcase-overviewItemDesc',
+      fontSize: 9,
       lineHeight: 1.3,
+      color: theme.colors.text.secondary,
+      display: '-webkit-box',
+      WebkitLineClamp: 2,
+      WebkitBoxOrient: 'vertical',
+      overflow: 'hidden',
     }),
 
     previewLink: css({
@@ -832,8 +842,7 @@ function getStyles(theme: GrafanaTheme2) {
       lineHeight: 1.2,
       letterSpacing: '0.01em',
       textAlign: 'center',
-      wordBreak: 'break-word',
-      hyphens: 'auto',
+      maxWidth: 48,
       transition: 'color 0.2s ease',
     }),
     tabIndicator: css({
