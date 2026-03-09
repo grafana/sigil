@@ -276,7 +276,7 @@ func (s *SavedConversationService) CreateManualConversation(ctx context.Context,
 	}
 
 	if err := s.store.CreateSavedConversation(ctx, sc); err != nil {
-		var resultErr error = err
+		resultErr := err
 		if errors.Is(err, evalpkg.ErrConflict) {
 			resultErr = s.duplicateSavedConversationConflict(ctx, trimmedTenantID, trimmedSavedID, conversationID)
 		}
