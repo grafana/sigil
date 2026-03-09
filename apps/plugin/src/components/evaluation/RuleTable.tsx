@@ -88,6 +88,7 @@ export default function RuleTable({ rules, evaluators, onToggle, onClick, showTo
     cols.push({
       id: 'selector',
       header: 'Selector',
+      width: 150,
       cell: (rule: Rule) => <Badge text={getSelectorLabel(rule.selector)} color="green" />,
     });
 

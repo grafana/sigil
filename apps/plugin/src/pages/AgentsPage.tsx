@@ -708,7 +708,7 @@ export default function AgentsPage({
       {
         id: 'agent',
         header: 'Agent',
-        width: 280,
+        width: 240,
         cell: (item) => <AgentChipList agents={[agentDisplayName(item)]} maxVisible={1} />,
       },
       {
