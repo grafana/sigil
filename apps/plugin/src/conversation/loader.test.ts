@@ -143,7 +143,7 @@ describe('loadConversationTraces', () => {
     expect(result.spans).toHaveLength(2);
   });
 
-  it('starts fetching traces from the oldest generation first', async () => {
+  it('starts fetching traces from the newest generation first', async () => {
     const fetchTrace: TraceFetcher = jest.fn().mockResolvedValue(makeTracePayload());
 
     await loadConversationTraces(
@@ -176,9 +176,9 @@ describe('loadConversationTraces', () => {
       fetchTrace
     );
 
-    expect(fetchTrace).toHaveBeenNthCalledWith(1, 'trace-oldest', expect.any(Object));
+    expect(fetchTrace).toHaveBeenNthCalledWith(1, 'trace-latest', expect.any(Object));
     expect(fetchTrace).toHaveBeenNthCalledWith(2, 'trace-middle', expect.any(Object));
-    expect(fetchTrace).toHaveBeenNthCalledWith(3, 'trace-latest', expect.any(Object));
+    expect(fetchTrace).toHaveBeenNthCalledWith(3, 'trace-oldest', expect.any(Object));
   });
 
   it('deduplicates mixed-encoding trace IDs before fetching', async () => {

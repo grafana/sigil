@@ -163,9 +163,9 @@ function generationTimestampMs(generation: GenerationDetail): number | undefined
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function orderTraceIDsByOldestGeneration(generations: GenerationDetail[]): string[] {
+function orderTraceIDsByNewestGeneration(generations: GenerationDetail[]): string[] {
   const firstSeenIndex = new Map<string, number>();
-  const oldestTimestampByTraceID = new Map<string, number>();
+  const newestTimestampByTraceID = new Map<string, number>();
 
   for (const [index, generation] of generations.entries()) {
     const normalizedTraceID = normalizeTraceID(generation.trace_id);
@@ -179,22 +179,22 @@ function orderTraceIDsByOldestGeneration(generations: GenerationDetail[]): strin
     if (timestampMs === undefined) {
       continue;
     }
-    const existing = oldestTimestampByTraceID.get(normalizedTraceID);
-    if (existing === undefined || timestampMs < existing) {
-      oldestTimestampByTraceID.set(normalizedTraceID, timestampMs);
+    const existing = newestTimestampByTraceID.get(normalizedTraceID);
+    if (existing === undefined || timestampMs > existing) {
+      newestTimestampByTraceID.set(normalizedTraceID, timestampMs);
     }
   }
 
   return Array.from(firstSeenIndex.keys()).sort((left, right) => {
-    const leftTimestamp = oldestTimestampByTraceID.get(left);
-    const rightTimestamp = oldestTimestampByTraceID.get(right);
+    const leftTimestamp = newestTimestampByTraceID.get(left);
+    const rightTimestamp = newestTimestampByTraceID.get(right);
     if (leftTimestamp !== undefined && rightTimestamp !== undefined && leftTimestamp !== rightTimestamp) {
-      return leftTimestamp - rightTimestamp;
-    }
-    if (leftTimestamp !== undefined && rightTimestamp === undefined) {
-      return -1;
+      return rightTimestamp - leftTimestamp;
     }
     if (leftTimestamp === undefined && rightTimestamp !== undefined) {
+      return -1;
+    }
+    if (leftTimestamp !== undefined && rightTimestamp === undefined) {
       return 1;
     }
     return (firstSeenIndex.get(left) ?? 0) - (firstSeenIndex.get(right) ?? 0);
@@ -206,7 +206,7 @@ export async function loadConversationTraces(
   fetchTrace: TraceFetcher,
   loadOptions?: LoadConversationTracesOptions
 ): Promise<ConversationData> {
-  const traceIDs = orderTraceIDsByOldestGeneration(data.orphanGenerations);
+  const traceIDs = orderTraceIDsByNewestGeneration(data.orphanGenerations);
   if (traceIDs.length === 0) {
     return data;
   }
