@@ -173,7 +173,6 @@ const INTRO_CYCLE_MS = 3000;
 export function FeatureShowcase() {
   const styles = useStyles2(getStyles);
   const [activeIndex, setActiveIndex] = useState(INTRO_INDEX);
-  const hasSeenIntroRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pausedRef = useRef(false);
 
@@ -187,7 +186,6 @@ export function FeatureShowcase() {
       if (!pausedRef.current) {
         setActiveIndex((prev) => {
           if (prev === INTRO_INDEX) {
-            hasSeenIntroRef.current = true;
             return OVERVIEW_INDEX;
           }
           const next = prev + 1;
@@ -461,11 +459,6 @@ export function FeatureShowcase() {
   );
 }
 
-const fillAnimation = keyframes({
-  from: { width: '0%' },
-  to: { width: '100%' },
-});
-
 const gradientShift = keyframes({
   '0%': { backgroundPosition: '0% 50%' },
   '50%': { backgroundPosition: '100% 50%' },
@@ -564,19 +557,6 @@ function getStyles(theme: GrafanaTheme2) {
       padding: theme.spacing(2),
       textAlign: 'center',
     }),
-    introTitleRow: css({
-      label: 'featureShowcase-introTitleRow',
-      display: 'flex',
-      alignItems: 'center',
-      gap: theme.spacing(1),
-      animation: `${fadeInUp} 0.5s ease-out both`,
-    }),
-    introLogo: css({
-      label: 'featureShowcase-introLogo',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-    }),
     introTitle: css({
       label: 'featureShowcase-introTitle',
       fontSize: 24,
@@ -598,39 +578,6 @@ function getStyles(theme: GrafanaTheme2) {
       fontSize: theme.typography.body.fontSize,
       color: theme.colors.text.secondary,
       animation: `${fadeInUp} 0.5s ease-out 0.15s both`,
-    }),
-    introDivider: css({
-      label: 'featureShowcase-introDivider',
-      width: 48,
-      height: 1,
-      background: 'linear-gradient(90deg, transparent, #5794F260, #B877D960, #FF983060, transparent)',
-      margin: theme.spacing(0.5, 0),
-      animation: `${fadeInUp} 0.5s ease-out 0.2s both`,
-    }),
-    introFeatureStrip: css({
-      label: 'featureShowcase-introFeatureStrip',
-      display: 'flex',
-      flexWrap: 'wrap',
-      justifyContent: 'center',
-      gap: theme.spacing(0.75),
-    }),
-    introChip: css({
-      label: 'featureShowcase-introChip',
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: theme.spacing(0.5),
-      padding: theme.spacing(0.5, 1),
-      borderRadius: theme.shape.radius.pill,
-      border: '1px solid',
-      fontSize: theme.typography.bodySmall.fontSize,
-      background: theme.colors.background.primary,
-      cursor: 'pointer',
-      transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-      animation: `${fadeInUp} 0.4s ease-out both`,
-      '&:hover': {
-        transform: 'translateY(-1px)',
-        boxShadow: theme.shadows.z1,
-      },
     }),
     overviewSlide: css({
       label: 'featureShowcase-overviewSlide',
@@ -835,25 +782,6 @@ function getStyles(theme: GrafanaTheme2) {
       wordBreak: 'break-word',
       hyphens: 'auto',
       transition: 'color 0.2s ease',
-    }),
-    tabIndicator: css({
-      label: 'featureShowcase-tabIndicator',
-      position: 'absolute',
-      bottom: 2,
-      left: '20%',
-      right: '20%',
-      height: 2,
-      borderRadius: 1,
-      opacity: 0.3,
-    }),
-    tabIndicatorFill: css({
-      label: 'featureShowcase-tabIndicatorFill',
-      height: '100%',
-      width: '0%',
-      opacity: 1,
-      animationName: fillAnimation,
-      animationTimingFunction: 'linear',
-      animationFillMode: 'forwards',
     }),
   };
 }
