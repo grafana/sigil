@@ -98,7 +98,7 @@ export function PageInsightBar({
     const { prompt: p, origin: o, systemPrompt: sp, gen: g } = latestRef.current;
     const fullPrompt = `${p}\n\nData context:\n${ctx}`;
     g.generate({
-      agentName: 'sigil-plugin-insights',
+      agentName: 'insights',
       agentId: 'v1',
       prompt: fullPrompt,
       origin: o,
