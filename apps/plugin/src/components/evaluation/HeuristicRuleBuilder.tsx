@@ -122,10 +122,7 @@ export default function HeuristicRuleBuilder({ query, onChange, error }: Heurist
   const styles = useStyles2(getStyles);
   const controlElements = useMemo(() => HEURISTIC_CONTROL_ELEMENTS, []);
   const handleQueryChange = useCallback((next: unknown) => onChange(next as HeuristicQueryGroup), [onChange]);
-  const builderContext = useMemo<HeuristicBuilderContext>(
-    () => ({ totalNodes: countQueryNodes(query) }),
-    [query]
-  );
+  const builderContext = useMemo<HeuristicBuilderContext>(() => ({ totalNodes: countQueryNodes(query) }), [query]);
 
   return (
     <div className={styles.builder}>
