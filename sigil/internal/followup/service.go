@@ -66,6 +66,9 @@ func (s *Service) Followup(ctx context.Context, generations []*sigilv1.Generatio
 	if strings.TrimSpace(req.Message) == "" {
 		return Response{}, NewValidationError("message is required")
 	}
+	if len(req.Message) > maxMessageCharLen {
+		return Response{}, NewValidationError("message exceeds maximum length")
+	}
 	if strings.TrimSpace(req.GenerationID) == "" {
 		return Response{}, NewValidationError("generation_id is required")
 	}

@@ -1067,16 +1067,24 @@ func (s *Service) ListConversationGenerationsForTenant(ctx context.Context, tena
 	trimmedTenantID := strings.TrimSpace(tenantID)
 	trimmedConversationID := strings.TrimSpace(conversationID)
 	if trimmedTenantID == "" {
-		return nil, false, NewValidationError("tenant id is required")
+		err := NewValidationError("tenant id is required")
+		recordQuerySpanError(span, err)
+		return nil, false, err
 	}
 	if trimmedConversationID == "" {
-		return nil, false, NewValidationError("conversation id is required")
+		err := NewValidationError("conversation id is required")
+		recordQuerySpanError(span, err)
+		return nil, false, err
 	}
 	if s.conversationStore == nil {
-		return nil, false, errors.New("conversation store is not configured")
+		err := errors.New("conversation store is not configured")
+		recordQuerySpanError(span, err)
+		return nil, false, err
 	}
 	if s.walReader == nil {
-		return nil, false, errors.New("wal reader is not configured")
+		err := errors.New("wal reader is not configured")
+		recordQuerySpanError(span, err)
+		return nil, false, err
 	}
 
 	fanOutStore := s.fanOutStore
@@ -1086,9 +1094,11 @@ func (s *Service) ListConversationGenerationsForTenant(ctx context.Context, tena
 
 	conversation, err := s.conversationStore.GetConversation(ctx, trimmedTenantID, trimmedConversationID)
 	if err != nil {
+		recordQuerySpanError(span, err)
 		return nil, false, err
 	}
 	if conversation == nil {
+		span.SetAttributes(attribute.Bool("sigil.query.found", false))
 		return nil, false, nil
 	}
 
@@ -1106,6 +1116,7 @@ func (s *Service) ListConversationGenerationsForTenant(ctx context.Context, tena
 		generations, err = fanOutStore.ListConversationGenerations(ctx, trimmedTenantID, trimmedConversationID)
 	}
 	if err != nil {
+		recordQuerySpanError(span, err)
 		return nil, false, err
 	}
 
