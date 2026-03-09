@@ -222,6 +222,57 @@ func TestCreateEvaluatorRejectsMultipleOutputKeys(t *testing.T) {
 	}
 }
 
+func TestCreateEvaluatorMapsDuplicateStorageErrorsToConflict(t *testing.T) {
+	store := newMemoryControlStore()
+	store.createEvaluatorErr = evalpkg.ErrConflict
+	service := NewService(store, nil)
+
+	_, err := service.CreateEvaluator(context.Background(), "fake", evalpkg.EvaluatorDefinition{
+		EvaluatorID: "custom.helpfulness",
+		Version:     "2026-02-17",
+		Kind:        evalpkg.EvaluatorKindHeuristic,
+		Config:      map[string]any{"not_empty": true},
+		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
+	})
+	if err == nil {
+		t.Fatal("expected conflict error")
+	}
+	if !isConflictError(err) {
+		t.Fatalf("expected conflict error, got %v", err)
+	}
+}
+
+func TestCreateRuleMapsDuplicateStorageErrorsToConflict(t *testing.T) {
+	store := newMemoryControlStore()
+	store.createRuleErr = evalpkg.ErrConflict
+	if err := store.CreateEvaluator(context.Background(), evalpkg.EvaluatorDefinition{
+		TenantID:    "fake",
+		EvaluatorID: "custom.helpfulness",
+		Version:     "2026-02-17",
+		Kind:        evalpkg.EvaluatorKindHeuristic,
+		Config:      map[string]any{"not_empty": true},
+		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
+	}); err != nil {
+		t.Fatalf("seed evaluator: %v", err)
+	}
+	service := NewService(store, nil)
+
+	_, err := service.CreateRule(context.Background(), "fake", evalpkg.RuleDefinition{
+		RuleID:       "rule.helpfulness",
+		Enabled:      true,
+		Selector:     evalpkg.SelectorUserVisibleTurn,
+		Match:        map[string]any{},
+		SampleRate:   1,
+		EvaluatorIDs: []string{"custom.helpfulness"},
+	})
+	if err == nil {
+		t.Fatal("expected conflict error")
+	}
+	if !isConflictError(err) {
+		t.Fatalf("expected conflict error, got %v", err)
+	}
+}
+
 func TestCreateEvaluatorReturnsInternalServerErrorOnStoreFailure(t *testing.T) {
 	mux, _, store := newEvalHTTPEnv(t)
 	store.createEvaluatorErr = errors.New("mysql unavailable")
@@ -741,6 +792,22 @@ func TestForkPredefinedEvaluatorHTTP(t *testing.T) {
 	}
 }
 
+func TestForkPredefinedEvaluatorHTTPRejectsPartialLLMJudgeOverride(t *testing.T) {
+	mux, _, _ := newEvalHTTPEnv(t)
+
+	forkPayload := `{
+		"evaluator_id":"custom.helpfulness",
+		"config":{"provider":"anthropic"}
+	}`
+	forkResp := doRequest(mux, http.MethodPost, "/api/v1/eval/predefined/evaluators/sigil.helpfulness:fork", forkPayload)
+	if forkResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 fork predefined evaluator, got %d body=%s", forkResp.Code, forkResp.Body.String())
+	}
+	if !strings.Contains(forkResp.Body.String(), "requires both provider and model") {
+		t.Fatalf("expected provider/model validation error, got body=%s", forkResp.Body.String())
+	}
+}
+
 func TestForkPredefinedEvaluatorReturnsInternalServerErrorOnStoreFailure(t *testing.T) {
 	mux, _, store := newEvalHTTPEnv(t)
 	store.createEvaluatorErr = errors.New("write failed")
@@ -785,7 +852,7 @@ func TestPredefinedEndpoints_FallbackToHardcoded_WithNilTemplateStore(t *testing
 	// Fork should set lineage back to the predefined source.
 	forkPayload := `{
 		"evaluator_id":"custom.helpfulness_fallback",
-		"config":{"provider":"openai"}
+		"config":{"provider":"openai","model":"gpt-4o-mini"}
 	}`
 	forkResp := doRequest(mux, http.MethodPost, "/api/v1/eval/predefined/evaluators/sigil.helpfulness:fork", forkPayload)
 	if forkResp.Code != http.StatusOK {

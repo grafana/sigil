@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -87,6 +88,11 @@ func (s *TestService) handleEvalTest(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	testReq, err := testReq.normalizeAndValidate()
+	if err != nil {
+		writeControlWriteError(w, err)
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(req.Context(), 30*time.Second)
 	defer cancel()
@@ -119,9 +125,14 @@ func (s *Service) handleEvaluators(w http.ResponseWriter, req *http.Request) {
 
 	switch req.Method {
 	case http.MethodPost:
-		var evaluator evalpkg.EvaluatorDefinition
-		if err := decodeJSONBody(req, &evaluator); err != nil {
+		var createReq createEvaluatorRequest
+		if err := decodeJSONBody(req, &createReq); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		evaluator, err := createReq.toEvaluatorDefinition(tenantID)
+		if err != nil {
+			writeControlWriteError(w, err)
 			return
 		}
 		created, err := s.CreateEvaluator(req.Context(), tenantID, evaluator)
@@ -217,7 +228,6 @@ func (s *Service) handlePredefinedEvaluatorByID(w http.ResponseWriter, req *http
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
 	created, err := s.ForkPredefinedEvaluator(req.Context(), tenantID, templateID, request)
 	if err != nil {
 		writeControlWriteError(w, err)
@@ -318,7 +328,7 @@ func (s *Service) handleRuleByID(w http.ResponseWriter, req *http.Request) {
 		writeJSON(w, http.StatusOK, updated)
 	case http.MethodDelete:
 		if err := s.DeleteRule(req.Context(), tenantID, ruleID); err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeControlWriteError(w, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -355,6 +365,11 @@ func (s *Service) handleRulesPreview(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if err := validateRulePreviewRuleID(previewReq.RuleID); err != nil {
+		writeControlWriteError(w, ValidationWrap(err))
+		return
+	}
+	previewReq.RuleID = strings.TrimSpace(previewReq.RuleID)
 
 	resp, err := s.PreviewRule(req.Context(), tenantID, previewReq)
 	if err != nil {
@@ -404,7 +419,10 @@ func decodeJSONBody(req *http.Request, out any) error {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(out); err != nil {
-		return errors.New("invalid request body")
+		return fmt.Errorf("invalid request body: %w", err)
+	}
+	if decoder.More() {
+		return errors.New("invalid request body: multiple JSON values are not allowed")
 	}
 	return nil
 }
@@ -506,9 +524,18 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 }
 
 func writeControlWriteError(w http.ResponseWriter, err error) {
-	if isValidationError(err) {
+	switch {
+	case isValidationError(err):
 		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	case isNotFoundError(err):
+		http.Error(w, err.Error(), http.StatusNotFound)
+	case isConflictError(err):
+		http.Error(w, err.Error(), http.StatusConflict)
+	case isUnavailableError(err):
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+	case errors.Is(err, evalpkg.ErrNotFound):
+		http.Error(w, "not found", http.StatusNotFound)
+	default:
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 	}
-	http.Error(w, "internal server error", http.StatusInternalServerError)
 }

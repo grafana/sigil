@@ -225,6 +225,7 @@ export default function PublishVersionForm({
   });
   const outputKeyFieldRef = useRef<HTMLDivElement>(null);
   const regexPatternFieldRef = useRef<HTMLDivElement>(null);
+  const judgeTargetFieldRef = useRef<HTMLDivElement>(null);
   const maxTokensFieldRef = useRef<HTMLDivElement>(null);
   const temperatureFieldRef = useRef<HTMLDivElement>(null);
   const schemaFieldRef = useRef<HTMLDivElement>(null);
@@ -311,6 +312,8 @@ export default function PublishVersionForm({
   const sharedValidation = validateSharedForm({
     kind,
     outputKey,
+    provider,
+    model,
     pattern,
     maxTokens,
     temperature,
@@ -331,6 +334,7 @@ export default function PublishVersionForm({
   });
   const outputKeyError = sharedValidation.outputKeyError;
   const regexPatternError = sharedValidation.regexPatternError;
+  const judgeTargetError = sharedValidation.judgeTargetError;
   const maxTokensError = sharedValidation.maxTokensError;
   const temperatureError = sharedValidation.temperatureError;
   const schemaParseError = sharedValidation.schemaParseError ?? '';
@@ -341,6 +345,7 @@ export default function PublishVersionForm({
 
   const showOutputKeyError = touched && outputKeyError != null;
   const showRegexPatternError = touched && regexPatternError != null;
+  const showJudgeTargetError = touched && judgeTargetError != null;
   const showMaxTokensError = touched && maxTokensError != null;
   const showTemperatureError = touched && temperatureError != null;
   const showSchemaError = touched && schemaParseError !== '';
@@ -355,6 +360,7 @@ export default function PublishVersionForm({
       focusInvalidFieldFromMap(sharedValidation.firstInvalidField, {
         outputKey: outputKeyFieldRef.current,
         regexPattern: regexPatternFieldRef.current,
+        judgeTarget: judgeTargetFieldRef.current,
         maxTokens: maxTokensFieldRef.current,
         temperature: temperatureFieldRef.current,
         schema: schemaFieldRef.current,
@@ -428,16 +434,25 @@ export default function PublishVersionForm({
               </Text>
             </div>
             <div className={styles.twoColumnGrid}>
-              <JudgeProviderModelFields
-                compactControlClassName={styles.compactControl}
-                provider={provider}
-                model={model}
-                providerOptions={providerOptions}
-                modelOptions={modelOptions}
-                setProvider={setProvider}
-                setModel={setModel}
-                setModelOptions={setModelOptions}
-              />
+              <div ref={judgeTargetFieldRef}>
+                <JudgeProviderModelFields
+                  compactControlClassName={styles.compactControl}
+                  provider={provider}
+                  model={model}
+                  providerOptions={providerOptions}
+                  modelOptions={modelOptions}
+                  setProvider={setProvider}
+                  setModel={setModel}
+                  setModelOptions={setModelOptions}
+                />
+                {showJudgeTargetError && judgeTargetError && (
+                  <div className={styles.validationMessage}>
+                    <Text variant="bodySmall" color="error">
+                      {judgeTargetError}
+                    </Text>
+                  </div>
+                )}
+              </div>
             </div>
             <Field
               label="System prompt"

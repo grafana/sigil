@@ -91,7 +91,7 @@ func TestTemplateHTTPCreateBadKind(t *testing.T) {
 		"template_id":"my_template",
 		"kind":"unknown_kind",
 		"version":"2026-03-02",
-		"config":{"key":"value"},
+		"config":{"provider":"openai","model":"gpt-4o-mini"},
 		"output_keys":[{"key":"score","type":"number"}]
 	}`
 	resp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates", createPayload)
@@ -110,7 +110,7 @@ func TestTemplateHTTPCreateBadVersionFormat(t *testing.T) {
 		"template_id":"my_template",
 		"kind":"llm_judge",
 		"version":"v1.0.0",
-		"config":{"key":"value"},
+		"config":{"provider":"openai","model":"gpt-4o-mini"},
 		"output_keys":[{"key":"score","type":"number"}]
 	}`
 	resp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates", createPayload)
@@ -131,7 +131,7 @@ func TestTemplateHTTPListAll(t *testing.T) {
 			"template_id":"` + id + `",
 			"kind":"heuristic",
 			"version":"2026-03-02",
-			"config":{"key":"value"},
+			"config":{"not_empty":true},
 			"output_keys":[{"key":"score","type":"bool"}]
 		}`
 		resp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates", payload)
@@ -163,7 +163,7 @@ func TestTemplateHTTPListWithScopeFilter(t *testing.T) {
 		"template_id":"tenant_template",
 		"kind":"heuristic",
 		"version":"2026-03-02",
-		"config":{"key":"value"},
+		"config":{"not_empty":true},
 		"output_keys":[{"key":"score","type":"bool"}]
 	}`
 	resp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates", payload)
@@ -224,7 +224,7 @@ func TestTemplateHTTPDelete(t *testing.T) {
 		"template_id":"deletable",
 		"kind":"heuristic",
 		"version":"2026-03-02",
-		"config":{"key":"value"},
+		"config":{"not_empty":true},
 		"output_keys":[{"key":"score","type":"bool"}]
 	}`
 	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates", payload)
@@ -290,7 +290,7 @@ func TestTemplateHTTPPublishVersion(t *testing.T) {
 		"template_id":"versioned",
 		"kind":"llm_judge",
 		"version":"2026-03-01",
-		"config":{"provider":"openai"},
+		"config":{"provider":"openai","model":"gpt-4o-mini"},
 		"output_keys":[{"key":"score","type":"number"}]
 	}`
 	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates", createPayload)
@@ -327,7 +327,7 @@ func TestTemplateHTTPListVersions(t *testing.T) {
 		"template_id":"multi_ver",
 		"kind":"heuristic",
 		"version":"2026-03-01",
-		"config":{"key":"v1"},
+		"config":{"not_empty":true},
 		"output_keys":[{"key":"score","type":"bool"}]
 	}`
 	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates", createPayload)
@@ -338,7 +338,7 @@ func TestTemplateHTTPListVersions(t *testing.T) {
 	// Publish a second version.
 	publishPayload := `{
 		"version":"2026-03-02",
-		"config":{"key":"v2"},
+		"config":{"contains":["v2"]},
 		"output_keys":[{"key":"score","type":"bool"}]
 	}`
 	publishResp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates/multi_ver/versions", publishPayload)
@@ -369,7 +369,7 @@ func TestTemplateHTTPGetVersion(t *testing.T) {
 		"template_id":"get_ver",
 		"kind":"llm_judge",
 		"version":"2026-03-01",
-		"config":{"provider":"openai"},
+		"config":{"provider":"openai","model":"gpt-4o-mini"},
 		"output_keys":[{"key":"score","type":"number"}]
 	}`
 	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates", createPayload)
@@ -486,6 +486,34 @@ func TestTemplateHTTPForkWithConfigOverrides(t *testing.T) {
 	}
 }
 
+func TestTemplateHTTPForkRejectsPartialLLMJudgeOverride(t *testing.T) {
+	mux, _, _ := newTemplateHTTPEnv(t)
+
+	createPayload := `{
+		"template_id":"forkable_invalid",
+		"kind":"llm_judge",
+		"version":"2026-03-01",
+		"config":{"provider":"openai","model":"gpt-4o-mini"},
+		"output_keys":[{"key":"helpfulness","type":"number"}]
+	}`
+	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates", createPayload)
+	if createResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 create, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+
+	forkPayload := `{
+		"evaluator_id":"custom.invalid",
+		"config":{"provider":"anthropic"}
+	}`
+	forkResp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates/forkable_invalid:fork", forkPayload)
+	if forkResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 fork with partial override, got %d body=%s", forkResp.Code, forkResp.Body.String())
+	}
+	if !strings.Contains(forkResp.Body.String(), "requires both provider and model") {
+		t.Fatalf("expected provider/model validation error, got body=%s", forkResp.Body.String())
+	}
+}
+
 func TestTemplateHTTPMethodNotAllowed(t *testing.T) {
 	mux, _, _ := newTemplateHTTPEnv(t)
 
@@ -532,8 +560,8 @@ func TestTemplateHTTPForkNonexistent(t *testing.T) {
 	mux, _, _ := newTemplateHTTPEnv(t)
 
 	resp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates/nonexistent:fork", `{"evaluator_id":"custom.test"}`)
-	if resp.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for fork nonexistent template, got %d body=%s", resp.Code, resp.Body.String())
+	if resp.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for fork nonexistent template, got %d body=%s", resp.Code, resp.Body.String())
 	}
 	if !strings.Contains(resp.Body.String(), "not found") {
 		t.Errorf("expected 'not found' in error, got body=%s", resp.Body.String())
@@ -554,12 +582,12 @@ func TestTemplateHTTPPublishVersionNonexistent(t *testing.T) {
 
 	payload := `{
 		"version":"2026-03-02",
-		"config":{"key":"value"},
+		"config":{"provider":"openai","model":"gpt-4o-mini"},
 		"output_keys":[{"key":"score","type":"number"}]
 	}`
 	resp := doRequest(mux, http.MethodPost, "/api/v1/eval/templates/nonexistent/versions", payload)
-	if resp.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for publish to nonexistent template, got %d body=%s", resp.Code, resp.Body.String())
+	if resp.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for publish to nonexistent template, got %d body=%s", resp.Code, resp.Body.String())
 	}
 	if !strings.Contains(resp.Body.String(), "not found") {
 		t.Errorf("expected 'not found' in error, got body=%s", resp.Body.String())

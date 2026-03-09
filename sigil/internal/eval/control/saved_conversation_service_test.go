@@ -15,8 +15,10 @@ import (
 // --- mocks ---
 
 type mockSavedConversationStore struct {
-	mu   sync.Mutex
-	data map[string]*evalpkg.SavedConversation // key: tenantID + "/" + savedID
+	mu         sync.Mutex
+	data       map[string]*evalpkg.SavedConversation // key: tenantID + "/" + savedID
+	createErr  error
+	createHook func(evalpkg.SavedConversation)
 }
 
 func newMockSavedConversationStore() *mockSavedConversationStore {
@@ -30,6 +32,12 @@ func (m *mockSavedConversationStore) key(tenantID, savedID string) string {
 func (m *mockSavedConversationStore) CreateSavedConversation(_ context.Context, sc evalpkg.SavedConversation) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.createErr != nil {
+		if m.createHook != nil {
+			m.createHook(sc)
+		}
+		return m.createErr
+	}
 	k := m.key(sc.TenantID, sc.SavedID)
 	if _, exists := m.data[k]; exists {
 		return fmt.Errorf("saved conversation %q already exists", sc.SavedID)
@@ -48,6 +56,18 @@ func (m *mockSavedConversationStore) GetSavedConversation(_ context.Context, ten
 	}
 	copied := *sc
 	return &copied, nil
+}
+
+func (m *mockSavedConversationStore) GetSavedConversationByConversationID(_ context.Context, tenantID, conversationID string) (*evalpkg.SavedConversation, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, sc := range m.data {
+		if sc.TenantID == tenantID && sc.ConversationID == conversationID {
+			copied := *sc
+			return &copied, nil
+		}
+	}
+	return nil, nil
 }
 
 func (m *mockSavedConversationStore) ListSavedConversations(_ context.Context, tenantID, source string, limit int, _ uint64) ([]evalpkg.SavedConversation, uint64, error) {
@@ -181,7 +201,7 @@ func TestSavedConversationServiceBookmark(t *testing.T) {
 		})
 
 		require.Error(t, err)
-		assert.True(t, isValidationError(err), "expected validation error, got: %v", err)
+		assert.True(t, isNotFoundError(err), "expected not-found error, got: %v", err)
 		assert.Contains(t, err.Error(), "conv-missing")
 	})
 
@@ -253,7 +273,9 @@ func TestSavedConversationServiceManualCreate(t *testing.T) {
 	svc := NewSavedConversationService(store, lookup, WithManualWriter(writer))
 
 	t.Run("create manual conversation", func(t *testing.T) {
-		result, err := svc.CreateManualConversation(context.Background(), "tenant-1", CreateManualConversationRequest{
+		deleter := newMockManualConversationDeleter()
+		svcWithDeleter := NewSavedConversationService(store, lookup, WithManualWriter(writer), WithManualDeleter(deleter))
+		result, err := svcWithDeleter.CreateManualConversation(context.Background(), "tenant-1", CreateManualConversationRequest{
 			SavedID: "manual-1",
 			Name:    "Test Conversation",
 			Tags:    map[string]string{"suite": "regression"},
@@ -261,6 +283,7 @@ func TestSavedConversationServiceManualCreate(t *testing.T) {
 			Generations: []ManualGeneration{
 				{
 					GenerationID: "gen-1",
+					Model:        ManualModelRef{Provider: "openai", Name: "gpt-4o-mini"},
 					Input:        []ManualMessage{{Role: "user", Content: "Hello"}},
 					Output:       []ManualMessage{{Role: "assistant", Content: "Hi there"}},
 				},
@@ -299,6 +322,7 @@ func TestSavedConversationServiceManualCreate(t *testing.T) {
 			Generations: []ManualGeneration{
 				{
 					GenerationID: "",
+					Model:        ManualModelRef{Provider: "openai", Name: "gpt-4o-mini"},
 					Input:        []ManualMessage{{Role: "user", Content: "Hello"}},
 					Output:       []ManualMessage{{Role: "assistant", Content: "Hi"}},
 				},
@@ -317,6 +341,7 @@ func TestSavedConversationServiceManualCreate(t *testing.T) {
 			Generations: []ManualGeneration{
 				{
 					GenerationID: "gen-1",
+					Model:        ManualModelRef{Provider: "openai", Name: "gpt-4o-mini"},
 					Input:        nil,
 					Output:       []ManualMessage{{Role: "assistant", Content: "Hi"}},
 				},
@@ -335,6 +360,7 @@ func TestSavedConversationServiceManualCreate(t *testing.T) {
 			Generations: []ManualGeneration{
 				{
 					GenerationID: "gen-1",
+					Model:        ManualModelRef{Provider: "openai", Name: "gpt-4o-mini"},
 					Input:        []ManualMessage{{Role: "user", Content: "Hello"}},
 					Output:       nil,
 				},
@@ -354,6 +380,7 @@ func TestSavedConversationServiceManualCreate(t *testing.T) {
 			Generations: []ManualGeneration{
 				{
 					GenerationID: "gen-1",
+					Model:        ManualModelRef{Provider: "openai", Name: "gpt-4o-mini"},
 					Input:        []ManualMessage{{Role: "user", Content: "Hello"}},
 					Output:       []ManualMessage{{Role: "assistant", Content: "Hi"}},
 				},
@@ -361,6 +388,73 @@ func TestSavedConversationServiceManualCreate(t *testing.T) {
 		})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "manual conversation writer is not configured")
+	})
+
+	t.Run("no deleter configured returns error", func(t *testing.T) {
+		svcNoDeleter := NewSavedConversationService(store, lookup, WithManualWriter(writer))
+		_, err := svcNoDeleter.CreateManualConversation(context.Background(), "tenant-1", CreateManualConversationRequest{
+			SavedID: "manual-no-deleter",
+			Name:    "No Deleter",
+			SavedBy: "user-1",
+			Generations: []ManualGeneration{{
+				GenerationID: "gen-1",
+				Model:        ManualModelRef{Provider: "openai", Name: "gpt-4o-mini"},
+				Input:        []ManualMessage{{Role: "user", Content: "Hello"}},
+				Output:       []ManualMessage{{Role: "assistant", Content: "Hi"}},
+			}},
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "manual conversation deleter is not configured")
+	})
+
+	t.Run("rolls back manual conversation data when saved conversation insert fails", func(t *testing.T) {
+		failingStore := newMockSavedConversationStore()
+		failingStore.createErr = evalpkg.ErrConflict
+		writer := newMockManualConversationWriter()
+		deleter := newMockManualConversationDeleter()
+		svcWithRollback := NewSavedConversationService(failingStore, lookup, WithManualWriter(writer), WithManualDeleter(deleter))
+
+		_, err := svcWithRollback.CreateManualConversation(context.Background(), "tenant-1", CreateManualConversationRequest{
+			SavedID: "manual-rollback",
+			Name:    "Rollback",
+			SavedBy: "user-1",
+			Generations: []ManualGeneration{{
+				GenerationID: "gen-rollback-1",
+				Model:        ManualModelRef{Provider: "openai", Name: "gpt-4o-mini"},
+				Input:        []ManualMessage{{Role: "user", Content: "Hello"}},
+				Output:       []ManualMessage{{Role: "assistant", Content: "Hi"}},
+			}},
+		})
+
+		require.Error(t, err)
+		assert.True(t, isConflictError(err), "expected conflict error, got: %v", err)
+		assert.True(t, writer.Called("tenant-1", "conv_manual_manual-rollback"))
+		assert.True(t, deleter.Called("tenant-1", "conv_manual_manual-rollback"))
+	})
+
+	t.Run("duplicate conversation conflict reports existing saved id", func(t *testing.T) {
+		conflictStore := newMockSavedConversationStore()
+		conflictStore.createErr = evalpkg.ErrConflict
+		conflictStore.createHook = func(_ evalpkg.SavedConversation) {
+			conflictStore.data[conflictStore.key("tenant-1", "saved-existing")] = &evalpkg.SavedConversation{
+				TenantID:       "tenant-1",
+				SavedID:        "saved-existing",
+				ConversationID: "conv-shared",
+			}
+		}
+		lookup.Add("tenant-1", "conv-shared")
+		svcWithConflict := NewSavedConversationService(conflictStore, lookup)
+
+		_, err := svcWithConflict.SaveConversation(context.Background(), "tenant-1", SaveConversationRequest{
+			SavedID:        "saved-new",
+			ConversationID: "conv-shared",
+			Name:           "Shared",
+			SavedBy:        "user-1",
+		})
+
+		require.Error(t, err)
+		assert.True(t, isConflictError(err), "expected conflict error, got: %v", err)
+		assert.Contains(t, err.Error(), `conversation "conv-shared" is already saved as "saved-existing"`)
 	})
 }
 
@@ -383,6 +477,7 @@ func TestSavedConversationServiceDeleteManualCascade(t *testing.T) {
 		Generations: []ManualGeneration{
 			{
 				GenerationID: "gen-1",
+				Model:        ManualModelRef{Provider: "openai", Name: "gpt-4o-mini"},
 				Input:        []ManualMessage{{Role: "user", Content: "Hello"}},
 				Output:       []ManualMessage{{Role: "assistant", Content: "Hi"}},
 			},
@@ -437,8 +532,9 @@ func TestSavedConversationServiceListAndGet(t *testing.T) {
 	lookup.Add("tenant-1", "conv-1")
 	lookup.Add("tenant-1", "conv-2")
 	writer := newMockManualConversationWriter()
+	deleter := newMockManualConversationDeleter()
 
-	svc := NewSavedConversationService(store, lookup, WithManualWriter(writer))
+	svc := NewSavedConversationService(store, lookup, WithManualWriter(writer), WithManualDeleter(deleter))
 
 	// Seed data: one telemetry bookmark and one manual conversation.
 	_, err := svc.SaveConversation(context.Background(), "tenant-1", SaveConversationRequest{
@@ -450,6 +546,7 @@ func TestSavedConversationServiceListAndGet(t *testing.T) {
 		SavedID: "saved-m", Name: "Manual", SavedBy: "u",
 		Generations: []ManualGeneration{{
 			GenerationID: "g1",
+			Model:        ManualModelRef{Provider: "openai", Name: "gpt-4o-mini"},
 			Input:        []ManualMessage{{Role: "user", Content: "hi"}},
 			Output:       []ManualMessage{{Role: "assistant", Content: "hey"}},
 		}},

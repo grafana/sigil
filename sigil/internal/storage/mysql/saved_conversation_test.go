@@ -66,6 +66,22 @@ func TestSavedConversationCRUD(t *testing.T) {
 		t.Errorf("unexpected tags %v", got.Tags)
 	}
 
+	gotByConversationID, err := store.GetSavedConversationByConversationID(ctx, tenant, "conv-abc-123")
+	if err != nil {
+		t.Fatalf("get by conversation id: %v", err)
+	}
+	if gotByConversationID == nil || gotByConversationID.SavedID != "sc-test-1" {
+		t.Fatalf("expected saved conversation by conversation id, got %#v", gotByConversationID)
+	}
+
+	missingByConversationID, err := store.GetSavedConversationByConversationID(ctx, tenant, "conv-missing")
+	if err != nil {
+		t.Fatalf("get missing by conversation id: %v", err)
+	}
+	if missingByConversationID != nil {
+		t.Fatalf("expected nil missing conversation lookup, got %#v", missingByConversationID)
+	}
+
 	// List (no filter)
 	items, nextCursor, err := store.ListSavedConversations(ctx, tenant, "", 10, 0)
 	if err != nil {

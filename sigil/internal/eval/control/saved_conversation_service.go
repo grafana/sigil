@@ -90,6 +90,29 @@ type SavedConversationService struct {
 	manualDeleter ManualConversationDeleter
 }
 
+func (s *SavedConversationService) duplicateSavedConversationConflict(
+	ctx context.Context,
+	tenantID string,
+	savedID string,
+	conversationID string,
+) error {
+	existing, err := s.store.GetSavedConversation(ctx, tenantID, savedID)
+	if err != nil {
+		return err
+	}
+	if existing != nil {
+		return ConflictError(fmt.Sprintf("saved conversation %q already exists", savedID))
+	}
+	existingForConversation, err := s.store.GetSavedConversationByConversationID(ctx, tenantID, conversationID)
+	if err != nil {
+		return err
+	}
+	if existingForConversation != nil {
+		return ConflictError(fmt.Sprintf("conversation %q is already saved as %q", conversationID, existingForConversation.SavedID))
+	}
+	return ConflictError("saved conversation already exists")
+}
+
 // NewSavedConversationService creates a SavedConversationService with the required store
 // and conversation lookup, plus optional manual writer/deleter.
 func NewSavedConversationService(store evalpkg.SavedConversationStore, convLookup ConversationLookup, opts ...SavedConversationServiceOption) *SavedConversationService {
@@ -114,6 +137,9 @@ func (s *SavedConversationService) SaveConversation(ctx context.Context, tenantI
 	if trimmedSavedID == "" {
 		return nil, newValidationError(errors.New("saved_id is required"))
 	}
+	if err := validateSavedConversationID(trimmedSavedID); err != nil {
+		return nil, ValidationWrap(err)
+	}
 	if trimmedConvID == "" {
 		return nil, newValidationError(errors.New("conversation_id is required"))
 	}
@@ -124,7 +150,25 @@ func (s *SavedConversationService) SaveConversation(ctx context.Context, tenantI
 		return nil, newValidationError(errors.New("saved_by is required"))
 	}
 	if s.convLookup == nil {
-		return nil, errors.New("conversation lookup is not configured")
+		return nil, UnavailableError("conversation lookup is not configured", errors.New("conversation lookup is not configured"))
+	}
+	tags, err := validateSavedConversationTags(req.Tags)
+	if err != nil {
+		return nil, ValidationWrap(err)
+	}
+	existing, err := s.store.GetSavedConversation(ctx, trimmedTenantID, trimmedSavedID)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return nil, ConflictError(fmt.Sprintf("saved conversation %q already exists", trimmedSavedID))
+	}
+	existingForConversation, err := s.store.GetSavedConversationByConversationID(ctx, trimmedTenantID, trimmedConvID)
+	if err != nil {
+		return nil, err
+	}
+	if existingForConversation != nil {
+		return nil, ConflictError(fmt.Sprintf("conversation %q is already saved as %q", trimmedConvID, existingForConversation.SavedID))
 	}
 
 	conv, err := s.convLookup.GetConversation(ctx, trimmedTenantID, trimmedConvID)
@@ -132,12 +176,7 @@ func (s *SavedConversationService) SaveConversation(ctx context.Context, tenantI
 		return nil, fmt.Errorf("lookup conversation: %w", err)
 	}
 	if conv == nil {
-		return nil, newValidationError(fmt.Errorf("conversation %q not found", trimmedConvID))
-	}
-
-	tags := req.Tags
-	if tags == nil {
-		tags = map[string]string{}
+		return nil, NotFoundError(fmt.Sprintf("conversation %q not found", trimmedConvID))
 	}
 
 	sc := evalpkg.SavedConversation{
@@ -151,6 +190,9 @@ func (s *SavedConversationService) SaveConversation(ctx context.Context, tenantI
 	}
 
 	if err := s.store.CreateSavedConversation(ctx, sc); err != nil {
+		if errors.Is(err, evalpkg.ErrConflict) {
+			return nil, s.duplicateSavedConversationConflict(ctx, trimmedTenantID, trimmedSavedID, trimmedConvID)
+		}
 		return nil, err
 	}
 
@@ -177,39 +219,48 @@ func (s *SavedConversationService) CreateManualConversation(ctx context.Context,
 	if trimmedSavedID == "" {
 		return nil, newValidationError(errors.New("saved_id is required"))
 	}
+	if err := validateSavedConversationID(trimmedSavedID); err != nil {
+		return nil, ValidationWrap(err)
+	}
 	if trimmedName == "" {
 		return nil, newValidationError(errors.New("name is required"))
 	}
 	if trimmedSavedBy == "" {
 		return nil, newValidationError(errors.New("saved_by is required"))
 	}
-	if len(req.Generations) == 0 {
-		return nil, newValidationError(errors.New("at least one generation is required"))
+	tags, err := validateSavedConversationTags(req.Tags)
+	if err != nil {
+		return nil, ValidationWrap(err)
 	}
-	for i, gen := range req.Generations {
-		if strings.TrimSpace(gen.GenerationID) == "" {
-			return nil, newValidationError(fmt.Errorf("generation[%d]: generation_id is required", i))
-		}
-		if len(gen.Input) == 0 {
-			return nil, newValidationError(fmt.Errorf("generation[%d]: at least one input message is required", i))
-		}
-		if len(gen.Output) == 0 {
-			return nil, newValidationError(fmt.Errorf("generation[%d]: at least one output message is required", i))
-		}
+	normalizedGenerations := append([]ManualGeneration(nil), req.Generations...)
+	if err := validateManualGenerations(normalizedGenerations); err != nil {
+		return nil, ValidationWrap(err)
+	}
+	existing, err := s.store.GetSavedConversation(ctx, trimmedTenantID, trimmedSavedID)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return nil, ConflictError(fmt.Sprintf("saved conversation %q already exists", trimmedSavedID))
 	}
 	if s.manualWriter == nil {
-		return nil, errors.New("manual conversation writer is not configured")
+		return nil, UnavailableError("manual conversation writer is not configured", errors.New("manual conversation writer is not configured"))
+	}
+	if s.manualDeleter == nil {
+		return nil, UnavailableError("manual conversation deleter is not configured", errors.New("manual conversation deleter is not configured"))
 	}
 
 	conversationID := fmt.Sprintf("conv_manual_%s", trimmedSavedID)
-
-	if err := s.manualWriter.CreateManualConversation(ctx, trimmedTenantID, conversationID, req.Generations); err != nil {
-		return nil, fmt.Errorf("create manual conversation data: %w", err)
+	existingForConversation, err := s.store.GetSavedConversationByConversationID(ctx, trimmedTenantID, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	if existingForConversation != nil {
+		return nil, ConflictError(fmt.Sprintf("conversation %q is already saved as %q", conversationID, existingForConversation.SavedID))
 	}
 
-	tags := req.Tags
-	if tags == nil {
-		tags = map[string]string{}
+	if err := s.manualWriter.CreateManualConversation(ctx, trimmedTenantID, conversationID, normalizedGenerations); err != nil {
+		return nil, fmt.Errorf("create manual conversation data: %w", err)
 	}
 
 	sc := evalpkg.SavedConversation{
@@ -223,6 +274,12 @@ func (s *SavedConversationService) CreateManualConversation(ctx context.Context,
 	}
 
 	if err := s.store.CreateSavedConversation(ctx, sc); err != nil {
+		if rollbackErr := s.manualDeleter.DeleteManualConversationData(ctx, trimmedTenantID, conversationID); rollbackErr != nil {
+			return nil, fmt.Errorf("create saved conversation: %w (rollback manual conversation data: %v)", err, rollbackErr)
+		}
+		if errors.Is(err, evalpkg.ErrConflict) {
+			return nil, s.duplicateSavedConversationConflict(ctx, trimmedTenantID, trimmedSavedID, conversationID)
+		}
 		return nil, err
 	}
 
@@ -244,7 +301,7 @@ func (s *SavedConversationService) ListSavedConversations(ctx context.Context, t
 	}
 	trimmedSource := strings.TrimSpace(source)
 	if trimmedSource != "" && !evalpkg.IsValidSavedConversationSource(trimmedSource) {
-		return nil, 0, newValidationError(fmt.Errorf("invalid source %q", trimmedSource))
+		return nil, 0, ValidationWrap(fmt.Errorf("invalid source %q", trimmedSource))
 	}
 	return s.store.ListSavedConversations(ctx, trimmedTenantID, trimmedSource, limit, cursor)
 }

@@ -32,6 +32,8 @@
 - Never pass runtime dependencies through `context.Context`.
 - Define interfaces where they are consumed, not where they are implemented.
 - Keep packages loosely coupled; avoid heavy cross-package implementation ties.
+- Keep request validation at the API/control boundary with explicit request DTO validation; avoid duplicating defensive request-shape checks deeper in service, storage, or runtime layers.
+- Use sentinel errors and small custom error types for domain outcomes (`validation`, `not found`, `conflict`, `unavailable`); map them to transport-specific status codes only at the API layer.
 - Add tests where they improve confidence.
 - Prefer table-driven tests when many similar cases exist.
 

@@ -391,7 +391,7 @@ func TestTestService_RunTest_BoundsEnforcement(t *testing.T) {
 
 			resp, err := svc.RunTest(context.Background(), "tenant-1", EvalTestRequest{
 				Kind:         "heuristic",
-				Config:       map[string]any{"some": "config"},
+				Config:       map[string]any{"not_empty": true},
 				OutputKeys:   tt.outputKeys,
 				GenerationID: "gen-1",
 			})

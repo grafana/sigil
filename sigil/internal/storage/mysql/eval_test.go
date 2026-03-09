@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -73,6 +74,86 @@ func TestEvalStoreEvaluatorCRUD(t *testing.T) {
 	}
 }
 
+func TestEvalStoreCreateEvaluatorRejectsDuplicates(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	evaluator := evalpkg.EvaluatorDefinition{
+		TenantID:    "tenant-a",
+		EvaluatorID: "sigil.helpfulness",
+		Version:     "2026-02-17",
+		Kind:        evalpkg.EvaluatorKindHeuristic,
+		Config:      map[string]any{"not_empty": true},
+		OutputKeys:  []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeBool}},
+	}
+	if err := store.CreateEvaluator(context.Background(), evaluator); err != nil {
+		t.Fatalf("first create evaluator: %v", err)
+	}
+	if err := store.CreateEvaluator(context.Background(), evaluator); err == nil {
+		t.Fatal("expected duplicate evaluator create to fail")
+	} else if !errors.Is(err, evalpkg.ErrConflict) {
+		t.Fatalf("expected conflict error, got %v", err)
+	}
+}
+
+func TestEvalStoreCreateEvaluatorRestoresSoftDeletedRows(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	original := evalpkg.EvaluatorDefinition{
+		TenantID:    "tenant-a",
+		EvaluatorID: "sigil.helpfulness",
+		Version:     "2026-02-17",
+		Kind:        evalpkg.EvaluatorKindRegex,
+		Config:      map[string]any{"pattern": "good"},
+		OutputKeys:  []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeBool}},
+	}
+	if err := store.CreateEvaluator(context.Background(), original); err != nil {
+		t.Fatalf("first create evaluator: %v", err)
+	}
+	if err := store.DeleteEvaluator(context.Background(), original.TenantID, original.EvaluatorID); err != nil {
+		t.Fatalf("delete evaluator: %v", err)
+	}
+
+	recreated := original
+	recreated.Kind = evalpkg.EvaluatorKindHeuristic
+	recreated.Config = map[string]any{"not_empty": true}
+	recreated.OutputKeys = []evalpkg.OutputKey{{Key: "passed", Type: evalpkg.ScoreTypeBool}}
+	if err := store.CreateEvaluator(context.Background(), recreated); err != nil {
+		t.Fatalf("recreate evaluator: %v", err)
+	}
+
+	got, err := store.GetEvaluatorVersion(context.Background(), recreated.TenantID, recreated.EvaluatorID, recreated.Version)
+	if err != nil {
+		t.Fatalf("get evaluator version: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected recreated evaluator")
+	}
+	if got.Kind != recreated.Kind {
+		t.Fatalf("expected recreated kind %q, got %q", recreated.Kind, got.Kind)
+	}
+	if got.Config["not_empty"] != true {
+		t.Fatalf("expected recreated config, got %#v", got.Config)
+	}
+
+	items, _, err := store.ListEvaluators(context.Background(), recreated.TenantID, 10, 0)
+	if err != nil {
+		t.Fatalf("list evaluators: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected one active evaluator after recreate, got %d", len(items))
+	}
+}
+
 func TestEvalStoreRuleCRUDAndUpdate(t *testing.T) {
 	store, cleanup := newTestWALStore(t)
 	defer cleanup()
@@ -136,6 +217,92 @@ func TestEvalStoreRuleCRUDAndUpdate(t *testing.T) {
 	}
 	if rule != nil {
 		t.Errorf("expected deleted rule")
+	}
+}
+
+func TestEvalStoreCreateRuleRejectsDuplicates(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	rule := evalpkg.RuleDefinition{
+		TenantID:     "tenant-a",
+		RuleID:       "online.helpfulness.user-visible",
+		Enabled:      true,
+		Selector:     evalpkg.SelectorUserVisibleTurn,
+		Match:        map[string]any{"agent_name": []string{"assistant-*"}},
+		SampleRate:   0.25,
+		EvaluatorIDs: []string{"sigil.helpfulness"},
+	}
+	if err := store.CreateRule(context.Background(), rule); err != nil {
+		t.Fatalf("first create rule: %v", err)
+	}
+	if err := store.CreateRule(context.Background(), rule); err == nil {
+		t.Fatal("expected duplicate rule create to fail")
+	} else if !errors.Is(err, evalpkg.ErrConflict) {
+		t.Fatalf("expected conflict error, got %v", err)
+	}
+}
+
+func TestEvalStoreCreateRuleRestoresSoftDeletedRows(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	original := evalpkg.RuleDefinition{
+		TenantID:     "tenant-a",
+		RuleID:       "online.helpfulness.user-visible",
+		Enabled:      true,
+		Selector:     evalpkg.SelectorUserVisibleTurn,
+		Match:        map[string]any{"agent_name": []string{"assistant-*"}},
+		SampleRate:   0.25,
+		EvaluatorIDs: []string{"sigil.helpfulness"},
+	}
+	if err := store.CreateRule(context.Background(), original); err != nil {
+		t.Fatalf("first create rule: %v", err)
+	}
+	if err := store.DeleteRule(context.Background(), original.TenantID, original.RuleID); err != nil {
+		t.Fatalf("delete rule: %v", err)
+	}
+
+	recreated := original
+	recreated.Enabled = false
+	recreated.Selector = evalpkg.SelectorAllAssistantGenerations
+	recreated.SampleRate = 1
+	recreated.EvaluatorIDs = []string{"sigil.conciseness"}
+	if err := store.CreateRule(context.Background(), recreated); err != nil {
+		t.Fatalf("recreate rule: %v", err)
+	}
+
+	got, err := store.GetRule(context.Background(), recreated.TenantID, recreated.RuleID)
+	if err != nil {
+		t.Fatalf("get rule: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected recreated rule")
+	}
+	if got.Enabled {
+		t.Fatal("expected recreated rule to use new enabled value")
+	}
+	if got.Selector != recreated.Selector {
+		t.Fatalf("expected recreated selector %q, got %q", recreated.Selector, got.Selector)
+	}
+	if len(got.EvaluatorIDs) != 1 || got.EvaluatorIDs[0] != "sigil.conciseness" {
+		t.Fatalf("expected recreated evaluator ids, got %#v", got.EvaluatorIDs)
+	}
+
+	items, _, err := store.ListRules(context.Background(), recreated.TenantID, 10, 0)
+	if err != nil {
+		t.Fatalf("list rules: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected one active rule after recreate, got %d", len(items))
 	}
 }
 

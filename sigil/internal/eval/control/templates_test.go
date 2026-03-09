@@ -57,7 +57,7 @@ func TestTemplateService_Create_InvalidKind(t *testing.T) {
 		TemplateID: "my_template",
 		Kind:       "unknown_kind",
 		Version:    "2026-03-01",
-		Config:     map[string]any{"key": "value"},
+		Config:     map[string]any{"provider": "openai", "model": "gpt-4o-mini"},
 		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
 	})
 	if err == nil {
@@ -90,7 +90,7 @@ func TestTemplateService_Create_InvalidVersion(t *testing.T) {
 				TemplateID: "my_template",
 				Kind:       "llm_judge",
 				Version:    tc.version,
-				Config:     map[string]any{"key": "value"},
+				Config:     map[string]any{"provider": "openai", "model": "gpt-4o-mini"},
 				OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
 			})
 			if err == nil {
@@ -119,7 +119,7 @@ func TestTemplateService_Create_MissingFields(t *testing.T) {
 			req: CreateTemplateRequest{
 				Kind:       "llm_judge",
 				Version:    "2026-03-01",
-				Config:     map[string]any{"key": "value"},
+				Config:     map[string]any{"provider": "openai", "model": "gpt-4o-mini"},
 				OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
 			},
 			wantErr: "template_id is required",
@@ -141,7 +141,7 @@ func TestTemplateService_Create_MissingFields(t *testing.T) {
 				TemplateID: "my_template",
 				Kind:       "llm_judge",
 				Version:    "2026-03-01",
-				Config:     map[string]any{"key": "value"},
+				Config:     map[string]any{"provider": "openai", "model": "gpt-4o-mini"},
 				OutputKeys: nil,
 			},
 			wantErr: "output_keys must include exactly one key",
@@ -152,7 +152,7 @@ func TestTemplateService_Create_MissingFields(t *testing.T) {
 				TemplateID: "my_template",
 				Kind:       "llm_judge",
 				Version:    "2026-03-01",
-				Config:     map[string]any{"key": "value"},
+				Config:     map[string]any{"provider": "openai", "model": "gpt-4o-mini"},
 				OutputKeys: []evalpkg.OutputKey{
 					{Key: "a", Type: evalpkg.ScoreTypeNumber},
 					{Key: "b", Type: evalpkg.ScoreTypeNumber},
@@ -185,7 +185,7 @@ func TestTemplateService_PublishVersion(t *testing.T) {
 		TemplateID: "my_template",
 		Kind:       "llm_judge",
 		Version:    "2026-03-01",
-		Config:     map[string]any{"provider": "openai"},
+		Config:     map[string]any{"provider": "openai", "model": "gpt-4o-mini"},
 		OutputKeys: []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeNumber}},
 	})
 	if err != nil {
@@ -225,7 +225,7 @@ func TestTemplateService_PublishVersion_DuplicateVersion(t *testing.T) {
 		TemplateID: "my_template",
 		Kind:       "llm_judge",
 		Version:    "2026-03-01",
-		Config:     map[string]any{"provider": "openai"},
+		Config:     map[string]any{"provider": "openai", "model": "gpt-4o-mini"},
 		OutputKeys: []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeNumber}},
 	})
 	if err != nil {
@@ -252,7 +252,7 @@ func TestTemplateService_CreateDuplicate(t *testing.T) {
 		TemplateID: "dup_template",
 		Kind:       "llm_judge",
 		Version:    "2026-03-01",
-		Config:     map[string]any{"provider": "openai"},
+		Config:     map[string]any{"provider": "openai", "model": "gpt-4o-mini"},
 		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
 	})
 	if err != nil {
@@ -263,14 +263,14 @@ func TestTemplateService_CreateDuplicate(t *testing.T) {
 		TemplateID: "dup_template",
 		Kind:       "llm_judge",
 		Version:    "2026-03-02",
-		Config:     map[string]any{"provider": "anthropic"},
+		Config:     map[string]any{"provider": "anthropic", "model": "claude-3-5-haiku-latest"},
 		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
 	})
 	if err == nil {
 		t.Fatal("expected error for duplicate template ID")
 	}
-	if !isValidationError(err) {
-		t.Errorf("expected validation error, got %v", err)
+	if !isConflictError(err) {
+		t.Errorf("expected conflict error, got %v", err)
 	}
 	if !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("expected 'already exists' in error, got %q", err.Error())
@@ -354,6 +354,35 @@ func TestTemplateService_ForkTemplate_WithOverrides(t *testing.T) {
 	}
 }
 
+func TestTemplateService_ForkTemplate_RejectsPartialLLMJudgeOverride(t *testing.T) {
+	svc, _, _ := newTemplateTestEnv(t)
+
+	_, err := svc.CreateTemplate(context.Background(), "tenant_1", CreateTemplateRequest{
+		TemplateID: "my_template",
+		Kind:       "llm_judge",
+		Version:    "2026-03-01",
+		Config:     map[string]any{"provider": "openai", "model": "gpt-4o-mini"},
+		OutputKeys: []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeNumber}},
+	})
+	if err != nil {
+		t.Fatalf("create template: %v", err)
+	}
+
+	_, err = svc.ForkTemplate(context.Background(), "tenant_1", "my_template", ForkTemplateRequest{
+		EvaluatorID: "custom.helpfulness",
+		Config:      map[string]any{"provider": "anthropic"},
+	})
+	if err == nil {
+		t.Fatal("expected validation error for partial llm_judge override")
+	}
+	if !isValidationError(err) {
+		t.Fatalf("expected validation error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "requires both provider and model") {
+		t.Fatalf("expected provider/model validation error, got %q", err.Error())
+	}
+}
+
 func TestTemplateService_ForkTemplate_NotFound(t *testing.T) {
 	svc, _, _ := newTemplateTestEnv(t)
 
@@ -363,8 +392,8 @@ func TestTemplateService_ForkTemplate_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for fork nonexistent template")
 	}
-	if !isValidationError(err) {
-		t.Errorf("expected validation error, got %v", err)
+	if !isNotFoundError(err) {
+		t.Errorf("expected not-found error, got %v", err)
 	}
 	if !strings.Contains(err.Error(), "not found") {
 		t.Errorf("expected 'not found' in error, got %q", err.Error())
@@ -378,7 +407,7 @@ func TestTemplateService_DeleteTemplate(t *testing.T) {
 		TemplateID: "my_template",
 		Kind:       "heuristic",
 		Version:    "2026-03-01",
-		Config:     map[string]any{"key": "value"},
+		Config:     map[string]any{"not_empty": true},
 		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeBool}},
 	})
 	if err != nil {
@@ -422,7 +451,7 @@ func TestTemplateService_List(t *testing.T) {
 			TemplateID: id,
 			Kind:       "heuristic",
 			Version:    "2026-03-01",
-			Config:     map[string]any{"source": "tenant"},
+			Config:     map[string]any{"not_empty": true},
 			OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeBool}},
 		})
 		if err != nil {
@@ -685,7 +714,7 @@ func TestValidateOutputKeyConstraints(t *testing.T) {
 				Min:  floatPtr(10),
 				Max:  floatPtr(5),
 			},
-			wantErr: "min (10) must be <= max (5)",
+			wantErr: "min (10) must be < max (5)",
 		},
 		{
 			name: "bool_with_min_max_wrong_type",
