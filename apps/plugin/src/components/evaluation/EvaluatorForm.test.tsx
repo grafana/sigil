@@ -1,13 +1,17 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { EvaluationDataSource } from '../../evaluation/api';
-import type { Evaluator } from '../../evaluation/types';
+import type { Evaluator, HeuristicConfig } from '../../evaluation/types';
 import EvaluatorForm from './EvaluatorForm';
 
 const mockDataSource = {
   listJudgeProviders: () => new Promise(() => {}),
   listJudgeModels: () => new Promise(() => {}),
 } as unknown as EvaluationDataSource;
+
+function heuristicConfig(root: HeuristicConfig['root']): HeuristicConfig {
+  return { version: 'v2', root };
+}
 
 describe('EvaluatorForm', () => {
   it('does not leak unrelated config keys when building regex config', () => {
@@ -234,41 +238,21 @@ describe('EvaluatorForm', () => {
     expect(screen.getByText('Must be less than or equal to Max')).toBeInTheDocument();
   });
 
-  it('blocks submit when heuristic max length is not greater than min length', () => {
+  it('blocks submit when heuristic text rules are blank', async () => {
     const onSubmit = jest.fn();
-    const prefill: Partial<Evaluator> = {
-      evaluator_id: 'seed.heuristic',
-      kind: 'heuristic',
-      config: {
-        min_length: 20,
-        max_length: 20,
-      },
-      output_keys: [{ key: 'passed', type: 'bool' }],
-    };
+    render(<EvaluatorForm onSubmit={onSubmit} onCancel={jest.fn()} dataSource={mockDataSource} />);
 
-    render(<EvaluatorForm prefill={prefill} onSubmit={onSubmit} onCancel={jest.fn()} dataSource={mockDataSource} />);
-
+    fireEvent.change(screen.getByPlaceholderText('e.g. custom.helpfulness'), {
+      target: { value: 'seed.heuristic.blank' },
+    });
+    fireEvent.mouseDown(screen.getByText('LLM Judge'));
+    fireEvent.click(await screen.findByText('Heuristic'));
+    fireEvent.mouseDown(screen.getByText('is not empty'));
+    fireEvent.click(await screen.findByText('contains'));
     fireEvent.click(screen.getByRole('button', { name: 'Create' }));
 
     expect(onSubmit).not.toHaveBeenCalled();
-    expect(screen.getByText('Must be greater than Min length')).toBeInTheDocument();
-  });
-
-  it('blocks submit when heuristic has no rules', () => {
-    const onSubmit = jest.fn();
-    const prefill: Partial<Evaluator> = {
-      evaluator_id: 'seed.heuristic.empty',
-      kind: 'heuristic',
-      config: {},
-      output_keys: [{ key: 'passed', type: 'bool' }],
-    };
-
-    render(<EvaluatorForm prefill={prefill} onSubmit={onSubmit} onCancel={jest.fn()} dataSource={mockDataSource} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
-
-    expect(onSubmit).not.toHaveBeenCalled();
-    expect(screen.getByText('Add at least one heuristic rule')).toBeInTheDocument();
+    expect(screen.getByText('Text match rules need a value')).toBeInTheDocument();
   });
 
   it('preserves heuristic contains rules when submitting', () => {
@@ -276,13 +260,24 @@ describe('EvaluatorForm', () => {
     const prefill: Partial<Evaluator> = {
       evaluator_id: 'seed.heuristic.contains',
       kind: 'heuristic',
-      config: {
-        not_empty: true,
-        contains: ['refund requested', 'account issue'],
-        not_contains: ['profanity'],
-        min_length: 1,
-        max_length: 100,
-      },
+      config: heuristicConfig({
+        kind: 'group',
+        operator: 'and',
+        rules: [
+          { kind: 'rule', type: 'not_empty' },
+          {
+            kind: 'group',
+            operator: 'or',
+            rules: [
+              { kind: 'rule', type: 'contains', value: 'refund requested' },
+              { kind: 'rule', type: 'contains', value: 'account issue' },
+            ],
+          },
+          { kind: 'rule', type: 'not_contains', value: 'profanity' },
+          { kind: 'rule', type: 'min_length', value: 1 },
+          { kind: 'rule', type: 'max_length', value: 100 },
+        ],
+      }),
       output_keys: [{ key: 'passed', type: 'bool' }],
     };
 
@@ -291,13 +286,7 @@ describe('EvaluatorForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create' }));
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
-    expect(onSubmit.mock.calls[0][0].config).toEqual({
-      not_empty: true,
-      contains: ['refund requested', 'account issue'],
-      not_contains: ['profanity'],
-      min_length: 1,
-      max_length: 100,
-    });
+    expect(onSubmit.mock.calls[0][0].config).toEqual(prefill.config);
   });
 
   it('does not use em-dash placeholders for numeric score pass conditions', () => {

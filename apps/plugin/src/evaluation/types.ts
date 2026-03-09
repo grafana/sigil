@@ -1,5 +1,37 @@
 export type EvaluatorKind = 'llm_judge' | 'json_schema' | 'regex' | 'heuristic';
 
+export type HeuristicOperator = 'and' | 'or';
+export type HeuristicRuleType = 'not_empty' | 'contains' | 'not_contains' | 'min_length' | 'max_length';
+
+export type HeuristicGroupNode = {
+  kind: 'group';
+  operator: HeuristicOperator;
+  rules: HeuristicNode[];
+};
+
+export type HeuristicRuleNode =
+  | {
+      kind: 'rule';
+      type: 'not_empty';
+    }
+  | {
+      kind: 'rule';
+      type: 'contains' | 'not_contains';
+      value: string;
+    }
+  | {
+      kind: 'rule';
+      type: 'min_length' | 'max_length';
+      value: number;
+    };
+
+export type HeuristicNode = HeuristicGroupNode | HeuristicRuleNode;
+
+export type HeuristicConfig = {
+  version: 'v2';
+  root: HeuristicGroupNode;
+};
+
 /** Shared state emitted by evaluator/template forms for the test panel. */
 export type EvalFormState = {
   kind: EvaluatorKind;
@@ -31,6 +63,9 @@ export function getFixedOutputType(kind: EvaluatorKind): ScoreType | undefined {
 export function kindSupportsCustomPassValue(kind: EvaluatorKind): boolean {
   return kind === 'llm_judge';
 }
+
+export const HEURISTIC_MAX_DEPTH = 3;
+export const HEURISTIC_MAX_NODES = 25;
 
 export type EvalOutputKey = {
   key: string;

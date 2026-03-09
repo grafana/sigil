@@ -1,5 +1,5 @@
 import type { EvaluatorKind, ScoreType } from './types';
-import { parseHeuristicStringListInput } from './heuristicConfig';
+import { validateHeuristicQuery, type HeuristicQueryGroup } from './heuristicConfig';
 
 export type SharedInvalidField =
   | 'outputKey'
@@ -9,7 +9,6 @@ export type SharedInvalidField =
   | 'temperature'
   | 'schema'
   | 'heuristic'
-  | 'heuristicMaxLength'
   | 'passThreshold'
   | 'outputMax';
 
@@ -22,13 +21,7 @@ export type SharedFormValidationInput = {
   maxTokens: number;
   temperature: number;
   schemaJson: string;
-  heuristic: {
-    notEmpty: boolean;
-    contains: string;
-    notContains: string;
-    minLength: number | '';
-    maxLength: number | '';
-  };
+  heuristicQuery?: HeuristicQueryGroup;
   output: {
     type: ScoreType;
     passThreshold: number | '';
@@ -45,7 +38,6 @@ export type SharedFormValidationResult = {
   temperatureError?: string;
   schemaParseError?: string;
   heuristicConfigError?: string;
-  heuristicMaxLengthError?: string;
   passThresholdError?: string;
   outputMaxError?: string;
   hasErrors: boolean;
@@ -104,21 +96,10 @@ export function validateSharedForm(input: SharedFormValidationInput): SharedForm
   }
 
   const heuristicConfigError =
-    input.kind === 'heuristic' &&
-    !input.heuristic.notEmpty &&
-    parseHeuristicStringListInput(input.heuristic.contains) == null &&
-    parseHeuristicStringListInput(input.heuristic.notContains) == null &&
-    input.heuristic.minLength === '' &&
-    input.heuristic.maxLength === ''
-      ? 'Add at least one heuristic rule'
-      : undefined;
-
-  const heuristicMaxLengthError =
-    input.kind === 'heuristic' &&
-    input.heuristic.minLength !== '' &&
-    input.heuristic.maxLength !== '' &&
-    Number(input.heuristic.minLength) >= Number(input.heuristic.maxLength)
-      ? 'Must be greater than Min length'
+    input.kind === 'heuristic'
+      ? input.heuristicQuery == null
+        ? 'Add at least one heuristic rule'
+        : validateHeuristicQuery(input.heuristicQuery)
       : undefined;
 
   const passThresholdError =
@@ -152,13 +133,11 @@ export function validateSharedForm(input: SharedFormValidationInput): SharedForm
               ? 'schema'
               : heuristicConfigError
                 ? 'heuristic'
-                : heuristicMaxLengthError
-                  ? 'heuristicMaxLength'
-                  : passThresholdError
-                    ? 'passThreshold'
-                    : outputMaxError
-                      ? 'outputMax'
-                      : null;
+                : passThresholdError
+                  ? 'passThreshold'
+                  : outputMaxError
+                    ? 'outputMax'
+                    : null;
 
   return {
     outputKeyError,
@@ -168,7 +147,6 @@ export function validateSharedForm(input: SharedFormValidationInput): SharedForm
     temperatureError,
     schemaParseError,
     heuristicConfigError,
-    heuristicMaxLengthError,
     passThresholdError,
     outputMaxError,
     hasErrors: firstInvalidField != null,

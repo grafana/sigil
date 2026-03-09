@@ -95,18 +95,3 @@ func extractRegexPatterns(config map[string]any) []string {
 	}
 	return nil
 }
-
-func configBool(config map[string]any, key string, defaultValue bool) bool {
-	if config == nil {
-		return defaultValue
-	}
-	value, ok := config[key]
-	if !ok {
-		return defaultValue
-	}
-	asBool, ok := value.(bool)
-	if !ok {
-		return defaultValue
-	}
-	return asBool
-}

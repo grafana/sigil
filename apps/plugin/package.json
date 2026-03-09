@@ -89,6 +89,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-json-view-lite": "^2.5.0",
+    "react-querybuilder": "^8.8.4",
     "react-router-dom": "^7.0.0",
     "rxjs": "7.8.2"
   }

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
-import { Button, Field, Input, Select, Stack, Switch, Text, useStyles2 } from '@grafana/ui';
+import { Button, Field, Input, Select, Stack, Text, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
 import {
   JSON_SCHEMA_SUPPORTED_KEYWORDS,
@@ -21,8 +21,13 @@ import {
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../../evaluation/api';
 import { focusInvalidFieldFromMap } from '../../evaluation/focusFirstInvalid';
 import { parseSchemaConfig, validateSharedForm } from '../../evaluation/formValidation';
-import { formatHeuristicStringList, parseHeuristicStringListInput } from '../../evaluation/heuristicConfig';
+import {
+  createDefaultHeuristicQuery,
+  heuristicQueryToConfig,
+  type HeuristicQueryGroup,
+} from '../../evaluation/heuristicConfig';
 import { nextVersion } from '../../evaluation/versionUtils';
+import HeuristicRuleBuilder from './HeuristicRuleBuilder';
 import JudgeProviderModelFields from './JudgeProviderModelFields';
 import { getSectionTitleStyles } from './sectionStyles';
 import PromptTemplateTextarea from './PromptTemplateTextarea';
@@ -185,17 +190,9 @@ export default function PublishVersionForm({
     return s ? JSON.stringify(s, null, 2) : '{}';
   });
   const [pattern, setPattern] = useState(() => String(initialConfig?.pattern ?? ''));
-  const [notEmpty, setNotEmpty] = useState(() => Boolean(initialConfig?.not_empty));
-  const [contains, setContains] = useState(() => formatHeuristicStringList(initialConfig?.contains));
-  const [notContains, setNotContains] = useState(() => formatHeuristicStringList(initialConfig?.not_contains));
-  const [heuristicMinLength, setHeuristicMinLength] = useState<number | ''>(() => {
-    const v = initialConfig?.min_length;
-    return typeof v === 'number' ? v : '';
-  });
-  const [heuristicMaxLength, setHeuristicMaxLength] = useState<number | ''>(() => {
-    const v = initialConfig?.max_length;
-    return typeof v === 'number' ? v : '';
-  });
+  const [heuristicQuery, setHeuristicQuery] = useState<HeuristicQueryGroup>(() =>
+    createDefaultHeuristicQuery(initialConfig)
+  );
 
   useEffect(() => {
     if (kind !== 'llm_judge') {
@@ -243,7 +240,6 @@ export default function PublishVersionForm({
   const temperatureFieldRef = useRef<HTMLDivElement>(null);
   const schemaFieldRef = useRef<HTMLDivElement>(null);
   const heuristicFieldRef = useRef<HTMLDivElement>(null);
-  const heuristicMaxLengthFieldRef = useRef<HTMLDivElement>(null);
   const passThresholdFieldRef = useRef<HTMLDivElement>(null);
   const outputMaxFieldRef = useRef<HTMLDivElement>(null);
   const fixedOutputType = getFixedOutputType(kind);
@@ -268,13 +264,7 @@ export default function PublishVersionForm({
       case 'regex':
         return { pattern: pattern || '' };
       case 'heuristic':
-        return {
-          not_empty: notEmpty,
-          contains: parseHeuristicStringListInput(contains),
-          not_contains: parseHeuristicStringListInput(notContains),
-          min_length: heuristicMinLength === '' ? undefined : heuristicMinLength,
-          max_length: heuristicMaxLength === '' ? undefined : heuristicMaxLength,
-        };
+        return heuristicQueryToConfig(heuristicQuery);
       default:
         return {};
     }
@@ -309,11 +299,7 @@ export default function PublishVersionForm({
     temperature,
     schemaJson,
     pattern,
-    notEmpty,
-    contains,
-    notContains,
-    heuristicMinLength,
-    heuristicMaxLength,
+    heuristicQuery,
     outputKey,
     outputType,
     outputDescription,
@@ -334,13 +320,7 @@ export default function PublishVersionForm({
     maxTokens,
     temperature,
     schemaJson,
-    heuristic: {
-      notEmpty,
-      contains,
-      notContains,
-      minLength: heuristicMinLength,
-      maxLength: heuristicMaxLength,
-    },
+    heuristicQuery,
     output: {
       type: effectiveOutputType,
       passThreshold,
@@ -355,7 +335,6 @@ export default function PublishVersionForm({
   const temperatureError = sharedValidation.temperatureError;
   const schemaParseError = sharedValidation.schemaParseError ?? '';
   const heuristicConfigError = sharedValidation.heuristicConfigError;
-  const heuristicMaxLengthError = sharedValidation.heuristicMaxLengthError;
   const passThresholdError = sharedValidation.passThresholdError;
   const outputMaxError = sharedValidation.outputMaxError;
 
@@ -366,7 +345,6 @@ export default function PublishVersionForm({
   const showTemperatureError = touched && temperatureError != null;
   const showSchemaError = touched && schemaParseError !== '';
   const showHeuristicConfigError = touched && heuristicConfigError != null;
-  const showHeuristicMaxLengthError = touched && heuristicMaxLengthError != null;
   const showPassThresholdError = touched && passThresholdError != null;
   const showOutputMaxError = touched && outputMaxError != null;
 
@@ -381,7 +359,6 @@ export default function PublishVersionForm({
         temperature: temperatureFieldRef.current,
         schema: schemaFieldRef.current,
         heuristic: heuristicFieldRef.current,
-        heuristicMaxLength: heuristicMaxLengthFieldRef.current,
         passThreshold: passThresholdFieldRef.current,
         outputMax: outputMaxFieldRef.current,
       });
@@ -604,76 +581,15 @@ export default function PublishVersionForm({
           <div className={styles.sectionBody}>
             <div className={styles.sectionText}>
               <Text variant="body" color="secondary">
-                Define the simple rules used to check presence and length for each generation result.
+                Build deterministic response checks with nested AND/OR groups.
               </Text>
             </div>
-            {showHeuristicConfigError && heuristicConfigError && (
-              <div className={styles.validationMessage}>
-                <Text variant="bodySmall" color="error">
-                  {heuristicConfigError}
-                </Text>
-              </div>
-            )}
-            <Field className={styles.switchField} label="Not empty" description="Optional. Require non-empty output.">
-              <div ref={heuristicFieldRef}>
-                <Switch value={notEmpty} onChange={(e) => setNotEmpty(e.currentTarget.checked)} />
-              </div>
-            </Field>
-            <Field label="Contains" description="Optional. Require each phrase to appear. Use one phrase per line.">
-              <textarea
-                className={`${styles.textarea} ${styles.descriptionTextarea}`}
-                value={contains}
-                onChange={(e) => setContains(e.currentTarget.value)}
-                placeholder={'e.g. refund requested\naccount issue'}
-                rows={3}
+            <div ref={heuristicFieldRef}>
+              <HeuristicRuleBuilder
+                query={heuristicQuery}
+                onChange={setHeuristicQuery}
+                error={showHeuristicConfigError ? heuristicConfigError : undefined}
               />
-            </Field>
-            <Field
-              label="Not contains"
-              description="Optional. Reject output if any phrase appears. Use one phrase per line."
-            >
-              <textarea
-                className={`${styles.textarea} ${styles.descriptionTextarea}`}
-                value={notContains}
-                onChange={(e) => setNotContains(e.currentTarget.value)}
-                placeholder={'e.g. profanity\nunsafe advice'}
-                rows={3}
-              />
-            </Field>
-            <div className={styles.twoColumnGrid}>
-              <Field label="Min length" description="Optional. Minimum response length.">
-                <Input
-                  className={styles.numericControl}
-                  type="number"
-                  value={heuristicMinLength}
-                  onChange={(e) => {
-                    const v = e.currentTarget.value;
-                    setHeuristicMinLength(v === '' ? '' : parseInt(v, 10) || 0);
-                  }}
-                  placeholder="e.g. 0"
-                />
-              </Field>
-              <Field label="Max length" description="Optional. Maximum response length.">
-                <div ref={heuristicMaxLengthFieldRef}>
-                  <Input
-                    className={styles.numericControl}
-                    type="number"
-                    value={heuristicMaxLength}
-                    onChange={(e) => {
-                      const v = e.currentTarget.value;
-                      setHeuristicMaxLength(v === '' ? '' : parseInt(v, 10) || 0);
-                    }}
-                    placeholder="e.g. 100"
-                  />
-                  {showHeuristicMaxLengthError && heuristicMaxLengthError && (
-                    <div className={styles.validationMessage}>
-                      <Text variant="bodySmall" color="error">
-                        {heuristicMaxLengthError}
-                      </Text>
-                    </div>
-                  )}
-                </div>
-              </Field>
             </div>
           </div>
         </div>

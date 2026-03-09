@@ -88,9 +88,12 @@ func Templates() []Template {
 				EvaluatorID: "sigil.response_not_empty",
 				Version:     DefaultTemplateVersion,
 				Kind:        evalpkg.EvaluatorKindHeuristic,
-				Config: map[string]any{
-					"not_empty": true,
-				},
+				Config: evalpkg.NewHeuristicConfig(evalpkg.HeuristicGroupNode{
+					Operator: evalpkg.HeuristicOperatorAnd,
+					Rules: []evalpkg.HeuristicNode{
+						{Rule: &evalpkg.HeuristicRuleNode{Type: evalpkg.HeuristicRuleNotEmpty}},
+					},
+				}),
 				OutputKeys: []evalpkg.OutputKey{boolOutputKey("response_not_empty",
 					"True if the assistant response includes at least one non-whitespace character",
 					boolPtr(true))},
@@ -102,10 +105,13 @@ func Templates() []Template {
 				EvaluatorID: "sigil.response_length",
 				Version:     DefaultTemplateVersion,
 				Kind:        evalpkg.EvaluatorKindHeuristic,
-				Config: map[string]any{
-					"min_length": 1,
-					"max_length": 4096,
-				},
+				Config: evalpkg.NewHeuristicConfig(evalpkg.HeuristicGroupNode{
+					Operator: evalpkg.HeuristicOperatorAnd,
+					Rules: []evalpkg.HeuristicNode{
+						{Rule: &evalpkg.HeuristicRuleNode{Type: evalpkg.HeuristicRuleMinLength, IntValue: 1}},
+						{Rule: &evalpkg.HeuristicRuleNode{Type: evalpkg.HeuristicRuleMaxLength, IntValue: 4096}},
+					},
+				}),
 				OutputKeys: []evalpkg.OutputKey{boolOutputKey("response_length",
 					"True if the response length is between 1 and 4096 bytes",
 					boolPtr(true))},

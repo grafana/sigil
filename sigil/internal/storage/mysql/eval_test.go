@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -87,7 +88,7 @@ func TestEvalStoreCreateEvaluatorRejectsDuplicates(t *testing.T) {
 		EvaluatorID: "sigil.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForStorageTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeBool}},
 	}
 	if err := store.CreateEvaluator(context.Background(), evaluator); err != nil {
@@ -125,7 +126,7 @@ func TestEvalStoreCreateEvaluatorRestoresSoftDeletedRows(t *testing.T) {
 
 	recreated := original
 	recreated.Kind = evalpkg.EvaluatorKindHeuristic
-	recreated.Config = map[string]any{"not_empty": true}
+	recreated.Config = heuristicNotEmptyConfigForStorageTest()
 	recreated.OutputKeys = []evalpkg.OutputKey{{Key: "passed", Type: evalpkg.ScoreTypeBool}}
 	if err := store.CreateEvaluator(context.Background(), recreated); err != nil {
 		t.Fatalf("recreate evaluator: %v", err)
@@ -141,7 +142,7 @@ func TestEvalStoreCreateEvaluatorRestoresSoftDeletedRows(t *testing.T) {
 	if got.Kind != recreated.Kind {
 		t.Fatalf("expected recreated kind %q, got %q", recreated.Kind, got.Kind)
 	}
-	if got.Config["not_empty"] != true {
+	if !reflect.DeepEqual(got.Config, recreated.Config) {
 		t.Fatalf("expected recreated config, got %#v", got.Config)
 	}
 
@@ -152,6 +153,15 @@ func TestEvalStoreCreateEvaluatorRestoresSoftDeletedRows(t *testing.T) {
 	if len(items) != 1 {
 		t.Fatalf("expected one active evaluator after recreate, got %d", len(items))
 	}
+}
+
+func heuristicNotEmptyConfigForStorageTest() map[string]any {
+	return evalpkg.NewHeuristicConfig(evalpkg.HeuristicGroupNode{
+		Operator: evalpkg.HeuristicOperatorAnd,
+		Rules: []evalpkg.HeuristicNode{
+			{Rule: &evalpkg.HeuristicRuleNode{Type: evalpkg.HeuristicRuleNotEmpty}},
+		},
+	})
 }
 
 func TestEvalStoreRuleCRUDAndUpdate(t *testing.T) {

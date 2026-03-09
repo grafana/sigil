@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { css, cx, keyframes } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { useStyles2 } from '@grafana/ui';
-import { useAssistant } from '@grafana/assistant';
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
+import { useAssistant } from '@grafana/assistant';
 import { SparklesBackground } from '../components/landing/SparklesBackground';
 import { AutoinstrumentationPanel } from '../components/tutorial/TryItNowPanel';
 import {

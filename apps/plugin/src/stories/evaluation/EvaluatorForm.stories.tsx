@@ -59,8 +59,15 @@ export const Heuristic = {
         kind: 'heuristic',
         description: 'Checks that the response contains meaningful content',
         config: {
-          not_empty: true,
-          min_length: 25,
+          version: 'v2',
+          root: {
+            kind: 'group',
+            operator: 'and',
+            rules: [
+              { kind: 'rule', type: 'not_empty' },
+              { kind: 'rule', type: 'min_length', value: 25 },
+            ],
+          },
         },
         output_keys: [{ key: 'passed', type: 'bool' }],
         is_predefined: false,

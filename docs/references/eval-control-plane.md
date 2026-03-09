@@ -57,6 +57,11 @@ Kind-specific output constraints:
 - `json_schema`, `regex`, and `heuristic` require a `bool` output key.
 - `pass_value` is only meaningful for `llm_judge` boolean outputs.
 
+Heuristic config:
+- `heuristic` configs use `version: "v2"` and a required `root` group node.
+- Group nodes use `kind: "group"`, `operator: "and"|"or"`, and `rules`.
+- Rule nodes use `kind: "rule"` and one of `not_empty`, `contains`, `not_contains`, `min_length`, or `max_length`.
+
 Response: evaluator object (`200 OK`).
 
 ### `GET /api/v1/eval/evaluators?limit=&cursor=`

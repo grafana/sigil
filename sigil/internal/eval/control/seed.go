@@ -17,11 +17,12 @@ type yamlSeed struct {
 }
 
 type yamlSeedEvaluator struct {
-	ID      string                  `yaml:"id"`
-	Kind    string                  `yaml:"kind"`
-	Version string                  `yaml:"version"`
-	Config  map[string]any          `yaml:",inline"`
-	Output  yamlSeedEvaluatorOutput `yaml:"output"`
+	ID           string                  `yaml:"id"`
+	Kind         string                  `yaml:"kind"`
+	Version      string                  `yaml:"version"`
+	Config       map[string]any          `yaml:"config"`
+	InlineConfig map[string]any          `yaml:",inline"`
+	Output       yamlSeedEvaluatorOutput `yaml:"output"`
 }
 
 type yamlSeedEvaluatorOutput struct {
@@ -170,9 +171,20 @@ func LoadYAMLSeedWithOptions(ctx context.Context, store seedStore, tenantID stri
 			version = "seed"
 		}
 
-		config := make(map[string]any, len(item.Config))
-		for key, value := range item.Config {
-			if key == "id" || key == "kind" || key == "version" || key == "output" {
+		rawConfig := item.Config
+		configIsInline := false
+		if len(rawConfig) == 0 {
+			if nestedConfig, ok := item.InlineConfig["config"].(map[string]any); ok && len(nestedConfig) > 0 {
+				rawConfig = nestedConfig
+			}
+		}
+		if len(rawConfig) == 0 {
+			rawConfig = item.InlineConfig
+			configIsInline = true
+		}
+		config := make(map[string]any, len(rawConfig))
+		for key, value := range rawConfig {
+			if key == "id" || key == "kind" || key == "output" || (configIsInline && key == "version") {
 				continue
 			}
 			config[key] = value

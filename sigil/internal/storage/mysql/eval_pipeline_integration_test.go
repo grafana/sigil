@@ -31,9 +31,12 @@ func TestOnlineEvaluationPipelineEndToEnd(t *testing.T) {
 		EvaluatorID: "sigil.response_not_empty",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config: map[string]any{
-			"not_empty": true,
-		},
+		Config: evalpkg.NewHeuristicConfig(evalpkg.HeuristicGroupNode{
+			Operator: evalpkg.HeuristicOperatorAnd,
+			Rules: []evalpkg.HeuristicNode{
+				{Rule: &evalpkg.HeuristicRuleNode{Type: evalpkg.HeuristicRuleNotEmpty}},
+			},
+		}),
 		OutputKeys: []evalpkg.OutputKey{{
 			Key:  "response_not_empty",
 			Type: evalpkg.ScoreTypeBool,
