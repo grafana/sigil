@@ -135,6 +135,7 @@ export default function DataTable<T>(props: DataTableProps<T>) {
                 variant === 'warning' && styles.rowWarning,
                 variant === 'info' && styles.rowInfo
               )}
+              data-variant={variant}
               onClick={onRowClick ? (e) => onRowClick(item, e) : undefined}
               role={rowRole}
               aria-label={rowAriaLabel?.(item)}
