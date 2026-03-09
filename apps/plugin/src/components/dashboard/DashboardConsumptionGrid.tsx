@@ -717,7 +717,7 @@ function MostTokensConversationsTable({ conversationsDataSource, timeRange, filt
       rowAriaLabel={(c) => `view conversation ${c.conversation_id}`}
       panelTitle="Highest token usage conversations"
       loading={loading}
-      loadError={error}
+      loadError={error && conversations.length === 0 ? error : undefined}
       emptyIcon="dashboard"
       emptyMessage="No conversations in this time range."
       seeMoreHref={buildTokensSeeMoreUrl(timeRange, filters)}

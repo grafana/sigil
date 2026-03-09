@@ -925,7 +925,7 @@ function RecentConversationsTable({ conversationsDataSource, timeRange, filters 
       rowAriaLabel={(c) => `view conversation ${c.conversation_id}`}
       panelTitle="Recent conversations"
       loading={loading}
-      loadError={error}
+      loadError={error && conversations.length === 0 ? error : undefined}
       emptyIcon="comments-alt"
       emptyMessage="No conversations in this time range."
       seeMoreHref={buildRecentSeeMoreUrl(timeRange, filters)}
