@@ -35,6 +35,15 @@ export const ToolResultSuccess = {
   args: { message: mockToolResult },
 };
 
+export const AnonymousToolResult = {
+  args: {
+    message: {
+      ...mockToolResult,
+      name: undefined,
+    },
+  },
+};
+
 export const ToolResultWithError = {
   args: { message: mockToolResultError },
 };

@@ -219,3 +219,5 @@ export const WithToolMessages = () => (
     allGenerations={allGens}
   />
 );
+
+export const WithToolResultMessages = WithToolMessages;

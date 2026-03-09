@@ -1,5 +1,5 @@
-import { decodeBase64Json, formatJson, humanizeRole, parseMessages } from './messageParser';
-import type { MessageRole } from './types';
+import { decodeBase64Json, formatJson, humanizeMessageRole, humanizeRole, parseMessages } from './messageParser';
+import type { Message, MessageRole } from './types';
 
 function encodeUtf8Base64(value: string): string {
   const bytes = new TextEncoder().encode(value);
@@ -39,6 +39,26 @@ describe('humanizeRole', () => {
 
   it('returns Unknown for unrecognized role', () => {
     expect(humanizeRole('SOMETHING_ELSE' as MessageRole)).toBe('Unknown');
+  });
+});
+
+describe('humanizeMessageRole', () => {
+  it('returns Tool Result for tool messages with tool results', () => {
+    const message: Message = {
+      role: 'MESSAGE_ROLE_TOOL',
+      parts: [{ tool_result: { tool_call_id: 'tc-1', name: 'search', content: 'found 3 results' } }],
+    };
+
+    expect(humanizeMessageRole(message)).toBe('Tool Result');
+  });
+
+  it('falls back to the role label for non-tool-result messages', () => {
+    const message: Message = {
+      role: 'MESSAGE_ROLE_ASSISTANT',
+      parts: [{ text: 'hello' }],
+    };
+
+    expect(humanizeMessageRole(message)).toBe('Assistant');
   });
 });
 

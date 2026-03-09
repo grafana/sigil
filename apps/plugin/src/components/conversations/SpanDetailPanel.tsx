@@ -11,6 +11,7 @@ import {
   type Part,
 } from '../../generation/types';
 import { ATTR_GENERATION_ID, getStringAttr } from '../../conversation/attributes';
+import { humanizeMessageRole } from '../../conversation/messageParser';
 
 export type SpanDetailPanelProps = {
   span: ConversationSpan;
@@ -348,7 +349,7 @@ function MessageList({ messages, label }: { messages: Message[]; label: string }
   return (
     <>
       {messages.map((msg, i) => {
-        const roleLabel = msg.role.replace('MESSAGE_ROLE_', '').toLowerCase();
+        const roleLabel = humanizeMessageRole(msg).toLowerCase();
         return (
           <div key={i} className={styles.messageBlock}>
             <div className={styles.messageRole}>
@@ -536,7 +537,7 @@ function ConversationThread({
               {gen.created_at ? ` - ${new Date(gen.created_at).toLocaleString()}` : ''}
             </div>
             {allMessages.map((msg, i) => {
-              const roleLabel = msg.role.replace('MESSAGE_ROLE_', '').toLowerCase();
+              const roleLabel = humanizeMessageRole(msg).toLowerCase();
               const bubbleStyle =
                 msg.role === 'MESSAGE_ROLE_USER'
                   ? styles.threadBubbleUser
