@@ -83,6 +83,8 @@ services:
       export GOWORK=off;
       cd /app/sigil/apps/plugin && mage -v watch &
       cd /app/sigil && pnpm run dev"
+    environment:
+      DEVELOPMENT: ${DEVELOPMENT:-false}
     healthcheck:
       test: test -f /app/sigil/apps/plugin/dist/plugin.json
       interval: 10s
@@ -97,6 +99,7 @@ services:
     working_dir: /app/sigil
     command: air -c .air.toml
     environment:
+      DEVELOPMENT: ${DEVELOPMENT:-false}
       SIGIL_HTTP_ADDR: :8080
       SIGIL_OTLP_GRPC_ADDR: :4317
       SIGIL_TARGET: all

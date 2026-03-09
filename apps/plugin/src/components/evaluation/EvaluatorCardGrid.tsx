@@ -3,6 +3,7 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, Button, ConfirmModal, IconButton, Stack, Text, useStyles2 } from '@grafana/ui';
 import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type Evaluator } from '../../evaluation/types';
+import ActorBadge from './ActorBadge';
 
 export type EvaluatorCardGridProps = {
   evaluators: Evaluator[];
@@ -152,7 +153,9 @@ export default function EvaluatorCardGrid({
 
             <div className={styles.meta}>
               <span className={styles.metaText}>Version {evaluator.version}</span>
-              <span className={styles.metaText}>Created {formatDate(evaluator.created_at)}</span>
+              <span className={styles.metaText}>
+                Created {formatDate(evaluator.created_at)} by <ActorBadge actor={evaluator.created_by} />
+              </span>
             </div>
 
             <div className={styles.description}>

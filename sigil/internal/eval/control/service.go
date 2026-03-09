@@ -109,11 +109,13 @@ func WithPreview(previewStore storage.RecentGenerationLister, previewWindowHrs i
 	}
 }
 
-func (s *Service) CreateEvaluator(ctx context.Context, tenantID string, evaluator evalpkg.EvaluatorDefinition) (evalpkg.EvaluatorDefinition, error) {
+func (s *Service) CreateEvaluator(ctx context.Context, tenantID, actorID string, evaluator evalpkg.EvaluatorDefinition) (evalpkg.EvaluatorDefinition, error) {
 	if s.store == nil {
 		return evalpkg.EvaluatorDefinition{}, errors.New("eval store is required")
 	}
 	evaluator.TenantID = strings.TrimSpace(tenantID)
+	evaluator.CreatedBy = normalizeActorID(actorID)
+	evaluator.UpdatedBy = normalizeActorID(actorID)
 	if err := validateEvaluator(&evaluator); err != nil {
 		return evalpkg.EvaluatorDefinition{}, ValidationWrap(err)
 	}
@@ -173,20 +175,22 @@ func (s *Service) listPredefinedFromHardcoded() []evalpkg.EvaluatorDefinition {
 		item := template.EvaluatorDefinition
 		item.IsPredefined = true
 		item.TenantID = ""
+		item.CreatedBy = LegacyActorID
+		item.UpdatedBy = LegacyActorID
 		item.DeletedAt = nil
 		out = append(out, item)
 	}
 	return out
 }
 
-func (s *Service) ForkPredefinedEvaluator(ctx context.Context, tenantID, templateID string, request ForkPredefinedEvaluatorRequest) (evalpkg.EvaluatorDefinition, error) {
+func (s *Service) ForkPredefinedEvaluator(ctx context.Context, tenantID, actorID, templateID string, request ForkPredefinedEvaluatorRequest) (evalpkg.EvaluatorDefinition, error) {
 	if s.store == nil {
 		return evalpkg.EvaluatorDefinition{}, errors.New("eval store is required")
 	}
-	return s.forkFromHardcoded(ctx, tenantID, templateID, request)
+	return s.forkFromHardcoded(ctx, tenantID, actorID, templateID, request)
 }
 
-func (s *Service) forkFromHardcoded(ctx context.Context, tenantID, templateID string, request ForkPredefinedEvaluatorRequest) (evalpkg.EvaluatorDefinition, error) {
+func (s *Service) forkFromHardcoded(ctx context.Context, tenantID, actorID, templateID string, request ForkPredefinedEvaluatorRequest) (evalpkg.EvaluatorDefinition, error) {
 	template, ok := findPredefinedTemplate(templateID)
 	if !ok {
 		return evalpkg.EvaluatorDefinition{}, NotFoundError(fmt.Sprintf("predefined evaluator %q was not found", strings.TrimSpace(templateID)))
@@ -223,7 +227,7 @@ func (s *Service) forkFromHardcoded(ctx context.Context, tenantID, templateID st
 		SourceTemplateID:      template.EvaluatorID,
 		SourceTemplateVersion: template.Version,
 	}
-	return s.CreateEvaluator(ctx, fork.TenantID, fork)
+	return s.CreateEvaluator(ctx, fork.TenantID, actorID, fork)
 }
 
 func (s *Service) GetEvaluator(ctx context.Context, tenantID, evaluatorID string) (*evalpkg.EvaluatorDefinition, error) {
@@ -292,11 +296,13 @@ func (s *Service) findEnabledRulesReferencingEvaluator(ctx context.Context, tena
 	return matches, nil
 }
 
-func (s *Service) CreateRule(ctx context.Context, tenantID string, rule evalpkg.RuleDefinition) (evalpkg.RuleDefinition, error) {
+func (s *Service) CreateRule(ctx context.Context, tenantID, actorID string, rule evalpkg.RuleDefinition) (evalpkg.RuleDefinition, error) {
 	if s.store == nil {
 		return evalpkg.RuleDefinition{}, errors.New("eval store is required")
 	}
 	rule.TenantID = strings.TrimSpace(tenantID)
+	rule.CreatedBy = normalizeActorID(actorID)
+	rule.UpdatedBy = normalizeActorID(actorID)
 	if err := validateRule(&rule); err != nil {
 		return evalpkg.RuleDefinition{}, ValidationWrap(err)
 	}
@@ -343,7 +349,7 @@ func (s *Service) GetRule(ctx context.Context, tenantID, ruleID string) (*evalpk
 	return s.store.GetRule(ctx, strings.TrimSpace(tenantID), strings.TrimSpace(ruleID))
 }
 
-func (s *Service) UpdateRule(ctx context.Context, tenantID, ruleID string, enabled *bool, selector *evalpkg.Selector, match map[string]any, sampleRate *float64, evaluatorIDs []string) (*evalpkg.RuleDefinition, error) {
+func (s *Service) UpdateRule(ctx context.Context, tenantID, actorID, ruleID string, enabled *bool, selector *evalpkg.Selector, match map[string]any, sampleRate *float64, evaluatorIDs []string) (*evalpkg.RuleDefinition, error) {
 	if s.store == nil {
 		return nil, errors.New("eval store is required")
 	}
@@ -369,6 +375,7 @@ func (s *Service) UpdateRule(ctx context.Context, tenantID, ruleID string, enabl
 	if evaluatorIDs != nil {
 		rule.EvaluatorIDs = evaluatorIDs
 	}
+	rule.UpdatedBy = normalizeActorID(actorID)
 	if err := validateRule(rule); err != nil {
 		return nil, ValidationWrap(err)
 	}

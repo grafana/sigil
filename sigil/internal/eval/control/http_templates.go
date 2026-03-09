@@ -18,12 +18,16 @@ func (s *TemplateService) handleTemplates(w http.ResponseWriter, req *http.Reque
 
 	switch req.Method {
 	case http.MethodPost:
+		actorID, ok := actorIDFromRequest(w, req)
+		if !ok {
+			return
+		}
 		var createReq CreateTemplateRequest
 		if err := decodeJSONBody(req, &createReq); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		tmpl, err := s.CreateTemplate(req.Context(), tenantID, createReq)
+		tmpl, err := s.CreateTemplate(req.Context(), tenantID, actorID, createReq)
 		if err != nil {
 			writeControlWriteError(w, err)
 			return
@@ -150,6 +154,10 @@ func (s *TemplateService) handleTemplateFork(w http.ResponseWriter, req *http.Re
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	actorID, ok := actorIDFromRequest(w, req)
+	if !ok {
+		return
+	}
 
 	var forkReq ForkTemplateRequest
 	if err := decodeJSONBody(req, &forkReq); err != nil {
@@ -157,7 +165,7 @@ func (s *TemplateService) handleTemplateFork(w http.ResponseWriter, req *http.Re
 		return
 	}
 
-	created, err := s.ForkTemplate(req.Context(), tenantID, templateID, forkReq)
+	created, err := s.ForkTemplate(req.Context(), tenantID, actorID, templateID, forkReq)
 	if err != nil {
 		writeControlWriteError(w, err)
 		return
@@ -168,12 +176,16 @@ func (s *TemplateService) handleTemplateFork(w http.ResponseWriter, req *http.Re
 func (s *TemplateService) handleTemplateVersions(w http.ResponseWriter, req *http.Request, tenantID, templateID string) {
 	switch req.Method {
 	case http.MethodPost:
+		actorID, ok := actorIDFromRequest(w, req)
+		if !ok {
+			return
+		}
 		var pubReq PublishVersionRequest
 		if err := decodeJSONBody(req, &pubReq); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		ver, err := s.PublishVersion(req.Context(), tenantID, templateID, pubReq)
+		ver, err := s.PublishVersion(req.Context(), tenantID, actorID, templateID, pubReq)
 		if err != nil {
 			writeControlWriteError(w, err)
 			return
@@ -231,7 +243,10 @@ func templateCreateResponse(tmpl *evalpkg.TemplateDefinition, versions []evalpkg
 		versionSummaries = append(versionSummaries, map[string]any{
 			"version":    v.Version,
 			"changelog":  v.Changelog,
+			"created_by": v.CreatedBy,
+			"updated_by": v.UpdatedBy,
 			"created_at": v.CreatedAt,
+			"updated_at": v.UpdatedAt,
 		})
 	}
 	return map[string]any{
@@ -241,6 +256,8 @@ func templateCreateResponse(tmpl *evalpkg.TemplateDefinition, versions []evalpkg
 		"kind":           tmpl.Kind,
 		"description":    tmpl.Description,
 		"latest_version": tmpl.LatestVersion,
+		"created_by":     tmpl.CreatedBy,
+		"updated_by":     tmpl.UpdatedBy,
 		"versions":       versionSummaries,
 		"created_at":     tmpl.CreatedAt,
 		"updated_at":     tmpl.UpdatedAt,
@@ -257,6 +274,8 @@ func templateGetResponse(tmpl *evalpkg.TemplateDefinition, latestVer *evalpkg.Te
 		"kind":           tmpl.Kind,
 		"description":    tmpl.Description,
 		"latest_version": tmpl.LatestVersion,
+		"created_by":     tmpl.CreatedBy,
+		"updated_by":     tmpl.UpdatedBy,
 		"created_at":     tmpl.CreatedAt,
 		"updated_at":     tmpl.UpdatedAt,
 	}
@@ -271,7 +290,10 @@ func templateGetResponse(tmpl *evalpkg.TemplateDefinition, latestVer *evalpkg.Te
 		versionSummaries = append(versionSummaries, map[string]any{
 			"version":    v.Version,
 			"changelog":  v.Changelog,
+			"created_by": v.CreatedBy,
+			"updated_by": v.UpdatedBy,
 			"created_at": v.CreatedAt,
+			"updated_at": v.UpdatedAt,
 		})
 	}
 	resp["versions"] = versionSummaries

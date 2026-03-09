@@ -61,6 +61,46 @@ func TestEvaluatorCRUDHTTP(t *testing.T) {
 	}
 }
 
+func TestCreateEvaluatorRequiresGrafanaUser(t *testing.T) {
+	mux, _, _ := newEvalHTTPEnv(t)
+
+	createPayload := `{
+		"evaluator_id":"custom.helpfulness",
+		"version":"2026-02-17",
+		"kind":"heuristic",
+		"config":` + heuristicNotEmptyJSONForTest() + `,
+		"output_keys":[{"key":"helpfulness","type":"bool"}]
+	}`
+	createResp := doRequestWithoutActor(mux, http.MethodPost, "/api/v1/eval/evaluators", createPayload)
+	if createResp.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 create evaluator without grafana user, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+	if !strings.Contains(createResp.Body.String(), "grafana user identity is required") {
+		t.Fatalf("expected missing identity error, got body=%s", createResp.Body.String())
+	}
+}
+
+func TestCreateEvaluatorAllowsMissingGrafanaUserInDevelopment(t *testing.T) {
+	t.Setenv("DEVELOPMENT", "true")
+
+	mux, _, _ := newEvalHTTPEnv(t)
+
+	createPayload := `{
+		"evaluator_id":"custom.helpfulness",
+		"version":"2026-02-17",
+		"kind":"heuristic",
+		"config":` + heuristicNotEmptyJSONForTest() + `,
+		"output_keys":[{"key":"helpfulness","type":"bool"}]
+	}`
+	createResp := doRequestWithoutActor(mux, http.MethodPost, "/api/v1/eval/evaluators", createPayload)
+	if createResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 create evaluator in development mode, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+	if !strings.Contains(createResp.Body.String(), `"created_by":"system@grafana.com"`) {
+		t.Fatalf("expected development fallback actor in response, got body=%s", createResp.Body.String())
+	}
+}
+
 func TestEvalControlMetricsByTenant(t *testing.T) {
 	mux, _, _ := newEvalHTTPEnv(t)
 	before := testutil.ToFloat64(evalControlRequestsTotal.WithLabelValues("fake", "evaluators", "GET", "2xx"))
@@ -256,7 +296,7 @@ func TestCreateEvaluatorMapsDuplicateStorageErrorsToConflict(t *testing.T) {
 	store.createEvaluatorErr = evalpkg.ErrConflict
 	service := NewService(store, nil)
 
-	_, err := service.CreateEvaluator(context.Background(), "fake", evalpkg.EvaluatorDefinition{
+	_, err := service.CreateEvaluator(context.Background(), "fake", "test-user@example.com", evalpkg.EvaluatorDefinition{
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
@@ -286,7 +326,7 @@ func TestCreateRuleMapsDuplicateStorageErrorsToConflict(t *testing.T) {
 	}
 	service := NewService(store, nil)
 
-	_, err := service.CreateRule(context.Background(), "fake", evalpkg.RuleDefinition{
+	_, err := service.CreateRule(context.Background(), "fake", "test-user@example.com", evalpkg.RuleDefinition{
 		RuleID:       "rule.helpfulness",
 		Enabled:      true,
 		Selector:     evalpkg.SelectorUserVisibleTurn,
@@ -972,6 +1012,19 @@ func newEvalMux(service *Service) *http.ServeMux {
 }
 
 func doRequest(handler http.Handler, method, path, body string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(method, path, bytes.NewBufferString(body))
+	if strings.TrimSpace(body) != "" {
+		request.Header.Set("Content-Type", "application/json")
+	}
+	if method == http.MethodPost || method == http.MethodPatch {
+		request.Header.Set(HeaderGrafanaUser, "test-user@example.com")
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	return response
+}
+
+func doRequestWithoutActor(handler http.Handler, method, path, body string) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(method, path, bytes.NewBufferString(body))
 	if strings.TrimSpace(body) != "" {
 		request.Header.Set("Content-Type", "application/json")

@@ -10,6 +10,7 @@ import EvaluatorForm from '../components/evaluation/EvaluatorForm';
 import EvalTestPanel from '../components/evaluation/EvalTestPanel';
 import VersionHistoryTable from '../components/evaluation/VersionHistoryTable';
 import VersionCompare from '../components/evaluation/VersionCompare';
+import ActorBadge from '../components/evaluation/ActorBadge';
 import { getSectionTitleStyles } from '../components/evaluation/sectionStyles';
 import { useOptionalEvalRulesDataContext } from '../contexts/EvalRulesDataContext';
 
@@ -123,6 +124,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexDirection: 'column' as const,
     background: theme.colors.background.primary,
     borderRadius: theme.shape.radius.default,
+    overflow: 'hidden',
   }),
   detailCardHeader: css({
     display: 'flex',
@@ -138,6 +140,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   detailCardBody: css({
     padding: theme.spacing(1, 1.25),
+  }),
+  detailCardBodyFlush: css({
+    padding: 0,
   }),
 });
 
@@ -210,7 +215,10 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
           all.map((e) => ({
             version: e.version,
             changelog: '—',
+            created_by: e.created_by,
             created_at: e.created_at,
+            updated_by: e.updated_by,
+            updated_at: e.updated_at,
           }))
         );
         return;
@@ -317,7 +325,7 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
               <Badge text={evaluator.version} color="blue" />
             </div>
             <div className={styles.headerSubtitle}>
-              Update the evaluator configuration and test it against recent generations.
+              Created by <ActorBadge actor={evaluator.created_by} />.
             </div>
           </div>
         </div>
@@ -351,11 +359,18 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
       </div>
 
       <div className={styles.bottomSections}>
-        <VersionHistoryTable
-          versions={versions}
-          selectedVersions={selectedVersions}
-          onToggleSelect={handleToggleVersionSelect}
-        />
+        <div className={styles.detailCard}>
+          <div className={styles.detailCardHeader}>
+            <div className={styles.sectionTitle}>Version history</div>
+          </div>
+          <div className={styles.detailCardBodyFlush}>
+            <VersionHistoryTable
+              versions={versions}
+              selectedVersions={selectedVersions}
+              onToggleSelect={handleToggleVersionSelect}
+            />
+          </div>
+        </div>
 
         {compareLeft && compareRight && (
           <div className={styles.detailCard}>

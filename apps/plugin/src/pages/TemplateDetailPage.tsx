@@ -20,6 +20,7 @@ import TemplateConfigSummary from '../components/evaluation/TemplateConfigSummar
 import VersionHistoryTable from '../components/evaluation/VersionHistoryTable';
 import PublishVersionForm from '../components/evaluation/PublishVersionForm';
 import VersionCompare from '../components/evaluation/VersionCompare';
+import ActorBadge from '../components/evaluation/ActorBadge';
 import { getSectionTitleStyles } from '../components/evaluation/sectionStyles';
 
 const EVAL_TEMPLATES_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}/templates`;
@@ -128,6 +129,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexDirection: 'column' as const,
     background: theme.colors.background.primary,
     borderRadius: theme.shape.radius.default,
+    overflow: 'hidden',
   }),
   detailCardHeader: css({
     display: 'flex',
@@ -140,6 +142,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   detailCardBody: css({
     padding: theme.spacing(1, 1.25),
+  }),
+  detailCardBodyFlush: css({
+    padding: 0,
   }),
   sectionTitle: css({
     ...getSectionTitleStyles(theme),
@@ -344,7 +349,10 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
               <Badge text={template.scope} color={template.scope === 'global' ? 'orange' : 'blue'} />
               <Badge text={`v${template.latest_version}`} color="green" />
             </div>
-            {template.description && <div className={styles.headerSubtitle}>{template.description}</div>}
+            <div className={styles.headerSubtitle}>
+              {template.description ? `${template.description} ` : ''}
+              Created by <ActorBadge actor={template.created_by} />.
+            </div>
           </div>
         </div>
         <Stack direction="row" gap={1}>
@@ -414,11 +422,18 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
 
       {template.scope === 'tenant' && (
         <div className={styles.bottomSections}>
-          <VersionHistoryTable
-            versions={template.versions ?? []}
-            selectedVersions={selectedVersions}
-            onToggleSelect={handleToggleVersionSelect}
-          />
+          <div className={styles.detailCard}>
+            <div className={styles.detailCardHeader}>
+              <div className={styles.sectionTitle}>Version history</div>
+            </div>
+            <div className={styles.detailCardBodyFlush}>
+              <VersionHistoryTable
+                versions={template.versions ?? []}
+                selectedVersions={selectedVersions}
+                onToggleSelect={handleToggleVersionSelect}
+              />
+            </div>
+          </div>
 
           {compareLeft && compareRight && (
             <div className={styles.detailCard}>

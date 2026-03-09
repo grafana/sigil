@@ -32,6 +32,8 @@ type stubResponse struct {
 
 var pluginProxyTracer = otel.Tracer("github.com/grafana/sigil/apps/plugin/proxy")
 
+const headerGrafanaUser = "X-Grafana-User"
+
 func (a *App) authorizeRequest(req *http.Request) error {
 	action, ok := requiredPermissionAction(req.Method, req.URL.Path)
 	if !ok {
@@ -402,6 +404,7 @@ func (a *App) handleProxy(w http.ResponseWriter, req *http.Request, path string,
 		proxyReq.SetBasicAuth(a.tenantID, a.apiAuthToken)
 	}
 	injectTenantHeaders(proxyReq, a.tenantID)
+	injectGrafanaUserHeader(proxyReq, method, path)
 	injectOperatorIdentityHeaders(proxyReq, method, path)
 	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(proxyReq.Header))
 
@@ -458,6 +461,7 @@ func (a *App) handleProxyWithBody(w http.ResponseWriter, req *http.Request, path
 		proxyReq.SetBasicAuth(a.tenantID, a.apiAuthToken)
 	}
 	injectTenantHeaders(proxyReq, a.tenantID)
+	injectGrafanaUserHeader(proxyReq, method, path)
 	injectOperatorIdentityHeaders(proxyReq, method, path)
 	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(proxyReq.Header))
 
@@ -586,6 +590,43 @@ func injectOperatorIdentityHeaders(proxyReq *http.Request, method string, path s
 	}
 	if name := strings.TrimSpace(user.Name); name != "" {
 		proxyReq.Header.Set("X-Sigil-Operator-Name", name)
+	}
+}
+
+func injectGrafanaUserHeader(proxyReq *http.Request, method string, path string) {
+	if proxyReq == nil || !shouldInjectGrafanaUser(method, path) {
+		return
+	}
+	if strings.TrimSpace(proxyReq.Header.Get(headerGrafanaUser)) != "" {
+		return
+	}
+
+	user := backend.UserFromContext(proxyReq.Context())
+	if user == nil {
+		return
+	}
+
+	actorID := strings.TrimSpace(user.Email)
+	if actorID == "" {
+		actorID = strings.TrimSpace(user.Login)
+	}
+	if actorID != "" {
+		proxyReq.Header.Set(headerGrafanaUser, actorID)
+	}
+}
+
+func shouldInjectGrafanaUser(method string, path string) bool {
+	if !strings.HasPrefix(path, "/api/v1/eval/") {
+		return false
+	}
+	if method != http.MethodPost && method != http.MethodPatch {
+		return false
+	}
+	switch path {
+	case "/api/v1/eval:test", "/api/v1/eval/rules:preview":
+		return false
+	default:
+		return true
 	}
 }
 
