@@ -141,7 +141,7 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, tenantID string, r
 		Scope:         evalpkg.TemplateScopeTenant,
 		LatestVersion: version,
 		Kind:          kind,
-		Description:   strings.TrimSpace(req.Description),
+		Description:   normalizedReq.Description,
 		CreatedAt:     now,
 		UpdatedAt:     now,
 	}
