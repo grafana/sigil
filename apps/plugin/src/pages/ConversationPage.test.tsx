@@ -150,7 +150,7 @@ describe('ConversationPage', () => {
 
   it('shows an error alert when the conversation fails to load', async () => {
     const dataSource = createDataSource();
-    dataSource.getConversationDetail.mockRejectedValue(new Error('network error'));
+    dataSource.getConversationDetail.mockRejectedValue(Object.assign(new Error('network error'), { status: 400 }));
     renderPage(dataSource, '/conversations/conv-fail/view');
 
     expect(await screen.findByText('Failed to load conversation')).toBeInTheDocument();
