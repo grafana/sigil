@@ -9,7 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.32.11
 	github.com/go-kit/log v0.2.1
 	github.com/go-sql-driver/mysql v1.9.3
-	github.com/grafana/dskit v0.0.0-20260304175301-5f643207fdbc
+	github.com/grafana/dskit v0.0.0-20260308073005-8c00e189b489
 	github.com/minio/minio-go/v7 v7.0.98
 	github.com/openai/openai-go/v3 v3.24.0
 	github.com/prometheus/client_golang v1.23.2
