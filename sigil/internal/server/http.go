@@ -73,6 +73,7 @@ func RegisterRoutes(
 		modelCardSvc,
 		kitlog.NewNopLogger(),
 		protectedMiddleware,
+		nil,
 	)
 }
 
@@ -112,6 +113,7 @@ func RegisterQueryRoutes(
 	modelCardSvc *modelcards.Service,
 	logger kitlog.Logger,
 	protectedMiddleware func(http.Handler) http.Handler,
+	followupSvc *followup.Service,
 	promptInsightsOpts ...PromptInsightsOption,
 ) {
 	if mux == nil || querySvc == nil {
@@ -144,7 +146,7 @@ func RegisterQueryRoutes(
 	mux.Handle("/api/v1/conversations/search/stream", protectedMiddleware(http.HandlerFunc(streamSearchConversations(querySvc))))
 	mux.Handle("/api/v1/conversations/stats", protectedMiddleware(http.HandlerFunc(conversationStats(querySvc))))
 	mux.Handle("/api/v1/conversations", protectedMiddleware(http.HandlerFunc(listConversations(querySvc))))
-	mux.Handle("/api/v1/conversations/", protectedMiddleware(http.HandlerFunc(conversationRoutes(querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled, piOpts.FollowupSvc))))
+	mux.Handle("/api/v1/conversations/", protectedMiddleware(http.HandlerFunc(conversationRoutes(querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled, followupSvc))))
 
 	if modelCardSvc != nil {
 		mux.Handle("/api/v1/model-cards", protectedMiddleware(http.HandlerFunc(listModelCards(modelCardSvc))))
@@ -169,9 +171,8 @@ func RegisterQueryRoutes(
 
 // PromptInsightsOption carries optional dependencies for prompt insights routes.
 type PromptInsightsOption struct {
-	Analyzer    *promptinsights.Analyzer
-	Store       promptinsights.Store
-	FollowupSvc *followup.Service
+	Analyzer *promptinsights.Analyzer
+	Store    promptinsights.Store
 }
 
 func health(w http.ResponseWriter, _ *http.Request) {

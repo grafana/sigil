@@ -253,10 +253,10 @@ func newQuerierModule(
 				modelCardSvc,
 				logger,
 				protectedMiddleware,
+				followupSvc,
 				server.PromptInsightsOption{
-					Analyzer:    promptInsightsAnalyzer,
-					Store:       promptInsightsStore,
-					FollowupSvc: followupSvc,
+					Analyzer: promptInsightsAnalyzer,
+					Store:    promptInsightsStore,
 				},
 			)
 			server.RegisterSettingsRoutes(mux, tenantSettingsSvc, protectedMiddleware)

@@ -873,12 +873,16 @@ function FollowupSection({
     if (!conversationId || !generationId || !state.input.trim()) {
       return;
     }
+    const requestGenId = generationId;
     setState((prev) => ({ ...prev, loading: true, error: null, response: null, model: null }));
     try {
       const resp = await followupGeneration(conversationId, {
         generation_id: generationId,
         message: state.input.trim(),
       });
+      if (stableGenId.current !== requestGenId) {
+        return;
+      }
       setState((prev) => ({
         ...prev,
         loading: false,
@@ -886,6 +890,9 @@ function FollowupSection({
         model: resp.model,
       }));
     } catch (err) {
+      if (stableGenId.current !== requestGenId) {
+        return;
+      }
       setState((prev) => ({
         ...prev,
         loading: false,
