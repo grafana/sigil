@@ -123,6 +123,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexDirection: 'column' as const,
     background: theme.colors.background.primary,
     borderRadius: theme.shape.radius.default,
+    overflow: 'hidden',
   }),
   detailCardHeader: css({
     display: 'flex',
@@ -138,6 +139,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   detailCardBody: css({
     padding: theme.spacing(1, 1.25),
+  }),
+  detailCardBodyFlush: css({
+    padding: 0,
   }),
 });
 
@@ -351,11 +355,18 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
       </div>
 
       <div className={styles.bottomSections}>
-        <VersionHistoryTable
-          versions={versions}
-          selectedVersions={selectedVersions}
-          onToggleSelect={handleToggleVersionSelect}
-        />
+        <div className={styles.detailCard}>
+          <div className={styles.detailCardHeader}>
+            <div className={styles.sectionTitle}>Version history</div>
+          </div>
+          <div className={styles.detailCardBodyFlush}>
+            <VersionHistoryTable
+              versions={versions}
+              selectedVersions={selectedVersions}
+              onToggleSelect={handleToggleVersionSelect}
+            />
+          </div>
+        </div>
 
         {compareLeft && compareRight && (
           <div className={styles.detailCard}>
