@@ -106,6 +106,23 @@ function detailToConversationData(detail: ConversationDetail): ConversationData 
 const inflightDetails = new Map<string, Promise<ConversationData>>();
 const inflightExplores = new Map<string, Promise<ConversationData>>();
 
+async function loadConversationWithTransientRetry<T>(load: () => Promise<T>): Promise<T> {
+  let attempt = 0;
+
+  for (;;) {
+    try {
+      return await load();
+    } catch (error) {
+      if (attempt >= DETAIL_RETRY_DELAYS_MS.length || !shouldRetryConversationDetail(error)) {
+        throw error;
+      }
+      const delay = DETAIL_RETRY_DELAYS_MS[attempt];
+      attempt += 1;
+      await sleep(delay);
+    }
+  }
+}
+
 export function loadConversationDetail(
   dataSource: ConversationsDataSource,
   conversationID: string
@@ -115,24 +132,12 @@ export function loadConversationDetail(
     return existing;
   }
 
-  const promise = (async () => {
-    let attempt = 0;
+  const promise = loadConversationWithTransientRetry(async () => {
     // Projection-backed search can surface a conversation slightly before the
     // remote detail path settles, so tolerate brief 5xx/read flaps here.
-    for (;;) {
-      try {
-        const detail = await dataSource.getConversationDetail(conversationID);
-        return detailToConversationData(detail);
-      } catch (error) {
-        if (attempt >= DETAIL_RETRY_DELAYS_MS.length || !shouldRetryConversationDetail(error)) {
-          throw error;
-        }
-        const delay = DETAIL_RETRY_DELAYS_MS[attempt];
-        attempt += 1;
-        await sleep(delay);
-      }
-    }
-  })().finally(() => inflightDetails.delete(conversationID));
+    const detail = await dataSource.getConversationDetail(conversationID);
+    return detailToConversationData(detail);
+  }).finally(() => inflightDetails.delete(conversationID));
 
   inflightDetails.set(conversationID, promise);
   return promise;
@@ -290,9 +295,10 @@ export function loadConversationExplore(
     return existing;
   }
 
-  const promise = dataSource.getConversationExplore!(conversationID)
-    .then(exploreToConversationData)
-    .finally(() => inflightExplores.delete(conversationID));
+  const promise = loadConversationWithTransientRetry(async () => {
+    const explore = await dataSource.getConversationExplore!(conversationID);
+    return exploreToConversationData(explore);
+  }).finally(() => inflightExplores.delete(conversationID));
 
   inflightExplores.set(conversationID, promise);
   return promise;

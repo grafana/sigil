@@ -148,4 +148,55 @@ describe('useConversationData', () => {
     expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-1');
     expect(traceFetcher).toHaveBeenCalledWith('trace-1');
   });
+
+  it('retries transient explore bootstrap failures before surfacing an error', async () => {
+    const dataSource: ConversationsDataSource = {
+      searchConversations: jest.fn(),
+      getConversationDetail: jest.fn(),
+      getConversationExplore: jest
+        .fn()
+        .mockRejectedValueOnce({ status: 500 })
+        .mockResolvedValue(
+          makeExploreResponse({
+            spans: [
+              {
+                traceID: 'trace-1',
+                spanID: 'span-root',
+                parentSpanID: '',
+                name: 'root',
+                startTimeUnixNano: '1000',
+                endTimeUnixNano: '2000',
+              },
+            ],
+          })
+        ),
+      getGeneration: jest.fn(),
+      getSearchTags: jest.fn(),
+      getSearchTagValues: jest.fn(),
+    };
+    const traceFetcher = jest.fn();
+
+    const { result } = renderHook(() =>
+      useConversationData({
+        conversationID: 'conv-1',
+        dataSource,
+        traceFetcher,
+        modelCardClient,
+        preferExplorePayload: true,
+      })
+    );
+
+    await waitFor(
+      () => {
+        expect(result.current.loading).toBe(false);
+        expect(result.current.errorMessage).toBe('');
+        expect(result.current.conversationData?.spans).toHaveLength(1);
+      },
+      { timeout: 3000 }
+    );
+
+    expect(dataSource.getConversationExplore).toHaveBeenCalledTimes(2);
+    expect(dataSource.getConversationDetail).not.toHaveBeenCalled();
+    expect(traceFetcher).not.toHaveBeenCalled();
+  });
 });
