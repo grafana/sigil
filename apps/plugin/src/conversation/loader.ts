@@ -51,7 +51,7 @@ function shouldRetryConversationDetail(error: unknown): boolean {
   if (status === 408 || status === 429) {
     return true;
   }
-  return status >= 500;
+  return status >= 500 && status !== 501;
 }
 
 function parseTraceResults(results: TraceResult[]): ReturnType<typeof parseOTLPTrace> {

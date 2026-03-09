@@ -73,7 +73,11 @@ export const defaultModelCardClient: ModelCardClient = {
     });
 
     resolveCache.set(cacheKey, promise);
-    setTimeout(() => resolveCache.delete(cacheKey), CACHE_TTL_MS);
+    setTimeout(() => {
+      if (resolveCache.get(cacheKey) === promise) {
+        resolveCache.delete(cacheKey);
+      }
+    }, CACHE_TTL_MS);
     return promise;
   },
 
@@ -108,7 +112,11 @@ export const defaultModelCardClient: ModelCardClient = {
     });
 
     lookupCache.set(cacheKey, promise);
-    setTimeout(() => lookupCache.delete(cacheKey), CACHE_TTL_MS);
+    setTimeout(() => {
+      if (lookupCache.get(cacheKey) === promise) {
+        lookupCache.delete(cacheKey);
+      }
+    }, CACHE_TTL_MS);
     return promise;
   },
 };

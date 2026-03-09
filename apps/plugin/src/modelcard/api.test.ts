@@ -1,4 +1,4 @@
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { defaultModelCardClient, resetModelCardClientCacheForTests, type ModelCardClient } from './api';
 import type { ModelCard, ModelCardLookupResponse, ModelCardPricing, ModelCardResolveResponse } from './types';
 
@@ -213,6 +213,86 @@ describe('ModelCardClient', () => {
       expect(backendFetchMock).toHaveBeenCalledTimes(1);
 
       jest.advanceTimersByTime(5 * 60 * 1000);
+
+      await defaultModelCardClient.lookup({ modelKey: 'openrouter:openai/gpt-4o' });
+      expect(backendFetchMock).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('default client cache TTL does not evict newer entries', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('stale resolve TTL timer does not evict a newer cache entry', async () => {
+      backendFetchMock.mockReturnValueOnce(throwError(() => new Error('network error')));
+
+      const firstPromise = defaultModelCardClient.resolve([{ provider: 'openai', model: 'gpt-4o' }]);
+      await expect(firstPromise).rejects.toThrow('network error');
+
+      jest.advanceTimersByTime(1);
+
+      const resolveResponse: ModelCardResolveResponse = {
+        resolved: [
+          {
+            provider: 'openai',
+            model: 'gpt-4o',
+            status: 'resolved',
+            match_strategy: 'exact',
+            card: {
+              model_key: 'openrouter:openai/gpt-4o',
+              source_model_id: 'openai/gpt-4o',
+              pricing: basePricing,
+            },
+          },
+        ],
+        freshness: {
+          catalog_last_refreshed_at: '2026-03-03T00:00:00Z',
+          stale: false,
+          soft_stale: false,
+          hard_stale: false,
+          source_path: 'memory_live',
+        },
+      };
+
+      backendFetchMock.mockReturnValue(of({ data: resolveResponse }));
+      await defaultModelCardClient.resolve([{ provider: 'openai', model: 'gpt-4o' }]);
+      expect(backendFetchMock).toHaveBeenCalledTimes(2);
+
+      jest.advanceTimersByTime(5 * 60 * 1000 - 1);
+
+      await defaultModelCardClient.resolve([{ provider: 'openai', model: 'gpt-4o' }]);
+      expect(backendFetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('stale lookup TTL timer does not evict a newer cache entry', async () => {
+      backendFetchMock.mockReturnValueOnce(throwError(() => new Error('network error')));
+
+      const firstPromise = defaultModelCardClient.lookup({ modelKey: 'openrouter:openai/gpt-4o' });
+      await expect(firstPromise).rejects.toThrow('network error');
+
+      jest.advanceTimersByTime(1);
+
+      const lookupResponse: ModelCardLookupResponse = {
+        data: testCard,
+        freshness: {
+          catalog_last_refreshed_at: '2026-03-03T00:00:00Z',
+          stale: false,
+          soft_stale: false,
+          hard_stale: false,
+          source_path: 'memory_live',
+        },
+      };
+
+      backendFetchMock.mockReturnValue(of({ data: lookupResponse }));
+      await defaultModelCardClient.lookup({ modelKey: 'openrouter:openai/gpt-4o' });
+      expect(backendFetchMock).toHaveBeenCalledTimes(2);
+
+      jest.advanceTimersByTime(5 * 60 * 1000 - 1);
 
       await defaultModelCardClient.lookup({ modelKey: 'openrouter:openai/gpt-4o' });
       expect(backendFetchMock).toHaveBeenCalledTimes(2);

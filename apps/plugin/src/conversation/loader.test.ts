@@ -1,5 +1,5 @@
 import type { ConversationsDataSource } from './api';
-import { loadConversation, loadConversationDetail } from './loader';
+import { loadConversation, loadConversationDetail, loadConversationExplore } from './loader';
 import type { ConversationDetail } from './types';
 
 function makeDetail(overrides: Partial<ConversationDetail> = {}): ConversationDetail {
@@ -185,6 +185,23 @@ describe('loadConversation', () => {
     expect(fetchTrace).toHaveBeenCalledTimes(2);
     expect(result.spans).toHaveLength(1);
     expect(result.orphanGenerations).toHaveLength(0);
+  });
+
+  it('does not retry 501 errors in loadConversationExplore', async () => {
+    const dataSource: ConversationsDataSource = {
+      searchConversations: jest.fn(),
+      getConversationDetail: jest.fn(),
+      getConversationExplore: jest.fn().mockRejectedValue({ status: 501, message: 'not implemented' }),
+      getGeneration: jest.fn(),
+      getSearchTags: jest.fn(),
+      getSearchTagValues: jest.fn(),
+    };
+
+    await expect(loadConversationExplore(dataSource, 'conv-501')).rejects.toEqual({
+      status: 501,
+      message: 'not implemented',
+    });
+    expect(dataSource.getConversationExplore).toHaveBeenCalledTimes(1);
   });
 
   it('merges spans from multiple traces sorted by time', async () => {
