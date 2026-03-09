@@ -4,22 +4,38 @@
   <img src="./assets/readme/sigil-tri-shot.svg" alt="Sigil landing, analytics, and conversation explore views" width="100%" />
 </p>
 
-Sigil is an open-source AI observability project from Grafana.
+Sigil is an open-source AI observability project from Grafana for teams running agents in production.
 
 > It's actually useful AI o11y.
 
-It combines OpenTelemetry traces with normalized LLM generation data, so you can inspect conversations, completions, and traces in one place.
+Instrument once with a thin OpenTelemetry-native SDK, then use Sigil to see what your agents are doing, what they cost, how quality is changing, and which conversations need attention.
 
 ## What You Get
 
-- Grafana app plugin (`/apps/plugin`) for conversations, completions, traces, and settings.
-- Go service (`/sigil`) for generation ingest and query APIs on `:8080`.
-- Evaluations: online evaluation (live scoring on production traffic) is supported; offline experiments (datasets/regressions) are planned. See `docs/references/ai-observability-evaluation-market.md`.
+- **Simple onboarding.** Sigil is a thin SDK layer on top of OpenTelemetry and the OTel GenAI semantic conventions, with helpers for common providers and frameworks. If you already have OTel, setup is small enough to do by hand or with coding assistants such as Claude Code or Cursor.
+- **A single pane of glass for your agents.** See activity, latency, errors, token usage, cost, cache behavior, and quality in one place with filters for time range, provider, model, agent, and labels.
+- **Conversation drilldown when something looks off.** Open any conversation to inspect the full thread, tool calls, traces, scores, ratings, annotations, token usage, and cost breakdowns.
+- **Agent catalog and version history.** Sigil automatically groups agents, tracks versions, shows prompt and tool footprints, surfaces usage and cost per version, and helps you compare how an agent changes over time.
+- **Actionable suggestions, not just dashboards.** Built-in insight bars flag anomalies and optimization opportunities around cost, cache, errors, and performance, and agent detail can rate a version's prompt/tool setup and suggest improvements.
+- **Online evaluation on live traffic.** Score production generations continuously so you can monitor quality, catch regressions, and avoid manually reading every conversation.
+
+## Why Sigil
+
+- **OpenTelemetry-native**: Sigil follows the OTel GenAI semantic conventions, emits standard traces and metrics over OTLP, and works with existing OTel pipelines.
+- **Generation-first**: normalized generation ingest lets Sigil correlate conversations, tool executions, traces, costs, and scores.
+- **Version-aware agents**: prompt and tool changes become queryable agent versions, even when producers do not send a clean version string.
+- **Built for production quality loops**: observability, agent understanding, ratings, annotations, and online evaluation live in the same workflow.
+- **Open and composable**: Sigil fits naturally with Grafana, Alloy, Tempo, Prometheus, MySQL, and object storage.
+
+## Included Components
+
+- Grafana app plugin (`/apps/plugin`) for dashboards, conversations, agents, evaluations, and settings.
+- Go service (`/sigil`) for generation ingest, query APIs, agent catalog APIs, and online evaluation workers.
 - SDKs (`/sdks`) for Go, Python, TypeScript/JavaScript, Java, and .NET/C#:
   - OTel traces with AI-specific attributes (`gen_ai.*`).
   - OTel metrics: latency histograms and token usage distributions.
   - Structured generation export to Sigil.
-- Alloy / OTel Collector as the telemetry pipeline (traces + metrics).
+- Alloy / OTel Collector as the telemetry pipeline for traces and metrics.
 - Tempo (docker compose) as trace storage.
 - Prometheus as metrics storage for SDK-emitted AI metrics.
 - MySQL as default metadata and record-reference storage.
@@ -28,15 +44,6 @@ It combines OpenTelemetry traces with normalized LLM generation data, so you can
   - AWS S3
   - Google Cloud Storage
   - Azure Blob Storage
-
-## Why Sigil
-
-- **Trace + generation correlation**: connect model calls, tool executions, and request traces.
-- **OpenTelemetry-native**: SDKs emit OTel traces and metrics via standard OTLP. Works with any OTel-compatible collector.
-- **Built-in AI metrics**: latency histograms (streaming, sync, tool calls), token usage distributions, error rates -- per provider, model, agent, and namespace.
-- **Generation-first ingest**: export normalized generation payloads across providers.
-- **Grafana-native experience**: query and explore from the Sigil app plugin.
-- **SDK support**: Go, Python, TypeScript/JavaScript, Java, and .NET/C# SDKs with provider helpers.
 
 ## Architecture At A Glance
 
