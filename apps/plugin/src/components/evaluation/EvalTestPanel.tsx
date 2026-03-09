@@ -190,6 +190,9 @@ export default function EvalTestPanel({
       let testConfig = config;
       if (kind === 'llm_judge' && (providerTrimmed !== '' || modelTrimmed !== '')) {
         testConfig = { ...config };
+        if (providerTrimmed === '' && modelTrimmed !== '') {
+          delete testConfig.provider;
+        }
         if (providerTrimmed !== '') {
           testConfig.provider = providerTrimmed;
         }

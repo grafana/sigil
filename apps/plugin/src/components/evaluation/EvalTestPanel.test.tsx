@@ -46,7 +46,7 @@ describe('EvalTestPanel', () => {
     render(
       <EvalTestPanel
         kind="llm_judge"
-        config={{ max_tokens: 128, temperature: 0 }}
+        config={{ provider: 'openai', model: 'gpt-4o-mini', max_tokens: 128, temperature: 0 }}
         outputKeys={[{ key: 'score', type: 'number' }]}
         dataSource={dataSource}
         conversationsDataSource={conversationsDataSource}
