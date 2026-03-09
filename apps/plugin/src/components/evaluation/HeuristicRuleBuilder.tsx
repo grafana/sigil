@@ -226,10 +226,12 @@ function HeuristicActionButton(props: ActionProps) {
   const hasReachedMaxNodes = (builderContext?.totalNodes ?? 0) >= HEURISTIC_MAX_NODES;
   const label = String(props.label ?? 'Action');
   const isAddGroupAction = String(props.label ?? '').includes('Group');
+  const isAddRuleAction = String(props.label ?? '').includes('Rule');
   const isRemoveAction = label === '⨯';
   const nextGroupDepth = props.level + 2;
   const exceedsMaxDepth = isAddGroupAction && nextGroupDepth > HEURISTIC_MAX_DEPTH;
-  const disabled = props.disabled || hasReachedMaxNodes || exceedsMaxDepth;
+  const disableForAddLimits = (isAddGroupAction || isAddRuleAction) && (hasReachedMaxNodes || exceedsMaxDepth);
+  const disabled = props.disabled || disableForAddLimits;
 
   if (isRemoveAction) {
     return (

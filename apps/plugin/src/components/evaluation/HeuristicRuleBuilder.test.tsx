@@ -74,5 +74,8 @@ describe('HeuristicRuleBuilder', () => {
 
     expect(screen.getByRole('button', { name: '+ Rule' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '+ Group' })).toBeDisabled();
+    const removeButton = document.querySelector('[data-testid="trash-alt"]')?.closest('button');
+    expect(removeButton).not.toBeNull();
+    expect(removeButton).toBeEnabled();
   });
 });
