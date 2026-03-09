@@ -181,6 +181,35 @@ describe('loadConversationTraces', () => {
     expect(fetchTrace).toHaveBeenNthCalledWith(3, 'trace-oldest', expect.any(Object));
   });
 
+  it('fetches traces with known timestamps before traces without timestamps', async () => {
+    const fetchTrace: TraceFetcher = jest.fn().mockResolvedValue(makeTracePayload());
+
+    await loadConversationTraces(
+      makeConversationData({
+        generationCount: 3,
+        orphanGenerations: [
+          {
+            generation_id: 'gen-no-ts',
+            conversation_id: 'conv-1',
+            trace_id: 'trace-no-ts',
+            span_id: 'span-no-ts',
+          },
+          {
+            generation_id: 'gen-known',
+            conversation_id: 'conv-1',
+            trace_id: 'trace-known',
+            span_id: 'span-known',
+            created_at: '2026-03-09T13:30:00Z',
+          },
+        ],
+      }),
+      fetchTrace
+    );
+
+    expect(fetchTrace).toHaveBeenNthCalledWith(1, 'trace-known', expect.any(Object));
+    expect(fetchTrace).toHaveBeenNthCalledWith(2, 'trace-no-ts', expect.any(Object));
+  });
+
   it('deduplicates mixed-encoding trace IDs before fetching', async () => {
     const fetchTrace: TraceFetcher = jest.fn().mockResolvedValue(makeTracePayload());
 

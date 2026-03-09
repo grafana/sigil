@@ -192,10 +192,10 @@ function orderTraceIDsByNewestGeneration(generations: GenerationDetail[]): strin
       return rightTimestamp - leftTimestamp;
     }
     if (leftTimestamp === undefined && rightTimestamp !== undefined) {
-      return -1;
+      return 1;
     }
     if (leftTimestamp !== undefined && rightTimestamp === undefined) {
-      return 1;
+      return -1;
     }
     return (firstSeenIndex.get(left) ?? 0) - (firstSeenIndex.get(right) ?? 0);
   });
