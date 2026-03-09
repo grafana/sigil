@@ -242,7 +242,7 @@ func normalizeConversationExploreID(value string, expectedHexLength int, expecte
 	if trimmed == "" {
 		return ""
 	}
-	if len(trimmed) == expectedHexLength && isLowerHexString(trimmed) {
+	if len(trimmed) == expectedHexLength && isHexString(trimmed) {
 		return strings.ToLower(trimmed)
 	}
 	decoded, err := base64.StdEncoding.DecodeString(trimmed)
@@ -263,7 +263,7 @@ func normalizeConversationExploreSpanID(value string) string {
 	return normalizeConversationExploreID(value, 16, 8)
 }
 
-func isLowerHexString(value string) bool {
+func isHexString(value string) bool {
 	for _, r := range value {
 		switch {
 		case r >= '0' && r <= '9':

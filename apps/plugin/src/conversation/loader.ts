@@ -234,7 +234,7 @@ function buildConversationSpansFromExplore(
     const durationNano =
       parseSerializedNs(span.durationNano ?? span.duration_nano) ??
       (safeEndTimeUnixNano > startTimeUnixNano ? safeEndTimeUnixNano - startTimeUnixNano : BIGINT_ONE);
-    const generation = generationBySpan.get(`${traceID}:${spanID}`) ?? null;
+    const generation = generationBySpan.get(`${normalizeTraceID(traceID)}:${normalizeSpanID(spanID)}`) ?? null;
     if (generation) {
       matchedGenerationIDs.add(generation.generation_id);
     }
