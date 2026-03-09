@@ -15,7 +15,7 @@ importers:
         version: 11.13.5
       '@grafana/assistant':
         specifier: ^0.1.19
-        version: 0.1.19(d8552819478fa81a7ee20dc6add14afb)
+        version: 0.1.20(d8552819478fa81a7ee20dc6add14afb)
       '@grafana/data':
         specifier: ^12.3.2
         version: 12.4.0(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
@@ -1017,8 +1017,8 @@ packages:
       '@modelcontextprotocol/sdk':
         optional: true
 
-  '@grafana/assistant@0.1.19':
-    resolution: {integrity: sha512-TGnTJhhiPwxkPEi7CJraT2kDQuL7IkvVgPz0a3NeQooI6GkgAycswsFCKpD4cePP9GKK65OtbRuVBrPO8RXMfQ==}
+  '@grafana/assistant@0.1.20':
+    resolution: {integrity: sha512-D84OTMBG/+S4FB8hkqeHW7F5ZJCe4z5GPO+G3CCrJ3gYMEFghbozoI8AWTvn4iYE+oFm3tiOt0kaXOticuWolg==}
     peerDependencies:
       '@grafana/data': '>=12.1.0'
       '@grafana/runtime': '>=12.1.0'
@@ -8412,7 +8412,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@grafana/assistant@0.1.19(d8552819478fa81a7ee20dc6add14afb)':
+  '@grafana/assistant@0.1.20(d8552819478fa81a7ee20dc6add14afb)':
     dependencies:
       '@grafana/data': 12.4.0(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       '@grafana/runtime': 12.4.0(@babel/core@7.29.0)(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
