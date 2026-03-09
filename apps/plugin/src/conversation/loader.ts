@@ -1,5 +1,6 @@
 import { dateTime, type TimeRange } from '@grafana/data';
 import type { ConversationsDataSource } from './api';
+import { normalizeTraceID } from './ids';
 import { parseOTLPTrace, buildSpanTree } from './spans';
 import type { GenerationDetail } from '../generation/types';
 import type { ConversationData, ConversationDetail } from './types';
@@ -167,19 +168,20 @@ function orderTraceIDsByOldestGeneration(generations: GenerationDetail[]): strin
   const oldestTimestampByTraceID = new Map<string, number>();
 
   for (const [index, generation] of generations.entries()) {
-    if (!generation.trace_id || generation.trace_id.length === 0) {
+    const normalizedTraceID = normalizeTraceID(generation.trace_id);
+    if (normalizedTraceID.length === 0) {
       continue;
     }
-    if (!firstSeenIndex.has(generation.trace_id)) {
-      firstSeenIndex.set(generation.trace_id, index);
+    if (!firstSeenIndex.has(normalizedTraceID)) {
+      firstSeenIndex.set(normalizedTraceID, index);
     }
     const timestampMs = generationTimestampMs(generation);
     if (timestampMs === undefined) {
       continue;
     }
-    const existing = oldestTimestampByTraceID.get(generation.trace_id);
+    const existing = oldestTimestampByTraceID.get(normalizedTraceID);
     if (existing === undefined || timestampMs < existing) {
-      oldestTimestampByTraceID.set(generation.trace_id, timestampMs);
+      oldestTimestampByTraceID.set(normalizedTraceID, timestampMs);
     }
   }
 

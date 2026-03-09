@@ -180,6 +180,36 @@ describe('loadConversationTraces', () => {
     expect(fetchTrace).toHaveBeenNthCalledWith(2, 'trace-middle', expect.any(Object));
     expect(fetchTrace).toHaveBeenNthCalledWith(3, 'trace-latest', expect.any(Object));
   });
+
+  it('deduplicates mixed-encoding trace IDs before fetching', async () => {
+    const fetchTrace: TraceFetcher = jest.fn().mockResolvedValue(makeTracePayload());
+
+    await loadConversationTraces(
+      makeConversationData({
+        generationCount: 2,
+        orphanGenerations: [
+          {
+            generation_id: 'gen-base64',
+            conversation_id: 'conv-1',
+            trace_id: 'AQIDBAUGBwgJCgsMDQ4PEA==',
+            span_id: 'span-a',
+            created_at: '2026-03-09T13:10:00Z',
+          },
+          {
+            generation_id: 'gen-hex',
+            conversation_id: 'conv-1',
+            trace_id: '0102030405060708090a0b0c0d0e0f10',
+            span_id: 'span-b',
+            created_at: '2026-03-09T13:20:00Z',
+          },
+        ],
+      }),
+      fetchTrace
+    );
+
+    expect(fetchTrace).toHaveBeenCalledTimes(1);
+    expect(fetchTrace).toHaveBeenCalledWith('0102030405060708090a0b0c0d0e0f10', expect.any(Object));
+  });
 });
 
 function makeDetail(overrides: Partial<ConversationDetail> = {}): ConversationDetail {
