@@ -5,8 +5,44 @@ import type { ConversationData, ConversationDetail } from './types';
 export type TraceFetcher = (traceID: string) => Promise<unknown>;
 
 const TRACE_FETCH_CONCURRENCY = 5;
+const DETAIL_RETRY_DELAYS_MS = [250, 750, 1500];
+const TRACE_EMPTY_RETRY_DELAYS_MS = [750];
 
 type TraceResult = { traceID: string; payload: unknown };
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function getErrorStatus(error: unknown): number | undefined {
+  if (typeof error !== 'object' || error === null) {
+    return undefined;
+  }
+  const maybeStatus = (error as { status?: unknown }).status;
+  return typeof maybeStatus === 'number' ? maybeStatus : undefined;
+}
+
+function shouldRetryConversationDetail(error: unknown): boolean {
+  const status = getErrorStatus(error);
+  if (status === undefined) {
+    return true;
+  }
+  if (status === 408 || status === 429) {
+    return true;
+  }
+  return status >= 500;
+}
+
+function parseTraceResults(results: TraceResult[]): ReturnType<typeof parseOTLPTrace> {
+  return results.flatMap(({ traceID, payload }) => {
+    if (payload === null) {
+      return [];
+    }
+    return parseOTLPTrace(traceID, payload);
+  });
+}
 
 async function fetchTracesWithConcurrency(
   traceIDs: string[],
@@ -59,10 +95,24 @@ export function loadConversationDetail(
     return existing;
   }
 
-  const promise = dataSource
-    .getConversationDetail(conversationID)
-    .then(detailToConversationData)
-    .finally(() => inflightDetails.delete(conversationID));
+  const promise = (async () => {
+    let attempt = 0;
+    // Projection-backed search can surface a conversation slightly before the
+    // remote detail path settles, so tolerate brief 5xx/read flaps here.
+    for (;;) {
+      try {
+        const detail = await dataSource.getConversationDetail(conversationID);
+        return detailToConversationData(detail);
+      } catch (error) {
+        if (attempt >= DETAIL_RETRY_DELAYS_MS.length || !shouldRetryConversationDetail(error)) {
+          throw error;
+        }
+        const delay = DETAIL_RETRY_DELAYS_MS[attempt];
+        attempt += 1;
+        await sleep(delay);
+      }
+    }
+  })().finally(() => inflightDetails.delete(conversationID));
 
   inflightDetails.set(conversationID, promise);
   return promise;
@@ -84,14 +134,20 @@ export async function loadConversationTraces(
     return data;
   }
 
-  const tracePayloads = await fetchTracesWithConcurrency(traceIDs, fetchTrace);
-
-  const allParsedSpans = tracePayloads.flatMap(({ traceID, payload }) => {
-    if (payload === null) {
-      return [];
+  let tracePayloads = await fetchTracesWithConcurrency(traceIDs, fetchTrace);
+  let allParsedSpans = parseTraceResults(tracePayloads);
+  if (allParsedSpans.length === 0) {
+    // Recent conversations can arrive in projection before Tempo serves the
+    // corresponding traces. Retry once before rendering an empty tree.
+    for (const delay of TRACE_EMPTY_RETRY_DELAYS_MS) {
+      await sleep(delay);
+      tracePayloads = await fetchTracesWithConcurrency(traceIDs, fetchTrace);
+      allParsedSpans = parseTraceResults(tracePayloads);
+      if (allParsedSpans.length > 0) {
+        break;
+      }
     }
-    return parseOTLPTrace(traceID, payload);
-  });
+  }
 
   const allGenerations = data.orphanGenerations;
   const { roots, orphanGenerations } = buildSpanTree(allParsedSpans, allGenerations);

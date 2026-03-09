@@ -1,5 +1,5 @@
 import type { ConversationsDataSource } from './api';
-import { loadConversation } from './loader';
+import { loadConversation, loadConversationDetail } from './loader';
 import type { ConversationDetail } from './types';
 
 function makeDetail(overrides: Partial<ConversationDetail> = {}): ConversationDetail {
@@ -36,6 +36,10 @@ function makeDataSource(detail: ConversationDetail): ConversationsDataSource {
 }
 
 describe('loadConversation', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('assembles ConversationData from detail + traces', async () => {
     const detail = makeDetail({
       conversation_title: 'Incident: stored title',
@@ -124,6 +128,63 @@ describe('loadConversation', () => {
 
     expect(result.spans).toHaveLength(0);
     expect(result.orphanGenerations).toHaveLength(1);
+  });
+
+  it('retries transient conversation detail failures', async () => {
+    jest.useFakeTimers();
+
+    const detail = makeDetail({
+      generations: [{ generation_id: 'gen-1', conversation_id: 'conv-1' }],
+    });
+    const dataSource: ConversationsDataSource = {
+      searchConversations: jest.fn(),
+      getConversationDetail: jest
+        .fn()
+        .mockRejectedValueOnce({ status: 500, message: 'internal server error' })
+        .mockRejectedValueOnce({ status: 502, message: 'bad gateway' })
+        .mockResolvedValue(detail),
+      getGeneration: jest.fn(),
+      getSearchTags: jest.fn(),
+      getSearchTagValues: jest.fn(),
+    };
+
+    const promise = loadConversationDetail(dataSource, 'conv-1');
+    await jest.runAllTimersAsync();
+    const result = await promise;
+
+    expect(dataSource.getConversationDetail).toHaveBeenCalledTimes(3);
+    expect(result.conversationID).toBe('conv-1');
+  });
+
+  it('retries empty trace payloads once before leaving the tree empty', async () => {
+    jest.useFakeTimers();
+
+    const detail = makeDetail({
+      generations: [{ generation_id: 'gen-1', conversation_id: 'conv-1', trace_id: 'trace-1', span_id: 'span-1' }],
+    });
+    const fetchTrace = jest
+      .fn()
+      .mockResolvedValueOnce({ trace: {} })
+      .mockResolvedValueOnce(
+        makeOTLPPayload('trace-1', [
+          {
+            spanId: 'span-1',
+            parentSpanId: '',
+            name: 'generateText gpt-4o',
+            startTimeUnixNano: '1000',
+            endTimeUnixNano: '2000',
+            attributes: [{ key: 'gen_ai.operation.name', value: { stringValue: 'generateText' } }],
+          },
+        ])
+      );
+
+    const promise = loadConversation(makeDataSource(detail), 'conv-1', fetchTrace);
+    await jest.runAllTimersAsync();
+    const result = await promise;
+
+    expect(fetchTrace).toHaveBeenCalledTimes(2);
+    expect(result.spans).toHaveLength(1);
+    expect(result.orphanGenerations).toHaveLength(0);
   });
 
   it('merges spans from multiple traces sorted by time', async () => {
