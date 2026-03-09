@@ -194,6 +194,28 @@ export type ConversationsDataSource = {
   getSearchTagValues: (tag: string, from: string, to: string) => Promise<string[]>;
 };
 
+export type FollowupRequest = {
+  generation_id: string;
+  message: string;
+  model?: string;
+};
+
+export type FollowupResponse = {
+  response: string;
+  model: string;
+};
+
+export async function followupGeneration(conversationId: string, request: FollowupRequest): Promise<FollowupResponse> {
+  const response = await lastValueFrom(
+    getBackendSrv().fetch<FollowupResponse>({
+      method: 'POST',
+      url: `${queryBasePath}/conversations/${encodeURIComponent(conversationId)}/followup`,
+      data: request,
+    })
+  );
+  return response.data;
+}
+
 export const defaultConversationsDataSource: ConversationsDataSource = {
   async listConversations() {
     const response = await lastValueFrom(

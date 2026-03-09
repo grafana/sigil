@@ -1058,6 +1058,64 @@ func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, 
 	}, true, nil
 }
 
+// ListConversationGenerationsForTenant returns raw protobuf generations for a
+// conversation, using the same hot/cold fan-out as GetConversationDetailForTenant.
+func (s *Service) ListConversationGenerationsForTenant(ctx context.Context, tenantID, conversationID string) ([]*sigilv1.Generation, bool, error) {
+	ctx, span := queryServiceTracer.Start(ctx, "sigil.query.list_conversation_generations")
+	defer span.End()
+
+	trimmedTenantID := strings.TrimSpace(tenantID)
+	trimmedConversationID := strings.TrimSpace(conversationID)
+	if trimmedTenantID == "" {
+		return nil, false, NewValidationError("tenant id is required")
+	}
+	if trimmedConversationID == "" {
+		return nil, false, NewValidationError("conversation id is required")
+	}
+	if s.conversationStore == nil {
+		return nil, false, errors.New("conversation store is not configured")
+	}
+	if s.walReader == nil {
+		return nil, false, errors.New("wal reader is not configured")
+	}
+
+	fanOutStore := s.fanOutStore
+	if fanOutStore == nil {
+		fanOutStore = storage.NewFanOutStore(s.walReader, nil, nil)
+	}
+
+	conversation, err := s.conversationStore.GetConversation(ctx, trimmedTenantID, trimmedConversationID)
+	if err != nil {
+		return nil, false, err
+	}
+	if conversation == nil {
+		return nil, false, nil
+	}
+
+	plan := storage.ConversationReadPlan{
+		ExpectedGenerationCount: conversation.GenerationCount,
+	}
+	if !conversation.LastGenerationAt.IsZero() {
+		plan.To = conversation.LastGenerationAt.UTC().Add(2 * time.Minute)
+	}
+
+	var generations []*sigilv1.Generation
+	if plannedReader, ok := fanOutStore.(plannedConversationFanOutReader); ok {
+		generations, err = plannedReader.ListConversationGenerationsWithPlan(ctx, trimmedTenantID, trimmedConversationID, plan)
+	} else {
+		generations, err = fanOutStore.ListConversationGenerations(ctx, trimmedTenantID, trimmedConversationID)
+	}
+	if err != nil {
+		return nil, false, err
+	}
+
+	span.SetAttributes(
+		attribute.Bool("sigil.query.found", true),
+		attribute.Int("sigil.query.generation_count", len(generations)),
+	)
+	return generations, true, nil
+}
+
 func (s *Service) GetGenerationDetailForTenant(ctx context.Context, tenantID, generationID string) (map[string]any, bool, error) {
 	return s.GetGenerationDetailForTenantWithPlan(ctx, tenantID, generationID, GenerationDetailReadPlan{})
 }

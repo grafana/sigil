@@ -19,6 +19,7 @@ import (
 	evalingest "github.com/grafana/sigil/sigil/internal/eval/ingest"
 	evalworker "github.com/grafana/sigil/sigil/internal/eval/worker"
 	"github.com/grafana/sigil/sigil/internal/feedback"
+	"github.com/grafana/sigil/sigil/internal/followup"
 	"github.com/grafana/sigil/sigil/internal/modelcards"
 	"github.com/grafana/sigil/sigil/internal/promptinsights"
 	"github.com/grafana/sigil/sigil/internal/query"
@@ -134,6 +135,8 @@ func newQuerierModule(
 	if store, ok := generationStore.(promptinsights.Store); ok {
 		promptInsightsStore = store
 	}
+
+	followupSvc := followup.NewService(discovery, cfg.EvalDefaultJudgeModel)
 
 	if _, ok := discovery.Client(agentRatingProviderID); ok {
 		agentRater = agentrating.NewRaterWithTarget(discovery, agentRatingProviderID, agentRatingModelName)
@@ -251,8 +254,9 @@ func newQuerierModule(
 				logger,
 				protectedMiddleware,
 				server.PromptInsightsOption{
-					Analyzer: promptInsightsAnalyzer,
-					Store:    promptInsightsStore,
+					Analyzer:    promptInsightsAnalyzer,
+					Store:       promptInsightsStore,
+					FollowupSvc: followupSvc,
 				},
 			)
 			server.RegisterSettingsRoutes(mux, tenantSettingsSvc, protectedMiddleware)

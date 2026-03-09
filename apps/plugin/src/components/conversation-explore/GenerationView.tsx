@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cx } from '@emotion/css';
-import { Icon, Toggletip, Tooltip, useStyles2 } from '@grafana/ui';
+import { Icon, Spinner, Toggletip, Tooltip, useStyles2 } from '@grafana/ui';
 import { getDataSourceSrv } from '@grafana/runtime';
 import {
   formatScoreValue,
@@ -12,6 +12,7 @@ import {
 } from '../../generation/types';
 import type { ConversationSpan, SpanAttributes } from '../../conversation/types';
 import { getSelectionID } from '../../conversation/spans';
+import { followupGeneration } from '../../conversation/api';
 import { plugin } from '../../module';
 import { buildAgentDetailHref } from '../dashboard/ViewAgentsLink';
 import type { FlowNode } from './types';
@@ -832,6 +833,113 @@ function ScoreChips({ scores }: { scores: Record<string, LatestScore> }) {
   );
 }
 
+type FollowupState = {
+  input: string;
+  loading: boolean;
+  response: string | null;
+  model: string | null;
+  error: string | null;
+};
+
+const initialFollowupState: FollowupState = {
+  input: '',
+  loading: false,
+  response: null,
+  model: null,
+  error: null,
+};
+
+function FollowupSection({
+  conversationId,
+  generationId,
+}: {
+  conversationId: string | undefined;
+  generationId: string | undefined;
+}) {
+  const styles = useStyles2(getStyles);
+  const [state, setState] = useState<FollowupState>(initialFollowupState);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Reset when generation changes
+  const stableGenId = useRef(generationId);
+  if (stableGenId.current !== generationId) {
+    stableGenId.current = generationId;
+    if (state !== initialFollowupState) {
+      setState(initialFollowupState);
+    }
+  }
+
+  const handleSubmit = useCallback(async () => {
+    if (!conversationId || !generationId || !state.input.trim()) {
+      return;
+    }
+    setState((prev) => ({ ...prev, loading: true, error: null, response: null, model: null }));
+    try {
+      const resp = await followupGeneration(conversationId, {
+        generation_id: generationId,
+        message: state.input.trim(),
+      });
+      setState((prev) => ({
+        ...prev,
+        loading: false,
+        response: resp.response,
+        model: resp.model,
+      }));
+    } catch (err) {
+      setState((prev) => ({
+        ...prev,
+        loading: false,
+        error: err instanceof Error ? err.message : 'Request failed',
+      }));
+    }
+  }, [conversationId, generationId, state.input]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSubmit();
+      }
+    },
+    [handleSubmit]
+  );
+
+  if (!conversationId || !generationId) {
+    return null;
+  }
+
+  return (
+    <div className={styles.followupSection}>
+      <div className={styles.followupInputRow}>
+        <textarea
+          ref={textareaRef}
+          className={styles.followupInput}
+          placeholder="Ask about this step..."
+          value={state.input}
+          onChange={(e) => setState((prev) => ({ ...prev, input: e.target.value }))}
+          onKeyDown={handleKeyDown}
+          rows={1}
+          disabled={state.loading}
+        />
+        <button
+          className={styles.followupButton}
+          onClick={handleSubmit}
+          disabled={state.loading || !state.input.trim()}
+        >
+          {state.loading ? <Spinner size="sm" /> : 'Ask'}
+        </button>
+      </div>
+      {state.error && <div className={styles.followupError}>{state.error}</div>}
+      {state.response && (
+        <>
+          <div className={styles.followupResponse}>{state.response}</div>
+          {state.model && <div className={styles.followupMeta}>Answered by {state.model}</div>}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function GenerationView({
   node,
   allGenerations,
@@ -1168,6 +1276,8 @@ export default function GenerationView({
             ))}
           </Section>
         )}
+
+        <FollowupSection conversationId={gen?.conversation_id} generationId={gen?.generation_id} />
       </div>
     </div>
   );
