@@ -102,11 +102,7 @@ func TestTestService_RunTest(t *testing.T) {
 	assert.Equal(t, map[string]any{"pattern": "Go"}, score.Metadata)
 }
 
-func TestTestService_RunTest_ValidationErrors(t *testing.T) {
-	reader := &stubGenerationReader{generation: testGeneration()}
-	eval := &stubEvaluator{kind: evalpkg.EvaluatorKindRegex}
-	svc := newTestService(reader, eval)
-
+func TestEvalTestRequest_NormalizeAndValidateErrors(t *testing.T) {
 	tests := []struct {
 		name string
 		req  EvalTestRequest
@@ -160,7 +156,7 @@ func TestTestService_RunTest_ValidationErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := svc.RunTest(context.Background(), "tenant-1", tt.req)
+			_, err := tt.req.normalizeAndValidate()
 			require.Error(t, err)
 			assert.True(t, isValidationError(err), "expected validation error, got: %v", err)
 		})
@@ -391,7 +387,7 @@ func TestTestService_RunTest_BoundsEnforcement(t *testing.T) {
 
 			resp, err := svc.RunTest(context.Background(), "tenant-1", EvalTestRequest{
 				Kind:         "heuristic",
-				Config:       map[string]any{"some": "config"},
+				Config:       map[string]any{"not_empty": true},
 				OutputKeys:   tt.outputKeys,
 				GenerationID: "gen-1",
 			})

@@ -63,20 +63,43 @@ func (s *WALStore) CreateEvaluator(ctx context.Context, evaluator evalpkg.Evalua
 		model.SourceTemplateVersion = &evaluator.SourceTemplateVersion
 	}
 
-	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "tenant_id"}, {Name: "evaluator_id"}, {Name: "version"}},
-		DoUpdates: clause.Assignments(map[string]any{
-			"kind":                    model.Kind,
-			"description":             model.Description,
-			"config_json":             model.ConfigJSON,
-			"output_keys_json":        model.OutputKeysJSON,
-			"is_predefined":           model.IsPredefined,
-			"source_template_id":      model.SourceTemplateID,
-			"source_template_version": model.SourceTemplateVersion,
-			"deleted_at":              nil,
-			"updated_at":              now,
-		}),
-	}).Create(&model).Error
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var existing EvalEvaluatorModel
+		err := tx.Unscoped().
+			Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("tenant_id = ? AND evaluator_id = ? AND version = ?", model.TenantID, model.EvaluatorID, model.Version).
+			Take(&existing).Error
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			if err := tx.Create(&model).Error; err != nil {
+				if isDuplicateKeyError(err) {
+					return fmt.Errorf("%w: evaluator %q version %q already exists", evalpkg.ErrConflict, evaluator.EvaluatorID, evaluator.Version)
+				}
+				return fmt.Errorf("create evaluator: %w", err)
+			}
+			return nil
+		case err != nil:
+			return fmt.Errorf("check existing evaluator: %w", err)
+		case existing.DeletedAt == nil:
+			return fmt.Errorf("%w: evaluator %q version %q already exists", evalpkg.ErrConflict, evaluator.EvaluatorID, evaluator.Version)
+		default:
+			updates := map[string]any{
+				"kind":                    model.Kind,
+				"description":             model.Description,
+				"config_json":             model.ConfigJSON,
+				"output_keys_json":        model.OutputKeysJSON,
+				"is_predefined":           model.IsPredefined,
+				"source_template_id":      model.SourceTemplateID,
+				"source_template_version": model.SourceTemplateVersion,
+				"deleted_at":              nil,
+				"updated_at":              now,
+			}
+			if err := tx.Model(&EvalEvaluatorModel{}).Where("id = ?", existing.ID).Updates(updates).Error; err != nil {
+				return fmt.Errorf("restore evaluator: %w", err)
+			}
+			return nil
+		}
+	})
 }
 
 func (s *WALStore) GetEvaluator(ctx context.Context, tenantID, evaluatorID string) (*evalpkg.EvaluatorDefinition, error) {
@@ -246,18 +269,41 @@ func (s *WALStore) CreateRule(ctx context.Context, rule evalpkg.RuleDefinition) 
 		UpdatedAt:        now,
 	}
 
-	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "tenant_id"}, {Name: "rule_id"}},
-		DoUpdates: clause.Assignments(map[string]any{
-			"enabled":            model.Enabled,
-			"selector":           model.Selector,
-			"match_json":         model.MatchJSON,
-			"sample_rate":        model.SampleRate,
-			"evaluator_ids_json": model.EvaluatorIDsJSON,
-			"deleted_at":         nil,
-			"updated_at":         now,
-		}),
-	}).Create(&model).Error
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var existing EvalRuleModel
+		err := tx.Unscoped().
+			Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("tenant_id = ? AND rule_id = ?", model.TenantID, model.RuleID).
+			Take(&existing).Error
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			if err := tx.Create(&model).Error; err != nil {
+				if isDuplicateKeyError(err) {
+					return fmt.Errorf("%w: rule %q already exists", evalpkg.ErrConflict, rule.RuleID)
+				}
+				return fmt.Errorf("create rule: %w", err)
+			}
+			return nil
+		case err != nil:
+			return fmt.Errorf("check existing rule: %w", err)
+		case existing.DeletedAt == nil:
+			return fmt.Errorf("%w: rule %q already exists", evalpkg.ErrConflict, rule.RuleID)
+		default:
+			updates := map[string]any{
+				"enabled":            model.Enabled,
+				"selector":           model.Selector,
+				"match_json":         model.MatchJSON,
+				"sample_rate":        model.SampleRate,
+				"evaluator_ids_json": model.EvaluatorIDsJSON,
+				"deleted_at":         nil,
+				"updated_at":         now,
+			}
+			if err := tx.Model(&EvalRuleModel{}).Where("id = ?", existing.ID).Updates(updates).Error; err != nil {
+				return fmt.Errorf("restore rule: %w", err)
+			}
+			return nil
+		}
+	})
 }
 
 func (s *WALStore) GetRule(ctx context.Context, tenantID, ruleID string) (*evalpkg.RuleDefinition, error) {

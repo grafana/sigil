@@ -131,6 +131,92 @@ var (
 )
 ```
 
+### API-Boundary Validation
+
+Keep request validation at the transport or control boundary, not scattered through the service stack.
+
+- Validate and normalize request DTOs before converting them into domain types.
+- Keep service, storage, and runtime layers focused on domain behavior and operational failures.
+- Avoid repeating defensive request-shape checks after the API layer unless there is a separate non-HTTP caller that genuinely needs the same guard.
+
+```go
+type CreateTemplateRequest struct {
+    TemplateID string         `json:"template_id"`
+    Kind       EvaluatorKind  `json:"kind"`
+    Config     map[string]any `json:"config"`
+}
+
+func (r CreateTemplateRequest) Validate() error {
+    if strings.TrimSpace(r.TemplateID) == "" {
+        return ValidationError("template_id is required")
+    }
+    if err := validateEvaluatorConfig(r.Kind, r.Config); err != nil {
+        return err
+    }
+    return nil
+}
+
+func (h *Handler) createTemplate(w http.ResponseWriter, req *http.Request) {
+    var body CreateTemplateRequest
+    if err := decodeJSON(req, &body); err != nil {
+        writeError(w, ValidationError("invalid request body"))
+        return
+    }
+    if err := body.Validate(); err != nil {
+        writeError(w, err)
+        return
+    }
+    _, err := h.service.CreateTemplate(req.Context(), body.toDomain())
+    writeError(w, err)
+}
+```
+
+### Sentinel Errors and HTTP Mapping
+
+Return typed domain errors internally and translate them to HTTP responses only at the edge.
+
+- Prefer `errors.Is`/`errors.As` over string matching.
+- Keep error kinds small and stable: validation, not found, conflict, unavailable, internal.
+- Add context by wrapping the underlying cause instead of leaking transport details into services.
+
+```go
+var (
+    ErrValidation  = errors.New("validation")
+    ErrNotFound    = errors.New("not found")
+    ErrConflict    = errors.New("conflict")
+    ErrUnavailable = errors.New("unavailable")
+)
+
+type FieldError struct {
+    Field   string
+    Message string
+}
+
+type ControlError struct {
+    Kind   error
+    Err    error
+    Fields []FieldError
+}
+
+func (e *ControlError) Error() string { return e.Kind.Error() }
+func (e *ControlError) Unwrap() error { return e.Err }
+
+func writeError(w http.ResponseWriter, err error) {
+    switch {
+    case errors.Is(err, ErrValidation):
+        http.Error(w, err.Error(), http.StatusBadRequest)
+    case errors.Is(err, ErrNotFound):
+        http.Error(w, err.Error(), http.StatusNotFound)
+    case errors.Is(err, ErrConflict):
+        http.Error(w, err.Error(), http.StatusConflict)
+    case errors.Is(err, ErrUnavailable):
+        http.Error(w, err.Error(), http.StatusServiceUnavailable)
+    default:
+        http.Error(w, "internal error", http.StatusInternalServerError)
+    }
+}
+```
+
 ### Error Checking with errors.Is and errors.As
 
 ```go

@@ -29,7 +29,10 @@ function JudgeProviderModelFields({
 
   return (
     <>
-      <Field label="Provider" description="Optional. Override the default judge provider.">
+      <Field
+        label="Provider"
+        description="Optional. Override the default judge target with both fields, or use a fully-qualified model."
+      >
         <Select<string>
           className={compactControlClassName}
           options={providerOptions}
@@ -43,7 +46,10 @@ function JudgeProviderModelFields({
           placeholder="Default"
         />
       </Field>
-      <Field label="Model" description="Optional. Override the default judge model.">
+      <Field
+        label="Model"
+        description="Optional. Override the default judge target with both fields, or use a fully-qualified model."
+      >
         <Select<string>
           className={compactControlClassName}
           options={modelOptions}

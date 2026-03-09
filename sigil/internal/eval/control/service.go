@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
+	"github.com/grafana/sigil/sigil/internal/eval/evaluators/judges"
 	"github.com/grafana/sigil/sigil/internal/eval/predefined"
 	"github.com/grafana/sigil/sigil/internal/eval/rules"
 	"github.com/grafana/sigil/sigil/internal/eval/worker"
@@ -54,34 +55,6 @@ type Service struct {
 	// previewWindowHrs is in hours and controls preview sampling window when previewStore is configured.
 	previewWindowHrs int
 	now              func() time.Time
-}
-
-type validationError struct {
-	cause error
-}
-
-func (e validationError) Error() string {
-	return e.cause.Error()
-}
-
-func (e validationError) Unwrap() error {
-	return e.cause
-}
-
-func newValidationError(err error) error {
-	if err == nil {
-		return nil
-	}
-	var target validationError
-	if errors.As(err, &target) {
-		return err
-	}
-	return validationError{cause: err}
-}
-
-func isValidationError(err error) bool {
-	var target validationError
-	return errors.As(err, &target)
 }
 
 type ForkPredefinedEvaluatorRequest struct {
@@ -142,10 +115,28 @@ func (s *Service) CreateEvaluator(ctx context.Context, tenantID string, evaluato
 	}
 	evaluator.TenantID = strings.TrimSpace(tenantID)
 	if err := validateEvaluator(&evaluator); err != nil {
-		return evalpkg.EvaluatorDefinition{}, newValidationError(err)
+		return evalpkg.EvaluatorDefinition{}, ValidationWrap(err)
+	}
+	existing, err := s.store.GetEvaluatorVersion(ctx, evaluator.TenantID, evaluator.EvaluatorID, evaluator.Version)
+	if err != nil {
+		return evalpkg.EvaluatorDefinition{}, err
+	}
+	if existing != nil {
+		return evalpkg.EvaluatorDefinition{}, ConflictError(fmt.Sprintf(
+			"evaluator %q version %q already exists",
+			evaluator.EvaluatorID,
+			evaluator.Version,
+		))
 	}
 
 	if err := s.store.CreateEvaluator(ctx, evaluator); err != nil {
+		if errors.Is(err, evalpkg.ErrConflict) {
+			return evalpkg.EvaluatorDefinition{}, ConflictError(fmt.Sprintf(
+				"evaluator %q version %q already exists",
+				evaluator.EvaluatorID,
+				evaluator.Version,
+			))
+		}
 		return evalpkg.EvaluatorDefinition{}, err
 	}
 	s.refreshActiveMetrics(ctx, evaluator.TenantID)
@@ -198,26 +189,27 @@ func (s *Service) ForkPredefinedEvaluator(ctx context.Context, tenantID, templat
 func (s *Service) forkFromHardcoded(ctx context.Context, tenantID, templateID string, request ForkPredefinedEvaluatorRequest) (evalpkg.EvaluatorDefinition, error) {
 	template, ok := findPredefinedTemplate(templateID)
 	if !ok {
-		return evalpkg.EvaluatorDefinition{}, newValidationError(fmt.Errorf("predefined evaluator %q was not found", strings.TrimSpace(templateID)))
+		return evalpkg.EvaluatorDefinition{}, NotFoundError(fmt.Sprintf("predefined evaluator %q was not found", strings.TrimSpace(templateID)))
+	}
+	normalizedRequest, err := request.normalizeAndValidate(template.Kind)
+	if err != nil {
+		return evalpkg.EvaluatorDefinition{}, err
 	}
 
-	evaluatorID := strings.TrimSpace(request.EvaluatorID)
-	if evaluatorID == "" {
-		return evalpkg.EvaluatorDefinition{}, newValidationError(errors.New("evaluator_id is required"))
-	}
-	version := strings.TrimSpace(request.Version)
+	evaluatorID := normalizedRequest.EvaluatorID
+	version := normalizedRequest.Version
 	if version == "" {
 		version = template.Version
 	}
 
-	forkConfig := cloneMap(template.Config)
-	for key, value := range request.Config {
-		forkConfig[key] = value
-	}
+	forkConfig := mergeEvaluatorForkConfig(template.Kind, template.Config, normalizedRequest.Config)
 
 	outputKeys := template.OutputKeys
-	if len(request.OutputKeys) > 0 {
-		outputKeys = request.OutputKeys
+	if len(normalizedRequest.OutputKeys) > 0 {
+		outputKeys = normalizedRequest.OutputKeys
+	}
+	if err := validateEvaluatorConfig(template.Kind, forkConfig, outputKeys); err != nil {
+		return evalpkg.EvaluatorDefinition{}, ValidationWrap(err)
 	}
 
 	fork := evalpkg.EvaluatorDefinition{
@@ -253,7 +245,7 @@ func (s *Service) DeleteEvaluator(ctx context.Context, tenantID, evaluatorID str
 		return err
 	}
 	if len(referencingRules) > 0 {
-		return newValidationError(fmt.Errorf(
+		return ValidationWrap(fmt.Errorf(
 			"cannot delete evaluator %q: referenced by enabled rules %s",
 			trimmedEvaluatorID,
 			strings.Join(referencingRules, ", "),
@@ -306,7 +298,14 @@ func (s *Service) CreateRule(ctx context.Context, tenantID string, rule evalpkg.
 	}
 	rule.TenantID = strings.TrimSpace(tenantID)
 	if err := validateRule(&rule); err != nil {
-		return evalpkg.RuleDefinition{}, newValidationError(err)
+		return evalpkg.RuleDefinition{}, ValidationWrap(err)
+	}
+	existing, err := s.store.GetRule(ctx, rule.TenantID, rule.RuleID)
+	if err != nil {
+		return evalpkg.RuleDefinition{}, err
+	}
+	if existing != nil {
+		return evalpkg.RuleDefinition{}, ConflictError(fmt.Sprintf("rule %q already exists", rule.RuleID))
 	}
 
 	if err := s.validateRuleEvaluatorReferences(ctx, rule.TenantID, rule.EvaluatorIDs); err != nil {
@@ -314,6 +313,9 @@ func (s *Service) CreateRule(ctx context.Context, tenantID string, rule evalpkg.
 	}
 
 	if err := s.store.CreateRule(ctx, rule); err != nil {
+		if errors.Is(err, evalpkg.ErrConflict) {
+			return evalpkg.RuleDefinition{}, ConflictError(fmt.Sprintf("rule %q already exists", rule.RuleID))
+		}
 		return evalpkg.RuleDefinition{}, err
 	}
 	s.refreshActiveMetrics(ctx, rule.TenantID)
@@ -368,7 +370,7 @@ func (s *Service) UpdateRule(ctx context.Context, tenantID, ruleID string, enabl
 		rule.EvaluatorIDs = evaluatorIDs
 	}
 	if err := validateRule(rule); err != nil {
-		return nil, newValidationError(err)
+		return nil, ValidationWrap(err)
 	}
 	if rule.Enabled {
 		if err := s.validateRuleEvaluatorReferences(ctx, rule.TenantID, rule.EvaluatorIDs); err != nil {
@@ -397,7 +399,7 @@ func (s *Service) validateRuleEvaluatorReferences(ctx context.Context, tenantID 
 			return err
 		}
 		if evaluator == nil {
-			return newValidationError(fmt.Errorf("evaluator %q was not found", evaluatorID))
+			return ValidationWrap(fmt.Errorf("evaluator %q was not found", evaluatorID))
 		}
 	}
 	return nil
@@ -427,9 +429,13 @@ func (s *Service) ListJudgeModels(ctx context.Context, providerID string) ([]Jud
 		return []JudgeModel{}, nil
 	}
 	if strings.TrimSpace(providerID) == "" {
-		return nil, newValidationError(errors.New("provider query param is required"))
+		return nil, ValidationWrap(errors.New("provider query param is required"))
 	}
-	return s.discovery.ListModels(ctx, strings.TrimSpace(providerID))
+	models, err := s.discovery.ListModels(ctx, strings.TrimSpace(providerID))
+	if errors.Is(err, judges.ErrProviderNotFound) {
+		return nil, NotFoundError(fmt.Sprintf("judge provider %q was not found", strings.TrimSpace(providerID)))
+	}
+	return models, err
 }
 
 const previewMaxSamples = 20
@@ -437,11 +443,11 @@ const inputPreviewMaxLen = 200
 
 func (s *Service) PreviewRule(ctx context.Context, tenantID string, req evalpkg.RulePreviewRequest) (evalpkg.RulePreviewResponse, error) {
 	if s.previewStore == nil || s.previewWindowHrs <= 0 {
-		return evalpkg.RulePreviewResponse{}, newValidationError(errors.New("rule preview is not configured"))
+		return evalpkg.RulePreviewResponse{}, ValidationWrap(errors.New("rule preview is not configured"))
 	}
 	trimmedTenantID := strings.TrimSpace(tenantID)
 	if trimmedTenantID == "" {
-		return evalpkg.RulePreviewResponse{}, newValidationError(errors.New("tenant id is required"))
+		return evalpkg.RulePreviewResponse{}, ValidationWrap(errors.New("tenant id is required"))
 	}
 
 	selector := strings.TrimSpace(string(req.Selector))
@@ -451,10 +457,10 @@ func (s *Service) PreviewRule(ctx context.Context, tenantID string, req evalpkg.
 	switch evalpkg.Selector(selector) {
 	case evalpkg.SelectorUserVisibleTurn, evalpkg.SelectorAllAssistantGenerations, evalpkg.SelectorToolCallSteps, evalpkg.SelectorErroredGenerations:
 	default:
-		return evalpkg.RulePreviewResponse{}, newValidationError(errors.New("selector is invalid"))
+		return evalpkg.RulePreviewResponse{}, ValidationWrap(errors.New("selector is invalid"))
 	}
 	if req.SampleRate < 0 || req.SampleRate > 1 {
-		return evalpkg.RulePreviewResponse{}, newValidationError(errors.New("sample_rate must be between 0 and 1"))
+		return evalpkg.RulePreviewResponse{}, ValidationWrap(errors.New("sample_rate must be between 0 and 1"))
 	}
 	match := req.Match
 	if match == nil {
@@ -462,7 +468,7 @@ func (s *Service) PreviewRule(ctx context.Context, tenantID string, req evalpkg.
 	} else {
 		normalizedMatch, err := validateRuleMatch(match)
 		if err != nil {
-			return evalpkg.RulePreviewResponse{}, newValidationError(err)
+			return evalpkg.RulePreviewResponse{}, ValidationWrap(err)
 		}
 		match = normalizedMatch
 	}
@@ -664,11 +670,16 @@ func validateRule(rule *evalpkg.RuleDefinition) error {
 		return errors.New("evaluator_ids must include at least one id")
 	}
 	normalizedEvaluatorIDs := make([]string, 0, len(rule.EvaluatorIDs))
+	seenEvaluatorIDs := make(map[string]struct{}, len(rule.EvaluatorIDs))
 	for _, evaluatorID := range rule.EvaluatorIDs {
 		trimmedEvaluatorID := strings.TrimSpace(evaluatorID)
 		if trimmedEvaluatorID == "" {
 			return errors.New("evaluator_ids cannot include empty values")
 		}
+		if _, exists := seenEvaluatorIDs[trimmedEvaluatorID]; exists {
+			return fmt.Errorf("evaluator_ids cannot include duplicate value %q", trimmedEvaluatorID)
+		}
+		seenEvaluatorIDs[trimmedEvaluatorID] = struct{}{}
 		normalizedEvaluatorIDs = append(normalizedEvaluatorIDs, trimmedEvaluatorID)
 	}
 	rule.EvaluatorIDs = normalizedEvaluatorIDs

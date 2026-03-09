@@ -126,30 +126,13 @@ type ForkTemplateRequest struct {
 // CreateTemplate validates and persists a new template with its initial version.
 // Users can only create tenant-scoped templates.
 func (s *TemplateService) CreateTemplate(ctx context.Context, tenantID string, req CreateTemplateRequest) (*evalpkg.TemplateDefinition, error) {
-	templateID := strings.TrimSpace(req.TemplateID)
-	if templateID == "" {
-		return nil, newValidationError(errors.New("template_id is required"))
+	normalizedReq, err := req.normalizeAndValidate()
+	if err != nil {
+		return nil, err
 	}
-	if err := validateID("template_id", templateID); err != nil {
-		return nil, newValidationError(err)
-	}
-	kind := evalpkg.EvaluatorKind(strings.TrimSpace(req.Kind))
-	if err := validateKind(kind); err != nil {
-		return nil, newValidationError(err)
-	}
-	version := strings.TrimSpace(req.Version)
-	if version == "" {
-		return nil, newValidationError(errors.New("version is required"))
-	}
-	if !isValidVersionFormat(version) {
-		return nil, newValidationError(fmt.Errorf("version %q must be in YYYY-MM-DD or YYYY-MM-DD.N format", version))
-	}
-	if len(req.Config) == 0 {
-		return nil, newValidationError(errors.New("config is required"))
-	}
-	if err := validateOutputKeys(req.OutputKeys); err != nil {
-		return nil, newValidationError(err)
-	}
+	templateID := normalizedReq.TemplateID
+	kind := evalpkg.EvaluatorKind(normalizedReq.Kind)
+	version := normalizedReq.Version
 
 	now := s.now().UTC()
 	tmpl := evalpkg.TemplateDefinition{
@@ -158,7 +141,7 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, tenantID string, r
 		Scope:         evalpkg.TemplateScopeTenant,
 		LatestVersion: version,
 		Kind:          kind,
-		Description:   strings.TrimSpace(req.Description),
+		Description:   normalizedReq.Description,
 		CreatedAt:     now,
 		UpdatedAt:     now,
 	}
@@ -166,15 +149,23 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, tenantID string, r
 		TenantID:   tmpl.TenantID,
 		TemplateID: templateID,
 		Version:    version,
-		Config:     req.Config,
-		OutputKeys: req.OutputKeys,
-		Changelog:  strings.TrimSpace(req.Changelog),
+		Config:     normalizedReq.Config,
+		OutputKeys: normalizedReq.OutputKeys,
+		Changelog:  normalizedReq.Changelog,
 		CreatedAt:  now,
 	}
 
+	existing, err := s.store.GetTemplate(ctx, tmpl.TenantID, templateID)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return nil, ConflictError(fmt.Sprintf("template %q already exists", templateID))
+	}
+
 	if err := s.store.CreateTemplate(ctx, tmpl, ver); err != nil {
-		if strings.Contains(err.Error(), "already exists") {
-			return nil, newValidationError(err)
+		if errors.Is(err, evalpkg.ErrConflict) {
+			return nil, ConflictError(fmt.Sprintf("template %q already exists", templateID))
 		}
 		return nil, err
 	}
@@ -232,27 +223,13 @@ func (s *TemplateService) DeleteTemplate(ctx context.Context, tenantID, template
 	trimmedTemplateID := strings.TrimSpace(templateID)
 
 	if _, _, ok := findPredefinedTemplateDefinition(trimmedTemplateID); ok {
-		return newValidationError(errors.New("cannot delete global templates"))
+		return ValidationWrap(errors.New("cannot delete global templates"))
 	}
 	return s.store.DeleteTemplate(ctx, trimmedTenantID, trimmedTemplateID)
 }
 
 // PublishVersion adds a new immutable version to an existing template.
 func (s *TemplateService) PublishVersion(ctx context.Context, tenantID, templateID string, req PublishVersionRequest) (*evalpkg.TemplateVersion, error) {
-	version := strings.TrimSpace(req.Version)
-	if version == "" {
-		return nil, newValidationError(errors.New("version is required"))
-	}
-	if !isValidVersionFormat(version) {
-		return nil, newValidationError(fmt.Errorf("version %q must be in YYYY-MM-DD or YYYY-MM-DD.N format", version))
-	}
-	if len(req.Config) == 0 {
-		return nil, newValidationError(errors.New("config is required"))
-	}
-	if err := validateOutputKeys(req.OutputKeys); err != nil {
-		return nil, newValidationError(err)
-	}
-
 	trimmedTenantID := strings.TrimSpace(tenantID)
 	trimmedTemplateID := strings.TrimSpace(templateID)
 
@@ -262,17 +239,22 @@ func (s *TemplateService) PublishVersion(ctx context.Context, tenantID, template
 	}
 	if tmpl == nil {
 		if _, _, ok := findPredefinedTemplateDefinition(trimmedTemplateID); ok {
-			return nil, newValidationError(errors.New("cannot publish versions for global templates"))
+			return nil, ValidationWrap(errors.New("cannot publish versions for global templates"))
 		}
-		return nil, newValidationError(fmt.Errorf("template %q not found", trimmedTemplateID))
+		return nil, NotFoundError(fmt.Sprintf("template %q not found", trimmedTemplateID))
 	}
+	normalizedReq, err := req.normalizeAndValidate(tmpl.Kind)
+	if err != nil {
+		return nil, err
+	}
+	version := normalizedReq.Version
 
 	existingVer, err := s.store.GetTemplateVersion(ctx, trimmedTenantID, trimmedTemplateID, version)
 	if err != nil {
 		return nil, err
 	}
 	if existingVer != nil {
-		return nil, newValidationError(fmt.Errorf("version %q already exists for template %q", version, trimmedTemplateID))
+		return nil, ConflictError(fmt.Sprintf("version %q already exists for template %q", version, trimmedTemplateID))
 	}
 
 	now := s.now().UTC()
@@ -280,9 +262,9 @@ func (s *TemplateService) PublishVersion(ctx context.Context, tenantID, template
 		TenantID:   trimmedTenantID,
 		TemplateID: trimmedTemplateID,
 		Version:    version,
-		Config:     req.Config,
-		OutputKeys: req.OutputKeys,
-		Changelog:  strings.TrimSpace(req.Changelog),
+		Config:     normalizedReq.Config,
+		OutputKeys: normalizedReq.OutputKeys,
+		Changelog:  normalizedReq.Changelog,
 		CreatedAt:  now,
 	}
 
@@ -320,19 +302,11 @@ func (s *TemplateService) ListTemplateVersions(ctx context.Context, tenantID, te
 // ForkTemplate creates a concrete evaluator from a template version, applying optional config overrides.
 func (s *TemplateService) ForkTemplate(ctx context.Context, tenantID, templateID string, req ForkTemplateRequest) (*evalpkg.EvaluatorDefinition, error) {
 	if s.evalCreator == nil {
-		return nil, errors.New("evaluator creator is required")
+		return nil, UnavailableError("evaluator creator is not configured", errors.New("evaluator creator is required"))
 	}
 
 	trimmedTenantID := strings.TrimSpace(tenantID)
 	trimmedTemplateID := strings.TrimSpace(templateID)
-
-	evaluatorID := strings.TrimSpace(req.EvaluatorID)
-	if evaluatorID == "" {
-		return nil, newValidationError(errors.New("evaluator_id is required"))
-	}
-	if err := validateID("evaluator_id", evaluatorID); err != nil {
-		return nil, newValidationError(err)
-	}
 
 	// Resolve tenant or predefined template.
 	tmpl, _, err := s.GetTemplate(ctx, trimmedTenantID, trimmedTemplateID)
@@ -340,11 +314,15 @@ func (s *TemplateService) ForkTemplate(ctx context.Context, tenantID, templateID
 		return nil, err
 	}
 	if tmpl == nil {
-		return nil, newValidationError(fmt.Errorf("template %q not found", trimmedTemplateID))
+		return nil, NotFoundError(fmt.Sprintf("template %q not found", trimmedTemplateID))
+	}
+	normalizedReq, err := req.normalizeAndValidate(tmpl.Kind)
+	if err != nil {
+		return nil, err
 	}
 
 	// Determine which version to use.
-	versionStr := strings.TrimSpace(req.Version)
+	versionStr := normalizedReq.Version
 	if versionStr == "" {
 		versionStr = tmpl.LatestVersion
 	}
@@ -354,7 +332,7 @@ func (s *TemplateService) ForkTemplate(ctx context.Context, tenantID, templateID
 	if tmpl.Scope == evalpkg.TemplateScopeGlobal {
 		_, predefinedVersion, ok := findPredefinedTemplateDefinition(trimmedTemplateID)
 		if !ok || versionStr != tmpl.LatestVersion {
-			return nil, newValidationError(fmt.Errorf("template version %q not found for template %q", versionStr, trimmedTemplateID))
+			return nil, NotFoundError(fmt.Sprintf("template version %q not found for template %q", versionStr, trimmedTemplateID))
 		}
 		ver = &predefinedVersion
 	} else {
@@ -363,25 +341,24 @@ func (s *TemplateService) ForkTemplate(ctx context.Context, tenantID, templateID
 			return nil, err
 		}
 		if ver == nil {
-			return nil, newValidationError(fmt.Errorf("template version %q not found for template %q", versionStr, trimmedTemplateID))
+			return nil, NotFoundError(fmt.Sprintf("template version %q not found for template %q", versionStr, trimmedTemplateID))
 		}
 	}
 
-	// Shallow-merge request config over template version config.
-	forkConfig := cloneMap(ver.Config)
-	for key, value := range req.Config {
-		forkConfig[key] = value
-	}
+	forkConfig := mergeEvaluatorForkConfig(tmpl.Kind, ver.Config, normalizedReq.Config)
 
 	// Use request output keys if provided, otherwise template version output keys.
 	outputKeys := ver.OutputKeys
-	if len(req.OutputKeys) > 0 {
-		outputKeys = req.OutputKeys
+	if len(normalizedReq.OutputKeys) > 0 {
+		outputKeys = normalizedReq.OutputKeys
+	}
+	if err := validateEvaluatorConfig(tmpl.Kind, forkConfig, outputKeys); err != nil {
+		return nil, ValidationWrap(err)
 	}
 
 	fork := evalpkg.EvaluatorDefinition{
 		TenantID:              trimmedTenantID,
-		EvaluatorID:           evaluatorID,
+		EvaluatorID:           normalizedReq.EvaluatorID,
 		Version:               versionStr,
 		Kind:                  tmpl.Kind,
 		Config:                forkConfig,
@@ -426,8 +403,12 @@ func validateOutputKeys(keys []evalpkg.OutputKey) error {
 	if len(keys) != 1 {
 		return errors.New("output_keys must include exactly one key")
 	}
-	for _, key := range keys {
-		if strings.TrimSpace(key.Key) == "" {
+	for idx := range keys {
+		key := &keys[idx]
+		key.Key = strings.TrimSpace(key.Key)
+		key.Unit = strings.TrimSpace(key.Unit)
+		key.Description = strings.TrimSpace(key.Description)
+		if key.Key == "" {
 			return errors.New("output key name is required")
 		}
 		switch key.Type {
@@ -435,7 +416,21 @@ func validateOutputKeys(keys []evalpkg.OutputKey) error {
 		default:
 			return fmt.Errorf("output key %q has invalid type", key.Key)
 		}
-		if err := validateOutputKeyConstraints(key); err != nil {
+		if len(key.Enum) > 0 {
+			enumValues, err := normalizeOutputKeyStrings(key.Enum, fmt.Sprintf("output key %q enum", key.Key))
+			if err != nil {
+				return err
+			}
+			key.Enum = enumValues
+		}
+		if len(key.PassMatch) > 0 {
+			passMatchValues, err := normalizeOutputKeyStrings(key.PassMatch, fmt.Sprintf("output key %q pass_match", key.Key))
+			if err != nil {
+				return err
+			}
+			key.PassMatch = passMatchValues
+		}
+		if err := validateOutputKeyConstraints(*key); err != nil {
 			return err
 		}
 	}
@@ -447,18 +442,40 @@ func validateOutputKeyConstraints(key evalpkg.OutputKey) error {
 		if key.Type != evalpkg.ScoreTypeNumber {
 			return fmt.Errorf("output key %q: min/max are only valid for number types", key.Key)
 		}
-		if key.Min != nil && key.Max != nil && *key.Min > *key.Max {
-			return fmt.Errorf("output key %q: min (%g) must be <= max (%g)", key.Key, *key.Min, *key.Max)
+		if key.Min != nil && key.Max != nil && *key.Min >= *key.Max {
+			return fmt.Errorf("output key %q: min (%g) must be < max (%g)", key.Key, *key.Min, *key.Max)
 		}
 	}
-	if key.PassThreshold != nil && key.Type != evalpkg.ScoreTypeNumber {
-		return fmt.Errorf("output key %q: pass_threshold is only valid for number types", key.Key)
+	if len(key.Enum) > 0 && key.Type != evalpkg.ScoreTypeString {
+		return fmt.Errorf("output key %q: enum is only valid for string types", key.Key)
+	}
+	if key.PassThreshold != nil {
+		if key.Type != evalpkg.ScoreTypeNumber {
+			return fmt.Errorf("output key %q: pass_threshold is only valid for number types", key.Key)
+		}
+		if key.Min != nil && *key.PassThreshold < *key.Min {
+			return fmt.Errorf("output key %q: pass_threshold (%g) must be >= min (%g)", key.Key, *key.PassThreshold, *key.Min)
+		}
+		if key.Max != nil && *key.PassThreshold > *key.Max {
+			return fmt.Errorf("output key %q: pass_threshold (%g) must be <= max (%g)", key.Key, *key.PassThreshold, *key.Max)
+		}
 	}
 	if len(key.PassMatch) > 0 && key.Type != evalpkg.ScoreTypeString {
 		return fmt.Errorf("output key %q: pass_match is only valid for string types", key.Key)
 	}
 	if key.PassValue != nil && key.Type != evalpkg.ScoreTypeBool {
 		return fmt.Errorf("output key %q: pass_value is only valid for bool types", key.Key)
+	}
+	if len(key.Enum) > 0 && len(key.PassMatch) > 0 {
+		enumSet := make(map[string]struct{}, len(key.Enum))
+		for _, value := range key.Enum {
+			enumSet[value] = struct{}{}
+		}
+		for _, value := range key.PassMatch {
+			if _, ok := enumSet[value]; !ok {
+				return fmt.Errorf("output key %q: pass_match value %q must be included in enum", key.Key, value)
+			}
+		}
 	}
 	return nil
 }

@@ -70,6 +70,27 @@ describe('EvaluatorForm', () => {
     expect(screen.getByText('Must be an integer greater than 0')).toBeInTheDocument();
   });
 
+  it('blocks submit when only provider is selected for llm_judge', () => {
+    const onSubmit = jest.fn();
+    const prefill: Partial<Evaluator> = {
+      evaluator_id: 'seed.provider-only',
+      kind: 'llm_judge',
+      config: {
+        provider: 'openai',
+        max_tokens: 128,
+        temperature: 0,
+      },
+      output_keys: [{ key: 'score', type: 'number' }],
+    };
+
+    render(<EvaluatorForm prefill={prefill} onSubmit={onSubmit} onCancel={jest.fn()} dataSource={mockDataSource} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText('Choose both provider and model, or leave both blank')).toBeInTheDocument();
+  });
+
   it('blocks submit when temperature is greater than two', () => {
     const onSubmit = jest.fn();
     const prefill: Partial<Evaluator> = {
@@ -156,6 +177,28 @@ describe('EvaluatorForm', () => {
 
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByText('Must be greater than Min')).toBeInTheDocument();
+  });
+
+  it('blocks submit when pass threshold is greater than max', () => {
+    const onSubmit = jest.fn();
+    const prefill: Partial<Evaluator> = {
+      evaluator_id: 'seed.threshold.max',
+      kind: 'llm_judge',
+      config: {
+        system_prompt: 'judge this',
+        user_prompt: 'score output',
+        max_tokens: 128,
+        temperature: 0,
+      },
+      output_keys: [{ key: 'score', type: 'number', pass_threshold: 11, min: 1, max: 10 }],
+    };
+
+    render(<EvaluatorForm prefill={prefill} onSubmit={onSubmit} onCancel={jest.fn()} dataSource={mockDataSource} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText('Must be less than or equal to Max')).toBeInTheDocument();
   });
 
   it('blocks submit when heuristic max length is not greater than min length', () => {

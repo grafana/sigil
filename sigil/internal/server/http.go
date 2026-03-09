@@ -17,6 +17,7 @@ import (
 	"github.com/grafana/dskit/tenant"
 	"github.com/grafana/sigil/sigil/internal/agentrating"
 	"github.com/grafana/sigil/sigil/internal/feedback"
+	"github.com/grafana/sigil/sigil/internal/followup"
 	generationingest "github.com/grafana/sigil/sigil/internal/ingest/generation"
 	"github.com/grafana/sigil/sigil/internal/jsonutil"
 	"github.com/grafana/sigil/sigil/internal/modelcards"
@@ -72,6 +73,7 @@ func RegisterRoutes(
 		modelCardSvc,
 		kitlog.NewNopLogger(),
 		protectedMiddleware,
+		nil,
 	)
 }
 
@@ -111,6 +113,7 @@ func RegisterQueryRoutes(
 	modelCardSvc *modelcards.Service,
 	logger kitlog.Logger,
 	protectedMiddleware func(http.Handler) http.Handler,
+	followupSvc *followup.Service,
 	promptInsightsOpts ...PromptInsightsOption,
 ) {
 	if mux == nil || querySvc == nil {
@@ -133,23 +136,23 @@ func RegisterQueryRoutes(
 	if rater != nil && ratingStore != nil {
 		mux.Handle("/api/v1/agents:rate", protectedMiddleware(http.HandlerFunc(rateAgent(querySvc, rater, ratingStore, logger))))
 	}
+	var piOpts PromptInsightsOption
+	if len(promptInsightsOpts) > 0 {
+		piOpts = promptInsightsOpts[0]
+	}
+
 	mux.Handle("/api/v1/conversations:batch-metadata", protectedMiddleware(http.HandlerFunc(batchConversationMetadata(querySvc))))
 	mux.Handle("/api/v1/conversations/search", protectedMiddleware(http.HandlerFunc(searchConversations(querySvc))))
 	mux.Handle("/api/v1/conversations/search/stream", protectedMiddleware(http.HandlerFunc(streamSearchConversations(querySvc))))
 	mux.Handle("/api/v1/conversations/stats", protectedMiddleware(http.HandlerFunc(conversationStats(querySvc))))
 	mux.Handle("/api/v1/conversations", protectedMiddleware(http.HandlerFunc(listConversations(querySvc))))
-	mux.Handle("/api/v1/conversations/", protectedMiddleware(http.HandlerFunc(conversationRoutes(querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled))))
+	mux.Handle("/api/v1/conversations/", protectedMiddleware(http.HandlerFunc(conversationRoutes(querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled, followupSvc))))
 
 	if modelCardSvc != nil {
 		mux.Handle("/api/v1/model-cards", protectedMiddleware(http.HandlerFunc(listModelCards(modelCardSvc))))
 		mux.Handle("/api/v1/model-cards:lookup", protectedMiddleware(http.HandlerFunc(lookupModelCard(modelCardSvc))))
 		mux.Handle("/api/v1/model-cards:sources", protectedMiddleware(http.HandlerFunc(listModelCardSources(modelCardSvc))))
 		mux.Handle("/api/v1/model-cards:refresh", protectedMiddleware(http.HandlerFunc(refreshModelCards(modelCardSvc))))
-	}
-
-	var piOpts PromptInsightsOption
-	if len(promptInsightsOpts) > 0 {
-		piOpts = promptInsightsOpts[0]
 	}
 	if piOpts.Store != nil {
 		mux.Handle("/api/v1/agents:prompt-insights", protectedMiddleware(http.HandlerFunc(lookupPromptInsights(querySvc, piOpts.Store))))
@@ -255,7 +258,7 @@ func batchConversationMetadata(querySvc *query.Service) http.HandlerFunc {
 	}
 }
 
-func conversationRoutes(querySvc *query.Service, feedbackSvc *feedback.Service, ratingsEnabled bool, annotationsEnabled bool) http.HandlerFunc {
+func conversationRoutes(querySvc *query.Service, feedbackSvc *feedback.Service, ratingsEnabled bool, annotationsEnabled bool, followupSvc *followup.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		id, childPath, ok := parseConversationSubPath(req.URL.Path)
 		if !ok {
@@ -292,20 +295,17 @@ func conversationRoutes(querySvc *query.Service, feedbackSvc *feedback.Service, 
 			return
 		}
 
-		if feedbackSvc == nil {
-			http.NotFound(w, req)
-			return
-		}
-
 		switch childPath {
+		case "followup":
+			handleConversationFollowup(w, req, querySvc, followupSvc, id)
 		case "ratings":
-			if !ratingsEnabled {
+			if feedbackSvc == nil || !ratingsEnabled {
 				http.NotFound(w, req)
 				return
 			}
 			handleConversationRatings(w, req, feedbackSvc, id)
 		case "annotations":
-			if !annotationsEnabled {
+			if feedbackSvc == nil || !annotationsEnabled {
 				http.NotFound(w, req)
 				return
 			}
@@ -314,6 +314,73 @@ func conversationRoutes(querySvc *query.Service, feedbackSvc *feedback.Service, 
 			http.NotFound(w, req)
 		}
 	}
+}
+
+func handleConversationFollowup(w http.ResponseWriter, req *http.Request, querySvc *query.Service, followupSvc *followup.Service, conversationID string) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if followupSvc == nil {
+		http.Error(w, "followup is unavailable: no judge provider is configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	tenantID, err := tenant.TenantID(req.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	var payload struct {
+		GenerationID string `json:"generation_id"`
+		Message      string `json:"message"`
+		Model        string `json:"model,omitempty"`
+	}
+	if req.Body == nil {
+		http.Error(w, "request body is required", http.StatusBadRequest)
+		return
+	}
+	decoder := json.NewDecoder(req.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&payload); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if err := jsonutil.EnsureEOF(decoder); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	generations, found, err := querySvc.ListConversationGenerationsForTenant(req.Context(), tenantID, conversationID)
+	if err != nil {
+		if query.IsValidationError(err) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	if !found {
+		http.NotFound(w, req)
+		return
+	}
+
+	resp, err := followupSvc.Followup(req.Context(), generations, followup.Request{
+		ConversationID: conversationID,
+		GenerationID:   payload.GenerationID,
+		Message:        payload.Message,
+		Model:          payload.Model,
+	})
+	if err != nil {
+		if followup.IsValidationError(err) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func getGeneration(querySvc *query.Service) http.HandlerFunc {

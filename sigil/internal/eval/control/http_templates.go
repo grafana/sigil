@@ -43,7 +43,11 @@ func (s *TemplateService) handleTemplates(w http.ResponseWriter, req *http.Reque
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		scope := parseTemplateScope(req)
+		scope, err := parseTemplateScope(req)
+		if err != nil {
+			writeControlWriteError(w, err)
+			return
+		}
 		items, nextCursor, err := s.ListTemplates(req.Context(), tenantID, scope, limit, cursor)
 		if err != nil {
 			http.Error(w, "internal server error", http.StatusInternalServerError)
@@ -207,13 +211,16 @@ func (s *TemplateService) handleTemplateVersionByID(w http.ResponseWriter, req *
 	writeJSON(w, http.StatusOK, ver)
 }
 
-func parseTemplateScope(req *http.Request) *evalpkg.TemplateScope {
+func parseTemplateScope(req *http.Request) (*evalpkg.TemplateScope, error) {
 	raw := strings.TrimSpace(req.URL.Query().Get("scope"))
 	if raw == "" {
-		return nil
+		return nil, nil
 	}
 	scope := evalpkg.TemplateScope(raw)
-	return &scope
+	if err := validateTemplateScope(scope); err != nil {
+		return nil, ValidationWrap(err)
+	}
+	return &scope, nil
 }
 
 // templateCreateResponse builds the response for template creation.

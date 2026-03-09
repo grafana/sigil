@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { css, cx } from '@emotion/css';
 import { dateTime, type GrafanaTheme2 } from '@grafana/data';
+import DataTable, { type ColumnDef } from '../components/shared/DataTable';
+import AgentChipList from '../components/shared/AgentChipList';
 import {
   Alert,
   Icon,
@@ -136,73 +138,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     marginLeft: theme.spacing(0.25),
   }),
 
-  // --- Top agents table (overview) ---
-  tablePanel: css({
-    display: 'flex',
-    flexDirection: 'column' as const,
-    background: theme.colors.background.primary,
-    border: `1px solid ${theme.colors.border.weak}`,
-    borderRadius: theme.shape.radius.default,
-    overflow: 'hidden',
-  }),
-  tablePanelHeader: css({
-    padding: theme.spacing(1.5, 2),
-    borderBottom: `1px solid ${theme.colors.border.weak}`,
-  }),
-  tablePanelTitle: css({
-    display: 'block',
-    fontSize: theme.typography.h6.fontSize,
-    fontWeight: theme.typography.fontWeightMedium,
-    color: theme.colors.text.primary,
-  }),
-  overviewTable: css({
-    width: '100%',
-    borderCollapse: 'collapse' as const,
-  }),
-  overviewHeaderRow: css({
-    borderBottom: `2px solid ${theme.colors.border.medium}`,
-  }),
-  overviewHeaderCell: css({
-    padding: theme.spacing(1, 1.5),
-    textAlign: 'left' as const,
-    fontSize: theme.typography.bodySmall.fontSize,
-    fontWeight: theme.typography.fontWeightMedium,
-    color: theme.colors.text.secondary,
-    whiteSpace: 'nowrap' as const,
-  }),
-  overviewHeaderCellRight: css({
-    textAlign: 'right' as const,
-  }),
-  overviewTableRow: css({
-    borderBottom: `1px solid ${theme.colors.border.weak}`,
-    cursor: 'pointer',
-    transition: 'background 0.1s ease',
-    '&:hover': {
-      background: theme.colors.action.hover,
-    },
-  }),
-  overviewTableCell: css({
-    padding: theme.spacing(1, 1.5),
-    fontSize: theme.typography.bodySmall.fontSize,
-    verticalAlign: 'middle' as const,
-  }),
-  overviewTableCellRight: css({
+  // --- Table cell styles (used in DataTable column renderers) ---
+  cellRight: css({
     textAlign: 'right' as const,
     fontVariantNumeric: 'tabular-nums',
-  }),
-  overviewTableCellMono: css({
-    fontFamily: theme.typography.fontFamilyMonospace,
-    whiteSpace: 'normal' as const,
-    overflowWrap: 'anywhere' as const,
-  }),
-  overviewEmptyState: css({
-    display: 'flex',
-    flexDirection: 'column' as const,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: theme.spacing(1),
-    padding: theme.spacing(4),
-    color: theme.colors.text.secondary,
   }),
 
   // --- Agents tab ---
@@ -217,14 +156,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   agentsTableWrap: css({
     overflowX: 'auto',
-  }),
-  agentsTable: css({
-    width: '100%',
-    borderCollapse: 'collapse' as const,
-    minWidth: 880,
-  }),
-  anonymousRow: css({
-    borderLeft: `3px solid ${theme.colors.warning.main}`,
   }),
   promptCell: css({
     maxWidth: 360,
@@ -749,6 +680,89 @@ export default function AgentsPage({
     [items, starredAgents]
   );
 
+  const agentColumns = useMemo<Array<ColumnDef<AgentListItem>>>(
+    () => [
+      {
+        id: 'star',
+        header: '',
+        width: 32,
+        cell: (item) => {
+          const name = agentDisplayName(item);
+          const isStarred = starredAgents.has(item.agent_name);
+          return (
+            <div className={styles.starCell}>
+              <button
+                className={cx(styles.starButton, isStarred && styles.starButtonActive)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleStar(item.agent_name);
+                }}
+                aria-label={isStarred ? `unstar agent ${name}` : `star agent ${name}`}
+              >
+                <Icon name={isStarred ? 'favorite' : 'star'} size="md" />
+              </button>
+            </div>
+          );
+        },
+      },
+      {
+        id: 'agent',
+        header: 'Agent',
+        width: 240,
+        cell: (item) => <AgentChipList agents={[agentDisplayName(item)]} maxVisible={1} />,
+      },
+      {
+        id: 'latest_seen',
+        header: 'Latest seen',
+        width: 100,
+        cell: (item) => (
+          <Tooltip content={new Date(item.latest_seen_at).toLocaleString()} placement="left">
+            <span>{formatRelativeTime(item.latest_seen_at)}</span>
+          </Tooltip>
+        ),
+      },
+      {
+        id: 'versions',
+        header: 'Versions',
+        width: 80,
+        align: 'right',
+        cell: (item) => <span className={styles.cellRight}>{item.version_count}</span>,
+      },
+      {
+        id: 'tools',
+        header: 'Tools',
+        width: 60,
+        align: 'right',
+        cell: (item) => <span className={styles.cellRight}>{item.tool_count}</span>,
+      },
+      {
+        id: 'generations',
+        header: 'Generations',
+        width: 100,
+        align: 'right',
+        cell: (item) => <span className={styles.cellRight}>{formatStatValue(item.generation_count, 'short')}</span>,
+      },
+      {
+        id: 'prompt_prefix',
+        header: 'Prompt prefix',
+        cell: (item) => (
+          <span className={styles.promptCell}>
+            {item.system_prompt_prefix.length > 0 ? item.system_prompt_prefix : '-'}
+          </span>
+        ),
+      },
+    ],
+    [
+      starredAgents,
+      toggleStar,
+      styles.starCell,
+      styles.starButton,
+      styles.starButtonActive,
+      styles.cellRight,
+      styles.promptCell,
+    ]
+  );
+
   // --- AI insight context ---
 
   const agentInsightDataContext = useMemo(() => {
@@ -1034,74 +1048,28 @@ export default function AgentsPage({
                 </div>
               ) : (
                 <>
-                  <div className={cx(styles.tablePanel, styles.agentsTableWrap)}>
-                    <table className={styles.agentsTable} aria-label="agents index table">
-                      <thead>
-                        <tr className={styles.overviewHeaderRow}>
-                          <th className={cx(styles.overviewHeaderCell, styles.starCell)} aria-label="Star" />
-                          <th className={styles.overviewHeaderCell}>Agent</th>
-                          <th className={styles.overviewHeaderCell}>Latest seen</th>
-                          <th className={cx(styles.overviewHeaderCell, styles.overviewHeaderCellRight)}>Versions</th>
-                          <th className={cx(styles.overviewHeaderCell, styles.overviewHeaderCellRight)}>Tools</th>
-                          <th className={cx(styles.overviewHeaderCell, styles.overviewHeaderCellRight)}>Generations</th>
-                          <th className={styles.overviewHeaderCell}>Prompt prefix</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sortedItems.map((item) => {
-                          const isAnonymous = item.agent_name.trim().length === 0;
-                          const name = agentDisplayName(item);
-                          const href = agentHref(name);
-                          const isStarred = starredAgents.has(item.agent_name);
-                          return (
-                            <tr
-                              key={`${item.agent_name}:${item.latest_effective_version}`}
-                              className={cx(styles.overviewTableRow, isAnonymous && styles.anonymousRow)}
-                              onClick={(e) => {
-                                if (e.metaKey || e.ctrlKey) {
-                                  window.open(href, '_blank');
-                                } else {
-                                  handleOpenAgent(item);
-                                }
-                              }}
-                              role="link"
-                              aria-label={`open agent ${cardLabel(item)}`}
-                            >
-                              <td className={cx(styles.overviewTableCell, styles.starCell)}>
-                                <button
-                                  className={cx(styles.starButton, isStarred && styles.starButtonActive)}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleStar(item.agent_name);
-                                  }}
-                                  aria-label={isStarred ? `unstar agent ${name}` : `star agent ${name}`}
-                                >
-                                  <Icon name={isStarred ? 'favorite' : 'star'} size="md" />
-                                </button>
-                              </td>
-                              <td className={cx(styles.overviewTableCell, styles.overviewTableCellMono)}>{name}</td>
-                              <td className={styles.overviewTableCell}>
-                                <Tooltip content={new Date(item.latest_seen_at).toLocaleString()} placement="left">
-                                  <span>{formatRelativeTime(item.latest_seen_at)}</span>
-                                </Tooltip>
-                              </td>
-                              <td className={cx(styles.overviewTableCell, styles.overviewTableCellRight)}>
-                                {item.version_count}
-                              </td>
-                              <td className={cx(styles.overviewTableCell, styles.overviewTableCellRight)}>
-                                {item.tool_count}
-                              </td>
-                              <td className={cx(styles.overviewTableCell, styles.overviewTableCellRight)}>
-                                {formatStatValue(item.generation_count, 'short')}
-                              </td>
-                              <td className={cx(styles.overviewTableCell, styles.promptCell)}>
-                                {item.system_prompt_prefix.length > 0 ? item.system_prompt_prefix : '-'}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                  <div className={styles.agentsTableWrap}>
+                    <DataTable<AgentListItem>
+                      columns={agentColumns}
+                      data={sortedItems}
+                      keyOf={(item) => `${item.agent_name}:${item.latest_effective_version}`}
+                      onRowClick={(item, e) => {
+                        const name = agentDisplayName(item);
+                        const href = agentHref(name);
+                        if (e.metaKey || e.ctrlKey) {
+                          window.open(href, '_blank');
+                        } else {
+                          handleOpenAgent(item);
+                        }
+                      }}
+                      rowRole="link"
+                      rowAriaLabel={(item) => `open agent ${cardLabel(item)}`}
+                      rowVariant={(item) => (item.agent_name.trim().length === 0 ? 'warning' : undefined)}
+                      panel={true}
+                      scrollable={true}
+                      minWidth={880}
+                      ariaLabel="agents index table"
+                    />
                   </div>
 
                   {nextCursor.length > 0 && (

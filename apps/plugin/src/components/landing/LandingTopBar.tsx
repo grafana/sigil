@@ -28,6 +28,7 @@ import {
 import { defaultEvaluationDataSource } from '../../evaluation/api';
 import { useFilterUrlState } from '../../hooks/useFilterUrlState';
 import { ideTabs, buildCursorPromptDeeplink, downloadTextFile, renderIdeActionLogo } from '../../ide/ideUtils';
+import { FeatureShowcase } from './FeatureShowcase';
 import { PipelineConnectorSwarm } from './PipelineConnectorSwarm';
 
 type IdeKey = InstrumentationPromptIde;
@@ -1011,76 +1012,63 @@ export function LandingTopBar({
           </div>
 
           <div className={styles.heroSideHeaderBlock}>
-            <div className={styles.videoCard}>
-              <div className={styles.videoPreview}>
-                <div className={styles.videoPlayIcon} data-play-icon="">
-                  <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                </div>
-                <div className={styles.videoComingSoon}>
-                  <Text color="secondary" variant="bodySmall">
-                    Video coming soon
-                  </Text>
-                </div>
+            <FeatureShowcase />
+            <div className={styles.sideSecondary}>
+              <div className={styles.sideActions}>
+                <LinkButton
+                  href={`${PLUGIN_BASE}/${ROUTES.Tutorial}`}
+                  icon="play"
+                  variant="primary"
+                  fill="outline"
+                  className={styles.sideActionButton}
+                >
+                  Start tutorial
+                </LinkButton>
+                <LinkButton
+                  href="https://github.com/grafana/sigil#readme"
+                  icon="book-open"
+                  variant="secondary"
+                  target="_blank"
+                  rel="noreferrer"
+                  className={styles.sideActionButton}
+                >
+                  Read docs
+                </LinkButton>
               </div>
-            </div>
-            <div className={styles.sideActions}>
-              <LinkButton
-                href={`${PLUGIN_BASE}/${ROUTES.Tutorial}`}
-                icon="play"
-                variant="primary"
-                fill="outline"
-                className={styles.sideActionButton}
-              >
-                Start tutorial
-              </LinkButton>
-              <LinkButton
-                href="https://github.com/grafana/sigil#readme"
-                icon="book-open"
-                variant="secondary"
-                target="_blank"
-                rel="noreferrer"
-                className={styles.sideActionButton}
-              >
-                Read docs
-              </LinkButton>
-            </div>
-            <Card className={styles.heroSideCard}>
-              <Stack direction="column" gap={2}>
-                <div className={styles.sideCardMutedHeading}>
-                  <Text color="secondary">AUTOINSTRUMENTATION</Text>
-                  <Tooltip
-                    content="We provide skills and prompts that guide AI to do the instrumentation work for you."
-                    placement="top"
-                  >
-                    <span className={styles.sideCardInfoIcon} aria-label="Autoinstrumentation help">
-                      <Icon name="info-circle" size="sm" />
-                    </span>
-                  </Tooltip>
-                </div>
-                <Text color="secondary">
-                  Use our coding agent skill to instrument your codebase. Then select coding agent.
-                </Text>
-                <div className={styles.ideTabs}>
-                  {ideTabs.map((ide) => (
-                    <button
-                      key={ide.key}
-                      type="button"
-                      className={styles.ideTabButton}
-                      onClick={() => {
-                        setSelectedIde(ide.key);
-                        setIsAgentModalOpen(true);
-                      }}
-                      aria-label={`Open ${ide.label} instrumentation details`}
+              <Card className={styles.heroSideCard}>
+                <Stack direction="column" gap={2}>
+                  <div className={styles.sideCardMutedHeading}>
+                    <Text color="secondary">AUTOINSTRUMENTATION</Text>
+                    <Tooltip
+                      content="We provide skills and prompts that guide AI to do the instrumentation work for you."
+                      placement="top"
                     >
-                      <span className={styles.ideTabLogo}>{ide.logo}</span>
-                      <span>{ide.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </Stack>
-            </Card>
+                      <span className={styles.sideCardInfoIcon} aria-label="Autoinstrumentation help">
+                        <Icon name="info-circle" size="sm" />
+                      </span>
+                    </Tooltip>
+                  </div>
+                  <Text color="secondary">Use our coding agent skill to instrument your codebase.</Text>
+                  <div className={styles.ideTabs}>
+                    {ideTabs.map((ide) => (
+                      <button
+                        key={ide.key}
+                        type="button"
+                        className={styles.ideTabButton}
+                        onClick={() => {
+                          setSelectedIde(ide.key);
+                          setIsAgentModalOpen(true);
+                        }}
+                        aria-label={`Open ${ide.label} instrumentation details`}
+                      >
+                        <span className={styles.ideTabLogo}>{ide.logo}</span>
+                        <span>{ide.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </Stack>
+              </Card>
+            </div>
           </div>
         </div>
       </div>
@@ -1415,75 +1403,41 @@ function getStyles(theme: GrafanaTheme2) {
       flexDirection: 'column',
       gap: theme.spacing(2),
       paddingTop: 32,
+      '@container landing-top-bar (max-width: 1200px)': {
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gridTemplateRows: 'auto',
+        paddingTop: 0,
+      },
     }),
-    videoCard: css({
-      label: 'landingTopBar-videoCard',
+    sideSecondary: css({
+      label: 'landingTopBar-sideSecondary',
       display: 'flex',
       flexDirection: 'column',
-      flex: 1,
-      minHeight: 0,
-      width: '100%',
-      border: `1px solid ${theme.colors.border.weak}`,
-      borderRadius: theme.shape.radius.default,
-      overflow: 'hidden',
-      cursor: 'pointer',
-      transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
-      background: theme.colors.background.secondary,
-      '&:hover': {
-        borderColor: theme.colors.primary.border,
-        boxShadow: theme.shadows.z2,
-      },
-      '&:hover [data-play-icon]': {
-        transform: 'scale(1.1)',
-      },
-      '&:focus-visible': {
-        outline: `2px solid ${theme.colors.primary.main}`,
-        outlineOffset: 2,
-      },
-    }),
-    videoPreview: css({
-      label: 'landingTopBar-videoPreview',
-      position: 'relative',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      flex: 1,
-      minHeight: 200,
-      background: theme.colors.background.secondary,
-    }),
-    videoPlayIcon: css({
-      label: 'landingTopBar-videoPlayIcon',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      width: 72,
-      height: 72,
-      borderRadius: theme.shape.radius.circle,
-      background: 'rgba(255, 255, 255, 0.15)',
-      backdropFilter: 'blur(8px)',
-      color: '#fff',
-      transition: 'transform 0.2s ease',
-    }),
-    videoComingSoon: css({
-      label: 'landingTopBar-videoComingSoon',
-      position: 'absolute',
-      bottom: theme.spacing(1.5),
-      left: '50%',
-      transform: 'translateX(-50%)',
-      opacity: 0.7,
+      gap: theme.spacing(2),
     }),
     sideActions: css({
       label: 'landingTopBar-sideActions',
       display: 'grid',
       gridTemplateColumns: '1fr 1fr',
       gap: theme.spacing(1),
+      '@container landing-top-bar (max-width: 1200px)': {
+        gridTemplateColumns: '1fr',
+      },
     }),
     sideActionButton: css({
       label: 'landingTopBar-sideActionButton',
       justifyContent: 'center',
+      '@container landing-top-bar (max-width: 1200px)': {
+        padding: theme.spacing(1, 2),
+        height: 'auto',
+        minHeight: 40,
+      },
     }),
     heroSideCard: css({
       label: 'landingTopBar-heroSideCard',
+      marginTop: 'auto',
+      marginBottom: 0,
     }),
     sideCardMutedHeading: css({
       label: 'landingTopBar-sideCardMutedHeading',

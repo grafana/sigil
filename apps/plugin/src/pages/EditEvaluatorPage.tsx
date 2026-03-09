@@ -351,18 +351,11 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
       </div>
 
       <div className={styles.bottomSections}>
-        <div className={styles.detailCard}>
-          <div className={styles.detailCardHeader}>
-            <div className={styles.sectionTitle}>Version history</div>
-          </div>
-          <div className={styles.detailCardBody}>
-            <VersionHistoryTable
-              versions={versions}
-              selectedVersions={selectedVersions}
-              onToggleSelect={handleToggleVersionSelect}
-            />
-          </div>
-        </div>
+        <VersionHistoryTable
+          versions={versions}
+          selectedVersions={selectedVersions}
+          onToggleSelect={handleToggleVersionSelect}
+        />
 
         {compareLeft && compareRight && (
           <div className={styles.detailCard}>

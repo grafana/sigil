@@ -161,6 +161,10 @@ func permissionForConversationRoute(method string, path string) (string, bool) {
 		if method == http.MethodPost {
 			return permissionFeedbackWrite, true
 		}
+	case "followup":
+		if method == http.MethodPost {
+			return permissionDataRead, true
+		}
 	}
 
 	return "", false
@@ -185,22 +189,27 @@ func (a *App) handleConversationRoutes(w http.ResponseWriter, req *http.Request)
 	id := strings.TrimPrefix(req.URL.Path, "/query/conversations/")
 	if id == "" || strings.Contains(id, "/") {
 		parts := strings.Split(id, "/")
-		if len(parts) != 2 || parts[0] == "" || (parts[1] != "ratings" && parts[1] != "annotations" && parts[1] != "explore") {
+		if len(parts) != 2 || parts[0] == "" {
 			http.Error(w, "invalid conversation path", http.StatusBadRequest)
 			return
 		}
 		id = parts[0]
 		child := parts[1]
-		if child == "explore" {
+		switch child {
+		case "explore":
 			a.handleConversationExplore(w, req, id)
-			return
-		}
-		path := fmt.Sprintf("/api/v1/conversations/%s/%s", id, child)
-		switch req.Method {
-		case http.MethodGet, http.MethodPost:
-			a.handleProxy(w, req, path, req.Method)
+		case "ratings", "annotations":
+			path := fmt.Sprintf("/api/v1/conversations/%s/%s", id, child)
+			switch req.Method {
+			case http.MethodGet, http.MethodPost:
+				a.handleProxy(w, req, path, req.Method)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		case "followup":
+			a.handleProxy(w, req, fmt.Sprintf("/api/v1/conversations/%s/followup", id), http.MethodPost)
 		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			http.Error(w, "invalid conversation path", http.StatusBadRequest)
 		}
 		return
 	}

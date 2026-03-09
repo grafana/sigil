@@ -612,6 +612,18 @@ cd sigil
 GOWORK=off go test ./e2e -tags=e2e -run TestStorageHotColdRoundTripLocal -count=1 -v
 """
 
+[tasks."deps:playwright"]
+description = "Install Playwright browser binaries for plugin browser tests"
+run = "pnpm --dir apps/plugin exec playwright install"
+
+[tasks."test:e2e:plugin"]
+description = "Run plugin Playwright browser end-to-end tests"
+run = "pnpm --dir apps/plugin exec playwright test"
+
+[tasks."test:e2e:plugin:eval"]
+description = "Run plugin Playwright evaluation validation browser tests"
+run = "pnpm --dir apps/plugin exec playwright test tests/evaluationValidation.spec.ts"
+
 [tasks."bench:storage"]
 description = "Run Sigil storage benchmarks (WAL, object, compactor, fan-out)"
 depends = ["doctor:go"]

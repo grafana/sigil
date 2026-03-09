@@ -201,7 +201,7 @@ describe('ConversationListPanel', () => {
       />
     );
     const row = container.querySelector('tr[role="button"]');
-    expect(row?.className).toContain('rowError');
+    expect(row).toHaveAttribute('data-variant', 'error');
   });
 });
 
