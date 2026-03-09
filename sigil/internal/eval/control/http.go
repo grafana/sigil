@@ -533,8 +533,6 @@ func writeControlWriteError(w http.ResponseWriter, err error) {
 		http.Error(w, err.Error(), http.StatusConflict)
 	case isUnavailableError(err):
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-	case errors.Is(err, evalpkg.ErrNotFound):
-		http.Error(w, "not found", http.StatusNotFound)
 	default:
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 	}

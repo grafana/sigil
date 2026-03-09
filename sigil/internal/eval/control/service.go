@@ -189,7 +189,7 @@ func (s *Service) ForkPredefinedEvaluator(ctx context.Context, tenantID, templat
 func (s *Service) forkFromHardcoded(ctx context.Context, tenantID, templateID string, request ForkPredefinedEvaluatorRequest) (evalpkg.EvaluatorDefinition, error) {
 	template, ok := findPredefinedTemplate(templateID)
 	if !ok {
-		return evalpkg.EvaluatorDefinition{}, newValidationError(fmt.Errorf("predefined evaluator %q was not found", strings.TrimSpace(templateID)))
+		return evalpkg.EvaluatorDefinition{}, NotFoundError(fmt.Sprintf("predefined evaluator %q was not found", strings.TrimSpace(templateID)))
 	}
 	normalizedRequest, err := request.normalizeAndValidate(template.Kind)
 	if err != nil {
