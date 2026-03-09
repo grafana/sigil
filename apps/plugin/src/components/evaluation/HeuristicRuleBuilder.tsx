@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Button, Input, Select, Text, useStyles2 } from '@grafana/ui';
+import { Button, IconButton, Input, Select, Text, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
 import {
   QueryBuilder,
@@ -19,6 +19,7 @@ import {
   HEURISTIC_QUERY_COMBINATORS,
   HEURISTIC_QUERY_FIELDS,
   HEURISTIC_QUERY_OPERATORS,
+  countHeuristicQueryNodes,
   type HeuristicQueryGroup,
 } from '../../evaluation/heuristicConfig';
 
@@ -26,6 +27,10 @@ type HeuristicRuleBuilderProps = {
   query: HeuristicQueryGroup;
   onChange: (next: HeuristicQueryGroup) => void;
   error?: string;
+};
+
+type HeuristicBuilderContext = {
+  totalNodes: number;
 };
 
 const HEURISTIC_CONTROL_ELEMENTS = {
@@ -114,6 +119,10 @@ export default function HeuristicRuleBuilder({ query, onChange, error }: Heurist
   const styles = useStyles2(getStyles);
   const controlElements = useMemo(() => HEURISTIC_CONTROL_ELEMENTS, []);
   const handleQueryChange = useCallback((next: unknown) => onChange(next as HeuristicQueryGroup), [onChange]);
+  const builderContext = useMemo<HeuristicBuilderContext>(
+    () => ({ totalNodes: countHeuristicQueryNodes(query) }),
+    [query]
+  );
 
   return (
     <div className={styles.builder}>
@@ -142,6 +151,7 @@ export default function HeuristicRuleBuilder({ query, onChange, error }: Heurist
         showLockButtons={false}
         showNotToggle={false}
         addRuleToNewGroups
+        context={builderContext}
       />
       <div className={styles.helper}>
         <Text variant="bodySmall">
@@ -212,9 +222,44 @@ function HeuristicValueEditor(props: ValueEditorProps) {
 
 function HeuristicActionButton(props: ActionProps) {
   const styles = useStyles2(getStyles);
+  const builderContext = props.context as HeuristicBuilderContext | undefined;
+  const hasReachedMaxNodes = (builderContext?.totalNodes ?? 0) >= HEURISTIC_MAX_NODES;
+  const label = String(props.label ?? 'Action');
+  const isAddGroupAction = String(props.label ?? '').includes('Group');
+  const isRemoveAction = label === '⨯';
+  const nextGroupDepth = props.level + 2;
+  const exceedsMaxDepth = isAddGroupAction && nextGroupDepth > HEURISTIC_MAX_DEPTH;
+  const disabled = props.disabled || hasReachedMaxNodes || exceedsMaxDepth;
+
+  if (isRemoveAction) {
+    return (
+      <IconButton
+        name="trash-alt"
+        tooltip="Remove"
+        aria-label="Remove rule"
+        disabled={disabled}
+        onClick={() => {
+          if (!disabled) {
+            props.handleOnClick();
+          }
+        }}
+      />
+    );
+  }
+
   return (
-    <Button className={styles.action} variant="secondary" size="sm" onClick={() => props.handleOnClick()}>
-      {String(props.label ?? 'Action')}
+    <Button
+      className={styles.action}
+      variant="secondary"
+      size="sm"
+      disabled={disabled}
+      onClick={() => {
+        if (!disabled) {
+          props.handleOnClick();
+        }
+      }}
+    >
+      {label}
     </Button>
   );
 }
