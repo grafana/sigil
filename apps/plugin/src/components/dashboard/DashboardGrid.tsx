@@ -582,7 +582,7 @@ export function DashboardGrid({
           comparisonLabel={comparisonLabel}
         />
         <TopStat
-          label="Total Cost"
+          label="Total Estimated Cost"
           value={totalCost.totalCost}
           unit="currencyUSD"
           loading={costTokens.loading || resolvedPricing.loading}

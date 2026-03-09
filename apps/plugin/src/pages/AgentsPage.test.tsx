@@ -85,6 +85,8 @@ function LocationProbe() {
   return <div data-testid="location-probe">{location.pathname}</div>;
 }
 
+const EMPTY_AGENT_RESPONSE = { items: [], next_cursor: '' };
+
 function createDataSource(): AgentsDataSource {
   return {
     listAgents: jest
@@ -117,6 +119,7 @@ function createDataSource(): AgentsDataSource {
         ],
         next_cursor: 'cursor-1',
       })
+      .mockResolvedValueOnce(EMPTY_AGENT_RESPONSE)
       .mockResolvedValueOnce({
         items: [
           {
@@ -132,7 +135,8 @@ function createDataSource(): AgentsDataSource {
           },
         ],
         next_cursor: '',
-      }),
+      })
+      .mockResolvedValue(EMPTY_AGENT_RESPONSE),
     lookupAgent: jest.fn(async () => {
       throw new Error('not used in AgentsPage tests');
     }),
@@ -295,22 +299,25 @@ describe('AgentsPage', () => {
   it('renders risk strip with all-zero signals in neutral styling', async () => {
     const dataSource: AgentsDataSource = {
       ...createDataSource(),
-      listAgents: jest.fn().mockResolvedValueOnce({
-        items: [
-          {
-            agent_name: 'healthy-agent',
-            latest_effective_version: 'sha256:aaaa',
-            first_seen_at: '2026-03-04T10:00:00Z',
-            latest_seen_at: '2026-03-04T11:00:00Z',
-            generation_count: 5,
-            version_count: 2,
-            tool_count: 1,
-            system_prompt_prefix: 'test',
-            token_estimate: { system_prompt: 4, tools_total: 5, total: 9 },
-          },
-        ],
-        next_cursor: '',
-      }),
+      listAgents: jest
+        .fn()
+        .mockResolvedValueOnce({
+          items: [
+            {
+              agent_name: 'healthy-agent',
+              latest_effective_version: 'sha256:aaaa',
+              first_seen_at: '2026-03-04T10:00:00Z',
+              latest_seen_at: '2026-03-04T11:00:00Z',
+              generation_count: 5,
+              version_count: 2,
+              tool_count: 1,
+              system_prompt_prefix: 'test',
+              token_estimate: { system_prompt: 4, tools_total: 5, total: 9 },
+            },
+          ],
+          next_cursor: '',
+        })
+        .mockResolvedValue(EMPTY_AGENT_RESPONSE),
     };
 
     renderPage(dataSource);
@@ -348,14 +355,7 @@ describe('AgentsPage', () => {
     triggerLoadMoreIntersection();
 
     await waitFor(() =>
-      expect(dataSource.listAgents).toHaveBeenNthCalledWith(
-        2,
-        24,
-        'cursor-1',
-        '',
-        expect.any(Number),
-        expect.any(Number)
-      )
+      expect(dataSource.listAgents).toHaveBeenCalledWith(24, 'cursor-1', '', expect.any(Number), expect.any(Number))
     );
     expect(await screen.findByRole('link', { name: 'open agent assistant-beta' })).toBeInTheDocument();
   });

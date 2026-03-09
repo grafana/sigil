@@ -325,7 +325,7 @@ export function DashboardConsumptionGrid({
       `Output tokens: ${outputTokensValue}`,
       `Cache read tokens: ${cacheReadValue}`,
       `Cache hit rate: ${cacheHitRate.toFixed(2)}%`,
-      `Estimated total cost (USD): $${totalCost.totalCost.toFixed(4)}`,
+      `Total estimated cost (USD): $${totalCost.totalCost.toFixed(4)}`,
       '',
       summarizeVector(tokensByTypeStat.data, 'Tokens by type'),
       summarizeMatrix(tokensByTypeTimeseries.data, 'Tokens by type over time'),

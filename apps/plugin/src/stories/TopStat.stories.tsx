@@ -102,7 +102,7 @@ export const StatsRow = () => (
     />
     <TopStat label="Total Tokens" value={89000} unit="short" loading={false} prevValue={75000} prevLoading={false} />
     <TopStat
-      label="Total Cost"
+      label="Total Estimated Cost"
       value={12.5}
       unit="currencyUSD"
       loading={false}

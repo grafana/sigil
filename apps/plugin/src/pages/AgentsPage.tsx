@@ -508,10 +508,19 @@ export default function AgentsPage({
 
   const rangeFromSec = Math.floor(timeRange.from.valueOf() / 1000);
   const rangeToSec = Math.floor(timeRange.to.valueOf() / 1000);
+  const windowSec = rangeToSec - rangeFromSec;
+  const prevFromSec = rangeFromSec - windowSec;
+  const prevToSec = rangeFromSec;
+
   const telemetryRangeDuration = useMemo(
     () => computeRangeDuration(rangeFromSec, rangeToSec),
     [rangeFromSec, rangeToSec]
   );
+  const prevTelemetryRangeDuration = useMemo(
+    () => computeRangeDuration(prevFromSec, prevToSec),
+    [prevFromSec, prevToSec]
+  );
+
   const usageByModelAndType = usePrometheusQuery(
     dashboardDataSource,
     tokensByModelAndTypeQuery(emptyFilters, telemetryRangeDuration, 'agent'),
@@ -519,8 +528,21 @@ export default function AgentsPage({
     rangeToSec,
     'instant'
   );
+  const prevUsageByModelAndType = usePrometheusQuery(
+    dashboardDataSource,
+    tokensByModelAndTypeQuery(emptyFilters, prevTelemetryRangeDuration, 'agent'),
+    prevFromSec,
+    prevToSec,
+    'instant'
+  );
+
   const resolvePairs = useMemo(() => extractResolvePairs(usageByModelAndType.data), [usageByModelAndType.data]);
+  const prevResolvePairs = useMemo(
+    () => extractResolvePairs(prevUsageByModelAndType.data),
+    [prevUsageByModelAndType.data]
+  );
   const resolvedPricing = useResolvedModelPricing(dashboardDataSource, resolvePairs);
+  const prevResolvedPricing = useResolvedModelPricing(dashboardDataSource, prevResolvePairs);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -528,6 +550,10 @@ export default function AgentsPage({
     }, 250);
     return () => clearTimeout(timeout);
   }, [searchInput]);
+
+  const [prevItems, setPrevItems] = useState<AgentListItem[]>([]);
+  const [loadingPrev, setLoadingPrev] = useState(true);
+  const prevRequestVersion = useRef(0);
 
   useEffect(() => {
     requestVersion.current += 1;
@@ -567,6 +593,33 @@ export default function AgentsPage({
         setLoading(false);
       });
   }, [dataSource, namePrefix, rangeFromSec, rangeToSec]);
+
+  useEffect(() => {
+    prevRequestVersion.current += 1;
+    const version = prevRequestVersion.current;
+    setLoadingPrev(true);
+
+    dataSource
+      .listAgents(PAGE_SIZE, '', namePrefix, prevFromSec, prevToSec)
+      .then((response) => {
+        if (prevRequestVersion.current !== version) {
+          return;
+        }
+        setPrevItems(response.items ?? []);
+      })
+      .catch(() => {
+        if (prevRequestVersion.current !== version) {
+          return;
+        }
+        setPrevItems([]);
+      })
+      .finally(() => {
+        if (prevRequestVersion.current !== version) {
+          return;
+        }
+        setLoadingPrev(false);
+      });
+  }, [dataSource, namePrefix, prevFromSec, prevToSec]);
 
   // --- Summary computation ---
 
@@ -644,6 +697,36 @@ export default function AgentsPage({
       usageByName,
     };
   }, [items, resolvedPricing.pricingMap, timeRange, usageByModelAndType.data]);
+
+  const prevSummary = useMemo(() => {
+    const usageByName = aggregateAgentUsageByName(prevUsageByModelAndType.data, prevResolvedPricing.pricingMap);
+    let seenInRangeCount = 0;
+    let totalGenerationsWithRuntime = 0;
+    let totalRuntimeTokens = 0;
+    let totalRuntimeCostUSD = 0;
+    for (const item of prevItems) {
+      const latestSeenAtMs = new Date(item.latest_seen_at).getTime();
+      if (Number.isFinite(latestSeenAtMs)) {
+        if (latestSeenAtMs >= prevFromSec * 1000 && latestSeenAtMs <= prevToSec * 1000) {
+          seenInRangeCount += 1;
+        }
+      }
+      const usage = usageByName.get(item.agent_name) ?? usageByName.get(item.agent_name.trim()) ?? null;
+      if (usage) {
+        totalGenerationsWithRuntime += item.generation_count;
+        totalRuntimeTokens += usage.tokens;
+        totalRuntimeCostUSD += usage.costUSD;
+      }
+    }
+    return {
+      seenInRangeCount,
+      totalGenerations: totalGenerationsWithRuntime,
+      totalTokens: totalRuntimeTokens,
+      totalCostUSD: totalRuntimeCostUSD,
+    };
+  }, [prevItems, prevResolvedPricing.pricingMap, prevFromSec, prevToSec, prevUsageByModelAndType.data]);
+
+  const prevLoading = loadingPrev || prevUsageByModelAndType.loading || prevResolvedPricing.loading;
 
   // --- Derived data for overview panels ---
 
@@ -958,12 +1041,18 @@ export default function AgentsPage({
                     label="Agents"
                     value={summary.seenInRangeCount}
                     loading={false}
+                    prevValue={prevSummary.seenInRangeCount}
+                    prevLoading={prevLoading}
+                    comparisonLabel="in previous window"
                     helpTooltip="Agents with latest_seen_at inside the selected time range."
                   />
                   <TopStat
                     label="Total Generations"
                     value={summary.totalGenerations}
                     loading={false}
+                    prevValue={prevSummary.totalGenerations}
+                    prevLoading={prevLoading}
+                    comparisonLabel="in previous window"
                     helpTooltip="Sum of generation_count for agents with runtime token usage."
                   />
                   <TopStat
@@ -971,6 +1060,9 @@ export default function AgentsPage({
                     value={summary.totalTokens}
                     unit="short"
                     loading={usageByModelAndType.loading}
+                    prevValue={prevSummary.totalTokens}
+                    prevLoading={prevLoading}
+                    comparisonLabel="in previous window"
                     helpTooltip="Runtime token usage across loaded agents in the selected time range."
                   />
                   <TopStat
@@ -978,6 +1070,10 @@ export default function AgentsPage({
                     value={summary.totalCostUSD}
                     unit="currencyUSD"
                     loading={usageByModelAndType.loading || resolvedPricing.loading}
+                    prevValue={prevSummary.totalCostUSD}
+                    prevLoading={prevLoading}
+                    invertChange
+                    comparisonLabel="in previous window"
                     helpTooltip="Estimated cost based on resolved model pricing and runtime token usage."
                   />
                 </DashboardSummaryBar>

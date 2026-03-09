@@ -48,7 +48,7 @@ export const DashboardContext = {
       'Error Rate (%): 1.8',
       'Latency P95 (seconds): 0.62',
       'Total tokens: 1,240,000',
-      'Estimated total cost (USD): $3.72',
+      'Total estimated cost (USD): $3.72',
     ].join('\n'),
     systemPrompt:
       'You are a concise observability analyst. Return exactly 2-3 findings. Each finding is a single short sentence on its own line prefixed with "- ". Bold key numbers/metrics with **bold**. No headers, no paragraphs, no extra text. Keep each bullet under 20 words. Focus on anomalies, changes, or notable patterns only.',
