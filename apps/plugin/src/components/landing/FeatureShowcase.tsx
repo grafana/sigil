@@ -8,7 +8,6 @@ import analyticsScreenshot from '../../img/landing/analytics.png';
 import conversationsScreenshot from '../../img/landing/conversations.png';
 import drilldownScreenshot from '../../img/landing/drilldown.png';
 import evaluationsScreenshot from '../../img/landing/evaluations.png';
-import promptsScreenshot from '../../img/landing/prompts.png';
 
 type Feature = {
   key: string;
@@ -67,28 +66,6 @@ const FEATURES: Feature[] = [
       </svg>
     ),
     screenshotSrc: evaluationsScreenshot,
-  },
-  {
-    key: 'prompts',
-    title: 'Prompt Analysis',
-    description: 'Prompt chains and quality insights.',
-    color: '#B877D9',
-    href: `${PLUGIN_BASE}/${ROUTES.Agents}`,
-    icon: (
-      <svg
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-      </svg>
-    ),
-    screenshotSrc: promptsScreenshot,
   },
   {
     key: 'drilldown',
