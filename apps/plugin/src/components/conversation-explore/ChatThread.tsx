@@ -6,6 +6,7 @@ import { getStyles } from './ChatThread.styles';
 import { renderTextWithXml } from './CollapsibleXml';
 import { parseToolContent } from './formatContent';
 import { HighlightedJson } from './HighlightedJson';
+import { getDisplayedInputMessages, sortGenerationsByCreatedAt } from './turnDelta';
 
 export type ChatThreadProps = {
   generations: GenerationDetail[];
@@ -21,9 +22,11 @@ type ThreadEntry = {
 
 function buildThread(generations: GenerationDetail[]): ThreadEntry[] {
   const entries: ThreadEntry[] = [];
+  const orderedGenerations = sortGenerationsByCreatedAt(generations);
 
-  for (let gIdx = 0; gIdx < generations.length; gIdx++) {
-    const gen = generations[gIdx];
+  for (let gIdx = 0; gIdx < orderedGenerations.length; gIdx++) {
+    const gen = orderedGenerations[gIdx];
+    const previousGen = gIdx > 0 ? orderedGenerations[gIdx - 1] : undefined;
 
     if (gIdx > 0) {
       const model = gen.model?.name ?? '';
@@ -32,7 +35,10 @@ function buildThread(generations: GenerationDetail[]): ThreadEntry[] {
       entries.push({ key: `div-${gen.generation_id}`, kind: 'divider', dividerLabel: label });
     }
 
-    const allMessages: Message[] = [...(gen.input ?? []), ...(gen.output ?? [])];
+    const allMessages: Message[] = [
+      ...getDisplayedInputMessages(gen.input ?? [], previousGen),
+      ...(gen.output ?? []),
+    ];
 
     for (let mIdx = 0; mIdx < allMessages.length; mIdx++) {
       const msg = allMessages[mIdx];
