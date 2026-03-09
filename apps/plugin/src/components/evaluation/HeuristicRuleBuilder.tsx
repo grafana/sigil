@@ -16,6 +16,7 @@ import {
   type HeuristicRuleType,
 } from '../../evaluation/types';
 import {
+  countHeuristicQueryNodes,
   HEURISTIC_QUERY_COMBINATORS,
   HEURISTIC_QUERY_FIELDS,
   HEURISTIC_QUERY_OPERATORS,
@@ -46,10 +47,6 @@ const HEURISTIC_CONTROL_ELEMENTS = {
 const getDefaultHeuristicField = () => 'response';
 const getDefaultHeuristicOperator = () => 'not_empty';
 const getHeuristicValueEditorType = (_field: string, operator: string) => (operator === 'not_empty' ? null : 'text');
-
-function countQueryNodes(group: HeuristicQueryGroup): number {
-  return 1 + group.rules.reduce((sum, child) => sum + ('rules' in child ? countQueryNodes(child) : 1), 0);
-}
 
 const getStyles = (theme: GrafanaTheme2) => ({
   builder: css({
@@ -122,7 +119,7 @@ export default function HeuristicRuleBuilder({ query, onChange, error }: Heurist
   const styles = useStyles2(getStyles);
   const controlElements = useMemo(() => HEURISTIC_CONTROL_ELEMENTS, []);
   const handleQueryChange = useCallback((next: unknown) => onChange(next as HeuristicQueryGroup), [onChange]);
-  const builderContext = useMemo<HeuristicBuilderContext>(() => ({ totalNodes: countQueryNodes(query) }), [query]);
+  const builderContext = useMemo<HeuristicBuilderContext>(() => ({ totalNodes: countHeuristicQueryNodes(query) }), [query]);
 
   return (
     <div className={styles.builder}>

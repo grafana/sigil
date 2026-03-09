@@ -66,7 +66,7 @@ export function validateHeuristicQuery(query: HeuristicQueryGroup): string | und
   return validateHeuristicQueryNode(query, 1);
 }
 
-function countHeuristicQueryNodes(group: HeuristicQueryGroup): number {
+export function countHeuristicQueryNodes(group: HeuristicQueryGroup): number {
   return 1 + group.rules.reduce((sum, child) => sum + (isQueryGroup(child) ? countHeuristicQueryNodes(child) : 1), 0);
 }
 
