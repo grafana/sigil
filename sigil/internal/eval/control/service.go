@@ -197,9 +197,6 @@ func (s *Service) forkFromHardcoded(ctx context.Context, tenantID, templateID st
 	}
 
 	evaluatorID := normalizedRequest.EvaluatorID
-	if evaluatorID == "" {
-		return evalpkg.EvaluatorDefinition{}, newValidationError(errors.New("evaluator_id is required"))
-	}
 	version := normalizedRequest.Version
 	if version == "" {
 		version = template.Version
