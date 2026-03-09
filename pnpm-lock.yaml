@@ -223,7 +223,7 @@ importers:
         version: 0.78.0(zod@4.3.6)
       '@google/adk':
         specifier: ^0.4.0
-        version: 0.4.0(bf12a3a52f8c231a29bcc41dcc8713bb)
+        version: 0.4.0(603f23204bccb1df895e42586aa55def)
       '@google/genai':
         specifier: ^1.41.0
         version: 1.44.0(@modelcontextprotocol/sdk@1.26.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))
@@ -265,14 +265,14 @@ importers:
         version: 2.6.0(@opentelemetry/api@1.9.0)
       llamaindex:
         specifier: ^0.12.1
-        version: 0.12.1(@modelcontextprotocol/sdk@1.26.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(hono@4.12.1)(rxjs@7.8.2)(tree-sitter@0.22.4)(web-tree-sitter@0.24.7)(zod@4.3.6)
+        version: 0.12.1(@modelcontextprotocol/sdk@1.26.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(hono@4.12.5)(rxjs@7.8.2)(tree-sitter@0.22.4)(web-tree-sitter@0.24.7)(zod@4.3.6)
       openai:
         specifier: ^6.21.0
         version: 6.25.0(ws@8.19.0)(zod@4.3.6)
     devDependencies:
       '@types/node':
-        specifier: ^24.0.0
-        version: 24.11.0
+        specifier: ^24.11.0
+        version: 24.12.0
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -8389,7 +8389,7 @@ snapshots:
       - encoding
       - supports-color
 
-  '@google/adk@0.4.0(bf12a3a52f8c231a29bcc41dcc8713bb)':
+  '@google/adk@0.4.0(603f23204bccb1df895e42586aa55def)':
     dependencies:
       '@a2a-js/sdk': 0.3.10(@grpc/grpc-js@1.14.3)(express@5.2.1)
       '@google-cloud/opentelemetry-cloud-monitoring-exporter': 0.21.0(@opentelemetry/api@1.9.0)(@opentelemetry/core@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/resources@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.6.0(@opentelemetry/api@1.9.0))(encoding@0.1.13)
@@ -8399,7 +8399,7 @@ snapshots:
       '@mikro-orm/core': 6.6.8
       '@mikro-orm/mariadb': 6.6.8(@mikro-orm/core@6.6.8)(pg@8.19.0)
       '@mikro-orm/mssql': 6.6.8(@azure/core-client@1.10.1)(@mikro-orm/core@6.6.8)(mariadb@3.4.5)(pg@8.19.0)
-      '@mikro-orm/mysql': 6.6.8(@mikro-orm/core@6.6.8)(@types/node@24.11.0)(mariadb@3.4.5)(pg@8.19.0)
+      '@mikro-orm/mysql': 6.6.8(@mikro-orm/core@6.6.8)(@types/node@24.12.0)(mariadb@3.4.5)(pg@8.19.0)
       '@mikro-orm/postgresql': 6.6.8(@mikro-orm/core@6.6.8)(mariadb@3.4.5)
       '@mikro-orm/reflection': 6.6.8(@mikro-orm/core@6.6.8)
       '@mikro-orm/sqlite': 6.6.8(@mikro-orm/core@6.6.8)(mariadb@3.4.5)(pg@8.19.0)
@@ -8783,7 +8783,7 @@ snapshots:
   '@jest/console@30.2.0':
     dependencies:
       '@jest/types': 30.2.0
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       chalk: 4.1.2
       jest-message-util: 30.2.0
       jest-util: 30.2.0
@@ -8797,14 +8797,14 @@ snapshots:
       '@jest/test-result': 30.2.0
       '@jest/transform': 30.2.0
       '@jest/types': 30.2.0
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       ansi-escapes: 4.3.2
       chalk: 4.1.2
       ci-info: 4.4.0
       exit-x: 0.2.2
       graceful-fs: 4.2.11
       jest-changed-files: 30.2.0
-      jest-config: 30.2.0(@types/node@24.11.0)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.19))(@types/node@24.11.0)(typescript@5.9.3))
+      jest-config: 30.2.0(@types/node@24.12.0)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.19))(@types/node@24.11.0)(typescript@5.9.3))
       jest-haste-map: 30.2.0
       jest-message-util: 30.2.0
       jest-regex-util: 30.0.1
@@ -8837,7 +8837,7 @@ snapshots:
       '@jest/fake-timers': 30.2.0
       '@jest/types': 30.2.0
       '@types/jsdom': 21.1.7
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       jest-mock: 30.2.0
       jest-util: 30.2.0
       jsdom: 26.1.0
@@ -8846,7 +8846,7 @@ snapshots:
     dependencies:
       '@jest/fake-timers': 30.2.0
       '@jest/types': 30.2.0
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       jest-mock: 30.2.0
 
   '@jest/expect-utils@30.2.0':
@@ -8864,7 +8864,7 @@ snapshots:
     dependencies:
       '@jest/types': 30.2.0
       '@sinonjs/fake-timers': 13.0.5
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       jest-message-util: 30.2.0
       jest-mock: 30.2.0
       jest-util: 30.2.0
@@ -8882,7 +8882,7 @@ snapshots:
 
   '@jest/pattern@30.0.1':
     dependencies:
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       jest-regex-util: 30.0.1
 
   '@jest/reporters@30.2.0':
@@ -8893,7 +8893,7 @@ snapshots:
       '@jest/transform': 30.2.0
       '@jest/types': 30.2.0
       '@jridgewell/trace-mapping': 0.3.31
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       chalk: 4.1.2
       collect-v8-coverage: 1.0.3
       exit-x: 0.2.2
@@ -8973,7 +8973,7 @@ snapshots:
       '@jest/schemas': 29.6.3
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       '@types/yargs': 17.0.35
       chalk: 4.1.2
 
@@ -8983,7 +8983,7 @@ snapshots:
       '@jest/schemas': 30.0.5
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       '@types/yargs': 17.0.35
       chalk: 4.1.2
 
@@ -9075,7 +9075,7 @@ snapshots:
     dependencies:
       '@finom/zod-to-json-schema': 3.24.11(zod@4.3.6)
       '@llamaindex/env': 0.1.30
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       magic-bytes.js: 1.13.0
       zod: 4.3.6
     transitivePeerDependencies:
@@ -9096,18 +9096,18 @@ snapshots:
       tree-sitter: 0.22.4
       web-tree-sitter: 0.24.7
 
-  '@llamaindex/workflow-core@1.3.3(@modelcontextprotocol/sdk@1.26.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(hono@4.12.1)(rxjs@7.8.2)(zod@4.3.6)':
+  '@llamaindex/workflow-core@1.3.3(@modelcontextprotocol/sdk@1.26.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(hono@4.12.5)(rxjs@7.8.2)(zod@4.3.6)':
     optionalDependencies:
       '@modelcontextprotocol/sdk': 1.26.0(@cfworker/json-schema@4.1.1)(zod@4.3.6)
-      hono: 4.12.1
+      hono: 4.12.5
       rxjs: 7.8.2
       zod: 4.3.6
 
-  '@llamaindex/workflow@1.1.24(@llamaindex/core@0.6.22)(@llamaindex/env@0.1.30)(@modelcontextprotocol/sdk@1.26.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(hono@4.12.1)(rxjs@7.8.2)(zod@4.3.6)':
+  '@llamaindex/workflow@1.1.24(@llamaindex/core@0.6.22)(@llamaindex/env@0.1.30)(@modelcontextprotocol/sdk@1.26.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(hono@4.12.5)(rxjs@7.8.2)(zod@4.3.6)':
     dependencies:
       '@llamaindex/core': 0.6.22
       '@llamaindex/env': 0.1.30
-      '@llamaindex/workflow-core': 1.3.3(@modelcontextprotocol/sdk@1.26.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(hono@4.12.1)(rxjs@7.8.2)(zod@4.3.6)
+      '@llamaindex/workflow-core': 1.3.3(@modelcontextprotocol/sdk@1.26.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(hono@4.12.5)(rxjs@7.8.2)(zod@4.3.6)
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
       - hono
@@ -9132,11 +9132,11 @@ snapshots:
       mikro-orm: 6.6.8
       reflect-metadata: 0.2.2
 
-  '@mikro-orm/knex@6.6.8(@mikro-orm/core@6.6.8)(mariadb@3.4.5)(mysql2@3.18.2(@types/node@24.11.0))(pg@8.19.0)':
+  '@mikro-orm/knex@6.6.8(@mikro-orm/core@6.6.8)(mariadb@3.4.5)(mysql2@3.18.2(@types/node@24.12.0))(pg@8.19.0)':
     dependencies:
       '@mikro-orm/core': 6.6.8
       fs-extra: 11.3.3
-      knex: 3.1.0(mysql2@3.18.2(@types/node@24.11.0))(pg@8.19.0)
+      knex: 3.1.0(mysql2@3.18.2(@types/node@24.12.0))(pg@8.19.0)
       sqlstring: 2.3.3
     optionalDependencies:
       mariadb: 3.4.5
@@ -9234,11 +9234,11 @@ snapshots:
       - sqlite3
       - supports-color
 
-  '@mikro-orm/mysql@6.6.8(@mikro-orm/core@6.6.8)(@types/node@24.11.0)(mariadb@3.4.5)(pg@8.19.0)':
+  '@mikro-orm/mysql@6.6.8(@mikro-orm/core@6.6.8)(@types/node@24.12.0)(mariadb@3.4.5)(pg@8.19.0)':
     dependencies:
       '@mikro-orm/core': 6.6.8
-      '@mikro-orm/knex': 6.6.8(@mikro-orm/core@6.6.8)(mariadb@3.4.5)(mysql2@3.18.2(@types/node@24.11.0))(pg@8.19.0)
-      mysql2: 3.18.2(@types/node@24.11.0)
+      '@mikro-orm/knex': 6.6.8(@mikro-orm/core@6.6.8)(mariadb@3.4.5)(mysql2@3.18.2(@types/node@24.12.0))(pg@8.19.0)
+      mysql2: 3.18.2(@types/node@24.12.0)
     transitivePeerDependencies:
       - '@types/node'
       - better-sqlite3
@@ -10487,7 +10487,7 @@ snapshots:
 
   '@types/jsdom@21.1.7':
     dependencies:
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       '@types/tough-cookie': 4.0.5
       parse5: 7.3.0
 
@@ -10563,7 +10563,7 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
 
   '@types/yargs-parser@21.0.3': {}
 
@@ -13284,7 +13284,7 @@ snapshots:
       '@jest/expect': 30.2.0
       '@jest/test-result': 30.2.0
       '@jest/types': 30.2.0
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       chalk: 4.1.2
       co: 4.6.0
       dedent: 1.7.1(babel-plugin-macros@3.1.0)
@@ -13356,6 +13356,39 @@ snapshots:
       - babel-plugin-macros
       - supports-color
 
+  jest-config@30.2.0(@types/node@24.12.0)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.19))(@types/node@24.11.0)(typescript@5.9.3)):
+    dependencies:
+      '@babel/core': 7.29.0
+      '@jest/get-type': 30.1.0
+      '@jest/pattern': 30.0.1
+      '@jest/test-sequencer': 30.2.0
+      '@jest/types': 30.2.0
+      babel-jest: 30.2.0(@babel/core@7.29.0)
+      chalk: 4.1.2
+      ci-info: 4.4.0
+      deepmerge: 4.3.1
+      glob: 10.5.0
+      graceful-fs: 4.2.11
+      jest-circus: 30.2.0(babel-plugin-macros@3.1.0)
+      jest-docblock: 30.2.0
+      jest-environment-node: 30.2.0
+      jest-regex-util: 30.0.1
+      jest-resolve: 30.2.0
+      jest-runner: 30.2.0
+      jest-util: 30.2.0
+      jest-validate: 30.2.0
+      micromatch: 4.0.8
+      parse-json: 5.2.0
+      pretty-format: 30.2.0
+      slash: 3.0.0
+      strip-json-comments: 3.1.1
+    optionalDependencies:
+      '@types/node': 24.12.0
+      ts-node: 10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.19))(@types/node@24.11.0)(typescript@5.9.3)
+    transitivePeerDependencies:
+      - babel-plugin-macros
+      - supports-color
+
   jest-diff@30.2.0:
     dependencies:
       '@jest/diff-sequences': 30.0.1
@@ -13392,7 +13425,7 @@ snapshots:
       '@jest/environment': 30.2.0
       '@jest/fake-timers': 30.2.0
       '@jest/types': 30.2.0
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       jest-mock: 30.2.0
       jest-util: 30.2.0
       jest-validate: 30.2.0
@@ -13400,7 +13433,7 @@ snapshots:
   jest-haste-map@30.2.0:
     dependencies:
       '@jest/types': 30.2.0
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       anymatch: 3.1.3
       fb-watchman: 2.0.2
       graceful-fs: 4.2.11
@@ -13439,7 +13472,7 @@ snapshots:
   jest-mock@30.2.0:
     dependencies:
       '@jest/types': 30.2.0
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       jest-util: 30.2.0
 
   jest-pnp-resolver@1.2.3(jest-resolve@30.2.0):
@@ -13473,7 +13506,7 @@ snapshots:
       '@jest/test-result': 30.2.0
       '@jest/transform': 30.2.0
       '@jest/types': 30.2.0
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       chalk: 4.1.2
       emittery: 0.13.1
       exit-x: 0.2.2
@@ -13502,7 +13535,7 @@ snapshots:
       '@jest/test-result': 30.2.0
       '@jest/transform': 30.2.0
       '@jest/types': 30.2.0
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       chalk: 4.1.2
       cjs-module-lexer: 2.2.0
       collect-v8-coverage: 1.0.3
@@ -13549,7 +13582,7 @@ snapshots:
   jest-util@29.7.0:
     dependencies:
       '@jest/types': 29.6.3
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       chalk: 4.1.2
       ci-info: 3.9.0
       graceful-fs: 4.2.11
@@ -13558,7 +13591,7 @@ snapshots:
   jest-util@30.2.0:
     dependencies:
       '@jest/types': 30.2.0
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       chalk: 4.1.2
       ci-info: 4.4.0
       graceful-fs: 4.2.11
@@ -13577,7 +13610,7 @@ snapshots:
     dependencies:
       '@jest/test-result': 30.2.0
       '@jest/types': 30.2.0
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       ansi-escapes: 4.3.2
       chalk: 4.1.2
       emittery: 0.13.1
@@ -13586,20 +13619,20 @@ snapshots:
 
   jest-worker@27.5.1:
     dependencies:
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       merge-stream: 2.0.0
       supports-color: 8.1.1
 
   jest-worker@29.7.0:
     dependencies:
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       jest-util: 29.7.0
       merge-stream: 2.0.0
       supports-color: 8.1.1
 
   jest-worker@30.2.0:
     dependencies:
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       '@ungap/structured-clone': 1.3.0
       jest-util: 30.2.0
       merge-stream: 2.0.0
@@ -13743,7 +13776,7 @@ snapshots:
 
   kind-of@6.0.3: {}
 
-  knex@3.1.0(mysql2@3.18.2(@types/node@24.11.0))(pg@8.19.0):
+  knex@3.1.0(mysql2@3.18.2(@types/node@24.12.0))(pg@8.19.0):
     dependencies:
       colorette: 2.0.19
       commander: 10.0.1
@@ -13760,7 +13793,7 @@ snapshots:
       tarn: 3.0.2
       tildify: 2.0.0
     optionalDependencies:
-      mysql2: 3.18.2(@types/node@24.11.0)
+      mysql2: 3.18.2(@types/node@24.12.0)
       pg: 8.19.0
     transitivePeerDependencies:
       - supports-color
@@ -13858,14 +13891,14 @@ snapshots:
 
   livereload-js@2.4.0: {}
 
-  llamaindex@0.12.1(@modelcontextprotocol/sdk@1.26.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(hono@4.12.1)(rxjs@7.8.2)(tree-sitter@0.22.4)(web-tree-sitter@0.24.7)(zod@4.3.6):
+  llamaindex@0.12.1(@modelcontextprotocol/sdk@1.26.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(hono@4.12.5)(rxjs@7.8.2)(tree-sitter@0.22.4)(web-tree-sitter@0.24.7)(zod@4.3.6):
     dependencies:
       '@llamaindex/core': 0.6.22
       '@llamaindex/env': 0.1.30
       '@llamaindex/node-parser': 2.0.22(@llamaindex/core@0.6.22)(@llamaindex/env@0.1.30)(tree-sitter@0.22.4)(web-tree-sitter@0.24.7)
-      '@llamaindex/workflow': 1.1.24(@llamaindex/core@0.6.22)(@llamaindex/env@0.1.30)(@modelcontextprotocol/sdk@1.26.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(hono@4.12.1)(rxjs@7.8.2)(zod@4.3.6)
+      '@llamaindex/workflow': 1.1.24(@llamaindex/core@0.6.22)(@llamaindex/env@0.1.30)(@modelcontextprotocol/sdk@1.26.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(hono@4.12.5)(rxjs@7.8.2)(zod@4.3.6)
       '@types/lodash': 4.17.23
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       lodash: 4.17.23
       magic-bytes.js: 1.13.0
     transitivePeerDependencies:
@@ -14135,9 +14168,9 @@ snapshots:
 
   mustache@4.2.0: {}
 
-  mysql2@3.18.2(@types/node@24.11.0):
+  mysql2@3.18.2(@types/node@24.12.0):
     dependencies:
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       aws-ssl-profiles: 1.1.2
       denque: 2.1.0
       generate-function: 2.3.1
@@ -14675,7 +14708,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.0
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       long: 5.3.2
 
   protocol-buffers-schema@3.6.0: {}
