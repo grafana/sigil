@@ -15,6 +15,7 @@ export const Default = {
   args: {
     node: generationNode,
     allGenerations: mockGenerations,
+    flowNodes: mockFlowNodes,
     onClose: () => {
       // Storybook interaction-only callback.
     },
@@ -25,6 +26,7 @@ export const WithError = {
   args: {
     node: errorNode,
     allGenerations: mockGenerations,
+    flowNodes: mockFlowNodesWithError,
     onClose: () => {
       // Storybook interaction-only callback.
     },
@@ -35,6 +37,7 @@ export const WithScoreTooltip = {
   args: {
     node: mockFlowNodes[1].children[0],
     allGenerations: mockGenerations,
+    flowNodes: mockFlowNodes,
     onClose: () => {
       // Storybook interaction-only callback.
     },
@@ -45,6 +48,7 @@ export const WithResourceAttributes = {
   args: {
     node: generationNode,
     allGenerations: mockGenerations,
+    flowNodes: mockFlowNodes,
     onClose: () => {
       // Storybook interaction-only callback.
     },

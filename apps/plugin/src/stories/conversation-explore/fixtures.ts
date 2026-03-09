@@ -275,6 +275,139 @@ export const mockFlowNodesWithError: FlowNode[] = [
   mockFlowNodes[1],
 ];
 
+export const mockGenerationsWithToolResults: GenerationDetail[] = [
+  {
+    generation_id: 'gen-tool-1',
+    conversation_id: 'conv-tool-1',
+    trace_id: 'trace-tool-1',
+    span_id: 'span-tool-1',
+    mode: 'SYNC',
+    model: { provider: 'anthropic', name: 'claude-sonnet-4-5' },
+    agent_name: 'cost-optimizer',
+    input: [
+      {
+        role: 'MESSAGE_ROLE_USER',
+        parts: [{ text: 'Show me log volume savings recommendations for our production stack.' }],
+      },
+    ],
+    output: [
+      {
+        role: 'MESSAGE_ROLE_ASSISTANT',
+        parts: [
+          { text: "I'll check the adaptive logs recommendations for your stack." },
+          {
+            tool_call: {
+              id: 'tc-tool-1',
+              name: 'get_adaptive_logs_recommendations',
+              input_json: '{"namespace": "production", "limit": 5}',
+            },
+          },
+        ],
+      },
+    ],
+    usage: { input_tokens: 1200, output_tokens: 350, total_tokens: 1550 },
+    created_at: '2024-11-17T12:52:07.291Z',
+  },
+  {
+    generation_id: 'gen-tool-2',
+    conversation_id: 'conv-tool-1',
+    trace_id: 'trace-tool-1',
+    span_id: 'span-tool-2',
+    mode: 'SYNC',
+    model: { provider: 'anthropic', name: 'claude-sonnet-4-5' },
+    agent_name: 'cost-optimizer',
+    input: [
+      {
+        role: 'MESSAGE_ROLE_TOOL',
+        parts: [
+          {
+            tool_result: {
+              tool_call_id: 'tc-tool-1',
+              name: 'get_adaptive_logs_recommendations',
+              content: JSON.stringify([
+                {
+                  text: JSON.stringify({
+                    results: [
+                      {
+                        signal: 'logs',
+                        totalRecommendations: 98,
+                        totalPotentialVolumeSavings: '290.8 GB/day',
+                        recommendations: [
+                          {
+                            pattern: 'level=info ts=<TIMESTAMP> caller=mirror.go:<NUM>',
+                            levels: ['info'],
+                            dropRate: '50% → 99%',
+                            volumeSavings: '50.1 GB/day',
+                          },
+                          {
+                            pattern: 'ts=<TIMESTAMP> caller=log.go:<NUM> level=info',
+                            levels: ['info'],
+                            dropRate: '0% → 99%',
+                            volumeSavings: '48.3 GB/day',
+                          },
+                        ],
+                      },
+                    ],
+                  }),
+                  type: 'text',
+                },
+              ]),
+            },
+          },
+        ],
+      },
+    ],
+    output: [
+      {
+        role: 'MESSAGE_ROLE_ASSISTANT',
+        parts: [
+          {
+            text: 'Here are the top recommendations. You could save up to 290.8 GB/day by adjusting log levels and drop rates. The biggest wins are in the mirror.go info logs (50.1 GB/day) and trace ID logs (48.3 GB/day).',
+          },
+        ],
+      },
+    ],
+    usage: { input_tokens: 2800, output_tokens: 420, total_tokens: 3220 },
+    created_at: '2024-11-17T12:52:10.500Z',
+  },
+  {
+    generation_id: 'gen-tool-3',
+    conversation_id: 'conv-tool-1',
+    trace_id: 'trace-tool-1',
+    span_id: 'span-tool-3',
+    mode: 'SYNC',
+    model: { provider: 'anthropic', name: 'claude-sonnet-4-5' },
+    agent_name: 'cost-optimizer',
+    input: [
+      {
+        role: 'MESSAGE_ROLE_TOOL',
+        parts: [
+          {
+            tool_result: {
+              tool_call_id: 'tc-err-1',
+              name: 'apply_recommendation',
+              content: 'Error: permission denied for tenant 12345. Contact platform team for access.',
+              is_error: true,
+            },
+          },
+        ],
+      },
+    ],
+    output: [
+      {
+        role: 'MESSAGE_ROLE_ASSISTANT',
+        parts: [
+          {
+            text: "I wasn't able to apply the recommendation due to a permissions issue. Please contact the platform team for access to tenant 12345.",
+          },
+        ],
+      },
+    ],
+    usage: { input_tokens: 1800, output_tokens: 200, total_tokens: 2000 },
+    created_at: '2024-11-17T12:52:15.000Z',
+  },
+];
+
 export const mockGenerationsWithXml: GenerationDetail[] = [
   {
     generation_id: 'gen-xml-1',

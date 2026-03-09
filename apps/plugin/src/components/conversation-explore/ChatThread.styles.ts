@@ -96,6 +96,17 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     overflow: 'auto',
     whiteSpace: 'pre-wrap' as const,
   }),
+  toolResultError: css({
+    borderColor: theme.colors.error.border,
+    background: theme.colors.error.transparent,
+  }),
+  errorBadge: css({
+    color: theme.colors.error.text,
+    fontSize: 10,
+    fontWeight: 600,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.04em',
+  }),
   thinkingBlock: css({
     padding: theme.spacing(1),
     borderRadius: theme.shape.radius.default,
