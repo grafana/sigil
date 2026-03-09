@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { css, cx } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Button, Card, Icon, IconButton, LinkButton, Stack, Text, Tooltip, useStyles2 } from '@grafana/ui';
-import { useAssistant } from '../../assistant/runtime';
+import { useAssistant } from '@grafana/assistant';
 import { defaultAgentsDataSource } from '../../agents/api';
 import { defaultConversationsDataSource } from '../../conversation/api';
 import { PLUGIN_BASE, ROUTES } from '../../constants';

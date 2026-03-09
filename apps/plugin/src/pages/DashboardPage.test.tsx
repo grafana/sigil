@@ -51,7 +51,7 @@ jest.mock('@grafana/runtime', () => ({
   PanelRenderer: ({ pluginId }: { pluginId: string }) => <div data-testid={`renderer-${pluginId}`} />,
 }));
 
-jest.mock('../assistant/runtime', () => ({
+jest.mock('@grafana/assistant', () => ({
   useInlineAssistant: () => ({
     isGenerating: false,
     content: '',

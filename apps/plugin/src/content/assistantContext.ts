@@ -1,4 +1,4 @@
-import { createAssistantContextItem, type ChatContextItem } from '../assistant/runtime';
+import { createAssistantContextItem, type ChatContextItem } from '@grafana/assistant';
 import { sigilProjectContext } from './sigilProjectContext';
 
 const PROJECT_CONTEXT_HEADER = 'Sigil knowledgebase';

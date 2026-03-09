@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Icon, IconButton, Tooltip, useStyles2 } from '@grafana/ui';
-import { useAssistant, useInlineAssistant } from '../../assistant/runtime';
+import { useAssistant, useInlineAssistant } from '@grafana/assistant';
 import { Loader } from '../Loader';
 import {
   buildSigilAssistantContextItems,

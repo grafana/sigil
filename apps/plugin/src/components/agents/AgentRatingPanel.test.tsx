@@ -11,7 +11,7 @@ let mockInlineIsGenerating = false;
 let mockInlineContent = '';
 let consoleErrorSpy: jest.SpyInstance;
 
-jest.mock('../../assistant/runtime', () => ({
+jest.mock('@grafana/assistant', () => ({
   createAssistantContextItem: (type: string, params: { title?: string; data?: unknown }) => ({
     node: {
       id: `${type}-${params.title ?? 'context'}`,

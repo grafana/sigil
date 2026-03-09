@@ -7,7 +7,7 @@ const mockOpenAssistant = jest.fn();
 let mockIsGenerating = false;
 let mockContent = '';
 
-jest.mock('../../assistant/runtime', () => ({
+jest.mock('@grafana/assistant', () => ({
   useAssistant: () => ({
     openAssistant: mockOpenAssistant,
   }),
