@@ -2,18 +2,25 @@ import React, { useEffect, useState } from 'react';
 import type { SelectableValue } from '@grafana/data';
 import { Button, Field, FieldSet, Input, Select, Stack } from '@grafana/ui';
 import type { EvaluationDataSource } from '../../evaluation/api';
-import type { ForkEvaluatorRequest } from '../../evaluation/types';
+import type { EvaluatorKind, ForkEvaluatorRequest } from '../../evaluation/types';
 import { validateJudgeTarget } from '../../evaluation/formValidation';
 import { isValidResourceID, INVALID_ID_MESSAGE } from '../../evaluation/utils';
 
 export type ForkEvaluatorFormProps = {
   templateID: string;
+  kind?: EvaluatorKind;
   onSubmit: (req: ForkEvaluatorRequest) => void;
   onCancel: () => void;
   dataSource: Pick<EvaluationDataSource, 'listJudgeProviders' | 'listJudgeModels'>;
 };
 
-export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel, dataSource }: ForkEvaluatorFormProps) {
+export default function ForkEvaluatorForm({
+  templateID,
+  kind = 'llm_judge',
+  onSubmit,
+  onCancel,
+  dataSource,
+}: ForkEvaluatorFormProps) {
   const [evaluatorId, setEvaluatorId] = useState('');
   const [provider, setProvider] = useState<string | null>(null);
   const [model, setModel] = useState('');
@@ -47,7 +54,7 @@ export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel, data
   const idError = isIdEmpty ? 'Evaluator ID is required' : isIdInvalid ? INVALID_ID_MESSAGE : undefined;
   const providerTrimmed = provider?.trim() ?? '';
   const modelTrimmed = model.trim();
-  const providerModelError = validateJudgeTarget(providerTrimmed, modelTrimmed);
+  const providerModelError = kind === 'llm_judge' ? validateJudgeTarget(providerTrimmed, modelTrimmed) : undefined;
   const showIdError = touched && (isIdEmpty || isIdInvalid);
   const showProviderModelError = touched && providerModelError != null;
 

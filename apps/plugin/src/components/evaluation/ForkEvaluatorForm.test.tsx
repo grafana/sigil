@@ -118,4 +118,35 @@ describe('ForkEvaluatorForm', () => {
       config: { model: 'openai/gpt-4o-mini' },
     });
   });
+
+  it('allows provider-only overrides for non-llm_judge forks', async () => {
+    const onSubmit = jest.fn();
+    const resolvedDataSource: ForkEvaluatorFormProps['dataSource'] = {
+      listJudgeProviders: jest.fn(async () => ({
+        providers: [{ id: 'openai', name: 'OpenAI', type: 'openai' }],
+      })),
+      listJudgeModels: jest.fn(async () => ({ models: [] })),
+    };
+
+    render(
+      <ForkEvaluatorForm
+        templateID="sigil.regex"
+        kind="regex"
+        onSubmit={onSubmit}
+        onCancel={jest.fn()}
+        dataSource={resolvedDataSource}
+      />
+    );
+
+    await waitFor(() => expect(resolvedDataSource.listJudgeProviders).toHaveBeenCalled());
+    fireEvent.change(screen.getByPlaceholderText('sigil.regex'), { target: { value: 'my.custom.eval' } });
+    fireEvent.mouseDown(screen.getAllByText('Keep template default')[0]);
+    fireEvent.click(await screen.findByText('OpenAI'));
+    fireEvent.click(screen.getByRole('button', { name: 'Fork' }));
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      evaluator_id: 'my.custom.eval',
+      config: { provider: 'openai' },
+    });
+  });
 });

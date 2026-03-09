@@ -16,10 +16,12 @@ import (
 // --- mocks ---
 
 type mockSavedConversationStore struct {
-	mu         sync.Mutex
-	data       map[string]*evalpkg.SavedConversation // key: tenantID + "/" + savedID
-	createErr  error
-	createHook func(evalpkg.SavedConversation)
+	mu           sync.Mutex
+	data         map[string]*evalpkg.SavedConversation // key: tenantID + "/" + savedID
+	createErr    error
+	createHook   func(evalpkg.SavedConversation)
+	getErr       error
+	getByConvErr error
 }
 
 func newMockSavedConversationStore() *mockSavedConversationStore {
@@ -51,6 +53,9 @@ func (m *mockSavedConversationStore) CreateSavedConversation(_ context.Context, 
 func (m *mockSavedConversationStore) GetSavedConversation(_ context.Context, tenantID, savedID string) (*evalpkg.SavedConversation, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.getErr != nil {
+		return nil, m.getErr
+	}
 	sc, ok := m.data[m.key(tenantID, savedID)]
 	if !ok {
 		return nil, nil
@@ -62,6 +67,9 @@ func (m *mockSavedConversationStore) GetSavedConversation(_ context.Context, ten
 func (m *mockSavedConversationStore) GetSavedConversationByConversationID(_ context.Context, tenantID, conversationID string) (*evalpkg.SavedConversation, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.getByConvErr != nil {
+		return nil, m.getByConvErr
+	}
 	for _, sc := range m.data {
 		if sc.TenantID == tenantID && sc.ConversationID == conversationID {
 			copied := *sc
@@ -465,6 +473,31 @@ func TestSavedConversationServiceManualCreate(t *testing.T) {
 		assert.True(t, isConflictError(err), "expected conflict error, got: %v", err)
 		assert.Contains(t, err.Error(), `conversation "conv_manual_manual-rollback" is already saved as "saved-existing"`)
 		assert.Contains(t, err.Error(), "rollback manual conversation data: rollback failed")
+	})
+
+	t.Run("conflict lookup failure still returns conflict", func(t *testing.T) {
+		failingStore := newMockSavedConversationStore()
+		failingStore.createErr = evalpkg.ErrConflict
+		failingStore.getErr = errors.New("lookup failed")
+		writer := newMockManualConversationWriter()
+		deleter := newMockManualConversationDeleter()
+		svcWithRollback := NewSavedConversationService(failingStore, lookup, WithManualWriter(writer), WithManualDeleter(deleter))
+
+		_, err := svcWithRollback.CreateManualConversation(context.Background(), "tenant-1", CreateManualConversationRequest{
+			SavedID: "manual-rollback",
+			Name:    "Rollback",
+			SavedBy: "user-1",
+			Generations: []ManualGeneration{{
+				GenerationID: "gen-rollback-1",
+				Model:        ManualModelRef{Provider: "openai", Name: "gpt-4o-mini"},
+				Input:        []ManualMessage{{Role: "user", Content: "Hello"}},
+				Output:       []ManualMessage{{Role: "assistant", Content: "Hi"}},
+			}},
+		})
+
+		require.Error(t, err)
+		assert.True(t, isConflictError(err), "expected conflict error, got: %v", err)
+		assert.Equal(t, "saved conversation already exists", err.Error())
 	})
 
 	t.Run("duplicate conversation conflict reports existing saved id", func(t *testing.T) {

@@ -96,21 +96,23 @@ func (s *SavedConversationService) duplicateSavedConversationConflict(
 	savedID string,
 	conversationID string,
 ) error {
+	const fallbackMessage = "saved conversation already exists"
+
 	existing, err := s.store.GetSavedConversation(ctx, tenantID, savedID)
 	if err != nil {
-		return err
+		return ConflictError(fallbackMessage)
 	}
 	if existing != nil {
 		return ConflictError(fmt.Sprintf("saved conversation %q already exists", savedID))
 	}
 	existingForConversation, err := s.store.GetSavedConversationByConversationID(ctx, tenantID, conversationID)
 	if err != nil {
-		return err
+		return ConflictError(fallbackMessage)
 	}
 	if existingForConversation != nil {
 		return ConflictError(fmt.Sprintf("conversation %q is already saved as %q", conversationID, existingForConversation.SavedID))
 	}
-	return ConflictError("saved conversation already exists")
+	return ConflictError(fallbackMessage)
 }
 
 // NewSavedConversationService creates a SavedConversationService with the required store
