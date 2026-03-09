@@ -4,7 +4,8 @@ import { useStyles2 } from '@grafana/ui';
 import type { GenerationDetail, Message, MessageRole, Part } from '../../generation/types';
 import { getStyles } from './ChatThread.styles';
 import { renderTextWithXml } from './CollapsibleXml';
-import { formatToolContent } from './formatContent';
+import { parseToolContent } from './formatContent';
+import { HighlightedJson } from './HighlightedJson';
 
 export type ChatThreadProps = {
   generations: GenerationDetail[];
@@ -54,16 +55,6 @@ function partToText(part: Part): string | null {
   if (part.text) {
     return part.text;
   }
-  if (part.thinking) {
-    return null;
-  }
-  if (part.tool_call) {
-    return null;
-  }
-  if (part.tool_result) {
-    const raw = part.tool_result.content ?? part.tool_result.content_json ?? null;
-    return raw ? formatToolContent(raw) : null;
-  }
   return null;
 }
 
@@ -103,8 +94,6 @@ function MessageBubble({ entry }: { entry: ThreadEntry }) {
     <div className={cx(styles.message, messageClass)}>
       <RoleBadge role={entry.role} isSystem={isSystem} />
       {parts.map((part, i) => {
-        const text = partToText(part);
-
         if (part.thinking) {
           return (
             <div key={i} className={styles.thinkingBlock}>
@@ -114,15 +103,35 @@ function MessageBubble({ entry }: { entry: ThreadEntry }) {
         }
 
         if (part.tool_call) {
-          const formattedArgs = part.tool_call.input_json ? formatToolContent(part.tool_call.input_json) : '';
+          const raw = part.tool_call.input_json ?? '';
+          const content = raw ? parseToolContent(raw) : null;
           return (
             <div key={i} className={styles.toolCallBlock}>
               <div className={styles.toolCallName}>{part.tool_call.name}</div>
-              {formattedArgs && <div className={styles.toolCallArgs}>{formattedArgs}</div>}
+              {content?.kind === 'json' && <HighlightedJson content={content.formatted} maxCollapsedLines={12} />}
+              {content?.kind === 'text' && <div className={styles.toolCallArgs}>{content.content}</div>}
+              {content?.kind === 'binary' && <div className={styles.toolCallArgs}>{content.label}</div>}
             </div>
           );
         }
 
+        if (part.tool_result) {
+          const raw = part.tool_result.content ?? part.tool_result.content_json ?? '';
+          const content = raw ? parseToolContent(raw) : null;
+          return (
+            <div key={i} className={cx(styles.toolCallBlock, part.tool_result.is_error && styles.toolResultError)}>
+              <div className={styles.toolCallName}>
+                {part.tool_result.name}
+                {part.tool_result.is_error && <span className={styles.errorBadge}> error</span>}
+              </div>
+              {content?.kind === 'json' && <HighlightedJson content={content.formatted} maxCollapsedLines={12} />}
+              {content?.kind === 'text' && <div className={styles.toolCallArgs}>{content.content}</div>}
+              {content?.kind === 'binary' && <div className={styles.toolCallArgs}>{content.label}</div>}
+            </div>
+          );
+        }
+
+        const text = partToText(part);
         if (text) {
           return (
             <div key={i} className={styles.messageContent}>

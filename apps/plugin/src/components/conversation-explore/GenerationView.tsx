@@ -8,6 +8,7 @@ import {
   type LatestScore,
   type Message,
   type Part,
+  type ToolResultPart,
 } from '../../generation/types';
 import type { ConversationSpan, SpanAttributes } from '../../conversation/types';
 import { getSelectionID } from '../../conversation/spans';
@@ -16,7 +17,8 @@ import { buildAgentDetailHref } from '../dashboard/ViewAgentsLink';
 import type { FlowNode } from './types';
 import { getStyles } from './GenerationView.styles';
 import { renderTextWithXml } from './CollapsibleXml';
-import { formatToolContent } from './formatContent';
+import { parseToolContent } from './formatContent';
+import { HighlightedJson } from './HighlightedJson';
 import { TokenizedText } from '../tokenizer/TokenizedText';
 import { useTokenizer } from '../tokenizer/useTokenizer';
 import { getEncoding, AVAILABLE_ENCODINGS, type EncodingName } from '../tokenizer/encodingMap';
@@ -24,6 +26,7 @@ import { getEncoding, AVAILABLE_ENCODINGS, type EncodingName } from '../tokenize
 export type GenerationViewProps = {
   node: FlowNode;
   allGenerations: GenerationDetail[];
+  flowNodes: FlowNode[];
   onClose: () => void;
   onNavigateToGeneration?: (generationId: string) => void;
   scrollToToolCallId?: string | null;
@@ -200,16 +203,88 @@ function AttributePills({ entries }: { entries: Array<{ key: string; value: stri
   );
 }
 
+type ToolCallLink = {
+  result?: ToolResultPart;
+  resultGenerationId?: string;
+  callGenerationId?: string;
+};
+
+function collectFlowNodeGenIds(nodes: FlowNode[]): Set<string> {
+  const ids = new Set<string>();
+  for (const n of nodes) {
+    if (n.generation?.generation_id) {
+      ids.add(n.generation.generation_id);
+    }
+    for (const id of collectFlowNodeGenIds(n.children)) {
+      ids.add(id);
+    }
+  }
+  return ids;
+}
+
+function buildToolCallLinks(allGenerations: GenerationDetail[], visibleGenIds: Set<string>): Map<string, ToolCallLink> {
+  const map = new Map<string, ToolCallLink>();
+
+  for (const g of allGenerations) {
+    if (!visibleGenIds.has(g.generation_id)) {
+      continue;
+    }
+
+    for (const msg of g.output ?? []) {
+      for (const part of msg.parts) {
+        if (part.tool_call) {
+          const existing = map.get(part.tool_call.id);
+          map.set(part.tool_call.id, { ...existing, callGenerationId: g.generation_id });
+        }
+      }
+    }
+    for (const msg of g.input ?? []) {
+      for (const part of msg.parts) {
+        if (part.tool_result) {
+          const existing = map.get(part.tool_result.tool_call_id);
+          map.set(part.tool_result.tool_call_id, {
+            ...existing,
+            result: part.tool_result,
+            resultGenerationId: g.generation_id,
+          });
+        }
+      }
+    }
+  }
+
+  return map;
+}
+
+type ToolContext = {
+  links: Map<string, ToolCallLink>;
+  onNavigate?: (generationId: string) => void;
+};
+
+function GenJumpLink({ generationId, label, toolCtx }: { generationId: string; label: string; toolCtx: ToolContext }) {
+  const styles = useStyles2(getStyles);
+  if (!toolCtx.onNavigate) {
+    return null;
+  }
+
+  return (
+    <button type="button" className={styles.genJumpLink} onClick={() => toolCtx.onNavigate!(generationId)}>
+      {label}
+    </button>
+  );
+}
+
 function MessageBlock({
   message,
   tokenized,
   encode,
   decode,
+  toolCtx,
 }: {
   message: Message;
   tokenized?: boolean;
   encode?: (text: string) => number[];
   decode?: (ids: number[]) => string;
+  toolCtx?: ToolContext;
 }) {
   const styles = useStyles2(getStyles);
 
@@ -224,9 +299,34 @@ function MessageBlock({
     <div className={styles.messageBlock}>
       <div className={roleClass}>{roleToLabel(message.role)}</div>
       {message.parts.map((part, i) => (
-        <PartContent key={i} part={part} tokenized={tokenized} encode={encode} decode={decode} />
+        <PartContent key={i} part={part} tokenized={tokenized} encode={encode} decode={decode} toolCtx={toolCtx} />
       ))}
     </div>
+  );
+}
+
+function ToolResultInline({ result, toolCtx }: { result: ToolResultPart; toolCtx?: ToolContext }) {
+  const styles = useStyles2(getStyles);
+  const raw = result.content ?? result.content_json ?? '';
+  const content = raw ? parseToolContent(raw) : null;
+  const link = toolCtx?.links.get(result.tool_call_id);
+
+  return (
+    <>
+      <div className={styles.toolResultSeparator} />
+      <div className={styles.toolResultInlineHeader}>
+        <div className={cx(styles.toolResultInlineLabel, result.is_error && styles.toolResultInlineError)}>
+          {'↳ Result'}
+          {result.is_error && ' (error)'}
+        </div>
+        {link?.resultGenerationId && toolCtx && (
+          <GenJumpLink generationId={link.resultGenerationId} label="Jump to result →" toolCtx={toolCtx} />
+        )}
+      </div>
+      {content?.kind === 'json' && <HighlightedJson content={content.formatted} />}
+      {content?.kind === 'text' && <div className={styles.toolCallInlineArgs}>{content.content}</div>}
+      {content?.kind === 'binary' && <div className={styles.toolCallInlineArgs}>{content.label}</div>}
+    </>
   );
 }
 
@@ -235,11 +335,13 @@ function PartContent({
   tokenized,
   encode,
   decode,
+  toolCtx,
 }: {
   part: Part;
   tokenized?: boolean;
   encode?: (text: string) => number[];
   decode?: (ids: number[]) => string;
+  toolCtx?: ToolContext;
 }) {
   const styles = useStyles2(getStyles);
 
@@ -271,25 +373,38 @@ function PartContent({
   }
 
   if (part.tool_call) {
-    const formattedArgs = part.tool_call.input_json ? formatToolContent(part.tool_call.input_json) : '';
+    const raw = part.tool_call.input_json ?? '';
+    const content = raw ? parseToolContent(raw) : null;
+    const link = toolCtx?.links.get(part.tool_call.id);
     return (
       <div data-tool-call-id={part.tool_call.id} className={styles.toolCallInline}>
         <div className={styles.toolCallInlineName}>{part.tool_call.name}</div>
-        {formattedArgs && <div className={styles.toolCallInlineArgs}>{formattedArgs}</div>}
+        {content?.kind === 'json' && <HighlightedJson content={content.formatted} />}
+        {content?.kind === 'text' && <div className={styles.toolCallInlineArgs}>{content.content}</div>}
+        {content?.kind === 'binary' && <div className={styles.toolCallInlineArgs}>{content.label}</div>}
+        {link?.result && <ToolResultInline result={link.result} toolCtx={toolCtx} />}
       </div>
     );
   }
 
   if (part.tool_result) {
     const raw = part.tool_result.content ?? part.tool_result.content_json ?? '';
-    const formatted = raw ? formatToolContent(raw) : '';
+    const content = raw ? parseToolContent(raw) : null;
+    const link = toolCtx?.links.get(part.tool_result.tool_call_id);
     return (
       <div className={styles.toolCallInline}>
-        <div className={styles.toolCallInlineName}>
-          {part.tool_result.name}
-          {part.tool_result.is_error && ' (error)'}
+        <div className={styles.toolResultInlineHeader}>
+          <div className={styles.toolCallInlineName}>
+            {part.tool_result.name}
+            {part.tool_result.is_error && ' (error)'}
+          </div>
+          {link?.callGenerationId && toolCtx && (
+            <GenJumpLink generationId={link.callGenerationId} label="← Jump to call" toolCtx={toolCtx} />
+          )}
         </div>
-        {formatted && <div className={styles.toolCallInlineArgs}>{formatted}</div>}
+        {content?.kind === 'json' && <HighlightedJson content={content.formatted} />}
+        {content?.kind === 'text' && <div className={styles.toolCallInlineArgs}>{content.content}</div>}
+        {content?.kind === 'binary' && <div className={styles.toolCallInlineArgs}>{content.label}</div>}
       </div>
     );
   }
@@ -720,6 +835,7 @@ function ScoreChips({ scores }: { scores: Record<string, LatestScore> }) {
 export default function GenerationView({
   node,
   allGenerations,
+  flowNodes,
   onClose,
   onNavigateToGeneration,
   scrollToToolCallId,
@@ -738,6 +854,12 @@ export default function GenerationView({
     return getDataSourceSrv().getInstanceSettings(tempoUid)?.meta?.info?.logos?.small ?? null;
   }, []);
 
+  const visibleGenIds = useMemo(() => collectFlowNodeGenIds(flowNodes), [flowNodes]);
+  const toolLinks = useMemo(() => buildToolCallLinks(allGenerations, visibleGenIds), [allGenerations, visibleGenIds]);
+  const toolCtx: ToolContext = useMemo(
+    () => ({ links: toolLinks, onNavigate: onNavigateToGeneration }),
+    [toolLinks, onNavigateToGeneration]
+  );
   const inputMessages = useMemo(() => gen?.input ?? [], [gen?.input]);
   const outputMessages = gen?.output ?? [];
   const inputTokens = gen?.usage?.input_tokens ?? 0;
@@ -1017,6 +1139,7 @@ export default function GenerationView({
                 tokenized={tokenizedSections['input'] && !!encode}
                 encode={encode}
                 decode={decode}
+                toolCtx={toolCtx}
               />
             ))}
           </Section>
@@ -1040,6 +1163,7 @@ export default function GenerationView({
                 tokenized={tokenizedSections['output'] && !!encode}
                 encode={encode}
                 decode={decode}
+                toolCtx={toolCtx}
               />
             ))}
           </Section>

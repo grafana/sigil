@@ -48,6 +48,7 @@ export default function DetailPanel({
         <GenerationView
           node={selectedNode}
           allGenerations={allGenerations}
+          flowNodes={flowNodes}
           onClose={onDeselectNode}
           onNavigateToGeneration={onNavigateToGeneration}
           scrollToToolCallId={scrollToToolCallId}

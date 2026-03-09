@@ -1,5 +1,5 @@
 import ChatThread from '../../components/conversation-explore/ChatThread';
-import { mockGenerations, mockGenerationsWithXml } from './fixtures';
+import { mockGenerations, mockGenerationsWithToolResults, mockGenerationsWithXml } from './fixtures';
 
 const meta = {
   title: 'Sigil/Conversation Explore/ChatThread',
@@ -14,6 +14,10 @@ export const Default = {
 
 export const SingleGeneration = {
   args: { generations: [mockGenerations[0]] },
+};
+
+export const WithToolResults = {
+  args: { generations: mockGenerationsWithToolResults },
 };
 
 export const WithXmlBlocks = {

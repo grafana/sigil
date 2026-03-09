@@ -32,7 +32,7 @@ describe('GenerationView', () => {
       children: [],
     };
 
-    render(<GenerationView node={node} allGenerations={[generation]} onClose={jest.fn()} />);
+    render(<GenerationView node={node} allGenerations={[generation]} flowNodes={[]} onClose={jest.fn()} />);
 
     const chip = screen.getByText('sigil.quality').closest('div');
     expect(chip).not.toBeNull();
@@ -68,7 +68,7 @@ describe('GenerationView', () => {
       children: [],
     };
 
-    render(<GenerationView node={node} allGenerations={[generation]} onClose={jest.fn()} />);
+    render(<GenerationView node={node} allGenerations={[generation]} flowNodes={[]} onClose={jest.fn()} />);
 
     expect(screen.getByText(/↓3\s+↑215/)).toBeInTheDocument();
     expect(screen.getAllByText('claude-sonnet-4-6').length).toBeGreaterThan(1);
@@ -126,7 +126,9 @@ describe('GenerationView', () => {
       children: [],
     };
 
-    const { container } = render(<GenerationView node={node} allGenerations={[generation]} onClose={jest.fn()} />);
+    const { container } = render(
+      <GenerationView node={node} allGenerations={[generation]} flowNodes={[]} onClose={jest.fn()} />
+    );
 
     expect(screen.queryByText('System Prompt')).not.toBeInTheDocument();
     expect(screen.queryByText('Keep this hidden')).not.toBeInTheDocument();
@@ -196,7 +198,7 @@ describe('GenerationView', () => {
       children: [],
     };
 
-    render(<GenerationView node={node} allGenerations={[generation]} onClose={jest.fn()} />);
+    render(<GenerationView node={node} allGenerations={[generation]} flowNodes={[]} onClose={jest.fn()} />);
 
     expect(screen.queryByText('visible only in tooltip')).not.toBeInTheDocument();
 
@@ -236,6 +238,7 @@ describe('GenerationView', () => {
       <GenerationView
         node={node}
         allGenerations={[generation, { ...generation, generation_id: 'gen-5' }]}
+        flowNodes={[]}
         onClose={jest.fn()}
       />
     );
@@ -291,7 +294,7 @@ describe('GenerationView', () => {
       children: [],
     };
 
-    render(<GenerationView node={node} allGenerations={[generation]} onClose={jest.fn()} />);
+    render(<GenerationView node={node} allGenerations={[generation]} flowNodes={[]} onClose={jest.fn()} />);
 
     // Header count should reflect deduplicated total (2 unique AI keys), not raw sum (4)
     expect(screen.getByText('(2)')).toBeInTheDocument();
@@ -334,6 +337,7 @@ describe('GenerationView', () => {
       <GenerationView
         node={node}
         allGenerations={[generation, { ...generation, generation_id: 'gen-other' }]}
+        flowNodes={[]}
         onClose={jest.fn()}
       />
     );

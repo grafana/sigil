@@ -182,6 +182,41 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     overflow: 'auto',
     whiteSpace: 'pre-wrap' as const,
   }),
+  toolResultSeparator: css({
+    borderTop: `1px dashed ${theme.colors.border.weak}`,
+    margin: `${theme.spacing(0.75)} 0`,
+  }),
+  toolResultInlineHeader: css({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing(0.5),
+    marginBottom: theme.spacing(0.25),
+  }),
+  toolResultInlineLabel: css({
+    fontSize: 10,
+    fontWeight: 600,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.04em',
+    color: theme.isDark ? 'oklch(0.70 0.08 145)' : 'oklch(0.45 0.10 145)',
+  }),
+  toolResultInlineError: css({
+    color: theme.colors.error.text,
+  }),
+  genJumpLink: css({
+    appearance: 'none',
+    background: 'none',
+    border: 'none',
+    padding: 0,
+    fontSize: 10,
+    fontFamily: theme.typography.fontFamilyMonospace,
+    color: theme.colors.text.link,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap' as const,
+    '&:hover': {
+      textDecoration: 'underline',
+    },
+  }),
   usageChips: css({
     fontSize: 12,
     fontVariantNumeric: 'tabular-nums',
