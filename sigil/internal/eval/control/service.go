@@ -202,10 +202,7 @@ func (s *Service) forkFromHardcoded(ctx context.Context, tenantID, templateID st
 		version = template.Version
 	}
 
-	forkConfig := cloneMap(template.Config)
-	for key, value := range normalizedRequest.Config {
-		forkConfig[key] = value
-	}
+	forkConfig := mergeEvaluatorForkConfig(template.Kind, template.Config, normalizedRequest.Config)
 
 	outputKeys := template.OutputKeys
 	if len(normalizedRequest.OutputKeys) > 0 {

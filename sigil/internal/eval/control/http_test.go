@@ -808,6 +808,25 @@ func TestForkPredefinedEvaluatorHTTPRejectsPartialLLMJudgeOverride(t *testing.T)
 	}
 }
 
+func TestForkPredefinedEvaluatorHTTPAllowsFullyQualifiedModelOverrideWithoutProvider(t *testing.T) {
+	mux, _, _ := newEvalHTTPEnv(t)
+
+	forkPayload := `{
+		"evaluator_id":"custom.helpfulness",
+		"config":{"model":"anthropic/claude-3-5-haiku-latest"}
+	}`
+	forkResp := doRequest(mux, http.MethodPost, "/api/v1/eval/predefined/evaluators/sigil.helpfulness:fork", forkPayload)
+	if forkResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 fork predefined evaluator, got %d body=%s", forkResp.Code, forkResp.Body.String())
+	}
+	if !strings.Contains(forkResp.Body.String(), `"model":"anthropic/claude-3-5-haiku-latest"`) {
+		t.Fatalf("expected fully-qualified model override in response, body=%s", forkResp.Body.String())
+	}
+	if strings.Contains(forkResp.Body.String(), `"provider":"openai"`) {
+		t.Fatalf("expected inherited provider to be cleared for fully-qualified model override, body=%s", forkResp.Body.String())
+	}
+}
+
 func TestForkPredefinedEvaluatorReturnsInternalServerErrorOnStoreFailure(t *testing.T) {
 	mux, _, store := newEvalHTTPEnv(t)
 	store.createEvaluatorErr = errors.New("write failed")

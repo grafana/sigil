@@ -345,11 +345,7 @@ func (s *TemplateService) ForkTemplate(ctx context.Context, tenantID, templateID
 		}
 	}
 
-	// Shallow-merge request config over template version config.
-	forkConfig := cloneMap(ver.Config)
-	for key, value := range normalizedReq.Config {
-		forkConfig[key] = value
-	}
+	forkConfig := mergeEvaluatorForkConfig(tmpl.Kind, ver.Config, normalizedReq.Config)
 
 	// Use request output keys if provided, otherwise template version output keys.
 	outputKeys := ver.OutputKeys

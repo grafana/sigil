@@ -407,6 +407,38 @@ func TestTemplateService_ForkTemplate_RejectsPartialLLMJudgeOverride(t *testing.
 	}
 }
 
+func TestTemplateService_ForkTemplate_AllowsFullyQualifiedModelOverrideWithoutProvider(t *testing.T) {
+	svc, _, _ := newTemplateTestEnv(t)
+
+	_, err := svc.CreateTemplate(context.Background(), "tenant_1", CreateTemplateRequest{
+		TemplateID: "my_template",
+		Kind:       "llm_judge",
+		Version:    "2026-03-01",
+		Config:     map[string]any{"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.5},
+		OutputKeys: []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeNumber}},
+	})
+	if err != nil {
+		t.Fatalf("create template: %v", err)
+	}
+
+	eval, err := svc.ForkTemplate(context.Background(), "tenant_1", "my_template", ForkTemplateRequest{
+		EvaluatorID: "custom.helpfulness",
+		Config:      map[string]any{"model": "anthropic/claude-3-5-haiku-latest"},
+	})
+	if err != nil {
+		t.Fatalf("fork template: %v", err)
+	}
+	if provider, ok := eval.Config["provider"]; ok {
+		t.Fatalf("expected inherited provider to be cleared, got %v", provider)
+	}
+	if eval.Config["model"] != "anthropic/claude-3-5-haiku-latest" {
+		t.Fatalf("expected fully-qualified model override, got %v", eval.Config["model"])
+	}
+	if eval.Config["temperature"] != 0.5 {
+		t.Fatalf("expected unrelated config to remain, got %v", eval.Config["temperature"])
+	}
+}
+
 func TestTemplateService_ForkTemplate_NotFound(t *testing.T) {
 	svc, _, _ := newTemplateTestEnv(t)
 

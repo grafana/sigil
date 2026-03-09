@@ -476,6 +476,23 @@ func normalizeOptionalFloat(config map[string]any, key string) (float64, bool, e
 	}
 }
 
+func mergeEvaluatorForkConfig(kind evalpkg.EvaluatorKind, baseConfig, overrideConfig map[string]any) map[string]any {
+	merged := cloneMap(baseConfig)
+	if kind == evalpkg.EvaluatorKindLLMJudge {
+		if rawModel, ok := overrideConfig["model"]; ok {
+			if model, ok := rawModel.(string); ok && strings.TrimSpace(model) != "" {
+				if _, hasProvider := overrideConfig["provider"]; !hasProvider {
+					delete(merged, "provider")
+				}
+			}
+		}
+	}
+	for key, value := range overrideConfig {
+		merged[key] = value
+	}
+	return merged
+}
+
 func validateRulePreviewRuleID(ruleID string) error {
 	trimmed := strings.TrimSpace(ruleID)
 	if trimmed == "" {
