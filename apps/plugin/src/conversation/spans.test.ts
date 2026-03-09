@@ -154,6 +154,22 @@ describe('parseOTLPTrace', () => {
     const arrayOuter = { traces: [inner] };
     expect(parseOTLPTrace('t1', arrayOuter)).toHaveLength(1);
   });
+
+  it('normalizes base64 OTLP IDs to hex for generation matching', () => {
+    const payload = makeOTLPPayload([
+      makeOTLPSpan({
+        spanId: 'JRquhN1Vm7A=',
+        parentSpanId: 'dh3NZS5uTg4=',
+      }),
+    ]);
+
+    const spans = parseOTLPTrace('xUbNuB2T/N4G7osnjrigXQ==', payload);
+
+    expect(spans).toHaveLength(1);
+    expect(spans[0].traceID).toBe('c546cdb81d93fcde06ee8b278eb8a05d');
+    expect(spans[0].spanID).toBe('251aae84dd559bb0');
+    expect(spans[0].parentSpanID).toBe('761dcd652e6e4e0e');
+  });
 });
 
 describe('buildSpanTree', () => {

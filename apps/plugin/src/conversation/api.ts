@@ -2,6 +2,7 @@ import { lastValueFrom } from 'rxjs';
 import { getBackendSrv } from '@grafana/runtime';
 import type {
   ConversationDetail,
+  ConversationExploreResponse,
   ConversationListResponse,
   GenerationLookupHints,
   CreateConversationRatingRequest,
@@ -180,6 +181,7 @@ export type ConversationsDataSource = {
   ) => Promise<void>;
   getConversationStats?: (request: ConversationStatsRequest) => Promise<ConversationStatsResponse>;
   getConversationDetail: (conversationID: string) => Promise<ConversationDetail>;
+  getConversationExplore?: (conversationID: string) => Promise<ConversationExploreResponse>;
   listConversationRatings?: (
     conversationID: string,
     limit?: number,
@@ -222,6 +224,17 @@ export const defaultConversationsDataSource: ConversationsDataSource = {
       getBackendSrv().fetch<ConversationDetail>({
         method: 'GET',
         url: `${queryBasePath}/conversations/${encodeURIComponent(conversationID)}`,
+      })
+    );
+    return response.data;
+  },
+
+  async getConversationExplore(conversationID) {
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<ConversationExploreResponse>({
+        method: 'GET',
+        url: `${queryBasePath}/conversations/${encodeURIComponent(conversationID)}/explore`,
+        showErrorAlert: false,
       })
     );
     return response.data;

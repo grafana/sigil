@@ -19,6 +19,10 @@ sdks/js/.test-dist/
 # plugin and go artifacts
 apps/plugin/dist/
 apps/plugin/pkg/
+!apps/plugin/pkg/
+!apps/plugin/pkg/main.go
+!apps/plugin/pkg/plugin/
+!apps/plugin/pkg/plugin/*.go
 sigil/tmp/
 sigil/sigil
 *.db

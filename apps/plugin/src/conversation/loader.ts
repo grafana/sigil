@@ -1,12 +1,30 @@
+import type { TimeRange } from '@grafana/data';
 import type { ConversationsDataSource } from './api';
 import { parseOTLPTrace, buildSpanTree } from './spans';
-import type { ConversationData, ConversationDetail } from './types';
+import type {
+  ConversationData,
+  ConversationDetail,
+  ConversationExploreResponse,
+  ConversationExploreSpan,
+  ConversationSpan,
+  SerializedSpanAttributes,
+  SpanAttributeValue,
+  SpanAttributes,
+  SpanKind,
+} from './types';
+import type { GenerationDetail } from '../generation/types';
 
-export type TraceFetcher = (traceID: string) => Promise<unknown>;
+export type TraceFetchOptions = {
+  timeRange?: Pick<TimeRange, 'from' | 'to'>;
+};
+
+export type TraceFetcher = (traceID: string, options?: TraceFetchOptions) => Promise<unknown>;
 
 const TRACE_FETCH_CONCURRENCY = 5;
 const DETAIL_RETRY_DELAYS_MS = [250, 750, 1500];
 const TRACE_EMPTY_RETRY_DELAYS_MS = [750];
+const BIGINT_ZERO = BigInt(0);
+const BIGINT_ONE = BigInt(1);
 
 type TraceResult = { traceID: string; payload: unknown };
 
@@ -85,6 +103,7 @@ function detailToConversationData(detail: ConversationDetail): ConversationData 
 }
 
 const inflightDetails = new Map<string, Promise<ConversationData>>();
+const inflightExplores = new Map<string, Promise<ConversationData>>();
 
 export function loadConversationDetail(
   dataSource: ConversationsDataSource,
@@ -115,6 +134,164 @@ export function loadConversationDetail(
   })().finally(() => inflightDetails.delete(conversationID));
 
   inflightDetails.set(conversationID, promise);
+  return promise;
+}
+
+function parseSerializedNs(value: string | number | bigint | undefined): bigint | null {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+  try {
+    return BigInt(value);
+  } catch {
+    return null;
+  }
+}
+
+function parseSerializedSpanKind(kind: SpanKind | number | string | undefined): SpanKind {
+  if (kind === undefined || kind === null) {
+    return 'UNSPECIFIED';
+  }
+
+  const normalized = String(kind).toUpperCase();
+  switch (normalized) {
+    case 'INTERNAL':
+    case 'SERVER':
+    case 'CLIENT':
+    case 'PRODUCER':
+    case 'CONSUMER':
+    case 'UNSPECIFIED':
+      return normalized;
+    case '1':
+      return 'INTERNAL';
+    case '2':
+      return 'SERVER';
+    case '3':
+      return 'CLIENT';
+    case '4':
+      return 'PRODUCER';
+    case '5':
+      return 'CONSUMER';
+    default:
+      return 'UNSPECIFIED';
+  }
+}
+
+function toSpanAttributes(attributes: SerializedSpanAttributes | undefined): SpanAttributes {
+  const result = new Map<string, SpanAttributeValue>();
+  if (!attributes) {
+    return result;
+  }
+
+  if (Array.isArray(attributes)) {
+    for (const attribute of attributes) {
+      if (attribute?.key && attribute.value) {
+        result.set(attribute.key, attribute.value);
+      }
+    }
+    return result;
+  }
+
+  for (const [key, value] of Object.entries(attributes)) {
+    if (value) {
+      result.set(key, value);
+    }
+  }
+  return result;
+}
+
+function sortConversationSpans(spans: ConversationSpan[]): ConversationSpan[] {
+  return spans.sort((left, right) =>
+    left.startTimeUnixNano < right.startTimeUnixNano ? -1 : left.startTimeUnixNano > right.startTimeUnixNano ? 1 : 0
+  );
+}
+
+function buildConversationSpansFromExplore(
+  serializedSpans: ConversationExploreSpan[],
+  generations: GenerationDetail[]
+): { roots: ConversationSpan[]; orphanGenerations: GenerationDetail[] } {
+  const generationBySpan = new Map<string, GenerationDetail>();
+  const matchedGenerationIDs = new Set<string>();
+
+  for (const generation of generations) {
+    if (generation.trace_id && generation.span_id) {
+      generationBySpan.set(`${generation.trace_id}:${generation.span_id}`, generation);
+    }
+  }
+
+  function visit(span: ConversationExploreSpan): ConversationSpan {
+    const traceID = span.traceID ?? span.trace_id ?? '';
+    const spanID = span.spanID ?? span.span_id ?? '';
+    const parentSpanID = span.parentSpanID ?? span.parent_span_id ?? '';
+    const rawStartTimeUnixNano = parseSerializedNs(span.startTimeUnixNano ?? span.start_time_unix_nano);
+    const rawEndTimeUnixNano = parseSerializedNs(span.endTimeUnixNano ?? span.end_time_unix_nano);
+    const startTimeUnixNano = rawStartTimeUnixNano ?? rawEndTimeUnixNano ?? BIGINT_ONE;
+    const endTimeUnixNano = rawEndTimeUnixNano ?? startTimeUnixNano;
+    const safeEndTimeUnixNano = endTimeUnixNano >= startTimeUnixNano ? endTimeUnixNano : startTimeUnixNano;
+    const durationNano =
+      parseSerializedNs(span.durationNano ?? span.duration_nano) ??
+      (safeEndTimeUnixNano > startTimeUnixNano ? safeEndTimeUnixNano - startTimeUnixNano : BIGINT_ONE);
+    const generation = generationBySpan.get(`${traceID}:${spanID}`) ?? null;
+    if (generation) {
+      matchedGenerationIDs.add(generation.generation_id);
+    }
+
+    return {
+      traceID,
+      spanID,
+      parentSpanID,
+      name: span.name?.trim() || '(unnamed span)',
+      kind: parseSerializedSpanKind(span.kind),
+      serviceName: span.serviceName ?? span.service_name ?? '',
+      startTimeUnixNano,
+      endTimeUnixNano: safeEndTimeUnixNano,
+      durationNano: durationNano > BIGINT_ZERO ? durationNano : BIGINT_ONE,
+      attributes: toSpanAttributes(span.attributes),
+      resourceAttributes: toSpanAttributes(span.resourceAttributes ?? span.resource_attributes),
+      generation,
+      children: sortConversationSpans((span.children ?? []).map(visit)),
+    };
+  }
+
+  const roots = sortConversationSpans((serializedSpans ?? []).map(visit));
+  const orphanGenerations = generations.filter((generation) => !matchedGenerationIDs.has(generation.generation_id));
+
+  return { roots, orphanGenerations };
+}
+
+function exploreToConversationData(explore: ConversationExploreResponse): ConversationData {
+  const base = detailToConversationData(explore);
+  const { roots, orphanGenerations } = buildConversationSpansFromExplore(explore.spans ?? [], explore.generations);
+  return {
+    ...base,
+    spans: roots,
+    orphanGenerations,
+  };
+}
+
+type ErrorWithStatus = {
+  status?: number;
+};
+
+export function isConversationExploreUnavailable(error: unknown): boolean {
+  const status = typeof error === 'object' && error !== null ? (error as ErrorWithStatus).status : undefined;
+  return status === 404 || status === 405 || status === 501;
+}
+
+export function loadConversationExplore(
+  dataSource: ConversationsDataSource,
+  conversationID: string
+): Promise<ConversationData> {
+  const existing = inflightExplores.get(conversationID);
+  if (existing) {
+    return existing;
+  }
+
+  const promise = dataSource.getConversationExplore!(conversationID)
+    .then(exploreToConversationData)
+    .finally(() => inflightExplores.delete(conversationID));
+
+  inflightExplores.set(conversationID, promise);
   return promise;
 }
 

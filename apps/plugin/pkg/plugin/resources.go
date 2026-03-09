@@ -149,6 +149,10 @@ func permissionForConversationRoute(method string, path string) (string, bool) {
 		return "", false
 	}
 
+	if parts[1] == "explore" && method == http.MethodGet {
+		return permissionDataRead, true
+	}
+
 	switch parts[1] {
 	case "ratings", "annotations":
 		if method == http.MethodGet {
@@ -181,12 +185,16 @@ func (a *App) handleConversationRoutes(w http.ResponseWriter, req *http.Request)
 	id := strings.TrimPrefix(req.URL.Path, "/query/conversations/")
 	if id == "" || strings.Contains(id, "/") {
 		parts := strings.Split(id, "/")
-		if len(parts) != 2 || parts[0] == "" || (parts[1] != "ratings" && parts[1] != "annotations") {
+		if len(parts) != 2 || parts[0] == "" || (parts[1] != "ratings" && parts[1] != "annotations" && parts[1] != "explore") {
 			http.Error(w, "invalid conversation path", http.StatusBadRequest)
 			return
 		}
 		id = parts[0]
 		child := parts[1]
+		if child == "explore" {
+			a.handleConversationExplore(w, req, id)
+			return
+		}
 		path := fmt.Sprintf("/api/v1/conversations/%s/%s", id, child)
 		switch req.Method {
 		case http.MethodGet, http.MethodPost:

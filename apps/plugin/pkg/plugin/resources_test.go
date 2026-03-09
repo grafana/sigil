@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/grafana/authlib/authz"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -150,6 +151,7 @@ func TestRequiredPermissionAction(t *testing.T) {
 			{method: http.MethodPost, path: "/query/conversations/search/stream"},
 			{method: http.MethodPost, path: "/query/conversations/stats"},
 			{method: http.MethodGet, path: "/query/conversations/c-1"},
+			{method: http.MethodGet, path: "/query/conversations/c-1/explore"},
 			{method: http.MethodGet, path: "/query/conversations/c-1/ratings"},
 			{method: http.MethodGet, path: "/query/conversations/c-1/annotations"},
 			{method: http.MethodGet, path: "/query/generations/gen-1"},
@@ -2414,6 +2416,245 @@ func TestCallResourceRoutesTempoProxyThroughGrafanaDatasourceProxy(t *testing.T)
 	}
 	if tb := bytes.TrimSpace(sender.Body); !bytes.Equal(tb, []byte(`{"traces":[]}`)) {
 		t.Fatalf("unexpected response body: %s", tb)
+	}
+}
+
+func TestCallResourceConversationExploreBuildsCompactSpanGraph(t *testing.T) {
+	expectedStart := strconv.FormatInt(time.Date(2026, 3, 6, 8, 50, 0, 0, time.UTC).Unix(), 10)
+	expectedEnd := strconv.FormatInt(time.Date(2026, 3, 6, 10, 35, 0, 0, time.UTC).Unix(), 10)
+
+	sigil := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/conversations/c-1" {
+			http.Error(w, "unexpected path", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{
+			"conversation_id":"c-1",
+			"conversation_title":"Conversation",
+			"generation_count":2,
+			"first_generation_at":"2026-03-06T10:00:00Z",
+			"last_generation_at":"2026-03-06T10:05:00Z",
+			"generations":[
+				{"generation_id":"gen-1","conversation_id":"c-1","trace_id":"trace-1","span_id":"gen-span-1","created_at":"2026-03-06T09:20:00Z"},
+				{"generation_id":"gen-2","conversation_id":"c-1","trace_id":"trace-1","span_id":"gen-span-2","created_at":"2026-03-06T09:23:00Z"}
+			],
+			"annotations":[]
+		}`)
+	}))
+	defer sigil.Close()
+
+	var tempoRequests int
+	grafana := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/datasources/proxy/uid/tempo-ds/api/v2/traces/trace-1" {
+			http.Error(w, "unexpected path", http.StatusBadRequest)
+			return
+		}
+		if got := r.URL.Query().Get("start"); got != expectedStart {
+			http.Error(w, "unexpected start query: "+got, http.StatusBadRequest)
+			return
+		}
+		if got := r.URL.Query().Get("end"); got != expectedEnd {
+			http.Error(w, "unexpected end query: "+got, http.StatusBadRequest)
+			return
+		}
+		tempoRequests++
+		if got := r.Header.Get("Authorization"); got != "Bearer sa-token" {
+			http.Error(w, "missing authorization", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{
+			"resourceSpans":[
+				{
+					"resource":{"attributes":[
+						{"key":"service.name","value":{"stringValue":"assistant"}},
+						{"key":"user.id","value":{"stringValue":"user-42"}}
+					]},
+					"scopeSpans":[
+						{"spans":[
+							{"spanId":"root","parentSpanId":"","name":"root","kind":1,"startTimeUnixNano":"100","endTimeUnixNano":"400","attributes":[
+								{"key":"sigil.sdk.name","value":{"stringValue":"sdk-go"}}
+							]},
+							{"spanId":"gen-span-1","parentSpanId":"root","name":"generateText gpt-4o","kind":1,"startTimeUnixNano":"110","endTimeUnixNano":"200","attributes":[
+								{"key":"gen_ai.operation.name","value":{"stringValue":"generateText"}},
+								{"key":"sigil.generation.id","value":{"stringValue":"gen-1"}}
+							]},
+							{"spanId":"gen-span-2","parentSpanId":"root","name":"streamText gpt-4o","kind":1,"startTimeUnixNano":"210","endTimeUnixNano":"320","attributes":[
+								{"key":"gen_ai.operation.name","value":{"stringValue":"streamText"}},
+								{"key":"sigil.generation.id","value":{"stringValue":"gen-2"}}
+							]},
+							{"spanId":"tool-span-1","parentSpanId":"root","name":"sql_query_executor","kind":1,"startTimeUnixNano":"230","endTimeUnixNano":"300","attributes":[
+								{"key":"gen_ai.operation.name","value":{"stringValue":"execute_tool"}},
+								{"key":"gen_ai.tool.name","value":{"stringValue":"sql_query_executor"}}
+							]},
+							{"spanId":"ignored-span","parentSpanId":"root","name":"ignored","kind":1,"startTimeUnixNano":"330","endTimeUnixNano":"331","attributes":[
+								{"key":"foo","value":{"stringValue":"bar"}}
+							]}
+						]}
+					]
+				}
+			]
+		}`)
+	}))
+	defer grafana.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+	app.apiURL = sigil.URL
+	app.grafanaAppURL = grafana.URL
+	app.grafanaServiceAccountToken = "sa-token"
+	app.tempoDatasourceUID = "tempo-ds"
+
+	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "query/conversations/c-1/explore",
+	})
+	if sender.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)
+	}
+	if tempoRequests != 1 {
+		t.Fatalf("expected one tempo trace request, got %d", tempoRequests)
+	}
+
+	var response struct {
+		ConversationID string                    `json:"conversation_id"`
+		Spans          []conversationExploreSpan `json:"spans"`
+	}
+	if err := json.Unmarshal(sender.Body, &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.ConversationID != "c-1" {
+		t.Fatalf("unexpected conversation id: %q", response.ConversationID)
+	}
+	if len(response.Spans) != 1 {
+		t.Fatalf("expected one root span, got %d", len(response.Spans))
+	}
+	root := response.Spans[0]
+	if root.SpanID != "root" {
+		t.Fatalf("unexpected root span id: %q", root.SpanID)
+	}
+	if got := len(root.Children); got != 3 {
+		t.Fatalf("expected three included child spans, got %d", got)
+	}
+	if root.ResourceAttributes["user.id"].StringValue == nil || *root.ResourceAttributes["user.id"].StringValue != "user-42" {
+		t.Fatalf("expected user.id resource attribute to be preserved")
+	}
+	if root.Children[2].SpanID != "tool-span-1" {
+		t.Fatalf("expected tool span to be preserved, got %q", root.Children[2].SpanID)
+	}
+}
+
+func TestExtractExploreGenerationsFallsBackToConversationWindow(t *testing.T) {
+	conversationWindow := conversationExploreWindowFromStrings("2026-03-06T10:00:00Z", "2026-03-06T10:05:00Z")
+
+	_, traceIDs, _, traceWindows := extractExploreGenerations(
+		[]any{
+			map[string]any{
+				"generation_id":   "gen-1",
+				"conversation_id": "c-1",
+				"trace_id":        "trace-1",
+				"span_id":         "span-1",
+			},
+		},
+		conversationWindow,
+	)
+
+	if len(traceIDs) != 1 || traceIDs[0] != "trace-1" {
+		t.Fatalf("unexpected trace ids: %#v", traceIDs)
+	}
+
+	window, ok := traceWindows["trace-1"]
+	if !ok {
+		t.Fatalf("expected trace window for trace-1")
+	}
+	if got := window.Start.UTC().Format(time.RFC3339); got != "2026-03-06T09:30:00Z" {
+		t.Fatalf("unexpected fallback start: %s", got)
+	}
+	if got := window.End.UTC().Format(time.RFC3339); got != "2026-03-06T10:35:00Z" {
+		t.Fatalf("unexpected fallback end: %s", got)
+	}
+}
+
+func TestExtractExploreGenerationsUsesConversationEnvelopeForTraceWindows(t *testing.T) {
+	conversationWindow := conversationExploreWindowFromStrings("2026-03-06T10:00:00Z", "2026-03-06T10:05:00Z")
+
+	_, _, _, traceWindows := extractExploreGenerations(
+		[]any{
+			map[string]any{
+				"generation_id":   "gen-1",
+				"conversation_id": "c-1",
+				"trace_id":        "trace-1",
+				"span_id":         "span-1",
+				"created_at":      "2026-03-06T09:20:00Z",
+			},
+		},
+		conversationWindow,
+	)
+
+	window, ok := traceWindows["trace-1"]
+	if !ok {
+		t.Fatalf("expected trace window for trace-1")
+	}
+	if got := window.Start.UTC().Format(time.RFC3339); got != "2026-03-06T08:50:00Z" {
+		t.Fatalf("unexpected fallback start: %s", got)
+	}
+	if got := window.End.UTC().Format(time.RFC3339); got != "2026-03-06T10:35:00Z" {
+		t.Fatalf("unexpected fallback end: %s", got)
+	}
+}
+
+func TestBuildConversationExploreTraceNormalizesBase64Identifiers(t *testing.T) {
+	payload := []byte(`{
+		"resourceSpans":[
+			{
+				"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"assistant"}}]},
+				"scopeSpans":[
+					{"spans":[
+						{
+							"traceId":"xUbNuB2T/N4G7osnjrigXQ==",
+							"spanId":"JRquhN1Vm7A=",
+							"parentSpanId":"dh3NZS5uTg4=",
+							"name":"generateText claude-haiku",
+							"kind":1,
+							"startTimeUnixNano":"100",
+							"endTimeUnixNano":"200",
+							"attributes":[
+								{"key":"sigil.generation.id","value":{"stringValue":"gen-1"}},
+								{"key":"gen_ai.operation.name","value":{"stringValue":"generateText"}}
+							]
+						}
+					]}
+				]
+			}
+		]
+	}`)
+
+	spans, err := buildConversationExploreTrace(
+		"c546cdb81d93fcde06ee8b278eb8a05d",
+		payload,
+		map[string]struct{}{
+			"c546cdb81d93fcde06ee8b278eb8a05d:251aae84dd559bb0": {},
+		},
+	)
+	if err != nil {
+		t.Fatalf("build conversation explore trace: %v", err)
+	}
+	if len(spans) != 1 {
+		t.Fatalf("expected one span, got %d", len(spans))
+	}
+	if spans[0].TraceID != "c546cdb81d93fcde06ee8b278eb8a05d" {
+		t.Fatalf("unexpected normalized trace id: %q", spans[0].TraceID)
+	}
+	if spans[0].SpanID != "251aae84dd559bb0" {
+		t.Fatalf("unexpected normalized span id: %q", spans[0].SpanID)
+	}
+	if spans[0].ParentSpanID != "761dcd652e6e4e0e" {
+		t.Fatalf("unexpected normalized parent span id: %q", spans[0].ParentSpanID)
 	}
 }
 

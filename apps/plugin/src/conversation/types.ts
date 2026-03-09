@@ -172,6 +172,38 @@ export type ConversationDetail = {
   annotations: ConversationAnnotation[];
 };
 
+export type SerializedSpanAttributes =
+  | Record<string, SpanAttributeValue>
+  | Array<{ key?: string; value?: SpanAttributeValue }>
+  | null;
+
+export type ConversationExploreSpan = {
+  traceID?: string;
+  trace_id?: string;
+  spanID?: string;
+  span_id?: string;
+  parentSpanID?: string;
+  parent_span_id?: string;
+  name?: string;
+  kind?: SpanKind | number | string;
+  serviceName?: string;
+  service_name?: string;
+  startTimeUnixNano?: string | number;
+  start_time_unix_nano?: string | number;
+  endTimeUnixNano?: string | number;
+  end_time_unix_nano?: string | number;
+  durationNano?: string | number;
+  duration_nano?: string | number;
+  attributes?: SerializedSpanAttributes;
+  resourceAttributes?: SerializedSpanAttributes;
+  resource_attributes?: SerializedSpanAttributes;
+  children?: ConversationExploreSpan[];
+};
+
+export type ConversationExploreResponse = ConversationDetail & {
+  spans: ConversationExploreSpan[];
+};
+
 export type SearchTag = {
   key: string;
   scope: 'well-known' | 'span' | 'resource';

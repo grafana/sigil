@@ -94,8 +94,10 @@ jest.mock('../module', () => ({
 
 describe('ConversationExplorePage', () => {
   const originalClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+  const traceFetcher = jest.fn().mockResolvedValue({ resourceSpans: [] });
 
   beforeEach(() => {
+    traceFetcher.mockClear();
     Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
       configurable: true,
       get() {
@@ -114,7 +116,10 @@ describe('ConversationExplorePage', () => {
     render(
       <MemoryRouter initialEntries={['/conversations/conv-1/explore']}>
         <Routes>
-          <Route path="/conversations/:conversationID/explore" element={<ConversationExplorePage />} />
+          <Route
+            path="/conversations/:conversationID/explore"
+            element={<ConversationExplorePage traceFetcher={traceFetcher} />}
+          />
         </Routes>
       </MemoryRouter>
     );
@@ -133,7 +138,10 @@ describe('ConversationExplorePage', () => {
     render(
       <MemoryRouter initialEntries={['/conversations/conv-1/explore']}>
         <Routes>
-          <Route path="/conversations/:conversationID/explore" element={<ConversationExplorePage />} />
+          <Route
+            path="/conversations/:conversationID/explore"
+            element={<ConversationExplorePage traceFetcher={traceFetcher} />}
+          />
         </Routes>
       </MemoryRouter>
     );

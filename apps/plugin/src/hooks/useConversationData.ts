@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createTempoTraceFetcher } from '../conversation/fetchTrace';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
-import { loadConversationDetail, loadConversationTraces, type TraceFetcher } from '../conversation/loader';
+import {
+  isConversationExploreUnavailable,
+  loadConversationDetail,
+  loadConversationExplore,
+  loadConversationTraces,
+  type TraceFetcher,
+} from '../conversation/loader';
 import {
   getAllGenerations,
   getCostSummary,
@@ -23,6 +29,7 @@ export type UseConversationDataOptions = {
   dataSource?: ConversationsDataSource;
   traceFetcher?: TraceFetcher;
   modelCardClient?: ModelCardClient;
+  preferExplorePayload?: boolean;
 };
 
 export type UseConversationDataResult = {
@@ -42,6 +49,7 @@ export function useConversationData({
   dataSource = defaultConversationsDataSource,
   traceFetcher = defaultTraceFetcher,
   modelCardClient = defaultModelCardClient,
+  preferExplorePayload = false,
 }: UseConversationDataOptions): UseConversationDataResult {
   const [conversationData, setConversationData] = useState<ConversationData | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -72,8 +80,8 @@ export function useConversationData({
       setConversationData(null);
     });
 
-    void loadConversationDetail(dataSource, conversationID)
-      .then((data) => {
+    const loadLegacyConversation = () =>
+      loadConversationDetail(dataSource, conversationID).then((data) => {
         if (requestVersionRef.current !== requestVersion) {
           return;
         }
@@ -88,16 +96,38 @@ export function useConversationData({
           setConversationData(enriched);
           setTracesLoading(false);
         });
-      })
-      .catch((error) => {
-        if (requestVersionRef.current !== requestVersion) {
-          return;
-        }
-        setErrorMessage(error instanceof Error ? error.message : 'failed to load conversation detail');
-        setLoading(false);
-        setTracesLoading(false);
       });
-  }, [dataSource, conversationID, traceFetcher]);
+
+    const loadInitialConversation = async () => {
+      if (preferExplorePayload && dataSource.getConversationExplore) {
+        try {
+          const data = await loadConversationExplore(dataSource, conversationID);
+          if (requestVersionRef.current !== requestVersion) {
+            return;
+          }
+          setConversationData(data);
+          setLoading(false);
+          setTracesLoading(false);
+          return;
+        } catch (error) {
+          if (!isConversationExploreUnavailable(error)) {
+            throw error;
+          }
+        }
+      }
+
+      return loadLegacyConversation();
+    };
+
+    void loadInitialConversation().catch((error) => {
+      if (requestVersionRef.current !== requestVersion) {
+        return;
+      }
+      setErrorMessage(error instanceof Error ? error.message : 'failed to load conversation detail');
+      setLoading(false);
+      setTracesLoading(false);
+    });
+  }, [dataSource, conversationID, preferExplorePayload, traceFetcher]);
 
   const allGenerations = useMemo<GenerationDetail[]>(() => {
     if (!conversationData) {

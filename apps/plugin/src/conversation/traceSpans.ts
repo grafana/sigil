@@ -1,3 +1,5 @@
+import { normalizeSpanID, normalizeTraceID } from './ids';
+
 const BIGINT_ZERO = BigInt(0);
 const BIGINT_ONE = BigInt(1);
 const NS_PER_MS = BigInt(1_000_000);
@@ -196,6 +198,7 @@ function getTraceCandidates(payload: unknown): TempoTrace[] {
 export function buildTraceSpans(traceID: string, payload: unknown): ParsedTraceSpan[] {
   const spans: ParsedTraceSpan[] = [];
   const traceCandidates = getTraceCandidates(payload);
+  const normalizedTraceID = normalizeTraceID(traceID) || traceID;
 
   for (const trace of traceCandidates) {
     const resourceSpans = trace.resourceSpans ?? trace.resource_spans ?? trace.batches;
@@ -223,11 +226,11 @@ export function buildTraceSpans(traceID: string, payload: unknown): ParsedTraceS
             continue;
           }
           const safeEnd = endNs != null && endNs >= startNs ? endNs : startNs;
-          const spanID = span.spanId ?? span.spanID ?? span.span_id ?? '';
-          const parentSpanID = span.parentSpanId ?? span.parentSpanID ?? span.parent_span_id ?? '';
+          const spanID = normalizeSpanID(span.spanId ?? span.spanID ?? span.span_id ?? '');
+          const parentSpanID = normalizeSpanID(span.parentSpanId ?? span.parentSpanID ?? span.parent_span_id ?? '');
           const name = span.name?.trim() ?? '';
           spans.push({
-            traceID,
+            traceID: normalizedTraceID,
             spanID,
             parentSpanID,
             name: name.length > 0 ? name : '(unnamed span)',
@@ -235,7 +238,7 @@ export function buildTraceSpans(traceID: string, payload: unknown): ParsedTraceS
             startNs,
             endNs: safeEnd,
             durationNs: safeEnd > startNs ? safeEnd - startNs : BIGINT_ONE,
-            selectionID: `${traceID}:${spanID.length > 0 ? spanID : `${startNs}`}`,
+            selectionID: `${normalizedTraceID}:${spanID.length > 0 ? spanID : `${startNs}`}`,
             attributes: toAttributeMap(span.attributes),
           });
         }
