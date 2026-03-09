@@ -135,6 +135,39 @@ describe('EvaluatorForm', () => {
     expect(screen.getByText('Invalid JSON')).toBeInTheDocument();
   });
 
+  it('locks json_schema evaluators to bool output and omits pass_value overrides', () => {
+    const onSubmit = jest.fn();
+    const prefill: Partial<Evaluator> = {
+      evaluator_id: 'seed.schema.bool',
+      kind: 'json_schema',
+      config: {
+        schema: { type: 'object' },
+      },
+      output_keys: [{ key: 'json_valid', type: 'bool', pass_value: false }],
+    };
+
+    render(<EvaluatorForm prefill={prefill} onSubmit={onSubmit} onCancel={jest.fn()} dataSource={mockDataSource} />);
+
+    expect(screen.getByDisplayValue('bool')).toBeDisabled();
+    expect(screen.queryByText('Pass when')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][0].output_keys).toEqual([{ key: 'json_valid', type: 'bool' }]);
+  });
+
+  it('updates the default output key when switching kinds', () => {
+    render(<EvaluatorForm onSubmit={jest.fn()} onCancel={jest.fn()} dataSource={mockDataSource} />);
+
+    expect(screen.getByDisplayValue('score')).toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getByText('LLM Judge'));
+    fireEvent.click(screen.getByText('Heuristic'));
+
+    expect(screen.getByDisplayValue('heuristic_pass')).toBeInTheDocument();
+  });
+
   it('blocks submit when pass threshold is lower than min', () => {
     const onSubmit = jest.fn();
     const prefill: Partial<Evaluator> = {

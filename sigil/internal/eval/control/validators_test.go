@@ -197,6 +197,50 @@ func TestValidateEvaluatorConfig(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "kind is invalid") {
 		t.Fatalf("expected invalid kind error, got %v", err)
 	}
+
+	t.Run("json schema requires bool outputs", func(t *testing.T) {
+		err := validateEvaluatorConfig(evalpkg.EvaluatorKindJSONSchema, map[string]any{
+			"schema": map[string]any{"type": "object"},
+		}, []evalpkg.OutputKey{{
+			Key:  "json_valid",
+			Type: evalpkg.ScoreTypeString,
+		}})
+		if err == nil || !strings.Contains(err.Error(), "json_schema evaluators require bool output keys") {
+			t.Fatalf("expected bool output error, got %v", err)
+		}
+	})
+
+	t.Run("regex rejects pass_value overrides", func(t *testing.T) {
+		passValue := false
+		err := validateEvaluatorConfig(evalpkg.EvaluatorKindRegex, map[string]any{
+			"pattern": "^ok$",
+		}, []evalpkg.OutputKey{{
+			Key:       "regex_match",
+			Type:      evalpkg.ScoreTypeBool,
+			PassValue: &passValue,
+		}})
+		if err == nil || !strings.Contains(err.Error(), "regex evaluators do not support output key pass_value=false") {
+			t.Fatalf("expected pass_value error, got %v", err)
+		}
+	})
+
+	t.Run("json schema normalizes legacy pass_value true", func(t *testing.T) {
+		passValue := true
+		outputKeys := []evalpkg.OutputKey{{
+			Key:       "json_valid",
+			Type:      evalpkg.ScoreTypeBool,
+			PassValue: &passValue,
+		}}
+		err := validateEvaluatorConfig(evalpkg.EvaluatorKindJSONSchema, map[string]any{
+			"schema": map[string]any{"type": "object"},
+		}, outputKeys)
+		if err != nil {
+			t.Fatalf("expected legacy pass_value=true to be accepted, got %v", err)
+		}
+		if outputKeys[0].PassValue != nil {
+			t.Fatalf("expected legacy pass_value=true to be normalized away, got %#v", outputKeys[0].PassValue)
+		}
+	})
 }
 
 func TestNumericNormalizationHelpers(t *testing.T) {

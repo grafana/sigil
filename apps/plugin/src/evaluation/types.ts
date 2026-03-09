@@ -9,6 +9,29 @@ export type EvalFormState = {
 
 export type ScoreType = 'number' | 'bool' | 'string';
 
+export const FIXED_BOOL_OUTPUT_KINDS: ReadonlySet<EvaluatorKind> = new Set(['json_schema', 'regex', 'heuristic']);
+
+export const JSON_SCHEMA_SUPPORTED_KEYWORDS = ['type', 'required', 'properties', 'items'] as const;
+
+export const DEFAULT_OUTPUT_KEY_BY_KIND: Record<EvaluatorKind, string> = {
+  llm_judge: 'score',
+  json_schema: 'json_valid',
+  regex: 'regex_match',
+  heuristic: 'heuristic_pass',
+};
+
+export function getDefaultOutputKey(kind: EvaluatorKind): string {
+  return DEFAULT_OUTPUT_KEY_BY_KIND[kind];
+}
+
+export function getFixedOutputType(kind: EvaluatorKind): ScoreType | undefined {
+  return FIXED_BOOL_OUTPUT_KINDS.has(kind) ? 'bool' : undefined;
+}
+
+export function kindSupportsCustomPassValue(kind: EvaluatorKind): boolean {
+  return kind === 'llm_judge';
+}
+
 export type EvalOutputKey = {
   key: string;
   type: ScoreType;

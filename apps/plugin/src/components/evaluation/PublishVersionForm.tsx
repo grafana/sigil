@@ -3,10 +3,14 @@ import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
 import { Button, Field, Input, Select, Stack, Switch, Text, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
 import {
+  JSON_SCHEMA_SUPPORTED_KEYWORDS,
   LLM_JUDGE_DEFAULT_SYSTEM_PROMPT,
   LLM_JUDGE_DEFAULT_USER_PROMPT,
   LLM_JUDGE_USER_PROMPT_VARIABLES_DESCRIPTION,
   buildOutputKeyFromForm,
+  getDefaultOutputKey,
+  getFixedOutputType,
+  kindSupportsCustomPassValue,
   normalizedOptionalString,
   type EvalFormState,
   type EvalOutputKey,
@@ -218,8 +222,10 @@ export default function PublishVersionForm({
       .catch(() => {});
   }, [ds, kind, provider]);
 
-  const [outputKey, setOutputKey] = useState(initialOutputKeys?.[0]?.key ?? 'score');
-  const [outputType, setOutputType] = useState<ScoreType>(initialOutputKeys?.[0]?.type ?? 'number');
+  const [outputKey, setOutputKey] = useState(initialOutputKeys?.[0]?.key ?? getDefaultOutputKey(kind));
+  const [outputType, setOutputType] = useState<ScoreType>(
+    initialOutputKeys?.[0]?.type ?? getFixedOutputType(kind) ?? 'number'
+  );
   const [outputDescription, setOutputDescription] = useState(initialOutputKeys?.[0]?.description ?? '');
   const [outputEnum, setOutputEnum] = useState(initialOutputKeys?.[0]?.enum?.join(', ') ?? '');
   const [passThreshold, setPassThreshold] = useState<number | ''>(initialOutputKeys?.[0]?.pass_threshold ?? '');
@@ -240,6 +246,9 @@ export default function PublishVersionForm({
   const heuristicMaxLengthFieldRef = useRef<HTMLDivElement>(null);
   const passThresholdFieldRef = useRef<HTMLDivElement>(null);
   const outputMaxFieldRef = useRef<HTMLDivElement>(null);
+  const fixedOutputType = getFixedOutputType(kind);
+  const effectiveOutputType = fixedOutputType ?? outputType;
+  const supportsCustomPassValue = kindSupportsCustomPassValue(kind);
 
   const [changelog, setChangelog] = useState('');
 
@@ -278,14 +287,14 @@ export default function PublishVersionForm({
       outputKeys: [
         buildOutputKeyFromForm({
           key: outputKey,
-          type: outputType,
+          type: effectiveOutputType,
           description: outputDescription,
           enumValue: outputEnum,
           passThreshold,
           min: outputMin,
           max: outputMax,
           passMatch,
-          passValue,
+          passValue: supportsCustomPassValue ? passValue : '',
         }),
       ],
     });
@@ -333,7 +342,7 @@ export default function PublishVersionForm({
       maxLength: heuristicMaxLength,
     },
     output: {
-      type: outputType,
+      type: effectiveOutputType,
       passThreshold,
       min: outputMin,
       max: outputMax,
@@ -382,14 +391,14 @@ export default function PublishVersionForm({
     const outputKeys: EvalOutputKey[] = [
       buildOutputKeyFromForm({
         key: outputKey,
-        type: outputType,
+        type: effectiveOutputType,
         description: outputDescription,
         enumValue: outputEnum,
         passThreshold,
         min: outputMin,
         max: outputMax,
         passMatch,
-        passValue,
+        passValue: supportsCustomPassValue ? passValue : '',
       }),
     ];
 
@@ -526,10 +535,14 @@ export default function PublishVersionForm({
           <div className={styles.sectionBody}>
             <div className={styles.sectionText}>
               <Text variant="body" color="secondary">
-                Provide the JSON schema used to validate each generation result.
+                Provide the JSON object shape to validate. Supported schema keywords today: type, required, properties,
+                and items.
               </Text>
             </div>
-            <Field label="Schema" description="Optional. JSON schema for validation. Leave blank to use {}.">
+            <Field
+              label="Schema"
+              description={`Optional. Uses Sigil's built-in JSON Schema subset (${JSON_SCHEMA_SUPPORTED_KEYWORDS.join(', ')}). Leave blank to use {}.`}
+            >
               <div ref={schemaFieldRef}>
                 <textarea
                   className={`${styles.textarea} ${styles.codeTextarea}`}
@@ -673,7 +686,9 @@ export default function PublishVersionForm({
         <div className={styles.sectionBody}>
           <div className={styles.sectionText}>
             <Text variant="body" color="secondary">
-              Define the score this template emits and how downstream views should interpret it.
+              {fixedOutputType === 'bool'
+                ? 'This evaluator kind always emits a boolean pass/fail score.'
+                : 'Define the score this template emits and how downstream views should interpret it.'}
             </Text>
           </div>
           <div className={styles.twoColumnGrid}>
@@ -695,16 +710,20 @@ export default function PublishVersionForm({
               </div>
             </Field>
             <Field label="Output type">
-              <Select<ScoreType>
-                className={styles.compactControl}
-                options={SCORE_TYPE_OPTIONS}
-                value={outputType}
-                onChange={(v) => {
-                  if (v?.value) {
-                    setOutputType(v.value);
-                  }
-                }}
-              />
+              {fixedOutputType != null ? (
+                <Input className={styles.compactControl} value={fixedOutputType} readOnly disabled />
+              ) : (
+                <Select<ScoreType>
+                  className={styles.compactControl}
+                  options={SCORE_TYPE_OPTIONS}
+                  value={outputType}
+                  onChange={(v) => {
+                    if (v?.value) {
+                      setOutputType(v.value);
+                    }
+                  }}
+                />
+              )}
             </Field>
           </div>
           <Field
@@ -722,7 +741,7 @@ export default function PublishVersionForm({
               placeholder="e.g. How helpful the response is on a 1-10 scale"
             />
           </Field>
-          {kind === 'llm_judge' && outputType === 'string' && (
+          {kind === 'llm_judge' && effectiveOutputType === 'string' && (
             <Field
               label="Allowed values"
               description="Optional. Comma-separated list of allowed string values. Enforced via structured output."
@@ -745,10 +764,12 @@ export default function PublishVersionForm({
         <div className={styles.sectionBody}>
           <div className={styles.sectionText}>
             <Text variant="body" color="secondary">
-              Define which output values should count as passing for this template.
+              {fixedOutputType === 'bool'
+                ? 'Pass/fail is fixed for this evaluator kind: true passes and false fails.'
+                : 'Define which output values should count as passing for this template.'}
             </Text>
           </div>
-          {outputType === 'number' && (
+          {effectiveOutputType === 'number' && (
             <div className={styles.twoColumnGrid}>
               <Field label="Pass threshold" description="Optional. Score at or above this value passes.">
                 <div ref={passThresholdFieldRef}>
@@ -799,7 +820,7 @@ export default function PublishVersionForm({
               </Field>
             </div>
           )}
-          {outputType === 'string' && (
+          {effectiveOutputType === 'string' && (
             <Field label="Pass values" description="Optional. Comma-separated values that count as passing.">
               <Input
                 className={styles.fullWidthControl}
@@ -809,7 +830,7 @@ export default function PublishVersionForm({
               />
             </Field>
           )}
-          {outputType === 'bool' && (
+          {effectiveOutputType === 'bool' && supportsCustomPassValue && (
             <Field label="Pass when" description="Optional. Choose which boolean value counts as passing.">
               <Select<string>
                 className={styles.compactControl}

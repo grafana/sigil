@@ -31,6 +31,9 @@ func validateEvaluatorConfig(kind evalpkg.EvaluatorKind, config map[string]any, 
 	if kind == evalpkg.EvaluatorKindLLMJudge && len(outputKeys) == 1 && strings.EqualFold(strings.TrimSpace(outputKeys[0].Key), "explanation") {
 		return errors.New(`output key "explanation" is reserved for llm_judge evaluators`)
 	}
+	if err := validateOutputKeysForKind(kind, outputKeys); err != nil {
+		return err
+	}
 
 	switch kind {
 	case evalpkg.EvaluatorKindRegex:
@@ -44,6 +47,28 @@ func validateEvaluatorConfig(kind evalpkg.EvaluatorKind, config map[string]any, 
 	default:
 		return errors.New("kind is invalid")
 	}
+}
+
+func validateOutputKeysForKind(kind evalpkg.EvaluatorKind, outputKeys []evalpkg.OutputKey) error {
+	switch kind {
+	case evalpkg.EvaluatorKindJSONSchema, evalpkg.EvaluatorKindRegex, evalpkg.EvaluatorKindHeuristic:
+		for idx := range outputKeys {
+			key := &outputKeys[idx]
+			if key.Type != evalpkg.ScoreTypeBool {
+				return fmt.Errorf("%s evaluators require bool output keys", kind)
+			}
+			if key.PassValue != nil {
+				if *key.PassValue {
+					// Legacy predefined bool evaluators stored pass_value=true even though these
+					// evaluator kinds always treat true as pass. Normalize the no-op away.
+					key.PassValue = nil
+					continue
+				}
+				return fmt.Errorf("%s evaluators do not support output key pass_value=false", kind)
+			}
+		}
+	}
+	return nil
 }
 
 func validateRegexConfig(config map[string]any) error {

@@ -3,6 +3,7 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, Text, useStyles2 } from '@grafana/ui';
 import {
+  JSON_SCHEMA_SUPPORTED_KEYWORDS,
   getEffectiveLLMJudgePrompts,
   normalizedOptionalString,
   type EvalOutputKey,
@@ -218,7 +219,8 @@ export default function TemplateConfigSummary({ kind, config, outputKeys }: Temp
           <div className={styles.sectionBody}>
             <div className={styles.sectionText}>
               <Text variant="body" color="secondary">
-                Each response is parsed as JSON and validated against this schema.
+                Each response is parsed as JSON and validated against the Sigil built-in schema subset:
+                {` ${JSON_SCHEMA_SUPPORTED_KEYWORDS.join(', ')}.`}
               </Text>
             </div>
             <div className={styles.valueCard}>

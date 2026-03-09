@@ -856,6 +856,24 @@ func TestForkPredefinedEvaluatorHTTPAllowsFullyQualifiedModelOverrideWithoutProv
 	}
 }
 
+func TestForkPredefinedFixedBoolEvaluatorHTTPLegacyPassValueStillForks(t *testing.T) {
+	mux, _, _ := newEvalHTTPEnv(t)
+
+	forkPayload := `{
+		"evaluator_id":"custom.json_valid"
+	}`
+	forkResp := doRequest(mux, http.MethodPost, "/api/v1/eval/predefined/evaluators/sigil.json_valid:fork", forkPayload)
+	if forkResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 fork predefined evaluator, got %d body=%s", forkResp.Code, forkResp.Body.String())
+	}
+	if !strings.Contains(forkResp.Body.String(), `"custom.json_valid"`) {
+		t.Fatalf("expected forked evaluator id in response, body=%s", forkResp.Body.String())
+	}
+	if strings.Contains(forkResp.Body.String(), `"pass_value"`) {
+		t.Fatalf("expected legacy pass_value=true to be normalized away, body=%s", forkResp.Body.String())
+	}
+}
+
 func TestForkPredefinedEvaluatorReturnsInternalServerErrorOnStoreFailure(t *testing.T) {
 	mux, _, store := newEvalHTTPEnv(t)
 	store.createEvaluatorErr = errors.New("write failed")

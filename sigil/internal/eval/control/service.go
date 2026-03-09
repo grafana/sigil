@@ -647,6 +647,9 @@ func validateEvaluator(evaluator *evalpkg.EvaluatorDefinition) error {
 	if evaluator.Config == nil {
 		evaluator.Config = map[string]any{}
 	}
+	if err := validateEvaluatorConfig(evaluator.Kind, evaluator.Config, evaluator.OutputKeys); err != nil {
+		return err
+	}
 	return nil
 }
 

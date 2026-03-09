@@ -20,4 +20,17 @@ describe('TemplateConfigSummary', () => {
     expect(screen.getByText('{{latest_user_message}}')).toBeInTheDocument();
     expect(screen.getByText('{{assistant_response}}')).toBeInTheDocument();
   });
+
+  it('describes the supported json schema subset', () => {
+    render(
+      <TemplateConfigSummary
+        kind="json_schema"
+        config={{ schema: { type: 'object' } }}
+        outputKeys={[{ key: 'json_valid', type: 'bool' }]}
+      />
+    );
+
+    expect(screen.getByText(/built-in schema subset/i)).toBeInTheDocument();
+    expect(screen.getByText(/type, required, properties, items/i)).toBeInTheDocument();
+  });
 });

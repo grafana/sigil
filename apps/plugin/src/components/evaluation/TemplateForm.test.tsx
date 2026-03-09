@@ -60,4 +60,27 @@ describe('TemplateForm', () => {
       );
     });
   });
+
+  it('shows json_schema as a fixed bool output kind', async () => {
+    render(<TemplateForm onSubmit={jest.fn()} onCancel={jest.fn()} dataSource={mockDataSource} />);
+
+    fireEvent.mouseDown(screen.getByText('LLM Judge'));
+    fireEvent.click(await screen.findByText('JSON Schema'));
+
+    expect(screen.getByDisplayValue('json_valid')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('bool')).toBeDisabled();
+    expect(screen.queryByText('Pass threshold')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pass when')).not.toBeInTheDocument();
+    expect(screen.getByText(/built-in JSON Schema subset/i)).toBeInTheDocument();
+  });
+
+  it('preserves a custom output key when switching kinds', async () => {
+    render(<TemplateForm onSubmit={jest.fn()} onCancel={jest.fn()} dataSource={mockDataSource} />);
+
+    fireEvent.change(screen.getByPlaceholderText('score'), { target: { value: 'custom_key' } });
+    fireEvent.mouseDown(screen.getByText('LLM Judge'));
+    fireEvent.click(await screen.findByText('Regex'));
+
+    expect(screen.getByDisplayValue('custom_key')).toBeInTheDocument();
+  });
 });

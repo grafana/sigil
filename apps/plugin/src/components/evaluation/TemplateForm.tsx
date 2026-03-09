@@ -4,10 +4,14 @@ import { Button, Field, Input, Select, Stack, Switch, Text, useStyles2 } from '@
 import { css } from '@emotion/css';
 import {
   EVALUATOR_KIND_LABELS,
+  JSON_SCHEMA_SUPPORTED_KEYWORDS,
   LLM_JUDGE_DEFAULT_SYSTEM_PROMPT,
   LLM_JUDGE_DEFAULT_USER_PROMPT,
   LLM_JUDGE_USER_PROMPT_VARIABLES_DESCRIPTION,
   buildOutputKeyFromForm,
+  getDefaultOutputKey,
+  getFixedOutputType,
+  kindSupportsCustomPassValue,
   normalizedOptionalString,
   type CreateTemplateRequest,
   type EvalFormState,
@@ -204,7 +208,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
   const [minLength, setMinLength] = useState<number | ''>('');
   const [maxLength, setMaxLength] = useState<number | ''>('');
 
-  const [outputKey, setOutputKey] = useState('score');
+  const [outputKey, setOutputKey] = useState(getDefaultOutputKey('llm_judge'));
   const [outputType, setOutputType] = useState<ScoreType>('number');
   const [outputDescription, setOutputDescription] = useState('');
   const [outputEnum, setOutputEnum] = useState('');
@@ -224,6 +228,10 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
   const heuristicMaxLengthFieldRef = useRef<HTMLDivElement>(null);
   const passThresholdFieldRef = useRef<HTMLDivElement>(null);
   const outputMaxFieldRef = useRef<HTMLDivElement>(null);
+  const fixedOutputType = getFixedOutputType(kind);
+  const effectiveOutputType = fixedOutputType ?? outputType;
+  const supportsCustomPassValue = kindSupportsCustomPassValue(kind);
+  const previousKindRef = useRef<EvaluatorKind>('llm_judge');
 
   const buildConfig = (): Record<string, unknown> => {
     switch (kind) {
@@ -254,20 +262,32 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
   };
 
   useEffect(() => {
+    const previousKind = previousKindRef.current;
+    if (previousKind === kind) {
+      return;
+    }
+    const previousDefaultKey = getDefaultOutputKey(previousKind);
+    if (outputKey.trim() === '' || outputKey === previousDefaultKey) {
+      setOutputKey(getDefaultOutputKey(kind));
+    }
+    previousKindRef.current = kind;
+  }, [kind, outputKey]);
+
+  useEffect(() => {
     onConfigChange?.({
       kind,
       config: buildConfig(),
       outputKeys: [
         buildOutputKeyFromForm({
           key: outputKey,
-          type: outputType,
+          type: effectiveOutputType,
           description: outputDescription,
           enumValue: outputEnum,
           passThreshold,
           min: outputMin,
           max: outputMax,
           passMatch,
-          passValue,
+          passValue: supportsCustomPassValue ? passValue : '',
         }),
       ],
     });
@@ -318,7 +338,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
       maxLength,
     },
     output: {
-      type: outputType,
+      type: effectiveOutputType,
       passThreshold,
       min: outputMin,
       max: outputMax,
@@ -372,14 +392,14 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
     const outputKeys: EvalOutputKey[] = [
       buildOutputKeyFromForm({
         key: outputKey,
-        type: outputType,
+        type: effectiveOutputType,
         description: outputDescription,
         enumValue: outputEnum,
         passThreshold,
         min: outputMin,
         max: outputMax,
         passMatch,
-        passValue,
+        passValue: supportsCustomPassValue ? passValue : '',
       }),
     ];
 
@@ -556,10 +576,14 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
           <div className={styles.sectionBody}>
             <div className={styles.sectionText}>
               <Text variant="body" color="secondary">
-                Provide the JSON schema used to validate each generation result.
+                Provide the JSON object shape to validate. Supported schema keywords today: type, required, properties,
+                and items.
               </Text>
             </div>
-            <Field label="Schema" description="Optional. JSON schema for validation. Leave blank to use {}.">
+            <Field
+              label="Schema"
+              description={`Optional. Uses Sigil's built-in JSON Schema subset (${JSON_SCHEMA_SUPPORTED_KEYWORDS.join(', ')}). Leave blank to use {}.`}
+            >
               <div ref={schemaFieldRef}>
                 <textarea
                   className={`${styles.textarea} ${styles.codeTextarea}`}
@@ -703,7 +727,9 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
         <div className={styles.sectionBody}>
           <div className={styles.sectionText}>
             <Text variant="body" color="secondary">
-              Define the score this template emits and how downstream views should interpret it.
+              {fixedOutputType === 'bool'
+                ? 'This evaluator kind always emits a boolean pass/fail score.'
+                : 'Define the score this template emits and how downstream views should interpret it.'}
             </Text>
           </div>
           <div className={styles.twoColumnGrid}>
@@ -725,16 +751,20 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
               </div>
             </Field>
             <Field label="Output type">
-              <Select<ScoreType>
-                className={styles.compactControl}
-                options={SCORE_TYPE_OPTIONS}
-                value={outputType}
-                onChange={(v) => {
-                  if (v?.value) {
-                    setOutputType(v.value);
-                  }
-                }}
-              />
+              {fixedOutputType != null ? (
+                <Input className={styles.compactControl} value={fixedOutputType} readOnly disabled />
+              ) : (
+                <Select<ScoreType>
+                  className={styles.compactControl}
+                  options={SCORE_TYPE_OPTIONS}
+                  value={outputType}
+                  onChange={(v) => {
+                    if (v?.value) {
+                      setOutputType(v.value);
+                    }
+                  }}
+                />
+              )}
             </Field>
           </div>
           <Field
@@ -752,7 +782,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
               placeholder="e.g. How helpful the response is on a 1-10 scale"
             />
           </Field>
-          {kind === 'llm_judge' && outputType === 'string' && (
+          {kind === 'llm_judge' && effectiveOutputType === 'string' && (
             <Field
               label="Allowed values"
               description="Optional. Comma-separated list of allowed string values. Enforced via structured output."
@@ -775,10 +805,12 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
         <div className={styles.sectionBody}>
           <div className={styles.sectionText}>
             <Text variant="body" color="secondary">
-              Define which output values should count as passing for this template.
+              {fixedOutputType === 'bool'
+                ? 'Pass/fail is fixed for this evaluator kind: true passes and false fails.'
+                : 'Define which output values should count as passing for this template.'}
             </Text>
           </div>
-          {outputType === 'number' && (
+          {effectiveOutputType === 'number' && (
             <div className={styles.twoColumnGrid}>
               <Field label="Pass threshold" description="Optional. Score at or above this value passes.">
                 <div ref={passThresholdFieldRef}>
@@ -829,7 +861,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
               </Field>
             </div>
           )}
-          {outputType === 'string' && (
+          {effectiveOutputType === 'string' && (
             <Field label="Pass values" description="Optional. Comma-separated values that count as passing.">
               <Input
                 className={styles.fullWidthControl}
@@ -839,7 +871,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
               />
             </Field>
           )}
-          {outputType === 'bool' && (
+          {effectiveOutputType === 'bool' && supportsCustomPassValue && (
             <Field label="Pass when" description="Optional. Choose which boolean value counts as passing.">
               <Select<string>
                 className={styles.compactControl}

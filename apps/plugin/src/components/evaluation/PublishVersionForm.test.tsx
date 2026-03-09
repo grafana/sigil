@@ -28,4 +28,28 @@ describe('PublishVersionForm', () => {
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByText('Choose both provider and model, or leave both blank')).toBeInTheDocument();
   });
+
+  it('forces regex outputs to bool and strips unsupported pass configuration', () => {
+    const onSubmit = jest.fn();
+
+    render(
+      <PublishVersionForm
+        kind="regex"
+        initialConfig={{ pattern: '^ok$' }}
+        initialOutputKeys={[{ key: 'regex_match', type: 'string', pass_match: ['ok'] }]}
+        onSubmit={onSubmit}
+        onCancel={jest.fn()}
+        dataSource={mockDataSource}
+      />
+    );
+
+    expect(screen.getByDisplayValue('bool')).toBeDisabled();
+    expect(screen.queryByText('Pass values')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pass when')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Publish$/ }));
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][0].output_keys).toEqual([{ key: 'regex_match', type: 'bool' }]);
+  });
 });

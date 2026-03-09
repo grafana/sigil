@@ -51,3 +51,29 @@ export default meta;
 export const Default = {
   render: () => <PublishVersionFormWrapper />,
 };
+
+export const JSONSchema = {
+  render: () => (
+    <div className={storyContainer}>
+      <PublishVersionForm
+        kind="json_schema"
+        initialConfig={{
+          schema: {
+            type: 'object',
+            required: ['answer'],
+            properties: {
+              answer: { type: 'string' },
+            },
+          },
+        }}
+        initialOutputKeys={[
+          { key: 'json_valid', type: 'bool', description: 'Whether the response matches the schema' },
+        ]}
+        existingVersions={['2026-03-01', '2026-03-02']}
+        onSubmit={(req) => console.log('Publish version submitted:', req)}
+        onCancel={() => console.log('Cancel clicked')}
+        dataSource={mockDataSource}
+      />
+    </div>
+  ),
+};

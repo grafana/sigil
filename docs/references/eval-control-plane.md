@@ -53,6 +53,10 @@ Request fields:
 - `unit` (optional)
 - `pass_threshold` (optional)
 
+Kind-specific output constraints:
+- `json_schema`, `regex`, and `heuristic` require a `bool` output key.
+- `pass_value` is only meaningful for `llm_judge` boolean outputs.
+
 Response: evaluator object (`200 OK`).
 
 ### `GET /api/v1/eval/evaluators?limit=&cursor=`

@@ -133,7 +133,11 @@ Each evaluator currently supports exactly one output key.
 | `llm_judge` | `provider`, `model`, `system_prompt`, `user_prompt`, `max_tokens`, `temperature`, `timeout_ms` | `number`, `bool`, or `string` |
 | `json_schema` | `schema` | `bool` |
 | `regex` | `pattern` or `patterns`, optional `reject=true` | `bool` |
-| `heuristic` | `not_empty`, `contains`, `not_contains`, `min_length`, `max_length` | usually `bool` |
+| `heuristic` | `not_empty`, `contains`, `not_contains`, `min_length`, `max_length` | `bool` |
+
+`json_schema` note:
+- Sigil currently supports a built-in JSON Schema subset: `type`, `required`, `properties`, and `items`.
+- Draft negotiation via `$schema` is not supported today.
 
 ### LLM Template Variables
 

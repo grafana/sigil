@@ -478,7 +478,9 @@ func TestSavedConversationServiceManualCreate(t *testing.T) {
 	t.Run("conflict lookup failure still returns conflict", func(t *testing.T) {
 		failingStore := newMockSavedConversationStore()
 		failingStore.createErr = evalpkg.ErrConflict
-		failingStore.getErr = errors.New("lookup failed")
+		failingStore.createHook = func(evalpkg.SavedConversation) {
+			failingStore.getByConvErr = errors.New("lookup failed")
+		}
 		writer := newMockManualConversationWriter()
 		deleter := newMockManualConversationDeleter()
 		svcWithRollback := NewSavedConversationService(failingStore, lookup, WithManualWriter(writer), WithManualDeleter(deleter))
