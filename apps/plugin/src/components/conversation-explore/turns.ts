@@ -35,7 +35,11 @@ function partsEqual(left: Part, right: Part): boolean {
 }
 
 export function messagesEqual(left: Message, right: Message): boolean {
-  if (left.role !== right.role || (left.name ?? '') !== (right.name ?? '') || left.parts.length !== right.parts.length) {
+  if (
+    left.role !== right.role ||
+    (left.name ?? '') !== (right.name ?? '') ||
+    left.parts.length !== right.parts.length
+  ) {
     return false;
   }
   for (let idx = 0; idx < left.parts.length; idx++) {
@@ -287,11 +291,11 @@ export function newMessagesForGeneration(
     return input.slice(prefix);
   }
 
-  // No prefix match -- return just the latest user turn as a safe default.
+  // No prefix match -- return messages from the last user turn as a safe default.
   for (let i = input.length - 1; i >= 0; i--) {
-    if (input[i].role === 'MESSAGE_ROLE_ASSISTANT') {
-      return i < input.length - 1 ? input.slice(i + 1) : [input[input.length - 1]];
+    if (input[i].role === 'MESSAGE_ROLE_USER') {
+      return input.slice(i);
     }
   }
-  return [input[input.length - 1]];
+  return input;
 }

@@ -408,9 +408,7 @@ describe('GenerationView', () => {
       children: [],
     };
 
-    render(
-      <GenerationView node={node} allGenerations={[previous, current]} flowNodes={[]} onClose={jest.fn()} />
-    );
+    render(<GenerationView node={node} allGenerations={[previous, current]} flowNodes={[]} onClose={jest.fn()} />);
 
     // Only the current prompt turn is visible initially
     expect(screen.getByText('second question')).toBeInTheDocument();
@@ -486,9 +484,7 @@ describe('GenerationView', () => {
       children: [],
     };
 
-    render(
-      <GenerationView node={node} allGenerations={[gen1, gen2, gen3]} flowNodes={[]} onClose={jest.fn()} />
-    );
+    render(<GenerationView node={node} allGenerations={[gen1, gen2, gen3]} flowNodes={[]} onClose={jest.fn()} />);
 
     // Only the current prompt turn (turn 3) visible initially
     expect(screen.getByText('q3')).toBeInTheDocument();
@@ -561,9 +557,7 @@ describe('GenerationView', () => {
       children: [],
     };
 
-    render(
-      <GenerationView node={node} allGenerations={[previous, rewritten]} flowNodes={[]} onClose={jest.fn()} />
-    );
+    render(<GenerationView node={node} allGenerations={[previous, rewritten]} flowNodes={[]} onClose={jest.fn()} />);
 
     expect(screen.getByText('rewritten follow-up')).toBeInTheDocument();
     expect(screen.getByText('rewritten answer')).toBeInTheDocument();

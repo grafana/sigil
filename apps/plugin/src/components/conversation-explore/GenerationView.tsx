@@ -290,8 +290,7 @@ function MessageBlock({
     message.role === 'MESSAGE_ROLE_ASSISTANT' && styles.messageRoleAssistant,
     message.role === 'MESSAGE_ROLE_TOOL' && styles.messageRoleTool
   );
-  const turnLabel =
-    turnIndex && totalTurns && totalTurns > 1 ? `Turn ${turnIndex} of ${totalTurns}` : turnIndex ? `Turn ${turnIndex}` : undefined;
+  const turnLabel = turnIndex && totalTurns && totalTurns > 1 ? `Turn ${turnIndex} of ${totalTurns}` : undefined;
 
   return (
     <div
@@ -979,7 +978,8 @@ export default function GenerationView({
     [gen, allGenerations]
   );
   const turnHistory = useMemo(
-    () => (gen ? reconstructTurns(inputMessages, gen, allGenerations) : { turns: [] as ConversationTurn[], totalTurns: 0 }),
+    () =>
+      gen ? reconstructTurns(inputMessages, gen, allGenerations) : { turns: [] as ConversationTurn[], totalTurns: 0 },
     [inputMessages, gen, allGenerations]
   );
   const { totalTurns } = turnHistory;
@@ -996,10 +996,7 @@ export default function GenerationView({
   }
 
   const clamped = Math.min(revealedCount, historyTurns.length);
-  const visibleHistory = useMemo(
-    () => historyTurns.slice(historyTurns.length - clamped),
-    [historyTurns, clamped]
-  );
+  const visibleHistory = useMemo(() => historyTurns.slice(historyTurns.length - clamped), [historyTurns, clamped]);
   const remainingTurns = historyTurns.length - clamped;
   const showTurnContext = historyTurns.length > 0 || totalTurns > 1;
 
@@ -1262,21 +1259,13 @@ export default function GenerationView({
             {historyTurns.length > 0 && (
               <div className={styles.historyControls}>
                 {remainingTurns > 0 && (
-                  <button
-                    type="button"
-                    className={styles.historyLink}
-                    onClick={() => setRevealedCount((c) => c + 1)}
-                  >
+                  <button type="button" className={styles.historyLink} onClick={() => setRevealedCount((c) => c + 1)}>
                     <Icon name="angle-up" size="sm" />
                     {remainingTurns === 1 ? 'Load 1 more turn' : `Load more (${remainingTurns} turns)`}
                   </button>
                 )}
                 {clamped > 0 && (
-                  <button
-                    type="button"
-                    className={styles.historyLink}
-                    onClick={() => setRevealedCount(0)}
-                  >
+                  <button type="button" className={styles.historyLink} onClick={() => setRevealedCount(0)}>
                     Collapse
                   </button>
                 )}
@@ -1287,7 +1276,8 @@ export default function GenerationView({
                 {visibleHistory.map((turn) => (
                   <React.Fragment key={`turn-${turn.number}`}>
                     <div className={cx(styles.turnGroupSeparator, turn.prefixBreak && styles.turnGroupSeparatorBreak)}>
-                      Turn {turn.number} of {totalTurns}{turn.prefixBreak ? ' · context diverged' : ''}
+                      Turn {turn.number} of {totalTurns}
+                      {turn.prefixBreak ? ' · context diverged' : ''}
                     </div>
                     <div className={styles.messageStack}>
                       {turn.messages.map((msg, mi) => (
@@ -1306,9 +1296,13 @@ export default function GenerationView({
                 ))}
               </div>
             )}
-            {showTurnContext && visibleHistory.length > 0 && <div className={styles.historySeparator}>Current prompt</div>}
+            {showTurnContext && visibleHistory.length > 0 && (
+              <div className={styles.historySeparator}>Current prompt</div>
+            )}
             <div className={cx(styles.historySection, showTurnContext && styles.historySectionCurrent)}>
-              {showTurnContext && visibleHistory.length === 0 && <div className={styles.historySectionLabel}>Current prompt</div>}
+              {showTurnContext && visibleHistory.length === 0 && (
+                <div className={styles.historySectionLabel}>Current prompt</div>
+              )}
               <div className={styles.messageStack}>
                 {currentTurn.messages.map((msg, i) => (
                   <MessageBlock

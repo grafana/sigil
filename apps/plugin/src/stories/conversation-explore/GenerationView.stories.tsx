@@ -73,9 +73,17 @@ export const WithRewrittenHistory = {
         input: [
           { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Check Redis persistence.' }] },
           { role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'What changed in the config?' }] },
-          { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Actually compare the new save policy against AOF rewrite impact.' }] },
+          {
+            role: 'MESSAGE_ROLE_USER',
+            parts: [{ text: 'Actually compare the new save policy against AOF rewrite impact.' }],
+          },
         ],
-        output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'The rewritten prompt focuses on save cadence versus rewrite growth.' }] }],
+        output: [
+          {
+            role: 'MESSAGE_ROLE_ASSISTANT',
+            parts: [{ text: 'The rewritten prompt focuses on save cadence versus rewrite growth.' }],
+          },
+        ],
       },
       children: [],
     },
@@ -91,7 +99,12 @@ export const WithRewrittenHistory = {
           { role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'What changed in the config?' }] },
           { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Compare the old replication backlog settings.' }] },
         ],
-        output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'The previous prompt focused on replication backlog settings.' }] }],
+        output: [
+          {
+            role: 'MESSAGE_ROLE_ASSISTANT',
+            parts: [{ text: 'The previous prompt focused on replication backlog settings.' }],
+          },
+        ],
       },
       {
         generation_id: 'gen-rewrite-2',
@@ -102,9 +115,17 @@ export const WithRewrittenHistory = {
         input: [
           { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Check Redis persistence.' }] },
           { role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'What changed in the config?' }] },
-          { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Actually compare the new save policy against AOF rewrite impact.' }] },
+          {
+            role: 'MESSAGE_ROLE_USER',
+            parts: [{ text: 'Actually compare the new save policy against AOF rewrite impact.' }],
+          },
         ],
-        output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'The rewritten prompt focuses on save cadence versus rewrite growth.' }] }],
+        output: [
+          {
+            role: 'MESSAGE_ROLE_ASSISTANT',
+            parts: [{ text: 'The rewritten prompt focuses on save cadence versus rewrite growth.' }],
+          },
+        ],
       },
     ],
     flowNodes: [],
@@ -142,10 +163,23 @@ export const WithVisibleMultiTurnInput = {
         agent_name: 'fe-grafana-assistant',
         input: [
           { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Summarize the current Redis rollout.' }] },
-          { role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'The rollout is stable in staging and partially enabled in production.' }] },
-          { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Call out the riskiest instance group before we widen traffic.' }] },
+          {
+            role: 'MESSAGE_ROLE_ASSISTANT',
+            parts: [{ text: 'The rollout is stable in staging and partially enabled in production.' }],
+          },
+          {
+            role: 'MESSAGE_ROLE_USER',
+            parts: [{ text: 'Call out the riskiest instance group before we widen traffic.' }],
+          },
         ],
-        output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'The riskiest group is the us-central1 canary shard because persistence lag is still spiking.' }] }],
+        output: [
+          {
+            role: 'MESSAGE_ROLE_ASSISTANT',
+            parts: [
+              { text: 'The riskiest group is the us-central1 canary shard because persistence lag is still spiking.' },
+            ],
+          },
+        ],
       },
       children: [],
     },
@@ -158,10 +192,23 @@ export const WithVisibleMultiTurnInput = {
         agent_name: 'fe-grafana-assistant',
         input: [
           { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Summarize the current Redis rollout.' }] },
-          { role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'The rollout is stable in staging and partially enabled in production.' }] },
-          { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Call out the riskiest instance group before we widen traffic.' }] },
+          {
+            role: 'MESSAGE_ROLE_ASSISTANT',
+            parts: [{ text: 'The rollout is stable in staging and partially enabled in production.' }],
+          },
+          {
+            role: 'MESSAGE_ROLE_USER',
+            parts: [{ text: 'Call out the riskiest instance group before we widen traffic.' }],
+          },
         ],
-        output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'The riskiest group is the us-central1 canary shard because persistence lag is still spiking.' }] }],
+        output: [
+          {
+            role: 'MESSAGE_ROLE_ASSISTANT',
+            parts: [
+              { text: 'The riskiest group is the us-central1 canary shard because persistence lag is still spiking.' },
+            ],
+          },
+        ],
       },
     ],
     flowNodes: [],
@@ -188,12 +235,27 @@ export const WithCumulativeHistory = {
         agent_name: 'fe-grafana-assistant',
         input: [
           { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'What services are in the Agent Management group?' }] },
-          { role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'Agent Management contains 28-39 services responsible for managing agent configs and deployments.' }] },
+          {
+            role: 'MESSAGE_ROLE_ASSISTANT',
+            parts: [
+              {
+                text: 'Agent Management contains 28-39 services responsible for managing agent configs and deployments.',
+              },
+            ],
+          },
           { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Which Kubernetes clusters does it span?' }] },
-          { role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'It spans two production clusters in us-central1 and eu-west1.' }] },
+          {
+            role: 'MESSAGE_ROLE_ASSISTANT',
+            parts: [{ text: 'It spans two production clusters in us-central1 and eu-west1.' }],
+          },
           { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Show me the memory usage trend for the last 24h.' }] },
         ],
-        output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'Here is the memory usage trend across both clusters for the past 24 hours.' }] }],
+        output: [
+          {
+            role: 'MESSAGE_ROLE_ASSISTANT',
+            parts: [{ text: 'Here is the memory usage trend across both clusters for the past 24 hours.' }],
+          },
+        ],
       },
       children: [],
     },
@@ -204,10 +266,17 @@ export const WithCumulativeHistory = {
         created_at: '2026-03-09T19:01:00Z',
         model: { provider: 'anthropic', name: 'claude-sonnet-4-6' },
         agent_name: 'fe-grafana-assistant',
-        input: [
-          { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'What services are in the Agent Management group?' }] },
+        input: [{ role: 'MESSAGE_ROLE_USER', parts: [{ text: 'What services are in the Agent Management group?' }] }],
+        output: [
+          {
+            role: 'MESSAGE_ROLE_ASSISTANT',
+            parts: [
+              {
+                text: 'Agent Management contains 28-39 services responsible for managing agent configs and deployments.',
+              },
+            ],
+          },
         ],
-        output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'Agent Management contains 28-39 services responsible for managing agent configs and deployments.' }] }],
       },
       {
         generation_id: 'gen-cumul-2',
@@ -217,10 +286,22 @@ export const WithCumulativeHistory = {
         agent_name: 'fe-grafana-assistant',
         input: [
           { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'What services are in the Agent Management group?' }] },
-          { role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'Agent Management contains 28-39 services responsible for managing agent configs and deployments.' }] },
+          {
+            role: 'MESSAGE_ROLE_ASSISTANT',
+            parts: [
+              {
+                text: 'Agent Management contains 28-39 services responsible for managing agent configs and deployments.',
+              },
+            ],
+          },
           { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Which Kubernetes clusters does it span?' }] },
         ],
-        output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'It spans two production clusters in us-central1 and eu-west1.' }] }],
+        output: [
+          {
+            role: 'MESSAGE_ROLE_ASSISTANT',
+            parts: [{ text: 'It spans two production clusters in us-central1 and eu-west1.' }],
+          },
+        ],
       },
       {
         generation_id: 'gen-cumul-3',
@@ -230,12 +311,27 @@ export const WithCumulativeHistory = {
         agent_name: 'fe-grafana-assistant',
         input: [
           { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'What services are in the Agent Management group?' }] },
-          { role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'Agent Management contains 28-39 services responsible for managing agent configs and deployments.' }] },
+          {
+            role: 'MESSAGE_ROLE_ASSISTANT',
+            parts: [
+              {
+                text: 'Agent Management contains 28-39 services responsible for managing agent configs and deployments.',
+              },
+            ],
+          },
           { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Which Kubernetes clusters does it span?' }] },
-          { role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'It spans two production clusters in us-central1 and eu-west1.' }] },
+          {
+            role: 'MESSAGE_ROLE_ASSISTANT',
+            parts: [{ text: 'It spans two production clusters in us-central1 and eu-west1.' }],
+          },
           { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Show me the memory usage trend for the last 24h.' }] },
         ],
-        output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'Here is the memory usage trend across both clusters for the past 24 hours.' }] }],
+        output: [
+          {
+            role: 'MESSAGE_ROLE_ASSISTANT',
+            parts: [{ text: 'Here is the memory usage trend across both clusters for the past 24 hours.' }],
+          },
+        ],
       },
     ],
     flowNodes: [],
