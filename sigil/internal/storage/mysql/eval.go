@@ -19,11 +19,7 @@ var _ evalpkg.EvalStore = (*WALStore)(nil)
 const defaultEvalWorkItemClaimTTL = 10 * time.Minute
 
 func normalizeActorID(actorID string) string {
-	trimmed := strings.TrimSpace(actorID)
-	if trimmed == "" {
-		return "system@grafana.com"
-	}
-	return trimmed
+	return evalpkg.NormalizeActorID(actorID)
 }
 
 func (s *WALStore) CreateEvaluator(ctx context.Context, evaluator evalpkg.EvaluatorDefinition) error {

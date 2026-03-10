@@ -4,12 +4,14 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 )
 
 const (
 	HeaderGrafanaUser       = "X-Grafana-User"
 	HeaderSigilTrustedActor = "X-Sigil-Trusted-Actor"
-	LegacyActorID           = "system@grafana.com"
+	LegacyActorID           = evalpkg.LegacyActorID
 )
 
 func actorIDFromRequest(w http.ResponseWriter, req *http.Request) (string, bool) {
@@ -36,11 +38,7 @@ func actorIDFromRequest(w http.ResponseWriter, req *http.Request) (string, bool)
 }
 
 func normalizeActorID(actorID string) string {
-	trimmed := strings.TrimSpace(actorID)
-	if trimmed == "" {
-		return LegacyActorID
-	}
-	return trimmed
+	return evalpkg.NormalizeActorID(actorID)
 }
 
 func isDevelopmentMode() bool {

@@ -128,34 +128,36 @@ export default function VersionHistoryTable({
         ),
       },
     ];
-    if (showUpdated) {
-      base.push({
-        id: 'updated',
-        header: (
-          <span className={styles.headerText}>
-            <Text weight="medium" variant="bodySmall">
-              Updated
-            </Text>
-          </span>
-        ),
-        cell: (v: TemplateVersionSummary) => (
+    base.push({
+      id: 'date',
+      header: (
+        <span className={styles.headerText}>
+          <Text weight="medium" variant="bodySmall">
+            {showUpdated ? 'Updated' : 'Created'}
+          </Text>
+        </span>
+      ),
+      cell: (v: TemplateVersionSummary) => {
+        const timestamp = showUpdated ? v.updated_at?.trim() || v.created_at : v.created_at;
+        const actor = showUpdated ? v.updated_by?.trim() || v.created_by : v.created_by;
+
+        return (
           <div className={styles.metaCell}>
-            {v.updated_at ? (
+            <Text color="secondary" variant="bodySmall">
+              {formatDate(timestamp)}
+            </Text>
+            {actor ? (
               <>
                 <Text color="secondary" variant="bodySmall">
-                  {formatDate(v.updated_at)} by
+                  by
                 </Text>
-                <ActorBadge actor={v.updated_by} />
+                <ActorBadge actor={actor} />
               </>
-            ) : (
-              <Text color="secondary" variant="bodySmall">
-                —
-              </Text>
-            )}
+            ) : null}
           </div>
-        ),
-      });
-    }
+        );
+      },
+    });
     if (onRollback != null) {
       base.push({
         id: 'actions',
