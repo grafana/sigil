@@ -92,6 +92,8 @@ Plugin boundary:
 - Sigil plugin backend tenant header precedence is:
   - preserve inbound `X-Scope-OrgID`
   - else use plugin connection fallback tenant ID (default `fake`)
+- Eval write routes also forward trusted Grafana user identity from the plugin backend using `X-Grafana-User`.
+- Sigil uses `X-Grafana-User` only for eval resource attribution (`created_by` / `updated_by`), not for tenant isolation.
 - Local Compose defaults:
   - Tempo runs with `multitenancy_enabled: true`.
   - Alloy injects `X-Scope-OrgID: fake` on Tempo OTLP exports.
@@ -216,8 +218,9 @@ prometheus.remote_write "grafana_cloud" {
 ## Current Limitations
 
 1. Header-only tenant model: Sigil enforces tenant context, but does not provide user identity, token validation, or authorization policies by itself.
-2. No native bearer validation in Sigil API: bearer is only supported through a proxy pattern.
-3. Single-tenant request contract: Sigil endpoints use single-tenant extraction (`TenantID`), so multi-tenant query headers like `tenant-a|tenant-b` are not supported.
+2. User identity for eval attribution is proxy-provided metadata, not first-class authz inside Sigil.
+3. No native bearer validation in Sigil API: bearer is only supported through a proxy pattern.
+4. Single-tenant request contract: Sigil endpoints use single-tenant extraction (`TenantID`), so multi-tenant query headers like `tenant-a|tenant-b` are not supported.
 4. Fake-tenant mode collapses all traffic into one tenant and must not be used as isolation.
 5. Traces/metrics tenant policy is externalized to collector/exporter config.
 6. Helm convenience values `alloy.auth.*` inject `X-Scope-OrgID` and optional bearer header; Grafana Cloud Basic-auth topologies require customizing Alloy config.

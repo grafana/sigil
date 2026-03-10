@@ -31,6 +31,7 @@ This is the canonical navigation map for repository documentation.
 - Design docs: [`design-docs/index.md`](design-docs/index.md)
   - Backend operational metrics baseline (active): `design-docs/2026-03-03-backend-operational-metrics-baseline.md`
   - Agent catalog versioning and APIs (active): `design-docs/2026-03-04-agent-catalog-versioning.md`
+  - Evaluation resource user attribution (completed): `design-docs/2026-03-09-eval-resource-user-attribution.md`
   - Conversation detail V2 shared-ref payload (active): `design-docs/2026-03-10-conversation-detail-v2.md`
   - Streaming conversation search (completed): `design-docs/2026-03-05-streaming-conversation-search.md`
   - Vercel AI SDK integration design (completed): `design-docs/2026-02-22-sdk-vercel-ai-sdk-integration.md`
@@ -65,6 +66,7 @@ This is the canonical navigation map for repository documentation.
   - Phase 2 umbrella coordinator: `exec-plans/active/2026-02-12-phase-2-delivery.md`
   - Backend operational metrics baseline: `exec-plans/active/2026-03-03-backend-operational-metrics-baseline.md`
   - Agent catalog versioning and APIs: `exec-plans/active/2026-03-04-agent-catalog-versioning.md`
+  - Evaluation resource user attribution: `exec-plans/completed/2026-03-09-eval-resource-user-attribution.md`
   - Conversation detail V2 shared-ref payload: `exec-plans/active/2026-03-10-conversation-detail-v2.md`
   - LangChain/LangGraph framework integration delivery: `exec-plans/completed/2026-02-20-sdk-langchain-langgraph-integrations.md`
   - OpenAI Agents/LlamaIndex/Google ADK framework integration delivery: `exec-plans/completed/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`

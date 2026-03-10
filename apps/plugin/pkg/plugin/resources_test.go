@@ -2152,8 +2152,14 @@ func TestCallResourceReturnsNon200StubOnProxyFailures(t *testing.T) {
 }
 
 func TestCallResourceSupportsEvalWriteOperations(t *testing.T) {
+	seenGrafanaUsers := map[string]string{}
+	seenTrustedActors := map[string]string{}
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost || r.Method == http.MethodPatch {
+			seenGrafanaUsers[r.URL.Path] = r.Header.Get(headerGrafanaUser)
+			seenTrustedActors[r.URL.Path] = r.Header.Get(headerSigilTrustedActor)
+		}
 		switch r.URL.Path {
 		case "/api/v1/eval/evaluators":
 			if r.Method != http.MethodPost {
@@ -2189,6 +2195,12 @@ func TestCallResourceSupportsEvalWriteOperations(t *testing.T) {
 				return
 			}
 			_, _ = io.WriteString(w, `{"window_hours":6,"total_generations":100}`)
+		case "/api/v1/eval:test":
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			_, _ = io.WriteString(w, `{"status":"ok"}`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -2251,6 +2263,14 @@ func TestCallResourceSupportsEvalWriteOperations(t *testing.T) {
 			expStatus: http.StatusOK,
 			expBody:   []byte(`{"window_hours":6,"total_generations":100}`),
 		},
+		{
+			name:      "test eval",
+			method:    http.MethodPost,
+			path:      "eval:test",
+			body:      []byte(`{"kind":"llm_judge","config":{}}`),
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"status":"ok"}`),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -2259,6 +2279,16 @@ func TestCallResourceSupportsEvalWriteOperations(t *testing.T) {
 				Method: tc.method,
 				Path:   tc.path,
 				Body:   tc.body,
+				Headers: map[string][]string{
+					headerGrafanaUser:       {"spoofed@example.com"},
+					headerSigilTrustedActor: {"false"},
+				},
+				PluginContext: backend.PluginContext{
+					User: &backend.User{
+						Login: "admin",
+						Email: "admin@localhost",
+					},
+				},
 			})
 			if resp.Status != tc.expStatus {
 				t.Fatalf("expected status %d, got %d body=%s", tc.expStatus, resp.Status, resp.Body)
@@ -2267,6 +2297,50 @@ func TestCallResourceSupportsEvalWriteOperations(t *testing.T) {
 				if tb := bytes.TrimSpace(resp.Body); !bytes.Equal(tb, tc.expBody) {
 					t.Fatalf("response body should be %s, got %s", tc.expBody, tb)
 				}
+			}
+			wantUser := ""
+			switch tc.path {
+			case "eval/evaluators":
+				wantUser = seenGrafanaUsers["/api/v1/eval/evaluators"]
+			case "eval/predefined/evaluators/sigil.helpfulness:fork":
+				wantUser = seenGrafanaUsers["/api/v1/eval/predefined/evaluators/sigil.helpfulness:fork"]
+			case "eval/rules":
+				wantUser = seenGrafanaUsers["/api/v1/eval/rules"]
+			case "eval/rules/rule-1":
+				wantUser = seenGrafanaUsers["/api/v1/eval/rules/rule-1"]
+			}
+			if tc.path != "eval/rules:preview" && tc.path != "eval:test" && wantUser != "admin@localhost" {
+				t.Fatalf("expected X-Grafana-User to be forwarded for %s, got %q", tc.path, wantUser)
+			}
+			switch tc.path {
+			case "eval/evaluators":
+				if seenTrustedActors["/api/v1/eval/evaluators"] != "true" {
+					t.Fatalf("expected trusted actor header for %s, got %q", tc.path, seenTrustedActors["/api/v1/eval/evaluators"])
+				}
+			case "eval/predefined/evaluators/sigil.helpfulness:fork":
+				if seenTrustedActors["/api/v1/eval/predefined/evaluators/sigil.helpfulness:fork"] != "true" {
+					t.Fatalf("expected trusted actor header for %s, got %q", tc.path, seenTrustedActors["/api/v1/eval/predefined/evaluators/sigil.helpfulness:fork"])
+				}
+			case "eval/rules":
+				if seenTrustedActors["/api/v1/eval/rules"] != "true" {
+					t.Fatalf("expected trusted actor header for %s, got %q", tc.path, seenTrustedActors["/api/v1/eval/rules"])
+				}
+			case "eval/rules/rule-1":
+				if seenTrustedActors["/api/v1/eval/rules/rule-1"] != "true" {
+					t.Fatalf("expected trusted actor header for %s, got %q", tc.path, seenTrustedActors["/api/v1/eval/rules/rule-1"])
+				}
+			}
+			if tc.path == "eval/rules:preview" && seenGrafanaUsers["/api/v1/eval/rules:preview"] != "" {
+				t.Fatalf("expected no X-Grafana-User header for eval preview, got %q", seenGrafanaUsers["/api/v1/eval/rules:preview"])
+			}
+			if tc.path == "eval/rules:preview" && seenTrustedActors["/api/v1/eval/rules:preview"] != "" {
+				t.Fatalf("expected no trusted actor header for eval preview, got %q", seenTrustedActors["/api/v1/eval/rules:preview"])
+			}
+			if tc.path == "eval:test" && seenGrafanaUsers["/api/v1/eval:test"] != "" {
+				t.Fatalf("expected no X-Grafana-User header for eval test, got %q", seenGrafanaUsers["/api/v1/eval:test"])
+			}
+			if tc.path == "eval:test" && seenTrustedActors["/api/v1/eval:test"] != "" {
+				t.Fatalf("expected no trusted actor header for eval test, got %q", seenTrustedActors["/api/v1/eval:test"])
 			}
 		})
 	}

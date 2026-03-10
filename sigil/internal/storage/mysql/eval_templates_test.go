@@ -24,10 +24,13 @@ func TestTemplateStoreCRUD(t *testing.T) {
 		LatestVersion: "v1",
 		Kind:          evalpkg.EvaluatorKindLLMJudge,
 		Description:   "Helpfulness evaluator template",
+		CreatedBy:     "alice@example.com",
+		UpdatedBy:     "alice@example.com",
 	}, evalpkg.TemplateVersion{
 		TenantID:   "tenant-a",
 		TemplateID: "tmpl.helpfulness",
 		Version:    "v1",
+		CreatedBy:  "alice@example.com",
 		Config: map[string]any{
 			"provider":      "openai",
 			"model":         "gpt-4o-mini",
@@ -60,6 +63,12 @@ func TestTemplateStoreCRUD(t *testing.T) {
 	if tmpl.Scope != evalpkg.TemplateScopeTenant {
 		t.Errorf("unexpected scope %q", tmpl.Scope)
 	}
+	if tmpl.CreatedBy != "alice@example.com" {
+		t.Errorf("unexpected created_by %q", tmpl.CreatedBy)
+	}
+	if tmpl.UpdatedBy != "alice@example.com" {
+		t.Errorf("unexpected updated_by %q", tmpl.UpdatedBy)
+	}
 
 	// ListTemplates returns the template.
 	items, nextCursor, err := store.ListTemplates(context.Background(), "tenant-a", nil, 10, 0)
@@ -90,6 +99,12 @@ func TestTemplateStoreCRUD(t *testing.T) {
 	if ver.Changelog != "Initial version" {
 		t.Errorf("unexpected changelog %q", ver.Changelog)
 	}
+	if ver.CreatedBy != "alice@example.com" {
+		t.Errorf("unexpected version created_by %q", ver.CreatedBy)
+	}
+	if ver.UpdatedBy != "alice@example.com" {
+		t.Errorf("unexpected version updated_by %q", ver.UpdatedBy)
+	}
 
 	// GetLatestTemplateVersion
 	latest, err := store.GetLatestTemplateVersion(context.Background(), "tenant-a", "tmpl.helpfulness")
@@ -108,6 +123,7 @@ func TestTemplateStoreCRUD(t *testing.T) {
 		TenantID:   "tenant-a",
 		TemplateID: "tmpl.helpfulness",
 		Version:    "v2",
+		CreatedBy:  "bob@example.com",
 		Config: map[string]any{
 			"provider":      "openai",
 			"model":         "gpt-4o",
@@ -121,7 +137,7 @@ func TestTemplateStoreCRUD(t *testing.T) {
 	}
 
 	// Update latest version pointer.
-	err = store.UpdateTemplateLatestVersion(context.Background(), "tenant-a", "tmpl.helpfulness", "v2")
+	err = store.UpdateTemplateLatestVersion(context.Background(), "tenant-a", "tmpl.helpfulness", "v2", "test-user@example.com")
 	if err != nil {
 		t.Fatalf("update template latest version: %v", err)
 	}
@@ -136,6 +152,23 @@ func TestTemplateStoreCRUD(t *testing.T) {
 	}
 	if latest.Version != "v2" {
 		t.Errorf("expected latest version v2, got %q", latest.Version)
+	}
+	if latest.CreatedBy != "bob@example.com" {
+		t.Errorf("expected latest version created_by to round-trip, got %q", latest.CreatedBy)
+	}
+	if latest.UpdatedBy != "bob@example.com" {
+		t.Errorf("expected latest version updated_by to mirror created_by, got %q", latest.UpdatedBy)
+	}
+
+	tmpl, err = store.GetTemplate(context.Background(), "tenant-a", "tmpl.helpfulness")
+	if err != nil {
+		t.Fatalf("get template after publish: %v", err)
+	}
+	if tmpl == nil {
+		t.Fatal("expected template after publish")
+	}
+	if tmpl.UpdatedBy != "test-user@example.com" {
+		t.Errorf("expected template updated_by to change with latest version pointer update, got %q", tmpl.UpdatedBy)
 	}
 
 	// ListTemplateVersions returns both versions, newest first.
@@ -549,7 +582,7 @@ func TestTemplateStoreUpdateLatestVersionNotFound(t *testing.T) {
 	}
 
 	// Updating latest version on a nonexistent template should return ErrNotFound.
-	err := store.UpdateTemplateLatestVersion(context.Background(), "tenant-h", "tmpl.missing", "v1")
+	err := store.UpdateTemplateLatestVersion(context.Background(), "tenant-h", "tmpl.missing", "v1", "test-user@example.com")
 	if err == nil {
 		t.Fatal("expected error for update on nonexistent template")
 	}

@@ -9,11 +9,12 @@ import (
 )
 
 var (
-	ErrValidation  = errors.New("validation")
-	ErrNotFound    = errors.New("not found")
-	ErrConflict    = errors.New("conflict")
-	ErrUnavailable = errors.New("unavailable")
-	ErrInternal    = errors.New("internal")
+	ErrValidation   = errors.New("validation")
+	ErrUnauthorized = errors.New("unauthorized")
+	ErrNotFound     = errors.New("not found")
+	ErrConflict     = errors.New("conflict")
+	ErrUnavailable  = errors.New("unavailable")
+	ErrInternal     = errors.New("internal")
 )
 
 type FieldError struct {
@@ -88,6 +89,10 @@ func ValidationWrap(err error, fields ...FieldError) error {
 	return newControlError(ErrValidation, "", err, fields...)
 }
 
+func UnauthorizedError(message string) error {
+	return newControlError(ErrUnauthorized, message, nil)
+}
+
 func NotFoundError(message string) error {
 	return newControlError(ErrNotFound, message, nil)
 }
@@ -120,6 +125,10 @@ func InternalError(message string, err error) error {
 
 func isValidationError(err error) bool {
 	return errors.Is(err, ErrValidation)
+}
+
+func isUnauthorizedError(err error) bool {
+	return errors.Is(err, ErrUnauthorized)
 }
 
 func isNotFoundError(err error) bool {
