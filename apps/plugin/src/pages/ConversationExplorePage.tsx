@@ -14,6 +14,7 @@ import { Alert, Button, Icon, Input, Modal, Tooltip, useStyles2 } from '@grafana
 import { getAppEvents } from '@grafana/runtime';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
+import { normalizeSpanID, normalizeTraceID } from '../conversation/ids';
 import { resolveConversationUserId } from '../conversation/userIdentity';
 import { createTempoTraceFetcher } from '../conversation/fetchTrace';
 import type { TraceFetcher } from '../conversation/loader';
@@ -35,6 +36,7 @@ import DetailPanel from '../components/conversation-explore/DetailPanel';
 import type { FlowNode } from '../components/conversation-explore/types';
 import { Loader } from '../components/Loader';
 import { PageInsightBar } from '../components/insight/PageInsightBar';
+import { useConversationAssistantContext } from '../hooks/useConversationAssistantContext';
 
 export type ConversationExplorePageProps = {
   dataSource?: ConversationsDataSource;
@@ -302,29 +304,6 @@ type GrafanaTracePanelProps = {
   timeRange: TimeRange;
 };
 
-function normalizeTracePanelSpanId(spanId: string | undefined): string | undefined {
-  if (!spanId) {
-    return undefined;
-  }
-
-  const trimmed = spanId.trim();
-  if (trimmed.length === 0) {
-    return undefined;
-  }
-
-  if (/^[0-9a-f]{16}$/i.test(trimmed)) {
-    return trimmed.toLowerCase();
-  }
-
-  try {
-    const binary = window.atob(trimmed);
-    const hex = Array.from(binary, (char) => char.charCodeAt(0).toString(16).padStart(2, '0')).join('');
-    return /^[0-9a-f]{16}$/i.test(hex) ? hex.toLowerCase() : trimmed;
-  } catch {
-    return trimmed;
-  }
-}
-
 function findTraceActionButton(container: HTMLElement, label: string): HTMLButtonElement | null {
   const normalizedLabel = label.trim().toLowerCase();
   const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>('button'));
@@ -407,7 +386,8 @@ function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProp
   const [scene, setScene] = useState<EmbeddedScene | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const collapsedOverviewKeyRef = useRef<string | null>(null);
-  const normalizedSpanId = useMemo(() => normalizeTracePanelSpanId(spanId), [spanId]);
+  const normalizedTraceId = useMemo(() => normalizeTraceID(traceId) || traceId, [traceId]);
+  const normalizedSpanId = useMemo(() => normalizeSpanID(spanId), [spanId]);
 
   useEffect(() => {
     if (!tempoDatasourceUID) {
@@ -424,7 +404,7 @@ function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProp
 
       const queryRunner = new SceneQueryRunner({
         datasource: { uid: tempoDatasourceUID },
-        queries: [{ refId: 'A', query: traceId, queryType: 'traceql' }],
+        queries: [{ refId: 'A', query: normalizedTraceId, queryType: 'traceql' }],
       });
 
       const tracePanel = PanelBuilders.traces().setHoverHeader(true);
@@ -464,14 +444,14 @@ function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProp
       cancelled = true;
       cancelAnimationFrame(frame);
     };
-  }, [normalizedSpanId, tempoDatasourceUID, timeRange, traceId]);
+  }, [normalizedSpanId, normalizedTraceId, tempoDatasourceUID, timeRange]);
 
   useEffect(() => {
     if (!scene || !hostRef.current) {
       return;
     }
 
-    const collapseKey = `${traceId}:${normalizedSpanId ?? ''}`;
+    const collapseKey = `${normalizedTraceId}:${normalizedSpanId ?? ''}`;
     if (collapsedOverviewKeyRef.current === collapseKey) {
       return;
     }
@@ -538,7 +518,7 @@ function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProp
       cancelled = true;
       stopCollapse();
     };
-  }, [normalizedSpanId, scene, traceId]);
+  }, [normalizedSpanId, normalizedTraceId, scene]);
 
   useEffect(() => {
     if (!scene || !hostRef.current || !normalizedSpanId) {
@@ -574,7 +554,7 @@ function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProp
         return false;
       }
 
-      const targetElement = findTraceTargetElement(hostRef.current, traceId, normalizedSpanId);
+      const targetElement = findTraceTargetElement(hostRef.current, normalizedTraceId, normalizedSpanId);
       if (targetElement) {
         scrollTraceTargetIntoView(targetElement);
 
@@ -631,7 +611,7 @@ function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProp
     }, 250);
 
     return stopAll;
-  }, [normalizedSpanId, scene, traceId]);
+  }, [normalizedSpanId, normalizedTraceId, scene]);
 
   if (!tempoDatasourceUID) {
     return (
@@ -1104,6 +1084,17 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     models,
     generationCosts,
   ]);
+
+  useConversationAssistantContext({
+    conversationID,
+    conversationTitle: conversationTitle || conversationID,
+    conversationData,
+    allGenerations,
+    tokenSummary,
+    costSummary,
+    generationCosts,
+    totalDurationMs,
+  });
 
   if (loading) {
     return (

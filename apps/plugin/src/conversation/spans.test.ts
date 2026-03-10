@@ -188,6 +188,36 @@ describe('buildSpanTree', () => {
     expect(orphanGenerations).toHaveLength(0);
   });
 
+  it('matches generations when trace and span IDs use different encodings', () => {
+    const traceIDBase64 = 'AQIDBAUGBwgJCgsMDQ4PEA==';
+    const traceIDHex = '0102030405060708090a0b0c0d0e0f10';
+    const spanIDBase64 = 'AQIDBAUGBwg=';
+    const spanIDHex = '0102030405060708';
+    const payload = makeOTLPPayload([
+      makeOTLPSpan({
+        spanId: spanIDBase64,
+        parentSpanId: '',
+        startTimeUnixNano: '1000',
+        endTimeUnixNano: '2000',
+      }),
+    ]);
+    const parsedSpans = parseOTLPTrace(traceIDBase64, payload);
+    const generation: GenerationDetail = {
+      generation_id: 'gen-hex',
+      conversation_id: 'conv-1',
+      trace_id: traceIDHex,
+      span_id: spanIDHex,
+    };
+
+    const { roots, orphanGenerations } = buildSpanTree(parsedSpans, [generation]);
+
+    expect(roots).toHaveLength(1);
+    expect(roots[0].traceID).toBe(traceIDHex);
+    expect(roots[0].spanID).toBe(spanIDHex);
+    expect(roots[0].generation?.generation_id).toBe('gen-hex');
+    expect(orphanGenerations).toHaveLength(0);
+  });
+
   it('identifies orphan generations', () => {
     const gen: GenerationDetail = {
       generation_id: 'orphan-gen',
