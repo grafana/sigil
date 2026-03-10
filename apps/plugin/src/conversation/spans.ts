@@ -8,6 +8,7 @@ import {
   OperationName,
   getStringAttr,
 } from './attributes';
+import { normalizeSpanID, normalizeTraceID } from './ids';
 import type { ConversationSpan, SpanAttributes, SpanAttributeValue, SpanKind } from './types';
 
 // ── Intermediate parsed span (flat, no children) ──
@@ -179,12 +180,12 @@ export function parseOTLPTrace(traceID: string, payload: unknown): ParsedSpan[] 
             continue;
           }
           const safeEnd = endNs !== null && endNs >= startNs ? endNs : startNs;
-          const spanID = span.spanId ?? span.span_id ?? '';
-          const parentSpanID = span.parentSpanId ?? span.parent_span_id ?? '';
+          const spanID = normalizeSpanID(span.spanId ?? span.span_id ?? '');
+          const parentSpanID = normalizeSpanID(span.parentSpanId ?? span.parent_span_id ?? '');
           const name = span.name?.trim() ?? '';
 
           spans.push({
-            traceID,
+            traceID: normalizeTraceID(traceID) || traceID,
             spanID,
             parentSpanID,
             name: name.length > 0 ? name : '(unnamed span)',
@@ -214,8 +215,10 @@ export function buildSpanTree(
   const matchedGenerationIDs = new Set<string>();
 
   for (const gen of generations) {
-    if (gen.trace_id && gen.span_id) {
-      genByTraceAndSpan.set(`${gen.trace_id}:${gen.span_id}`, gen);
+    const normalizedTraceID = normalizeTraceID(gen.trace_id);
+    const normalizedSpanID = normalizeSpanID(gen.span_id);
+    if (normalizedTraceID && normalizedSpanID) {
+      genByTraceAndSpan.set(`${normalizedTraceID}:${normalizedSpanID}`, gen);
     }
   }
 

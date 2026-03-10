@@ -4,6 +4,26 @@ import type { GenerationDetail } from '../../generation/types';
 import ChatThread from './ChatThread';
 
 describe('ChatThread', () => {
+  it('labels tool-result messages as tool results', () => {
+    const generations: GenerationDetail[] = [
+      {
+        generation_id: 'gen-tool-result',
+        conversation_id: 'conv-1',
+        created_at: '2026-03-06T10:00:00Z',
+        input: [
+          {
+            role: 'MESSAGE_ROLE_TOOL',
+            parts: [{ tool_result: { tool_call_id: 'tc-1', name: 'search', content: '{"hits":3}' } }],
+          },
+        ],
+      },
+    ];
+
+    render(<ChatThread generations={generations} />);
+
+    expect(screen.getByText('Tool Result')).toBeInTheDocument();
+  });
+
   it('never renders system prompt text in the conversation thread', () => {
     const generations: GenerationDetail[] = [
       {

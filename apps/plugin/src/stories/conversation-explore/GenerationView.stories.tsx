@@ -114,6 +114,17 @@ export const WithRewrittenHistory = {
   },
 };
 
+export const WithToolResultMessage = {
+  args: {
+    node: mockFlowNodes[0].children[1],
+    allGenerations: mockGenerations,
+    flowNodes: mockFlowNodes,
+    onClose: () => {
+      // Storybook interaction-only callback.
+    },
+  },
+};
+
 export const WithCumulativeHistory = {
   args: {
     node: {

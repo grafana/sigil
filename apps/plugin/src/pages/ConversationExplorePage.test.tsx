@@ -4,6 +4,69 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { ConversationSpan } from '../conversation/types';
 import ConversationExplorePage from './ConversationExplorePage';
 
+const mockSceneQueryRunner = jest.fn();
+const mockTracePanelSetOption = jest.fn();
+
+jest.mock('@grafana/i18n', () => ({
+  initPluginTranslations: jest.fn().mockResolvedValue(undefined),
+  i18n: {
+    t: (key: string, defaultValue?: string) => defaultValue ?? key,
+  },
+  t: (key: string, defaultValue?: string) => defaultValue ?? key,
+}));
+
+jest.mock('@grafana/scenes', () => {
+  class MockEmbeddedScene {
+    Component = () => null;
+
+    constructor(public args: unknown) {}
+  }
+
+  class MockSceneFlexItem {
+    constructor(public args: unknown) {}
+  }
+
+  class MockSceneFlexLayout {
+    constructor(public args: unknown) {}
+  }
+
+  class MockSceneQueryRunner {
+    constructor(public args: unknown) {
+      mockSceneQueryRunner(args);
+    }
+  }
+
+  class MockSceneTimeRange {
+    constructor(public args: unknown) {}
+  }
+
+  function makeTracePanelBuilder() {
+    return {
+      setHoverHeader() {
+        return this;
+      },
+      setOption(key: string, value: string) {
+        mockTracePanelSetOption(key, value);
+        return this;
+      },
+      build() {
+        return {};
+      },
+    };
+  }
+
+  return {
+    EmbeddedScene: MockEmbeddedScene,
+    PanelBuilders: {
+      traces: () => makeTracePanelBuilder(),
+    },
+    SceneFlexItem: MockSceneFlexItem,
+    SceneFlexLayout: MockSceneFlexLayout,
+    SceneQueryRunner: MockSceneQueryRunner,
+    SceneTimeRange: MockSceneTimeRange,
+  };
+});
+
 jest.mock('../hooks/useConversationData', () => ({
   useConversationData: jest.fn(() => ({
     conversationData: {
@@ -36,6 +99,10 @@ jest.mock('../hooks/useSavedConversation', () => ({
   })),
 }));
 
+jest.mock('../hooks/useConversationAssistantContext', () => ({
+  useConversationAssistantContext: jest.fn(),
+}));
+
 jest.mock('../components/conversation-explore/MetricsBar', () => ({
   __esModule: true,
   default: () => <div>Metrics</div>,
@@ -58,8 +125,8 @@ jest.mock('../components/conversation-explore/DetailPanel', () => ({
       type="button"
       onClick={() =>
         onOpenTraceDrawer({
-          traceID: 'trace-1',
-          spanID: 'abcdef0123456789',
+          traceID: 'AQIDBAUGBwgJCgsMDQ4PEA==',
+          spanID: 'AQIDBAUGBwg=',
           parentSpanID: '',
           name: 'span-1',
           kind: 'INTERNAL',
@@ -87,7 +154,7 @@ jest.mock('../module', () => ({
   plugin: {
     meta: {
       id: 'grafana-sigil-app',
-      jsonData: {},
+      jsonData: { tempoDatasourceUID: 'tempo-uid' },
     },
   },
 }));
@@ -96,6 +163,8 @@ describe('ConversationExplorePage', () => {
   const originalClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
 
   beforeEach(() => {
+    mockSceneQueryRunner.mockReset();
+    mockTracePanelSetOption.mockReset();
     Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
       configurable: true,
       get() {
@@ -153,5 +222,35 @@ describe('ConversationExplorePage', () => {
       expect(screen.getByRole('separator', { name: 'Resize flow panel' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Expand sidebar' })).not.toBeInTheDocument();
     });
+  });
+
+  it('normalizes trace and span IDs before opening the Grafana trace drawer', async () => {
+    render(
+      <MemoryRouter initialEntries={['/conversations/conv-1/explore']}>
+        <Routes>
+          <Route path="/conversations/:conversationID/explore" element={<ConversationExplorePage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open trace' }));
+
+    await waitFor(() => {
+      expect(mockSceneQueryRunner).toHaveBeenCalled();
+    });
+
+    expect(mockSceneQueryRunner).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        datasource: { uid: 'tempo-uid' },
+        queries: [
+          expect.objectContaining({
+            refId: 'A',
+            query: '0102030405060708090a0b0c0d0e0f10',
+            queryType: 'traceql',
+          }),
+        ],
+      })
+    );
+    expect(mockTracePanelSetOption).toHaveBeenCalledWith('focusedSpanId', '0102030405060708');
   });
 });

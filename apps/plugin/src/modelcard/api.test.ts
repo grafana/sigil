@@ -1,5 +1,15 @@
-import type { ModelCardClient } from './api';
+import { of } from 'rxjs';
+import { defaultModelCardClient, resetModelCardClientCacheForTests, type ModelCardClient } from './api';
 import type { ModelCard, ModelCardLookupResponse, ModelCardPricing, ModelCardResolveResponse } from './types';
+
+const backendFetchMock = jest.fn();
+
+jest.mock('@grafana/runtime', () => ({
+  ...jest.requireActual('@grafana/runtime'),
+  getBackendSrv: () => ({
+    fetch: backendFetchMock,
+  }),
+}));
 
 const basePricing: ModelCardPricing = {
   prompt_usd_per_token: 0.0025,
@@ -37,6 +47,11 @@ function mockClient(overrides?: Partial<ModelCardClient>): ModelCardClient {
 }
 
 describe('ModelCardClient', () => {
+  beforeEach(() => {
+    backendFetchMock.mockReset();
+    resetModelCardClientCacheForTests();
+  });
+
   describe('resolve', () => {
     it('returns resolved items for valid pairs', async () => {
       const resolveResponse: ModelCardResolveResponse = {
@@ -133,6 +148,144 @@ describe('ModelCardClient', () => {
       });
 
       await expect(client.lookup({ modelKey: 'nonexistent' })).rejects.toThrow('model card not found');
+    });
+  });
+
+  describe('default client cache TTL', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('evicts resolve cache entries after TTL and re-fetches', async () => {
+      const resolveResponse: ModelCardResolveResponse = {
+        resolved: [
+          {
+            provider: 'openai',
+            model: 'gpt-4o',
+            status: 'resolved',
+            match_strategy: 'exact',
+            card: {
+              model_key: 'openrouter:openai/gpt-4o',
+              source_model_id: 'openai/gpt-4o',
+              pricing: basePricing,
+            },
+          },
+        ],
+        freshness: {
+          catalog_last_refreshed_at: '2026-03-03T00:00:00Z',
+          stale: false,
+          soft_stale: false,
+          hard_stale: false,
+          source_path: 'memory_live',
+        },
+      };
+
+      backendFetchMock.mockReturnValue(of({ data: resolveResponse }));
+
+      await defaultModelCardClient.resolve([{ provider: 'openai', model: 'gpt-4o' }]);
+      expect(backendFetchMock).toHaveBeenCalledTimes(1);
+
+      jest.advanceTimersByTime(5 * 60 * 1000);
+
+      await defaultModelCardClient.resolve([{ provider: 'openai', model: 'gpt-4o' }]);
+      expect(backendFetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('evicts lookup cache entries after TTL and re-fetches', async () => {
+      const lookupResponse: ModelCardLookupResponse = {
+        data: testCard,
+        freshness: {
+          catalog_last_refreshed_at: '2026-03-03T00:00:00Z',
+          stale: false,
+          soft_stale: false,
+          hard_stale: false,
+          source_path: 'memory_live',
+        },
+      };
+
+      backendFetchMock.mockReturnValue(of({ data: lookupResponse }));
+
+      await defaultModelCardClient.lookup({ modelKey: 'openrouter:openai/gpt-4o' });
+      expect(backendFetchMock).toHaveBeenCalledTimes(1);
+
+      jest.advanceTimersByTime(5 * 60 * 1000);
+
+      await defaultModelCardClient.lookup({ modelKey: 'openrouter:openai/gpt-4o' });
+      expect(backendFetchMock).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('default client caching', () => {
+    it('deduplicates identical resolve requests', async () => {
+      const resolveResponse: ModelCardResolveResponse = {
+        resolved: [
+          {
+            provider: 'openai',
+            model: 'gpt-4o',
+            status: 'resolved',
+            match_strategy: 'exact',
+            card: {
+              model_key: 'openrouter:openai/gpt-4o',
+              source_model_id: 'openai/gpt-4o',
+              pricing: basePricing,
+            },
+          },
+        ],
+        freshness: {
+          catalog_last_refreshed_at: '2026-03-03T00:00:00Z',
+          stale: false,
+          soft_stale: false,
+          hard_stale: false,
+          source_path: 'memory_live',
+        },
+      };
+
+      backendFetchMock.mockReturnValue(of({ data: resolveResponse }));
+
+      const [first, second] = await Promise.all([
+        defaultModelCardClient.resolve([{ provider: 'openai', model: 'gpt-4o' }]),
+        defaultModelCardClient.resolve([{ provider: 'openai', model: 'gpt-4o' }]),
+      ]);
+
+      expect(first).toEqual(resolveResponse);
+      expect(second).toEqual(resolveResponse);
+      expect(backendFetchMock).toHaveBeenCalledTimes(1);
+      expect(backendFetchMock).toHaveBeenCalledWith({
+        method: 'GET',
+        url: '/api/plugins/grafana-sigil-app/resources/query/model-cards?resolve_pair=openai%3Agpt-4o',
+      });
+    });
+
+    it('deduplicates identical lookup requests', async () => {
+      const lookupResponse: ModelCardLookupResponse = {
+        data: testCard,
+        freshness: {
+          catalog_last_refreshed_at: '2026-03-03T00:00:00Z',
+          stale: false,
+          soft_stale: false,
+          hard_stale: false,
+          source_path: 'memory_live',
+        },
+      };
+
+      backendFetchMock.mockReturnValue(of({ data: lookupResponse }));
+
+      const [first, second] = await Promise.all([
+        defaultModelCardClient.lookup({ modelKey: 'openrouter:openai/gpt-4o' }),
+        defaultModelCardClient.lookup({ modelKey: 'openrouter:openai/gpt-4o' }),
+      ]);
+
+      expect(first).toEqual(lookupResponse);
+      expect(second).toEqual(lookupResponse);
+      expect(backendFetchMock).toHaveBeenCalledTimes(1);
+      expect(backendFetchMock).toHaveBeenCalledWith({
+        method: 'GET',
+        url: '/api/plugins/grafana-sigil-app/resources/query/model-cards/lookup?model_key=openrouter%3Aopenai%2Fgpt-4o',
+      });
     });
   });
 });

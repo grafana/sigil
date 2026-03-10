@@ -2,6 +2,7 @@ import React from 'react';
 import { cx } from '@emotion/css';
 import { useStyles2 } from '@grafana/ui';
 import type { GenerationDetail, Message, MessageRole, Part } from '../../generation/types';
+import { humanizeMessageRole } from '../../conversation/messageParser';
 import { getStyles } from './ChatThread.styles';
 import { renderTextWithXml } from './CollapsibleXml';
 import { parseToolContent } from './formatContent';
@@ -64,7 +65,7 @@ function partToText(part: Part): string | null {
   return null;
 }
 
-function RoleBadge({ role, isSystem }: { role?: MessageRole; isSystem?: boolean }) {
+function RoleBadge({ role, label, isSystem }: { role?: MessageRole; label?: string; isSystem?: boolean }) {
   const styles = useStyles2(getStyles);
 
   if (isSystem) {
@@ -73,11 +74,11 @@ function RoleBadge({ role, isSystem }: { role?: MessageRole; isSystem?: boolean 
 
   switch (role) {
     case 'MESSAGE_ROLE_USER':
-      return <div className={cx(styles.roleLabel, styles.roleLabelUser)}>User</div>;
+      return <div className={cx(styles.roleLabel, styles.roleLabelUser)}>{label ?? 'User'}</div>;
     case 'MESSAGE_ROLE_ASSISTANT':
-      return <div className={cx(styles.roleLabel, styles.roleLabelAssistant)}>Assistant</div>;
+      return <div className={cx(styles.roleLabel, styles.roleLabelAssistant)}>{label ?? 'Assistant'}</div>;
     case 'MESSAGE_ROLE_TOOL':
-      return <div className={cx(styles.roleLabel, styles.roleLabelTool)}>Tool</div>;
+      return <div className={cx(styles.roleLabel, styles.roleLabelTool)}>{label ?? 'Tool'}</div>;
     default:
       return null;
   }
@@ -87,6 +88,7 @@ function MessageBubble({ entry }: { entry: ThreadEntry }) {
   const styles = useStyles2(getStyles);
   const isSystem = entry.role === undefined;
   const parts = entry.parts ?? [];
+  const roleLabel = entry.role ? humanizeMessageRole({ role: entry.role, parts }) : undefined;
 
   const messageClass = isSystem
     ? styles.systemMessage
@@ -98,7 +100,7 @@ function MessageBubble({ entry }: { entry: ThreadEntry }) {
 
   return (
     <div className={cx(styles.message, messageClass)}>
-      <RoleBadge role={entry.role} isSystem={isSystem} />
+      <RoleBadge role={entry.role} label={roleLabel} isSystem={isSystem} />
       {parts.map((part, i) => {
         if (part.thinking) {
           return (

@@ -6,6 +6,34 @@ import type { FlowNode } from './types';
 import GenerationView from './GenerationView';
 
 describe('GenerationView', () => {
+  it('labels tool-result messages as tool results', () => {
+    const generation: GenerationDetail = {
+      generation_id: 'gen-tool-result',
+      conversation_id: 'conv-1',
+      created_at: '2026-03-04T10:00:00Z',
+      input: [
+        {
+          role: 'MESSAGE_ROLE_TOOL',
+          parts: [{ tool_result: { tool_call_id: 'tc-1', name: 'search', content: '{"hits":3}' } }],
+        },
+      ],
+    };
+    const node: FlowNode = {
+      id: 'node-tool-result',
+      kind: 'generation',
+      label: 'generation',
+      durationMs: 125,
+      startMs: 0,
+      status: 'success',
+      generation,
+      children: [],
+    };
+
+    render(<GenerationView node={node} allGenerations={[generation]} flowNodes={[]} onClose={jest.fn()} />);
+
+    expect(screen.getByText('Tool Result')).toBeInTheDocument();
+  });
+
   it('renders neutral score chip when passed is null', () => {
     const generation: GenerationDetail = {
       generation_id: 'gen-1',
