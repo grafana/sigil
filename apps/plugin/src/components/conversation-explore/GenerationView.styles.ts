@@ -600,5 +600,33 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     fontSize: 10,
     color: theme.colors.text.secondary,
   }),
+  historyControls: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+    paddingBottom: theme.spacing(0.75),
+  }),
+  historyLink: css({
+    appearance: 'none',
+    background: 'none',
+    border: 'none',
+    padding: 0,
+    fontSize: 11,
+    color: theme.colors.text.link,
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.375),
+    '&:hover': {
+      textDecoration: 'underline',
+    },
+  }),
+  historyContextWrapper: css({
+    opacity: 0.55,
+  }),
+  historySeparator: css({
+    borderTop: `1px dashed ${theme.colors.border.medium}`,
+    margin: `${theme.spacing(0.5)} 0`,
+  }),
   ...getTokenizeControlStyles(theme),
 });

@@ -23,6 +23,7 @@ import { HighlightedJson } from './HighlightedJson';
 import { TokenizedText } from '../tokenizer/TokenizedText';
 import { useTokenizer } from '../tokenizer/useTokenizer';
 import { getEncoding, AVAILABLE_ENCODINGS, type EncodingName } from '../tokenizer/encodingMap';
+import { getDisplayedInputMessages, sortGenerationsByCreatedAt } from './turnDelta';
 
 export type GenerationViewProps = {
   node: FlowNode;
@@ -691,11 +692,7 @@ function findAdjacentGenerations(
   currentGen: GenerationDetail,
   allGenerations: GenerationDetail[]
 ): AdjacentGenerations {
-  const sorted = [...allGenerations].sort((a, b) => {
-    const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
-    const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
-    return aTime - bTime;
-  });
+  const sorted = sortGenerationsByCreatedAt(allGenerations);
 
   const idx = sorted.findIndex((g) => g.generation_id === currentGen.generation_id);
   return {
@@ -703,25 +700,6 @@ function findAdjacentGenerations(
     next: idx >= 0 && idx < sorted.length - 1 ? sorted[idx + 1] : undefined,
     currentIndex: idx,
     total: sorted.length,
-  };
-}
-
-function splitInputMessages(
-  inputMessages: Message[],
-  previousGen: GenerationDetail | undefined
-): { contextCount: number; newMessages: Message[] } {
-  if (!previousGen) {
-    return { contextCount: 0, newMessages: inputMessages };
-  }
-
-  const prevCount = (previousGen.input?.length ?? 0) + (previousGen.output?.length ?? 0);
-  if (prevCount <= 0 || prevCount >= inputMessages.length) {
-    return { contextCount: 0, newMessages: inputMessages };
-  }
-
-  return {
-    contextCount: prevCount,
-    newMessages: inputMessages.slice(prevCount),
   };
 }
 
@@ -985,12 +963,31 @@ export default function GenerationView({
     () => (gen ? findAdjacentGenerations(gen, allGenerations) : undefined),
     [gen, allGenerations]
   );
-  const { contextCount, newMessages } = useMemo(
-    () => splitInputMessages(inputMessages, adjacent?.previous),
+  const displayedInput = useMemo(
+    () => getDisplayedInputMessages(inputMessages, adjacent?.previous),
     [inputMessages, adjacent?.previous]
   );
 
-  const displayedInput = contextCount > 0 ? newMessages : inputMessages;
+  const hiddenMessages = useMemo(
+    () => inputMessages.slice(0, inputMessages.length - displayedInput.length),
+    [inputMessages, displayedInput]
+  );
+
+  const [revealedCount, setRevealedCount] = useState(0);
+  const revealedGenRef = useRef(gen?.generation_id);
+  if (revealedGenRef.current !== gen?.generation_id) {
+    revealedGenRef.current = gen?.generation_id;
+    if (revealedCount !== 0) {
+      setRevealedCount(0);
+    }
+  }
+
+  const clampedRevealed = Math.min(revealedCount, hiddenMessages.length);
+  const revealedSlice = useMemo(
+    () => hiddenMessages.slice(hiddenMessages.length - clampedRevealed),
+    [hiddenMessages, clampedRevealed]
+  );
+  const remaining = hiddenMessages.length - clampedRevealed;
 
   const autoEncoding = useMemo(
     () => getEncoding(gen?.model?.provider, gen?.model?.name),
@@ -1248,6 +1245,46 @@ export default function GenerationView({
             onEncodingChange={setEncodingOverride}
             tokenizerLoading={tokenizerLoading}
           >
+            {hiddenMessages.length > 0 && (
+              <div className={styles.historyControls}>
+                {remaining > 0 && (
+                  <button
+                    type="button"
+                    className={styles.historyLink}
+                    onClick={() => setRevealedCount((c) => c + 1)}
+                  >
+                    <Icon name="angle-up" size="sm" />
+                    Load more ({remaining})
+                  </button>
+                )}
+                {clampedRevealed > 0 && (
+                  <button
+                    type="button"
+                    className={styles.historyLink}
+                    onClick={() => setRevealedCount(0)}
+                  >
+                    Collapse
+                  </button>
+                )}
+              </div>
+            )}
+            {revealedSlice.length > 0 && (
+              <>
+                <div className={styles.historyContextWrapper}>
+                  {revealedSlice.map((msg, i) => (
+                    <MessageBlock
+                      key={`ctx-${i}`}
+                      message={msg}
+                      tokenized={tokenizedSections['input'] && !!encode}
+                      encode={encode}
+                      decode={decode}
+                      toolCtx={toolCtx}
+                    />
+                  ))}
+                </div>
+                <div className={styles.historySeparator} />
+              </>
+            )}
             {displayedInput.map((msg, i) => (
               <MessageBlock
                 key={i}

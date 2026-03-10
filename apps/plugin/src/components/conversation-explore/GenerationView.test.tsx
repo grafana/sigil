@@ -349,4 +349,115 @@ describe('GenerationView', () => {
       'version=sha256%3Abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
     );
   });
+
+  it('reveals hidden context messages one at a time and collapses them back', () => {
+    const previous: GenerationDetail = {
+      generation_id: 'gen-ctx-1',
+      conversation_id: 'conv-1',
+      created_at: '2026-03-04T09:58:00Z',
+      input: [{ role: 'MESSAGE_ROLE_USER', parts: [{ text: 'first question' }] }],
+      output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'first answer' }] }],
+    };
+    const current: GenerationDetail = {
+      generation_id: 'gen-ctx-2',
+      conversation_id: 'conv-1',
+      created_at: '2026-03-04T10:00:00Z',
+      input: [
+        { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'first question' }] },
+        { role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'first answer' }] },
+        { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'second question' }] },
+      ],
+      output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'second answer' }] }],
+    };
+    const node: FlowNode = {
+      id: 'node-ctx',
+      kind: 'generation',
+      label: 'generation',
+      durationMs: 200,
+      startMs: 0,
+      status: 'success',
+      generation: current,
+      children: [],
+    };
+
+    render(
+      <GenerationView node={node} allGenerations={[previous, current]} flowNodes={[]} onClose={jest.fn()} />
+    );
+
+    // Only the new turn is visible initially
+    expect(screen.getByText('second question')).toBeInTheDocument();
+    expect(screen.queryByText('first question')).not.toBeInTheDocument();
+    expect(screen.queryByText('first answer')).not.toBeInTheDocument();
+
+    // "Load more" shows the count of hidden messages
+    const loadMore = screen.getByText(/Load more/);
+    expect(loadMore).toHaveTextContent('Load more (2)');
+    expect(screen.queryByText('Collapse')).not.toBeInTheDocument();
+
+    // First click reveals the message closest to the current turn
+    fireEvent.click(loadMore);
+    expect(screen.getByText('first answer')).toBeInTheDocument();
+    expect(screen.queryByText('first question')).not.toBeInTheDocument();
+    expect(screen.getByText(/Load more/)).toHaveTextContent('Load more (1)');
+    expect(screen.getByText('Collapse')).toBeInTheDocument();
+
+    // Second click reveals the remaining message
+    fireEvent.click(screen.getByText(/Load more/));
+    expect(screen.getByText('first question')).toBeInTheDocument();
+    expect(screen.getByText('first answer')).toBeInTheDocument();
+    expect(screen.queryByText(/Load more/)).not.toBeInTheDocument();
+
+    // Collapse hides all context messages again
+    fireEvent.click(screen.getByText('Collapse'));
+    expect(screen.queryByText('first question')).not.toBeInTheDocument();
+    expect(screen.queryByText('first answer')).not.toBeInTheDocument();
+    expect(screen.getByText('second question')).toBeInTheDocument();
+    expect(screen.getByText(/Load more/)).toHaveTextContent('Load more (2)');
+  });
+
+  it('shows only rewritten input tail when the latest prompt edits prior history', () => {
+    const previous: GenerationDetail = {
+      generation_id: 'gen-prev',
+      conversation_id: 'conv-1',
+      created_at: '2026-03-04T09:59:00Z',
+      input: [
+        { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'original question' }] },
+        { role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'original answer' }] },
+        { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'old follow-up' }] },
+      ],
+      output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'old follow-up answer' }] }],
+    };
+    const rewritten: GenerationDetail = {
+      generation_id: 'gen-rewritten',
+      conversation_id: 'conv-1',
+      created_at: '2026-03-04T10:00:00Z',
+      input: [
+        { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'original question' }] },
+        { role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'original answer' }] },
+        { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'rewritten follow-up' }] },
+      ],
+      output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'rewritten answer' }] }],
+    };
+    const node: FlowNode = {
+      id: 'node-rewritten',
+      kind: 'generation',
+      label: 'generation',
+      durationMs: 250,
+      startMs: 0,
+      status: 'success',
+      generation: rewritten,
+      children: [],
+    };
+
+    render(
+      <GenerationView node={node} allGenerations={[previous, rewritten]} flowNodes={[]} onClose={jest.fn()} />
+    );
+
+    expect(screen.getByText('rewritten follow-up')).toBeInTheDocument();
+    expect(screen.getByText('rewritten answer')).toBeInTheDocument();
+    expect(screen.queryByText('old follow-up')).not.toBeInTheDocument();
+    expect(screen.queryByText('old follow-up answer')).not.toBeInTheDocument();
+    expect(screen.queryByText('original question')).not.toBeInTheDocument();
+    expect(screen.queryByText('original answer')).not.toBeInTheDocument();
+  });
 });
