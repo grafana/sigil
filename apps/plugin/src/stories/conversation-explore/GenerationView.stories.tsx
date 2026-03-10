@@ -55,4 +55,15 @@ export const WithResourceAttributes = {
   },
 };
 
+export const WithToolResultMessage = {
+  args: {
+    node: mockFlowNodes[0].children[1],
+    allGenerations: mockGenerations,
+    flowNodes: mockFlowNodes,
+    onClose: () => {
+      // Storybook interaction-only callback.
+    },
+  },
+};
+
 export const Screenshot = Default;

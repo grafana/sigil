@@ -3,7 +3,7 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Icon, Stack, useStyles2, type IconName } from '@grafana/ui';
 import type { Message } from '../../conversation/types';
-import { humanizeRole } from '../../conversation/messageParser';
+import { humanizeMessageRole } from '../../conversation/messageParser';
 import MessageBubble from './MessageBubble';
 import ThinkingBlock from './ThinkingBlock';
 import ToolCallCard from './ToolCallCard';
@@ -115,7 +115,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
         <Icon name={roleToIcon(role)} size="md" />
       </div>
       <div className={contentClass}>
-        <span className={styles.roleLabel}>{message.name ?? humanizeRole(role)}</span>
+        <span className={styles.roleLabel}>{message.name ?? humanizeMessageRole(message)}</span>
         <Stack direction="column" gap={1}>
           {(message.parts ?? []).map((part, i) => {
             if (part.thinking != null) {

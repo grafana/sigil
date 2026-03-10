@@ -13,6 +13,7 @@ import {
 import type { ConversationSpan, SpanAttributes } from '../../conversation/types';
 import { getSelectionID } from '../../conversation/spans';
 import { followupGeneration } from '../../conversation/api';
+import { humanizeMessageRole } from '../../conversation/messageParser';
 import { plugin } from '../../module';
 import { buildAgentDetailHref } from '../dashboard/ViewAgentsLink';
 import type { FlowNode } from './types';
@@ -62,19 +63,6 @@ function resolveEffectiveVersion(generation: GenerationDetail): string {
     }
   }
   return '';
-}
-
-function roleToLabel(role: string): string {
-  switch (role) {
-    case 'MESSAGE_ROLE_USER':
-      return 'User';
-    case 'MESSAGE_ROLE_ASSISTANT':
-      return 'Assistant';
-    case 'MESSAGE_ROLE_TOOL':
-      return 'Tool';
-    default:
-      return role;
-  }
 }
 
 function Section({
@@ -298,7 +286,7 @@ function MessageBlock({
 
   return (
     <div className={styles.messageBlock}>
-      <div className={roleClass}>{roleToLabel(message.role)}</div>
+      <div className={roleClass}>{humanizeMessageRole(message)}</div>
       {message.parts.map((part, i) => (
         <PartContent key={i} part={part} tokenized={tokenized} encode={encode} decode={decode} toolCtx={toolCtx} />
       ))}

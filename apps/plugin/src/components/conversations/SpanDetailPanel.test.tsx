@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import SpanDetailPanel from './SpanDetailPanel';
 import type { ConversationSpan, SpanAttributeValue } from '../../conversation/types';
 import type { GenerationDetail } from '../../generation/types';
@@ -127,5 +127,22 @@ describe('SpanDetailPanel', () => {
     expect(screen.getByText('Span')).toBeInTheDocument();
     expect(screen.getByText(/Span Attributes/)).toBeInTheDocument();
     expect(screen.getByText(/Resource Attributes/)).toBeInTheDocument();
+  });
+
+  it('labels tool-result messages as tool results in generation details', () => {
+    const generationWithToolResult: GenerationDetail = {
+      ...sampleGeneration,
+      input: [
+        {
+          role: 'MESSAGE_ROLE_TOOL',
+          parts: [{ tool_result: { tool_call_id: 'tc-1', name: 'search', content: '{"hits":3}' } }],
+        },
+      ],
+    };
+
+    render(<SpanDetailPanel span={makeSpan({ generation: generationWithToolResult })} />);
+    fireEvent.click(screen.getByText(/Input Messages/));
+
+    expect(screen.getByText('tool result')).toBeInTheDocument();
   });
 });
