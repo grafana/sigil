@@ -1,17 +1,11 @@
 import type { ConversationAnnotation, ConversationDetail, ConversationRatingSummary } from './types';
-import type {
-  GenerationDetail,
-  GenerationUsage,
-  LatestScore,
-  Message,
-  ToolDefinition,
-} from '../generation/types';
+import type { GenerationDetail, GenerationUsage, LatestScore, Message, ToolDefinition } from '../generation/types';
 
 type SharedConversationDetailV2 = {
   messages?: Message[];
   tools?: ToolDefinition[];
   system_prompts?: string[];
-  metadata?: Record<string, unknown>[];
+  metadata?: Array<Record<string, unknown>>;
 };
 
 type GenerationDetailV2 = {

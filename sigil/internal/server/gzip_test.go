@@ -9,7 +9,7 @@ import (
 )
 
 func TestWithGzipCompressionCompressesWhenAccepted(t *testing.T) {
-	handler := withGzipCompression(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := WithGzipCompression(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}))
@@ -39,7 +39,7 @@ func TestWithGzipCompressionCompressesWhenAccepted(t *testing.T) {
 }
 
 func TestWithGzipCompressionRespectsExistingContentEncoding(t *testing.T) {
-	handler := withGzipCompression(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := WithGzipCompression(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Encoding", "br")
 		_, _ = w.Write([]byte("already-encoded"))
 	}))
@@ -58,7 +58,7 @@ func TestWithGzipCompressionRespectsExistingContentEncoding(t *testing.T) {
 }
 
 func TestWithGzipCompressionDoesNotWriteBodyForNoContent(t *testing.T) {
-	handler := withGzipCompression(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := WithGzipCompression(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -79,7 +79,7 @@ func TestWithGzipCompressionDoesNotWriteBodyForNoContent(t *testing.T) {
 }
 
 func TestWithGzipCompressionSkipsHeadRequests(t *testing.T) {
-	handler := withGzipCompression(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := WithGzipCompression(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 	}))

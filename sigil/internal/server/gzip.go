@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func withGzipCompression(next http.Handler) http.Handler {
+func WithGzipCompression(next http.Handler) http.Handler {
 	if next == nil {
 		return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
 	}
