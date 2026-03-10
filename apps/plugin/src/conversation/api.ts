@@ -269,7 +269,7 @@ export const defaultConversationsDataSource: ConversationsDataSource = {
     const response = await lastValueFrom(
       getBackendSrv().fetch<ConversationDetail | ConversationDetailV2>({
         method: 'GET',
-        url: `${queryBasePath}/conversations/${encodeURIComponent(conversationID)}?format=v2`,
+        url: `${queryBasePath}/v2/conversations/${encodeURIComponent(conversationID)}`,
       })
     );
     return isConversationDetailV2(response.data) ? hydrateConversationDetailV2(response.data) : response.data;

@@ -179,7 +179,7 @@ describe('defaultConversationsDataSource', () => {
 
     expect(backendFetchMock).toHaveBeenCalledWith({
       method: 'GET',
-      url: '/api/plugins/grafana-sigil-app/resources/query/conversations/conv-1?format=v2',
+      url: '/api/plugins/grafana-sigil-app/resources/query/v2/conversations/conv-1',
     });
     expect(response).toEqual({
       conversation_id: 'conv-1',

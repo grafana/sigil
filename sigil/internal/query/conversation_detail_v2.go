@@ -113,8 +113,11 @@ func (p *conversationDetailInternPool) internArrayOfObjects(
 	delete(payload, field)
 
 	items, ok := raw.([]any)
-	if !ok || len(items) == 0 {
+	if !ok {
 		return nil, false, nil
+	}
+	if len(items) == 0 {
+		return []int{}, true, nil
 	}
 
 	out := make([]int, 0, len(items))
@@ -179,7 +182,7 @@ func (p *conversationDetailInternPool) internObject(
 	delete(payload, field)
 
 	object, ok := raw.(map[string]any)
-	if !ok || len(object) == 0 {
+	if !ok {
 		return 0, false, nil
 	}
 
