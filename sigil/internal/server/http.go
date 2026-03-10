@@ -147,6 +147,7 @@ func RegisterQueryRoutes(
 	mux.Handle("/api/v1/conversations/stats", protectedMiddleware(http.HandlerFunc(conversationStats(querySvc))))
 	mux.Handle("/api/v1/conversations", protectedMiddleware(http.HandlerFunc(listConversations(querySvc))))
 	mux.Handle("/api/v1/conversations/", protectedMiddleware(http.HandlerFunc(conversationRoutes(querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled, followupSvc))))
+	mux.Handle("/api/v2/conversations/", protectedMiddleware(http.HandlerFunc(conversationRoutesV2(querySvc))))
 
 	if modelCardSvc != nil {
 		mux.Handle("/api/v1/model-cards", protectedMiddleware(http.HandlerFunc(listModelCards(modelCardSvc))))
@@ -278,6 +279,29 @@ func conversationRoutes(querySvc *query.Service, feedbackSvc *feedback.Service, 
 				return
 			}
 
+			format := strings.TrimSpace(req.URL.Query().Get("format"))
+			if format == "v2" {
+				item, found, err := querySvc.GetConversationDetailV2ForTenant(req.Context(), tenantID, id)
+				if err != nil {
+					if query.IsValidationError(err) {
+						http.Error(w, err.Error(), http.StatusBadRequest)
+						return
+					}
+					http.Error(w, "internal server error", http.StatusInternalServerError)
+					return
+				}
+				if !found {
+					http.NotFound(w, req)
+					return
+				}
+				writeJSON(w, http.StatusOK, item)
+				return
+			}
+			if format != "" {
+				http.Error(w, "invalid format", http.StatusBadRequest)
+				return
+			}
+
 			item, found, err := querySvc.GetConversationDetailForTenant(req.Context(), tenantID, id)
 			if err != nil {
 				if query.IsValidationError(err) {
@@ -313,6 +337,41 @@ func conversationRoutes(querySvc *query.Service, feedbackSvc *feedback.Service, 
 		default:
 			http.NotFound(w, req)
 		}
+	}
+}
+
+func conversationRoutesV2(querySvc *query.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		id, ok := parseSingleConversationPath(req.URL.Path, "/api/v2/conversations/")
+		if !ok {
+			http.Error(w, "invalid conversation path", http.StatusBadRequest)
+			return
+		}
+		if req.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		tenantID, err := tenant.TenantID(req.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		item, found, err := querySvc.GetConversationDetailV2ForTenant(req.Context(), tenantID, id)
+		if err != nil {
+			if query.IsValidationError(err) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if !found {
+			http.NotFound(w, req)
+			return
+		}
+		writeJSON(w, http.StatusOK, item)
 	}
 }
 
@@ -1883,6 +1942,14 @@ func parseConversationSubPath(path string) (string, string, bool) {
 		return parts[0], parts[1], true
 	}
 	return "", "", false
+}
+
+func parseSingleConversationPath(path string, prefix string) (string, bool) {
+	trimmed := strings.TrimPrefix(path, prefix)
+	if trimmed == path || trimmed == "" || strings.Contains(trimmed, "/") {
+		return "", false
+	}
+	return trimmed, true
 }
 
 func parsePaginationQuery(w http.ResponseWriter, req *http.Request) (int, uint64, bool) {

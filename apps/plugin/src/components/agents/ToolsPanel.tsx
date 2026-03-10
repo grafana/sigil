@@ -5,6 +5,7 @@ import { Icon, Input, Stack, Tab, TabsBar, Text, Tooltip, useStyles2, useTheme2 
 import { JsonView, type Props as JsonViewProps } from 'react-json-view-lite';
 import 'react-json-view-lite/dist/index.css';
 import type { AgentTool } from '../../agents/types';
+import { decodeBase64Utf8 } from '../../conversation/base64';
 import { TokenizedText } from '../tokenizer/TokenizedText';
 import { AVAILABLE_ENCODINGS, type EncodingName } from '../tokenizer/encodingMap';
 import { getTokenizeControlStyles } from '../tokenizer/tokenizeControls.styles';
@@ -560,25 +561,34 @@ function shouldExpandNode(): boolean {
   return true;
 }
 
-function parseSchema(raw: string): object {
+function decodeSchemaJson(raw: string): string {
   if (!raw || raw.trim() === '') {
+    return '';
+  }
+  return decodeBase64Utf8(raw) ?? raw;
+}
+
+function parseSchema(raw: string): object {
+  const decoded = decodeSchemaJson(raw);
+  if (decoded === '') {
     return {};
   }
   try {
-    return JSON.parse(raw) as object;
+    return JSON.parse(decoded) as object;
   } catch {
     return {};
   }
 }
 
 function formatSchemaForDiff(raw: string): string {
-  if (!raw || raw.trim() === '') {
+  const decoded = decodeSchemaJson(raw);
+  if (decoded === '') {
     return '';
   }
   try {
-    return JSON.stringify(JSON.parse(raw), null, 2);
+    return JSON.stringify(JSON.parse(decoded), null, 2);
   } catch {
-    return raw;
+    return decoded;
   }
 }
 
