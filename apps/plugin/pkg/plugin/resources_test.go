@@ -2195,6 +2195,12 @@ func TestCallResourceSupportsEvalWriteOperations(t *testing.T) {
 				return
 			}
 			_, _ = io.WriteString(w, `{"window_hours":6,"total_generations":100}`)
+		case "/api/v1/eval:test":
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			_, _ = io.WriteString(w, `{"status":"ok"}`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -2257,6 +2263,14 @@ func TestCallResourceSupportsEvalWriteOperations(t *testing.T) {
 			expStatus: http.StatusOK,
 			expBody:   []byte(`{"window_hours":6,"total_generations":100}`),
 		},
+		{
+			name:      "test eval",
+			method:    http.MethodPost,
+			path:      "eval:test",
+			body:      []byte(`{"kind":"llm_judge","config":{}}`),
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"status":"ok"}`),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -2295,7 +2309,7 @@ func TestCallResourceSupportsEvalWriteOperations(t *testing.T) {
 			case "eval/rules/rule-1":
 				wantUser = seenGrafanaUsers["/api/v1/eval/rules/rule-1"]
 			}
-			if tc.path != "eval/rules:preview" && wantUser != "admin@localhost" {
+			if tc.path != "eval/rules:preview" && tc.path != "eval:test" && wantUser != "admin@localhost" {
 				t.Fatalf("expected X-Grafana-User to be forwarded for %s, got %q", tc.path, wantUser)
 			}
 			switch tc.path {
@@ -2321,6 +2335,12 @@ func TestCallResourceSupportsEvalWriteOperations(t *testing.T) {
 			}
 			if tc.path == "eval/rules:preview" && seenTrustedActors["/api/v1/eval/rules:preview"] != "" {
 				t.Fatalf("expected no trusted actor header for eval preview, got %q", seenTrustedActors["/api/v1/eval/rules:preview"])
+			}
+			if tc.path == "eval:test" && seenGrafanaUsers["/api/v1/eval:test"] != "" {
+				t.Fatalf("expected no X-Grafana-User header for eval test, got %q", seenGrafanaUsers["/api/v1/eval:test"])
+			}
+			if tc.path == "eval:test" && seenTrustedActors["/api/v1/eval:test"] != "" {
+				t.Fatalf("expected no trusted actor header for eval test, got %q", seenTrustedActors["/api/v1/eval:test"])
 			}
 		})
 	}

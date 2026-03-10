@@ -616,7 +616,7 @@ func injectGrafanaUserHeader(proxyReq *http.Request, method string, path string)
 	if proxyReq == nil {
 		return
 	}
-	if strings.HasPrefix(path, "/api/v1/eval/") {
+	if strings.HasPrefix(path, "/api/v1/eval") {
 		proxyReq.Header.Del(headerGrafanaUser)
 		proxyReq.Header.Del(headerSigilTrustedActor)
 	}
@@ -640,7 +640,7 @@ func injectGrafanaUserHeader(proxyReq *http.Request, method string, path string)
 }
 
 func shouldInjectGrafanaUser(method string, path string) bool {
-	if !strings.HasPrefix(path, "/api/v1/eval/") {
+	if !strings.HasPrefix(path, "/api/v1/eval") {
 		return false
 	}
 	if method != http.MethodPost && method != http.MethodPatch {
