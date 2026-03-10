@@ -7,7 +7,7 @@ import {
   type ConversationContextInput,
 } from '../content/assistantContext';
 
-const URL_PATTERN = /\/a\/grafana-sigil-app\/conversations\/.+\/(view|explore)/;
+const URL_PATTERN = /\/a\/grafana-sigil-app\/conversations\/.+\/explore/;
 
 const QUESTIONS = [
   { prompt: 'Why is this conversation slow?' },

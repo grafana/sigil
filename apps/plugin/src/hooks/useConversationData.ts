@@ -81,7 +81,14 @@ export function useConversationData({
         setLoading(false);
         setTracesLoading(true);
 
-        return loadConversationTraces(data, traceFetcher).then((enriched) => {
+        return loadConversationTraces(data, traceFetcher, {
+          onProgress: (partialData) => {
+            if (requestVersionRef.current !== requestVersion) {
+              return;
+            }
+            setConversationData(partialData);
+          },
+        }).then((enriched) => {
           if (requestVersionRef.current !== requestVersion) {
             return;
           }

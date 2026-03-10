@@ -57,13 +57,6 @@
     },
     {
       "type": "page",
-      "name": "Conversations",
-      "path": "/a/grafana-sigil-app/conversations/:conversationID/view",
-      "action": "grafana-sigil-app.data:read",
-      "addToNav": false
-    },
-    {
-      "type": "page",
       "name": "Conversation explore",
       "path": "/a/grafana-sigil-app/conversations/:conversationID/explore",
       "action": "grafana-sigil-app.data:read",

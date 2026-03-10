@@ -18,6 +18,13 @@ export function humanizeRole(role: MessageRole): string {
   }
 }
 
+export function humanizeMessageRole(message: Pick<Message, 'role' | 'parts'>): string {
+  if (message.role === 'MESSAGE_ROLE_TOOL' && message.parts.some((part) => part.tool_result != null)) {
+    return 'Tool Result';
+  }
+  return humanizeRole(message.role);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
