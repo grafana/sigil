@@ -7,7 +7,7 @@ import { getStyles } from './ChatThread.styles';
 import { renderTextWithXml } from './CollapsibleXml';
 import { parseToolContent } from './formatContent';
 import { HighlightedJson } from './HighlightedJson';
-import { getDisplayedInputMessages, sortGenerationsByCreatedAt } from './turnDelta';
+import { newMessagesForGeneration, sortGenerationsByCreatedAt } from './turns';
 
 export type ChatThreadProps = {
   generations: GenerationDetail[];
@@ -37,7 +37,7 @@ function buildThread(generations: GenerationDetail[]): ThreadEntry[] {
     }
 
     const allMessages: Message[] = [
-      ...getDisplayedInputMessages(gen.input ?? [], previousGen),
+      ...(newMessagesForGeneration(gen, previousGen) as Message[]),
       ...(gen.output ?? []),
     ];
 

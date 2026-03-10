@@ -125,6 +125,52 @@ export const WithToolResultMessage = {
   },
 };
 
+export const WithVisibleMultiTurnInput = {
+  args: {
+    node: {
+      id: 'multi-turn-node',
+      kind: 'generation',
+      label: 'generateText',
+      durationMs: 310,
+      startMs: 0,
+      status: 'success',
+      generation: {
+        generation_id: 'gen-multi-turn',
+        conversation_id: 'conv-multi-turn',
+        created_at: '2026-03-09T19:04:00Z',
+        model: { provider: 'anthropic', name: 'claude-sonnet-4-6' },
+        agent_name: 'fe-grafana-assistant',
+        input: [
+          { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Summarize the current Redis rollout.' }] },
+          { role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'The rollout is stable in staging and partially enabled in production.' }] },
+          { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Call out the riskiest instance group before we widen traffic.' }] },
+        ],
+        output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'The riskiest group is the us-central1 canary shard because persistence lag is still spiking.' }] }],
+      },
+      children: [],
+    },
+    allGenerations: [
+      {
+        generation_id: 'gen-multi-turn',
+        conversation_id: 'conv-multi-turn',
+        created_at: '2026-03-09T19:04:00Z',
+        model: { provider: 'anthropic', name: 'claude-sonnet-4-6' },
+        agent_name: 'fe-grafana-assistant',
+        input: [
+          { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Summarize the current Redis rollout.' }] },
+          { role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'The rollout is stable in staging and partially enabled in production.' }] },
+          { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'Call out the riskiest instance group before we widen traffic.' }] },
+        ],
+        output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'The riskiest group is the us-central1 canary shard because persistence lag is still spiking.' }] }],
+      },
+    ],
+    flowNodes: [],
+    onClose: () => {
+      // Storybook interaction-only callback.
+    },
+  },
+};
+
 export const WithCumulativeHistory = {
   args: {
     node: {

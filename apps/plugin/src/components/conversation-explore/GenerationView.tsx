@@ -24,7 +24,7 @@ import { HighlightedJson } from './HighlightedJson';
 import { TokenizedText } from '../tokenizer/TokenizedText';
 import { useTokenizer } from '../tokenizer/useTokenizer';
 import { getEncoding, AVAILABLE_ENCODINGS, type EncodingName } from '../tokenizer/encodingMap';
-import { getDisplayedInputMessages, sortGenerationsByCreatedAt } from './turnDelta';
+import { reconstructTurns, sortGenerationsByCreatedAt, type ConversationTurn } from './turns';
 
 export type GenerationViewProps = {
   node: FlowNode;
@@ -269,12 +269,18 @@ function MessageBlock({
   encode,
   decode,
   toolCtx,
+  turnIndex,
+  totalTurns,
+  emphasis = 'default',
 }: {
   message: Message;
   tokenized?: boolean;
   encode?: (text: string) => number[];
   decode?: (ids: number[]) => string;
   toolCtx?: ToolContext;
+  turnIndex?: number;
+  totalTurns?: number;
+  emphasis?: 'default' | 'history' | 'current';
 }) {
   const styles = useStyles2(getStyles);
 
@@ -284,10 +290,31 @@ function MessageBlock({
     message.role === 'MESSAGE_ROLE_ASSISTANT' && styles.messageRoleAssistant,
     message.role === 'MESSAGE_ROLE_TOOL' && styles.messageRoleTool
   );
+  const turnLabel =
+    turnIndex && totalTurns && totalTurns > 1 ? `Turn ${turnIndex} of ${totalTurns}` : turnIndex ? `Turn ${turnIndex}` : undefined;
 
   return (
-    <div className={styles.messageBlock}>
-      <div className={roleClass}>{humanizeMessageRole(message)}</div>
+    <div
+      className={cx(
+        styles.messageBlock,
+        emphasis === 'history' && styles.messageBlockHistory,
+        emphasis === 'current' && styles.messageBlockCurrent
+      )}
+    >
+      <div className={styles.messageHeader}>
+        <div className={roleClass}>{humanizeMessageRole(message)}</div>
+        {turnLabel && (
+          <div
+            className={cx(
+              styles.messageTurn,
+              emphasis === 'history' && styles.messageTurnHistory,
+              emphasis === 'current' && styles.messageTurnCurrent
+            )}
+          >
+            {turnLabel}
+          </div>
+        )}
+      </div>
       {message.parts.map((part, i) => (
         <PartContent key={i} part={part} tokenized={tokenized} encode={encode} decode={decode} toolCtx={toolCtx} />
       ))}
@@ -951,15 +978,13 @@ export default function GenerationView({
     () => (gen ? findAdjacentGenerations(gen, allGenerations) : undefined),
     [gen, allGenerations]
   );
-  const displayedInput = useMemo(
-    () => getDisplayedInputMessages(inputMessages, adjacent?.previous),
-    [inputMessages, adjacent?.previous]
+  const turnHistory = useMemo(
+    () => (gen ? reconstructTurns(inputMessages, gen, allGenerations) : { turns: [] as ConversationTurn[], totalTurns: 0 }),
+    [inputMessages, gen, allGenerations]
   );
-
-  const hiddenMessages = useMemo(
-    () => inputMessages.slice(0, inputMessages.length - displayedInput.length),
-    [inputMessages, displayedInput]
-  );
+  const { totalTurns } = turnHistory;
+  const historyTurns = useMemo(() => turnHistory.turns.slice(0, -1), [turnHistory]);
+  const currentTurn = turnHistory.turns.at(-1);
 
   const [revealedCount, setRevealedCount] = useState(0);
   const revealedGenRef = useRef(gen?.generation_id);
@@ -970,12 +995,13 @@ export default function GenerationView({
     }
   }
 
-  const clampedRevealed = Math.min(revealedCount, hiddenMessages.length);
-  const revealedSlice = useMemo(
-    () => hiddenMessages.slice(hiddenMessages.length - clampedRevealed),
-    [hiddenMessages, clampedRevealed]
+  const clamped = Math.min(revealedCount, historyTurns.length);
+  const visibleHistory = useMemo(
+    () => historyTurns.slice(historyTurns.length - clamped),
+    [historyTurns, clamped]
   );
-  const remaining = hiddenMessages.length - clampedRevealed;
+  const remainingTurns = historyTurns.length - clamped;
+  const showTurnContext = historyTurns.length > 0 || totalTurns > 1;
 
   const autoEncoding = useMemo(
     () => getEncoding(gen?.model?.provider, gen?.model?.name),
@@ -1222,7 +1248,7 @@ export default function GenerationView({
           </Section>
         )}
 
-        {displayedInput.length > 0 && (
+        {currentTurn && currentTurn.messages.length > 0 && (
           <Section
             title="Input"
             count={inputTokens > 0 ? `${formatNumber(inputTokens)} tokens` : undefined}
@@ -1233,19 +1259,19 @@ export default function GenerationView({
             onEncodingChange={setEncodingOverride}
             tokenizerLoading={tokenizerLoading}
           >
-            {hiddenMessages.length > 0 && (
+            {historyTurns.length > 0 && (
               <div className={styles.historyControls}>
-                {remaining > 0 && (
+                {remainingTurns > 0 && (
                   <button
                     type="button"
                     className={styles.historyLink}
                     onClick={() => setRevealedCount((c) => c + 1)}
                   >
                     <Icon name="angle-up" size="sm" />
-                    Load more ({remaining})
+                    {remainingTurns === 1 ? 'Load 1 more turn' : `Load more (${remainingTurns} turns)`}
                   </button>
                 )}
-                {clampedRevealed > 0 && (
+                {clamped > 0 && (
                   <button
                     type="button"
                     className={styles.historyLink}
@@ -1256,33 +1282,49 @@ export default function GenerationView({
                 )}
               </div>
             )}
-            {revealedSlice.length > 0 && (
-              <>
-                <div className={styles.historyContextWrapper}>
-                  {revealedSlice.map((msg, i) => (
-                    <MessageBlock
-                      key={`ctx-${i}`}
-                      message={msg}
-                      tokenized={tokenizedSections['input'] && !!encode}
-                      encode={encode}
-                      decode={decode}
-                      toolCtx={toolCtx}
-                    />
-                  ))}
-                </div>
-                <div className={styles.historySeparator} />
-              </>
+            {visibleHistory.length > 0 && (
+              <div className={cx(styles.historySection, styles.historySectionEarlier)}>
+                {visibleHistory.map((turn) => (
+                  <React.Fragment key={`turn-${turn.number}`}>
+                    <div className={cx(styles.turnGroupSeparator, turn.prefixBreak && styles.turnGroupSeparatorBreak)}>
+                      Turn {turn.number} of {totalTurns}{turn.prefixBreak ? ' · context diverged' : ''}
+                    </div>
+                    <div className={styles.messageStack}>
+                      {turn.messages.map((msg, mi) => (
+                        <MessageBlock
+                          key={`ctx-${turn.number}-${mi}`}
+                          message={msg}
+                          tokenized={tokenizedSections['input'] && !!encode}
+                          encode={encode}
+                          decode={decode}
+                          toolCtx={toolCtx}
+                          emphasis="history"
+                        />
+                      ))}
+                    </div>
+                  </React.Fragment>
+                ))}
+              </div>
             )}
-            {displayedInput.map((msg, i) => (
-              <MessageBlock
-                key={i}
-                message={msg}
-                tokenized={tokenizedSections['input'] && !!encode}
-                encode={encode}
-                decode={decode}
-                toolCtx={toolCtx}
-              />
-            ))}
+            {showTurnContext && visibleHistory.length > 0 && <div className={styles.historySeparator}>Current prompt</div>}
+            <div className={cx(styles.historySection, showTurnContext && styles.historySectionCurrent)}>
+              {showTurnContext && visibleHistory.length === 0 && <div className={styles.historySectionLabel}>Current prompt</div>}
+              <div className={styles.messageStack}>
+                {currentTurn.messages.map((msg, i) => (
+                  <MessageBlock
+                    key={i}
+                    message={msg}
+                    tokenized={tokenizedSections['input'] && !!encode}
+                    encode={encode}
+                    decode={decode}
+                    toolCtx={toolCtx}
+                    turnIndex={currentTurn.number}
+                    totalTurns={totalTurns}
+                    emphasis={showTurnContext ? 'current' : 'default'}
+                  />
+                ))}
+              </div>
+            </div>
           </Section>
         )}
 
