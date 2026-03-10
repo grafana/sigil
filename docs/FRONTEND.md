@@ -17,7 +17,7 @@ Purpose: define plugin UI architecture, proxy boundaries, and frame-compatibilit
 - Frontend must not call Sigil API query endpoints directly.
 - Use `getBackendSrv().fetch()` for plugin-to-backend calls by default.
 - Exception: browser `fetch()` is allowed for the conversation search streaming route because the page must consume incremental NDJSON chunks.
-- Conversation detail fetch prefers the V2 shared-ref route and hydrates it back into the existing runtime detail shape inside the conversation API layer.
+- Conversation detail fetch prefers the shared-ref V2 payload via the stable V1 conversation route using `format=v2`, then hydrates it back into the existing runtime detail shape inside the conversation API layer.
 
 ## Proxy Contract
 
@@ -27,7 +27,7 @@ Current plugin query contract:
   - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/search`
   - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/search/stream`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations`
-  - `GET /api/plugins/grafana-sigil-app/resources/query/v2/conversations/{conversation_id}`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}?format=v2`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}`
   - `GET /api/plugins/grafana-sigil-app/resources/query/generations/{generation_id}`
   - `GET /api/plugins/grafana-sigil-app/resources/query/agents`
@@ -57,9 +57,11 @@ Current plugin query contract:
   - `POST /api/plugins/grafana-sigil-app/resources/eval/rules:preview`
   - `GET /api/plugins/grafana-sigil-app/resources/eval/judge/providers`
   - `GET /api/plugins/grafana-sigil-app/resources/eval/judge/models?provider={id}`
+- Plugin backend still exposes `GET /api/plugins/grafana-sigil-app/resources/query/v2/conversations/{conversation_id}` for direct V2 passthrough, but frontend callers should prefer the stable `format=v2` form above for compatibility.
 - Plugin backend forwards to Sigil API query endpoints:
   - `POST /api/v1/conversations:batch-metadata` (search hydration only)
-  - `GET /api/v2/conversations/{conversation_id}`
+  - `GET /api/v1/conversations/{conversation_id}?format=v2`
+  - `GET /api/v2/conversations/{conversation_id}` (supported passthrough; not the preferred frontend entrypoint)
   - `GET /api/v1/conversations`
   - `GET /api/v1/conversations/{conversation_id}`
   - `GET /api/v1/generations/{generation_id}`

@@ -48,11 +48,11 @@ function isConversationDetailV2(detail: ConversationDetail | ConversationDetailV
 
   return Boolean(
     firstGeneration &&
-      ('input_refs' in firstGeneration ||
-        'output_refs' in firstGeneration ||
-        'tool_refs' in firstGeneration ||
-        'system_prompt_ref' in firstGeneration ||
-        'metadata_ref' in firstGeneration)
+    ('input_refs' in firstGeneration ||
+      'output_refs' in firstGeneration ||
+      'tool_refs' in firstGeneration ||
+      'system_prompt_ref' in firstGeneration ||
+      'metadata_ref' in firstGeneration)
   );
 }
 
@@ -266,10 +266,11 @@ export const defaultConversationsDataSource: ConversationsDataSource = {
   },
 
   async getConversationDetail(conversationID) {
+    const params = new URLSearchParams({ format: 'v2' });
     const response = await lastValueFrom(
       getBackendSrv().fetch<ConversationDetail | ConversationDetailV2>({
         method: 'GET',
-        url: `${queryBasePath}/v2/conversations/${encodeURIComponent(conversationID)}`,
+        url: `${queryBasePath}/conversations/${encodeURIComponent(conversationID)}?${params.toString()}`,
       })
     );
     return isConversationDetailV2(response.data) ? hydrateConversationDetailV2(response.data) : response.data;
