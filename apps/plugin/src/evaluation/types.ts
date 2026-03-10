@@ -295,6 +295,10 @@ export type EvalTestRequest = {
   config: Record<string, unknown>;
   output_keys: EvalOutputKey[];
   generation_id: string;
+  conversation_id?: string;
+  from?: string;
+  to?: string;
+  at?: string;
 };
 
 export type EvalTestScore = {

@@ -6,8 +6,22 @@ import EvalTestPanel from './EvalTestPanel';
 
 jest.mock('./GenerationPicker', () => ({
   __esModule: true,
-  default: ({ onSelect }: { onSelect: (id: string, hints?: { conversation_id?: string }) => void }) => (
-    <button type="button" onClick={() => onSelect('gen-1', { conversation_id: 'conv-1' })}>
+  default: ({
+    onSelect,
+  }: {
+    onSelect: (id: string, hints?: { conversation_id?: string; from?: string; to?: string; at?: string }) => void;
+  }) => (
+    <button
+      type="button"
+      onClick={() =>
+        onSelect('gen-1', {
+          conversation_id: 'conv-1',
+          from: '2026-03-09T11:55:00Z',
+          to: '2026-03-09T12:05:00Z',
+          at: '2026-03-09T12:00:00Z',
+        })
+      }
+    >
       Pick generation
     </button>
   ),
@@ -117,6 +131,10 @@ describe('EvalTestPanel', () => {
         config: { max_tokens: 128, temperature: 0, model: 'openai/gpt-4o-mini' },
         output_keys: [{ key: 'score', type: 'number' }],
         generation_id: 'gen-1',
+        conversation_id: 'conv-1',
+        from: '2026-03-09T11:55:00Z',
+        to: '2026-03-09T12:05:00Z',
+        at: '2026-03-09T12:00:00Z',
       })
     );
   });

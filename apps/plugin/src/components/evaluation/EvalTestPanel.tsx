@@ -205,6 +205,7 @@ export default function EvalTestPanel({
         config: testConfig,
         output_keys: outputKeys,
         generation_id: generationId,
+        ...(generationLookupHintsRef.current ?? {}),
       });
       setResult(resp);
     } catch (err: unknown) {
