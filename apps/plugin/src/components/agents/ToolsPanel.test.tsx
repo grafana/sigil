@@ -35,4 +35,28 @@ describe('ToolsPanel', () => {
 
     expect(screen.getByText('Immediate')).toBeInTheDocument();
   });
+
+  it('parses base64-encoded tool schemas', () => {
+    const encodedSchema = btoa('{"type":"object","properties":{"city":{"type":"string"}}}');
+    render(
+      <ToolsPanel
+        tools={[
+          {
+            name: 'encoded_tool',
+            description: 'Encoded schema tool',
+            type: 'function',
+            input_schema_json: encodedSchema,
+            deferred: false,
+            token_estimate: 10,
+          },
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: /schema/i }));
+
+    const tree = screen.getByRole('tree', { name: 'JSON view' });
+    expect(tree).toHaveTextContent('city');
+    expect(tree).toHaveTextContent('string');
+  });
 });

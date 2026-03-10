@@ -1,11 +1,9 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { RouterProvider, createMemoryRouter } from 'react-router-dom';
+import { RouterProvider, createMemoryRouter, useLocation, useParams } from 'react-router-dom';
 import ConversationsBrowserPage from './ConversationsBrowserPage';
-import ConversationPage from './ConversationPage';
 import type { ConversationsDataSource } from '../conversation/api';
 import type { DashboardDataSource } from '../dashboard/api';
-import type { TraceFetcher } from '../conversation/loader';
 
 jest.mock('@grafana/ui', () => {
   const actual = jest.requireActual('@grafana/ui');
@@ -54,7 +52,18 @@ beforeAll(() => {
   }
 });
 
-const noopTraceFetcher: TraceFetcher = async () => null;
+function ExploreRouteProbe() {
+  const { conversationID = '' } = useParams<{ conversationID?: string }>();
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  return (
+    <div>
+      <div>Explore route</div>
+      <div>{`Conversation ID: ${conversationID}`}</div>
+      <div>{`Conversation title: ${params.get('conversationTitle') ?? ''}`}</div>
+    </div>
+  );
+}
 
 function createDataSource(): MockConversationsDataSource {
   const currentConversations = [
@@ -210,7 +219,7 @@ describe('ConversationsBrowserPage', () => {
       [
         {
           path: '/conversations/:conversationID/explore',
-          element: <ConversationPage dataSource={dataSource} traceFetcher={noopTraceFetcher} />,
+          element: <ExploreRouteProbe />,
         },
         {
           path: '/conversations',
@@ -244,17 +253,14 @@ describe('ConversationsBrowserPage', () => {
     expect(dataSource.searchConversations.mock.calls[0][0].select).toHaveLength(5);
 
     expect(await screen.findByLabelText('select conversation conv-a')).toBeInTheDocument();
-    expect(screen.queryByText('Conversation ID')).not.toBeInTheDocument();
+    expect(screen.queryByText('Explore route')).not.toBeInTheDocument();
     expect(screen.getByText('Agents')).toBeInTheDocument();
-    expect(screen.queryByText(/^Generations \(\d+\)$/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('select conversation conv-b'));
-    expect(await screen.findByText('Conversation ID')).toBeInTheDocument();
-    expect(await screen.findByText(/^Generations \(\d+\)$/)).toBeInTheDocument();
-    expect(screen.getByText('Conversation ID').parentElement).toHaveTextContent('conv-b');
+    expect(await screen.findByText('Explore route')).toBeInTheDocument();
+    expect(screen.getByText('Conversation ID: conv-b')).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/conversations/conv-b/explore');
     expect(screen.queryByLabelText('select conversation conv-b')).not.toBeInTheDocument();
-    expect(dataSource.getConversationDetail).toHaveBeenCalledWith('conv-b');
   });
 
   it('propagates conversation title to conversation explore URL and header', async () => {
@@ -293,8 +299,7 @@ describe('ConversationsBrowserPage', () => {
 
     expect(router.state.location.pathname).toBe('/conversations/conv-b/explore');
     expect(router.state.location.search).toContain('conversationTitle=Incident%3A+authentication+failures');
-    expect(await screen.findByText('Incident: authentication failures')).toBeInTheDocument();
-    expect(screen.getByText('Conversation').parentElement).toHaveTextContent('conv-b');
+    expect(await screen.findByText('Conversation title: Incident: authentication failures')).toBeInTheDocument();
   });
 
   it('uses the title returned by search for the listing without fetching conversation detail', async () => {

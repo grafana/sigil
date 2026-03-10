@@ -158,7 +158,6 @@ export default function VersionHistoryTable({
       keyOf={(v) => v.version}
       isSelected={(v) => selectedVersions.includes(v.version)}
       emptyMessage="No versions yet."
-      panelTitle="Version history"
     />
   );
 }

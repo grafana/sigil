@@ -1,4 +1,4 @@
-export const TOKEN_COLORS = [
+const TOKEN_COLORS = [
   'oklch(0.75 0.15 30)', // coral
   'oklch(0.75 0.15 90)', // gold
   'oklch(0.75 0.15 150)', // green

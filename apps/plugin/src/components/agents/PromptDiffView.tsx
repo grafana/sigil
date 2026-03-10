@@ -169,9 +169,6 @@ function getStyles(theme: GrafanaTheme2) {
     }),
     diffPre: css({
       margin: 0,
-      minHeight: 280,
-      maxHeight: 580,
-      overflow: 'auto',
       borderRadius: theme.shape.radius.default,
       border: `1px solid ${theme.colors.border.weak}`,
       background: theme.colors.background.canvas,
