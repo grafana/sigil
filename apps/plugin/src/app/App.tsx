@@ -11,7 +11,6 @@ const PlaygroundSparklesPage = React.lazy(() => import('../pages/PlaygroundSpark
 const DashboardPage = React.lazy(() => import('../pages/DashboardPage'));
 const TutorialPage = React.lazy(() => import('../pages/TutorialPage'));
 const ConversationsBrowserPage = React.lazy(() => import('../pages/ConversationsBrowserPage'));
-const ConversationPage = React.lazy(() => import('../pages/ConversationPage'));
 const ConversationExplorePage = React.lazy(() => import('../pages/ConversationExplorePage'));
 const AgentsPage = React.lazy(() => import('../pages/AgentsPage'));
 const AgentDetailPage = React.lazy(() => import('../pages/AgentDetailPage'));
@@ -70,7 +69,9 @@ export default function App(props: AppRootProps) {
     };
   }, [props.meta.name, agentDetailPageNav]);
   const shouldHidePluginHeader = location.pathname.includes(`/${ROUTES.Conversations}`);
-  const shouldUseFullBleedPageInner = location.pathname.includes(`/${ROUTES.PlaygroundSparkles}`);
+  const shouldUseFullBleedPageInner =
+    location.pathname.includes(`/${ROUTES.PlaygroundSparkles}`) ||
+    location.pathname.includes(`/${ROUTES.Conversations}`);
 
   React.useEffect(() => {
     const pageInner = document.querySelector('[class*="page-inner"]');
@@ -112,14 +113,6 @@ export default function App(props: AppRootProps) {
           element={
             <div className={styles.conversationsRouteContainer}>
               <ConversationsBrowserPage />
-            </div>
-          }
-        />
-        <Route
-          path={ROUTES.ConversationsView}
-          element={
-            <div className={styles.conversationsRouteContainer}>
-              <ConversationPage />
             </div>
           }
         />

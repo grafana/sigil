@@ -4,7 +4,6 @@ import type { GrafanaTheme2 } from '@grafana/data';
 export const getStyles = (theme: GrafanaTheme2) => ({
   container: css({
     padding: `${theme.spacing(1)} ${theme.spacing(1.5)}`,
-    borderTop: `1px solid ${theme.colors.border.weak}`,
     flexShrink: 0,
   }),
   header: css({

@@ -86,8 +86,9 @@ func TestHTTPSavedConversationsManualCreate(t *testing.T) {
 	store := newMockSavedConversationStore()
 	convLookup := newMockConversationLookup()
 	writer := newMockManualConversationWriter()
+	deleter := newMockManualConversationDeleter()
 
-	svc := NewSavedConversationService(store, convLookup, WithManualWriter(writer))
+	svc := NewSavedConversationService(store, convLookup, WithManualWriter(writer), WithManualDeleter(deleter))
 	mux := newSavedConversationMux(svc)
 
 	body, _ := json.Marshal(CreateManualConversationRequest{
@@ -97,6 +98,7 @@ func TestHTTPSavedConversationsManualCreate(t *testing.T) {
 		Generations: []ManualGeneration{
 			{
 				GenerationID: "gen-1",
+				Model:        ManualModelRef{Provider: "openai", Name: "gpt-4o-mini"},
 				Input:        []ManualMessage{{Role: "user", Content: "Hello"}},
 				Output:       []ManualMessage{{Role: "assistant", Content: "Hi there"}},
 			},

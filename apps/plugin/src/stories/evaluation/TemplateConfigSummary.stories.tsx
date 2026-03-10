@@ -58,11 +58,25 @@ export const Heuristic = {
   args: {
     kind: 'heuristic',
     config: {
-      not_empty: true,
-      min_length: 12,
-      max_length: 400,
-      contains: ['answer'],
-      not_contains: ['lorem ipsum'],
+      version: 'v2',
+      root: {
+        kind: 'group',
+        operator: 'and',
+        rules: [
+          { kind: 'rule', type: 'not_empty' },
+          {
+            kind: 'group',
+            operator: 'or',
+            rules: [
+              { kind: 'rule', type: 'contains', value: 'answer' },
+              { kind: 'rule', type: 'contains', value: 'solution' },
+            ],
+          },
+          { kind: 'rule', type: 'not_contains', value: 'lorem ipsum' },
+          { kind: 'rule', type: 'min_length', value: 12 },
+          { kind: 'rule', type: 'max_length', value: 400 },
+        ],
+      },
     },
     outputKeys: [
       {

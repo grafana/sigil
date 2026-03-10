@@ -22,55 +22,21 @@ func (e *HeuristicEvaluator) Evaluate(_ context.Context, input EvalInput, defini
 	text := strings.TrimSpace(input.ResponseText)
 	length := len(text)
 
-	notEmptyRequired := configBool(definition.Config, "not_empty", false)
-	containsValues := configStringSlice(definition.Config, "contains")
-	notContainsValues := configStringSlice(definition.Config, "not_contains")
-	minLength, hasMinLength := configInt(definition.Config, "min_length")
-	maxLength, hasMaxLength := configInt(definition.Config, "max_length")
-
-	passed := true
-	if notEmptyRequired {
-		passed = text != ""
+	config, err := evalpkg.ParseHeuristicConfig(definition.Config)
+	if err != nil {
+		return nil, evalpkg.Permanent(fmt.Errorf("heuristic evaluator config is invalid: %w", err))
 	}
-	if hasMinLength && length < minLength {
-		passed = false
-	}
-	if hasMaxLength && length > maxLength {
-		passed = false
-	}
-	for _, needle := range containsValues {
-		if !strings.Contains(strings.ToLower(text), strings.ToLower(needle)) {
-			passed = false
-			break
-		}
-	}
-	for _, needle := range notContainsValues {
-		if strings.Contains(strings.ToLower(text), strings.ToLower(needle)) {
-			passed = false
-			break
-		}
-	}
+	passed := evaluateHeuristicNode(config.Root, text, length)
 
 	meta := firstOutputKey(definition, "heuristic_pass", evalpkg.ScoreTypeBool)
 	if meta.Type != evalpkg.ScoreTypeBool {
 		return nil, evalpkg.Permanent(fmt.Errorf("heuristic evaluator output key %q must be bool", meta.Key))
 	}
 
-	metadata := map[string]any{"response_length": length}
-	if hasMinLength {
-		metadata["min_length"] = minLength
-	}
-	if hasMaxLength {
-		metadata["max_length"] = maxLength
-	}
-	if len(containsValues) > 0 {
-		metadata["contains"] = containsValues
-	}
-	if len(notContainsValues) > 0 {
-		metadata["not_contains"] = notContainsValues
-	}
-	if notEmptyRequired {
-		metadata["not_empty"] = true
+	metadata := map[string]any{
+		"response_length": length,
+		"version":         config.Version,
+		"root":            config.Root.ToMap(),
 	}
 
 	return []ScoreOutput{{
@@ -83,56 +49,43 @@ func (e *HeuristicEvaluator) Evaluate(_ context.Context, input EvalInput, defini
 	}}, nil
 }
 
-func configStringSlice(config map[string]any, key string) []string {
-	if config == nil {
-		return nil
-	}
-	raw, ok := config[key]
-	if !ok {
-		return nil
-	}
-	switch typed := raw.(type) {
-	case []string:
-		out := make([]string, 0, len(typed))
-		for _, value := range typed {
-			if trimmed := strings.TrimSpace(value); trimmed != "" {
-				out = append(out, trimmed)
+func evaluateHeuristicNode(node evalpkg.HeuristicNode, text string, length int) bool {
+	if node.Group != nil {
+		switch node.Group.Operator {
+		case evalpkg.HeuristicOperatorAnd:
+			for _, child := range node.Group.Rules {
+				if !evaluateHeuristicNode(child, text, length) {
+					return false
+				}
 			}
+			return true
+		case evalpkg.HeuristicOperatorOr:
+			for _, child := range node.Group.Rules {
+				if evaluateHeuristicNode(child, text, length) {
+					return true
+				}
+			}
+			return false
+		default:
+			return false
 		}
-		return out
-	case []any:
-		out := make([]string, 0, len(typed))
-		for _, value := range typed {
-			asString, ok := value.(string)
-			if !ok {
-				continue
-			}
-			if trimmed := strings.TrimSpace(asString); trimmed != "" {
-				out = append(out, trimmed)
-			}
-		}
-		return out
-	default:
-		return nil
 	}
-}
+	if node.Rule == nil {
+		return false
+	}
 
-func configInt(config map[string]any, key string) (int, bool) {
-	if config == nil {
-		return 0, false
-	}
-	raw, ok := config[key]
-	if !ok {
-		return 0, false
-	}
-	switch typed := raw.(type) {
-	case int:
-		return typed, true
-	case int64:
-		return int(typed), true
-	case float64:
-		return int(typed), true
+	switch node.Rule.Type {
+	case evalpkg.HeuristicRuleNotEmpty:
+		return text != ""
+	case evalpkg.HeuristicRuleContains:
+		return strings.Contains(strings.ToLower(text), strings.ToLower(node.Rule.StringValue))
+	case evalpkg.HeuristicRuleNotContains:
+		return !strings.Contains(strings.ToLower(text), strings.ToLower(node.Rule.StringValue))
+	case evalpkg.HeuristicRuleMinLength:
+		return length >= node.Rule.IntValue
+	case evalpkg.HeuristicRuleMaxLength:
+		return length <= node.Rule.IntValue
 	default:
-		return 0, false
+		return false
 	}
 }

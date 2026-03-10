@@ -37,4 +37,12 @@ export default meta;
 
 export const Default = {
   render: () => <TemplateFormWrapper />,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Switch the Kind field to compare flexible LLM Judge outputs with fixed-bool kinds like JSON Schema, Regex, and Heuristic.',
+      },
+    },
+  },
 };

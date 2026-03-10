@@ -2,17 +2,25 @@ import React, { useEffect, useState } from 'react';
 import type { SelectableValue } from '@grafana/data';
 import { Button, Field, FieldSet, Input, Select, Stack } from '@grafana/ui';
 import type { EvaluationDataSource } from '../../evaluation/api';
-import type { ForkEvaluatorRequest } from '../../evaluation/types';
+import type { EvaluatorKind, ForkEvaluatorRequest } from '../../evaluation/types';
+import { validateJudgeTarget } from '../../evaluation/formValidation';
 import { isValidResourceID, INVALID_ID_MESSAGE } from '../../evaluation/utils';
 
 export type ForkEvaluatorFormProps = {
   templateID: string;
+  kind?: EvaluatorKind;
   onSubmit: (req: ForkEvaluatorRequest) => void;
   onCancel: () => void;
   dataSource: Pick<EvaluationDataSource, 'listJudgeProviders' | 'listJudgeModels'>;
 };
 
-export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel, dataSource }: ForkEvaluatorFormProps) {
+export default function ForkEvaluatorForm({
+  templateID,
+  kind = 'llm_judge',
+  onSubmit,
+  onCancel,
+  dataSource,
+}: ForkEvaluatorFormProps) {
   const [evaluatorId, setEvaluatorId] = useState('');
   const [provider, setProvider] = useState<string | null>(null);
   const [model, setModel] = useState('');
@@ -44,22 +52,26 @@ export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel, data
   const isIdEmpty = evaluatorId.trim() === '';
   const isIdInvalid = !isIdEmpty && !isValidResourceID(evaluatorId.trim());
   const idError = isIdEmpty ? 'Evaluator ID is required' : isIdInvalid ? INVALID_ID_MESSAGE : undefined;
+  const providerTrimmed = provider?.trim() ?? '';
+  const modelTrimmed = model.trim();
+  const providerModelError = kind === 'llm_judge' ? validateJudgeTarget(providerTrimmed, modelTrimmed) : undefined;
   const showIdError = touched && (isIdEmpty || isIdInvalid);
+  const showProviderModelError = touched && providerModelError != null;
 
   const handleSubmit = () => {
     setTouched(true);
-    if (isIdEmpty || isIdInvalid) {
+    if (isIdEmpty || isIdInvalid || providerModelError != null) {
       return;
     }
     const req: ForkEvaluatorRequest = {
       evaluator_id: evaluatorId.trim(),
     };
     const configOverrides: Record<string, unknown> = {};
-    if (provider != null && provider !== '') {
-      configOverrides.provider = provider;
+    if (providerTrimmed !== '') {
+      configOverrides.provider = providerTrimmed;
     }
-    if (model.trim() !== '') {
-      configOverrides.model = model.trim();
+    if (modelTrimmed !== '') {
+      configOverrides.model = modelTrimmed;
     }
     if (Object.keys(configOverrides).length > 0) {
       req.config = configOverrides;
@@ -84,7 +96,10 @@ export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel, data
           width={40}
         />
       </Field>
-      <Field label="Provider override" description="Optional. Override the LLM provider for llm_judge evaluators.">
+      <Field
+        label="Provider override"
+        description="Optional. Override the default judge target with both fields, or use a fully-qualified model."
+      >
         <Select<string>
           options={providerOptions}
           value={provider}
@@ -98,7 +113,10 @@ export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel, data
           width={30}
         />
       </Field>
-      <Field label="Model override" description="Optional. Override the model for llm_judge evaluators.">
+      <Field
+        label="Model override"
+        description="Optional. Override the default judge target with both fields, or use a fully-qualified model."
+      >
         <Select<string>
           options={modelOptions}
           value={model || null}
@@ -109,6 +127,11 @@ export default function ForkEvaluatorForm({ templateID, onSubmit, onCancel, data
           width={40}
         />
       </Field>
+      {showProviderModelError && (
+        <Field>
+          <div role="alert">{providerModelError}</div>
+        </Field>
+      )}
       <Stack direction="row" gap={1}>
         <Button onClick={handleSubmit}>Fork</Button>
         <Button variant="secondary" onClick={onCancel}>

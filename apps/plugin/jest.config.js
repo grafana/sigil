@@ -8,6 +8,7 @@ module.exports = {
   moduleNameMapper: {
     ...require('./.config/jest.config').moduleNameMapper,
     '\\.svg$': path.resolve(__dirname, '.config/jest/mocks/svgAssetMock.js'),
+    '\\.(png|jpg|jpeg|gif|webp)$': path.resolve(__dirname, '.config/jest/mocks/imgAssetMock.js'),
   },
   testEnvironmentOptions: {
     url: 'http://localhost:3000',

@@ -47,7 +47,13 @@ func (s *WALStore) CreateSavedConversation(ctx context.Context, sc evalpkg.Saved
 		UpdatedAt:      now,
 	}
 
-	return s.db.WithContext(ctx).Create(&model).Error
+	if err := s.db.WithContext(ctx).Create(&model).Error; err != nil {
+		if isDuplicateKeyError(err) {
+			return fmt.Errorf("%w: saved conversation create conflict", evalpkg.ErrConflict)
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *WALStore) GetSavedConversation(ctx context.Context, tenantID, savedID string) (*evalpkg.SavedConversation, error) {
@@ -67,6 +73,32 @@ func (s *WALStore) GetSavedConversation(ctx context.Context, tenantID, savedID s
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get saved conversation: %w", err)
+	}
+
+	out, err := savedConversationModelToEntity(row)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (s *WALStore) GetSavedConversationByConversationID(ctx context.Context, tenantID, conversationID string) (*evalpkg.SavedConversation, error) {
+	if strings.TrimSpace(tenantID) == "" {
+		return nil, errors.New("tenant id is required")
+	}
+	if strings.TrimSpace(conversationID) == "" {
+		return nil, errors.New("conversation id is required")
+	}
+
+	var row EvalSavedConversationModel
+	err := s.db.WithContext(ctx).
+		Where("tenant_id = ? AND conversation_id = ?", tenantID, conversationID).
+		First(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get saved conversation by conversation id: %w", err)
 	}
 
 	out, err := savedConversationModelToEntity(row)

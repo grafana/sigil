@@ -1,14 +1,16 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2, TimeRange } from '@grafana/data';
-import { Badge, Icon, LinkButton, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
+import { Badge, Text, Tooltip, useStyles2 } from '@grafana/ui';
+import DataTable, { type ColumnDef, getCommonCellStyles } from '../shared/DataTable';
+import ModelChipList from '../shared/ModelChipList';
 import { getConversationPassRate } from '../../conversation/aggregates';
 import type { ConversationsDataSource } from '../../conversation/api';
 import { buildConversationSearchFilter } from '../../conversation/filters';
 import type { ConversationSearchResult } from '../../conversation/types';
 import type { DashboardFilters } from '../../dashboard/types';
 import { PLUGIN_BASE, ROUTES, buildConversationExploreRoute } from '../../constants';
-import { getBreakdownStatPanelStyles, formatRelativeTime } from './dashboardShared';
+import { formatRelativeTime } from './dashboardShared';
 
 const MAX_ROWS = 10;
 
@@ -46,7 +48,6 @@ export function LowestPassRateConversationsTable({
   filters,
 }: LowestPassRateConversationsTableProps) {
   const styles = useStyles2(getStyles);
-  const bspStyles = useStyles2(getBreakdownStatPanelStyles);
   const [conversations, setConversations] = useState<ConversationSearchResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -102,198 +103,95 @@ export function LowestPassRateConversationsTable({
     })();
   }, [conversationsDataSource, fromISO, toISO, filterString]);
 
-  const title = 'Lowest pass rate conversations';
-  const seeMoreHref = buildSeeMoreUrl(timeRange, filters);
+  const columns: Array<ColumnDef<ConversationSearchResult>> = useMemo(
+    () => [
+      {
+        id: 'conversation',
+        header: 'Conversation',
+        cell: (c: ConversationSearchResult) => (
+          <span className={styles.monoCell}>{c.conversation_title?.trim() || c.conversation_id}</span>
+        ),
+      },
+      {
+        id: 'passRate',
+        header: 'Pass Rate',
+        cell: (c: ConversationSearchResult) => {
+          const passRate = getConversationPassRate(c);
+          const pct = passRate !== null ? Math.round(passRate * 100) : 0;
+          return (
+            <div className={styles.evalBar}>
+              <div className={styles.evalBarTrack}>
+                <div className={styles.evalBarFill} style={{ width: `${pct}%` }} />
+              </div>
+              <span className={styles.evalBarLabel}>{pct}%</span>
+            </div>
+          );
+        },
+      },
+      {
+        id: 'passed',
+        header: 'Passed',
+        cell: (c: ConversationSearchResult) => c.eval_summary?.pass_count ?? 0,
+      },
+      {
+        id: 'failed',
+        header: 'Failed',
+        cell: (c: ConversationSearchResult) =>
+          (c.eval_summary?.fail_count ?? 0) > 0 ? (
+            <Badge text={String(c.eval_summary?.fail_count)} color="red" />
+          ) : (
+            <Text color="secondary">0</Text>
+          ),
+      },
+      {
+        id: 'models',
+        header: 'Models',
+        cell: (c: ConversationSearchResult) => <ModelChipList models={c.models} />,
+      },
+      {
+        id: 'lastActivity',
+        header: 'Last activity',
+        cell: (c: ConversationSearchResult) => (
+          <Tooltip content={new Date(c.last_generation_at).toLocaleString()} placement="left">
+            <span>{formatRelativeTime(c.last_generation_at)}</span>
+          </Tooltip>
+        ),
+      },
+    ],
+    [styles.monoCell, styles.evalBar, styles.evalBarTrack, styles.evalBarFill, styles.evalBarLabel]
+  );
 
-  if (loading) {
-    return (
-      <div className={styles.tablePanel}>
-        <div className={styles.tablePanelHeader}>
-          <span className={bspStyles.bspTitle}>{title}</span>
-        </div>
-        <div className={bspStyles.bspCenter} style={{ padding: 32 }}>
-          <Spinner size="lg" />
-        </div>
-      </div>
-    );
-  }
-
-  if (error && conversations.length === 0) {
-    return (
-      <div className={styles.tablePanel}>
-        <div className={styles.tablePanelHeader}>
-          <span className={bspStyles.bspTitle}>{title}</span>
-        </div>
-        <div className={bspStyles.bspCenter} style={{ padding: 32, opacity: 0.6 }}>
-          {error}
-        </div>
-      </div>
-    );
-  }
-
-  if (conversations.length === 0) {
-    return (
-      <div className={styles.tablePanel}>
-        <div className={styles.tablePanelHeader}>
-          <span className={bspStyles.bspTitle}>{title}</span>
-        </div>
-        <div className={styles.emptyState}>
-          <Icon name="check-circle" size="xl" />
-          <Text color="secondary">No evaluated conversations in this time range.</Text>
-        </div>
-      </div>
-    );
-  }
+  const handleRowClick = useCallback((c: ConversationSearchResult, e: React.MouseEvent) => {
+    const href = `${PLUGIN_BASE}/${buildConversationExploreRoute(c.conversation_id)}`;
+    if (e.metaKey || e.ctrlKey) {
+      window.open(href, '_blank');
+    } else {
+      window.location.href = href;
+    }
+  }, []);
 
   return (
-    <div className={styles.tablePanel}>
-      <div className={styles.tablePanelHeader}>
-        <span className={bspStyles.bspTitle}>{title}</span>
-      </div>
-      <table className={styles.table}>
-        <thead>
-          <tr className={styles.headerRow}>
-            <th className={styles.headerCell}>Conversation</th>
-            <th className={styles.headerCell}>Pass Rate</th>
-            <th className={styles.headerCell}>Passed</th>
-            <th className={styles.headerCell}>Failed</th>
-            <th className={styles.headerCell}>Models</th>
-            <th className={styles.headerCell}>Last activity</th>
-          </tr>
-        </thead>
-        <tbody>
-          {conversations.map((conversation) => {
-            const passRate = getConversationPassRate(conversation);
-            const pct = passRate !== null ? Math.round(passRate * 100) : 0;
-            return (
-              <tr
-                key={conversation.conversation_id}
-                className={styles.tableRow}
-                onClick={(e) => {
-                  const href = `${PLUGIN_BASE}/${buildConversationExploreRoute(conversation.conversation_id)}`;
-                  if (e.metaKey || e.ctrlKey) {
-                    window.open(href, '_blank');
-                  } else {
-                    window.location.href = href;
-                  }
-                }}
-                role="link"
-                aria-label={`view conversation ${conversation.conversation_id}`}
-              >
-                <td className={`${styles.tableCell} ${styles.idCell}`}>
-                  <span>{conversation.conversation_title?.trim() || conversation.conversation_id}</span>
-                </td>
-                <td className={styles.tableCell}>
-                  <div className={styles.evalBar}>
-                    <div className={styles.evalBarTrack}>
-                      <div className={styles.evalBarFill} style={{ width: `${pct}%` }} />
-                    </div>
-                    <span className={styles.evalBarLabel}>{pct}%</span>
-                  </div>
-                </td>
-                <td className={styles.tableCell}>{conversation.eval_summary?.pass_count ?? 0}</td>
-                <td className={styles.tableCell}>
-                  {(conversation.eval_summary?.fail_count ?? 0) > 0 ? (
-                    <Badge text={String(conversation.eval_summary?.fail_count)} color="red" />
-                  ) : (
-                    <Text color="secondary">0</Text>
-                  )}
-                </td>
-                <td className={styles.tableCell}>
-                  <div className={styles.modelList}>
-                    {conversation.models.map((model) => (
-                      <Badge key={model} text={model} color="blue" />
-                    ))}
-                    {conversation.models.length === 0 && <Text color="secondary">-</Text>}
-                  </div>
-                </td>
-                <td className={styles.tableCell}>
-                  <Tooltip content={new Date(conversation.last_generation_at).toLocaleString()} placement="left">
-                    <span>{formatRelativeTime(conversation.last_generation_at)}</span>
-                  </Tooltip>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      <div className={styles.seeMoreFooter}>
-        <LinkButton href={seeMoreHref} variant="secondary" fill="text" size="sm" icon="arrow-right">
-          See more conversations
-        </LinkButton>
-      </div>
-    </div>
+    <DataTable
+      columns={columns}
+      data={conversations}
+      keyOf={(c) => c.conversation_id}
+      onRowClick={handleRowClick}
+      rowRole="link"
+      rowAriaLabel={(c) => `view conversation ${c.conversation_id}`}
+      panelTitle="Lowest pass rate conversations"
+      loading={loading}
+      loadError={error}
+      emptyIcon="check-circle"
+      emptyMessage="No evaluated conversations in this time range."
+      seeMoreHref={buildSeeMoreUrl(timeRange, filters)}
+      seeMoreLabel="See more conversations"
+    />
   );
 }
 
 function getStyles(theme: GrafanaTheme2) {
   return {
-    tablePanel: css({
-      display: 'flex',
-      flexDirection: 'column',
-      background: theme.colors.background.primary,
-      border: `1px solid ${theme.colors.border.weak}`,
-      borderRadius: theme.shape.radius.default,
-      overflow: 'hidden',
-    }),
-    tablePanelHeader: css({
-      padding: theme.spacing(1.5, 2),
-      borderBottom: `1px solid ${theme.colors.border.weak}`,
-    }),
-    table: css({
-      width: '100%',
-      borderCollapse: 'collapse',
-    }),
-    headerRow: css({
-      borderBottom: `2px solid ${theme.colors.border.medium}`,
-    }),
-    headerCell: css({
-      padding: theme.spacing(1, 1.5),
-      textAlign: 'left',
-      fontSize: theme.typography.bodySmall.fontSize,
-      fontWeight: theme.typography.fontWeightMedium,
-      color: theme.colors.text.secondary,
-      whiteSpace: 'nowrap',
-    }),
-    tableRow: css({
-      borderBottom: `1px solid ${theme.colors.border.weak}`,
-      cursor: 'pointer',
-      transition: 'background 0.1s ease',
-      '&:hover': {
-        background: theme.colors.action.hover,
-      },
-    }),
-    tableCell: css({
-      padding: theme.spacing(1, 1.5),
-      fontSize: theme.typography.bodySmall.fontSize,
-      verticalAlign: 'middle',
-    }),
-    idCell: css({
-      fontFamily: theme.typography.fontFamilyMonospace,
-      fontSize: theme.typography.bodySmall.fontSize,
-      whiteSpace: 'normal',
-      overflowWrap: 'anywhere',
-    }),
-    modelList: css({
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: theme.spacing(0.5),
-    }),
-    emptyState: css({
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: theme.spacing(1),
-      padding: theme.spacing(4),
-      color: theme.colors.text.secondary,
-    }),
-    seeMoreFooter: css({
-      display: 'flex',
-      justifyContent: 'center',
-      padding: theme.spacing(1),
-      borderTop: `1px solid ${theme.colors.border.weak}`,
-    }),
+    ...getCommonCellStyles(theme),
     evalBar: css({
       display: 'flex',
       alignItems: 'center',
@@ -317,7 +215,7 @@ function getStyles(theme: GrafanaTheme2) {
       fontSize: theme.typography.bodySmall.fontSize,
       fontWeight: theme.typography.fontWeightMedium,
       minWidth: 36,
-      textAlign: 'right',
+      textAlign: 'right' as const,
     }),
   };
 }

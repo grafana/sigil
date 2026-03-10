@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { dateTime, ThresholdsMode, type AbsoluteTimeRange, type GrafanaTheme2, type TimeRange } from '@grafana/data';
-import { Badge, Icon, LinkButton, Spinner, Text, Tooltip, useStyles2, useTheme2 } from '@grafana/ui';
+import { Badge, Text, Tooltip, useStyles2, useTheme2 } from '@grafana/ui';
+import DataTable, { type ColumnDef, getCommonCellStyles } from '../shared/DataTable';
+import ModelChipList from '../shared/ModelChipList';
 import type { DashboardDataSource } from '../../dashboard/api';
 import {
   type BreakdownDimension,
@@ -13,7 +15,6 @@ import {
   formatStatValue,
   extractResolvePairs,
   BreakdownStatPanel,
-  getBreakdownStatPanelStyles,
   stringHash,
   getBarPalette,
   formatRelativeTime,
@@ -500,7 +501,7 @@ export function DashboardCacheGrid({
         )}
 
         {/* Savings breakdown by model */}
-        {savings.byModel.length > 0 && <SavingsTable items={savings.byModel} height={CHART_HEIGHT} />}
+        {savings.byModel.length > 0 && <SavingsTable items={savings.byModel} />}
       </div>
 
       {/* Conversations with low cache utilization */}
@@ -650,43 +651,58 @@ function buildCacheHitRateByModelResponse(
 
 type SavingsTableProps = {
   items: ModelSavings[];
-  height: number;
 };
 
-function SavingsTable({ items, height }: SavingsTableProps) {
-  const styles = useStyles2(getBreakdownStatPanelStyles);
+function SavingsTable({ items }: SavingsTableProps) {
+  const styles = useStyles2(getStyles);
   const theme = useTheme2();
   const palette = useMemo(() => getBarPalette(theme), [theme]);
-  const totalSavings = items.reduce((s, i) => s + i.savings, 0);
-  return (
-    <div className={styles.bspPanel} style={{ height }}>
-      <div className={styles.bspHeader}>
-        <span className={styles.bspTitle}>Cache savings by model</span>
-        <div className={styles.bspValueRow}>
-          <span className={styles.bspBigValue}>{formatStatValue(totalSavings, 'currencyUSD')}</span>
-        </div>
-      </div>
-      <div className={styles.bspList}>
-        {items.map((item) => {
-          const barWidth = totalSavings > 0 ? (item.savings / items[0].savings) * 100 : 0;
+  const maxSavings = items.length > 0 ? items[0].savings : 0;
+  const totalSavings = useMemo(() => items.reduce((s, i) => s + i.savings, 0), [items]);
+
+  const columns = useMemo<Array<ColumnDef<ModelSavings>>>(
+    () => [
+      {
+        id: 'model',
+        header: 'Model',
+        cell: (item: ModelSavings) => <ModelChipList models={[item.model]} maxVisible={1} />,
+      },
+      {
+        id: 'savings',
+        header: 'Savings',
+        cell: (item: ModelSavings) => {
+          const barWidth = maxSavings > 0 ? (item.savings / maxSavings) * 100 : 0;
           const color = palette[stringHash(`${item.provider}::${item.model}`) % palette.length];
           return (
-            <div key={`${item.provider}::${item.model}`} className={styles.bspBarRow}>
-              <div className={styles.bspBarMeta}>
-                <span className={styles.bspBarName}>{item.model}</span>
-                <span className={styles.bspBarValue}>
-                  {formatStatValue(item.savings, 'currencyUSD')} · {formatStatValue(item.cacheHitRate, 'percent')} hit
-                  rate
-                </span>
+            <div className={styles.savingsCell}>
+              <div className={styles.cacheBarTrack}>
+                <div className={styles.cacheBarFill} style={{ width: `${barWidth}%`, background: color }} />
               </div>
-              <div className={styles.bspBarTrack}>
-                <div className={styles.bspBarFill} style={{ width: `${barWidth}%`, background: color }} />
-              </div>
+              <span className={styles.cacheBarLabel}>{formatStatValue(item.savings, 'currencyUSD')}</span>
             </div>
           );
-        })}
-      </div>
-    </div>
+        },
+      },
+      {
+        id: 'cacheHitRate',
+        header: 'Cache hit rate',
+        cell: (item: ModelSavings) => formatStatValue(item.cacheHitRate, 'percent'),
+      },
+    ],
+    [maxSavings, palette, styles.cacheBarTrack, styles.cacheBarFill, styles.cacheBarLabel, styles.savingsCell]
+  );
+
+  return (
+    <DataTable<ModelSavings>
+      columns={columns}
+      data={items}
+      keyOf={(item) => `${item.provider}::${item.model}`}
+      panelTitle="Cache savings by model"
+      panelSubtitle={formatStatValue(totalSavings, 'currencyUSD')}
+      loading={false}
+      emptyIcon="piggy-bank"
+      emptyMessage="No cache savings in this period."
+    />
   );
 }
 
@@ -722,13 +738,18 @@ function buildCacheSeeMoreUrl(timeRange: TimeRange, filters: DashboardFilters): 
   return `${PLUGIN_BASE}/${ROUTES.Conversations}?${params.toString()}`;
 }
 
+type CacheMissRow = ConversationSearchResult & {
+  inputTokens: number;
+  cacheReadTokens: number;
+  cacheHitRate: number;
+};
+
 function CacheMissConversationsTable({
   conversationsDataSource,
   timeRange,
   filters,
 }: CacheMissConversationsTableProps) {
   const styles = useStyles2(getStyles);
-  const bspStyles = useStyles2(getBreakdownStatPanelStyles);
   const [conversations, setConversations] = useState<ConversationSearchResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -793,7 +814,7 @@ function CacheMissConversationsTable({
     })();
   }, [conversationsDataSource, fromISO, toISO, filterString]);
 
-  const withCacheStats = useMemo(() => {
+  const withCacheStats = useMemo<CacheMissRow[]>(() => {
     return conversations.map((c) => {
       const inputTokens = (c.selected?.['span.gen_ai.usage.input_tokens'] as number) ?? 0;
       const cacheReadTokens = (c.selected?.['span.gen_ai.usage.cache_read_input_tokens'] as number) ?? 0;
@@ -803,117 +824,79 @@ function CacheMissConversationsTable({
     });
   }, [conversations]);
 
-  const title = 'Conversations with low cache utilization';
-  const seeMoreHref = buildCacheSeeMoreUrl(timeRange, filters);
+  const columns = useMemo<Array<ColumnDef<CacheMissRow>>>(
+    () => [
+      {
+        id: 'conversation',
+        header: 'Conversation',
+        cell: (c: CacheMissRow) => (
+          <span className={styles.monoCell}>{c.conversation_title?.trim() || c.conversation_id}</span>
+        ),
+      },
+      {
+        id: 'llmCalls',
+        header: 'LLM calls',
+        cell: (c: CacheMissRow) => c.generation_count,
+      },
+      {
+        id: 'models',
+        header: 'Models',
+        cell: (c: CacheMissRow) => <ModelChipList models={c.models} />,
+      },
+      {
+        id: 'inputTokens',
+        header: 'Input tokens',
+        cell: (c: CacheMissRow) => formatStatValue(c.inputTokens),
+      },
+      {
+        id: 'cacheReadTokens',
+        header: 'Cache read tokens',
+        cell: (c: CacheMissRow) =>
+          c.cacheReadTokens > 0 ? formatStatValue(c.cacheReadTokens) : <Text color="secondary">0</Text>,
+      },
+      {
+        id: 'cacheHitRate',
+        header: 'Cache hit rate',
+        cell: (c: CacheMissRow) => <CacheHitRateBadge rate={c.cacheHitRate} />,
+      },
+      {
+        id: 'lastActivity',
+        header: 'Last activity',
+        cell: (c: CacheMissRow) => (
+          <Tooltip content={new Date(c.last_generation_at).toLocaleString()} placement="left">
+            <span>{formatRelativeTime(c.last_generation_at)}</span>
+          </Tooltip>
+        ),
+      },
+    ],
+    [styles.monoCell]
+  );
 
-  if (loading) {
-    return (
-      <div className={styles.tablePanel}>
-        <div className={styles.tablePanelHeader}>
-          <span className={bspStyles.bspTitle}>{title}</span>
-        </div>
-        <div className={bspStyles.bspCenter} style={{ padding: 32 }}>
-          <Spinner size="lg" />
-        </div>
-      </div>
-    );
-  }
-
-  if (error && conversations.length === 0) {
-    return (
-      <div className={styles.tablePanel}>
-        <div className={styles.tablePanelHeader}>
-          <span className={bspStyles.bspTitle}>{title}</span>
-        </div>
-        <div className={bspStyles.bspCenter} style={{ padding: 32, opacity: 0.6 }}>
-          {error}
-        </div>
-      </div>
-    );
-  }
-
-  if (withCacheStats.length === 0) {
-    return (
-      <div className={styles.tablePanel}>
-        <div className={styles.tablePanelHeader}>
-          <span className={bspStyles.bspTitle}>{title}</span>
-        </div>
-        <div className={styles.emptyState}>
-          <Icon name="check-circle" size="xl" />
-          <Text color="secondary">No conversations found in this time range.</Text>
-        </div>
-      </div>
-    );
-  }
+  const handleRowClick = useCallback((c: CacheMissRow, e: React.MouseEvent) => {
+    const href = `${PLUGIN_BASE}/${buildConversationExploreRoute(c.conversation_id)}`;
+    if (e.metaKey || e.ctrlKey) {
+      window.open(href, '_blank');
+    } else {
+      window.location.href = href;
+    }
+  }, []);
 
   return (
-    <div className={styles.tablePanel}>
-      <div className={styles.tablePanelHeader}>
-        <span className={bspStyles.bspTitle}>{title}</span>
-      </div>
-      <table className={styles.table}>
-        <thead>
-          <tr className={styles.headerRow}>
-            <th className={styles.headerCell}>Conversation</th>
-            <th className={styles.headerCell}>LLM calls</th>
-            <th className={styles.headerCell}>Models</th>
-            <th className={styles.headerCell}>Input tokens</th>
-            <th className={styles.headerCell}>Cache read tokens</th>
-            <th className={styles.headerCell}>Cache hit rate</th>
-            <th className={styles.headerCell}>Last activity</th>
-          </tr>
-        </thead>
-        <tbody>
-          {withCacheStats.map((c) => (
-            <tr
-              key={c.conversation_id}
-              className={styles.tableRow}
-              onClick={(e) => {
-                const href = `${PLUGIN_BASE}/${buildConversationExploreRoute(c.conversation_id)}`;
-                if (e.metaKey || e.ctrlKey) {
-                  window.open(href, '_blank');
-                } else {
-                  window.location.href = href;
-                }
-              }}
-              role="link"
-              aria-label={`view conversation ${c.conversation_id}`}
-            >
-              <td className={`${styles.tableCell} ${styles.idCell}`}>
-                <span>{c.conversation_title?.trim() || c.conversation_id}</span>
-              </td>
-              <td className={styles.tableCell}>{c.generation_count}</td>
-              <td className={styles.tableCell}>
-                <div className={styles.modelList}>
-                  {c.models.map((model) => (
-                    <Badge key={model} text={model} color="blue" />
-                  ))}
-                  {c.models.length === 0 && <Text color="secondary">-</Text>}
-                </div>
-              </td>
-              <td className={styles.tableCell}>{formatStatValue(c.inputTokens)}</td>
-              <td className={styles.tableCell}>
-                {c.cacheReadTokens > 0 ? formatStatValue(c.cacheReadTokens) : <Text color="secondary">0</Text>}
-              </td>
-              <td className={styles.tableCell}>
-                <CacheHitRateBadge rate={c.cacheHitRate} />
-              </td>
-              <td className={styles.tableCell}>
-                <Tooltip content={new Date(c.last_generation_at).toLocaleString()} placement="left">
-                  <span>{formatRelativeTime(c.last_generation_at)}</span>
-                </Tooltip>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div className={styles.seeMoreFooter}>
-        <LinkButton href={seeMoreHref} variant="secondary" fill="text" size="sm" icon="arrow-right">
-          See more conversations
-        </LinkButton>
-      </div>
-    </div>
+    <DataTable<CacheMissRow>
+      columns={columns}
+      data={withCacheStats}
+      keyOf={(c) => c.conversation_id}
+      onRowClick={handleRowClick}
+      rowRole="link"
+      rowAriaLabel={(c) => `view conversation ${c.conversation_id}`}
+      panelTitle="Conversations with low cache utilization"
+      loading={loading}
+      loadError={error}
+      emptyIcon="check-circle"
+      emptyMessage="No conversations found in this time range."
+      seeMoreHref={buildCacheSeeMoreUrl(timeRange, filters)}
+      seeMoreLabel="See more conversations"
+    />
   );
 }
 
@@ -929,6 +912,31 @@ function CacheHitRateBadge({ rate }: { rate: number }) {
 
 function getStyles(theme: GrafanaTheme2) {
   return {
+    ...getCommonCellStyles(theme),
+    savingsCell: css({
+      display: 'flex',
+      alignItems: 'center',
+      gap: theme.spacing(1),
+      minWidth: 100,
+    }),
+    cacheBarTrack: css({
+      flex: 1,
+      height: 6,
+      borderRadius: 3,
+      background: theme.colors.background.secondary,
+      overflow: 'hidden',
+    }),
+    cacheBarFill: css({
+      height: '100%',
+      borderRadius: 3,
+      transition: 'width 0.2s ease',
+    }),
+    cacheBarLabel: css({
+      fontSize: theme.typography.bodySmall.fontSize,
+      fontWeight: theme.typography.fontWeightMedium,
+      minWidth: 60,
+      textAlign: 'right' as const,
+    }),
     gridWrapper: css({
       display: 'flex',
       flexDirection: 'column',
@@ -943,72 +951,6 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'grid',
       gridTemplateColumns: '3fr 2fr',
       gap: theme.spacing(1),
-    }),
-    tablePanel: css({
-      display: 'flex',
-      flexDirection: 'column',
-      background: theme.colors.background.primary,
-      border: `1px solid ${theme.colors.border.weak}`,
-      borderRadius: theme.shape.radius.default,
-      overflow: 'hidden',
-    }),
-    tablePanelHeader: css({
-      padding: theme.spacing(1.5, 2),
-      borderBottom: `1px solid ${theme.colors.border.weak}`,
-    }),
-    table: css({
-      width: '100%',
-      borderCollapse: 'collapse',
-    }),
-    headerRow: css({
-      borderBottom: `2px solid ${theme.colors.border.medium}`,
-    }),
-    headerCell: css({
-      padding: theme.spacing(1, 1.5),
-      textAlign: 'left',
-      fontSize: theme.typography.bodySmall.fontSize,
-      fontWeight: theme.typography.fontWeightMedium,
-      color: theme.colors.text.secondary,
-      whiteSpace: 'nowrap',
-    }),
-    tableRow: css({
-      borderBottom: `1px solid ${theme.colors.border.weak}`,
-      cursor: 'pointer',
-      transition: 'background 0.1s ease',
-      '&:hover': {
-        background: theme.colors.action.hover,
-      },
-    }),
-    tableCell: css({
-      padding: theme.spacing(1, 1.5),
-      fontSize: theme.typography.bodySmall.fontSize,
-      verticalAlign: 'middle',
-    }),
-    idCell: css({
-      fontFamily: theme.typography.fontFamilyMonospace,
-      fontSize: theme.typography.bodySmall.fontSize,
-      whiteSpace: 'normal',
-      overflowWrap: 'anywhere',
-    }),
-    modelList: css({
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: theme.spacing(0.5),
-    }),
-    emptyState: css({
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: theme.spacing(1),
-      padding: theme.spacing(4),
-      color: theme.colors.text.secondary,
-    }),
-    seeMoreFooter: css({
-      display: 'flex',
-      justifyContent: 'center',
-      padding: theme.spacing(1),
-      borderTop: `1px solid ${theme.colors.border.weak}`,
     }),
   };
 }

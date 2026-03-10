@@ -1,13 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { dateTime, ThresholdsMode, type AbsoluteTimeRange, type GrafanaTheme2, type TimeRange } from '@grafana/data';
-import { Badge, Icon, LinkButton, Spinner, Text, Tooltip, useStyles2 } from '@grafana/ui';
-import {
-  BreakdownStatPanel,
-  getBreakdownStatPanelStyles,
-  formatRelativeTime,
-  formatWindowLabel,
-} from './dashboardShared';
+import { Badge, Text, Tooltip, useStyles2 } from '@grafana/ui';
+import DataTable, { type ColumnDef, getCommonCellStyles } from '../shared/DataTable';
+import ModelChipList from '../shared/ModelChipList';
+import { BreakdownStatPanel, formatRelativeTime, formatWindowLabel } from './dashboardShared';
 import { TopStat } from '../TopStat';
 import type { DashboardDataSource } from '../../dashboard/api';
 import { type BreakdownDimension, type DashboardFilters, breakdownToPromLabel } from '../../dashboard/types';
@@ -366,7 +363,6 @@ function buildErrorsSeeMoreUrl(timeRange: TimeRange, filters: DashboardFilters):
 
 function ErrorConversationsTable({ conversationsDataSource, timeRange, filters }: ErrorConversationsTableProps) {
   const styles = useStyles2(getStyles);
-  const bspStyles = useStyles2(getBreakdownStatPanelStyles);
   const [conversations, setConversations] = useState<ConversationSearchResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -428,120 +424,75 @@ function ErrorConversationsTable({ conversationsDataSource, timeRange, filters }
     })();
   }, [conversationsDataSource, fromISO, toISO, filterString]);
 
-  const title = 'Conversations with errors';
-  const seeMoreHref = buildErrorsSeeMoreUrl(timeRange, filters);
+  const columns: Array<ColumnDef<ConversationSearchResult>> = useMemo(
+    () => [
+      {
+        id: 'conversation',
+        header: 'Conversation',
+        cell: (c: ConversationSearchResult) => (
+          <span className={styles.monoCell}>{c.conversation_title?.trim() || c.conversation_id}</span>
+        ),
+      },
+      {
+        id: 'llm_calls',
+        header: 'LLM calls',
+        cell: (c: ConversationSearchResult) => c.generation_count,
+      },
+      {
+        id: 'models',
+        header: 'Models',
+        cell: (c: ConversationSearchResult) => <ModelChipList models={c.models} />,
+      },
+      {
+        id: 'errors',
+        header: 'Errors',
+        cell: (c: ConversationSearchResult) =>
+          c.error_count > 0 ? <Badge text={String(c.error_count)} color="red" /> : <Text color="secondary">0</Text>,
+      },
+      {
+        id: 'last_activity',
+        header: 'Last activity',
+        cell: (c: ConversationSearchResult) => (
+          <Tooltip content={new Date(c.last_generation_at).toLocaleString()} placement="left">
+            <span>{formatRelativeTime(c.last_generation_at)}</span>
+          </Tooltip>
+        ),
+      },
+    ],
+    [styles.monoCell]
+  );
 
-  if (loading) {
-    return (
-      <div className={styles.tablePanel}>
-        <div className={styles.tablePanelHeader}>
-          <span className={bspStyles.bspTitle}>{title}</span>
-        </div>
-        <div className={bspStyles.bspCenter} style={{ padding: 32 }}>
-          <Spinner size="lg" />
-        </div>
-      </div>
-    );
-  }
-
-  if (error && conversations.length === 0) {
-    return (
-      <div className={styles.tablePanel}>
-        <div className={styles.tablePanelHeader}>
-          <span className={bspStyles.bspTitle}>{title}</span>
-        </div>
-        <div className={bspStyles.bspCenter} style={{ padding: 32, opacity: 0.6 }}>
-          {error}
-        </div>
-      </div>
-    );
-  }
-
-  if (conversations.length === 0) {
-    return (
-      <div className={styles.tablePanel}>
-        <div className={styles.tablePanelHeader}>
-          <span className={bspStyles.bspTitle}>{title}</span>
-        </div>
-        <div className={styles.emptyState}>
-          <Icon name="check-circle" size="xl" />
-          <Text color="secondary">No conversations with errors in this time range.</Text>
-        </div>
-      </div>
-    );
-  }
+  const handleRowClick = useCallback((c: ConversationSearchResult, e: React.MouseEvent) => {
+    const href = `${PLUGIN_BASE}/${buildConversationExploreRoute(c.conversation_id)}`;
+    if (e.metaKey || e.ctrlKey) {
+      window.open(href, '_blank');
+    } else {
+      window.location.href = href;
+    }
+  }, []);
 
   return (
-    <div className={styles.tablePanel}>
-      <div className={styles.tablePanelHeader}>
-        <span className={bspStyles.bspTitle}>{title}</span>
-      </div>
-      <table className={styles.table}>
-        <thead>
-          <tr className={styles.headerRow}>
-            <th className={styles.headerCell}>Conversation</th>
-            <th className={styles.headerCell}>LLM calls</th>
-            <th className={styles.headerCell}>Models</th>
-            <th className={styles.headerCell}>Errors</th>
-            <th className={styles.headerCell}>Last activity</th>
-          </tr>
-        </thead>
-        <tbody>
-          {conversations.map((conversation) => (
-            <tr
-              key={conversation.conversation_id}
-              className={styles.tableRow}
-              onClick={(e) => {
-                const href = `${PLUGIN_BASE}/${buildConversationExploreRoute(conversation.conversation_id)}`;
-                if (e.metaKey || e.ctrlKey) {
-                  window.open(href, '_blank');
-                } else {
-                  window.location.href = href;
-                }
-              }}
-              role="link"
-              aria-label={`view conversation ${conversation.conversation_id}`}
-            >
-              <td className={`${styles.tableCell} ${styles.idCell}`}>
-                <span>{conversation.conversation_title?.trim() || conversation.conversation_id}</span>
-              </td>
-              <td className={styles.tableCell}>{conversation.generation_count}</td>
-              <td className={styles.tableCell}>
-                <div className={styles.modelList}>
-                  {conversation.models.map((model) => (
-                    <Badge key={model} text={model} color="blue" />
-                  ))}
-                  {conversation.models.length === 0 && <Text color="secondary">-</Text>}
-                </div>
-              </td>
-              <td className={styles.tableCell}>
-                {conversation.error_count > 0 ? (
-                  <Badge text={String(conversation.error_count)} color="red" />
-                ) : (
-                  <Text color="secondary">0</Text>
-                )}
-              </td>
-              <td className={styles.tableCell}>
-                <Tooltip content={new Date(conversation.last_generation_at).toLocaleString()} placement="left">
-                  <span>{formatRelativeTime(conversation.last_generation_at)}</span>
-                </Tooltip>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div className={styles.seeMoreFooter}>
-        <LinkButton href={seeMoreHref} variant="secondary" fill="text" size="sm" icon="arrow-right">
-          See more conversations
-        </LinkButton>
-      </div>
-    </div>
+    <DataTable<ConversationSearchResult>
+      columns={columns}
+      data={conversations}
+      keyOf={(c: ConversationSearchResult) => c.conversation_id}
+      onRowClick={handleRowClick}
+      rowRole="link"
+      rowAriaLabel={(c: ConversationSearchResult) => `view conversation ${c.conversation_id}`}
+      panelTitle="Conversations with errors"
+      loading={loading}
+      loadError={error && conversations.length === 0 ? error : undefined}
+      emptyIcon="check-circle"
+      emptyMessage="No conversations with errors in this time range."
+      seeMoreHref={buildErrorsSeeMoreUrl(timeRange, filters)}
+      seeMoreLabel="See more conversations"
+    />
   );
 }
 
 function getStyles(theme: GrafanaTheme2) {
   return {
+    ...getCommonCellStyles(theme),
     gridWrapper: css({
       display: 'flex',
       flexDirection: 'column',
@@ -556,72 +507,6 @@ function getStyles(theme: GrafanaTheme2) {
       display: 'grid',
       gridTemplateColumns: '3fr 2fr',
       gap: theme.spacing(1),
-    }),
-    tablePanel: css({
-      display: 'flex',
-      flexDirection: 'column',
-      background: theme.colors.background.primary,
-      border: `1px solid ${theme.colors.border.weak}`,
-      borderRadius: theme.shape.radius.default,
-      overflow: 'hidden',
-    }),
-    tablePanelHeader: css({
-      padding: theme.spacing(1.5, 2),
-      borderBottom: `1px solid ${theme.colors.border.weak}`,
-    }),
-    table: css({
-      width: '100%',
-      borderCollapse: 'collapse',
-    }),
-    headerRow: css({
-      borderBottom: `2px solid ${theme.colors.border.medium}`,
-    }),
-    headerCell: css({
-      padding: theme.spacing(1, 1.5),
-      textAlign: 'left',
-      fontSize: theme.typography.bodySmall.fontSize,
-      fontWeight: theme.typography.fontWeightMedium,
-      color: theme.colors.text.secondary,
-      whiteSpace: 'nowrap',
-    }),
-    tableRow: css({
-      borderBottom: `1px solid ${theme.colors.border.weak}`,
-      cursor: 'pointer',
-      transition: 'background 0.1s ease',
-      '&:hover': {
-        background: theme.colors.action.hover,
-      },
-    }),
-    tableCell: css({
-      padding: theme.spacing(1, 1.5),
-      fontSize: theme.typography.bodySmall.fontSize,
-      verticalAlign: 'middle',
-    }),
-    idCell: css({
-      fontFamily: theme.typography.fontFamilyMonospace,
-      fontSize: theme.typography.bodySmall.fontSize,
-      whiteSpace: 'normal',
-      overflowWrap: 'anywhere',
-    }),
-    modelList: css({
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: theme.spacing(0.5),
-    }),
-    emptyState: css({
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: theme.spacing(1),
-      padding: theme.spacing(4),
-      color: theme.colors.text.secondary,
-    }),
-    seeMoreFooter: css({
-      display: 'flex',
-      justifyContent: 'center',
-      padding: theme.spacing(1),
-      borderTop: `1px solid ${theme.colors.border.weak}`,
     }),
   };
 }

@@ -14,6 +14,7 @@ import { Alert, Button, Icon, Input, Modal, Tooltip, useStyles2 } from '@grafana
 import { getAppEvents } from '@grafana/runtime';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
+import { normalizeSpanID, normalizeTraceID } from '../conversation/ids';
 import { resolveConversationUserId } from '../conversation/userIdentity';
 import { createTempoTraceFetcher } from '../conversation/fetchTrace';
 import type { TraceFetcher } from '../conversation/loader';
@@ -35,6 +36,7 @@ import DetailPanel from '../components/conversation-explore/DetailPanel';
 import type { FlowNode } from '../components/conversation-explore/types';
 import { Loader } from '../components/Loader';
 import { PageInsightBar } from '../components/insight/PageInsightBar';
+import { useConversationAssistantContext } from '../hooks/useConversationAssistantContext';
 
 export type ConversationExplorePageProps = {
   dataSource?: ConversationsDataSource;
@@ -46,6 +48,7 @@ const defaultTraceFetcher = createTempoTraceFetcher();
 
 const getStyles = (theme: GrafanaTheme2) => ({
   pageContainer: css({
+    label: 'conversationExplorePage-pageContainer',
     position: 'absolute',
     inset: 0,
     display: 'flex',
@@ -55,13 +58,17 @@ const getStyles = (theme: GrafanaTheme2) => ({
     background: theme.colors.background.canvas,
   }),
   topSection: css({
+    label: 'conversationExplorePage-topSection',
     display: 'flex',
     flexDirection: 'column' as const,
     gap: theme.spacing(1),
-    padding: theme.spacing(1, 0),
+    padding: theme.spacing(0.75, 0),
     flexShrink: 0,
+    borderTop: `1px solid ${theme.colors.border.weak}`,
+    borderBottom: `1px solid ${theme.colors.border.weak}`,
   }),
   spinnerWrap: css({
+    label: 'conversationExplorePage-spinnerWrap',
     flex: 1,
     display: 'flex',
     alignItems: 'center',
@@ -69,13 +76,16 @@ const getStyles = (theme: GrafanaTheme2) => ({
     minHeight: 200,
   }),
   errorWrap: css({
+    label: 'conversationExplorePage-errorWrap',
     padding: theme.spacing(2),
   }),
   insightRow: css({
+    label: 'conversationExplorePage-insightRow',
     paddingBottom: '2px',
     flexShrink: 0,
   }),
   contentArea: css({
+    label: 'conversationExplorePage-contentArea',
     flex: 1,
     display: 'flex',
     flexDirection: 'row' as const,
@@ -83,6 +93,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     overflow: 'hidden',
   }),
   leftPanel: css({
+    label: 'conversationExplorePage-leftPanel',
     display: 'flex',
     flexDirection: 'column' as const,
     flexShrink: 0,
@@ -90,6 +101,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     overflow: 'hidden',
   }),
   collapsedRail: css({
+    label: 'conversationExplorePage-collapsedRail',
     display: 'flex',
     alignItems: 'flex-start',
     justifyContent: 'center',
@@ -100,6 +112,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     borderRight: `1px solid ${theme.colors.border.weak}`,
   }),
   expandButton: css({
+    label: 'conversationExplorePage-expandButton',
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -115,6 +128,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     },
   }),
   resizeHandle: css({
+    label: 'conversationExplorePage-resizeHandle',
     width: 4,
     flexShrink: 0,
     cursor: 'col-resize',
@@ -125,6 +139,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     },
   }),
   rightPanel: css({
+    label: 'conversationExplorePage-rightPanel',
     flex: 1,
     display: 'flex',
     flexDirection: 'column' as const,
@@ -132,6 +147,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     overflow: 'hidden',
   }),
   rightPanelContent: css({
+    label: 'conversationExplorePage-rightPanelContent',
     flex: 1,
     display: 'flex',
     minWidth: 0,
@@ -140,6 +156,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     position: 'relative',
   }),
   detailPanelWrap: css({
+    label: 'conversationExplorePage-detailPanelWrap',
     display: 'flex',
     flexDirection: 'column' as const,
     flex: 1,
@@ -148,12 +165,15 @@ const getStyles = (theme: GrafanaTheme2) => ({
     overflow: 'hidden',
   }),
   saveModal: css({
+    label: 'conversationExplorePage-saveModal',
     width: 400,
   }),
   saveModalInput: css({
+    label: 'conversationExplorePage-saveModalInput',
     paddingBottom: theme.spacing(0.5),
   }),
   traceDrawerPanel: css({
+    label: 'conversationExplorePage-traceDrawerPanel',
     display: 'flex',
     flexDirection: 'column' as const,
     background: theme.colors.background.primary,
@@ -163,6 +183,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexShrink: 0,
   }),
   traceDrawerHeader: css({
+    label: 'conversationExplorePage-traceDrawerHeader',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -175,6 +196,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexShrink: 0,
   }),
   traceDrawerTitle: css({
+    label: 'conversationExplorePage-traceDrawerTitle',
     display: 'flex',
     alignItems: 'center',
     gap: theme.spacing(0.375),
@@ -190,11 +212,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
     },
   }),
   traceDrawerBody: css({
+    label: 'conversationExplorePage-traceDrawerBody',
     flex: 1,
     minHeight: 0,
     overflow: 'hidden',
   }),
   tracePanelHost: css({
+    label: 'conversationExplorePage-tracePanelHost',
     height: '100%',
     minHeight: 0,
     background: theme.colors.background.primary,
@@ -221,6 +245,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     },
   }),
   tracePanelMessage: css({
+    label: 'conversationExplorePage-tracePanelMessage',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -228,6 +253,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     padding: theme.spacing(2),
   }),
   tracePanelScene: css({
+    label: 'conversationExplorePage-tracePanelScene',
     height: '100%',
     minHeight: 0,
     overflow: 'auto',
@@ -254,6 +280,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     },
   }),
   traceDrawerClose: css({
+    label: 'conversationExplorePage-traceDrawerClose',
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -276,29 +303,6 @@ type GrafanaTracePanelProps = {
   spanId?: string;
   timeRange: TimeRange;
 };
-
-function normalizeTracePanelSpanId(spanId: string | undefined): string | undefined {
-  if (!spanId) {
-    return undefined;
-  }
-
-  const trimmed = spanId.trim();
-  if (trimmed.length === 0) {
-    return undefined;
-  }
-
-  if (/^[0-9a-f]{16}$/i.test(trimmed)) {
-    return trimmed.toLowerCase();
-  }
-
-  try {
-    const binary = window.atob(trimmed);
-    const hex = Array.from(binary, (char) => char.charCodeAt(0).toString(16).padStart(2, '0')).join('');
-    return /^[0-9a-f]{16}$/i.test(hex) ? hex.toLowerCase() : trimmed;
-  } catch {
-    return trimmed;
-  }
-}
 
 function findTraceActionButton(container: HTMLElement, label: string): HTMLButtonElement | null {
   const normalizedLabel = label.trim().toLowerCase();
@@ -382,7 +386,8 @@ function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProp
   const [scene, setScene] = useState<EmbeddedScene | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const collapsedOverviewKeyRef = useRef<string | null>(null);
-  const normalizedSpanId = useMemo(() => normalizeTracePanelSpanId(spanId), [spanId]);
+  const normalizedTraceId = useMemo(() => normalizeTraceID(traceId) || traceId, [traceId]);
+  const normalizedSpanId = useMemo(() => normalizeSpanID(spanId), [spanId]);
 
   useEffect(() => {
     if (!tempoDatasourceUID) {
@@ -399,7 +404,7 @@ function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProp
 
       const queryRunner = new SceneQueryRunner({
         datasource: { uid: tempoDatasourceUID },
-        queries: [{ refId: 'A', query: traceId, queryType: 'traceql' }],
+        queries: [{ refId: 'A', query: normalizedTraceId, queryType: 'traceql' }],
       });
 
       const tracePanel = PanelBuilders.traces().setHoverHeader(true);
@@ -439,14 +444,14 @@ function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProp
       cancelled = true;
       cancelAnimationFrame(frame);
     };
-  }, [normalizedSpanId, tempoDatasourceUID, timeRange, traceId]);
+  }, [normalizedSpanId, normalizedTraceId, tempoDatasourceUID, timeRange]);
 
   useEffect(() => {
     if (!scene || !hostRef.current) {
       return;
     }
 
-    const collapseKey = `${traceId}:${normalizedSpanId ?? ''}`;
+    const collapseKey = `${normalizedTraceId}:${normalizedSpanId ?? ''}`;
     if (collapsedOverviewKeyRef.current === collapseKey) {
       return;
     }
@@ -513,7 +518,7 @@ function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProp
       cancelled = true;
       stopCollapse();
     };
-  }, [normalizedSpanId, scene, traceId]);
+  }, [normalizedSpanId, normalizedTraceId, scene]);
 
   useEffect(() => {
     if (!scene || !hostRef.current || !normalizedSpanId) {
@@ -549,7 +554,7 @@ function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProp
         return false;
       }
 
-      const targetElement = findTraceTargetElement(hostRef.current, traceId, normalizedSpanId);
+      const targetElement = findTraceTargetElement(hostRef.current, normalizedTraceId, normalizedSpanId);
       if (targetElement) {
         scrollTraceTargetIntoView(targetElement);
 
@@ -606,7 +611,7 @@ function GrafanaTracePanel({ traceId, spanId, timeRange }: GrafanaTracePanelProp
     }, 250);
 
     return stopAll;
-  }, [normalizedSpanId, scene, traceId]);
+  }, [normalizedSpanId, normalizedTraceId, scene]);
 
   if (!tempoDatasourceUID) {
     return (
@@ -1079,6 +1084,17 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     models,
     generationCosts,
   ]);
+
+  useConversationAssistantContext({
+    conversationID,
+    conversationTitle: conversationTitle || conversationID,
+    conversationData,
+    allGenerations,
+    tokenSummary,
+    costSummary,
+    generationCosts,
+    totalDurationMs,
+  });
 
   if (loading) {
     return (

@@ -287,6 +287,7 @@ type SavedConversation struct {
 type SavedConversationStore interface {
 	CreateSavedConversation(ctx context.Context, sc SavedConversation) error
 	GetSavedConversation(ctx context.Context, tenantID, savedID string) (*SavedConversation, error)
+	GetSavedConversationByConversationID(ctx context.Context, tenantID, conversationID string) (*SavedConversation, error)
 	ListSavedConversations(ctx context.Context, tenantID string, source string, limit int, cursor uint64) ([]SavedConversation, uint64, error)
 	DeleteSavedConversation(ctx context.Context, tenantID, savedID string) error
 }

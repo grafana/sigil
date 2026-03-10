@@ -1,5 +1,37 @@
 export type EvaluatorKind = 'llm_judge' | 'json_schema' | 'regex' | 'heuristic';
 
+export type HeuristicOperator = 'and' | 'or';
+export type HeuristicRuleType = 'not_empty' | 'contains' | 'not_contains' | 'min_length' | 'max_length';
+
+export type HeuristicGroupNode = {
+  kind: 'group';
+  operator: HeuristicOperator;
+  rules: HeuristicNode[];
+};
+
+export type HeuristicRuleNode =
+  | {
+      kind: 'rule';
+      type: 'not_empty';
+    }
+  | {
+      kind: 'rule';
+      type: 'contains' | 'not_contains';
+      value: string;
+    }
+  | {
+      kind: 'rule';
+      type: 'min_length' | 'max_length';
+      value: number;
+    };
+
+export type HeuristicNode = HeuristicGroupNode | HeuristicRuleNode;
+
+export type HeuristicConfig = {
+  version: 'v2';
+  root: HeuristicGroupNode;
+};
+
 /** Shared state emitted by evaluator/template forms for the test panel. */
 export type EvalFormState = {
   kind: EvaluatorKind;
@@ -8,6 +40,32 @@ export type EvalFormState = {
 };
 
 export type ScoreType = 'number' | 'bool' | 'string';
+
+export const FIXED_BOOL_OUTPUT_KINDS: ReadonlySet<EvaluatorKind> = new Set(['json_schema', 'regex', 'heuristic']);
+
+export const JSON_SCHEMA_SUPPORTED_KEYWORDS = ['type', 'required', 'properties', 'items'] as const;
+
+export const DEFAULT_OUTPUT_KEY_BY_KIND: Record<EvaluatorKind, string> = {
+  llm_judge: 'score',
+  json_schema: 'json_valid',
+  regex: 'regex_match',
+  heuristic: 'heuristic_pass',
+};
+
+export function getDefaultOutputKey(kind: EvaluatorKind): string {
+  return DEFAULT_OUTPUT_KEY_BY_KIND[kind];
+}
+
+export function getFixedOutputType(kind: EvaluatorKind): ScoreType | undefined {
+  return FIXED_BOOL_OUTPUT_KINDS.has(kind) ? 'bool' : undefined;
+}
+
+export function kindSupportsCustomPassValue(kind: EvaluatorKind): boolean {
+  return kind === 'llm_judge';
+}
+
+export const HEURISTIC_MAX_DEPTH = 3;
+export const HEURISTIC_MAX_NODES = 25;
 
 export type EvalOutputKey = {
   key: string;

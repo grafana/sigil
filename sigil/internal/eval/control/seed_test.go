@@ -58,12 +58,28 @@ func TestLoadYAMLSeedRejectsDuplicateIDs(t *testing.T) {
 evaluators:
   - id: dup
     kind: heuristic
+    config:
+      version: v2
+      root:
+        kind: group
+        operator: and
+        rules:
+          - kind: rule
+            type: not_empty
     output:
       keys:
         - key: one
           type: bool
   - id: dup
     kind: heuristic
+    config:
+      version: v2
+      root:
+        kind: group
+        operator: and
+        rules:
+          - kind: rule
+            type: not_empty
     output:
       keys:
         - key: two
@@ -125,6 +141,14 @@ func TestLoadYAMLSeedPreservesExplicitZeroSampleRate(t *testing.T) {
 evaluators:
   - id: eval.zero
     kind: heuristic
+    config:
+      version: v2
+      root:
+        kind: group
+        operator: and
+        rules:
+          - kind: rule
+            type: not_empty
     output:
       keys:
         - key: zero
@@ -156,6 +180,14 @@ func TestLoadYAMLSeedDefaultsSampleRateWhenOmitted(t *testing.T) {
 evaluators:
   - id: eval.default
     kind: heuristic
+    config:
+      version: v2
+      root:
+        kind: group
+        operator: and
+        rules:
+          - kind: rule
+            type: not_empty
     output:
       keys:
         - key: default
@@ -185,6 +217,14 @@ func TestLoadYAMLSeedRejectsUnsupportedMatchKey(t *testing.T) {
 evaluators:
   - id: eval.match
     kind: heuristic
+    config:
+      version: v2
+      root:
+        kind: group
+        operator: and
+        rules:
+          - kind: rule
+            type: not_empty
     output:
       keys:
         - key: match
@@ -210,6 +250,14 @@ func TestLoadYAMLSeedRejectsInvalidMatchValueType(t *testing.T) {
 evaluators:
   - id: eval.match
     kind: heuristic
+    config:
+      version: v2
+      root:
+        kind: group
+        operator: and
+        rules:
+          - kind: rule
+            type: not_empty
     output:
       keys:
         - key: match
@@ -251,6 +299,14 @@ func TestLoadYAMLSeedWithOptionsBestEffortSkipsInvalidAndContinues(t *testing.T)
 evaluators:
   - id: eval.good
     kind: heuristic
+    config:
+      version: v2
+      root:
+        kind: group
+        operator: and
+        rules:
+          - kind: rule
+            type: not_empty
     output:
       keys:
         - key: good

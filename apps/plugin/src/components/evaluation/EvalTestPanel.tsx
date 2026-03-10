@@ -6,6 +6,7 @@ import { defaultConversationsDataSource, type ConversationsDataSource } from '..
 import type { GenerationLookupHints } from '../../conversation/types';
 import type { GenerationDetail, Message } from '../../generation/types';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../../evaluation/api';
+import { validateJudgeTarget } from '../../evaluation/formValidation';
 import type { EvalOutputKey, EvalTestResponse, EvaluatorKind } from '../../evaluation/types';
 import { buildConversationExploreRoute, PLUGIN_BASE } from '../../constants';
 import ChatMessage from '../chat/ChatMessage';
@@ -135,6 +136,9 @@ export default function EvalTestPanel({
   const [modelOptions, setModelOptions] = useState<Array<SelectableValue<string>>>([]);
   const [provider, setProvider] = useState<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
+  const providerTrimmed = provider?.trim() ?? '';
+  const modelTrimmed = model?.trim() ?? '';
+  const judgeTargetError = kind === 'llm_judge' ? (validateJudgeTarget(providerTrimmed, modelTrimmed) ?? null) : null;
 
   // Load providers on mount
   useEffect(() => {
@@ -175,7 +179,7 @@ export default function EvalTestPanel({
   }, [generationId, convDs]);
 
   const handleRun = async () => {
-    if (!generationId) {
+    if (!generationId || judgeTargetError) {
       return;
     }
     setRunning(true);
@@ -184,13 +188,16 @@ export default function EvalTestPanel({
     try {
       // Merge provider/model into config for llm_judge
       let testConfig = config;
-      if (kind === 'llm_judge' && (provider || model)) {
+      if (kind === 'llm_judge' && (providerTrimmed !== '' || modelTrimmed !== '')) {
         testConfig = { ...config };
-        if (provider) {
-          testConfig.provider = provider;
+        if (providerTrimmed === '' && modelTrimmed !== '') {
+          delete testConfig.provider;
         }
-        if (model) {
-          testConfig.model = model;
+        if (providerTrimmed !== '') {
+          testConfig.provider = providerTrimmed;
+        }
+        if (modelTrimmed !== '') {
+          testConfig.model = modelTrimmed;
         }
       }
       const resp = await ds.testEval({
@@ -222,33 +229,40 @@ export default function EvalTestPanel({
         </Text>
 
         {kind === 'llm_judge' && (
-          <Stack direction="row" gap={1}>
-            <Field label="Provider">
-              <Select<string>
-                options={providerOptions}
-                value={provider}
-                onChange={(v) => {
-                  setProvider(v?.value ?? null);
-                  setModel(null);
-                  setModelOptions([]);
-                }}
-                isClearable
-                placeholder="Default"
-                width={16}
-              />
-            </Field>
-            <Field label="Model">
-              <Select<string>
-                options={modelOptions}
-                value={model}
-                onChange={(v) => setModel(v?.value ?? null)}
-                isClearable
-                allowCustomValue
-                placeholder="Default"
-                width={20}
-              />
-            </Field>
-          </Stack>
+          <>
+            <Stack direction="row" gap={1}>
+              <Field label="Provider">
+                <Select<string>
+                  options={providerOptions}
+                  value={provider}
+                  onChange={(v) => {
+                    setProvider(v?.value ?? null);
+                    setModel(null);
+                    setModelOptions([]);
+                  }}
+                  isClearable
+                  placeholder="Default"
+                  width={16}
+                />
+              </Field>
+              <Field label="Model">
+                <Select<string>
+                  options={modelOptions}
+                  value={model}
+                  onChange={(v) => setModel(v?.value ?? null)}
+                  isClearable
+                  allowCustomValue
+                  placeholder="Default"
+                  width={20}
+                />
+              </Field>
+            </Stack>
+            {judgeTargetError && (
+              <Text variant="bodySmall" color="error">
+                {judgeTargetError}
+              </Text>
+            )}
+          </>
         )}
 
         <GenerationPicker
@@ -302,7 +316,7 @@ export default function EvalTestPanel({
         <span className={`${styles.runButtonWrapper} ${running ? styles.runButtonGlow : ''}`}>
           <Button
             onClick={handleRun}
-            disabled={!generationId || running}
+            disabled={!generationId || running || judgeTargetError != null}
             icon={running ? undefined : 'play'}
             variant="primary"
           >

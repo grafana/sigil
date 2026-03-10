@@ -59,10 +59,43 @@ export const Heuristic = {
         kind: 'heuristic',
         description: 'Checks that the response contains meaningful content',
         config: {
-          not_empty: true,
-          min_length: 25,
+          version: 'v2',
+          root: {
+            kind: 'group',
+            operator: 'and',
+            rules: [
+              { kind: 'rule', type: 'not_empty' },
+              { kind: 'rule', type: 'min_length', value: 25 },
+            ],
+          },
         },
         output_keys: [{ key: 'passed', type: 'bool' }],
+        is_predefined: false,
+        created_at: '2025-01-15T00:00:00Z',
+        updated_at: '2025-01-15T00:00:00Z',
+      }}
+    />
+  ),
+};
+
+export const JSONSchema = {
+  render: () => (
+    <EvaluatorFormWrapper
+      initialEvaluator={{
+        evaluator_id: 'custom.json-valid',
+        version: '2025-01-15',
+        kind: 'json_schema',
+        description: 'Checks whether the assistant returns valid structured JSON',
+        config: {
+          schema: {
+            type: 'object',
+            required: ['answer'],
+            properties: {
+              answer: { type: 'string' },
+            },
+          },
+        },
+        output_keys: [{ key: 'json_valid', type: 'bool' }],
         is_predefined: false,
         created_at: '2025-01-15T00:00:00Z',
         updated_at: '2025-01-15T00:00:00Z',

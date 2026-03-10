@@ -132,6 +132,35 @@ func TestDecodeJSONBody_WhitespaceOnlyBodyReturnsRequiredError(t *testing.T) {
 	}
 }
 
+func TestDecodeJSONBody_UnknownFieldIsSanitized(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/eval/evaluators", bytes.NewBufferString(`{"bogus":true}`))
+
+	var payload createEvaluatorRequest
+	err := decodeJSONBody(req, &payload)
+	if err == nil {
+		t.Fatal("expected error for unknown field")
+	}
+	if got := err.Error(); got != `invalid request body: unknown field "bogus"` {
+		t.Fatalf("unexpected error: %q", got)
+	}
+}
+
+func TestDecodeJSONBody_TypeErrorDoesNotLeakStructNames(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/eval/evaluators", bytes.NewBufferString(`{"config":"wrong"}`))
+
+	var payload createEvaluatorRequest
+	err := decodeJSONBody(req, &payload)
+	if err == nil {
+		t.Fatal("expected type error")
+	}
+	if strings.Contains(err.Error(), "createEvaluatorRequest") {
+		t.Fatalf("expected sanitized type error, got %q", err.Error())
+	}
+	if got := err.Error(); got != `invalid request body: field "config" has the wrong type` {
+		t.Fatalf("unexpected error: %q", got)
+	}
+}
+
 func TestDeleteEvaluatorRejectsEnabledRuleReferences(t *testing.T) {
 	store := newMemoryControlStore()
 	if err := store.CreateEvaluator(context.Background(), evalpkg.EvaluatorDefinition{
@@ -139,7 +168,7 @@ func TestDeleteEvaluatorRejectsEnabledRuleReferences(t *testing.T) {
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
@@ -175,7 +204,7 @@ func TestCreateEvaluatorNormalizesIdentifiersWithWhitespace(t *testing.T) {
 		"evaluator_id":"  custom.helpfulness  ",
 		"version":" 2026-02-17 ",
 		"kind":"heuristic",
-		"config":{"not_empty":true},
+		"config":` + heuristicNotEmptyJSONForTest() + `,
 		"output_keys":[{"key":"helpfulness","type":"bool"}]
 	}`
 	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/evaluators", createPayload)
@@ -207,7 +236,7 @@ func TestCreateEvaluatorRejectsMultipleOutputKeys(t *testing.T) {
 		"evaluator_id":"custom.multi_output",
 		"version":"2026-02-17",
 		"kind":"heuristic",
-		"config":{"not_empty":true},
+		"config":` + heuristicNotEmptyJSONForTest() + `,
 		"output_keys":[
 			{"key":"helpfulness","type":"bool"},
 			{"key":"conciseness","type":"bool"}
@@ -222,6 +251,57 @@ func TestCreateEvaluatorRejectsMultipleOutputKeys(t *testing.T) {
 	}
 }
 
+func TestCreateEvaluatorMapsDuplicateStorageErrorsToConflict(t *testing.T) {
+	store := newMemoryControlStore()
+	store.createEvaluatorErr = evalpkg.ErrConflict
+	service := NewService(store, nil)
+
+	_, err := service.CreateEvaluator(context.Background(), "fake", evalpkg.EvaluatorDefinition{
+		EvaluatorID: "custom.helpfulness",
+		Version:     "2026-02-17",
+		Kind:        evalpkg.EvaluatorKindHeuristic,
+		Config:      heuristicNotEmptyConfigForTest(),
+		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
+	})
+	if err == nil {
+		t.Fatal("expected conflict error")
+	}
+	if !isConflictError(err) {
+		t.Fatalf("expected conflict error, got %v", err)
+	}
+}
+
+func TestCreateRuleMapsDuplicateStorageErrorsToConflict(t *testing.T) {
+	store := newMemoryControlStore()
+	store.createRuleErr = evalpkg.ErrConflict
+	if err := store.CreateEvaluator(context.Background(), evalpkg.EvaluatorDefinition{
+		TenantID:    "fake",
+		EvaluatorID: "custom.helpfulness",
+		Version:     "2026-02-17",
+		Kind:        evalpkg.EvaluatorKindHeuristic,
+		Config:      heuristicNotEmptyConfigForTest(),
+		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
+	}); err != nil {
+		t.Fatalf("seed evaluator: %v", err)
+	}
+	service := NewService(store, nil)
+
+	_, err := service.CreateRule(context.Background(), "fake", evalpkg.RuleDefinition{
+		RuleID:       "rule.helpfulness",
+		Enabled:      true,
+		Selector:     evalpkg.SelectorUserVisibleTurn,
+		Match:        map[string]any{},
+		SampleRate:   1,
+		EvaluatorIDs: []string{"custom.helpfulness"},
+	})
+	if err == nil {
+		t.Fatal("expected conflict error")
+	}
+	if !isConflictError(err) {
+		t.Fatalf("expected conflict error, got %v", err)
+	}
+}
+
 func TestCreateEvaluatorReturnsInternalServerErrorOnStoreFailure(t *testing.T) {
 	mux, _, store := newEvalHTTPEnv(t)
 	store.createEvaluatorErr = errors.New("mysql unavailable")
@@ -230,7 +310,7 @@ func TestCreateEvaluatorReturnsInternalServerErrorOnStoreFailure(t *testing.T) {
 		"evaluator_id":"custom.helpfulness",
 		"version":"2026-02-17",
 		"kind":"heuristic",
-		"config":{"not_empty":true},
+		"config":` + heuristicNotEmptyJSONForTest() + `,
 		"output_keys":[{"key":"helpfulness","type":"bool"}]
 	}`
 	createResp := doRequest(mux, http.MethodPost, "/api/v1/eval/evaluators", createPayload)
@@ -249,7 +329,7 @@ func TestRuleCRUDHTTP(t *testing.T) {
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
@@ -301,7 +381,7 @@ func TestRuleByIDRejectsSlashInRuleID(t *testing.T) {
 	store := newMemoryControlStore()
 	if err := store.CreateEvaluator(context.Background(), evalpkg.EvaluatorDefinition{
 		TenantID: "fake", EvaluatorID: "e1", Version: "v1", Kind: evalpkg.EvaluatorKindHeuristic,
-		Config: map[string]any{}, OutputKeys: []evalpkg.OutputKey{{Key: "ok", Type: evalpkg.ScoreTypeBool}},
+		Config: heuristicNotEmptyConfigForTest(), OutputKeys: []evalpkg.OutputKey{{Key: "ok", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
 	}
@@ -322,7 +402,7 @@ func TestEnableRuleRejectsMissingEvaluators(t *testing.T) {
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
@@ -364,7 +444,7 @@ func TestCreateRuleDefaultsEnabledAndSampleRateWhenOmitted(t *testing.T) {
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
@@ -404,7 +484,7 @@ func TestCreateRuleSupportsExplicitZeroSamplingAndDisabled(t *testing.T) {
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
@@ -443,7 +523,7 @@ func TestCreateRuleReturnsInternalServerErrorOnStoreFailure(t *testing.T) {
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
@@ -473,7 +553,7 @@ func TestCreateRuleRejectsUnsupportedMatchKeys(t *testing.T) {
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
@@ -503,7 +583,7 @@ func TestCreateRuleRejectsInvalidMatchValueTypes(t *testing.T) {
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
@@ -564,7 +644,7 @@ func TestCreateRuleNormalizesRuleIDAndMatchKeysWithWhitespace(t *testing.T) {
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
@@ -611,7 +691,7 @@ func TestCreateRuleRejectsDuplicateMatchKeysAfterNormalization(t *testing.T) {
 		EvaluatorID: "custom.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindHeuristic,
-		Config:      map[string]any{"not_empty": true},
+		Config:      heuristicNotEmptyConfigForTest(),
 		OutputKeys:  []evalpkg.OutputKey{{Key: "helpfulness", Type: evalpkg.ScoreTypeBool}},
 	}); err != nil {
 		t.Fatalf("seed evaluator: %v", err)
@@ -741,6 +821,59 @@ func TestForkPredefinedEvaluatorHTTP(t *testing.T) {
 	}
 }
 
+func TestForkPredefinedEvaluatorHTTPRejectsPartialLLMJudgeOverride(t *testing.T) {
+	mux, _, _ := newEvalHTTPEnv(t)
+
+	forkPayload := `{
+		"evaluator_id":"custom.helpfulness",
+		"config":{"provider":"anthropic"}
+	}`
+	forkResp := doRequest(mux, http.MethodPost, "/api/v1/eval/predefined/evaluators/sigil.helpfulness:fork", forkPayload)
+	if forkResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 fork predefined evaluator, got %d body=%s", forkResp.Code, forkResp.Body.String())
+	}
+	if !strings.Contains(forkResp.Body.String(), "requires both provider and model") {
+		t.Fatalf("expected provider/model validation error, got body=%s", forkResp.Body.String())
+	}
+}
+
+func TestForkPredefinedEvaluatorHTTPAllowsFullyQualifiedModelOverrideWithoutProvider(t *testing.T) {
+	mux, _, _ := newEvalHTTPEnv(t)
+
+	forkPayload := `{
+		"evaluator_id":"custom.helpfulness",
+		"config":{"model":"anthropic/claude-3-5-haiku-latest"}
+	}`
+	forkResp := doRequest(mux, http.MethodPost, "/api/v1/eval/predefined/evaluators/sigil.helpfulness:fork", forkPayload)
+	if forkResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 fork predefined evaluator, got %d body=%s", forkResp.Code, forkResp.Body.String())
+	}
+	if !strings.Contains(forkResp.Body.String(), `"model":"anthropic/claude-3-5-haiku-latest"`) {
+		t.Fatalf("expected fully-qualified model override in response, body=%s", forkResp.Body.String())
+	}
+	if strings.Contains(forkResp.Body.String(), `"provider":"openai"`) {
+		t.Fatalf("expected inherited provider to be cleared for fully-qualified model override, body=%s", forkResp.Body.String())
+	}
+}
+
+func TestForkPredefinedFixedBoolEvaluatorHTTPLegacyPassValueStillForks(t *testing.T) {
+	mux, _, _ := newEvalHTTPEnv(t)
+
+	forkPayload := `{
+		"evaluator_id":"custom.json_valid"
+	}`
+	forkResp := doRequest(mux, http.MethodPost, "/api/v1/eval/predefined/evaluators/sigil.json_valid:fork", forkPayload)
+	if forkResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 fork predefined evaluator, got %d body=%s", forkResp.Code, forkResp.Body.String())
+	}
+	if !strings.Contains(forkResp.Body.String(), `"custom.json_valid"`) {
+		t.Fatalf("expected forked evaluator id in response, body=%s", forkResp.Body.String())
+	}
+	if strings.Contains(forkResp.Body.String(), `"pass_value"`) {
+		t.Fatalf("expected legacy pass_value=true to be normalized away, body=%s", forkResp.Body.String())
+	}
+}
+
 func TestForkPredefinedEvaluatorReturnsInternalServerErrorOnStoreFailure(t *testing.T) {
 	mux, _, store := newEvalHTTPEnv(t)
 	store.createEvaluatorErr = errors.New("write failed")
@@ -785,7 +918,7 @@ func TestPredefinedEndpoints_FallbackToHardcoded_WithNilTemplateStore(t *testing
 	// Fork should set lineage back to the predefined source.
 	forkPayload := `{
 		"evaluator_id":"custom.helpfulness_fallback",
-		"config":{"provider":"openai"}
+		"config":{"provider":"openai","model":"gpt-4o-mini"}
 	}`
 	forkResp := doRequest(mux, http.MethodPost, "/api/v1/eval/predefined/evaluators/sigil.helpfulness:fork", forkPayload)
 	if forkResp.Code != http.StatusOK {

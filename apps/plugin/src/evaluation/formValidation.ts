@@ -1,31 +1,27 @@
 import type { EvaluatorKind, ScoreType } from './types';
-import { parseHeuristicStringListInput } from './heuristicConfig';
+import { validateHeuristicQuery, type HeuristicQueryGroup } from './heuristicConfig';
 
 export type SharedInvalidField =
   | 'outputKey'
   | 'regexPattern'
+  | 'judgeTarget'
   | 'maxTokens'
   | 'temperature'
   | 'schema'
   | 'heuristic'
-  | 'heuristicMaxLength'
   | 'passThreshold'
   | 'outputMax';
 
 export type SharedFormValidationInput = {
   kind: EvaluatorKind;
   outputKey: string;
+  provider: string;
+  model: string;
   pattern: string;
   maxTokens: number;
   temperature: number;
   schemaJson: string;
-  heuristic: {
-    notEmpty: boolean;
-    contains: string;
-    notContains: string;
-    minLength: number | '';
-    maxLength: number | '';
-  };
+  heuristicQuery?: HeuristicQueryGroup;
   output: {
     type: ScoreType;
     passThreshold: number | '';
@@ -37,11 +33,11 @@ export type SharedFormValidationInput = {
 export type SharedFormValidationResult = {
   outputKeyError?: string;
   regexPatternError?: string;
+  judgeTargetError?: string;
   maxTokensError?: string;
   temperatureError?: string;
   schemaParseError?: string;
   heuristicConfigError?: string;
-  heuristicMaxLengthError?: string;
   passThresholdError?: string;
   outputMaxError?: string;
   hasErrors: boolean;
@@ -56,9 +52,30 @@ export function parseSchemaConfig(schemaJson: string): { schema: unknown } {
   }
 }
 
+export function validateJudgeTarget(provider: string, model: string): string | undefined {
+  const providerTrimmed = provider.trim();
+  const modelTrimmed = model.trim();
+
+  if (providerTrimmed === '' && modelTrimmed === '') {
+    return undefined;
+  }
+  if (providerTrimmed !== '' && modelTrimmed === '') {
+    return 'Choose both provider and model, or leave both blank';
+  }
+  if (providerTrimmed === '') {
+    const slashIndex = modelTrimmed.indexOf('/');
+    if (slashIndex > 0 && slashIndex < modelTrimmed.length - 1) {
+      return undefined;
+    }
+    return 'Choose both provider and model, or use a fully-qualified model like provider/model';
+  }
+  return undefined;
+}
+
 export function validateSharedForm(input: SharedFormValidationInput): SharedFormValidationResult {
   const outputKeyError = input.outputKey.trim() === '' ? 'Output key is required' : undefined;
   const regexPatternError = input.kind === 'regex' && input.pattern.trim() === '' ? 'Pattern is required' : undefined;
+  const judgeTargetError = input.kind === 'llm_judge' ? validateJudgeTarget(input.provider, input.model) : undefined;
   const maxTokensError =
     input.kind === 'llm_judge' && (!Number.isInteger(input.maxTokens) || input.maxTokens < 1)
       ? 'Must be an integer greater than 0'
@@ -79,29 +96,19 @@ export function validateSharedForm(input: SharedFormValidationInput): SharedForm
   }
 
   const heuristicConfigError =
-    input.kind === 'heuristic' &&
-    !input.heuristic.notEmpty &&
-    parseHeuristicStringListInput(input.heuristic.contains) == null &&
-    parseHeuristicStringListInput(input.heuristic.notContains) == null &&
-    input.heuristic.minLength === '' &&
-    input.heuristic.maxLength === ''
-      ? 'Add at least one heuristic rule'
-      : undefined;
-
-  const heuristicMaxLengthError =
-    input.kind === 'heuristic' &&
-    input.heuristic.minLength !== '' &&
-    input.heuristic.maxLength !== '' &&
-    Number(input.heuristic.minLength) >= Number(input.heuristic.maxLength)
-      ? 'Must be greater than Min length'
+    input.kind === 'heuristic'
+      ? input.heuristicQuery == null
+        ? 'Add at least one heuristic rule'
+        : validateHeuristicQuery(input.heuristicQuery)
       : undefined;
 
   const passThresholdError =
-    input.output.type === 'number' &&
-    input.output.passThreshold !== '' &&
-    input.output.min !== '' &&
-    input.output.passThreshold < input.output.min
-      ? 'Must be greater than or equal to Min'
+    input.output.type === 'number' && input.output.passThreshold !== ''
+      ? input.output.min !== '' && input.output.passThreshold < input.output.min
+        ? 'Must be greater than or equal to Min'
+        : input.output.max !== '' && input.output.passThreshold > input.output.max
+          ? 'Must be less than or equal to Max'
+          : undefined
       : undefined;
 
   const outputMaxError =
@@ -116,16 +123,16 @@ export function validateSharedForm(input: SharedFormValidationInput): SharedForm
     ? 'outputKey'
     : regexPatternError
       ? 'regexPattern'
-      : maxTokensError
-        ? 'maxTokens'
-        : temperatureError
-          ? 'temperature'
-          : schemaParseError
-            ? 'schema'
-            : heuristicConfigError
-              ? 'heuristic'
-              : heuristicMaxLengthError
-                ? 'heuristicMaxLength'
+      : judgeTargetError
+        ? 'judgeTarget'
+        : maxTokensError
+          ? 'maxTokens'
+          : temperatureError
+            ? 'temperature'
+            : schemaParseError
+              ? 'schema'
+              : heuristicConfigError
+                ? 'heuristic'
                 : passThresholdError
                   ? 'passThreshold'
                   : outputMaxError
@@ -135,11 +142,11 @@ export function validateSharedForm(input: SharedFormValidationInput): SharedForm
   return {
     outputKeyError,
     regexPatternError,
+    judgeTargetError,
     maxTokensError,
     temperatureError,
     schemaParseError,
     heuristicConfigError,
-    heuristicMaxLengthError,
     passThresholdError,
     outputMaxError,
     hasErrors: firstInvalidField != null,

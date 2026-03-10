@@ -2,7 +2,6 @@ package control
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -37,17 +36,6 @@ type EvalTestResponse struct {
 	ExecutionTimeMs int64           `json:"execution_time_ms"`
 }
 
-// notFoundError indicates a requested resource was not found.
-type notFoundError struct{ cause error }
-
-func (e notFoundError) Error() string { return e.cause.Error() }
-func (e notFoundError) Unwrap() error { return e.cause }
-
-func isNotFoundError(err error) bool {
-	var target notFoundError
-	return errors.As(err, &target)
-}
-
 // TestService runs synchronous one-shot evaluator tests against stored generations.
 type TestService struct {
 	reader     worker.GenerationReader
@@ -66,22 +54,9 @@ func NewTestService(reader worker.GenerationReader, evals map[evalpkg.EvaluatorK
 func (s *TestService) RunTest(ctx context.Context, tenantID string, req EvalTestRequest) (*EvalTestResponse, error) {
 	kind := evalpkg.EvaluatorKind(req.Kind)
 
-	if err := validateKind(kind); err != nil {
-		return nil, newValidationError(err)
-	}
-	if len(req.Config) == 0 {
-		return nil, newValidationError(errors.New("config is required"))
-	}
-	if err := validateOutputKeys(req.OutputKeys); err != nil {
-		return nil, newValidationError(err)
-	}
-	if req.GenerationID == "" {
-		return nil, newValidationError(errors.New("generation_id is required"))
-	}
-
 	eval, ok := s.evaluators[kind]
 	if !ok {
-		return nil, newValidationError(fmt.Errorf("no evaluator registered for kind %q", kind))
+		return nil, ValidationWrap(fmt.Errorf("no evaluator registered for kind %q", kind))
 	}
 
 	generation, err := s.reader.GetByID(ctx, tenantID, req.GenerationID)
@@ -89,7 +64,7 @@ func (s *TestService) RunTest(ctx context.Context, tenantID string, req EvalTest
 		return nil, fmt.Errorf("fetch generation: %w", err)
 	}
 	if generation == nil {
-		return nil, notFoundError{cause: fmt.Errorf("generation %q not found", req.GenerationID)}
+		return nil, NotFoundError(fmt.Sprintf("generation %q not found", req.GenerationID))
 	}
 
 	input := evaluators.InputFromGeneration(tenantID, generation)

@@ -1,6 +1,9 @@
 import {
   buildForkEvaluatorConfig,
+  getDefaultOutputKey,
+  getFixedOutputType,
   getEffectiveLLMJudgePrompts,
+  kindSupportsCustomPassValue,
   LLM_JUDGE_DEFAULT_SYSTEM_PROMPT,
   LLM_JUDGE_DEFAULT_USER_PROMPT,
   LLM_JUDGE_USER_PROMPT_VARIABLES_DESCRIPTION,
@@ -61,5 +64,26 @@ describe('buildForkEvaluatorConfig', () => {
     expect(LLM_JUDGE_USER_PROMPT_VARIABLES_DESCRIPTION).not.toContain('{{output}}');
     expect(LLM_JUDGE_USER_PROMPT_VARIABLES_DESCRIPTION).not.toContain('{{metadata}}');
     expect(LLM_JUDGE_USER_PROMPT_VARIABLES_DESCRIPTION).not.toContain('{{response_model}}');
+  });
+
+  it('marks non-judge evaluator kinds as fixed bool outputs', () => {
+    expect(getFixedOutputType('json_schema')).toBe('bool');
+    expect(getFixedOutputType('regex')).toBe('bool');
+    expect(getFixedOutputType('heuristic')).toBe('bool');
+    expect(getFixedOutputType('llm_judge')).toBeUndefined();
+  });
+
+  it('returns kind-specific default output keys', () => {
+    expect(getDefaultOutputKey('llm_judge')).toBe('score');
+    expect(getDefaultOutputKey('json_schema')).toBe('json_valid');
+    expect(getDefaultOutputKey('regex')).toBe('regex_match');
+    expect(getDefaultOutputKey('heuristic')).toBe('heuristic_pass');
+  });
+
+  it('allows custom pass_value only for llm_judge', () => {
+    expect(kindSupportsCustomPassValue('llm_judge')).toBe(true);
+    expect(kindSupportsCustomPassValue('json_schema')).toBe(false);
+    expect(kindSupportsCustomPassValue('regex')).toBe(false);
+    expect(kindSupportsCustomPassValue('heuristic')).toBe(false);
   });
 });

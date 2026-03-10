@@ -1,13 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
-import { Button, Field, Input, Select, Stack, Switch, Text, useStyles2 } from '@grafana/ui';
+import { Button, Field, Input, Select, Stack, Text, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
 import {
   EVALUATOR_KIND_LABELS,
+  JSON_SCHEMA_SUPPORTED_KEYWORDS,
   LLM_JUDGE_DEFAULT_SYSTEM_PROMPT,
   LLM_JUDGE_DEFAULT_USER_PROMPT,
   LLM_JUDGE_USER_PROMPT_VARIABLES_DESCRIPTION,
   buildOutputKeyFromForm,
+  getDefaultOutputKey,
+  getFixedOutputType,
+  kindSupportsCustomPassValue,
   normalizedOptionalString,
   type CreateTemplateRequest,
   type EvalFormState,
@@ -18,8 +22,13 @@ import {
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../../evaluation/api';
 import { focusFirstInvalidField, focusInvalidFieldFromMap } from '../../evaluation/focusFirstInvalid';
 import { parseSchemaConfig, validateSharedForm } from '../../evaluation/formValidation';
-import { parseHeuristicStringListInput } from '../../evaluation/heuristicConfig';
+import {
+  createDefaultHeuristicQuery,
+  heuristicQueryToConfig,
+  type HeuristicQueryGroup,
+} from '../../evaluation/heuristicConfig';
 import { isValidResourceID, INVALID_ID_MESSAGE } from '../../evaluation/utils';
+import HeuristicRuleBuilder from './HeuristicRuleBuilder';
 import JudgeProviderModelFields from './JudgeProviderModelFields';
 import { getSectionTitleStyles } from './sectionStyles';
 import PromptTemplateTextarea from './PromptTemplateTextarea';
@@ -132,6 +141,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
   validationMessage: css({
     marginTop: theme.spacing(0.25),
   }),
+  gridContents: css({
+    display: 'contents',
+  }),
+  gridValidationMessage: css({
+    gridColumn: '1 / -1',
+    marginTop: theme.spacing(0.25),
+  }),
   actions: css({
     display: 'flex',
     justifyContent: 'flex-start',
@@ -191,13 +207,9 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
 
   const [schemaJson, setSchemaJson] = useState('{}');
   const [pattern, setPattern] = useState('');
-  const [notEmpty, setNotEmpty] = useState(false);
-  const [contains, setContains] = useState('');
-  const [notContains, setNotContains] = useState('');
-  const [minLength, setMinLength] = useState<number | ''>('');
-  const [maxLength, setMaxLength] = useState<number | ''>('');
+  const [heuristicQuery, setHeuristicQuery] = useState<HeuristicQueryGroup>(() => createDefaultHeuristicQuery());
 
-  const [outputKey, setOutputKey] = useState('score');
+  const [outputKey, setOutputKey] = useState(getDefaultOutputKey('llm_judge'));
   const [outputType, setOutputType] = useState<ScoreType>('number');
   const [outputDescription, setOutputDescription] = useState('');
   const [outputEnum, setOutputEnum] = useState('');
@@ -209,13 +221,17 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
   const templateIdFieldRef = useRef<HTMLDivElement>(null);
   const outputKeyFieldRef = useRef<HTMLDivElement>(null);
   const regexPatternFieldRef = useRef<HTMLDivElement>(null);
+  const judgeTargetFieldRef = useRef<HTMLDivElement>(null);
   const maxTokensFieldRef = useRef<HTMLDivElement>(null);
   const temperatureFieldRef = useRef<HTMLDivElement>(null);
   const schemaFieldRef = useRef<HTMLDivElement>(null);
   const heuristicFieldRef = useRef<HTMLDivElement>(null);
-  const heuristicMaxLengthFieldRef = useRef<HTMLDivElement>(null);
   const passThresholdFieldRef = useRef<HTMLDivElement>(null);
   const outputMaxFieldRef = useRef<HTMLDivElement>(null);
+  const fixedOutputType = getFixedOutputType(kind);
+  const effectiveOutputType = fixedOutputType ?? outputType;
+  const supportsCustomPassValue = kindSupportsCustomPassValue(kind);
+  const previousKindRef = useRef<EvaluatorKind>('llm_judge');
 
   const buildConfig = (): Record<string, unknown> => {
     switch (kind) {
@@ -233,17 +249,23 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
       case 'regex':
         return { pattern: pattern || '' };
       case 'heuristic':
-        return {
-          not_empty: notEmpty,
-          contains: parseHeuristicStringListInput(contains),
-          not_contains: parseHeuristicStringListInput(notContains),
-          min_length: minLength === '' ? undefined : minLength,
-          max_length: maxLength === '' ? undefined : maxLength,
-        };
+        return heuristicQueryToConfig(heuristicQuery);
       default:
         return {};
     }
   };
+
+  useEffect(() => {
+    const previousKind = previousKindRef.current;
+    if (previousKind === kind) {
+      return;
+    }
+    const previousDefaultKey = getDefaultOutputKey(previousKind);
+    if (outputKey.trim() === '' || outputKey === previousDefaultKey) {
+      setOutputKey(getDefaultOutputKey(kind));
+    }
+    previousKindRef.current = kind;
+  }, [kind, outputKey]);
 
   useEffect(() => {
     onConfigChange?.({
@@ -252,14 +274,14 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
       outputKeys: [
         buildOutputKeyFromForm({
           key: outputKey,
-          type: outputType,
+          type: effectiveOutputType,
           description: outputDescription,
           enumValue: outputEnum,
           passThreshold,
           min: outputMin,
           max: outputMax,
           passMatch,
-          passValue,
+          passValue: supportsCustomPassValue ? passValue : '',
         }),
       ],
     });
@@ -274,11 +296,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
     temperature,
     schemaJson,
     pattern,
-    notEmpty,
-    contains,
-    notContains,
-    minLength,
-    maxLength,
+    heuristicQuery,
     outputKey,
     outputType,
     outputDescription,
@@ -296,19 +314,15 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
   const sharedValidation = validateSharedForm({
     kind,
     outputKey,
+    provider,
+    model,
     pattern,
     maxTokens,
     temperature,
     schemaJson,
-    heuristic: {
-      notEmpty,
-      contains,
-      notContains,
-      minLength,
-      maxLength,
-    },
+    heuristicQuery,
     output: {
-      type: outputType,
+      type: effectiveOutputType,
       passThreshold,
       min: outputMin,
       max: outputMax,
@@ -316,22 +330,22 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
   });
   const outputKeyError = sharedValidation.outputKeyError;
   const regexPatternError = sharedValidation.regexPatternError;
+  const judgeTargetError = sharedValidation.judgeTargetError;
   const maxTokensError = sharedValidation.maxTokensError;
   const temperatureError = sharedValidation.temperatureError;
   const schemaParseError = sharedValidation.schemaParseError ?? '';
   const heuristicConfigError = sharedValidation.heuristicConfigError;
-  const heuristicMaxLengthError = sharedValidation.heuristicMaxLengthError;
   const passThresholdError = sharedValidation.passThresholdError;
   const outputMaxError = sharedValidation.outputMaxError;
 
   const showIdError = touched && (isIdEmpty || isIdInvalid);
   const showOutputKeyError = touched && outputKeyError != null;
   const showRegexPatternError = touched && regexPatternError != null;
+  const showJudgeTargetError = touched && judgeTargetError != null;
   const showMaxTokensError = touched && maxTokensError != null;
   const showTemperatureError = touched && temperatureError != null;
   const showSchemaError = touched && schemaParseError !== '';
   const showHeuristicConfigError = touched && heuristicConfigError != null;
-  const showHeuristicMaxLengthError = touched && heuristicMaxLengthError != null;
   const showPassThresholdError = touched && passThresholdError != null;
   const showOutputMaxError = touched && outputMaxError != null;
 
@@ -344,11 +358,11 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
         focusInvalidFieldFromMap(sharedValidation.firstInvalidField, {
           outputKey: outputKeyFieldRef.current,
           regexPattern: regexPatternFieldRef.current,
+          judgeTarget: judgeTargetFieldRef.current,
           maxTokens: maxTokensFieldRef.current,
           temperature: temperatureFieldRef.current,
           schema: schemaFieldRef.current,
           heuristic: heuristicFieldRef.current,
-          heuristicMaxLength: heuristicMaxLengthFieldRef.current,
           passThreshold: passThresholdFieldRef.current,
           outputMax: outputMaxFieldRef.current,
         });
@@ -359,14 +373,14 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
     const outputKeys: EvalOutputKey[] = [
       buildOutputKeyFromForm({
         key: outputKey,
-        type: outputType,
+        type: effectiveOutputType,
         description: outputDescription,
         enumValue: outputEnum,
         passThreshold,
         min: outputMin,
         max: outputMax,
         passMatch,
-        passValue,
+        passValue: supportsCustomPassValue ? passValue : '',
       }),
     ];
 
@@ -458,16 +472,25 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
               </Text>
             </div>
             <div className={styles.twoColumnGrid}>
-              <JudgeProviderModelFields
-                compactControlClassName={styles.compactControl}
-                provider={provider}
-                model={model}
-                providerOptions={providerOptions}
-                modelOptions={modelOptions}
-                setProvider={setProvider}
-                setModel={setModel}
-                setModelOptions={setModelOptions}
-              />
+              <div ref={judgeTargetFieldRef} className={styles.gridContents}>
+                <JudgeProviderModelFields
+                  compactControlClassName={styles.compactControl}
+                  provider={provider}
+                  model={model}
+                  providerOptions={providerOptions}
+                  modelOptions={modelOptions}
+                  setProvider={setProvider}
+                  setModel={setModel}
+                  setModelOptions={setModelOptions}
+                />
+                {showJudgeTargetError && judgeTargetError && (
+                  <div className={styles.gridValidationMessage}>
+                    <Text variant="bodySmall" color="error">
+                      {judgeTargetError}
+                    </Text>
+                  </div>
+                )}
+              </div>
             </div>
             <Field
               label="System prompt"
@@ -534,10 +557,14 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
           <div className={styles.sectionBody}>
             <div className={styles.sectionText}>
               <Text variant="body" color="secondary">
-                Provide the JSON schema used to validate each generation result.
+                Provide the JSON object shape to validate. Supported schema keywords today: type, required, properties,
+                and items.
               </Text>
             </div>
-            <Field label="Schema" description="Optional. JSON schema for validation. Leave blank to use {}.">
+            <Field
+              label="Schema"
+              description={`Optional. Uses Sigil's built-in JSON Schema subset (${JSON_SCHEMA_SUPPORTED_KEYWORDS.join(', ')}). Leave blank to use {}.`}
+            >
               <div ref={schemaFieldRef}>
                 <textarea
                   className={`${styles.textarea} ${styles.codeTextarea}`}
@@ -599,76 +626,15 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
           <div className={styles.sectionBody}>
             <div className={styles.sectionText}>
               <Text variant="body" color="secondary">
-                Define the simple rules used to check presence and length for each generation result.
+                Build deterministic response checks with nested AND/OR groups.
               </Text>
             </div>
-            {showHeuristicConfigError && heuristicConfigError && (
-              <div className={styles.validationMessage}>
-                <Text variant="bodySmall" color="error">
-                  {heuristicConfigError}
-                </Text>
-              </div>
-            )}
-            <Field className={styles.switchField} label="Not empty" description="Optional. Require non-empty output.">
-              <div ref={heuristicFieldRef}>
-                <Switch value={notEmpty} onChange={(e) => setNotEmpty(e.currentTarget.checked)} />
-              </div>
-            </Field>
-            <Field label="Contains" description="Optional. Require each phrase to appear. Use one phrase per line.">
-              <textarea
-                className={`${styles.textarea} ${styles.descriptionTextarea}`}
-                value={contains}
-                onChange={(e) => setContains(e.currentTarget.value)}
-                placeholder={'e.g. refund requested\naccount issue'}
-                rows={3}
+            <div ref={heuristicFieldRef}>
+              <HeuristicRuleBuilder
+                query={heuristicQuery}
+                onChange={setHeuristicQuery}
+                error={showHeuristicConfigError ? heuristicConfigError : undefined}
               />
-            </Field>
-            <Field
-              label="Not contains"
-              description="Optional. Reject output if any phrase appears. Use one phrase per line."
-            >
-              <textarea
-                className={`${styles.textarea} ${styles.descriptionTextarea}`}
-                value={notContains}
-                onChange={(e) => setNotContains(e.currentTarget.value)}
-                placeholder={'e.g. profanity\nunsafe advice'}
-                rows={3}
-              />
-            </Field>
-            <div className={styles.twoColumnGrid}>
-              <Field label="Min length" description="Optional. Minimum response length.">
-                <Input
-                  className={styles.numericControl}
-                  type="number"
-                  value={minLength}
-                  onChange={(e) => {
-                    const v = e.currentTarget.value;
-                    setMinLength(v === '' ? '' : parseInt(v, 10) || 0);
-                  }}
-                  placeholder="e.g. 0"
-                />
-              </Field>
-              <Field label="Max length" description="Optional. Maximum response length.">
-                <div ref={heuristicMaxLengthFieldRef}>
-                  <Input
-                    className={styles.numericControl}
-                    type="number"
-                    value={maxLength}
-                    onChange={(e) => {
-                      const v = e.currentTarget.value;
-                      setMaxLength(v === '' ? '' : parseInt(v, 10) || 0);
-                    }}
-                    placeholder="e.g. 100"
-                  />
-                  {showHeuristicMaxLengthError && heuristicMaxLengthError && (
-                    <div className={styles.validationMessage}>
-                      <Text variant="bodySmall" color="error">
-                        {heuristicMaxLengthError}
-                      </Text>
-                    </div>
-                  )}
-                </div>
-              </Field>
             </div>
           </div>
         </div>
@@ -681,7 +647,9 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
         <div className={styles.sectionBody}>
           <div className={styles.sectionText}>
             <Text variant="body" color="secondary">
-              Define the score this template emits and how downstream views should interpret it.
+              {fixedOutputType === 'bool'
+                ? 'This evaluator kind always emits a boolean pass/fail score.'
+                : 'Define the score this template emits and how downstream views should interpret it.'}
             </Text>
           </div>
           <div className={styles.twoColumnGrid}>
@@ -703,16 +671,20 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
               </div>
             </Field>
             <Field label="Output type">
-              <Select<ScoreType>
-                className={styles.compactControl}
-                options={SCORE_TYPE_OPTIONS}
-                value={outputType}
-                onChange={(v) => {
-                  if (v?.value) {
-                    setOutputType(v.value);
-                  }
-                }}
-              />
+              {fixedOutputType != null ? (
+                <Input className={styles.compactControl} value={fixedOutputType} readOnly disabled />
+              ) : (
+                <Select<ScoreType>
+                  className={styles.compactControl}
+                  options={SCORE_TYPE_OPTIONS}
+                  value={outputType}
+                  onChange={(v) => {
+                    if (v?.value) {
+                      setOutputType(v.value);
+                    }
+                  }}
+                />
+              )}
             </Field>
           </div>
           <Field
@@ -730,7 +702,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
               placeholder="e.g. How helpful the response is on a 1-10 scale"
             />
           </Field>
-          {kind === 'llm_judge' && outputType === 'string' && (
+          {kind === 'llm_judge' && effectiveOutputType === 'string' && (
             <Field
               label="Allowed values"
               description="Optional. Comma-separated list of allowed string values. Enforced via structured output."
@@ -753,10 +725,12 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
         <div className={styles.sectionBody}>
           <div className={styles.sectionText}>
             <Text variant="body" color="secondary">
-              Define which output values should count as passing for this template.
+              {fixedOutputType === 'bool'
+                ? 'Pass/fail is fixed for this evaluator kind: true passes and false fails.'
+                : 'Define which output values should count as passing for this template.'}
             </Text>
           </div>
-          {outputType === 'number' && (
+          {effectiveOutputType === 'number' && (
             <div className={styles.twoColumnGrid}>
               <Field label="Pass threshold" description="Optional. Score at or above this value passes.">
                 <div ref={passThresholdFieldRef}>
@@ -807,7 +781,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
               </Field>
             </div>
           )}
-          {outputType === 'string' && (
+          {effectiveOutputType === 'string' && (
             <Field label="Pass values" description="Optional. Comma-separated values that count as passing.">
               <Input
                 className={styles.fullWidthControl}
@@ -817,7 +791,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
               />
             </Field>
           )}
-          {outputType === 'bool' && (
+          {effectiveOutputType === 'bool' && supportsCustomPassValue && (
             <Field label="Pass when" description="Optional. Choose which boolean value counts as passing.">
               <Select<string>
                 className={styles.compactControl}

@@ -24,13 +24,13 @@ describe('ChatMessage', () => {
     expect(screen.getByText('I am doing well.')).toBeInTheDocument();
   });
 
-  it('renders tool message with tool label', () => {
+  it('renders tool result messages with a tool result label', () => {
     const message: Message = {
       role: 'MESSAGE_ROLE_TOOL',
       parts: [{ tool_result: { tool_call_id: 'tc-1', name: 'search', content: 'found 3 results' } }],
     };
     render(<ChatMessage message={message} />);
-    expect(screen.getByText('Tool')).toBeInTheDocument();
+    expect(screen.getByText('Tool Result')).toBeInTheDocument();
   });
 
   it('uses message name instead of role label when present', () => {
@@ -41,7 +41,7 @@ describe('ChatMessage', () => {
     };
     render(<ChatMessage message={message} />);
     expect(screen.getByText('search_tool')).toBeInTheDocument();
-    expect(screen.queryByText('Tool')).not.toBeInTheDocument();
+    expect(screen.queryByText('Tool Result')).not.toBeInTheDocument();
   });
 
   it('renders thinking block for thinking parts', () => {

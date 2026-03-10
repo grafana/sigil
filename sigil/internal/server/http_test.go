@@ -144,6 +144,7 @@ func TestRegisterQueryRoutesOwnsQueryPaths(t *testing.T) {
 		newTestModelCardService(t),
 		kitlog.NewNopLogger(),
 		protected,
+		nil,
 	)
 
 	queryReq := httptest.NewRequest(http.MethodGet, "/api/v1/conversations", nil)
@@ -590,6 +591,7 @@ func TestRateAgentEndpointValidatesRequestBody(t *testing.T) {
 		newTestModelCardService(t),
 		kitlog.NewNopLogger(),
 		protected,
+		nil,
 	)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents:rate", bytes.NewBufferString(`{"agent_name":"assistant","extra":true}`))
@@ -638,6 +640,7 @@ func TestRateAgentEndpointReturnsAcceptedWhenProviderUnavailable(t *testing.T) {
 		newTestModelCardService(t),
 		kitlog.NewNopLogger(),
 		protected,
+		nil,
 	)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents:rate", bytes.NewBufferString(`{"agent_name":"assistant"}`))
@@ -702,6 +705,7 @@ func TestRateAgentEndpointReusesExistingPendingRating(t *testing.T) {
 		newTestModelCardService(t),
 		kitlog.NewNopLogger(),
 		protected,
+		nil,
 	)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents:rate", bytes.NewBufferString(`{"agent_name":"assistant"}`))
@@ -770,6 +774,7 @@ func TestLookupAgentRatingEndpointReturnsLatestStoredRating(t *testing.T) {
 		newTestModelCardService(t),
 		kitlog.NewNopLogger(),
 		protected,
+		nil,
 	)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/agents:rating?name=assistant", nil)
@@ -824,6 +829,7 @@ func TestLookupAgentRatingEndpointReturnsNotFoundWhenNoStoredRating(t *testing.T
 		newTestModelCardService(t),
 		kitlog.NewNopLogger(),
 		protected,
+		nil,
 	)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/agents:rating?name=assistant", nil)
@@ -1660,6 +1666,7 @@ func TestLookupPromptInsightsEndpointReturnsStoredResult(t *testing.T) {
 		newTestModelCardService(t),
 		kitlog.NewNopLogger(),
 		protected,
+		nil,
 		PromptInsightsOption{Store: insightsStore},
 	)
 
@@ -1715,6 +1722,7 @@ func TestLookupPromptInsightsEndpointReturnsNotFoundWhenEmpty(t *testing.T) {
 		newTestModelCardService(t),
 		kitlog.NewNopLogger(),
 		protected,
+		nil,
 		PromptInsightsOption{Store: &testPromptInsightsStore{}},
 	)
 
@@ -1766,6 +1774,7 @@ func TestAnalyzePromptWithExcerptsReturnsAccepted(t *testing.T) {
 		newTestModelCardService(t),
 		kitlog.NewNopLogger(),
 		protected,
+		nil,
 		PromptInsightsOption{Analyzer: analyzer, Store: insightsStore},
 	)
 
@@ -1842,6 +1851,7 @@ func TestAnalyzePromptWithExcerptsRejectsUnknownFields(t *testing.T) {
 		newTestModelCardService(t),
 		kitlog.NewNopLogger(),
 		protected,
+		nil,
 		PromptInsightsOption{Analyzer: analyzer, Store: &testPromptInsightsStore{}},
 	)
 
@@ -1901,6 +1911,7 @@ func TestAnalyzePromptWithExcerptsReturnsPendingWhenAlreadyRunning(t *testing.T)
 		newTestModelCardService(t),
 		kitlog.NewNopLogger(),
 		protected,
+		nil,
 		PromptInsightsOption{Analyzer: analyzer, Store: insightsStore},
 	)
 

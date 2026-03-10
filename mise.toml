@@ -85,7 +85,7 @@ run = "DEVELOPMENT=true SIGIL_API_URL=https://sigil-dev-001.grafana-dev.net/ SIG
 
 [tasks."up:ops"]
 description = "Start local stack without sdk-traffic, pointing to ops datasources"
-run = "DEVELOPMENT=true SIGIL_API_URL=https://sigil-ops-001.grafana-ops.net/ SIGIL_API_AUTH_TOKEN=$SIGIL_API_AUTH_TOKEN_OPS SIGIL_PROM_DS_UID=grafanacloud-prom SIGIL_TEMPO_DS_UID=grafanacloud-traces docker compose --profile core up --watch --build --remove-orphans"
+run = "DEVELOPMENT=true SIGIL_API_URL=https://sigil-ops-001.grafana-ops.net/ SIGIL_TENANT_ID=27821 SIGIL_API_AUTH_TOKEN=$SIGIL_API_AUTH_TOKEN_OPS SIGIL_PROM_DS_UID=grafanacloud-prom SIGIL_TEMPO_DS_UID=grafanacloud-traces docker compose --profile core up --watch --build --remove-orphans"
 
 [tasks."up:build"]
 description = "Start local stack and force image rebuilds"
@@ -611,6 +611,18 @@ set -euo pipefail
 cd sigil
 GOWORK=off go test ./e2e -tags=e2e -run TestStorageHotColdRoundTripLocal -count=1 -v
 """
+
+[tasks."deps:playwright"]
+description = "Install Playwright browser binaries for plugin browser tests"
+run = "pnpm --dir apps/plugin exec playwright install"
+
+[tasks."test:e2e:plugin"]
+description = "Run plugin Playwright browser end-to-end tests"
+run = "pnpm --dir apps/plugin exec playwright test"
+
+[tasks."test:e2e:plugin:eval"]
+description = "Run plugin Playwright evaluation validation browser tests"
+run = "pnpm --dir apps/plugin exec playwright test tests/evaluationValidation.spec.ts"
 
 [tasks."bench:storage"]
 description = "Run Sigil storage benchmarks (WAL, object, compactor, fan-out)"

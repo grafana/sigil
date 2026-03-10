@@ -2,9 +2,9 @@ import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo
 import { css, cx, keyframes } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Alert, Badge, Button, Icon, Spinner, Text, Tooltip, useStyles2, useTheme2 } from '@grafana/ui';
-import { createAssistantContextItem, useAssistant, useInlineAssistant } from '@grafana/assistant';
 import { useSearchParams } from 'react-router-dom';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../../agents/api';
+import { createAssistantContextItem, useAssistant, useInlineAssistant } from '@grafana/assistant';
 import type { AgentRatingResponse, AgentRatingStatus, AgentRatingSuggestion } from '../../agents/types';
 import { Loader } from '../Loader';
 import MarkdownPreview from '../markdown/MarkdownPreview';
@@ -959,6 +959,8 @@ const AgentRatingPanel = forwardRef<AgentRatingPanelHandle, AgentRatingPanelProp
     setRewriteError('');
     setRewriteMarkdown('');
     rewriteAssistant.generate({
+      agentName: 'agent-rewrite',
+      agentId: 'v1',
       origin: 'sigil-agent-rating-rewrite',
       prompt,
       systemPrompt: REWRITE_SYSTEM_PROMPT,
