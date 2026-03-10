@@ -1019,7 +1019,6 @@ export function LandingTopBar({
                   href={`${PLUGIN_BASE}/${ROUTES.Tutorial}`}
                   icon="play"
                   variant="primary"
-                  fill="outline"
                   className={styles.sideActionButton}
                 >
                   Start tutorial
