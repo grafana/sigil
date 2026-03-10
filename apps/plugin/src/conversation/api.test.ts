@@ -179,7 +179,7 @@ describe('defaultConversationsDataSource', () => {
 
     expect(backendFetchMock).toHaveBeenCalledWith({
       method: 'GET',
-      url: '/api/plugins/grafana-sigil-app/resources/query/v2/conversations/conv-1',
+      url: '/api/plugins/grafana-sigil-app/resources/query/conversations/conv-1?format=v2',
     });
     expect(response).toEqual({
       conversation_id: 'conv-1',
@@ -199,5 +199,28 @@ describe('defaultConversationsDataSource', () => {
       ],
       annotations: [],
     });
+  });
+
+  it('accepts legacy conversation detail payloads when format=v2 is ignored', async () => {
+    const detail = {
+      conversation_id: 'conv-1',
+      generation_count: 1,
+      first_generation_at: '2026-03-10T09:00:00Z',
+      last_generation_at: '2026-03-10T09:01:00Z',
+      generations: [
+        {
+          generation_id: 'gen-1',
+          conversation_id: 'conv-1',
+          input: [{ role: 'MESSAGE_ROLE_USER', parts: [{ text: 'hello' }] }],
+          output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'hi' }] }],
+        },
+      ],
+      annotations: [],
+    };
+    backendFetchMock.mockReturnValue(of({ data: detail }));
+
+    const response = await defaultConversationsDataSource.getConversationDetail('conv-1');
+
+    expect(response).toEqual(detail);
   });
 });

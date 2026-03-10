@@ -88,10 +88,34 @@ func acceptsGzip(header string) bool {
 			continue
 		}
 		if strings.HasPrefix(token, "gzip") {
-			return !strings.Contains(token, "q=0")
+			return !hasQValueZero(token)
 		}
 	}
 	return false
+}
+
+// hasQValueZero returns true when the token contains a quality value of
+// exactly zero (q=0, q=0., q=0.0, q=0.00, q=0.000), which per RFC 7231
+// means "not acceptable". Positive fractional values like q=0.5 return false.
+func hasQValueZero(token string) bool {
+	idx := strings.Index(token, "q=")
+	if idx < 0 {
+		return false
+	}
+	rest := token[idx+2:]
+	if semi := strings.IndexByte(rest, ';'); semi >= 0 {
+		rest = rest[:semi]
+	}
+	qval := strings.TrimSpace(rest)
+	if len(qval) == 0 {
+		return false
+	}
+	for _, c := range qval {
+		if c != '0' && c != '.' {
+			return false
+		}
+	}
+	return true
 }
 
 func responseMayHaveBody(statusCode int) bool {

@@ -279,6 +279,29 @@ func conversationRoutes(querySvc *query.Service, feedbackSvc *feedback.Service, 
 				return
 			}
 
+			format := strings.TrimSpace(req.URL.Query().Get("format"))
+			if format == "v2" {
+				item, found, err := querySvc.GetConversationDetailV2ForTenant(req.Context(), tenantID, id)
+				if err != nil {
+					if query.IsValidationError(err) {
+						http.Error(w, err.Error(), http.StatusBadRequest)
+						return
+					}
+					http.Error(w, "internal server error", http.StatusInternalServerError)
+					return
+				}
+				if !found {
+					http.NotFound(w, req)
+					return
+				}
+				writeJSON(w, http.StatusOK, item)
+				return
+			}
+			if format != "" {
+				http.Error(w, "invalid format", http.StatusBadRequest)
+				return
+			}
+
 			item, found, err := querySvc.GetConversationDetailForTenant(req.Context(), tenantID, id)
 			if err != nil {
 				if query.IsValidationError(err) {

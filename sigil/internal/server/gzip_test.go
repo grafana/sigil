@@ -80,6 +80,36 @@ func TestWithGzipCompressionDoesNotWriteBodyForNoContent(t *testing.T) {
 	}
 }
 
+func TestAcceptsGzip(t *testing.T) {
+	tests := []struct {
+		name   string
+		header string
+		want   bool
+	}{
+		{name: "plain gzip", header: "gzip", want: true},
+		{name: "gzip with q=1", header: "gzip;q=1", want: true},
+		{name: "gzip with q=0.5", header: "gzip;q=0.5", want: true},
+		{name: "gzip with q=0.1", header: "gzip;q=0.1", want: true},
+		{name: "gzip with q=0.9", header: "gzip;q=0.9", want: true},
+		{name: "gzip with q=0.001", header: "gzip;q=0.001", want: true},
+		{name: "gzip with q=0 rejected", header: "gzip;q=0", want: false},
+		{name: "gzip with q=0.0 rejected", header: "gzip;q=0.0", want: false},
+		{name: "gzip with q=0.000 rejected", header: "gzip;q=0.000", want: false},
+		{name: "gzip with space before q", header: "gzip; q=0.5", want: true},
+		{name: "gzip among multiple", header: "deflate, gzip;q=0.8, br", want: true},
+		{name: "gzip q=0 among multiple", header: "deflate, gzip;q=0, br", want: false},
+		{name: "no gzip", header: "deflate, br", want: false},
+		{name: "empty header", header: "", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := acceptsGzip(tt.header); got != tt.want {
+				t.Errorf("acceptsGzip(%q) = %v, want %v", tt.header, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestWithGzipCompressionSkipsHeadRequests(t *testing.T) {
 	handler := WithGzipCompression(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
