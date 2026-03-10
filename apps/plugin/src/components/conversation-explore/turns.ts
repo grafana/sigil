@@ -283,7 +283,7 @@ export function newMessagesForGeneration(
   }
 
   const prefix = sharedPrefixLength(prevTranscript, input);
-  if (prefix > 0 && prefix < input.length) {
+  if (prefix > 0) {
     return input.slice(prefix);
   }
 
