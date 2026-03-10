@@ -74,9 +74,9 @@ func (s *TestService) RunTest(ctx context.Context, tenantID string, req EvalTest
 
 	lookupPlan := storage.GenerationReadPlan{
 		ConversationID: req.ConversationID,
-		From:           req.From.UTC(),
-		To:             req.To.UTC(),
-		At:             req.At.UTC(),
+		From:           req.From,
+		To:             req.To,
+		At:             req.At,
 	}
 	generation, err := s.reader.GetGenerationByIDWithPlan(ctx, tenantID, req.GenerationID, lookupPlan)
 	if err != nil {

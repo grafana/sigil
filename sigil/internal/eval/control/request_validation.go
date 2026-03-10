@@ -197,7 +197,7 @@ func (r EvalTestRequest) normalizeAndValidate() (EvalTestRequest, error) {
 		return EvalTestRequest{}, ValidationError("from must be before to")
 	}
 	if !req.At.IsZero() {
-		req.At = req.At.UTC().Round(0)
+		req.At = req.At.Round(0)
 	}
 	if !req.From.IsZero() {
 		req.From = req.From.Round(0)
