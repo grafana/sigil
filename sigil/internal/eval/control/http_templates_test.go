@@ -123,6 +123,25 @@ func TestTemplateHTTPCreateRequiresGrafanaUser(t *testing.T) {
 	}
 }
 
+func TestTemplateHTTPCreateRejectsUntrustedGrafanaUser(t *testing.T) {
+	mux, _, _ := newTemplateHTTPEnv(t)
+
+	createPayload := `{
+		"template_id":"my_team.policy_check",
+		"kind":"llm_judge",
+		"version":"2026-03-02",
+		"config":{"provider":"openai","model":"gpt-4o-mini"},
+		"output_keys":[{"key":"compliance","type":"number"}]
+	}`
+	createResp := doRequestWithUntrustedActor(mux, http.MethodPost, "/api/v1/eval/templates", createPayload)
+	if createResp.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 create template with untrusted grafana user, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+	if !strings.Contains(createResp.Body.String(), "trusted grafana user identity is required") {
+		t.Fatalf("expected trusted identity error, got body=%s", createResp.Body.String())
+	}
+}
+
 func TestTemplateHTTPCreateAllowsMissingGrafanaUserInDevelopment(t *testing.T) {
 	t.Setenv("DEVELOPMENT", "true")
 

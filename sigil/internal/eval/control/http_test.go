@@ -80,6 +80,25 @@ func TestCreateEvaluatorRequiresGrafanaUser(t *testing.T) {
 	}
 }
 
+func TestCreateEvaluatorRejectsUntrustedGrafanaUser(t *testing.T) {
+	mux, _, _ := newEvalHTTPEnv(t)
+
+	createPayload := `{
+		"evaluator_id":"custom.helpfulness",
+		"version":"2026-02-17",
+		"kind":"heuristic",
+		"config":` + heuristicNotEmptyJSONForTest() + `,
+		"output_keys":[{"key":"helpfulness","type":"bool"}]
+	}`
+	createResp := doRequestWithUntrustedActor(mux, http.MethodPost, "/api/v1/eval/evaluators", createPayload)
+	if createResp.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 create evaluator with untrusted grafana user, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+	if !strings.Contains(createResp.Body.String(), "trusted grafana user identity is required") {
+		t.Fatalf("expected trusted identity error, got body=%s", createResp.Body.String())
+	}
+}
+
 func TestCreateEvaluatorAllowsMissingGrafanaUserInDevelopment(t *testing.T) {
 	t.Setenv("DEVELOPMENT", "true")
 
@@ -1018,6 +1037,7 @@ func doRequest(handler http.Handler, method, path, body string) *httptest.Respon
 	}
 	if method == http.MethodPost || method == http.MethodPatch {
 		request.Header.Set(HeaderGrafanaUser, "test-user@example.com")
+		request.Header.Set(HeaderSigilTrustedActor, "true")
 	}
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -1029,6 +1049,17 @@ func doRequestWithoutActor(handler http.Handler, method, path, body string) *htt
 	if strings.TrimSpace(body) != "" {
 		request.Header.Set("Content-Type", "application/json")
 	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	return response
+}
+
+func doRequestWithUntrustedActor(handler http.Handler, method, path, body string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(method, path, bytes.NewBufferString(body))
+	if strings.TrimSpace(body) != "" {
+		request.Header.Set("Content-Type", "application/json")
+	}
+	request.Header.Set(HeaderGrafanaUser, "spoofed@example.com")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	return response

@@ -32,7 +32,10 @@ type stubResponse struct {
 
 var pluginProxyTracer = otel.Tracer("github.com/grafana/sigil/apps/plugin/proxy")
 
-const headerGrafanaUser = "X-Grafana-User"
+const (
+	headerGrafanaUser       = "X-Grafana-User"
+	headerSigilTrustedActor = "X-Sigil-Trusted-Actor"
+)
 
 func (a *App) authorizeRequest(req *http.Request) error {
 	action, ok := requiredPermissionAction(req.Method, req.URL.Path)
@@ -594,10 +597,14 @@ func injectOperatorIdentityHeaders(proxyReq *http.Request, method string, path s
 }
 
 func injectGrafanaUserHeader(proxyReq *http.Request, method string, path string) {
-	if proxyReq == nil || !shouldInjectGrafanaUser(method, path) {
+	if proxyReq == nil {
 		return
 	}
-	if strings.TrimSpace(proxyReq.Header.Get(headerGrafanaUser)) != "" {
+	if strings.HasPrefix(path, "/api/v1/eval/") {
+		proxyReq.Header.Del(headerGrafanaUser)
+		proxyReq.Header.Del(headerSigilTrustedActor)
+	}
+	if !shouldInjectGrafanaUser(method, path) {
 		return
 	}
 
@@ -612,6 +619,7 @@ func injectGrafanaUserHeader(proxyReq *http.Request, method string, path string)
 	}
 	if actorID != "" {
 		proxyReq.Header.Set(headerGrafanaUser, actorID)
+		proxyReq.Header.Set(headerSigilTrustedActor, "true")
 	}
 }
 

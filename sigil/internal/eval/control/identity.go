@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	HeaderGrafanaUser = "X-Grafana-User"
-	LegacyActorID     = "system@grafana.com"
+	HeaderGrafanaUser       = "X-Grafana-User"
+	HeaderSigilTrustedActor = "X-Sigil-Trusted-Actor"
+	LegacyActorID           = "system@grafana.com"
 )
 
 func actorIDFromRequest(w http.ResponseWriter, req *http.Request) (string, bool) {
@@ -22,6 +23,13 @@ func actorIDFromRequest(w http.ResponseWriter, req *http.Request) (string, bool)
 			return LegacyActorID, true
 		}
 		writeControlWriteError(w, UnauthorizedError("grafana user identity is required"))
+		return "", false
+	}
+	if strings.TrimSpace(req.Header.Get(HeaderSigilTrustedActor)) != "true" {
+		if isDevelopmentMode() {
+			return LegacyActorID, true
+		}
+		writeControlWriteError(w, UnauthorizedError("trusted grafana user identity is required"))
 		return "", false
 	}
 	return actorID, true
