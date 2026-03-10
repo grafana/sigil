@@ -27,7 +27,9 @@ func TestWithGzipCompressionCompressesWhenAccepted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new gzip reader: %v", err)
 	}
-	defer reader.Close()
+	defer func() {
+		_ = reader.Close()
+	}()
 
 	body, err := io.ReadAll(reader)
 	if err != nil {

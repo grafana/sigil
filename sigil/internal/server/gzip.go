@@ -18,7 +18,9 @@ func WithGzipCompression(next http.Handler) http.Handler {
 		}
 
 		gzipWriter := &lazyGzipResponseWriter{ResponseWriter: w}
-		defer gzipWriter.Close()
+		defer func() {
+			_ = gzipWriter.Close()
+		}()
 		next.ServeHTTP(gzipWriter, req)
 	})
 }
