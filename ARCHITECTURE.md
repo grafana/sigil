@@ -479,6 +479,7 @@ Conversation query path (design doc: `docs/design-docs/2026-02-15-conversation-q
   - `DELETE /api/v1/eval/rules/{id}` -- soft-delete rule
   - `GET /api/v1/eval/judge/providers` -- list configured judge providers
   - `GET /api/v1/eval/judge/models?provider={id}` -- list models for a provider
+  - `POST /api/v1/eval:test` -- run one-shot evaluator test against a stored generation; optional `conversation_id`, `from`, `to`, and `at` hints bound cold generation lookup to the same hardened hot/cold fan-out used by query detail routes
 - Dropped placeholder endpoints:
   - `GET /api/v1/completions` (replaced by conversation search)
   - `GET /api/v1/traces/{trace_id}` (replaced by Tempo proxy)

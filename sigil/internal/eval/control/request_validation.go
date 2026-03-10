@@ -186,5 +186,22 @@ func (r EvalTestRequest) normalizeAndValidate() (EvalTestRequest, error) {
 	}
 	req.Kind = string(kind)
 	req.GenerationID = strings.TrimSpace(req.GenerationID)
+	req.ConversationID = strings.TrimSpace(req.ConversationID)
+	req.From = req.From.UTC()
+	req.To = req.To.UTC()
+	req.At = req.At.UTC()
+	if req.From.IsZero() != req.To.IsZero() {
+		return EvalTestRequest{}, ValidationError("from and to must be provided together")
+	}
+	if !req.From.IsZero() && req.To.Before(req.From) {
+		return EvalTestRequest{}, ValidationError("from must be before to")
+	}
+	if !req.At.IsZero() {
+		req.At = req.At.UTC().Round(0)
+	}
+	if !req.From.IsZero() {
+		req.From = req.From.Round(0)
+		req.To = req.To.Round(0)
+	}
 	return req, nil
 }
