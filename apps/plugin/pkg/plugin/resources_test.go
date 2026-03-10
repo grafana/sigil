@@ -149,6 +149,7 @@ func TestRequiredPermissionAction(t *testing.T) {
 			{method: http.MethodPost, path: "/query/conversations/search"},
 			{method: http.MethodPost, path: "/query/conversations/search/stream"},
 			{method: http.MethodPost, path: "/query/conversations/stats"},
+			{method: http.MethodGet, path: "/query/v2/conversations/c-1"},
 			{method: http.MethodGet, path: "/query/conversations/c-1"},
 			{method: http.MethodGet, path: "/query/conversations/c-1/ratings"},
 			{method: http.MethodGet, path: "/query/conversations/c-1/annotations"},
@@ -431,6 +432,8 @@ func TestCallResource(t *testing.T) {
 			_, _ = io.WriteString(w, `{"items":[{"conversation_id":"conv-1","user_id":"user-42","generation_count":2,"first_generation_at":"2026-02-15T08:00:00Z","last_generation_at":"2026-02-15T09:00:00Z","models":["gpt-4o"],"model_providers":{"gpt-4o":"openai"},"agents":["assistant"],"error_count":0,"has_errors":false,"annotation_count":0}],"missing_conversation_ids":[]}`)
 		case "/api/v1/conversations/c-1":
 			_, _ = io.WriteString(w, `{"conversation_id":"c-1"}`)
+		case "/api/v2/conversations/c-1":
+			_, _ = io.WriteString(w, `{"conversation_id":"c-1","messages":[],"shared":{}}`)
 		case "/api/v1/conversations/conv-1":
 			_, _ = io.WriteString(w, `{"conversation_id":"conv-1","generations":[{"agent_name":"assistant","input":[{"parts":[{"text":"user msg"}]}],"output":[{"parts":[{"text":"assistant reply"}]}]}],"annotations":[]}`)
 		case "/api/v1/agents:analyze-prompt-with-excerpts":
@@ -693,6 +696,13 @@ func TestCallResource(t *testing.T) {
 			path:      "query/conversations/c-1",
 			expStatus: http.StatusOK,
 			expBody:   []byte(`{"conversation_id":"c-1"}`),
+		},
+		{
+			name:      "get conversation by id v2",
+			method:    http.MethodGet,
+			path:      "query/v2/conversations/c-1",
+			expStatus: http.StatusOK,
+			expBody:   []byte(`{"conversation_id":"c-1","messages":[],"shared":{}}`),
 		},
 		{
 			name:      "search conversations",

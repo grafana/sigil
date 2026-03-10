@@ -99,6 +99,8 @@ func requiredPermissionAction(method string, path string) (string, bool) {
 		return permissionDataRead, true
 	case method == http.MethodPost && path == "/query/conversations/stats":
 		return permissionDataRead, true
+	case method == http.MethodGet && strings.HasPrefix(path, "/query/v2/conversations/"):
+		return permissionDataRead, true
 	case strings.HasPrefix(path, "/query/conversations/"):
 		return permissionForConversationRoute(method, path)
 	case method == http.MethodGet && strings.HasPrefix(path, "/query/generations/"):
@@ -218,6 +220,20 @@ func (a *App) handleConversationRoutes(w http.ResponseWriter, req *http.Request)
 		return
 	}
 	a.handleProxy(w, req, fmt.Sprintf("/api/v1/conversations/%s", id), http.MethodGet)
+}
+
+func (a *App) handleConversationRoutesV2(w http.ResponseWriter, req *http.Request) {
+	id := strings.TrimPrefix(req.URL.Path, "/query/v2/conversations/")
+	if id == "" || strings.Contains(id, "/") {
+		http.Error(w, "invalid conversation path", http.StatusBadRequest)
+		return
+	}
+
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	a.handleProxy(w, req, fmt.Sprintf("/api/v2/conversations/%s", id), http.MethodGet)
 }
 
 func (a *App) handleGenerationRoutes(w http.ResponseWriter, req *http.Request) {
@@ -1158,6 +1174,7 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/query/conversations/stats", a.withAuthorization(a.handleConversationStats))
 	mux.HandleFunc("/query/conversations", a.withAuthorization(a.handleListConversations))
 	mux.HandleFunc("/query/conversations/", a.withAuthorization(a.handleConversationRoutes))
+	mux.HandleFunc("/query/v2/conversations/", a.withAuthorization(a.handleConversationRoutesV2))
 	mux.HandleFunc("/query/generations/", a.withAuthorization(a.handleGenerationRoutes))
 	mux.HandleFunc("/query/search/tags", a.withAuthorization(a.handleSearchTags))
 	mux.HandleFunc("/query/search/tag/", a.withAuthorization(a.handleSearchTagValues))

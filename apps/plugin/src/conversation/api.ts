@@ -16,6 +16,7 @@ import type {
   SearchTagValuesResponse,
   SearchTagsResponse,
 } from './types';
+import { hydrateConversationDetailV2, type ConversationDetailV2 } from './detailV2';
 
 const queryBasePath = '/api/plugins/grafana-sigil-app/resources/query';
 
@@ -29,6 +30,31 @@ export type ConversationSearchStreamOptions = {
   onResults: (conversations: ConversationSearchResponse['conversations']) => void;
   onComplete: (response: Pick<ConversationSearchResponse, 'next_cursor' | 'has_more'>) => void;
 };
+
+function isConversationDetailV2(detail: ConversationDetail | ConversationDetailV2): detail is ConversationDetailV2 {
+  if ('shared' in detail) {
+    return true;
+  }
+
+  const firstGeneration = detail.generations[0] as
+    | {
+        input_refs?: number[];
+        output_refs?: number[];
+        tool_refs?: number[];
+        system_prompt_ref?: number;
+        metadata_ref?: number;
+      }
+    | undefined;
+
+  return Boolean(
+    firstGeneration &&
+    ('input_refs' in firstGeneration ||
+      'output_refs' in firstGeneration ||
+      'tool_refs' in firstGeneration ||
+      'system_prompt_ref' in firstGeneration ||
+      'metadata_ref' in firstGeneration)
+  );
+}
 
 function toUnixSeconds(value: string): string {
   const parsed = Date.parse(value);
@@ -240,13 +266,14 @@ export const defaultConversationsDataSource: ConversationsDataSource = {
   },
 
   async getConversationDetail(conversationID) {
+    const params = new URLSearchParams({ format: 'v2' });
     const response = await lastValueFrom(
-      getBackendSrv().fetch<ConversationDetail>({
+      getBackendSrv().fetch<ConversationDetail | ConversationDetailV2>({
         method: 'GET',
-        url: `${queryBasePath}/conversations/${encodeURIComponent(conversationID)}`,
+        url: `${queryBasePath}/conversations/${encodeURIComponent(conversationID)}?${params.toString()}`,
       })
     );
-    return response.data;
+    return isConversationDetailV2(response.data) ? hydrateConversationDetailV2(response.data) : response.data;
   },
 
   async listConversationRatings(conversationID, limit = 10, cursor) {

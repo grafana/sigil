@@ -134,6 +134,7 @@ Design doc: `docs/design-docs/2026-02-15-conversation-query-path.md`
 
 - `POST /api/v1/conversations:batch-metadata` -- batch conversation metadata hydration for plugin-owned search results.
 - `GET /api/v1/conversations/{id}` -- full conversation with all hydrated generations (MySQL/object storage).
+- `GET /api/v2/conversations/{id}` -- full conversation detail with shared-ref payload tables for messages, tools, system prompts, and metadata.
 - `GET /api/v1/generations/{id}` -- single generation detail (MySQL/object storage).
 - `GET /api/v1/agents` -- paginated agent catalog summaries grouped by agent name.
 - `GET /api/v1/agents:lookup` -- full agent definition for a name bucket and effective version (or latest).
@@ -155,18 +156,20 @@ Design doc: `docs/design-docs/2026-02-15-conversation-query-path.md`
 2. Plugin backend applies tenant/header behavior and proxies conversation search/search-stream/stats requests to Sigil when those endpoints are available.
    - Main conversations page may use the streaming route (`POST /query/conversations/search/stream`) which returns NDJSON result chunks followed by a final cursor payload.
    - If the Sigil search endpoints are unavailable on an older backend, the plugin falls back to the legacy Tempo orchestration path rather than reimplementing approximate projection semantics locally.
+   - Conversation detail default path now targets the V2 detail contract and hydrates shared refs back into the existing frontend runtime shape.
 3. Sigil API query path:
    - conversation search / stream / stats:
      - use MySQL projection for browse-safe conversation queries, currently time window + recency + conversation-level filters available in projection such as `generation_count`, `provider`, `model`, `agent`, `status=error`, and projected token select fields
      - use Tempo when hit selection depends on unsupported span/resource predicates, tool filters, or other deep trace search conditions
    - conversation batch metadata: hydrate conversation summaries (`generation_count`, timestamps, feedback summary, eval summary) for plugin-provided IDs and Tempo result sets.
    - conversation detail: direct MySQL/object storage fan-out read by conversation ID, return all hydrated generations.
+   - conversation detail V2: same fan-out read path, but response interns repeated messages, tools, system prompts, and metadata into shared tables referenced by dense integer indexes.
    - generation detail: direct MySQL/object storage read by generation ID.
 
 - agent catalog list/lookup/version-history: direct MySQL projection reads from `agent_heads`, `agent_versions`, and `agent_version_models`.
 - model cards: read model-card catalog from DB/snapshot fallback and optionally resolve `(provider, model)` pairs for deterministic pricing joins.
 
-4. Sigil API returns JSON responses (hydration payloads and full detail payloads).
+4. Sigil API returns JSON responses (hydration payloads and full detail payloads) and compresses responses when the client advertises gzip support.
 
 Evaluation control write boundary:
 
