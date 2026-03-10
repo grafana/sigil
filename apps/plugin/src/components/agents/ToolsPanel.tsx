@@ -8,9 +8,11 @@ import type { AgentTool } from '../../agents/types';
 import { TokenizedText } from '../tokenizer/TokenizedText';
 import { AVAILABLE_ENCODINGS, type EncodingName } from '../tokenizer/encodingMap';
 import { getTokenizeControlStyles } from '../tokenizer/tokenizeControls.styles';
+import { computeDiffLines } from './PromptDiffView';
 
 export type ToolsPanelProps = {
   tools: AgentTool[];
+  previousTools?: AgentTool[] | null;
   tokenized?: boolean;
   onToggleTokenize?: () => void;
   tokenizerLoading?: boolean;
@@ -293,6 +295,152 @@ const getStyles = (theme: GrafanaTheme2) => ({
     fontSize: theme.typography.size.sm,
     overflowX: 'auto',
   }),
+  diffBody: css({
+    flex: 1,
+    overflowY: 'auto',
+    padding: theme.spacing(2),
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(2),
+    minHeight: 320,
+    maxHeight: 580,
+  }),
+  diffSummaryBar: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1.5),
+    padding: theme.spacing(1, 1.5),
+    borderRadius: theme.shape.radius.default,
+    border: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.canvas,
+    fontSize: theme.typography.bodySmall.fontSize,
+    fontWeight: theme.typography.fontWeightMedium,
+    fontVariantNumeric: 'tabular-nums',
+    flexWrap: 'wrap' as const,
+  }),
+  diffSummaryAdded: css({ color: theme.colors.success.text }),
+  diffSummaryRemoved: css({ color: theme.colors.error.text }),
+  diffSummaryModified: css({ color: theme.colors.warning.text }),
+  diffSummaryUnchanged: css({ color: theme.colors.text.secondary }),
+  diffGroup: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.75),
+  }),
+  diffGroupTitle: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    fontSize: theme.typography.bodySmall.fontSize,
+    fontWeight: theme.typography.fontWeightMedium,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.03em',
+  }),
+  diffToolEntry: css({
+    borderRadius: theme.shape.radius.default,
+    border: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.canvas,
+    overflow: 'hidden',
+  }),
+  diffToolHeader: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.75),
+    padding: theme.spacing(0.75, 1.25),
+    fontFamily: theme.typography.fontFamilyMonospace,
+    fontSize: theme.typography.bodySmall.fontSize,
+    color: theme.colors.text.primary,
+    cursor: 'default',
+  }),
+  diffToolHeaderExpandable: css({
+    cursor: 'pointer',
+    '&:hover': {
+      background: theme.colors.action.hover,
+    },
+  }),
+  diffToolTokenDelta: css({
+    marginLeft: 'auto',
+    fontSize: 11,
+    fontVariantNumeric: 'tabular-nums',
+    color: theme.colors.text.secondary,
+  }),
+  diffToolDetail: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(1),
+    padding: theme.spacing(1, 1.25),
+    borderTop: `1px solid ${theme.colors.border.weak}`,
+  }),
+  diffSectionLabel: css({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing(1),
+  }),
+  diffSectionStats: css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.75),
+    fontSize: theme.typography.bodySmall.fontSize,
+    fontWeight: theme.typography.fontWeightMedium,
+    fontVariantNumeric: 'tabular-nums',
+  }),
+  diffStatAdded: css({ color: theme.colors.success.text }),
+  diffStatRemoved: css({ color: theme.colors.error.text }),
+  diffPre: css({
+    margin: 0,
+    maxHeight: 240,
+    overflow: 'auto',
+    borderRadius: theme.shape.radius.default,
+    border: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.primary,
+    padding: 0,
+    fontFamily: theme.typography.fontFamilyMonospace,
+    fontSize: theme.typography.size.sm,
+    lineHeight: 1.6,
+    color: theme.colors.text.primary,
+  }),
+  diffLineEqual: css({
+    display: 'flex',
+    minHeight: '1.6em',
+  }),
+  diffLineAdd: css({
+    display: 'flex',
+    minHeight: '1.6em',
+    backgroundColor: `${theme.colors.success.main}1A`,
+    borderLeft: `3px solid ${theme.colors.success.main}`,
+  }),
+  diffLineRemove: css({
+    display: 'flex',
+    minHeight: '1.6em',
+    backgroundColor: `${theme.colors.error.main}1A`,
+    borderLeft: `3px solid ${theme.colors.error.main}`,
+  }),
+  diffGutter: css({
+    display: 'inline-block',
+    width: 24,
+    minWidth: 24,
+    textAlign: 'center' as const,
+    color: theme.colors.text.secondary,
+    userSelect: 'none' as const,
+    flexShrink: 0,
+  }),
+  diffLineText: css({
+    flex: 1,
+    minWidth: 0,
+    whiteSpace: 'pre-wrap' as const,
+    overflowWrap: 'anywhere' as const,
+    paddingRight: theme.spacing(1),
+  }),
+  diffNoChanges: css({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing(0.75),
+    padding: theme.spacing(4),
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.bodySmall.fontSize,
+  }),
   emptyDetail: css({
     flex: 1,
     display: 'flex',
@@ -423,12 +571,274 @@ function parseSchema(raw: string): object {
   }
 }
 
+function formatSchemaForDiff(raw: string): string {
+  if (!raw || raw.trim() === '') {
+    return '';
+  }
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2);
+  } catch {
+    return raw;
+  }
+}
+
 function buildToolKey(tool: AgentTool): string {
   return [tool.name, tool.type, tool.input_schema_json].join('\u0000');
 }
 
+type ToolChangeSummary = {
+  added: AgentTool[];
+  removed: AgentTool[];
+  modified: Array<{ current: AgentTool; previous: AgentTool }>;
+  unchanged: AgentTool[];
+};
+
+function computeToolChanges(current: AgentTool[], previous: AgentTool[]): ToolChangeSummary {
+  const prevByName = new Map<string, AgentTool>();
+  for (const tool of previous) {
+    prevByName.set(tool.name, tool);
+  }
+  const currentNames = new Set(current.map((t) => t.name));
+
+  const added: AgentTool[] = [];
+  const modified: Array<{ current: AgentTool; previous: AgentTool }> = [];
+  const unchanged: AgentTool[] = [];
+
+  for (const tool of current) {
+    const prev = prevByName.get(tool.name);
+    if (!prev) {
+      added.push(tool);
+    } else if (
+      prev.description !== tool.description ||
+      formatSchemaForDiff(prev.input_schema_json) !== formatSchemaForDiff(tool.input_schema_json)
+    ) {
+      modified.push({ current: tool, previous: prev });
+    } else {
+      unchanged.push(tool);
+    }
+  }
+
+  const removed = previous.filter((t) => !currentNames.has(t.name));
+
+  return { added, removed, modified, unchanged };
+}
+
+type InlineDiffProps = {
+  label: string;
+  oldText: string;
+  newText: string;
+  styles: ReturnType<typeof getStyles>;
+};
+
+function InlineDiff({ label, oldText, newText, styles }: InlineDiffProps) {
+  const lines = useMemo(() => computeDiffLines(oldText, newText), [oldText, newText]);
+  const stats = useMemo(() => {
+    let a = 0;
+    let r = 0;
+    for (const line of lines) {
+      if (line.type === 'add') {
+        a++;
+      }
+      if (line.type === 'remove') {
+        r++;
+      }
+    }
+    return { added: a, removed: r };
+  }, [lines]);
+
+  if (stats.added === 0 && stats.removed === 0) {
+    return null;
+  }
+
+  return (
+    <div>
+      <div className={styles.diffSectionLabel}>
+        <Text variant="bodySmall" weight="medium" color="secondary">
+          {label}
+        </Text>
+        <div className={styles.diffSectionStats}>
+          {stats.added > 0 && <span className={styles.diffStatAdded}>+{stats.added}</span>}
+          {stats.removed > 0 && <span className={styles.diffStatRemoved}>-{stats.removed}</span>}
+        </div>
+      </div>
+      <pre className={styles.diffPre}>
+        {lines.map((line, idx) => {
+          let cls = styles.diffLineEqual;
+          let g = ' ';
+          if (line.type === 'add') {
+            cls = styles.diffLineAdd;
+            g = '+';
+          } else if (line.type === 'remove') {
+            cls = styles.diffLineRemove;
+            g = '-';
+          }
+          return (
+            <div key={idx} className={cls}>
+              <span className={styles.diffGutter}>{g}</span>
+              <span className={styles.diffLineText}>{line.text || '\n'}</span>
+            </div>
+          );
+        })}
+      </pre>
+    </div>
+  );
+}
+
+function ModifiedToolEntry({
+  current,
+  previous,
+  styles,
+}: {
+  current: AgentTool;
+  previous: AgentTool;
+  styles: ReturnType<typeof getStyles>;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const tokenDelta = current.token_estimate - previous.token_estimate;
+  const descChanged = current.description !== previous.description;
+  const schemaChanged =
+    formatSchemaForDiff(current.input_schema_json) !== formatSchemaForDiff(previous.input_schema_json);
+
+  return (
+    <div className={styles.diffToolEntry}>
+      <div
+        className={cx(styles.diffToolHeader, styles.diffToolHeaderExpandable)}
+        onClick={() => setExpanded((v) => !v)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            setExpanded((v) => !v);
+          }
+        }}
+      >
+        <Icon name={expanded ? 'angle-down' : 'angle-right'} size="sm" />
+        <span>{current.name}</span>
+        {tokenDelta !== 0 && (
+          <span className={styles.diffToolTokenDelta}>
+            {tokenDelta > 0 ? '+' : ''}
+            {tokenDelta.toLocaleString()} tok
+          </span>
+        )}
+      </div>
+      {expanded && (
+        <div className={styles.diffToolDetail}>
+          {descChanged && (
+            <InlineDiff
+              label="Description"
+              oldText={previous.description}
+              newText={current.description}
+              styles={styles}
+            />
+          )}
+          {schemaChanged && (
+            <InlineDiff
+              label="Input schema"
+              oldText={formatSchemaForDiff(previous.input_schema_json)}
+              newText={formatSchemaForDiff(current.input_schema_json)}
+              styles={styles}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ToolsDiffView({
+  tools,
+  previousTools,
+  styles,
+}: {
+  tools: AgentTool[];
+  previousTools: AgentTool[];
+  styles: ReturnType<typeof getStyles>;
+}) {
+  const changes = useMemo(() => computeToolChanges(tools, previousTools), [tools, previousTools]);
+  const hasAnyChange = changes.added.length > 0 || changes.removed.length > 0 || changes.modified.length > 0;
+
+  if (!hasAnyChange) {
+    return (
+      <div className={styles.diffBody}>
+        <div className={styles.diffNoChanges}>
+          <Icon name="check-circle" />
+          <Text color="secondary" variant="bodySmall">
+            No tool changes between versions.
+          </Text>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.diffBody}>
+      <div className={styles.diffSummaryBar}>
+        {changes.added.length > 0 && <span className={styles.diffSummaryAdded}>{changes.added.length} added</span>}
+        {changes.removed.length > 0 && (
+          <span className={styles.diffSummaryRemoved}>{changes.removed.length} removed</span>
+        )}
+        {changes.modified.length > 0 && (
+          <span className={styles.diffSummaryModified}>{changes.modified.length} modified</span>
+        )}
+        {changes.unchanged.length > 0 && (
+          <span className={styles.diffSummaryUnchanged}>{changes.unchanged.length} unchanged</span>
+        )}
+      </div>
+
+      {changes.added.length > 0 && (
+        <div className={styles.diffGroup}>
+          <div className={cx(styles.diffGroupTitle, styles.diffSummaryAdded)}>
+            <Icon name="plus-circle" size="sm" />
+            Added
+          </div>
+          {changes.added.map((tool) => (
+            <div key={tool.name} className={styles.diffToolEntry}>
+              <div className={styles.diffToolHeader}>
+                <Icon name="plus" size="xs" />
+                <span>{tool.name}</span>
+                <span className={styles.diffToolTokenDelta}>+{tool.token_estimate.toLocaleString()} tok</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {changes.removed.length > 0 && (
+        <div className={styles.diffGroup}>
+          <div className={cx(styles.diffGroupTitle, styles.diffSummaryRemoved)}>
+            <Icon name="minus-circle" size="sm" />
+            Removed
+          </div>
+          {changes.removed.map((tool) => (
+            <div key={tool.name} className={styles.diffToolEntry}>
+              <div className={styles.diffToolHeader}>
+                <Icon name="minus" size="xs" />
+                <span>{tool.name}</span>
+                <span className={styles.diffToolTokenDelta}>-{tool.token_estimate.toLocaleString()} tok</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {changes.modified.length > 0 && (
+        <div className={styles.diffGroup}>
+          <div className={cx(styles.diffGroupTitle, styles.diffSummaryModified)}>
+            <Icon name="pen" size="sm" />
+            Modified
+          </div>
+          {changes.modified.map(({ current, previous }) => (
+            <ModifiedToolEntry key={current.name} current={current} previous={previous} styles={styles} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ToolsPanel({
   tools,
+  previousTools,
   tokenized,
   onToggleTokenize,
   tokenizerLoading,
@@ -447,6 +857,9 @@ export default function ToolsPanel({
   const [filter, setFilter] = useState('');
   const [sortField, setSortField] = useState<'name' | 'tokens'>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [showDiff, setShowDiff] = useState(false);
+
+  const hasPreviousTools = previousTools != null && previousTools.length > 0;
 
   const toggleSort = (field: 'name' | 'tokens') => {
     if (sortField === field) {
@@ -525,180 +938,208 @@ export default function ToolsPanel({
           <Text weight="medium">Tools</Text>
           <span className={styles.headerCount}>{tools.length}</span>
         </Stack>
-        {onToggleTokenize && (
-          <span style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
+          {hasPreviousTools && (
             <span
-              className={cx(styles.tokenizeBtn, tokenized && styles.tokenizeBtnActive)}
-              onClick={onToggleTokenize}
+              className={cx(styles.tokenizeBtn, showDiff && styles.tokenizeBtnActive)}
+              onClick={() => setShowDiff((v) => !v)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
-                  onToggleTokenize();
+                  setShowDiff((v) => !v);
                 }
               }}
               role="button"
               tabIndex={0}
+              aria-pressed={showDiff}
+              aria-label="Toggle tool diff view"
             >
-              <Icon name="brackets-curly" size="xs" />
-              {tokenizerLoading ? 'Loading\u2026' : 'Tokenize'}
+              <Icon name="code-branch" size="xs" />
+              Diff
             </span>
-            {tokenized && onEncodingChange && (
-              <select
-                className={styles.encodingSelect}
-                aria-label="Tokenizer encoding"
-                value={encodingOverride ?? ''}
-                onChange={(e) => onEncodingChange(e.target.value ? (e.target.value as EncodingName) : null)}
+          )}
+          {onToggleTokenize && (
+            <>
+              <span
+                className={cx(styles.tokenizeBtn, tokenized && styles.tokenizeBtnActive)}
+                onClick={onToggleTokenize}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    onToggleTokenize();
+                  }
+                }}
+                role="button"
+                tabIndex={0}
               >
-                <option value="">Auto ({(autoEncoding ?? 'cl100k').replace('_base', '')})</option>
-                {AVAILABLE_ENCODINGS.map((enc) => (
-                  <option key={enc.value} value={enc.value}>
-                    {enc.value.replace('_base', '')}
-                  </option>
-                ))}
-              </select>
-            )}
-          </span>
-        )}
+                <Icon name="brackets-curly" size="xs" />
+                {tokenizerLoading ? 'Loading\u2026' : 'Tokenize'}
+              </span>
+              {tokenized && onEncodingChange && (
+                <select
+                  className={styles.encodingSelect}
+                  aria-label="Tokenizer encoding"
+                  value={encodingOverride ?? ''}
+                  onChange={(e) => onEncodingChange(e.target.value ? (e.target.value as EncodingName) : null)}
+                >
+                  <option value="">Auto ({(autoEncoding ?? 'cl100k').replace('_base', '')})</option>
+                  {AVAILABLE_ENCODINGS.map((enc) => (
+                    <option key={enc.value} value={enc.value}>
+                      {enc.value.replace('_base', '')}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </>
+          )}
+        </span>
       </div>
 
-      <div className={styles.body}>
-        <div className={styles.sidebar}>
-          {tools.length > 6 && (
-            <div className={styles.sidebarSearch}>
-              <Input
-                prefix={<Icon name="search" />}
-                placeholder="Filter tools…"
-                value={filter}
-                onChange={(e) => setFilter(e.currentTarget.value)}
-              />
-            </div>
-          )}
-          <div className={styles.sortBar}>
-            <button
-              type="button"
-              className={cx(styles.sortButton, sortField === 'name' && styles.sortButtonActive)}
-              onClick={() => toggleSort('name')}
-              aria-label={`sort by name ${sortField === 'name' ? sortDir : ''}`}
-            >
-              Name
-              {sortField === 'name' && <Icon name={sortDir === 'asc' ? 'arrow-up' : 'arrow-down'} size="xs" />}
-            </button>
-            <button
-              type="button"
-              className={cx(styles.sortButton, sortField === 'tokens' && styles.sortButtonActive)}
-              onClick={() => toggleSort('tokens')}
-              aria-label={`sort by tokens ${sortField === 'tokens' ? sortDir : ''}`}
-            >
-              Tokens
-              {sortField === 'tokens' && <Icon name={sortDir === 'asc' ? 'arrow-up' : 'arrow-down'} size="xs" />}
-            </button>
-          </div>
-          <div className={styles.sidebarList}>
-            {filteredTools.map(({ tool, originalIndex }) => (
-              <button
-                key={`${buildToolKey(tool)}:${originalIndex}`}
-                type="button"
-                className={cx(
-                  styles.toolRow,
-                  tool.deferred && styles.toolRowDeferred,
-                  originalIndex === selectedIndex && styles.toolRowActive
-                )}
-                onClick={() => setSelectedToolKey(buildToolKey(tool))}
-                aria-label={`select tool ${tool.name}`}
-                aria-pressed={originalIndex === selectedIndex}
-              >
-                <span className={cx(styles.toolName, tool.deferred && styles.toolNameDeferred)}>{tool.name}</span>
-                <span className={styles.toolMeta}>
-                  {tool.deferred && <span className={styles.toolDeferredDot} aria-label="deferred tool" />}
-                  <span className={cx(styles.toolTokens, tool.deferred && styles.toolTokensDeferred)}>
-                    {tool.token_estimate.toLocaleString()} tok
-                  </span>
-                </span>
-              </button>
-            ))}
-            {filteredTools.length === 0 && (
-              <div className={styles.empty}>
-                <Text color="secondary" variant="bodySmall">
-                  No tools match &ldquo;{filter}&rdquo;
-                </Text>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {selected !== null ? (
-          <div className={styles.detail}>
-            <div>
-              <Stack direction="row" alignItems="center" gap={1} wrap="wrap">
-                <span className={styles.detailTitle}>{selected.name}</span>
-                <span className={styles.detailType}>{selected.type}</span>
-              </Stack>
-              <div className={styles.detailTokensRow}>
-                <Tooltip content="Estimated tokens consumed by this tool's schema definition" placement="top">
-                  <Stack direction="row" alignItems="center" gap={0.5}>
-                    <Icon name="database" size="xs" />
-                    <span>{selected.token_estimate.toLocaleString()} tokens</span>
-                  </Stack>
-                </Tooltip>
-              </div>
-              <div className={styles.detailExecutionMode}>
-                <span>Execution mode:</span>
-                <span
-                  className={cx(
-                    styles.detailExecutionModePill,
-                    selected.deferred && styles.detailExecutionModePillDeferred
-                  )}
-                >
-                  {selected.deferred ? 'Deferred' : 'Immediate'}
-                </span>
-              </div>
-            </div>
-
-            <div className={styles.detailTabs}>
-              <TabsBar>
-                <Tab
-                  label="Description"
-                  active={detailTab === 'description'}
-                  onChangeTab={() => setDetailTab('description')}
+      {showDiff && hasPreviousTools ? (
+        <ToolsDiffView tools={tools} previousTools={previousTools!} styles={styles} />
+      ) : (
+        <div className={styles.body}>
+          <div className={styles.sidebar}>
+            {tools.length > 6 && (
+              <div className={styles.sidebarSearch}>
+                <Input
+                  prefix={<Icon name="search" />}
+                  placeholder="Filter tools…"
+                  value={filter}
+                  onChange={(e) => setFilter(e.currentTarget.value)}
                 />
-                <Tab label="Input schema" active={detailTab === 'schema'} onChangeTab={() => setDetailTab('schema')} />
-              </TabsBar>
-            </div>
-
-            {detailTab === 'description' && (
-              <div>
-                {tokenized && encode && decode && selected.description.length > 0 ? (
-                  <pre className={styles.descriptionCode}>
-                    <TokenizedText text={selected.description} encode={encode} decode={decode} />
-                  </pre>
-                ) : (
-                  <pre className={styles.descriptionCode}>
-                    {selected.description.length > 0 ? selected.description : 'No description recorded.'}
-                  </pre>
-                )}
               </div>
             )}
+            <div className={styles.sortBar}>
+              <button
+                type="button"
+                className={cx(styles.sortButton, sortField === 'name' && styles.sortButtonActive)}
+                onClick={() => toggleSort('name')}
+                aria-label={`sort by name ${sortField === 'name' ? sortDir : ''}`}
+              >
+                Name
+                {sortField === 'name' && <Icon name={sortDir === 'asc' ? 'arrow-up' : 'arrow-down'} size="xs" />}
+              </button>
+              <button
+                type="button"
+                className={cx(styles.sortButton, sortField === 'tokens' && styles.sortButtonActive)}
+                onClick={() => toggleSort('tokens')}
+                aria-label={`sort by tokens ${sortField === 'tokens' ? sortDir : ''}`}
+              >
+                Tokens
+                {sortField === 'tokens' && <Icon name={sortDir === 'asc' ? 'arrow-up' : 'arrow-down'} size="xs" />}
+              </button>
+            </div>
+            <div className={styles.sidebarList}>
+              {filteredTools.map(({ tool, originalIndex }) => (
+                <button
+                  key={`${buildToolKey(tool)}:${originalIndex}`}
+                  type="button"
+                  className={cx(
+                    styles.toolRow,
+                    tool.deferred && styles.toolRowDeferred,
+                    originalIndex === selectedIndex && styles.toolRowActive
+                  )}
+                  onClick={() => setSelectedToolKey(buildToolKey(tool))}
+                  aria-label={`select tool ${tool.name}`}
+                  aria-pressed={originalIndex === selectedIndex}
+                >
+                  <span className={cx(styles.toolName, tool.deferred && styles.toolNameDeferred)}>{tool.name}</span>
+                  <span className={styles.toolMeta}>
+                    {tool.deferred && <span className={styles.toolDeferredDot} aria-label="deferred tool" />}
+                    <span className={cx(styles.toolTokens, tool.deferred && styles.toolTokensDeferred)}>
+                      {tool.token_estimate.toLocaleString()} tok
+                    </span>
+                  </span>
+                </button>
+              ))}
+              {filteredTools.length === 0 && (
+                <div className={styles.empty}>
+                  <Text color="secondary" variant="bodySmall">
+                    No tools match &ldquo;{filter}&rdquo;
+                  </Text>
+                </div>
+              )}
+            </div>
+          </div>
 
-            {detailTab === 'schema' && (
+          {selected !== null ? (
+            <div className={styles.detail}>
               <div>
-                <div className={styles.sectionLabel}>Input schema</div>
-                <div className={styles.schemaContainer}>
-                  <JsonView
-                    data={parsedSchema}
-                    style={jsonStyle}
-                    shouldExpandNode={shouldExpandNode}
-                    clickToExpandNode
-                  />
+                <Stack direction="row" alignItems="center" gap={1} wrap="wrap">
+                  <span className={styles.detailTitle}>{selected.name}</span>
+                  <span className={styles.detailType}>{selected.type}</span>
+                </Stack>
+                <div className={styles.detailTokensRow}>
+                  <Tooltip content="Estimated tokens consumed by this tool's schema definition" placement="top">
+                    <Stack direction="row" alignItems="center" gap={0.5}>
+                      <Icon name="database" size="xs" />
+                      <span>{selected.token_estimate.toLocaleString()} tokens</span>
+                    </Stack>
+                  </Tooltip>
+                </div>
+                <div className={styles.detailExecutionMode}>
+                  <span>Execution mode:</span>
+                  <span
+                    className={cx(
+                      styles.detailExecutionModePill,
+                      selected.deferred && styles.detailExecutionModePillDeferred
+                    )}
+                  >
+                    {selected.deferred ? 'Deferred' : 'Immediate'}
+                  </span>
                 </div>
               </div>
-            )}
-          </div>
-        ) : (
-          <div className={styles.emptyDetail}>
-            <Icon name="brackets-curly" size="xl" />
-            <Text color="secondary">Select a tool to view its details</Text>
-          </div>
-        )}
-      </div>
+
+              <div className={styles.detailTabs}>
+                <TabsBar>
+                  <Tab
+                    label="Description"
+                    active={detailTab === 'description'}
+                    onChangeTab={() => setDetailTab('description')}
+                  />
+                  <Tab
+                    label="Input schema"
+                    active={detailTab === 'schema'}
+                    onChangeTab={() => setDetailTab('schema')}
+                  />
+                </TabsBar>
+              </div>
+
+              {detailTab === 'description' && (
+                <div>
+                  {tokenized && encode && decode && selected.description.length > 0 ? (
+                    <pre className={styles.descriptionCode}>
+                      <TokenizedText text={selected.description} encode={encode} decode={decode} />
+                    </pre>
+                  ) : (
+                    <pre className={styles.descriptionCode}>
+                      {selected.description.length > 0 ? selected.description : 'No description recorded.'}
+                    </pre>
+                  )}
+                </div>
+              )}
+
+              {detailTab === 'schema' && (
+                <div>
+                  <div className={styles.sectionLabel}>Input schema</div>
+                  <div className={styles.schemaContainer}>
+                    <JsonView
+                      data={parsedSchema}
+                      style={jsonStyle}
+                      shouldExpandNode={shouldExpandNode}
+                      clickToExpandNode
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className={styles.emptyDetail}>
+              <Icon name="brackets-curly" size="xl" />
+              <Text color="secondary">Select a tool to view its details</Text>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

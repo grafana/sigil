@@ -1396,6 +1396,7 @@ export default function AgentDetailPage({
   const [lookback, setLookback] = useState(DEFAULT_LOOKBACK);
   const [analyzeModalOpen, setAnalyzeModalOpen] = useState(false);
   const [previousVersionPrompt, setPreviousVersionPrompt] = useState<string | null>(null);
+  const [previousVersionTools, setPreviousVersionTools] = useState<AgentDetail['tools'] | null>(null);
   const prevAgentNameRef = useRef(agentName);
   const prevDetailRef = useRef<AgentDetail | null>(null);
 
@@ -1412,12 +1413,14 @@ export default function AgentDetailPage({
   useEffect(() => {
     if (agentName !== prevAgentNameRef.current) {
       setPreviousVersionPrompt(null);
+      setPreviousVersionTools(null);
       prevDetailRef.current = null;
       prevAgentNameRef.current = agentName;
       return;
     }
     if (detail && prevDetailRef.current && detail.effective_version !== prevDetailRef.current.effective_version) {
       setPreviousVersionPrompt(prevDetailRef.current.system_prompt);
+      setPreviousVersionTools(prevDetailRef.current.tools);
     }
     prevDetailRef.current = detail;
   }, [agentName, detail]);
@@ -2119,6 +2122,7 @@ export default function AgentDetailPage({
           <div className={styles.tabMainContent}>
             <ToolsPanel
               tools={detail.tools}
+              previousTools={previousVersionTools}
               tokenized={tokenizedSections['tools']}
               onToggleTokenize={() => toggleSection('tools')}
               tokenizerLoading={tokenizerLoading}
