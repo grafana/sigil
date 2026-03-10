@@ -77,7 +77,7 @@ func (m *serverModule) start(_ context.Context) error {
 	if m.registry != nil {
 		m.registry.ApplyHTTP(apiMux, protectedHTTP)
 	}
-	httpHandler := withHTTPTracing(apiMux)
+	httpHandler := withHTTPTracing(withGzipCompression(apiMux))
 	m.apiServer = &http.Server{
 		Addr:    m.cfg.HTTPAddr,
 		Handler: httpHandler,

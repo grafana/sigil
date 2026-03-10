@@ -17,6 +17,7 @@ Purpose: define plugin UI architecture, proxy boundaries, and frame-compatibilit
 - Frontend must not call Sigil API query endpoints directly.
 - Use `getBackendSrv().fetch()` for plugin-to-backend calls by default.
 - Exception: browser `fetch()` is allowed for the conversation search streaming route because the page must consume incremental NDJSON chunks.
+- Conversation detail fetch prefers the V2 shared-ref route and hydrates it back into the existing runtime detail shape inside the conversation API layer.
 
 ## Proxy Contract
 
@@ -26,6 +27,7 @@ Current plugin query contract:
   - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/search`
   - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/search/stream`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations`
+  - `GET /api/plugins/grafana-sigil-app/resources/query/v2/conversations/{conversation_id}`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}`
   - `GET /api/plugins/grafana-sigil-app/resources/query/generations/{generation_id}`
   - `GET /api/plugins/grafana-sigil-app/resources/query/agents`
@@ -57,6 +59,7 @@ Current plugin query contract:
   - `GET /api/plugins/grafana-sigil-app/resources/eval/judge/models?provider={id}`
 - Plugin backend forwards to Sigil API query endpoints:
   - `POST /api/v1/conversations:batch-metadata` (search hydration only)
+  - `GET /api/v2/conversations/{conversation_id}`
   - `GET /api/v1/conversations`
   - `GET /api/v1/conversations/{conversation_id}`
   - `GET /api/v1/generations/{generation_id}`
@@ -116,6 +119,7 @@ Sigil plugin query routes enforce action-based RBAC in the plugin backend:
 
 - `grafana-sigil-app.data:read`
   - `GET /query/conversations`
+  - `GET /query/v2/conversations/{conversation_id}`
   - `POST /query/conversations/search`
   - `POST /query/conversations/search/stream`
   - `GET /query/conversations/{conversation_id}`
@@ -179,6 +183,7 @@ See `docs/references/grafana-query-response-shapes.md`.
   - display optional conversation `user_id` labels from Tempo span attribute `user.id` (latest matching span wins)
   - support cursor pagination in list view
   - open conversation detail with hydrated generations, ratings, and annotations
+  - hydrate V2 shared-ref detail payloads (`messages`, `tools`, `system_prompts`, `metadata`) back into the existing `ConversationDetail` / `GenerationDetail` runtime shape before rendering
   - display optional conversation detail `user_id` from generation metadata key `sigil.user.id`
   - open generation detail with trace/span identifiers
   - render conversation span tree with the local Jaeger-style tree component (`SigilSpanTree`) backed by:

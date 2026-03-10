@@ -1058,6 +1058,19 @@ func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, 
 	}, true, nil
 }
 
+func (s *Service) GetConversationDetailV2ForTenant(ctx context.Context, tenantID, conversationID string) (ConversationDetailV2, bool, error) {
+	detail, found, err := s.GetConversationDetailForTenant(ctx, tenantID, conversationID)
+	if err != nil || !found {
+		return ConversationDetailV2{}, found, err
+	}
+
+	v2, err := BuildConversationDetailV2(detail)
+	if err != nil {
+		return ConversationDetailV2{}, false, err
+	}
+	return v2, true, nil
+}
+
 // ListConversationGenerationsForTenant returns raw protobuf generations for a
 // conversation, using the same hot/cold fan-out as GetConversationDetailForTenant.
 func (s *Service) ListConversationGenerationsForTenant(ctx context.Context, tenantID, conversationID string) ([]*sigilv1.Generation, bool, error) {

@@ -2,6 +2,7 @@ import { ReadableStream } from 'node:stream/web';
 import { of } from 'rxjs';
 import { defaultConversationsDataSource } from './api';
 import type { ConversationSearchRequest, ConversationSearchResponse, ConversationStatsRequest } from './types';
+import type { ConversationDetailV2 } from './detailV2';
 
 const backendFetchMock = jest.fn();
 const browserFetchMock = jest.fn();
@@ -141,6 +142,62 @@ describe('defaultConversationsDataSource', () => {
       method: 'POST',
       url: '/api/plugins/grafana-sigil-app/resources/query/conversations/stats',
       data: statsRequest,
+    });
+  });
+
+  it('getConversationDetail fetches the V2 route and hydrates the response', async () => {
+    const detail: ConversationDetailV2 = {
+      conversation_id: 'conv-1',
+      generation_count: 1,
+      first_generation_at: '2026-03-10T09:00:00Z',
+      last_generation_at: '2026-03-10T09:01:00Z',
+      generations: [
+        {
+          generation_id: 'gen-1',
+          conversation_id: 'conv-1',
+          input_refs: [0],
+          output_refs: [1],
+          tool_refs: [0],
+          system_prompt_ref: 0,
+          metadata_ref: 0,
+        },
+      ],
+      annotations: [],
+      shared: {
+        messages: [
+          { role: 'MESSAGE_ROLE_USER', parts: [{ text: 'hello' }] },
+          { role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'hi' }] },
+        ],
+        tools: [{ name: 'web_search', description: 'Search the web' }],
+        system_prompts: ['You are a helpful assistant.'],
+        metadata: [{ topic: 'greeting' }],
+      },
+    };
+    backendFetchMock.mockReturnValue(of({ data: detail }));
+
+    const response = await defaultConversationsDataSource.getConversationDetail('conv-1');
+
+    expect(backendFetchMock).toHaveBeenCalledWith({
+      method: 'GET',
+      url: '/api/plugins/grafana-sigil-app/resources/query/v2/conversations/conv-1',
+    });
+    expect(response).toEqual({
+      conversation_id: 'conv-1',
+      generation_count: 1,
+      first_generation_at: '2026-03-10T09:00:00Z',
+      last_generation_at: '2026-03-10T09:01:00Z',
+      generations: [
+        {
+          generation_id: 'gen-1',
+          conversation_id: 'conv-1',
+          input: [{ role: 'MESSAGE_ROLE_USER', parts: [{ text: 'hello' }] }],
+          output: [{ role: 'MESSAGE_ROLE_ASSISTANT', parts: [{ text: 'hi' }] }],
+          tools: [{ name: 'web_search', description: 'Search the web' }],
+          system_prompt: 'You are a helpful assistant.',
+          metadata: { topic: 'greeting' },
+        },
+      ],
+      annotations: [],
     });
   });
 });

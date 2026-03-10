@@ -16,6 +16,7 @@ import type {
   SearchTagValuesResponse,
   SearchTagsResponse,
 } from './types';
+import { hydrateConversationDetailV2, type ConversationDetailV2 } from './detailV2';
 
 const queryBasePath = '/api/plugins/grafana-sigil-app/resources/query';
 
@@ -241,12 +242,12 @@ export const defaultConversationsDataSource: ConversationsDataSource = {
 
   async getConversationDetail(conversationID) {
     const response = await lastValueFrom(
-      getBackendSrv().fetch<ConversationDetail>({
+      getBackendSrv().fetch<ConversationDetailV2>({
         method: 'GET',
-        url: `${queryBasePath}/conversations/${encodeURIComponent(conversationID)}`,
+        url: `${queryBasePath}/v2/conversations/${encodeURIComponent(conversationID)}`,
       })
     );
-    return response.data;
+    return hydrateConversationDetailV2(response.data);
   },
 
   async listConversationRatings(conversationID, limit = 10, cursor) {
