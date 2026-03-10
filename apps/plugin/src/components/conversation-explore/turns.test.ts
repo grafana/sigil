@@ -342,10 +342,7 @@ describe('newMessagesForGeneration', () => {
 
   it('returns empty when previous transcript fully covers current input', () => {
     const prev = gen('g1', '2026-01-01T00:01:00Z', [user('q1')], [assistant('a1')]);
-    const curr = gen('g2', '2026-01-01T00:02:00Z',
-      [user('q1'), assistant('a1')],
-      [assistant('a2')]
-    );
+    const curr = gen('g2', '2026-01-01T00:02:00Z', [user('q1'), assistant('a1')], [assistant('a2')]);
     expect(newMessagesForGeneration(curr, prev)).toEqual([]);
   });
 });
