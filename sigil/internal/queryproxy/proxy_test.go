@@ -220,3 +220,52 @@ func TestForwardUpstreamUnavailable(t *testing.T) {
 		t.Fatalf("expected ErrUpstreamUnavailable, got %v", err)
 	}
 }
+
+func TestForwardReturnsErrorWhenDownstreamWriteFails(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"success"}`))
+	}))
+	defer upstream.Close()
+
+	proxy, err := New(Config{
+		PrometheusBaseURL: upstream.URL,
+		TempoBaseURL:      upstream.URL,
+		Timeout:           time.Second,
+	})
+	if err != nil {
+		t.Fatalf("new proxy: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/proxy", nil)
+	req = req.WithContext(user.InjectOrgID(req.Context(), "tenant-a"))
+
+	writeErr := errors.New("downstream write failed")
+	resp := &failingResponseWriter{
+		header:   make(http.Header),
+		writeErr: writeErr,
+	}
+
+	err = proxy.Forward(resp, req, BackendPrometheus, "/api/v1/query")
+	if err == nil {
+		t.Fatalf("expected downstream write error")
+	}
+	if !errors.Is(err, writeErr) {
+		t.Fatalf("expected wrapped downstream write error, got %v", err)
+	}
+}
+
+type failingResponseWriter struct {
+	header   http.Header
+	writeErr error
+}
+
+func (w *failingResponseWriter) Header() http.Header {
+	return w.header
+}
+
+func (w *failingResponseWriter) WriteHeader(_ int) {}
+
+func (w *failingResponseWriter) Write(_ []byte) (int, error) {
+	return 0, w.writeErr
+}
