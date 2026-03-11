@@ -13,7 +13,10 @@ import (
 	"time"
 
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
+	"github.com/grafana/sigil/sigil/internal/eval/evaluators"
 	"github.com/grafana/sigil/sigil/internal/eval/predefined"
+	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
+	"github.com/grafana/sigil/sigil/internal/storage"
 	"github.com/grafana/sigil/sigil/internal/tenantauth"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 )
@@ -1294,3 +1297,159 @@ func paginateRules(items []evalpkg.RuleDefinition, limit int, cursor uint64) ([]
 	}
 	return append([]evalpkg.RuleDefinition(nil), items[start:end]...), nextCursor, nil
 }
+
+// --- eval:test HTTP tests ---
+
+func TestEvalTestHTTPInlineGeneration(t *testing.T) {
+	store := newMemoryControlStore()
+	service := NewService(store, nil)
+
+	reader := &httpTestGenerationReader{err: errors.New("should not be called")}
+	evalInstance := &httpTestEvaluator{
+		kind: evalpkg.EvaluatorKindHeuristic,
+		scores: []httpTestScoreOutput{{
+			Key:    "heuristic_pass",
+			Type:   evalpkg.ScoreTypeBool,
+			Value:  true,
+			Passed: boolPtr(true),
+		}},
+	}
+	testSvc := NewTestService(reader, httpTestEvalMap(evalInstance))
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterHTTPRoutes(mux, service, nil, testSvc, protected)
+
+	payload := `{
+		"kind":"heuristic",
+		"config":` + heuristicNotEmptyJSONForTest() + `,
+		"output_keys":[{"key":"heuristic_pass","type":"bool"}],
+		"generation_data":{"id":"gen-http","conversation_id":"conv-http","input":[{"parts":[{"text":"hello"}]}],"output":[{"parts":[{"text":"world"}]}]}
+	}`
+	resp := doRequest(mux, http.MethodPost, "/api/v1/eval:test", payload)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", resp.Code, resp.Body.String())
+	}
+
+	var result EvalTestResponse
+	if err := json.Unmarshal(resp.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if result.GenerationID != "gen-http" {
+		t.Errorf("expected generation_id=gen-http, got %q", result.GenerationID)
+	}
+	if result.ConversationID != "conv-http" {
+		t.Errorf("expected conversation_id=conv-http, got %q", result.ConversationID)
+	}
+	if reader.called {
+		t.Error("expected storage reader NOT to be called for inline generation_data")
+	}
+}
+
+func TestEvalTestHTTPFallbackToStorage(t *testing.T) {
+	store := newMemoryControlStore()
+	service := NewService(store, nil)
+
+	gen := &sigilv1.Generation{
+		Id:             "gen-stored",
+		ConversationId: "conv-stored",
+		Input:          []*sigilv1.Message{{Parts: []*sigilv1.Part{{Payload: &sigilv1.Part_Text{Text: "stored input"}}}}},
+		Output:         []*sigilv1.Message{{Parts: []*sigilv1.Part{{Payload: &sigilv1.Part_Text{Text: "stored output"}}}}},
+	}
+	reader := &httpTestGenerationReader{generation: gen}
+	evalInstance := &httpTestEvaluator{
+		kind: evalpkg.EvaluatorKindHeuristic,
+		scores: []httpTestScoreOutput{{
+			Key:    "heuristic_pass",
+			Type:   evalpkg.ScoreTypeBool,
+			Value:  true,
+			Passed: boolPtr(true),
+		}},
+	}
+	testSvc := NewTestService(reader, httpTestEvalMap(evalInstance))
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterHTTPRoutes(mux, service, nil, testSvc, protected)
+
+	payload := `{
+		"kind":"heuristic",
+		"config":` + heuristicNotEmptyJSONForTest() + `,
+		"output_keys":[{"key":"heuristic_pass","type":"bool"}],
+		"generation_id":"gen-stored"
+	}`
+	resp := doRequest(mux, http.MethodPost, "/api/v1/eval:test", payload)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", resp.Code, resp.Body.String())
+	}
+
+	var result EvalTestResponse
+	if err := json.Unmarshal(resp.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if result.GenerationID != "gen-stored" {
+		t.Errorf("expected generation_id=gen-stored, got %q", result.GenerationID)
+	}
+	if !reader.called {
+		t.Error("expected storage reader to be called when generation_data is absent")
+	}
+}
+
+// Minimal stubs for HTTP-level eval:test tests.
+
+type httpTestGenerationReader struct {
+	generation *sigilv1.Generation
+	err        error
+	called     bool
+}
+
+func (r *httpTestGenerationReader) GetGenerationByIDWithPlan(_ context.Context, _, _ string, _ storage.GenerationReadPlan) (*sigilv1.Generation, error) {
+	r.called = true
+	return r.generation, r.err
+}
+
+type httpTestScoreOutput struct {
+	Key    string
+	Type   evalpkg.ScoreType
+	Value  any
+	Passed *bool
+}
+
+type httpTestEvaluator struct {
+	kind   evalpkg.EvaluatorKind
+	scores []httpTestScoreOutput
+}
+
+func (e *httpTestEvaluator) Kind() evalpkg.EvaluatorKind { return e.kind }
+
+func (e *httpTestEvaluator) Evaluate(_ context.Context, _ evaluators.EvalInput, _ evalpkg.EvaluatorDefinition) ([]evaluators.ScoreOutput, error) {
+	out := make([]evaluators.ScoreOutput, 0, len(e.scores))
+	for _, s := range e.scores {
+		sv := evalpkg.ScoreValue{}
+		switch v := s.Value.(type) {
+		case bool:
+			sv = evalpkg.BoolValue(v)
+		case float64:
+			sv = evalpkg.NumberValue(v)
+		case string:
+			sv = evalpkg.StringValue(v)
+		}
+		out = append(out, evaluators.ScoreOutput{
+			Key:    s.Key,
+			Type:   s.Type,
+			Value:  sv,
+			Passed: s.Passed,
+		})
+	}
+	return out, nil
+}
+
+func httpTestEvalMap(evals ...*httpTestEvaluator) map[evalpkg.EvaluatorKind]evaluators.Evaluator {
+	out := make(map[evalpkg.EvaluatorKind]evaluators.Evaluator, len(evals))
+	for _, e := range evals {
+		out[e.kind] = e
+	}
+	return out
+}
+
+func boolPtr(v bool) *bool { return &v }

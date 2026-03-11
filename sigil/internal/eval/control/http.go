@@ -84,7 +84,7 @@ func (s *TestService) handleEvalTest(w http.ResponseWriter, req *http.Request) {
 	}
 
 	var testReq EvalTestRequest
-	if err := decodeJSONBody(req, &testReq); err != nil {
+	if err := decodeJSONBodyWithLimit(req, &testReq, maxEvalTestBodySize); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -417,11 +417,19 @@ func (s *Service) handleJudgeModels(w http.ResponseWriter, req *http.Request) {
 // malicious or oversized payloads. 1 MB is generous for JSON config payloads.
 const maxRequestBodySize = 1 << 20
 
+// maxEvalTestBodySize is a larger limit for eval:test requests that may carry
+// inline generation data (messages, tool calls, etc.).
+const maxEvalTestBodySize = 4 << 20
+
 func decodeJSONBody(req *http.Request, out any) error {
+	return decodeJSONBodyWithLimit(req, out, maxRequestBodySize)
+}
+
+func decodeJSONBodyWithLimit(req *http.Request, out any, limit int) error {
 	if req.Body == nil {
 		return errors.New("request body is required")
 	}
-	reader := io.LimitReader(req.Body, maxRequestBodySize+1)
+	reader := io.LimitReader(req.Body, int64(limit)+1)
 	data, err := io.ReadAll(reader)
 	if err != nil {
 		return errors.New("failed to read request body")
@@ -429,7 +437,7 @@ func decodeJSONBody(req *http.Request, out any) error {
 	if len(bytes.TrimSpace(data)) == 0 {
 		return errors.New("request body is required")
 	}
-	if len(data) > maxRequestBodySize {
+	if len(data) > limit {
 		return errors.New("request body too large")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))

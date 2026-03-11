@@ -156,11 +156,12 @@ func newQuerierModule(
 	var ingestScoreSvc *evalingest.Service
 	var testSvc *evalcontrol.TestService
 	if evalStore, ok := generationStore.(evalpkg.EvalStore); ok && evalStore != nil {
+		testReadConfig := evalTestColdReadConfig(cfg)
 		testReader := storage.NewFanOutStore(
 			walReader,
 			blockMetadataStore,
 			blockReader,
-			storage.WithColdReadConfig(coldReadConfig),
+			storage.WithColdReadConfig(testReadConfig),
 			storage.WithIndexCacheConfig(indexCacheConfig),
 		)
 		evalRegistry := map[evalpkg.EvaluatorKind]evaluators.Evaluator{
@@ -274,6 +275,19 @@ func newQuerierModule(
 		runErr:       make(chan error, 1),
 	}
 	return services.NewBasicService(module.start, module.run, module.stop).WithName(config.TargetQuerier), nil
+}
+
+func evalTestColdReadConfig(cfg config.Config) storage.ColdReadConfig {
+	return storage.ColdReadConfig{
+		// eval:test already has a 30s handler timeout. Reusing the aggressive
+		// conversation-query cold-read budget causes generation fetches to fail
+		// around 6s before the request deadline.
+		TotalBudget:      cfg.QueryProxy.Timeout,
+		IndexReadTimeout: cfg.QueryRead.ColdIndexReadTimeout,
+		IndexRetries:     cfg.QueryRead.ColdIndexRetries,
+		IndexWorkers:     cfg.QueryRead.ColdIndexWorkers,
+		IndexMaxInflight: cfg.QueryRead.ColdIndexMaxInflight,
+	}
 }
 
 func (m *querierModule) start(_ context.Context) error {

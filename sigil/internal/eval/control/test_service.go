@@ -2,21 +2,28 @@ package control
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	"github.com/grafana/sigil/sigil/internal/eval/evaluators"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	"github.com/grafana/sigil/sigil/internal/storage"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // EvalTestRequest describes a one-shot evaluator test against a stored generation.
+// When GenerationData is provided the backend uses it directly, avoiding a
+// storage round-trip. The frontend already fetches the generation for preview,
+// so echoing it back here eliminates a redundant cold-storage scan.
 type EvalTestRequest struct {
 	Kind           string              `json:"kind"`
 	Config         map[string]any      `json:"config"`
 	OutputKeys     []evalpkg.OutputKey `json:"output_keys"`
-	GenerationID   string              `json:"generation_id"`
+	GenerationID   string              `json:"generation_id,omitempty"`
+	GenerationData json.RawMessage     `json:"generation_data,omitempty"`
 	ConversationID string              `json:"conversation_id,omitempty"`
 	From           time.Time           `json:"from,omitempty"`
 	To             time.Time           `json:"to,omitempty"`
@@ -72,15 +79,9 @@ func (s *TestService) RunTest(ctx context.Context, tenantID string, req EvalTest
 		return nil, ValidationWrap(fmt.Errorf("no evaluator registered for kind %q", kind))
 	}
 
-	lookupPlan := storage.GenerationReadPlan{
-		ConversationID: req.ConversationID,
-		From:           req.From,
-		To:             req.To,
-		At:             req.At,
-	}
-	generation, err := s.reader.GetGenerationByIDWithPlan(ctx, tenantID, req.GenerationID, lookupPlan)
+	generation, err := s.resolveGeneration(ctx, tenantID, req)
 	if err != nil {
-		return nil, fmt.Errorf("fetch generation: %w", err)
+		return nil, err
 	}
 	if generation == nil {
 		return nil, NotFoundError(fmt.Sprintf("generation %q not found", req.GenerationID))
@@ -134,6 +135,86 @@ func (s *TestService) RunTest(ctx context.Context, tenantID string, req EvalTest
 	}
 
 	return result, nil
+}
+
+// resolveGeneration returns a generation from inline data when available,
+// falling back to a storage lookup.
+func (s *TestService) resolveGeneration(ctx context.Context, tenantID string, req EvalTestRequest) (*sigilv1.Generation, error) {
+	if len(req.GenerationData) > 0 {
+		return decodeInlineGeneration(req.GenerationData)
+	}
+	lookupPlan := storage.GenerationReadPlan{
+		ConversationID: req.ConversationID,
+		From:           req.From,
+		To:             req.To,
+		At:             req.At,
+	}
+	generation, err := s.reader.GetGenerationByIDWithPlan(ctx, tenantID, req.GenerationID, lookupPlan)
+	if err != nil {
+		return nil, fmt.Errorf("fetch generation: %w", err)
+	}
+	return generation, nil
+}
+
+// decodeInlineGeneration unmarshals client-provided generation JSON back into
+// the proto representation. The query API reshapes several proto fields before
+// returning them (renames "id" → "generation_id", strips the GENERATION_MODE_
+// enum prefix, and maps call_error into error.message), so we normalize the
+// JSON before handing it to protojson. Non-proto fields like latest_scores are
+// silently discarded via DiscardUnknown.
+func decodeInlineGeneration(data json.RawMessage) (*sigilv1.Generation, error) {
+	data = normalizeQueryAPIGeneration(data)
+	var gen sigilv1.Generation
+	opts := protojson.UnmarshalOptions{DiscardUnknown: true}
+	if err := opts.Unmarshal(data, &gen); err != nil {
+		return nil, ValidationWrap(fmt.Errorf("invalid generation_data: %w", err))
+	}
+	return &gen, nil
+}
+
+// normalizeQueryAPIGeneration remaps query-API field names and values back to
+// proto shape so protojson can unmarshal correctly. This reverses query-API
+// transforms: "id" → "generation_id", "GENERATION_MODE_SYNC" → "SYNC",
+// and call_error → error.message. When both source and destination proto
+// fields are present, the explicit proto field wins.
+func normalizeQueryAPIGeneration(data json.RawMessage) json.RawMessage {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return data
+	}
+	if gid, ok := raw["generation_id"]; ok {
+		if _, hasID := raw["id"]; !hasID {
+			raw["id"] = gid
+		}
+		delete(raw, "generation_id")
+	}
+	if modeRaw, ok := raw["mode"]; ok {
+		var mode string
+		if err := json.Unmarshal(modeRaw, &mode); err == nil {
+			mode = strings.TrimSpace(mode)
+			if mode != "" && !strings.HasPrefix(mode, "GENERATION_MODE_") {
+				if encoded, err := json.Marshal("GENERATION_MODE_" + mode); err == nil {
+					raw["mode"] = encoded
+				}
+			}
+		}
+	}
+	if errRaw, ok := raw["error"]; ok {
+		if _, hasCallError := raw["call_error"]; !hasCallError {
+			var errObj map[string]json.RawMessage
+			if err := json.Unmarshal(errRaw, &errObj); err == nil {
+				if msgRaw, hasMsg := errObj["message"]; hasMsg {
+					raw["call_error"] = msgRaw
+				}
+			}
+		}
+		delete(raw, "error")
+	}
+	out, err := json.Marshal(raw)
+	if err != nil {
+		return data
+	}
+	return out
 }
 
 // scoreValueToAny extracts the concrete value from a ScoreValue union.

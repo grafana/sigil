@@ -171,8 +171,9 @@ func (r EvalTestRequest) normalizeAndValidate() (EvalTestRequest, error) {
 	if err := validateKind(kind); err != nil {
 		return EvalTestRequest{}, ValidationWrap(err)
 	}
-	if strings.TrimSpace(req.GenerationID) == "" {
-		return EvalTestRequest{}, ValidationError("generation_id is required")
+	hasInlineData := len(req.GenerationData) > 0
+	if !hasInlineData && strings.TrimSpace(req.GenerationID) == "" {
+		return EvalTestRequest{}, ValidationError("generation_id is required when generation_data is not provided")
 	}
 	if err := validateOutputKeys(req.OutputKeys); err != nil {
 		return EvalTestRequest{}, ValidationWrap(err)

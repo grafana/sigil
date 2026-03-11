@@ -205,6 +205,9 @@ export default function EvalTestPanel({
         config: testConfig,
         output_keys: outputKeys,
         generation_id: generationId,
+        generation_data: generation
+          ? { ...(generation as Record<string, unknown>), id: generation.generation_id }
+          : undefined,
         ...(generationLookupHintsRef.current ?? {}),
       });
       setResult(resp);

@@ -89,6 +89,39 @@ func TestBuildScoreGenerationLookupFallsBackToColdTier(t *testing.T) {
 	}
 }
 
+func TestEvalTestColdReadConfigUsesRequestTimeoutBudget(t *testing.T) {
+	cfg := config.Config{
+		QueryProxy: config.QueryProxyConfig{
+			Timeout: 30 * time.Second,
+		},
+		QueryRead: config.QueryReadConfig{
+			ColdTotalBudget:      6 * time.Second,
+			ColdIndexReadTimeout: 1500 * time.Millisecond,
+			ColdIndexRetries:     2,
+			ColdIndexWorkers:     7,
+			ColdIndexMaxInflight: 99,
+		},
+	}
+
+	got := evalTestColdReadConfig(cfg)
+
+	if got.TotalBudget != cfg.QueryProxy.Timeout {
+		t.Fatalf("expected eval:test cold budget %s, got %s", cfg.QueryProxy.Timeout, got.TotalBudget)
+	}
+	if got.IndexReadTimeout != cfg.QueryRead.ColdIndexReadTimeout {
+		t.Fatalf("expected index read timeout %s, got %s", cfg.QueryRead.ColdIndexReadTimeout, got.IndexReadTimeout)
+	}
+	if got.IndexRetries != cfg.QueryRead.ColdIndexRetries {
+		t.Fatalf("expected index retries %d, got %d", cfg.QueryRead.ColdIndexRetries, got.IndexRetries)
+	}
+	if got.IndexWorkers != cfg.QueryRead.ColdIndexWorkers {
+		t.Fatalf("expected index workers %d, got %d", cfg.QueryRead.ColdIndexWorkers, got.IndexWorkers)
+	}
+	if got.IndexMaxInflight != cfg.QueryRead.ColdIndexMaxInflight {
+		t.Fatalf("expected index max inflight %d, got %d", cfg.QueryRead.ColdIndexMaxInflight, got.IndexMaxInflight)
+	}
+}
+
 type scoreLookupWALReaderStub struct{}
 
 func (s *scoreLookupWALReaderStub) GetByID(context.Context, string, string) (*sigilv1.Generation, error) {
