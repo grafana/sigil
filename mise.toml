@@ -331,12 +331,12 @@ helm package ./charts/sigil --destination dist/charts
 [tasks."model-cards:snapshot:update"]
 description = "Refresh model-card snapshot from OpenRouter and write canonical fallback JSON"
 depends = ["doctor:go"]
-run = "cd sigil && GOWORK=off go run ./cmd/modelcards-snapshot --mode update --output ./internal/modelcards/fallback/openrouter_models.v1.json"
+run = "cd sigil && GOWORK=off go run ./cmd/modelcards-snapshot --mode update --snapshot-output ./internal/modelcards/fallback/openrouter_models.v1.json"
 
 [tasks."model-cards:snapshot:check"]
 description = "Validate model-card fallback snapshot schema, checksum, and canonical formatting"
 depends = ["doctor:go"]
-run = "cd sigil && GOWORK=off go run ./cmd/modelcards-snapshot --mode check --output ./internal/modelcards/fallback/openrouter_models.v1.json"
+run = "cd sigil && GOWORK=off go run ./cmd/modelcards-snapshot --mode check --snapshot-output ./internal/modelcards/fallback/openrouter_models.v1.json"
 
 [tasks."model-cards:supplemental:update"]
 description = "Additively upsert supplemental model-cards from live OpenRouter models missing from the base snapshot"

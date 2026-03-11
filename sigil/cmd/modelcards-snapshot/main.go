@@ -22,16 +22,12 @@ const (
 
 func main() {
 	mode := flag.String("mode", "check", "mode: update|check|update-supplemental|check-supplemental")
-	output := flag.String("output", "", "deprecated alias for --snapshot-output")
 	snapshotOutput := flag.String("snapshot-output", defaultSnapshotOutputPath, "snapshot output path")
 	supplementalOutput := flag.String("supplemental-output", defaultSupplementalOutputPath, "supplemental catalog output path")
 	timeout := flag.Duration("timeout", 30*time.Second, "live fetch timeout for update modes")
 	flag.Parse()
 
-	snapshotPath := strings.TrimSpace(*snapshotOutput)
-	if override := strings.TrimSpace(*output); override != "" {
-		snapshotPath = override
-	}
+	snapshotPath := snapshotOutputPath(*snapshotOutput)
 
 	switch *mode {
 	case "update":
@@ -58,6 +54,14 @@ func main() {
 		fmt.Fprintf(os.Stderr, "unsupported mode %q\n", *mode)
 		os.Exit(1)
 	}
+}
+
+func snapshotOutputPath(snapshotOutput string) string {
+	trimmed := strings.TrimSpace(snapshotOutput)
+	if trimmed == "" {
+		return defaultSnapshotOutputPath
+	}
+	return trimmed
 }
 
 func runUpdateSnapshot(output string, timeout time.Duration) error {
