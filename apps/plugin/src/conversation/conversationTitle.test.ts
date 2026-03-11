@@ -106,6 +106,28 @@ describe('resolveConversationTitleFromTelemetry', () => {
     expect(title).toBe('Latest span title');
   });
 
+  it('keeps traversal order tie-break when start times match', () => {
+    const child = makeSpan({
+      spanID: 'child',
+      startTimeUnixNano: BigInt(10),
+      attributes: attrs([['sigil.conversation.title', { stringValue: 'Child title' }]]),
+    });
+    const first = makeSpan({
+      spanID: 'first',
+      startTimeUnixNano: BigInt(10),
+      attributes: attrs([['sigil.conversation.title', { stringValue: 'First title' }]]),
+      children: [child],
+    });
+    const second = makeSpan({
+      spanID: 'second',
+      startTimeUnixNano: BigInt(10),
+      attributes: attrs([['sigil.conversation.title', { stringValue: 'Second title' }]]),
+    });
+
+    const title = resolveConversationTitleFromTelemetry([], [first, second]);
+    expect(title).toBe('Second title');
+  });
+
   it('reads title from legacy conversation_title metadata key', () => {
     const title = resolveConversationTitleFromTelemetry(
       [makeGeneration({ metadata: { conversation_title: 'Legacy title' } })],
