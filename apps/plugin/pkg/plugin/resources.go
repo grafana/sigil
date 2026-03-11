@@ -1168,6 +1168,38 @@ func (a *App) handleEvalSavedConversationsManual(w http.ResponseWriter, req *htt
 	a.handleProxy(w, req, "/api/v1/eval/saved-conversations:manual", http.MethodPost)
 }
 
+func (a *App) handleEvalCollections(w http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case http.MethodGet:
+		a.handleProxy(w, req, "/api/v1/eval/collections", http.MethodGet)
+	case http.MethodPost:
+		a.handleProxy(w, req, "/api/v1/eval/collections", http.MethodPost)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (a *App) handleEvalCollectionRoutes(w http.ResponseWriter, req *http.Request) {
+	rest := strings.TrimPrefix(req.URL.Path, "/eval/collections/")
+	if rest == "" {
+		http.Error(w, "invalid collection path", http.StatusBadRequest)
+		return
+	}
+	path := "/api/v1/eval/collections/" + rest
+	switch req.Method {
+	case http.MethodGet:
+		a.handleProxy(w, req, path, http.MethodGet)
+	case http.MethodPost:
+		a.handleProxy(w, req, path, http.MethodPost)
+	case http.MethodPatch:
+		a.handleProxy(w, req, path, http.MethodPatch)
+	case http.MethodDelete:
+		a.handleProxy(w, req, path, http.MethodDelete)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/query/conversations/search", a.withAuthorization(a.handleSearchConversations))
 	mux.HandleFunc("/query/conversations/search/stream", a.withAuthorization(a.handleSearchConversationsStream))
@@ -1207,6 +1239,8 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/eval/saved-conversations", a.withAuthorization(a.handleEvalSavedConversations))
 	mux.HandleFunc("/eval/saved-conversations/", a.withAuthorization(a.handleEvalSavedConversationByID))
 	mux.HandleFunc("/eval/saved-conversations:manual", a.withAuthorization(a.handleEvalSavedConversationsManual))
+	mux.HandleFunc("/eval/collections", a.withAuthorization(a.handleEvalCollections))
+	mux.HandleFunc("/eval/collections/", a.withAuthorization(a.handleEvalCollectionRoutes))
 }
 
 type conversationSearchTimeRange struct {
