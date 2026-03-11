@@ -63,8 +63,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   meta: css({
     display: 'flex',
-    flexWrap: 'wrap' as const,
-    gap: theme.spacing(0.75),
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.25),
   }),
   metaText: css({
     color: theme.colors.text.secondary,
@@ -160,7 +160,7 @@ export default function EvaluatorCardGrid({
 
             <div className={styles.description}>
               <Text color="secondary" variant="bodySmall">
-                {evaluator.description || '—'}
+                {evaluator.description ?? ''}
               </Text>
             </div>
             <div className={styles.footer}>
