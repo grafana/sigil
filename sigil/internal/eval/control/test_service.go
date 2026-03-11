@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
@@ -157,7 +158,8 @@ func (s *TestService) resolveGeneration(ctx context.Context, tenantID string, re
 
 // decodeInlineGeneration unmarshals client-provided generation JSON back into
 // the proto representation. The query API reshapes several proto fields before
-// returning them (e.g. renames "id" → "generation_id"), so we normalize the
+// returning them (renames "id" → "generation_id", strips the GENERATION_MODE_
+// enum prefix, and maps call_error into error.message), so we normalize the
 // JSON before handing it to protojson. Non-proto fields like latest_scores are
 // silently discarded via DiscardUnknown.
 func decodeInlineGeneration(data json.RawMessage) (*sigilv1.Generation, error) {
@@ -170,11 +172,11 @@ func decodeInlineGeneration(data json.RawMessage) (*sigilv1.Generation, error) {
 	return &gen, nil
 }
 
-// normalizeQueryAPIGeneration remaps query-API field names back to proto field
-// names so protojson can unmarshal correctly. The query API's
-// generationToResponsePayload renames proto "id" → "generation_id"; this
-// reverses that transform. When both fields are present, the explicit proto
-// "id" wins.
+// normalizeQueryAPIGeneration remaps query-API field names and values back to
+// proto shape so protojson can unmarshal correctly. This reverses query-API
+// transforms: "id" → "generation_id", "GENERATION_MODE_SYNC" → "SYNC",
+// and call_error → error.message. When both source and destination proto
+// fields are present, the explicit proto field wins.
 func normalizeQueryAPIGeneration(data json.RawMessage) json.RawMessage {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -185,6 +187,28 @@ func normalizeQueryAPIGeneration(data json.RawMessage) json.RawMessage {
 			raw["id"] = gid
 		}
 		delete(raw, "generation_id")
+	}
+	if modeRaw, ok := raw["mode"]; ok {
+		var mode string
+		if err := json.Unmarshal(modeRaw, &mode); err == nil {
+			mode = strings.TrimSpace(mode)
+			if mode != "" && !strings.HasPrefix(mode, "GENERATION_MODE_") {
+				if encoded, err := json.Marshal("GENERATION_MODE_" + mode); err == nil {
+					raw["mode"] = encoded
+				}
+			}
+		}
+	}
+	if errRaw, ok := raw["error"]; ok {
+		if _, hasCallError := raw["call_error"]; !hasCallError {
+			var errObj map[string]json.RawMessage
+			if err := json.Unmarshal(errRaw, &errObj); err == nil {
+				if msgRaw, hasMsg := errObj["message"]; hasMsg {
+					raw["call_error"] = msgRaw
+				}
+			}
+		}
+		delete(raw, "error")
 	}
 	out, err := json.Marshal(raw)
 	if err != nil {

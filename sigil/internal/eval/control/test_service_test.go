@@ -647,6 +647,32 @@ func TestTestService_RunTestInlineGenerationQueryAPIFormat(t *testing.T) {
 	assert.False(t, reader.called)
 }
 
+func TestDecodeInlineGenerationNormalizesQueryAPIMode(t *testing.T) {
+	payload := json.RawMessage(`{
+		"generation_id":"gen-m",
+		"conversation_id":"conv-m",
+		"mode":"SYNC"
+	}`)
+
+	gen, err := decodeInlineGeneration(payload)
+	require.NoError(t, err)
+	require.NotNil(t, gen)
+	assert.Equal(t, sigilv1.GenerationMode_GENERATION_MODE_SYNC, gen.GetMode())
+}
+
+func TestDecodeInlineGenerationNormalizesQueryAPIError(t *testing.T) {
+	payload := json.RawMessage(`{
+		"generation_id":"gen-e",
+		"conversation_id":"conv-e",
+		"error":{"message":"provider unavailable"}
+	}`)
+
+	gen, err := decodeInlineGeneration(payload)
+	require.NoError(t, err)
+	require.NotNil(t, gen)
+	assert.Equal(t, "provider unavailable", gen.GetCallError())
+}
+
 func TestEvalTestRequest_NormalizeAndValidateAcceptsInlineDataWithoutGenerationID(t *testing.T) {
 	gen := testGeneration()
 	data := marshalGenerationJSON(t, gen)
