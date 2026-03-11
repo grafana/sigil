@@ -1854,10 +1854,11 @@ func latestConversationUserID(generations []*sigilv1.Generation) string {
 	bestIndex := -1
 	found := false
 	for idx, generation := range generations {
-		candidate := storage.GenerationMetadataString(generation, generationMetadataUserIDKey)
-		if candidate == "" {
-			candidate = storage.GenerationMetadataString(generation, generationMetadataLegacyUserIDKey)
-		}
+		candidate := storage.GenerationMetadataFirstString(
+			generation,
+			generationMetadataUserIDKey,
+			generationMetadataLegacyUserIDKey,
+		)
 		if candidate == "" {
 			continue
 		}
