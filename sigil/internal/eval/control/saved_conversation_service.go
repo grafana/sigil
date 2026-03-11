@@ -372,7 +372,9 @@ func (s *SavedConversationService) DeleteSavedConversation(ctx context.Context, 
 	}
 
 	if s.collectionCleaner != nil {
-		_ = s.collectionCleaner.DeleteCollectionMembersBySavedID(ctx, trimmedTenantID, trimmedSavedID)
+		if err := s.collectionCleaner.DeleteCollectionMembersBySavedID(ctx, trimmedTenantID, trimmedSavedID); err != nil {
+			return fmt.Errorf("delete collection memberships: %w", err)
+		}
 	}
 
 	return s.store.DeleteSavedConversation(ctx, trimmedTenantID, trimmedSavedID)
