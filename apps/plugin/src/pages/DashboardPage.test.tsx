@@ -70,6 +70,7 @@ jest.mock('@grafana/assistant', () => ({
     },
     occurrences: [],
   })),
+  providePageContext: jest.fn(),
 }));
 
 jest.mock('../components/landing/LandingTopBar', () => ({
@@ -140,7 +141,7 @@ describe('DashboardPage', () => {
     await waitFor(() => {
       expect(ds.queryInstant).toHaveBeenCalled();
       expect(ds.queryRange).toHaveBeenCalled();
-      expect(ds.labels).toHaveBeenCalledWith(expect.any(Number), expect.any(Number));
+      expect(ds.labels).toHaveBeenCalledWith(expect.any(Number), expect.any(Number), undefined);
       expect(ds.labelValues).toHaveBeenCalledWith(
         'gen_ai_provider_name',
         expect.any(Number),
