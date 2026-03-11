@@ -405,9 +405,7 @@ export const defaultEvaluationDataSource: EvaluationDataSource = {
     }
     const qs = params.toString();
     const url = qs.length > 0 ? `${evalBasePath}/collections?${qs}` : `${evalBasePath}/collections`;
-    const response = await lastValueFrom(
-      getBackendSrv().fetch<CollectionListResponse>({ method: 'GET', url })
-    );
+    const response = await lastValueFrom(getBackendSrv().fetch<CollectionListResponse>({ method: 'GET', url }));
     return response.data;
   },
 
@@ -486,9 +484,7 @@ export const defaultEvaluationDataSource: EvaluationDataSource = {
       qs.length > 0
         ? `${evalBasePath}/collections/${encodeURIComponent(collectionID)}/members?${qs}`
         : `${evalBasePath}/collections/${encodeURIComponent(collectionID)}/members`;
-    const response = await lastValueFrom(
-      getBackendSrv().fetch<CollectionMembersResponse>({ method: 'GET', url })
-    );
+    const response = await lastValueFrom(getBackendSrv().fetch<CollectionMembersResponse>({ method: 'GET', url }));
     return response.data;
   },
 

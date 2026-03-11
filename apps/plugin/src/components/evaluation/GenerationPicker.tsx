@@ -208,8 +208,7 @@ export default function GenerationPicker({
     setLoadingSaved(true);
 
     const load = selectedCollectionId
-      ? evalDs.listCollectionMembers?.(selectedCollectionId, 50) ??
-        Promise.resolve({ items: [], next_cursor: '' })
+      ? (evalDs.listCollectionMembers?.(selectedCollectionId, 50) ?? Promise.resolve({ items: [], next_cursor: '' }))
       : evalDs.listSavedConversations(undefined, 50);
 
     load
