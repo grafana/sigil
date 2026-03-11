@@ -1207,6 +1207,30 @@ func (a *App) handleEvalCollectionRoutes(w http.ResponseWriter, req *http.Reques
 		http.Error(w, "invalid collection path", http.StatusBadRequest)
 		return
 	}
+	// Validate path structure: {id}, {id}/members, or {id}/members/{saved_id}.
+	segments := strings.Split(rest, "/")
+	switch len(segments) {
+	case 1: // {collection_id}
+	case 2: // {collection_id}/members
+		if segments[1] != "members" {
+			http.Error(w, "invalid collection path", http.StatusBadRequest)
+			return
+		}
+	case 3: // {collection_id}/members/{saved_id}
+		if segments[1] != "members" {
+			http.Error(w, "invalid collection path", http.StatusBadRequest)
+			return
+		}
+	default:
+		http.Error(w, "invalid collection path", http.StatusBadRequest)
+		return
+	}
+	for _, seg := range segments {
+		if seg == "" || seg == "." || seg == ".." {
+			http.Error(w, "invalid collection path", http.StatusBadRequest)
+			return
+		}
+	}
 	path := "/api/v1/eval/collections/" + rest
 	switch req.Method {
 	case http.MethodGet:

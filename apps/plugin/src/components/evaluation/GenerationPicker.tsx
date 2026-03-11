@@ -238,8 +238,7 @@ export default function GenerationPicker({
       return;
     }
     let cancelled = false;
-    evalDs
-      .listCollections?.(100)
+    (evalDs.listCollections?.(100) ?? Promise.resolve({ items: [], next_cursor: '' }))
       .then((resp) => {
         if (!cancelled) {
           setCollections(resp.items ?? []);
