@@ -33,8 +33,16 @@ func NewTemplateService(store evalpkg.TemplateStore, evalCreator evaluatorCreato
 	return &TemplateService{store: store, evalCreator: evalCreator, now: time.Now}
 }
 
+// parseVersionDate extracts the date portion from a version string in
+// YYYY-MM-DD or YYYY-MM-DD.N format. Returns zero time if parsing fails.
+func parseVersionDate(version string) time.Time {
+	datePart, _, _ := strings.Cut(version, ".")
+	t, _ := time.Parse(time.DateOnly, datePart)
+	return t
+}
+
 func predefinedTemplateDefinition(template predefined.Template) evalpkg.TemplateDefinition {
-	versionTime, _ := time.Parse(time.DateOnly, template.Version)
+	versionTime := parseVersionDate(template.Version)
 	return evalpkg.TemplateDefinition{
 		TemplateID:    template.EvaluatorID,
 		Scope:         evalpkg.TemplateScopeGlobal,
@@ -49,7 +57,7 @@ func predefinedTemplateDefinition(template predefined.Template) evalpkg.Template
 }
 
 func predefinedTemplateVersion(template predefined.Template) evalpkg.TemplateVersion {
-	versionTime, _ := time.Parse(time.DateOnly, template.Version)
+	versionTime := parseVersionDate(template.Version)
 	return evalpkg.TemplateVersion{
 		TemplateID: template.EvaluatorID,
 		Version:    template.Version,
