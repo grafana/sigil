@@ -24,10 +24,9 @@ type ProviderConfig = {
 };
 
 class DashboardLabelFiltersVariable extends AdHocFiltersVariable {
-  constructor(
-    initialFilters: AdHocVariableFilter[],
-    private readonly getConfig: () => ProviderConfig
-  ) {
+  private readonly getConfig: () => ProviderConfig;
+
+  constructor(initialFilters: AdHocVariableFilter[], getConfig: () => ProviderConfig) {
     super({
       name: 'labelFilters',
       datasource: null,
@@ -37,14 +36,15 @@ class DashboardLabelFiltersVariable extends AdHocFiltersVariable {
       inputPlaceholder: 'Filter by label values',
       getTagKeysProvider: async () => ({
         replace: true,
-        values: this.getConfig().labelKeyOptions.map(toMetricFindValue),
+        values: getConfig().labelKeyOptions.map(toMetricFindValue),
       }),
       getTagValuesProvider: async (_variable, filter) => ({
         replace: true,
-        values: (await this.getConfig().loadValues(fromAdHocFilter(filter))).map(toMetricFindValue),
+        values: (await getConfig().loadValues(fromAdHocFilter(filter))).map(toMetricFindValue),
       }),
       expressionBuilder: () => '',
     });
+    this.getConfig = getConfig;
   }
 
   override _getOperators() {

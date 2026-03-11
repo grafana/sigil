@@ -116,7 +116,7 @@ describe('FilterToolbar', () => {
     expect(screen.queryByText('Label filter editor')).not.toBeInTheDocument();
   });
 
-  it('hides label filter UI entirely when label filters are unavailable', () => {
+  it('hides label filter toggle and editor when hideLabelFilters is true', () => {
     render(
       <FilterToolbar
         timeRange={timeRange}
@@ -139,7 +139,31 @@ describe('FilterToolbar', () => {
     );
 
     expect(screen.queryByLabelText('Show label filters')).not.toBeInTheDocument();
-    expect(screen.queryByText('1 label filter active')).not.toBeInTheDocument();
     expect(screen.queryByText('Label filter editor')).not.toBeInTheDocument();
+  });
+
+  it('shows active label filter badge when hideLabelFilters is true and filters are active', () => {
+    render(
+      <FilterToolbar
+        timeRange={timeRange}
+        filters={{
+          ...emptyFilters,
+          labelFilters: [{ key: 'service_name', operator: '=', value: 'sigil-api' }],
+        }}
+        providerOptions={['openai']}
+        modelOptions={['gpt-4o']}
+        agentOptions={['assistant']}
+        labelKeyOptions={['service_name']}
+        labelsLoading={false}
+        dataSource={mockDataSource}
+        from={1}
+        to={2}
+        hideLabelFilters
+        onTimeRangeChange={jest.fn()}
+        onFiltersChange={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText('1 label filter active')).toBeInTheDocument();
   });
 });

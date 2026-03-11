@@ -76,7 +76,7 @@ export function FilterToolbar({
     );
   }, [filters]);
   const completedLabelFilterCount = filters.labelFilters.filter((lf) => lf.key && lf.value).length;
-  const hiddenLabelFilterCount = !hideLabelFilters && !labelFilterRowOpen ? completedLabelFilterCount : 0;
+  const hiddenLabelFilterCount = hideLabelFilters || !labelFilterRowOpen ? completedLabelFilterCount : 0;
 
   const handleProviderChange = useCallback(
     (values: Array<SelectableValue<string>>) => {
