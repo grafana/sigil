@@ -14,8 +14,8 @@ import (
 
 type mockCollectionStore struct {
 	mu          sync.Mutex
-	collections map[string]*evalpkg.Collection  // key: tenantID/collectionID
-	members     map[string]map[string]bool       // key: collectionID -> set of savedIDs
+	collections map[string]*evalpkg.Collection // key: tenantID/collectionID
+	members     map[string]map[string]bool     // key: collectionID -> set of savedIDs
 	createErr   error
 }
 
