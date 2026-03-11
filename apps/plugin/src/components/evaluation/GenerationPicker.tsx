@@ -378,16 +378,13 @@ export default function GenerationPicker({
           {collections.length > 0 && (
             <div className={styles.searchBox}>
               <Select
-                options={[
-                  { label: 'All saved conversations', value: undefined },
-                  ...collections.map((c) => ({
-                    label: `${c.name} (${c.member_count})`,
-                    value: c.collection_id,
-                  })),
-                ]}
-                value={selectedCollectionId}
-                onChange={(v) => setSelectedCollectionId(v.value)}
-                placeholder="Filter by collection..."
+                options={collections.map((c) => ({
+                  label: `${c.name} (${c.member_count})`,
+                  value: c.collection_id,
+                }))}
+                value={selectedCollectionId ?? null}
+                onChange={(v) => setSelectedCollectionId(v?.value)}
+                placeholder="All saved conversations"
                 isClearable
               />
             </div>
