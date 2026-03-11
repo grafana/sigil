@@ -3,6 +3,7 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, Switch, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import DataTable, { type ColumnDef } from '../shared/DataTable';
+import ActorBadge from './ActorBadge';
 import {
   formatEvaluatorId,
   getKindBadgeColor,
@@ -31,6 +32,21 @@ function formatMatchEntries(match: Record<string, string | string[]>): string[] 
   });
 }
 
+function formatDate(iso: string): string {
+  if (!iso) {
+    return '—';
+  }
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime()) || d.getUTCFullYear() <= 1) {
+      return '—';
+    }
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch {
+    return '—';
+  }
+}
+
 const getStyles = (theme: GrafanaTheme2) => ({
   ruleId: css({
     display: 'flex',
@@ -46,6 +62,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexWrap: 'wrap' as const,
     gap: theme.spacing(0.5),
+    minWidth: 0,
+  }),
+  metaCell: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    flexWrap: 'wrap',
     minWidth: 0,
   }),
 });
@@ -162,8 +185,22 @@ export default function RuleTable({ rules, evaluators, onToggle, onClick, showTo
       },
     });
 
+    cols.push({
+      id: 'created',
+      header: 'Created',
+      width: 180,
+      cell: (rule: Rule) => (
+        <div className={styles.metaCell}>
+          <Text color="secondary" variant="bodySmall">
+            {formatDate(rule.created_at)} by
+          </Text>
+          <ActorBadge actor={rule.created_by} />
+        </div>
+      ),
+    });
+
     return cols;
-  }, [showToggle, onToggle, evaluators, styles.ruleId, styles.matchCell, styles.evaluators]);
+  }, [showToggle, onToggle, evaluators, styles.ruleId, styles.matchCell, styles.evaluators, styles.metaCell]);
 
   return (
     <DataTable<Rule>

@@ -10,6 +10,7 @@ import EvaluatorForm from '../components/evaluation/EvaluatorForm';
 import EvalTestPanel from '../components/evaluation/EvalTestPanel';
 import VersionHistoryTable from '../components/evaluation/VersionHistoryTable';
 import VersionCompare from '../components/evaluation/VersionCompare';
+import ActorBadge from '../components/evaluation/ActorBadge';
 import { getSectionTitleStyles } from '../components/evaluation/sectionStyles';
 import { useOptionalEvalRulesDataContext } from '../contexts/EvalRulesDataContext';
 
@@ -214,7 +215,10 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
           all.map((e) => ({
             version: e.version,
             changelog: '—',
+            created_by: e.created_by,
             created_at: e.created_at,
+            updated_by: e.updated_by,
+            updated_at: e.updated_at,
           }))
         );
         return;
@@ -321,7 +325,7 @@ export default function EditEvaluatorPage(props: EditEvaluatorPageProps) {
               <Badge text={evaluator.version} color="blue" />
             </div>
             <div className={styles.headerSubtitle}>
-              Update the evaluator configuration and test it against recent generations.
+              Created by <ActorBadge actor={evaluator.created_by} />.
             </div>
           </div>
         </div>

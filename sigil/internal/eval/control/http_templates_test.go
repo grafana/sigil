@@ -57,9 +57,21 @@ func TestTemplateHTTPCreateAndGet(t *testing.T) {
 	if createBody["kind"] != "llm_judge" {
 		t.Errorf("expected kind=llm_judge, got %v", createBody["kind"])
 	}
+	if createBody["created_by"] != "test-user@example.com" {
+		t.Errorf("expected created_by=test-user@example.com, got %v", createBody["created_by"])
+	}
+	if createBody["updated_by"] != "test-user@example.com" {
+		t.Errorf("expected updated_by=test-user@example.com, got %v", createBody["updated_by"])
+	}
 	versions, ok := createBody["versions"].([]any)
 	if !ok || len(versions) != 1 {
 		t.Errorf("expected versions array with 1 entry, got %v", createBody["versions"])
+	}
+	if ok && len(versions) == 1 {
+		versionSummary, _ := versions[0].(map[string]any)
+		if versionSummary["updated_by"] != "test-user@example.com" {
+			t.Errorf("expected version updated_by=test-user@example.com, got %v", versionSummary["updated_by"])
+		}
 	}
 
 	// GET by ID should include config and output_keys from latest version.
@@ -81,6 +93,73 @@ func TestTemplateHTTPCreateAndGet(t *testing.T) {
 	config, _ := getBody["config"].(map[string]any)
 	if config["provider"] != "openai" {
 		t.Errorf("expected config.provider=openai, got %v", config["provider"])
+	}
+	getVersions, ok := getBody["versions"].([]any)
+	if !ok || len(getVersions) != 1 {
+		t.Fatalf("expected get response versions array with 1 entry, got %v", getBody["versions"])
+	}
+	getVersionSummary, _ := getVersions[0].(map[string]any)
+	if getVersionSummary["updated_by"] != "test-user@example.com" {
+		t.Errorf("expected get version updated_by=test-user@example.com, got %v", getVersionSummary["updated_by"])
+	}
+}
+
+func TestTemplateHTTPCreateRequiresGrafanaUser(t *testing.T) {
+	mux, _, _ := newTemplateHTTPEnv(t)
+
+	createPayload := `{
+		"template_id":"my_team.policy_check",
+		"kind":"llm_judge",
+		"version":"2026-03-02",
+		"config":{"provider":"openai","model":"gpt-4o-mini"},
+		"output_keys":[{"key":"compliance","type":"number"}]
+	}`
+	createResp := doRequestWithoutActor(mux, http.MethodPost, "/api/v1/eval/templates", createPayload)
+	if createResp.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 create template, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+	if !strings.Contains(createResp.Body.String(), "grafana user identity is required") {
+		t.Fatalf("expected missing identity error, got body=%s", createResp.Body.String())
+	}
+}
+
+func TestTemplateHTTPCreateRejectsUntrustedGrafanaUser(t *testing.T) {
+	mux, _, _ := newTemplateHTTPEnv(t)
+
+	createPayload := `{
+		"template_id":"my_team.policy_check",
+		"kind":"llm_judge",
+		"version":"2026-03-02",
+		"config":{"provider":"openai","model":"gpt-4o-mini"},
+		"output_keys":[{"key":"compliance","type":"number"}]
+	}`
+	createResp := doRequestWithUntrustedActor(mux, http.MethodPost, "/api/v1/eval/templates", createPayload)
+	if createResp.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 create template with untrusted grafana user, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+	if !strings.Contains(createResp.Body.String(), "trusted grafana user identity is required") {
+		t.Fatalf("expected trusted identity error, got body=%s", createResp.Body.String())
+	}
+}
+
+func TestTemplateHTTPCreateAllowsMissingGrafanaUserInDevelopment(t *testing.T) {
+	t.Setenv("DEVELOPMENT", "true")
+
+	mux, _, _ := newTemplateHTTPEnv(t)
+
+	createPayload := `{
+		"template_id":"my_team.policy_check",
+		"kind":"llm_judge",
+		"version":"2026-03-02",
+		"config":{"provider":"openai","model":"gpt-4o-mini"},
+		"output_keys":[{"key":"compliance","type":"number"}]
+	}`
+	createResp := doRequestWithoutActor(mux, http.MethodPost, "/api/v1/eval/templates", createPayload)
+	if createResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 create template in development mode, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+	if !strings.Contains(createResp.Body.String(), `"created_by":"system@grafana.com"`) {
+		t.Fatalf("expected development fallback actor in response, got body=%s", createResp.Body.String())
 	}
 }
 

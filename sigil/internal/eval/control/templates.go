@@ -16,7 +16,7 @@ import (
 // evaluatorCreator abstracts evaluator creation with validation and metrics refresh.
 // *Service satisfies this interface.
 type evaluatorCreator interface {
-	CreateEvaluator(ctx context.Context, tenantID string, evaluator evalpkg.EvaluatorDefinition) (evalpkg.EvaluatorDefinition, error)
+	CreateEvaluator(ctx context.Context, tenantID, actorID string, evaluator evalpkg.EvaluatorDefinition) (evalpkg.EvaluatorDefinition, error)
 }
 
 // TemplateService coordinates template CRUD, versioning, forking, and validation.
@@ -40,6 +40,8 @@ func predefinedTemplateDefinition(template predefined.Template) evalpkg.Template
 		LatestVersion: template.Version,
 		Kind:          template.Kind,
 		Description:   template.Description,
+		CreatedBy:     LegacyActorID,
+		UpdatedBy:     LegacyActorID,
 	}
 }
 
@@ -49,6 +51,8 @@ func predefinedTemplateVersion(template predefined.Template) evalpkg.TemplateVer
 		Version:    template.Version,
 		Config:     cloneMap(template.Config),
 		OutputKeys: append([]evalpkg.OutputKey(nil), template.OutputKeys...),
+		CreatedBy:  LegacyActorID,
+		UpdatedBy:  LegacyActorID,
 	}
 }
 
@@ -125,7 +129,7 @@ type ForkTemplateRequest struct {
 
 // CreateTemplate validates and persists a new template with its initial version.
 // Users can only create tenant-scoped templates.
-func (s *TemplateService) CreateTemplate(ctx context.Context, tenantID string, req CreateTemplateRequest) (*evalpkg.TemplateDefinition, error) {
+func (s *TemplateService) CreateTemplate(ctx context.Context, tenantID, actorID string, req CreateTemplateRequest) (*evalpkg.TemplateDefinition, error) {
 	normalizedReq, err := req.normalizeAndValidate()
 	if err != nil {
 		return nil, err
@@ -142,6 +146,8 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, tenantID string, r
 		LatestVersion: version,
 		Kind:          kind,
 		Description:   normalizedReq.Description,
+		CreatedBy:     normalizeActorID(actorID),
+		UpdatedBy:     normalizeActorID(actorID),
 		CreatedAt:     now,
 		UpdatedAt:     now,
 	}
@@ -152,7 +158,10 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, tenantID string, r
 		Config:     normalizedReq.Config,
 		OutputKeys: normalizedReq.OutputKeys,
 		Changelog:  normalizedReq.Changelog,
+		CreatedBy:  normalizeActorID(actorID),
+		UpdatedBy:  normalizeActorID(actorID),
 		CreatedAt:  now,
+		UpdatedAt:  now,
 	}
 
 	existing, err := s.store.GetTemplate(ctx, tmpl.TenantID, templateID)
@@ -229,7 +238,7 @@ func (s *TemplateService) DeleteTemplate(ctx context.Context, tenantID, template
 }
 
 // PublishVersion adds a new immutable version to an existing template.
-func (s *TemplateService) PublishVersion(ctx context.Context, tenantID, templateID string, req PublishVersionRequest) (*evalpkg.TemplateVersion, error) {
+func (s *TemplateService) PublishVersion(ctx context.Context, tenantID, actorID, templateID string, req PublishVersionRequest) (*evalpkg.TemplateVersion, error) {
 	trimmedTenantID := strings.TrimSpace(tenantID)
 	trimmedTemplateID := strings.TrimSpace(templateID)
 
@@ -265,7 +274,10 @@ func (s *TemplateService) PublishVersion(ctx context.Context, tenantID, template
 		Config:     normalizedReq.Config,
 		OutputKeys: normalizedReq.OutputKeys,
 		Changelog:  normalizedReq.Changelog,
+		CreatedBy:  normalizeActorID(actorID),
+		UpdatedBy:  normalizeActorID(actorID),
 		CreatedAt:  now,
+		UpdatedAt:  now,
 	}
 
 	if err := s.store.PublishTemplateVersion(ctx, ver); err != nil {
@@ -300,7 +312,7 @@ func (s *TemplateService) ListTemplateVersions(ctx context.Context, tenantID, te
 }
 
 // ForkTemplate creates a concrete evaluator from a template version, applying optional config overrides.
-func (s *TemplateService) ForkTemplate(ctx context.Context, tenantID, templateID string, req ForkTemplateRequest) (*evalpkg.EvaluatorDefinition, error) {
+func (s *TemplateService) ForkTemplate(ctx context.Context, tenantID, actorID, templateID string, req ForkTemplateRequest) (*evalpkg.EvaluatorDefinition, error) {
 	if s.evalCreator == nil {
 		return nil, UnavailableError("evaluator creator is not configured", errors.New("evaluator creator is required"))
 	}
@@ -368,7 +380,7 @@ func (s *TemplateService) ForkTemplate(ctx context.Context, tenantID, templateID
 		SourceTemplateVersion: versionStr,
 	}
 
-	created, err := s.evalCreator.CreateEvaluator(ctx, trimmedTenantID, fork)
+	created, err := s.evalCreator.CreateEvaluator(ctx, trimmedTenantID, actorID, fork)
 	if err != nil {
 		return nil, err
 	}

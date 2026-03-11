@@ -20,6 +20,7 @@ import TemplateConfigSummary from '../components/evaluation/TemplateConfigSummar
 import VersionHistoryTable from '../components/evaluation/VersionHistoryTable';
 import PublishVersionForm from '../components/evaluation/PublishVersionForm';
 import VersionCompare from '../components/evaluation/VersionCompare';
+import ActorBadge from '../components/evaluation/ActorBadge';
 import { getSectionTitleStyles } from '../components/evaluation/sectionStyles';
 
 const EVAL_TEMPLATES_BASE = `${PLUGIN_BASE}/${ROUTES.Evaluation}/templates`;
@@ -348,7 +349,10 @@ export default function TemplateDetailPage(props: TemplateDetailPageProps) {
               <Badge text={template.scope} color={template.scope === 'global' ? 'orange' : 'blue'} />
               <Badge text={`v${template.latest_version}`} color="green" />
             </div>
-            {template.description && <div className={styles.headerSubtitle}>{template.description}</div>}
+            <div className={styles.headerSubtitle}>
+              {template.description ? `${template.description} ` : ''}
+              Created by <ActorBadge actor={template.created_by} />.
+            </div>
           </div>
         </div>
         <Stack direction="row" gap={1}>

@@ -105,6 +105,8 @@ type EvalEvaluatorModel struct {
 	IsPredefined          bool       `gorm:"not null;default:false"`
 	SourceTemplateID      *string    `gorm:"size:255"`
 	SourceTemplateVersion *string    `gorm:"size:64"`
+	CreatedBy             string     `gorm:"size:255;not null;default:system@grafana.com"`
+	UpdatedBy             string     `gorm:"size:255;not null;default:system@grafana.com"`
 	DeletedAt             *time.Time `gorm:"type:datetime(6);index:idx_eval_evaluators_tenant_deleted_updated,priority:3"`
 	CreatedAt             time.Time  `gorm:"type:datetime(6);not null;autoCreateTime"`
 	UpdatedAt             time.Time  `gorm:"type:datetime(6);not null;autoUpdateTime;index:idx_eval_evaluators_tenant_deleted_updated,priority:4"`
@@ -123,6 +125,8 @@ type EvalRuleModel struct {
 	MatchJSON        string     `gorm:"type:json;not null"`
 	SampleRate       float64    `gorm:"not null;default:0.01"`
 	EvaluatorIDsJSON string     `gorm:"type:json;not null"`
+	CreatedBy        string     `gorm:"size:255;not null;default:system@grafana.com"`
+	UpdatedBy        string     `gorm:"size:255;not null;default:system@grafana.com"`
 	DeletedAt        *time.Time `gorm:"type:datetime(6);index:idx_eval_rules_tenant_enabled_deleted,priority:3"`
 	CreatedAt        time.Time  `gorm:"type:datetime(6);not null;autoCreateTime"`
 	UpdatedAt        time.Time  `gorm:"type:datetime(6);not null;autoUpdateTime"`
@@ -140,6 +144,8 @@ type EvalTemplateModel struct {
 	LatestVersion string     `gorm:"size:64;not null"`
 	Kind          string     `gorm:"size:32;not null"`
 	Description   *string    `gorm:"type:text"`
+	CreatedBy     string     `gorm:"size:255;not null;default:system@grafana.com"`
+	UpdatedBy     string     `gorm:"size:255;not null;default:system@grafana.com"`
 	DeletedAt     *time.Time `gorm:"type:datetime(6)"`
 	CreatedAt     time.Time  `gorm:"type:datetime(6);not null;autoCreateTime"`
 	UpdatedAt     time.Time  `gorm:"type:datetime(6);not null;autoUpdateTime"`
@@ -155,6 +161,7 @@ type EvalTemplateVersionModel struct {
 	ConfigJSON     string    `gorm:"type:json;not null"`
 	OutputKeysJSON string    `gorm:"type:json;not null"`
 	Changelog      *string   `gorm:"type:text"`
+	CreatedBy      string    `gorm:"size:255;not null;default:system@grafana.com"`
 	CreatedAt      time.Time `gorm:"type:datetime(6);not null;autoCreateTime"`
 }
 

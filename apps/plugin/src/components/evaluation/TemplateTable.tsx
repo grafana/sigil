@@ -4,6 +4,7 @@ import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, Button, ConfirmModal, IconButton, Text, useStyles2 } from '@grafana/ui';
 import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type TemplateDefinition } from '../../evaluation/types';
 import DataTable, { type ColumnDef } from '../shared/DataTable';
+import ActorBadge from './ActorBadge';
 
 export type TemplateTableProps = {
   templates: TemplateDefinition[];
@@ -101,9 +102,12 @@ export default function TemplateTable({ templates, onSelect, onDelete, onFork }:
         header: 'Created',
         width: 120,
         cell: (template: TemplateDefinition) => (
-          <Text color="secondary" variant="bodySmall">
-            {formatDate(template.created_at)}
-          </Text>
+          <div>
+            <Text color="secondary" variant="bodySmall">
+              {formatDate(template.created_at)}
+            </Text>
+            <ActorBadge actor={template.created_by} />
+          </div>
         ),
       },
     ];

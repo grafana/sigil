@@ -17,6 +17,7 @@ Purpose: define plugin UI architecture, proxy boundaries, and frame-compatibilit
 - Frontend must not call Sigil API query endpoints directly.
 - Use `getBackendSrv().fetch()` for plugin-to-backend calls by default.
 - Exception: browser `fetch()` is allowed for the conversation search streaming route because the page must consume incremental NDJSON chunks.
+- Evaluation actor metadata is backend-owned. Frontend eval request payloads must not send `created_by` or `updated_by`.
 - Conversation detail fetch prefers the shared-ref V2 payload via the stable V1 conversation route using `format=v2`, then hydrates it back into the existing runtime detail shape inside the conversation API layer.
 
 ## Proxy Contract
@@ -88,6 +89,12 @@ Current plugin query contract:
   - `POST /api/v1/eval/rules:preview`
   - `GET /api/v1/eval/judge/providers`
   - `GET /api/v1/eval/judge/models?provider={id}`
+
+For eval write routes, the plugin backend also forwards trusted Grafana user identity to Sigil using:
+
+- `X-Grafana-User`
+
+This header is derived from Grafana request context in the plugin backend, not from page code.
 
 Conversation search and search-tag discovery are plugin-owned orchestration flows:
 
@@ -200,6 +207,7 @@ See `docs/references/grafana-query-response-shapes.md`.
   - support two-level navigation: overview, evaluators, and rules sub-pages under a single Evaluation nav entry
   - use shared effective-prompt fallback for `llm_judge` forms, summaries, and detail views so omitted prompts still display the backend defaults
   - explain the `llm_judge` variable model in authoring surfaces: simple variables render plain text, structured variables render tagged fragments, and empty structured values disappear
+  - display actor attribution returned by the backend for eval resources; do not let users edit actor fields client-side
 - Agents:
   - list tenant agent heads with prefix search and cursor pagination
   - surface unnamed-agent bucket explicitly with warning treatment

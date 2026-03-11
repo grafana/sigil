@@ -3,6 +3,7 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, Button, ConfirmModal, IconButton, Stack, Text, useStyles2 } from '@grafana/ui';
 import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type TemplateDefinition } from '../../evaluation/types';
+import ActorBadge from './ActorBadge';
 
 export type TemplateCardGridProps = {
   templates: TemplateDefinition[];
@@ -153,7 +154,9 @@ export default function TemplateCardGrid({ templates, onSelect, onDelete, onFork
 
               <div className={styles.meta}>
                 <span className={styles.metaText}>Version {template.latest_version}</span>
-                <span className={styles.metaText}>Created {formatDate(template.created_at)}</span>
+                <span className={styles.metaText}>
+                  Created {formatDate(template.created_at)} by <ActorBadge actor={template.created_by} />
+                </span>
               </div>
 
               <div className={styles.description}>

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go (HTTP handler, evaluator composition), TypeScript/React (Grafana UI components), existing conversation search APIs for generation picking.
 
-**Design doc:** `docs/plans/2026-03-03-eval-quick-test-design.md`
+**Design doc:** `docs/design-docs/2026-03-03-eval-quick-test-design.md`
 
 ---
 

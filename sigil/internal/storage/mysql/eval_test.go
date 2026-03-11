@@ -23,6 +23,8 @@ func TestEvalStoreEvaluatorCRUD(t *testing.T) {
 		EvaluatorID: "sigil.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindLLMJudge,
+		CreatedBy:   "alice@example.com",
+		UpdatedBy:   "alice@example.com",
 		Config: map[string]any{
 			"provider":      "openai",
 			"model":         "gpt-4o-mini",
@@ -46,6 +48,12 @@ func TestEvalStoreEvaluatorCRUD(t *testing.T) {
 	}
 	if evaluator.Config["provider"] != "openai" {
 		t.Errorf("unexpected provider config %#v", evaluator.Config)
+	}
+	if evaluator.CreatedBy != "alice@example.com" {
+		t.Errorf("expected created_by to round-trip, got %q", evaluator.CreatedBy)
+	}
+	if evaluator.UpdatedBy != "alice@example.com" {
+		t.Errorf("expected updated_by to round-trip, got %q", evaluator.UpdatedBy)
 	}
 
 	items, nextCursor, err := store.ListEvaluators(context.Background(), "tenant-a", 10, 0)
@@ -114,6 +122,8 @@ func TestEvalStoreCreateEvaluatorRestoresSoftDeletedRows(t *testing.T) {
 		EvaluatorID: "sigil.helpfulness",
 		Version:     "2026-02-17",
 		Kind:        evalpkg.EvaluatorKindRegex,
+		CreatedBy:   "alice@example.com",
+		UpdatedBy:   "alice@example.com",
 		Config:      map[string]any{"pattern": "good"},
 		OutputKeys:  []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeBool}},
 	}
@@ -126,6 +136,8 @@ func TestEvalStoreCreateEvaluatorRestoresSoftDeletedRows(t *testing.T) {
 
 	recreated := original
 	recreated.Kind = evalpkg.EvaluatorKindHeuristic
+	recreated.CreatedBy = "bob@example.com"
+	recreated.UpdatedBy = "bob@example.com"
 	recreated.Config = heuristicNotEmptyConfigForStorageTest()
 	recreated.OutputKeys = []evalpkg.OutputKey{{Key: "passed", Type: evalpkg.ScoreTypeBool}}
 	if err := store.CreateEvaluator(context.Background(), recreated); err != nil {
@@ -138,6 +150,12 @@ func TestEvalStoreCreateEvaluatorRestoresSoftDeletedRows(t *testing.T) {
 	}
 	if got == nil {
 		t.Fatal("expected recreated evaluator")
+	}
+	if got.CreatedBy != "bob@example.com" {
+		t.Fatalf("expected recreated evaluator created_by to be replaced, got %q", got.CreatedBy)
+	}
+	if got.UpdatedBy != "bob@example.com" {
+		t.Fatalf("expected recreated evaluator updated_by to be replaced, got %q", got.UpdatedBy)
 	}
 	if got.Kind != recreated.Kind {
 		t.Fatalf("expected recreated kind %q, got %q", recreated.Kind, got.Kind)

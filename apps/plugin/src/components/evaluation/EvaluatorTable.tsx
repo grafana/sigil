@@ -4,6 +4,7 @@ import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, ConfirmModal, IconButton, Text, useStyles2 } from '@grafana/ui';
 import DataTable, { type ColumnDef } from '../shared/DataTable';
 import { EVALUATOR_KIND_LABELS, getKindBadgeColor, type Evaluator } from '../../evaluation/types';
+import ActorBadge from './ActorBadge';
 
 export type EvaluatorTableProps = {
   evaluators: Evaluator[];
@@ -102,9 +103,12 @@ export default function EvaluatorTable({ evaluators, selectedEvaluatorID, onSele
         header: 'Created',
         width: 120,
         cell: (evaluator: Evaluator) => (
-          <Text color="secondary" variant="bodySmall">
-            {formatDate(evaluator.created_at)}
-          </Text>
+          <div>
+            <Text color="secondary" variant="bodySmall">
+              {formatDate(evaluator.created_at)}
+            </Text>
+            <ActorBadge actor={evaluator.created_by} />
+          </div>
         ),
       },
     ];

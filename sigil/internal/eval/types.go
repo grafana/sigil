@@ -93,6 +93,8 @@ type EvaluatorDefinition struct {
 	IsPredefined          bool           `json:"is_predefined"`
 	SourceTemplateID      string         `json:"source_template_id,omitempty"`
 	SourceTemplateVersion string         `json:"source_template_version,omitempty"`
+	CreatedBy             string         `json:"created_by"`
+	UpdatedBy             string         `json:"updated_by"`
 	DeletedAt             *time.Time     `json:"deleted_at,omitempty"`
 	CreatedAt             time.Time      `json:"created_at"`
 	UpdatedAt             time.Time      `json:"updated_at"`
@@ -106,6 +108,8 @@ type RuleDefinition struct {
 	Match        map[string]any `json:"match"`
 	SampleRate   float64        `json:"sample_rate"`
 	EvaluatorIDs []string       `json:"evaluator_ids"`
+	CreatedBy    string         `json:"created_by"`
+	UpdatedBy    string         `json:"updated_by"`
 	DeletedAt    *time.Time     `json:"deleted_at,omitempty"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
@@ -127,6 +131,8 @@ type TemplateDefinition struct {
 	LatestVersion string        `json:"latest_version"`
 	Kind          EvaluatorKind `json:"kind"`
 	Description   string        `json:"description,omitempty"`
+	CreatedBy     string        `json:"created_by"`
+	UpdatedBy     string        `json:"updated_by"`
 	DeletedAt     *time.Time    `json:"deleted_at,omitempty"`
 	CreatedAt     time.Time     `json:"created_at"`
 	UpdatedAt     time.Time     `json:"updated_at"`
@@ -140,7 +146,10 @@ type TemplateVersion struct {
 	Config     map[string]any `json:"config"`
 	OutputKeys []OutputKey    `json:"output_keys"`
 	Changelog  string         `json:"changelog,omitempty"`
+	CreatedBy  string         `json:"created_by"`
+	UpdatedBy  string         `json:"updated_by"`
 	CreatedAt  time.Time      `json:"created_at"`
+	UpdatedAt  time.Time      `json:"updated_at"`
 }
 
 type GenerationScore struct {
@@ -305,8 +314,8 @@ type TemplateStore interface {
 	GetLatestTemplateVersion(ctx context.Context, tenantID, templateID string) (*TemplateVersion, error)
 	ListTemplateVersions(ctx context.Context, tenantID, templateID string) ([]TemplateVersion, error)
 
-	UpdateTemplateLatestVersion(ctx context.Context, tenantID, templateID, version string) error
-	UpdateTemplateDescription(ctx context.Context, tenantID, templateID, description string) error
+	UpdateTemplateLatestVersion(ctx context.Context, tenantID, templateID, version, updatedBy string) error
+	UpdateTemplateDescription(ctx context.Context, tenantID, templateID, description, updatedBy string) error
 
 	// PublishTemplateVersion atomically creates a version and updates the
 	// template's latest_version pointer. Implementations must wrap both
