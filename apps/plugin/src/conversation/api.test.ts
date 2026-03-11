@@ -252,13 +252,11 @@ describe('defaultConversationsDataSource', () => {
     ]);
     expect(backendFetchMock).toHaveBeenNthCalledWith(1, {
       method: 'GET',
-      url:
-        '/api/datasources/proxy/uid/tempo-uid/api/v2/search/tags?start=1739602800&end=1739613600&q=%7B+span.gen_ai.conversation.id+%21%3D+%22%22+%7D&scope=span',
+      url: '/api/datasources/proxy/uid/tempo-uid/api/v2/search/tags?start=1739602800&end=1739613600&q=%7B+span.gen_ai.conversation.id+%21%3D+%22%22+%7D&scope=span',
     });
     expect(backendFetchMock).toHaveBeenNthCalledWith(2, {
       method: 'GET',
-      url:
-        '/api/datasources/proxy/uid/tempo-uid/api/v2/search/tags?start=1739602800&end=1739613600&q=%7B+span.gen_ai.conversation.id+%21%3D+%22%22+%7D&scope=resource',
+      url: '/api/datasources/proxy/uid/tempo-uid/api/v2/search/tags?start=1739602800&end=1739613600&q=%7B+span.gen_ai.conversation.id+%21%3D+%22%22+%7D&scope=resource',
     });
   });
 
@@ -275,8 +273,7 @@ describe('defaultConversationsDataSource', () => {
     expect(values).toEqual(['prod']);
     expect(backendFetchMock).toHaveBeenCalledWith({
       method: 'GET',
-      url:
-        '/api/datasources/proxy/uid/tempo-uid/api/v2/search/tag/resource.k8s.namespace.name/values?start=1739602800&end=1739613600&q=%7B+span.gen_ai.conversation.id+%21%3D+%22%22+%7D',
+      url: '/api/datasources/proxy/uid/tempo-uid/api/v2/search/tag/resource.k8s.namespace.name/values?start=1739602800&end=1739613600&q=%7B+span.gen_ai.conversation.id+%21%3D+%22%22+%7D',
     });
   });
 
@@ -302,7 +299,10 @@ describe('defaultConversationsDataSource', () => {
     backendFetchMock.mockReturnValue(
       of({
         data: {
-          tagValues: [{ type: 'string', value: 'assistant' }, { type: 'string', value: 'worker' }],
+          tagValues: [
+            { type: 'string', value: 'assistant' },
+            { type: 'string', value: 'worker' },
+          ],
         },
       })
     );
@@ -331,8 +331,7 @@ describe('defaultConversationsDataSource', () => {
 
     expect(backendFetchMock).toHaveBeenLastCalledWith({
       method: 'GET',
-      url:
-        '/api/plugins/grafana-sigil-app/resources/query/search/tags?start=1739602800&end=1739613600&q=%7B+span.gen_ai.conversation.id+%21%3D+%22%22+%7D',
+      url: '/api/plugins/grafana-sigil-app/resources/query/search/tags?start=1739602800&end=1739613600&q=%7B+span.gen_ai.conversation.id+%21%3D+%22%22+%7D',
     });
   });
 });

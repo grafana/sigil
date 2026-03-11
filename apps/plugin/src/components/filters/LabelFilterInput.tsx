@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import type { AdHocVariableFilter, GrafanaTheme2, MetricFindValue, SelectableValue } from '@grafana/data';
 import { initPluginTranslations } from '@grafana/i18n';
@@ -25,7 +25,10 @@ type ProviderConfig = {
 };
 
 class DashboardLabelFiltersVariable extends AdHocFiltersVariable {
-  constructor(initialFilters: AdHocVariableFilter[], private readonly getConfig: () => ProviderConfig) {
+  constructor(
+    initialFilters: AdHocVariableFilter[],
+    private readonly getConfig: () => ProviderConfig
+  ) {
     super({
       name: 'labelFilters',
       datasource: null,
@@ -48,11 +51,13 @@ class DashboardLabelFiltersVariable extends AdHocFiltersVariable {
   override _getOperators() {
     const allowed = new Set(this.getConfig().allowedOperators);
 
-    return OPERATORS.filter((operator) => allowed.has(operator.value as FilterOperator)).map(({ value, description }) => ({
-      label: value,
-      value,
-      description,
-    }));
+    return OPERATORS.filter((operator) => allowed.has(operator.value as FilterOperator)).map(
+      ({ value, description }) => ({
+        label: value,
+        value,
+        description,
+      })
+    );
   }
 }
 
@@ -83,10 +88,11 @@ export function LabelFilterInput({
     loadValues,
   };
 
-  const variable = useMemo(
-    () => new DashboardLabelFiltersVariable(toAdHocFilters(filters), () => configRef.current),
-    []
-  );
+  const variableRef = useRef<DashboardLabelFiltersVariable | null>(null);
+  if (variableRef.current === null) {
+    variableRef.current = new DashboardLabelFiltersVariable(toAdHocFilters(filters), () => configRef.current);
+  }
+  const variable = variableRef.current;
   const variableState = variable.useState();
 
   useEffect(() => {

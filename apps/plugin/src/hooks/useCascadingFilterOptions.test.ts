@@ -14,14 +14,16 @@ function createDataSource(): DashboardDataSource {
   return {
     queryRange: jest.fn().mockResolvedValue({ status: 'success', data: { resultType: 'matrix', result: [] } }),
     queryInstant: jest.fn().mockResolvedValue({ status: 'success', data: { resultType: 'vector', result: [] } }),
-    labels: jest.fn().mockResolvedValue([
-      'service_name',
-      'job',
-      'gen_ai_provider_name',
-      'gen_ai_request_model',
-      'gen_ai_agent_name',
-      '__name__',
-    ]),
+    labels: jest
+      .fn()
+      .mockResolvedValue([
+        'service_name',
+        'job',
+        'gen_ai_provider_name',
+        'gen_ai_request_model',
+        'gen_ai_agent_name',
+        '__name__',
+      ]),
     labelValues: jest.fn().mockImplementation(async (label: string) => {
       switch (label) {
         case 'gen_ai_provider_name':

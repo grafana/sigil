@@ -14,6 +14,30 @@ jest.mock('@grafana/i18n', () => ({
 
 jest.mock('@grafana/scenes', () => {
   const React = require('react');
+  const useMockVariableState = (variable: MockAdHocFiltersVariable) => {
+    const [, forceRender] = React.useReducer((value: number) => value + 1, 0);
+
+    React.useEffect(() => {
+      const listener = () => forceRender();
+      variable.listeners.add(listener);
+      return () => {
+        variable.listeners.delete(listener);
+      };
+    }, [variable]);
+
+    return variable.state;
+  };
+
+  const MockCombobox = ({ model }: { model: MockAdHocFiltersVariable }) =>
+    React.createElement(
+      'button',
+      {
+        type: 'button',
+        onClick: () => model.updateFilters([{ key: 'service_name', operator: '=', value: 'sigil-api', condition: '' }]),
+      },
+      'Apply filter'
+    );
+  MockCombobox.displayName = 'MockCombobox';
 
   class MockAdHocFiltersVariable {
     state: { filters: Array<{ key: string; operator: string; value: string; condition: string }> };
@@ -22,29 +46,13 @@ jest.mock('@grafana/scenes', () => {
 
     constructor(config: { filters: Array<{ key: string; operator: string; value: string; condition: string }> }) {
       this.state = { filters: config.filters };
-      this.Component = ({ model }: { model: MockAdHocFiltersVariable }) =>
-        React.createElement(
-          'button',
-          {
-            type: 'button',
-            onClick: () =>
-              model.updateFilters([{ key: 'service_name', operator: '=', value: 'sigil-api', condition: '' }]),
-          },
-          'Apply filter'
-        );
+      this.Component = MockCombobox;
     }
 
     useState() {
-      const [, forceRender] = React.useReducer((value: number) => value + 1, 0);
-      React.useEffect(() => {
-        const listener = () => forceRender();
-        this.listeners.add(listener);
-        return () => {
-          this.listeners.delete(listener);
-        };
-      }, []);
-
-      return this.state;
+      // The real Scenes model exposes a hook-shaped instance method.
+      // eslint-disable-next-line react-hooks/rules-of-hooks
+      return useMockVariableState(this);
     }
 
     updateFilters(filters: Array<{ key: string; operator: string; value: string; condition: string }>) {

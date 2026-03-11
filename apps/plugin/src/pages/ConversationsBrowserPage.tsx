@@ -137,10 +137,7 @@ function sortConversations(
   });
 }
 
-function withConversationFilters(
-  filters: DashboardFilters,
-  overrides: Partial<DashboardFilters>
-): DashboardFilters {
+function withConversationFilters(filters: DashboardFilters, overrides: Partial<DashboardFilters>): DashboardFilters {
   return {
     ...filters,
     ...overrides,
@@ -154,16 +151,16 @@ function excludeConversationLabelFilter(filters: LabelFilter[], filter: LabelFil
     if (removed) {
       return true;
     }
-    if (
-      candidate.key === filter.key &&
-      candidate.operator === filter.operator &&
-      candidate.value === filter.value
-    ) {
+    if (candidate.key === filter.key && candidate.operator === filter.operator && candidate.value === filter.value) {
       removed = true;
       return false;
     }
     return true;
   });
+}
+
+function getSettledValue<T>(result: PromiseSettledResult<T>, fallback: T): T {
+  return result.status === 'fulfilled' ? result.value : fallback;
 }
 
 async function fetchRangeConversations(
@@ -432,8 +429,12 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
     const run = async () => {
       setConversationLabelsLoading(true);
       try {
-        const [tags, providerValues, modelValues, agentValues] = await Promise.all([
-          dataSource.getSearchTags(timeRange.from.toISOString(), timeRange.to.toISOString(), conversationTagDiscoveryQuery),
+        const [tagsResult, providerValuesResult, modelValuesResult, agentValuesResult] = await Promise.allSettled([
+          dataSource.getSearchTags(
+            timeRange.from.toISOString(),
+            timeRange.to.toISOString(),
+            conversationTagDiscoveryQuery
+          ),
           dataSource.getSearchTagValues(
             PROVIDER_TAG_KEY,
             timeRange.from.toISOString(),
@@ -457,8 +458,16 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
           return;
         }
 
+        const tags = getSettledValue(tagsResult, []);
+        const providerValues = getSettledValue(providerValuesResult, []);
+        const modelValues = getSettledValue(modelValuesResult, []);
+        const agentValues = getSettledValue(agentValuesResult, []);
+
         const nextOptions = tags
-          .filter((tag) => (tag.scope === 'span' || tag.scope === 'resource') && !DEDICATED_CONVERSATION_LABEL_KEYS.has(tag.key))
+          .filter(
+            (tag) =>
+              (tag.scope === 'span' || tag.scope === 'resource') && !DEDICATED_CONVERSATION_LABEL_KEYS.has(tag.key)
+          )
           .map((tag) => tag.key)
           .sort((left, right) => {
             const byPriority = conversationLabelPriority(left) - conversationLabelPriority(right);
@@ -473,12 +482,7 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
         setModelOptions(modelValues);
         setAgentOptions(agentValues);
       } catch {
-        if (!cancelled) {
-          setProviderOptions([]);
-          setModelOptions([]);
-          setAgentOptions([]);
-          setConversationLabelKeyOptions([]);
-        }
+        // Promise.allSettled above should prevent request-level failures from cascading.
       } finally {
         if (!cancelled) {
           setConversationLabelsLoading(false);

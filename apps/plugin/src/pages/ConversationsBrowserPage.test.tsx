@@ -459,7 +459,9 @@ describe('ConversationsBrowserPage', () => {
     const { router } = renderPage(dataSource, '/conversations?label=service_name%7C%3D%7Csigil-api');
 
     await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalled());
-    await waitFor(() => expect(router.state.location.search).toContain('label=resource.service.name%7C%3D%7Csigil-api'));
+    await waitFor(() =>
+      expect(router.state.location.search).toContain('label=resource.service.name%7C%3D%7Csigil-api')
+    );
     expect(router.state.location.search).not.toContain('service_name');
     const toolbarProps = mockFilterToolbar.mock.lastCall?.[0];
     expect(toolbarProps?.hideLabelFilters).toBeUndefined();
@@ -551,27 +553,29 @@ describe('ConversationsBrowserPage', () => {
 
   it('loads provider, model, and agent options from scoped Tempo tag values', async () => {
     const dataSource = createDataSource();
-    dataSource.getSearchTagValues.mockImplementation(async (tag: string, _from: string, _to: string, query?: string) => {
-      if (tag === 'span.gen_ai.provider.name') {
-        expect(query).toBe(
-          '{ span.gen_ai.operation.name =~ "generateText|streamText|execute_tool" && resource.k8s.namespace.name = "prod" }'
-        );
-        return ['openai'];
+    dataSource.getSearchTagValues.mockImplementation(
+      async (tag: string, _from: string, _to: string, query?: string) => {
+        if (tag === 'span.gen_ai.provider.name') {
+          expect(query).toBe(
+            '{ span.gen_ai.operation.name =~ "generateText|streamText|execute_tool" && resource.k8s.namespace.name = "prod" }'
+          );
+          return ['openai'];
+        }
+        if (tag === 'span.gen_ai.request.model') {
+          expect(query).toBe(
+            '{ span.gen_ai.operation.name =~ "generateText|streamText|execute_tool" && resource.k8s.namespace.name = "prod" }'
+          );
+          return ['gpt-4o'];
+        }
+        if (tag === 'span.gen_ai.agent.name') {
+          expect(query).toBe(
+            '{ span.gen_ai.operation.name =~ "generateText|streamText|execute_tool" && resource.k8s.namespace.name = "prod" }'
+          );
+          return ['assistant'];
+        }
+        return [];
       }
-      if (tag === 'span.gen_ai.request.model') {
-        expect(query).toBe(
-          '{ span.gen_ai.operation.name =~ "generateText|streamText|execute_tool" && resource.k8s.namespace.name = "prod" }'
-        );
-        return ['gpt-4o'];
-      }
-      if (tag === 'span.gen_ai.agent.name') {
-        expect(query).toBe(
-          '{ span.gen_ai.operation.name =~ "generateText|streamText|execute_tool" && resource.k8s.namespace.name = "prod" }'
-        );
-        return ['assistant'];
-      }
-      return [];
-    });
+    );
 
     renderPage(dataSource, '/conversations?label=resource.k8s.namespace.name%7C%3D%7Cprod');
 
@@ -595,5 +599,37 @@ describe('ConversationsBrowserPage', () => {
       expect.any(String),
       expect.any(String)
     );
+  });
+
+  it('keeps successful conversation filter options when one Tempo lookup fails', async () => {
+    const dataSource = createDataSource();
+    dataSource.getSearchTags.mockResolvedValue([
+      { key: 'resource.k8s.namespace.name', scope: 'resource' },
+      { key: 'span.http.route', scope: 'span' },
+    ]);
+    dataSource.getSearchTagValues.mockImplementation(async (tag: string) => {
+      if (tag === 'span.gen_ai.provider.name') {
+        return ['openai'];
+      }
+      if (tag === 'span.gen_ai.request.model') {
+        return ['gpt-4o'];
+      }
+      if (tag === 'span.gen_ai.agent.name') {
+        throw new Error('tempo failed');
+      }
+      return [];
+    });
+
+    renderPage(dataSource);
+
+    await waitFor(() => expect(dataSource.getSearchTags).toHaveBeenCalled());
+    await waitFor(() => {
+      const toolbarProps = mockFilterToolbar.mock.lastCall?.[0];
+      expect(toolbarProps?.providerOptions).toEqual(['openai']);
+      expect(toolbarProps?.modelOptions).toEqual(['gpt-4o']);
+      expect(toolbarProps?.agentOptions).toEqual([]);
+      expect(toolbarProps?.labelKeyOptions).toEqual(['resource.k8s.namespace.name', 'span.http.route']);
+      expect(toolbarProps?.labelsLoading).toBe(false);
+    });
   });
 });

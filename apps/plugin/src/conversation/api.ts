@@ -527,8 +527,7 @@ export const defaultConversationsDataSource: ConversationsDataSource = {
       if (directTags) {
         return directTags;
       }
-    } catch {
-    }
+    } catch {}
 
     const params = new URLSearchParams();
     const start = toUnixSeconds(from);
@@ -562,8 +561,7 @@ export const defaultConversationsDataSource: ConversationsDataSource = {
       if (directValues) {
         return directValues;
       }
-    } catch {
-    }
+    } catch {}
 
     const params = new URLSearchParams();
     const start = toUnixSeconds(from);
