@@ -6,11 +6,20 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { getConversationPassRate } from '../conversation/aggregates';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
 import { buildConversationSearchFilter } from '../conversation/filters';
+import {
+  canonicalizeConversationFilterKey,
+  mapDashboardLabelFiltersToConversation,
+} from '../conversation/filterKeyMapping';
+import { buildConversationTagDiscoveryQuery } from '../conversation/searchTagScope';
 import type { ConversationSearchResult, ConversationStatsResponse } from '../conversation/types';
-import { type DashboardDataSource, defaultDashboardDataSource } from '../dashboard/api';
-import { type ConversationOrderBy, conversationOrderByLabel, CONVERSATION_ORDER_BY_VALUES } from '../dashboard/types';
+import {
+  type ConversationOrderBy,
+  conversationOrderByLabel,
+  CONVERSATION_ORDER_BY_VALUES,
+  type DashboardFilters,
+  type LabelFilter,
+} from '../dashboard/types';
 import { useFilterUrlState } from '../hooks/useFilterUrlState';
-import { useCascadingFilterOptions } from '../hooks/useCascadingFilterOptions';
 import { FilterToolbar } from '../components/filters/FilterToolbar';
 import { TopStat } from '../components/TopStat';
 import { defaultModelCardClient, type ModelCardClient } from '../modelcard/api';
@@ -24,7 +33,6 @@ import { isAbortError } from '../utils/http';
 
 export type ConversationsBrowserPageProps = {
   dataSource?: ConversationsDataSource;
-  dashboardDataSource?: DashboardDataSource;
   modelCardClient?: ModelCardClient;
 };
 
@@ -61,6 +69,16 @@ function getConversationTotalTokens(conversation: ConversationSearchResult): num
 
 type ConversationStats = ConversationStatsResponse;
 
+const LABEL_FILTER_ROW_STORAGE_KEY = 'sigil.conversations.labelFilterRowOpen';
+const DEDICATED_CONVERSATION_LABEL_KEYS = new Set([
+  'span.gen_ai.provider.name',
+  'span.gen_ai.request.model',
+  'span.gen_ai.agent.name',
+]);
+const PROVIDER_TAG_KEY = 'span.gen_ai.provider.name';
+const MODEL_TAG_KEY = 'span.gen_ai.request.model';
+const AGENT_TAG_KEY = 'span.gen_ai.agent.name';
+
 const EMPTY_CONVERSATION_STATS: ConversationStats = {
   totalConversations: 0,
   totalTokens: 0,
@@ -69,6 +87,22 @@ const EMPTY_CONVERSATION_STATS: ConversationStats = {
   ratedConversations: 0,
   badRatedPct: 0,
 };
+
+function conversationLabelPriority(label: string): number {
+  if (label.startsWith('span.gen_ai.')) {
+    return 0;
+  }
+  if (label.startsWith('resource.service.') || label.startsWith('resource.k8s.')) {
+    return 1;
+  }
+  if (label.startsWith('span.')) {
+    return 2;
+  }
+  if (label.startsWith('resource.')) {
+    return 3;
+  }
+  return 4;
+}
 
 function sortConversations(
   conversations: ConversationSearchResult[],
@@ -100,6 +134,35 @@ function sortConversations(
       default:
         return Date.parse(b.last_generation_at) - Date.parse(a.last_generation_at);
     }
+  });
+}
+
+function withConversationFilters(
+  filters: DashboardFilters,
+  overrides: Partial<DashboardFilters>
+): DashboardFilters {
+  return {
+    ...filters,
+    ...overrides,
+  };
+}
+
+function excludeConversationLabelFilter(filters: LabelFilter[], filter: LabelFilter): LabelFilter[] {
+  let removed = false;
+
+  return filters.filter((candidate) => {
+    if (removed) {
+      return true;
+    }
+    if (
+      candidate.key === filter.key &&
+      candidate.operator === filter.operator &&
+      candidate.value === filter.value
+    ) {
+      removed = true;
+      return false;
+    }
+    return true;
   });
 }
 
@@ -265,12 +328,36 @@ const getStyles = (theme: GrafanaTheme2) => ({
 export default function ConversationsBrowserPage(props: ConversationsBrowserPageProps) {
   const styles = useStyles2(getStyles);
   const dataSource = props.dataSource ?? defaultConversationsDataSource;
-  const dashboardDS = props.dashboardDataSource ?? defaultDashboardDataSource;
   const modelCardClient = props.modelCardClient ?? defaultModelCardClient;
   const location = useLocation();
   const navigate = useNavigate();
 
   const { timeRange, filters, searchParams, setTimeRange, setFilters, setSearchParams } = useFilterUrlState();
+  const [showLabelFilterRow, setShowLabelFilterRow] = useState(() => {
+    if (typeof window === 'undefined') {
+      return filters.labelFilters.length > 0;
+    }
+
+    const storedValue = window.sessionStorage.getItem(LABEL_FILTER_ROW_STORAGE_KEY);
+    if (storedValue === null) {
+      return filters.labelFilters.length > 0;
+    }
+
+    return storedValue === '1';
+  });
+  const previousLabelFilterCountRef = useRef(filters.labelFilters.length);
+  const conversationFilters = useMemo(
+    () => ({
+      ...filters,
+      labelFilters: mapDashboardLabelFiltersToConversation(filters.labelFilters),
+    }),
+    [filters]
+  );
+  const [providerOptions, setProviderOptions] = useState<string[]>([]);
+  const [modelOptions, setModelOptions] = useState<string[]>([]);
+  const [agentOptions, setAgentOptions] = useState<string[]>([]);
+  const [conversationLabelKeyOptions, setConversationLabelKeyOptions] = useState<string[]>([]);
+  const [conversationLabelsLoading, setConversationLabelsLoading] = useState(false);
 
   const orderBy = useMemo<ConversationOrderBy>(() => {
     const v = searchParams.get('orderBy') as ConversationOrderBy;
@@ -297,13 +384,156 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
 
   const from = useMemo(() => Math.floor(timeRange.from.valueOf() / 1000), [timeRange]);
   const to = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);
-
-  const { providerOptions, modelOptions, agentOptions, labelKeyOptions, labelsLoading } = useCascadingFilterOptions(
-    dashboardDS,
-    filters,
-    from,
-    to
+  const providerOptionsQuery = useMemo(
+    () => buildConversationTagDiscoveryQuery(withConversationFilters(conversationFilters, { providers: [] })),
+    [conversationFilters]
   );
+  const modelOptionsQuery = useMemo(
+    () => buildConversationTagDiscoveryQuery(withConversationFilters(conversationFilters, { models: [] })),
+    [conversationFilters]
+  );
+  const agentOptionsQuery = useMemo(
+    () => buildConversationTagDiscoveryQuery(withConversationFilters(conversationFilters, { agentNames: [] })),
+    [conversationFilters]
+  );
+  const conversationTagDiscoveryQuery = useMemo(
+    () => buildConversationTagDiscoveryQuery(conversationFilters),
+    [conversationFilters]
+  );
+
+  useEffect(() => {
+    const normalizedLabelFilters = conversationFilters.labelFilters;
+    const rawLabelFilters = filters.labelFilters;
+
+    if (rawLabelFilters.length === normalizedLabelFilters.length) {
+      const isSame = rawLabelFilters.every((filter, index) => {
+        const normalized = normalizedLabelFilters[index];
+        return (
+          normalized !== undefined &&
+          filter.key === normalized.key &&
+          filter.operator === normalized.operator &&
+          filter.value === normalized.value
+        );
+      });
+      if (isSame) {
+        return;
+      }
+    }
+
+    setFilters({
+      ...filters,
+      labelFilters: normalizedLabelFilters,
+    });
+  }, [conversationFilters.labelFilters, filters, setFilters]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const run = async () => {
+      setConversationLabelsLoading(true);
+      try {
+        const [tags, providerValues, modelValues, agentValues] = await Promise.all([
+          dataSource.getSearchTags(timeRange.from.toISOString(), timeRange.to.toISOString(), conversationTagDiscoveryQuery),
+          dataSource.getSearchTagValues(
+            PROVIDER_TAG_KEY,
+            timeRange.from.toISOString(),
+            timeRange.to.toISOString(),
+            providerOptionsQuery
+          ),
+          dataSource.getSearchTagValues(
+            MODEL_TAG_KEY,
+            timeRange.from.toISOString(),
+            timeRange.to.toISOString(),
+            modelOptionsQuery
+          ),
+          dataSource.getSearchTagValues(
+            AGENT_TAG_KEY,
+            timeRange.from.toISOString(),
+            timeRange.to.toISOString(),
+            agentOptionsQuery
+          ),
+        ]);
+        if (cancelled) {
+          return;
+        }
+
+        const nextOptions = tags
+          .filter((tag) => (tag.scope === 'span' || tag.scope === 'resource') && !DEDICATED_CONVERSATION_LABEL_KEYS.has(tag.key))
+          .map((tag) => tag.key)
+          .sort((left, right) => {
+            const byPriority = conversationLabelPriority(left) - conversationLabelPriority(right);
+            if (byPriority !== 0) {
+              return byPriority;
+            }
+            return left.localeCompare(right);
+          });
+
+        setConversationLabelKeyOptions(nextOptions);
+        setProviderOptions(providerValues);
+        setModelOptions(modelValues);
+        setAgentOptions(agentValues);
+      } catch {
+        if (!cancelled) {
+          setProviderOptions([]);
+          setModelOptions([]);
+          setAgentOptions([]);
+          setConversationLabelKeyOptions([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setConversationLabelsLoading(false);
+        }
+      }
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    agentOptionsQuery,
+    conversationTagDiscoveryQuery,
+    dataSource,
+    modelOptionsQuery,
+    providerOptionsQuery,
+    timeRange,
+  ]);
+
+  const loadConversationLabelValues = useCallback(
+    async (filter: LabelFilter) => {
+      const scopedFilters = withConversationFilters(conversationFilters, {
+        labelFilters: excludeConversationLabelFilter(conversationFilters.labelFilters, filter),
+      });
+      const values = await dataSource.getSearchTagValues(
+        canonicalizeConversationFilterKey(filter.key),
+        timeRange.from.toISOString(),
+        timeRange.to.toISOString(),
+        buildConversationTagDiscoveryQuery(scopedFilters)
+      );
+      return values.map((value) => ({ label: value, value }));
+    },
+    [conversationFilters, dataSource, timeRange]
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.sessionStorage.setItem(LABEL_FILTER_ROW_STORAGE_KEY, showLabelFilterRow ? '1' : '0');
+  }, [showLabelFilterRow]);
+
+  useEffect(() => {
+    const previousCount = previousLabelFilterCountRef.current;
+    const nextCount = conversationFilters.labelFilters.length;
+
+    if (previousCount === 0 && nextCount > 0) {
+      setShowLabelFilterRow(true);
+    }
+
+    previousLabelFilterCountRef.current = nextCount;
+  }, [conversationFilters.labelFilters]);
 
   const conversationsSegment = `/${ROUTES.Conversations}`;
   const conversationsSegmentIndex = location.pathname.indexOf(conversationsSegment);
@@ -327,7 +557,7 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   const requestVersionRef = useRef<number>(0);
   const loadAbortControllerRef = useRef<AbortController | null>(null);
 
-  const filterString = useMemo(() => buildConversationSearchFilter(filters), [filters]);
+  const filterString = useMemo(() => buildConversationSearchFilter(conversationFilters), [conversationFilters]);
 
   const conversations = useMemo(() => sortConversations(rawConversations, orderBy), [rawConversations, orderBy]);
 
@@ -545,18 +775,19 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
           <div className={styles.controlsRow}>
             <FilterToolbar
               timeRange={timeRange}
-              filters={filters}
+              filters={conversationFilters}
               providerOptions={providerOptions}
               modelOptions={modelOptions}
               agentOptions={agentOptions}
-              labelKeyOptions={labelKeyOptions}
-              labelsLoading={labelsLoading}
-              dataSource={dashboardDS}
+              labelKeyOptions={conversationLabelKeyOptions}
+              labelsLoading={conversationLabelsLoading}
               from={from}
               to={to}
+              loadLabelValues={loadConversationLabelValues}
               onTimeRangeChange={setTimeRange}
               onFiltersChange={setFilters}
-              hideLabelFilters
+              showLabelFilterRow={showLabelFilterRow}
+              onLabelFilterRowOpenChange={setShowLabelFilterRow}
               fillWidth
             >
               <Select<ConversationOrderBy>

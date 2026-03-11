@@ -6,7 +6,12 @@ type LabelNamesResult = {
   loading: boolean;
 };
 
-export function useLabelNames(dataSource: DashboardDataSource, from: number, to: number): LabelNamesResult {
+export function useLabelNames(
+  dataSource: DashboardDataSource,
+  from: number,
+  to: number,
+  matchers?: string
+): LabelNamesResult {
   const [names, setNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const versionRef = useRef(0);
@@ -17,7 +22,7 @@ export function useLabelNames(dataSource: DashboardDataSource, from: number, to:
 
     const run = async () => {
       try {
-        const result = await dataSource.labels(from, to);
+        const result = await dataSource.labels(from, to, matchers);
         if (versionRef.current === version) {
           setNames(result);
         }
@@ -33,7 +38,7 @@ export function useLabelNames(dataSource: DashboardDataSource, from: number, to:
     };
 
     run();
-  }, [dataSource, from, to]);
+  }, [dataSource, from, to, matchers]);
 
   return { names, loading };
 }

@@ -1,413 +1,254 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { css, cx } from '@emotion/css';
-import { type GrafanaTheme2, type SelectableValue } from '@grafana/data';
-import { Icon, IconButton, Select, useStyles2 } from '@grafana/ui';
-import { type FilterOperator, filterOperatorLabel, FILTER_OPERATORS, type LabelFilter } from '../../dashboard/types';
-import type { DashboardDataSource } from '../../dashboard/api';
-import { useLabelValues } from '../dashboard/useLabelValues';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { css } from '@emotion/css';
+import type { AdHocVariableFilter, GrafanaTheme2, MetricFindValue, SelectableValue } from '@grafana/data';
+import { initPluginTranslations } from '@grafana/i18n';
+import { useStyles2 } from '@grafana/ui';
+import { AdHocFiltersVariable, OPERATORS } from '@grafana/scenes';
+import type { FilterOperator, LabelFilter } from '../../dashboard/types';
+import { plugin } from '../../module';
 
 export type LabelFilterInputProps = {
   filters: LabelFilter[];
   labelKeyOptions: Array<SelectableValue<string>>;
   labelsLoading: boolean;
-  dataSource: DashboardDataSource;
-  from: number;
-  to: number;
-  onChange: (index: number, filter: LabelFilter) => void;
-  onRemove: (index: number) => void;
+  loadValues: (filter: LabelFilter) => Promise<Array<SelectableValue<string>>>;
+  allowedOperators?: FilterOperator[];
+  showLeadingIcon?: boolean;
+  onDismiss?: () => void;
+  onFiltersChange: (filters: LabelFilter[]) => void;
 };
 
-const operatorOptions: Array<SelectableValue<FilterOperator>> = FILTER_OPERATORS.map((op) => ({
-  label: op,
-  value: op,
-  description: filterOperatorLabel[op],
-}));
-
-type EditingSegment = 'key' | 'operator' | 'value';
-
-type EditingState = {
-  index: number;
-  segment: EditingSegment;
-} | null;
-
-function CompletedPill({
-  filter,
-  index,
-  onEdit,
-  onRemove,
-}: {
-  filter: LabelFilter;
-  index: number;
-  onEdit: (index: number) => void;
-  onRemove: (index: number) => void;
-}) {
-  const styles = useStyles2(getPillStyles);
-  const label = `${filter.key} ${filter.operator} ${filter.value}`;
-  return (
-    <span className={styles.pill}>
-      <button
-        type="button"
-        className={styles.pillLabel}
-        onClick={() => onEdit(index)}
-        aria-label={`Edit filter ${label}`}
-        title={label}
-      >
-        {label}
-      </button>
-      <IconButton
-        className={styles.pillRemove}
-        name="times"
-        aria-label={`Remove filter ${label}`}
-        size="sm"
-        onClick={() => onRemove(index)}
-      />
-    </span>
-  );
-}
-
-function WipInput({
-  filter,
-  index,
-  editingSegment,
-  autoFocus = false,
-  labelKeyOptions,
-  labelsLoading,
-  dataSource,
-  from,
-  to,
-  onChange,
-  onRemove,
-  onDone,
-}: {
-  filter: LabelFilter;
-  index: number;
-  editingSegment: EditingSegment;
-  autoFocus?: boolean;
+type ProviderConfig = {
+  allowedOperators: FilterOperator[];
   labelKeyOptions: Array<SelectableValue<string>>;
-  labelsLoading: boolean;
-  dataSource: DashboardDataSource;
-  from: number;
-  to: number;
-  onChange: (index: number, filter: LabelFilter) => void;
-  onRemove: (index: number) => void;
-  onDone: () => void;
-}) {
-  const styles = useStyles2(getWipStyles);
-  const { values: valueOptions, loading: valuesLoading } = useLabelValues(dataSource, filter.key, from, to);
-  const valueSelectOptions = useMemo(() => valueOptions.map((v) => ({ label: v, value: v })), [valueOptions]);
+  loadValues: (filter: LabelFilter) => Promise<Array<SelectableValue<string>>>;
+};
 
-  const [segment, setSegment] = useState<EditingSegment>(editingSegment);
+class DashboardLabelFiltersVariable extends AdHocFiltersVariable {
+  constructor(initialFilters: AdHocVariableFilter[], private readonly getConfig: () => ProviderConfig) {
+    super({
+      name: 'labelFilters',
+      datasource: null,
+      layout: 'combobox',
+      filters: initialFilters,
+      allowCustomValue: true,
+      inputPlaceholder: 'Filter by label values',
+      getTagKeysProvider: async () => ({
+        replace: true,
+        values: this.getConfig().labelKeyOptions.map(toMetricFindValue),
+      }),
+      getTagValuesProvider: async (_variable, filter) => ({
+        replace: true,
+        values: (await this.getConfig().loadValues(fromAdHocFilter(filter))).map(toMetricFindValue),
+      }),
+      expressionBuilder: () => '',
+    });
+  }
 
-  const handleKeyChange = useCallback(
-    (sel: SelectableValue<string>) => {
-      onChange(index, { key: sel?.value ?? '', operator: filter.operator, value: '' });
-      if (sel?.value) {
-        setSegment('operator');
-      }
-    },
-    [index, filter.operator, onChange]
-  );
+  override _getOperators() {
+    const allowed = new Set(this.getConfig().allowedOperators);
 
-  const handleOperatorChange = useCallback(
-    (sel: SelectableValue<FilterOperator>) => {
-      onChange(index, { ...filter, operator: sel?.value ?? '=' });
-      setSegment('value');
-    },
-    [index, filter, onChange]
-  );
-
-  const handleValueChange = useCallback(
-    (sel: SelectableValue<string>) => {
-      onChange(index, { ...filter, value: sel?.value ?? '' });
-      onDone();
-    },
-    [index, filter, onChange, onDone]
-  );
-
-  const showKeyPill = filter.key && segment !== 'key';
-  const showOperatorPill = filter.key && filter.operator && segment !== 'operator';
-
-  return (
-    <span className={styles.wip}>
-      {showKeyPill && (
-        <button type="button" className={cx(styles.segmentPill, styles.keySegment)} onClick={() => setSegment('key')}>
-          {filter.key}
-        </button>
-      )}
-
-      {segment === 'key' && (
-        <Select<string>
-          className={styles.inlineSelect}
-          options={labelKeyOptions}
-          value={filter.key || null}
-          onChange={handleKeyChange}
-          placeholder="Filter by label values"
-          isLoading={labelsLoading}
-          isSearchable
-          allowCustomValue
-          autoFocus={autoFocus}
-          openMenuOnFocus={autoFocus}
-          width={35}
-          onBlur={() => {
-            if (filter.key) {
-              setSegment('operator');
-            }
-          }}
-        />
-      )}
-
-      {showOperatorPill && (
-        <button
-          type="button"
-          className={cx(styles.segmentPill, styles.operatorSegment)}
-          onClick={() => setSegment('operator')}
-        >
-          {filter.operator}
-        </button>
-      )}
-
-      {segment === 'operator' && filter.key && (
-        <Select<FilterOperator>
-          className={styles.inlineSelect}
-          options={operatorOptions}
-          value={filter.operator}
-          onChange={handleOperatorChange}
-          autoFocus
-          openMenuOnFocus
-          width="auto"
-          onBlur={() => setSegment('value')}
-        />
-      )}
-
-      {segment === 'value' && filter.key && (
-        <Select<string>
-          className={styles.inlineSelect}
-          options={valueSelectOptions}
-          value={filter.value || null}
-          onChange={handleValueChange}
-          placeholder="value"
-          isLoading={valuesLoading}
-          isSearchable
-          allowCustomValue
-          autoFocus
-          openMenuOnFocus
-          width={16}
-          onBlur={() => {
-            if (filter.value) {
-              onDone();
-            }
-          }}
-        />
-      )}
-
-      {(filter.key || filter.value) && (
-        <IconButton
-          className={styles.removeBtn}
-          name="times"
-          aria-label="Remove filter"
-          size="sm"
-          onClick={() => onRemove(index)}
-        />
-      )}
-    </span>
-  );
+    return OPERATORS.filter((operator) => allowed.has(operator.value as FilterOperator)).map(({ value, description }) => ({
+      label: value,
+      value,
+      description,
+    }));
+  }
 }
 
 export function LabelFilterInput({
   filters,
   labelKeyOptions,
   labelsLoading,
-  dataSource,
-  from,
-  to,
-  onChange,
-  onRemove,
+  loadValues,
+  allowedOperators = ['=', '!=', '=~', '!~', '<', '<=', '>', '>='],
+  showLeadingIcon = true,
+  onDismiss,
+  onFiltersChange,
 }: LabelFilterInputProps) {
-  const styles = useStyles2(getContainerStyles);
-  const [editing, setEditing] = useState<EditingState>(null);
+  const styles = useStyles2(getStyles);
+  const [translationsReady, setTranslationsReady] = useState(false);
+  const skipNextExternalSyncRef = useRef(false);
+  const lastEmittedFiltersRef = useRef<string>(JSON.stringify(filters));
+  const lastPropFiltersRef = useRef<string>(JSON.stringify(filters));
+  const configRef = useRef<ProviderConfig>({
+    allowedOperators,
+    labelKeyOptions,
+    loadValues: async () => [],
+  });
 
-  const completedFilters = filters.filter((lf) => lf.key && lf.value);
-  const wipFilter = filters.find((lf) => !lf.key || !lf.value);
-  const wipIndex = wipFilter ? filters.indexOf(wipFilter) : filters.length;
+  configRef.current = {
+    allowedOperators,
+    labelKeyOptions,
+    loadValues,
+  };
 
-  const handleEdit = useCallback((index: number) => {
-    setEditing({ index, segment: 'key' });
+  const variable = useMemo(
+    () => new DashboardLabelFiltersVariable(toAdHocFilters(filters), () => configRef.current),
+    []
+  );
+  const variableState = variable.useState();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const ensureTranslations = async () => {
+      await initPluginTranslations(plugin.meta.id, []);
+      if (!cancelled) {
+        setTranslationsReady(true);
+      }
+    };
+
+    void ensureTranslations();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const handleDone = useCallback(() => {
-    setEditing(null);
-  }, []);
+  useEffect(() => {
+    const nextFilters = toAdHocFilters(filters);
+    const nextSerialized = JSON.stringify(nextFilters);
+    const propsChanged = nextSerialized !== lastPropFiltersRef.current;
+
+    lastPropFiltersRef.current = nextSerialized;
+
+    if (!propsChanged) {
+      return;
+    }
+
+    if (skipNextExternalSyncRef.current) {
+      skipNextExternalSyncRef.current = false;
+      return;
+    }
+
+    if (!sameAdHocFilters(variableState.filters, nextFilters)) {
+      variable.updateFilters(nextFilters, { skipPublish: true });
+    }
+  }, [filters, variable, variableState.filters]);
+
+  useEffect(() => {
+    const nextFilters = fromAdHocFilters(variableState.filters);
+    const nextSerialized = JSON.stringify(nextFilters);
+
+    if (nextSerialized === lastEmittedFiltersRef.current) {
+      return;
+    }
+
+    lastEmittedFiltersRef.current = nextSerialized;
+
+    if (!sameLabelFilters(filters, nextFilters)) {
+      skipNextExternalSyncRef.current = true;
+      onFiltersChange(nextFilters);
+    }
+  }, [filters, onFiltersChange, variableState.filters]);
+
+  if (!translationsReady) {
+    return (
+      <div className={styles.wrapper}>
+        <div className={styles.loadingHint}>Loading filters…</div>
+      </div>
+    );
+  }
 
   return (
-    <div className={styles.container}>
-      <Icon name="filter" className={styles.filterIcon} />
-      {completedFilters.map((lf) => {
-        const realIndex = filters.indexOf(lf);
-        if (editing && editing.index === realIndex) {
-          return (
-            <WipInput
-              key={realIndex}
-              filter={lf}
-              index={realIndex}
-              editingSegment={editing.segment}
-              autoFocus
-              labelKeyOptions={labelKeyOptions}
-              labelsLoading={labelsLoading}
-              dataSource={dataSource}
-              from={from}
-              to={to}
-              onChange={onChange}
-              onRemove={(i) => {
-                onRemove(i);
-                setEditing(null);
-              }}
-              onDone={handleDone}
-            />
-          );
-        }
-        return <CompletedPill key={realIndex} filter={lf} index={realIndex} onEdit={handleEdit} onRemove={onRemove} />;
-      })}
-      {wipFilter && !editing && (
-        <WipInput
-          key={wipIndex}
-          filter={wipFilter}
-          index={wipIndex}
-          editingSegment="key"
-          labelKeyOptions={labelKeyOptions}
-          labelsLoading={labelsLoading}
-          dataSource={dataSource}
-          from={from}
-          to={to}
-          onChange={onChange}
-          onRemove={onRemove}
-          onDone={handleDone}
+    <div className={styles.wrapper}>
+      <div className={styles.combobox}>
+        <variable.Component model={variable} />
+      </div>
+      {onDismiss && (
+        <button
+          type="button"
+          className={styles.dismissToggleHitbox}
+          aria-label="Hide label filters"
+          onClick={onDismiss}
         />
       )}
-      {!wipFilter && !editing && (
-        <WipInput
-          key={filters.length}
-          filter={{ key: '', operator: '=', value: '' }}
-          index={filters.length}
-          editingSegment="key"
-          labelKeyOptions={labelKeyOptions}
-          labelsLoading={labelsLoading}
-          dataSource={dataSource}
-          from={from}
-          to={to}
-          onChange={onChange}
-          onRemove={onRemove}
-          onDone={handleDone}
-        />
-      )}
+      {labelsLoading && <span className={styles.loadingHint}>Loading labels…</span>}
     </div>
   );
 }
 
-function getContainerStyles(theme: GrafanaTheme2) {
+function toAdHocFilters(filters: LabelFilter[]): AdHocVariableFilter[] {
+  return filters.map((filter) => ({
+    key: filter.key,
+    operator: filter.operator,
+    value: filter.value,
+    condition: '',
+  }));
+}
+
+function fromAdHocFilters(filters: AdHocVariableFilter[]): LabelFilter[] {
+  return filters
+    .filter((filter) => filter.key && filter.operator && filter.value)
+    .map((filter) => ({
+      key: filter.key,
+      operator: filter.operator as FilterOperator,
+      value: String(filter.value),
+    }));
+}
+
+function sameLabelFilters(a: LabelFilter[], b: LabelFilter[]): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function sameAdHocFilters(a: AdHocVariableFilter[], b: AdHocVariableFilter[]): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function toMetricFindValue(option: SelectableValue<string>): MetricFindValue {
   return {
-    container: css({
-      display: 'inline-flex',
-      alignItems: 'center',
-      flexWrap: 'wrap',
-      gap: theme.spacing(0.5),
-      background: theme.colors.background.primary,
-      border: `1px solid ${theme.colors.border.weak}`,
-      borderRadius: theme.shape.radius.default,
-      minHeight: 32,
-      padding: theme.spacing(0, 0, 0, 0.5),
-    }),
-    filterIcon: css({
-      color: theme.colors.text.secondary,
-      marginLeft: theme.spacing(0.5),
-      flexShrink: 0,
-    }),
+    text: String(option.label ?? option.value ?? ''),
+    value: String(option.value ?? option.label ?? ''),
   };
 }
 
-function getPillStyles(theme: GrafanaTheme2) {
+function fromAdHocFilter(filter: AdHocVariableFilter): LabelFilter {
   return {
-    pill: css({
+    key: filter.key,
+    operator: filter.operator as FilterOperator,
+    value: String(filter.value ?? ''),
+  };
+}
+
+function getStyles(theme: GrafanaTheme2) {
+  return {
+    wrapper: css({
       display: 'inline-flex',
       alignItems: 'center',
-      gap: theme.spacing(0.25),
-      background: theme.colors.action.disabledBackground,
-      borderRadius: theme.shape.radius.default,
-      padding: theme.spacing(0, 0.25, 0, 1),
-      maxWidth: 240,
-      minHeight: 24,
-      ...theme.typography.bodySmall,
+      gap: theme.spacing(0.5),
+      minWidth: 320,
+      width: 'fit-content',
+      maxWidth: 'min(100%, 960px)',
+      flex: '0 1 auto',
+      position: 'relative',
     }),
-    pillLabel: css({
+    combobox: css({
+      flex: '0 1 auto',
+      width: 'fit-content',
+      minWidth: 280,
+      maxWidth: '100%',
+      '& > div, & > div > div': {
+        minWidth: 0,
+        width: 'fit-content',
+        maxWidth: '100%',
+      },
+    }),
+    dismissToggleHitbox: css({
+      position: 'absolute',
+      left: theme.spacing(0.5),
+      top: theme.spacing(0.5),
+      width: theme.spacing(4),
+      height: theme.spacing(4),
       border: 'none',
       background: 'transparent',
-      color: theme.colors.text.primary,
       cursor: 'pointer',
-      padding: 0,
-      whiteSpace: 'nowrap',
-      overflow: 'hidden',
-      textOverflow: 'ellipsis',
-      ...theme.typography.bodySmall,
-      '&:hover': {
-        textDecoration: 'underline',
-      },
+      borderRadius: theme.shape.radius.default,
+      zIndex: 1,
     }),
-    pillRemove: css({
+    loadingHint: css({
       color: theme.colors.text.secondary,
-      flexShrink: 0,
-      '&:hover': {
-        color: theme.colors.text.primary,
-      },
-    }),
-  };
-}
-
-function getWipStyles(theme: GrafanaTheme2) {
-  return {
-    wip: css({
-      display: 'inline-flex',
-      alignItems: 'center',
-      flexWrap: 'nowrap',
-    }),
-    segmentPill: css({
-      display: 'inline-flex',
-      alignItems: 'center',
-      background: theme.colors.action.disabledBackground,
-      border: 'none',
-      padding: theme.spacing(0, 1),
-      minHeight: 24,
-      cursor: 'pointer',
       ...theme.typography.bodySmall,
-      '&:hover': {
-        background: theme.colors.action.hover,
-      },
-    }),
-    keySegment: css({
-      fontWeight: theme.typography.fontWeightBold,
-      borderRadius: `${theme.shape.radius.default} 0 0 ${theme.shape.radius.default}`,
-    }),
-    operatorSegment: css({
-      fontFamily: theme.typography.fontFamilyMonospace,
-      borderRadius: 0,
-    }),
-    inlineSelect: css({
-      // Remove Select's built-in border to avoid double border with container
-      '& > div': {
-        border: 'none',
-        background: 'transparent',
-        minHeight: 28,
-        boxShadow: 'none',
-        outline: 'none',
-      },
-      '& > div > div:first-of-type': {
-        border: 'none',
-        boxShadow: 'none',
-      },
-    }),
-    removeBtn: css({
-      color: theme.colors.text.secondary,
-      '&:hover': {
-        color: theme.colors.text.primary,
-      },
     }),
   };
 }

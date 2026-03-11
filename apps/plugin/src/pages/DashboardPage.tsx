@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { css } from '@emotion/css';
 import { type GrafanaTheme2 } from '@grafana/data';
 import { Tab, TabsBar, useStyles2 } from '@grafana/ui';
@@ -18,10 +18,27 @@ type DashboardPageProps = {
   dataSource?: DashboardDataSource;
 };
 
+const LABEL_FILTER_ROW_STORAGE_KEY = 'sigil.dashboard.labelFilterRowOpen';
+
 export default function DashboardPage({ dataSource = defaultDashboardDataSource }: DashboardPageProps) {
   const styles = useStyles2(getStyles);
   const { timeRange, filters, breakdownBy, tab, setTimeRange, setFilters, setBreakdownBy, setTab } =
     useDashboardUrlState();
+  const [showLabelFilterRow, setShowLabelFilterRow] = useState(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+
+    return window.sessionStorage.getItem(LABEL_FILTER_ROW_STORAGE_KEY) === '1';
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.sessionStorage.setItem(LABEL_FILTER_ROW_STORAGE_KEY, showLabelFilterRow ? '1' : '0');
+  }, [showLabelFilterRow]);
 
   const handleTabChange = useCallback(
     (newTab: DashboardTab) => () => {
@@ -61,6 +78,9 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         dataSource={dataSource}
         from={from}
         to={to}
+        showLabelFilters={tab !== 'evaluation'}
+        showLabelFilterRow={showLabelFilterRow}
+        onLabelFilterRowOpenChange={setShowLabelFilterRow}
         onTimeRangeChange={setTimeRange}
         onFiltersChange={setFilters}
         onBreakdownChange={setBreakdownBy}

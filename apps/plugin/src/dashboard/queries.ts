@@ -1,4 +1,10 @@
-import { breakdownToPromLabel, type BreakdownDimension, type DashboardFilters, type FilterOperator } from './types';
+import {
+  breakdownToPromLabel,
+  type BreakdownDimension,
+  type DashboardFilters,
+  type FilterOperator,
+  type LabelFilter,
+} from './types';
 
 // OTel metric names converted to Prometheus format (dots → underscores).
 const TOKEN_USAGE = 'gen_ai_client_token_usage';
@@ -87,6 +93,17 @@ export function buildLabelSelector(filters: DashboardFilters): string {
     }
   }
   return parts.filter(Boolean).join(',');
+}
+
+export function buildScopedLabelMatcher(
+  filters: DashboardFilters,
+  labelFilters: LabelFilter[] = filters.labelFilters,
+  excludeIndices: number[] = []
+): string | undefined {
+  const exclude = new Set(excludeIndices);
+  const complete = labelFilters.filter((lf, index) => !exclude.has(index) && lf.key && lf.value);
+  const selector = buildLabelSelector({ ...filters, labelFilters: complete });
+  return selector || undefined;
 }
 
 function sel(filters: DashboardFilters, extra?: string): string {

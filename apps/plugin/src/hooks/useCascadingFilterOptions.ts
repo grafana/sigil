@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
 import type { DashboardDataSource } from '../dashboard/api';
-import { buildCascadingSelector } from '../dashboard/queries';
+import { buildCascadingSelector, buildScopedLabelMatcher } from '../dashboard/queries';
 import type { DashboardFilters } from '../dashboard/types';
 import { useLabelNames } from '../components/dashboard/useLabelNames';
 import { useLabelValues } from '../components/dashboard/useLabelValues';
 
 const NOISE_LABELS = new Set(['__name__', 'le', 'quantile']);
+const DEDICATED_FILTER_LABELS = new Set(['gen_ai_provider_name', 'gen_ai_request_model', 'gen_ai_agent_name']);
 
 function labelPriority(label: string): number {
   if (label.startsWith('gen_ai_')) {
@@ -49,17 +50,12 @@ export function useCascadingFilterOptions(
   const modelValues = useLabelValues(dataSource, 'gen_ai_request_model', from, to, providerMatcher);
   const agentValues = useLabelValues(dataSource, 'gen_ai_agent_name', from, to, providerAndModelMatcher);
 
-  const labelNames = useLabelNames(dataSource, from, to);
+  const labelMatcher = useMemo(() => buildScopedLabelMatcher(filters), [filters]);
+  const labelNames = useLabelNames(dataSource, from, to, labelMatcher);
 
   const labelKeyOptions = useMemo(() => {
-    const merged = new Set<string>([
-      ...labelNames.names,
-      'gen_ai_provider_name',
-      'gen_ai_request_model',
-      'gen_ai_agent_name',
-    ]);
-    return Array.from(merged)
-      .filter((label) => !NOISE_LABELS.has(label))
+    return Array.from(new Set(labelNames.names))
+      .filter((label) => !NOISE_LABELS.has(label) && !DEDICATED_FILTER_LABELS.has(label))
       .sort((a, b) => {
         const byPriority = labelPriority(a) - labelPriority(b);
         if (byPriority !== 0) {

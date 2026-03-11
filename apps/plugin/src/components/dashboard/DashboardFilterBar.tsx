@@ -1,7 +1,12 @@
 import React, { useCallback } from 'react';
 import { Select } from '@grafana/ui';
 import { type SelectableValue, type TimeRange } from '@grafana/data';
-import { type BreakdownDimension, breakdownLabel, type DashboardFilters } from '../../dashboard/types';
+import {
+  type BreakdownDimension,
+  breakdownLabel,
+  type DashboardFilters,
+  PROM_LABEL_FILTER_OPERATORS,
+} from '../../dashboard/types';
 import type { DashboardDataSource } from '../../dashboard/api';
 import { FilterToolbar } from '../filters/FilterToolbar';
 
@@ -17,6 +22,9 @@ export type DashboardFilterBarProps = {
   dataSource: DashboardDataSource;
   from: number;
   to: number;
+  showLabelFilters?: boolean;
+  showLabelFilterRow?: boolean;
+  onLabelFilterRowOpenChange?: (isOpen: boolean) => void;
   onTimeRangeChange: (timeRange: TimeRange) => void;
   onFiltersChange: (filters: DashboardFilters) => void;
   onBreakdownChange: (breakdown: BreakdownDimension) => void;
@@ -38,6 +46,9 @@ export function DashboardFilterBar({
   dataSource,
   from,
   to,
+  showLabelFilters = true,
+  showLabelFilterRow,
+  onLabelFilterRowOpenChange,
   onTimeRangeChange,
   onFiltersChange,
   onBreakdownChange,
@@ -63,8 +74,11 @@ export function DashboardFilterBar({
       to={to}
       onTimeRangeChange={onTimeRangeChange}
       onFiltersChange={onFiltersChange}
-      hideLabelFilters
+      hideLabelFilters={!showLabelFilters}
       fillWidth
+      labelFilterOperators={PROM_LABEL_FILTER_OPERATORS}
+      showLabelFilterRow={showLabelFilterRow}
+      onLabelFilterRowOpenChange={onLabelFilterRowOpenChange}
     >
       <Select<BreakdownDimension>
         options={breakdownOptions}

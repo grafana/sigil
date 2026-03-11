@@ -1897,6 +1897,78 @@ func TestCallResourceSearchTagsInjectsTraceparentHeader(t *testing.T) {
 	}
 }
 
+func TestCallResourceSearchTagsForwardsScopedTraceQLQuery(t *testing.T) {
+	const scopedQuery = `{ span.gen_ai.conversation.id != "" }`
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/datasources/proxy/uid/tempo/api/v2/search/tags" {
+			http.NotFound(w, r)
+			return
+		}
+		if got := r.URL.Query().Get("q"); got != scopedQuery {
+			http.Error(w, "missing scoped search query", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"tagNames":[]}`)
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+	app.grafanaAppURL = upstream.URL
+	app.grafanaServiceAccountToken = "sa-token"
+	app.tempoDatasourceUID = "tempo"
+
+	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "query/search/tags?q=%7B+span.gen_ai.conversation.id+%21%3D+%22%22+%7D",
+	})
+	if sender.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)
+	}
+}
+
+func TestCallResourceSearchTagValuesForwardsScopedTraceQLQuery(t *testing.T) {
+	const scopedQuery = `{ span.gen_ai.conversation.id != "" }`
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/datasources/proxy/uid/tempo/api/v2/search/tag/resource.k8s.namespace.name/values" {
+			http.NotFound(w, r)
+			return
+		}
+		if got := r.URL.Query().Get("q"); got != scopedQuery {
+			http.Error(w, "missing scoped search query", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"values":["prod"]}`)
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+	app.grafanaAppURL = upstream.URL
+	app.grafanaServiceAccountToken = "sa-token"
+	app.tempoDatasourceUID = "tempo"
+
+	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "query/search/tag/resource.k8s.namespace.name/values?q=%7B+span.gen_ai.conversation.id+%21%3D+%22%22+%7D",
+	})
+	if sender.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)
+	}
+}
+
 func TestCallResourceIgnoresGrafanaOrgHeaderAndUsesFallbackTenant(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("X-Scope-OrgID"); got != defaultTenantID {
@@ -2461,6 +2533,44 @@ func TestCallResourceForwardsGzipEncodedGrafanaProxyResponses(t *testing.T) {
 	var result map[string]interface{}
 	if err := json.Unmarshal(decompressed, &result); err != nil {
 		t.Fatalf("decompressed response body is not valid JSON: %v\nbody bytes: %x", err, decompressed)
+	}
+}
+
+func TestCallResourceSearchErrorDecompressesGzippedUpstreamBody(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/conversations/stats" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusBadRequest)
+		gz := gzip.NewWriter(w)
+		_, _ = gz.Write([]byte("unknown filter key \"resource.k8s.namespace.name\""))
+		_ = gz.Close()
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+	app.apiURL = upstream.URL
+
+	sender := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodPost,
+		Path:   "query/conversations/stats",
+		Body: []byte(`{
+			"filters":"resource.k8s.namespace.name = \"prod\"",
+			"time_range":{"from":"2026-03-11T10:00:00Z","to":"2026-03-11T11:00:00Z"}
+		}`),
+	})
+	if sender.Status != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusBadRequest, sender.Status, sender.Body)
+	}
+	if string(sender.Body) != "unknown filter key \"resource.k8s.namespace.name\"\n" {
+		t.Fatalf("expected decompressed error body, got %q", string(sender.Body))
 	}
 }
 

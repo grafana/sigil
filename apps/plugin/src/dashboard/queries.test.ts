@@ -1,6 +1,7 @@
 import {
   buildCascadingSelector,
   buildLabelSelector,
+  buildScopedLabelMatcher,
   computeStep,
   computeRateInterval,
   computeRangeDuration,
@@ -155,6 +156,34 @@ describe('buildLabelSelector', () => {
     expect(buildLabelSelector({ ...empty, labelFilters: [{ key: 'service_name', operator: '=', value: '' }] })).toBe(
       ''
     );
+  });
+});
+
+describe('buildScopedLabelMatcher', () => {
+  it('returns undefined when no filters are active', () => {
+    expect(buildScopedLabelMatcher(empty)).toBeUndefined();
+  });
+
+  it('uses complete label filters from draft rows', () => {
+    expect(
+      buildScopedLabelMatcher(empty, [
+        { key: 'service_name', operator: '=', value: 'sigil-api' },
+        { key: 'env', operator: '=', value: '' },
+      ])
+    ).toBe('service_name="sigil-api"');
+  });
+
+  it('excludes the edited row from the scoped matcher', () => {
+    expect(
+      buildScopedLabelMatcher(
+        { ...empty, providers: ['openai'] },
+        [
+          { key: 'service_name', operator: '=', value: 'sigil-api' },
+          { key: 'deployment', operator: '=', value: 'blue' },
+        ],
+        [1]
+      )
+    ).toBe('gen_ai_provider_name=~"(?i).*openai.*",service_name="sigil-api"');
   });
 });
 

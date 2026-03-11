@@ -11,10 +11,19 @@ import type {
 const queryBasePath = '/api/plugins/grafana-sigil-app/resources/query';
 const genAIMetricsMatcher = '{__name__=~"gen_ai_client_.*"}';
 
+function mergeMetricsMatcher(matchers?: string): string {
+  if (!matchers) {
+    return genAIMetricsMatcher;
+  }
+  const base = genAIMetricsMatcher.slice(1, -1);
+  const extra = matchers.startsWith('{') ? matchers.slice(1, -1) : matchers;
+  return `{${base},${extra}}`;
+}
+
 export type DashboardDataSource = {
   queryRange: (query: string, start: number, end: number, step: number) => Promise<PrometheusQueryResponse>;
   queryInstant: (query: string, time: number) => Promise<PrometheusQueryResponse>;
-  labels: (start: number, end: number) => Promise<string[]>;
+  labels: (start: number, end: number, matchers?: string) => Promise<string[]>;
   labelValues: (label: string, start: number, end: number, matchers?: string) => Promise<string[]>;
   resolveModelCards: (pairs: ModelResolvePair[]) => Promise<ModelCardResolveResponse>;
 };
@@ -42,29 +51,23 @@ export const defaultDashboardDataSource: DashboardDataSource = {
     return response.data;
   },
 
-  async labels(start, end) {
+  async labels(start, end, matchers) {
     const response = await lastValueFrom(
       getBackendSrv().fetch<PrometheusLabelsResponse>({
         method: 'GET',
         url: `${queryBasePath}/proxy/prometheus/api/v1/labels`,
-        params: { start, end, 'match[]': genAIMetricsMatcher },
+        params: { start, end, 'match[]': mergeMetricsMatcher(matchers) },
       })
     );
     return response.data.data ?? [];
   },
 
   async labelValues(label, start, end, matchers?) {
-    let matchExpr = genAIMetricsMatcher;
-    if (matchers) {
-      const base = genAIMetricsMatcher.slice(1, -1);
-      const extra = matchers.startsWith('{') ? matchers.slice(1, -1) : matchers;
-      matchExpr = `{${base},${extra}}`;
-    }
     const response = await lastValueFrom(
       getBackendSrv().fetch<PrometheusLabelValuesResponse>({
         method: 'GET',
         url: `${queryBasePath}/proxy/prometheus/api/v1/label/${encodeURIComponent(label)}/values`,
-        params: { start, end, 'match[]': matchExpr },
+        params: { start, end, 'match[]': mergeMetricsMatcher(matchers) },
       })
     );
     return response.data.data ?? [];

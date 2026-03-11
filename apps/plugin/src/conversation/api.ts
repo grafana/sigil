@@ -1,5 +1,7 @@
 import { lastValueFrom } from 'rxjs';
 import { getBackendSrv } from '@grafana/runtime';
+import { plugin } from '../module';
+import { canonicalizeConversationFilterKey } from './filterKeyMapping';
 import type {
   ConversationDetail,
   ConversationListResponse,
@@ -19,6 +21,9 @@ import type {
 import { hydrateConversationDetailV2, type ConversationDetailV2 } from './detailV2';
 
 const queryBasePath = '/api/plugins/grafana-sigil-app/resources/query';
+const tempoDatasourceUID = (
+  plugin.meta.jsonData as { tempoDatasourceUID?: string } | undefined
+)?.tempoDatasourceUID?.trim();
 
 type ConversationSearchStreamEvent =
   | { type: 'results'; conversations?: ConversationSearchResponse['conversations'] }
@@ -62,6 +67,192 @@ function toUnixSeconds(value: string): string {
     return '';
   }
   return String(Math.floor(parsed / 1000));
+}
+
+function normalizeTempoSearchTagKey(scope: 'span' | 'resource', key: string): string {
+  const trimmed = key.trim();
+  if (trimmed.length === 0) {
+    return '';
+  }
+  if (trimmed.startsWith('span.') || trimmed.startsWith('resource.')) {
+    return canonicalizeConversationFilterKey(trimmed);
+  }
+  return canonicalizeConversationFilterKey(`${scope}.${trimmed}`);
+}
+
+function dedupeSortedStrings(values: string[]): string[] {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).sort((left, right) =>
+    left.localeCompare(right)
+  );
+}
+
+function parseTempoSearchTagsResponse(payload: unknown, fallbackScope: 'span' | 'resource'): SearchTag[] {
+  const tags: SearchTag[] = [];
+  const seen = new Set<string>();
+
+  const addTag = (key: string, scope: 'span' | 'resource') => {
+    const normalizedKey = normalizeTempoSearchTagKey(scope, key);
+    if (!normalizedKey || seen.has(normalizedKey)) {
+      return;
+    }
+    seen.add(normalizedKey);
+    tags.push({ key: normalizedKey, scope });
+  };
+
+  if (!payload || typeof payload !== 'object') {
+    return tags;
+  }
+
+  const record = payload as {
+    scopes?: Array<{ name?: string; tags?: Array<{ name?: string } | string> }>;
+    tagNames?: string[];
+    tags?: string[];
+  };
+
+  if (Array.isArray(record.scopes)) {
+    for (const scopeEntry of record.scopes) {
+      const scopeName = scopeEntry?.name === 'resource' ? 'resource' : scopeEntry?.name === 'span' ? 'span' : null;
+      if (!scopeName || !Array.isArray(scopeEntry.tags)) {
+        continue;
+      }
+      for (const rawTag of scopeEntry.tags) {
+        if (typeof rawTag === 'string') {
+          addTag(rawTag, scopeName);
+          continue;
+        }
+        if (rawTag && typeof rawTag === 'object' && typeof rawTag.name === 'string') {
+          addTag(rawTag.name, scopeName);
+        }
+      }
+    }
+  }
+
+  if (tags.length > 0) {
+    return tags.sort((left, right) => left.key.localeCompare(right.key));
+  }
+
+  if (Array.isArray(record.tagNames)) {
+    for (const key of record.tagNames) {
+      addTag(key, fallbackScope);
+    }
+  }
+  if (Array.isArray(record.tags)) {
+    for (const key of record.tags) {
+      addTag(key, fallbackScope);
+    }
+  }
+
+  return tags.sort((left, right) => left.key.localeCompare(right.key));
+}
+
+function parseTempoSearchTagValuesResponse(payload: unknown): string[] {
+  if (!payload || typeof payload !== 'object') {
+    return [];
+  }
+
+  const record = payload as { values?: unknown; tagValues?: unknown };
+  const candidates = [record.values, record.tagValues];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      const normalizedValues = candidate.flatMap((value) => {
+        if (typeof value === 'string') {
+          return [value];
+        }
+        if (
+          value &&
+          typeof value === 'object' &&
+          'value' in value &&
+          typeof (value as { value?: unknown }).value === 'string'
+        ) {
+          return [(value as { value: string }).value];
+        }
+        return [];
+      });
+      return dedupeSortedStrings(normalizedValues);
+    }
+  }
+
+  return [];
+}
+
+async function fetchTempoSearchTagsDirect(from: string, to: string, query?: string): Promise<SearchTag[] | null> {
+  if (!tempoDatasourceUID) {
+    return null;
+  }
+
+  const params = new URLSearchParams();
+  const start = toUnixSeconds(from);
+  const end = toUnixSeconds(to);
+  if (start.length > 0) {
+    params.set('start', start);
+  }
+  if (end.length > 0) {
+    params.set('end', end);
+  }
+  const trimmedQuery = query?.trim();
+  if (trimmedQuery) {
+    params.set('q', trimmedQuery);
+  }
+
+  const [spanResponse, resourceResponse] = await Promise.all([
+    lastValueFrom(
+      getBackendSrv().fetch<unknown>({
+        method: 'GET',
+        url: `/api/datasources/proxy/uid/${tempoDatasourceUID}/api/v2/search/tags?${new URLSearchParams({
+          ...Object.fromEntries(params.entries()),
+          scope: 'span',
+        }).toString()}`,
+      })
+    ),
+    lastValueFrom(
+      getBackendSrv().fetch<unknown>({
+        method: 'GET',
+        url: `/api/datasources/proxy/uid/${tempoDatasourceUID}/api/v2/search/tags?${new URLSearchParams({
+          ...Object.fromEntries(params.entries()),
+          scope: 'resource',
+        }).toString()}`,
+      })
+    ),
+  ]);
+
+  return [
+    ...parseTempoSearchTagsResponse(spanResponse.data, 'span'),
+    ...parseTempoSearchTagsResponse(resourceResponse.data, 'resource'),
+  ].sort((left, right) => left.key.localeCompare(right.key));
+}
+
+async function fetchTempoSearchTagValuesDirect(
+  tag: string,
+  from: string,
+  to: string,
+  query?: string
+): Promise<string[] | null> {
+  if (!tempoDatasourceUID) {
+    return null;
+  }
+
+  const params = new URLSearchParams();
+  const start = toUnixSeconds(from);
+  const end = toUnixSeconds(to);
+  if (start.length > 0) {
+    params.set('start', start);
+  }
+  if (end.length > 0) {
+    params.set('end', end);
+  }
+  const trimmedQuery = query?.trim();
+  if (trimmedQuery) {
+    params.set('q', trimmedQuery);
+  }
+
+  const response = await lastValueFrom(
+    getBackendSrv().fetch<unknown>({
+      method: 'GET',
+      url: `/api/datasources/proxy/uid/${tempoDatasourceUID}/api/v2/search/tag/${encodeURIComponent(tag)}/values?${params.toString()}`,
+    })
+  );
+
+  return parseTempoSearchTagValuesResponse(response.data);
 }
 
 async function searchConversationsRequest(request: ConversationSearchRequest): Promise<ConversationSearchResponse> {
@@ -216,8 +407,8 @@ export type ConversationsDataSource = {
     request: CreateConversationRatingRequest
   ) => Promise<CreateConversationRatingResponse>;
   getGeneration: (generationID: string, hints?: GenerationLookupHints) => Promise<GenerationDetail>;
-  getSearchTags: (from: string, to: string) => Promise<SearchTag[]>;
-  getSearchTagValues: (tag: string, from: string, to: string) => Promise<string[]>;
+  getSearchTags: (from: string, to: string, query?: string) => Promise<SearchTag[]>;
+  getSearchTagValues: (tag: string, from: string, to: string, query?: string) => Promise<string[]>;
 };
 
 export type FollowupRequest = {
@@ -330,7 +521,15 @@ export const defaultConversationsDataSource: ConversationsDataSource = {
     return response.data;
   },
 
-  async getSearchTags(from, to) {
+  async getSearchTags(from, to, query) {
+    try {
+      const directTags = await fetchTempoSearchTagsDirect(from, to, query);
+      if (directTags) {
+        return directTags;
+      }
+    } catch {
+    }
+
     const params = new URLSearchParams();
     const start = toUnixSeconds(from);
     const end = toUnixSeconds(to);
@@ -339,6 +538,10 @@ export const defaultConversationsDataSource: ConversationsDataSource = {
     }
     if (end.length > 0) {
       params.set('end', end);
+    }
+    const trimmedQuery = query?.trim();
+    if (trimmedQuery) {
+      params.set('q', trimmedQuery);
     }
 
     const response = await lastValueFrom(
@@ -353,7 +556,15 @@ export const defaultConversationsDataSource: ConversationsDataSource = {
     return response.data.tags ?? [];
   },
 
-  async getSearchTagValues(tag, from, to) {
+  async getSearchTagValues(tag, from, to, query) {
+    try {
+      const directValues = await fetchTempoSearchTagValuesDirect(tag, from, to, query);
+      if (directValues) {
+        return directValues;
+      }
+    } catch {
+    }
+
     const params = new URLSearchParams();
     const start = toUnixSeconds(from);
     const end = toUnixSeconds(to);
@@ -362,6 +573,10 @@ export const defaultConversationsDataSource: ConversationsDataSource = {
     }
     if (end.length > 0) {
       params.set('end', end);
+    }
+    const trimmedQuery = query?.trim();
+    if (trimmedQuery) {
+      params.set('q', trimmedQuery);
     }
 
     const response = await lastValueFrom(

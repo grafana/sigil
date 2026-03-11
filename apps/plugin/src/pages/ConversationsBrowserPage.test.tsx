@@ -3,7 +3,8 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { RouterProvider, createMemoryRouter, useLocation, useParams } from 'react-router-dom';
 import ConversationsBrowserPage from './ConversationsBrowserPage';
 import type { ConversationsDataSource } from '../conversation/api';
-import type { DashboardDataSource } from '../dashboard/api';
+import { buildConversationTagDiscoveryQuery } from '../conversation/searchTagScope';
+import type { FilterToolbarProps } from '../components/filters/FilterToolbar';
 
 jest.mock('@grafana/ui', () => {
   const actual = jest.requireActual('@grafana/ui');
@@ -13,6 +14,20 @@ jest.mock('@grafana/ui', () => {
     TimeRangePicker: () => <div data-testid="time-range-picker" />,
   };
 });
+
+const mockFilterToolbar = jest.fn<void, [FilterToolbarProps]>();
+
+jest.mock('../components/filters/FilterToolbar', () => ({
+  FilterToolbar: (props: FilterToolbarProps) => {
+    mockFilterToolbar(props);
+    return (
+      <div data-testid="filter-toolbar">
+        <div>{props.showLabelFilterRow ? 'Label filters open' : 'Label filters closed'}</div>
+        {props.children}
+      </div>
+    );
+  },
+}));
 
 type MockConversationsDataSource = {
   [Key in keyof ConversationsDataSource as NonNullable<ConversationsDataSource[Key]> extends (...args: any[]) => any
@@ -196,24 +211,13 @@ function createStreamingDataSource(): MockConversationsDataSource {
   return dataSource;
 }
 
-const mockDashboardDataSource: DashboardDataSource = {
-  queryRange: jest.fn().mockResolvedValue({ status: 'success', data: { resultType: 'matrix', result: [] } }),
-  queryInstant: jest.fn().mockResolvedValue({ status: 'success', data: { resultType: 'vector', result: [] } }),
-  labels: jest.fn().mockResolvedValue([]),
-  labelValues: jest.fn().mockResolvedValue([]),
-  resolveModelCards: jest.fn().mockResolvedValue({
-    resolved: [],
-    freshness: {
-      catalog_last_refreshed_at: null,
-      stale: false,
-      soft_stale: false,
-      hard_stale: false,
-      source_path: 'memory_live',
-    },
-  }),
-};
-
 describe('ConversationsBrowserPage', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFilterToolbar.mockClear();
+    window.sessionStorage.clear();
+  });
+
   function renderPage(dataSource: ConversationsDataSource, initialEntry = '/conversations') {
     const router = createMemoryRouter(
       [
@@ -223,7 +227,7 @@ describe('ConversationsBrowserPage', () => {
         },
         {
           path: '/conversations',
-          element: <ConversationsBrowserPage dataSource={dataSource} dashboardDataSource={mockDashboardDataSource} />,
+          element: <ConversationsBrowserPage dataSource={dataSource} />,
         },
       ],
       { initialEntries: [initialEntry] }
@@ -239,7 +243,7 @@ describe('ConversationsBrowserPage', () => {
     const dataSource = createDataSource();
     const { router } = renderPage(dataSource);
 
-    await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalled());
     expect(dataSource.getConversationStats).toHaveBeenCalledTimes(1);
     expect(dataSource.searchConversations.mock.calls[0][0].select).toContain('span.gen_ai.usage.input_tokens');
     expect(dataSource.searchConversations.mock.calls[0][0].select).toContain('span.gen_ai.usage.output_tokens');
@@ -448,5 +452,148 @@ describe('ConversationsBrowserPage', () => {
     rendered.unmount();
 
     expect(capturedSignal?.aborted).toBe(true);
+  });
+
+  it('shows the label filter row when label filters are present in the URL', async () => {
+    const dataSource = createDataSource();
+    const { router } = renderPage(dataSource, '/conversations?label=service_name%7C%3D%7Csigil-api');
+
+    await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalled());
+    await waitFor(() => expect(router.state.location.search).toContain('label=resource.service.name%7C%3D%7Csigil-api'));
+    expect(router.state.location.search).not.toContain('service_name');
+    const toolbarProps = mockFilterToolbar.mock.lastCall?.[0];
+    expect(toolbarProps?.hideLabelFilters).toBeUndefined();
+    expect(toolbarProps?.showLabelFilterRow).toBe(true);
+    expect(toolbarProps?.filters.labelFilters).toEqual([
+      { key: 'resource.service.name', operator: '=', value: 'sigil-api' },
+    ]);
+    expect(screen.getByText('Label filters open')).toBeInTheDocument();
+  });
+
+  it('drops unsupported analytics labels from the conversations URL state', async () => {
+    const dataSource = createDataSource();
+    const { router } = renderPage(
+      dataSource,
+      '/conversations?label=job%7C%3D%7Calloy&label=resource.sigil.devex.language%7C%3D%7Cgo'
+    );
+
+    await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(router.state.location.search).toContain('label=resource.sigil.devex.language%7C%3D%7Cgo')
+    );
+    expect(router.state.location.search).not.toContain('job%7C%3D%7Calloy');
+
+    const toolbarProps = mockFilterToolbar.mock.lastCall?.[0];
+    expect(toolbarProps?.filters.labelFilters).toEqual([
+      { key: 'resource.sigil.devex.language', operator: '=', value: 'go' },
+    ]);
+  });
+
+  it('keeps conversation attribute filters visible as conversation keys in the shared toolbar', async () => {
+    const dataSource = createDataSource();
+    renderPage(dataSource, '/conversations?label=resource.service.name%7C%3D%7Csigil-api');
+
+    await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalledTimes(1));
+    const toolbarProps = mockFilterToolbar.mock.lastCall?.[0];
+    expect(toolbarProps?.filters.labelFilters).toEqual([
+      { key: 'resource.service.name', operator: '=', value: 'sigil-api' },
+    ]);
+  });
+
+  it('scopes tag discovery and tag values to sigil conversation spans', async () => {
+    const dataSource = createDataSource();
+    dataSource.getSearchTags.mockResolvedValue([
+      { key: 'resource.k8s.namespace.name', scope: 'resource' },
+      { key: 'span.http.route', scope: 'span' },
+    ]);
+    dataSource.getSearchTagValues.mockImplementation(async (tag: string) => {
+      if (tag === 'span.gen_ai.provider.name') {
+        return ['openai'];
+      }
+      if (tag === 'span.gen_ai.request.model') {
+        return ['gpt-4o'];
+      }
+      if (tag === 'span.gen_ai.agent.name') {
+        return ['assistant'];
+      }
+      if (tag === 'resource.k8s.namespace.name') {
+        return ['prod'];
+      }
+      return [];
+    });
+
+    renderPage(dataSource, '/conversations?label=resource.k8s.namespace.name%7C%3D%7Cprod');
+
+    await waitFor(() => expect(dataSource.getSearchTags).toHaveBeenCalled());
+
+    const scopedQuery = buildConversationTagDiscoveryQuery({
+      providers: [],
+      models: [],
+      agentNames: [],
+      labelFilters: [{ key: 'resource.k8s.namespace.name', operator: '=', value: 'prod' }],
+    });
+    expect(dataSource.getSearchTags).toHaveBeenCalledWith(expect.any(String), expect.any(String), scopedQuery);
+
+    const toolbarProps = mockFilterToolbar.mock.lastCall?.[0];
+    expect(toolbarProps?.loadLabelValues).toBeDefined();
+
+    await act(async () => {
+      await toolbarProps?.loadLabelValues?.({ key: 'resource.k8s.namespace.name', operator: '=', value: 'prod' });
+    });
+
+    expect(dataSource.getSearchTagValues).toHaveBeenCalledWith(
+      'resource.k8s.namespace.name',
+      expect.any(String),
+      expect.any(String),
+      '{ span.gen_ai.operation.name =~ "generateText|streamText|execute_tool" }'
+    );
+  });
+
+  it('loads provider, model, and agent options from scoped Tempo tag values', async () => {
+    const dataSource = createDataSource();
+    dataSource.getSearchTagValues.mockImplementation(async (tag: string, _from: string, _to: string, query?: string) => {
+      if (tag === 'span.gen_ai.provider.name') {
+        expect(query).toBe(
+          '{ span.gen_ai.operation.name =~ "generateText|streamText|execute_tool" && resource.k8s.namespace.name = "prod" }'
+        );
+        return ['openai'];
+      }
+      if (tag === 'span.gen_ai.request.model') {
+        expect(query).toBe(
+          '{ span.gen_ai.operation.name =~ "generateText|streamText|execute_tool" && resource.k8s.namespace.name = "prod" }'
+        );
+        return ['gpt-4o'];
+      }
+      if (tag === 'span.gen_ai.agent.name') {
+        expect(query).toBe(
+          '{ span.gen_ai.operation.name =~ "generateText|streamText|execute_tool" && resource.k8s.namespace.name = "prod" }'
+        );
+        return ['assistant'];
+      }
+      return [];
+    });
+
+    renderPage(dataSource, '/conversations?label=resource.k8s.namespace.name%7C%3D%7Cprod');
+
+    await waitFor(() =>
+      expect(dataSource.getSearchTagValues).toHaveBeenCalledWith(
+        'span.gen_ai.provider.name',
+        expect.any(String),
+        expect.any(String),
+        expect.any(String)
+      )
+    );
+    expect(dataSource.getSearchTagValues).toHaveBeenCalledWith(
+      'span.gen_ai.request.model',
+      expect.any(String),
+      expect.any(String),
+      expect.any(String)
+    );
+    expect(dataSource.getSearchTagValues).toHaveBeenCalledWith(
+      'span.gen_ai.agent.name',
+      expect.any(String),
+      expect.any(String),
+      expect.any(String)
+    );
   });
 });

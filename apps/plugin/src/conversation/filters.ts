@@ -1,10 +1,5 @@
 import type { DashboardFilters } from '../dashboard/types';
-
-const promLabelToFilterKey: Record<string, string> = {
-  gen_ai_provider_name: 'provider',
-  gen_ai_request_model: 'model',
-  gen_ai_agent_name: 'agent',
-};
+import { mapDashboardLabelFiltersToConversation } from './filterKeyMapping';
 
 function buildFilterClause(key: string, values: string[]): string | null {
   if (values.length === 0) {
@@ -34,11 +29,8 @@ export function buildConversationSearchFilter(filters: DashboardFilters): string
     parts.push(agentClause);
   }
 
-  for (const lf of filters.labelFilters) {
-    if (lf.key && lf.value) {
-      const resolvedKey = promLabelToFilterKey[lf.key] ?? lf.key;
-      parts.push(`${resolvedKey} ${lf.operator} "${lf.value}"`);
-    }
+  for (const filter of mapDashboardLabelFiltersToConversation(filters.labelFilters)) {
+    parts.push(`${filter.key} ${filter.operator} "${filter.value}"`);
   }
   return parts.join(' ');
 }

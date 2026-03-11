@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -1524,13 +1525,14 @@ func (a *App) handleSearchTags(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	start, end := searchcore.NormalizeTagDiscoveryRange(from, to, time.Now().UTC())
+	traceQLQuery := strings.TrimSpace(req.URL.Query().Get("q"))
 
-	spanTags, err := a.fetchTempoTags(req, "span", start, end)
+	spanTags, err := a.fetchTempoTags(req, "span", start, end, traceQLQuery)
 	if err != nil {
 		a.writeSearchError(w, "/query/search/tags", err)
 		return
 	}
-	resourceTags, err := a.fetchTempoTags(req, "resource", start, end)
+	resourceTags, err := a.fetchTempoTags(req, "resource", start, end, traceQLQuery)
 	if err != nil {
 		a.writeSearchError(w, "/query/search/tags", err)
 		return
@@ -1598,8 +1600,9 @@ func (a *App) handleSearchTagValues(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	start, end := searchcore.NormalizeTagDiscoveryRange(from, to, time.Now().UTC())
+	traceQLQuery := strings.TrimSpace(req.URL.Query().Get("q"))
 
-	values, err := a.fetchTempoTagValues(req, tempoTag, start, end)
+	values, err := a.fetchTempoTagValues(req, tempoTag, start, end, traceQLQuery)
 	if err != nil {
 		a.writeSearchError(w, "/query/search/tag/"+url.PathEscape(tag)+"/values", err)
 		return
@@ -2040,13 +2043,16 @@ func (a *App) searchTempo(
 	return &response, nil
 }
 
-func (a *App) fetchTempoTags(req *http.Request, scope string, from, to time.Time) ([]string, error) {
+func (a *App) fetchTempoTags(req *http.Request, scope string, from, to time.Time, traceQLQuery string) ([]string, error) {
 	query := url.Values{}
 	if trimmedScope := strings.TrimSpace(scope); trimmedScope != "" {
 		query.Set("scope", trimmedScope)
 	}
 	query.Set("start", strconv.FormatInt(from.UTC().Unix(), 10))
 	query.Set("end", strconv.FormatInt(to.UTC().Unix(), 10))
+	if trimmedQuery := strings.TrimSpace(traceQLQuery); trimmedQuery != "" {
+		query.Set("q", trimmedQuery)
+	}
 
 	body, err := a.doGrafanaRequest(
 		req,
@@ -2061,10 +2067,13 @@ func (a *App) fetchTempoTags(req *http.Request, scope string, from, to time.Time
 	return searchcore.ExtractStringSlice(body, "tagNames", "tags", "scopes")
 }
 
-func (a *App) fetchTempoTagValues(req *http.Request, tag string, from, to time.Time) ([]string, error) {
+func (a *App) fetchTempoTagValues(req *http.Request, tag string, from, to time.Time, traceQLQuery string) ([]string, error) {
 	query := url.Values{}
 	query.Set("start", strconv.FormatInt(from.UTC().Unix(), 10))
 	query.Set("end", strconv.FormatInt(to.UTC().Unix(), 10))
+	if trimmedQuery := strings.TrimSpace(traceQLQuery); trimmedQuery != "" {
+		query.Set("q", trimmedQuery)
+	}
 
 	body, err := a.doGrafanaRequest(
 		req,
@@ -2408,7 +2417,7 @@ func (a *App) writeSearchError(w http.ResponseWriter, endpoint string, err error
 		return
 	}
 	if upstreamErr := (*upstreamHTTPError)(nil); errors.As(err, &upstreamErr) {
-		trimmed := bytes.TrimSpace(upstreamErr.Body)
+		trimmed := bytes.TrimSpace(decompressIfGzipped(upstreamErr.Body))
 		if json.Valid(trimmed) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(upstreamErr.StatusCode)
@@ -2424,6 +2433,26 @@ func (a *App) writeSearchError(w http.ResponseWriter, endpoint string, err error
 	}
 
 	writeStub(w, http.StatusBadGateway, endpoint, err.Error())
+}
+
+func decompressIfGzipped(payload []byte) []byte {
+	if len(payload) < 2 || payload[0] != 0x1f || payload[1] != 0x8b {
+		return payload
+	}
+
+	reader, err := gzip.NewReader(bytes.NewReader(payload))
+	if err != nil {
+		return payload
+	}
+	defer func() {
+		_ = reader.Close()
+	}()
+
+	decompressed, err := io.ReadAll(reader)
+	if err != nil {
+		return payload
+	}
+	return decompressed
 }
 
 func parseSearchRange(req *http.Request) (time.Time, time.Time, error) {

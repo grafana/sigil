@@ -100,6 +100,7 @@ export type DashboardTab = 'overview' | 'performance' | 'errors' | 'usage' | 'ev
 export type FilterOperator = '=' | '!=' | '=~' | '!~' | '<' | '>' | '<=' | '>=';
 
 export const FILTER_OPERATORS: FilterOperator[] = ['=', '!=', '=~', '!~', '<', '>', '<=', '>='];
+export const PROM_LABEL_FILTER_OPERATORS: FilterOperator[] = ['=', '!=', '=~', '!~'];
 
 export const filterOperatorLabel: Record<FilterOperator, string> = {
   '=': 'Equals',

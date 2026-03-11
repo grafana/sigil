@@ -22,11 +22,6 @@ export function buildConversationsUrl(
   for (const a of filters.agentNames) {
     params.append('agent', a);
   }
-  for (const lf of filters.labelFilters) {
-    if (lf.key && lf.value) {
-      params.append('label', `${lf.key}|${lf.operator}|${lf.value}`);
-    }
-  }
   if (orderBy !== 'time') {
     params.set('orderBy', orderBy);
   }

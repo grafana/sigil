@@ -41,7 +41,9 @@ const mockDataSource: DashboardDataSource = {
 const now = Math.floor(Date.now() / 1000);
 const oneHourAgo = now - 3600;
 
-function DefaultWrapper() {
+type StoryArgs = Partial<React.ComponentProps<typeof FilterToolbar>>;
+
+function DefaultWrapper(args?: StoryArgs) {
   const [timeRange, setTimeRange] = useState<TimeRange>(() =>
     makeTimeRange('2026-02-15T08:00:00.000Z', '2026-02-15T12:00:00.000Z')
   );
@@ -49,6 +51,7 @@ function DefaultWrapper() {
 
   return (
     <FilterToolbar
+      {...args}
       timeRange={timeRange}
       filters={filters}
       providerOptions={['openai', 'anthropic', 'google']}
@@ -65,7 +68,7 @@ function DefaultWrapper() {
   );
 }
 
-function WithActiveFiltersWrapper() {
+function WithActiveFiltersWrapper(args?: StoryArgs) {
   const [timeRange, setTimeRange] = useState<TimeRange>(() =>
     makeTimeRange('2026-02-15T08:00:00.000Z', '2026-02-15T12:00:00.000Z')
   );
@@ -78,6 +81,7 @@ function WithActiveFiltersWrapper() {
 
   return (
     <FilterToolbar
+      {...args}
       timeRange={timeRange}
       filters={filters}
       providerOptions={['openai', 'anthropic', 'google']}
@@ -109,9 +113,30 @@ const meta = {
 export default meta;
 
 export const Default = {
-  render: () => <DefaultWrapper />,
+  render: (args: StoryArgs) => <DefaultWrapper {...args} />,
 };
 
 export const WithActiveFilters = {
-  render: () => <WithActiveFiltersWrapper />,
+  render: (args: StoryArgs) => <WithActiveFiltersWrapper {...args} />,
+};
+
+export const ExpandedLabelFilters = {
+  render: (args: StoryArgs) => <WithActiveFiltersWrapper {...args} />,
+  args: {
+    defaultShowLabelFilterRow: true,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'Expanded label filters render as a second row with spacing only and no separator line.',
+      },
+    },
+  },
+};
+
+export const HiddenLabelFilters = {
+  render: (args: StoryArgs) => <WithActiveFiltersWrapper {...args} />,
+  args: {
+    hideLabelFilters: true,
+  },
 };

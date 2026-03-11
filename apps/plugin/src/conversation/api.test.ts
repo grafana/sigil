@@ -1,5 +1,16 @@
 import { ReadableStream } from 'node:stream/web';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
+
+jest.mock('../module', () => ({
+  plugin: {
+    meta: {
+      jsonData: {
+        tempoDatasourceUID: 'tempo-uid',
+      },
+    },
+  },
+}));
+
 import { defaultConversationsDataSource } from './api';
 import type { ConversationSearchRequest, ConversationSearchResponse, ConversationStatsRequest } from './types';
 import type { ConversationDetailV2 } from './detailV2';
@@ -222,5 +233,106 @@ describe('defaultConversationsDataSource', () => {
     const response = await defaultConversationsDataSource.getConversationDetail('conv-1');
 
     expect(response).toEqual(detail);
+  });
+
+  it('getSearchTags forwards the optional scoped TraceQL query to the Tempo datasource proxy', async () => {
+    backendFetchMock
+      .mockReturnValueOnce(of({ data: { tagNames: ['gen_ai.operation.name'] } }))
+      .mockReturnValueOnce(of({ data: { tagNames: ['k8s.namespace.name'] } }));
+
+    const tags = await defaultConversationsDataSource.getSearchTags(
+      '2025-02-15T07:00:00Z',
+      '2025-02-15T10:00:00Z',
+      '{ span.gen_ai.conversation.id != "" }'
+    );
+
+    expect(tags).toEqual([
+      { key: 'resource.k8s.namespace.name', scope: 'resource' },
+      { key: 'span.gen_ai.operation.name', scope: 'span' },
+    ]);
+    expect(backendFetchMock).toHaveBeenNthCalledWith(1, {
+      method: 'GET',
+      url:
+        '/api/datasources/proxy/uid/tempo-uid/api/v2/search/tags?start=1739602800&end=1739613600&q=%7B+span.gen_ai.conversation.id+%21%3D+%22%22+%7D&scope=span',
+    });
+    expect(backendFetchMock).toHaveBeenNthCalledWith(2, {
+      method: 'GET',
+      url:
+        '/api/datasources/proxy/uid/tempo-uid/api/v2/search/tags?start=1739602800&end=1739613600&q=%7B+span.gen_ai.conversation.id+%21%3D+%22%22+%7D&scope=resource',
+    });
+  });
+
+  it('getSearchTagValues forwards the optional scoped TraceQL query to the Tempo datasource proxy', async () => {
+    backendFetchMock.mockReturnValue(of({ data: { values: ['prod'] } }));
+
+    const values = await defaultConversationsDataSource.getSearchTagValues(
+      'resource.k8s.namespace.name',
+      '2025-02-15T07:00:00Z',
+      '2025-02-15T10:00:00Z',
+      '{ span.gen_ai.conversation.id != "" }'
+    );
+
+    expect(values).toEqual(['prod']);
+    expect(backendFetchMock).toHaveBeenCalledWith({
+      method: 'GET',
+      url:
+        '/api/datasources/proxy/uid/tempo-uid/api/v2/search/tag/resource.k8s.namespace.name/values?start=1739602800&end=1739613600&q=%7B+span.gen_ai.conversation.id+%21%3D+%22%22+%7D',
+    });
+  });
+
+  it('canonicalizes alias-like tag names from Tempo to concrete resource keys', async () => {
+    backendFetchMock
+      .mockReturnValueOnce(of({ data: { tagNames: [] } }))
+      .mockReturnValueOnce(of({ data: { tagNames: ['namespace', 'cluster', 'service'] } }));
+
+    const tags = await defaultConversationsDataSource.getSearchTags(
+      '2025-02-15T07:00:00Z',
+      '2025-02-15T10:00:00Z',
+      '{ span.gen_ai.conversation.id != "" }'
+    );
+
+    expect(tags).toEqual([
+      { key: 'resource.k8s.cluster.name', scope: 'resource' },
+      { key: 'resource.k8s.namespace.name', scope: 'resource' },
+      { key: 'resource.service.name', scope: 'resource' },
+    ]);
+  });
+
+  it('normalizes structured Tempo tagValues objects from the datasource proxy', async () => {
+    backendFetchMock.mockReturnValue(
+      of({
+        data: {
+          tagValues: [{ type: 'string', value: 'assistant' }, { type: 'string', value: 'worker' }],
+        },
+      })
+    );
+
+    const values = await defaultConversationsDataSource.getSearchTagValues(
+      'span.gen_ai.agent.name',
+      '2025-02-15T07:00:00Z',
+      '2025-02-15T10:00:00Z',
+      '{ span.gen_ai.conversation.id != "" }'
+    );
+
+    expect(values).toEqual(['assistant', 'worker']);
+  });
+
+  it('falls back to the plugin resource route when the direct Tempo proxy fails', async () => {
+    backendFetchMock
+      .mockReturnValueOnce(throwError(() => new Error('tempo proxy failed')))
+      .mockReturnValueOnce(of({ data: { tagNames: [] } }))
+      .mockReturnValueOnce(of({ data: { tags: [] } }));
+
+    await defaultConversationsDataSource.getSearchTags(
+      '2025-02-15T07:00:00Z',
+      '2025-02-15T10:00:00Z',
+      '{ span.gen_ai.conversation.id != "" }'
+    );
+
+    expect(backendFetchMock).toHaveBeenLastCalledWith({
+      method: 'GET',
+      url:
+        '/api/plugins/grafana-sigil-app/resources/query/search/tags?start=1739602800&end=1739613600&q=%7B+span.gen_ai.conversation.id+%21%3D+%22%22+%7D',
+    });
   });
 });

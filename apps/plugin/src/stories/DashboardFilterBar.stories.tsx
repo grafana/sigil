@@ -41,7 +41,9 @@ const mockDataSource: DashboardDataSource = {
 const now = Math.floor(Date.now() / 1000);
 const oneHourAgo = now - 3600;
 
-function DashboardFilterBarWrapper() {
+type StoryArgs = Partial<React.ComponentProps<typeof DashboardFilterBar>>;
+
+function DashboardFilterBarWrapper(args?: StoryArgs) {
   const [timeRange, setTimeRange] = useState<TimeRange>(() =>
     makeTimeRange('2026-02-15T08:00:00.000Z', '2026-02-15T12:00:00.000Z')
   );
@@ -50,6 +52,7 @@ function DashboardFilterBarWrapper() {
 
   return (
     <DashboardFilterBar
+      {...args}
       timeRange={timeRange}
       filters={filters}
       breakdownBy={breakdownBy}
@@ -68,7 +71,7 @@ function DashboardFilterBarWrapper() {
   );
 }
 
-function WithActiveFiltersWrapper() {
+function WithActiveFiltersWrapper(args?: StoryArgs) {
   const [timeRange, setTimeRange] = useState<TimeRange>(() =>
     makeTimeRange('2026-02-15T08:00:00.000Z', '2026-02-15T12:00:00.000Z')
   );
@@ -82,6 +85,7 @@ function WithActiveFiltersWrapper() {
 
   return (
     <DashboardFilterBar
+      {...args}
       timeRange={timeRange}
       filters={filters}
       breakdownBy={breakdownBy}
@@ -115,9 +119,16 @@ const meta = {
 export default meta;
 
 export const Default = {
-  render: () => <DashboardFilterBarWrapper />,
+  render: (args: StoryArgs) => <DashboardFilterBarWrapper {...args} />,
 };
 
 export const WithActiveFilters = {
-  render: () => <WithActiveFiltersWrapper />,
+  render: (args: StoryArgs) => <WithActiveFiltersWrapper {...args} />,
+};
+
+export const EvaluationTab = {
+  render: (args: StoryArgs) => <WithActiveFiltersWrapper {...args} />,
+  args: {
+    showLabelFilters: false,
+  },
 };
