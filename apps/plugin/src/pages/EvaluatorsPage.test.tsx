@@ -163,6 +163,15 @@ function createDataSource(): EvaluatorsPageTestDataSource {
     deleteSavedConversation: async (_savedID: string) => {},
     createManualConversation: async (_request: CreateManualConversationRequest): Promise<SavedConversation> =>
       ({}) as SavedConversation,
+    listCollections: async () => ({ items: [], next_cursor: '' }),
+    createCollection: async () => ({}) as never,
+    getCollection: async () => ({}) as never,
+    updateCollection: async () => ({}) as never,
+    deleteCollection: async () => {},
+    addCollectionMembers: async () => {},
+    removeCollectionMember: async () => {},
+    listCollectionMembers: async () => ({ items: [], next_cursor: '' }),
+    listCollectionsForSavedConversation: async () => ({ items: [], next_cursor: '' }),
   };
 
   return {
