@@ -38,6 +38,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: theme.spacing(0.5),
     minWidth: 0,
   }),
+  created: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.25),
+  }),
 });
 
 export default function EvaluatorTable({ evaluators, selectedEvaluatorID, onSelect, onDelete }: EvaluatorTableProps) {
@@ -82,7 +87,7 @@ export default function EvaluatorTable({ evaluators, selectedEvaluatorID, onSele
         minWidth: 120,
         cell: (evaluator: Evaluator) => (
           <Text color="secondary" variant="bodySmall" truncate>
-            {evaluator.description || '—'}
+            {evaluator.description}
           </Text>
         ),
       },
@@ -101,9 +106,9 @@ export default function EvaluatorTable({ evaluators, selectedEvaluatorID, onSele
       {
         id: 'created',
         header: 'Created',
-        width: 120,
+        width: 160,
         cell: (evaluator: Evaluator) => (
-          <div>
+          <div className={styles.created}>
             <Text color="secondary" variant="bodySmall">
               {formatDate(evaluator.created_at)}
             </Text>
@@ -132,7 +137,7 @@ export default function EvaluatorTable({ evaluators, selectedEvaluatorID, onSele
     }
 
     return cols;
-  }, [onDelete, styles.evaluatorId, styles.outputKeys]);
+  }, [onDelete, styles.evaluatorId, styles.outputKeys, styles.created]);
 
   return (
     <>

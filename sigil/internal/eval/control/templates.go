@@ -34,6 +34,7 @@ func NewTemplateService(store evalpkg.TemplateStore, evalCreator evaluatorCreato
 }
 
 func predefinedTemplateDefinition(template predefined.Template) evalpkg.TemplateDefinition {
+	versionTime, _ := time.Parse(time.DateOnly, template.Version)
 	return evalpkg.TemplateDefinition{
 		TemplateID:    template.EvaluatorID,
 		Scope:         evalpkg.TemplateScopeGlobal,
@@ -42,10 +43,13 @@ func predefinedTemplateDefinition(template predefined.Template) evalpkg.Template
 		Description:   template.Description,
 		CreatedBy:     LegacyActorID,
 		UpdatedBy:     LegacyActorID,
+		CreatedAt:     versionTime,
+		UpdatedAt:     versionTime,
 	}
 }
 
 func predefinedTemplateVersion(template predefined.Template) evalpkg.TemplateVersion {
+	versionTime, _ := time.Parse(time.DateOnly, template.Version)
 	return evalpkg.TemplateVersion{
 		TemplateID: template.EvaluatorID,
 		Version:    template.Version,
@@ -53,6 +57,8 @@ func predefinedTemplateVersion(template predefined.Template) evalpkg.TemplateVer
 		OutputKeys: append([]evalpkg.OutputKey(nil), template.OutputKeys...),
 		CreatedBy:  LegacyActorID,
 		UpdatedBy:  LegacyActorID,
+		CreatedAt:  versionTime,
+		UpdatedAt:  versionTime,
 	}
 }
 

@@ -73,8 +73,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   meta: css({
     display: 'flex',
-    flexWrap: 'wrap' as const,
-    gap: theme.spacing(0.75),
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.25),
   }),
   metaText: css({
     color: theme.colors.text.secondary,
@@ -161,7 +161,7 @@ export default function TemplateCardGrid({ templates, onSelect, onDelete, onFork
 
               <div className={styles.description}>
                 <Text color="secondary" variant="bodySmall">
-                  {template.description || '—'}
+                  {template.description}
                 </Text>
               </div>
 

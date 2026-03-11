@@ -41,6 +41,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
     justifyContent: 'flex-end',
     gap: theme.spacing(0.5),
   }),
+  created: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.25),
+  }),
 });
 
 export default function TemplateTable({ templates, onSelect, onDelete, onFork }: TemplateTableProps) {
@@ -93,16 +98,16 @@ export default function TemplateTable({ templates, onSelect, onDelete, onFork }:
         minWidth: 120,
         cell: (template: TemplateDefinition) => (
           <Text color="secondary" variant="bodySmall" truncate>
-            {template.description || '—'}
+            {template.description}
           </Text>
         ),
       },
       {
         id: 'created',
         header: 'Created',
-        width: 120,
+        width: 160,
         cell: (template: TemplateDefinition) => (
-          <div>
+          <div className={styles.created}>
             <Text color="secondary" variant="bodySmall">
               {formatDate(template.created_at)}
             </Text>
@@ -152,7 +157,7 @@ export default function TemplateTable({ templates, onSelect, onDelete, onFork }:
     }
 
     return cols;
-  }, [onFork, onDelete, styles.templateId, styles.actions]);
+  }, [onFork, onDelete, styles.templateId, styles.actions, styles.created]);
 
   return (
     <>
