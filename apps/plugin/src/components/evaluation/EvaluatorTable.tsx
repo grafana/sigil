@@ -87,7 +87,7 @@ export default function EvaluatorTable({ evaluators, selectedEvaluatorID, onSele
         minWidth: 120,
         cell: (evaluator: Evaluator) => (
           <Text color="secondary" variant="bodySmall" truncate>
-            {evaluator.description}
+            {evaluator.description ?? ''}
           </Text>
         ),
       },

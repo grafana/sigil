@@ -160,7 +160,7 @@ export default function EvaluatorCardGrid({
 
             <div className={styles.description}>
               <Text color="secondary" variant="bodySmall">
-                {evaluator.description}
+                {evaluator.description ?? ''}
               </Text>
             </div>
             <div className={styles.footer}>
