@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/grafana/sigil/sigil/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // --- stubs ---
@@ -20,6 +22,7 @@ type stubGenerationReader struct {
 	generation *sigilv1.Generation
 	err        error
 	lastPlan   storage.GenerationReadPlan
+	called     bool
 }
 
 func (s *stubGenerationReader) GetGenerationByIDWithPlan(
@@ -28,6 +31,7 @@ func (s *stubGenerationReader) GetGenerationByIDWithPlan(
 	_ string,
 	plan storage.GenerationReadPlan,
 ) (*sigilv1.Generation, error) {
+	s.called = true
 	s.lastPlan = plan
 	return s.generation, s.err
 }
@@ -492,4 +496,169 @@ func TestTestService_RunTest_BoundsEnforcement(t *testing.T) {
 			}
 		})
 	}
+}
+
+// --- inline generation_data tests ---
+
+func marshalGenerationJSON(t *testing.T, gen *sigilv1.Generation) json.RawMessage {
+	t.Helper()
+	data, err := protojson.MarshalOptions{UseProtoNames: true}.Marshal(gen)
+	require.NoError(t, err)
+	return json.RawMessage(data)
+}
+
+func TestTestService_RunTestInlineGeneration(t *testing.T) {
+	gen := testGeneration()
+	reader := &stubGenerationReader{generation: nil, err: errors.New("should not be called")}
+	eval := &stubEvaluator{
+		kind: evalpkg.EvaluatorKindRegex,
+		scores: []evaluators.ScoreOutput{{
+			Key:   "regex_match",
+			Type:  evalpkg.ScoreTypeBool,
+			Value: evalpkg.BoolValue(true),
+		}},
+	}
+	svc := newTestService(reader, eval)
+
+	resp, err := svc.RunTest(context.Background(), "tenant-1", EvalTestRequest{
+		Kind:           "regex",
+		Config:         map[string]any{"pattern": "Go"},
+		OutputKeys:     []evalpkg.OutputKey{{Key: "regex_match", Type: evalpkg.ScoreTypeBool}},
+		GenerationData: marshalGenerationJSON(t, gen),
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, "gen-1", resp.GenerationID)
+	assert.Equal(t, "conv-1", resp.ConversationID)
+	assert.False(t, reader.called, "storage reader should not be called when inline generation_data is provided")
+}
+
+func TestTestService_RunTestInlineGenerationBadJSON(t *testing.T) {
+	reader := &stubGenerationReader{}
+	eval := &stubEvaluator{
+		kind:   evalpkg.EvaluatorKindRegex,
+		scores: []evaluators.ScoreOutput{},
+	}
+	svc := newTestService(reader, eval)
+
+	_, err := svc.RunTest(context.Background(), "tenant-1", EvalTestRequest{
+		Kind:           "regex",
+		Config:         map[string]any{"pattern": "Go"},
+		OutputKeys:     []evalpkg.OutputKey{{Key: "regex_match", Type: evalpkg.ScoreTypeBool}},
+		GenerationData: json.RawMessage(`{invalid json`),
+	})
+
+	require.Error(t, err)
+	assert.True(t, isValidationError(err), "expected validation error for bad JSON, got: %v", err)
+}
+
+func TestTestService_RunTestFallsBackToStorageWithoutInlineData(t *testing.T) {
+	reader := &stubGenerationReader{generation: testGeneration()}
+	eval := &stubEvaluator{
+		kind: evalpkg.EvaluatorKindRegex,
+		scores: []evaluators.ScoreOutput{{
+			Key:   "regex_match",
+			Type:  evalpkg.ScoreTypeBool,
+			Value: evalpkg.BoolValue(true),
+		}},
+	}
+	svc := newTestService(reader, eval)
+
+	resp, err := svc.RunTest(context.Background(), "tenant-1", EvalTestRequest{
+		Kind:         "regex",
+		Config:       map[string]any{"pattern": "Go"},
+		OutputKeys:   []evalpkg.OutputKey{{Key: "regex_match", Type: evalpkg.ScoreTypeBool}},
+		GenerationID: "gen-1",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.True(t, reader.called, "storage reader should be called when generation_data is not provided")
+	assert.Equal(t, "gen-1", resp.GenerationID)
+}
+
+func TestTestService_RunTestInlineGenerationWithExtraFields(t *testing.T) {
+	gen := testGeneration()
+	data := marshalGenerationJSON(t, gen)
+
+	// Simulate query API response that includes latest_scores (not a proto field).
+	var m map[string]any
+	require.NoError(t, json.Unmarshal(data, &m))
+	m["latest_scores"] = map[string]any{"k": "v"}
+	enriched, err := json.Marshal(m)
+	require.NoError(t, err)
+
+	reader := &stubGenerationReader{}
+	eval := &stubEvaluator{
+		kind: evalpkg.EvaluatorKindRegex,
+		scores: []evaluators.ScoreOutput{{
+			Key:   "regex_match",
+			Type:  evalpkg.ScoreTypeBool,
+			Value: evalpkg.BoolValue(true),
+		}},
+	}
+	svc := newTestService(reader, eval)
+
+	resp, err := svc.RunTest(context.Background(), "tenant-1", EvalTestRequest{
+		Kind:           "regex",
+		Config:         map[string]any{"pattern": "Go"},
+		OutputKeys:     []evalpkg.OutputKey{{Key: "regex_match", Type: evalpkg.ScoreTypeBool}},
+		GenerationData: json.RawMessage(enriched),
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, "gen-1", resp.GenerationID)
+	assert.False(t, reader.called)
+}
+
+func TestTestService_RunTestInlineGenerationQueryAPIFormat(t *testing.T) {
+	// The query API renames proto "id" → "generation_id". Verify that
+	// decodeInlineGeneration normalizes this back so the ID isn't lost.
+	queryAPIPayload := json.RawMessage(`{
+		"generation_id":"gen-qa",
+		"conversation_id":"conv-qa",
+		"input":[{"parts":[{"text":"hi"}]}],
+		"output":[{"parts":[{"text":"hello"}]}]
+	}`)
+	reader := &stubGenerationReader{err: errors.New("should not be called")}
+	eval := &stubEvaluator{
+		kind: evalpkg.EvaluatorKindRegex,
+		scores: []evaluators.ScoreOutput{{
+			Key:   "regex_match",
+			Type:  evalpkg.ScoreTypeBool,
+			Value: evalpkg.BoolValue(true),
+		}},
+	}
+	svc := newTestService(reader, eval)
+
+	resp, err := svc.RunTest(context.Background(), "tenant-1", EvalTestRequest{
+		Kind:           "regex",
+		Config:         map[string]any{"pattern": "hello"},
+		OutputKeys:     []evalpkg.OutputKey{{Key: "regex_match", Type: evalpkg.ScoreTypeBool}},
+		GenerationData: queryAPIPayload,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, "gen-qa", resp.GenerationID, "generation_id should be normalized to proto id")
+	assert.Equal(t, "conv-qa", resp.ConversationID)
+	assert.False(t, reader.called)
+}
+
+func TestEvalTestRequest_NormalizeAndValidateAcceptsInlineDataWithoutGenerationID(t *testing.T) {
+	gen := testGeneration()
+	data := marshalGenerationJSON(t, gen)
+
+	normalized, err := (EvalTestRequest{
+		Kind:           "regex",
+		Config:         map[string]any{"pattern": "x"},
+		OutputKeys:     []evalpkg.OutputKey{{Key: "k", Type: evalpkg.ScoreTypeBool}},
+		GenerationData: data,
+	}).normalizeAndValidate()
+
+	require.NoError(t, err)
+	assert.Equal(t, "", normalized.GenerationID)
+	assert.NotEmpty(t, normalized.GenerationData)
 }

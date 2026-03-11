@@ -294,7 +294,8 @@ export type EvalTestRequest = {
   kind: EvaluatorKind;
   config: Record<string, unknown>;
   output_keys: EvalOutputKey[];
-  generation_id: string;
+  generation_id?: string;
+  generation_data?: Record<string, unknown>;
   conversation_id?: string;
   from?: string;
   to?: string;
