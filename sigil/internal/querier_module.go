@@ -240,6 +240,9 @@ func newQuerierModule(
 		if md, ok := generationStore.(evalcontrol.ManualConversationDeleter); ok {
 			scOpts = append(scOpts, evalcontrol.WithManualDeleter(md))
 		}
+		if cleaner, ok := generationStore.(evalcontrol.CollectionMemberCleaner); ok {
+			scOpts = append(scOpts, evalcontrol.WithCollectionMemberCleaner(cleaner))
+		}
 		savedConvSvc = evalcontrol.NewSavedConversationService(scStore, conversationStore, scOpts...)
 	}
 
@@ -248,6 +251,10 @@ func newQuerierModule(
 		if scStore, ok := generationStore.(evalpkg.SavedConversationStore); ok {
 			collectionSvc = evalcontrol.NewCollectionService(colStore, scStore)
 		}
+	}
+
+	if collectionSvc != nil && savedConvSvc != nil {
+		savedConvSvc.SetCollectionLister(collectionSvc)
 	}
 
 	if registry != nil {

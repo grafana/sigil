@@ -1144,12 +1144,34 @@ func (a *App) handleEvalSavedConversations(w http.ResponseWriter, req *http.Requ
 }
 
 func (a *App) handleEvalSavedConversationByID(w http.ResponseWriter, req *http.Request) {
-	id := strings.TrimPrefix(req.URL.Path, "/eval/saved-conversations/")
-	if id == "" || strings.Contains(id, "/") {
+	rest := strings.TrimPrefix(req.URL.Path, "/eval/saved-conversations/")
+	if rest == "" {
 		http.Error(w, "invalid saved conversation path", http.StatusBadRequest)
 		return
 	}
-	path := fmt.Sprintf("/api/v1/eval/saved-conversations/%s", id)
+
+	// Handle {saved_id}/collections sub-path
+	if strings.HasSuffix(rest, "/collections") {
+		savedID := strings.TrimSuffix(rest, "/collections")
+		if savedID == "" || strings.Contains(savedID, "/") {
+			http.Error(w, "invalid saved conversation path", http.StatusBadRequest)
+			return
+		}
+		if req.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		path := fmt.Sprintf("/api/v1/eval/saved-conversations/%s/collections", savedID)
+		a.handleProxy(w, req, path, http.MethodGet)
+		return
+	}
+
+	// Existing behavior: {saved_id} only
+	if strings.Contains(rest, "/") {
+		http.Error(w, "invalid saved conversation path", http.StatusBadRequest)
+		return
+	}
+	path := fmt.Sprintf("/api/v1/eval/saved-conversations/%s", rest)
 	switch req.Method {
 	case http.MethodGet:
 		a.handleProxy(w, req, path, http.MethodGet)
