@@ -417,11 +417,20 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
       }
     }
 
-    setFilters({
-      ...filters,
-      labelFilters: normalizedLabelFilters,
-    });
-  }, [conversationFilters.labelFilters, filters, setFilters]);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('label');
+        for (const lf of normalizedLabelFilters) {
+          if (lf.key && lf.value) {
+            next.append('label', `${lf.key}|${lf.operator}|${lf.value}`);
+          }
+        }
+        return next;
+      },
+      { replace: true }
+    );
+  }, [conversationFilters.labelFilters, filters.labelFilters, setSearchParams]);
 
   useEffect(() => {
     let cancelled = false;

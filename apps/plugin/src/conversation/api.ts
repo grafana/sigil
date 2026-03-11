@@ -215,10 +215,17 @@ async function fetchTempoSearchTagsDirect(from: string, to: string, query?: stri
     ),
   ]);
 
-  return [
-    ...parseTempoSearchTagsResponse(spanResponse.data, 'span'),
-    ...parseTempoSearchTagsResponse(resourceResponse.data, 'resource'),
-  ].sort((left, right) => left.key.localeCompare(right.key));
+  const spanTags = parseTempoSearchTagsResponse(spanResponse.data, 'span');
+  const resourceTags = parseTempoSearchTagsResponse(resourceResponse.data, 'resource');
+  const seen = new Set<string>();
+  const merged: SearchTag[] = [];
+  for (const tag of [...spanTags, ...resourceTags]) {
+    if (!seen.has(tag.key)) {
+      seen.add(tag.key);
+      merged.push(tag);
+    }
+  }
+  return merged.sort((left, right) => left.key.localeCompare(right.key));
 }
 
 async function fetchTempoSearchTagValuesDirect(
