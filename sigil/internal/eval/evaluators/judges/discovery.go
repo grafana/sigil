@@ -172,7 +172,7 @@ func registerVertexAIFromEnv(discovery *Discovery, httpClient *http.Client) {
 	}
 
 	baseURL := strings.TrimSpace(os.Getenv("SIGIL_EVAL_VERTEXAI_BASE_URL"))
-	client := NewVertexAIClient(httpClient, baseURL, projectID, location, "", credentialsFile, credentialsJSON)
+	client := NewVertexAIClient(baseURL, projectID, location, "", credentialsFile, credentialsJSON)
 	addProviderIfReady(discovery, ProviderInfo{ID: "vertexai", Name: "Vertex AI", Type: "csp"}, client)
 }
 
