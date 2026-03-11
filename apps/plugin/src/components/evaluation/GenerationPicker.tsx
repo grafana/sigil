@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Button, Icon, Input, Spinner, Text, useStyles2 } from '@grafana/ui';
+import { Button, Icon, Input, Select, Spinner, Text, useStyles2 } from '@grafana/ui';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../../conversation/api';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../../evaluation/api';
 import type { ConversationDetail, GenerationLookupHints } from '../../conversation/types';
 import type { GenerationDetail } from '../../generation/types';
-import type { SavedConversation } from '../../evaluation/types';
+import type { Collection, SavedConversation } from '../../evaluation/types';
 
 export type GenerationPickerProps = {
   onSelect: (generationId: string | undefined, hints?: GenerationLookupHints) => void;
@@ -139,6 +139,8 @@ export default function GenerationPicker({
   const [tab, setTab] = useState<'saved' | 'recent'>('saved');
   const [savedConversations, setSavedConversations] = useState<SavedConversation[]>([]);
   const [loadingSaved, setLoadingSaved] = useState(false);
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string | undefined>(undefined);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -204,12 +206,15 @@ export default function GenerationPicker({
     }
     let cancelled = false;
     setLoadingSaved(true);
-    evalDs
-      .listSavedConversations(undefined, 50)
+
+    const load = selectedCollectionId
+      ? evalDs.listCollectionMembers?.(selectedCollectionId, 50) ??
+        Promise.resolve({ items: [], next_cursor: '' })
+      : evalDs.listSavedConversations(undefined, 50);
+
+    load
       .then((resp) => {
         if (!cancelled) {
-          // Reverse to show newest first. TODO: request server-side descending order
-          // once the API supports it — client-side reverse only covers the first page (50 items).
           setSavedConversations((resp.items ?? []).slice().reverse());
         }
       })
@@ -221,6 +226,29 @@ export default function GenerationPicker({
       .finally(() => {
         if (!cancelled) {
           setLoadingSaved(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, evalDs, selectedCollectionId]);
+
+  // Load collections when saved tab is active
+  useEffect(() => {
+    if (tab !== 'saved') {
+      return;
+    }
+    let cancelled = false;
+    evalDs
+      .listCollections?.(100)
+      .then((resp) => {
+        if (!cancelled) {
+          setCollections(resp.items ?? []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCollections([]);
         }
       });
     return () => {
@@ -349,6 +377,23 @@ export default function GenerationPicker({
 
       {tab === 'saved' && (
         <>
+          {collections.length > 0 && (
+            <div className={styles.searchBox}>
+              <Select
+                options={[
+                  { label: 'All saved conversations', value: undefined },
+                  ...collections.map((c) => ({
+                    label: `${c.name} (${c.member_count})`,
+                    value: c.collection_id,
+                  })),
+                ]}
+                value={selectedCollectionId}
+                onChange={(v) => setSelectedCollectionId(v.value)}
+                placeholder="Filter by collection..."
+                isClearable
+              />
+            </div>
+          )}
           <div className={styles.list}>
             {loadingSaved && (
               <div className={styles.empty}>
@@ -377,7 +422,7 @@ export default function GenerationPicker({
             {!loadingSaved && savedConversations.length === 0 && (
               <div className={styles.empty}>
                 <Text variant="bodySmall" color="secondary">
-                  No saved conversations.
+                  {selectedCollectionId ? 'No conversations in this collection.' : 'No saved conversations.'}
                 </Text>
               </div>
             )}
