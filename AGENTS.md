@@ -137,3 +137,6 @@ Or use `mise run up` (foreground with `--watch`). Conversations will appear in t
 - Go tests for `sigil/internal/storage/mysql` use testcontainers (MySQL in Docker). Ensure Docker is running before `go test ./...` in `sigil/`.
 - Node version must be exactly `24.14.0` (`engines` field in `package.json`).
 - Go version is `1.26.0` via mise, with `GOTOOLCHAIN=go1.25.7+auto` for workspace compatibility.
+- The Grafana container's startup script waits for the Go plugin binary at the bind-mount path (`/root/sigil/apps/plugin/dist/gpx_sigil_app*`), but `plugin-precache` builds into the `sigil-plugin-dist` Docker volume. If Grafana hangs waiting, copy the binary from the plugin container: `docker cp workspace-plugin-1:/tmp/gpx_sigil_app_linux_amd64 apps/plugin/dist/gpx_sigil_app_linux_amd64` (create `apps/plugin/dist/` with `sudo chmod 777` if needed).
+- `mise run up:dev` points to remote dev datasources (`sigil-dev-001.grafana-dev.net`). Querying real data requires `SIGIL_API_AUTH_TOKEN` to be set in `.env`. Without it, the plugin UI loads but API queries return permission errors.
+- After running `go mod tidy` in `apps/plugin`, commit the updated `go.mod`/`go.sum` so that `plugin-precache` builds succeed on first try.
