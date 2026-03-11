@@ -117,7 +117,7 @@ func TestVertexAIClientJudgeWithStaticCredentials(t *testing.T) {
 	credentials := cloudauth.NewCredentials(&cloudauth.CredentialsOptions{
 		TokenProvider: staticTokenProvider{token: "vertex-access-token"},
 	})
-	client := newVertexAIClientWithCredentials(server.Client(), server.URL, "vertex-project", "global", credentials)
+	client := newVertexAIClientWithCredentials(server.URL, "vertex-project", "global", credentials)
 	response, err := client.Judge(context.Background(), JudgeRequest{
 		SystemPrompt: "judge",
 		UserPrompt:   "answer",
@@ -143,7 +143,7 @@ func TestVertexAIClientJudgeWithStaticCredentials(t *testing.T) {
 }
 
 func TestVertexAIClientRejectsAPIKey(t *testing.T) {
-	client := NewVertexAIClient(nil, "", "vertex-project", "global", "vertex-key", "", "")
+	client := NewVertexAIClient("", "vertex-project", "global", "vertex-key", "", "")
 	if client.initErr == nil {
 		t.Fatalf("expected vertex init error when api key is configured")
 	}
