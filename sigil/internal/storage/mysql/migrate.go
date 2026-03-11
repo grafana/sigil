@@ -28,6 +28,8 @@ func (s *WALStore) AutoMigrate(ctx context.Context) error {
 		&EvalEvaluatorModel{},
 		&EvalRuleModel{},
 		&EvalSavedConversationModel{},
+		&EvalCollectionModel{},
+		&EvalCollectionMemberModel{},
 		&EvalTemplateModel{},
 		&EvalTemplateVersionModel{},
 		&ConversationModel{},
