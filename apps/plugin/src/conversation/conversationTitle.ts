@@ -107,17 +107,14 @@ function titleFromLatestGeneration(generations: GenerationDetail[]): string | nu
 }
 
 function titleFromLatestSpans(spans: ConversationSpan[]): string | null {
-  const stack = [...spans];
+  const stack = [...spans].reverse();
   let bestTitle: string | null = null;
   let bestStart: bigint | null = null;
   let bestOrder = -1;
   let order = 0;
 
   while (stack.length > 0) {
-    const span = stack.shift();
-    if (!span) {
-      continue;
-    }
+    const span = stack.pop() as ConversationSpan;
 
     const title = titleFromSpan(span);
     if (title) {
@@ -133,7 +130,9 @@ function titleFromLatestSpans(spans: ConversationSpan[]): string | null {
     }
 
     if (span.children.length > 0) {
-      stack.unshift(...span.children);
+      for (let i = span.children.length - 1; i >= 0; i -= 1) {
+        stack.push(span.children[i]);
+      }
     }
     order += 1;
   }
