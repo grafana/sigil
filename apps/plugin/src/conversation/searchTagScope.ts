@@ -1,5 +1,5 @@
 import { ATTR_OPERATION_NAME, OperationName } from './attributes';
-import type { DashboardFilters, FilterOperator, LabelFilter } from '../dashboard/types';
+import type { DashboardFilters, LabelFilter } from '../dashboard/types';
 import { canonicalizeConversationFilterKey } from './filterKeyMapping';
 
 const DISCOVERY_OPERATION_NAMES = [OperationName.GenerateText, OperationName.StreamText, OperationName.ExecuteTool];
@@ -14,18 +14,7 @@ function toSpanAttribute(key: string): string {
   return `span.${key}`;
 }
 
-function traceQLLiteral(value: string, operator: FilterOperator): string {
-  if (operator === '=~' || operator === '!~') {
-    return JSON.stringify(value);
-  }
-
-  const trimmed = value.trim();
-  if (trimmed === 'true' || trimmed === 'false') {
-    return trimmed;
-  }
-  if (trimmed !== '' && Number.isFinite(Number(trimmed))) {
-    return trimmed;
-  }
+function traceQLLiteral(value: string): string {
   return JSON.stringify(value);
 }
 
@@ -60,7 +49,7 @@ function buildLabelFilterPredicates(filters: LabelFilter[]): string[] {
       return [];
     }
 
-    return [`${traceQLKey} ${filter.operator} ${traceQLLiteral(filter.value, filter.operator)}`];
+    return [`${traceQLKey} ${filter.operator} ${traceQLLiteral(filter.value)}`];
   });
 }
 
