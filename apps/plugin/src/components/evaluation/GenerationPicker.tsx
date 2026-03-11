@@ -121,6 +121,16 @@ type ConversationRow = {
   models?: string[];
 };
 
+function sortByCreatedAtDesc<T extends { created_at?: string }>(items: T[]): T[] {
+  return items.slice().sort((left, right) => {
+    const leftTime = left.created_at ? Date.parse(left.created_at) : 0;
+    const rightTime = right.created_at ? Date.parse(right.created_at) : 0;
+    const safeLeftTime = Number.isNaN(leftTime) ? 0 : leftTime;
+    const safeRightTime = Number.isNaN(rightTime) ? 0 : rightTime;
+    return safeRightTime - safeLeftTime;
+  });
+}
+
 export default function GenerationPicker({
   onSelect,
   selectedGenerationId,
@@ -208,9 +218,8 @@ export default function GenerationPicker({
       .listSavedConversations(undefined, 50)
       .then((resp) => {
         if (!cancelled) {
-          // Reverse to show newest first. TODO: request server-side descending order
-          // once the API supports it — client-side reverse only covers the first page (50 items).
-          setSavedConversations((resp.items ?? []).slice().reverse());
+          // Keep newest-first presentation deterministic even if API order changes.
+          setSavedConversations(sortByCreatedAtDesc(resp.items ?? []));
         }
       })
       .catch(() => {
@@ -296,12 +305,7 @@ export default function GenerationPicker({
               <Spinner />
             </div>
           )}
-          {[...(detail.generations ?? [])]
-            .sort((a, b) => {
-              const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
-              const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
-              return tb - ta;
-            })
+          {sortByCreatedAtDesc(detail.generations ?? [])
             .map((gen: GenerationDetail) => (
               <div
                 key={gen.generation_id}

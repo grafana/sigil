@@ -5,17 +5,7 @@ import type { EvaluationDataSource } from '../../evaluation/api';
 import type { SavedConversation } from '../../evaluation/types';
 
 const mockSavedConversations: SavedConversation[] = [
-  {
-    tenant_id: 'tenant-1',
-    saved_id: 'sc-support-regression',
-    conversation_id: 'conv-abc-123',
-    name: 'Support regression - token limit hit',
-    source: 'telemetry',
-    tags: { use_case: 'support', priority: 'high' },
-    saved_by: 'operator-jane',
-    created_at: '2026-03-01T10:00:00Z',
-    updated_at: '2026-03-01T10:00:00Z',
-  },
+  // Intentionally unsorted input: component sorts newest first by created_at.
   {
     tenant_id: 'tenant-1',
     saved_id: 'sc-edge-case-empty',
@@ -26,6 +16,17 @@ const mockSavedConversations: SavedConversation[] = [
     saved_by: 'operator-jane',
     created_at: '2026-03-02T14:30:00Z',
     updated_at: '2026-03-02T14:30:00Z',
+  },
+  {
+    tenant_id: 'tenant-1',
+    saved_id: 'sc-support-regression',
+    conversation_id: 'conv-abc-123',
+    name: 'Support regression - token limit hit',
+    source: 'telemetry',
+    tags: { use_case: 'support', priority: 'high' },
+    saved_by: 'operator-jane',
+    created_at: '2026-03-01T10:00:00Z',
+    updated_at: '2026-03-01T10:00:00Z',
   },
 ];
 
