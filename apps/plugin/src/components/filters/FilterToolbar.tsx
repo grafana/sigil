@@ -117,7 +117,7 @@ export function FilterToolbar({
     [filters, onFiltersChange]
   );
 
-  const handleLabelFilterRemove = useCallback(
+  const handleLabelFiltersChange = useCallback(
     (nextLabelFilters: LabelFilter[]) => {
       onFiltersChange({ ...filters, labelFilters: nextLabelFilters });
     },
@@ -251,7 +251,7 @@ export function FilterToolbar({
                 loadValues={loadLabelValues ?? defaultLoadLabelValues}
                 allowedOperators={labelFilterOperators}
                 onDismiss={handleHideLabelFilters}
-                onFiltersChange={handleLabelFilterRemove}
+                onFiltersChange={handleLabelFiltersChange}
               />
             </div>
           )}

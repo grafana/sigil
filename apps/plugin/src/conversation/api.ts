@@ -21,9 +21,9 @@ import type {
 import { hydrateConversationDetailV2, type ConversationDetailV2 } from './detailV2';
 
 const queryBasePath = '/api/plugins/grafana-sigil-app/resources/query';
-const tempoDatasourceUID = (
-  plugin.meta.jsonData as { tempoDatasourceUID?: string } | undefined
-)?.tempoDatasourceUID?.trim();
+function getTempoDatasourceUID(): string | undefined {
+  return (plugin.meta.jsonData as { tempoDatasourceUID?: string } | undefined)?.tempoDatasourceUID?.trim() || undefined;
+}
 
 type ConversationSearchStreamEvent =
   | { type: 'results'; conversations?: ConversationSearchResponse['conversations'] }
@@ -176,7 +176,8 @@ function parseTempoSearchTagValuesResponse(payload: unknown): string[] {
 }
 
 async function fetchTempoSearchTagsDirect(from: string, to: string, query?: string): Promise<SearchTag[] | null> {
-  if (!tempoDatasourceUID) {
+  const uid = getTempoDatasourceUID();
+  if (!uid) {
     return null;
   }
 
@@ -198,7 +199,7 @@ async function fetchTempoSearchTagsDirect(from: string, to: string, query?: stri
     lastValueFrom(
       getBackendSrv().fetch<unknown>({
         method: 'GET',
-        url: `/api/datasources/proxy/uid/${tempoDatasourceUID}/api/v2/search/tags?${new URLSearchParams({
+        url: `/api/datasources/proxy/uid/${uid}/api/v2/search/tags?${new URLSearchParams({
           ...Object.fromEntries(params.entries()),
           scope: 'span',
         }).toString()}`,
@@ -207,7 +208,7 @@ async function fetchTempoSearchTagsDirect(from: string, to: string, query?: stri
     lastValueFrom(
       getBackendSrv().fetch<unknown>({
         method: 'GET',
-        url: `/api/datasources/proxy/uid/${tempoDatasourceUID}/api/v2/search/tags?${new URLSearchParams({
+        url: `/api/datasources/proxy/uid/${uid}/api/v2/search/tags?${new URLSearchParams({
           ...Object.fromEntries(params.entries()),
           scope: 'resource',
         }).toString()}`,
@@ -234,7 +235,8 @@ async function fetchTempoSearchTagValuesDirect(
   to: string,
   query?: string
 ): Promise<string[] | null> {
-  if (!tempoDatasourceUID) {
+  const uid = getTempoDatasourceUID();
+  if (!uid) {
     return null;
   }
 
@@ -255,7 +257,7 @@ async function fetchTempoSearchTagValuesDirect(
   const response = await lastValueFrom(
     getBackendSrv().fetch<unknown>({
       method: 'GET',
-      url: `/api/datasources/proxy/uid/${tempoDatasourceUID}/api/v2/search/tag/${encodeURIComponent(tag)}/values?${params.toString()}`,
+      url: `/api/datasources/proxy/uid/${uid}/api/v2/search/tag/${encodeURIComponent(tag)}/values?${params.toString()}`,
     })
   );
 
