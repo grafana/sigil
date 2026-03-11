@@ -1,6 +1,6 @@
 ---
 owner: sigil-core
-status: draft
+status: active
 last_reviewed: 2026-03-11
 source_of_truth: true
 audience: both
