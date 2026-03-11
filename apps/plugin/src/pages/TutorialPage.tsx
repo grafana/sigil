@@ -1515,7 +1515,7 @@ function getStyles(theme: GrafanaTheme2) {
         margin: 0,
         color: theme.colors.text.secondary,
       },
-      '& code': {
+      '& :not(pre) > code': {
         fontFamily: theme.typography.fontFamilyMonospace,
         fontSize: '0.9em',
         padding: theme.spacing(0.25, 0.75),

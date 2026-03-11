@@ -278,6 +278,12 @@ function getStyles(theme: GrafanaTheme2) {
       wordBreak: 'break-word',
       '& code': {
         fontFamily: theme.typography.fontFamilyMonospace,
+        background: 'none',
+        border: 'none',
+        padding: 0,
+        borderRadius: 0,
+        color: 'inherit',
+        fontSize: 'inherit',
       },
     }),
     promptSummaryRow: css({
