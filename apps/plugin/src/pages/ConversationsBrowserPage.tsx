@@ -561,7 +561,7 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   const requestVersionRef = useRef<number>(0);
   const loadAbortControllerRef = useRef<AbortController | null>(null);
 
-  const filterString = useMemo(() => buildConversationSearchFilter(conversationFilters), [conversationFilters]);
+  const filterString = useMemo(() => buildConversationSearchFilter(filters), [filters]);
 
   const conversations = useMemo(() => sortConversations(rawConversations, orderBy), [rawConversations, orderBy]);
 

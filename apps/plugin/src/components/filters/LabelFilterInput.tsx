@@ -13,7 +13,6 @@ export type LabelFilterInputProps = {
   labelsLoading: boolean;
   loadValues: (filter: LabelFilter) => Promise<Array<SelectableValue<string>>>;
   allowedOperators?: FilterOperator[];
-  showLeadingIcon?: boolean;
   onDismiss?: () => void;
   onFiltersChange: (filters: LabelFilter[]) => void;
 };
@@ -67,7 +66,6 @@ export function LabelFilterInput({
   labelsLoading,
   loadValues,
   allowedOperators = ['=', '!=', '=~', '!~', '<', '<=', '>', '>='],
-  showLeadingIcon = true,
   onDismiss,
   onFiltersChange,
 }: LabelFilterInputProps) {
