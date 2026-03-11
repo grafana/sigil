@@ -148,14 +148,12 @@ export function FilterToolbar({
           ? index
           : filters.labelFilters.findIndex(
               (candidate) =>
-                candidate.key === filter.key && candidate.operator === filter.operator && candidate.value === filter.value
+                candidate.key === filter.key &&
+                candidate.operator === filter.operator &&
+                candidate.value === filter.value
             );
 
-      return buildScopedLabelMatcher(
-        filters,
-        filters.labelFilters,
-        resolvedIndex >= 0 ? [resolvedIndex] : undefined
-      );
+      return buildScopedLabelMatcher(filters, filters.labelFilters, resolvedIndex >= 0 ? [resolvedIndex] : undefined);
     },
     [filters]
   );
