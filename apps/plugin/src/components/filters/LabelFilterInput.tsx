@@ -73,7 +73,7 @@ export function LabelFilterInput({
   const [translationsReady, setTranslationsReady] = useState(false);
   const skipNextExternalSyncRef = useRef(false);
   const lastEmittedFiltersRef = useRef<string>(JSON.stringify(filters));
-  const lastPropFiltersRef = useRef<string>(JSON.stringify(filters));
+  const lastPropFiltersRef = useRef<string>(JSON.stringify(toAdHocFilters(filters)));
   const configRef = useRef<ProviderConfig>({
     allowedOperators,
     labelKeyOptions,
