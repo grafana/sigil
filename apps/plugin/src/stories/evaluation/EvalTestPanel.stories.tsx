@@ -84,7 +84,7 @@ const evaluationDataSource: EvaluationDataSource = {
   listJudgeProviders: async () => ({ providers: [] }),
   listJudgeModels: async () => ({ models: [] }),
   testEval: async (request) => ({
-    generation_id: request.generation_id,
+    generation_id: request.generation_id ?? '',
     conversation_id: request.conversation_id ?? 'conv-abc-123',
     scores: [
       {
