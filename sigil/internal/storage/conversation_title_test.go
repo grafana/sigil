@@ -60,6 +60,67 @@ func TestGenerationMetadataString(t *testing.T) {
 	}
 }
 
+func TestGenerationMetadataFirstString(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		generation *sigilv1.Generation
+		keys       []string
+		want       string
+	}{
+		{
+			name: "nil generation",
+			keys: []string{"sigil.user.id", "user.id"},
+			want: "",
+		},
+		{
+			name: "uses first key when present",
+			generation: generationWithMetadata(map[string]*structpb.Value{
+				"sigil.user.id": structpb.NewStringValue(" primary "),
+				"user.id":       structpb.NewStringValue("fallback"),
+			}),
+			keys: []string{"sigil.user.id", "user.id"},
+			want: "primary",
+		},
+		{
+			name: "falls back to next key",
+			generation: generationWithMetadata(map[string]*structpb.Value{
+				"user.id": structpb.NewStringValue(" legacy "),
+			}),
+			keys: []string{"sigil.user.id", "user.id"},
+			want: "legacy",
+		},
+		{
+			name: "skips empty values",
+			generation: generationWithMetadata(map[string]*structpb.Value{
+				"sigil.user.id": structpb.NewStringValue("   "),
+				"user.id":       structpb.NewStringValue("legacy"),
+			}),
+			keys: []string{"sigil.user.id", "user.id"},
+			want: "legacy",
+		},
+		{
+			name: "no keys",
+			generation: generationWithMetadata(map[string]*structpb.Value{
+				"sigil.user.id": structpb.NewStringValue("primary"),
+			}),
+			keys: nil,
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := GenerationMetadataFirstString(tt.generation, tt.keys...); got != tt.want {
+				t.Fatalf("GenerationMetadataFirstString() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestConversationTitleFromGeneration(t *testing.T) {
 	t.Parallel()
 

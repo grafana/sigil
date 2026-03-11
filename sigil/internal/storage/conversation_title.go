@@ -20,19 +20,13 @@ func ConversationTitleFromGeneration(generation *sigilv1.Generation) string {
 	metadata := generation.GetMetadata()
 	if metadata != nil {
 		metadataMap := metadata.AsMap()
-		if title := metadataStringFromMap(metadataMap, conversationTitleKey); title != "" {
-			return title
-		}
-		if title := metadataStringFromMap(metadataMap, legacyConversationTitleKey); title != "" {
+		if title := metadataFirstStringFromMap(metadataMap, conversationTitleKey, legacyConversationTitleKey); title != "" {
 			return title
 		}
 		rawAttributes, ok := metadataMap["attributes"]
 		if ok {
 			if attributes, ok := rawAttributes.(map[string]any); ok {
-				if title := metadataStringFromMap(attributes, conversationTitleKey); title != "" {
-					return title
-				}
-				if title := metadataStringFromMap(attributes, legacyConversationTitleKey); title != "" {
+				if title := metadataFirstStringFromMap(attributes, conversationTitleKey, legacyConversationTitleKey); title != "" {
 					return title
 				}
 			}
@@ -52,6 +46,26 @@ func GenerationMetadataString(generation *sigilv1.Generation, key string) string
 		return ""
 	}
 	return metadataStringFromMap(metadata.AsMap(), key)
+}
+
+// GenerationMetadataFirstString returns the first non-empty normalized string
+// value for the provided generation metadata keys, in order.
+func GenerationMetadataFirstString(generation *sigilv1.Generation, keys ...string) string {
+	for _, key := range keys {
+		if value := GenerationMetadataString(generation, key); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func metadataFirstStringFromMap(values map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if value := metadataStringFromMap(values, key); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func metadataStringFromMap(values map[string]any, key string) string {

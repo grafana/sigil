@@ -312,11 +312,11 @@ func mergeLatestStringField(
 }
 
 func latestConversationProjectionUserID(generation *sigilv1.Generation) string {
-	userID := storage.GenerationMetadataString(generation, conversationProjectionUserIDKey)
-	if userID != "" {
-		return userID
-	}
-	return storage.GenerationMetadataString(generation, conversationProjectionLegacyUserIDKey)
+	return storage.GenerationMetadataFirstString(
+		generation,
+		conversationProjectionUserIDKey,
+		conversationProjectionLegacyUserIDKey,
+	)
 }
 
 func generationHasConversationProjectionError(generation *sigilv1.Generation) bool {
