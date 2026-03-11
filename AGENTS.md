@@ -112,7 +112,7 @@ The full local stack runs via Docker Compose (`mise run up`). Key services: Graf
 - Run `DEVELOPMENT=true docker compose --profile core up --build --remove-orphans -d` for detached mode (omit `--watch` since it cannot combine with `-d`).
 - After the Grafana container starts, the delve debugger may attach to the wrong process (the bash wrapper PID instead of the Grafana server). If Grafana is not responding on `:3000`, exec into the container and run `supervisorctl stop delve` then `kill -CONT <grafana-bash-pid>` to unblock it.
 - The mage-watcher inside the Grafana container will fail to rebuild Go plugin binaries because the `replace` directive (`../../sigil`) doesn't resolve inside that container. This is benign — the initial build is done by `plugin-precache`. Hot-reload of Go backend changes requires restarting `plugin-precache`.
-- Grafana uses anonymous auth by default (Admin role). Login credentials if needed: `admin` / `admin`.
+- Grafana uses anonymous auth by default (Admin role), but the Sigil plugin queries require a signed-in user. Log in as `admin` / `admin` (skip password change prompt) to make plugin data queries work.
 
 ### Lint / test / check
 
