@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	"github.com/grafana/sigil/sigil/internal/eval/evaluators"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
+	"github.com/grafana/sigil/sigil/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,9 +19,16 @@ import (
 type stubGenerationReader struct {
 	generation *sigilv1.Generation
 	err        error
+	lastPlan   storage.GenerationReadPlan
 }
 
-func (s *stubGenerationReader) GetByID(_ context.Context, _, _ string) (*sigilv1.Generation, error) {
+func (s *stubGenerationReader) GetGenerationByIDWithPlan(
+	_ context.Context,
+	_,
+	_ string,
+	plan storage.GenerationReadPlan,
+) (*sigilv1.Generation, error) {
+	s.lastPlan = plan
 	return s.generation, s.err
 }
 
@@ -102,6 +111,42 @@ func TestTestService_RunTest(t *testing.T) {
 	assert.Equal(t, map[string]any{"pattern": "Go"}, score.Metadata)
 }
 
+func TestTestService_RunTestPassesLookupHints(t *testing.T) {
+	createdAt := time.Date(2026, time.March, 9, 12, 0, 0, 0, time.UTC)
+	from := createdAt.Add(-5 * time.Minute)
+	to := createdAt.Add(5 * time.Minute)
+
+	reader := &stubGenerationReader{generation: testGeneration()}
+	eval := &stubEvaluator{
+		kind: evalpkg.EvaluatorKindRegex,
+		scores: []evaluators.ScoreOutput{{
+			Key:   "regex_match",
+			Type:  evalpkg.ScoreTypeBool,
+			Value: evalpkg.BoolValue(true),
+		}},
+	}
+
+	svc := newTestService(reader, eval)
+	_, err := svc.RunTest(context.Background(), "tenant-1", EvalTestRequest{
+		Kind:           "regex",
+		Config:         map[string]any{"pattern": "Go"},
+		OutputKeys:     []evalpkg.OutputKey{{Key: "regex_match", Type: evalpkg.ScoreTypeBool}},
+		GenerationID:   "gen-1",
+		ConversationID: "conv-1",
+		From:           from,
+		To:             to,
+		At:             createdAt,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, storage.GenerationReadPlan{
+		ConversationID: "conv-1",
+		From:           from,
+		To:             to,
+		At:             createdAt,
+	}, reader.lastPlan)
+}
+
 func TestEvalTestRequest_NormalizeAndValidateErrors(t *testing.T) {
 	tests := []struct {
 		name string
@@ -152,6 +197,27 @@ func TestEvalTestRequest_NormalizeAndValidateErrors(t *testing.T) {
 				GenerationID: "",
 			},
 		},
+		{
+			name: "from without to",
+			req: EvalTestRequest{
+				Kind:         "regex",
+				Config:       map[string]any{"pattern": "x"},
+				OutputKeys:   []evalpkg.OutputKey{{Key: "k", Type: evalpkg.ScoreTypeBool}},
+				GenerationID: "gen-1",
+				From:         time.Date(2026, time.March, 9, 12, 0, 0, 0, time.UTC),
+			},
+		},
+		{
+			name: "to before from",
+			req: EvalTestRequest{
+				Kind:         "regex",
+				Config:       map[string]any{"pattern": "x"},
+				OutputKeys:   []evalpkg.OutputKey{{Key: "k", Type: evalpkg.ScoreTypeBool}},
+				GenerationID: "gen-1",
+				From:         time.Date(2026, time.March, 9, 12, 5, 0, 0, time.UTC),
+				To:           time.Date(2026, time.March, 9, 12, 0, 0, 0, time.UTC),
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -161,6 +227,31 @@ func TestEvalTestRequest_NormalizeAndValidateErrors(t *testing.T) {
 			assert.True(t, isValidationError(err), "expected validation error, got: %v", err)
 		})
 	}
+}
+
+func TestEvalTestRequest_NormalizeAndValidateTrimsAndPreservesHints(t *testing.T) {
+	from := time.Date(2026, time.March, 9, 11, 55, 0, 0, time.FixedZone("offset", -5*60*60))
+	to := time.Date(2026, time.March, 9, 12, 5, 0, 0, time.FixedZone("offset", -5*60*60))
+	at := time.Date(2026, time.March, 9, 12, 0, 0, 0, time.FixedZone("offset", -5*60*60))
+
+	normalized, err := (EvalTestRequest{
+		Kind:           " regex ",
+		Config:         map[string]any{"pattern": "x"},
+		OutputKeys:     []evalpkg.OutputKey{{Key: "k", Type: evalpkg.ScoreTypeBool}},
+		GenerationID:   " gen-1 ",
+		ConversationID: " conv-1 ",
+		From:           from,
+		To:             to,
+		At:             at,
+	}).normalizeAndValidate()
+
+	require.NoError(t, err)
+	assert.Equal(t, "regex", normalized.Kind)
+	assert.Equal(t, "gen-1", normalized.GenerationID)
+	assert.Equal(t, "conv-1", normalized.ConversationID)
+	assert.Equal(t, from.UTC(), normalized.From)
+	assert.Equal(t, to.UTC(), normalized.To)
+	assert.Equal(t, at.UTC(), normalized.At)
 }
 
 func TestTestService_RunTest_GenerationNotFound(t *testing.T) {

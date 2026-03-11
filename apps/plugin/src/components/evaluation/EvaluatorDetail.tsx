@@ -8,6 +8,7 @@ import {
   getKindBadgeColor,
   type Evaluator,
 } from '../../evaluation/types';
+import ActorBadge from './ActorBadge';
 
 export type EvaluatorDetailProps = {
   evaluator: Evaluator;
@@ -86,6 +87,19 @@ export default function EvaluatorDetail({ evaluator }: EvaluatorDetailProps) {
         <Text color="secondary" variant="bodySmall">
           v{evaluator.version}
         </Text>
+      </div>
+
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <Text weight="medium" variant="bodySmall">
+            Attribution
+          </Text>
+        </div>
+        <div className={styles.sectionBody}>
+          created by <ActorBadge actor={evaluator.created_by} />
+          {'\n'}
+          updated by <ActorBadge actor={evaluator.updated_by} />
+        </div>
       </div>
 
       <div className={styles.section}>

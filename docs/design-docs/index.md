@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-03-04
+last_reviewed: 2026-03-10
 source_of_truth: true
 audience: agents
 ---
@@ -33,8 +33,13 @@ This folder stores durable engineering decisions for Sigil.
 - [`2026-02-17-embedding-call-observability.md`](2026-02-17-embedding-call-observability.md) (completed)
 - [`2026-02-20-sdk-langchain-langgraph-integrations.md`](2026-02-20-sdk-langchain-langgraph-integrations.md) (completed)
 - [`2026-03-02-evaluator-templates.md`](2026-03-02-evaluator-templates.md) (active)
+- [`2026-03-02-online-evaluation-ui-design.md`](2026-03-02-online-evaluation-ui-design.md) (active)
+- [`2026-03-03-eval-quick-test-design.md`](2026-03-03-eval-quick-test-design.md)
 - [`2026-03-03-backend-operational-metrics-baseline.md`](2026-03-03-backend-operational-metrics-baseline.md) (active)
 - [`2026-03-04-agent-catalog-versioning.md`](2026-03-04-agent-catalog-versioning.md) (active)
+- [`2026-03-04-eval-saved-conversations.md`](2026-03-04-eval-saved-conversations.md) (completed)
+- [`2026-03-05-tokenizer-visualization-design.md`](2026-03-05-tokenizer-visualization-design.md)
+- [`2026-03-09-eval-resource-user-attribution.md`](2026-03-09-eval-resource-user-attribution.md) (completed)
 - [`2026-03-05-streaming-conversation-search.md`](2026-03-05-streaming-conversation-search.md) (completed)
 - [`2026-03-10-conversation-detail-v2.md`](2026-03-10-conversation-detail-v2.md) (active)
 

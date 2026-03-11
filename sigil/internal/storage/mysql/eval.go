@@ -18,6 +18,14 @@ var _ evalpkg.EvalStore = (*WALStore)(nil)
 
 const defaultEvalWorkItemClaimTTL = 10 * time.Minute
 
+func normalizeActorID(actorID string) string {
+	trimmed := strings.TrimSpace(actorID)
+	if trimmed == "" {
+		return "system@grafana.com"
+	}
+	return trimmed
+}
+
 func (s *WALStore) CreateEvaluator(ctx context.Context, evaluator evalpkg.EvaluatorDefinition) error {
 	if strings.TrimSpace(evaluator.TenantID) == "" {
 		return errors.New("tenant id is required")
@@ -50,6 +58,8 @@ func (s *WALStore) CreateEvaluator(ctx context.Context, evaluator evalpkg.Evalua
 		ConfigJSON:     configJSON,
 		OutputKeysJSON: outputKeysJSON,
 		IsPredefined:   evaluator.IsPredefined,
+		CreatedBy:      normalizeActorID(evaluator.CreatedBy),
+		UpdatedBy:      normalizeActorID(evaluator.UpdatedBy),
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
@@ -91,6 +101,8 @@ func (s *WALStore) CreateEvaluator(ctx context.Context, evaluator evalpkg.Evalua
 				"is_predefined":           model.IsPredefined,
 				"source_template_id":      model.SourceTemplateID,
 				"source_template_version": model.SourceTemplateVersion,
+				"created_by":              model.CreatedBy,
+				"updated_by":              model.UpdatedBy,
 				"deleted_at":              nil,
 				"updated_at":              now,
 			}
@@ -265,6 +277,8 @@ func (s *WALStore) CreateRule(ctx context.Context, rule evalpkg.RuleDefinition) 
 		MatchJSON:        matchJSON,
 		SampleRate:       clampSampleRate(rule.SampleRate),
 		EvaluatorIDsJSON: evaluatorIDsJSON,
+		CreatedBy:        normalizeActorID(rule.CreatedBy),
+		UpdatedBy:        normalizeActorID(rule.UpdatedBy),
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
@@ -295,6 +309,8 @@ func (s *WALStore) CreateRule(ctx context.Context, rule evalpkg.RuleDefinition) 
 				"match_json":         model.MatchJSON,
 				"sample_rate":        model.SampleRate,
 				"evaluator_ids_json": model.EvaluatorIDsJSON,
+				"created_by":         model.CreatedBy,
+				"updated_by":         model.UpdatedBy,
 				"deleted_at":         nil,
 				"updated_at":         now,
 			}
@@ -432,6 +448,7 @@ func (s *WALStore) UpdateRule(ctx context.Context, rule evalpkg.RuleDefinition) 
 			"match_json":         matchJSON,
 			"sample_rate":        clampSampleRate(rule.SampleRate),
 			"evaluator_ids_json": evaluatorIDsJSON,
+			"updated_by":         normalizeActorID(rule.UpdatedBy),
 			"updated_at":         now,
 		})
 	if result.Error != nil {
@@ -1049,6 +1066,8 @@ func evaluatorModelToDefinition(row EvalEvaluatorModel) (evalpkg.EvaluatorDefini
 		Config:       config,
 		OutputKeys:   outputKeys,
 		IsPredefined: row.IsPredefined,
+		CreatedBy:    normalizeActorID(row.CreatedBy),
+		UpdatedBy:    normalizeActorID(row.UpdatedBy),
 		DeletedAt:    row.DeletedAt,
 		CreatedAt:    row.CreatedAt.UTC(),
 		UpdatedAt:    row.UpdatedAt.UTC(),
@@ -1082,6 +1101,8 @@ func ruleModelToDefinition(row EvalRuleModel) (evalpkg.RuleDefinition, error) {
 		Match:        match,
 		SampleRate:   clampSampleRate(row.SampleRate),
 		EvaluatorIDs: evaluatorIDs,
+		CreatedBy:    normalizeActorID(row.CreatedBy),
+		UpdatedBy:    normalizeActorID(row.UpdatedBy),
 		DeletedAt:    row.DeletedAt,
 		CreatedAt:    row.CreatedAt.UTC(),
 		UpdatedAt:    row.UpdatedAt.UTC(),

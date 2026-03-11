@@ -17,6 +17,7 @@ import type {
 import DryRunPreview from '../components/evaluation/DryRunPreview';
 import RuleEnableToggle from '../components/evaluation/RuleEnableToggle';
 import RuleForm from '../components/evaluation/RuleForm';
+import ActorBadge from '../components/evaluation/ActorBadge';
 
 const PREVIEW_DEBOUNCE_MS = 500;
 
@@ -130,6 +131,7 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
   const [sampleRate, setSampleRate] = useState(0.01);
   const [evaluatorIDs, setEvaluatorIDs] = useState<string[]>([]);
   const [enabled, setEnabled] = useState(true);
+  const [createdBy, setCreatedBy] = useState('');
   const [availableEvaluators, setAvailableEvaluators] = useState<Evaluator[]>([]);
   const [preview, setPreview] = useState<RulePreviewResponse | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -158,6 +160,7 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
       setSampleRate(0.01);
       setEvaluatorIDs([]);
       setEnabled(true);
+      setCreatedBy('');
       setLoading(false);
       return;
     }
@@ -178,6 +181,7 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
         setSampleRate(rule.sample_rate);
         setEvaluatorIDs(rule.evaluator_ids);
         setEnabled(rule.enabled);
+        setCreatedBy(rule.created_by ?? '');
         setAvailableEvaluators(pickLatestVersionPerEvaluator(evaluatorsRes.items));
       })
       .catch((err) => {
@@ -265,7 +269,8 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
           sample_rate: sampleRate,
           evaluator_ids: evaluatorIDs,
         };
-        await dataSource.createRule(req);
+        const created = await dataSource.createRule(req);
+        setCreatedBy(created.created_by ?? '');
       } else {
         const req: UpdateRuleRequest = {
           enabled,
@@ -274,7 +279,8 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
           sample_rate: sampleRate,
           evaluator_ids: evaluatorIDs,
         };
-        await dataSource.updateRule(ruleID!, req);
+        const updated = await dataSource.updateRule(ruleID!, req);
+        setCreatedBy(updated.created_by ?? '');
       }
       evalRulesContext?.refetch();
       goBack();
@@ -382,7 +388,13 @@ export default function RuleDetailPage(props: RuleDetailPageProps) {
               </Text>
               {isNew && <Badge text="New" color="blue" />}
             </div>
-            {isNew && <div className={styles.headerSubtitle}>Configure selectors, match criteria, and evaluators.</div>}
+            {isNew ? (
+              <div className={styles.headerSubtitle}>Configure selectors, match criteria, and evaluators.</div>
+            ) : (
+              <div className={styles.headerSubtitle}>
+                Created by <ActorBadge actor={createdBy} />.
+              </div>
+            )}
           </div>
         </div>
         <div className={styles.actions}>

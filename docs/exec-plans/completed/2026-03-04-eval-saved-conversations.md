@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go (GORM, net/http), TypeScript/React (Grafana plugin), MySQL
 
-**Design doc:** `docs/plans/2026-03-04-eval-saved-conversations-design.md`
+**Design doc:** `docs/design-docs/2026-03-04-eval-saved-conversations.md`
 
 ---
 

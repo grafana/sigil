@@ -11,9 +11,9 @@ go = "1.26.1"
 java = "temurin-17"
 helm = "3.19.0"
 dotnet = "8.0.418"
-"go:github.com/magefile/mage" = "v1.15.0"
+"go:github.com/magefile/mage" = "v1.16.0"
 "go:github.com/air-verse/air" = "v1.64.5"
-"go:github.com/golangci/golangci-lint/v2/cmd/golangci-lint" = "v2.10.1"
+"go:github.com/golangci/golangci-lint/v2/cmd/golangci-lint" = "v2.11.2"
 "go:github.com/matryer/moq" = "v0.6.0"
 
 [tasks.help]
@@ -72,23 +72,27 @@ dir = "apps/plugin"
 run = "pnpm run storybook"
 
 [tasks.up]
-description = "Start local stack (grafana, plugin, sigil, sdk-traffic, alloy, tempo, prometheus, mysql, minio)"
+description = "Start local development stack with DEVELOPMENT=true (grafana, plugin, sigil, sdk-traffic, alloy, tempo, prometheus, mysql, minio)"
 run = "DEVELOPMENT=true docker compose --profile core --profile traffic up --watch --build --remove-orphans"
 
 [tasks."up:object"]
-description = "Backward-compatible alias for `mise run up`"
+description = "Backward-compatible alias for `mise run up` with DEVELOPMENT=true"
 run = "DEVELOPMENT=true docker compose --profile core --profile traffic up --watch --build --remove-orphans"
 
+[tasks."up:detached"]
+description = "Start local development stack in detached mode with DEVELOPMENT=true"
+run = "DEVELOPMENT=true docker compose --profile core --profile traffic up --build --remove-orphans -d"
+
 [tasks."up:dev"]
-description = "Start local stack without sdk-traffic, pointing to dev datasources"
+description = "Start local development stack without sdk-traffic, pointing to dev datasources"
 run = "DEVELOPMENT=true SIGIL_API_URL=https://sigil-dev-001.grafana-dev.net/ SIGIL_TENANT_ID=13 SIGIL_PROM_DS_UID=cortex-dev-01 SIGIL_TEMPO_DS_UID=tempo-dev-01 docker compose --profile core up --watch --build --remove-orphans"
 
 [tasks."up:ops"]
-description = "Start local stack without sdk-traffic, pointing to ops datasources"
+description = "Start local development stack without sdk-traffic, pointing to ops datasources"
 run = "DEVELOPMENT=true SIGIL_API_URL=https://sigil-ops-001.grafana-ops.net/ SIGIL_TENANT_ID=27821 SIGIL_API_AUTH_TOKEN=$SIGIL_API_AUTH_TOKEN_OPS SIGIL_PROM_DS_UID=grafanacloud-prom SIGIL_TEMPO_DS_UID=grafanacloud-traces docker compose --profile core up --watch --build --remove-orphans"
 
 [tasks."up:build"]
-description = "Start local stack and force image rebuilds"
+description = "Start local development stack with DEVELOPMENT=true and force image rebuilds"
 run = "DEVELOPMENT=true docker compose --profile core --profile traffic up --watch --build --remove-orphans"
 
 [tasks.down]

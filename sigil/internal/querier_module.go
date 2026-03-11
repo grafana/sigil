@@ -17,7 +17,6 @@ import (
 	"github.com/grafana/sigil/sigil/internal/eval/evaluators"
 	"github.com/grafana/sigil/sigil/internal/eval/evaluators/judges"
 	evalingest "github.com/grafana/sigil/sigil/internal/eval/ingest"
-	evalworker "github.com/grafana/sigil/sigil/internal/eval/worker"
 	"github.com/grafana/sigil/sigil/internal/feedback"
 	"github.com/grafana/sigil/sigil/internal/followup"
 	"github.com/grafana/sigil/sigil/internal/modelcards"
@@ -81,6 +80,19 @@ func newQuerierModule(
 		blockReader = nil
 	}
 
+	coldReadConfig := storage.ColdReadConfig{
+		TotalBudget:      cfg.QueryRead.ColdTotalBudget,
+		IndexReadTimeout: cfg.QueryRead.ColdIndexReadTimeout,
+		IndexRetries:     cfg.QueryRead.ColdIndexRetries,
+		IndexWorkers:     cfg.QueryRead.ColdIndexWorkers,
+		IndexMaxInflight: cfg.QueryRead.ColdIndexMaxInflight,
+	}
+	indexCacheConfig := storage.IndexCacheConfig{
+		Enabled:  true,
+		TTL:      cfg.QueryRead.ColdIndexCacheTTL,
+		MaxBytes: cfg.QueryRead.ColdIndexCacheMaxBytes,
+	}
+
 	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
 		ConversationStore:  conversationStore,
 		WALReader:          walReader,
@@ -89,18 +101,8 @@ func newQuerierModule(
 		FeedbackStore:      feedbackStore,
 		TempoBaseURL:       cfg.QueryProxy.TempoBaseURL,
 		HTTPClient:         &http.Client{Timeout: cfg.QueryProxy.Timeout},
-		ColdReadConfig: storage.ColdReadConfig{
-			TotalBudget:      cfg.QueryRead.ColdTotalBudget,
-			IndexReadTimeout: cfg.QueryRead.ColdIndexReadTimeout,
-			IndexRetries:     cfg.QueryRead.ColdIndexRetries,
-			IndexWorkers:     cfg.QueryRead.ColdIndexWorkers,
-			IndexMaxInflight: cfg.QueryRead.ColdIndexMaxInflight,
-		},
-		IndexCacheConfig: storage.IndexCacheConfig{
-			Enabled:  true,
-			TTL:      cfg.QueryRead.ColdIndexCacheTTL,
-			MaxBytes: cfg.QueryRead.ColdIndexCacheMaxBytes,
-		},
+		ColdReadConfig:     coldReadConfig,
+		IndexCacheConfig:   indexCacheConfig,
 	})
 	if err != nil {
 		return nil, err
@@ -154,19 +156,20 @@ func newQuerierModule(
 	var ingestScoreSvc *evalingest.Service
 	var testSvc *evalcontrol.TestService
 	if evalStore, ok := generationStore.(evalpkg.EvalStore); ok && evalStore != nil {
-		// Build generation reader and evaluator registry for the test service.
-		if genReader, ok := generationStore.(evalworker.GenerationReader); ok {
-			hotColdReader := evalworker.NewHotColdGenerationReader(genReader, blockMetadataStore, blockReader)
-			if hotColdReader != nil {
-				evalRegistry := map[evalpkg.EvaluatorKind]evaluators.Evaluator{
-					evalpkg.EvaluatorKindRegex:      evaluators.NewRegexEvaluator(),
-					evalpkg.EvaluatorKindJSONSchema: evaluators.NewJSONSchemaEvaluator(),
-					evalpkg.EvaluatorKindHeuristic:  evaluators.NewHeuristicEvaluator(),
-					evalpkg.EvaluatorKindLLMJudge:   evaluators.NewLLMJudgeEvaluator(discovery, cfg.EvalDefaultJudgeModel),
-				}
-				testSvc = evalcontrol.NewTestService(hotColdReader, evalRegistry)
-			}
+		testReader := storage.NewFanOutStore(
+			walReader,
+			blockMetadataStore,
+			blockReader,
+			storage.WithColdReadConfig(coldReadConfig),
+			storage.WithIndexCacheConfig(indexCacheConfig),
+		)
+		evalRegistry := map[evalpkg.EvaluatorKind]evaluators.Evaluator{
+			evalpkg.EvaluatorKindRegex:      evaluators.NewRegexEvaluator(),
+			evalpkg.EvaluatorKindJSONSchema: evaluators.NewJSONSchemaEvaluator(),
+			evalpkg.EvaluatorKindHeuristic:  evaluators.NewHeuristicEvaluator(),
+			evalpkg.EvaluatorKindLLMJudge:   evaluators.NewLLMJudgeEvaluator(discovery, cfg.EvalDefaultJudgeModel),
 		}
+		testSvc = evalcontrol.NewTestService(testReader, evalRegistry)
 
 		// Wire optional stores supported by the active backend.
 		var controlOpts []evalcontrol.ServiceOption

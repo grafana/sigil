@@ -6,16 +6,23 @@ const versions: TemplateVersionSummary[] = [
   {
     version: '2026-03-05',
     changelog: 'Tightened prompt wording and lowered temperature.',
+    created_by: 'alex@example.com',
     created_at: '2026-03-05T14:30:00Z',
+    updated_by: 'alex@example.com',
+    updated_at: '2026-03-05T14:30:00Z',
   },
   {
     version: '2026-03-04',
     changelog: 'Added explicit output description for the score key.',
+    created_by: 'morgan@example.com',
     created_at: '2026-03-04T11:10:00Z',
+    updated_by: 'taylor@example.com',
+    updated_at: '2026-03-04T16:45:00Z',
   },
   {
     version: '2026-03-02',
     changelog: '',
+    created_by: '—',
     created_at: '2026-03-02T09:00:00Z',
   },
 ];

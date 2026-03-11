@@ -4,6 +4,7 @@ import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, Button, Checkbox, Text, useStyles2 } from '@grafana/ui';
 import DataTable, { type ColumnDef } from '../shared/DataTable';
 import type { TemplateVersionSummary } from '../../evaluation/types';
+import ActorBadge from './ActorBadge';
 
 export type VersionHistoryTableProps = {
   versions: TemplateVersionSummary[];
@@ -31,6 +32,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
     alignItems: 'center',
     minWidth: 0,
   }),
+  metaCell: css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    flexWrap: 'wrap',
+    minWidth: 0,
+  }),
   changelogCell: css({
     minWidth: 0,
   }),
@@ -56,6 +64,11 @@ export default function VersionHistoryTable({
   onRollback,
 }: VersionHistoryTableProps) {
   const styles = useStyles2(getStyles);
+  const showUpdated = versions.some((v) => {
+    const actor = (v.updated_by ?? '').trim();
+    const timestamp = (v.updated_at ?? '').trim();
+    return actor.length > 0 || timestamp.length > 0;
+  });
 
   const columns = useMemo((): Array<ColumnDef<TemplateVersionSummary>> => {
     const base: Array<ColumnDef<TemplateVersionSummary>> = [
@@ -114,22 +127,35 @@ export default function VersionHistoryTable({
           </div>
         ),
       },
-      {
-        id: 'created',
+    ];
+    if (showUpdated) {
+      base.push({
+        id: 'updated',
         header: (
           <span className={styles.headerText}>
             <Text weight="medium" variant="bodySmall">
-              Created
+              Updated
             </Text>
           </span>
         ),
         cell: (v: TemplateVersionSummary) => (
-          <Text color="secondary" variant="bodySmall">
-            {formatDate(v.created_at)}
-          </Text>
+          <div className={styles.metaCell}>
+            {v.updated_at ? (
+              <>
+                <Text color="secondary" variant="bodySmall">
+                  {formatDate(v.updated_at)} by
+                </Text>
+                <ActorBadge actor={v.updated_by} />
+              </>
+            ) : (
+              <Text color="secondary" variant="bodySmall">
+                —
+              </Text>
+            )}
+          </div>
         ),
-      },
-    ];
+      });
+    }
     if (onRollback != null) {
       base.push({
         id: 'actions',
@@ -149,7 +175,7 @@ export default function VersionHistoryTable({
       });
     }
     return base;
-  }, [onRollback, onToggleSelect, selectedVersions, styles]);
+  }, [onRollback, onToggleSelect, selectedVersions, showUpdated, styles]);
 
   return (
     <DataTable<TemplateVersionSummary>

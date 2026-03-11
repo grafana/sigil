@@ -148,6 +148,7 @@ Design doc: `docs/design-docs/2026-02-15-conversation-query-path.md`
   - predefined evaluators are read-only defaults loaded from `sigil/internal/eval/predefined`
   - template CRUD/versioning in `eval_templates` and `eval_template_versions` stores tenant templates
   - predefined defaults are also exposed through template APIs as read-only synthetic `scope=global` entries
+  - tenant-managed eval writes stamp Grafana-backed actor metadata (`created_by`, `updated_by`) at the Sigil API/control boundary from plugin-forwarded `X-Grafana-User`
 
 ### Query access path
 
@@ -169,6 +170,12 @@ Design doc: `docs/design-docs/2026-02-15-conversation-query-path.md`
 - model cards: read model-card catalog from DB/snapshot fallback and optionally resolve `(provider, model)` pairs for deterministic pricing joins.
 
 4. Sigil API returns JSON responses (hydration payloads and full detail payloads) and compresses responses when the client advertises gzip support.
+
+Evaluation control write boundary:
+
+- plugin backend forwards tenant context and Grafana user identity on eval write routes
+- Sigil control handlers validate request payloads and stamp actor fields before storage writes
+- storage persists actor metadata directly on evaluator, rule, template, and template-version rows
 
 For Grafana app plugin deployments:
 
@@ -472,6 +479,7 @@ Conversation query path (design doc: `docs/design-docs/2026-02-15-conversation-q
   - `DELETE /api/v1/eval/rules/{id}` -- soft-delete rule
   - `GET /api/v1/eval/judge/providers` -- list configured judge providers
   - `GET /api/v1/eval/judge/models?provider={id}` -- list models for a provider
+  - `POST /api/v1/eval:test` -- run one-shot evaluator test against a stored generation; optional `conversation_id`, `from`, `to`, and `at` hints bound cold generation lookup to the same hardened hot/cold fan-out used by query detail routes
 - Dropped placeholder endpoints:
   - `GET /api/v1/completions` (replaced by conversation search)
   - `GET /api/v1/traces/{trace_id}` (replaced by Tempo proxy)

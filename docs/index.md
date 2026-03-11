@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-03-05
+last_reviewed: 2026-03-10
 source_of_truth: true
 audience: both
 ---
@@ -30,7 +30,12 @@ This is the canonical navigation map for repository documentation.
 
 - Design docs: [`design-docs/index.md`](design-docs/index.md)
   - Backend operational metrics baseline (active): `design-docs/2026-03-03-backend-operational-metrics-baseline.md`
+  - Online evaluation UI design (active): `design-docs/2026-03-02-online-evaluation-ui-design.md`
+  - Eval quick-test design: `design-docs/2026-03-03-eval-quick-test-design.md`
   - Agent catalog versioning and APIs (active): `design-docs/2026-03-04-agent-catalog-versioning.md`
+  - Eval saved conversations (completed): `design-docs/2026-03-04-eval-saved-conversations.md`
+  - Tokenizer visualization design: `design-docs/2026-03-05-tokenizer-visualization-design.md`
+  - Evaluation resource user attribution (completed): `design-docs/2026-03-09-eval-resource-user-attribution.md`
   - Conversation detail V2 shared-ref payload (active): `design-docs/2026-03-10-conversation-detail-v2.md`
   - Streaming conversation search (completed): `design-docs/2026-03-05-streaming-conversation-search.md`
   - Vercel AI SDK integration design (completed): `design-docs/2026-02-22-sdk-vercel-ai-sdk-integration.md`
@@ -65,6 +70,7 @@ This is the canonical navigation map for repository documentation.
   - Phase 2 umbrella coordinator: `exec-plans/active/2026-02-12-phase-2-delivery.md`
   - Backend operational metrics baseline: `exec-plans/active/2026-03-03-backend-operational-metrics-baseline.md`
   - Agent catalog versioning and APIs: `exec-plans/active/2026-03-04-agent-catalog-versioning.md`
+  - Evaluation resource user attribution: `exec-plans/completed/2026-03-09-eval-resource-user-attribution.md`
   - Conversation detail V2 shared-ref payload: `exec-plans/active/2026-03-10-conversation-detail-v2.md`
   - LangChain/LangGraph framework integration delivery: `exec-plans/completed/2026-02-20-sdk-langchain-langgraph-integrations.md`
   - OpenAI Agents/LlamaIndex/Google ADK framework integration delivery: `exec-plans/completed/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
@@ -73,8 +79,10 @@ This is the canonical navigation map for repository documentation.
   - Sigil automatic dev/ops Argo deployment delivery: `exec-plans/completed/2026-03-05-sigil-cd-dev-ops-auto-deploy.md`
   - Query cold-read hardening delivery: `exec-plans/completed/2026-03-05-query-cold-read-hardening.md`
   - Streaming conversation search delivery: `exec-plans/completed/2026-03-05-streaming-conversation-search.md`
+  - Tokenizer visualization delivery: `exec-plans/completed/2026-03-05-tokenizer-visualization.md`
   - Runtime role split and distributed Helm topology delivery: `exec-plans/completed/2026-03-02-runtime-role-split.md`
   - Conversation details Jaeger-style tree port: `exec-plans/completed/2026-03-03-conversation-jaeger-tree.md`
+  - Eval quick-test delivery: `exec-plans/completed/2026-03-03-eval-quick-test.md`
   - Eval saved conversations: `exec-plans/completed/2026-03-04-eval-saved-conversations.md`
   - Completed: `exec-plans/completed/`
     - `exec-plans/completed/2026-02-11-bootstrap-phase-1.md` (superseded)
@@ -100,9 +108,11 @@ This is the canonical navigation map for repository documentation.
     - `exec-plans/completed/2026-03-02-sigil-image-and-plugin-publish.md`
     - `exec-plans/completed/2026-03-05-sigil-cd-dev-ops-auto-deploy.md`
     - `exec-plans/completed/2026-03-05-streaming-conversation-search.md`
+    - `exec-plans/completed/2026-03-05-tokenizer-visualization.md`
     - `exec-plans/completed/2026-03-07-llm-judge-prompt-context-refresh.md`
     - `exec-plans/completed/2026-03-02-runtime-role-split.md`
     - `exec-plans/completed/2026-03-03-conversation-jaeger-tree.md`
+    - `exec-plans/completed/2026-03-03-eval-quick-test.md`
   - Tech debt tracker: [`exec-plans/tech-debt-tracker.md`](exec-plans/tech-debt-tracker.md)
 - Generated docs: [`generated/db-schema.md`](generated/db-schema.md)
 - External references: [`references/index.md`](references/index.md)

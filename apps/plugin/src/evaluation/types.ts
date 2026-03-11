@@ -177,6 +177,8 @@ export type Evaluator = {
   config: Record<string, unknown>;
   output_keys: EvalOutputKey[];
   is_predefined: boolean;
+  created_by?: string;
+  updated_by?: string;
   created_at: string;
   updated_at: string;
 };
@@ -210,6 +212,8 @@ export type Rule = {
   match: Record<string, string | string[]>;
   sample_rate: number;
   evaluator_ids: string[];
+  created_by?: string;
+  updated_by?: string;
   created_at: string;
   updated_at: string;
 };
@@ -291,6 +295,10 @@ export type EvalTestRequest = {
   config: Record<string, unknown>;
   output_keys: EvalOutputKey[];
   generation_id: string;
+  conversation_id?: string;
+  from?: string;
+  to?: string;
+  at?: string;
 };
 
 export type EvalTestScore = {
@@ -314,7 +322,10 @@ export type TemplateScope = 'global' | 'tenant';
 export type TemplateVersionSummary = {
   version: string;
   changelog: string;
+  created_by?: string;
   created_at: string;
+  updated_by?: string;
+  updated_at?: string;
 };
 
 export type TemplateDefinition = {
@@ -327,6 +338,8 @@ export type TemplateDefinition = {
   config?: Record<string, unknown>;
   output_keys?: EvalOutputKey[];
   versions: TemplateVersionSummary[];
+  created_by?: string;
+  updated_by?: string;
   created_at: string;
   updated_at: string;
 };
@@ -338,6 +351,7 @@ export type TemplateVersion = {
   config: Record<string, unknown>;
   output_keys: EvalOutputKey[];
   changelog: string;
+  created_by?: string;
   created_at: string;
 };
 

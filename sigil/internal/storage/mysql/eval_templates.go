@@ -52,6 +52,8 @@ func (s *WALStore) CreateTemplate(ctx context.Context, tmpl evalpkg.TemplateDefi
 		Scope:         scope,
 		LatestVersion: strings.TrimSpace(tmpl.LatestVersion),
 		Kind:          string(tmpl.Kind),
+		CreatedBy:     normalizeActorID(tmpl.CreatedBy),
+		UpdatedBy:     normalizeActorID(tmpl.UpdatedBy),
 		CreatedAt:     now,
 		UpdatedAt:     now,
 	}
@@ -69,6 +71,7 @@ func (s *WALStore) CreateTemplate(ctx context.Context, tmpl evalpkg.TemplateDefi
 		Version:        strings.TrimSpace(version.Version),
 		ConfigJSON:     configJSON,
 		OutputKeysJSON: outputKeysJSON,
+		CreatedBy:      normalizeActorID(version.CreatedBy),
 		CreatedAt:      verCreatedAt,
 	}
 	if cl := strings.TrimSpace(version.Changelog); cl != "" {
@@ -99,6 +102,8 @@ func (s *WALStore) CreateTemplate(ctx context.Context, tmpl evalpkg.TemplateDefi
 				"latest_version": tmplModel.LatestVersion,
 				"kind":           tmplModel.Kind,
 				"description":    tmplModel.Description,
+				"created_by":     tmplModel.CreatedBy,
+				"updated_by":     tmplModel.UpdatedBy,
 				"deleted_at":     nil,
 				"updated_at":     now,
 			}
@@ -112,6 +117,7 @@ func (s *WALStore) CreateTemplate(ctx context.Context, tmpl evalpkg.TemplateDefi
 				"config_json":      versionModel.ConfigJSON,
 				"output_keys_json": versionModel.OutputKeysJSON,
 				"changelog":        versionModel.Changelog,
+				"created_by":       versionModel.CreatedBy,
 				"created_at":       versionModel.CreatedAt,
 			}),
 		}).Create(&versionModel).Error; err != nil {
@@ -250,6 +256,7 @@ func (s *WALStore) CreateTemplateVersion(ctx context.Context, version evalpkg.Te
 		Version:        strings.TrimSpace(version.Version),
 		ConfigJSON:     configJSON,
 		OutputKeysJSON: outputKeysJSON,
+		CreatedBy:      normalizeActorID(version.CreatedBy),
 		CreatedAt:      now,
 	}
 	if cl := strings.TrimSpace(version.Changelog); cl != "" {
@@ -382,6 +389,7 @@ func (s *WALStore) PublishTemplateVersion(ctx context.Context, version evalpkg.T
 		Version:        strings.TrimSpace(version.Version),
 		ConfigJSON:     configJSON,
 		OutputKeysJSON: outputKeysJSON,
+		CreatedBy:      normalizeActorID(version.CreatedBy),
 		CreatedAt:      now,
 	}
 	if cl := strings.TrimSpace(version.Changelog); cl != "" {
@@ -397,6 +405,7 @@ func (s *WALStore) PublishTemplateVersion(ctx context.Context, version evalpkg.T
 				version.TenantID, version.TemplateID).
 			Updates(map[string]any{
 				"latest_version": strings.TrimSpace(version.Version),
+				"updated_by":     normalizeActorID(version.CreatedBy),
 				"updated_at":     now,
 			})
 		if result.Error != nil {
@@ -409,7 +418,7 @@ func (s *WALStore) PublishTemplateVersion(ctx context.Context, version evalpkg.T
 	})
 }
 
-func (s *WALStore) UpdateTemplateLatestVersion(ctx context.Context, tenantID, templateID, version string) error {
+func (s *WALStore) UpdateTemplateLatestVersion(ctx context.Context, tenantID, templateID, version, updatedBy string) error {
 	if strings.TrimSpace(tenantID) == "" {
 		return errors.New("tenant id is required")
 	}
@@ -426,6 +435,7 @@ func (s *WALStore) UpdateTemplateLatestVersion(ctx context.Context, tenantID, te
 		Where("tenant_id = ? AND template_id = ? AND deleted_at IS NULL", tenantID, templateID).
 		Updates(map[string]any{
 			"latest_version": strings.TrimSpace(version),
+			"updated_by":     normalizeActorID(updatedBy),
 			"updated_at":     now,
 		})
 	if result.Error != nil {
@@ -437,7 +447,7 @@ func (s *WALStore) UpdateTemplateLatestVersion(ctx context.Context, tenantID, te
 	return nil
 }
 
-func (s *WALStore) UpdateTemplateDescription(ctx context.Context, tenantID, templateID, description string) error {
+func (s *WALStore) UpdateTemplateDescription(ctx context.Context, tenantID, templateID, description, updatedBy string) error {
 	if strings.TrimSpace(tenantID) == "" {
 		return errors.New("tenant id is required")
 	}
@@ -451,6 +461,7 @@ func (s *WALStore) UpdateTemplateDescription(ctx context.Context, tenantID, temp
 		Where("tenant_id = ? AND template_id = ? AND deleted_at IS NULL", tenantID, templateID).
 		Updates(map[string]any{
 			"description": description,
+			"updated_by":  normalizeActorID(updatedBy),
 			"updated_at":  now,
 		})
 	if result.Error != nil {
@@ -469,6 +480,8 @@ func modelToTemplate(row EvalTemplateModel) evalpkg.TemplateDefinition {
 		Scope:         evalpkg.TemplateScope(row.Scope),
 		LatestVersion: row.LatestVersion,
 		Kind:          evalpkg.EvaluatorKind(row.Kind),
+		CreatedBy:     normalizeActorID(row.CreatedBy),
+		UpdatedBy:     normalizeActorID(row.UpdatedBy),
 		DeletedAt:     row.DeletedAt,
 		CreatedAt:     row.CreatedAt.UTC(),
 		UpdatedAt:     row.UpdatedAt.UTC(),
@@ -495,7 +508,10 @@ func modelToTemplateVersion(row EvalTemplateVersionModel) (evalpkg.TemplateVersi
 		Version:    row.Version,
 		Config:     config,
 		OutputKeys: outputKeys,
+		CreatedBy:  normalizeActorID(row.CreatedBy),
+		UpdatedBy:  normalizeActorID(row.CreatedBy),
 		CreatedAt:  row.CreatedAt.UTC(),
+		UpdatedAt:  row.CreatedAt.UTC(),
 	}
 	if row.Changelog != nil {
 		v.Changelog = *row.Changelog

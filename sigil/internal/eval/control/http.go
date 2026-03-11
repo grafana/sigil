@@ -125,6 +125,10 @@ func (s *Service) handleEvaluators(w http.ResponseWriter, req *http.Request) {
 
 	switch req.Method {
 	case http.MethodPost:
+		actorID, ok := actorIDFromRequest(w, req)
+		if !ok {
+			return
+		}
 		var createReq createEvaluatorRequest
 		if err := decodeJSONBody(req, &createReq); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -135,7 +139,7 @@ func (s *Service) handleEvaluators(w http.ResponseWriter, req *http.Request) {
 			writeControlWriteError(w, err)
 			return
 		}
-		created, err := s.CreateEvaluator(req.Context(), tenantID, evaluator)
+		created, err := s.CreateEvaluator(req.Context(), tenantID, actorID, evaluator)
 		if err != nil {
 			writeControlWriteError(w, err)
 			return
@@ -228,7 +232,11 @@ func (s *Service) handlePredefinedEvaluatorByID(w http.ResponseWriter, req *http
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	created, err := s.ForkPredefinedEvaluator(req.Context(), tenantID, templateID, request)
+	actorID, ok := actorIDFromRequest(w, req)
+	if !ok {
+		return
+	}
+	created, err := s.ForkPredefinedEvaluator(req.Context(), tenantID, actorID, templateID, request)
 	if err != nil {
 		writeControlWriteError(w, err)
 		return
@@ -244,13 +252,17 @@ func (s *Service) handleRules(w http.ResponseWriter, req *http.Request) {
 
 	switch req.Method {
 	case http.MethodPost:
+		actorID, ok := actorIDFromRequest(w, req)
+		if !ok {
+			return
+		}
 		var createRequest createRuleRequest
 		if err := decodeJSONBody(req, &createRequest); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		rule := createRequest.toRuleDefinition()
-		created, err := s.CreateRule(req.Context(), tenantID, rule)
+		created, err := s.CreateRule(req.Context(), tenantID, actorID, rule)
 		if err != nil {
 			writeControlWriteError(w, err)
 			return
@@ -301,6 +313,10 @@ func (s *Service) handleRuleByID(w http.ResponseWriter, req *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, rule)
 	case http.MethodPatch:
+		actorID, ok := actorIDFromRequest(w, req)
+		if !ok {
+			return
+		}
 		var patch struct {
 			Enabled      *bool             `json:"enabled"`
 			Selector     *evalpkg.Selector `json:"selector"`
@@ -316,7 +332,7 @@ func (s *Service) handleRuleByID(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, "at least one field must be provided", http.StatusBadRequest)
 			return
 		}
-		updated, err := s.UpdateRule(req.Context(), tenantID, ruleID, patch.Enabled, patch.Selector, patch.Match, patch.SampleRate, patch.EvaluatorIDs)
+		updated, err := s.UpdateRule(req.Context(), tenantID, actorID, ruleID, patch.Enabled, patch.Selector, patch.Match, patch.SampleRate, patch.EvaluatorIDs)
 		if err != nil {
 			writeControlWriteError(w, err)
 			return
@@ -560,6 +576,8 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 
 func writeControlWriteError(w http.ResponseWriter, err error) {
 	switch {
+	case isUnauthorizedError(err):
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 	case isValidationError(err):
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	case isNotFoundError(err):

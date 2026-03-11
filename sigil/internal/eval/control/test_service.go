@@ -7,15 +7,20 @@ import (
 
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	"github.com/grafana/sigil/sigil/internal/eval/evaluators"
-	"github.com/grafana/sigil/sigil/internal/eval/worker"
+	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
+	"github.com/grafana/sigil/sigil/internal/storage"
 )
 
 // EvalTestRequest describes a one-shot evaluator test against a stored generation.
 type EvalTestRequest struct {
-	Kind         string              `json:"kind"`
-	Config       map[string]any      `json:"config"`
-	OutputKeys   []evalpkg.OutputKey `json:"output_keys"`
-	GenerationID string              `json:"generation_id"`
+	Kind           string              `json:"kind"`
+	Config         map[string]any      `json:"config"`
+	OutputKeys     []evalpkg.OutputKey `json:"output_keys"`
+	GenerationID   string              `json:"generation_id"`
+	ConversationID string              `json:"conversation_id,omitempty"`
+	From           time.Time           `json:"from,omitempty"`
+	To             time.Time           `json:"to,omitempty"`
+	At             time.Time           `json:"at,omitempty"`
 }
 
 // EvalTestScore is a single score produced during a test run.
@@ -36,14 +41,22 @@ type EvalTestResponse struct {
 	ExecutionTimeMs int64           `json:"execution_time_ms"`
 }
 
+type generationLookup interface {
+	GetGenerationByIDWithPlan(
+		ctx context.Context,
+		tenantID, generationID string,
+		plan storage.GenerationReadPlan,
+	) (*sigilv1.Generation, error)
+}
+
 // TestService runs synchronous one-shot evaluator tests against stored generations.
 type TestService struct {
-	reader     worker.GenerationReader
+	reader     generationLookup
 	evaluators map[evalpkg.EvaluatorKind]evaluators.Evaluator
 }
 
 // NewTestService creates a TestService with the given generation reader and evaluator registry.
-func NewTestService(reader worker.GenerationReader, evals map[evalpkg.EvaluatorKind]evaluators.Evaluator) *TestService {
+func NewTestService(reader generationLookup, evals map[evalpkg.EvaluatorKind]evaluators.Evaluator) *TestService {
 	return &TestService{
 		reader:     reader,
 		evaluators: evals,
@@ -59,7 +72,13 @@ func (s *TestService) RunTest(ctx context.Context, tenantID string, req EvalTest
 		return nil, ValidationWrap(fmt.Errorf("no evaluator registered for kind %q", kind))
 	}
 
-	generation, err := s.reader.GetByID(ctx, tenantID, req.GenerationID)
+	lookupPlan := storage.GenerationReadPlan{
+		ConversationID: req.ConversationID,
+		From:           req.From,
+		To:             req.To,
+		At:             req.At,
+	}
+	generation, err := s.reader.GetGenerationByIDWithPlan(ctx, tenantID, req.GenerationID, lookupPlan)
 	if err != nil {
 		return nil, fmt.Errorf("fetch generation: %w", err)
 	}
