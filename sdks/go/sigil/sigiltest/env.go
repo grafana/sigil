@@ -12,7 +12,6 @@ import (
 	sigil "github.com/grafana/sigil/sdks/go/sigil"
 	sigilv1 "github.com/grafana/sigil/sdks/go/sigil/internal/gen/sigil/v1"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"google.golang.org/grpc"
@@ -34,9 +33,7 @@ type Env struct {
 	closeOnce      sync.Once
 }
 
-type Option func(*sigil.Config)
-
-func NewEnv(t testing.TB, opts ...Option) *Env {
+func NewEnv(t testing.TB) *Env {
 	t.Helper()
 
 	ingest := &capturingIngestServer{}
@@ -73,12 +70,6 @@ func NewEnv(t testing.TB, opts ...Option) *Env {
 		PayloadMaxBytes: 4 << 20,
 	}
 
-	for _, opt := range opts {
-		if opt != nil {
-			opt(&cfg)
-		}
-	}
-
 	env := &Env{
 		Client:         sigil.NewClient(cfg),
 		Spans:          spanRecorder,
@@ -97,30 +88,12 @@ func NewEnv(t testing.TB, opts ...Option) *Env {
 	return env
 }
 
-func WithConfig(mutator func(*sigil.Config)) Option {
-	return func(cfg *sigil.Config) {
-		if mutator != nil {
-			mutator(cfg)
-		}
-	}
-}
-
 func (e *Env) Shutdown(t testing.TB) {
 	t.Helper()
 
 	if err := e.close(); err != nil {
 		t.Fatalf("shutdown sigil client: %v", err)
 	}
-}
-
-func (e *Env) CollectMetrics(t testing.TB) metricdata.ResourceMetrics {
-	t.Helper()
-
-	var collected metricdata.ResourceMetrics
-	if err := e.Metrics.Collect(context.Background(), &collected); err != nil {
-		t.Fatalf("collect metrics: %v", err)
-	}
-	return collected
 }
 
 func (e *Env) RequestCount() int {
@@ -148,16 +121,6 @@ func (e *Env) SingleGenerationJSON(t testing.TB) map[string]any {
 		t.Fatalf("decode generation json: %v", err)
 	}
 	return generation
-}
-
-func (e *Env) SingleGenerationProto(t testing.TB) *sigilv1.Generation {
-	t.Helper()
-
-	req := e.singleRequest(t)
-	if len(req.GetGenerations()) != 1 {
-		t.Fatalf("expected exactly one generation in request, got %d", len(req.GetGenerations()))
-	}
-	return req.GetGenerations()[0]
 }
 
 func (e *Env) close() error {
@@ -319,54 +282,6 @@ func FloatValue(t testing.TB, value any, path ...any) float64 {
 		t.Fatalf("path %v expected number, got %T (%v)", path, resolved, resolved)
 	}
 	return number
-}
-
-func BoolValue(t testing.TB, value any, path ...any) bool {
-	t.Helper()
-
-	resolved := JSONPath(t, value, path...)
-	flag, ok := resolved.(bool)
-	if !ok {
-		t.Fatalf("path %v expected bool, got %T (%v)", path, resolved, resolved)
-	}
-	return flag
-}
-
-func MustAbsent(t testing.TB, value any, path ...any) {
-	t.Helper()
-
-	current := value
-	for idx, step := range path {
-		switch typed := step.(type) {
-		case string:
-			node, ok := current.(map[string]any)
-			if !ok {
-				return
-			}
-			next, ok := node[typed]
-			if !ok {
-				return
-			}
-			if idx == len(path)-1 {
-				t.Fatalf("expected path %v to be absent", path)
-			}
-			current = next
-		case int:
-			node, ok := current.([]any)
-			if !ok {
-				return
-			}
-			if typed < 0 || typed >= len(node) {
-				return
-			}
-			if idx == len(path)-1 {
-				t.Fatalf("expected path %v to be absent", path)
-			}
-			current = node[typed]
-		default:
-			t.Fatalf("unsupported path step type %T", step)
-		}
-	}
 }
 
 func RequireRequestCount(t testing.TB, env *Env, want int) {
