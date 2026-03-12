@@ -244,9 +244,82 @@ describe('AgentDetailPage', () => {
     );
 
     await screen.findByLabelText('toggle agent version selector');
+    expect(screen.getByText('Recent versions')).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getAllByLabelText(/select version sha256:/i)).toHaveLength(8);
     });
+  });
+
+  it('compacts long declared versions in the selector and recent versions strip', async () => {
+    const dataSource = createDataSource();
+    dataSource.lookupAgent = jest.fn(async (_name: string, version?: string) => ({
+      agent_name: _name,
+      effective_version:
+        version && version.length > 0
+          ? version
+          : 'sha256:1212121212121212121212121212121212121212121212121212121212121212',
+      declared_version_first: '12.0.0',
+      declared_version_latest: 'abcd0012-1111-2222-3333-444444444444',
+      first_seen_at: '2026-03-04T12:00:00Z',
+      last_seen_at: '2026-03-04T12:30:00Z',
+      generation_count: 12,
+      system_prompt: 'You are concise.',
+      system_prompt_prefix: 'v12',
+      tool_count: 2,
+      token_estimate: { system_prompt: 4, tools_total: 5, total: 9 },
+      tools: [
+        {
+          name: 'weather',
+          description: 'Get weather',
+          type: 'function',
+          input_schema_json: '{"city":{"type":"string"}}',
+          token_estimate: 3,
+        },
+      ],
+      models: [
+        {
+          provider: 'openai',
+          name: 'gpt-5',
+          generation_count: 10,
+          first_seen_at: '2026-03-04T09:00:00Z',
+          last_seen_at: '2026-03-04T11:00:00Z',
+        },
+      ],
+    }));
+    dataSource.listAgentVersions = jest.fn(async () => ({
+      items: Array.from({ length: 12 }, (_, index) => {
+        const effectiveVersion = `sha256:${String(index + 1)
+          .padStart(2, '0')
+          .repeat(32)}`;
+        const hour = (index + 1).toString().padStart(2, '0');
+        return {
+          effective_version: effectiveVersion,
+          declared_version_first: `${index + 1}.0.0`,
+          declared_version_latest: `abcd${String(index + 1).padStart(4, '0')}-1111-2222-3333-444444444444`,
+          first_seen_at: `2026-03-04T${hour}:00:00Z`,
+          last_seen_at: `2026-03-04T${hour}:30:00Z`,
+          generation_count: index + 1,
+          tool_count: 1,
+          system_prompt_prefix: `v${index + 1}`,
+          token_estimate: { system_prompt: 4, tools_total: 2, total: 6 },
+        };
+      }),
+      next_cursor: '',
+    }));
+
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const toggle = await screen.findByLabelText('toggle agent version selector');
+    expect(toggle).toHaveTextContent('Version abcd0012');
+    expect(screen.getByText('Recent versions')).toBeInTheDocument();
+    expect(screen.getByText('abcd0005')).toBeInTheDocument();
+    expect(screen.queryByText('abcd0012-1111-2222-3333-444444444444')).not.toBeInTheDocument();
   });
 
   it('does not show rating error alert when latest rating returns 404', async () => {

@@ -520,13 +520,34 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   versionPickerHeaderRow: css({
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
     gap: theme.spacing(1),
     width: '100%',
+    flexWrap: 'wrap' as const,
+  }),
+  versionPickerCopy: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.125),
+    minWidth: 0,
+  }),
+  versionPickerEyebrow: css({
+    fontSize: theme.typography.bodySmall.fontSize,
+    color: theme.colors.text.secondary,
+    lineHeight: 1.2,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.04em',
+    fontWeight: theme.typography.fontWeightMedium,
+  }),
+  versionPickerHint: css({
+    fontSize: theme.typography.size.sm,
+    color: theme.colors.text.secondary,
+    lineHeight: 1.2,
   }),
   versionPickerAnchor: css({
     position: 'relative' as const,
+    marginLeft: 'auto',
     '@media (max-width: 900px)': {
       width: '100%',
     },
@@ -566,7 +587,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   versionPickerMenu: css({
     position: 'absolute' as const,
     top: `calc(100% + ${theme.spacing(0.5)})`,
-    left: 0,
+    right: 0,
     zIndex: 8,
     width: 420,
     maxWidth: 'min(92vw, 420px)',
@@ -578,6 +599,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
     '@media (max-width: 900px)': {
       width: '100%',
       maxWidth: '100%',
+      left: 0,
+      right: 'auto',
     },
   }),
   versionPickerOptions: css({
@@ -625,23 +648,46 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexWrap: 'nowrap' as const,
     width: '100%',
-    minWidth: '100%',
-    gap: 0,
-    marginTop: theme.spacing(0.5),
+    gap: theme.spacing(0.75),
     overflowX: 'auto' as const,
     paddingBottom: theme.spacing(0.25),
     scrollbarWidth: 'thin' as const,
   }),
+  recentVersionsSection: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.5),
+    marginTop: theme.spacing(0.75),
+  }),
+  recentVersionsHeader: css({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing(1),
+    flexWrap: 'wrap' as const,
+  }),
+  recentVersionsHeaderLabel: css({
+    fontSize: theme.typography.bodySmall.fontSize,
+    color: theme.colors.text.secondary,
+    lineHeight: 1.2,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.04em',
+    fontWeight: theme.typography.fontWeightMedium,
+  }),
+  recentVersionsHeaderMeta: css({
+    fontSize: theme.typography.size.sm,
+    color: theme.colors.text.secondary,
+    lineHeight: 1.2,
+  }),
   recentVersionItem: css({
-    width: '100%',
-    minWidth: 0,
-    flex: 1,
+    flex: '0 0 clamp(108px, 10vw, 132px)',
+    minWidth: 108,
     display: 'flex',
     flexDirection: 'column' as const,
     gap: theme.spacing(0.125),
     '@media (max-width: 900px)': {
       flex: '0 0 min(120px, 32vw)',
-      minWidth: 96,
+      minWidth: 104,
     },
   }),
   recentVersionItemActive: css({}),
@@ -685,7 +731,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   recentVersionText: css({
     display: 'flex',
     flexDirection: 'column' as const,
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
     minWidth: 0,
   }),
   recentVersionTextCentered: css({
@@ -696,7 +742,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.text.primary,
     fontWeight: theme.typography.fontWeightMedium,
     lineHeight: 1.2,
-    textAlign: 'right' as const,
+    textAlign: 'left' as const,
     whiteSpace: 'nowrap' as const,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
@@ -723,8 +769,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
   recentVersionTimelineMarker: css({
     position: 'relative' as const,
     height: 14,
-    width: `calc(100% + ${theme.spacing(1.5)})`,
-    marginLeft: `-${theme.spacing(0.75)}`,
+    width: `calc(100% + ${theme.spacing(0.75)})`,
+    marginLeft: `-${theme.spacing(0.375)}`,
     '&::before': {
       content: '""',
       position: 'absolute' as const,
@@ -935,6 +981,28 @@ function formatRelativeDateCompact(iso: string): string {
     return `${Math.floor(diffSec / 3600)}h`;
   }
   return `${Math.floor(diffSec / 86400)}d`;
+}
+
+function formatCompactVersionLabel(
+  version: Pick<AgentVersionListItem, 'effective_version' | 'declared_version_first' | 'declared_version_latest'>
+): string {
+  const declared = version.declared_version_latest || version.declared_version_first;
+  if (declared) {
+    const normalized = declared.trim();
+    if (normalized.length <= 18) {
+      return normalized;
+    }
+    if (/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(normalized)) {
+      return normalized.slice(0, 8);
+    }
+    if (/^[0-9a-f]{12,}$/i.test(normalized.replace(/-/g, ''))) {
+      return `${normalized.slice(0, 8)}…`;
+    }
+    return `${normalized.slice(0, 16)}…`;
+  }
+
+  const effective = version.effective_version.replace(/^sha256:/, '');
+  return effective.length <= 12 ? effective : `${effective.slice(0, 8)}…`;
 }
 
 function formatDurationCompact(fromIso: string, toIso: string): string {
@@ -1553,6 +1621,9 @@ export default function AgentDetailPage({
     activeVersionItem?.declared_version_latest ||
     activeVersionItem?.declared_version_first ||
     `${activeVersion.replace(/^sha256:/, '').slice(0, 12)}…`;
+  const activeVersionCompactLabel = activeVersionItem
+    ? formatCompactVersionLabel(activeVersionItem)
+    : activeVersionLabel;
 
   return (
     <div className={styles.page}>
@@ -1650,6 +1721,12 @@ export default function AgentDetailPage({
                   <div className={styles.heroTopStatsRow}>
                     <div className={styles.heroVersionsPanel}>
                       <div className={styles.versionPickerHeaderRow}>
+                        <div className={styles.versionPickerCopy}>
+                          <span className={styles.versionPickerEyebrow}>Current version</span>
+                          <span className={styles.versionPickerHint}>
+                            Use the menu to jump across the full version history.
+                          </span>
+                        </div>
                         <div className={styles.versionPickerAnchor} ref={versionPickerRef}>
                           <button
                             type="button"
@@ -1657,9 +1734,10 @@ export default function AgentDetailPage({
                             aria-label="toggle agent version selector"
                             aria-expanded={isVersionPickerOpen}
                             aria-haspopup="listbox"
+                            title={`Version ${activeVersionLabel}`}
                             onClick={() => setIsVersionPickerOpen((current) => !current)}
                           >
-                            <span className={styles.versionPickerLabel}>Version {activeVersionLabel}</span>
+                            <span className={styles.versionPickerLabel}>Version {activeVersionCompactLabel}</span>
                             <Icon name={isVersionPickerOpen ? 'angle-up' : 'angle-down'} size="sm" />
                           </button>
                           {isVersionPickerOpen && (
@@ -1706,88 +1784,101 @@ export default function AgentDetailPage({
                         </div>
                       </div>
                       {recentVersions.length > 1 && (
-                        <div className={styles.recentVersionsGrid}>
-                          {recentVersions.map((versionItem, index) => {
-                            const rating = recentVersionRatings[versionItem.effective_version];
-                            const isSelected = activeVersion === versionItem.effective_version;
-                            const completedRating = rating?.status === 'completed' ? rating : null;
-                            const versionNumber =
-                              versionItem.declared_version_latest ||
-                              versionItem.declared_version_first ||
-                              `#${index + 1}`;
-                            const tooltipContent = (
-                              <div className={styles.versionTooltip}>
-                                <div className={styles.versionTooltipTitle}>Version {versionNumber}</div>
-                                <div className={styles.versionTooltipMeta}>
-                                  Last seen {formatDate(versionItem.last_seen_at)}
-                                </div>
-                                <div
-                                  className={styles.versionTooltipStatus}
-                                  style={{
-                                    color: completedRating
-                                      ? scoreTone(theme, completedRating.score)
-                                      : theme.colors.text.secondary,
-                                  }}
-                                >
-                                  {completedRating ? `Rated ${completedRating.score}/10` : 'Unrated'}
-                                </div>
-                              </div>
-                            );
-                            return (
-                              <div key={versionItem.effective_version} className={styles.recentVersionItem}>
-                                <Tooltip content={tooltipContent} placement="top">
-                                  <button
-                                    type="button"
-                                    className={cx(styles.recentVersionBox, isSelected && styles.recentVersionBoxActive)}
-                                    onClick={() => selectVersion(versionItem.effective_version)}
-                                    aria-label={`select version ${versionItem.effective_version}`}
+                        <div className={styles.recentVersionsSection}>
+                          <div className={styles.recentVersionsHeader}>
+                            <span className={styles.recentVersionsHeaderLabel}>Recent versions</span>
+                            <span className={styles.recentVersionsHeaderMeta}>
+                              Showing {recentVersions.length} of {versionOptions.length}
+                            </span>
+                          </div>
+                          <div className={styles.recentVersionsGrid} aria-label="Recent versions">
+                            {recentVersions.map((versionItem, index) => {
+                              const rating = recentVersionRatings[versionItem.effective_version];
+                              const isSelected = activeVersion === versionItem.effective_version;
+                              const completedRating = rating?.status === 'completed' ? rating : null;
+                              const fullVersionLabel =
+                                versionItem.declared_version_latest ||
+                                versionItem.declared_version_first ||
+                                `#${index + 1}`;
+                              const compactVersionLabel = formatCompactVersionLabel(versionItem);
+                              const tooltipContent = (
+                                <div className={styles.versionTooltip}>
+                                  <div className={styles.versionTooltipTitle}>Version {fullVersionLabel}</div>
+                                  <div className={styles.versionTooltipMeta}>
+                                    Last seen {formatDate(versionItem.last_seen_at)}
+                                  </div>
+                                  <div
+                                    className={styles.versionTooltipStatus}
+                                    style={{
+                                      color: completedRating
+                                        ? scoreTone(theme, completedRating.score)
+                                        : theme.colors.text.secondary,
+                                    }}
                                   >
-                                    <span
+                                    {completedRating ? `Rated ${completedRating.score}/10` : 'Unrated'}
+                                  </div>
+                                </div>
+                              );
+                              return (
+                                <div key={versionItem.effective_version} className={styles.recentVersionItem}>
+                                  <Tooltip content={tooltipContent} placement="top">
+                                    <button
+                                      type="button"
                                       className={cx(
-                                        styles.recentVersionContent,
-                                        !completedRating && styles.recentVersionContentSingle
+                                        styles.recentVersionBox,
+                                        isSelected && styles.recentVersionBoxActive
                                       )}
+                                      onClick={() => selectVersion(versionItem.effective_version)}
+                                      title={`Version ${fullVersionLabel}`}
+                                      aria-label={`select version ${versionItem.effective_version}`}
                                     >
                                       <span
                                         className={cx(
-                                          styles.recentVersionText,
-                                          !completedRating && styles.recentVersionTextCentered
+                                          styles.recentVersionContent,
+                                          !completedRating && styles.recentVersionContentSingle
                                         )}
                                       >
                                         <span
                                           className={cx(
-                                            styles.recentVersionNumber,
-                                            !completedRating && styles.recentVersionNumberCentered
+                                            styles.recentVersionText,
+                                            !completedRating && styles.recentVersionTextCentered
                                           )}
                                         >
-                                          {versionNumber}
+                                          <span
+                                            className={cx(
+                                              styles.recentVersionNumber,
+                                              !completedRating && styles.recentVersionNumberCentered
+                                            )}
+                                          >
+                                            {compactVersionLabel}
+                                          </span>
                                         </span>
+                                        {completedRating && (
+                                          <span
+                                            className={styles.recentVersionScore}
+                                            style={{ color: scoreTone(theme, completedRating.score) }}
+                                          >
+                                            {completedRating.score}/10
+                                          </span>
+                                        )}
                                       </span>
-                                      {completedRating && (
-                                        <span
-                                          className={styles.recentVersionScore}
-                                          style={{ color: scoreTone(theme, completedRating.score) }}
-                                        >
-                                          {completedRating.score}/10
-                                        </span>
-                                      )}
-                                    </span>
-                                    <span
-                                      className={cx(
-                                        styles.recentVersionTimelineMarker,
-                                        index === 0 && styles.recentVersionTimelineMarkerStart,
-                                        index === recentVersions.length - 1 && styles.recentVersionTimelineMarkerEnd
-                                      )}
-                                      aria-hidden="true"
-                                    />
-                                    <span className={styles.recentVersionRelativeTime}>
-                                      {formatRelativeDateCompact(versionItem.last_seen_at)}
-                                    </span>
-                                  </button>
-                                </Tooltip>
-                              </div>
-                            );
-                          })}
+                                      <span
+                                        className={cx(
+                                          styles.recentVersionTimelineMarker,
+                                          index === 0 && styles.recentVersionTimelineMarkerStart,
+                                          index === recentVersions.length - 1 && styles.recentVersionTimelineMarkerEnd
+                                        )}
+                                        aria-hidden="true"
+                                      />
+                                      <span className={styles.recentVersionRelativeTime}>
+                                        {formatRelativeDateCompact(versionItem.last_seen_at)}
+                                      </span>
+                                    </button>
+                                  </Tooltip>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
                       )}
                     </div>

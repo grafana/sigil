@@ -198,3 +198,31 @@ export const Anonymous = {
     </MemoryRouter>
   ),
 };
+
+export const DenseVersions = {
+  args: {
+    dataSource: {
+      ...mockDataSource,
+      listAgentVersions: async () => ({
+        items: Array.from({ length: 12 }, (_, index) => {
+          const effectiveVersion = `sha256:${String(index + 1)
+            .padStart(2, '0')
+            .repeat(32)}`;
+          const hour = (index + 1).toString().padStart(2, '0');
+          return {
+            effective_version: effectiveVersion,
+            declared_version_first: `${index + 1}.0.0`,
+            declared_version_latest: `abcd${String(index + 1).padStart(4, '0')}-1111-2222-3333-444444444444`,
+            first_seen_at: `2026-03-04T${hour}:00:00Z`,
+            last_seen_at: `2026-03-04T${hour}:30:00Z`,
+            generation_count: index + 1,
+            tool_count: 2,
+            system_prompt_prefix: `prompt ${index + 1}`,
+            token_estimate: { system_prompt: 120, tools_total: 75, total: 195 },
+          };
+        }),
+        next_cursor: '',
+      }),
+    } satisfies AgentsDataSource,
+  },
+};
