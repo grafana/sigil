@@ -81,10 +81,6 @@ export function useConversationData({
   );
 
   useEffect(() => {
-    conversationDataRef.current = conversationData;
-  }, [conversationData]);
-
-  useEffect(() => {
     requestVersionRef.current += 1;
     const requestVersion = requestVersionRef.current;
 
