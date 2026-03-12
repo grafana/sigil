@@ -971,7 +971,7 @@ def _tool_result_message(value: Any, *, tool_call_id: str, name: str, is_error: 
             name=name,
             content=rendered_content,
             content_json=content_json,
-            is_error=is_error if isinstance(is_error, bool) else None,
+            is_error=is_error if isinstance(is_error, bool) else False,
         ),
     )
     part.metadata.provider_type = "tool_result"
