@@ -1,6 +1,12 @@
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import { defaultAppPath as appPath, grafanaUrl, newAuthenticatedPage, repoRoot, worktreeName } from './grafana-playwright-auth.mjs';
+import {
+  defaultAppPath as appPath,
+  grafanaUrl,
+  newAuthenticatedPage,
+  repoRoot,
+  worktreeName,
+} from './grafana-playwright-auth.mjs';
 
 const screenshotDir = path.join(repoRoot, 'output', 'playwright');
 const screenshotName = `sigil-ui-proof-${worktreeName}-${new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-')}.png`;
@@ -14,7 +20,14 @@ async function main() {
   try {
     console.log(`open-app ${grafanaUrl}${appPath}`);
     await page.goto(`${grafanaUrl}${appPath}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
-    if (await page.locator('a,button').filter({ hasText: /^Sign in$/i }).first().isVisible().catch(() => false)) {
+    if (
+      await page
+        .locator('a,button')
+        .filter({ hasText: /^Sign in$/i })
+        .first()
+        .isVisible()
+        .catch(() => false)
+    ) {
       throw new Error('authentication did not stick; Sign in is still visible');
     }
     console.log('wait-for-heading Conversation activity');

@@ -30,7 +30,10 @@ async function ensureLoggedIn(page, appPath = defaultAppPath) {
 
   const usernameField = page.locator('input[name="user"]').first();
   const passwordField = page.locator('input[name="password"]').first();
-  const signInControl = page.locator('a,button').filter({ hasText: /^Sign in$/i }).first();
+  const signInControl = page
+    .locator('a,button')
+    .filter({ hasText: /^Sign in$/i })
+    .first();
 
   if (!(await usernameField.isVisible().catch(() => false)) && (await signInControl.isVisible().catch(() => false))) {
     await signInControl.click();
@@ -44,11 +47,7 @@ async function ensureLoggedIn(page, appPath = defaultAppPath) {
     await page.waitForTimeout(1000);
   }
 
-  await maybeClick(page, [
-    'button:has-text("Skip")',
-    'button:has-text("Skip for now")',
-    'a:has-text("Skip")',
-  ]);
+  await maybeClick(page, ['button:has-text("Skip")', 'button:has-text("Skip for now")', 'a:has-text("Skip")']);
 
   await page.waitForTimeout(1000);
 }

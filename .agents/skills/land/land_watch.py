@@ -119,25 +119,9 @@ async def get_review_comments(pr_number: int) -> list[dict[str, Any]]:
 
 
 async def get_reviews(pr_number: int) -> list[dict[str, Any]]:
-    page = 1
-    reviews: list[dict[str, Any]] = []
-    while True:
-        data = await run_gh(
-            "api",
-            "--method",
-            "GET",
-            f"repos/{{owner}}/{{repo}}/pulls/{pr_number}/reviews",
-            "-f",
-            "per_page=100",
-            "-f",
-            f"page={page}",
-        )
-        batch = json.loads(data)
-        if not batch:
-            break
-        reviews.extend(batch)
-        page += 1
-    return reviews
+    return await get_paginated_list(
+        f"repos/{{owner}}/{{repo}}/pulls/{pr_number}/reviews",
+    )
 
 
 async def get_check_runs(head_sha: str) -> list[dict[str, Any]]:
@@ -591,7 +575,11 @@ def raise_on_human_feedback(
         raise SystemExit(2)
 
 
-async def wait_for_codex(pr_number: int, checks_done: asyncio.Event) -> None:
+async def wait_for_codex(
+    pr_number: int,
+    head_sha: str,
+    checks_done: asyncio.Event,
+) -> None:
     print("Waiting for review feedback...", flush=True)
     while True:
         (
@@ -663,7 +651,9 @@ async def watch_pr() -> None:
         raise SystemExit(5)
     head_sha = pr.head_sha
     checks_done = asyncio.Event()
-    codex_task = asyncio.create_task(wait_for_codex(pr.number, checks_done))
+    codex_task = asyncio.create_task(
+        wait_for_codex(pr.number, head_sha, checks_done),
+    )
     checks_task = asyncio.create_task(wait_for_checks(head_sha, checks_done))
 
     async def head_monitor() -> None:

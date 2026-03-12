@@ -142,10 +142,13 @@ mise exec -- ./bin/symphony \
   /absolute/path/to/sigil/WORKFLOW.local.md
 ```
 
-For this repo checkout, that path is:
+For this repo checkout, render a local workflow file and pass its absolute path:
 
 ```bash
-/Users/cyriltovena/.superset/worktrees/sigil/cyriltovena/lightning-soybean/WORKFLOW.local.md
+cd /absolute/path/to/sigil
+SYMPHONY_LINEAR_PROJECT_SLUG=<your-project-slug> \
+  ./scripts/render-symphony-workflow.sh
+realpath WORKFLOW.local.md
 ```
 
 Suggested background run:
