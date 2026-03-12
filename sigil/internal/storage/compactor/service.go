@@ -13,11 +13,11 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
-	mysqlDriver "github.com/go-sql-driver/mysql"
 	"github.com/grafana/dskit/services"
 	"github.com/grafana/sigil/sigil/internal/config"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	"github.com/grafana/sigil/sigil/internal/storage"
+	mysqlstorage "github.com/grafana/sigil/sigil/internal/storage/mysql"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -473,7 +473,7 @@ func (s *Service) truncateCompactedWithRetry(
 			}
 			return deleted, limit, nil
 		}
-		if !isRetryableTruncateLockError(err) {
+		if !mysqlstorage.IsRetryableLockError(err) {
 			return 0, limit, err
 		}
 
@@ -537,24 +537,6 @@ func sleepWithContext(ctx context.Context, d time.Duration) error {
 	case <-timer.C:
 		return nil
 	}
-}
-
-func isRetryableTruncateLockError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	var mysqlErr *mysqlDriver.MySQLError
-	if errors.As(err, &mysqlErr) {
-		switch mysqlErr.Number {
-		case 1205, 1213:
-			return true
-		}
-	}
-
-	lower := strings.ToLower(err.Error())
-	return strings.Contains(lower, "deadlock found when trying to get lock") ||
-		strings.Contains(lower, "lock wait timeout exceeded")
 }
 
 func (s *Service) writeAndFinalize(ctx context.Context, tenantID string, rows []claimedRow) error {
