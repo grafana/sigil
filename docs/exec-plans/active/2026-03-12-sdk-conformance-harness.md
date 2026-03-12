@@ -39,15 +39,15 @@ The repo currently ships the Go core conformance harness entry point:
 
 - Local task: `mise run test:sdk:conformance`
 - Direct runner: `cd sdks/go && GOWORK=off go test ./sigil -run '^TestConformance' -count=1`
-- Current covered scenarios: conversation title semantics, user ID semantics, agent identity semantics, streaming mode semantics, tool execution semantics, embedding semantics, validation/error semantics, rating submission semantics, shutdown flush semantics
+- Current covered scenarios: full generation roundtrip, conversation title semantics, user ID semantics, agent identity semantics, streaming mode semantics, tool execution semantics, embedding semantics, validation/error semantics, rating submission semantics, shutdown flush semantics
 - Current assertion targets in active use: generation export proto, OTLP spans, OTLP metrics
 
 ### SDK fixes discovered during implementation
 
 (Updated as issues are found.)
 
-- [x] Added `cache_creation_input_tokens` to the generation ingest protobuf contract and regenerated the Go SDK/server bindings so full usage roundtrip coverage can assert all six token counters.
-- [x] Synced the checked-in JS proto copy and regenerated the Go protobuf bindings so `ToolDefinition.deferred` is present in the conformance ingest schema used by the Go SDK harness.
+- Added `cache_creation_input_tokens` to the generation ingest proto and Go SDK proto mapping so the full roundtrip export preserves the complete token usage payload.
+- Synced the checked-in JS proto copy and regenerated the Go protobuf bindings so `ToolDefinition.deferred` is present in the conformance ingest schema used by the Go SDK harness.
 
 ## Phase A: Go core SDK
 
@@ -122,30 +122,44 @@ The repo currently ships the Go core conformance harness entry point:
 
 Test that each Go provider mapper correctly transforms provider request/response into the normalized `Generation` shape.
 
-### Per provider (openai, anthropic, gemini)
+### Current shipped baseline
 
-- [ ] `sdks/go-providers/openai/conformance_test.go`
-  - [ ] Sync request/response mapping (all fields)
-  - [ ] Streaming mapping (accumulated output, mode=STREAM)
-  - [ ] Thinking/reasoning content -> ThinkingPart
-  - [ ] Tool calls -> ToolCallPart with correct ID, name, input JSON
-  - [ ] Usage mapping (all token types including provider-specific: cache, reasoning)
-  - [ ] Stop reason mapping
-  - [ ] Error response mapping -> SetCallError with correct error type/category
-  - [ ] Artifact capture (opt-in: request, response, tools, events)
-  - [ ] Embedding mapping -> EmbeddingResult
-- [ ] `sdks/go-providers/anthropic/conformance_test.go`
-  - [ ] Sync request/response mapping (all fields)
-  - [ ] Streaming mapping (accumulated output, mode=STREAM)
-  - [ ] Thinking content -> ThinkingPart
-  - [ ] Tool calls -> ToolCallPart with correct ID, name, input JSON
-  - [ ] Usage mapping (including Anthropic server-tool metadata)
-  - [ ] Stop reason mapping
-  - [ ] Error response mapping -> SetCallError with correct error type/category
-  - [ ] Artifact capture (opt-in: request, response, tools, events)
-  - [x] Embedding support gate -> explicit unsupported contract until Anthropic ships a native embeddings API in the official SDK surface
-- [ ] `sdks/go-providers/gemini/conformance_test.go` (same scenario list)
-- [ ] Extend `sdk-conformance-spec.md` with provider wrapper section
+- [x] `sdks/go-providers/openai/conformance_test.go`
+  - [x] Chat Completions sync normalization
+  - [x] Chat Completions stream normalization
+  - [x] Responses sync normalization
+  - [x] Responses stream normalization
+  - [x] Usage mapping (prompt/completion/total/cache/reasoning)
+  - [x] Stop reason mapping
+  - [x] Tool-call normalization
+  - [x] Raw artifact opt-in coverage
+  - [x] Explicit mapping-error coverage
+  - [x] Wrapper error semantics for provider failures and mapper failures
+- [x] `sdks/go-providers/anthropic/conformance_test.go`
+  - [x] Sync normalization with `ThinkingPart`
+  - [x] Streaming normalization with accumulated `ThinkingPart`
+  - [x] Usage mapping (input/output/cache/server-tool metadata)
+  - [x] Stop reason mapping
+  - [x] Tool-call normalization
+  - [x] Raw artifact opt-in coverage
+  - [x] Explicit mapping-error coverage
+  - [x] Wrapper error semantics for provider failures and mapper failures
+  - [x] Explicit embedding support gate coverage while the official Anthropic SDK/API surface lacks native embeddings
+- [x] `sdks/go-providers/gemini/conformance_test.go`
+  - [x] Sync normalization with `ThinkingPart`
+  - [x] Streaming normalization with accumulated `ThinkingPart`
+  - [x] Usage mapping (prompt/candidate/total/cache/reasoning/tool-use metadata)
+  - [x] Stop reason mapping
+  - [x] Tool-call normalization
+  - [x] Raw artifact opt-in coverage
+  - [x] Explicit mapping-error coverage
+  - [x] Wrapper error semantics for provider failures and mapper failures
+- [x] Extend `sdk-conformance-spec.md` with provider wrapper section
+
+### Remaining provider-wrapper scope
+
+- [ ] Wrapper error-to-span/category assertions with local fake ingest/span capture, if provider suites need to validate `SetCallError` transport semantics directly
+- [ ] Native provider-wrapper embedding conformance scenarios for Anthropic only if the official provider SDK/API surface later exposes a real embeddings operation
 
 ## Phase C: Go framework adapter (google-adk)
 

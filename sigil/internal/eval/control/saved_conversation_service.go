@@ -81,13 +81,35 @@ func WithManualDeleter(d ManualConversationDeleter) SavedConversationServiceOpti
 	return func(s *SavedConversationService) { s.manualDeleter = d }
 }
 
+// CollectionLister lists collections for a saved conversation.
+type CollectionLister interface {
+	ListCollectionsForSavedConversation(ctx context.Context, tenantID, savedID string) ([]evalpkg.Collection, error)
+}
+
+// CollectionMemberCleaner cleans up collection memberships for a saved conversation.
+type CollectionMemberCleaner interface {
+	DeleteCollectionMembersBySavedID(ctx context.Context, tenantID, savedID string) error
+}
+
+// WithCollectionMemberCleaner configures cascade cleanup of collection memberships.
+func WithCollectionMemberCleaner(c CollectionMemberCleaner) SavedConversationServiceOption {
+	return func(s *SavedConversationService) { s.collectionCleaner = c }
+}
+
 // SavedConversationService handles bookmarking telemetry conversations and creating
 // manual test conversations for evaluation.
 type SavedConversationService struct {
-	store         evalpkg.SavedConversationStore
-	convLookup    ConversationLookup
-	manualWriter  ManualConversationWriter
-	manualDeleter ManualConversationDeleter
+	store             evalpkg.SavedConversationStore
+	convLookup        ConversationLookup
+	manualWriter      ManualConversationWriter
+	manualDeleter     ManualConversationDeleter
+	collectionLister  CollectionLister
+	collectionCleaner CollectionMemberCleaner
+}
+
+// SetCollectionLister sets the collection lister for reverse lookup.
+func (s *SavedConversationService) SetCollectionLister(cl CollectionLister) {
+	s.collectionLister = cl
 }
 
 func (s *SavedConversationService) duplicateSavedConversationConflict(
@@ -346,6 +368,12 @@ func (s *SavedConversationService) DeleteSavedConversation(ctx context.Context, 
 	if existing.Source == evalpkg.SavedConversationSourceManual && s.manualDeleter != nil {
 		if err := s.manualDeleter.DeleteManualConversationData(ctx, trimmedTenantID, existing.ConversationID); err != nil {
 			return fmt.Errorf("delete manual conversation data: %w", err)
+		}
+	}
+
+	if s.collectionCleaner != nil {
+		if err := s.collectionCleaner.DeleteCollectionMembersBySavedID(ctx, trimmedTenantID, trimmedSavedID); err != nil {
+			return fmt.Errorf("delete collection memberships: %w", err)
 		}
 	}
 

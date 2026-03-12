@@ -11,11 +11,19 @@ audience: both
 Language-neutral specification of the currently shipped Sigil SDK conformance baseline.
 
 Reference implementation: Go (`sdks/go/sigil/conformance_test.go`, `package sigil_test`).
+Provider-wrapper reference implementations:
+
+- OpenAI: `sdks/go-providers/openai/conformance_test.go`
+- Anthropic: `sdks/go-providers/anthropic/conformance_test.go`
+- Gemini: `sdks/go-providers/gemini/conformance_test.go`
 
 Local entry points:
 
 - `mise run test:sdk:conformance`
 - `cd sdks/go && GOWORK=off go test ./sigil -run '^TestConformance' -count=1`
+- `cd sdks/go-providers/openai && GOWORK=off go test ./... -run '^TestConformance' -count=1`
+- `cd sdks/go-providers/anthropic && GOWORK=off go test ./... -run '^TestConformance' -count=1`
+- `cd sdks/go-providers/gemini && GOWORK=off go test ./... -run '^TestConformance' -count=1`
 
 Related docs:
 
@@ -25,7 +33,12 @@ Related docs:
 
 ## Current baseline
 
-The shipped Go harness currently covers nine core black-box scenarios:
+The shipped Go baseline now has two active layers:
+
+1. Core SDK conformance in `sdks/go/sigil`
+2. Provider-wrapper conformance in `sdks/go-providers/{openai,anthropic,gemini}`
+
+The current core scenario set covers nine black-box scenarios:
 
 1. Conversation title semantics
 2. User ID semantics
@@ -36,6 +49,28 @@ The shipped Go harness currently covers nine core black-box scenarios:
 7. Validation and error semantics
 8. Rating submission semantics
 9. Shutdown flush semantics
+
+The provider-wrapper layer verifies normalized `sigil.Generation` outputs directly from provider request/response fixtures. It runs with `go test` only and does not require Docker, a Sigil backend, or live provider access.
+
+The core SDK harness still covers the exported client API with local fake receivers. The provider-wrapper layer complements that by asserting mapper and wrapper behavior inside the provider modules.
+
+### Core SDK baseline
+
+The shipped Go core harness covers identity-resolution, validation/error, streaming, tool execution, embedding, rating, and shutdown-flush scenarios. This document only enumerates the scenario contracts that other SDKs are expected to replicate today.
+
+### Provider-wrapper baseline
+
+The shipped Go provider-wrapper baseline covers:
+
+- Sync normalization for OpenAI, Anthropic, and Gemini
+- Streaming normalization for OpenAI, Anthropic, and Gemini
+- Usage fields including provider-specific cache/reasoning metadata
+- Stop reason mapping
+- Tool call normalization
+- Thinking content normalization where the provider exposes it as content
+- Raw artifact capture behind explicit opt-in
+- Explicit mapping-error behavior for invalid response/stream inputs
+- Wrapper-level error semantics for provider failures and mapper failures without live providers
 
 Each scenario is executed through exported SDK entry points and validates behavior across the same localhost-only capture harness:
 
@@ -136,6 +171,50 @@ Additional scenario-family invariants:
 - Assert span attr `gen_ai.agent.version` is absent when the resolved version is empty.
 - Assert proto field `agent_name` equals the resolved name when present, otherwise empty.
 - Assert proto field `agent_version` equals the resolved version when present, otherwise empty.
+
+## Provider-wrapper scenarios
+
+### Common expectations
+
+Every provider-wrapper conformance suite should:
+
+- Use in-process request/response or stream fixtures only.
+- Assert the normalized `Generation` shape returned by the mapper.
+- Cover both sync and streaming code paths for the provider package.
+- Assert usage, stop reason, tool calls, and raw artifact opt-in behavior.
+- Assert mapping errors for malformed or missing provider responses/streams.
+- Assert wrapper-level error semantics without live provider access:
+  - provider call failures are returned unchanged
+  - mapper failures do not discard the native provider response
+
+### OpenAI provider baseline
+
+OpenAI has two normalization paths under test:
+
+- Chat Completions:
+  - sync mapping of text + tool calls, reasoning-enabled request controls, usage, stop reason, and request/response/tools artifacts
+  - streaming mapping of accumulated text + tool calls, usage, stop reason, and request/tools/provider-event artifacts
+- Responses API:
+  - sync mapping of text + tool calls, reasoning-enabled request controls, usage, stop reason, and request/response artifacts
+  - streaming mapping of accumulated text, stop reason, and request/provider-event artifacts
+
+OpenAI currently treats reasoning as controls/tokens rather than emitting a distinct `ThinkingPart`.
+
+### Anthropic provider baseline
+
+Anthropic message conformance covers:
+
+- sync mapping of text, `ThinkingPart`, tool calls, usage, stop reason, and request/response/tools artifacts
+- streaming mapping of accumulated `ThinkingPart`, accumulated text, accumulated tool-call JSON, usage, stop reason, and request/tools/provider-event artifacts
+- wrapper error semantics for provider failures and mapper failures
+
+### Gemini provider baseline
+
+Gemini generate-content conformance covers:
+
+- sync mapping of `ThinkingPart`, tool calls, text output, usage, stop reason, and request/response/tools artifacts
+- streaming mapping of accumulated `ThinkingPart`, tool calls, text output, usage, stop reason, and request/tools/provider-event artifacts
+- wrapper error semantics for provider failures and mapper failures
 
 ## Scenario 4: Streaming mode semantics and TTFT metrics
 

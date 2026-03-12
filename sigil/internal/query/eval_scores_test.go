@@ -29,6 +29,7 @@ func TestGetGenerationDetailForTenantIncludesLatestScores(t *testing.T) {
 					Value:            evalpkg.NumberValue(0.91),
 					EvaluatorID:      "sigil.helpfulness",
 					EvaluatorVersion: "2026-02-17",
+					Explanation:      "Score derived from rubric checks.",
 					CreatedAt:        time.Date(2026, 2, 17, 10, 0, 0, 0, time.UTC),
 				},
 			},
@@ -60,6 +61,10 @@ func TestGetGenerationDetailForTenantIncludesLatestScores(t *testing.T) {
 	numberValue, ok := valueRaw["number"].(float64)
 	if !ok || numberValue != 0.91 {
 		t.Fatalf("expected helpfulness value 0.91, got %#v", valueRaw)
+	}
+	explanation, ok := helpfulnessRaw["explanation"].(string)
+	if !ok || explanation != "Score derived from rubric checks." {
+		t.Fatalf("expected helpfulness explanation to be serialized, got %#v", helpfulnessRaw["explanation"])
 	}
 }
 
