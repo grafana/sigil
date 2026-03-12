@@ -62,10 +62,16 @@ export function useConversationData({
   const [nameResolvedModelCards, setNameResolvedModelCards] = useState<Map<string, ModelCard>>(new Map());
   const requestVersionRef = useRef<number>(0);
   const conversationDataRef = useRef<ConversationData | null>(null);
+  const loadingMoreGenerationsRef = useRef<boolean>(false);
 
   const applyConversationData = useCallback((nextData: ConversationData | null) => {
     conversationDataRef.current = nextData;
     setConversationData(nextData);
+  }, []);
+
+  const setLoadingMoreGenerationsState = useCallback((nextValue: boolean) => {
+    loadingMoreGenerationsRef.current = nextValue;
+    setLoadingMoreGenerations(nextValue);
   }, []);
 
   const mergeTraceResultIntoCurrent = useCallback(
@@ -89,7 +95,7 @@ export function useConversationData({
         applyConversationData(null);
         setLoading(false);
         setTracesLoading(false);
-        setLoadingMoreGenerations(false);
+        setLoadingMoreGenerationsState(false);
         setErrorMessage('');
         setLoadMoreErrorMessage('');
       });
@@ -99,7 +105,7 @@ export function useConversationData({
     queueMicrotask(() => {
       setLoading(true);
       setTracesLoading(false);
-      setLoadingMoreGenerations(false);
+      setLoadingMoreGenerationsState(false);
       setErrorMessage('');
       setLoadMoreErrorMessage('');
       applyConversationData(null);
@@ -137,16 +143,23 @@ export function useConversationData({
         setLoading(false);
         setTracesLoading(false);
       });
-  }, [applyConversationData, dataSource, conversationID, mergeTraceResultIntoCurrent, traceFetcher]);
+  }, [
+    applyConversationData,
+    dataSource,
+    conversationID,
+    mergeTraceResultIntoCurrent,
+    setLoadingMoreGenerationsState,
+    traceFetcher,
+  ]);
 
   const loadMoreGenerations = async () => {
     const current = conversationDataRef.current;
-    if (!current?.hasMoreGenerations || !current.nextGenerationsCursor || loadingMoreGenerations) {
+    if (!current?.hasMoreGenerations || !current.nextGenerationsCursor || loadingMoreGenerationsRef.current) {
       return;
     }
 
     const requestVersion = requestVersionRef.current;
-    setLoadingMoreGenerations(true);
+    setLoadingMoreGenerationsState(true);
     setLoadMoreErrorMessage('');
 
     try {
@@ -206,7 +219,7 @@ export function useConversationData({
       if (requestVersionRef.current !== requestVersion) {
         return;
       }
-      setLoadingMoreGenerations(false);
+      setLoadingMoreGenerationsState(false);
     }
   };
 

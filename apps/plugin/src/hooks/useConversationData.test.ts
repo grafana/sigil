@@ -242,7 +242,7 @@ describe('useConversationData', () => {
     await waitFor(() => {
       expect(result.current.loadingMoreGenerations).toBe(false);
       expect(result.current.conversationData?.hasMoreGenerations).toBe(false);
-      expect(result.current.allGenerations.map((generation) => generation.generation_id)).toEqual([
+      expect([...result.current.allGenerations.map((generation) => generation.generation_id)].sort()).toEqual([
         'gen-a',
         'gen-b',
         'gen-c',
@@ -334,7 +334,7 @@ describe('useConversationData', () => {
 
     await waitFor(() => {
       expect(result.current.loadingMoreGenerations).toBe(false);
-      expect(result.current.allGenerations.map((generation) => generation.generation_id)).toEqual([
+      expect([...result.current.allGenerations.map((generation) => generation.generation_id)].sort()).toEqual([
         'gen-a',
         'gen-b',
         'gen-c',
@@ -603,6 +603,129 @@ describe('useConversationData', () => {
       expect(result.current.conversationData?.hasMoreGenerations).toBe(false);
       expect(result.current.conversationData?.nextGenerationsCursor).toBeUndefined();
       expect(result.current.conversationData?.spans).toHaveLength(1);
+    });
+  });
+
+  it('deduplicates concurrent load-more invocations before state flushes', async () => {
+    let resolveOlderPage: ((value: unknown) => void) | undefined;
+    const dataSource: ConversationsDataSource = {
+      searchConversations: jest.fn(),
+      getConversationDetail: jest
+        .fn()
+        .mockResolvedValueOnce({
+          conversation_id: 'conv-1',
+          generation_count: 3,
+          first_generation_at: '2026-03-09T13:08:03Z',
+          last_generation_at: '2026-03-09T13:28:15Z',
+          generations: [
+            {
+              generation_id: 'gen-b',
+              conversation_id: 'conv-1',
+              trace_id: 'trace-b',
+              span_id: 'span-b',
+              created_at: '2026-03-09T13:18:03Z',
+            },
+            {
+              generation_id: 'gen-c',
+              conversation_id: 'conv-1',
+              trace_id: 'trace-c',
+              span_id: 'span-c',
+              created_at: '2026-03-09T13:28:15Z',
+            },
+          ],
+          has_more: true,
+          next_cursor: '20',
+          annotations: [],
+        })
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveOlderPage = resolve;
+            })
+        ),
+      getGeneration: jest.fn(),
+      getSearchTags: jest.fn(),
+      getSearchTagValues: jest.fn(),
+    };
+    const traceFetcher = jest.fn(async (traceID: string) => ({
+      resourceSpans: [
+        {
+          resource: { attributes: [{ key: 'service.name', value: { stringValue: 'svc' } }] },
+          scopeSpans: [
+            {
+              spans: [
+                {
+                  spanId: traceID.replace('trace', 'span'),
+                  parentSpanId: '',
+                  name: traceID,
+                  startTimeUnixNano: traceID === 'trace-b' ? '2000' : '3000',
+                  endTimeUnixNano: traceID === 'trace-b' ? '2500' : '3500',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    }));
+
+    const { result } = renderHook(() =>
+      useConversationData({
+        conversationID: 'conv-1',
+        dataSource,
+        traceFetcher,
+        modelCardClient,
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+      expect(result.current.tracesLoading).toBe(false);
+      expect(result.current.conversationData?.hasMoreGenerations).toBe(true);
+    });
+
+    let firstLoad: Promise<void>;
+    let secondLoad: Promise<void>;
+    await act(async () => {
+      firstLoad = result.current.loadMoreGenerations();
+      secondLoad = result.current.loadMoreGenerations();
+      await Promise.resolve();
+    });
+
+    expect(dataSource.getConversationDetail).toHaveBeenCalledTimes(2);
+    expect(dataSource.getConversationDetail).toHaveBeenNthCalledWith(2, 'conv-1', {
+      limit: 20,
+      cursor: '20',
+    });
+
+    await act(async () => {
+      resolveOlderPage?.({
+        conversation_id: 'conv-1',
+        generation_count: 3,
+        first_generation_at: '2026-03-09T13:08:03Z',
+        last_generation_at: '2026-03-09T13:28:15Z',
+        generations: [
+          {
+            generation_id: 'gen-a',
+            conversation_id: 'conv-1',
+            trace_id: 'trace-a',
+            span_id: 'span-a',
+            created_at: '2026-03-09T13:08:03Z',
+          },
+        ],
+        has_more: false,
+        annotations: [],
+      });
+      await Promise.all([firstLoad, secondLoad]);
+    });
+
+    await waitFor(() => {
+      expect(result.current.loadingMoreGenerations).toBe(false);
+      expect(result.current.conversationData?.hasMoreGenerations).toBe(false);
+      expect([...result.current.allGenerations.map((generation) => generation.generation_id)].sort()).toEqual([
+        'gen-a',
+        'gen-b',
+        'gen-c',
+      ]);
     });
   });
 });
