@@ -131,7 +131,7 @@ export function sortSavedConversationsNewestFirst(conversations: SavedConversati
     .map((conversation, index) => ({ conversation, index }))
     .sort((left, right) => {
       const timestampDiff = toTimestamp(right.conversation.created_at) - toTimestamp(left.conversation.created_at);
-      if (timestampDiff !== 0) {
+      if (timestampDiff !== 0 && !Number.isNaN(timestampDiff)) {
         return timestampDiff;
       }
       return left.index - right.index;
