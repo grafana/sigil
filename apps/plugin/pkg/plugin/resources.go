@@ -1366,17 +1366,23 @@ func (a *App) handleSearchConversations(w http.ResponseWriter, req *http.Request
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if handled, err := a.tryProxySearchRequest(w, req, "/api/v1/conversations/search"); handled {
-		if err != nil {
-			a.writeSearchError(w, "/query/conversations/search", err)
-		}
-		return
-	}
-
 	payload, err := decodeConversationSearchRequest(req)
 	if err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
+	}
+	bypassUpstream, err := shouldBypassUpstreamConversationSearch(payload)
+	if err != nil {
+		a.writeSearchError(w, "/query/conversations/search", err)
+		return
+	}
+	if !bypassUpstream {
+		if handled, err := a.tryProxySearchRequest(w, req, "/api/v1/conversations/search"); handled {
+			if err != nil {
+				a.writeSearchError(w, "/query/conversations/search", err)
+			}
+			return
+		}
 	}
 	needsTempo, err := conversationSearchNeedsTempo(payload)
 	if err != nil {
@@ -1405,12 +1411,6 @@ func (a *App) handleSearchConversationsStream(w http.ResponseWriter, req *http.R
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if handled, err := a.tryProxyStreamingSearchRequest(w, req, "/api/v1/conversations/search/stream"); handled {
-		if err != nil {
-			a.writeSearchError(w, "/query/conversations/search/stream", err)
-		}
-		return
-	}
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -1422,6 +1422,19 @@ func (a *App) handleSearchConversationsStream(w http.ResponseWriter, req *http.R
 	if err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
+	}
+	bypassUpstream, err := shouldBypassUpstreamConversationSearch(payload)
+	if err != nil {
+		a.writeSearchError(w, "/query/conversations/search/stream", err)
+		return
+	}
+	if !bypassUpstream {
+		if handled, err := a.tryProxyStreamingSearchRequest(w, req, "/api/v1/conversations/search/stream"); handled {
+			if err != nil {
+				a.writeSearchError(w, "/query/conversations/search/stream", err)
+			}
+			return
+		}
 	}
 	needsTempo, err := conversationSearchNeedsTempo(payload)
 	if err != nil {
@@ -1480,17 +1493,23 @@ func (a *App) handleConversationStats(w http.ResponseWriter, req *http.Request) 
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if handled, err := a.tryProxySearchRequest(w, req, "/api/v1/conversations/stats"); handled {
-		if err != nil {
-			a.writeSearchError(w, "/query/conversations/stats", err)
-		}
-		return
-	}
-
 	payload, err := decodeConversationSearchRequest(req)
 	if err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
+	}
+	bypassUpstream, err := shouldBypassUpstreamConversationSearch(payload)
+	if err != nil {
+		a.writeSearchError(w, "/query/conversations/stats", err)
+		return
+	}
+	if !bypassUpstream {
+		if handled, err := a.tryProxySearchRequest(w, req, "/api/v1/conversations/stats"); handled {
+			if err != nil {
+				a.writeSearchError(w, "/query/conversations/stats", err)
+			}
+			return
+		}
 	}
 	needsTempo, err := conversationSearchNeedsTempo(payload)
 	if err != nil {
@@ -1968,6 +1987,20 @@ func conversationSearchNeedsTempo(payload conversationSearchRequest) (bool, erro
 	return true, nil
 }
 
+func shouldBypassUpstreamConversationSearch(payload conversationSearchRequest) (bool, error) {
+	parsedFilters, err := searchcore.ParseFilterExpression(payload.Filters)
+	if err != nil {
+		return false, newSearchValidationError(err.Error())
+	}
+	for _, term := range parsedFilters.TempoTerms {
+		key := strings.TrimSpace(term.RawKey)
+		if strings.HasPrefix(key, "span.") || strings.HasPrefix(key, "resource.") {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func canFallbackProjectionSearchError(err error) bool {
 	upstreamErr := (*upstreamHTTPError)(nil)
 	if !errors.As(err, &upstreamErr) {
@@ -1987,9 +2020,16 @@ func decodeConversationSearchRequest(req *http.Request) (conversationSearchReque
 		return payload, nil
 	}
 
-	decoder := json.NewDecoder(req.Body)
-	if err := decoder.Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
 		return conversationSearchRequest{}, err
+	}
+	req.Body = io.NopCloser(bytes.NewReader(body))
+
+	if len(body) > 0 {
+		if err := json.Unmarshal(body, &payload); err != nil {
+			return conversationSearchRequest{}, err
+		}
 	}
 	return payload, nil
 }

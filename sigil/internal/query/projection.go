@@ -37,6 +37,15 @@ func (s *Service) ListConversationProjectionPageForTenant(
 			ExcludeConversationIDs: searchcore.DedupeAndSortStrings(excludeConversationIDs),
 		})
 		if err != nil {
+			s.errorLog(
+				"conversation_projection_page_load_failed",
+				"tenant_id", trimmedTenantID,
+				"from_unix", from.UTC().Unix(),
+				"to_unix", to.UTC().Unix(),
+				"limit", pageSize,
+				"exclude_count", len(excludeConversationIDs),
+				"err", err.Error(),
+			)
 			return nil, false, err
 		}
 		items, err := s.toConversationBatchMetadataPage(ctx, trimmedTenantID, rows)
@@ -72,6 +81,12 @@ func (s *Service) toConversationBatchMetadataPage(
 	if s.evalSummaryStore != nil {
 		summaries, err := s.evalSummaryStore.ListConversationEvalSummaries(ctx, tenantID, conversationIDs)
 		if err != nil {
+			s.errorLog(
+				"conversation_projection_eval_summary_load_failed",
+				"tenant_id", tenantID,
+				"requested_conversation_count", len(conversationIDs),
+				"err", err.Error(),
+			)
 			return nil, err
 		}
 		evalSummaries = summaries
@@ -133,6 +148,15 @@ func (s *Service) listConversationProjectionPageFallback(
 
 	rows, err := s.conversationStore.ListConversations(ctx, tenantID)
 	if err != nil {
+		s.errorLog(
+			"conversation_projection_fallback_list_failed",
+			"tenant_id", tenantID,
+			"from_unix", from.UTC().Unix(),
+			"to_unix", to.UTC().Unix(),
+			"limit", limit,
+			"exclude_count", len(excludeConversationIDs),
+			"err", err.Error(),
+		)
 		return nil, false, err
 	}
 

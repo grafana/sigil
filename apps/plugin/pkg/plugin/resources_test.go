@@ -1255,6 +1255,75 @@ func TestCallResourceStreamsConversationSearchFallbackUsesTempoWhenBackendStream
 	}
 }
 
+func TestCallResourceStreamsConversationSearchBypassesBackendProxyForRawTempoFilters(t *testing.T) {
+	streamRequests := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/conversations/search/stream":
+			streamRequests++
+			http.Error(w, `unknown filter key "resource.k8s.namespace.name"`, http.StatusBadRequest)
+		case "/api/datasources/proxy/uid/tempo/api/search":
+			_, _ = io.WriteString(w, buildTempoSearchResponse([]tempoSearchTraceFixture{
+				{
+					TraceID:           "trace-1",
+					StartTimeUnixNano: "1739610600000000000",
+					ConversationID:    "conv-1",
+					GenerationID:      "gen-1a",
+				},
+			}))
+		case "/api/v1/conversations:batch-metadata":
+			_, _ = io.WriteString(w, `{"items":[
+				{"conversation_id":"conv-1","conversation_title":"Namespace route","generation_count":1,"first_generation_at":"2025-02-15T08:00:00Z","last_generation_at":"2025-02-15T08:10:00Z","annotation_count":0}
+			],"missing_conversation_ids":[]}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+	app.apiURL = upstream.URL
+	app.grafanaAppURL = upstream.URL
+	app.grafanaServiceAccountToken = "sa-token"
+	app.tempoDatasourceUID = "tempo"
+
+	responses := callResourceStreamWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodPost,
+		Path:   "query/conversations/search/stream",
+		Body:   []byte(`{"filters":"resource.k8s.namespace.name = \"assistant\"","select":[],"time_range":{"from":"2025-02-15T07:00:00Z","to":"2025-02-15T10:00:00Z"},"page_size":10}`),
+	})
+	if len(responses) == 0 {
+		t.Fatal("expected streamed responses")
+	}
+	if streamRequests != 0 {
+		t.Fatalf("expected raw tempo filters to bypass backend stream proxy, got %d backend requests", streamRequests)
+	}
+
+	combinedBody := make([]byte, 0)
+	for _, response := range responses {
+		combinedBody = append(combinedBody, response.Body...)
+	}
+
+	lines := bytes.Split(bytes.TrimSpace(combinedBody), []byte("\n"))
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 ndjson stream lines, got %d body=%s", len(lines), string(combinedBody))
+	}
+
+	var first conversationSearchStreamResultsEvent
+	if err := json.Unmarshal(bytes.TrimSpace(lines[0]), &first); err != nil {
+		t.Fatalf("decode first stream chunk: %v", err)
+	}
+	if len(first.Conversations) != 1 || first.Conversations[0].ConversationID != "conv-1" {
+		t.Fatalf("expected local fallback result for raw tempo filter, got %+v", first.Conversations)
+	}
+}
+
 func TestCallResourceStreamsConversationSearchResultsAcrossMetadataChunks(t *testing.T) {
 	fixtures := make([]tempoSearchTraceFixture, 0, conversationSearchMetadataChunkSize+1)
 	for i := 0; i < conversationSearchMetadataChunkSize+1; i++ {
@@ -1599,6 +1668,78 @@ func TestCallResourceConversationStatsFallsBackToTempoSearchWhenBackendStatsUnsu
 	}
 	if stats.BadRatedPct != 100 {
 		t.Fatalf("expected bad rated pct 100, got %f", stats.BadRatedPct)
+	}
+}
+
+func TestCallResourceConversationStatsBypassesBackendProxyForRawTempoFilters(t *testing.T) {
+	statsRequests := 0
+	tempoRequests := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/conversations/stats":
+			statsRequests++
+			http.Error(w, `unknown filter key "resource.k8s.namespace.name"`, http.StatusBadRequest)
+		case "/api/datasources/proxy/uid/tempo/api/search":
+			tempoRequests++
+			switch tempoRequests {
+			case 1:
+				_, _ = io.WriteString(w, buildTempoSearchResponse([]tempoSearchTraceFixture{
+					{
+						TraceID:           "trace-1",
+						StartTimeUnixNano: "1739609400000000000",
+						ConversationID:    "conv-1",
+						GenerationID:      "gen-1a",
+					},
+				}))
+			default:
+				_, _ = io.WriteString(w, `{"traces":[]}`)
+			}
+		case "/api/v1/conversations:batch-metadata":
+			_, _ = io.WriteString(w, `{"items":[
+				{"conversation_id":"conv-1","conversation_title":"Namespace route","generation_count":1,"first_generation_at":"2025-02-15T08:00:00Z","last_generation_at":"2025-02-15T08:10:00Z","annotation_count":0}
+			],"missing_conversation_ids":[]}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+	app.apiURL = upstream.URL
+	app.grafanaAppURL = upstream.URL
+	app.grafanaServiceAccountToken = "sa-token"
+	app.tempoDatasourceUID = "tempo"
+
+	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodPost,
+		Path:   "query/conversations/stats",
+		Body: []byte(`{
+			"filters":"resource.k8s.namespace.name = \"assistant\"",
+			"time_range":{"from":"2025-02-15T07:00:00Z","to":"2025-02-15T10:00:00Z"}
+		}`),
+	})
+	if response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, response.Status, response.Body)
+	}
+	if statsRequests != 0 {
+		t.Fatalf("expected raw tempo filters to bypass backend stats proxy, got %d backend requests", statsRequests)
+	}
+	if tempoRequests == 0 {
+		t.Fatal("expected local tempo search to run for raw tempo filters")
+	}
+
+	var stats conversationStatsResponse
+	if err := json.Unmarshal(bytes.TrimSpace(response.Body), &stats); err != nil {
+		t.Fatalf("decode stats response: %v", err)
+	}
+	if stats.TotalConversations != 1 {
+		t.Fatalf("expected 1 conversation, got %d", stats.TotalConversations)
 	}
 }
 
@@ -2545,7 +2686,7 @@ func TestCallResourceSearchErrorDecompressesGzippedUpstreamBody(t *testing.T) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusBadRequest)
 		gz := gzip.NewWriter(w)
-		_, _ = gz.Write([]byte("unknown filter key \"resource.k8s.namespace.name\""))
+		_, _ = gz.Write([]byte("backend exploded"))
 		_ = gz.Close()
 	}))
 	defer upstream.Close()
@@ -2562,14 +2703,14 @@ func TestCallResourceSearchErrorDecompressesGzippedUpstreamBody(t *testing.T) {
 		Method: http.MethodPost,
 		Path:   "query/conversations/stats",
 		Body: []byte(`{
-			"filters":"resource.k8s.namespace.name = \"prod\"",
+			"filters":"provider = \"openai\"",
 			"time_range":{"from":"2026-03-11T10:00:00Z","to":"2026-03-11T11:00:00Z"}
 		}`),
 	})
 	if sender.Status != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d body=%s", http.StatusBadRequest, sender.Status, sender.Body)
 	}
-	if string(sender.Body) != "unknown filter key \"resource.k8s.namespace.name\"\n" {
+	if string(sender.Body) != "backend exploded\n" {
 		t.Fatalf("expected decompressed error body, got %q", string(sender.Body))
 	}
 }
@@ -2962,5 +3103,23 @@ func TestCallResourceSettingsRoutesProxyToSigil(t *testing.T) {
 	})
 	if sender.Status != http.StatusOK {
 		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)
+	}
+}
+
+func TestDecodeConversationSearchRequestPreservesBody(t *testing.T) {
+	payload := `{"timeRange":{"from":"2025-01-01T00:00:00Z","to":"2025-01-02T00:00:00Z"}}`
+	req := httptest.NewRequest(http.MethodPost, "/query/conversations/search", strings.NewReader(payload))
+
+	_, err := decodeConversationSearchRequest(req)
+	if err != nil {
+		t.Fatalf("unexpected decode error: %v", err)
+	}
+
+	remaining, err := io.ReadAll(req.Body)
+	if err != nil {
+		t.Fatalf("unexpected error reading body after decode: %v", err)
+	}
+	if string(remaining) != payload {
+		t.Fatalf("body not preserved after decode: got %q, want %q", string(remaining), payload)
 	}
 }
