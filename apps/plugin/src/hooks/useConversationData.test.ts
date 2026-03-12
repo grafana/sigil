@@ -907,6 +907,7 @@ describe('useConversationData', () => {
 
     await waitFor(() => {
       expect(result.current.conversationData?.spans.some((span) => span.spanID === 'span-b')).toBe(true);
+      expect(result.current.conversationData?.hasMoreGenerations).toBe(false);
     });
   });
 });
