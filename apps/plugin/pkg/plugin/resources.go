@@ -2020,9 +2020,16 @@ func decodeConversationSearchRequest(req *http.Request) (conversationSearchReque
 		return payload, nil
 	}
 
-	decoder := json.NewDecoder(req.Body)
-	if err := decoder.Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
 		return conversationSearchRequest{}, err
+	}
+	req.Body = io.NopCloser(bytes.NewReader(body))
+
+	if len(body) > 0 {
+		if err := json.Unmarshal(body, &payload); err != nil {
+			return conversationSearchRequest{}, err
+		}
 	}
 	return payload, nil
 }

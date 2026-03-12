@@ -238,6 +238,16 @@ func (w *panicRecoveryResponseWriter) Write(p []byte) (int, error) {
 	return w.ResponseWriter.Write(p)
 }
 
+func (w *panicRecoveryResponseWriter) Flush() {
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+func (w *panicRecoveryResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
 func recoverHTTPPanics(next http.Handler) http.Handler {
 	if next == nil {
 		return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})

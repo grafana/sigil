@@ -3105,3 +3105,21 @@ func TestCallResourceSettingsRoutesProxyToSigil(t *testing.T) {
 		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, sender.Status, sender.Body)
 	}
 }
+
+func TestDecodeConversationSearchRequestPreservesBody(t *testing.T) {
+	payload := `{"timeRange":{"from":"2025-01-01T00:00:00Z","to":"2025-01-02T00:00:00Z"}}`
+	req := httptest.NewRequest(http.MethodPost, "/query/conversations/search", strings.NewReader(payload))
+
+	_, err := decodeConversationSearchRequest(req)
+	if err != nil {
+		t.Fatalf("unexpected decode error: %v", err)
+	}
+
+	remaining, err := io.ReadAll(req.Body)
+	if err != nil {
+		t.Fatalf("unexpected error reading body after decode: %v", err)
+	}
+	if string(remaining) != payload {
+		t.Fatalf("body not preserved after decode: got %q, want %q", string(remaining), payload)
+	}
+}
