@@ -122,7 +122,7 @@ Files:
 
 ---
 
-- [ ] **2.1 Write the failing test**
+- [x] **2.1 Write the failing test**
 
 Create `apps/plugin/src/components/saved-conversations/CollectionFormModal.test.tsx`:
 
@@ -182,7 +182,7 @@ describe('CollectionFormModal', () => {
 });
 ```
 
-- [ ] **2.2 Run the test to confirm it fails**
+- [x] **2.2 Run the test to confirm it fails**
 
 ```bash
 cd apps/plugin && pnpm exec jest --testPathPattern=CollectionFormModal --watchAll=false 2>&1 | tail -20
@@ -190,7 +190,7 @@ cd apps/plugin && pnpm exec jest --testPathPattern=CollectionFormModal --watchAl
 
 Expected: FAIL — `CollectionFormModal` not found.
 
-- [ ] **2.3 Implement CollectionFormModal**
+- [x] **2.3 Implement CollectionFormModal**
 
 Create `apps/plugin/src/components/saved-conversations/CollectionFormModal.tsx`:
 
@@ -314,7 +314,7 @@ export function CollectionFormModal({ isOpen, onSubmit, onClose }: CollectionFor
 }
 ```
 
-- [ ] **2.4 Run tests to confirm they pass**
+- [x] **2.4 Run tests to confirm they pass**
 
 ```bash
 cd apps/plugin && pnpm exec jest --testPathPattern=CollectionFormModal --watchAll=false 2>&1 | tail -20
@@ -322,7 +322,7 @@ cd apps/plugin && pnpm exec jest --testPathPattern=CollectionFormModal --watchAl
 
 Expected: PASS — 5 tests pass.
 
-- [ ] **2.5 Write Storybook story**
+- [x] **2.5 Write Storybook story**
 
 Create `apps/plugin/src/stories/saved-conversations/CollectionFormModal.stories.tsx`:
 
@@ -355,7 +355,7 @@ export const Submitting: Story = {
 };
 ```
 
-- [ ] **2.6 Commit**
+- [x] **2.6 Commit**
 
 ```bash
 git add apps/plugin/src/components/saved-conversations/CollectionFormModal.tsx \
