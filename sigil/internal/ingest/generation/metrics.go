@@ -10,6 +10,8 @@ import (
 )
 
 var (
+	generationUnknownLabel = "unknown"
+
 	generationIngestBatchSize = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "sigil_ingest_generation_batch_size",
 		Help:    "Generation ingest batch size by transport.",
@@ -32,7 +34,7 @@ func withTransport(ctx context.Context, transport string) context.Context {
 
 func transportFromContext(ctx context.Context) string {
 	if ctx == nil {
-		return "unknown"
+		return generationUnknownLabel
 	}
 	value, _ := ctx.Value(generationTransportContextKey{}).(string)
 	return metriclabels.Transport(value)
@@ -66,6 +68,6 @@ func generationModeLabel(mode sigilv1.GenerationMode) string {
 	case sigilv1.GenerationMode_GENERATION_MODE_STREAM:
 		return "stream"
 	default:
-		return "unknown"
+		return generationUnknownLabel
 	}
 }
