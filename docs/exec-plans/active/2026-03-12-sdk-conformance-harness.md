@@ -45,14 +45,14 @@ Building conformance tests against the real public API will surface issues that 
 
 - [x] Add `conformance_helpers_test.go` (`package sigil_test`):
   - [x] `conformanceEnv` struct wiring `sigil.Client` to all four capture targets
-  - [ ] `newConformanceEnv(t, ...opts)` constructor with functional options
+  - [x] `newConformanceEnv(t, ...opts)` constructor with functional options
   - [x] `fakeIngestServer` implementing `GenerationIngestServiceServer` on `127.0.0.1:0`
   - [x] `fakeRatingServer` wrapping `httptest.Server` with request capture
   - [x] OTel `tracetest.SpanRecorder` + `sdktrace.TracerProvider` setup
   - [x] OTel `sdkmetric.ManualReader` + `sdkmetric.MeterProvider` setup
   - [ ] Optional `resource.Resource` injection for OTLP resource attribute scenarios
   - [x] Span assertion helpers: `findSpan`, `spanAttrs`, `requireSpanAttr`, `requireSpanAttrAbsent`
-  - [ ] Metric assertion helpers: `findHistogram`, `requireNoHistogram`
+  - [x] Metric assertion helpers: `findHistogram`, `requireNoHistogram`
   - [x] Proto assertion helpers: `requireProtoMetadata`, `requireProtoMetadataAbsent`
 
 ### A2: Core scenarios (generation identity and resolution chains)
@@ -90,14 +90,14 @@ Building conformance tests against the real public API will surface issues that 
 - [ ] Scenario 5: SDK identity protection (`sigil.sdk.name` overwrite)
 - [ ] Scenario 6: Tags and metadata merge (start + result, conflict resolution)
 - [ ] Scenario 7: Resource attributes on OTLP spans
-- [ ] Scenario 8: Streaming mode (mode, operation name, TTFT metric)
-- [ ] Scenario 9: Tool execution (span shape, attributes, metrics, context propagation)
-- [ ] Scenario 10: Embedding (span, metrics, no generation export)
-- [ ] Scenario 11: Validation and error semantics
-  - [ ] Invalid generation: no export, ErrValidationFailed
-  - [ ] SetCallError: error span attributes, metric labels
-- [ ] Scenario 12: Rating helper (request shape, auth headers, response parsing)
-- [ ] Scenario 13: Shutdown flushes pending generation
+- [x] Scenario 8: Streaming mode (mode, operation name, TTFT metric)
+- [x] Scenario 9: Tool execution (span shape, attributes, metrics, context propagation)
+- [x] Scenario 10: Embedding (span, metrics, no generation export)
+- [x] Scenario 11: Validation and error semantics
+  - [x] Invalid generation: no export, ErrValidationFailed
+  - [x] SetCallError: error span attributes, metric labels
+- [x] Scenario 12: Rating helper (request shape, auth headers, response parsing)
+- [x] Scenario 13: Shutdown flushes pending generation
 
 ### A4: Spec and docs
 
