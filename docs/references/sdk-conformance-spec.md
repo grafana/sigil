@@ -25,19 +25,24 @@ Related docs:
 
 ## Current baseline
 
-The shipped Go harness currently covers three core identity-resolution scenarios:
+The shipped Go harness currently covers nine core black-box scenarios:
 
 1. Conversation title semantics
 2. User ID semantics
 3. Agent identity semantics
+4. Streaming mode semantics and TTFT metrics
+5. Tool execution semantics
+6. Embedding semantics
+7. Validation and error semantics
+8. Rating submission semantics
+9. Shutdown flush semantics
 
-Each scenario is executed through the public SDK API and validates the same behavior across:
+Each scenario is executed through exported SDK entry points and validates behavior across the same localhost-only capture harness:
 
 - generation export payloads captured from a fake local gRPC ingest server
 - OTLP spans captured with the SDK's in-memory span recorder
 - OTLP metrics captured with the SDK's in-memory metric reader
-
-The harness also provisions a fake rating HTTP server, but rating requests are not part of the active baseline yet.
+- HTTP rating requests captured from a fake local API server when the scenario exercises ratings
 
 ## Harness requirements
 
@@ -57,16 +62,24 @@ Every SDK conformance runner that implements this baseline must provide:
 - "Assert span attr `X` absent" means the captured span does not contain attribute `X`.
 - "Assert metric `M` has data" means the named histogram has at least one data point.
 - "Assert metric `M` absent" means the named histogram is not emitted for the scenario.
+- "Assert no generation export" means the fake ingest server received zero generation export requests for the scenario.
+- "Assert rating request `P`" means the fake rating server observed an HTTP request on path `P`.
 
-## Common invariants for the current baseline
+## Common invariants for generation scenarios
 
-These assertions apply to every currently shipped scenario:
+These assertions apply to the sync generation scenarios in the current baseline (conversation title, user ID, agent identity, validation, shutdown flush):
 
 - Use the SDK's sync generation entry point.
 - Assert `gen_ai.operation.name = "generateText"` on the generation span.
 - Assert `gen_ai.client.operation.duration` has data.
 - Assert `gen_ai.client.time_to_first_token` is absent.
 - Shutdown the client before reading captured generation payloads.
+
+Additional scenario-family invariants:
+
+- Streaming uses the SDK's streaming generation entry point, emits `gen_ai.operation.name = "streamText"`, and records `gen_ai.client.time_to_first_token`.
+- Tool execution and embeddings use their dedicated SDK entry points, emit OTel spans and metrics, and do not enqueue generation export payloads.
+- Rating submission uses the SDK's HTTP rating helper and does not depend on generation export capture.
 
 ## Scenario 1: Conversation title semantics
 
@@ -124,6 +137,96 @@ These assertions apply to every currently shipped scenario:
 - Assert proto field `agent_name` equals the resolved name when present, otherwise empty.
 - Assert proto field `agent_version` equals the resolved version when present, otherwise empty.
 
+## Scenario 4: Streaming mode semantics and TTFT metrics
+
+### Setup
+
+- Start a streaming generation through the SDK's streaming entry point.
+- Record first-token timing before ending the recorder.
+- End with a single assistant text output and token usage.
+
+### Expected behavior
+
+- Assert `gen_ai.client.operation.duration` has data.
+- Assert `gen_ai.client.time_to_first_token` has data.
+- Assert proto field `mode = GENERATION_MODE_STREAM`.
+- Assert proto field `operation_name = "streamText"`.
+- Assert the exported output preserves the stitched assistant text.
+- Assert the recorded span name is `streamText <model>`.
+
+## Scenario 5: Tool execution semantics
+
+### Setup
+
+- Start tool execution through the dedicated SDK entry point with tool identity, conversation identity, and agent identity.
+- End with structured arguments and structured tool result content.
+
+### Expected behavior
+
+- Assert `gen_ai.client.operation.duration` has data.
+- Assert `gen_ai.client.time_to_first_token` is absent.
+- Assert no generation export.
+- Assert span attrs for tool name, tool call ID, tool type, tool call arguments, tool call result, conversation title, agent name, and agent version.
+
+## Scenario 6: Embedding semantics
+
+### Setup
+
+- Start an embedding operation through the dedicated SDK entry point with explicit dimensions and encoding format.
+- End with embedding result metadata including input count, input tokens, response model, and dimensions.
+
+### Expected behavior
+
+- Assert `gen_ai.client.operation.duration` has data.
+- Assert `gen_ai.client.token.usage` has data.
+- Assert `gen_ai.client.time_to_first_token` is absent.
+- Assert `gen_ai.client.tool_calls_per_operation` is absent.
+- Assert no generation export.
+- Assert span attrs for agent identity, embedding input count, and embedding dimension count.
+
+## Scenario 7: Validation and error semantics
+
+### Setup matrix
+
+| Case | Entry point | Result | Expected local error | Expected export |
+|---|---|---|---|---|
+| invalid generation | sync generation | invalid input message shape | `ErrValidationFailed` | none |
+| provider call error | sync generation | `SetCallError("provider unavailable")` | nil | one generation payload with call error |
+
+### Expected behavior
+
+- Invalid generations fail locally with `ErrValidationFailed`.
+- Invalid generations record span attr `error.type = "validation_error"` and do not export a generation payload.
+- Provider call errors record span attr `error.type = "provider_call_error"`.
+- Provider call errors export proto field `call_error` and metadata key `call_error` with the provider error message.
+
+## Scenario 8: Rating submission semantics
+
+### Setup
+
+- Submit a conversation rating through the SDK's rating helper with rating ID, rating value, comment, and metadata.
+
+### Expected behavior
+
+- Assert rating request `/api/v1/conversations/{conversation_id}/ratings`.
+- Assert the request method is `POST`.
+- Assert the request body preserves rating ID, rating value, comment, and metadata fields.
+- Assert the SDK parses and returns the rating response payload.
+
+## Scenario 9: Shutdown flush semantics
+
+### Setup
+
+- Configure generation export batching so a single generation remains queued before the flush interval.
+- Record one sync generation and assert that no export happened yet.
+- Call `Shutdown`.
+
+### Expected behavior
+
+- Assert no generation export before `Shutdown`.
+- Assert exactly one generation export after `Shutdown`.
+- Assert the flushed generation payload matches the recorded conversation identity.
+
 ## Extending the spec
 
-Future phases will extend this document with additional core, provider-wrapper, and framework-adapter scenarios. Until those phases land, this document is the authoritative baseline for the currently shipped Go conformance harness.
+Future phases will extend this document with the remaining core gaps (full roundtrip payload coverage, SDK identity protection, metadata/tag merge behavior, resource attributes) plus provider-wrapper and framework-adapter scenarios. Until those phases land, this document is the authoritative baseline for the currently shipped Go conformance harness.
