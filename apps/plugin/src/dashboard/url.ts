@@ -2,7 +2,7 @@ import type { TimeRange } from '@grafana/data';
 import { PLUGIN_BASE, ROUTES, buildToolAnalyticsRoute } from '../constants';
 import type { ConversationOrderBy, DashboardFilters, LabelFilter } from './types';
 
-function serializeRawTime(raw: string | { toISOString(): string }): string {
+export function serializeRawTime(raw: string | { toISOString(): string }): string {
   if (typeof raw === 'string') {
     return raw;
   }
