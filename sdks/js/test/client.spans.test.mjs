@@ -147,6 +147,35 @@ test('generation normalization trims only title and user fields', async () => {
   }
 });
 
+test('generation span reflects metadata fallback title and user id after normalization', async () => {
+  const harness = newHarness();
+
+  try {
+    const recorder = harness.client.startGeneration({
+      model: { provider: 'openai', name: 'gpt-5' },
+      metadata: {
+        'sigil.conversation.title': '  Meta title  ',
+        'user.id': '  legacy-user  ',
+      },
+    });
+    recorder.setResult({});
+    recorder.end();
+    assert.equal(recorder.getError(), undefined);
+
+    const generation = singleGeneration(harness.client);
+    assert.equal(generation.conversationTitle, 'Meta title');
+    assert.equal(generation.userId, 'legacy-user');
+    assert.equal(generation.metadata?.['sigil.conversation.title'], 'Meta title');
+    assert.equal(generation.metadata?.['sigil.user.id'], 'legacy-user');
+
+    const span = singleGenerationSpan(harness.spanExporter);
+    assert.equal(span.attributes['sigil.conversation.title'], 'Meta title');
+    assert.equal(span.attributes['user.id'], 'legacy-user');
+  } finally {
+    await shutdownHarness(harness);
+  }
+});
+
 test('generation callError sets metadata and provider_call_error span status', async () => {
   const harness = newHarness();
 

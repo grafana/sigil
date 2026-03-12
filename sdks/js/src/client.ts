@@ -479,6 +479,10 @@ export class SigilClient {
     }
   }
 
+  internalSyncGenerationSpan(span: Span, generation: Generation): void {
+    setGenerationSpanAttributes(span, generation);
+  }
+
   internalFinalizeGenerationSpan(
     span: Span,
     generation: Generation,
@@ -488,7 +492,6 @@ export class SigilClient {
     firstTokenAt: Date | undefined
   ): void {
     span.updateName(generationSpanName(generation.operationName, generation.model.name));
-    setGenerationSpanAttributes(span, generation);
 
     if (callError !== undefined) {
       span.recordException(new Error(callError));
@@ -957,6 +960,7 @@ class GenerationRecorderImpl implements GenerationRecorder {
     }
     generation.metadata[spanAttrSDKName] = sdkName;
 
+    this.client.internalSyncGenerationSpan(this.span, generation);
     this.client.internalApplyTraceContextFromSpan(this.span, generation);
     this.client.internalRecordGeneration(generation);
 
