@@ -126,6 +126,7 @@ This is the canonical navigation map for repository documentation.
   - Helm deployment chart: [`references/helm-chart.md`](references/helm-chart.md)
   - Model cards API shape: [`references/model-cards-api.md`](references/model-cards-api.md)
   - Multi-tenancy guide: [`references/multi-tenancy.md`](references/multi-tenancy.md)
+  - Symphony setup guide: [`references/symphony-setup.md`](references/symphony-setup.md)
 
 ## Redundancy Rule
 
