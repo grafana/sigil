@@ -1,12 +1,13 @@
 ---
 name: ui-proof
-description: Capture feature-level UI proof for app-touching tickets, save multiple screenshots or short recordings under output/playwright, and attach the evidence to the Linear workpad comment.
+description: Capture feature-level UI proof for UI/UX-facing or app-touching tickets, save multiple screenshots or short recordings under output/playwright, and attach the evidence to the Linear workpad comment.
 ---
 
 # UI Proof
 
-Use this for app-touching tickets when the worker needs to prove the changed
-feature actually works in the running Sigil UI.
+Use this for UI/UX-facing or app-touching tickets when the worker needs to
+prove the changed feature actually works in the running Sigil UI or when visual
+evidence materially improves the handoff.
 
 Do not stop at a smoke screenshot. Capture the changed user flow.
 
@@ -31,11 +32,28 @@ enough for a non-trivial interaction.
    - `output/playwright/<ticket>-entry.png`
    - `output/playwright/<ticket>-filters-open.png`
    - `output/playwright/<ticket>-result.png`
-5. Upload the artifacts with:
+5. Upload the artifacts to Linear.
+   Preferred unattended path: use the `linear_graphql` tool, request a
+   `fileUpload`, `PUT` the bytes to the returned `uploadUrl`, then embed the
+   `assetUrl` in the workpad as markdown.
+   ```graphql
+   mutation FileUpload($filename: String!, $contentType: String!, $size: Int!) {
+     fileUpload(filename: $filename, contentType: $contentType, size: $size, makePublic: true) {
+       success
+       uploadFile {
+         uploadUrl
+         assetUrl
+         headers { key value }
+       }
+     }
+   }
+   ```
+   Use the repo-local script only as a fallback when env-based Linear auth is
+   already available:
    ```bash
    pnpm --dir apps/plugin exec node ./scripts/upload-linear-assets.mjs output/playwright/<file>...
    ```
-6. Embed the returned markdown image links into the Linear workpad comment.
+6. Embed the uploaded markdown image links into the Linear workpad comment.
    Keep the proof grouped in a short `## UI Proof` section with one caption per
    image.
 
@@ -69,7 +87,7 @@ handoff.
 The final workpad should include:
 
 - brief description of the validated flow
-- the image markdown returned by `upload-linear-assets.mjs`
+- the uploaded image markdown or direct `assetUrl` embeds
 - any limitation or missing runtime condition
 
 Do not leave the proof only on disk. The evidence must be embedded in the
