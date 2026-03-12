@@ -270,12 +270,14 @@ func (e *conformanceEnv) Shutdown(t *testing.T) {
 	if e == nil || e.Client == nil {
 		return
 	}
+	client := e.Client
+	e.Client = nil
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := e.Client.Shutdown(ctx); err != nil {
+	if err := client.Shutdown(ctx); err != nil {
 		t.Fatalf("shutdown client: %v", err)
 	}
-	e.Client = nil
 }
 
 func (e *conformanceEnv) close() error {
