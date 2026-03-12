@@ -122,36 +122,49 @@ The repo currently ships the Go core conformance harness entry point:
 
 Test that each Go provider mapper correctly transforms provider request/response into the normalized `Generation` shape.
 
-### Per provider (openai, anthropic, gemini)
+### Current shipped baseline
 
 - [x] `sdks/go-providers/openai/conformance_test.go`
-  - [x] Sync request/response mapping
-  - [x] Streaming mapping (accumulated output, mode=STREAM)
-  - [x] Tool calls/results
-  - [x] Usage mapping (including reasoning/cache fields)
+  - [x] Chat Completions sync normalization
+  - [x] Chat Completions stream normalization
+  - [x] Responses sync normalization
+  - [x] Responses stream normalization
+  - [x] Recorder-path sync/stream export assertions via `sdks/go/sigil/sigiltest`
+  - [x] Usage mapping (prompt/completion/total/cache/reasoning)
   - [x] Stop reason mapping
-  - [x] Error response mapping -> `SetCallError` classification
-  - [x] Embedding mapping -> `EmbeddingResult`
-  - [ ] Artifact capture (opt-in: request, response, tools, events)
+  - [x] Tool-call normalization
+  - [x] Raw artifact opt-in coverage
+  - [x] Explicit mapping-error coverage
+  - [x] Wrapper error semantics for provider failures and mapper failures
+  - [x] Embedding mapping through the recorder path
 - [x] `sdks/go-providers/anthropic/conformance_test.go`
-  - [x] Sync request/response mapping
-  - [x] Streaming mapping (accumulated output, mode=STREAM)
-  - [x] Thinking/reasoning content -> `ThinkingPart`
-  - [x] Tool calls/results
-  - [x] Usage mapping (including cache + server tool metadata)
+  - [x] Sync normalization with `ThinkingPart`
+  - [x] Streaming normalization with accumulated `ThinkingPart`
+  - [x] Recorder-path sync/stream export assertions via `sdks/go/sigil/sigiltest`
+  - [x] Usage mapping (input/output/cache/server-tool metadata)
   - [x] Stop reason mapping
-  - [x] Error response mapping -> `SetCallError` classification
-  - [ ] Embedding mapping -> not applicable in current repo; no Anthropic embedding wrapper/API surface exists
+  - [x] Tool-call normalization
+  - [x] Raw artifact opt-in coverage
+  - [x] Explicit mapping-error coverage
+  - [x] Wrapper error semantics for provider failures and mapper failures
+  - [ ] Embedding mapping remains not applicable because the current Anthropic wrapper exposes no embedding surface in-repo
 - [x] `sdks/go-providers/gemini/conformance_test.go`
-  - [x] Sync request/response mapping
-  - [x] Streaming mapping (accumulated output, mode=STREAM)
-  - [x] Thinking/reasoning content -> `ThinkingPart`
-  - [x] Tool calls/results
-  - [x] Usage mapping (including reasoning/tool-use metadata)
+  - [x] Sync normalization with `ThinkingPart`
+  - [x] Streaming normalization with accumulated `ThinkingPart`
+  - [x] Recorder-path sync/stream export assertions via `sdks/go/sigil/sigiltest`
+  - [x] Usage mapping (prompt/candidate/total/cache/reasoning/tool-use metadata)
   - [x] Stop reason mapping
-  - [x] Error response mapping -> `SetCallError` classification
-  - [x] Embedding mapping -> `EmbeddingResult`
+  - [x] Tool-call normalization
+  - [x] Raw artifact opt-in coverage
+  - [x] Explicit mapping-error coverage
+  - [x] Wrapper error semantics for provider failures and mapper failures
+  - [x] Embedding mapping through the recorder path
 - [x] Extend `sdk-conformance-spec.md` with provider wrapper section
+
+### Remaining provider-wrapper scope
+
+- [ ] Remove duplicate fixture surface between direct-normalization and recorder-path suites if the maintenance cost outweighs the extra coverage
+- [ ] Anthropic embedding conformance if the provider wrapper grows an embedding API surface
 
 ## Phase C: Go framework adapter (google-adk)
 
