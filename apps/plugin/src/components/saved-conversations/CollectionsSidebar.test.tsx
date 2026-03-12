@@ -138,4 +138,47 @@ describe('CollectionsSidebar', () => {
     fireEvent.click(screen.getByText(/new collection/i));
     expect(onCreateCollection).toHaveBeenCalled();
   });
+
+  it('switches to All saved when deleting the active collection', async () => {
+    onDeleteCollection.mockResolvedValue(undefined);
+    render(
+      <CollectionsSidebar
+        collections={collections}
+        totalCount={10}
+        activeCollectionID="col-1"
+        onSelect={onSelect}
+        onCreateCollection={onCreateCollection}
+        onRenameCollection={onRenameCollection}
+        onDeleteCollection={onDeleteCollection}
+      />
+    );
+    fireEvent.click(screen.getAllByLabelText(/collection options/i)[0]);
+    fireEvent.click(screen.getByText(/^delete$/i));
+    fireEvent.click(screen.getByTestId('data-testid Confirm Modal Danger Button'));
+    await waitFor(() => expect(onDeleteCollection).toHaveBeenCalledWith('col-1'));
+    expect(onSelect).toHaveBeenCalledWith(null);
+  });
+
+  it('reverts input and shows alert when rename fails', async () => {
+    onRenameCollection.mockRejectedValue(new Error('Server error'));
+    render(
+      <CollectionsSidebar
+        collections={collections}
+        totalCount={10}
+        activeCollectionID={null}
+        onSelect={onSelect}
+        onCreateCollection={onCreateCollection}
+        onRenameCollection={onRenameCollection}
+        onDeleteCollection={onDeleteCollection}
+      />
+    );
+    fireEvent.click(screen.getAllByLabelText(/collection options/i)[0]);
+    fireEvent.click(screen.getByText(/rename/i));
+    const input = screen.getByDisplayValue('Regression tests');
+    fireEvent.change(input, { target: { value: 'Bad name' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(onRenameCollection).toHaveBeenCalledWith('col-1', 'Bad name'));
+    await waitFor(() => expect(screen.getByDisplayValue('Regression tests')).toBeInTheDocument());
+    expect(screen.getByText('Server error')).toBeInTheDocument();
+  });
 });

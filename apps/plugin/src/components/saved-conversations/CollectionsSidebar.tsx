@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Badge, ConfirmModal, Icon, IconButton, Input, useStyles2 } from '@grafana/ui';
+import { Alert, Badge, ConfirmModal, IconButton, Input, useStyles2 } from '@grafana/ui';
 import type { Collection } from '../../evaluation/types';
 
 export type CollectionsSidebarProps = {
@@ -137,6 +137,7 @@ export function CollectionsSidebar({
   const [renameValue, setRenameValue] = useState('');
   const [renameError, setRenameError] = useState<string | undefined>();
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const prevNameRef = useRef('');
 
   const openMenu = (e: React.MouseEvent, collectionID: string) => {
     e.stopPropagation();
@@ -144,6 +145,7 @@ export function CollectionsSidebar({
   };
 
   const startRename = (collection: Collection) => {
+    prevNameRef.current = collection.name;
     setRenameValue(collection.name);
     setRenameError(undefined);
     setMenuState({ collectionID: collection.collection_id, type: 'rename' });
@@ -161,6 +163,7 @@ export function CollectionsSidebar({
       setMenuState(null);
     } catch (e) {
       setRenameError(e instanceof Error ? e.message : 'Rename failed');
+      setRenameValue(prevNameRef.current);
     }
   };
 
@@ -214,6 +217,7 @@ export function CollectionsSidebar({
                   />
                   <IconButton name="check" tooltip="Confirm rename" onClick={() => confirmRename(col.collection_id)} />
                   <IconButton name="times" tooltip="Cancel rename" onClick={cancelRename} />
+                  {renameError && <Alert severity="error" title={renameError} />}
                 </>
               ) : (
                 <>
@@ -265,6 +269,9 @@ export function CollectionsSidebar({
           confirmText="Delete collection"
           onConfirm={async () => {
             await onDeleteCollection(collectionToDelete.collection_id);
+            if (activeCollectionID === collectionToDelete.collection_id) {
+              onSelect(null);
+            }
             setMenuState(null);
           }}
           onDismiss={() => setMenuState(null)}
