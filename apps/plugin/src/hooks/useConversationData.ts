@@ -158,8 +158,12 @@ export function useConversationData({
         return;
       }
       if (pageData.orphanGenerations.length === 0 || pageData.nextGenerationsCursor === current.nextGenerationsCursor) {
+        const latest = conversationDataRef.current;
+        if (!latest) {
+          return;
+        }
         const stabilized = {
-          ...current,
+          ...latest,
           hasMoreGenerations: false,
           nextGenerationsCursor: undefined,
         };
