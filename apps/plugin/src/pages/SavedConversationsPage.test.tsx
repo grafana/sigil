@@ -67,7 +67,7 @@ describe('SavedConversationsPage', () => {
     await waitFor(() => screen.getByText('Regression tests'));
     fireEvent.click(screen.getByText('Regression tests'));
     await waitFor(() => {
-      expect(ds.listCollectionMembers).toHaveBeenCalledWith('col-1', undefined, undefined);
+      expect(ds.listCollectionMembers).toHaveBeenCalledWith('col-1', 25, undefined);
     });
   });
 
@@ -115,9 +115,9 @@ describe('SavedConversationsPage', () => {
     // Select a conversation (find its checkbox by aria-label)
     const checkbox = screen.getByLabelText('Select Auth flow edge case');
     fireEvent.click(checkbox);
-    // Click Remove
-    await waitFor(() => screen.getByText(/^remove$/i));
-    fireEvent.click(screen.getByText(/^remove$/i));
+    // Click Remove from collection
+    await waitFor(() => screen.getByText(/remove from collection/i));
+    fireEvent.click(screen.getByText(/remove from collection/i));
     await waitFor(() => {
       expect(ds.removeCollectionMember).toHaveBeenCalledWith('col-1', 's1');
     });

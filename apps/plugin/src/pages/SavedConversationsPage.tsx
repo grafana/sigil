@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Alert, useStyles2 } from '@grafana/ui';
@@ -29,9 +29,11 @@ export type SavedConversationsPageProps = {
 
 const getStyles = (theme: GrafanaTheme2) => ({
   page: css({
+    position: 'absolute',
+    inset: 0,
     display: 'flex',
     flexDirection: 'column',
-    height: '100%',
+    minHeight: 0,
     overflow: 'hidden',
   }),
   header: css({
@@ -54,6 +56,16 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flex: 1,
     overflow: 'hidden',
+    minHeight: 0,
+  }),
+  resizeHandle: css({
+    width: 4,
+    flexShrink: 0,
+    cursor: 'col-resize',
+    background: 'transparent',
+    '&:hover, &:active': {
+      background: theme.colors.primary.main,
+    },
   }),
   errorBar: css({
     margin: theme.spacing(1, 2),
@@ -62,6 +74,26 @@ const getStyles = (theme: GrafanaTheme2) => ({
 
 export default function SavedConversationsPage({ dataSource = defaultEvaluationDataSource }: SavedConversationsPageProps) {
   const styles = useStyles2(getStyles);
+  const [sidebarWidth, setSidebarWidth] = useState(200);
+  const isDragging = useRef(false);
+
+  const onResizeMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!isDragging.current) { return; }
+      setSidebarWidth(Math.max(140, Math.min(400, startWidth + ev.clientX - startX)));
+    };
+    const onMouseUp = () => {
+      isDragging.current = false;
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
 
   const [collections, setCollections] = useState<Collection[]>([]);
   const [activeCollectionID, setActiveCollectionID] = useState<string | null>(null);
@@ -77,6 +109,7 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [pageSize, setPageSize] = useState(25);
 
   // Load all collections on mount (truncate at 200 per spec, following next_cursor)
   useEffect(() => {
@@ -92,14 +125,14 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
     setError(undefined);
     try {
       if (activeCollectionID === null) {
-        const resp = await dataSource.listSavedConversations(undefined, 50, cursor);
+        const resp = await dataSource.listSavedConversations(undefined, pageSize, cursor);
         setConversations(resp.items);
         setNextCursor(resp.next_cursor || undefined);
         const trueTotal = resp.total_count ?? resp.items.length;
         setAllSavedCount(trueTotal);
         setAllSavedTotal(resp.total_count);
       } else {
-        const resp = await dataSource.listCollectionMembers(activeCollectionID, undefined, cursor);
+        const resp = await dataSource.listCollectionMembers(activeCollectionID, pageSize, cursor);
         setConversations(resp.items);
         setNextCursor(resp.next_cursor || undefined);
       }
@@ -108,7 +141,7 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
     } finally {
       setIsLoading(false);
     }
-  }, [dataSource, activeCollectionID]);
+  }, [dataSource, activeCollectionID, pageSize]);
 
   useEffect(() => {
     setSelectedIDs(new Set());
@@ -139,6 +172,17 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
     setCollections((prev) => prev.filter((c) => c.collection_id !== id));
     if (activeCollectionID === id) {
       setActiveCollectionID(null);
+    }
+  };
+
+  const handleUnsave = async (ids: Set<string>) => {
+    setError(undefined);
+    try {
+      await Promise.all([...ids].map((id) => dataSource.deleteSavedConversation(id)));
+      setSelectedIDs(new Set());
+      await loadConversations();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to unsave conversations');
     }
   };
 
@@ -176,6 +220,12 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
     setCollections((prev) => [...prev, collection]);
   };
 
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size);
+    setNextCursor(undefined);
+    setPrevCursors([]);
+  };
+
   const handlePageChange = (direction: 'next' | 'prev') => {
     if (direction === 'next' && nextCursor) {
       setPrevCursors((prev) => [...prev, currentCursor]); // push the cursor that loaded THIS page
@@ -208,7 +258,9 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
           onCreateCollection={() => setShowCreateModal(true)}
           onRenameCollection={handleRenameCollection}
           onDeleteCollection={handleDeleteCollection}
+          width={sidebarWidth}
         />
+        <div className={styles.resizeHandle} onMouseDown={onResizeMouseDown} />
         <SavedConversationsList
           conversations={conversations}
           isLoading={isLoading}
@@ -217,9 +269,12 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
           activeCollectionID={activeCollectionID}
           onAddToCollection={() => setShowAddModal(true)}
           onRemoveFromCollection={handleRemoveFromCollection}
+          onUnsave={handleUnsave}
           hasNextPage={!!nextCursor}
           hasPrevPage={prevCursors.length > 0}
           onPageChange={handlePageChange}
+          pageSize={pageSize}
+          onPageSizeChange={handlePageSizeChange}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           totalCount={activeCollectionID === null ? allSavedTotal : collections.find((c) => c.collection_id === activeCollectionID)?.member_count}

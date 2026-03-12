@@ -12,6 +12,7 @@ export type CollectionsSidebarProps = {
   onCreateCollection: () => void;
   onRenameCollection: (id: string, name: string) => Promise<void>;
   onDeleteCollection: (id: string) => Promise<void>;
+  width?: number;
 };
 
 type MenuPosition = { top: number; right: number };
@@ -19,7 +20,6 @@ type MenuState = { collectionID: string; type: 'menu' | 'rename' | 'delete'; men
 
 const getStyles = (theme: GrafanaTheme2) => ({
   sidebar: css({
-    width: 200,
     flexShrink: 0,
     borderRight: `1px solid ${theme.colors.border.weak}`,
     display: 'flex',
@@ -34,7 +34,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   allSaved: css({
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'baseline',
     justifyContent: 'space-between',
     padding: theme.spacing(0.75, 1),
     borderRadius: theme.shape.radius.default,
@@ -54,7 +54,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   collectionItem: css({
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'baseline',
     justifyContent: 'space-between',
     gap: theme.spacing(0.5),
     padding: theme.spacing(0.75, 1),
@@ -75,7 +75,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   count: css({
     fontSize: theme.typography.bodySmall.fontSize,
-    lineHeight: theme.typography.body.lineHeight,
     color: theme.colors.text.secondary,
     flexShrink: 0,
     marginLeft: theme.spacing(0.5),
@@ -85,6 +84,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flexShrink: 0,
     display: 'flex',
     alignItems: 'center',
+    alignSelf: 'center',
   }),
   menuPopover: css({
     position: 'fixed',
@@ -114,7 +114,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   footer: css({
     padding: theme.spacing(0, 2),
-    height: theme.spacing(5),
+    height: theme.spacing(6),
     flexShrink: 0,
     borderTop: `1px solid ${theme.colors.border.weak}`,
     display: 'flex',
@@ -133,6 +133,7 @@ export function CollectionsSidebar({
   onCreateCollection,
   onRenameCollection,
   onDeleteCollection,
+  width = 200,
 }: CollectionsSidebarProps) {
   const styles = useStyles2(getStyles);
   const [menuState, setMenuState] = useState<MenuState>(null);
@@ -149,7 +150,7 @@ export function CollectionsSidebar({
   }, [menuState]);
 
   useEffect(() => {
-    if (menuState?.type !== 'menu') return;
+    if (menuState?.type !== 'menu') {return;}
     const close = () => setMenuState(null);
     document.addEventListener('mousedown', close);
     document.addEventListener('scroll', close, true);
@@ -205,7 +206,7 @@ export function CollectionsSidebar({
     : collections;
 
   return (
-    <div className={styles.sidebar}>
+    <div className={styles.sidebar} style={{ width }}>
       <div className={styles.scrollArea}>
         {/* All saved */}
         <div
@@ -248,8 +249,8 @@ export function CollectionsSidebar({
                     onChange={(e) => setRenameValue(e.currentTarget.value)}
                     invalid={!!renameError}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') confirmRename(col.collection_id);
-                      if (e.key === 'Escape') cancelRename();
+                      if (e.key === 'Enter') {confirmRename(col.collection_id);}
+                      if (e.key === 'Escape') {cancelRename();}
                     }}
                     onClick={(e) => e.stopPropagation()}
                   />
@@ -302,8 +303,7 @@ export function CollectionsSidebar({
 
       <div className={styles.footer}>
         <Button
-          variant="secondary"
-          size="sm"
+          variant="primary"
           icon="plus"
           className={styles.newCollectionBtn}
           onClick={onCreateCollection}

@@ -22,6 +22,7 @@ describe('SavedConversationsList', () => {
   const onSelectionChange = jest.fn();
   const onAddToCollection = jest.fn();
   const onRemoveFromCollection = jest.fn();
+  const onUnsave = jest.fn();
   const onPageChange = jest.fn();
 
   const conversations = [
@@ -38,9 +39,12 @@ describe('SavedConversationsList', () => {
     activeCollectionID: null as string | null,
     onAddToCollection,
     onRemoveFromCollection,
+    onUnsave,
     hasNextPage: false,
     hasPrevPage: false,
     onPageChange,
+    pageSize: 25,
+    onPageSizeChange: jest.fn(),
     searchQuery: '',
     onSearchChange: jest.fn(),
   };
@@ -49,6 +53,7 @@ describe('SavedConversationsList', () => {
     onSelectionChange.mockReset();
     onAddToCollection.mockReset();
     onRemoveFromCollection.mockReset();
+    onUnsave.mockReset();
     onPageChange.mockReset();
   });
 
@@ -85,7 +90,7 @@ describe('SavedConversationsList', () => {
         activeCollectionID={null}
       />
     );
-    expect(screen.queryByText(/^remove$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/remove from collection/i)).not.toBeInTheDocument();
   });
 
   it('shows Remove button when a collection is active', () => {
@@ -96,7 +101,7 @@ describe('SavedConversationsList', () => {
         activeCollectionID="col-1"
       />
     );
-    expect(screen.getByText(/^remove$/i)).toBeInTheDocument();
+    expect(screen.getByText(/remove from collection/i)).toBeInTheDocument();
   });
 
   it('calls onRemoveFromCollection when Remove is clicked', () => {
@@ -107,7 +112,7 @@ describe('SavedConversationsList', () => {
         activeCollectionID="col-1"
       />
     );
-    fireEvent.click(screen.getByText(/^remove$/i));
+    fireEvent.click(screen.getByText(/remove from collection/i));
     expect(onRemoveFromCollection).toHaveBeenCalledWith(new Set(['s1', 's2']));
   });
 
@@ -160,7 +165,8 @@ describe('SavedConversationsList', () => {
         conversations={[rich]}
       />
     );
-    expect(screen.getByText('agent-a, agent-b')).toBeInTheDocument();
+    expect(screen.getByText('agent-a')).toBeInTheDocument();
+    expect(screen.getByText('agent-b')).toBeInTheDocument();
     expect(screen.getByText('4')).toBeInTheDocument();
     expect(screen.getByText('1,234')).toBeInTheDocument();
   });
