@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/grafana/sigil/sigil/internal/server"
 	"google.golang.org/grpc"
 )
 
@@ -21,12 +22,14 @@ type serverTransportRegistry struct {
 
 	httpRegistrars []HTTPRouteRegistrar
 	grpcRegistrars []GRPCServiceRegistrar
+	readiness      []server.ReadinessCheck
 }
 
 func newServerTransportRegistry() *serverTransportRegistry {
 	return &serverTransportRegistry{
 		httpRegistrars: make([]HTTPRouteRegistrar, 0, 4),
 		grpcRegistrars: make([]GRPCServiceRegistrar, 0, 2),
+		readiness:      make([]server.ReadinessCheck, 0, 2),
 	}
 }
 
@@ -46,6 +49,15 @@ func (r *serverTransportRegistry) RegisterGRPC(registrar GRPCServiceRegistrar) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.grpcRegistrars = append(r.grpcRegistrars, registrar)
+}
+
+func (r *serverTransportRegistry) RegisterReadiness(check server.ReadinessCheck) {
+	if check == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.readiness = append(r.readiness, check)
 }
 
 func (r *serverTransportRegistry) ApplyHTTP(mux *http.ServeMux, protectedMiddleware func(http.Handler) http.Handler) {
@@ -74,6 +86,16 @@ func (r *serverTransportRegistry) ApplyGRPC(server *grpc.Server) {
 	for _, registrar := range registrars {
 		registrar(server)
 	}
+}
+
+func (r *serverTransportRegistry) ReadinessChecks() []server.ReadinessCheck {
+	if r == nil {
+		return nil
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]server.ReadinessCheck(nil), r.readiness...)
 }
 
 func (r *serverTransportRegistry) HasGRPCRegistrars() bool {

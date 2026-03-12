@@ -45,6 +45,24 @@ var validLookbacks = map[string]time.Duration{
 	"7d":  7 * 24 * time.Hour,
 }
 
+type ReadinessCheck func(context.Context) error
+
+type coreRoutesOptions struct {
+	readinessChecks []ReadinessCheck
+}
+
+type CoreRoutesOption func(*coreRoutesOptions)
+
+func WithReadinessChecks(checks ...ReadinessCheck) CoreRoutesOption {
+	return func(opts *coreRoutesOptions) {
+		for _, check := range checks {
+			if check != nil {
+				opts.readinessChecks = append(opts.readinessChecks, check)
+			}
+		}
+	}
+}
+
 func parseLookback(raw string) time.Duration {
 	if d, ok := validLookbacks[strings.TrimSpace(raw)]; ok {
 		return d
@@ -80,11 +98,20 @@ func RegisterRoutes(
 }
 
 // RegisterCoreRoutes wires transport-level routes shared by every runtime role.
-func RegisterCoreRoutes(mux *http.ServeMux) {
+func RegisterCoreRoutes(mux *http.ServeMux, opts ...CoreRoutesOption) {
 	if mux == nil {
 		return
 	}
+	options := coreRoutesOptions{}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&options)
+		}
+	}
 	mux.Handle("/healthz", recoverHTTPPanics(http.HandlerFunc(health)))
+	mux.Handle("/readyz", recoverHTTPPanics(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		ready(w, req, options.readinessChecks)
+	})))
 	mux.Handle("/metrics", recoverHTTPPanics(promhttp.Handler()))
 }
 
@@ -287,6 +314,26 @@ type PromptInsightsOption struct {
 }
 
 func health(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func ready(w http.ResponseWriter, req *http.Request, checks []ReadinessCheck) {
+	failures := make([]string, 0, len(checks))
+	for _, check := range checks {
+		if check == nil {
+			continue
+		}
+		if err := check(req.Context()); err != nil {
+			failures = append(failures, err.Error())
+		}
+	}
+	if len(failures) > 0 {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"status": "degraded",
+			"errors": failures,
+		})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
