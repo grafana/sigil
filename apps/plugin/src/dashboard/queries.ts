@@ -5,7 +5,7 @@ import {
   type FilterOperator,
   type LabelFilter,
 } from './types';
-import { dropToolMetricLabelConflicts, TOOL_METRIC_LABEL } from './toolRuntime';
+import { dropToolMetricLabelConflicts, EXECUTE_TOOL_OPERATION, TOOL_METRIC_LABEL } from './toolRuntime';
 
 // OTel metric names converted to Prometheus format (dots → underscores).
 const TOKEN_USAGE = 'gen_ai_client_token_usage';
@@ -154,7 +154,7 @@ export function totalErrorsQuery(filters: DashboardFilters, rangeDuration: strin
 }
 
 export function topToolExecutionsQuery(filters: DashboardFilters, rangeDuration: string): string {
-  return `sum by (${TOOL_METRIC_LABEL})(increase(${OPERATION_DURATION}_count${sel(dropToolMetricLabelConflicts(filters), 'gen_ai_operation_name="execute_tool"')}[${rangeDuration}]))`;
+  return `sum by (${TOOL_METRIC_LABEL})(increase(${OPERATION_DURATION}_count${sel(dropToolMetricLabelConflicts(filters), `gen_ai_operation_name="${EXECUTE_TOOL_OPERATION}"`)}[${rangeDuration}]))`;
 }
 
 export function errorRateQuery(

@@ -376,6 +376,7 @@ export default function ToolAnalyticsPage({
     topAgents,
     topErrorTypes,
   ];
+  const pageIsLoading = pageQueryResponses.some((response) => response.loading);
   const pageHasErrors = pageQueryResponses.some((response) => response.error.length > 0);
   const pageHasData = pageQueryResponses.some((response) => hasResponseData(response.data));
 
@@ -469,13 +470,13 @@ export default function ToolAnalyticsPage({
         />
       </DashboardSummaryBar>
 
-      {pageHasErrors && !pageHasData && (
+      {!pageIsLoading && pageHasErrors && !pageHasData && (
         <Alert severity="error" title="Tool analytics failed to load">
           Every tool runtime query failed for this page. Adjust filters or retry later.
         </Alert>
       )}
 
-      {!pageHasErrors && !pageHasData && (
+      {!pageIsLoading && !pageHasErrors && !pageHasData && (
         <div className={styles.emptyState}>
           <Text color="secondary">No `execute_tool` runtime data matched {toolName} in this time range.</Text>
         </div>

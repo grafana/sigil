@@ -188,4 +188,26 @@ describe('ToolAnalyticsPage', () => {
       screen.queryByText('No `execute_tool` runtime data matched calendar.lookup in this time range.')
     ).not.toBeInTheDocument();
   });
+
+  it('does not show the empty state while runtime queries are still loading', async () => {
+    const dataSource = createDashboardDataSource();
+    const pendingQuery = new Promise<PrometheusQueryResponse>(() => {
+      // Keep the page queries in-flight to verify the loading state.
+    });
+    dataSource.queryInstant.mockReturnValue(pendingQuery);
+    dataSource.queryRange.mockReturnValue(pendingQuery);
+
+    render(
+      <MemoryRouter initialEntries={['/analytics/tools/calendar.lookup']}>
+        <Routes>
+          <Route path="/analytics/tools/:toolName" element={<ToolAnalyticsPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(
+      screen.queryByText('No `execute_tool` runtime data matched calendar.lookup in this time range.')
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Tool analytics failed to load')).not.toBeInTheDocument();
+  });
 });
