@@ -1,6 +1,12 @@
 import { dateTime } from '@grafana/data';
 import type { ConversationsDataSource } from './api';
-import { loadConversation, loadConversationDetail, loadConversationTraces, type TraceFetcher } from './loader';
+import {
+  loadConversation,
+  loadConversationDetail,
+  loadConversationTraces,
+  mergeConversationData,
+  type TraceFetcher,
+} from './loader';
 import type { ConversationData, ConversationDetailPage } from './types';
 
 function makeConversationData(overrides: Partial<ConversationData> = {}): ConversationData {
@@ -463,5 +469,41 @@ describe('loadConversation', () => {
     expect(result.spans).toHaveLength(2);
     expect(result.spans[0].name).toBe('earlier');
     expect(result.spans[1].name).toBe('later');
+  });
+});
+
+describe('mergeConversationData', () => {
+  it('takes pagination metadata from the explicit pagination parameter', () => {
+    const current = makeConversationData({
+      hasMoreGenerations: false,
+      nextGenerationsCursor: undefined,
+    });
+    const other = makeConversationData({
+      hasMoreGenerations: false,
+      nextGenerationsCursor: undefined,
+    });
+    const pagination = { hasMoreGenerations: true, nextGenerationsCursor: 'cursor-abc' };
+
+    const merged = mergeConversationData(current, other, pagination);
+
+    expect(merged.hasMoreGenerations).toBe(true);
+    expect(merged.nextGenerationsCursor).toBe('cursor-abc');
+  });
+
+  it('does not inherit pagination from either data argument', () => {
+    const a = makeConversationData({
+      hasMoreGenerations: true,
+      nextGenerationsCursor: 'cursor-a',
+    });
+    const b = makeConversationData({
+      hasMoreGenerations: true,
+      nextGenerationsCursor: 'cursor-b',
+    });
+    const pagination = { hasMoreGenerations: false, nextGenerationsCursor: undefined };
+
+    const merged = mergeConversationData(a, b, pagination);
+
+    expect(merged.hasMoreGenerations).toBe(false);
+    expect(merged.nextGenerationsCursor).toBeUndefined();
   });
 });

@@ -179,22 +179,28 @@ export function mergeConversationDetailPages(
   };
 }
 
-export function mergeConversationData(current: ConversationData, olderPage: ConversationData): ConversationData {
-  const mergedGenerations = mergeGenerationLists(getAllGenerations(olderPage), getAllGenerations(current));
-  const mergedParsedSpans = mergeParsedSpans(current.spans, olderPage.spans);
+export type ConversationPagination = Pick<ConversationData, 'hasMoreGenerations' | 'nextGenerationsCursor'>;
+
+export function mergeConversationData(
+  current: ConversationData,
+  other: ConversationData,
+  pagination: ConversationPagination
+): ConversationData {
+  const mergedGenerations = mergeGenerationLists(getAllGenerations(other), getAllGenerations(current));
+  const mergedParsedSpans = mergeParsedSpans(current.spans, other.spans);
   const { roots, orphanGenerations } = buildSpanTree(mergedParsedSpans, mergedGenerations);
 
   return {
     conversationID: current.conversationID,
-    conversationTitle: current.conversationTitle ?? olderPage.conversationTitle,
-    userID: current.userID ?? olderPage.userID,
-    generationCount: Math.max(current.generationCount, olderPage.generationCount),
-    firstGenerationAt: olderPage.firstGenerationAt || current.firstGenerationAt,
-    lastGenerationAt: current.lastGenerationAt || olderPage.lastGenerationAt,
-    ratingSummary: current.ratingSummary ?? olderPage.ratingSummary,
-    annotations: current.annotations.length > 0 ? current.annotations : olderPage.annotations,
-    hasMoreGenerations: olderPage.hasMoreGenerations,
-    nextGenerationsCursor: olderPage.nextGenerationsCursor,
+    conversationTitle: current.conversationTitle ?? other.conversationTitle,
+    userID: current.userID ?? other.userID,
+    generationCount: Math.max(current.generationCount, other.generationCount),
+    firstGenerationAt: other.firstGenerationAt || current.firstGenerationAt,
+    lastGenerationAt: current.lastGenerationAt || other.lastGenerationAt,
+    ratingSummary: current.ratingSummary ?? other.ratingSummary,
+    annotations: current.annotations.length > 0 ? current.annotations : other.annotations,
+    hasMoreGenerations: pagination.hasMoreGenerations,
+    nextGenerationsCursor: pagination.nextGenerationsCursor,
     spans: roots,
     orphanGenerations,
   };

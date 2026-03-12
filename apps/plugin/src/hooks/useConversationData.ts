@@ -81,7 +81,7 @@ export function useConversationData({
         applyConversationData(traceData);
         return;
       }
-      applyConversationData(mergeConversationData(traceData, latest));
+      applyConversationData(mergeConversationData(traceData, latest, latest));
     },
     [applyConversationData]
   );
@@ -201,7 +201,7 @@ export function useConversationData({
         if (!latest) {
           return;
         }
-        const merged = mergeConversationData(latest, nextPage);
+        const merged = mergeConversationData(latest, nextPage, nextPage);
         applyConversationData(merged);
       };
 
@@ -213,7 +213,7 @@ export function useConversationData({
         if (!latest) {
           return;
         }
-        const merged = mergeConversationData(partialPage, latest);
+        const merged = mergeConversationData(partialPage, latest, latest);
         applyConversationData(merged);
       };
 
@@ -232,7 +232,7 @@ export function useConversationData({
           if (!latest) {
             return;
           }
-          const merged = mergeConversationData(enrichedPage, latest);
+          const merged = mergeConversationData(enrichedPage, latest, latest);
           applyConversationData(merged);
         })
         .catch((error) => {
