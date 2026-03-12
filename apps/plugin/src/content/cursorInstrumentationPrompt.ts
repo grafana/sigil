@@ -116,7 +116,7 @@ Provider wrappers and framework adapters already exist; reuse them where possibl
   - \`sdks/dotnet/examples/Grafana.Sigil.DevExEmitter/Program.cs\`
 - JS transport and framework behavior:
   - \`sdks/js/test/client.transport.test.mjs\`
-  - \`sdks/js/test/frameworks.vercel-ai-sdk.test.mjs\`
+  - \`sdks/js/test/frameworks.vercel-ai-sdk.conformance.test.mjs\`
 - Python framework integration tests:
   - \`sdks/python-frameworks/*/tests/*.py\`
 
