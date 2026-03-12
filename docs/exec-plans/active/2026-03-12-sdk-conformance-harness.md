@@ -35,12 +35,13 @@ Building conformance tests against the real public API will surface issues that 
 
 ### Current shipped baseline
 
-The repo now ships an aggregate core conformance entry point plus the Go provider-wrapper layer:
+The repo now ships an aggregate core conformance entry point, the Go provider-wrapper layer, and the first Go framework-adapter layer:
 
-- Local task: `mise run test:sdk:conformance`
+- Local task: `mise run sdk:conformance`
 - Direct Go runner: `mise run test:go:sdk-conformance`
 - Current covered core scenarios: sync roundtrip, conversation title semantics, user ID semantics, agent identity semantics, streaming telemetry semantics, tool execution semantics, embedding semantics, validation/error semantics, rating submission semantics, shutdown flush semantics
 - Current assertion targets in active use: generation export proto, OTLP spans, OTLP metrics, rating HTTP
+- Current shipped extension layers: Go provider wrappers (`openai`, `anthropic`, `gemini`) and Go Google ADK framework-adapter conformance
 
 ### SDK fixes discovered during implementation
 
@@ -112,10 +113,10 @@ The repo now ships an aggregate core conformance entry point plus the Go provide
 ### A4: Spec and docs
 
 - [x] Publish `docs/references/sdk-conformance-spec.md` for the current Go core baseline (language-neutral)
-- [x] Add `test:sdk:conformance` task to `mise.toml`
+- [x] Add SDK conformance tasks to `mise.toml` (`test:sdk:conformance` plus the local alias `sdk:conformance`)
 - [x] Update `ARCHITECTURE.md` SDK section
 - [x] Update discoverability docs (`docs/index.md`, `docs/references/index.md`, `sdks/go/README.md`)
-- [x] Verify: `mise run test:sdk:conformance` passes
+- [x] Verify: `mise run sdk:conformance` passes
 - [x] Verify: `go test -run TestConformance -count=5 ./sdks/go/sigil/` proves determinism
 
 ## Phase B: Go provider wrappers

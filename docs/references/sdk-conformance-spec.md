@@ -19,6 +19,7 @@ Provider-wrapper reference implementations:
 
 Local entry points:
 
+- `mise run sdk:conformance`
 - `mise run test:sdk:conformance`
 - `mise run test:go:sdk-conformance`
 - `mise run test:ts:sdk-conformance`
@@ -39,10 +40,11 @@ Related docs:
 
 ## Current baseline
 
-The shipped Go baseline now has two active layers:
+The repo now ships three active conformance layers:
 
-1. Core SDK conformance in `sdks/go/sigil`
-2. Provider-wrapper conformance in `sdks/go-providers/{openai,anthropic,gemini}`
+1. Core SDK conformance across Go, TypeScript/JavaScript, Python, Java, and .NET
+2. Go provider-wrapper conformance in `sdks/go-providers/{openai,anthropic,gemini}`
+3. Go framework-adapter conformance in `sdks/go-frameworks/google-adk`
 
 The current shared core scenario set covers ten black-box scenarios:
 
@@ -58,6 +60,8 @@ The current shared core scenario set covers ten black-box scenarios:
 10. Shutdown flush semantics
 
 The provider-wrapper layer verifies normalized `sigil.Generation` outputs directly from provider request/response fixtures. It runs with `go test` only and does not require Docker, a Sigil backend, or live provider access.
+
+The framework-adapter layer verifies framework lifecycle propagation, parent/child span linkage, framework metadata/tag projection, generation triggering, and explicit unsupported embedding contracts when the framework surface does not expose a first-class embeddings lifecycle.
 
 The core SDK harness now runs across Go, TypeScript/JavaScript, Python, Java, and .NET using the same language-neutral contract. The provider-wrapper layer complements that by asserting mapper and wrapper behavior inside the Go provider modules.
 
@@ -85,6 +89,10 @@ Each scenario is executed through exported SDK entry points and validates behavi
 - OTLP spans captured with the SDK's in-memory span recorder
 - OTLP metrics captured with the SDK's in-memory metric reader
 - HTTP rating requests captured from a fake local API server when the scenario exercises ratings
+
+### Framework-adapter baseline
+
+The shipped Go framework-adapter baseline currently covers Google ADK run lifecycle, streaming lifecycle, tool-call observability, parent-child span linkage, framework metadata/tag propagation, and explicit unsupported embedding behavior.
 
 ## Harness requirements
 
@@ -143,9 +151,12 @@ Additional scenario-family invariants:
 - Assert proto field `span_id` matches the finished generation span span ID.
 - Assert proto request and response content preserves text, thinking, tool call, and tool result parts.
 - Assert proto request controls preserve `max_tokens`, `temperature`, `top_p`, `tool_choice`, and `thinking_enabled`.
+- Assert tool definitions preserve `name`, `description`, `type`, `input_schema_json`, and `deferred`.
 - Assert proto usage preserves input/output/total/cache read/cache write/cache creation/reasoning token counts when the SDK supports those counters.
-- Assert proto stop reason, tags, metadata, and artifacts are preserved.
+- Assert proto stop reason, merged tags, merged metadata, and artifacts are preserved.
+- Assert proto metadata `sigil.sdk.name` is stamped by the SDK with the canonical runtime identity value and overrides conflicting caller-provided values.
 - Assert span attr `gen_ai.operation.name = "generateText"`.
+- Assert span attr `sigil.sdk.name` equals the canonical runtime identity value.
 - Assert metric `gen_ai.client.operation.duration` has data.
 - Assert metric `gen_ai.client.token.usage` has data.
 - Assert metric `gen_ai.client.time_to_first_token` absent.
@@ -439,10 +450,9 @@ Current Go scope note:
 
 ## Extending the spec
 
-Future phases will extend this document with the remaining core gaps (full
-roundtrip payload coverage, SDK identity protection, metadata/tag merge
-behavior, resource attributes) plus provider-wrapper and framework-adapter
-scenarios in other languages. Provider-wrapper embedding scenarios apply only
+Future phases will extend this document with the remaining core gaps (resource
+attributes and any newly exported transport fields) plus provider-wrapper and
+framework-adapter scenarios in other languages. Provider-wrapper embedding scenarios apply only
 when the official provider SDK or API surface exposes a native embedding
 operation; when it does not, the suite should assert the wrapper's explicit
 unsupported capability contract instead of fabricating request DTOs or

@@ -420,6 +420,10 @@ dir = "sdks/go"
 depends = ["doctor:go"]
 run = "GOWORK=off go test ./sigil -run '^TestConformance' -count=1"
 
+[tasks."sdk:conformance"]
+description = "Run the shared SDK core conformance suites"
+run = "mise run test:sdk:conformance"
+
 [tasks."test:sdk:conformance"]
 description = "Run core conformance suites across Go, TypeScript/JavaScript, Python, Java, and .NET SDKs"
 run = """

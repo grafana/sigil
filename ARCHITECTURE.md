@@ -608,7 +608,7 @@ The default local stack started by `mise run up` (`docker compose --profile core
 
 A no-Docker conformance test suite validates the Sigil SDK public API behaviors the UI and query layer depend on across Go, TypeScript/JavaScript, Python, Java, and .NET. The suites run in the normal language test runners using only localhost transports and OTel SDK test infrastructure.
 
-- **Local entry point**: `mise run test:sdk:conformance` runs the aggregate core harnesses across all five SDKs.
+- **Local entry point**: `mise run sdk:conformance` runs the aggregate core harnesses across all five SDKs (`test:sdk:conformance` remains the underlying CI-oriented task).
 - **Go reference implementation**: `sdks/go/sigil/conformance_test.go` and `conformance_helpers_test.go` (`package sigil_test`).
 - **Current shared core baseline**: sync roundtrip, conversation title resolution, user ID resolution, agent identity resolution, streaming telemetry, tool execution, embeddings, validation/call-error, rating submission, and shutdown flush across exported generation payloads, OTLP spans, OTLP metrics, and local rating HTTP capture.
 - **Cross-SDK spec**: `docs/references/sdk-conformance-spec.md` defines the current language-neutral baseline and the extension model for future provider/framework coverage, including explicit unsupported capability contracts when provider or framework embedding surfaces do not exist.
