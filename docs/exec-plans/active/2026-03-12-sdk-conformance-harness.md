@@ -47,6 +47,7 @@ The repo currently ships the Go core conformance harness entry point:
 (Updated as issues are found.)
 
 - Added `cache_creation_input_tokens` to the generation ingest proto and Go SDK proto mapping so the full roundtrip export preserves the complete token usage payload.
+- Synced the checked-in JS proto copy and regenerated the Go protobuf bindings so `ToolDefinition.deferred` is present in the conformance ingest schema used by the Go SDK harness.
 
 ## Phase A: Go core SDK
 
