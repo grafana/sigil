@@ -785,6 +785,57 @@ func TestFanOutStoreListConversationGenerationsRecordsDeadlineExceededOutcome(t 
 	}
 }
 
+func TestFanOutStoreGetGenerationByIDRecordsSuccessOutcomeOnEarlyReturns(t *testing.T) {
+	successBefore := testutil.ToFloat64(queryColdReadOutcomeTotal.WithLabelValues("get_by_id", "success"))
+	base := time.Date(2026, 2, 19, 10, 0, 0, 0, time.UTC)
+	generation := fanOutTestGeneration("gen-1", "conv-other", base)
+	index, generationsByOffset := buildFanOutTestBlock(t, []*sigilv1.Generation{generation})
+
+	store := NewFanOutStore(
+		&fanOutTestWALReader{
+			getByID: func(_ context.Context, _, _ string) (*sigilv1.Generation, error) {
+				return nil, nil
+			},
+		},
+		&fanOutTestBlockMetadataStore{
+			listBlocks: func(_ context.Context, _ string, _, _ time.Time) ([]BlockMeta, error) {
+				return []BlockMeta{{TenantID: "tenant-a", BlockID: "block-1"}}, nil
+			},
+		},
+		&fanOutTestBlockReader{
+			readIndex: func(_ context.Context, _, _ string) (*BlockIndex, error) {
+				return index, nil
+			},
+			readGenerations: func(_ context.Context, _, _ string, entries []IndexEntry) ([]*sigilv1.Generation, error) {
+				return fanOutGenerationsFromEntries(entries, generationsByOffset), nil
+			},
+		},
+	)
+
+	found, err := store.GetGenerationByIDWithPlan(context.Background(), "tenant-a", "gen-1", GenerationReadPlan{
+		ConversationID: "conv-expected",
+	})
+	if err != nil {
+		t.Fatalf("get generation with hinted candidate: %v", err)
+	}
+	if found == nil || found.GetConversationId() != "conv-other" {
+		t.Fatalf("expected hinted candidate return, got %#v", found)
+	}
+
+	missing, err := store.GetGenerationByIDWithPlan(context.Background(), "tenant-a", "gen-missing", GenerationReadPlan{})
+	if err != nil {
+		t.Fatalf("get generation without range hint: %v", err)
+	}
+	if missing != nil {
+		t.Fatalf("expected nil generation for missing id, got %#v", missing)
+	}
+
+	successAfter := testutil.ToFloat64(queryColdReadOutcomeTotal.WithLabelValues("get_by_id", "success"))
+	if delta := successAfter - successBefore; delta != 2 {
+		t.Fatalf("expected two success increments, got %v", delta)
+	}
+}
+
 func TestFanOutStoreListConversationGenerationsSkipsStaleBlocks(t *testing.T) {
 	base := time.Date(2026, 2, 19, 10, 0, 0, 0, time.UTC)
 	hotGeneration := fanOutTestGeneration("gen-1", "conv-1", base.Add(time.Minute))

@@ -436,9 +436,11 @@ func (s *FanOutStore) readColdGenerationByIDWithPlan(
 	// conversation_id hint is advisory; if ID is found with a different
 	// conversation, prefer returning the ID match over false negatives.
 	if hintedCandidate != nil {
+		observeColdReadOutcome("get_by_id", nil)
 		return hintedCandidate, scannedBlocks, nil
 	}
 	if !hasGenerationRangeHint(plan) {
+		observeColdReadOutcome("get_by_id", nil)
 		return nil, scannedBlocks, nil
 	}
 
