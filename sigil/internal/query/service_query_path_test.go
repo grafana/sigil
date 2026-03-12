@@ -1139,6 +1139,57 @@ func TestGetConversationDetailPageForTenantSlicesNewestWindow(t *testing.T) {
 	}
 }
 
+func TestGetConversationDetailPageForTenantStopsOnZeroProgressPage(t *testing.T) {
+	base := time.Date(2026, 2, 15, 9, 0, 0, 0, time.UTC)
+	conversationStore := &stubConversationStore{
+		items: map[string]storage.Conversation{
+			"conv-1": {
+				TenantID:         "tenant-a",
+				ConversationID:   "conv-1",
+				GenerationCount:  4,
+				CreatedAt:        base,
+				LastGenerationAt: base.Add(4 * time.Minute),
+				UpdatedAt:        base.Add(4 * time.Minute),
+			},
+		},
+	}
+
+	walReader := &stubWALReader{
+		byConversationByTenant: map[string]map[string][]*sigilv1.Generation{
+			"tenant-a": {
+				"conv-1": {
+					testGenerationPayload("gen-1", "conv-1", base.Add(time.Minute)),
+					testGenerationPayload("gen-2", "conv-1", base.Add(2*time.Minute)),
+				},
+			},
+		},
+	}
+
+	service := NewServiceWithStores(conversationStore, feedback.NewMemoryStore())
+	service.walReader = walReader
+	service.fanOutStore = storage.NewFanOutStore(walReader, nil, nil)
+
+	detail, found, err := service.GetConversationDetailPageForTenant(context.Background(), "tenant-a", "conv-1", ConversationDetailPage{
+		Limit:  2,
+		Offset: 2,
+	})
+	if err != nil {
+		t.Fatalf("get paged conversation detail: %v", err)
+	}
+	if !found {
+		t.Fatalf("expected paged conversation detail to be found")
+	}
+	if detail.HasMore {
+		t.Fatalf("expected zero-progress page to stop pagination")
+	}
+	if detail.NextCursor != "" {
+		t.Fatalf("expected empty next cursor for zero-progress page, got %q", detail.NextCursor)
+	}
+	if len(detail.Generations) != 0 {
+		t.Fatalf("expected zero generations on zero-progress page, got %d", len(detail.Generations))
+	}
+}
+
 func TestGetConversationDetailForTenantIncludesStoredConversationTitle(t *testing.T) {
 	base := time.Date(2026, 2, 15, 9, 0, 0, 0, time.UTC)
 	conversationStore := &stubConversationStore{

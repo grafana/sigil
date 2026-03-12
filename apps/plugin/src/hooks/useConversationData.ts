@@ -144,6 +144,16 @@ export function useConversationData({
       if (requestVersionRef.current !== requestVersion) {
         return;
       }
+      if (pageData.orphanGenerations.length === 0 || pageData.nextGenerationsCursor === current.nextGenerationsCursor) {
+        const stabilized = {
+          ...current,
+          hasMoreGenerations: false,
+          nextGenerationsCursor: undefined,
+        };
+        conversationDataRef.current = stabilized;
+        setConversationData(stabilized);
+        return;
+      }
 
       const mergePartial = (partialPage: ConversationData) => {
         if (requestVersionRef.current !== requestVersion) {

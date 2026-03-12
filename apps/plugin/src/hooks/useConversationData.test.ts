@@ -255,4 +255,102 @@ describe('useConversationData', () => {
       cursor: '20',
     });
   });
+
+  it('stops load-more pagination when a page makes no cursor progress', async () => {
+    const dataSource: ConversationsDataSource = {
+      searchConversations: jest.fn(),
+      getConversationDetail: jest
+        .fn()
+        .mockResolvedValueOnce({
+          conversation_id: 'conv-1',
+          generation_count: 3,
+          first_generation_at: '2026-03-09T13:08:03Z',
+          last_generation_at: '2026-03-09T13:28:15Z',
+          generations: [
+            {
+              generation_id: 'gen-b',
+              conversation_id: 'conv-1',
+              trace_id: 'trace-b',
+              span_id: 'span-b',
+              created_at: '2026-03-09T13:18:03Z',
+            },
+            {
+              generation_id: 'gen-c',
+              conversation_id: 'conv-1',
+              trace_id: 'trace-c',
+              span_id: 'span-c',
+              created_at: '2026-03-09T13:28:15Z',
+            },
+          ],
+          has_more: true,
+          next_cursor: '20',
+          annotations: [],
+        })
+        .mockResolvedValueOnce({
+          conversation_id: 'conv-1',
+          generation_count: 3,
+          first_generation_at: '2026-03-09T13:08:03Z',
+          last_generation_at: '2026-03-09T13:28:15Z',
+          generations: [],
+          has_more: true,
+          next_cursor: '20',
+          annotations: [],
+        }),
+      getGeneration: jest.fn(),
+      getSearchTags: jest.fn(),
+      getSearchTagValues: jest.fn(),
+    };
+    const traceFetcher = jest.fn(async (traceID: string) => ({
+      resourceSpans: [
+        {
+          resource: { attributes: [{ key: 'service.name', value: { stringValue: 'svc' } }] },
+          scopeSpans: [
+            {
+              spans: [
+                {
+                  spanId: traceID.replace('trace', 'span'),
+                  parentSpanId: '',
+                  name: traceID,
+                  startTimeUnixNano: traceID === 'trace-b' ? '2000' : '3000',
+                  endTimeUnixNano: traceID === 'trace-b' ? '2500' : '3500',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    }));
+
+    const { result } = renderHook(() =>
+      useConversationData({
+        conversationID: 'conv-1',
+        dataSource,
+        traceFetcher,
+        modelCardClient,
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+      expect(result.current.tracesLoading).toBe(false);
+      expect(result.current.conversationData?.hasMoreGenerations).toBe(true);
+    });
+
+    await act(async () => {
+      await result.current.loadMoreGenerations();
+    });
+
+    await waitFor(() => {
+      expect(result.current.loadingMoreGenerations).toBe(false);
+      expect(result.current.conversationData?.hasMoreGenerations).toBe(false);
+      expect(result.current.conversationData?.nextGenerationsCursor).toBeUndefined();
+      expect(result.current.allGenerations.map((generation) => generation.generation_id)).toEqual(['gen-b', 'gen-c']);
+    });
+
+    expect(dataSource.getConversationDetail).toHaveBeenNthCalledWith(2, 'conv-1', {
+      limit: 20,
+      cursor: '20',
+    });
+    expect(traceFetcher).toHaveBeenCalledTimes(2);
+  });
 });
