@@ -19,10 +19,6 @@ export function buildConversationExploreRoute(conversationID: string): string {
   return `${ROUTES.Conversations}/${encodeURIComponent(conversationID)}/explore`;
 }
 
-export function buildToolsRoute(): string {
-  return ROUTES.AnalyticsTools;
-}
-
 export function buildToolAnalyticsRoute(toolName: string): string {
   return `${ROUTES.AnalyticsTools}/${encodeURIComponent(toolName)}`;
 }

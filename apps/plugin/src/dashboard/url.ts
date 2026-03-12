@@ -1,5 +1,5 @@
 import type { TimeRange } from '@grafana/data';
-import { PLUGIN_BASE, ROUTES, buildToolAnalyticsRoute, buildToolsRoute } from '../constants';
+import { PLUGIN_BASE, ROUTES, buildToolAnalyticsRoute } from '../constants';
 import type { ConversationOrderBy, DashboardFilters, LabelFilter } from './types';
 
 export function serializeRawTime(raw: string | { toISOString(): string }): string {
@@ -36,17 +36,12 @@ export function buildDashboardSearchParams(timeRange: TimeRange, filters: Dashbo
   return params;
 }
 
-export function buildAnalyticsUrl(timeRange: TimeRange, filters: DashboardFilters): string {
-  const params = buildDashboardSearchParams(timeRange, filters);
-  return `${PLUGIN_BASE}/${ROUTES.Analytics}?${params.toString()}`;
-}
-
 export function buildToolsUrl(timeRange: TimeRange, filters: DashboardFilters, toolSearch = ''): string {
   const params = buildDashboardSearchParams(timeRange, filters);
   if (toolSearch.trim()) {
     params.set('tool', toolSearch.trim());
   }
-  return `${PLUGIN_BASE}/${buildToolsRoute()}?${params.toString()}`;
+  return `${PLUGIN_BASE}/${ROUTES.AnalyticsTools}?${params.toString()}`;
 }
 
 export function buildConversationsUrl(
