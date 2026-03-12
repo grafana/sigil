@@ -604,6 +604,16 @@ The default local stack started by `mise run up` (`docker compose --profile core
 - One-shot mode (`SIGIL_TRAFFIC_ONESHOT=1`) runs bounded emitter cycles and fails fast if API assertions do not observe all five SDK emitters plus Python/JS framework-tagged records for LangChain, LangGraph, OpenAI Agents, LlamaIndex, and Google ADK.
 - Raw provider artifacts stay default OFF; this path is intended for synthetic ingest load and contract-shape visibility only.
 
+## SDK Conformance Harness
+
+A no-Docker conformance test suite validates that each SDK's public API emits the exact fields the UI, query layer, and agent catalog depend on. The suite runs in `go test` time (seconds) using only localhost transports and OTel SDK test infrastructure.
+
+- **Go reference implementation**: `sdks/go/sigil/conformance_test.go` and `conformance_helpers_test.go` (`package sigil_test`).
+- **Cross-SDK spec**: `docs/references/sdk-conformance-spec.md` defines all scenarios in language-neutral terms. Each SDK implements its own runner against this spec.
+- **Four assertion targets**: generation proto (fake gRPC server), OTLP spans (`tracetest.SpanRecorder`), OTLP metrics (`sdkmetric.ManualReader`), rating HTTP (`httptest.Server`).
+- **Scope**: SDK emission and public API contract only. Does not test backend projections, batch/retry mechanics, provider wrappers, or framework adapters.
+- Design doc: `docs/design-docs/2026-03-12-sdk-conformance-harness.md`.
+
 ## Evolution Path
 
 Sigil defines an ingestion-log abstraction with pluggable backends.
