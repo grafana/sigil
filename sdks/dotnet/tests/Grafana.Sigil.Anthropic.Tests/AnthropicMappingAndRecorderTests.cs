@@ -158,7 +158,7 @@ public sealed class AnthropicMappingAndRecorderTests
         Assert.Single(generations);
         Assert.Equal(GenerationMode.Stream, generations[0].Mode);
         Assert.Equal(string.Empty, generations[0].CallError);
-        Assert.Single(spans.Where(span => span.GetTagItem("error.type")?.ToString() == "mapping_error"));
+        Assert.Single(spans, span => span.GetTagItem("error.type")?.ToString() == "mapping_error");
     }
 
     [Fact]
