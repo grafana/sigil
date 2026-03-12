@@ -3,36 +3,60 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import SavedConversationsPage from './SavedConversationsPage';
 import type { EvaluationDataSource } from '../evaluation/api';
-import type { Collection, SavedConversation, CollectionListResponse, SavedConversationListResponse, CollectionMembersResponse } from '../evaluation/types';
+import type {
+  Collection,
+  SavedConversation,
+  CollectionListResponse,
+  SavedConversationListResponse,
+  CollectionMembersResponse,
+} from '../evaluation/types';
 
 const makeSC = (id: string, name: string): SavedConversation => ({
-  tenant_id: 'test', saved_id: id, conversation_id: `conv-${id}`,
-  name, source: 'telemetry', tags: {}, saved_by: 'alice',
-  created_at: '2026-03-10T00:00:00Z', updated_at: '2026-03-10T00:00:00Z',
-  generation_count: 0, total_tokens: 0, agent_names: [],
+  tenant_id: 'test',
+  saved_id: id,
+  conversation_id: `conv-${id}`,
+  name,
+  source: 'telemetry',
+  tags: {},
+  saved_by: 'alice',
+  created_at: '2026-03-10T00:00:00Z',
+  updated_at: '2026-03-10T00:00:00Z',
+  generation_count: 0,
+  total_tokens: 0,
+  agent_names: [],
 });
 
 const makeCollection = (id: string, name: string): Collection => ({
-  tenant_id: 'test', collection_id: id, name,
-  created_by: 'user', updated_by: 'user',
-  created_at: '2026-03-01T00:00:00Z', updated_at: '2026-03-01T00:00:00Z',
+  tenant_id: 'test',
+  collection_id: id,
+  name,
+  created_by: 'user',
+  updated_by: 'user',
+  created_at: '2026-03-01T00:00:00Z',
+  updated_at: '2026-03-01T00:00:00Z',
   member_count: 2,
 });
 
 function buildDataSource(overrides?: Partial<EvaluationDataSource>): EvaluationDataSource {
   const base: Partial<EvaluationDataSource> = {
-    listCollections: jest.fn(async (): Promise<CollectionListResponse> => ({
-      items: [makeCollection('col-1', 'Regression tests')],
-      next_cursor: '',
-    })),
-    listSavedConversations: jest.fn(async (): Promise<SavedConversationListResponse> => ({
-      items: [makeSC('s1', 'Auth flow edge case'), makeSC('s2', 'Rate limiting test')],
-      next_cursor: '',
-    })),
-    listCollectionMembers: jest.fn(async (): Promise<CollectionMembersResponse> => ({
-      items: [makeSC('s1', 'Auth flow edge case')],
-      next_cursor: '',
-    })),
+    listCollections: jest.fn(
+      async (): Promise<CollectionListResponse> => ({
+        items: [makeCollection('col-1', 'Regression tests')],
+        next_cursor: '',
+      })
+    ),
+    listSavedConversations: jest.fn(
+      async (): Promise<SavedConversationListResponse> => ({
+        items: [makeSC('s1', 'Auth flow edge case'), makeSC('s2', 'Rate limiting test')],
+        next_cursor: '',
+      })
+    ),
+    listCollectionMembers: jest.fn(
+      async (): Promise<CollectionMembersResponse> => ({
+        items: [makeSC('s1', 'Auth flow edge case')],
+        next_cursor: '',
+      })
+    ),
     listCollectionsForSavedConversation: jest.fn(async () => ({ items: [], next_cursor: '' })),
     createCollection: jest.fn(async (req) => makeCollection('col-new', req.name)),
     updateCollection: jest.fn(async (_, req) => makeCollection('col-1', req.name ?? 'Updated')),
@@ -73,7 +97,9 @@ describe('SavedConversationsPage', () => {
 
   it('shows error alert when listSavedConversations fails', async () => {
     const ds = buildDataSource({
-      listSavedConversations: jest.fn(async () => { throw new Error('network error'); }),
+      listSavedConversations: jest.fn(async () => {
+        throw new Error('network error');
+      }),
     });
     render(
       <MemoryRouter>
@@ -121,5 +147,27 @@ describe('SavedConversationsPage', () => {
     await waitFor(() => {
       expect(ds.removeCollectionMember).toHaveBeenCalledWith('col-1', 's1');
     });
+  });
+
+  it('keeps search query and selection when page size changes', async () => {
+    const ds = buildDataSource();
+    render(
+      <MemoryRouter>
+        <SavedConversationsPage dataSource={ds} />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => screen.getByText('Auth flow edge case'));
+    fireEvent.change(screen.getByPlaceholderText('Search...'), { target: { value: 'Auth' } });
+    fireEvent.click(screen.getByLabelText('Select Auth flow edge case'));
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByDisplayValue('25'), { target: { value: '100' } });
+
+    await waitFor(() => {
+      expect(ds.listSavedConversations).toHaveBeenCalledWith(undefined, 100, undefined);
+    });
+    expect(screen.getByPlaceholderText('Search...')).toHaveValue('Auth');
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
   });
 });

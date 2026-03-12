@@ -6,15 +6,28 @@ import type { EvaluationDataSource } from '../../evaluation/api';
 import type { Collection, SavedConversation } from '../../evaluation/types';
 
 const makeSC = (id: string, name: string, by = 'alice'): SavedConversation => ({
-  tenant_id: 'demo', saved_id: id, conversation_id: `conv-${id}`,
-  name, source: 'telemetry', tags: {}, saved_by: by,
-  created_at: '2026-03-10T00:00:00Z', updated_at: '2026-03-10T00:00:00Z',
+  tenant_id: 'demo',
+  saved_id: id,
+  conversation_id: `conv-${id}`,
+  name,
+  source: 'telemetry',
+  tags: {},
+  saved_by: by,
+  created_at: '2026-03-10T00:00:00Z',
+  updated_at: '2026-03-10T00:00:00Z',
+  generation_count: 0,
+  total_tokens: 0,
+  agent_names: [],
 });
 
 const makeCollection = (id: string, name: string, count: number): Collection => ({
-  tenant_id: 'demo', collection_id: id, name,
-  created_by: 'user', updated_by: 'user',
-  created_at: '2026-03-01T00:00:00Z', updated_at: '2026-03-01T00:00:00Z',
+  tenant_id: 'demo',
+  collection_id: id,
+  name,
+  created_by: 'user',
+  updated_by: 'user',
+  created_at: '2026-03-01T00:00:00Z',
+  updated_at: '2026-03-01T00:00:00Z',
   member_count: count,
 });
 
@@ -50,7 +63,13 @@ const dataSource: Partial<EvaluationDataSource> = {
 const meta: Meta<typeof SavedConversationsPage> = {
   title: 'SavedConversations/SavedConversationsPage',
   component: SavedConversationsPage,
-  decorators: [(Story: React.ComponentType) => <MemoryRouter><Story /></MemoryRouter>],
+  decorators: [
+    (Story: React.ComponentType) => (
+      <MemoryRouter>
+        <Story />
+      </MemoryRouter>
+    ),
+  ],
 };
 export default meta;
 type Story = StoryObj<typeof SavedConversationsPage>;
