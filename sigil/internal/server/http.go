@@ -31,6 +31,7 @@ import (
 const (
 	agentRatingEvaluationTimeout       = 3 * time.Minute
 	agentRatingPersistTimeout          = 10 * time.Second
+	conversationDetailTimeout          = 5 * time.Second
 	promptInsightsEvaluationTimeout    = 3 * time.Minute
 	promptInsightsPersistTimeout       = 10 * time.Second
 	promptInsightsConversationLimit    = 15
@@ -435,16 +436,19 @@ func conversationRoutes(querySvc *query.Service, feedbackSvc *feedback.Service, 
 				http.Error(w, err.Error(), http.StatusUnauthorized)
 				return
 			}
+			page, err := parseConversationDetailPage(req)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			detailCtx, cancel := context.WithTimeout(req.Context(), conversationDetailTimeout)
+			defer cancel()
 
 			format := strings.TrimSpace(req.URL.Query().Get("format"))
 			if format == "v2" {
-				item, found, err := querySvc.GetConversationDetailV2ForTenant(req.Context(), tenantID, id)
+				item, found, err := querySvc.GetConversationDetailV2PageForTenant(detailCtx, tenantID, id, page)
 				if err != nil {
-					if query.IsValidationError(err) {
-						http.Error(w, err.Error(), http.StatusBadRequest)
-						return
-					}
-					http.Error(w, "internal server error", http.StatusInternalServerError)
+					writeConversationDetailError(w, err)
 					return
 				}
 				if !found {
@@ -459,13 +463,9 @@ func conversationRoutes(querySvc *query.Service, feedbackSvc *feedback.Service, 
 				return
 			}
 
-			item, found, err := querySvc.GetConversationDetailForTenant(req.Context(), tenantID, id)
+			item, found, err := querySvc.GetConversationDetailPageForTenant(detailCtx, tenantID, id, page)
 			if err != nil {
-				if query.IsValidationError(err) {
-					http.Error(w, err.Error(), http.StatusBadRequest)
-					return
-				}
-				http.Error(w, "internal server error", http.StatusInternalServerError)
+				writeConversationDetailError(w, err)
 				return
 			}
 			if !found {
@@ -514,14 +514,17 @@ func conversationRoutesV2(querySvc *query.Service) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
-
-		item, found, err := querySvc.GetConversationDetailV2ForTenant(req.Context(), tenantID, id)
+		page, err := parseConversationDetailPage(req)
 		if err != nil {
-			if query.IsValidationError(err) {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		detailCtx, cancel := context.WithTimeout(req.Context(), conversationDetailTimeout)
+		defer cancel()
+
+		item, found, err := querySvc.GetConversationDetailV2PageForTenant(detailCtx, tenantID, id, page)
+		if err != nil {
+			writeConversationDetailError(w, err)
 			return
 		}
 		if !found {
@@ -597,6 +600,54 @@ func handleConversationFollowup(w http.ResponseWriter, req *http.Request, queryS
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func parseConversationDetailPage(req *http.Request) (query.ConversationDetailPage, error) {
+	page := query.ConversationDetailPage{}
+	if req == nil || req.URL == nil {
+		return page, nil
+	}
+
+	rawLimit := strings.TrimSpace(req.URL.Query().Get("limit"))
+	if rawLimit == "" {
+		if strings.TrimSpace(req.URL.Query().Get("cursor")) != "" {
+			return page, query.NewValidationError("limit is required when cursor is provided")
+		}
+		return page, nil
+	}
+
+	limit, err := strconv.Atoi(rawLimit)
+	if err != nil || limit < 0 {
+		return page, query.NewValidationError("limit must be a non-negative integer")
+	}
+	page.Limit = limit
+
+	rawCursor := strings.TrimSpace(req.URL.Query().Get("cursor"))
+	if rawCursor == "" {
+		return page, nil
+	}
+	offset, err := strconv.Atoi(rawCursor)
+	if err != nil || offset < 0 {
+		return query.ConversationDetailPage{}, query.NewValidationError("cursor must be a non-negative integer offset")
+	}
+	page.Offset = offset
+	return page, nil
+}
+
+func writeConversationDetailError(w http.ResponseWriter, err error) {
+	if err == nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	if query.IsValidationError(err) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if query.IsUnavailableError(err) {
+		http.Error(w, err.Error(), http.StatusGatewayTimeout)
+		return
+	}
+	http.Error(w, "internal server error", http.StatusInternalServerError)
 }
 
 func getGeneration(querySvc *query.Service) http.HandlerFunc {

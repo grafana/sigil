@@ -1,7 +1,7 @@
 import { dateTime } from '@grafana/data';
 import type { ConversationsDataSource } from './api';
 import { loadConversation, loadConversationDetail, loadConversationTraces, type TraceFetcher } from './loader';
-import type { ConversationData, ConversationDetail } from './types';
+import type { ConversationData, ConversationDetailPage } from './types';
 
 function makeConversationData(overrides: Partial<ConversationData> = {}): ConversationData {
   return {
@@ -13,6 +13,7 @@ function makeConversationData(overrides: Partial<ConversationData> = {}): Conver
     lastGenerationAt: '2026-03-09T13:28:15Z',
     ratingSummary: null,
     annotations: [],
+    hasMoreGenerations: false,
     spans: [],
     orphanGenerations: [
       {
@@ -241,7 +242,7 @@ describe('loadConversationTraces', () => {
   });
 });
 
-function makeDetail(overrides: Partial<ConversationDetail> = {}): ConversationDetail {
+function makeDetail(overrides: Partial<ConversationDetailPage> = {}): ConversationDetailPage {
   return {
     conversation_id: 'conv-1',
     generation_count: 2,
@@ -249,6 +250,7 @@ function makeDetail(overrides: Partial<ConversationDetail> = {}): ConversationDe
     last_generation_at: '2026-03-03T10:05:00Z',
     generations: [],
     annotations: [],
+    has_more: false,
     ...overrides,
   };
 }
@@ -264,7 +266,7 @@ function makeOTLPPayload(traceID: string, spans: Array<Record<string, unknown>>)
   };
 }
 
-function makeDataSource(detail: ConversationDetail): ConversationsDataSource {
+function makeDataSource(detail: ConversationDetailPage): ConversationsDataSource {
   return {
     searchConversations: jest.fn(),
     getConversationDetail: jest.fn().mockResolvedValue(detail),

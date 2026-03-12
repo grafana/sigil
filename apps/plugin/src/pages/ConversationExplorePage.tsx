@@ -67,6 +67,28 @@ const getStyles = (theme: GrafanaTheme2) => ({
     borderTop: `1px solid ${theme.colors.border.weak}`,
     borderBottom: `1px solid ${theme.colors.border.weak}`,
   }),
+  generationLoadRow: css({
+    label: 'conversationExplorePage-generationLoadRow',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing(1),
+    padding: theme.spacing(0, 1),
+    flexWrap: 'wrap' as const,
+  }),
+  generationLoadMeta: css({
+    label: 'conversationExplorePage-generationLoadMeta',
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.bodySmall.fontSize,
+  }),
+  generationLoadError: css({
+    label: 'conversationExplorePage-generationLoadError',
+    color: theme.colors.error.text,
+    fontSize: theme.typography.bodySmall.fontSize,
+  }),
   spinnerWrap: css({
     label: 'conversationExplorePage-spinnerWrap',
     flex: 1,
@@ -650,12 +672,15 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
     conversationData,
     loading,
     tracesLoading,
+    loadingMoreGenerations,
     errorMessage,
+    loadMoreErrorMessage,
     tokenSummary,
     costSummary,
     generationCosts,
     modelCards,
     allGenerations,
+    loadMoreGenerations,
   } = useConversationData({
     conversationID,
     dataSource,
@@ -671,6 +696,7 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
   const conversationTitle =
     conversationData?.conversationTitle?.trim() || conversationTitleFromTelemetry || conversationTitleFromURL;
   const conversationUserId = useMemo(() => resolveConversationUserId(conversationData), [conversationData]);
+  const loadedGenerationCount = allGenerations.length;
   const [recentRatings, setRecentRatings] = useState<ConversationRating[]>([]);
 
   const {
@@ -1170,6 +1196,26 @@ export default function ConversationExplorePage(props: ConversationExplorePagePr
           onToggleSave={saveLoading ? undefined : handleToggleSave}
           onBack={() => navigate(-1)}
         />
+        <div className={styles.generationLoadRow}>
+          <div className={styles.generationLoadMeta}>
+            <span>
+              Loaded {loadedGenerationCount} of {conversationData.generationCount} generations
+            </span>
+            {tracesLoading && <span>Resolving traces...</span>}
+            {loadingMoreGenerations && <span>Loading older generations...</span>}
+          </div>
+          {conversationData.hasMoreGenerations && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void loadMoreGenerations()}
+              disabled={loadingMoreGenerations}
+            >
+              {loadingMoreGenerations ? 'Loading…' : 'Load more generations'}
+            </Button>
+          )}
+          {loadMoreErrorMessage.length > 0 && <div className={styles.generationLoadError}>{loadMoreErrorMessage}</div>}
+        </div>
         <div className={styles.insightRow}>
           <PageInsightBar
             prompt="Analyze this single conversation trace. Flag expensive operations, errors, unusual patterns, or optimization opportunities."

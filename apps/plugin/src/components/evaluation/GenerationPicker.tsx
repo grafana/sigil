@@ -4,9 +4,12 @@ import type { GrafanaTheme2 } from '@grafana/data';
 import { Button, Icon, Input, Select, Spinner, Text, useStyles2 } from '@grafana/ui';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../../conversation/api';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../../evaluation/api';
-import type { ConversationDetail, GenerationLookupHints } from '../../conversation/types';
+import { mergeConversationDetailPages } from '../../conversation/loader';
+import type { ConversationDetailPage, GenerationLookupHints } from '../../conversation/types';
 import type { GenerationDetail } from '../../generation/types';
 import type { Collection, SavedConversation } from '../../evaluation/types';
+
+const DETAIL_PAGE_SIZE = 20;
 
 export type GenerationPickerProps = {
   onSelect: (generationId: string | undefined, hints?: GenerationLookupHints) => void;
@@ -151,8 +154,10 @@ export default function GenerationPicker({
   const [query, setQuery] = useState('');
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [detail, setDetail] = useState<ConversationDetail | null>(null);
+  const [detail, setDetail] = useState<ConversationDetailPage | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [loadingMoreDetail, setLoadingMoreDetail] = useState(false);
+  const [detailError, setDetailError] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [tab, setTab] = useState<'saved' | 'recent'>('saved');
   const [savedConversations, setSavedConversations] = useState<SavedConversation[]>([]);
@@ -275,13 +280,35 @@ export default function GenerationPicker({
 
   const handleConversationClick = async (conversationId: string) => {
     setLoadingDetail(true);
+    setDetailError('');
     try {
-      const d = await convDs.getConversationDetail(conversationId);
+      const d = await convDs.getConversationDetail(conversationId, { limit: DETAIL_PAGE_SIZE });
       setDetail(d);
     } catch {
       setDetail(null);
+      setDetailError('Failed to load conversation generations.');
     } finally {
       setLoadingDetail(false);
+    }
+  };
+
+  const handleLoadMoreDetail = async () => {
+    if (!detail?.has_more || !detail.next_cursor || loadingMoreDetail) {
+      return;
+    }
+
+    setLoadingMoreDetail(true);
+    setDetailError('');
+    try {
+      const nextPage = await convDs.getConversationDetail(detail.conversation_id, {
+        limit: DETAIL_PAGE_SIZE,
+        cursor: detail.next_cursor,
+      });
+      setDetail((current) => (current ? mergeConversationDetailPages(current, nextPage) : nextPage));
+    } catch {
+      setDetailError('Failed to load older generations. Retry to continue browsing.');
+    } finally {
+      setLoadingMoreDetail(false);
     }
   };
 
@@ -303,6 +330,7 @@ export default function GenerationPicker({
     onSelect(undefined);
     setConfirmed(false);
     setDetail(null);
+    setDetailError('');
   };
 
   // Compact view once a generation is selected and confirmed
@@ -370,6 +398,20 @@ export default function GenerationPicker({
               <Text variant="bodySmall" color="secondary">
                 No generations in this conversation.
               </Text>
+            </div>
+          )}
+          {detailError.length > 0 && (
+            <div className={styles.empty}>
+              <Text variant="bodySmall" color="error">
+                {detailError}
+              </Text>
+            </div>
+          )}
+          {detail.has_more && (
+            <div className={styles.empty}>
+              <Button variant="secondary" size="sm" onClick={() => void handleLoadMoreDetail()} disabled={loadingMoreDetail}>
+                {loadingMoreDetail ? 'Loading…' : 'Load more generations'}
+              </Button>
             </div>
           )}
         </div>

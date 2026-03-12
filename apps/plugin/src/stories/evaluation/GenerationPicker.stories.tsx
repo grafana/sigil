@@ -47,6 +47,7 @@ const mockConvDs: ConversationsDataSource = {
     generation_count: 2,
     first_generation_at: '2026-03-01T09:55:00Z',
     last_generation_at: '2026-03-01T10:00:00Z',
+    has_more: false,
     generations: [
       {
         generation_id: 'gen-001',

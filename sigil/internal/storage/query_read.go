@@ -16,6 +16,7 @@ const (
 // fan-out reads for one conversation detail request.
 type ConversationReadPlan struct {
 	ExpectedGenerationCount int
+	Limit                   int
 	From                    time.Time
 	To                      time.Time
 }

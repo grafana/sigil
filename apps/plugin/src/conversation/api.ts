@@ -4,6 +4,7 @@ import { plugin } from '../module';
 import { canonicalizeConversationFilterKey } from './filterKeyMapping';
 import type {
   ConversationDetail,
+  ConversationDetailPage,
   ConversationListResponse,
   GenerationLookupHints,
   CreateConversationRatingRequest,
@@ -60,6 +61,11 @@ function isConversationDetailV2(detail: ConversationDetail | ConversationDetailV
       'metadata_ref' in firstGeneration)
   );
 }
+
+export type ConversationDetailQuery = {
+  limit?: number;
+  cursor?: string;
+};
 
 function toUnixSeconds(value: string): string {
   const parsed = Date.parse(value);
@@ -405,7 +411,7 @@ export type ConversationsDataSource = {
     options: ConversationSearchStreamOptions
   ) => Promise<void>;
   getConversationStats?: (request: ConversationStatsRequest) => Promise<ConversationStatsResponse>;
-  getConversationDetail: (conversationID: string) => Promise<ConversationDetail>;
+  getConversationDetail: (conversationID: string, query?: ConversationDetailQuery) => Promise<ConversationDetailPage>;
   listConversationRatings?: (
     conversationID: string,
     limit?: number,
@@ -465,15 +471,26 @@ export const defaultConversationsDataSource: ConversationsDataSource = {
     return getConversationStatsRequest(request);
   },
 
-  async getConversationDetail(conversationID) {
+  async getConversationDetail(conversationID, query) {
     const params = new URLSearchParams({ format: 'v2' });
+    if (query?.limit !== undefined) {
+      params.set('limit', String(query.limit));
+    }
+    if (query?.cursor) {
+      params.set('cursor', query.cursor);
+    }
     const response = await lastValueFrom(
-      getBackendSrv().fetch<ConversationDetail | ConversationDetailV2>({
+      getBackendSrv().fetch<ConversationDetailPage | ConversationDetailV2>({
         method: 'GET',
         url: `${queryBasePath}/conversations/${encodeURIComponent(conversationID)}?${params.toString()}`,
       })
     );
-    return isConversationDetailV2(response.data) ? hydrateConversationDetailV2(response.data) : response.data;
+    return isConversationDetailV2(response.data)
+      ? hydrateConversationDetailV2(response.data)
+      : {
+          ...response.data,
+          has_more: response.data.has_more ?? false,
+        };
   },
 
   async listConversationRatings(conversationID, limit = 10, cursor) {

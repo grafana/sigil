@@ -1,9 +1,10 @@
 import { dateTime, type TimeRange } from '@grafana/data';
-import type { ConversationsDataSource } from './api';
+import type { ConversationDetailQuery, ConversationsDataSource } from './api';
+import { getAllGenerations } from './aggregates';
 import { normalizeTraceID } from './ids';
-import { parseOTLPTrace, buildSpanTree } from './spans';
+import { buildSpanTree, parseOTLPTrace, type ParsedSpan } from './spans';
 import type { GenerationDetail } from '../generation/types';
-import type { ConversationData, ConversationDetail } from './types';
+import type { ConversationData, ConversationDetailPage, ConversationSpan } from './types';
 
 const TRACE_FETCH_TIME_PADDING_MS = 30 * 60 * 1000;
 
@@ -89,7 +90,7 @@ async function fetchTracesWithConcurrency(
   return results;
 }
 
-function detailToConversationData(detail: ConversationDetail): ConversationData {
+function detailToConversationData(detail: ConversationDetailPage): ConversationData {
   return {
     conversationID: detail.conversation_id,
     conversationTitle: detail.conversation_title,
@@ -99,6 +100,8 @@ function detailToConversationData(detail: ConversationDetail): ConversationData 
     lastGenerationAt: detail.last_generation_at,
     ratingSummary: detail.rating_summary ?? null,
     annotations: detail.annotations ?? [],
+    hasMoreGenerations: detail.has_more,
+    nextGenerationsCursor: detail.next_cursor,
     spans: [],
     orphanGenerations: detail.generations,
   };
@@ -106,11 +109,104 @@ function detailToConversationData(detail: ConversationDetail): ConversationData 
 
 const inflightDetails = new Map<string, Promise<ConversationData>>();
 
+function conversationDetailRequestKey(conversationID: string, query?: ConversationDetailQuery): string {
+  return [conversationID, query?.limit ?? '', query?.cursor ?? ''].join(':');
+}
+
+function mergeGenerationLists(older: GenerationDetail[], newer: GenerationDetail[]): GenerationDetail[] {
+  const merged = new Map<string, GenerationDetail>();
+  for (const generation of [...older, ...newer]) {
+    if (!merged.has(generation.generation_id)) {
+      merged.set(generation.generation_id, generation);
+    }
+  }
+  return Array.from(merged.values());
+}
+
+function flattenConversationSpans(spans: ConversationSpan[]): ParsedSpan[] {
+  const flattened: ParsedSpan[] = [];
+
+  function walk(nodes: ConversationSpan[]) {
+    for (const node of nodes) {
+      flattened.push({
+        traceID: node.traceID,
+        spanID: node.spanID,
+        parentSpanID: node.parentSpanID,
+        name: node.name,
+        kind: node.kind,
+        serviceName: node.serviceName,
+        startTimeUnixNano: node.startTimeUnixNano,
+        endTimeUnixNano: node.endTimeUnixNano,
+        durationNano: node.durationNano,
+        attributes: node.attributes,
+        resourceAttributes: node.resourceAttributes,
+      });
+      walk(node.children);
+    }
+  }
+
+  walk(spans);
+  return flattened;
+}
+
+function mergeParsedSpans(existing: ConversationSpan[], incoming: ConversationSpan[]): ParsedSpan[] {
+  const merged = new Map<string, ParsedSpan>();
+  for (const span of [...flattenConversationSpans(existing), ...flattenConversationSpans(incoming)]) {
+    const key = `${span.traceID}:${span.spanID}`;
+    if (!merged.has(key)) {
+      merged.set(key, span);
+    }
+  }
+  return Array.from(merged.values());
+}
+
+export function mergeConversationDetailPages(
+  current: ConversationDetailPage,
+  olderPage: ConversationDetailPage
+): ConversationDetailPage {
+  return {
+    conversation_id: current.conversation_id,
+    conversation_title: current.conversation_title ?? olderPage.conversation_title,
+    user_id: current.user_id ?? olderPage.user_id,
+    generation_count: Math.max(current.generation_count, olderPage.generation_count),
+    first_generation_at: olderPage.first_generation_at || current.first_generation_at,
+    last_generation_at: current.last_generation_at || olderPage.last_generation_at,
+    generations: mergeGenerationLists(olderPage.generations, current.generations),
+    has_more: olderPage.has_more,
+    next_cursor: olderPage.next_cursor,
+    rating_summary: current.rating_summary ?? olderPage.rating_summary,
+    annotations: current.annotations.length > 0 ? current.annotations : olderPage.annotations,
+  };
+}
+
+export function mergeConversationData(current: ConversationData, olderPage: ConversationData): ConversationData {
+  const mergedGenerations = mergeGenerationLists(getAllGenerations(olderPage), getAllGenerations(current));
+  const mergedParsedSpans = mergeParsedSpans(current.spans, olderPage.spans);
+  const { roots, orphanGenerations } = buildSpanTree(mergedParsedSpans, mergedGenerations);
+
+  return {
+    conversationID: current.conversationID,
+    conversationTitle: current.conversationTitle ?? olderPage.conversationTitle,
+    userID: current.userID ?? olderPage.userID,
+    generationCount: Math.max(current.generationCount, olderPage.generationCount),
+    firstGenerationAt: olderPage.firstGenerationAt || current.firstGenerationAt,
+    lastGenerationAt: current.lastGenerationAt || olderPage.lastGenerationAt,
+    ratingSummary: current.ratingSummary ?? olderPage.ratingSummary,
+    annotations: current.annotations.length > 0 ? current.annotations : olderPage.annotations,
+    hasMoreGenerations: olderPage.hasMoreGenerations,
+    nextGenerationsCursor: olderPage.nextGenerationsCursor,
+    spans: roots,
+    orphanGenerations,
+  };
+}
+
 export function loadConversationDetail(
   dataSource: ConversationsDataSource,
-  conversationID: string
+  conversationID: string,
+  query?: ConversationDetailQuery
 ): Promise<ConversationData> {
-  const existing = inflightDetails.get(conversationID);
+  const requestKey = conversationDetailRequestKey(conversationID, query);
+  const existing = inflightDetails.get(requestKey);
   if (existing) {
     return existing;
   }
@@ -121,7 +217,7 @@ export function loadConversationDetail(
     // remote detail path settles, so tolerate brief 5xx/read flaps here.
     for (;;) {
       try {
-        const detail = await dataSource.getConversationDetail(conversationID);
+        const detail = await dataSource.getConversationDetail(conversationID, query);
         return detailToConversationData(detail);
       } catch (error) {
         if (attempt >= DETAIL_RETRY_DELAYS_MS.length || !shouldRetryConversationDetail(error)) {
@@ -132,9 +228,9 @@ export function loadConversationDetail(
         await sleep(delay);
       }
     }
-  })().finally(() => inflightDetails.delete(conversationID));
+  })().finally(() => inflightDetails.delete(requestKey));
 
-  inflightDetails.set(conversationID, promise);
+  inflightDetails.set(requestKey, promise);
   return promise;
 }
 

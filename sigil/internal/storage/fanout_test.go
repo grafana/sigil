@@ -211,6 +211,58 @@ func TestFanOutStoreListConversationGenerationsWithPlanSkipsColdWhenHotComplete(
 	}
 }
 
+func TestFanOutStoreListConversationGenerationsWithPlanUsesHotWindowReader(t *testing.T) {
+	base := time.Date(2026, 2, 19, 10, 0, 0, 0, time.UTC)
+	hotGeneration1 := fanOutTestGeneration("gen-2", "conv-1", base.Add(2*time.Minute))
+	hotGeneration2 := fanOutTestGeneration("gen-3", "conv-1", base.Add(3*time.Minute))
+	fullReadCalled := false
+	coldCalled := false
+
+	store := NewFanOutStore(
+		&fanOutTestWALReader{
+			getByConversationID: func(_ context.Context, _, _ string) ([]*sigilv1.Generation, error) {
+				fullReadCalled = true
+				return []*sigilv1.Generation{}, nil
+			},
+			getByConversationIDWindow: func(_ context.Context, tenantID, conversationID string, limit int) ([]*sigilv1.Generation, error) {
+				if tenantID != "tenant-a" || conversationID != "conv-1" {
+					t.Fatalf("unexpected hot window request %q/%q", tenantID, conversationID)
+				}
+				if limit != 2 {
+					t.Fatalf("expected hot window limit 2, got %d", limit)
+				}
+				return []*sigilv1.Generation{hotGeneration1, hotGeneration2}, nil
+			},
+		},
+		&fanOutTestBlockMetadataStore{
+			listBlocks: func(_ context.Context, _ string, _, _ time.Time) ([]BlockMeta, error) {
+				coldCalled = true
+				return []BlockMeta{}, nil
+			},
+		},
+		&fanOutTestBlockReader{},
+	)
+
+	generations, err := store.ListConversationGenerationsWithPlan(context.Background(), "tenant-a", "conv-1", ConversationReadPlan{
+		Limit: 2,
+	})
+	if err != nil {
+		t.Fatalf("list conversation generations with plan: %v", err)
+	}
+	if fullReadCalled {
+		t.Fatalf("expected bounded hot reader to replace full hot read")
+	}
+	if coldCalled {
+		t.Fatalf("expected cold path to be skipped when bounded hot reader satisfies limit")
+	}
+	if len(generations) != 2 {
+		t.Fatalf("expected 2 bounded hot generations, got %d", len(generations))
+	}
+	if generations[0].GetId() != "gen-2" || generations[1].GetId() != "gen-3" {
+		t.Fatalf("unexpected bounded hot generations: %#v", []string{generations[0].GetId(), generations[1].GetId()})
+	}
+}
+
 func TestFanOutStoreListConversationGenerationsWithPlanStopsAfterRemainingExpectedCount(t *testing.T) {
 	base := time.Date(2026, 2, 19, 10, 0, 0, 0, time.UTC)
 	hotGeneration1 := fanOutTestGeneration("hot-1", "conv-1", base.Add(1*time.Minute))
@@ -915,8 +967,9 @@ func TestFanOutStoreGetGenerationByIDSkipsStaleBlocks(t *testing.T) {
 }
 
 type fanOutTestWALReader struct {
-	getByID             func(ctx context.Context, tenantID, generationID string) (*sigilv1.Generation, error)
-	getByConversationID func(ctx context.Context, tenantID, conversationID string) ([]*sigilv1.Generation, error)
+	getByID                   func(ctx context.Context, tenantID, generationID string) (*sigilv1.Generation, error)
+	getByConversationID       func(ctx context.Context, tenantID, conversationID string) ([]*sigilv1.Generation, error)
+	getByConversationIDWindow func(ctx context.Context, tenantID, conversationID string, limit int) ([]*sigilv1.Generation, error)
 }
 
 func (r *fanOutTestWALReader) GetByID(ctx context.Context, tenantID, generationID string) (*sigilv1.Generation, error) {
@@ -931,6 +984,17 @@ func (r *fanOutTestWALReader) GetByConversationID(ctx context.Context, tenantID,
 		return []*sigilv1.Generation{}, nil
 	}
 	return r.getByConversationID(ctx, tenantID, conversationID)
+}
+
+func (r *fanOutTestWALReader) GetByConversationIDWindow(
+	ctx context.Context,
+	tenantID, conversationID string,
+	limit int,
+) ([]*sigilv1.Generation, error) {
+	if r.getByConversationIDWindow == nil {
+		return []*sigilv1.Generation{}, nil
+	}
+	return r.getByConversationIDWindow(ctx, tenantID, conversationID, limit)
 }
 
 type fanOutTestBlockMetadataStore struct {

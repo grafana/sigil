@@ -1,4 +1,4 @@
-import type { ConversationAnnotation, ConversationDetail, ConversationRatingSummary } from './types';
+import type { ConversationAnnotation, ConversationDetailPage, ConversationRatingSummary } from './types';
 import type { GenerationDetail, GenerationUsage, LatestScore, Message, ToolDefinition } from '../generation/types';
 
 type SharedConversationDetailV2 = {
@@ -42,6 +42,8 @@ export type ConversationDetailV2 = {
   first_generation_at: string;
   last_generation_at: string;
   generations: GenerationDetailV2[];
+  has_more: boolean;
+  next_cursor?: string;
   rating_summary?: ConversationRatingSummary;
   annotations: ConversationAnnotation[];
   shared?: SharedConversationDetailV2;
@@ -104,7 +106,7 @@ function hydrateGenerationDetail(generation: GenerationDetailV2, shared: SharedC
   };
 }
 
-export function hydrateConversationDetailV2(detail: ConversationDetailV2): ConversationDetail {
+export function hydrateConversationDetailV2(detail: ConversationDetailV2): ConversationDetailPage {
   const shared = detail.shared ?? {};
 
   return {
@@ -115,6 +117,8 @@ export function hydrateConversationDetailV2(detail: ConversationDetailV2): Conve
     first_generation_at: detail.first_generation_at,
     last_generation_at: detail.last_generation_at,
     generations: (detail.generations ?? []).map((generation) => hydrateGenerationDetail(generation, shared)),
+    has_more: detail.has_more ?? false,
+    next_cursor: detail.next_cursor,
     rating_summary: detail.rating_summary,
     annotations: detail.annotations ?? [],
   };

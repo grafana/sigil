@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -85,12 +86,71 @@ func (s *WALStore) GetByConversationID(ctx context.Context, tenantID, conversati
 	return generations, nil
 }
 
+func (s *WALStore) GetByConversationIDWindow(ctx context.Context, tenantID, conversationID string, limit int) ([]*sigilv1.Generation, error) {
+	start := time.Now()
+	if strings.TrimSpace(tenantID) == "" {
+		observeWALMetrics("get_by_conversation", "error", start, 0)
+		return nil, errors.New("tenant id is required")
+	}
+	if strings.TrimSpace(conversationID) == "" {
+		observeWALMetrics("get_by_conversation", "error", start, 0)
+		return nil, errors.New("conversation id is required")
+	}
+	if limit <= 0 {
+		return s.GetByConversationID(ctx, tenantID, conversationID)
+	}
+
+	var rows []GenerationModel
+	if err := s.db.WithContext(ctx).
+		Where("tenant_id = ? AND conversation_id = ?", tenantID, conversationID).
+		Order("created_at DESC, id DESC").
+		Limit(limit).
+		Find(&rows).Error; err != nil {
+		observeWALMetrics("get_by_conversation", "error", start, 0)
+		return nil, fmt.Errorf("query generations by conversation window: %w", err)
+	}
+
+	generations := make([]*sigilv1.Generation, 0, len(rows))
+	for _, row := range rows {
+		generation, err := decodeGenerationPayload(row.Payload)
+		if err != nil {
+			observeWALMetrics("get_by_conversation", "error", start, len(generations))
+			return nil, fmt.Errorf("decode generation payload %q: %w", row.GenerationID, err)
+		}
+		generations = append(generations, generation)
+	}
+
+	sort.SliceStable(generations, func(i, j int) bool {
+		leftTime := generationCreatedTime(generations[i])
+		rightTime := generationCreatedTime(generations[j])
+		if leftTime.Equal(rightTime) {
+			return generations[i].GetId() < generations[j].GetId()
+		}
+		return leftTime.Before(rightTime)
+	})
+	observeWALMetrics("get_by_conversation", "success", start, len(generations))
+	return generations, nil
+}
+
 func decodeGenerationPayload(payload []byte) (*sigilv1.Generation, error) {
 	var generation sigilv1.Generation
 	if err := proto.Unmarshal(payload, &generation); err != nil {
 		return nil, err
 	}
 	return &generation, nil
+}
+
+func generationCreatedTime(generation *sigilv1.Generation) time.Time {
+	if generation == nil {
+		return time.Time{}
+	}
+	if completedAt := generation.GetCompletedAt(); completedAt != nil {
+		return completedAt.AsTime().UTC()
+	}
+	if startedAt := generation.GetStartedAt(); startedAt != nil {
+		return startedAt.AsTime().UTC()
+	}
+	return time.Time{}
 }
 
 // ListRecentGenerations returns generations for a tenant since the given time,

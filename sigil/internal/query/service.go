@@ -126,8 +126,15 @@ type ConversationDetail struct {
 	FirstGenerationAt time.Time                           `json:"first_generation_at"`
 	LastGenerationAt  time.Time                           `json:"last_generation_at"`
 	Generations       []map[string]any                    `json:"generations"`
+	HasMore           bool                                `json:"has_more"`
+	NextCursor        string                              `json:"next_cursor,omitempty"`
 	RatingSummary     *feedback.ConversationRatingSummary `json:"rating_summary,omitempty"`
 	Annotations       []feedback.ConversationAnnotation   `json:"annotations"`
+}
+
+type ConversationDetailPage struct {
+	Limit  int
+	Offset int
 }
 
 type generationTitleSnapshot struct {
@@ -150,6 +157,23 @@ func NewValidationError(msg string) error {
 func IsValidationError(err error) bool {
 	var validationErr *ValidationError
 	return errors.As(err, &validationErr)
+}
+
+type UnavailableError struct {
+	msg string
+}
+
+func (e *UnavailableError) Error() string {
+	return e.msg
+}
+
+func NewUnavailableError(msg string) error {
+	return &UnavailableError{msg: msg}
+}
+
+func IsUnavailableError(err error) bool {
+	var unavailableErr *UnavailableError
+	return errors.As(err, &unavailableErr)
 }
 
 type ratingSummaryStore interface {
@@ -962,6 +986,15 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 }
 
 func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, conversationID string) (ConversationDetail, bool, error) {
+	return s.GetConversationDetailPageForTenant(ctx, tenantID, conversationID, ConversationDetailPage{})
+}
+
+func (s *Service) GetConversationDetailPageForTenant(
+	ctx context.Context,
+	tenantID,
+	conversationID string,
+	page ConversationDetailPage,
+) (ConversationDetail, bool, error) {
 	ctx, span := queryServiceTracer.Start(ctx, "sigil.query.get_conversation_detail")
 	defer span.End()
 
@@ -978,6 +1011,16 @@ func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, 
 	}
 	if trimmedConversationID == "" {
 		err := NewValidationError("conversation id is required")
+		recordQuerySpanError(span, err)
+		return ConversationDetail{}, false, err
+	}
+	if page.Limit < 0 {
+		err := NewValidationError("limit must be greater than or equal to 0")
+		recordQuerySpanError(span, err)
+		return ConversationDetail{}, false, err
+	}
+	if page.Offset < 0 {
+		err := NewValidationError("cursor must be greater than or equal to 0")
 		recordQuerySpanError(span, err)
 		return ConversationDetail{}, false, err
 	}
@@ -1009,6 +1052,13 @@ func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, 
 	plan := storage.ConversationReadPlan{
 		ExpectedGenerationCount: conversation.GenerationCount,
 	}
+	if page.Limit > 0 {
+		targetCount := page.Offset + page.Limit
+		if conversation.GenerationCount > 0 && targetCount > conversation.GenerationCount {
+			targetCount = conversation.GenerationCount
+		}
+		plan.Limit = targetCount
+	}
 	if !conversation.LastGenerationAt.IsZero() {
 		plan.To = conversation.LastGenerationAt.UTC().Add(2 * time.Minute)
 	}
@@ -1019,13 +1069,29 @@ func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, 
 		mergedGenerations, err = fanOutStore.ListConversationGenerations(ctx, trimmedTenantID, trimmedConversationID)
 	}
 	if err != nil {
+		err = wrapConversationDetailUnavailable(err)
 		recordQuerySpanError(span, err)
 		return ConversationDetail{}, false, err
 	}
 	userID := latestConversationUserID(mergedGenerations)
+	pageGenerations := mergedGenerations
+	hasMore := false
+	nextCursor := ""
+	if page.Limit > 0 {
+		pageGenerations = sliceConversationGenerationPage(mergedGenerations, page)
+		returnedCount := len(pageGenerations)
+		totalCount := conversation.GenerationCount
+		if totalCount <= 0 {
+			totalCount = len(mergedGenerations)
+		}
+		hasMore = page.Offset+returnedCount < totalCount
+		if hasMore {
+			nextCursor = strconv.Itoa(page.Offset + returnedCount)
+		}
+	}
 
-	generationPayloads := make([]map[string]any, 0, len(mergedGenerations))
-	for _, generation := range mergedGenerations {
+	generationPayloads := make([]map[string]any, 0, len(pageGenerations))
+	for _, generation := range pageGenerations {
 		payload, err := generationToResponsePayload(generation)
 		if err != nil {
 			recordQuerySpanError(span, err)
@@ -1050,6 +1116,7 @@ func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, 
 
 	annotations, err := s.listAllConversationAnnotations(ctx, trimmedTenantID, trimmedConversationID)
 	if err != nil {
+		err = wrapConversationDetailUnavailable(err)
 		recordQuerySpanError(span, err)
 		return ConversationDetail{}, false, err
 	}
@@ -1058,6 +1125,7 @@ func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, 
 	if s.ratingSummaryStore != nil {
 		summary, err := s.ratingSummaryStore.GetConversationRatingSummary(ctx, trimmedTenantID, trimmedConversationID)
 		if err != nil {
+			err = wrapConversationDetailUnavailable(err)
 			recordQuerySpanError(span, err)
 			return ConversationDetail{}, false, err
 		}
@@ -1079,13 +1147,24 @@ func (s *Service) GetConversationDetailForTenant(ctx context.Context, tenantID, 
 		FirstGenerationAt: conversation.FirstGenerationAt.UTC(),
 		LastGenerationAt:  conversation.LastGenerationAt.UTC(),
 		Generations:       generationPayloads,
+		HasMore:           hasMore,
+		NextCursor:        nextCursor,
 		RatingSummary:     ratingSummary,
 		Annotations:       annotations,
 	}, true, nil
 }
 
 func (s *Service) GetConversationDetailV2ForTenant(ctx context.Context, tenantID, conversationID string) (ConversationDetailV2, bool, error) {
-	detail, found, err := s.GetConversationDetailForTenant(ctx, tenantID, conversationID)
+	return s.GetConversationDetailV2PageForTenant(ctx, tenantID, conversationID, ConversationDetailPage{})
+}
+
+func (s *Service) GetConversationDetailV2PageForTenant(
+	ctx context.Context,
+	tenantID,
+	conversationID string,
+	page ConversationDetailPage,
+) (ConversationDetailV2, bool, error) {
+	detail, found, err := s.GetConversationDetailPageForTenant(ctx, tenantID, conversationID, page)
 	if err != nil || !found {
 		return ConversationDetailV2{}, found, err
 	}
@@ -1095,6 +1174,44 @@ func (s *Service) GetConversationDetailV2ForTenant(ctx context.Context, tenantID
 		return ConversationDetailV2{}, false, err
 	}
 	return v2, true, nil
+}
+
+func wrapConversationDetailUnavailable(err error) error {
+	if err == nil {
+		return nil
+	}
+	if IsUnavailableError(err) {
+		return err
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return NewUnavailableError("conversation detail timed out while loading this window; retry to load more")
+	}
+	return err
+}
+
+func sliceConversationGenerationPage(generations []*sigilv1.Generation, page ConversationDetailPage) []*sigilv1.Generation {
+	if page.Limit <= 0 {
+		return generations
+	}
+	total := len(generations)
+	if total == 0 || page.Offset >= total {
+		return []*sigilv1.Generation{}
+	}
+
+	startDesc := page.Offset
+	endDesc := page.Offset + page.Limit
+	if endDesc > total {
+		endDesc = total
+	}
+	startAsc := total - endDesc
+	endAsc := total - startDesc
+	if startAsc < 0 {
+		startAsc = 0
+	}
+	if startAsc > endAsc {
+		return []*sigilv1.Generation{}
+	}
+	return append([]*sigilv1.Generation(nil), generations[startAsc:endAsc]...)
 }
 
 // ListConversationGenerationsForTenant returns raw protobuf generations for a

@@ -127,6 +127,7 @@ function createDataSource(): MockConversationsDataSource {
         generation_count: 2,
         first_generation_at: '2026-02-01T10:00:00Z',
         last_generation_at: '2026-02-01T10:01:00Z',
+        has_more: false,
         generations: [
           {
             generation_id: `${_conversationID}-gen-1`,

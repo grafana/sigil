@@ -1,11 +1,21 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import type { ConversationsDataSource } from '../conversation/api';
 import type { ConversationSpan } from '../conversation/types';
 import ConversationExplorePage from './ConversationExplorePage';
 
 const mockSceneQueryRunner = jest.fn();
 const mockTracePanelSetOption = jest.fn();
+const mockLoadMoreGenerations = jest.fn();
+const mockPageDataSource = {
+  searchConversations: jest.fn(),
+  getConversationDetail: jest.fn(),
+  getGeneration: jest.fn(),
+  getSearchTags: jest.fn(),
+  getSearchTagValues: jest.fn(),
+  listConversationRatings: jest.fn(() => new Promise(() => {})),
+} as unknown as ConversationsDataSource;
 
 jest.mock('@grafana/i18n', () => ({
   initPluginTranslations: jest.fn().mockResolvedValue(undefined),
@@ -77,17 +87,22 @@ jest.mock('../hooks/useConversationData', () => ({
       lastGenerationAt: '2026-03-01T10:01:00Z',
       ratingSummary: null,
       annotations: [],
+      hasMoreGenerations: true,
+      nextGenerationsCursor: '20',
       spans: [],
       orphanGenerations: [],
     },
     loading: false,
     tracesLoading: false,
+    loadingMoreGenerations: false,
     errorMessage: '',
+    loadMoreErrorMessage: '',
     tokenSummary: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
     costSummary: { totalCost: 0.01 },
     generationCosts: new Map(),
     modelCards: new Map(),
     allGenerations: [],
+    loadMoreGenerations: mockLoadMoreGenerations,
   })),
 }));
 
@@ -162,9 +177,23 @@ jest.mock('../module', () => ({
 describe('ConversationExplorePage', () => {
   const originalClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
 
+  function renderPage() {
+    return render(
+      <MemoryRouter initialEntries={['/conversations/conv-1/explore']}>
+        <Routes>
+          <Route
+            path="/conversations/:conversationID/explore"
+            element={<ConversationExplorePage dataSource={mockPageDataSource} />}
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+  }
+
   beforeEach(() => {
     mockSceneQueryRunner.mockReset();
     mockTracePanelSetOption.mockReset();
+    mockLoadMoreGenerations.mockReset();
     Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
       configurable: true,
       get() {
@@ -180,13 +209,7 @@ describe('ConversationExplorePage', () => {
   });
 
   it('opens the trace drawer at half of the available content width', async () => {
-    render(
-      <MemoryRouter initialEntries={['/conversations/conv-1/explore']}>
-        <Routes>
-          <Route path="/conversations/:conversationID/explore" element={<ConversationExplorePage />} />
-        </Routes>
-      </MemoryRouter>
-    );
+    renderPage();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open trace' }));
 
@@ -199,13 +222,7 @@ describe('ConversationExplorePage', () => {
   });
 
   it('restores the original sidebar state after repeated trace opens', async () => {
-    render(
-      <MemoryRouter initialEntries={['/conversations/conv-1/explore']}>
-        <Routes>
-          <Route path="/conversations/:conversationID/explore" element={<ConversationExplorePage />} />
-        </Routes>
-      </MemoryRouter>
-    );
+    renderPage();
 
     const openTraceButton = screen.getByRole('button', { name: 'Open trace' });
 
@@ -225,13 +242,7 @@ describe('ConversationExplorePage', () => {
   });
 
   it('normalizes trace and span IDs before opening the Grafana trace drawer', async () => {
-    render(
-      <MemoryRouter initialEntries={['/conversations/conv-1/explore']}>
-        <Routes>
-          <Route path="/conversations/:conversationID/explore" element={<ConversationExplorePage />} />
-        </Routes>
-      </MemoryRouter>
-    );
+    renderPage();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open trace' }));
 
@@ -252,5 +263,14 @@ describe('ConversationExplorePage', () => {
       })
     );
     expect(mockTracePanelSetOption).toHaveBeenCalledWith('focusedSpanId', '0102030405060708');
+  });
+
+  it('offers incremental generation loading when more pages are available', async () => {
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load more generations' }));
+
+    expect(mockLoadMoreGenerations).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Loaded 0 of 1 generations')).toBeInTheDocument();
   });
 });

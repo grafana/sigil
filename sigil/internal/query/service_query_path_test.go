@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -1074,6 +1075,67 @@ func TestGetConversationDetailForTenantMergesHotAndCold(t *testing.T) {
 	}
 	if detail.UserID != "user-final" {
 		t.Fatalf("expected latest user id in detail, got %q", detail.UserID)
+	}
+}
+
+func TestGetConversationDetailPageForTenantSlicesNewestWindow(t *testing.T) {
+	base := time.Date(2026, 2, 15, 9, 0, 0, 0, time.UTC)
+	conversationStore := &stubConversationStore{
+		items: map[string]storage.Conversation{
+			"conv-1": {
+				TenantID:         "tenant-a",
+				ConversationID:   "conv-1",
+				GenerationCount:  4,
+				CreatedAt:        base,
+				LastGenerationAt: base.Add(4 * time.Minute),
+				UpdatedAt:        base.Add(4 * time.Minute),
+			},
+		},
+	}
+
+	walReader := &stubWALReader{
+		byConversationByTenant: map[string]map[string][]*sigilv1.Generation{
+			"tenant-a": {
+				"conv-1": {
+					testGenerationPayload("gen-1", "conv-1", base.Add(time.Minute)),
+					testGenerationPayload("gen-2", "conv-1", base.Add(2*time.Minute)),
+					testGenerationPayload("gen-3", "conv-1", base.Add(3*time.Minute)),
+					testGenerationPayload("gen-4", "conv-1", base.Add(4*time.Minute)),
+				},
+			},
+		},
+	}
+
+	service := NewServiceWithStores(conversationStore, feedback.NewMemoryStore())
+	service.walReader = walReader
+	service.fanOutStore = storage.NewFanOutStore(walReader, nil, nil)
+
+	detail, found, err := service.GetConversationDetailPageForTenant(context.Background(), "tenant-a", "conv-1", ConversationDetailPage{
+		Limit:  2,
+		Offset: 1,
+	})
+	if err != nil {
+		t.Fatalf("get paged conversation detail: %v", err)
+	}
+	if !found {
+		t.Fatalf("expected paged conversation detail to be found")
+	}
+	if !detail.HasMore {
+		t.Fatalf("expected paged detail to advertise more generations")
+	}
+	if detail.NextCursor != "3" {
+		t.Fatalf("expected next cursor 3, got %q", detail.NextCursor)
+	}
+	if len(detail.Generations) != 2 {
+		t.Fatalf("expected 2 paged generations, got %d", len(detail.Generations))
+	}
+
+	var generationIDs []string
+	for _, generation := range detail.Generations {
+		generationIDs = append(generationIDs, generation["generation_id"].(string))
+	}
+	if !reflect.DeepEqual(generationIDs, []string{"gen-2", "gen-3"}) {
+		t.Fatalf("unexpected paged generation ids: %#v", generationIDs)
 	}
 }
 

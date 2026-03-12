@@ -9,6 +9,8 @@ describe('hydrateConversationDetailV2', () => {
       generation_count: 1,
       first_generation_at: '2026-03-10T09:00:00Z',
       last_generation_at: '2026-03-10T09:01:00Z',
+      has_more: true,
+      next_cursor: '20',
       generations: [
         {
           generation_id: 'gen-1',
@@ -95,6 +97,8 @@ describe('hydrateConversationDetailV2', () => {
       generation_count: 1,
       first_generation_at: '2026-03-10T09:00:00Z',
       last_generation_at: '2026-03-10T09:01:00Z',
+      has_more: true,
+      next_cursor: '20',
       generations: [
         {
           generation_id: 'gen-1',
@@ -174,6 +178,7 @@ describe('hydrateConversationDetailV2', () => {
       generation_count: 1,
       first_generation_at: '2026-03-10T09:00:00Z',
       last_generation_at: '2026-03-10T09:01:00Z',
+      has_more: false,
       generations: [
         {
           generation_id: 'gen-1',

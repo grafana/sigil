@@ -36,6 +36,7 @@ const conversationsDataSource: ConversationsDataSource = {
     generation_count: 2,
     first_generation_at: '2026-03-09T11:55:00Z',
     last_generation_at: '2026-03-09T12:00:00Z',
+    has_more: false,
     generations: [
       {
         generation_id: 'gen-1',

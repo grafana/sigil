@@ -156,6 +156,7 @@ const mockConversationsDataSource: ConversationsDataSource = {
       generation_count: 0,
       first_generation_at: '',
       last_generation_at: '',
+      has_more: false,
       generations: [],
       annotations: [],
     };

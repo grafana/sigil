@@ -14,6 +14,8 @@ type ConversationDetailV2 struct {
 	FirstGenerationAt string                     `json:"first_generation_at"`
 	LastGenerationAt  string                     `json:"last_generation_at"`
 	Generations       []map[string]any           `json:"generations"`
+	HasMore           bool                       `json:"has_more"`
+	NextCursor        string                     `json:"next_cursor,omitempty"`
 	RatingSummary     any                        `json:"rating_summary,omitempty"`
 	Annotations       any                        `json:"annotations"`
 	Shared            ConversationDetailV2Shared `json:"shared"`
@@ -62,6 +64,8 @@ func BuildConversationDetailV2(detail ConversationDetail) (ConversationDetailV2,
 		FirstGenerationAt: detail.FirstGenerationAt.UTC().Format(time.RFC3339Nano),
 		LastGenerationAt:  detail.LastGenerationAt.UTC().Format(time.RFC3339Nano),
 		Generations:       generations,
+		HasMore:           detail.HasMore,
+		NextCursor:        detail.NextCursor,
 		RatingSummary:     detail.RatingSummary,
 		Annotations:       detail.Annotations,
 		Shared:            pool.shared,

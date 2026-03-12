@@ -48,6 +48,7 @@ function makeData(overrides: Partial<ConversationData> = {}): ConversationData {
     lastGenerationAt: '',
     ratingSummary: null,
     annotations: [],
+    hasMoreGenerations: false,
     spans: [],
     orphanGenerations: [],
     ...overrides,

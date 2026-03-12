@@ -1577,7 +1577,8 @@ func (s *testConversationStore) GetConversation(_ context.Context, tenantID, con
 }
 
 type testWALReader struct {
-	byID map[string]*sigilv1.Generation
+	byID           map[string]*sigilv1.Generation
+	byConversation map[string][]*sigilv1.Generation
 }
 
 func (s *testWALReader) GetByID(_ context.Context, _ string, generationID string) (*sigilv1.Generation, error) {
@@ -1587,8 +1588,11 @@ func (s *testWALReader) GetByID(_ context.Context, _ string, generationID string
 	return s.byID[generationID], nil
 }
 
-func (s *testWALReader) GetByConversationID(_ context.Context, _ string, _ string) ([]*sigilv1.Generation, error) {
-	return []*sigilv1.Generation{}, nil
+func (s *testWALReader) GetByConversationID(_ context.Context, _ string, conversationID string) ([]*sigilv1.Generation, error) {
+	if s.byConversation == nil {
+		return []*sigilv1.Generation{}, nil
+	}
+	return s.byConversation[conversationID], nil
 }
 
 type testScoreStore struct {

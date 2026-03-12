@@ -32,6 +32,7 @@ function makeConversationData(overrides: Partial<ConversationData> = {}): Conver
     lastGenerationAt: '2026-03-06T00:00:00Z',
     ratingSummary: null,
     annotations: [],
+    hasMoreGenerations: false,
     spans: [],
     orphanGenerations: [],
     ...overrides,

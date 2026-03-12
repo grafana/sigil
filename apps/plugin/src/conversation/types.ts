@@ -172,6 +172,11 @@ export type ConversationDetail = {
   annotations: ConversationAnnotation[];
 };
 
+export type ConversationDetailPage = ConversationDetail & {
+  has_more: boolean;
+  next_cursor?: string;
+};
+
 export type SearchTag = {
   key: string;
   scope: 'well-known' | 'span' | 'resource';
@@ -227,6 +232,8 @@ export type ConversationData = {
   lastGenerationAt: string;
   ratingSummary: ConversationRatingSummary | null;
   annotations: ConversationAnnotation[];
+  hasMoreGenerations: boolean;
+  nextGenerationsCursor?: string;
   spans: ConversationSpan[];
   orphanGenerations: GenerationDetail[];
 };

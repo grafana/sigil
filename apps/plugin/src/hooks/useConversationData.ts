@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createTempoTraceFetcher } from '../conversation/fetchTrace';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
-import { loadConversationDetail, loadConversationTraces, type TraceFetcher } from '../conversation/loader';
+import {
+  loadConversationDetail,
+  loadConversationTraces,
+  mergeConversationData,
+  type TraceFetcher,
+} from '../conversation/loader';
 import {
   getAllGenerations,
   getCostSummary,
@@ -17,6 +22,7 @@ import type { ConversationData } from '../conversation/types';
 import type { GenerationCostResult, GenerationDetail } from '../generation/types';
 
 const defaultTraceFetcher = createTempoTraceFetcher();
+const INITIAL_GENERATION_PAGE_SIZE = 20;
 
 export type UseConversationDataOptions = {
   conversationID: string;
@@ -29,12 +35,15 @@ export type UseConversationDataResult = {
   conversationData: ConversationData | null;
   loading: boolean;
   tracesLoading: boolean;
+  loadingMoreGenerations: boolean;
   errorMessage: string;
+  loadMoreErrorMessage: string;
   tokenSummary: TokenSummary | null;
   costSummary: CostSummary | null;
   generationCosts: Map<string, GenerationCostResult>;
   modelCards: Map<string, ModelCard>;
   allGenerations: GenerationDetail[];
+  loadMoreGenerations: () => Promise<void>;
 };
 
 export function useConversationData({
@@ -46,10 +55,17 @@ export function useConversationData({
   const [conversationData, setConversationData] = useState<ConversationData | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [tracesLoading, setTracesLoading] = useState<boolean>(false);
+  const [loadingMoreGenerations, setLoadingMoreGenerations] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [loadMoreErrorMessage, setLoadMoreErrorMessage] = useState<string>('');
   const [conversationCosts, setConversationCosts] = useState<Map<string, GenerationCostResult>>(new Map());
   const [nameResolvedModelCards, setNameResolvedModelCards] = useState<Map<string, ModelCard>>(new Map());
   const requestVersionRef = useRef<number>(0);
+  const conversationDataRef = useRef<ConversationData | null>(null);
+
+  useEffect(() => {
+    conversationDataRef.current = conversationData;
+  }, [conversationData]);
 
   useEffect(() => {
     requestVersionRef.current += 1;
@@ -60,7 +76,9 @@ export function useConversationData({
         setConversationData(null);
         setLoading(false);
         setTracesLoading(false);
+        setLoadingMoreGenerations(false);
         setErrorMessage('');
+        setLoadMoreErrorMessage('');
       });
       return;
     }
@@ -68,11 +86,13 @@ export function useConversationData({
     queueMicrotask(() => {
       setLoading(true);
       setTracesLoading(false);
+      setLoadingMoreGenerations(false);
       setErrorMessage('');
+      setLoadMoreErrorMessage('');
       setConversationData(null);
     });
 
-    void loadConversationDetail(dataSource, conversationID)
+    void loadConversationDetail(dataSource, conversationID, { limit: INITIAL_GENERATION_PAGE_SIZE })
       .then((data) => {
         if (requestVersionRef.current !== requestVersion) {
           return;
@@ -105,6 +125,66 @@ export function useConversationData({
         setTracesLoading(false);
       });
   }, [dataSource, conversationID, traceFetcher]);
+
+  const loadMoreGenerations = async () => {
+    const current = conversationDataRef.current;
+    if (!current?.hasMoreGenerations || !current.nextGenerationsCursor || loadingMoreGenerations) {
+      return;
+    }
+
+    const requestVersion = requestVersionRef.current;
+    setLoadingMoreGenerations(true);
+    setLoadMoreErrorMessage('');
+
+    try {
+      const pageData = await loadConversationDetail(dataSource, conversationID, {
+        limit: INITIAL_GENERATION_PAGE_SIZE,
+        cursor: current.nextGenerationsCursor,
+      });
+      if (requestVersionRef.current !== requestVersion) {
+        return;
+      }
+
+      const mergePartial = (partialPage: ConversationData) => {
+        if (requestVersionRef.current !== requestVersion) {
+          return;
+        }
+        const latest = conversationDataRef.current;
+        if (!latest) {
+          return;
+        }
+        const merged = mergeConversationData(latest, partialPage);
+        conversationDataRef.current = merged;
+        setConversationData(merged);
+      };
+
+      mergePartial(pageData);
+      const enrichedPage = await loadConversationTraces(pageData, traceFetcher, {
+        onProgress: mergePartial,
+      });
+      if (requestVersionRef.current !== requestVersion) {
+        return;
+      }
+
+      const latest = conversationDataRef.current;
+      if (!latest) {
+        return;
+      }
+      const merged = mergeConversationData(latest, enrichedPage);
+      conversationDataRef.current = merged;
+      setConversationData(merged);
+    } catch (error) {
+      if (requestVersionRef.current !== requestVersion) {
+        return;
+      }
+      setLoadMoreErrorMessage(error instanceof Error ? error.message : 'failed to load more generations');
+    } finally {
+      if (requestVersionRef.current !== requestVersion) {
+        return;
+      }
+      setLoadingMoreGenerations(false);
+    }
+  };
 
   const allGenerations = useMemo<GenerationDetail[]>(() => {
     if (!conversationData) {
@@ -202,11 +282,14 @@ export function useConversationData({
     conversationData,
     loading,
     tracesLoading,
+    loadingMoreGenerations,
     errorMessage,
+    loadMoreErrorMessage,
     tokenSummary,
     costSummary,
     generationCosts: conversationCosts,
     modelCards,
     allGenerations,
+    loadMoreGenerations,
   };
 }

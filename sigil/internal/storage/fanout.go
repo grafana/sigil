@@ -24,6 +24,10 @@ type GenerationFanOutReader interface {
 	ListConversationGenerations(ctx context.Context, tenantID, conversationID string) ([]*sigilv1.Generation, error)
 }
 
+type pagedConversationHotReader interface {
+	GetByConversationIDWindow(ctx context.Context, tenantID, conversationID string, limit int) ([]*sigilv1.Generation, error)
+}
+
 // FanOutStore merges generation reads from hot WAL rows and cold compacted
 // blocks. When the same generation exists in both stores, hot rows win.
 type FanOutStore struct {
@@ -290,7 +294,19 @@ func (s *FanOutStore) ListConversationGenerationsWithPlan(ctx context.Context, t
 	hotStart := time.Now()
 	hotGenerations := []*sigilv1.Generation{}
 	if s.hotReader != nil {
-		loadedHot, err := s.hotReader.GetByConversationID(ctx, tenantID, conversationID)
+		var (
+			loadedHot []*sigilv1.Generation
+			err       error
+		)
+		if plan.Limit > 0 {
+			if pagedReader, ok := s.hotReader.(pagedConversationHotReader); ok {
+				loadedHot, err = pagedReader.GetByConversationIDWindow(ctx, tenantID, conversationID, plan.Limit)
+			} else {
+				loadedHot, err = s.hotReader.GetByConversationID(ctx, tenantID, conversationID)
+			}
+		} else {
+			loadedHot, err = s.hotReader.GetByConversationID(ctx, tenantID, conversationID)
+		}
 		observeFanOutDuration("hot", hotStart)
 		if err != nil {
 			observeQueryResolution("list_conversation", "error")
@@ -309,6 +325,9 @@ func (s *FanOutStore) ListConversationGenerationsWithPlan(ctx context.Context, t
 
 	if !s.hasColdReadPath() {
 		merged := mergeGenerationsPreferHot(hotGenerations, nil)
+		if plan.Limit > 0 {
+			merged = limitConversationGenerationsNewest(merged, plan.Limit)
+		}
 		resolution := "miss"
 		if len(merged) > 0 {
 			resolution = "hot"
@@ -323,6 +342,9 @@ func (s *FanOutStore) ListConversationGenerationsWithPlan(ctx context.Context, t
 	expected := plan.ExpectedGenerationCount
 	if expected > 0 && hotUniqueCount >= expected {
 		merged := mergeGenerationsPreferHot(hotGenerations, nil)
+		if plan.Limit > 0 {
+			merged = limitConversationGenerationsNewest(merged, plan.Limit)
+		}
 		observeQueryResolution("list_conversation", "hot")
 		observeQueryReturnedItems("list_conversation", len(merged))
 		logger.Debug("fanout list conversation generations completed from hot storage",
@@ -330,6 +352,19 @@ func (s *FanOutStore) ListConversationGenerationsWithPlan(ctx context.Context, t
 			"conversation_id", conversationID,
 			"hot_count", len(hotGenerations),
 			"expected_generation_count", expected,
+		)
+		return merged, nil
+	}
+	if plan.Limit > 0 && hotUniqueCount >= plan.Limit {
+		merged := mergeGenerationsPreferHot(hotGenerations, nil)
+		merged = limitConversationGenerationsNewest(merged, plan.Limit)
+		observeQueryResolution("list_conversation", "hot")
+		observeQueryReturnedItems("list_conversation", len(merged))
+		logger.Debug("fanout list conversation generations satisfied bounded window from hot storage",
+			"tenant_id", tenantID,
+			"conversation_id", conversationID,
+			"hot_count", len(hotGenerations),
+			"requested_limit", plan.Limit,
 		)
 		return merged, nil
 	}
@@ -356,6 +391,9 @@ func (s *FanOutStore) ListConversationGenerationsWithPlan(ctx context.Context, t
 	}
 
 	merged := mergeGenerationsPreferHot(hotGenerations, coldGenerations)
+	if plan.Limit > 0 {
+		merged = limitConversationGenerationsNewest(merged, plan.Limit)
+	}
 	resolution := "miss"
 	switch {
 	case len(hotGenerations) > 0 && len(coldGenerations) > 0:
@@ -542,6 +580,9 @@ func (s *FanOutStore) readColdConversationGenerationsWithPlan(
 	if !s.hasColdReadPath() {
 		return []*sigilv1.Generation{}, 0, 0, nil
 	}
+	if plan.Limit > 0 {
+		return s.readColdConversationGenerationsWindowed(ctx, tenantID, conversationID, plan, hotGenerationIDs, hotUniqueCount)
+	}
 
 	from, to := normalizedPlanRange(plan)
 	coldCtx, cancel := withOptionalTimeout(ctx, s.coldReadConfig.TotalBudget)
@@ -651,6 +692,91 @@ func (s *FanOutStore) readColdConversationGenerationsWithPlan(
 	if firstErr != nil {
 		observeColdReadOutcome("list_conversation", firstErr)
 		return nil, scannedBlocks, matchedBlocks, firstErr
+	}
+
+	observeColdReadOutcome("list_conversation", nil)
+	out := make([]*sigilv1.Generation, 0, len(byID))
+	for _, generation := range byID {
+		out = append(out, generation)
+	}
+	return out, scannedBlocks, matchedBlocks, nil
+}
+
+func (s *FanOutStore) readColdConversationGenerationsWindowed(
+	ctx context.Context,
+	tenantID,
+	conversationID string,
+	plan ConversationReadPlan,
+	hotGenerationIDs map[string]struct{},
+	hotUniqueCount int,
+) ([]*sigilv1.Generation, int, int, error) {
+	from, to := normalizedPlanRange(plan)
+	coldCtx, cancel := withOptionalTimeout(ctx, s.coldReadConfig.TotalBudget)
+	defer cancel()
+
+	blocks, err := s.blockMetadataStore.ListBlocks(coldCtx, tenantID, from, to)
+	if err != nil {
+		observeColdReadOutcome("list_conversation", err)
+		return nil, 0, 0, err
+	}
+	if len(blocks) == 0 {
+		observeColdReadOutcome("list_conversation", nil)
+		return []*sigilv1.Generation{}, 0, 0, nil
+	}
+
+	if hotGenerationIDs == nil {
+		hotGenerationIDs = map[string]struct{}{}
+	}
+	byID := make(map[string]*sigilv1.Generation)
+	scannedBlocks := 0
+	matchedBlocks := 0
+	targetCount := plan.Limit
+	for idx := len(blocks) - 1; idx >= 0; idx-- {
+		if coldCtx.Err() != nil {
+			err := coldCtx.Err()
+			observeColdReadOutcome("list_conversation", err)
+			return nil, scannedBlocks, matchedBlocks, err
+		}
+
+		result := s.scanConversationBlock(coldCtx, tenantID, conversationID, blocks[idx])
+		if result.scanned {
+			scannedBlocks++
+		}
+		if result.matched {
+			matchedBlocks++
+		}
+		if result.err != nil {
+			observeColdReadOutcome("list_conversation", result.err)
+			return nil, scannedBlocks, matchedBlocks, result.err
+		}
+
+		sort.SliceStable(result.generations, func(i, j int) bool {
+			leftTime := generationTimestamp(result.generations[i])
+			rightTime := generationTimestamp(result.generations[j])
+			if leftTime.Equal(rightTime) {
+				return result.generations[i].GetId() > result.generations[j].GetId()
+			}
+			return leftTime.After(rightTime)
+		})
+		for _, generation := range result.generations {
+			if generation == nil {
+				continue
+			}
+			generationID := strings.TrimSpace(generation.GetId())
+			if generationID == "" {
+				continue
+			}
+			if _, hotDuplicate := hotGenerationIDs[generationID]; hotDuplicate {
+				continue
+			}
+			if _, exists := byID[generationID]; exists {
+				continue
+			}
+			byID[generationID] = generation
+		}
+		if targetCount > 0 && hotUniqueCount+len(byID) >= targetCount {
+			break
+		}
 	}
 
 	observeColdReadOutcome("list_conversation", nil)
@@ -919,6 +1045,14 @@ func mergeGenerationsPreferHot(hotGenerations, coldGenerations []*sigilv1.Genera
 		return leftTime.Before(rightTime)
 	})
 	return out
+}
+
+func limitConversationGenerationsNewest(generations []*sigilv1.Generation, limit int) []*sigilv1.Generation {
+	if limit <= 0 || len(generations) <= limit {
+		return generations
+	}
+	start := len(generations) - limit
+	return append([]*sigilv1.Generation(nil), generations[start:]...)
 }
 
 func generationTimestamp(generation *sigilv1.Generation) time.Time {
