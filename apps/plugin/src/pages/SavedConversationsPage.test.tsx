@@ -82,6 +82,23 @@ describe('SavedConversationsPage', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
   });
 
+  it('All saved count stays fixed when switching to a collection', async () => {
+    const ds = buildDataSource();
+    render(
+      <MemoryRouter>
+        <SavedConversationsPage dataSource={ds} />
+      </MemoryRouter>
+    );
+    // "All saved" initially shows total from listSavedConversations (2 items)
+    await waitFor(() => screen.getByText('Regression tests'));
+    // Switch to the collection (listCollectionMembers returns 1 item)
+    fireEvent.click(screen.getByText('Regression tests'));
+    await waitFor(() => expect(ds.listCollectionMembers).toHaveBeenCalled());
+    // All saved count should still be 2, not 1
+    const allSavedCount = screen.getAllByText('2');
+    expect(allSavedCount.length).toBeGreaterThan(0);
+  });
+
   it('calls removeCollectionMember when Remove is clicked from active collection', async () => {
     const ds = buildDataSource();
     render(

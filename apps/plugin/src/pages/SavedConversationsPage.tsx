@@ -67,6 +67,7 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
   const [activeCollectionID, setActiveCollectionID] = useState<string | null>(null);
   const [conversations, setConversations] = useState<SavedConversation[]>([]);
   const [totalCount, setTotalCount] = useState(0);
+  const [allSavedCount, setAllSavedCount] = useState(0);
   const [nextCursor, setNextCursor] = useState<string | undefined>();
   const [prevCursors, setPrevCursors] = useState<Array<string | undefined>>([]);
   const [currentCursor, setCurrentCursor] = useState<string | undefined>();
@@ -95,6 +96,7 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
         setConversations(resp.items);
         setNextCursor(resp.next_cursor || undefined);
         setTotalCount(resp.items.length);
+        setAllSavedCount(resp.items.length);
       } else {
         const resp = await dataSource.listCollectionMembers(activeCollectionID, undefined, cursor);
         setConversations(resp.items);
@@ -189,8 +191,8 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <h1 className={styles.title}>Saved Conversations</h1>
-        <p className={styles.subtitle}>Organize and browse your saved conversations</p>
+        <h1 className={styles.title}>Saved conversations</h1>
+        <p className={styles.subtitle}>Browse and organize saved conversations</p>
       </div>
       {error && (
         <div className={styles.errorBar}>
@@ -200,7 +202,7 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
       <div className={styles.body}>
         <CollectionsSidebar
           collections={collections}
-          totalCount={totalCount}
+          totalCount={allSavedCount}
           activeCollectionID={activeCollectionID}
           onSelect={handleSelectCollection}
           onCreateCollection={() => setShowCreateModal(true)}

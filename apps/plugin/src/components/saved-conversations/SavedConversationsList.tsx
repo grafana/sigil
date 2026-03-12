@@ -1,7 +1,7 @@
 import React from 'react';
 import { css } from '@emotion/css';
 import { dateTime, type GrafanaTheme2 } from '@grafana/data';
-import { Button, Icon, Input, Spinner, useStyles2 } from '@grafana/ui';
+import { Button, Checkbox, Icon, Input, Spinner, useStyles2 } from '@grafana/ui';
 import { PLUGIN_BASE, buildConversationExploreRoute } from '../../constants';
 import type { SavedConversation } from '../../evaluation/types';
 
@@ -69,11 +69,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gridTemplateColumns: '32px 1fr 140px 120px',
     gap: theme.spacing(1),
     padding: theme.spacing(0.75, 2),
-    borderBottom: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.secondary,
+    borderBottom: `1px solid ${theme.colors.border.medium}`,
     fontSize: theme.typography.bodySmall.fontSize,
+    fontWeight: theme.typography.fontWeightMedium,
     color: theme.colors.text.secondary,
-    textTransform: 'uppercase',
-    letterSpacing: '0.04em',
   }),
   rows: css({
     flex: 1,
@@ -106,7 +106,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   secondary: css({
     color: theme.colors.text.secondary,
-    fontSize: theme.typography.body.fontSize,
+    fontSize: theme.typography.bodySmall.fontSize,
   }),
   emptyState: css({
     display: 'flex',
@@ -128,7 +128,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: theme.spacing(1, 2),
+    padding: theme.spacing(0, 2),
+    height: theme.spacing(5),
+    flexShrink: 0,
     borderTop: `1px solid ${theme.colors.border.weak}`,
     fontSize: theme.typography.bodySmall.fontSize,
     color: theme.colors.text.secondary,
@@ -190,7 +192,7 @@ export function SavedConversationsList({
             <span>{selectedIDs.size} selected</span>
             <span className={styles.divider} />
             <span className={styles.selectionAction} onClick={onAddToCollection}>
-              Add to collection ›
+              Add to collection
             </span>
             {activeCollectionID !== null && (
               <>
@@ -205,7 +207,7 @@ export function SavedConversationsList({
           <Input
             className={styles.searchInput}
             prefix={<Icon name="search" />}
-            placeholder="Search saved conversations..."
+            placeholder="Search..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.currentTarget.value)}
           />
@@ -214,10 +216,10 @@ export function SavedConversationsList({
 
       {/* Column headers */}
       <div className={styles.colHeaders}>
-        <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} aria-label="Select all" />
+        <Checkbox value={allSelected} onChange={toggleSelectAll} aria-label="Select all" />
         <span>Name</span>
         <span>Saved by</span>
-        <span>Date</span>
+        <span>Saved</span>
       </div>
 
       {/* Rows */}
@@ -237,9 +239,8 @@ export function SavedConversationsList({
               key={sc.saved_id}
               className={`${styles.row} ${selectedIDs.has(sc.saved_id) ? styles.rowSelected : ''}`}
             >
-              <input
-                type="checkbox"
-                checked={selectedIDs.has(sc.saved_id)}
+              <Checkbox
+                value={selectedIDs.has(sc.saved_id)}
                 onChange={() => toggleRow(sc.saved_id)}
                 aria-label={`Select ${sc.name}`}
               />

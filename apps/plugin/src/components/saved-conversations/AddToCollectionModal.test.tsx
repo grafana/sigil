@@ -103,6 +103,42 @@ describe('AddToCollectionModal', () => {
     expect(onSaved).toHaveBeenCalled();
   });
 
+  it('disables Save when no collections are checked', async () => {
+    const ds = buildDataSource({});
+    render(
+      <AddToCollectionModal
+        isOpen
+        selectedSavedIDs={['s1']}
+        collections={collections}
+        dataSource={ds as unknown as EvaluationDataSource}
+        onClose={onClose}
+        onSaved={onSaved}
+        onCollectionCreated={jest.fn()}
+      />
+    );
+    await waitFor(() => screen.getByLabelText('Regression tests'));
+    expect(screen.getByRole('button', { name: /save/i })).toBeDisabled();
+  });
+
+  it('enables Save after checking a collection', async () => {
+    const ds = buildDataSource({});
+    render(
+      <AddToCollectionModal
+        isOpen
+        selectedSavedIDs={['s1']}
+        collections={collections}
+        dataSource={ds as unknown as EvaluationDataSource}
+        onClose={onClose}
+        onSaved={onSaved}
+        onCollectionCreated={jest.fn()}
+      />
+    );
+    await waitFor(() => screen.getByLabelText('Regression tests'));
+    expect(screen.getByRole('button', { name: /save/i })).toBeDisabled();
+    fireEvent.click(screen.getByLabelText('Regression tests'));
+    expect(screen.getByRole('button', { name: /save/i })).not.toBeDisabled();
+  });
+
   it('calls onClose on Cancel', async () => {
     const ds = buildDataSource({});
     render(

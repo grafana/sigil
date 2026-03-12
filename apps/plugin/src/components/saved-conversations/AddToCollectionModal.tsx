@@ -203,6 +203,17 @@ export function AddToCollectionModal({
     }
   };
 
+  const hasChanges = [...checkStates.entries()].some(([colID, state]) => {
+    const current = membershipMap.get(colID) ?? new Set<string>();
+    if (state === 'checked') {
+      return selectedSavedIDs.some((id) => !current.has(id));
+    }
+    if (state === 'unchecked') {
+      return selectedSavedIDs.some((id) => current.has(id));
+    }
+    return false;
+  });
+
   const filtered = filterQuery
     ? collections.filter((c) => c.name.toLowerCase().includes(filterQuery.toLowerCase()))
     : collections;
@@ -252,7 +263,7 @@ export function AddToCollectionModal({
           </button>
           <div className={styles.footer}>
             <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
-            <Button variant="primary" onClick={handleSave} disabled={saving || loading}>
+            <Button variant="primary" onClick={handleSave} disabled={saving || loading || !hasChanges}>
               {saving ? 'Saving...' : 'Save'}
             </Button>
           </div>

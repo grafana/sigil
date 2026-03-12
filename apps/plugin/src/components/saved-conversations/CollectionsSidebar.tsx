@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Badge, ConfirmModal, IconButton, Input, useStyles2 } from '@grafana/ui';
+import { Alert, Button, ConfirmModal, IconButton, Input, useStyles2 } from '@grafana/ui';
 import type { Collection } from '../../evaluation/types';
 
 export type CollectionsSidebarProps = {
@@ -43,11 +43,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   allSavedActive: css({
     background: `${theme.colors.primary.transparent} !important`,
-    border: `1px solid ${theme.colors.primary.border}`,
   }),
   sectionLabel: css({
     fontSize: theme.typography.bodySmall.fontSize,
-    color: theme.colors.text.disabled,
+    color: theme.colors.text.secondary,
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
     padding: theme.spacing(1, 1, 0.5),
@@ -107,19 +106,15 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flex: 1,
   }),
   footer: css({
-    padding: theme.spacing(1),
+    padding: theme.spacing(0, 2),
+    height: theme.spacing(5),
+    flexShrink: 0,
     borderTop: `1px solid ${theme.colors.border.weak}`,
+    display: 'flex',
+    alignItems: 'center',
   }),
   newCollectionBtn: css({
     width: '100%',
-    border: `1px dashed ${theme.colors.primary.border}`,
-    background: 'transparent',
-    color: theme.colors.primary.text,
-    borderRadius: theme.shape.radius.default,
-    padding: theme.spacing(0.75),
-    cursor: 'pointer',
-    fontSize: theme.typography.body.fontSize,
-    '&:hover': { background: theme.colors.primary.transparent },
   }),
 });
 
@@ -197,7 +192,7 @@ export function CollectionsSidebar({
           onClick={() => onSelect(null)}
         >
           <span>All saved</span>
-          <Badge text={String(totalCount)} color="blue" />
+          <span className={styles.count}>{totalCount}</span>
         </div>
 
         <div className={styles.sectionLabel}>Collections</div>
@@ -271,9 +266,15 @@ export function CollectionsSidebar({
       </div>
 
       <div className={styles.footer}>
-        <button className={styles.newCollectionBtn} onClick={onCreateCollection}>
-          + New collection
-        </button>
+        <Button
+          variant="secondary"
+          size="sm"
+          icon="plus"
+          className={styles.newCollectionBtn}
+          onClick={onCreateCollection}
+        >
+          New collection
+        </Button>
       </div>
 
       {collectionToDelete && (
