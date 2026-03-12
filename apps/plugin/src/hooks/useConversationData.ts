@@ -193,7 +193,7 @@ export function useConversationData({
         return;
       }
 
-      const mergePartial = (partialPage: ConversationData) => {
+      const mergePage = (nextPage: ConversationData) => {
         if (requestVersionRef.current !== requestVersion) {
           return;
         }
@@ -201,15 +201,27 @@ export function useConversationData({
         if (!latest) {
           return;
         }
-        const merged = mergeConversationData(latest, partialPage);
+        const merged = mergeConversationData(latest, nextPage);
         applyConversationData(merged);
       };
 
-      mergePartial(pageData);
+      const mergeTracePartial = (partialPage: ConversationData) => {
+        if (requestVersionRef.current !== requestVersion) {
+          return;
+        }
+        const latest = conversationDataRef.current;
+        if (!latest) {
+          return;
+        }
+        const merged = mergeConversationData(partialPage, latest);
+        applyConversationData(merged);
+      };
+
+      mergePage(pageData);
       releaseLoadMore();
 
       void loadConversationTraces(pageData, traceFetcher, {
-        onProgress: mergePartial,
+        onProgress: mergeTracePartial,
       })
         .then((enrichedPage) => {
           if (requestVersionRef.current !== requestVersion) {
@@ -220,7 +232,7 @@ export function useConversationData({
           if (!latest) {
             return;
           }
-          const merged = mergeConversationData(latest, enrichedPage);
+          const merged = mergeConversationData(enrichedPage, latest);
           applyConversationData(merged);
         })
         .catch((error) => {

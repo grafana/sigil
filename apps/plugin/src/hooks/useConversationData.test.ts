@@ -870,6 +870,7 @@ describe('useConversationData', () => {
       });
       expect(result.current.loadingMoreGenerations).toBe(false);
       expect(result.current.conversationData?.hasMoreGenerations).toBe(false);
+      expect(result.current.conversationData?.nextGenerationsCursor).toBeUndefined();
       expect([...result.current.allGenerations.map((generation) => generation.generation_id)].sort()).toEqual([
         'gen-a',
         'gen-b',
@@ -907,6 +908,8 @@ describe('useConversationData', () => {
 
     await waitFor(() => {
       expect(result.current.conversationData?.spans.some((span) => span.spanID === 'span-b')).toBe(true);
+      expect(result.current.conversationData?.hasMoreGenerations).toBe(false);
+      expect(result.current.conversationData?.nextGenerationsCursor).toBeUndefined();
     });
   });
 });
