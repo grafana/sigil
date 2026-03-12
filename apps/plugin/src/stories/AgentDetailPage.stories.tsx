@@ -171,6 +171,41 @@ const mockDataSource: AgentsDataSource = {
   }),
 };
 
+const denseVersionDataSource: AgentsDataSource = {
+  ...mockDataSource,
+  lookupAgent: async (name: string, version?: string) => ({
+    ...(await mockDataSource.lookupAgent(name, version)),
+    declared_version_first: '3792846c-6b61-4fb1-95a5-cde85fc97151',
+    declared_version_latest: '3aafa4a3-9050-4b7f-bd72-b3c76718b612',
+  }),
+  listAgentVersions: async () => ({
+    items: [
+      '3792846c-6b61-4fb1-95a5-cde85fc97151',
+      '4a151aa5-6fa2-4d8b-ae0a-f20e23a13fce',
+      'f5b3c9bb-b87a-489b-978b-abd896a02cfb',
+      'd1af22c8-60be-4c63-9d61-cc4337e2c928',
+      '778a0c6c-7e64-4221-9743-092b32c94806',
+      'e450e9d4-21d1-4761-8a99-b976a75f8b6c',
+      'b0f11333-8af2-4df2-95d6-d2bc65914908',
+      '3aafa4a3-9050-4b7f-bd72-b3c76718b612',
+    ].map((declaredVersion, index) => {
+      const hour = (index + 1).toString().padStart(2, '0');
+      return {
+        effective_version: `sha256:${String(index + 1).repeat(64)}`,
+        declared_version_first: declaredVersion,
+        declared_version_latest: declaredVersion,
+        first_seen_at: `2026-03-04T${hour}:00:00Z`,
+        last_seen_at: `2026-03-04T${hour}:30:00Z`,
+        generation_count: 12 - index,
+        tool_count: 2,
+        system_prompt_prefix: `prompt ${index + 1}`,
+        token_estimate: { system_prompt: 96, tools_total: 64, total: 160 },
+      };
+    }),
+    next_cursor: '',
+  }),
+};
+
 const meta = {
   title: 'Sigil/Agents/Agent Detail Page',
   component: AgentDetailPage,
@@ -188,6 +223,12 @@ const meta = {
 
 export default meta;
 export const Default = {};
+
+export const DenseVersions = {
+  args: {
+    dataSource: denseVersionDataSource,
+  },
+};
 
 export const Anonymous = {
   render: (args: AgentDetailPageProps) => (

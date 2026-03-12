@@ -634,8 +634,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   recentVersionItem: css({
     width: '100%',
-    minWidth: 0,
-    flex: 1,
+    flex: '1 1 112px',
+    minWidth: 112,
     display: 'flex',
     flexDirection: 'column' as const,
     gap: theme.spacing(0.125),
@@ -673,7 +673,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   recentVersionContent: css({
     display: 'grid',
-    gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+    gridTemplateColumns: 'minmax(0, 1fr) auto',
     alignItems: 'center',
     gap: theme.spacing(0.5),
     width: '100%',
@@ -686,12 +686,16 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     alignItems: 'flex-end',
+    width: '100%',
     minWidth: 0,
   }),
   recentVersionTextCentered: css({
     alignItems: 'center',
   }),
   recentVersionNumber: css({
+    display: 'block',
+    width: '100%',
+    maxWidth: '100%',
     fontSize: theme.typography.bodySmall.fontSize,
     color: theme.colors.text.primary,
     fontWeight: theme.typography.fontWeightMedium,
@@ -935,6 +939,14 @@ function formatRelativeDateCompact(iso: string): string {
     return `${Math.floor(diffSec / 3600)}h`;
   }
   return `${Math.floor(diffSec / 86400)}d`;
+}
+
+function formatRecentVersionLabel(label: string): string {
+  const normalized = label.trim();
+  if (normalized.length <= 18) {
+    return normalized;
+  }
+  return `${normalized.slice(0, 8)}…${normalized.slice(-4)}`;
 }
 
 function formatDurationCompact(fromIso: string, toIso: string): string {
@@ -1715,6 +1727,7 @@ export default function AgentDetailPage({
                               versionItem.declared_version_latest ||
                               versionItem.declared_version_first ||
                               `#${index + 1}`;
+                            const versionLabel = formatRecentVersionLabel(versionNumber);
                             const tooltipContent = (
                               <div className={styles.versionTooltip}>
                                 <div className={styles.versionTooltipTitle}>Version {versionNumber}</div>
@@ -1759,8 +1772,8 @@ export default function AgentDetailPage({
                                             styles.recentVersionNumber,
                                             !completedRating && styles.recentVersionNumberCentered
                                           )}
-                                        >
-                                          {versionNumber}
+                                          >
+                                          {versionLabel}
                                         </span>
                                       </span>
                                       {completedRating && (

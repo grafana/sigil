@@ -100,6 +100,32 @@ function createDataSource(): AgentsDataSource {
   };
 }
 
+function createDenseVersionItems() {
+  return [
+    '3792846c-6b61-4fb1-95a5-cde85fc97151',
+    '4a151aa5-6fa2-4d8b-ae0a-f20e23a13fce',
+    'f5b3c9bb-b87a-489b-978b-abd896a02cfb',
+    'd1af22c8-60be-4c63-9d61-cc4337e2c928',
+    '778a0c6c-7e64-4221-9743-092b32c94806',
+    'e450e9d4-21d1-4761-8a99-b976a75f8b6c',
+    'b0f11333-8af2-4df2-95d6-d2bc65914908',
+    '3aafa4a3-9050-4b7f-bd72-b3c76718b612',
+  ].map((version, index) => {
+    const hour = (index + 1).toString().padStart(2, '0');
+    return {
+      effective_version: `sha256:${String(index + 1).repeat(64)}`,
+      declared_version_first: version,
+      declared_version_latest: version,
+      first_seen_at: `2026-03-04T${hour}:00:00Z`,
+      last_seen_at: `2026-03-04T${hour}:30:00Z`,
+      generation_count: index + 1,
+      tool_count: 1,
+      system_prompt_prefix: `v${index + 1}`,
+      token_estimate: { system_prompt: 4, tools_total: 2, total: 6 },
+    };
+  });
+}
+
 describe('AgentDetailPage', () => {
   it('loads named agent with selected version and updates URL on switch', async () => {
     const dataSource = createDataSource();
@@ -246,6 +272,33 @@ describe('AgentDetailPage', () => {
     await screen.findByLabelText('toggle agent version selector');
     await waitFor(() => {
       expect(screen.getAllByLabelText(/select version sha256:/i)).toHaveLength(8);
+    });
+  });
+
+  it('shortens long recent version labels in the top bar', async () => {
+    const dataSource = createDataSource();
+    dataSource.listAgentVersions = jest.fn(async () => ({
+      items: createDenseVersionItems(),
+      next_cursor: '',
+    }));
+
+    render(
+      <MemoryRouter initialEntries={['/agents/name/assistant']}>
+        <Routes>
+          <Route path="/agents/name/:agentName" element={<AgentDetailPage dataSource={dataSource} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await screen.findByLabelText('toggle agent version selector');
+    await waitFor(() => {
+      const recentButtonText = screen
+        .getAllByLabelText(/select version sha256:/i)
+        .map((button) => button.textContent?.replace(/\s+/g, ' ').trim() ?? '');
+
+      expect(recentButtonText).toEqual(
+        expect.arrayContaining([expect.stringContaining('4a151aa5…3fce'), expect.stringContaining('3aafa4a3…b612')])
+      );
     });
   });
 
