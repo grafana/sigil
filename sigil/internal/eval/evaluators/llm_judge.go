@@ -20,6 +20,7 @@ const (
 	defaultLLMJudgeSystemPrompt = "You evaluate one assistant response. Use only the user input and assistant output. Follow the score field description exactly. Be strict. If uncertain, choose the lower score."
 	defaultLLMJudgeUserPrompt   = "Latest user message:\n{{latest_user_message}}\n\nAssistant response:\n{{assistant_response}}"
 	defaultLLMJudgeMaxTokens    = 128
+	llmJudgeExplanationPrompt   = "Very brief one-sentence justification for the score."
 )
 
 type LLMJudgeEvaluator struct {
@@ -356,7 +357,7 @@ func BuildJudgeSchema(keys []evalpkg.OutputKey) map[string]any {
 	}
 
 	props := map[string]any{
-		"explanation": map[string]any{"type": "string", "description": "Concise justification for the score"},
+		"explanation": map[string]any{"type": "string", "description": llmJudgeExplanationPrompt},
 	}
 	required := []string{"explanation"}
 
