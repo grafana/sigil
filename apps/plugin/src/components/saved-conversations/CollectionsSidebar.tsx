@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Alert, Badge, ConfirmModal, IconButton, Input, useStyles2 } from '@grafana/ui';
@@ -139,6 +139,19 @@ export function CollectionsSidebar({
   const renameInputRef = useRef<HTMLInputElement>(null);
   const prevNameRef = useRef('');
 
+  useEffect(() => {
+    if (menuState?.type === 'rename') {
+      renameInputRef.current?.focus();
+    }
+  }, [menuState]);
+
+  useEffect(() => {
+    if (menuState?.type !== 'menu') return;
+    const handleOutsideClick = () => setMenuState(null);
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [menuState]);
+
   const openMenu = (e: React.MouseEvent, collectionID: string) => {
     e.stopPropagation();
     setMenuState({ collectionID, type: 'menu' });
@@ -149,7 +162,6 @@ export function CollectionsSidebar({
     setRenameValue(collection.name);
     setRenameError(undefined);
     setMenuState({ collectionID: collection.collection_id, type: 'rename' });
-    setTimeout(() => renameInputRef.current?.focus(), 0);
   };
 
   const confirmRename = async (collectionID: string) => {
@@ -195,8 +207,8 @@ export function CollectionsSidebar({
           const isActive = activeCollectionID === col.collection_id;
 
           return (
+            <React.Fragment key={col.collection_id}>
             <div
-              key={col.collection_id}
               className={`${styles.collectionItem} ${isActive ? styles.collectionItemActive : ''}`}
               style={{ position: 'relative' }}
               onClick={() => !isRenaming && onSelect(col.collection_id)}
@@ -217,7 +229,6 @@ export function CollectionsSidebar({
                   />
                   <IconButton name="check" tooltip="Confirm rename" onClick={() => confirmRename(col.collection_id)} />
                   <IconButton name="times" tooltip="Cancel rename" onClick={cancelRename} />
-                  {renameError && <Alert severity="error" title={renameError} />}
                 </>
               ) : (
                 <>
@@ -251,6 +262,10 @@ export function CollectionsSidebar({
                 </>
               )}
             </div>
+            {isRenaming && renameError && (
+              <Alert severity="error" title={renameError} style={{ marginTop: 4 }} />
+            )}
+            </React.Fragment>
           );
         })}
       </div>
