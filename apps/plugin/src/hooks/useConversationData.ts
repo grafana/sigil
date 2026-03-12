@@ -143,7 +143,7 @@ export function useConversationData({
       });
   }, [applyConversationData, dataSource, conversationID, mergeTraceResultIntoCurrent, traceFetcher]);
 
-  const loadMoreGenerations = async () => {
+  const loadMoreGenerations = useCallback(async () => {
     const current = conversationDataRef.current;
     if (!current?.hasMoreGenerations || !current.nextGenerationsCursor || loadingMoreGenerations) {
       return;
@@ -208,7 +208,7 @@ export function useConversationData({
       }
       setLoadingMoreGenerations(false);
     }
-  };
+  }, [loadingMoreGenerations, dataSource, conversationID, traceFetcher, applyConversationData]);
 
   const allGenerations = useMemo<GenerationDetail[]>(() => {
     if (!conversationData) {
