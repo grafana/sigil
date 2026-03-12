@@ -289,6 +289,8 @@ public sealed class ToolExecutionStart
     public string AgentVersion { get; set; } = string.Empty;
     /// <summary>The model that requested the tool call (e.g. "gpt-5").</summary>
     public string RequestModel { get; set; } = string.Empty;
+    /// <summary>The provider that served the model (e.g. "openai").</summary>
+    public string RequestProvider { get; set; } = string.Empty;
     public bool IncludeContent { get; set; }
     public DateTimeOffset? StartedAt { get; set; }
 }

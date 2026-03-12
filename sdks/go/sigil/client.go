@@ -1652,7 +1652,7 @@ func (c *Client) recordToolExecutionMetrics(seed ToolExecutionStart, startedAt t
 		duration,
 		metric.WithAttributes(
 			attribute.String(spanAttrOperationName, "execute_tool"),
-			attribute.String(spanAttrProviderName, ""),
+			attribute.String(spanAttrProviderName, strings.TrimSpace(seed.RequestProvider)),
 			attribute.String(spanAttrRequestModel, strings.TrimSpace(seed.RequestModel)),
 			attribute.String(spanAttrAgentName, strings.TrimSpace(seed.AgentName)),
 			attribute.String(spanAttrErrorType, errorType),

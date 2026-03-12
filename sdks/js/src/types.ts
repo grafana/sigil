@@ -350,6 +350,8 @@ export interface ToolExecutionStart {
   agentVersion?: string;
   /** The model that requested the tool call (e.g. "gpt-5"). */
   requestModel?: string;
+  /** The provider that served the model (e.g. "openai"). */
+  requestProvider?: string;
   includeContent?: boolean;
   startedAt?: Date;
 }
@@ -372,6 +374,7 @@ export interface ToolExecution {
   agentName?: string;
   agentVersion?: string;
   requestModel?: string;
+  requestProvider?: string;
   includeContent: boolean;
   startedAt: Date;
   completedAt: Date;

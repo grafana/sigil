@@ -806,6 +806,7 @@ func TestConformance_ToolExecution(t *testing.T) {
 		ToolType:        "function",
 		ToolDescription: "Get weather",
 		RequestModel:    conformanceModel.Name,
+		RequestProvider: conformanceModel.Provider,
 		IncludeContent:  true,
 		StartedAt:       generationStartedAt.Add(100 * time.Millisecond),
 	})
@@ -833,6 +834,7 @@ func TestConformance_ToolExecution(t *testing.T) {
 	duration := findHistogram[float64](t, metrics, metricOperationDuration)
 	requireHistogramPointWithAttrs(t, duration, map[string]string{
 		spanAttrOperationName: conformanceToolOperation,
+		spanAttrProviderName:  conformanceModel.Provider,
 		spanAttrRequestModel:  conformanceModel.Name,
 		spanAttrAgentName:     "agent-tools",
 	})

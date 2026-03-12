@@ -254,6 +254,7 @@ class ToolExecutionStart:
     agent_name: str = ""
     agent_version: str = ""
     request_model: str = ""
+    request_provider: str = ""
     include_content: bool = False
     started_at: Optional[datetime] = None
 
