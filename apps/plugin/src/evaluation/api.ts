@@ -26,6 +26,12 @@ import type {
   TemplateScope,
   TemplateVersion,
   TemplateVersionListResponse,
+  AddCollectionMembersRequest,
+  Collection,
+  CollectionListResponse,
+  CollectionMembersResponse,
+  CreateCollectionRequest,
+  UpdateCollectionRequest,
   UpdateRuleRequest,
 } from './types';
 
@@ -60,6 +66,15 @@ export type EvaluationDataSource = {
   getSavedConversation: (savedID: string) => Promise<SavedConversation>;
   deleteSavedConversation: (savedID: string) => Promise<void>;
   createManualConversation: (request: CreateManualConversationRequest) => Promise<SavedConversation>;
+  listCollections: (limit?: number, cursor?: string) => Promise<CollectionListResponse>;
+  createCollection: (request: CreateCollectionRequest) => Promise<Collection>;
+  getCollection: (collectionID: string) => Promise<Collection>;
+  updateCollection: (collectionID: string, request: UpdateCollectionRequest) => Promise<Collection>;
+  deleteCollection: (collectionID: string) => Promise<void>;
+  addCollectionMembers: (collectionID: string, request: AddCollectionMembersRequest) => Promise<void>;
+  removeCollectionMember: (collectionID: string, savedID: string) => Promise<void>;
+  listCollectionMembers: (collectionID: string, limit?: number, cursor?: string) => Promise<CollectionMembersResponse>;
+  listCollectionsForSavedConversation: (savedID: string) => Promise<CollectionListResponse>;
 };
 
 export const defaultEvaluationDataSource: EvaluationDataSource = {
@@ -375,6 +390,109 @@ export const defaultEvaluationDataSource: EvaluationDataSource = {
         method: 'POST',
         url: `${evalBasePath}/saved-conversations:manual`,
         data: request,
+      })
+    );
+    return response.data;
+  },
+
+  async listCollections(limit?: number, cursor?: string) {
+    const params = new URLSearchParams();
+    if (limit != null) {
+      params.set('limit', String(limit));
+    }
+    if (cursor) {
+      params.set('cursor', cursor);
+    }
+    const qs = params.toString();
+    const url = qs.length > 0 ? `${evalBasePath}/collections?${qs}` : `${evalBasePath}/collections`;
+    const response = await lastValueFrom(getBackendSrv().fetch<CollectionListResponse>({ method: 'GET', url }));
+    return response.data;
+  },
+
+  async createCollection(request) {
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<Collection>({
+        method: 'POST',
+        url: `${evalBasePath}/collections`,
+        data: request,
+      })
+    );
+    return response.data;
+  },
+
+  async getCollection(collectionID) {
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<Collection>({
+        method: 'GET',
+        url: `${evalBasePath}/collections/${encodeURIComponent(collectionID)}`,
+      })
+    );
+    return response.data;
+  },
+
+  async updateCollection(collectionID, request) {
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<Collection>({
+        method: 'PATCH',
+        url: `${evalBasePath}/collections/${encodeURIComponent(collectionID)}`,
+        data: request,
+      })
+    );
+    return response.data;
+  },
+
+  async deleteCollection(collectionID) {
+    await lastValueFrom(
+      getBackendSrv().fetch<void>({
+        method: 'DELETE',
+        url: `${evalBasePath}/collections/${encodeURIComponent(collectionID)}`,
+        responseType: 'text',
+      })
+    );
+  },
+
+  async addCollectionMembers(collectionID, request) {
+    await lastValueFrom(
+      getBackendSrv().fetch<void>({
+        method: 'POST',
+        url: `${evalBasePath}/collections/${encodeURIComponent(collectionID)}/members`,
+        data: request,
+      })
+    );
+  },
+
+  async removeCollectionMember(collectionID, savedID) {
+    await lastValueFrom(
+      getBackendSrv().fetch<void>({
+        method: 'DELETE',
+        url: `${evalBasePath}/collections/${encodeURIComponent(collectionID)}/members/${encodeURIComponent(savedID)}`,
+        responseType: 'text',
+      })
+    );
+  },
+
+  async listCollectionMembers(collectionID, limit?: number, cursor?: string) {
+    const params = new URLSearchParams();
+    if (limit != null) {
+      params.set('limit', String(limit));
+    }
+    if (cursor) {
+      params.set('cursor', cursor);
+    }
+    const qs = params.toString();
+    const url =
+      qs.length > 0
+        ? `${evalBasePath}/collections/${encodeURIComponent(collectionID)}/members?${qs}`
+        : `${evalBasePath}/collections/${encodeURIComponent(collectionID)}/members`;
+    const response = await lastValueFrom(getBackendSrv().fetch<CollectionMembersResponse>({ method: 'GET', url }));
+    return response.data;
+  },
+
+  async listCollectionsForSavedConversation(savedID) {
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<CollectionListResponse>({
+        method: 'GET',
+        url: `${evalBasePath}/saved-conversations/${encodeURIComponent(savedID)}/collections`,
       })
     );
     return response.data;

@@ -61,6 +61,7 @@ export type LatestScore = {
   evaluator_id: string;
   evaluator_version: string;
   evaluator_description?: string;
+  explanation?: string;
   created_at: string;
   passed?: boolean | null;
 };
