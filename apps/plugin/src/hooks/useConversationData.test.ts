@@ -728,4 +728,185 @@ describe('useConversationData', () => {
       ]);
     });
   });
+
+  it('allows requesting the next page while the prior page traces are still loading', async () => {
+    let resolveOlderTrace: ((value: unknown) => void) | undefined;
+    const dataSource: ConversationsDataSource = {
+      searchConversations: jest.fn(),
+      getConversationDetail: jest
+        .fn()
+        .mockResolvedValueOnce({
+          conversation_id: 'conv-1',
+          generation_count: 4,
+          first_generation_at: '2026-03-09T13:08:03Z',
+          last_generation_at: '2026-03-09T13:38:15Z',
+          generations: [
+            {
+              generation_id: 'gen-c',
+              conversation_id: 'conv-1',
+              trace_id: 'trace-c',
+              span_id: 'span-c',
+              created_at: '2026-03-09T13:28:03Z',
+            },
+            {
+              generation_id: 'gen-d',
+              conversation_id: 'conv-1',
+              trace_id: 'trace-d',
+              span_id: 'span-d',
+              created_at: '2026-03-09T13:38:15Z',
+            },
+          ],
+          has_more: true,
+          next_cursor: '20',
+          annotations: [],
+        })
+        .mockResolvedValueOnce({
+          conversation_id: 'conv-1',
+          generation_count: 4,
+          first_generation_at: '2026-03-09T13:08:03Z',
+          last_generation_at: '2026-03-09T13:38:15Z',
+          generations: [
+            {
+              generation_id: 'gen-b',
+              conversation_id: 'conv-1',
+              trace_id: 'trace-b',
+              span_id: 'span-b',
+              created_at: '2026-03-09T13:18:03Z',
+            },
+          ],
+          has_more: true,
+          next_cursor: '40',
+          annotations: [],
+        })
+        .mockResolvedValueOnce({
+          conversation_id: 'conv-1',
+          generation_count: 4,
+          first_generation_at: '2026-03-09T13:08:03Z',
+          last_generation_at: '2026-03-09T13:38:15Z',
+          generations: [
+            {
+              generation_id: 'gen-a',
+              conversation_id: 'conv-1',
+              trace_id: 'trace-a',
+              span_id: 'span-a',
+              created_at: '2026-03-09T13:08:03Z',
+            },
+          ],
+          has_more: false,
+          annotations: [],
+        }),
+      getGeneration: jest.fn(),
+      getSearchTags: jest.fn(),
+      getSearchTagValues: jest.fn(),
+    };
+    const traceFetcher = jest.fn((traceID: string) => {
+      if (traceID === 'trace-b') {
+        return new Promise((resolve) => {
+          resolveOlderTrace = resolve;
+        });
+      }
+      return Promise.resolve({
+        resourceSpans: [
+          {
+            resource: { attributes: [{ key: 'service.name', value: { stringValue: 'svc' } }] },
+            scopeSpans: [
+              {
+                spans: [
+                  {
+                    spanId: traceID.replace('trace', 'span'),
+                    parentSpanId: '',
+                    name: traceID,
+                    startTimeUnixNano: traceID === 'trace-a' ? '1000' : traceID === 'trace-c' ? '3000' : '4000',
+                    endTimeUnixNano: traceID === 'trace-a' ? '1500' : traceID === 'trace-c' ? '3500' : '4500',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+    });
+
+    const { result } = renderHook(() =>
+      useConversationData({
+        conversationID: 'conv-1',
+        dataSource,
+        traceFetcher,
+        modelCardClient,
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+      expect(result.current.tracesLoading).toBe(false);
+      expect(result.current.conversationData?.hasMoreGenerations).toBe(true);
+      expect(result.current.conversationData?.nextGenerationsCursor).toBe('20');
+    });
+
+    await act(async () => {
+      await result.current.loadMoreGenerations();
+    });
+
+    await waitFor(() => {
+      expect(result.current.loadingMoreGenerations).toBe(false);
+      expect(result.current.conversationData?.hasMoreGenerations).toBe(true);
+      expect(result.current.conversationData?.nextGenerationsCursor).toBe('40');
+      expect([...result.current.allGenerations.map((generation) => generation.generation_id)].sort()).toEqual([
+        'gen-b',
+        'gen-c',
+        'gen-d',
+      ]);
+    });
+
+    await act(async () => {
+      await result.current.loadMoreGenerations();
+    });
+
+    await waitFor(() => {
+      expect(dataSource.getConversationDetail).toHaveBeenCalledTimes(3);
+      expect(dataSource.getConversationDetail).toHaveBeenNthCalledWith(3, 'conv-1', {
+        limit: 20,
+        cursor: '40',
+      });
+      expect(result.current.loadingMoreGenerations).toBe(false);
+      expect(result.current.conversationData?.hasMoreGenerations).toBe(false);
+      expect([...result.current.allGenerations.map((generation) => generation.generation_id)].sort()).toEqual([
+        'gen-a',
+        'gen-b',
+        'gen-c',
+        'gen-d',
+      ]);
+    });
+
+    act(() => {
+      resolveOlderTrace?.({
+        resourceSpans: [
+          {
+            resource: { attributes: [{ key: 'service.name', value: { stringValue: 'svc' } }] },
+            scopeSpans: [
+              {
+                spans: [
+                  {
+                    spanId: 'span-b',
+                    parentSpanId: '',
+                    name: 'trace-b',
+                    startTimeUnixNano: '2000',
+                    endTimeUnixNano: '2500',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(result.current.conversationData?.spans.some((span) => span.spanID === 'span-b')).toBe(true);
+    });
+  });
 });

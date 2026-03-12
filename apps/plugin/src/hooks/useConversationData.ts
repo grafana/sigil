@@ -159,6 +159,15 @@ export function useConversationData({
     }
 
     const requestVersion = requestVersionRef.current;
+    let releasedLoadMore = false;
+    const releaseLoadMore = () => {
+      if (releasedLoadMore) {
+        return;
+      }
+      releasedLoadMore = true;
+      setLoadingMoreGenerationsState(false);
+    };
+
     setLoadingMoreGenerationsState(true);
     setLoadMoreErrorMessage('');
 
@@ -197,19 +206,30 @@ export function useConversationData({
       };
 
       mergePartial(pageData);
-      const enrichedPage = await loadConversationTraces(pageData, traceFetcher, {
-        onProgress: mergePartial,
-      });
-      if (requestVersionRef.current !== requestVersion) {
-        return;
-      }
+      releaseLoadMore();
 
-      const latest = conversationDataRef.current;
-      if (!latest) {
-        return;
-      }
-      const merged = mergeConversationData(latest, enrichedPage);
-      applyConversationData(merged);
+      void loadConversationTraces(pageData, traceFetcher, {
+        onProgress: mergePartial,
+      })
+        .then((enrichedPage) => {
+          if (requestVersionRef.current !== requestVersion) {
+            return;
+          }
+
+          const latest = conversationDataRef.current;
+          if (!latest) {
+            return;
+          }
+          const merged = mergeConversationData(latest, enrichedPage);
+          applyConversationData(merged);
+        })
+        .catch((error) => {
+          if (requestVersionRef.current !== requestVersion) {
+            return;
+          }
+          setLoadMoreErrorMessage(error instanceof Error ? error.message : 'failed to load more generations');
+        });
+      return;
     } catch (error) {
       if (requestVersionRef.current !== requestVersion) {
         return;
@@ -219,7 +239,7 @@ export function useConversationData({
       if (requestVersionRef.current !== requestVersion) {
         return;
       }
-      setLoadingMoreGenerationsState(false);
+      releaseLoadMore();
     }
   };
 
