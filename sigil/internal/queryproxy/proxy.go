@@ -107,7 +107,9 @@ func (p *Proxy) Forward(w http.ResponseWriter, req *http.Request, backend Backen
 
 	copyResponseHeaders(w.Header(), resp.Header)
 	w.WriteHeader(resp.StatusCode)
-	_, _ = io.Copy(w, resp.Body)
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		return fmt.Errorf("copy upstream response body: %w", err)
+	}
 	return nil
 }
 
