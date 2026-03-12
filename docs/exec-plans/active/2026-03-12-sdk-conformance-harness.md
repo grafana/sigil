@@ -114,8 +114,8 @@ The repo currently ships the Go core conformance harness entry point:
 - [x] Add `test:sdk:conformance` task to `mise.toml`
 - [x] Update `ARCHITECTURE.md` SDK section
 - [x] Update discoverability docs (`docs/index.md`, `docs/references/index.md`, `sdks/go/README.md`)
-- [ ] Verify: `mise run test:sdk:conformance` passes
-- [ ] Verify: `go test -run TestConformance -count=5 ./sdks/go/sigil/` proves determinism
+- [x] Verify: `mise run test:sdk:conformance` passes
+- [x] Verify: `go test -run TestConformance -count=5 ./sdks/go/sigil/` proves determinism
 
 ## Phase B: Go provider wrappers
 
