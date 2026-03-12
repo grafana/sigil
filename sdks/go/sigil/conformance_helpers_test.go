@@ -3,6 +3,7 @@ package sigil_test
 import (
 	"context"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -22,28 +23,62 @@ import (
 )
 
 const (
-	conformanceOperationName    = "generateText"
-	metadataKeyConversation     = "sigil.conversation.title"
-	metadataKeyCanonicalUserID  = "sigil.user.id"
-	metadataKeyLegacyUserID     = "user.id"
-	spanAttrOperationName       = "gen_ai.operation.name"
-	spanAttrConversationTitle   = "sigil.conversation.title"
-	spanAttrUserID              = "user.id"
-	spanAttrAgentName           = "gen_ai.agent.name"
-	spanAttrAgentVersion        = "gen_ai.agent.version"
-	spanAttrErrorType           = "error.type"
-	spanAttrRequestToolChoice   = "sigil.gen_ai.request.tool_choice"
-	spanAttrEmbeddingInputCount = "gen_ai.embeddings.input_count"
-	spanAttrEmbeddingDimCount   = "gen_ai.embeddings.dimension.count"
-	spanAttrToolName            = "gen_ai.tool.name"
-	spanAttrToolCallID          = "gen_ai.tool.call.id"
-	spanAttrToolType            = "gen_ai.tool.type"
-	spanAttrToolCallArguments   = "gen_ai.tool.call.arguments"
-	spanAttrToolCallResult      = "gen_ai.tool.call.result"
-	metricOperationDuration     = "gen_ai.client.operation.duration"
-	metricTokenUsage            = "gen_ai.client.token.usage"
-	metricTimeToFirstToken      = "gen_ai.client.time_to_first_token"
-	metricToolCallsPerOperation = "gen_ai.client.tool_calls_per_operation"
+	conformanceOperationName       = "generateText"
+	conformanceStreamOperation     = "streamText"
+	conformanceToolOperation       = "execute_tool"
+	conformanceEmbeddingOperation  = "embeddings"
+	metadataKeyConversation        = "sigil.conversation.title"
+	metadataKeyCanonicalUserID     = "sigil.user.id"
+	metadataKeyLegacyUserID        = "user.id"
+	metadataKeyThinkingBudget      = "sigil.gen_ai.request.thinking.budget_tokens"
+	metadataKeySDKName             = "sigil.sdk.name"
+	sdkMetadataKeyName             = metadataKeySDKName
+	sdkNameGo                      = "sdk-go"
+	spanAttrOperationName          = "gen_ai.operation.name"
+	spanAttrGenerationID           = "sigil.generation.id"
+	spanAttrConversationID         = "gen_ai.conversation.id"
+	spanAttrConversationTitle      = "sigil.conversation.title"
+	spanAttrUserID                 = "user.id"
+	spanAttrAgentName              = "gen_ai.agent.name"
+	spanAttrAgentVersion           = "gen_ai.agent.version"
+	spanAttrErrorType              = "error.type"
+	spanAttrErrorCategory          = "error.category"
+	spanAttrProviderName           = "gen_ai.provider.name"
+	spanAttrRequestModel           = "gen_ai.request.model"
+	spanAttrRequestMaxTokens       = "gen_ai.request.max_tokens"
+	spanAttrRequestTemperature     = "gen_ai.request.temperature"
+	spanAttrRequestTopP            = "gen_ai.request.top_p"
+	spanAttrRequestToolChoice      = "sigil.gen_ai.request.tool_choice"
+	spanAttrRequestThinkingEnabled = "sigil.gen_ai.request.thinking.enabled"
+	spanAttrRequestThinkingBudget  = metadataKeyThinkingBudget
+	spanAttrEmbeddingInputCount    = "gen_ai.embeddings.input_count"
+	spanAttrEmbeddingDimCount      = "gen_ai.embeddings.dimension.count"
+	spanAttrToolName               = "gen_ai.tool.name"
+	spanAttrToolCallID             = "gen_ai.tool.call.id"
+	spanAttrToolType               = "gen_ai.tool.type"
+	spanAttrToolDescription        = "gen_ai.tool.description"
+	spanAttrToolCallArguments      = "gen_ai.tool.call.arguments"
+	spanAttrToolCallResult         = "gen_ai.tool.call.result"
+	spanAttrResponseID             = "gen_ai.response.id"
+	spanAttrResponseModel          = "gen_ai.response.model"
+	spanAttrFinishReasons          = "gen_ai.response.finish_reasons"
+	spanAttrInputTokens            = "gen_ai.usage.input_tokens"
+	spanAttrOutputTokens           = "gen_ai.usage.output_tokens"
+	spanAttrCacheReadTokens        = "gen_ai.usage.cache_read_input_tokens"
+	spanAttrCacheWriteTokens       = "gen_ai.usage.cache_write_input_tokens"
+	spanAttrCacheCreationTokens    = "gen_ai.usage.cache_creation_input_tokens"
+	spanAttrReasoningTokens        = "gen_ai.usage.reasoning_tokens"
+	metricOperationDuration        = "gen_ai.client.operation.duration"
+	metricTokenUsage               = "gen_ai.client.token.usage"
+	metricTimeToFirstToken         = "gen_ai.client.time_to_first_token"
+	metricToolCallsPerOperation    = "gen_ai.client.tool_calls_per_operation"
+	metricAttrTokenType            = "gen_ai.token.type"
+	metricTokenTypeInput           = "input"
+	metricTokenTypeOutput          = "output"
+	metricTokenTypeCacheRead       = "cache_read"
+	metricTokenTypeCacheWrite      = "cache_write"
+	metricTokenTypeCacheCreation   = "cache_creation"
+	metricTokenTypeReasoning       = "reasoning"
 )
 
 var conformanceModel = sigil.ModelRef{
@@ -249,9 +284,41 @@ func (s *fakeIngestServer) SingleGeneration(t *testing.T) *sigilv1.Generation {
 }
 
 func (s *fakeIngestServer) RequestCount() int {
+	if s == nil {
+		return 0
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return len(s.requests)
+}
+
+func (s *fakeIngestServer) Requests() []*sigilv1.ExportGenerationsRequest {
+	if s == nil {
+		return nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	out := make([]*sigilv1.ExportGenerationsRequest, len(s.requests))
+	copy(out, s.requests)
+	return out
+}
+
+func (s *fakeIngestServer) GenerationCount() int {
+	if s == nil {
+		return 0
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	total := 0
+	for _, req := range s.requests {
+		total += len(req.GetGenerations())
+	}
+	return total
 }
 
 func acceptanceResponse(req *sigilv1.ExportGenerationsRequest) *sigilv1.ExportGenerationsResponse {
@@ -319,20 +386,32 @@ func (s *fakeRatingServer) Close() {
 func (s *fakeRatingServer) SingleRequest(t *testing.T) capturedRatingRequest {
 	t.Helper()
 
+	requests := s.Requests()
+	if len(requests) != 1 {
+		t.Fatalf("expected exactly one rating request, got %d", len(requests))
+	}
+
+	return requests[0]
+}
+
+func (s *fakeRatingServer) Requests() []capturedRatingRequest {
+	if s == nil {
+		return nil
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if len(s.requests) != 1 {
-		t.Fatalf("expected exactly one rating request, got %d", len(s.requests))
+	out := make([]capturedRatingRequest, len(s.requests))
+	for i := range s.requests {
+		out[i] = capturedRatingRequest{
+			Method:  s.requests[i].Method,
+			Path:    s.requests[i].Path,
+			Headers: s.requests[i].Headers.Clone(),
+			Body:    append([]byte(nil), s.requests[i].Body...),
+		}
 	}
-
-	req := s.requests[0]
-	return capturedRatingRequest{
-		Method:  req.Method,
-		Path:    req.Path,
-		Headers: req.Headers.Clone(),
-		Body:    append([]byte(nil), req.Body...),
-	}
+	return out
 }
 
 func findSpan(t *testing.T, spans []sdktrace.ReadOnlySpan, operationName string) sdktrace.ReadOnlySpan {
@@ -382,6 +461,68 @@ func requireSpanAttrAbsent(t *testing.T, attrs map[string]attribute.Value, key s
 	}
 }
 
+func requireSpanBoolAttr(t *testing.T, attrs map[string]attribute.Value, key string, want bool) {
+	t.Helper()
+
+	got, ok := attrs[key]
+	if !ok {
+		t.Fatalf("expected span attribute %q=%t, attribute missing", key, want)
+	}
+	if got.AsBool() != want {
+		t.Fatalf("unexpected span attribute %q: got %t want %t", key, got.AsBool(), want)
+	}
+}
+
+func requireSpanInt64Attr(t *testing.T, attrs map[string]attribute.Value, key string, want int64) {
+	t.Helper()
+
+	got, ok := attrs[key]
+	if !ok {
+		t.Fatalf("expected span attribute %q=%d, attribute missing", key, want)
+	}
+	if got.AsInt64() != want {
+		t.Fatalf("unexpected span attribute %q: got %d want %d", key, got.AsInt64(), want)
+	}
+}
+
+func requireSpanFloat64Attr(t *testing.T, attrs map[string]attribute.Value, key string, want float64) {
+	t.Helper()
+
+	got, ok := attrs[key]
+	if !ok {
+		t.Fatalf("expected span attribute %q=%v, attribute missing", key, want)
+	}
+	if math.Abs(got.AsFloat64()-want) > 1e-9 {
+		t.Fatalf("unexpected span attribute %q: got %v want %v", key, got.AsFloat64(), want)
+	}
+}
+
+func requireSpanStringSliceAttr(t *testing.T, attrs map[string]attribute.Value, key string, want []string) {
+	t.Helper()
+
+	got, ok := attrs[key]
+	if !ok {
+		t.Fatalf("expected span attribute %q=%v, attribute missing", key, want)
+	}
+	gotSlice := got.AsStringSlice()
+	if len(gotSlice) != len(want) {
+		t.Fatalf("unexpected span attribute %q length: got %d want %d", key, len(gotSlice), len(want))
+	}
+	for i := range want {
+		if gotSlice[i] != want[i] {
+			t.Fatalf("unexpected span attribute %q[%d]: got %q want %q", key, i, gotSlice[i], want[i])
+		}
+	}
+}
+
+func requireSpanAttrPresent(t *testing.T, attrs map[string]attribute.Value, key string) {
+	t.Helper()
+
+	if _, ok := attrs[key]; !ok {
+		t.Fatalf("expected span attribute %q to be present", key)
+	}
+}
+
 func findHistogram[N int64 | float64](t *testing.T, collected metricdata.ResourceMetrics, name string) metricdata.Histogram[N] {
 	t.Helper()
 
@@ -412,6 +553,35 @@ func requireNoHistogram(t *testing.T, collected metricdata.ResourceMetrics, name
 			}
 		}
 	}
+}
+
+func requireHistogramPointWithAttrs[N int64 | float64](t *testing.T, histogram metricdata.Histogram[N], want map[string]string) metricdata.HistogramDataPoint[N] {
+	t.Helper()
+
+	return findHistogramPoint(t, histogram, want)
+}
+
+func findHistogramPoint[N int64 | float64](t *testing.T, histogram metricdata.Histogram[N], want map[string]string) metricdata.HistogramDataPoint[N] {
+	t.Helper()
+
+	for _, point := range histogram.DataPoints {
+		if histogramPointMatches(point.Attributes, want) {
+			return point
+		}
+	}
+
+	t.Fatalf("expected histogram point with attrs %v", want)
+	return metricdata.HistogramDataPoint[N]{}
+}
+
+func histogramPointMatches(attrs attribute.Set, want map[string]string) bool {
+	for key, expected := range want {
+		value, ok := (&attrs).Value(attribute.Key(key))
+		if !ok || value.AsString() != expected {
+			return false
+		}
+	}
+	return true
 }
 
 func requireProtoMetadata(t *testing.T, generation *sigilv1.Generation, key, want string) {

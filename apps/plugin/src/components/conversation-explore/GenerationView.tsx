@@ -796,7 +796,7 @@ function ScoreChips({ scores }: { scores: Record<string, LatestScore> }) {
           </>
         );
 
-        if (!score.evaluator_description) {
+        if (!score.evaluator_description && !score.explanation) {
           return (
             <div key={key} className={`${styles.scoreChip} ${chipClass}`}>
               {chipContent}
@@ -812,7 +812,8 @@ function ScoreChips({ scores }: { scores: Record<string, LatestScore> }) {
                 <div>
                   {score.evaluator_id} v{score.evaluator_version}
                 </div>
-                <div>{score.evaluator_description}</div>
+                {score.evaluator_description && <div>{score.evaluator_description}</div>}
+                {score.explanation && <div>{score.explanation}</div>}
               </div>
             }
             placement="top"

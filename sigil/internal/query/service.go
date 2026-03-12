@@ -1870,6 +1870,9 @@ func latestScoresToResponse(scores map[string]evalpkg.LatestScore) map[string]an
 		if score.EvaluatorDescription != "" {
 			entry["evaluator_description"] = score.EvaluatorDescription
 		}
+		if score.Explanation != "" {
+			entry["explanation"] = score.Explanation
+		}
 		out[key] = entry
 	}
 	return out

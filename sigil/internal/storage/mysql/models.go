@@ -213,6 +213,33 @@ func (EvalSavedConversationModel) TableName() string {
 	return "eval_saved_conversations"
 }
 
+type EvalCollectionModel struct {
+	TenantID     string    `gorm:"size:128;not null;primaryKey"`
+	CollectionID string    `gorm:"size:36;not null;primaryKey"`
+	Name         string    `gorm:"size:255;not null"`
+	Description  string    `gorm:"type:text"`
+	CreatedBy    string    `gorm:"size:255;not null"`
+	UpdatedBy    string    `gorm:"size:255;not null"`
+	CreatedAt    time.Time `gorm:"type:datetime(6);not null;autoCreateTime"`
+	UpdatedAt    time.Time `gorm:"type:datetime(6);not null;autoUpdateTime"`
+}
+
+func (EvalCollectionModel) TableName() string {
+	return "eval_collections"
+}
+
+type EvalCollectionMemberModel struct {
+	TenantID     string    `gorm:"size:128;not null;primaryKey;index:idx_eval_collection_members_saved,priority:1"`
+	CollectionID string    `gorm:"size:36;not null;primaryKey"`
+	SavedID      string    `gorm:"size:128;not null;primaryKey;index:idx_eval_collection_members_saved,priority:2"`
+	AddedBy      string    `gorm:"size:255;not null"`
+	CreatedAt    time.Time `gorm:"type:datetime(6);not null;autoCreateTime"`
+}
+
+func (EvalCollectionMemberModel) TableName() string {
+	return "eval_collection_members"
+}
+
 type AgentVersionModel struct {
 	ID                        uint64    `gorm:"primaryKey;autoIncrement"`
 	TenantID                  string    `gorm:"size:128;not null;uniqueIndex:ux_agent_versions_tenant_name_version,priority:1;index:idx_agent_versions_tenant_name_last_seen,priority:1"`

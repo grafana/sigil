@@ -72,12 +72,68 @@ const mockConvDs: ConversationsDataSource = {
 
 const mockEvalDs: Partial<EvaluationDataSource> = {
   listSavedConversations: async () => ({ items: mockSavedConversations, next_cursor: '' }),
+  listCollections: async () => ({
+    items: [
+      {
+        tenant_id: 't',
+        collection_id: 'col-1',
+        name: 'Auth Regression',
+        description: '',
+        created_by: 'user-1',
+        updated_by: 'user-1',
+        created_at: '2026-03-01T00:00:00Z',
+        updated_at: '2026-03-01T00:00:00Z',
+        member_count: 3,
+      },
+      {
+        tenant_id: 't',
+        collection_id: 'col-2',
+        name: 'Streaming Edge Cases',
+        description: '',
+        created_by: 'user-1',
+        updated_by: 'user-1',
+        created_at: '2026-03-02T00:00:00Z',
+        updated_at: '2026-03-02T00:00:00Z',
+        member_count: 1,
+      },
+    ],
+    next_cursor: '',
+  }),
+  listCollectionMembers: async () => ({ items: mockSavedConversations.slice(0, 1), next_cursor: '' }),
 };
 
 function GenerationPickerWrapper({ saved }: { saved: SavedConversation[] }) {
   const [selected, setSelected] = useState<string | undefined>();
   const evalDs: Partial<EvaluationDataSource> = {
     listSavedConversations: async () => ({ items: saved, next_cursor: '' }),
+    listCollections: async () => ({
+      items: [
+        {
+          tenant_id: 't',
+          collection_id: 'col-1',
+          name: 'Auth Regression',
+          description: '',
+          created_by: 'user-1',
+          updated_by: 'user-1',
+          created_at: '2026-03-01T00:00:00Z',
+          updated_at: '2026-03-01T00:00:00Z',
+          member_count: 3,
+        },
+        {
+          tenant_id: 't',
+          collection_id: 'col-2',
+          name: 'Streaming Edge Cases',
+          description: '',
+          created_by: 'user-1',
+          updated_by: 'user-1',
+          created_at: '2026-03-02T00:00:00Z',
+          updated_at: '2026-03-02T00:00:00Z',
+          member_count: 1,
+        },
+      ],
+      next_cursor: '',
+    }),
+    listCollectionMembers: async () => ({ items: saved.slice(0, 1), next_cursor: '' }),
   };
   return (
     <div style={{ maxWidth: 480 }}>
