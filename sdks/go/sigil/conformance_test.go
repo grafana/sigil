@@ -1124,22 +1124,6 @@ func int64Ptr(value int64) *int64 {
 	return &value
 }
 
-func requireProtoMetadataNumber(t *testing.T, generation *sigilv1.Generation, key string, want float64) {
-	t.Helper()
-
-	value, ok := generation.GetMetadata().AsMap()[key]
-	if !ok {
-		t.Fatalf("expected generation metadata %q=%v, key missing", key, want)
-	}
-	got, ok := value.(float64)
-	if !ok {
-		t.Fatalf("expected generation metadata %q to be float64, got %#v", key, value)
-	}
-	if got != want {
-		t.Fatalf("unexpected generation metadata %q: got %v want %v", key, got, want)
-	}
-}
-
 func float64Ptr(value float64) *float64 {
 	return &value
 }

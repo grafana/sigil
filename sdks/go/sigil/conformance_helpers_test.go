@@ -574,10 +574,6 @@ func findHistogramPoint[N int64 | float64](t *testing.T, histogram metricdata.Hi
 	return metricdata.HistogramDataPoint[N]{}
 }
 
-func pointHasStringAttrs(attrs attribute.Set, want map[string]string) bool {
-	return histogramPointMatches(attrs, want)
-}
-
 func histogramPointMatches(attrs attribute.Set, want map[string]string) bool {
 	for key, expected := range want {
 		value, ok := (&attrs).Value(attribute.Key(key))
