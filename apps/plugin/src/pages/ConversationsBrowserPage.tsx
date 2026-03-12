@@ -710,7 +710,13 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
           return;
         }
         const stats = buildConversationStats(
-          await fetchRangeConversations(dataSource, previousFromISO, previousToISO, filterString, abortController.signal),
+          await fetchRangeConversations(
+            dataSource,
+            previousFromISO,
+            previousToISO,
+            filterString,
+            abortController.signal
+          ),
           timeRange.from.valueOf()
         );
         if (requestVersionRef.current !== requestVersion) {
@@ -751,7 +757,8 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
     return buildConversationStats(conversations, timeRange.to.valueOf());
   }, [conversations, currentConversationStats, hasResolvedCurrentConversationStats, timeRange]);
 
-  const loadingDisplayedCurrentStats = !hasResolvedCurrentConversationStats && loadingCurrent && conversations.length === 0;
+  const loadingDisplayedCurrentStats =
+    !hasResolvedCurrentConversationStats && loadingCurrent && conversations.length === 0;
 
   const loadedConversationCount = conversations.length;
   const currentConversationProgress = useMemo(() => {
