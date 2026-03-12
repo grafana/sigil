@@ -2,6 +2,8 @@ package metriclabels
 
 import "strings"
 
+const unknownLabel = "unknown"
+
 func Transport(transport string) string {
 	switch strings.ToLower(strings.TrimSpace(transport)) {
 	case "http":
@@ -9,22 +11,22 @@ func Transport(transport string) string {
 	case "grpc":
 		return "grpc"
 	default:
-		return "unknown"
+		return unknownLabel
 	}
 }
 
 func Reason(reason string) string {
-	trimmed := strings.TrimSpace(reason)
-	if trimmed == "" {
-		return "unknown"
-	}
-	return trimmed
+	return normalizeUnknown(reason)
 }
 
 func TenantID(tenantID string) string {
-	trimmed := strings.TrimSpace(tenantID)
+	return normalizeUnknown(tenantID)
+}
+
+func normalizeUnknown(value string) string {
+	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
-		return "unknown"
+		return unknownLabel
 	}
 	return trimmed
 }
