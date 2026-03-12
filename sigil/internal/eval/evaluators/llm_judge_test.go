@@ -503,7 +503,7 @@ func TestBuildJudgeSchema(t *testing.T) {
 			want: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"explanation": map[string]any{"type": "string", "description": "Concise justification for the score"},
+					"explanation": map[string]any{"type": "string", "description": llmJudgeExplanationPrompt},
 					"helpfulness": map[string]any{"type": "number"},
 				},
 				"required":             []string{"explanation", "helpfulness"},
@@ -516,7 +516,7 @@ func TestBuildJudgeSchema(t *testing.T) {
 			want: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"explanation": map[string]any{"type": "string", "description": "Concise justification for the score"},
+					"explanation": map[string]any{"type": "string", "description": llmJudgeExplanationPrompt},
 					"toxic":       map[string]any{"type": "boolean"},
 				},
 				"required":             []string{"explanation", "toxic"},
@@ -529,7 +529,7 @@ func TestBuildJudgeSchema(t *testing.T) {
 			want: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"explanation": map[string]any{"type": "string", "description": "Concise justification for the score"},
+					"explanation": map[string]any{"type": "string", "description": llmJudgeExplanationPrompt},
 					"severity":    map[string]any{"type": "string", "enum": []string{"none", "mild", "severe"}},
 				},
 				"required":             []string{"explanation", "severity"},
@@ -547,7 +547,7 @@ func TestBuildJudgeSchema(t *testing.T) {
 			want: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"explanation": map[string]any{"type": "string", "description": "Concise justification for the score"},
+					"explanation": map[string]any{"type": "string", "description": llmJudgeExplanationPrompt},
 					"score":       map[string]any{"type": "number", "description": "Helpfulness score from 0 to 1"},
 				},
 				"required":             []string{"explanation", "score"},
