@@ -1,6 +1,7 @@
 package sigil_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,7 +11,459 @@ import (
 
 	sigil "github.com/grafana/sigil/sdks/go/sigil"
 	sigilv1 "github.com/grafana/sigil/sdks/go/sigil/internal/gen/sigil/v1"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
+
+func TestConformance_FullGenerationRoundtrip(t *testing.T) {
+	startedAt := time.Date(2026, time.March, 12, 11, 0, 0, 0, time.UTC)
+	completedAt := startedAt.Add(3 * time.Second)
+
+	requestArtifact, err := sigil.NewJSONArtifact(sigil.ArtifactKindRequest, "request", map[string]any{
+		"messages": 1,
+		"tools":    1,
+	})
+	if err != nil {
+		t.Fatalf("build request artifact: %v", err)
+	}
+	requestArtifact.RecordID = "rec-request-1"
+	requestArtifact.URI = "sigil://artifact/request-1"
+
+	responseArtifact, err := sigil.NewJSONArtifact(sigil.ArtifactKindResponse, "response", map[string]any{
+		"response_id": "msg_1",
+		"status":      "ok",
+	})
+	if err != nil {
+		t.Fatalf("build response artifact: %v", err)
+	}
+	responseArtifact.RecordID = "rec-response-1"
+	responseArtifact.URI = "sigil://artifact/response-1"
+
+	env := newConformanceEnv(t, withConformanceConfig(func(cfg *sigil.Config) {
+		cfg.Now = func() time.Time { return completedAt }
+	}))
+
+	_, recorder := env.Client.StartGeneration(context.Background(), sigil.GenerationStart{
+		ID:                "gen-full-roundtrip",
+		ConversationID:    "conv-full-roundtrip",
+		ConversationTitle: "Weather follow-up",
+		UserID:            "user-42",
+		AgentName:         "assistant-anthropic",
+		AgentVersion:      "1.0.0",
+		Model: sigil.ModelRef{
+			Provider: "anthropic",
+			Name:     "claude-sonnet-4-5",
+		},
+		SystemPrompt: "Answer with a brief explanation and cite the tool result.",
+		Tools: []sigil.ToolDefinition{
+			{
+				Name:        "weather.lookup",
+				Description: "Look up historical weather by city and date",
+				Type:        "function",
+				InputSchema: json.RawMessage(`{"type":"object","properties":{"city":{"type":"string"},"date":{"type":"string"}},"required":["city","date"]}`),
+				Deferred:    true,
+			},
+		},
+		MaxTokens:       int64Ptr(1024),
+		Temperature:     float64Ptr(0.7),
+		TopP:            float64Ptr(0.9),
+		ToolChoice:      stringPtr("required"),
+		ThinkingEnabled: boolPtr(true),
+		Tags: map[string]string{
+			"env":       "prod",
+			"seed_only": "seed",
+			"shared":    "seed",
+		},
+		Metadata: map[string]any{
+			spanAttrRequestThinkingBudget: int64(2048),
+			"request_only":                "seed-value",
+			"shared":                      "seed",
+			"nested":                      map[string]any{"phase": "seed"},
+		},
+		StartedAt: startedAt,
+	})
+	recorder.SetResult(sigil.Generation{
+		ResponseID:    "msg_1",
+		ResponseModel: "claude-sonnet-4-5-20260312",
+		Input: []sigil.Message{
+			{
+				Role: sigil.RoleUser,
+				Name: "customer",
+				Parts: []sigil.Part{
+					sigil.TextPart("Summarize yesterday's Paris weather and explain the spikes."),
+				},
+			},
+		},
+		Output: []sigil.Message{
+			{
+				Role: sigil.RoleAssistant,
+				Name: "assistant",
+				Parts: []sigil.Part{
+					{
+						Kind:     sigil.PartKindThinking,
+						Thinking: "Need the weather tool output before the final answer.",
+						Metadata: sigil.PartMetadata{ProviderType: "thinking"},
+					},
+					{
+						Kind: sigil.PartKindToolCall,
+						ToolCall: &sigil.ToolCall{
+							ID:        "call-weather-1",
+							Name:      "weather.lookup",
+							InputJSON: json.RawMessage(`{"city":"Paris","date":"2026-03-11"}`),
+						},
+						Metadata: sigil.PartMetadata{ProviderType: "tool_use"},
+					},
+				},
+			},
+			{
+				Role: sigil.RoleTool,
+				Name: "weather.lookup",
+				Parts: []sigil.Part{
+					{
+						Kind: sigil.PartKindToolResult,
+						ToolResult: &sigil.ToolResult{
+							ToolCallID:  "call-weather-1",
+							Name:        "weather.lookup",
+							Content:     "22C with a late-afternoon drop",
+							ContentJSON: json.RawMessage(`{"high_c":22,"trend":"late drop"}`),
+						},
+					},
+				},
+			},
+			{
+				Role: sigil.RoleAssistant,
+				Name: "assistant",
+				Parts: []sigil.Part{
+					sigil.TextPart("Paris peaked at 22C before a late drop as cloud cover moved in."),
+				},
+			},
+		},
+		Usage: sigil.TokenUsage{
+			InputTokens:              120,
+			OutputTokens:             42,
+			TotalTokens:              162,
+			CacheReadInputTokens:     30,
+			CacheWriteInputTokens:    4,
+			CacheCreationInputTokens: 6,
+			ReasoningTokens:          9,
+		},
+		StopReason: "end_turn",
+		Tags: map[string]string{
+			"shared":      "result",
+			"result_only": "assistant",
+		},
+		Metadata: map[string]any{
+			"shared":      "result",
+			"result_only": "assistant",
+			"nested":      map[string]any{"phase": "result"},
+			"quality":     true,
+		},
+		Artifacts: []sigil.Artifact{requestArtifact, responseArtifact},
+	}, nil)
+	recorder.End()
+	if err := recorder.Err(); err != nil {
+		t.Fatalf("record full generation roundtrip: %v", err)
+	}
+
+	metrics := env.CollectMetrics(t)
+	env.Shutdown(t)
+
+	span := findSpan(t, env.Spans.Ended(), conformanceOperationName)
+	if got := span.Name(); got != "generateText claude-sonnet-4-5" {
+		t.Fatalf("unexpected span name: got %q want %q", got, "generateText claude-sonnet-4-5")
+	}
+	if got := span.SpanKind(); got != trace.SpanKindClient {
+		t.Fatalf("unexpected span kind: got %v want %v", got, trace.SpanKindClient)
+	}
+	if got := span.Status().Code; got != codes.Ok {
+		t.Fatalf("unexpected span status: got %v want %v", got, codes.Ok)
+	}
+
+	attrs := spanAttrs(span)
+	requireSpanAttr(t, attrs, spanAttrGenerationID, "gen-full-roundtrip")
+	requireSpanAttr(t, attrs, spanAttrConversationID, "conv-full-roundtrip")
+	requireSpanAttr(t, attrs, spanAttrConversationTitle, "Weather follow-up")
+	requireSpanAttr(t, attrs, spanAttrUserID, "user-42")
+	requireSpanAttr(t, attrs, spanAttrAgentName, "assistant-anthropic")
+	requireSpanAttr(t, attrs, spanAttrAgentVersion, "1.0.0")
+	requireSpanAttr(t, attrs, spanAttrProviderName, "anthropic")
+	requireSpanAttr(t, attrs, spanAttrRequestModel, "claude-sonnet-4-5")
+	requireSpanAttr(t, attrs, spanAttrResponseID, "msg_1")
+	requireSpanAttr(t, attrs, spanAttrResponseModel, "claude-sonnet-4-5-20260312")
+	requireSpanAttr(t, attrs, sdkMetadataKeyName, "sdk-go")
+	requireSpanInt64Attr(t, attrs, spanAttrRequestMaxTokens, 1024)
+	requireSpanFloat64Attr(t, attrs, spanAttrRequestTemperature, 0.7)
+	requireSpanFloat64Attr(t, attrs, spanAttrRequestTopP, 0.9)
+	requireSpanAttr(t, attrs, spanAttrRequestToolChoice, "required")
+	requireSpanBoolAttr(t, attrs, spanAttrRequestThinkingEnabled, true)
+	requireSpanInt64Attr(t, attrs, spanAttrRequestThinkingBudget, 2048)
+	requireSpanStringSliceAttr(t, attrs, spanAttrFinishReasons, []string{"end_turn"})
+	requireSpanInt64Attr(t, attrs, spanAttrInputTokens, 120)
+	requireSpanInt64Attr(t, attrs, spanAttrOutputTokens, 42)
+	requireSpanInt64Attr(t, attrs, spanAttrCacheReadTokens, 30)
+	requireSpanInt64Attr(t, attrs, spanAttrCacheWriteTokens, 4)
+	requireSpanInt64Attr(t, attrs, spanAttrCacheCreationTokens, 6)
+	requireSpanInt64Attr(t, attrs, spanAttrReasoningTokens, 9)
+
+	duration := findHistogram[float64](t, metrics, metricOperationDuration)
+	durationPoint := findHistogramPoint(t, duration, map[string]string{
+		spanAttrOperationName: conformanceOperationName,
+		spanAttrProviderName:  "anthropic",
+		spanAttrRequestModel:  "claude-sonnet-4-5",
+		spanAttrAgentName:     "assistant-anthropic",
+		spanAttrErrorType:     "",
+		spanAttrErrorCategory: "",
+	})
+	if durationPoint.Count != 1 {
+		t.Fatalf("unexpected %s count: got %d want %d", metricOperationDuration, durationPoint.Count, 1)
+	}
+	if durationPoint.Sum != 3 {
+		t.Fatalf("unexpected %s sum: got %v want %v", metricOperationDuration, durationPoint.Sum, 3.0)
+	}
+
+	tokenUsage := findHistogram[int64](t, metrics, metricTokenUsage)
+	for tokenType, want := range map[string]int64{
+		metricTokenTypeInput:         120,
+		metricTokenTypeOutput:        42,
+		metricTokenTypeCacheRead:     30,
+		metricTokenTypeCacheWrite:    4,
+		metricTokenTypeCacheCreation: 6,
+		metricTokenTypeReasoning:     9,
+	} {
+		point := findHistogramPoint(t, tokenUsage, map[string]string{
+			spanAttrOperationName: conformanceOperationName,
+			spanAttrProviderName:  "anthropic",
+			spanAttrRequestModel:  "claude-sonnet-4-5",
+			spanAttrAgentName:     "assistant-anthropic",
+			metricAttrTokenType:   tokenType,
+		})
+		if point.Count != 1 {
+			t.Fatalf("unexpected %s count for token type %q: got %d want %d", metricTokenUsage, tokenType, point.Count, 1)
+		}
+		if point.Sum != want {
+			t.Fatalf("unexpected %s sum for token type %q: got %d want %d", metricTokenUsage, tokenType, point.Sum, want)
+		}
+	}
+
+	toolCalls := findHistogram[int64](t, metrics, metricToolCallsPerOperation)
+	toolPoint := findHistogramPoint(t, toolCalls, map[string]string{
+		spanAttrProviderName: "anthropic",
+		spanAttrRequestModel: "claude-sonnet-4-5",
+		spanAttrAgentName:    "assistant-anthropic",
+	})
+	if toolPoint.Count != 1 {
+		t.Fatalf("unexpected %s count: got %d want %d", metricToolCallsPerOperation, toolPoint.Count, 1)
+	}
+	if toolPoint.Sum != 1 {
+		t.Fatalf("unexpected %s sum: got %d want %d", metricToolCallsPerOperation, toolPoint.Sum, 1)
+	}
+	requireNoHistogram(t, metrics, metricTimeToFirstToken)
+
+	generation := env.Ingest.SingleGeneration(t)
+	if got := generation.GetId(); got != "gen-full-roundtrip" {
+		t.Fatalf("unexpected proto generation id: got %q want %q", got, "gen-full-roundtrip")
+	}
+	if got := generation.GetConversationId(); got != "conv-full-roundtrip" {
+		t.Fatalf("unexpected proto conversation id: got %q want %q", got, "conv-full-roundtrip")
+	}
+	if got := generation.GetOperationName(); got != conformanceOperationName {
+		t.Fatalf("unexpected proto operation name: got %q want %q", got, conformanceOperationName)
+	}
+	if got := generation.GetMode(); got != sigilv1.GenerationMode_GENERATION_MODE_SYNC {
+		t.Fatalf("unexpected proto mode: got %s want %s", got, sigilv1.GenerationMode_GENERATION_MODE_SYNC)
+	}
+	if got := generation.GetTraceId(); got != span.SpanContext().TraceID().String() {
+		t.Fatalf("unexpected proto trace_id: got %q want %q", got, span.SpanContext().TraceID().String())
+	}
+	if got := generation.GetSpanId(); got != span.SpanContext().SpanID().String() {
+		t.Fatalf("unexpected proto span_id: got %q want %q", got, span.SpanContext().SpanID().String())
+	}
+	if got := generation.GetAgentName(); got != "assistant-anthropic" {
+		t.Fatalf("unexpected proto agent_name: got %q want %q", got, "assistant-anthropic")
+	}
+	if got := generation.GetAgentVersion(); got != "1.0.0" {
+		t.Fatalf("unexpected proto agent_version: got %q want %q", got, "1.0.0")
+	}
+	if got := generation.GetModel().GetProvider(); got != "anthropic" {
+		t.Fatalf("unexpected proto model provider: got %q want %q", got, "anthropic")
+	}
+	if got := generation.GetModel().GetName(); got != "claude-sonnet-4-5" {
+		t.Fatalf("unexpected proto model name: got %q want %q", got, "claude-sonnet-4-5")
+	}
+	if got := generation.GetResponseId(); got != "msg_1" {
+		t.Fatalf("unexpected proto response_id: got %q want %q", got, "msg_1")
+	}
+	if got := generation.GetResponseModel(); got != "claude-sonnet-4-5-20260312" {
+		t.Fatalf("unexpected proto response_model: got %q want %q", got, "claude-sonnet-4-5-20260312")
+	}
+	if got := generation.GetSystemPrompt(); got != "Answer with a brief explanation and cite the tool result." {
+		t.Fatalf("unexpected proto system_prompt: got %q", got)
+	}
+	if got := generation.GetStopReason(); got != "end_turn" {
+		t.Fatalf("unexpected proto stop_reason: got %q want %q", got, "end_turn")
+	}
+	if got := generation.GetMaxTokens(); got != 1024 {
+		t.Fatalf("unexpected proto max_tokens: got %d want %d", got, 1024)
+	}
+	if got := generation.GetTemperature(); got != 0.7 {
+		t.Fatalf("unexpected proto temperature: got %v want %v", got, 0.7)
+	}
+	if got := generation.GetTopP(); got != 0.9 {
+		t.Fatalf("unexpected proto top_p: got %v want %v", got, 0.9)
+	}
+	if got := generation.GetToolChoice(); got != "required" {
+		t.Fatalf("unexpected proto tool_choice: got %q want %q", got, "required")
+	}
+	if got := generation.GetThinkingEnabled(); !got {
+		t.Fatalf("unexpected proto thinking_enabled: got %t want %t", got, true)
+	}
+	if got := generation.GetCallError(); got != "" {
+		t.Fatalf("expected empty proto call_error, got %q", got)
+	}
+
+	if got := generation.GetStartedAt().AsTime(); !got.Equal(startedAt) {
+		t.Fatalf("unexpected proto started_at: got %s want %s", got, startedAt)
+	}
+	if got := generation.GetCompletedAt().AsTime(); !got.Equal(completedAt) {
+		t.Fatalf("unexpected proto completed_at: got %s want %s", got, completedAt)
+	}
+
+	if len(generation.GetInput()) != 1 {
+		t.Fatalf("expected 1 proto input message, got %d", len(generation.GetInput()))
+	}
+	if input := generation.GetInput()[0]; input.GetRole() != sigilv1.MessageRole_MESSAGE_ROLE_USER || input.GetName() != "customer" || len(input.GetParts()) != 1 || input.GetParts()[0].GetText() != "Summarize yesterday's Paris weather and explain the spikes." {
+		t.Fatalf("unexpected proto input message: %#v", input)
+	}
+
+	if len(generation.GetOutput()) != 3 {
+		t.Fatalf("expected 3 proto output messages, got %d", len(generation.GetOutput()))
+	}
+	firstOutput := generation.GetOutput()[0]
+	if firstOutput.GetRole() != sigilv1.MessageRole_MESSAGE_ROLE_ASSISTANT || firstOutput.GetName() != "assistant" || len(firstOutput.GetParts()) != 2 {
+		t.Fatalf("unexpected first proto output message: %#v", firstOutput)
+	}
+	if got := firstOutput.GetParts()[0].GetThinking(); got != "Need the weather tool output before the final answer." {
+		t.Fatalf("unexpected proto thinking part: got %q", got)
+	}
+	if got := firstOutput.GetParts()[0].GetMetadata().GetProviderType(); got != "thinking" {
+		t.Fatalf("unexpected proto thinking provider_type: got %q want %q", got, "thinking")
+	}
+	if got := firstOutput.GetParts()[1].GetToolCall().GetId(); got != "call-weather-1" {
+		t.Fatalf("unexpected proto tool call id: got %q want %q", got, "call-weather-1")
+	}
+	if got := firstOutput.GetParts()[1].GetToolCall().GetName(); got != "weather.lookup" {
+		t.Fatalf("unexpected proto tool call name: got %q want %q", got, "weather.lookup")
+	}
+	if !bytes.Equal(firstOutput.GetParts()[1].GetToolCall().GetInputJson(), []byte(`{"city":"Paris","date":"2026-03-11"}`)) {
+		t.Fatalf("unexpected proto tool call input json: %s", firstOutput.GetParts()[1].GetToolCall().GetInputJson())
+	}
+	if got := firstOutput.GetParts()[1].GetMetadata().GetProviderType(); got != "tool_use" {
+		t.Fatalf("unexpected proto tool call provider_type: got %q want %q", got, "tool_use")
+	}
+
+	secondOutput := generation.GetOutput()[1]
+	if secondOutput.GetRole() != sigilv1.MessageRole_MESSAGE_ROLE_TOOL || secondOutput.GetName() != "weather.lookup" || len(secondOutput.GetParts()) != 1 {
+		t.Fatalf("unexpected second proto output message: %#v", secondOutput)
+	}
+	if got := secondOutput.GetParts()[0].GetToolResult().GetToolCallId(); got != "call-weather-1" {
+		t.Fatalf("unexpected proto tool result tool_call_id: got %q want %q", got, "call-weather-1")
+	}
+	if got := secondOutput.GetParts()[0].GetToolResult().GetName(); got != "weather.lookup" {
+		t.Fatalf("unexpected proto tool result name: got %q want %q", got, "weather.lookup")
+	}
+	if got := secondOutput.GetParts()[0].GetToolResult().GetContent(); got != "22C with a late-afternoon drop" {
+		t.Fatalf("unexpected proto tool result content: got %q", got)
+	}
+	if !bytes.Equal(secondOutput.GetParts()[0].GetToolResult().GetContentJson(), []byte(`{"high_c":22,"trend":"late drop"}`)) {
+		t.Fatalf("unexpected proto tool result content json: %s", secondOutput.GetParts()[0].GetToolResult().GetContentJson())
+	}
+	if secondOutput.GetParts()[0].GetToolResult().GetIsError() {
+		t.Fatalf("expected successful proto tool result")
+	}
+
+	thirdOutput := generation.GetOutput()[2]
+	if thirdOutput.GetRole() != sigilv1.MessageRole_MESSAGE_ROLE_ASSISTANT || thirdOutput.GetName() != "assistant" || len(thirdOutput.GetParts()) != 1 {
+		t.Fatalf("unexpected third proto output message: %#v", thirdOutput)
+	}
+	if got := thirdOutput.GetParts()[0].GetText(); got != "Paris peaked at 22C before a late drop as cloud cover moved in." {
+		t.Fatalf("unexpected proto output text: got %q", got)
+	}
+
+	if len(generation.GetTools()) != 1 {
+		t.Fatalf("expected 1 proto tool definition, got %d", len(generation.GetTools()))
+	}
+	tool := generation.GetTools()[0]
+	if tool.GetName() != "weather.lookup" || tool.GetDescription() != "Look up historical weather by city and date" || tool.GetType() != "function" || !tool.GetDeferred() {
+		t.Fatalf("unexpected proto tool definition: %#v", tool)
+	}
+	if !bytes.Equal(tool.GetInputSchemaJson(), []byte(`{"type":"object","properties":{"city":{"type":"string"},"date":{"type":"string"}},"required":["city","date"]}`)) {
+		t.Fatalf("unexpected proto tool input schema: %s", tool.GetInputSchemaJson())
+	}
+
+	usage := generation.GetUsage()
+	if usage.GetInputTokens() != 120 || usage.GetOutputTokens() != 42 || usage.GetTotalTokens() != 162 || usage.GetCacheReadInputTokens() != 30 || usage.GetCacheWriteInputTokens() != 4 || usage.GetReasoningTokens() != 9 || usage.GetCacheCreationInputTokens() != 6 {
+		t.Fatalf("unexpected proto usage: %#v", usage)
+	}
+
+	if len(generation.GetTags()) != 4 {
+		t.Fatalf("expected 4 proto tags, got %d", len(generation.GetTags()))
+	}
+	if got := generation.GetTags()["env"]; got != "prod" {
+		t.Fatalf("unexpected proto tag env: got %q want %q", got, "prod")
+	}
+	if got := generation.GetTags()["seed_only"]; got != "seed" {
+		t.Fatalf("unexpected proto tag seed_only: got %q want %q", got, "seed")
+	}
+	if got := generation.GetTags()["shared"]; got != "result" {
+		t.Fatalf("unexpected proto tag shared: got %q want %q", got, "result")
+	}
+	if got := generation.GetTags()["result_only"]; got != "assistant" {
+		t.Fatalf("unexpected proto tag result_only: got %q want %q", got, "assistant")
+	}
+
+	metadata := generation.GetMetadata().AsMap()
+	if got := metadata[sdkMetadataKeyName]; got != "sdk-go" {
+		t.Fatalf("unexpected proto metadata %q: got %#v want %#v", sdkMetadataKeyName, got, "sdk-go")
+	}
+	if got := metadata[metadataKeyConversation]; got != "Weather follow-up" {
+		t.Fatalf("unexpected proto metadata %q: got %#v want %#v", metadataKeyConversation, got, "Weather follow-up")
+	}
+	if got := metadata[metadataKeyCanonicalUserID]; got != "user-42" {
+		t.Fatalf("unexpected proto metadata %q: got %#v want %#v", metadataKeyCanonicalUserID, got, "user-42")
+	}
+	if got := metadata[spanAttrRequestThinkingBudget]; got != float64(2048) {
+		t.Fatalf("unexpected proto metadata %q: got %#v want %#v", spanAttrRequestThinkingBudget, got, float64(2048))
+	}
+	if got := metadata["request_only"]; got != "seed-value" {
+		t.Fatalf("unexpected proto metadata request_only: got %#v want %#v", got, "seed-value")
+	}
+	if got := metadata["shared"]; got != "result" {
+		t.Fatalf("unexpected proto metadata shared: got %#v want %#v", got, "result")
+	}
+	if got := metadata["result_only"]; got != "assistant" {
+		t.Fatalf("unexpected proto metadata result_only: got %#v want %#v", got, "assistant")
+	}
+	if got := metadata["quality"]; got != true {
+		t.Fatalf("unexpected proto metadata quality: got %#v want %#v", got, true)
+	}
+	nested, ok := metadata["nested"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected nested proto metadata map, got %#v", metadata["nested"])
+	}
+	if got := nested["phase"]; got != "result" {
+		t.Fatalf("unexpected proto nested metadata phase: got %#v want %#v", got, "result")
+	}
+
+	if len(generation.GetRawArtifacts()) != 2 {
+		t.Fatalf("expected 2 proto artifacts, got %d", len(generation.GetRawArtifacts()))
+	}
+	if artifact := generation.GetRawArtifacts()[0]; artifact.GetKind() != sigilv1.ArtifactKind_ARTIFACT_KIND_REQUEST || artifact.GetName() != "request" || artifact.GetContentType() != "application/json" || artifact.GetRecordId() != "rec-request-1" || artifact.GetUri() != "sigil://artifact/request-1" || !bytes.Equal(artifact.GetPayload(), requestArtifact.Payload) {
+		t.Fatalf("unexpected request artifact: %#v", artifact)
+	}
+	if artifact := generation.GetRawArtifacts()[1]; artifact.GetKind() != sigilv1.ArtifactKind_ARTIFACT_KIND_RESPONSE || artifact.GetName() != "response" || artifact.GetContentType() != "application/json" || artifact.GetRecordId() != "rec-response-1" || artifact.GetUri() != "sigil://artifact/response-1" || !bytes.Equal(artifact.GetPayload(), responseArtifact.Payload) {
+		t.Fatalf("unexpected response artifact: %#v", artifact)
+	}
+}
 
 func TestConformance_ConversationTitleSemantics(t *testing.T) {
 	testCases := []struct {
@@ -562,4 +1015,20 @@ func requireSyncGenerationMetrics(t *testing.T, env *conformanceEnv) {
 		t.Fatalf("expected %s datapoints for conformance generation", metricOperationDuration)
 	}
 	requireNoHistogram(t, metrics, metricTimeToFirstToken)
+}
+
+func int64Ptr(value int64) *int64 {
+	return &value
+}
+
+func float64Ptr(value float64) *float64 {
+	return &value
+}
+
+func stringPtr(value string) *string {
+	return &value
+}
+
+func boolPtr(value bool) *bool {
+	return &value
 }

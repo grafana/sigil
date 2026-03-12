@@ -39,14 +39,14 @@ The repo currently ships the Go core conformance harness entry point:
 
 - Local task: `mise run test:sdk:conformance`
 - Direct runner: `cd sdks/go && GOWORK=off go test ./sigil -run '^TestConformance' -count=1`
-- Current covered scenarios: conversation title semantics, user ID semantics, agent identity semantics
+- Current covered scenarios: full generation roundtrip, conversation title semantics, user ID semantics, agent identity semantics
 - Current assertion targets in active use: generation export proto, OTLP spans, OTLP metrics
 
 ### SDK fixes discovered during implementation
 
 (Updated as issues are found.)
 
-- _(none yet)_
+- Added `cache_creation_input_tokens` to the generation ingest proto and Go SDK proto mapping so the full roundtrip export preserves the complete token usage payload.
 
 ## Phase A: Go core SDK
 
@@ -67,15 +67,15 @@ The repo currently ships the Go core conformance harness entry point:
 ### A2: Core scenarios (generation identity and resolution chains)
 
 - [x] Add `conformance_test.go` (`package sigil_test`)
-- [ ] Scenario 1: Full generation roundtrip (sync, gRPC)
-  - [ ] All identity fields preserved on proto
-  - [ ] All content types: text, thinking, tool call, tool result
-  - [ ] Request controls: max_tokens, temperature, top_p, tool_choice, thinking_enabled
-  - [ ] Tags, metadata, artifacts (request + response)
-  - [ ] Usage (all six token fields) and stop reason
-  - [ ] Trace linkage: proto trace_id/span_id match OTLP span IDs
-  - [ ] Span attributes match `semantic-conventions.md` generation section
-  - [ ] Metrics: operation.duration, token.usage present; no TTFT for sync
+- [x] Scenario 1: Full generation roundtrip (sync, gRPC)
+  - [x] All identity fields preserved on proto
+  - [x] All content types: text, thinking, tool call, tool result
+  - [x] Request controls: max_tokens, temperature, top_p, tool_choice, thinking_enabled
+  - [x] Tags, metadata, artifacts (request + response)
+  - [x] Usage (all six token fields) and stop reason
+  - [x] Trace linkage: proto trace_id/span_id match OTLP span IDs
+  - [x] Span attributes match `semantic-conventions.md` generation section
+  - [x] Metrics: operation.duration, token.usage present; no TTFT for sync
 - [x] Scenario 2: Conversation title semantics (table-driven)
   - [x] Explicit field wins
   - [x] Context fallback
