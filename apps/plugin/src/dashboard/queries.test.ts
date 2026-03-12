@@ -7,6 +7,7 @@ import {
   computeRangeDuration,
   totalOpsQuery,
   totalErrorsQuery,
+  topToolExecutionsQuery,
   errorRateQuery,
   latencyStatQuery,
   tokensByModelAndTypeQuery,
@@ -239,6 +240,12 @@ describe('stat query builders', () => {
   it('totalErrorsQuery', () => {
     expect(totalErrorsQuery(noFilters, '3600s')).toBe(
       'sum(increase(gen_ai_client_operation_duration_seconds_count{error_type!=""}[3600s]))'
+    );
+  });
+
+  it('topToolExecutionsQuery scopes to execute_tool and groups by tool label', () => {
+    expect(topToolExecutionsQuery(noFilters, '3600s')).toBe(
+      'sum by (gen_ai_request_model)(increase(gen_ai_client_operation_duration_seconds_count{gen_ai_operation_name="execute_tool"}[3600s]))'
     );
   });
 

@@ -20,7 +20,7 @@ import { type ConversationsDataSource, defaultConversationsDataSource } from '..
 import { buildConversationSearchFilter } from '../../conversation/filters';
 import type { ConversationSearchResult } from '../../conversation/types';
 import { extractResolvePairs, BreakdownStatPanel, formatRelativeTime, formatWindowLabel } from './dashboardShared';
-import { ViewConversationsLink, buildConversationsUrl } from './ViewConversationsLink';
+import { ViewConversationsLink } from './ViewConversationsLink';
 import { ViewAgentsLink, buildAgentDetailHref } from './ViewAgentsLink';
 import { TopStat } from '../TopStat';
 import { calculateTotalCost, calculateTotalCostByGroup, calculateCostTimeSeries } from '../../dashboard/cost';
@@ -53,6 +53,7 @@ import { useModelCardBreakdownPopover } from './useModelCardBreakdownPopover';
 import { PageInsightBar } from '../insight/PageInsightBar';
 import { summarizeVector, summarizeMatrix, hasResponseData } from '../insight/summarize';
 import { DashboardSummaryBar } from './DashboardSummaryBar';
+import { buildConversationsUrl } from '../../dashboard/url';
 
 export type DashboardGridProps = {
   dataSource: DashboardDataSource;

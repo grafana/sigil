@@ -9,6 +9,7 @@ import { PLUGIN_BASE, ROUTES } from '../constants';
 const LandingPage = React.lazy(() => import('../pages/LandingPage'));
 const PlaygroundSparklesPage = React.lazy(() => import('../pages/PlaygroundSparklesPage'));
 const DashboardPage = React.lazy(() => import('../pages/DashboardPage'));
+const ToolAnalyticsPage = React.lazy(() => import('../pages/ToolAnalyticsPage'));
 const TutorialPage = React.lazy(() => import('../pages/TutorialPage'));
 const ConversationsBrowserPage = React.lazy(() => import('../pages/ConversationsBrowserPage'));
 const ConversationExplorePage = React.lazy(() => import('../pages/ConversationExplorePage'));
@@ -52,11 +53,34 @@ function useAgentDetailPageNav(): NavModelItem | undefined {
   }, [matchedName, isAnonymous]);
 }
 
+function useToolAnalyticsPageNav(): NavModelItem | undefined {
+  const location = useLocation();
+  const match = location.pathname.match(new RegExp(`${PLUGIN_BASE}/${ROUTES.Analytics}/tools/([^/]+)`));
+  const matchedToolName = match ? decodeURIComponent(match[1]) : undefined;
+
+  return React.useMemo(() => {
+    if (!matchedToolName) {
+      return undefined;
+    }
+    return {
+      text: matchedToolName,
+      parentItem: {
+        text: 'Analytics',
+        url: `${PLUGIN_BASE}/${ROUTES.Analytics}`,
+      },
+    };
+  }, [matchedToolName]);
+}
+
 export default function App(props: AppRootProps) {
   const styles = useStyles2(getStyles);
   const location = useLocation();
   const agentDetailPageNav = useAgentDetailPageNav();
+  const toolAnalyticsPageNav = useToolAnalyticsPageNav();
   const pageNav = React.useMemo<NavModelItem>(() => {
+    if (toolAnalyticsPageNav) {
+      return toolAnalyticsPageNav;
+    }
     if (agentDetailPageNav) {
       return agentDetailPageNav;
     }
@@ -67,7 +91,7 @@ export default function App(props: AppRootProps) {
       icon: undefined,
       hideFromBreadcrumbs: true,
     };
-  }, [props.meta.name, agentDetailPageNav]);
+  }, [props.meta.name, agentDetailPageNav, toolAnalyticsPageNav]);
   const shouldHidePluginHeader = location.pathname.includes(`/${ROUTES.Conversations}`);
   const shouldUseFullBleedPageInner =
     location.pathname.includes(`/${ROUTES.PlaygroundSparkles}`) ||
@@ -107,6 +131,7 @@ export default function App(props: AppRootProps) {
           }
         />
         <Route path={ROUTES.Analytics} element={<DashboardPage />} />
+        <Route path={ROUTES.AnalyticsTool} element={<ToolAnalyticsPage />} />
         <Route path={`${ROUTES.Tutorial}/*`} element={<TutorialPage />} />
         <Route
           path={ROUTES.Conversations}
