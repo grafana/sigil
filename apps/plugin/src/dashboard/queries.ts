@@ -5,6 +5,7 @@ import {
   type FilterOperator,
   type LabelFilter,
 } from './types';
+import { buildExecuteToolMetricFilters } from './toolRuntime';
 
 // OTel metric names converted to Prometheus format (dots → underscores).
 const TOKEN_USAGE = 'gen_ai_client_token_usage';
@@ -148,8 +149,28 @@ export function totalOpsQuery(
   return `sum${byClause(breakdown)}(increase(${OPERATION_DURATION}_count${sel(filters)}[${rangeDuration}]))`;
 }
 
-export function totalErrorsQuery(filters: DashboardFilters, rangeDuration: string): string {
-  return `sum(increase(${OPERATION_DURATION}_count${sel(filters, 'error_type!=""')}[${rangeDuration}]))`;
+export function totalErrorsQuery(
+  filters: DashboardFilters,
+  rangeDuration: string,
+  breakdown: BreakdownDimension = 'none'
+): string {
+  return `sum${byClause(breakdown)}(increase(${OPERATION_DURATION}_count${sel(filters, 'error_type!=""')}[${rangeDuration}]))`;
+}
+
+export function topToolExecutionsQuery(filters: DashboardFilters, rangeDuration: string): string {
+  return totalOpsQuery(buildExecuteToolMetricFilters(filters), rangeDuration, 'model');
+}
+
+export function topToolErrorsQuery(filters: DashboardFilters, rangeDuration: string): string {
+  return totalErrorsQuery(buildExecuteToolMetricFilters(filters), rangeDuration, 'model');
+}
+
+export function topToolErrorRateQuery(filters: DashboardFilters, rangeDuration: string): string {
+  return errorRateQuery(buildExecuteToolMetricFilters(filters), rangeDuration, 'model');
+}
+
+export function topToolLatencyQuery(filters: DashboardFilters, rangeDuration: string, quantile = 0.95): string {
+  return latencyStatQuery(buildExecuteToolMetricFilters(filters), rangeDuration, 'model', quantile);
 }
 
 export function errorRateQuery(

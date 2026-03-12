@@ -37,6 +37,21 @@
     },
     {
       "type": "page",
+      "name": "Tools",
+      "path": "/a/grafana-sigil-app/analytics/tools",
+      "action": "grafana-sigil-app.data:read",
+      "addToNav": true,
+      "defaultNav": false
+    },
+    {
+      "type": "page",
+      "name": "Tools",
+      "path": "/a/grafana-sigil-app/analytics/tools/:toolName",
+      "action": "grafana-sigil-app.data:read",
+      "addToNav": false
+    },
+    {
+      "type": "page",
       "name": "Conversations",
       "path": "/a/grafana-sigil-app/conversations",
       "action": "grafana-sigil-app.data:read",

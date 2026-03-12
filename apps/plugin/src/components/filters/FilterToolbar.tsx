@@ -20,6 +20,7 @@ export type FilterToolbarProps = {
   to: number;
   onTimeRangeChange: (timeRange: TimeRange) => void;
   onFiltersChange: (filters: DashboardFilters) => void;
+  hideModelFilter?: boolean;
   hideLabelFilters?: boolean;
   fillWidth?: boolean;
   labelFilterOperators?: FilterOperator[];
@@ -43,6 +44,7 @@ export function FilterToolbar({
   to,
   onTimeRangeChange,
   onFiltersChange,
+  hideModelFilter = false,
   hideLabelFilters = false,
   fillWidth = false,
   labelFilterOperators = FILTER_OPERATORS,
@@ -70,11 +72,11 @@ export function FilterToolbar({
   const activeFilterCount = useMemo(() => {
     return (
       filters.providers.length +
-      filters.models.length +
+      (hideModelFilter ? 0 : filters.models.length) +
       filters.agentNames.length +
       filters.labelFilters.filter((lf) => lf.key && lf.value).length
     );
-  }, [filters]);
+  }, [filters, hideModelFilter]);
   const completedLabelFilterCount = filters.labelFilters.filter((lf) => lf.key && lf.value).length;
   const hiddenLabelFilterCount = hideLabelFilters || !labelFilterRowOpen ? completedLabelFilterCount : 0;
 
@@ -192,18 +194,20 @@ export function FilterToolbar({
               isSearchable
               width={fillWidth ? undefined : 'auto'}
             />
-            <MultiSelect<string>
-              className={fillWidth ? styles.multiSelectFill : styles.multiSelect}
-              options={modelSelectOptions}
-              value={filters.models}
-              onChange={handleModelChange}
-              onCreateOption={handleModelCreate}
-              placeholder="Model"
-              isClearable
-              allowCustomValue
-              isSearchable
-              width={fillWidth ? undefined : 'auto'}
-            />
+            {!hideModelFilter && (
+              <MultiSelect<string>
+                className={fillWidth ? styles.multiSelectFill : styles.multiSelect}
+                options={modelSelectOptions}
+                value={filters.models}
+                onChange={handleModelChange}
+                onCreateOption={handleModelCreate}
+                placeholder="Model"
+                isClearable
+                allowCustomValue
+                isSearchable
+                width={fillWidth ? undefined : 'auto'}
+              />
+            )}
             <MultiSelect<string>
               className={fillWidth ? styles.multiSelectFill : styles.multiSelect}
               options={agentSelectOptions}

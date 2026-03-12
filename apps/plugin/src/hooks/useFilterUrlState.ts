@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { dateTimeParse, type TimeRange } from '@grafana/data';
 import { type DashboardFilters, type FilterOperator, FILTER_OPERATORS, type LabelFilter } from '../dashboard/types';
+import { serializeRawTime } from '../dashboard/url';
 
 const DEFAULT_FROM = 'now-1h';
 const DEFAULT_TO = 'now';
@@ -53,13 +54,6 @@ function parseFilters(params: URLSearchParams): DashboardFilters {
     agentNames: parseMulti(params, 'agent'),
     labelFilters: parseLabelFilters(params),
   };
-}
-
-function serializeRawTime(raw: string | { toISOString(): string }): string {
-  if (typeof raw === 'string') {
-    return raw;
-  }
-  return raw.toISOString();
 }
 
 function setOrDelete(params: URLSearchParams, key: string, value: string, defaultValue = ''): void {
