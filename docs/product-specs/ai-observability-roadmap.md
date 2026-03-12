@@ -101,7 +101,7 @@ Exit signal:
 
 ## Dependencies and Cross-Links
 
-- Competitive context: `docs/references/competitive-benchmark.md`
+- Reference docs index: `docs/references/index.md`
 - Generation ingest contract: `docs/references/generation-ingest-contract.md`
 - Plugin UI/proxy constraints: `docs/FRONTEND.md`
 - System architecture baseline: `ARCHITECTURE.md`

@@ -67,7 +67,7 @@
   - completed: `docs/exec-plans/completed/`
   - tech debt: `docs/exec-plans/tech-debt-tracker.md`
 - Generation ingest reference: `docs/references/generation-ingest-contract.md`
-- Benchmark + OTEL references: `docs/references/competitive-benchmark.md`
+- Semantic convention reference: `docs/references/semantic-conventions.md`
 
 ## Documentation Governance
 

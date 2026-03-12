@@ -8,16 +8,14 @@ audience: contributors
 
 # References Index
 
-External ecosystem notes and comparative references used for architecture and implementation decisions.
+External reference notes used for architecture and implementation decisions.
 
 ## Documents
 
 - [`online-evaluation-user-guide.md`](online-evaluation-user-guide.md)
 - [`semantic-conventions.md`](semantic-conventions.md)
 - [`sdk-conformance-spec.md`](sdk-conformance-spec.md)
-- [`competitive-benchmark.md`](competitive-benchmark.md)
 - [`storage-benchmarks.md`](storage-benchmarks.md)
-- [`ai-observability-evaluation-market.md`](ai-observability-evaluation-market.md)
 - [`generation-ingest-contract.md`](generation-ingest-contract.md)
 - [`score-ingest-contract.md`](score-ingest-contract.md)
 - [`eval-control-plane.md`](eval-control-plane.md)

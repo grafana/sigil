@@ -124,7 +124,6 @@ This is the canonical navigation map for repository documentation.
   - Generation ingest contract: [`references/generation-ingest-contract.md`](references/generation-ingest-contract.md)
   - Score ingest contract: [`references/score-ingest-contract.md`](references/score-ingest-contract.md)
   - Evaluation control plane API: [`references/eval-control-plane.md`](references/eval-control-plane.md)
-  - AI o11y + evaluation market survey (online + offline): [`references/ai-observability-evaluation-market.md`](references/ai-observability-evaluation-market.md)
   - Grafana response shapes: [`references/grafana-query-response-shapes.md`](references/grafana-query-response-shapes.md)
   - Helm deployment chart: [`references/helm-chart.md`](references/helm-chart.md)
   - Model cards API shape: [`references/model-cards-api.md`](references/model-cards-api.md)

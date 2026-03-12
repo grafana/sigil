@@ -47,17 +47,13 @@ Execution for this design is completed and tracked in:
 
 - `docs/exec-plans/completed/2026-02-17-embedding-call-observability.md`
 
-## Market research
+## Industry context
 
-### How competitors handle embeddings
+Common patterns across existing tooling:
 
-| Product | Approach | What is stored |
-|---------|----------|----------------|
-| LangSmith | Embeddings are runs in the trace tree | Trace metadata, no separate entity |
-| Langfuse | Dedicated `embedding` observation type | Input text, output vectors, usage. Community noted `generation` type was used interchangeably — dedicated type is mostly for UI categorization |
-| Arize Phoenix | OTel spans | Span attributes, embedding similarity analysis done downstream |
-| Helicone | Proxy-based capture | API request/response via proxy |
-| OpenLLMetry | OTel spans | Standard `gen_ai.*` span attributes |
+- Trace-centric systems model embeddings as spans or run nodes linked to the parent workflow.
+- Some products expose a dedicated embedding record type, mostly for UI categorization rather than a materially different storage model.
+- Proxy-style capture focuses on request and response metadata, while retrieval-quality analysis still happens downstream.
 
 ### Key insight
 
