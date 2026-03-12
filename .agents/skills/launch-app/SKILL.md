@@ -14,10 +14,16 @@ and avoids fixed host-port collisions by using OrbStack DNS.
    ./scripts/run-sigil-worktree.sh url
    ```
 
-2. Start the worktree stack if it is not already running:
+2. Start the worktree stack if it is not already running. Pick the runtime that
+   matches the validation need:
    ```bash
    mise run up:worktree:detached
+   mise run worktree:dev
+   mise run worktree:ops
    ```
+   Use `up:worktree:detached` for the normal local worktree stack,
+   `worktree:dev` for dev datasources, and `worktree:ops` for ops-backed or
+   scale-sensitive validation.
 
 3. Wait for the first cold start to finish. `plugin-precache` may take a bit on
    an empty volume, and Grafana can lag the API by another few seconds.

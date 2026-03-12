@@ -179,6 +179,18 @@ curl -sf http://sigil.<worktree>.orb.local/healthz
 curl -I http://grafana.<worktree>.orb.local/login
 ```
 
+When a ticket benefits from remote-backed data, switch the startup command
+instead of falling back to the fixed-port root stack:
+
+```bash
+mise run worktree:dev
+mise run worktree:ops
+```
+
+Use `worktree:dev` for dev datasources and `worktree:ops` for ops-backed,
+scale-sensitive validation. Both commands still use the same worktree-safe
+OrbStack URLs and compose isolation model.
+
 If plugin queries fail in Grafana, sign in with `admin` / `admin` and skip the
 password-change prompt. In practice, treat that login as required for local
 Sigil UI validation.
@@ -231,6 +243,10 @@ Recommended model:
 
 - Use `mise run up:worktree` or `mise run up:worktree:detached` for checkout-
   local runtime validation.
+- Use `mise run worktree:dev` when a worktree-safe stack should query dev
+  datasources instead of the local Sigil backend.
+- Use `mise run worktree:ops` when scale-sensitive validation is easier against
+  ops datasources from a worktree-safe stack.
 - Use `mise run up:worktree:traffic-lite` when UI work needs a small amount of
   synthetic data without the full `sdk-traffic` load.
 - Let each worktree use its own Compose project name and OrbStack URL such as

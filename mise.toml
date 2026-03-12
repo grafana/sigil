@@ -127,6 +127,10 @@ run = "DEVELOPMENT=true SIGIL_API_URL=https://sigil-dev-001.grafana-dev.net/ SIG
 description = "Start local development stack without sdk-traffic, pointing to ops datasources"
 run = "DEVELOPMENT=true SIGIL_API_URL=https://sigil-ops-001.grafana-ops.net/ SIGIL_TENANT_ID=27821 SIGIL_API_AUTH_TOKEN=$SIGIL_API_AUTH_TOKEN_OPS SIGIL_PROM_DS_UID=grafanacloud-prom SIGIL_TEMPO_DS_UID=grafanacloud-traces docker compose --profile core up --watch --build --remove-orphans"
 
+[tasks."worktree:dev"]
+description = "Start the worktree-safe stack against dev datasources"
+run = "DEVELOPMENT=true SIGIL_API_URL=https://sigil-dev-001.grafana-dev.net/ SIGIL_TENANT_ID=13 SIGIL_PROM_DS_UID=cortex-dev-01 SIGIL_TEMPO_DS_UID=tempo-dev-01 ./scripts/run-sigil-worktree.sh up-detached"
+
 [tasks."worktree:ops"]
 description = "Start the worktree-safe stack against ops datasources"
 run = "DEVELOPMENT=true SIGIL_API_URL=https://sigil-ops-001.grafana-ops.net/ SIGIL_TENANT_ID=27821 SIGIL_API_AUTH_TOKEN=$SIGIL_API_AUTH_TOKEN_OPS SIGIL_PROM_DS_UID=grafanacloud-prom SIGIL_TEMPO_DS_UID=grafanacloud-traces ./scripts/run-sigil-worktree.sh up-detached"
