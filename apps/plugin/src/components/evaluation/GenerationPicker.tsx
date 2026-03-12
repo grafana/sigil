@@ -121,6 +121,24 @@ type ConversationRow = {
   models?: string[];
 };
 
+function toTimestamp(value: string): number {
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed;
+}
+
+export function sortSavedConversationsNewestFirst(conversations: SavedConversation[]): SavedConversation[] {
+  return conversations
+    .map((conversation, index) => ({ conversation, index }))
+    .sort((left, right) => {
+      const timestampDiff = toTimestamp(right.conversation.created_at) - toTimestamp(left.conversation.created_at);
+      if (timestampDiff !== 0) {
+        return timestampDiff;
+      }
+      return left.index - right.index;
+    })
+    .map(({ conversation }) => conversation);
+}
+
 export default function GenerationPicker({
   onSelect,
   selectedGenerationId,
@@ -208,9 +226,8 @@ export default function GenerationPicker({
       .listSavedConversations(undefined, 50)
       .then((resp) => {
         if (!cancelled) {
-          // Reverse to show newest first. TODO: request server-side descending order
-          // once the API supports it — client-side reverse only covers the first page (50 items).
-          setSavedConversations((resp.items ?? []).slice().reverse());
+          // Client-side ordering only applies to the first fetched page (50 items).
+          setSavedConversations(sortSavedConversationsNewestFirst(resp.items ?? []));
         }
       })
       .catch(() => {
