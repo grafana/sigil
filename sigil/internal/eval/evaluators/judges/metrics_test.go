@@ -117,6 +117,79 @@ func TestInstrumentedClientTimeoutError(t *testing.T) {
 	}
 }
 
+func TestInstrumentedClientNormalizesUnknownLabels(t *testing.T) {
+	observer := &metricsObserverStub{}
+	SetMetricsObserver(observer)
+	defer SetMetricsObserver(nil)
+
+	client := NewInstrumentedClient("   ", fakeJudgeClient{
+		judgeFn: func(_ context.Context, _ JudgeRequest) (JudgeResponse, error) {
+			return JudgeResponse{}, nil
+		},
+	})
+
+	_, err := client.Judge(WithTenantID(context.Background(), "tenant-a"), JudgeRequest{Model: "  "})
+	if err != nil {
+		t.Fatalf("judge: %v", err)
+	}
+
+	snapshot := observer.snapshot()
+	if len(snapshot.requests) != 1 {
+		t.Fatalf("expected one request event, got %d", len(snapshot.requests))
+	}
+	if snapshot.requests[0].provider != judgeUnknownLabel {
+		t.Fatalf("expected provider %q, got %q", judgeUnknownLabel, snapshot.requests[0].provider)
+	}
+	if snapshot.requests[0].model != judgeUnknownLabel {
+		t.Fatalf("expected model %q, got %q", judgeUnknownLabel, snapshot.requests[0].model)
+	}
+}
+
+func TestInstrumentedClientResponseModelOverridesRequestModel(t *testing.T) {
+	observer := &metricsObserverStub{}
+	SetMetricsObserver(observer)
+	defer SetMetricsObserver(nil)
+
+	client := NewInstrumentedClient("openai", fakeJudgeClient{
+		judgeFn: func(_ context.Context, _ JudgeRequest) (JudgeResponse, error) {
+			return JudgeResponse{Model: "gpt-4.1-mini"}, nil
+		},
+	})
+
+	_, err := client.Judge(WithTenantID(context.Background(), "tenant-a"), JudgeRequest{Model: "fallback-model"})
+	if err != nil {
+		t.Fatalf("judge: %v", err)
+	}
+
+	snapshot := observer.snapshot()
+	if len(snapshot.requests) != 1 {
+		t.Fatalf("expected one request event, got %d", len(snapshot.requests))
+	}
+	if snapshot.requests[0].model != "gpt-4.1-mini" {
+		t.Fatalf("expected response model override, got %q", snapshot.requests[0].model)
+	}
+}
+
+func TestNormalizeJudgeLabel(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "empty", input: "", want: judgeUnknownLabel},
+		{name: "whitespace", input: "   ", want: judgeUnknownLabel},
+		{name: "trimmed", input: "  openai  ", want: "openai"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := normalizeJudgeLabel(tt.input); got != tt.want {
+				t.Fatalf("normalizeJudgeLabel(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 type fakeJudgeClient struct {
 	judgeFn      func(ctx context.Context, req JudgeRequest) (JudgeResponse, error)
 	listModelsFn func(ctx context.Context) ([]JudgeModel, error)

@@ -22,6 +22,8 @@ var (
 	metricsObserver   MetricsObserver
 )
 
+const judgeUnknownLabel = "unknown"
+
 func SetMetricsObserver(observer MetricsObserver) {
 	metricsObserverMu.Lock()
 	metricsObserver = observer
@@ -60,17 +62,11 @@ func (c instrumentedClient) Judge(ctx context.Context, req JudgeRequest) (JudgeR
 		return response, err
 	}
 
-	model := strings.TrimSpace(req.Model)
-	if responseModel := strings.TrimSpace(response.Model); responseModel != "" {
+	model := normalizeJudgeLabel(req.Model)
+	if responseModel := normalizeJudgeLabel(response.Model); responseModel != judgeUnknownLabel {
 		model = responseModel
 	}
-	if model == "" {
-		model = "unknown"
-	}
-	providerID := c.providerID
-	if providerID == "" {
-		providerID = "unknown"
-	}
+	providerID := normalizeJudgeLabel(c.providerID)
 
 	status := judgeStatus(ctx, err)
 	observer.ObserveJudgeRequest(tenantID, providerID, model, status)
@@ -85,6 +81,14 @@ func (c instrumentedClient) Judge(ctx context.Context, req JudgeRequest) (JudgeR
 	observer.ObserveJudgeTokens(tenantID, providerID, model, "output", response.Usage.OutputTokens)
 	observer.ObserveJudgeTokens(tenantID, providerID, model, "cache_read", response.Usage.CacheReadTokens)
 	return response, err
+}
+
+func normalizeJudgeLabel(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return judgeUnknownLabel
+	}
+	return trimmed
 }
 
 func (c instrumentedClient) ListModels(ctx context.Context) ([]JudgeModel, error) {
@@ -131,6 +135,6 @@ func classifyJudgeError(ctx context.Context, err error) string {
 	case strings.Contains(message, "invalid response"), strings.Contains(message, "decode"), strings.Contains(message, "unmarshal"), strings.Contains(message, "parse"):
 		return "invalid_response"
 	default:
-		return "unknown"
+		return judgeUnknownLabel
 	}
 }
