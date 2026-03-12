@@ -175,7 +175,13 @@ Test that each Go provider mapper correctly transforms provider request/response
   - [x] Span hierarchy: framework span is parent of generation span
   - [x] Framework-specific metadata propagation is asserted explicitly
   - [x] Generation tags include `sigil.framework.name` and `sigil.framework.language`
+  - [x] Explicit embedding support gate coverage while the Google ADK lifecycle surface lacks a dedicated embeddings callback
 - [x] Extend `sdk-conformance-spec.md` with framework adapter section
+
+### Framework embedding rule
+
+- [x] Embed framework conformance scenarios only when the framework exposes a real embedding lifecycle
+- [x] Assert an explicit unsupported capability contract when the framework surface does not expose embeddings
 
 ## Phase D: Other language core SDKs
 
@@ -226,4 +232,5 @@ Priority order follows adoption:
 - No assertion libraries -- `t.Fatalf` with clear got/want messages only.
 - Table-driven tests for resolution chain scenarios (title, user ID, agent identity).
 - Three conformance layers (core, provider, framework) because each transforms data differently and breaks independently.
+- Embedding conformance runs only for real SDK/provider/framework embedding surfaces; otherwise suites assert explicit unsupported capability contracts.
 - Fix bugs found during implementation in the same branch.

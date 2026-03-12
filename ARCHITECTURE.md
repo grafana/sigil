@@ -611,9 +611,9 @@ A no-Docker conformance test suite validates the Sigil SDK public API behaviors 
 - **Local entry point**: `mise run test:sdk:conformance` runs the aggregate core harnesses across all five SDKs.
 - **Go reference implementation**: `sdks/go/sigil/conformance_test.go` and `conformance_helpers_test.go` (`package sigil_test`).
 - **Current shared core baseline**: sync roundtrip, conversation title resolution, user ID resolution, agent identity resolution, streaming telemetry, tool execution, embeddings, validation/call-error, rating submission, and shutdown flush across exported generation payloads, OTLP spans, OTLP metrics, and local rating HTTP capture.
-- **Cross-SDK spec**: `docs/references/sdk-conformance-spec.md` defines the current language-neutral baseline and the extension model for future provider/framework coverage.
+- **Cross-SDK spec**: `docs/references/sdk-conformance-spec.md` defines the current language-neutral baseline and the extension model for future provider/framework coverage, including explicit unsupported capability contracts when provider or framework embedding surfaces do not exist.
 - **Four assertion targets**: generation proto (fake gRPC server), OTLP spans (`tracetest.SpanRecorder`), OTLP metrics (`sdkmetric.ManualReader`), rating HTTP (`httptest.Server`).
-- **Scope**: core SDK suites only. Go also ships provider-wrapper conformance, but backend projections, batch/retry mechanics, and framework adapters remain outside the current shared core harness.
+- **Scope**: the shared core suites run across the shipped SDKs. Go also ships provider-wrapper conformance, and the Google ADK framework-adapter suite makes unsupported embedding behavior explicit. Backend projections and batch/retry mechanics remain outside the current harness.
 - Design doc: `docs/design-docs/2026-03-12-sdk-conformance-harness.md`.
 
 ## Evolution Path

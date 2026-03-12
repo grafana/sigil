@@ -422,6 +422,21 @@ The Go repo now ships the first framework-adapter conformance suite for
 - Assert `gen_ai.client.operation.duration` has data.
 - Assert `gen_ai.client.time_to_first_token` has data.
 
+### Framework embedding applicability
+
+Framework-adapter embedding scenarios apply only when the framework surface
+exposes a first-class embeddings lifecycle that the Sigil adapter can observe.
+When the framework does not expose that lifecycle, the conformance suite should
+assert the adapter's explicit unsupported capability contract instead of
+fabricating synthetic embedding callbacks or spans.
+
+Current Go scope note:
+
+- Google ADK: run and tool lifecycle conformance is shipped. Embedding
+  conformance is currently not applicable because the Google ADK lifecycle
+  surface used in this repository does not expose a dedicated embeddings
+  callback, so the suite asserts `CheckEmbeddingsSupport()`.
+
 ## Extending the spec
 
 Future phases will extend this document with the remaining core gaps (full
@@ -431,6 +446,8 @@ scenarios in other languages. Provider-wrapper embedding scenarios apply only
 when the official provider SDK or API surface exposes a native embedding
 operation; when it does not, the suite should assert the wrapper's explicit
 unsupported capability contract instead of fabricating request DTOs or
-synthetic embedding spans. Until those phases land, this document is the
-authoritative baseline for the currently shipped Go core harnesses, Go provider
-conformance harnesses, and the first Go framework-adapter suite (`google-adk`).
+synthetic embedding spans. Framework-adapter embedding scenarios follow the
+same rule for framework lifecycle surfaces. Until those phases land, this
+document is the authoritative baseline for the currently shipped Go core
+harnesses, Go provider conformance harnesses, and the first Go
+framework-adapter suite (`google-adk`).
