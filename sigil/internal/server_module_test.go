@@ -36,7 +36,7 @@ func TestBuildGenerationStoreRejectsMemoryBackend(t *testing.T) {
 	_, err := buildGenerationStore(context.Background(), config.Config{
 		Target:         config.TargetServer,
 		StorageBackend: "memory",
-	}, shouldAutoMigrateGenerationStoreTarget(config.TargetServer))
+	}, false)
 	if err == nil {
 		t.Fatalf("expected unsupported backend error")
 	}
