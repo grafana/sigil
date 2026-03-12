@@ -425,17 +425,22 @@ func TestConformance_GenerateContentStreamExportsNormalizedGeneration(t *testing
 		},
 	}
 
+	encodedResponses := make([][]byte, 0, len(responses))
+	for _, response := range responses {
+		encoded, err := json.Marshal(response)
+		if err != nil {
+			t.Fatalf("marshal stream response: %v", err)
+		}
+		encodedResponses = append(encodedResponses, encoded)
+	}
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || !strings.Contains(r.URL.Path, ":streamGenerateContent") {
 			http.NotFound(w, r)
 			return
 		}
 		w.Header().Set("Content-Type", "text/event-stream")
-		for _, response := range responses {
-			encoded, err := json.Marshal(response)
-			if err != nil {
-				t.Fatalf("marshal stream response: %v", err)
-			}
+		for _, encoded := range encodedResponses {
 			_, _ = fmt.Fprintf(w, "data:%s\n\n", encoded)
 		}
 	}))

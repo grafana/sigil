@@ -383,17 +383,22 @@ func TestConformance_ChatCompletionsNewStreamingExportsNormalizedGeneration(t *t
 		},
 	}
 
+	encodedChunks := make([][]byte, 0, len(chunks))
+	for _, chunk := range chunks {
+		encoded, err := json.Marshal(chunk)
+		if err != nil {
+			t.Fatalf("marshal chunk: %v", err)
+		}
+		encodedChunks = append(encodedChunks, encoded)
+	}
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/chat/completions" {
 			http.NotFound(w, r)
 			return
 		}
 		w.Header().Set("Content-Type", "text/event-stream")
-		for _, chunk := range chunks {
-			encoded, err := json.Marshal(chunk)
-			if err != nil {
-				t.Fatalf("marshal chunk: %v", err)
-			}
+		for _, encoded := range encodedChunks {
 			_, _ = fmt.Fprintf(w, "data: %s\n\n", encoded)
 		}
 		_, _ = io.WriteString(w, "data: [DONE]\n\n")
