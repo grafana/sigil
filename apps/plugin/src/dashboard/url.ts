@@ -17,7 +17,7 @@ function appendMulti(params: URLSearchParams, key: string, values: string[]): vo
   }
 }
 
-export function appendLabelFilters(params: URLSearchParams, filters: LabelFilter[]): void {
+function appendLabelFilters(params: URLSearchParams, filters: LabelFilter[]): void {
   for (const filter of filters) {
     if (filter.key && filter.value) {
       params.append('label', `${filter.key}|${filter.operator}|${filter.value}`);

@@ -1,8 +1,9 @@
 import React from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import ToolsPage from './ToolsPage';
 import type { DashboardDataSource } from '../dashboard/api';
+import { TOOL_METRIC_LABEL } from '../dashboard/toolRuntime';
 import type { PrometheusQueryResponse } from '../dashboard/types';
 
 jest.mock('@grafana/ui', () => {
@@ -145,6 +146,27 @@ describe('ToolsPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Tools analytics failed to load')).toBeInTheDocument();
+    });
+  });
+
+  it('sanitizes tool metric label filters from the URL state', async () => {
+    const dataSource = createDataSource();
+    function LocationProbe() {
+      const location = useLocation();
+      return <div data-testid="location-search">{location.search}</div>;
+    }
+
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={[`/analytics/tools?label=${TOOL_METRIC_LABEL}|=|calendar.lookup`]}>
+          <ToolsPage dataSource={dataSource} />
+          <LocationProbe />
+        </MemoryRouter>
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location-search')).toHaveTextContent('');
     });
   });
 });

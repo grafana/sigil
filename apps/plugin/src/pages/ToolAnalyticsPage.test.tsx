@@ -1,9 +1,10 @@
 import React from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import ToolAnalyticsPage from './ToolAnalyticsPage';
 import type { DashboardDataSource } from '../dashboard/api';
 import type { ConversationsDataSource } from '../conversation/api';
+import { TOOL_METRIC_LABEL } from '../dashboard/toolRuntime';
 import type { PrometheusQueryResponse } from '../dashboard/types';
 import type { ConversationSearchResponse } from '../conversation/types';
 
@@ -231,5 +232,38 @@ describe('ToolAnalyticsPage', () => {
       screen.queryByText('No `execute_tool` runtime data matched calendar.lookup in this time range.')
     ).not.toBeInTheDocument();
     expect(screen.queryByText('Tool analytics failed to load')).not.toBeInTheDocument();
+  });
+
+  it('sanitizes tool metric label filters from the drilldown URL state', async () => {
+    const dataSource = createDashboardDataSource();
+    const conversationsDataSource = createConversationsDataSource();
+    function LocationProbe() {
+      const location = useLocation();
+      return <div data-testid="location-search">{location.search}</div>;
+    }
+
+    await act(async () => {
+      render(
+        <MemoryRouter
+          initialEntries={[`/analytics/tools/calendar.lookup?label=${TOOL_METRIC_LABEL}|=|calendar.lookup`]}
+        >
+          <Routes>
+            <Route
+              path="/analytics/tools/:toolName"
+              element={
+                <>
+                  <ToolAnalyticsPage dataSource={dataSource} conversationsDataSource={conversationsDataSource} />
+                  <LocationProbe />
+                </>
+              }
+            />
+          </Routes>
+        </MemoryRouter>
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location-search')).toHaveTextContent('');
+    });
   });
 });
