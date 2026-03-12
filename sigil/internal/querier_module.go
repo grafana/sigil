@@ -241,7 +241,21 @@ func newQuerierModule(
 		if md, ok := generationStore.(evalcontrol.ManualConversationDeleter); ok {
 			scOpts = append(scOpts, evalcontrol.WithManualDeleter(md))
 		}
+		if cleaner, ok := generationStore.(evalcontrol.CollectionMemberCleaner); ok {
+			scOpts = append(scOpts, evalcontrol.WithCollectionMemberCleaner(cleaner))
+		}
 		savedConvSvc = evalcontrol.NewSavedConversationService(scStore, conversationStore, scOpts...)
+	}
+
+	var collectionSvc *evalcontrol.CollectionService
+	if colStore, ok := generationStore.(evalpkg.CollectionStore); ok {
+		if scStore, ok := generationStore.(evalpkg.SavedConversationStore); ok {
+			collectionSvc = evalcontrol.NewCollectionService(colStore, scStore)
+		}
+	}
+
+	if collectionSvc != nil && savedConvSvc != nil {
+		savedConvSvc.SetCollectionLister(collectionSvc)
 	}
 
 	if registry != nil {
@@ -266,6 +280,7 @@ func newQuerierModule(
 			server.RegisterSettingsRoutes(mux, tenantSettingsSvc, protectedMiddleware)
 			evalcontrol.RegisterHTTPRoutes(mux, controlSvc, templateSvc, testSvc, protectedMiddleware)
 			evalcontrol.RegisterSavedConversationRoutes(mux, savedConvSvc, protectedMiddleware)
+			evalcontrol.RegisterCollectionRoutes(mux, collectionSvc, protectedMiddleware)
 			evalingest.RegisterHTTPRoutes(mux, ingestScoreSvc, protectedMiddleware)
 		})
 	}

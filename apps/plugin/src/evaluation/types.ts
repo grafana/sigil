@@ -498,3 +498,42 @@ export function getKindBadgeColor(kind: EvaluatorKind): 'blue' | 'green' | 'oran
       return 'blue';
   }
 }
+
+export type Collection = {
+  tenant_id: string;
+  collection_id: string;
+  name: string;
+  description?: string;
+  created_by: string;
+  updated_by: string;
+  created_at: string;
+  updated_at: string;
+  member_count: number;
+};
+
+export type CollectionListResponse = {
+  items: Collection[];
+  next_cursor: string;
+};
+
+export type CreateCollectionRequest = {
+  name: string;
+  description?: string;
+  created_by: string;
+};
+
+export type UpdateCollectionRequest = {
+  name?: string;
+  description?: string;
+  updated_by: string;
+};
+
+export type AddCollectionMembersRequest = {
+  saved_ids: string[];
+  added_by: string;
+};
+
+export type CollectionMembersResponse = {
+  items: SavedConversation[];
+  next_cursor: string;
+};

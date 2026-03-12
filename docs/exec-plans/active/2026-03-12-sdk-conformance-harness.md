@@ -39,14 +39,15 @@ The repo currently ships the Go core conformance harness entry point:
 
 - Local task: `mise run test:sdk:conformance`
 - Direct runner: `cd sdks/go && GOWORK=off go test ./sigil -run '^TestConformance' -count=1`
-- Current covered scenarios: conversation title semantics, user ID semantics, agent identity semantics
+- Current covered scenarios: full generation roundtrip, conversation title semantics, user ID semantics, agent identity semantics, streaming mode semantics, tool execution semantics, embedding semantics, validation/error semantics, rating submission semantics, shutdown flush semantics
 - Current assertion targets in active use: generation export proto, OTLP spans, OTLP metrics
 
 ### SDK fixes discovered during implementation
 
 (Updated as issues are found.)
 
-- _(none yet)_
+- Added `cache_creation_input_tokens` to the generation ingest proto and Go SDK proto mapping so the full roundtrip export preserves the complete token usage payload.
+- Synced the checked-in JS proto copy and regenerated the Go protobuf bindings so `ToolDefinition.deferred` is present in the conformance ingest schema used by the Go SDK harness.
 
 ## Phase A: Go core SDK
 
@@ -67,15 +68,15 @@ The repo currently ships the Go core conformance harness entry point:
 ### A2: Core scenarios (generation identity and resolution chains)
 
 - [x] Add `conformance_test.go` (`package sigil_test`)
-- [ ] Scenario 1: Full generation roundtrip (sync, gRPC)
-  - [ ] All identity fields preserved on proto
-  - [ ] All content types: text, thinking, tool call, tool result
-  - [ ] Request controls: max_tokens, temperature, top_p, tool_choice, thinking_enabled
-  - [ ] Tags, metadata, artifacts (request + response)
-  - [ ] Usage (all six token fields) and stop reason
-  - [ ] Trace linkage: proto trace_id/span_id match OTLP span IDs
-  - [ ] Span attributes match `semantic-conventions.md` generation section
-  - [ ] Metrics: operation.duration, token.usage present; no TTFT for sync
+- [x] Scenario 1: Full generation roundtrip (sync, gRPC)
+  - [x] All identity fields preserved on proto
+  - [x] All content types: text, thinking, tool call, tool result
+  - [x] Request controls: max_tokens, temperature, top_p, tool_choice, thinking_enabled
+  - [x] Tags, metadata, artifacts (request + response)
+  - [x] Usage (all six token fields) and stop reason
+  - [x] Trace linkage: proto trace_id/span_id match OTLP span IDs
+  - [x] Span attributes match `semantic-conventions.md` generation section
+  - [x] Metrics: operation.duration, token.usage present; no TTFT for sync
 - [x] Scenario 2: Conversation title semantics (table-driven)
   - [x] Explicit field wins
   - [x] Context fallback
@@ -99,14 +100,14 @@ The repo currently ships the Go core conformance harness entry point:
 - [ ] Scenario 5: SDK identity protection (`sigil.sdk.name` overwrite)
 - [ ] Scenario 6: Tags and metadata merge (start + result, conflict resolution)
 - [ ] Scenario 7: Resource attributes on OTLP spans
-- [ ] Scenario 8: Streaming mode (mode, operation name, TTFT metric)
-- [ ] Scenario 9: Tool execution (span shape, attributes, metrics, context propagation)
-- [ ] Scenario 10: Embedding (span, metrics, no generation export)
-- [ ] Scenario 11: Validation and error semantics
-  - [ ] Invalid generation: no export, ErrValidationFailed
-  - [ ] SetCallError: error span attributes, metric labels
-- [ ] Scenario 12: Rating helper (request shape, auth headers, response parsing)
-- [ ] Scenario 13: Shutdown flushes pending generation
+- [x] Scenario 8: Streaming mode (mode, operation name, TTFT metric)
+- [x] Scenario 9: Tool execution (span shape, attributes, metrics, context propagation)
+- [x] Scenario 10: Embedding (span, metrics, no generation export)
+- [x] Scenario 11: Validation and error semantics
+  - [x] Invalid generation: no export, ErrValidationFailed
+  - [x] SetCallError: error span attributes, metric labels
+- [x] Scenario 12: Rating helper (request shape, auth headers, response parsing)
+- [x] Scenario 13: Shutdown flushes pending generation
 
 ### A4: Spec and docs
 
@@ -114,8 +115,8 @@ The repo currently ships the Go core conformance harness entry point:
 - [x] Add `test:sdk:conformance` task to `mise.toml`
 - [x] Update `ARCHITECTURE.md` SDK section
 - [x] Update discoverability docs (`docs/index.md`, `docs/references/index.md`, `sdks/go/README.md`)
-- [ ] Verify: `mise run test:sdk:conformance` passes
-- [ ] Verify: `go test -run TestConformance -count=5 ./sdks/go/sigil/` proves determinism
+- [x] Verify: `mise run test:sdk:conformance` passes
+- [x] Verify: `go test -run TestConformance -count=5 ./sdks/go/sigil/` proves determinism
 
 ## Phase B: Go provider wrappers
 

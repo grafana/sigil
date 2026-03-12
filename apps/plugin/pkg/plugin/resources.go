@@ -1145,12 +1145,34 @@ func (a *App) handleEvalSavedConversations(w http.ResponseWriter, req *http.Requ
 }
 
 func (a *App) handleEvalSavedConversationByID(w http.ResponseWriter, req *http.Request) {
-	id := strings.TrimPrefix(req.URL.Path, "/eval/saved-conversations/")
-	if id == "" || strings.Contains(id, "/") {
+	rest := strings.TrimPrefix(req.URL.Path, "/eval/saved-conversations/")
+	if rest == "" {
 		http.Error(w, "invalid saved conversation path", http.StatusBadRequest)
 		return
 	}
-	path := fmt.Sprintf("/api/v1/eval/saved-conversations/%s", id)
+
+	// Handle {saved_id}/collections sub-path
+	if strings.HasSuffix(rest, "/collections") {
+		savedID := strings.TrimSuffix(rest, "/collections")
+		if savedID == "" || strings.Contains(savedID, "/") {
+			http.Error(w, "invalid saved conversation path", http.StatusBadRequest)
+			return
+		}
+		if req.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		path := fmt.Sprintf("/api/v1/eval/saved-conversations/%s/collections", savedID)
+		a.handleProxy(w, req, path, http.MethodGet)
+		return
+	}
+
+	// Existing behavior: {saved_id} only
+	if strings.Contains(rest, "/") {
+		http.Error(w, "invalid saved conversation path", http.StatusBadRequest)
+		return
+	}
+	path := fmt.Sprintf("/api/v1/eval/saved-conversations/%s", rest)
 	switch req.Method {
 	case http.MethodGet:
 		a.handleProxy(w, req, path, http.MethodGet)
@@ -1167,6 +1189,62 @@ func (a *App) handleEvalSavedConversationsManual(w http.ResponseWriter, req *htt
 		return
 	}
 	a.handleProxy(w, req, "/api/v1/eval/saved-conversations:manual", http.MethodPost)
+}
+
+func (a *App) handleEvalCollections(w http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case http.MethodGet:
+		a.handleProxy(w, req, "/api/v1/eval/collections", http.MethodGet)
+	case http.MethodPost:
+		a.handleProxy(w, req, "/api/v1/eval/collections", http.MethodPost)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (a *App) handleEvalCollectionRoutes(w http.ResponseWriter, req *http.Request) {
+	rest := strings.TrimPrefix(req.URL.Path, "/eval/collections/")
+	if rest == "" {
+		http.Error(w, "invalid collection path", http.StatusBadRequest)
+		return
+	}
+	// Validate path structure: {id}, {id}/members, or {id}/members/{saved_id}.
+	segments := strings.Split(rest, "/")
+	switch len(segments) {
+	case 1: // {collection_id}
+	case 2: // {collection_id}/members
+		if segments[1] != "members" {
+			http.Error(w, "invalid collection path", http.StatusBadRequest)
+			return
+		}
+	case 3: // {collection_id}/members/{saved_id}
+		if segments[1] != "members" {
+			http.Error(w, "invalid collection path", http.StatusBadRequest)
+			return
+		}
+	default:
+		http.Error(w, "invalid collection path", http.StatusBadRequest)
+		return
+	}
+	for _, seg := range segments {
+		if seg == "" || seg == "." || seg == ".." {
+			http.Error(w, "invalid collection path", http.StatusBadRequest)
+			return
+		}
+	}
+	path := "/api/v1/eval/collections/" + rest
+	switch req.Method {
+	case http.MethodGet:
+		a.handleProxy(w, req, path, http.MethodGet)
+	case http.MethodPost:
+		a.handleProxy(w, req, path, http.MethodPost)
+	case http.MethodPatch:
+		a.handleProxy(w, req, path, http.MethodPatch)
+	case http.MethodDelete:
+		a.handleProxy(w, req, path, http.MethodDelete)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 func (a *App) registerRoutes(mux *http.ServeMux) {
@@ -1208,6 +1286,8 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/eval/saved-conversations", a.withAuthorization(a.handleEvalSavedConversations))
 	mux.HandleFunc("/eval/saved-conversations/", a.withAuthorization(a.handleEvalSavedConversationByID))
 	mux.HandleFunc("/eval/saved-conversations:manual", a.withAuthorization(a.handleEvalSavedConversationsManual))
+	mux.HandleFunc("/eval/collections", a.withAuthorization(a.handleEvalCollections))
+	mux.HandleFunc("/eval/collections/", a.withAuthorization(a.handleEvalCollectionRoutes))
 }
 
 type conversationSearchTimeRange struct {
