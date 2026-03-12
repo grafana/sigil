@@ -712,7 +712,7 @@ export class SigilClient {
     this.operationDurationHistogram.record(durationSeconds, {
       [spanAttrOperationName]: 'execute_tool',
       [spanAttrProviderName]: '',
-      [spanAttrRequestModel]: toolExecution.requestModel ?? '',
+      [spanAttrRequestModel]: (toolExecution.requestModel ?? '').trim(),
       [spanAttrAgentName]: toolExecution.agentName ?? '',
       [spanAttrErrorType]: errorType,
       [spanAttrErrorCategory]: errorCategory,
