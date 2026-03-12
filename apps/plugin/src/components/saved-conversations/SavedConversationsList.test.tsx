@@ -146,4 +146,11 @@ describe('SavedConversationsList', () => {
     );
     expect(screen.getByText('—')).toBeInTheDocument();
   });
+
+  it('conversation name is a link to the explore page', () => {
+    render(<SavedConversationsList {...defaultProps} />);
+    const link = screen.getByRole('link', { name: 'Auth flow edge case' });
+    expect(link).toHaveAttribute('href', expect.stringContaining('conv-s1'));
+    expect(link).toHaveAttribute('target', '_blank');
+  });
 });

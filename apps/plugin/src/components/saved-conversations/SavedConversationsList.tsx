@@ -94,12 +94,15 @@ const getStyles = (theme: GrafanaTheme2) => ({
     paddingLeft: `calc(${theme.spacing(2)} - 2px)`,
   }),
   conversationName: css({
-    cursor: 'pointer',
     color: theme.colors.text.link,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
     '&:hover': { textDecoration: 'underline' },
+  }),
+  paginationActions: css({
+    display: 'flex',
+    gap: theme.spacing(1),
   }),
   secondary: css({
     color: theme.colors.text.secondary,
@@ -211,7 +214,7 @@ export function SavedConversationsList({
 
       {/* Column headers */}
       <div className={styles.colHeaders}>
-        <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} />
+        <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} aria-label="Select all" />
         <span>Name</span>
         <span>Saved by</span>
         <span>Date</span>
@@ -238,13 +241,16 @@ export function SavedConversationsList({
                 type="checkbox"
                 checked={selectedIDs.has(sc.saved_id)}
                 onChange={() => toggleRow(sc.saved_id)}
+                aria-label={`Select ${sc.name}`}
               />
-              <span
+              <a
                 className={styles.conversationName}
-                onClick={() => window.open(`${PLUGIN_BASE}/${buildConversationExploreRoute(sc.conversation_id)}`, '_blank')}
+                href={`${PLUGIN_BASE}/${buildConversationExploreRoute(sc.conversation_id)}`}
+                target="_blank"
+                rel="noopener noreferrer"
               >
                 {sc.name}
-              </span>
+              </a>
               <span className={styles.secondary}>{sc.saved_by || '—'}</span>
               <span className={styles.secondary}>{dateTime(sc.created_at).format('MMM D, YYYY')}</span>
             </div>
@@ -255,7 +261,7 @@ export function SavedConversationsList({
       {/* Pagination */}
       <div className={styles.pagination}>
         <span>{conversations.length} conversation{conversations.length !== 1 ? 's' : ''}</span>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className={styles.paginationActions}>
           {hasPrevPage && (
             <Button variant="secondary" size="sm" onClick={() => onPageChange('prev')}>
               ← Prev
