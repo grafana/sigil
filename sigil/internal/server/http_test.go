@@ -162,6 +162,54 @@ func TestRegisterQueryRoutesOwnsQueryPaths(t *testing.T) {
 	}
 }
 
+func TestRecoverHTTPPanicsReturnsInternalServerError(t *testing.T) {
+	handler := recoverHTTPPanics(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic("boom")
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/test", nil)
+	resp := httptest.NewRecorder()
+	handler.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusInternalServerError {
+		t.Fatalf("expected %d, got %d", http.StatusInternalServerError, resp.Code)
+	}
+	if resp.Body.String() != "internal server error\n" {
+		t.Fatalf("unexpected body %q", resp.Body.String())
+	}
+}
+
+func TestRegisterRoutesRecoversProtectedMiddlewarePanics(t *testing.T) {
+	mux := http.NewServeMux()
+	panicingProtected := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+			panic("middleware boom")
+		})
+	}
+
+	RegisterRoutes(
+		mux,
+		query.NewService(),
+		generationingest.NewService(generationingest.NewMemoryStore()),
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		panicingProtected,
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversations", nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusInternalServerError {
+		t.Fatalf("expected %d, got %d", http.StatusInternalServerError, resp.Code)
+	}
+	if resp.Body.String() != "internal server error\n" {
+		t.Fatalf("unexpected body %q", resp.Body.String())
+	}
+}
+
 func TestRecordsEndpointsAreRemoved(t *testing.T) {
 	mux := http.NewServeMux()
 	RegisterRoutes(mux, query.NewService(), generationingest.NewService(generationingest.NewMemoryStore()), feedback.NewService(feedback.NewMemoryStore()), true, true, newTestModelCardService(t), nil)
