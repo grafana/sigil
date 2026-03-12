@@ -6,7 +6,7 @@ using GPart = Google.GenAI.Types.Part;
 
 namespace Grafana.Sigil.Gemini.Tests;
 
-public sealed class GeminiMappingAndRecorderTests
+public sealed class GeminiConformanceTests
 {
     private const string DefaultModel = "gemini-2.5-pro";
 

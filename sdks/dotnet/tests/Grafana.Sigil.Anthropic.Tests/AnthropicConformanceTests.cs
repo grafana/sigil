@@ -7,7 +7,7 @@ using AnthropicMessage = Anthropic.Models.Messages.Message;
 
 namespace Grafana.Sigil.Anthropic.Tests;
 
-public sealed class AnthropicMappingAndRecorderTests
+public sealed class AnthropicConformanceTests
 {
     [Fact]
     public void FromRequestResponse_MapsSyncModeAndDefaultsRawArtifactsOff()
@@ -176,6 +176,13 @@ public sealed class AnthropicMappingAndRecorderTests
         ));
     }
 
+    [Fact]
+    public void EmbeddingConformance_IsExplicitlyUnsupportedWithoutPublicSurface()
+    {
+        Assert.NotNull(typeof(AnthropicRecorder));
+        Assert.Null(typeof(AnthropicRecorder).Assembly.GetType("Grafana.Sigil.Anthropic.AnthropicEmbeddings"));
+    }
+
     private static MessageCreateParams CreateRequest()
     {
         var request = new MessageCreateParams
@@ -291,8 +298,8 @@ public sealed class AnthropicMappingAndRecorderTests
 
         return new AnthropicMessage
         {
+            Container = default!,
             ID = "msg_1",
-            Container = null!,
             Content = new List<ContentBlock>
             {
                 new TextBlock
@@ -329,8 +336,8 @@ public sealed class AnthropicMappingAndRecorderTests
             Type = JsonSerializer.SerializeToElement("message_start"),
             Message = new AnthropicMessage
             {
+                Container = default!,
                 ID = id,
-                Container = null!,
                 Model = Model.ClaudeSonnet4_5,
                 Content = new List<ContentBlock>
                 {
@@ -400,7 +407,7 @@ public sealed class AnthropicMappingAndRecorderTests
             Type = JsonSerializer.SerializeToElement("message_delta"),
             Delta = new Delta
             {
-                Container = null!,
+                Container = default!,
                 StopReason = StopReason.EndTurn,
                 StopSequence = null,
             },

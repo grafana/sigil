@@ -289,6 +289,10 @@ Full canonical tables covering all span attributes, metrics, span naming, span k
 
 ### Anthropic stream example (normalized generation)
 
+Correlation note:
+- `tool_result.tool_call_id` is the preferred link to a prior `tool_call`.
+- When a provider SDK does not expose a stable call ID, normalized payloads may omit `tool_call_id` and instead preserve `tool_result.name` as the fallback correlation key.
+
 ```json
 {
   "conversation_id": "conv-stream",
