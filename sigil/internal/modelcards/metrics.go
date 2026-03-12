@@ -35,17 +35,18 @@ var (
 )
 
 func observeRefreshMetrics(run RefreshRun) {
+	source := normalizeMetricLabel(run.Source, SourceOpenRouter)
 	mode := normalizeMetricLabel(run.RunMode, "primary")
 	status := normalizeMetricLabel(run.Status, unknownMetricLabel)
 
-	modelCardRefreshRunsTotal.WithLabelValues(normalizeMetricLabel(run.Source, SourceOpenRouter), mode, status).Inc()
+	modelCardRefreshRunsTotal.WithLabelValues(source, mode, status).Inc()
 
 	if !run.StartedAt.IsZero() && !run.FinishedAt.IsZero() {
 		duration := run.FinishedAt.Sub(run.StartedAt).Seconds()
 		if duration < 0 {
 			duration = 0
 		}
-		modelCardRefreshDuration.WithLabelValues(normalizeMetricLabel(run.Source, SourceOpenRouter), mode).Observe(duration)
+		modelCardRefreshDuration.WithLabelValues(source, mode).Observe(duration)
 	}
 }
 
