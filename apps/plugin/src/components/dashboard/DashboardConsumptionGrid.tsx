@@ -68,6 +68,10 @@ const EMPTY_CONVERSATION_STATS: ConversationStatsResponse = {
   ratedConversations: 0,
   badRatedPct: 0,
 };
+type ConversationStatsState = {
+  data: ConversationStatsResponse;
+  requestKey: string;
+};
 
 export function DashboardConsumptionGrid({
   dataSource,
@@ -97,11 +101,16 @@ export function DashboardConsumptionGrid({
   const interval = useMemo(() => computeRateInterval(step), [step]);
   const rangeDuration = useMemo(() => computeRangeDuration(from, to), [from, to]);
   const filterString = useMemo(() => buildConversationSearchFilter(filters), [filters]);
-  const [conversationStats, setConversationStats] = useState<ConversationStatsResponse>(EMPTY_CONVERSATION_STATS);
-  const [conversationStatsLoading, setConversationStatsLoading] = useState(true);
-  const [previousConversationStats, setPreviousConversationStats] =
-    useState<ConversationStatsResponse>(EMPTY_CONVERSATION_STATS);
-  const [previousConversationStatsLoading, setPreviousConversationStatsLoading] = useState(true);
+  const getConversationStats = conversationsDataSource.getConversationStats;
+  const hasConversationStatsApi = Boolean(getConversationStats);
+  const [conversationStatsState, setConversationStatsState] = useState<ConversationStatsState>({
+    data: EMPTY_CONVERSATION_STATS,
+    requestKey: '',
+  });
+  const [previousConversationStatsState, setPreviousConversationStatsState] = useState<ConversationStatsState>({
+    data: EMPTY_CONVERSATION_STATS,
+    requestKey: '',
+  });
 
   // --- Top stats (always aggregate, no breakdown) ---
   const tokensTotalStat = usePrometheusQuery(dataSource, totalTokensQuery(filters, rangeDuration), from, to, 'instant');
@@ -309,78 +318,82 @@ export function DashboardConsumptionGrid({
       ? (prevCacheReadValue / (prevInputTokensValue + prevCacheReadValue)) * 100
       : 0;
   const comparisonLabel = `previous ${formatWindowLabel(windowSize)}`;
-  const currentConversationCount = conversationStats.totalConversations;
-  const currentCallCount = currentConversationCount * conversationStats.avgCallsPerConversation;
-  const previousConversationCount = previousConversationStats.totalConversations;
-  const previousCallCount = previousConversationCount * previousConversationStats.avgCallsPerConversation;
+  const currentConversationRequestKey = `${filterString}:${timeRange.from.toISOString()}:${timeRange.to.toISOString()}`;
+  const previousConversationRequestKey = `${filterString}:${dateTime((from - windowSize) * 1000).toISOString()}:${dateTime(
+    (to - windowSize) * 1000
+  ).toISOString()}`;
+  const currentConversationStats = hasConversationStatsApi ? conversationStatsState.data : EMPTY_CONVERSATION_STATS;
+  const previousConversationStatsValue = hasConversationStatsApi ? previousConversationStatsState.data : EMPTY_CONVERSATION_STATS;
+  const currentConversationCount = currentConversationStats.totalConversations;
+  const currentCallCount = currentConversationCount * currentConversationStats.avgCallsPerConversation;
+  const previousConversationCount = previousConversationStatsValue.totalConversations;
+  const previousCallCount = previousConversationCount * previousConversationStatsValue.avgCallsPerConversation;
   const averageCostPerConversation = averageCost(totalCost.totalCost, currentConversationCount);
   const previousAverageCostPerConversation = averageCost(prevTotalCost.totalCost, previousConversationCount);
   const averageCostPerCall = averageCost(totalCost.totalCost, currentCallCount);
   const previousAverageCostPerCall = averageCost(prevTotalCost.totalCost, previousCallCount);
+  const currentConversationStatsLoading =
+    hasConversationStatsApi && conversationStatsState.requestKey !== currentConversationRequestKey;
+  const previousConversationStatsLoadingValue =
+    hasConversationStatsApi && previousConversationStatsState.requestKey !== previousConversationRequestKey;
 
   useEffect(() => {
-    if (!conversationsDataSource.getConversationStats) {
-      setConversationStats(EMPTY_CONVERSATION_STATS);
-      setConversationStatsLoading(false);
-      setPreviousConversationStats(EMPTY_CONVERSATION_STATS);
-      setPreviousConversationStatsLoading(false);
+    if (!getConversationStats) {
       return;
     }
 
     let cancelled = false;
-    const currentFromISO = timeRange.from.toISOString();
-    const currentToISO = timeRange.to.toISOString();
-    const previousFromISO = dateTime((from - windowSize) * 1000).toISOString();
-    const previousToISO = dateTime((to - windowSize) * 1000).toISOString();
-    setConversationStatsLoading(true);
-    setPreviousConversationStatsLoading(true);
 
-    void conversationsDataSource
-      .getConversationStats({
+    void getConversationStats({
         filters: filterString,
-        time_range: { from: currentFromISO, to: currentToISO },
+        time_range: { from: timeRange.from.toISOString(), to: timeRange.to.toISOString() },
       })
       .then((stats) => {
         if (!cancelled) {
-          setConversationStats(stats);
+          setConversationStatsState({ data: stats, requestKey: currentConversationRequestKey });
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setConversationStats(EMPTY_CONVERSATION_STATS);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setConversationStatsLoading(false);
+          setConversationStatsState({ data: EMPTY_CONVERSATION_STATS, requestKey: currentConversationRequestKey });
         }
       });
 
-    void conversationsDataSource
-      .getConversationStats({
+    void getConversationStats({
         filters: filterString,
-        time_range: { from: previousFromISO, to: previousToISO },
+        time_range: {
+          from: dateTime((from - windowSize) * 1000).toISOString(),
+          to: dateTime((to - windowSize) * 1000).toISOString(),
+        },
       })
       .then((stats) => {
         if (!cancelled) {
-          setPreviousConversationStats(stats);
+          setPreviousConversationStatsState({ data: stats, requestKey: previousConversationRequestKey });
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setPreviousConversationStats(EMPTY_CONVERSATION_STATS);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setPreviousConversationStatsLoading(false);
+          setPreviousConversationStatsState({
+            data: EMPTY_CONVERSATION_STATS,
+            requestKey: previousConversationRequestKey,
+          });
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [conversationsDataSource, filterString, from, timeRange.from, timeRange.to, to, windowSize]);
+  }, [
+    filterString,
+    from,
+    getConversationStats,
+    currentConversationRequestKey,
+    previousConversationRequestKey,
+    timeRange.from,
+    timeRange.to,
+    to,
+    windowSize,
+  ]);
 
   const allDataLoading =
     tokensTotalStat.loading ||
@@ -501,9 +514,9 @@ export function DashboardConsumptionGrid({
           label="Avg Cost / Conversation"
           value={averageCostPerConversation}
           unit="currencyUSD"
-          loading={costTokensData.loading || resolvedPricing.loading || conversationStatsLoading}
+          loading={costTokensData.loading || resolvedPricing.loading || currentConversationStatsLoading}
           prevValue={previousAverageCostPerConversation}
-          prevLoading={prevCostTokensData.loading || resolvedPricing.loading || previousConversationStatsLoading}
+          prevLoading={prevCostTokensData.loading || resolvedPricing.loading || previousConversationStatsLoadingValue}
           invertChange
           comparisonLabel={comparisonLabel}
         />
@@ -511,9 +524,9 @@ export function DashboardConsumptionGrid({
           label="Avg Cost / Call"
           value={averageCostPerCall}
           unit="currencyUSD"
-          loading={costTokensData.loading || resolvedPricing.loading || conversationStatsLoading}
+          loading={costTokensData.loading || resolvedPricing.loading || currentConversationStatsLoading}
           prevValue={previousAverageCostPerCall}
-          prevLoading={prevCostTokensData.loading || resolvedPricing.loading || previousConversationStatsLoading}
+          prevLoading={prevCostTokensData.loading || resolvedPricing.loading || previousConversationStatsLoadingValue}
           invertChange
           comparisonLabel={comparisonLabel}
         />
