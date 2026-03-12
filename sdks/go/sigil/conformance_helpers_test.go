@@ -3,6 +3,7 @@ package sigil_test
 import (
 	"context"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -22,17 +23,49 @@ import (
 )
 
 const (
-	conformanceOperationName   = "generateText"
-	metadataKeyConversation    = "sigil.conversation.title"
-	metadataKeyCanonicalUserID = "sigil.user.id"
-	metadataKeyLegacyUserID    = "user.id"
-	spanAttrOperationName      = "gen_ai.operation.name"
-	spanAttrConversationTitle  = "sigil.conversation.title"
-	spanAttrUserID             = "user.id"
-	spanAttrAgentName          = "gen_ai.agent.name"
-	spanAttrAgentVersion       = "gen_ai.agent.version"
-	metricOperationDuration    = "gen_ai.client.operation.duration"
-	metricTimeToFirstToken     = "gen_ai.client.time_to_first_token"
+	conformanceOperationName       = "generateText"
+	metadataKeyConversation        = "sigil.conversation.title"
+	metadataKeyCanonicalUserID     = "sigil.user.id"
+	metadataKeyLegacyUserID        = "user.id"
+	sdkMetadataKeyName             = "sigil.sdk.name"
+	sdkName                        = "sdk-go"
+	spanAttrGenerationID           = "sigil.generation.id"
+	spanAttrOperationName          = "gen_ai.operation.name"
+	spanAttrConversationID         = "gen_ai.conversation.id"
+	spanAttrConversationTitle      = "sigil.conversation.title"
+	spanAttrUserID                 = "user.id"
+	spanAttrAgentName              = "gen_ai.agent.name"
+	spanAttrAgentVersion           = "gen_ai.agent.version"
+	spanAttrErrorType              = "error.type"
+	spanAttrErrorCategory          = "error.category"
+	spanAttrProviderName           = "gen_ai.provider.name"
+	spanAttrRequestModel           = "gen_ai.request.model"
+	spanAttrRequestMaxTokens       = "gen_ai.request.max_tokens"
+	spanAttrRequestTemperature     = "gen_ai.request.temperature"
+	spanAttrRequestTopP            = "gen_ai.request.top_p"
+	spanAttrRequestToolChoice      = "sigil.gen_ai.request.tool_choice"
+	spanAttrRequestThinkingEnabled = "sigil.gen_ai.request.thinking.enabled"
+	spanAttrRequestThinkingBudget  = "sigil.gen_ai.request.thinking.budget_tokens"
+	spanAttrResponseID             = "gen_ai.response.id"
+	spanAttrResponseModel          = "gen_ai.response.model"
+	spanAttrFinishReasons          = "gen_ai.response.finish_reasons"
+	spanAttrInputTokens            = "gen_ai.usage.input_tokens"
+	spanAttrOutputTokens           = "gen_ai.usage.output_tokens"
+	spanAttrCacheReadTokens        = "gen_ai.usage.cache_read_input_tokens"
+	spanAttrCacheWriteTokens       = "gen_ai.usage.cache_write_input_tokens"
+	spanAttrCacheCreationTokens    = "gen_ai.usage.cache_creation_input_tokens"
+	spanAttrReasoningTokens        = "gen_ai.usage.reasoning_tokens"
+	metricOperationDuration        = "gen_ai.client.operation.duration"
+	metricTokenUsage               = "gen_ai.client.token.usage"
+	metricTimeToFirstToken         = "gen_ai.client.time_to_first_token"
+	metricToolCallsPerOperation    = "gen_ai.client.tool_calls_per_operation"
+	metricAttrTokenType            = "gen_ai.token.type"
+	metricTokenTypeInput           = "input"
+	metricTokenTypeOutput          = "output"
+	metricTokenTypeCacheRead       = "cache_read"
+	metricTokenTypeCacheWrite      = "cache_write"
+	metricTokenTypeCacheCreation   = "cache_creation"
+	metricTokenTypeReasoning       = "reasoning"
 )
 
 var conformanceModel = sigil.ModelRef{
@@ -330,6 +363,60 @@ func requireSpanAttr(t *testing.T, attrs map[string]attribute.Value, key, want s
 	}
 }
 
+func requireSpanInt64Attr(t *testing.T, attrs map[string]attribute.Value, key string, want int64) {
+	t.Helper()
+
+	got, ok := attrs[key]
+	if !ok {
+		t.Fatalf("expected span attribute %q=%d, attribute missing", key, want)
+	}
+	if got.AsInt64() != want {
+		t.Fatalf("unexpected span attribute %q: got %d want %d", key, got.AsInt64(), want)
+	}
+}
+
+func requireSpanFloat64Attr(t *testing.T, attrs map[string]attribute.Value, key string, want float64) {
+	t.Helper()
+
+	got, ok := attrs[key]
+	if !ok {
+		t.Fatalf("expected span attribute %q=%f, attribute missing", key, want)
+	}
+	if got.AsFloat64() != want {
+		t.Fatalf("unexpected span attribute %q: got %f want %f", key, got.AsFloat64(), want)
+	}
+}
+
+func requireSpanBoolAttr(t *testing.T, attrs map[string]attribute.Value, key string, want bool) {
+	t.Helper()
+
+	got, ok := attrs[key]
+	if !ok {
+		t.Fatalf("expected span attribute %q=%t, attribute missing", key, want)
+	}
+	if got.AsBool() != want {
+		t.Fatalf("unexpected span attribute %q: got %t want %t", key, got.AsBool(), want)
+	}
+}
+
+func requireSpanStringSliceAttr(t *testing.T, attrs map[string]attribute.Value, key string, want []string) {
+	t.Helper()
+
+	got, ok := attrs[key]
+	if !ok {
+		t.Fatalf("expected span attribute %q=%v, attribute missing", key, want)
+	}
+	gotValues := got.AsStringSlice()
+	if len(gotValues) != len(want) {
+		t.Fatalf("unexpected span attribute %q length: got %d want %d", key, len(gotValues), len(want))
+	}
+	for i := range want {
+		if gotValues[i] != want[i] {
+			t.Fatalf("unexpected span attribute %q[%d]: got %q want %q", key, i, gotValues[i], want[i])
+		}
+	}
+}
+
 func requireSpanAttrAbsent(t *testing.T, attrs map[string]attribute.Value, key string) {
 	t.Helper()
 
@@ -368,6 +455,60 @@ func requireNoHistogram(t *testing.T, collected metricdata.ResourceMetrics, name
 			}
 		}
 	}
+}
+
+func requireHistogramPointFloat64(t *testing.T, histogram metricdata.Histogram[float64], wantSum float64, wantAttrs map[string]string) {
+	t.Helper()
+
+	for _, point := range histogram.DataPoints {
+		if point.Count == 0 {
+			continue
+		}
+		if math.Abs(point.Sum-wantSum) > 1e-9 {
+			continue
+		}
+		if metricAttrsMatch(point.Attributes, wantAttrs) {
+			return
+		}
+	}
+
+	t.Fatalf("expected float64 histogram point sum=%v attrs=%v", wantSum, wantAttrs)
+}
+
+func requireHistogramPointInt64(t *testing.T, histogram metricdata.Histogram[int64], wantSum int64, wantAttrs map[string]string) {
+	t.Helper()
+
+	for _, point := range histogram.DataPoints {
+		if point.Count == 0 {
+			continue
+		}
+		if point.Sum != wantSum {
+			continue
+		}
+		if metricAttrsMatch(point.Attributes, wantAttrs) {
+			return
+		}
+	}
+
+	t.Fatalf("expected int64 histogram point sum=%d attrs=%v", wantSum, wantAttrs)
+}
+
+func metricAttrsMatch(set attribute.Set, want map[string]string) bool {
+	got := metricAttrsMap(set)
+	for key, wantValue := range want {
+		if got[key] != wantValue {
+			return false
+		}
+	}
+	return true
+}
+
+func metricAttrsMap(set attribute.Set) map[string]string {
+	out := make(map[string]string, len(set.ToSlice()))
+	for _, attr := range set.ToSlice() {
+		out[string(attr.Key)] = attr.Value.AsString()
+	}
+	return out
 }
 
 func requireProtoMetadata(t *testing.T, generation *sigilv1.Generation, key, want string) {

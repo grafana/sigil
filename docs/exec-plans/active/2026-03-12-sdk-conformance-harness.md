@@ -52,21 +52,21 @@ Building conformance tests against the real public API will surface issues that 
   - [x] OTel `sdkmetric.ManualReader` + `sdkmetric.MeterProvider` setup
   - [ ] Optional `resource.Resource` injection for OTLP resource attribute scenarios
   - [x] Span assertion helpers: `findSpan`, `spanAttrs`, `requireSpanAttr`, `requireSpanAttrAbsent`
-  - [ ] Metric assertion helpers: `findHistogram`, `requireNoHistogram`
+  - [x] Metric assertion helpers: `findHistogram`, `requireNoHistogram`
   - [x] Proto assertion helpers: `requireProtoMetadata`, `requireProtoMetadataAbsent`
 
 ### A2: Core scenarios (generation identity and resolution chains)
 
 - [x] Add `conformance_test.go` (`package sigil_test`)
-- [ ] Scenario 1: Full generation roundtrip (sync, gRPC)
-  - [ ] All identity fields preserved on proto
-  - [ ] All content types: text, thinking, tool call, tool result
-  - [ ] Request controls: max_tokens, temperature, top_p, tool_choice, thinking_enabled
-  - [ ] Tags, metadata, artifacts (request + response)
-  - [ ] Usage (all six token fields) and stop reason
-  - [ ] Trace linkage: proto trace_id/span_id match OTLP span IDs
-  - [ ] Span attributes match `semantic-conventions.md` generation section
-  - [ ] Metrics: operation.duration, token.usage present; no TTFT for sync
+- [x] Scenario 1: Full generation roundtrip (sync, gRPC)
+  - [x] All identity fields preserved on proto
+  - [x] All content types: text, thinking, tool call, tool result
+  - [x] Request controls: max_tokens, temperature, top_p, tool_choice, thinking_enabled
+  - [x] Tags, metadata, artifacts (request + response)
+  - [x] Usage (all six token fields) and stop reason
+  - [x] Trace linkage: proto trace_id/span_id match OTLP span IDs
+  - [x] Span attributes match `semantic-conventions.md` generation section
+  - [x] Metrics: operation.duration, token.usage present; no TTFT for sync
 - [x] Scenario 2: Conversation title semantics (table-driven)
   - [x] Explicit field wins
   - [x] Context fallback
