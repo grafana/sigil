@@ -1418,7 +1418,7 @@ public sealed class SigilClient : IAsyncDisposable
             {
                 new(SpanAttrOperationName, "execute_tool"),
                 new(SpanAttrProviderName, string.Empty),
-                new(SpanAttrRequestModel, seed.ToolName ?? string.Empty),
+                new(SpanAttrRequestModel, (seed.RequestModel ?? string.Empty).Trim()),
                 new(SpanAttrAgentName, seed.AgentName ?? string.Empty),
                 new(SpanAttrErrorType, errorType),
                 new(SpanAttrErrorCategory, errorCategory),

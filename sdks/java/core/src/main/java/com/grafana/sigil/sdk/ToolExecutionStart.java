@@ -12,6 +12,7 @@ public final class ToolExecutionStart {
     private String conversationTitle = "";
     private String agentName = "";
     private String agentVersion = "";
+    private String requestModel = "";
     private boolean includeContent;
     private Instant startedAt;
 
@@ -87,6 +88,17 @@ public final class ToolExecutionStart {
         return this;
     }
 
+    /** Returns the model that requested the tool call. */
+    public String getRequestModel() {
+        return requestModel;
+    }
+
+    /** Sets the model that requested the tool call (e.g. "gpt-5"). */
+    public ToolExecutionStart setRequestModel(String requestModel) {
+        this.requestModel = requestModel == null ? "" : requestModel;
+        return this;
+    }
+
     public boolean isIncludeContent() {
         return includeContent;
     }
@@ -115,6 +127,7 @@ public final class ToolExecutionStart {
                 .setConversationTitle(conversationTitle)
                 .setAgentName(agentName)
                 .setAgentVersion(agentVersion)
+                .setRequestModel(requestModel)
                 .setIncludeContent(includeContent)
                 .setStartedAt(startedAt);
     }

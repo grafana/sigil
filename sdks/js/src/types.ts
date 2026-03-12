@@ -348,6 +348,8 @@ export interface ToolExecutionStart {
   conversationTitle?: string;
   agentName?: string;
   agentVersion?: string;
+  /** The model that requested the tool call (e.g. "gpt-5"). */
+  requestModel?: string;
   includeContent?: boolean;
   startedAt?: Date;
 }
@@ -369,6 +371,7 @@ export interface ToolExecution {
   conversationTitle?: string;
   agentName?: string;
   agentVersion?: string;
+  requestModel?: string;
   includeContent: boolean;
   startedAt: Date;
   completedAt: Date;

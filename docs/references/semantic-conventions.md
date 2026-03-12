@@ -135,7 +135,7 @@ The normalized generation payload keeps provider-only details in `metadata` with
 
 `gen_ai.token.type` values: `input`, `output`, `cache_read`, `cache_write`, `cache_creation`, `reasoning`.
 
-For `execute_tool` operations, `gen_ai.client.operation.duration` records `gen_ai.request.model` as the tool name and `gen_ai.provider.name` as empty since there is no model or provider context for tool execution.
+For `execute_tool` operations, `gen_ai.client.operation.duration` records `gen_ai.request.model` as the model that requested the tool call (when provided by the caller) and `gen_ai.provider.name` as empty. The tool identity is captured via `gen_ai.tool.name` on the span.
 
 ---
 

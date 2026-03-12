@@ -253,6 +253,7 @@ class ToolExecutionStart:
     conversation_title: str = ""
     agent_name: str = ""
     agent_version: str = ""
+    request_model: str = ""
     include_content: bool = False
     started_at: Optional[datetime] = None
 

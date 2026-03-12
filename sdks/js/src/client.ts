@@ -712,7 +712,7 @@ export class SigilClient {
     this.operationDurationHistogram.record(durationSeconds, {
       [spanAttrOperationName]: 'execute_tool',
       [spanAttrProviderName]: '',
-      [spanAttrRequestModel]: toolExecution.toolName,
+      [spanAttrRequestModel]: toolExecution.requestModel ?? '',
       [spanAttrAgentName]: toolExecution.agentName ?? '',
       [spanAttrErrorType]: errorType,
       [spanAttrErrorCategory]: errorCategory,
@@ -1119,6 +1119,7 @@ class ToolExecutionRecorderImpl implements ToolExecutionRecorder {
       conversationTitle: this.seed.conversationTitle,
       agentName: this.seed.agentName,
       agentVersion: this.seed.agentVersion,
+      requestModel: this.seed.requestModel,
       includeContent: this.seed.includeContent ?? false,
       startedAt: new Date(this.startedAt),
       completedAt: new Date(this.result?.completedAt ?? this.client.internalNow()),

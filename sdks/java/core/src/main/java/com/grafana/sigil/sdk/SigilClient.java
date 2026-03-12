@@ -1185,7 +1185,7 @@ public final class SigilClient implements AutoCloseable {
                 Attributes.builder()
                         .put(SPAN_ATTR_OPERATION_NAME, "execute_tool")
                         .put(SPAN_ATTR_PROVIDER_NAME, "")
-                        .put(SPAN_ATTR_REQUEST_MODEL, seed.getToolName())
+                        .put(SPAN_ATTR_REQUEST_MODEL, seed.getRequestModel().trim())
                         .put(SPAN_ATTR_AGENT_NAME, seed.getAgentName())
                         .put(SPAN_ATTR_ERROR_TYPE, errorType)
                         .put(SPAN_ATTR_ERROR_CATEGORY, errorCategory)

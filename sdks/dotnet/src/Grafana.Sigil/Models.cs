@@ -287,6 +287,8 @@ public sealed class ToolExecutionStart
     public string ConversationTitle { get; set; } = string.Empty;
     public string AgentName { get; set; } = string.Empty;
     public string AgentVersion { get; set; } = string.Empty;
+    /// <summary>The model that requested the tool call (e.g. "gpt-5").</summary>
+    public string RequestModel { get; set; } = string.Empty;
     public bool IncludeContent { get; set; }
     public DateTimeOffset? StartedAt { get; set; }
 }
