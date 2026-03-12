@@ -610,10 +610,10 @@ A no-Docker conformance test suite validates the current Go SDK public API behav
 
 - **Local entry point**: `mise run test:sdk:conformance` runs the shipped Go harness (`cd sdks/go && GOWORK=off go test ./sigil -run '^TestConformance' -count=1`).
 - **Go reference implementation**: `sdks/go/sigil/conformance_test.go` and `conformance_helpers_test.go` (`package sigil_test`).
-- **Current shipped baseline**: conversation title resolution, user ID resolution, and agent identity resolution across exported generation payloads, OTLP spans, and sync metric emission.
-- **Cross-SDK spec**: `docs/references/sdk-conformance-spec.md` defines the current language-neutral baseline and the extension model for future provider/framework coverage.
+- **Current shipped baseline**: Go core conformance covers generation identity, streaming, tool execution, embedding, validation/error, rating, and shutdown semantics; Go provider-wrapper conformance covers OpenAI, Anthropic, and Gemini; Go framework-adapter conformance covers Google ADK.
+- **Cross-SDK spec**: `docs/references/sdk-conformance-spec.md` defines the current language-neutral baseline and the extension model for future provider/framework coverage, including explicit unsupported capability contracts when provider or framework embedding surfaces do not exist.
 - **Four assertion targets**: generation proto (fake gRPC server), OTLP spans (`tracetest.SpanRecorder`), OTLP metrics (`sdkmetric.ManualReader`), rating HTTP (`httptest.Server`).
-- **Scope**: current Go harness coverage only. It does not test backend projections, batch/retry mechanics, provider wrappers, or framework adapters yet.
+- **Scope**: shipped coverage is Go-only today across core, provider-wrapper, and the first framework-adapter suite. It does not test backend projections or batch/retry mechanics, and other language suites remain future work.
 - Design doc: `docs/design-docs/2026-03-12-sdk-conformance-harness.md`.
 
 ## Evolution Path

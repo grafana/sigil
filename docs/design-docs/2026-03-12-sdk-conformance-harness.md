@@ -40,6 +40,7 @@ If any of these fields are missing, malformed, or resolved incorrectly (e.g. use
 - Serve as the reference implementation that other SDKs (JS, Python, Java, .NET) replicate.
 - Catch regressions in identity resolution (conversation title, user ID, agent name/version), trace linkage, metric labels, and proto payload shape.
 - **Fix bugs found during implementation.** Building conformance tests against the public API will surface real issues: missing fields, incorrect fallback chains, serialization mismatches, or broken public surface. These are fixed in the same branch as the tests, with regression tests proving the fix. The conformance suite is both a verification tool and a discovery tool.
+- **Do not fabricate unsupported embedding coverage.** Embedding conformance only applies when the SDK, provider wrapper, or framework adapter exposes a real embedding lifecycle on its public API surface. Otherwise the suite should assert an explicit unsupported capability contract.
 
 ## Non-goals
 
