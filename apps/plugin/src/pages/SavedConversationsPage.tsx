@@ -9,6 +9,20 @@ import { SavedConversationsList } from '../components/saved-conversations/SavedC
 import { AddToCollectionModal } from '../components/saved-conversations/AddToCollectionModal';
 import { CollectionFormModal } from '../components/saved-conversations/CollectionFormModal';
 
+async function fetchAllCollections(
+  dataSource: Pick<EvaluationDataSource, 'listCollections'>,
+  max = 200
+): Promise<Collection[]> {
+  const all: Collection[] = [];
+  let cursor: string | undefined;
+  do {
+    const resp = await dataSource.listCollections(Math.min(50, max - all.length), cursor);
+    all.push(...resp.items);
+    cursor = resp.next_cursor || undefined;
+  } while (cursor && all.length < max);
+  return all.slice(0, max);
+}
+
 export type SavedConversationsPageProps = {
   dataSource?: EvaluationDataSource;
 };
@@ -54,7 +68,8 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
   const [conversations, setConversations] = useState<SavedConversation[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [nextCursor, setNextCursor] = useState<string | undefined>();
-  const [prevCursors, setPrevCursors] = useState<string[]>([]);
+  const [prevCursors, setPrevCursors] = useState<Array<string | undefined>>([]);
+  const [currentCursor, setCurrentCursor] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [selectedIDs, setSelectedIDs] = useState<Set<string>>(new Set());
@@ -62,15 +77,16 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
   const [showAddModal, setShowAddModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  // Load all collections on mount (truncate at 200 per spec)
+  // Load all collections on mount (truncate at 200 per spec, following next_cursor)
   useEffect(() => {
-    dataSource.listCollections(200)
-      .then((resp) => setCollections(resp.items))
+    fetchAllCollections(dataSource)
+      .then((items) => setCollections(items))
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load collections'));
   }, [dataSource]);
 
   // Load conversations whenever active collection changes
   const loadConversations = useCallback(async (cursor?: string) => {
+    setCurrentCursor(cursor);
     setIsLoading(true);
     setError(undefined);
     try {
@@ -148,9 +164,9 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
     setShowAddModal(false);
     setSelectedIDs(new Set());
     // Refresh collections to update member counts
-    dataSource.listCollections(200)
-      .then((resp) => setCollections(resp.items))
-      .catch(() => {});
+    fetchAllCollections(dataSource)
+      .then((items) => setCollections(items))
+      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to refresh collections'));
     await loadConversations();
   };
 
@@ -160,13 +176,13 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
 
   const handlePageChange = (direction: 'next' | 'prev') => {
     if (direction === 'next' && nextCursor) {
-      setPrevCursors((prev) => [...prev, '']); // push current as prev marker
+      setPrevCursors((prev) => [...prev, currentCursor]); // push the cursor that loaded THIS page
       loadConversations(nextCursor);
     } else if (direction === 'prev' && prevCursors.length > 0) {
       const newPrev = [...prevCursors];
       const cursor = newPrev.pop();
       setPrevCursors(newPrev);
-      loadConversations(cursor || undefined);
+      loadConversations(cursor);
     }
   };
 

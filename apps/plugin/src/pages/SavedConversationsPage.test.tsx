@@ -81,4 +81,27 @@ describe('SavedConversationsPage', () => {
     );
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
   });
+
+  it('calls removeCollectionMember when Remove is clicked from active collection', async () => {
+    const ds = buildDataSource();
+    render(
+      <MemoryRouter>
+        <SavedConversationsPage dataSource={ds} />
+      </MemoryRouter>
+    );
+    // Select the collection
+    await waitFor(() => screen.getByText('Regression tests'));
+    fireEvent.click(screen.getByText('Regression tests'));
+    // Wait for collection members to load
+    await waitFor(() => screen.getByText('Auth flow edge case'));
+    // Select a conversation (find its checkbox by aria-label)
+    const checkbox = screen.getByLabelText('Select Auth flow edge case');
+    fireEvent.click(checkbox);
+    // Click Remove
+    await waitFor(() => screen.getByText(/^remove$/i));
+    fireEvent.click(screen.getByText(/^remove$/i));
+    await waitFor(() => {
+      expect(ds.removeCollectionMember).toHaveBeenCalledWith('col-1', 's1');
+    });
+  });
 });
