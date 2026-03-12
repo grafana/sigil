@@ -125,7 +125,7 @@ func newFanOutBenchmarkFixture(b *testing.B, hotCount, coldCount, overlap int) f
 		index.Entries = append(index.Entries, IndexEntry{
 			GenerationIDHash:   hashID(generation.GetId()),
 			ConversationIDHash: hashID(conversationID),
-			Timestamp:          generationTimestamp(generation),
+			Timestamp:          GenerationTimestamp(generation),
 			Offset:             offset,
 			Length:             1,
 		})

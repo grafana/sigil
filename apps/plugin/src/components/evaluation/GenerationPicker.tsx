@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Button, Icon, Input, Select, Spinner, Text, useStyles2 } from '@grafana/ui';
@@ -164,6 +164,21 @@ export default function GenerationPicker({
   const [loadingSaved, setLoadingSaved] = useState(false);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | undefined>(undefined);
+  const detailRequestVersionRef = useRef(0);
+  const detailRef = useRef<ConversationDetailPage | null>(null);
+
+  const setActiveDetail = (nextDetail: ConversationDetailPage | null) => {
+    detailRef.current = nextDetail;
+    setDetail(nextDetail);
+  };
+
+  const resetDetailSelection = () => {
+    detailRequestVersionRef.current += 1;
+    setLoadingDetail(false);
+    setLoadingMoreDetail(false);
+    setDetailError('');
+    setActiveDetail(null);
+  };
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -279,35 +294,61 @@ export default function GenerationPicker({
   }, [tab, evalDs]);
 
   const handleConversationClick = async (conversationId: string) => {
+    detailRequestVersionRef.current += 1;
+    const requestVersion = detailRequestVersionRef.current;
     setLoadingDetail(true);
     setDetailError('');
     try {
       const d = await convDs.getConversationDetail(conversationId, { limit: DETAIL_PAGE_SIZE });
-      setDetail(d);
+      if (detailRequestVersionRef.current !== requestVersion) {
+        return;
+      }
+      setActiveDetail(d);
     } catch {
-      setDetail(null);
+      if (detailRequestVersionRef.current !== requestVersion) {
+        return;
+      }
+      setActiveDetail(null);
       setDetailError('Failed to load conversation generations.');
     } finally {
+      if (detailRequestVersionRef.current !== requestVersion) {
+        return;
+      }
       setLoadingDetail(false);
     }
   };
 
   const handleLoadMoreDetail = async () => {
-    if (!detail?.has_more || !detail.next_cursor || loadingMoreDetail) {
+    const currentDetail = detailRef.current;
+    if (!currentDetail?.has_more || !currentDetail.next_cursor || loadingMoreDetail) {
       return;
     }
 
+    const requestVersion = detailRequestVersionRef.current;
     setLoadingMoreDetail(true);
     setDetailError('');
     try {
-      const nextPage = await convDs.getConversationDetail(detail.conversation_id, {
+      const nextPage = await convDs.getConversationDetail(currentDetail.conversation_id, {
         limit: DETAIL_PAGE_SIZE,
-        cursor: detail.next_cursor,
+        cursor: currentDetail.next_cursor,
       });
-      setDetail((current) => (current ? mergeConversationDetailPages(current, nextPage) : nextPage));
+      if (detailRequestVersionRef.current !== requestVersion) {
+        return;
+      }
+      const latestDetail = detailRef.current;
+      if (!latestDetail || latestDetail.conversation_id !== currentDetail.conversation_id) {
+        return;
+      }
+      setActiveDetail(mergeConversationDetailPages(latestDetail, nextPage));
     } catch {
+      if (detailRequestVersionRef.current !== requestVersion) {
+        return;
+      }
       setDetailError('Failed to load older generations. Retry to continue browsing.');
     } finally {
+      if (detailRequestVersionRef.current !== requestVersion) {
+        return;
+      }
       setLoadingMoreDetail(false);
     }
   };
@@ -329,8 +370,7 @@ export default function GenerationPicker({
   const handleChange = () => {
     onSelect(undefined);
     setConfirmed(false);
-    setDetail(null);
-    setDetailError('');
+    resetDetailSelection();
   };
 
   // Compact view once a generation is selected and confirmed
@@ -355,7 +395,7 @@ export default function GenerationPicker({
     return (
       <div className={styles.container}>
         <div className={styles.stepHeader}>
-          <Button variant="secondary" size="sm" icon="arrow-left" aria-label="Back" onClick={() => setDetail(null)} />
+          <Button variant="secondary" size="sm" icon="arrow-left" aria-label="Back" onClick={resetDetailSelection} />
           <Text variant="bodySmall" weight="medium">
             Pick a generation
           </Text>

@@ -71,6 +71,57 @@ const mockConvDs: ConversationsDataSource = {
   getSearchTagValues: async () => [],
 };
 
+const paginatedMockConvDs: ConversationsDataSource = {
+  ...mockConvDs,
+  getConversationDetail: async (id, options) => {
+    if (options?.cursor === 'page-2') {
+      return {
+        conversation_id: id,
+        generation_count: 3,
+        first_generation_at: '2026-03-01T09:45:00Z',
+        last_generation_at: '2026-03-01T10:00:00Z',
+        has_more: false,
+        generations: [
+          {
+            generation_id: 'gen-003',
+            conversation_id: id,
+            model: { provider: 'openai', name: 'gpt-4' },
+            created_at: '2026-03-01T09:45:00Z',
+            messages: [],
+          } as never,
+        ],
+        annotations: [],
+      };
+    }
+
+    return {
+      conversation_id: id,
+      generation_count: 3,
+      first_generation_at: '2026-03-01T09:45:00Z',
+      last_generation_at: '2026-03-01T10:00:00Z',
+      has_more: true,
+      next_cursor: 'page-2',
+      generations: [
+        {
+          generation_id: 'gen-001',
+          conversation_id: id,
+          model: { provider: 'openai', name: 'gpt-4' },
+          created_at: '2026-03-01T10:00:00Z',
+          messages: [],
+        } as never,
+        {
+          generation_id: 'gen-002',
+          conversation_id: id,
+          model: { provider: 'openai', name: 'gpt-4' },
+          created_at: '2026-03-01T09:55:00Z',
+          messages: [],
+        } as never,
+      ],
+      annotations: [],
+    };
+  },
+};
+
 const mockEvalDs: Partial<EvaluationDataSource> = {
   listSavedConversations: async () => ({ items: mockSavedConversations, next_cursor: '' }),
   listCollections: async () => ({
@@ -174,6 +225,32 @@ export const RecentTab = {
             onSelect={setSelected}
             selectedGenerationId={selected}
             conversationsDataSource={mockConvDs}
+            evaluationDataSource={mockEvalDs as EvaluationDataSource}
+          />
+        </div>
+      );
+    };
+    return <Wrapper />;
+  },
+};
+
+export const RecentTabPaginated = {
+  parameters: {
+    docs: {
+      description: {
+        story: 'Exercises the paginated conversation detail path with a follow-up generation page.',
+      },
+    },
+  },
+  render: () => {
+    const Wrapper = () => {
+      const [selected, setSelected] = useState<string | undefined>();
+      return (
+        <div style={{ maxWidth: 480 }}>
+          <GenerationPicker
+            onSelect={setSelected}
+            selectedGenerationId={selected}
+            conversationsDataSource={paginatedMockConvDs}
             evaluationDataSource={mockEvalDs as EvaluationDataSource}
           />
         </div>

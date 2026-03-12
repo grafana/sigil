@@ -121,8 +121,8 @@ func (s *WALStore) GetByConversationIDWindow(ctx context.Context, tenantID, conv
 	}
 
 	sort.SliceStable(generations, func(i, j int) bool {
-		leftTime := generationCreatedTime(generations[i])
-		rightTime := generationCreatedTime(generations[j])
+		leftTime := storage.GenerationTimestamp(generations[i])
+		rightTime := storage.GenerationTimestamp(generations[j])
 		if leftTime.Equal(rightTime) {
 			return generations[i].GetId() < generations[j].GetId()
 		}
@@ -138,19 +138,6 @@ func decodeGenerationPayload(payload []byte) (*sigilv1.Generation, error) {
 		return nil, err
 	}
 	return &generation, nil
-}
-
-func generationCreatedTime(generation *sigilv1.Generation) time.Time {
-	if generation == nil {
-		return time.Time{}
-	}
-	if completedAt := generation.GetCompletedAt(); completedAt != nil {
-		return completedAt.AsTime().UTC()
-	}
-	if startedAt := generation.GetStartedAt(); startedAt != nil {
-		return startedAt.AsTime().UTC()
-	}
-	return time.Time{}
 }
 
 // ListRecentGenerations returns generations for a tenant since the given time,

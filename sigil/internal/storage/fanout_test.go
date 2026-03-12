@@ -1048,7 +1048,7 @@ func buildFanOutTestBlock(t *testing.T, generations []*sigilv1.Generation) (*Blo
 		index.Entries = append(index.Entries, IndexEntry{
 			GenerationIDHash:   hashID(generation.GetId()),
 			ConversationIDHash: hashID(generation.GetConversationId()),
-			Timestamp:          generationTimestamp(generation),
+			Timestamp:          GenerationTimestamp(generation),
 			Offset:             offset,
 			Length:             int64(1),
 		})

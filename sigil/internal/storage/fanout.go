@@ -751,8 +751,8 @@ func (s *FanOutStore) readColdConversationGenerationsWindowed(
 		}
 
 		sort.SliceStable(result.generations, func(i, j int) bool {
-			leftTime := generationTimestamp(result.generations[i])
-			rightTime := generationTimestamp(result.generations[j])
+			leftTime := GenerationTimestamp(result.generations[i])
+			rightTime := GenerationTimestamp(result.generations[j])
 			if leftTime.Equal(rightTime) {
 				return result.generations[i].GetId() > result.generations[j].GetId()
 			}
@@ -1037,8 +1037,8 @@ func mergeGenerationsPreferHot(hotGenerations, coldGenerations []*sigilv1.Genera
 		out = append(out, generation)
 	}
 	sort.SliceStable(out, func(i, j int) bool {
-		leftTime := generationTimestamp(out[i])
-		rightTime := generationTimestamp(out[j])
+		leftTime := GenerationTimestamp(out[i])
+		rightTime := GenerationTimestamp(out[j])
 		if leftTime.Equal(rightTime) {
 			return out[i].GetId() < out[j].GetId()
 		}
@@ -1053,19 +1053,6 @@ func limitConversationGenerationsNewest(generations []*sigilv1.Generation, limit
 	}
 	start := len(generations) - limit
 	return append([]*sigilv1.Generation(nil), generations[start:]...)
-}
-
-func generationTimestamp(generation *sigilv1.Generation) time.Time {
-	if generation == nil {
-		return time.Time{}
-	}
-	if completedAt := generation.GetCompletedAt(); completedAt != nil {
-		return completedAt.AsTime().UTC()
-	}
-	if startedAt := generation.GetStartedAt(); startedAt != nil {
-		return startedAt.AsTime().UTC()
-	}
-	return time.Time{}
 }
 
 func observeFanOutDuration(source string, start time.Time) {
