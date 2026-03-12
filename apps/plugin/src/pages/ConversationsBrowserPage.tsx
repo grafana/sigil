@@ -561,6 +561,8 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   );
 
   const [rawConversations, setRawConversations] = useState<ConversationSearchResult[]>([]);
+  const [currentConversationStats, setCurrentConversationStats] = useState<ConversationStats>(EMPTY_CONVERSATION_STATS);
+  const [hasResolvedCurrentConversationStats, setHasResolvedCurrentConversationStats] = useState(false);
   const [previousConversationStats, setPreviousConversationStats] =
     useState<ConversationStats>(EMPTY_CONVERSATION_STATS);
   const [loadingCurrent, setLoadingCurrent] = useState<boolean>(true);
@@ -589,21 +591,49 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
     setLoadingPrevious(true);
     setErrorMessage('');
     setRawConversations([]);
+    setCurrentConversationStats(EMPTY_CONVERSATION_STATS);
+    setHasResolvedCurrentConversationStats(false);
     setPreviousConversationStats(EMPTY_CONVERSATION_STATS);
 
     const currentFromMs = timeRange.from.valueOf();
     const currentToMs = timeRange.to.valueOf();
     const windowMs = currentToMs - currentFromMs;
+    const currentFromISO = timeRange.from.toISOString();
+    const currentToISO = timeRange.to.toISOString();
     const previousFromISO = dateTime(currentFromMs - windowMs).toISOString();
     const previousToISO = dateTime(currentToMs - windowMs).toISOString();
+    const getConversationStats = dataSource.getConversationStats;
+
+    if (getConversationStats) {
+      void (async () => {
+        try {
+          const stats = await getConversationStats({
+            filters: filterString,
+            time_range: {
+              from: currentFromISO,
+              to: currentToISO,
+            },
+          });
+          if (requestVersionRef.current !== requestVersion) {
+            return;
+          }
+          setCurrentConversationStats(stats);
+          setHasResolvedCurrentConversationStats(true);
+        } catch (error) {
+          if (requestVersionRef.current !== requestVersion || isAbortError(error)) {
+            return;
+          }
+        }
+      })();
+    }
 
     void (async () => {
       try {
         let sawBatch = false;
         const results = await fetchRangeConversations(
           dataSource,
-          timeRange.from.toISOString(),
-          timeRange.to.toISOString(),
+          currentFromISO,
+          currentToISO,
           filterString,
           abortController.signal,
           (batch) => {
@@ -644,29 +674,45 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
     })();
 
     void (async () => {
+      if (getConversationStats) {
+        try {
+          const stats = await getConversationStats({
+            filters: filterString,
+            time_range: {
+              from: previousFromISO,
+              to: previousToISO,
+            },
+          });
+          if (requestVersionRef.current !== requestVersion) {
+            return;
+          }
+          setPreviousConversationStats(stats);
+        } catch (error) {
+          if (requestVersionRef.current !== requestVersion || isAbortError(error)) {
+            return;
+          }
+          setErrorMessage((current) =>
+            current.length > 0 ? current : error instanceof Error ? error.message : 'failed to load conversations'
+          );
+          setPreviousConversationStats(EMPTY_CONVERSATION_STATS);
+        } finally {
+          if (requestVersionRef.current !== requestVersion) {
+            return;
+          }
+          setLoadingPrevious(false);
+        }
+        return;
+      }
+
       try {
         await previousStatsReady;
         if (requestVersionRef.current !== requestVersion) {
           return;
         }
-        const stats = dataSource.getConversationStats
-          ? await dataSource.getConversationStats({
-              filters: filterString,
-              time_range: {
-                from: previousFromISO,
-                to: previousToISO,
-              },
-            })
-          : buildConversationStats(
-              await fetchRangeConversations(
-                dataSource,
-                previousFromISO,
-                previousToISO,
-                filterString,
-                abortController.signal
-              ),
-              timeRange.from.valueOf()
-            );
+        const stats = buildConversationStats(
+          await fetchRangeConversations(dataSource, previousFromISO, previousToISO, filterString, abortController.signal),
+          timeRange.from.valueOf()
+        );
         if (requestVersionRef.current !== requestVersion) {
           return;
         }
@@ -698,12 +744,14 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
     };
   }, []);
 
-  const conversationStats = useMemo(
-    () => buildConversationStats(conversations, timeRange.to.valueOf()),
-    [conversations, timeRange]
-  );
+  const conversationStats = useMemo(() => {
+    if (hasResolvedCurrentConversationStats) {
+      return currentConversationStats;
+    }
+    return buildConversationStats(conversations, timeRange.to.valueOf());
+  }, [conversations, currentConversationStats, hasResolvedCurrentConversationStats, timeRange]);
 
-  const loadingDisplayedCurrentStats = loadingCurrent && conversations.length === 0;
+  const loadingDisplayedCurrentStats = !hasResolvedCurrentConversationStats && loadingCurrent && conversations.length === 0;
 
   const loadedConversationCount = conversations.length;
   const currentConversationProgress = useMemo(() => {

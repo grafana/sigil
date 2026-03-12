@@ -244,7 +244,7 @@ describe('ConversationsBrowserPage', () => {
     const { router } = renderPage(dataSource);
 
     await waitFor(() => expect(dataSource.searchConversations).toHaveBeenCalled());
-    expect(dataSource.getConversationStats).toHaveBeenCalledTimes(1);
+    expect(dataSource.getConversationStats).toHaveBeenCalledTimes(2);
     expect(dataSource.searchConversations.mock.calls[0][0].select).toContain('span.gen_ai.usage.input_tokens');
     expect(dataSource.searchConversations.mock.calls[0][0].select).toContain('span.gen_ai.usage.output_tokens');
     expect(dataSource.searchConversations.mock.calls[0][0].select).toContain(
@@ -351,24 +351,15 @@ describe('ConversationsBrowserPage', () => {
 
     expect(await screen.findByLabelText('select conversation conv-stream-a')).toBeInTheDocument();
     await waitFor(() => expect(dataSource.streamSearchConversations).toHaveBeenCalledTimes(1));
-    expect(dataSource.getConversationStats).toHaveBeenCalledTimes(1);
+    expect(dataSource.getConversationStats).toHaveBeenCalledTimes(2);
     expect(dataSource.searchConversations).not.toHaveBeenCalled();
   });
 
-  it('starts previous-window stats only after the first current stream batch', async () => {
-    let resolveFirstBatch: (() => void) | undefined;
-    const firstBatchReady = new Promise<void>((resolve) => {
-      resolveFirstBatch = resolve;
-    });
-    let resolveCurrent: (() => void) | undefined;
-    const currentDone = new Promise<void>((resolve) => {
-      resolveCurrent = resolve;
-    });
-    let resolvePreviousStats: (() => void) | undefined;
-    const previousStatsDone = new Promise<void>((resolve) => {
-      resolvePreviousStats = resolve;
-    });
-
+  it('loads current and previous stats without waiting for the stream to finish', async () => {
+    const pendingStats = new Map<
+      string,
+      { resolve: (value: Awaited<ReturnType<NonNullable<ConversationsDataSource['getConversationStats']>>>) => void }
+    >();
     const dataSource = createDataSource();
     dataSource.searchConversations.mockReset();
     dataSource.searchConversations.mockResolvedValue({
@@ -376,57 +367,51 @@ describe('ConversationsBrowserPage', () => {
       next_cursor: '',
       has_more: false,
     });
-    dataSource.streamSearchConversations = jest.fn().mockImplementationOnce(async (_request, options) => {
-      await firstBatchReady;
-      options.onResults([
-        {
-          conversation_id: 'conv-live',
-          generation_count: 2,
-          first_generation_at: '2026-02-02T09:59:00Z',
-          last_generation_at: '2026-02-02T10:00:00Z',
-          models: [],
-          agents: [],
-          error_count: 0,
-          has_errors: false,
-          trace_ids: [],
-          annotation_count: 0,
-        },
-      ]);
-      await currentDone;
-      options.onComplete({ next_cursor: '', has_more: false });
+    dataSource.streamSearchConversations = jest.fn().mockImplementation(async () => {
+      await new Promise(() => {});
     });
-    dataSource.getConversationStats!.mockImplementationOnce(async (_request) => {
-      await previousStatsDone;
-      return {
-        totalConversations: 12,
-        totalTokens: 2400,
-        avgCallsPerConversation: 2,
-        activeLast7d: 12,
-        ratedConversations: 3,
-        badRatedPct: 33,
-      };
-    });
+    dataSource.getConversationStats!.mockImplementation(
+      async (request) =>
+        await new Promise((resolve) => {
+          pendingStats.set(request.time_range.to, { resolve });
+        })
+    );
+
+    const currentStats = {
+      totalConversations: 42,
+      totalTokens: 6400,
+      avgCallsPerConversation: 2.5,
+      activeLast7d: 20,
+      ratedConversations: 6,
+      badRatedPct: 10,
+    };
+    const previousStats = {
+      totalConversations: 12,
+      totalTokens: 2400,
+      avgCallsPerConversation: 2,
+      activeLast7d: 12,
+      ratedConversations: 3,
+      badRatedPct: 33,
+    };
 
     renderPage(dataSource);
 
     await waitFor(() => expect(dataSource.streamSearchConversations).toHaveBeenCalledTimes(1));
-    expect(dataSource.getConversationStats).not.toHaveBeenCalled();
+    await waitFor(() => expect(dataSource.getConversationStats).toHaveBeenCalledTimes(2));
+
+    const sortedStatsRequests = [...pendingStats.entries()].sort(
+      ([leftTo], [rightTo]) => Date.parse(leftTo) - Date.parse(rightTo)
+    );
+    expect(sortedStatsRequests).toHaveLength(2);
 
     await act(async () => {
-      resolveFirstBatch?.();
+      sortedStatsRequests[0][1].resolve(previousStats);
+      sortedStatsRequests[1][1].resolve(currentStats);
       await Promise.resolve();
     });
 
-    expect(await screen.findByLabelText('select conversation conv-live')).toBeInTheDocument();
-    expect(screen.queryByLabelText('loading conversations')).not.toBeInTheDocument();
-    expect(screen.getByText('Loaded 1 conversations')).toBeInTheDocument();
-    expect(dataSource.getConversationStats).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      resolveCurrent?.();
-      resolvePreviousStats?.();
-      await Promise.resolve();
-    });
+    expect(await screen.findByText('42')).toBeInTheDocument();
+    expect(screen.getByText(/Loaded 0 conversations/)).toBeInTheDocument();
   });
 
   it('aborts in-flight stream searches on unmount', async () => {
