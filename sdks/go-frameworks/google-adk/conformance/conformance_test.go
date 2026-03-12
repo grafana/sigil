@@ -1,4 +1,4 @@
-package googleadk_test
+package conformance_test
 
 import (
 	"context"
