@@ -379,6 +379,107 @@ describe('useConversationData', () => {
     });
   });
 
+  it('stabilization path preserves trace spans merged during load-more await', async () => {
+    const tracePayload = {
+      resourceSpans: [
+        {
+          resource: { attributes: [{ key: 'service.name', value: { stringValue: 'svc' } }] },
+          scopeSpans: [
+            {
+              spans: [
+                {
+                  spanId: 'span-b',
+                  parentSpanId: '',
+                  name: 'trace-b',
+                  startTimeUnixNano: '2000',
+                  endTimeUnixNano: '2500',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    let resolveInitialTrace: ((value: unknown) => void) | undefined;
+    const dataSource: ConversationsDataSource = {
+      searchConversations: jest.fn(),
+      getConversationDetail: jest
+        .fn()
+        .mockResolvedValueOnce({
+          conversation_id: 'conv-1',
+          generation_count: 2,
+          first_generation_at: '2026-03-09T13:08:03Z',
+          last_generation_at: '2026-03-09T13:28:15Z',
+          generations: [
+            {
+              generation_id: 'gen-b',
+              conversation_id: 'conv-1',
+              trace_id: 'trace-b',
+              span_id: 'span-b',
+              created_at: '2026-03-09T13:18:03Z',
+            },
+            {
+              generation_id: 'gen-c',
+              conversation_id: 'conv-1',
+              created_at: '2026-03-09T13:28:15Z',
+            },
+          ],
+          has_more: true,
+          next_cursor: '20',
+          annotations: [],
+        })
+        .mockImplementationOnce(async () => {
+          resolveInitialTrace?.(tracePayload);
+          await new Promise((r) => setTimeout(r, 10));
+          return {
+            conversation_id: 'conv-1',
+            generation_count: 2,
+            first_generation_at: '2026-03-09T13:08:03Z',
+            last_generation_at: '2026-03-09T13:28:15Z',
+            generations: [],
+            has_more: false,
+            annotations: [],
+          };
+        }),
+      getGeneration: jest.fn(),
+      getSearchTags: jest.fn(),
+      getSearchTagValues: jest.fn(),
+    };
+    const traceFetcher = jest.fn((traceID: string) => {
+      if (traceID === 'trace-b') {
+        return new Promise((resolve) => {
+          resolveInitialTrace = resolve;
+        });
+      }
+      return Promise.resolve(null);
+    });
+
+    const { result } = renderHook(() =>
+      useConversationData({
+        conversationID: 'conv-1',
+        dataSource,
+        traceFetcher,
+        modelCardClient,
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+      expect(result.current.tracesLoading).toBe(true);
+    });
+
+    await act(async () => {
+      await result.current.loadMoreGenerations();
+    });
+
+    await waitFor(() => {
+      expect(result.current.loadingMoreGenerations).toBe(false);
+      expect(result.current.conversationData?.hasMoreGenerations).toBe(false);
+      expect(result.current.conversationData?.spans).toHaveLength(1);
+      expect(result.current.conversationData?.spans[0].spanID).toBe('span-b');
+    });
+  });
+
   it('stops load-more pagination when a page makes no cursor progress', async () => {
     const dataSource: ConversationsDataSource = {
       searchConversations: jest.fn(),
