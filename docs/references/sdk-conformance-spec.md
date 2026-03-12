@@ -10,7 +10,7 @@ audience: both
 
 Language-neutral specification of the currently shipped Sigil SDK conformance baseline.
 
-Reference implementation: Go (`sdks/go/sigil/conformance_test.go`, `package sigil_test`).
+Reference implementation: Go core (`sdks/go/sigil/conformance_test.go`, `package sigil_test`).
 Provider-wrapper reference implementations:
 
 - OpenAI: `sdks/go-providers/openai/conformance_test.go`
@@ -307,6 +307,32 @@ Gemini generate-content conformance covers:
 - Assert exactly one generation export after `Shutdown`.
 - Assert the flushed generation payload matches the recorded conversation identity.
 
+## Go provider wrapper baseline
+
+The shipped Go provider baseline now has two complementary assertion styles in each provider package:
+
+1. Direct normalization assertions against the returned `sigil.Generation` or `sigil.EmbeddingResult`
+2. Recorder-path assertions that route the normalized result through the real Go Sigil client and validate the exported generation payload and emitted spans via `sdks/go/sigil/sigiltest`
+
+### Provider scenarios
+
+Every shipped Go provider suite should cover these behaviors when the provider surface exists:
+
+- Sync mapping: request/response pairs normalize the expected model, prompts, input, output, and tags.
+- Streaming mapping: streamed provider summaries preserve accumulated output, final usage, and stop reason.
+- Tool semantics: provider tool calls become `tool_call` parts and provider tool outputs become `tool_result` parts.
+- Reasoning semantics: provider reasoning/thinking content is preserved when the provider surface emits that content.
+- Usage semantics: provider-specific token fields such as cache, reasoning, or tool-use tokens are preserved.
+- Error semantics: mapper validation failures stay local, and provider API failures routed via `SetCallError` preserve call error text plus the expected span error category on the recorder path.
+- Artifact semantics: direct normalization suites validate raw artifact opt-in coverage where the provider exposes it.
+- Embedding semantics: embedding wrappers emit normalized embedding results and recorder-path embedding spans with the expected input count and dimensions.
+
+### Current Go scope notes
+
+- OpenAI: chat-completions, responses, recorder-path, error, and embedding coverage are shipped.
+- Gemini: direct normalization, recorder-path, error, and embedding coverage are shipped.
+- Anthropic: direct normalization, recorder-path, and error coverage are shipped. Embedding coverage is not applicable until the Anthropic provider wrapper exposes an embedding API surface in this repository.
+
 ## Go framework adapter extension: Google ADK
 
 The Go repo now ships the first framework-adapter conformance suite for
@@ -368,10 +394,10 @@ The Go repo now ships the first framework-adapter conformance suite for
 Future phases will extend this document with the remaining core gaps (full
 roundtrip payload coverage, SDK identity protection, metadata/tag merge
 behavior, resource attributes) plus provider-wrapper and framework-adapter
-scenarios. Provider-wrapper embedding scenarios apply only when the official
-provider SDK or API surface exposes a native embedding operation; when it does
-not, the suite should assert the wrapper's explicit unsupported capability
-contract instead of fabricating request DTOs or synthetic embedding spans.
-Until those phases land, this document is the authoritative baseline for the
-currently shipped Go core harness and the first Go framework-adapter suite
-(`google-adk`).
+scenarios in other languages. Provider-wrapper embedding scenarios apply only
+when the official provider SDK or API surface exposes a native embedding
+operation; when it does not, the suite should assert the wrapper's explicit
+unsupported capability contract instead of fabricating request DTOs or
+synthetic embedding spans. Until those phases land, this document is the
+authoritative baseline for the currently shipped Go core harnesses, Go provider
+conformance harnesses, and the first Go framework-adapter suite (`google-adk`).

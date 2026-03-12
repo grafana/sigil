@@ -129,15 +129,18 @@ Test that each Go provider mapper correctly transforms provider request/response
   - [x] Chat Completions stream normalization
   - [x] Responses sync normalization
   - [x] Responses stream normalization
+  - [x] Recorder-path sync/stream export assertions via `sdks/go/sigil/sigiltest`
   - [x] Usage mapping (prompt/completion/total/cache/reasoning)
   - [x] Stop reason mapping
   - [x] Tool-call normalization
   - [x] Raw artifact opt-in coverage
   - [x] Explicit mapping-error coverage
   - [x] Wrapper error semantics for provider failures and mapper failures
+  - [x] Embedding mapping through the recorder path
 - [x] `sdks/go-providers/anthropic/conformance_test.go`
   - [x] Sync normalization with `ThinkingPart`
   - [x] Streaming normalization with accumulated `ThinkingPart`
+  - [x] Recorder-path sync/stream export assertions via `sdks/go/sigil/sigiltest`
   - [x] Usage mapping (input/output/cache/server-tool metadata)
   - [x] Stop reason mapping
   - [x] Tool-call normalization
@@ -148,16 +151,19 @@ Test that each Go provider mapper correctly transforms provider request/response
 - [x] `sdks/go-providers/gemini/conformance_test.go`
   - [x] Sync normalization with `ThinkingPart`
   - [x] Streaming normalization with accumulated `ThinkingPart`
+  - [x] Recorder-path sync/stream export assertions via `sdks/go/sigil/sigiltest`
   - [x] Usage mapping (prompt/candidate/total/cache/reasoning/tool-use metadata)
   - [x] Stop reason mapping
   - [x] Tool-call normalization
   - [x] Raw artifact opt-in coverage
   - [x] Explicit mapping-error coverage
   - [x] Wrapper error semantics for provider failures and mapper failures
+  - [x] Embedding mapping through the recorder path
 - [x] Extend `sdk-conformance-spec.md` with provider wrapper section
 
 ### Remaining provider-wrapper scope
 
+- [ ] Remove duplicate fixture surface between direct-normalization and recorder-path suites if the maintenance cost outweighs the extra coverage
 - [ ] Wrapper error-to-span/category assertions with local fake ingest/span capture, if provider suites need to validate `SetCallError` transport semantics directly
 - [ ] Native provider-wrapper embedding conformance scenarios for Anthropic only if the official provider SDK/API surface later exposes a real embeddings operation
 
