@@ -260,7 +260,13 @@ supervise_one_shot_children() {
 
 run_one_shot_assertions() {
   log "running one-shot Sigil API assertions"
-  "${PYTHON_VENV}/bin/python" "${ROOT_DIR}/.config/devex/sdk-traffic/assert-one-shot.py"
+  local py
+  if [[ -x "${PYTHON_VENV}/bin/python" ]]; then
+    py="${PYTHON_VENV}/bin/python"
+  else
+    py="python3"
+  fi
+  "${py}" "${ROOT_DIR}/.config/devex/sdk-traffic/assert-one-shot.py"
 }
 
 main() {
