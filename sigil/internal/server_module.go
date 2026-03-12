@@ -302,15 +302,6 @@ func withHTTPTracing(next http.Handler) http.Handler {
 	})
 }
 
-func shouldAutoMigrateGenerationStoreTarget(target string) bool {
-	switch strings.TrimSpace(strings.ToLower(target)) {
-	case config.TargetAll, config.TargetIngester:
-		return true
-	default:
-		return false
-	}
-}
-
 func buildGenerationStore(ctx context.Context, cfg config.Config, autoMigrate bool) (generationingest.Store, error) {
 	switch strings.ToLower(strings.TrimSpace(cfg.StorageBackend)) {
 	case "", "mysql":

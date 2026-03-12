@@ -606,14 +606,14 @@ The default local stack started by `mise run up` (`docker compose --profile core
 
 ## SDK Conformance Harness
 
-A no-Docker conformance test suite validates the current Go SDK public API behaviors the UI and query layer depend on. The suite runs in `go test` time (seconds) using only localhost transports and OTel SDK test infrastructure.
+A no-Docker conformance test suite validates the Sigil SDK public API behaviors the UI and query layer depend on across Go, TypeScript/JavaScript, Python, Java, and .NET. The suites run in the normal language test runners using only localhost transports and OTel SDK test infrastructure.
 
-- **Local entry point**: `mise run test:sdk:conformance` runs the shipped Go harness (`cd sdks/go && GOWORK=off go test ./sigil -run '^TestConformance' -count=1`).
+- **Local entry point**: `mise run test:sdk:conformance` runs the aggregate core harnesses across all five SDKs.
 - **Go reference implementation**: `sdks/go/sigil/conformance_test.go` and `conformance_helpers_test.go` (`package sigil_test`).
-- **Current shipped baseline**: Go core conformance covers generation identity, streaming, tool execution, embedding, validation/error, rating, and shutdown semantics; Go provider-wrapper conformance covers OpenAI, Anthropic, and Gemini; Go framework-adapter conformance covers Google ADK.
+- **Current shared core baseline**: sync roundtrip, conversation title resolution, user ID resolution, agent identity resolution, streaming telemetry, tool execution, embeddings, validation/call-error, rating submission, and shutdown flush across exported generation payloads, OTLP spans, OTLP metrics, and local rating HTTP capture.
 - **Cross-SDK spec**: `docs/references/sdk-conformance-spec.md` defines the current language-neutral baseline and the extension model for future provider/framework coverage, including explicit unsupported capability contracts when provider or framework embedding surfaces do not exist.
 - **Four assertion targets**: generation proto (fake gRPC server), OTLP spans (`tracetest.SpanRecorder`), OTLP metrics (`sdkmetric.ManualReader`), rating HTTP (`httptest.Server`).
-- **Scope**: shipped coverage is Go-only today across core, provider-wrapper, and the first framework-adapter suite. It does not test backend projections or batch/retry mechanics, and other language suites remain future work.
+- **Scope**: the shared core suites run across the shipped SDKs. Go also ships provider-wrapper conformance, and the Google ADK framework-adapter suite makes unsupported embedding behavior explicit. Backend projections and batch/retry mechanics remain outside the current harness.
 - Design doc: `docs/design-docs/2026-03-12-sdk-conformance-harness.md`.
 
 ## Evolution Path
