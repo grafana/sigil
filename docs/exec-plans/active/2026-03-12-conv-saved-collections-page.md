@@ -1950,7 +1950,7 @@ Files:
 
 ---
 
-- [ ] **6.1 Write the failing tests**
+- [x] **6.1 Write the failing tests**
 
 Create `apps/plugin/src/pages/SavedConversationsPage.test.tsx`:
 
@@ -2041,7 +2041,7 @@ describe('SavedConversationsPage', () => {
 });
 ```
 
-- [ ] **6.2 Run to confirm failure**
+- [x] **6.2 Run to confirm failure**
 
 ```bash
 cd apps/plugin && pnpm exec jest --testPathPattern=SavedConversationsPage --watchAll=false 2>&1 | tail -20
@@ -2049,7 +2049,7 @@ cd apps/plugin && pnpm exec jest --testPathPattern=SavedConversationsPage --watc
 
 Expected: FAIL — `SavedConversationsPage` not found.
 
-- [ ] **6.3 Implement SavedConversationsPage**
+- [x] **6.3 Implement SavedConversationsPage**
 
 Create `apps/plugin/src/pages/SavedConversationsPage.tsx`:
 
@@ -2267,7 +2267,7 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
 }
 ```
 
-- [ ] **6.4 Run tests to confirm pass**
+- [x] **6.4 Run tests to confirm pass**
 
 ```bash
 cd apps/plugin && pnpm exec jest --testPathPattern=SavedConversationsPage --watchAll=false 2>&1 | tail -20
@@ -2275,7 +2275,7 @@ cd apps/plugin && pnpm exec jest --testPathPattern=SavedConversationsPage --watc
 
 Expected: PASS.
 
-- [ ] **6.5 Run full plugin test suite**
+- [x] **6.5 Run full plugin test suite**
 
 ```bash
 cd apps/plugin && pnpm run test:ci 2>&1 | tail -30
@@ -2283,7 +2283,7 @@ cd apps/plugin && pnpm run test:ci 2>&1 | tail -30
 
 Expected: All existing tests still pass.
 
-- [ ] **6.6 Write Storybook story**
+- [x] **6.6 Write Storybook story**
 
 Create `apps/plugin/src/stories/saved-conversations/SavedConversationsPage.stories.tsx`:
 
@@ -2360,7 +2360,7 @@ export const Empty: Story = {
 };
 ```
 
-- [ ] **6.7 Run lint and typecheck**
+- [x] **6.7 Run lint and typecheck**
 
 ```bash
 cd apps/plugin && pnpm run lint && pnpm run typecheck 2>&1 | tail -30
@@ -2368,7 +2368,7 @@ cd apps/plugin && pnpm run lint && pnpm run typecheck 2>&1 | tail -30
 
 Expected: No errors.
 
-- [ ] **6.8 Commit**
+- [x] **6.8 Commit**
 
 ```bash
 git add apps/plugin/src/pages/SavedConversationsPage.tsx \
