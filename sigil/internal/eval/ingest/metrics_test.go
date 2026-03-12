@@ -50,6 +50,7 @@ func TestTransportFromContext(t *testing.T) {
 func TestWithTransportAllowsNilContext(t *testing.T) {
 	t.Parallel()
 
+	//nolint:staticcheck // Intentional nil context to verify withTransport fallback behavior.
 	ctx := withTransport(nil, "grpc")
 	if got := transportFromContext(ctx); got != "grpc" {
 		t.Fatalf("transportFromContext(withTransport(nil, ...)) = %q, want %q", got, "grpc")
