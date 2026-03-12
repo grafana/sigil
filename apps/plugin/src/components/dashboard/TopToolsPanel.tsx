@@ -2,13 +2,13 @@ import React, { useMemo } from 'react';
 import type { TimeRange } from '@grafana/data';
 import type { DashboardDataSource } from '../../dashboard/api';
 import { computeRangeDuration, topToolExecutionsQuery } from '../../dashboard/queries';
+import { TOOL_METRIC_LABEL } from '../../dashboard/toolRuntime';
 import { buildToolAnalyticsUrl } from '../../dashboard/url';
 import { usePrometheusQuery } from './usePrometheusQuery';
 import { BreakdownStatPanel } from './dashboardShared';
 import type { DashboardFilters } from '../../dashboard/types';
 
 const PANEL_HEIGHT = 250;
-const TOOL_METRIC_LABEL = 'gen_ai_request_model';
 
 export type TopToolsPanelProps = {
   dataSource: DashboardDataSource;

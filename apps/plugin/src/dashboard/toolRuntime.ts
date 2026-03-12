@@ -11,7 +11,7 @@ function appendLabelFilters(filters: DashboardFilters, extraFilters: LabelFilter
   };
 }
 
-function dropMetricLabelConflicts(filters: DashboardFilters): DashboardFilters {
+export function dropToolMetricLabelConflicts(filters: DashboardFilters): DashboardFilters {
   return {
     ...filters,
     // Current MVP tool metrics reuse the request-model metric label as the
@@ -23,7 +23,7 @@ function dropMetricLabelConflicts(filters: DashboardFilters): DashboardFilters {
 }
 
 export function buildToolMetricFilters(filters: DashboardFilters, toolName: string): DashboardFilters {
-  return appendLabelFilters(dropMetricLabelConflicts(filters), [
+  return appendLabelFilters(dropToolMetricLabelConflicts(filters), [
     { key: 'gen_ai_operation_name', operator: '=', value: EXECUTE_TOOL_OPERATION },
     { key: TOOL_METRIC_LABEL, operator: '=', value: toolName },
   ]);

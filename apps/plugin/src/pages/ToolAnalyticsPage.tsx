@@ -83,10 +83,6 @@ function buildLatencySeriesFrames(frames: DataFrame[], label: string): DataFrame
   });
 }
 
-function hasAnyLatencyData(responses: Array<ReturnType<typeof usePrometheusQuery>>): boolean {
-  return responses.some((response) => hasResponseData(response.data));
-}
-
 type ToolConversationsTableProps = {
   conversationsDataSource: ConversationsDataSource;
   timeRange: TimeRange;
@@ -327,22 +323,23 @@ export default function ToolAnalyticsPage({
     [latencyP50OverTime.data, latencyP95OverTime.data, latencyP99OverTime.data]
   );
 
-  const pageHasErrors =
-    executions.error.length > 0 &&
-    totalErrors.error.length > 0 &&
-    errorRate.error.length > 0 &&
-    usageOverTime.error.length > 0 &&
-    errorRateOverTime.error.length > 0 &&
-    latencyP95OverTime.error.length > 0;
-  const pageHasData =
-    hasResponseData(executions.data) ||
-    hasResponseData(totalErrors.data) ||
-    hasResponseData(errorRate.data) ||
-    hasResponseData(usageOverTime.data) ||
-    hasResponseData(errorRateOverTime.data) ||
-    hasAnyLatencyData([latencyP50OverTime, latencyP95OverTime, latencyP99OverTime]) ||
-    hasResponseData(topAgents.data) ||
-    hasResponseData(topErrorTypes.data);
+  const pageQueryResponses = [
+    executions,
+    totalErrors,
+    errorRate,
+    latencyP50,
+    latencyP95,
+    latencyP99,
+    usageOverTime,
+    errorRateOverTime,
+    latencyP50OverTime,
+    latencyP95OverTime,
+    latencyP99OverTime,
+    topAgents,
+    topErrorTypes,
+  ];
+  const pageHasErrors = pageQueryResponses.some((response) => response.error.length > 0);
+  const pageHasData = pageQueryResponses.some((response) => hasResponseData(response.data));
 
   if (!toolName) {
     return (

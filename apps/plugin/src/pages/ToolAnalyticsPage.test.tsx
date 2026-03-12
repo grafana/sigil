@@ -156,4 +156,29 @@ describe('ToolAnalyticsPage', () => {
       )
     ).toBe(true);
   });
+
+  it('shows the error state when any runtime query fails and no data is available', async () => {
+    const dataSource = createDashboardDataSource();
+    const conversationsDataSource = createConversationsDataSource();
+    dataSource.queryInstant.mockRejectedValueOnce(new Error('prometheus unavailable'));
+
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={['/analytics/tools/calendar.lookup']}>
+          <Routes>
+            <Route
+              path="/analytics/tools/:toolName"
+              element={<ToolAnalyticsPage dataSource={dataSource} conversationsDataSource={conversationsDataSource} />}
+            />
+          </Routes>
+        </MemoryRouter>
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Tool analytics failed to load')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('No `execute_tool` runtime data matched calendar.lookup in this time range.')).not.toBeInTheDocument();
+  });
 });

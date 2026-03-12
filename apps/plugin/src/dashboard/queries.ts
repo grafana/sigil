@@ -5,13 +5,13 @@ import {
   type FilterOperator,
   type LabelFilter,
 } from './types';
+import { dropToolMetricLabelConflicts, TOOL_METRIC_LABEL } from './toolRuntime';
 
 // OTel metric names converted to Prometheus format (dots → underscores).
 const TOKEN_USAGE = 'gen_ai_client_token_usage';
 const OPERATION_DURATION = 'gen_ai_client_operation_duration_seconds';
 const TIME_TO_FIRST_TOKEN = 'gen_ai_client_time_to_first_token_seconds';
 const PROMETHEUS_LABEL_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-const TOOL_METRIC_LABEL = 'gen_ai_request_model';
 
 /**
  * Escapes special regex characters for use in Prometheus label matchers.
@@ -112,14 +112,6 @@ function sel(filters: DashboardFilters, extra?: string): string {
   return parts ? `{${parts}}` : '';
 }
 
-function toolMetricFilters(filters: DashboardFilters): DashboardFilters {
-  return {
-    ...filters,
-    models: [],
-    labelFilters: filters.labelFilters.filter((filter) => filter.key.trim() !== TOOL_METRIC_LABEL),
-  };
-}
-
 /** Build a PromQL `by (...)` clause from breakdown dimension + extra required labels. */
 function byClause(breakdown: BreakdownDimension, extraLabels?: string[]): string {
   const labels = [...(extraLabels ?? [])];
@@ -162,7 +154,7 @@ export function totalErrorsQuery(filters: DashboardFilters, rangeDuration: strin
 }
 
 export function topToolExecutionsQuery(filters: DashboardFilters, rangeDuration: string): string {
-  return `sum by (${TOOL_METRIC_LABEL})(increase(${OPERATION_DURATION}_count${sel(toolMetricFilters(filters), 'gen_ai_operation_name="execute_tool"')}[${rangeDuration}]))`;
+  return `sum by (${TOOL_METRIC_LABEL})(increase(${OPERATION_DURATION}_count${sel(dropToolMetricLabelConflicts(filters), 'gen_ai_operation_name="execute_tool"')}[${rangeDuration}]))`;
 }
 
 export function errorRateQuery(
