@@ -1,7 +1,6 @@
 services:
   grafana:
     user: root
-    container_name: "sigil-grafana"
     build:
       context: ..
       dockerfile: .config/Dockerfile
@@ -22,6 +21,7 @@ services:
       - sigil-plugin-dist:/var/lib/grafana/plugins/grafana-sigil-app
       - ../provisioning:/etc/grafana/provisioning
       - ../apps/plugin:/root/sigil/apps/plugin
+      - sigil-plugin-dist:/root/sigil/apps/plugin/dist
       - ./grafana.ini:/etc/grafana/grafana.ini
     environment:
       NODE_ENV: development

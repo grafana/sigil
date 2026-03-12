@@ -24,3 +24,4 @@ External ecosystem notes and comparative references used for architecture and im
 - [`helm-chart.md`](helm-chart.md)
 - [`model-cards-api.md`](model-cards-api.md)
 - [`multi-tenancy.md`](multi-tenancy.md)
+- [`symphony-setup.md`](symphony-setup.md)
