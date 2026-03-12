@@ -166,6 +166,7 @@ func TestFromRequestResponse(t *testing.T) {
 }
 
 func TestMapFunctionMessageUsesNameFallbackCorrelation(t *testing.T) {
+	//nolint:staticcheck // OpenAI still exposes deprecated function messages in the union surface we normalize.
 	part := mapFunctionMessage(&osdk.ChatCompletionFunctionMessageParam{
 		Name:    "weather",
 		Content: param.NewOpt("18C and sunny"),
