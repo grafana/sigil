@@ -36,6 +36,7 @@ describe('SavedConversationsList', () => {
     onAddToCollection,
     onRemoveFromCollection,
     hasNextPage: false,
+    hasPrevPage: false,
     onPageChange,
     searchQuery: '',
     onSearchChange: jest.fn(),
@@ -122,5 +123,27 @@ describe('SavedConversationsList', () => {
     render(<SavedConversationsList {...defaultProps} />);
     fireEvent.click(screen.getAllByRole('checkbox')[0]);
     expect(onSelectionChange).toHaveBeenCalledWith(new Set(['s1', 's2', 's3']));
+  });
+
+  it('calls onAddToCollection when Add to collection is clicked', () => {
+    render(
+      <SavedConversationsList
+        {...defaultProps}
+        selectedIDs={new Set(['s1'])}
+      />
+    );
+    fireEvent.click(screen.getByText(/add to collection/i));
+    expect(onAddToCollection).toHaveBeenCalled();
+  });
+
+  it('shows — for empty saved_by', () => {
+    const noAuthor = { ...makeSC('s4', 'No author'), saved_by: '' };
+    render(
+      <SavedConversationsList
+        {...defaultProps}
+        conversations={[noAuthor]}
+      />
+    );
+    expect(screen.getByText('—')).toBeInTheDocument();
   });
 });

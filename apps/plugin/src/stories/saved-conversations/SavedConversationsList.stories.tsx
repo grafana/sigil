@@ -37,6 +37,7 @@ export const Default: Story = {
           onAddToCollection={() => console.log('add to collection')}
           onRemoveFromCollection={() => {}}
           hasNextPage={false}
+          hasPrevPage={false}
           onPageChange={() => {}}
           searchQuery={query}
           onSearchChange={setQuery}
@@ -60,6 +61,7 @@ export const WithActiveCollection: Story = {
           onAddToCollection={() => {}}
           onRemoveFromCollection={(ids) => console.log('remove', [...ids])}
           hasNextPage
+          hasPrevPage={false}
           onPageChange={() => {}}
           searchQuery=""
           onSearchChange={() => {}}
@@ -79,6 +81,7 @@ export const Loading: Story = {
     onAddToCollection: () => {},
     onRemoveFromCollection: () => {},
     hasNextPage: false,
+    hasPrevPage: false,
     onPageChange: () => {},
     searchQuery: '',
     onSearchChange: () => {},

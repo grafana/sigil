@@ -14,6 +14,7 @@ export type SavedConversationsListProps = {
   onAddToCollection: () => void;
   onRemoveFromCollection: (ids: Set<string>) => void;
   hasNextPage: boolean;
+  hasPrevPage: boolean;
   onPageChange: (direction: 'next' | 'prev') => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
@@ -140,6 +141,7 @@ export function SavedConversationsList({
   onAddToCollection,
   onRemoveFromCollection,
   hasNextPage,
+  hasPrevPage,
   onPageChange,
   searchQuery,
   onSearchChange,
@@ -253,11 +255,18 @@ export function SavedConversationsList({
       {/* Pagination */}
       <div className={styles.pagination}>
         <span>{conversations.length} conversation{conversations.length !== 1 ? 's' : ''}</span>
-        {hasNextPage && (
-          <Button variant="secondary" size="sm" onClick={() => onPageChange('next')}>
-            Next →
-          </Button>
-        )}
+        <div style={{ display: 'flex', gap: 8 }}>
+          {hasPrevPage && (
+            <Button variant="secondary" size="sm" onClick={() => onPageChange('prev')}>
+              ← Prev
+            </Button>
+          )}
+          {hasNextPage && (
+            <Button variant="secondary" size="sm" onClick={() => onPageChange('next')}>
+              Next →
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
