@@ -28,7 +28,10 @@ export function mapInputMessages(parts: Part[]): Message[] {
 }
 
 /** Map assistant-side parts to Sigil output messages with redaction. */
-export function mapOutputMessages(parts: Part[], redactor: Redactor): Message[] {
+export function mapOutputMessages(
+  parts: Part[],
+  redactor: Redactor,
+): Message[] {
   const messages: Message[] = [];
   for (const part of parts) {
     switch (part.type) {
@@ -57,38 +60,57 @@ export function mapOutputMessages(parts: Part[], redactor: Redactor): Message[] 
         if (state.status === "completed") {
           messages.push({
             role: "assistant",
-            parts: [{
-              type: "tool_call",
-              toolCall: {
-                id: part.callID,
-                name: part.tool,
-                inputJSON: redactor.redact(JSON.stringify(state.input ?? {})),
+            parts: [
+              {
+                type: "tool_call",
+                toolCall: {
+                  id: part.callID,
+                  name: part.tool,
+                  inputJSON: redactor.redact(JSON.stringify(state.input ?? {})),
+                },
               },
-            }],
+            ],
           });
           messages.push({
             role: "tool",
-            parts: [{
-              type: "tool_result",
-              toolResult: {
-                toolCallId: part.callID,
-                name: part.tool,
-                content: redactor.redact(state.output ?? ""),
+            parts: [
+              {
+                type: "tool_result",
+                toolResult: {
+                  toolCallId: part.callID,
+                  name: part.tool,
+                  content: redactor.redact(state.output ?? ""),
+                },
               },
-            }],
+            ],
           });
         } else if (state.status === "error") {
           messages.push({
-            role: "tool",
-            parts: [{
-              type: "tool_result",
-              toolResult: {
-                toolCallId: part.callID,
-                name: part.tool,
-                content: redactor.redact(state.error ?? "unknown error"),
-                isError: true,
+            role: "assistant",
+            parts: [
+              {
+                type: "tool_call",
+                toolCall: {
+                  id: part.callID,
+                  name: part.tool,
+                  inputJSON: redactor.redact(JSON.stringify(state.input ?? {})),
+                },
               },
-            }],
+            ],
+          });
+          messages.push({
+            role: "tool",
+            parts: [
+              {
+                type: "tool_result",
+                toolResult: {
+                  toolCallId: part.callID,
+                  name: part.tool,
+                  content: redactor.redact(state.error ?? "unknown error"),
+                  isError: true,
+                },
+              },
+            ],
           });
         }
         break;
@@ -134,9 +156,7 @@ export function mapGeneration(
   };
 }
 
-export function mapError(
-  error: NonNullable<AssistantMessage["error"]>,
-): Error {
+export function mapError(error: NonNullable<AssistantMessage["error"]>): Error {
   switch (error.name) {
     case "ProviderAuthError":
       return new Error("provider_auth");
