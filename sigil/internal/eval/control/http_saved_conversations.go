@@ -67,11 +67,29 @@ func (s *SavedConversationService) handleSavedConversationByID(w http.ResponseWr
 		return
 	}
 
-	savedID, valid := pathID(req.URL.Path, "/api/v1/eval/saved-conversations/")
-	if !valid {
+	rest := strings.TrimPrefix(req.URL.Path, "/api/v1/eval/saved-conversations/")
+
+	// Handle {saved_id}/collections sub-path
+	if strings.HasSuffix(rest, "/collections") {
+		savedID := strings.TrimSuffix(rest, "/collections")
+		if savedID == "" || strings.Contains(savedID, "/") {
+			http.Error(w, "invalid saved conversation path", http.StatusBadRequest)
+			return
+		}
+		if req.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.handleListCollectionsForSaved(w, req, tenantID, savedID)
+		return
+	}
+
+	// Existing: {saved_id} only
+	if rest == "" || strings.Contains(rest, "/") {
 		http.Error(w, "invalid saved conversation id", http.StatusBadRequest)
 		return
 	}
+	savedID := rest
 
 	switch req.Method {
 	case http.MethodGet:
@@ -94,6 +112,22 @@ func (s *SavedConversationService) handleSavedConversationByID(w http.ResponseWr
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (s *SavedConversationService) handleListCollectionsForSaved(w http.ResponseWriter, req *http.Request, tenantID, savedID string) {
+	if s.collectionLister == nil {
+		http.Error(w, "collections not available", http.StatusServiceUnavailable)
+		return
+	}
+	collections, err := s.collectionLister.ListCollectionsForSavedConversation(req.Context(), tenantID, savedID)
+	if err != nil {
+		writeControlWriteError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items":       collections,
+		"next_cursor": "",
+	})
 }
 
 func (s *SavedConversationService) handleCreateManualConversation(w http.ResponseWriter, req *http.Request) {

@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-03-10
+last_reviewed: 2026-03-12
 source_of_truth: true
 audience: both
 ---
@@ -72,6 +72,7 @@ This is the canonical navigation map for repository documentation.
   - Agent catalog versioning and APIs: `exec-plans/active/2026-03-04-agent-catalog-versioning.md`
   - Evaluation resource user attribution: `exec-plans/completed/2026-03-09-eval-resource-user-attribution.md`
   - Conversation detail V2 shared-ref payload: `exec-plans/active/2026-03-10-conversation-detail-v2.md`
+  - SDK conformance harness: `exec-plans/active/2026-03-12-sdk-conformance-harness.md`
   - LangChain/LangGraph framework integration delivery: `exec-plans/completed/2026-02-20-sdk-langchain-langgraph-integrations.md`
   - OpenAI Agents/LlamaIndex/Google ADK framework integration delivery: `exec-plans/completed/2026-02-20-sdk-openai-agents-llamaindex-google-adk-integrations.md`
   - Vercel AI SDK TypeScript integration delivery: `exec-plans/completed/2026-02-22-sdk-vercel-ai-sdk-integration.md`
@@ -118,6 +119,7 @@ This is the canonical navigation map for repository documentation.
 - External references: [`references/index.md`](references/index.md)
   - Online evaluation user guide: [`references/online-evaluation-user-guide.md`](references/online-evaluation-user-guide.md)
   - Storage benchmark baselines: [`references/storage-benchmarks.md`](references/storage-benchmarks.md)
+  - SDK conformance spec: [`references/sdk-conformance-spec.md`](references/sdk-conformance-spec.md)
   - Generation ingest contract: [`references/generation-ingest-contract.md`](references/generation-ingest-contract.md)
   - Score ingest contract: [`references/score-ingest-contract.md`](references/score-ingest-contract.md)
   - Evaluation control plane API: [`references/eval-control-plane.md`](references/eval-control-plane.md)

@@ -8,359 +8,304 @@ audience: both
 
 # SDK Conformance Spec
 
-Language-neutral specification of scenarios every Sigil SDK conformance runner must implement. Each scenario specifies the SDK actions, the expected generation proto fields, expected span attributes, and expected metric recordings.
+Language-neutral specification of the currently shipped Sigil SDK conformance baseline.
 
 Reference implementation: Go (`sdks/go/sigil/conformance_test.go`, `package sigil_test`).
+Provider-wrapper reference implementations:
+
+- OpenAI: `sdks/go-providers/openai/conformance_test.go`
+- Anthropic: `sdks/go-providers/anthropic/conformance_test.go`
+- Gemini: `sdks/go-providers/gemini/conformance_test.go`
+
+Local entry points:
+
+- `mise run test:sdk:conformance`
+- `cd sdks/go && GOWORK=off go test ./sigil -run '^TestConformance' -count=1`
+- `cd sdks/go-providers/openai && GOWORK=off go test ./... -run '^TestConformance' -count=1`
+- `cd sdks/go-providers/anthropic && GOWORK=off go test ./... -run '^TestConformance' -count=1`
+- `cd sdks/go-providers/gemini && GOWORK=off go test ./... -run '^TestConformance' -count=1`
 
 Related docs:
+
 - Semantic conventions: `docs/references/semantic-conventions.md`
-- Generation ingest contract: `docs/references/generation-ingest-contract.md`
-- Design doc: `docs/design-docs/2026-03-12-sdk-conformance-harness.md`
+- Architecture summary: `ARCHITECTURE.md#sdk-conformance-harness`
+- Design doc / future scope: `docs/design-docs/2026-03-12-sdk-conformance-harness.md`
 
-## Test infrastructure
+## Current baseline
 
-Each SDK conformance runner must provide:
+The shipped Go baseline now has two active layers:
 
-1. **Fake generation ingest server** (gRPC or HTTP) that captures the full `ExportGenerationsRequest` protobuf (or equivalent JSON).
-2. **Span capture** using the SDK's OTel test infrastructure (e.g. `SpanRecorder` in Go, `InMemorySpanExporter` in Python/JS).
-3. **Metric capture** using the SDK's OTel metric test infrastructure (e.g. `ManualReader` in Go).
-4. **Fake rating HTTP server** that captures the HTTP request.
+1. Core SDK conformance in `sdks/go/sigil`
+2. Provider-wrapper conformance in `sdks/go-providers/{openai,anthropic,gemini}`
 
-The SDK client must be configured to point at these local receivers. All tests run without Docker or external services.
+The current core scenario set covers nine black-box scenarios:
+
+1. Conversation title semantics
+2. User ID semantics
+3. Agent identity semantics
+4. Streaming mode semantics and TTFT metrics
+5. Tool execution semantics
+6. Embedding semantics
+7. Validation and error semantics
+8. Rating submission semantics
+9. Shutdown flush semantics
+
+The provider-wrapper layer verifies normalized `sigil.Generation` outputs directly from provider request/response fixtures. It runs with `go test` only and does not require Docker, a Sigil backend, or live provider access.
+
+The core SDK harness still covers the exported client API with local fake receivers. The provider-wrapper layer complements that by asserting mapper and wrapper behavior inside the provider modules.
+
+### Core SDK baseline
+
+The shipped Go core harness covers identity-resolution, validation/error, streaming, tool execution, embedding, rating, and shutdown-flush scenarios. This document only enumerates the scenario contracts that other SDKs are expected to replicate today.
+
+### Provider-wrapper baseline
+
+The shipped Go provider-wrapper baseline covers:
+
+- Sync normalization for OpenAI, Anthropic, and Gemini
+- Streaming normalization for OpenAI, Anthropic, and Gemini
+- Usage fields including provider-specific cache/reasoning metadata
+- Stop reason mapping
+- Tool call normalization
+- Thinking content normalization where the provider exposes it as content
+- Raw artifact capture behind explicit opt-in
+- Explicit mapping-error behavior for invalid response/stream inputs
+- Wrapper-level error semantics for provider failures and mapper failures without live providers
+
+Each scenario is executed through exported SDK entry points and validates behavior across the same localhost-only capture harness:
+
+- generation export payloads captured from a fake local gRPC ingest server
+- OTLP spans captured with the SDK's in-memory span recorder
+- OTLP metrics captured with the SDK's in-memory metric reader
+- HTTP rating requests captured from a fake local API server when the scenario exercises ratings
+
+## Harness requirements
+
+Every SDK conformance runner that implements this baseline must provide:
+
+1. A fake generation ingest receiver that captures the normalized generation payload as the backend would receive it.
+2. Span capture using the SDK's local OpenTelemetry test utilities.
+3. Metric capture using the SDK's local OpenTelemetry metric test utilities.
+4. A client configured to target only local receivers, with no Docker or external services.
+5. A flush/shutdown step before assertions so asynchronous export is complete.
 
 ## Assertion conventions
 
-- "Assert proto field X = Y" means the captured `Generation` protobuf (or equivalent JSON) has field X with value Y.
-- "Assert span attr X = Y" means the captured span has attribute key X with value Y.
-- "Assert span attr X absent" means the captured span does NOT have attribute key X.
-- "Assert metric M has data" means the named histogram has at least one data point.
-- "Assert metric M absent" means the named histogram has zero data points (or is not emitted).
+- "Assert proto metadata `X = Y`" means the captured generation payload contains metadata key `X` with string value `Y`.
+- "Assert proto field `X = Y`" means the captured normalized generation payload has field `X` set to `Y`.
+- "Assert span attr `X = Y`" means the captured span has attribute key `X` with value `Y`.
+- "Assert span attr `X` absent" means the captured span does not contain attribute `X`.
+- "Assert metric `M` has data" means the named histogram has at least one data point.
+- "Assert metric `M` absent" means the named histogram is not emitted for the scenario.
+- "Assert no generation export" means the fake ingest server received zero generation export requests for the scenario.
+- "Assert rating request `P`" means the fake rating server observed an HTTP request on path `P`.
 
----
+## Common invariants for generation scenarios
 
-## Scenario 1: Full generation roundtrip
+These assertions apply to the sync generation scenarios in the current baseline (conversation title, user ID, agent identity, validation, shutdown flush):
 
-### Setup
+- Use the SDK's sync generation entry point.
+- Assert `gen_ai.operation.name = "generateText"` on the generation span.
+- Assert `gen_ai.client.operation.duration` has data.
+- Assert `gen_ai.client.time_to_first_token` is absent.
+- Shutdown the client before reading captured generation payloads.
 
-Create a **sync** generation with all fields populated:
+Additional scenario-family invariants:
 
-- `conversation_id`: `"conv-roundtrip"`
-- `conversation_title`: `"Roundtrip Test"`
-- `user_id`: `"user-42"`
-- `agent_name`: `"test-agent"`
-- `agent_version`: `"1.0.0"`
-- `model.provider`: `"test-provider"`
-- `model.name`: `"test-model"`
-- `system_prompt`: `"You are a test assistant."`
-- `tools`: one tool definition with name, description, type, input schema, deferred=true
-- `max_tokens`: 1024
-- `temperature`: 0.7
-- `top_p`: 0.9
-- `tool_choice`: `"auto"`
-- `thinking_enabled`: true
-- `tags`: `{"env": "conformance", "suite": "roundtrip"}`
-- `metadata`: `{"custom_key": "custom_value"}`
+- Streaming uses the SDK's streaming generation entry point, emits `gen_ai.operation.name = "streamText"`, and records `gen_ai.client.time_to_first_token`.
+- Tool execution and embeddings use their dedicated SDK entry points, emit OTel spans and metrics, and do not enqueue generation export payloads.
+- Rating submission uses the SDK's HTTP rating helper and does not depend on generation export capture.
 
-Set result with:
-- `input`: user text message + tool result message
-- `output`: assistant message with text part, thinking part, and tool call part
-- `response_id`: `"resp-1"`
-- `response_model`: `"test-model-v2"`
-- `usage`: all six token fields non-zero (input, output, cache_read, cache_write, cache_creation, reasoning)
-- `stop_reason`: `"end_turn"`
-- `artifacts`: one request artifact, one response artifact
+## Scenario 1: Conversation title semantics
 
-Shutdown the client to flush.
+### Setup matrix
 
-### Expected generation proto
-
-- All identity fields match input values.
-- `mode` = `GENERATION_MODE_SYNC`.
-- `metadata["sigil.sdk.name"]` = SDK name (e.g. `"sdk-go"`).
-- `metadata["sigil.conversation.title"]` = `"Roundtrip Test"`.
-- `metadata["sigil.user.id"]` = `"user-42"`.
-- `trace_id` and `span_id` are non-empty and match the captured OTLP span.
-- All message parts round-trip: text content, thinking content, tool call (id, name, input_json), tool result (tool_call_id, content).
-- Tool definition includes `deferred = true`.
-- All usage fields match.
-- Both artifacts present.
-
-### Expected span attributes
-
-| Attribute | Value |
-|---|---|
-| `gen_ai.operation.name` | `"generateText"` |
-| `sigil.generation.id` | matches generation ID |
-| `gen_ai.conversation.id` | `"conv-roundtrip"` |
-| `sigil.conversation.title` | `"Roundtrip Test"` |
-| `user.id` | `"user-42"` |
-| `gen_ai.agent.name` | `"test-agent"` |
-| `gen_ai.agent.version` | `"1.0.0"` |
-| `gen_ai.provider.name` | `"test-provider"` |
-| `gen_ai.request.model` | `"test-model"` |
-| `gen_ai.request.max_tokens` | 1024 |
-| `gen_ai.request.temperature` | 0.7 |
-| `gen_ai.request.top_p` | 0.9 |
-| `sigil.gen_ai.request.tool_choice` | `"auto"` |
-| `sigil.gen_ai.request.thinking.enabled` | true |
-| `gen_ai.response.id` | `"resp-1"` |
-| `gen_ai.response.model` | `"test-model-v2"` |
-| `gen_ai.response.finish_reasons` | `["end_turn"]` |
-| `gen_ai.usage.input_tokens` | matches |
-| `gen_ai.usage.output_tokens` | matches |
-| `gen_ai.usage.cache_read_input_tokens` | matches |
-| `gen_ai.usage.cache_write_input_tokens` | matches |
-| `gen_ai.usage.reasoning_tokens` | matches |
-| `sigil.sdk.name` | SDK name |
-
-Span kind: CLIENT. Span status: OK.
-
-### Expected metrics
-
-| Metric | Expected |
-|---|---|
-| `gen_ai.client.operation.duration` | has data point with `gen_ai.operation.name=generateText`, `gen_ai.provider.name=test-provider`, `gen_ai.request.model=test-model` |
-| `gen_ai.client.token.usage` | has data points for token types: input, output, cache_read, cache_write, cache_creation, reasoning |
-| `gen_ai.client.time_to_first_token` | **absent** (sync mode) |
-
----
-
-## Scenario 2: Conversation title semantics
-
-### Sub-cases
-
-| Case | GenerationStart.ConversationTitle | Context title | Metadata `sigil.conversation.title` | Expected |
+| Case | Start conversation title | Context conversation title | Metadata `sigil.conversation.title` | Expected resolved title |
 |---|---|---|---|---|
-| explicit wins | `"Explicit"` | `"Context"` | -- | `"Explicit"` |
-| context fallback | `""` | `"Context"` | -- | `"Context"` |
-| metadata fallback | `""` | -- | `"Meta"` | `"Meta"` |
-| whitespace omitted | `"   "` | -- | -- | absent |
+| explicit wins | `"Explicit"` | `"Context"` | `"Meta"` | `"Explicit"` |
+| context fallback | `""` | `"Context"` | absent | `"Context"` |
+| metadata fallback | `""` | absent | `"Meta"` | `"Meta"` |
+| whitespace omitted | `"   "` | absent | absent | absent |
 
-### Expected (per sub-case)
+### Expected behavior
 
-- Proto `conversation_title` = expected value (or empty).
-- Proto `metadata["sigil.conversation.title"]` = expected value (or absent when empty).
-- Span attr `sigil.conversation.title` = expected value (or absent when empty).
+- Assert span attr `sigil.conversation.title` equals the resolved title when present.
+- Assert span attr `sigil.conversation.title` is absent when the resolved title is empty.
+- Assert proto metadata `sigil.conversation.title` equals the resolved title when present.
+- Assert proto metadata `sigil.conversation.title` is absent when the resolved title is empty.
 
----
+## Scenario 2: User ID semantics
 
-## Scenario 3: User ID semantics
+### Setup matrix
 
-### Sub-cases
-
-| Case | GenerationStart.UserID | Context user ID | Metadata `sigil.user.id` | Metadata `user.id` | Expected |
+| Case | Start user ID | Context user ID | Metadata `sigil.user.id` | Metadata `user.id` | Expected resolved user ID |
 |---|---|---|---|---|---|
-| explicit wins | `"explicit"` | `"ctx"` | `"meta"` | `"legacy"` | `"explicit"` |
-| context fallback | `""` | `"ctx"` | -- | -- | `"ctx"` |
-| canonical metadata | `""` | -- | `"canonical"` | -- | `"canonical"` |
-| legacy metadata | `""` | -- | -- | `"legacy"` | `"legacy"` |
-| canonical beats legacy | `""` | -- | `"canonical"` | `"legacy"` | `"canonical"` |
-| whitespace trimmed | `"  padded  "` | -- | -- | -- | `"padded"` |
+| explicit wins | `"explicit"` | `"ctx"` | `"canonical"` | `"legacy"` | `"explicit"` |
+| context fallback | `""` | `"ctx"` | absent | absent | `"ctx"` |
+| canonical metadata | `""` | absent | `"canonical"` | absent | `"canonical"` |
+| legacy metadata | `""` | absent | absent | `"legacy"` | `"legacy"` |
+| canonical beats legacy | `""` | absent | `"canonical"` | `"legacy"` | `"canonical"` |
+| whitespace trimmed | `"  padded  "` | absent | absent | absent | `"padded"` |
 
-### Expected (per sub-case)
+### Expected behavior
 
-- Proto `user_id` = expected value.
-- Proto `metadata["sigil.user.id"]` = expected value (when non-empty).
-- Span attr `user.id` = expected value.
+- Assert span attr `user.id` equals the resolved user ID.
+- Assert proto metadata `sigil.user.id` equals the resolved user ID.
 
----
+## Scenario 3: Agent identity semantics
 
-## Scenario 4: Agent identity semantics
+### Setup matrix
 
-### Sub-cases
+| Case | Start agent name | Start agent version | Context agent name | Context agent version | Result agent name | Result agent version | Expected name | Expected version |
+|---|---|---|---|---|---|---|---|---|
+| explicit fields | `"agent-explicit"` | `"v1.2.3"` | absent | absent | absent | absent | `"agent-explicit"` | `"v1.2.3"` |
+| context fallback | `""` | `""` | `"agent-context"` | `"v-context"` | absent | absent | `"agent-context"` | `"v-context"` |
+| result-time override | `"agent-seed"` | `"v-seed"` | absent | absent | `"agent-result"` | `"v-result"` | `"agent-result"` | `"v-result"` |
+| empty omission | `""` | `""` | absent | absent | absent | absent | absent | absent |
 
-| Case | Start agent_name | Start agent_version | Context name | Context version | Result agent_name | Expected name | Expected version |
-|---|---|---|---|---|---|---|---|
-| explicit | `"agent-x"` | `"2.0"` | -- | -- | -- | `"agent-x"` | `"2.0"` |
-| context fallback | `""` | `""` | `"ctx-agent"` | `"ctx-v"` | -- | `"ctx-agent"` | `"ctx-v"` |
-| result override | `"seed-agent"` | `"seed-v"` | -- | -- | `"override"` | `"override"` | `"seed-v"` |
-| empty omitted | `""` | `""` | -- | -- | -- | absent | absent |
+### Expected behavior
 
-### Expected (per sub-case)
+- Assert span attr `gen_ai.agent.name` equals the resolved name when present.
+- Assert span attr `gen_ai.agent.name` is absent when the resolved name is empty.
+- Assert span attr `gen_ai.agent.version` equals the resolved version when present.
+- Assert span attr `gen_ai.agent.version` is absent when the resolved version is empty.
+- Assert proto field `agent_name` equals the resolved name when present, otherwise empty.
+- Assert proto field `agent_version` equals the resolved version when present, otherwise empty.
 
-- Proto `agent_name` and `agent_version` = expected values.
-- Span attr `gen_ai.agent.name` and `gen_ai.agent.version` = expected values (or absent).
+## Provider-wrapper scenarios
 
----
+### Common expectations
 
-## Scenario 5: SDK identity protection
+Every provider-wrapper conformance suite should:
 
-### Setup
+- Use in-process request/response or stream fixtures only.
+- Assert the normalized `Generation` shape returned by the mapper.
+- Cover both sync and streaming code paths for the provider package.
+- Assert usage, stop reason, tool calls, and raw artifact opt-in behavior.
+- Assert mapping errors for malformed or missing provider responses/streams.
+- Assert wrapper-level error semantics without live provider access:
+  - provider call failures are returned unchanged
+  - mapper failures do not discard the native provider response
 
-Create a generation with `Metadata: {"sigil.sdk.name": "evil"}`.
+### OpenAI provider baseline
 
-### Expected
+OpenAI has two normalization paths under test:
 
-- Proto `metadata["sigil.sdk.name"]` = SDK name (e.g. `"sdk-go"`), NOT `"evil"`.
-- Span attr `sigil.sdk.name` = SDK name.
+- Chat Completions:
+  - sync mapping of text + tool calls, reasoning-enabled request controls, usage, stop reason, and request/response/tools artifacts
+  - streaming mapping of accumulated text + tool calls, usage, stop reason, and request/tools/provider-event artifacts
+- Responses API:
+  - sync mapping of text + tool calls, reasoning-enabled request controls, usage, stop reason, and request/response artifacts
+  - streaming mapping of accumulated text, stop reason, and request/provider-event artifacts
 
----
+OpenAI currently treats reasoning as controls/tokens rather than emitting a distinct `ThinkingPart`.
 
-## Scenario 6: Tags and metadata merge
+### Anthropic provider baseline
 
-### Setup
+Anthropic message conformance covers:
 
-Start with `Tags: {"env": "start", "start-only": "a"}` and `Metadata: {"env": "start", "start-only": 1}`.
-Result with `Tags: {"env": "result", "result-only": "b"}` and `Metadata: {"env": "result", "result-only": 2}`.
+- sync mapping of text, `ThinkingPart`, tool calls, usage, stop reason, and request/response/tools artifacts
+- streaming mapping of accumulated `ThinkingPart`, accumulated text, accumulated tool-call JSON, usage, stop reason, and request/tools/provider-event artifacts
+- wrapper error semantics for provider failures and mapper failures
 
-### Expected
+### Gemini provider baseline
 
-- Proto tags: `env=result`, `start-only=a`, `result-only=b` (result wins on conflict, union on disjoint).
-- Proto metadata: `env=result`, `start-only=1`, `result-only=2` (same merge rule).
+Gemini generate-content conformance covers:
 
----
+- sync mapping of `ThinkingPart`, tool calls, text output, usage, stop reason, and request/response/tools artifacts
+- streaming mapping of accumulated `ThinkingPart`, tool calls, text output, usage, stop reason, and request/tools/provider-event artifacts
+- wrapper error semantics for provider failures and mapper failures
 
-## Scenario 7: Resource attributes on OTLP
-
-### Setup
-
-Configure OTel resource with `service.name=conformance-svc`, `service.namespace=conformance-ns`, `deployment.environment.name=test`.
-Run one generation, one tool execution, one embedding.
-
-### Expected
-
-- All three OTLP spans include the resource attributes.
-- Generation proto links to traces via `trace_id`/`span_id` but does not contain resource attributes.
-
----
-
-## Scenario 8: Streaming mode
-
-### Setup
-
-Use the SDK's streaming generation API. Record `first_token_at` timestamp. Set result and end.
-
-### Expected
-
-- Proto `mode` = `GENERATION_MODE_STREAM`.
-- Span attr `gen_ai.operation.name` = `"streamText"`.
-- Metric `gen_ai.client.time_to_first_token` has a data point.
-- A companion sync generation in the same test produces no TTFT metric data point.
-
----
-
-## Scenario 9: Tool execution
+## Scenario 4: Streaming mode semantics and TTFT metrics
 
 ### Setup
 
-Start a generation with conversation ID, title, agent name, agent version. Within that context, start a tool execution with tool name, call ID, type, description, and `include_content=true`. Set arguments and result on the tool recorder.
+- Start a streaming generation through the SDK's streaming entry point.
+- Record first-token timing before ending the recorder.
+- End with a single assistant text output and token usage.
 
-### Expected
+### Expected behavior
 
-- Tool span: `gen_ai.operation.name=execute_tool`, `gen_ai.tool.name`, `gen_ai.tool.call.id`, `gen_ai.tool.type`, `gen_ai.tool.description`. Span kind: INTERNAL.
-- Context propagation: tool span has `gen_ai.conversation.id`, `sigil.conversation.title`, `gen_ai.agent.name`, `gen_ai.agent.version`.
-- Content capture: `gen_ai.tool.call.arguments` and `gen_ai.tool.call.result` present.
-- `sigil.sdk.name` present on tool span.
-- Metric `gen_ai.client.operation.duration` recorded for tool execution.
+- Assert `gen_ai.client.operation.duration` has data.
+- Assert `gen_ai.client.time_to_first_token` has data.
+- Assert proto field `mode = GENERATION_MODE_STREAM`.
+- Assert proto field `operation_name = "streamText"`.
+- Assert the exported output preserves the stitched assistant text.
+- Assert the recorded span name is `streamText <model>`.
 
----
-
-## Scenario 10: Embedding
-
-### Setup
-
-Start an embedding with model provider/name and agent name. Set result with input count, input tokens, dimensions.
-
-### Expected
-
-- Span: `gen_ai.operation.name=embeddings`, `gen_ai.embeddings.input_count`, `gen_ai.embeddings.dimension.count`, `gen_ai.provider.name`, `gen_ai.request.model`. Span kind: CLIENT.
-- `sigil.sdk.name` present.
-- Metrics: `gen_ai.client.operation.duration` and `gen_ai.client.token.usage` (input type) have data.
-- **No generation export** -- the fake ingest server receives zero requests.
-
----
-
-## Scenario 11: Validation and error semantics
-
-### Sub-case A: Invalid generation
-
-Create a generation with no model (empty provider and name). Call `SetResult` + `End`.
-
-**Expected**: `Err()` wraps the SDK's validation error. Fake ingest server receives zero requests.
-
-### Sub-case B: Provider call error
-
-Create a valid generation. Call `SetCallError` with an error containing `"429"` or a rate-limit signal. Call `SetResult` (with partial/empty generation) + `End`.
-
-**Expected**:
-- Span attr `error.type` = `"provider_call_error"`.
-- Span attr `error.category` = `"rate_limit"`.
-- Span status: ERROR.
-- Metric `gen_ai.client.operation.duration` includes error labels.
-
----
-
-## Scenario 12: Rating helper
+## Scenario 5: Tool execution semantics
 
 ### Setup
 
-Configure SDK with custom headers (e.g. `{"X-Custom": "test"}`). Submit a conversation rating for `"conv-rated"` with rating ID, good value, comment, and metadata.
+- Start tool execution through the dedicated SDK entry point with tool identity, conversation identity, and agent identity.
+- End with structured arguments and structured tool result content.
 
-### Expected
+### Expected behavior
 
-- HTTP request method: POST.
-- HTTP request path: `/api/v1/conversations/conv-rated/ratings`.
-- Custom header `X-Custom: test` present.
-- Request body deserializes to valid rating input JSON with all fields.
-- SDK parses the response into its rating response type.
+- Assert `gen_ai.client.operation.duration` has data.
+- Assert `gen_ai.client.time_to_first_token` is absent.
+- Assert no generation export.
+- Assert span attrs for tool name, tool call ID, tool type, tool call arguments, tool call result, conversation title, agent name, and agent version.
 
----
-
-## Scenario 13: Shutdown flushes pending
+## Scenario 6: Embedding semantics
 
 ### Setup
 
-Create and end a valid generation. Immediately call `Shutdown` (do not call `Flush` separately).
+- Start an embedding operation through the dedicated SDK entry point with explicit dimensions and encoding format.
+- End with embedding result metadata including input count, input tokens, response model, and dimensions.
 
-### Expected
+### Expected behavior
 
-- Fake ingest server received exactly one generation matching the input.
+- Assert `gen_ai.client.operation.duration` has data.
+- Assert `gen_ai.client.token.usage` has data.
+- Assert `gen_ai.client.time_to_first_token` is absent.
+- Assert `gen_ai.client.tool_calls_per_operation` is absent.
+- Assert no generation export.
+- Assert span attrs for agent identity, embedding input count, and embedding dimension count.
 
----
+## Scenario 7: Validation and error semantics
 
----
+### Setup matrix
 
-## Provider wrapper conformance (Phase B)
+| Case | Entry point | Result | Expected local error | Expected export |
+|---|---|---|---|---|
+| invalid generation | sync generation | invalid input message shape | `ErrValidationFailed` | none |
+| provider call error | sync generation | `SetCallError("provider unavailable")` | nil | one generation payload with call error |
 
-_To be added._ Provider conformance scenarios validate that each provider mapper (openai, anthropic, gemini) correctly transforms provider-specific request/response objects into the normalized `Generation` shape.
+### Expected behavior
 
-Planned scenario areas per provider:
-- Sync request/response mapping (all fields)
-- Streaming mapping (accumulated output, mode=STREAM)
-- Thinking/reasoning content mapping
-- Tool call mapping
-- Usage mapping (all token types including provider-specific)
-- Stop reason mapping
-- Error response mapping
-- Artifact capture (opt-in)
-- Embedding mapping
+- Invalid generations fail locally with `ErrValidationFailed`.
+- Invalid generations record span attr `error.type = "validation_error"` and do not export a generation payload.
+- Provider call errors record span attr `error.type = "provider_call_error"`.
+- Provider call errors export proto field `call_error` and metadata key `call_error` with the provider error message.
 
----
+## Scenario 8: Rating submission semantics
 
-## Framework adapter conformance (Phase C)
+### Setup
 
-_To be added._ Framework conformance scenarios validate that each framework adapter (langchain, langgraph, openai-agents, llamaindex, google-adk, vercel-ai-sdk) correctly produces spans with framework attributes and triggers generation recording.
+- Submit a conversation rating through the SDK's rating helper with rating ID, rating value, comment, and metadata.
 
-Planned scenario areas per framework:
-- Span creation with `sigil.framework.name`, `sigil.framework.language`, `sigil.framework.source`
-- Generation triggering through framework LLM calls
-- Span hierarchy (framework span as parent of generation/tool spans)
-- Framework-specific metadata attributes
-- Generation tags include framework identity
+### Expected behavior
 
----
+- Assert rating request `/api/v1/conversations/{conversation_id}/ratings`.
+- Assert the request method is `POST`.
+- Assert the request body preserves rating ID, rating value, comment, and metadata fields.
+- Assert the SDK parses and returns the rating response payload.
 
-## Adding new scenarios
+## Scenario 9: Shutdown flush semantics
 
-When a new SDK feature is added:
+### Setup
 
-1. Add a scenario to this spec with setup, expected proto, expected span attrs, and expected metrics.
-2. Implement the scenario in the Go reference runner.
-3. Each other SDK adds the scenario to its own runner.
-4. Update `semantic-conventions.md` if new span attributes or metrics are involved.
+- Configure generation export batching so a single generation remains queued before the flush interval.
+- Record one sync generation and assert that no export happened yet.
+- Call `Shutdown`.
 
-When a new provider or framework is added:
+### Expected behavior
 
-1. Add the provider/framework to the conformance matrix in the design doc.
-2. Add conformance scenarios to the relevant section of this spec.
-3. Implement in the Go reference runner, then other languages.
+- Assert no generation export before `Shutdown`.
+- Assert exactly one generation export after `Shutdown`.
+- Assert the flushed generation payload matches the recorded conversation identity.
+
+## Extending the spec
+
+Future phases will extend this document with the remaining core gaps (full roundtrip payload coverage, SDK identity protection, metadata/tag merge behavior, resource attributes) plus provider-wrapper and framework-adapter scenarios. Until those phases land, this document is the authoritative baseline for the currently shipped Go conformance harness.

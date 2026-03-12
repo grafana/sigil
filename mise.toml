@@ -414,6 +414,12 @@ dir = "sdks/go-frameworks/google-adk"
 depends = ["doctor:go"]
 run = "GOWORK=off go test ./..."
 
+[tasks."test:sdk:conformance"]
+description = "Run the current Go SDK conformance harness"
+dir = "sdks/go"
+depends = ["doctor:go"]
+run = "GOWORK=off go test ./sigil -run '^TestConformance' -count=1"
+
 [tasks."test:ts:sdk-js"]
 description = "Run TypeScript/JavaScript SDK runtime tests"
 depends = ["deps"]

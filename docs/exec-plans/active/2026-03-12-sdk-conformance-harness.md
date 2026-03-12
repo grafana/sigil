@@ -33,11 +33,21 @@ Building conformance tests against the real public API will surface issues that 
 3. The conformance test itself serves as the regression test for the fix.
 4. Log the fix in the "SDK fixes" section below so the PR description captures what was discovered.
 
+### Current shipped baseline
+
+The repo currently ships the Go core conformance harness entry point:
+
+- Local task: `mise run test:sdk:conformance`
+- Direct runner: `cd sdks/go && GOWORK=off go test ./sigil -run '^TestConformance' -count=1`
+- Current covered scenarios: full generation roundtrip, conversation title semantics, user ID semantics, agent identity semantics, streaming mode semantics, tool execution semantics, embedding semantics, validation/error semantics, rating submission semantics, shutdown flush semantics
+- Current assertion targets in active use: generation export proto, OTLP spans, OTLP metrics
+
 ### SDK fixes discovered during implementation
 
 (Updated as issues are found.)
 
-- _(none yet)_
+- Added `cache_creation_input_tokens` to the generation ingest proto and Go SDK proto mapping so the full roundtrip export preserves the complete token usage payload.
+- Synced the checked-in JS proto copy and regenerated the Go protobuf bindings so `ToolDefinition.deferred` is present in the conformance ingest schema used by the Go SDK harness.
 
 ## Phase A: Go core SDK
 
@@ -45,28 +55,28 @@ Building conformance tests against the real public API will surface issues that 
 
 - [x] Add `conformance_helpers_test.go` (`package sigil_test`):
   - [x] `conformanceEnv` struct wiring `sigil.Client` to all four capture targets
-  - [ ] `newConformanceEnv(t, ...opts)` constructor with functional options
+  - [x] `newConformanceEnv(t, ...opts)` constructor with functional options
   - [x] `fakeIngestServer` implementing `GenerationIngestServiceServer` on `127.0.0.1:0`
   - [x] `fakeRatingServer` wrapping `httptest.Server` with request capture
   - [x] OTel `tracetest.SpanRecorder` + `sdktrace.TracerProvider` setup
   - [x] OTel `sdkmetric.ManualReader` + `sdkmetric.MeterProvider` setup
   - [ ] Optional `resource.Resource` injection for OTLP resource attribute scenarios
   - [x] Span assertion helpers: `findSpan`, `spanAttrs`, `requireSpanAttr`, `requireSpanAttrAbsent`
-  - [ ] Metric assertion helpers: `findHistogram`, `requireNoHistogram`
+  - [x] Metric assertion helpers: `findHistogram`, `requireNoHistogram`
   - [x] Proto assertion helpers: `requireProtoMetadata`, `requireProtoMetadataAbsent`
 
 ### A2: Core scenarios (generation identity and resolution chains)
 
 - [x] Add `conformance_test.go` (`package sigil_test`)
-- [ ] Scenario 1: Full generation roundtrip (sync, gRPC)
-  - [ ] All identity fields preserved on proto
-  - [ ] All content types: text, thinking, tool call, tool result
-  - [ ] Request controls: max_tokens, temperature, top_p, tool_choice, thinking_enabled
-  - [ ] Tags, metadata, artifacts (request + response)
-  - [ ] Usage (all six token fields) and stop reason
-  - [ ] Trace linkage: proto trace_id/span_id match OTLP span IDs
-  - [ ] Span attributes match `semantic-conventions.md` generation section
-  - [ ] Metrics: operation.duration, token.usage present; no TTFT for sync
+- [x] Scenario 1: Full generation roundtrip (sync, gRPC)
+  - [x] All identity fields preserved on proto
+  - [x] All content types: text, thinking, tool call, tool result
+  - [x] Request controls: max_tokens, temperature, top_p, tool_choice, thinking_enabled
+  - [x] Tags, metadata, artifacts (request + response)
+  - [x] Usage (all six token fields) and stop reason
+  - [x] Trace linkage: proto trace_id/span_id match OTLP span IDs
+  - [x] Span attributes match `semantic-conventions.md` generation section
+  - [x] Metrics: operation.duration, token.usage present; no TTFT for sync
 - [x] Scenario 2: Conversation title semantics (table-driven)
   - [x] Explicit field wins
   - [x] Context fallback
@@ -90,43 +100,65 @@ Building conformance tests against the real public API will surface issues that 
 - [ ] Scenario 5: SDK identity protection (`sigil.sdk.name` overwrite)
 - [ ] Scenario 6: Tags and metadata merge (start + result, conflict resolution)
 - [ ] Scenario 7: Resource attributes on OTLP spans
-- [ ] Scenario 8: Streaming mode (mode, operation name, TTFT metric)
-- [ ] Scenario 9: Tool execution (span shape, attributes, metrics, context propagation)
-- [ ] Scenario 10: Embedding (span, metrics, no generation export)
-- [ ] Scenario 11: Validation and error semantics
-  - [ ] Invalid generation: no export, ErrValidationFailed
-  - [ ] SetCallError: error span attributes, metric labels
-- [ ] Scenario 12: Rating helper (request shape, auth headers, response parsing)
-- [ ] Scenario 13: Shutdown flushes pending generation
+- [x] Scenario 8: Streaming mode (mode, operation name, TTFT metric)
+- [x] Scenario 9: Tool execution (span shape, attributes, metrics, context propagation)
+- [x] Scenario 10: Embedding (span, metrics, no generation export)
+- [x] Scenario 11: Validation and error semantics
+  - [x] Invalid generation: no export, ErrValidationFailed
+  - [x] SetCallError: error span attributes, metric labels
+- [x] Scenario 12: Rating helper (request shape, auth headers, response parsing)
+- [x] Scenario 13: Shutdown flushes pending generation
 
 ### A4: Spec and docs
 
-- [ ] Write `docs/references/sdk-conformance-spec.md` (core scenarios, language-neutral)
-- [ ] Add `test:sdk:conformance` task to `mise.toml`
-- [ ] Update `ARCHITECTURE.md` SDK section
-- [ ] Update `docs/design-docs/index.md`
-- [ ] Verify: `mise run test:sdk:conformance` passes
-- [ ] Verify: `go test -run TestConformance -count=5 ./sdks/go/sigil/` proves determinism
+- [x] Publish `docs/references/sdk-conformance-spec.md` for the current Go core baseline (language-neutral)
+- [x] Add `test:sdk:conformance` task to `mise.toml`
+- [x] Update `ARCHITECTURE.md` SDK section
+- [x] Update discoverability docs (`docs/index.md`, `docs/references/index.md`, `sdks/go/README.md`)
+- [x] Verify: `mise run test:sdk:conformance` passes
+- [x] Verify: `go test -run TestConformance -count=5 ./sdks/go/sigil/` proves determinism
 
 ## Phase B: Go provider wrappers
 
 Test that each Go provider mapper correctly transforms provider request/response into the normalized `Generation` shape.
 
-### Per provider (openai, anthropic, gemini)
+### Current shipped baseline
 
-- [ ] `sdks/go-providers/openai/conformance_test.go`
-  - [ ] Sync request/response mapping (all fields)
-  - [ ] Streaming mapping (accumulated output, mode=STREAM)
-  - [ ] Thinking/reasoning content -> ThinkingPart
-  - [ ] Tool calls -> ToolCallPart with correct ID, name, input JSON
-  - [ ] Usage mapping (all token types including provider-specific: cache, reasoning)
-  - [ ] Stop reason mapping
-  - [ ] Error response mapping -> SetCallError with correct error type/category
-  - [ ] Artifact capture (opt-in: request, response, tools, events)
-  - [ ] Embedding mapping -> EmbeddingResult
-- [ ] `sdks/go-providers/anthropic/conformance_test.go` (same scenario list)
-- [ ] `sdks/go-providers/gemini/conformance_test.go` (same scenario list)
-- [ ] Extend `sdk-conformance-spec.md` with provider wrapper section
+- [x] `sdks/go-providers/openai/conformance_test.go`
+  - [x] Chat Completions sync normalization
+  - [x] Chat Completions stream normalization
+  - [x] Responses sync normalization
+  - [x] Responses stream normalization
+  - [x] Usage mapping (prompt/completion/total/cache/reasoning)
+  - [x] Stop reason mapping
+  - [x] Tool-call normalization
+  - [x] Raw artifact opt-in coverage
+  - [x] Explicit mapping-error coverage
+  - [x] Wrapper error semantics for provider failures and mapper failures
+- [x] `sdks/go-providers/anthropic/conformance_test.go`
+  - [x] Sync normalization with `ThinkingPart`
+  - [x] Streaming normalization with accumulated `ThinkingPart`
+  - [x] Usage mapping (input/output/cache/server-tool metadata)
+  - [x] Stop reason mapping
+  - [x] Tool-call normalization
+  - [x] Raw artifact opt-in coverage
+  - [x] Explicit mapping-error coverage
+  - [x] Wrapper error semantics for provider failures and mapper failures
+- [x] `sdks/go-providers/gemini/conformance_test.go`
+  - [x] Sync normalization with `ThinkingPart`
+  - [x] Streaming normalization with accumulated `ThinkingPart`
+  - [x] Usage mapping (prompt/candidate/total/cache/reasoning/tool-use metadata)
+  - [x] Stop reason mapping
+  - [x] Tool-call normalization
+  - [x] Raw artifact opt-in coverage
+  - [x] Explicit mapping-error coverage
+  - [x] Wrapper error semantics for provider failures and mapper failures
+- [x] Extend `sdk-conformance-spec.md` with provider wrapper section
+
+### Remaining provider-wrapper scope
+
+- [ ] Wrapper error-to-span/category assertions with local fake ingest/span capture, if provider suites need to validate `SetCallError` transport semantics directly
+- [ ] Embedding conformance scenarios, if provider-wrapper scope expands beyond generation normalization
 
 ## Phase C: Go framework adapter (google-adk)
 
