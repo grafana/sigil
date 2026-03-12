@@ -125,11 +125,13 @@ export default function ToolsPage({ dataSource = defaultDashboardDataSource }: T
   }, [showLabelFilterRow]);
 
   useEffect(() => {
-    if (filters.models.length === 0) {
+    const hasConflictingModels = filters.models.length > 0;
+    const hasConflictingLabels = filters.labelFilters.some((f) => f.key.trim() === TOOL_METRIC_LABEL);
+    if (!hasConflictingModels && !hasConflictingLabels) {
       return;
     }
     setFilters(sanitizedFilters);
-  }, [filters.models.length, sanitizedFilters, setFilters]);
+  }, [filters.models.length, filters.labelFilters, sanitizedFilters, setFilters]);
 
   const from = useMemo(() => Math.floor(timeRange.from.valueOf() / 1000), [timeRange]);
   const to = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);
