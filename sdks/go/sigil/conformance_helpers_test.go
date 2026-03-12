@@ -34,6 +34,7 @@ const (
 	spanAttrUserID                 = "user.id"
 	spanAttrAgentName              = "gen_ai.agent.name"
 	spanAttrAgentVersion           = "gen_ai.agent.version"
+	spanAttrErrorType              = "error.type"
 	spanAttrProviderName           = "gen_ai.provider.name"
 	spanAttrRequestModel           = "gen_ai.request.model"
 	spanAttrRequestMaxTokens       = "gen_ai.request.max_tokens"
@@ -41,6 +42,13 @@ const (
 	spanAttrRequestTopP            = "gen_ai.request.top_p"
 	spanAttrRequestToolChoice      = "sigil.gen_ai.request.tool_choice"
 	spanAttrRequestThinkingEnabled = "sigil.gen_ai.request.thinking.enabled"
+	spanAttrEmbeddingInputCount    = "gen_ai.embeddings.input_count"
+	spanAttrEmbeddingDimCount      = "gen_ai.embeddings.dimension.count"
+	spanAttrToolName               = "gen_ai.tool.name"
+	spanAttrToolCallID             = "gen_ai.tool.call.id"
+	spanAttrToolType               = "gen_ai.tool.type"
+	spanAttrToolCallArguments      = "gen_ai.tool.call.arguments"
+	spanAttrToolCallResult         = "gen_ai.tool.call.result"
 	spanAttrResponseID             = "gen_ai.response.id"
 	spanAttrResponseModel          = "gen_ai.response.model"
 	spanAttrFinishReasons          = "gen_ai.response.finish_reasons"
@@ -153,6 +161,14 @@ func newConformanceEnv(t *testing.T, opts ...conformanceEnvOption) *conformanceE
 	return env
 }
 
+func withConformanceConfig(mutator func(*sigil.Config)) conformanceEnvOption {
+	return func(cfg *conformanceEnvConfig) {
+		if mutator != nil {
+			mutator(&cfg.config)
+		}
+	}
+}
+
 func (e *conformanceEnv) Shutdown(t *testing.T) {
 	t.Helper()
 
@@ -258,6 +274,12 @@ func (s *fakeIngestServer) SingleGeneration(t *testing.T) *sigilv1.Generation {
 	return s.requests[0].Generations[0]
 }
 
+func (s *fakeIngestServer) RequestCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.requests)
+}
+
 func acceptanceResponse(req *sigilv1.ExportGenerationsRequest) *sigilv1.ExportGenerationsResponse {
 	response := &sigilv1.ExportGenerationsResponse{Results: make([]*sigilv1.ExportGenerationResult, len(req.GetGenerations()))}
 	for i := range req.GetGenerations() {
@@ -317,6 +339,25 @@ func (s *fakeRatingServer) URL() string {
 func (s *fakeRatingServer) Close() {
 	if s != nil && s.server != nil {
 		s.server.Close()
+	}
+}
+
+func (s *fakeRatingServer) SingleRequest(t *testing.T) capturedRatingRequest {
+	t.Helper()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(s.requests) != 1 {
+		t.Fatalf("expected exactly one rating request, got %d", len(s.requests))
+	}
+
+	req := s.requests[0]
+	return capturedRatingRequest{
+		Method:  req.Method,
+		Path:    req.Path,
+		Headers: req.Headers.Clone(),
+		Body:    append([]byte(nil), req.Body...),
 	}
 }
 
