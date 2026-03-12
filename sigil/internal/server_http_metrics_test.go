@@ -41,6 +41,12 @@ func TestMetricRequestArea(t *testing.T) {
 			requestPath: "/api/v1/conversations/conv-1/ratings",
 			want:        "feedback",
 		},
+		{
+			name:        "direct annotations route remains feedback",
+			route:       "/api/v1/conversations/{id}/annotations",
+			requestPath: "/api/v1/conversations/conv-1/annotations",
+			want:        "feedback",
+		},
 	}
 
 	for _, tc := range testCases {

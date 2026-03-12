@@ -78,7 +78,7 @@ func metricStatusClass(statusCode int) string {
 }
 
 func metricRequestArea(route string, requestPath string) string {
-	if strings.HasPrefix(route, "/api/v1/conversations/") && (strings.HasSuffix(route, "/ratings") || strings.HasSuffix(route, "/annotations")) {
+	if isFeedbackPath(route) {
 		return "feedback"
 	}
 	if route == "/api/v1/conversations/" && isFeedbackPath(requestPath) {
