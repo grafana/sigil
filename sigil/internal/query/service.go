@@ -1084,7 +1084,7 @@ func (s *Service) GetConversationDetailPageForTenant(
 		if totalCount <= 0 {
 			totalCount = len(mergedGenerations)
 		}
-		hasMore = page.Offset+returnedCount < totalCount
+		hasMore = returnedCount > 0 && page.Offset+returnedCount < totalCount
 		if hasMore {
 			nextCursor = strconv.Itoa(page.Offset + returnedCount)
 		}
