@@ -91,6 +91,10 @@ type ToolStartEvent struct {
 	ToolType        string
 	ToolDescription string
 	Arguments       any
+	// RequestModel is the model that requested the tool call (e.g. "gpt-5").
+	RequestModel string
+	// RequestProvider is the provider that served the model (e.g. "openai").
+	RequestProvider string
 }
 
 // ToolEndEvent is the adapter input for tool completion callbacks.
@@ -400,6 +404,8 @@ func (a *Adapter) OnToolStart(ctx context.Context, event ToolStartEvent) error {
 		ConversationID:  conversationID,
 		AgentName:       strings.TrimSpace(a.opts.AgentName),
 		AgentVersion:    strings.TrimSpace(a.opts.AgentVersion),
+		RequestModel:    strings.TrimSpace(event.RequestModel),
+		RequestProvider: strings.TrimSpace(event.RequestProvider),
 		IncludeContent:  a.captureInputs || a.captureOutputs,
 	})
 
