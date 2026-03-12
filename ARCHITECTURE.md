@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-03-07
+last_reviewed: 2026-03-12
 source_of_truth: true
 audience: both
 ---
@@ -606,12 +606,14 @@ The default local stack started by `mise run up` (`docker compose --profile core
 
 ## SDK Conformance Harness
 
-A no-Docker conformance test suite validates that each SDK's public API emits the exact fields the UI, query layer, and agent catalog depend on. The suite runs in `go test` time (seconds) using only localhost transports and OTel SDK test infrastructure.
+A no-Docker conformance test suite validates the current Go SDK public API behaviors the UI and query layer depend on. The suite runs in `go test` time (seconds) using only localhost transports and OTel SDK test infrastructure.
 
+- **Local entry point**: `mise run test:sdk:conformance` runs the shipped Go harness (`cd sdks/go && GOWORK=off go test ./sigil -run '^TestConformance' -count=1`).
 - **Go reference implementation**: `sdks/go/sigil/conformance_test.go` and `conformance_helpers_test.go` (`package sigil_test`).
-- **Cross-SDK spec**: `docs/references/sdk-conformance-spec.md` defines all scenarios in language-neutral terms. Each SDK implements its own runner against this spec.
+- **Current shipped baseline**: conversation title resolution, user ID resolution, and agent identity resolution across exported generation payloads, OTLP spans, and sync metric emission.
+- **Cross-SDK spec**: `docs/references/sdk-conformance-spec.md` defines the current language-neutral baseline and the extension model for future provider/framework coverage.
 - **Four assertion targets**: generation proto (fake gRPC server), OTLP spans (`tracetest.SpanRecorder`), OTLP metrics (`sdkmetric.ManualReader`), rating HTTP (`httptest.Server`).
-- **Scope**: SDK emission and public API contract only. Does not test backend projections, batch/retry mechanics, provider wrappers, or framework adapters.
+- **Scope**: current Go harness coverage only. It does not test backend projections, batch/retry mechanics, provider wrappers, or framework adapters yet.
 - Design doc: `docs/design-docs/2026-03-12-sdk-conformance-harness.md`.
 
 ## Evolution Path

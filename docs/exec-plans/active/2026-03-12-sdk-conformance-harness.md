@@ -33,6 +33,15 @@ Building conformance tests against the real public API will surface issues that 
 3. The conformance test itself serves as the regression test for the fix.
 4. Log the fix in the "SDK fixes" section below so the PR description captures what was discovered.
 
+### Current shipped baseline
+
+The repo currently ships the Go core conformance harness entry point:
+
+- Local task: `mise run test:sdk:conformance`
+- Direct runner: `cd sdks/go && GOWORK=off go test ./sigil -run '^TestConformance' -count=1`
+- Current covered scenarios: conversation title semantics, user ID semantics, agent identity semantics
+- Current assertion targets in active use: generation export proto, OTLP spans, OTLP metrics
+
 ### SDK fixes discovered during implementation
 
 (Updated as issues are found.)
@@ -45,14 +54,14 @@ Building conformance tests against the real public API will surface issues that 
 
 - [x] Add `conformance_helpers_test.go` (`package sigil_test`):
   - [x] `conformanceEnv` struct wiring `sigil.Client` to all four capture targets
-  - [ ] `newConformanceEnv(t, ...opts)` constructor with functional options
+  - [x] `newConformanceEnv(t, ...opts)` constructor with functional options
   - [x] `fakeIngestServer` implementing `GenerationIngestServiceServer` on `127.0.0.1:0`
   - [x] `fakeRatingServer` wrapping `httptest.Server` with request capture
   - [x] OTel `tracetest.SpanRecorder` + `sdktrace.TracerProvider` setup
   - [x] OTel `sdkmetric.ManualReader` + `sdkmetric.MeterProvider` setup
   - [ ] Optional `resource.Resource` injection for OTLP resource attribute scenarios
   - [x] Span assertion helpers: `findSpan`, `spanAttrs`, `requireSpanAttr`, `requireSpanAttrAbsent`
-  - [ ] Metric assertion helpers: `findHistogram`, `requireNoHistogram`
+  - [x] Metric assertion helpers: `findHistogram`, `requireNoHistogram`
   - [x] Proto assertion helpers: `requireProtoMetadata`, `requireProtoMetadataAbsent`
 
 ### A2: Core scenarios (generation identity and resolution chains)
@@ -101,10 +110,10 @@ Building conformance tests against the real public API will surface issues that 
 
 ### A4: Spec and docs
 
-- [ ] Write `docs/references/sdk-conformance-spec.md` (core scenarios, language-neutral)
-- [ ] Add `test:sdk:conformance` task to `mise.toml`
-- [ ] Update `ARCHITECTURE.md` SDK section
-- [ ] Update `docs/design-docs/index.md`
+- [x] Publish `docs/references/sdk-conformance-spec.md` for the current Go core baseline (language-neutral)
+- [x] Add `test:sdk:conformance` task to `mise.toml`
+- [x] Update `ARCHITECTURE.md` SDK section
+- [x] Update discoverability docs (`docs/index.md`, `docs/references/index.md`, `sdks/go/README.md`)
 - [ ] Verify: `mise run test:sdk:conformance` passes
 - [ ] Verify: `go test -run TestConformance -count=5 ./sdks/go/sigil/` proves determinism
 
