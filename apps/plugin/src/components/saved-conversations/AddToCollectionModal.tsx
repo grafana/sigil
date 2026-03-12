@@ -60,7 +60,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
     background: 'none',
     border: 'none',
     textAlign: 'left',
-    padding: 0,
+    paddingRight: 0,
+    paddingBottom: 0,
+    paddingLeft: 0,
     '&:hover': { textDecoration: 'underline' },
   }),
   footer: css({
