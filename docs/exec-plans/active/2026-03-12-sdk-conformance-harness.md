@@ -46,7 +46,8 @@ The repo currently ships the Go core conformance harness entry point:
 
 (Updated as issues are found.)
 
-- _(none yet)_
+- [x] Added `cache_creation_input_tokens` to the generation ingest protobuf contract and regenerated the Go SDK/server bindings so full usage roundtrip coverage can assert all six token counters.
+- [x] Synced the checked-in JS proto copy and regenerated the Go protobuf bindings so `ToolDefinition.deferred` is present in the conformance ingest schema used by the Go SDK harness.
 
 ## Phase A: Go core SDK
 
@@ -67,15 +68,15 @@ The repo currently ships the Go core conformance harness entry point:
 ### A2: Core scenarios (generation identity and resolution chains)
 
 - [x] Add `conformance_test.go` (`package sigil_test`)
-- [ ] Scenario 1: Full generation roundtrip (sync, gRPC)
-  - [ ] All identity fields preserved on proto
-  - [ ] All content types: text, thinking, tool call, tool result
-  - [ ] Request controls: max_tokens, temperature, top_p, tool_choice, thinking_enabled
-  - [ ] Tags, metadata, artifacts (request + response)
-  - [ ] Usage (all six token fields) and stop reason
-  - [ ] Trace linkage: proto trace_id/span_id match OTLP span IDs
-  - [ ] Span attributes match `semantic-conventions.md` generation section
-  - [ ] Metrics: operation.duration, token.usage present; no TTFT for sync
+- [x] Scenario 1: Full generation roundtrip (sync, gRPC)
+  - [x] All identity fields preserved on proto
+  - [x] All content types: text, thinking, tool call, tool result
+  - [x] Request controls: max_tokens, temperature, top_p, tool_choice, thinking_enabled
+  - [x] Tags, metadata, artifacts (request + response)
+  - [x] Usage (all six token fields) and stop reason
+  - [x] Trace linkage: proto trace_id/span_id match OTLP span IDs
+  - [x] Span attributes match `semantic-conventions.md` generation section
+  - [x] Metrics: operation.duration, token.usage present; no TTFT for sync
 - [x] Scenario 2: Conversation title semantics (table-driven)
   - [x] Explicit field wins
   - [x] Context fallback
