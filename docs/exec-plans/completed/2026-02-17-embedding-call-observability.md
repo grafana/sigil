@@ -119,7 +119,7 @@ Add embedding call observability to all 5 SDKs using OTel spans and existing met
 - [x] Update `sdks/java/README.md` with embedding recording examples.
 - [x] Update `sdks/dotnet/README.md` with embedding recording examples.
 - [x] Update `ARCHITECTURE.md` with embedding observability coverage.
-- [x] Update `docs/references/competitive-benchmark.md` with embedding support notes.
+- [x] Update repository docs with embedding support notes.
 - [x] Document opt-in input text capture with PII warnings in all SDK READMEs.
 - [x] Add TraceQL query examples for embedding spans to SDK docs.
 

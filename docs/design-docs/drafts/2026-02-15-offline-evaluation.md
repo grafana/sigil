@@ -22,10 +22,7 @@ Online evaluation is covered separately in `docs/design-docs/drafts/2026-02-15-o
 
 ## Background / Research
 
-See:
-
-- Market survey: `docs/references/ai-observability-evaluation-market.md`
-- Competitive benchmark: `docs/references/competitive-benchmark.md`
+See the reference docs catalog in `docs/references/index.md` for adjacent implementation material.
 
 Industry convergence:
 
@@ -586,4 +583,3 @@ See “Runner story” section; recommendation is to start by making Sigil a gre
 1. Should we standardize on one dataset item schema (messages + expected + metadata), or allow per-dataset schemas with JSON schema enforcement?
 2. Should offline runs always create a synthetic `conversation_id` namespace like `eval:<run_id>:<item_id>` to keep navigation consistent?
 3. How much of “dataset from production” should be in the plugin vs a CLI export tool first?
-
