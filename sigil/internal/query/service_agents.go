@@ -443,8 +443,8 @@ func encodeAgentListCursor(cursor agentListCursor) (string, error) {
 	if cursor.LatestSeenNanos <= 0 {
 		return "", fmt.Errorf("cursor latest_seen_nanos must be positive")
 	}
-	if strings.TrimSpace(cursor.FilterHash) == "" {
-		return "", fmt.Errorf("cursor filter_hash is required")
+	if err := validateCursorFilterHash(cursor.FilterHash); err != nil {
+		return "", err
 	}
 	payload, err := json.Marshal(cursor)
 	if err != nil {
@@ -469,8 +469,8 @@ func decodeAgentListCursor(raw string) (agentListCursor, error) {
 	if cursor.LatestSeenNanos <= 0 {
 		return agentListCursor{}, fmt.Errorf("cursor latest_seen_nanos must be positive")
 	}
-	if strings.TrimSpace(cursor.FilterHash) == "" {
-		return agentListCursor{}, fmt.Errorf("cursor filter_hash is required")
+	if err := validateCursorFilterHash(cursor.FilterHash); err != nil {
+		return agentListCursor{}, err
 	}
 	if cursor.HeadID == 0 {
 		return agentListCursor{}, fmt.Errorf("cursor head_id must be positive")
@@ -485,8 +485,8 @@ func encodeAgentVersionListCursor(cursor agentVersionListCursor) (string, error)
 	if cursor.VersionID == 0 {
 		return "", fmt.Errorf("cursor version_id must be positive")
 	}
-	if strings.TrimSpace(cursor.FilterHash) == "" {
-		return "", fmt.Errorf("cursor filter_hash is required")
+	if err := validateCursorFilterHash(cursor.FilterHash); err != nil {
+		return "", err
 	}
 	payload, err := json.Marshal(cursor)
 	if err != nil {
@@ -514,8 +514,15 @@ func decodeAgentVersionListCursor(raw string) (agentVersionListCursor, error) {
 	if cursor.VersionID == 0 {
 		return agentVersionListCursor{}, fmt.Errorf("cursor version_id must be positive")
 	}
-	if strings.TrimSpace(cursor.FilterHash) == "" {
-		return agentVersionListCursor{}, fmt.Errorf("cursor filter_hash is required")
+	if err := validateCursorFilterHash(cursor.FilterHash); err != nil {
+		return agentVersionListCursor{}, err
 	}
 	return cursor, nil
+}
+
+func validateCursorFilterHash(filterHash string) error {
+	if strings.TrimSpace(filterHash) == "" {
+		return fmt.Errorf("cursor filter_hash is required")
+	}
+	return nil
 }

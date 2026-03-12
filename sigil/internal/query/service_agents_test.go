@@ -249,3 +249,50 @@ func stringPtr(value string) *string {
 	v := value
 	return &v
 }
+
+func TestValidateCursorFilterHash(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name       string
+		filterHash string
+		expectErr  bool
+	}{
+		{
+			name:       "valid hash",
+			filterHash: "abc123",
+			expectErr:  false,
+		},
+		{
+			name:       "empty",
+			filterHash: "",
+			expectErr:  true,
+		},
+		{
+			name:       "whitespace only",
+			filterHash: "   ",
+			expectErr:  true,
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := validateCursorFilterHash(testCase.filterHash)
+			if testCase.expectErr {
+				if err == nil {
+					t.Fatalf("expected error")
+				}
+				if err.Error() != "cursor filter_hash is required" {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("expected nil error, got %v", err)
+			}
+		})
+	}
+}
