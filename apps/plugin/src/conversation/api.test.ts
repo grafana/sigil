@@ -266,6 +266,30 @@ describe('defaultConversationsDataSource', () => {
     });
   });
 
+  it('preserves zero-like cursors when loading conversation detail windows', async () => {
+    backendFetchMock.mockReturnValue(
+      of({
+        data: {
+          conversation_id: 'conv-1',
+          generation_count: 30,
+          first_generation_at: '2026-03-10T09:00:00Z',
+          last_generation_at: '2026-03-10T09:30:00Z',
+          generations: [],
+          has_more: true,
+          next_cursor: '20',
+          annotations: [],
+        },
+      })
+    );
+
+    await defaultConversationsDataSource.getConversationDetail('conv-1', { limit: 20, cursor: '0' });
+
+    expect(backendFetchMock).toHaveBeenCalledWith({
+      method: 'GET',
+      url: '/api/plugins/grafana-sigil-app/resources/query/conversations/conv-1?format=v2&limit=20&cursor=0',
+    });
+  });
+
   it('getSearchTags forwards the optional scoped TraceQL query to the Tempo datasource proxy', async () => {
     backendFetchMock
       .mockReturnValueOnce(of({ data: { tagNames: ['gen_ai.operation.name'] } }))

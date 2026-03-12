@@ -476,7 +476,7 @@ export const defaultConversationsDataSource: ConversationsDataSource = {
     if (query?.limit !== undefined) {
       params.set('limit', String(query.limit));
     }
-    if (query?.cursor) {
+    if (query?.cursor !== undefined) {
       params.set('cursor', query.cursor);
     }
     const response = await lastValueFrom(
