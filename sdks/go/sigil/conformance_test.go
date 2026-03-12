@@ -470,6 +470,228 @@ func TestConformance_ConversationTitleSemantics(t *testing.T) {
 	}
 }
 
+func TestConformance_RoundTripSemantics(t *testing.T) {
+	env := newConformanceEnv(t)
+
+	maxTokens := int64(512)
+	temperature := 0.25
+	topP := 0.9
+	toolChoice := "required"
+	thinkingEnabled := false
+
+	requestArtifact, err := sigil.NewJSONArtifact(sigil.ArtifactKindRequest, "request", map[string]any{"ok": true})
+	if err != nil {
+		t.Fatalf("build request artifact: %v", err)
+	}
+	responseArtifact, err := sigil.NewJSONArtifact(sigil.ArtifactKindResponse, "response", map[string]any{"status": "ok"})
+	if err != nil {
+		t.Fatalf("build response artifact: %v", err)
+	}
+
+	recordGeneration(t, env, context.Background(), sigil.GenerationStart{
+		ID:                "gen-roundtrip",
+		ConversationID:    "conv-roundtrip",
+		ConversationTitle: "Support ticket",
+		UserID:            "user-42",
+		AgentName:         "assistant-core",
+		AgentVersion:      "2026.03.12",
+		Model:             conformanceModel,
+		SystemPrompt:      "be concise",
+		MaxTokens:         &maxTokens,
+		Temperature:       &temperature,
+		TopP:              &topP,
+		ToolChoice:        &toolChoice,
+		ThinkingEnabled:   &thinkingEnabled,
+		Tools: []sigil.ToolDefinition{
+			{
+				Name:        "weather",
+				Description: "Get weather",
+				Type:        "function",
+				InputSchema: []byte(`{"type":"object"}`),
+			},
+		},
+		Tags: map[string]string{
+			"tenant": "dev",
+		},
+		Metadata: map[string]any{
+			"channel": "assistant",
+			"sigil.gen_ai.request.thinking.budget_tokens": int64(2048),
+		},
+	}, sigil.Generation{
+		ResponseID:    "resp-roundtrip",
+		ResponseModel: "gpt-5-2026",
+		Input: []sigil.Message{
+			sigil.UserTextMessage("Hello"),
+		},
+		Output: []sigil.Message{
+			{
+				Role: sigil.RoleAssistant,
+				Parts: []sigil.Part{
+					sigil.ThinkingPart("Need tool"),
+					sigil.ToolCallPart(sigil.ToolCall{
+						ID:        "call-1",
+						Name:      "weather",
+						InputJSON: []byte(`{"city":"Paris"}`),
+					}),
+					sigil.TextPart("Checking weather"),
+				},
+			},
+			{
+				Role: sigil.RoleTool,
+				Parts: []sigil.Part{
+					sigil.ToolResultPart(sigil.ToolResult{
+						ToolCallID:  "call-1",
+						Name:        "weather",
+						Content:     "18C",
+						ContentJSON: []byte(`{"temp_c":18}`),
+					}),
+				},
+			},
+		},
+		Usage: sigil.TokenUsage{
+			InputTokens:              120,
+			OutputTokens:             42,
+			CacheReadInputTokens:     8,
+			CacheWriteInputTokens:    1,
+			CacheCreationInputTokens: 3,
+			ReasoningTokens:          5,
+		},
+		StopReason: "stop",
+		Tags: map[string]string{
+			"channel": "web",
+		},
+		Metadata: map[string]any{
+			"result": "ok",
+		},
+		Artifacts: []sigil.Artifact{requestArtifact, responseArtifact},
+	})
+
+	span := findSpan(t, env.Spans.Ended(), conformanceOperationName)
+	attrs := spanAttrs(span)
+	requireSpanAttr(t, attrs, spanAttrConversationTitle, "Support ticket")
+	requireSpanAttr(t, attrs, spanAttrUserID, "user-42")
+	requireSpanAttr(t, attrs, spanAttrAgentName, "assistant-core")
+	requireSpanAttr(t, attrs, spanAttrAgentVersion, "2026.03.12")
+	requireSpanAttr(t, attrs, "gen_ai.provider.name", "openai")
+	requireSpanAttr(t, attrs, "gen_ai.request.model", "gpt-5")
+	requireSpanAttr(t, attrs, "gen_ai.response.id", "resp-roundtrip")
+	requireSpanAttr(t, attrs, "gen_ai.response.model", "gpt-5-2026")
+
+	metrics := env.CollectMetrics(t)
+	if len(findHistogram[float64](t, metrics, metricOperationDuration).DataPoints) == 0 {
+		t.Fatalf("expected %s datapoints for sync roundtrip", metricOperationDuration)
+	}
+	if len(findHistogram[int64](t, metrics, metricTokenUsage).DataPoints) == 0 {
+		t.Fatalf("expected %s datapoints for sync roundtrip", metricTokenUsage)
+	}
+	requireNoHistogram(t, metrics, metricTimeToFirstToken)
+
+	env.Shutdown(t)
+
+	generation := env.Ingest.SingleGeneration(t)
+	if generation.GetId() != "gen-roundtrip" {
+		t.Fatalf("unexpected proto id: got %q want %q", generation.GetId(), "gen-roundtrip")
+	}
+	if generation.GetConversationId() != "conv-roundtrip" {
+		t.Fatalf("unexpected proto conversation_id: got %q want %q", generation.GetConversationId(), "conv-roundtrip")
+	}
+	if generation.GetAgentName() != "assistant-core" {
+		t.Fatalf("unexpected proto agent_name: got %q want %q", generation.GetAgentName(), "assistant-core")
+	}
+	if generation.GetAgentVersion() != "2026.03.12" {
+		t.Fatalf("unexpected proto agent_version: got %q want %q", generation.GetAgentVersion(), "2026.03.12")
+	}
+	if generation.GetMode() != sigilv1.GenerationMode_GENERATION_MODE_SYNC {
+		t.Fatalf("expected sync proto mode, got %s", generation.GetMode())
+	}
+	if generation.GetOperationName() != conformanceOperationName {
+		t.Fatalf("unexpected proto operation_name: got %q want %q", generation.GetOperationName(), conformanceOperationName)
+	}
+	if generation.GetTraceId() != span.SpanContext().TraceID().String() {
+		t.Fatalf("unexpected proto trace_id: got %q want %q", generation.GetTraceId(), span.SpanContext().TraceID().String())
+	}
+	if generation.GetSpanId() != span.SpanContext().SpanID().String() {
+		t.Fatalf("unexpected proto span_id: got %q want %q", generation.GetSpanId(), span.SpanContext().SpanID().String())
+	}
+	if generation.GetResponseId() != "resp-roundtrip" {
+		t.Fatalf("unexpected proto response_id: got %q want %q", generation.GetResponseId(), "resp-roundtrip")
+	}
+	if generation.GetResponseModel() != "gpt-5-2026" {
+		t.Fatalf("unexpected proto response_model: got %q want %q", generation.GetResponseModel(), "gpt-5-2026")
+	}
+	if generation.GetMaxTokens() != maxTokens {
+		t.Fatalf("unexpected proto max_tokens: got %d want %d", generation.GetMaxTokens(), maxTokens)
+	}
+	if generation.GetTemperature() != temperature {
+		t.Fatalf("unexpected proto temperature: got %v want %v", generation.GetTemperature(), temperature)
+	}
+	if generation.GetTopP() != topP {
+		t.Fatalf("unexpected proto top_p: got %v want %v", generation.GetTopP(), topP)
+	}
+	if generation.GetToolChoice() != toolChoice {
+		t.Fatalf("unexpected proto tool_choice: got %q want %q", generation.GetToolChoice(), toolChoice)
+	}
+	if generation.GetThinkingEnabled() != thinkingEnabled {
+		t.Fatalf("unexpected proto thinking_enabled: got %v want %v", generation.GetThinkingEnabled(), thinkingEnabled)
+	}
+	if generation.GetStopReason() != "stop" {
+		t.Fatalf("unexpected proto stop_reason: got %q want %q", generation.GetStopReason(), "stop")
+	}
+	if generation.GetUsage().GetInputTokens() != 120 {
+		t.Fatalf("unexpected proto usage.input_tokens: got %d want %d", generation.GetUsage().GetInputTokens(), 120)
+	}
+	if generation.GetUsage().GetOutputTokens() != 42 {
+		t.Fatalf("unexpected proto usage.output_tokens: got %d want %d", generation.GetUsage().GetOutputTokens(), 42)
+	}
+	if generation.GetUsage().GetTotalTokens() != 162 {
+		t.Fatalf("unexpected proto usage.total_tokens: got %d want %d", generation.GetUsage().GetTotalTokens(), 162)
+	}
+	if generation.GetUsage().GetCacheReadInputTokens() != 8 {
+		t.Fatalf("unexpected proto usage.cache_read_input_tokens: got %d want %d", generation.GetUsage().GetCacheReadInputTokens(), 8)
+	}
+	if generation.GetUsage().GetCacheWriteInputTokens() != 1 {
+		t.Fatalf("unexpected proto usage.cache_write_input_tokens: got %d want %d", generation.GetUsage().GetCacheWriteInputTokens(), 1)
+	}
+	if generation.GetUsage().GetReasoningTokens() != 5 {
+		t.Fatalf("unexpected proto usage.reasoning_tokens: got %d want %d", generation.GetUsage().GetReasoningTokens(), 5)
+	}
+	if generation.GetTags()["tenant"] != "dev" || generation.GetTags()["channel"] != "web" {
+		t.Fatalf("unexpected proto tags: %#v", generation.GetTags())
+	}
+	requireProtoMetadata(t, generation, metadataKeyConversation, "Support ticket")
+	requireProtoMetadata(t, generation, metadataKeyCanonicalUserID, "user-42")
+	requireProtoMetadata(t, generation, "channel", "assistant")
+	requireProtoMetadata(t, generation, "result", "ok")
+	requireProtoMetadata(t, generation, "sigil.sdk.name", "sdk-go")
+	if len(generation.GetRawArtifacts()) != 2 {
+		t.Fatalf("unexpected proto raw_artifacts count: got %d want %d", len(generation.GetRawArtifacts()), 2)
+	}
+	if len(generation.GetInput()) != 1 || len(generation.GetInput()[0].GetParts()) != 1 {
+		t.Fatalf("unexpected proto input shape: %#v", generation.GetInput())
+	}
+	if got := generation.GetInput()[0].GetParts()[0].GetText(); got != "Hello" {
+		t.Fatalf("unexpected proto input text: got %q want %q", got, "Hello")
+	}
+	if len(generation.GetOutput()) != 2 {
+		t.Fatalf("unexpected proto output count: got %d want %d", len(generation.GetOutput()), 2)
+	}
+	if got := generation.GetOutput()[0].GetParts()[0].GetThinking(); got != "Need tool" {
+		t.Fatalf("unexpected proto thinking part: got %q want %q", got, "Need tool")
+	}
+	if got := generation.GetOutput()[0].GetParts()[1].GetToolCall().GetId(); got != "call-1" {
+		t.Fatalf("unexpected proto tool call id: got %q want %q", got, "call-1")
+	}
+	if got := string(generation.GetOutput()[0].GetParts()[1].GetToolCall().GetInputJson()); got != `{"city":"Paris"}` {
+		t.Fatalf("unexpected proto tool call input_json: got %q want %q", got, `{"city":"Paris"}`)
+	}
+	if got := generation.GetOutput()[1].GetParts()[0].GetToolResult().GetToolCallId(); got != "call-1" {
+		t.Fatalf("unexpected proto tool result call id: got %q want %q", got, "call-1")
+	}
+	if got := generation.GetOutput()[1].GetParts()[0].GetToolResult().GetContent(); got != "18C" {
+		t.Fatalf("unexpected proto tool result content: got %q want %q", got, "18C")
+	}
+}
+
 func TestConformance_UserIDSemantics(t *testing.T) {
 	testCases := []struct {
 		name           string

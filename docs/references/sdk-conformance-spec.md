@@ -8,7 +8,7 @@ audience: both
 
 # SDK Conformance Spec
 
-Language-neutral specification of the currently shipped Sigil SDK conformance baseline.
+Language-neutral specification of the current Sigil core SDK conformance baseline.
 
 Reference implementation: Go (`sdks/go/sigil/conformance_test.go`, `package sigil_test`).
 
@@ -23,7 +23,7 @@ Related docs:
 - Architecture summary: `ARCHITECTURE.md#sdk-conformance-harness`
 - Design doc / future scope: `docs/design-docs/2026-03-12-sdk-conformance-harness.md`
 
-## Current baseline
+## Current Go baseline
 
 The shipped Go harness currently covers nine core black-box scenarios:
 
@@ -44,6 +44,21 @@ Each scenario is executed through exported SDK entry points and validates behavi
 - OTLP metrics captured with the SDK's in-memory metric reader
 - HTTP rating requests captured from a fake local API server when the scenario exercises ratings
 
+## Shared cross-SDK core baseline
+
+The JS, Python, Java, and .NET suites added in this branch implement the current portable eight-scenario baseline:
+
+1. Sync roundtrip semantics
+2. Conversation title semantics
+3. User ID semantics
+4. Agent identity semantics
+5. Streaming telemetry semantics
+6. Validation and call-error semantics
+7. Rating submission semantics
+8. Shutdown flush semantics
+
+Go already covers tool execution and embeddings beyond this portable baseline. Those two scenarios remain the next cross-SDK parity targets once the non-Go runtimes expose the same harness surface consistently.
+
 ## Harness requirements
 
 Every SDK conformance runner that implements this baseline must provide:
@@ -51,8 +66,9 @@ Every SDK conformance runner that implements this baseline must provide:
 1. A fake generation ingest receiver that captures the normalized generation payload as the backend would receive it.
 2. Span capture using the SDK's local OpenTelemetry test utilities.
 3. Metric capture using the SDK's local OpenTelemetry metric test utilities.
-4. A client configured to target only local receivers, with no Docker or external services.
-5. A flush/shutdown step before assertions so asynchronous export is complete.
+4. A fake rating HTTP server that captures request method, path, headers, and body.
+5. A client configured to target only local receivers, with no Docker or external services.
+6. A flush or shutdown step before ingest assertions so asynchronous export is complete.
 
 ## Assertion conventions
 
@@ -65,23 +81,42 @@ Every SDK conformance runner that implements this baseline must provide:
 - "Assert no generation export" means the fake ingest server received zero generation export requests for the scenario.
 - "Assert rating request `P`" means the fake rating server observed an HTTP request on path `P`.
 
-## Common invariants for generation scenarios
+## Common invariants
 
-These assertions apply to the sync generation scenarios in the current baseline (conversation title, user ID, agent identity, validation, shutdown flush):
+These assertions apply to every generation scenario in the shared cross-SDK baseline unless the scenario explicitly says otherwise:
+
+- Assert `gen_ai.operation.name` is emitted on the generation span.
+- Assert `gen_ai.client.operation.duration` has data.
+- Assert the SDK shuts down cleanly after the scenario.
+- Assert the exported generation metadata contains `sigil.sdk.name`.
+
+## Scenario 1: Sync roundtrip semantics
+
+### Setup
 
 - Use the SDK's sync generation entry point.
-- Assert `gen_ai.operation.name = "generateText"` on the generation span.
-- Assert `gen_ai.client.operation.duration` has data.
-- Assert `gen_ai.client.time_to_first_token` is absent.
-- Shutdown the client before reading captured generation payloads.
+- Record one representative normalized generation through the public API.
+- Use gRPC ingest capture for the reference assertion path.
 
-Additional scenario-family invariants:
+### Expected behavior
 
-- Streaming uses the SDK's streaming generation entry point, emits `gen_ai.operation.name = "streamText"`, and records `gen_ai.client.time_to_first_token`.
-- Tool execution and embeddings use their dedicated SDK entry points, emit OTel spans and metrics, and do not enqueue generation export payloads.
-- Rating submission uses the SDK's HTTP rating helper and does not depend on generation export capture.
+- Assert proto field `mode = SYNC`.
+- Assert proto field `operation_name = "generateText"`.
+- Assert proto field `conversation_id` preserves the explicit conversation ID.
+- Assert proto field `agent_name` preserves the resolved agent name.
+- Assert proto field `agent_version` preserves the resolved agent version.
+- Assert proto field `trace_id` matches the finished generation span trace ID.
+- Assert proto field `span_id` matches the finished generation span span ID.
+- Assert proto request and response content preserves text, thinking, tool call, and tool result parts.
+- Assert proto request controls preserve `max_tokens`, `temperature`, `top_p`, `tool_choice`, and `thinking_enabled`.
+- Assert proto usage preserves input/output/total/cache read/cache write/cache creation/reasoning token counts when the SDK supports those counters.
+- Assert proto stop reason, tags, metadata, and artifacts are preserved.
+- Assert span attr `gen_ai.operation.name = "generateText"`.
+- Assert metric `gen_ai.client.operation.duration` has data.
+- Assert metric `gen_ai.client.token.usage` has data.
+- Assert metric `gen_ai.client.time_to_first_token` absent.
 
-## Scenario 1: Conversation title semantics
+## Scenario 2: Conversation title semantics
 
 ### Setup matrix
 
@@ -95,11 +130,11 @@ Additional scenario-family invariants:
 ### Expected behavior
 
 - Assert span attr `sigil.conversation.title` equals the resolved title when present.
-- Assert span attr `sigil.conversation.title` is absent when the resolved title is empty.
+- Assert span attr `sigil.conversation.title` absent when the resolved title is empty.
 - Assert proto metadata `sigil.conversation.title` equals the resolved title when present.
-- Assert proto metadata `sigil.conversation.title` is absent when the resolved title is empty.
+- Assert proto metadata `sigil.conversation.title` absent when the resolved title is empty.
 
-## Scenario 2: User ID semantics
+## Scenario 3: User ID semantics
 
 ### Setup matrix
 
@@ -117,7 +152,7 @@ Additional scenario-family invariants:
 - Assert span attr `user.id` equals the resolved user ID.
 - Assert proto metadata `sigil.user.id` equals the resolved user ID.
 
-## Scenario 3: Agent identity semantics
+## Scenario 4: Agent identity semantics
 
 ### Setup matrix
 
@@ -131,13 +166,13 @@ Additional scenario-family invariants:
 ### Expected behavior
 
 - Assert span attr `gen_ai.agent.name` equals the resolved name when present.
-- Assert span attr `gen_ai.agent.name` is absent when the resolved name is empty.
+- Assert span attr `gen_ai.agent.name` absent when the resolved name is empty.
 - Assert span attr `gen_ai.agent.version` equals the resolved version when present.
-- Assert span attr `gen_ai.agent.version` is absent when the resolved version is empty.
+- Assert span attr `gen_ai.agent.version` absent when the resolved version is empty.
 - Assert proto field `agent_name` equals the resolved name when present, otherwise empty.
 - Assert proto field `agent_version` equals the resolved version when present, otherwise empty.
 
-## Scenario 4: Streaming mode semantics and TTFT metrics
+## Scenario 5: Streaming telemetry semantics
 
 ### Setup
 
@@ -149,42 +184,12 @@ Additional scenario-family invariants:
 
 - Assert `gen_ai.client.operation.duration` has data.
 - Assert `gen_ai.client.time_to_first_token` has data.
-- Assert proto field `mode = GENERATION_MODE_STREAM`.
+- Assert proto field `mode = STREAM`.
 - Assert proto field `operation_name = "streamText"`.
 - Assert the exported output preserves the stitched assistant text.
 - Assert the recorded span name is `streamText <model>`.
 
-## Scenario 5: Tool execution semantics
-
-### Setup
-
-- Start tool execution through the dedicated SDK entry point with tool identity, conversation identity, and agent identity.
-- End with structured arguments and structured tool result content.
-
-### Expected behavior
-
-- Assert `gen_ai.client.operation.duration` has data.
-- Assert `gen_ai.client.time_to_first_token` is absent.
-- Assert no generation export.
-- Assert span attrs for tool name, tool call ID, tool type, tool call arguments, tool call result, conversation title, agent name, and agent version.
-
-## Scenario 6: Embedding semantics
-
-### Setup
-
-- Start an embedding operation through the dedicated SDK entry point with explicit dimensions and encoding format.
-- End with embedding result metadata including input count, input tokens, response model, and dimensions.
-
-### Expected behavior
-
-- Assert `gen_ai.client.operation.duration` has data.
-- Assert `gen_ai.client.token.usage` has data.
-- Assert `gen_ai.client.time_to_first_token` is absent.
-- Assert `gen_ai.client.tool_calls_per_operation` is absent.
-- Assert no generation export.
-- Assert span attrs for agent identity, embedding input count, and embedding dimension count.
-
-## Scenario 7: Validation and error semantics
+## Scenario 6: Validation and call-error semantics
 
 ### Setup matrix
 
@@ -200,7 +205,7 @@ Additional scenario-family invariants:
 - Provider call errors record span attr `error.type = "provider_call_error"`.
 - Provider call errors export proto field `call_error` and metadata key `call_error` with the provider error message.
 
-## Scenario 8: Rating submission semantics
+## Scenario 7: Rating submission semantics
 
 ### Setup
 
@@ -213,7 +218,7 @@ Additional scenario-family invariants:
 - Assert the request body preserves rating ID, rating value, comment, and metadata fields.
 - Assert the SDK parses and returns the rating response payload.
 
-## Scenario 9: Shutdown flush semantics
+## Scenario 8: Shutdown flush semantics
 
 ### Setup
 
@@ -227,6 +232,40 @@ Additional scenario-family invariants:
 - Assert exactly one generation export after `Shutdown`.
 - Assert the flushed generation payload matches the recorded conversation identity.
 
-## Extending the spec
+## Go-only extensions beyond the shared baseline
 
-Future phases will extend this document with the remaining core gaps (full roundtrip payload coverage, SDK identity protection, metadata/tag merge behavior, resource attributes) plus provider-wrapper and framework-adapter scenarios. Until those phases land, this document is the authoritative baseline for the currently shipped Go conformance harness.
+The current Go harness also covers these two scenarios, which are not yet part of the portable non-Go baseline:
+
+### Tool execution semantics
+
+#### Setup
+
+- Start tool execution through the dedicated SDK entry point with tool identity, conversation identity, and agent identity.
+- End with structured arguments and structured tool result content.
+
+#### Expected behavior
+
+- Assert `gen_ai.client.operation.duration` has data.
+- Assert `gen_ai.client.time_to_first_token` is absent.
+- Assert no generation export.
+- Assert span attrs for tool name, tool call ID, tool type, tool call arguments, tool call result, conversation title, agent name, and agent version.
+
+### Embedding semantics
+
+#### Setup
+
+- Start an embedding operation through the dedicated SDK entry point with explicit dimensions and encoding format.
+- End with embedding result metadata including input count, input tokens, response model, and dimensions.
+
+#### Expected behavior
+
+- Assert `gen_ai.client.operation.duration` has data.
+- Assert `gen_ai.client.token.usage` has data.
+- Assert `gen_ai.client.time_to_first_token` is absent.
+- Assert `gen_ai.client.tool_calls_per_operation` is absent.
+- Assert no generation export.
+- Assert span attrs for agent identity, embedding input count, and embedding dimension count.
+
+## Future phases
+
+Future phases will extend this document with additional core parity work (tool execution, embeddings, SDK identity protection, metadata/tag merge behavior, resource attributes) plus provider-wrapper and framework-adapter scenarios. Until those phases land, this document is the authoritative core SDK baseline for the current Go reference harness and the non-Go core conformance suites.

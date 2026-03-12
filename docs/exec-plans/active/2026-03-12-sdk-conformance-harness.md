@@ -39,8 +39,9 @@ The repo currently ships the Go core conformance harness entry point:
 
 - Local task: `mise run test:sdk:conformance`
 - Direct runner: `cd sdks/go && GOWORK=off go test ./sigil -run '^TestConformance' -count=1`
-- Current covered scenarios: conversation title semantics, user ID semantics, agent identity semantics, streaming mode semantics, tool execution semantics, embedding semantics, validation/error semantics, rating submission semantics, shutdown flush semantics
-- Current assertion targets in active use: generation export proto, OTLP spans, OTLP metrics
+- Current Go covered scenarios: conversation title semantics, user ID semantics, agent identity semantics, streaming mode semantics, tool execution semantics, embedding semantics, validation/error semantics, rating submission semantics, shutdown flush semantics
+- Current shared cross-SDK baseline implemented in this branch: sync roundtrip, conversation title semantics, user ID semantics, agent identity semantics, streaming telemetry, validation/call-error, rating submission, shutdown flush
+- Current assertion targets in active use: generation export proto, OTLP spans, OTLP metrics, rating HTTP
 
 ### SDK fixes discovered during implementation
 
@@ -150,12 +151,21 @@ Test that each Go provider mapper correctly transforms provider request/response
 
 ## Phase D: Other language core SDKs
 
-Each language implements the 13 core scenarios from `sdk-conformance-spec.md`:
+Each language implements the current core scenario set from `sdk-conformance-spec.md`:
 
-- [ ] **TypeScript/JS**: `sdks/js/test/conformance.test.mjs` (Vitest + OTel JS test utilities)
-- [ ] **Python**: `sdks/python/tests/test_conformance.py` (pytest + OTel Python test utilities)
-- [ ] **Java**: `sdks/java/core/src/test/java/.../ConformanceTest.java` (JUnit + OTel Java test utilities)
-- [ ] **.NET**: `sdks/dotnet/tests/.../ConformanceTests.cs` (xUnit + OTel .NET test utilities)
+- [x] **TypeScript/JS**: `sdks/js/test/conformance.test.mjs` (`node:test` + OTel JS test utilities)
+- [x] **Python**: `sdks/python/tests/test_conformance.py` (pytest + OTel Python test utilities)
+- [x] **Java**: `sdks/java/core/src/test/java/.../ConformanceTest.java` (JUnit + OTel Java test utilities)
+- [x] **.NET**: `sdks/dotnet/tests/.../ConformanceTests.cs` (xUnit + OTel .NET test utilities)
+- [x] Shared portable baseline validated across the four non-Go SDKs:
+  - [x] sync roundtrip
+  - [x] conversation title resolution
+  - [x] user ID resolution
+  - [x] agent identity resolution
+  - [x] streaming telemetry
+  - [x] validation + provider call error
+  - [x] rating submission
+  - [x] shutdown flush
 
 ## Phase E: Other language providers and frameworks
 
