@@ -119,6 +119,7 @@ func (s *Service) Export(ctx context.Context, req *sigilv1.ExportGenerationsRequ
 			metricTenantID = tenantID
 			span.SetAttributes(attribute.String("sigil.tenant.id", tenantID))
 			storeCtx, cancel := detachedPersistContext(ctx, s.persistTimeout)
+			defer cancel()
 			storeCtx, storeSpan := generationTracer.Start(
 				storeCtx,
 				"sigil.generation.store.save_batch",
@@ -128,7 +129,6 @@ func (s *Service) Export(ctx context.Context, req *sigilv1.ExportGenerationsRequ
 				),
 			)
 			errs := s.store.SaveBatch(storeCtx, tenantID, accepted)
-			cancel()
 			storeFailures := 0
 			for i := range acceptedIdx {
 				idx := acceptedIdx[i]
