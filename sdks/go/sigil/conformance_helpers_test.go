@@ -31,6 +31,8 @@ const (
 	spanAttrUserID             = "user.id"
 	spanAttrAgentName          = "gen_ai.agent.name"
 	spanAttrAgentVersion       = "gen_ai.agent.version"
+	metricOperationDuration    = "gen_ai.client.operation.duration"
+	metricTimeToFirstToken     = "gen_ai.client.time_to_first_token"
 )
 
 var conformanceModel = sigil.ModelRef{
@@ -56,14 +58,6 @@ type conformanceEnvOption func(*conformanceEnvConfig)
 
 type conformanceEnvConfig struct {
 	config sigil.Config
-}
-
-func withClientConfig(mutator func(*sigil.Config)) conformanceEnvOption {
-	return func(cfg *conformanceEnvConfig) {
-		if mutator != nil {
-			mutator(&cfg.config)
-		}
-	}
 }
 
 func newConformanceEnv(t *testing.T, opts ...conformanceEnvOption) *conformanceEnv {
@@ -133,8 +127,15 @@ func newConformanceEnv(t *testing.T, opts ...conformanceEnvOption) *conformanceE
 func (e *conformanceEnv) Shutdown(t *testing.T) {
 	t.Helper()
 
-	if err := e.close(); err != nil {
-		t.Fatalf("shutdown conformance env: %v", err)
+	if e == nil || e.Client == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := e.Client.Shutdown(ctx); err != nil {
+		t.Fatalf("shutdown conformance client: %v", err)
 	}
 }
 

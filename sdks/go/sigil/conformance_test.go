@@ -3,6 +3,7 @@ package sigil_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	sigil "github.com/grafana/sigil/sdks/go/sigil"
 )
@@ -73,6 +74,9 @@ func TestConformance_ConversationTitleSemantics(t *testing.T) {
 			} else {
 				requireSpanAttr(t, attrs, spanAttrConversationTitle, tc.wantTitle)
 			}
+
+			requireSyncGenerationMetrics(t, env)
+			env.Shutdown(t)
 		})
 	}
 }
@@ -153,6 +157,9 @@ func TestConformance_UserIDSemantics(t *testing.T) {
 			span := findSpan(t, env.Spans.Ended(), conformanceOperationName)
 			attrs := spanAttrs(span)
 			requireSpanAttr(t, attrs, spanAttrUserID, tc.wantResolvedID)
+
+			requireSyncGenerationMetrics(t, env)
+			env.Shutdown(t)
 		})
 	}
 }
@@ -250,6 +257,9 @@ func TestConformance_AgentIdentitySemantics(t *testing.T) {
 			} else {
 				requireSpanAttr(t, attrs, spanAttrAgentVersion, tc.wantVersion)
 			}
+
+			requireSyncGenerationMetrics(t, env)
+			env.Shutdown(t)
 		})
 	}
 }
@@ -264,5 +274,20 @@ func recordGeneration(t *testing.T, env *conformanceEnv, ctx context.Context, st
 		t.Fatalf("record generation: %v", err)
 	}
 
-	env.Shutdown(t)
+	flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := env.Client.Flush(flushCtx); err != nil {
+		t.Fatalf("flush generation export: %v", err)
+	}
+}
+
+func requireSyncGenerationMetrics(t *testing.T, env *conformanceEnv) {
+	t.Helper()
+
+	metrics := env.CollectMetrics(t)
+	duration := findHistogram[float64](t, metrics, metricOperationDuration)
+	if len(duration.DataPoints) == 0 {
+		t.Fatalf("expected %s datapoints for conformance generation", metricOperationDuration)
+	}
+	requireNoHistogram(t, metrics, metricTimeToFirstToken)
 }
