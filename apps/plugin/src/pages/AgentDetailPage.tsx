@@ -1772,7 +1772,7 @@ export default function AgentDetailPage({
                                             styles.recentVersionNumber,
                                             !completedRating && styles.recentVersionNumberCentered
                                           )}
-                                          >
+                                        >
                                           {versionLabel}
                                         </span>
                                       </span>
