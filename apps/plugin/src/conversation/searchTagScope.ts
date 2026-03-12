@@ -1,8 +1,7 @@
-import { ATTR_OPERATION_NAME, OperationName } from './attributes';
+import { ATTR_OPERATION_NAME, ATTR_SDK_NAME } from './attributes';
 import type { DashboardFilters, LabelFilter } from '../dashboard/types';
 import { canonicalizeConversationFilterKey } from './filterKeyMapping';
 
-const DISCOVERY_OPERATION_NAMES = [OperationName.GenerateText, OperationName.StreamText, OperationName.ExecuteTool];
 const CONVERSATION_SEARCH_KEY_TO_TRACEQL_KEY: Record<string, string> = {
   provider: 'span.gen_ai.provider.name',
   model: 'span.gen_ai.request.model',
@@ -54,9 +53,10 @@ function buildLabelFilterPredicates(filters: LabelFilter[]): string[] {
 }
 
 export function buildConversationTagDiscoveryQuery(filters?: DashboardFilters): string {
-  const operationKey = toSpanAttribute(ATTR_OPERATION_NAME);
-  const operations = DISCOVERY_OPERATION_NAMES.join('|');
-  const predicates = [`${operationKey} =~ "${operations}"`];
+  const predicates = [
+    `${toSpanAttribute(ATTR_OPERATION_NAME)} =~ ".+"`,
+    `${toSpanAttribute(ATTR_SDK_NAME)} =~ ".+"`,
+  ];
 
   if (filters) {
     predicates.push(
