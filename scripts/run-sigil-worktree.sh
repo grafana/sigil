@@ -70,12 +70,16 @@ pushd "${REPO_ROOT}" >/dev/null
 docker compose --profile core --profile traffic --profile traffic-lite config > "${TMP_COMPOSE}"
 popd >/dev/null
 
-python3 - "${TMP_COMPOSE}" <<'PY'
+python3 - "${REPO_ROOT}" "${TMP_COMPOSE}" <<'PY'
 import sys
 from pathlib import Path
+
+repo_root = Path(sys.argv[1])
+sys.path.insert(0, str(repo_root))
+
 from scripts.compose_yaml import strip_service_ports_and_container_names
 
-compose_path = Path(sys.argv[1])
+compose_path = Path(sys.argv[2])
 compose_path.write_text(
   strip_service_ports_and_container_names(
     compose_path.read_text(encoding="utf-8"),

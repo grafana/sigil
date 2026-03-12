@@ -195,22 +195,26 @@ if [[ "${ACTION}" == "up" ]]; then
 fi
 docker compose "${CONFIG_ARGS[@]}" config > "${TMP_RESOLVED}"
 
-python3 - "${TMP_RESOLVED}" "${TMP_COMPOSE}" "${OFFSET}" "${PROJECT_NAME}" "${SIGIL_DIR}/docker-compose.yaml" "${SIGIL_DIR}/.config/docker-compose-base.yaml" <<'PY'
+python3 - "${SIGIL_DIR}" "${TMP_RESOLVED}" "${TMP_COMPOSE}" "${OFFSET}" "${PROJECT_NAME}" "${SIGIL_DIR}/docker-compose.yaml" "${SIGIL_DIR}/.config/docker-compose-base.yaml" <<'PY'
 import re
 import sys
 from pathlib import Path
+
+sigil_dir = Path(sys.argv[1])
+sys.path.insert(0, str(sigil_dir))
+
 from scripts.compose_yaml import (
   CONTAINER_NAME_RE,
   PORTS_KEY_RE,
-  SERVICE_KEY_RE,
+  PORTS_EXIT_KEY_RE,
   SERVICE_RE,
 )
 
-compose_path = Path(sys.argv[1])
-output_path = Path(sys.argv[2])
-offset = int(sys.argv[3])
-project_name = sys.argv[4]
-reserved_sources = [Path(p) for p in sys.argv[5:]]
+compose_path = Path(sys.argv[2])
+output_path = Path(sys.argv[3])
+offset = int(sys.argv[4])
+project_name = sys.argv[5]
+reserved_sources = [Path(p) for p in sys.argv[6:]]
 
 lines = compose_path.read_text(encoding="utf-8").splitlines()
 
@@ -346,7 +350,7 @@ for line in lines:
           out.append(line)
         continue
       # Leaving ports block.
-      if SERVICE_KEY_RE.match(line) or SERVICE_RE.match(line):
+      if PORTS_EXIT_KEY_RE.match(line) or SERVICE_RE.match(line):
         in_ports = False
 
     if CONTAINER_NAME_RE.match(line):
