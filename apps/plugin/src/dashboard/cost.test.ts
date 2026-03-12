@@ -1,4 +1,5 @@
 import {
+  averageCost,
   buildPricingMap,
   calculateCostTimeSeries,
   calculateTotalCost,
@@ -56,6 +57,17 @@ describe('lookupPricing', () => {
 
   it('returns undefined for mismatched provider', () => {
     expect(lookupPricing(map, 'gpt-4o', 'anthropic')).toBeUndefined();
+  });
+});
+
+describe('averageCost', () => {
+  it('divides the total cost by the provided count', () => {
+    expect(averageCost(12, 3)).toBe(4);
+  });
+
+  it('returns zero when the denominator is zero or invalid', () => {
+    expect(averageCost(12, 0)).toBe(0);
+    expect(averageCost(12, Number.NaN)).toBe(0);
   });
 });
 

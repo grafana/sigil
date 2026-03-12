@@ -14,7 +14,7 @@ import {
 } from '../../dashboard/types';
 import { extractResolvePairs, BreakdownStatPanel, formatRelativeTime, formatWindowLabel } from './dashboardShared';
 import { TopStat } from '../TopStat';
-import { calculateTotalCost, calculateTotalCostByGroup, calculateCostTimeSeries } from '../../dashboard/cost';
+import { averageCost, calculateTotalCost, calculateTotalCostByGroup, calculateCostTimeSeries } from '../../dashboard/cost';
 import {
   computeStep,
   computeRateInterval,
@@ -32,7 +32,7 @@ import { MetricPanel } from './MetricPanel';
 import { useResolvedModelPricing } from './useResolvedModelPricing';
 import { type ConversationsDataSource, defaultConversationsDataSource } from '../../conversation/api';
 import { buildConversationSearchFilter } from '../../conversation/filters';
-import type { ConversationSearchResult } from '../../conversation/types';
+import type { ConversationSearchResult, ConversationStatsResponse } from '../../conversation/types';
 import { PLUGIN_BASE, ROUTES, buildConversationExploreRoute } from '../../constants';
 import { ViewConversationsLink } from './ViewConversationsLink';
 import { buildAgentDetailHref } from './ViewAgentsLink';
@@ -60,6 +60,14 @@ const noThresholds = {
 };
 
 const consistentColor = { mode: 'palette-classic-by-name' };
+const EMPTY_CONVERSATION_STATS: ConversationStatsResponse = {
+  totalConversations: 0,
+  totalTokens: 0,
+  avgCallsPerConversation: 0,
+  activeLast7d: 0,
+  ratedConversations: 0,
+  badRatedPct: 0,
+};
 
 export function DashboardConsumptionGrid({
   dataSource,
@@ -88,6 +96,12 @@ export function DashboardConsumptionGrid({
   const step = useMemo(() => computeStep(from, to), [from, to]);
   const interval = useMemo(() => computeRateInterval(step), [step]);
   const rangeDuration = useMemo(() => computeRangeDuration(from, to), [from, to]);
+  const filterString = useMemo(() => buildConversationSearchFilter(filters), [filters]);
+  const [conversationStats, setConversationStats] = useState<ConversationStatsResponse>(EMPTY_CONVERSATION_STATS);
+  const [conversationStatsLoading, setConversationStatsLoading] = useState(true);
+  const [previousConversationStats, setPreviousConversationStats] =
+    useState<ConversationStatsResponse>(EMPTY_CONVERSATION_STATS);
+  const [previousConversationStatsLoading, setPreviousConversationStatsLoading] = useState(true);
 
   // --- Top stats (always aggregate, no breakdown) ---
   const tokensTotalStat = usePrometheusQuery(dataSource, totalTokensQuery(filters, rangeDuration), from, to, 'instant');
@@ -295,6 +309,78 @@ export function DashboardConsumptionGrid({
       ? (prevCacheReadValue / (prevInputTokensValue + prevCacheReadValue)) * 100
       : 0;
   const comparisonLabel = `previous ${formatWindowLabel(windowSize)}`;
+  const currentConversationCount = conversationStats.totalConversations;
+  const currentCallCount = currentConversationCount * conversationStats.avgCallsPerConversation;
+  const previousConversationCount = previousConversationStats.totalConversations;
+  const previousCallCount = previousConversationCount * previousConversationStats.avgCallsPerConversation;
+  const averageCostPerConversation = averageCost(totalCost.totalCost, currentConversationCount);
+  const previousAverageCostPerConversation = averageCost(prevTotalCost.totalCost, previousConversationCount);
+  const averageCostPerCall = averageCost(totalCost.totalCost, currentCallCount);
+  const previousAverageCostPerCall = averageCost(prevTotalCost.totalCost, previousCallCount);
+
+  useEffect(() => {
+    if (!conversationsDataSource.getConversationStats) {
+      setConversationStats(EMPTY_CONVERSATION_STATS);
+      setConversationStatsLoading(false);
+      setPreviousConversationStats(EMPTY_CONVERSATION_STATS);
+      setPreviousConversationStatsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const currentFromISO = timeRange.from.toISOString();
+    const currentToISO = timeRange.to.toISOString();
+    const previousFromISO = dateTime((from - windowSize) * 1000).toISOString();
+    const previousToISO = dateTime((to - windowSize) * 1000).toISOString();
+    setConversationStatsLoading(true);
+    setPreviousConversationStatsLoading(true);
+
+    void conversationsDataSource
+      .getConversationStats({
+        filters: filterString,
+        time_range: { from: currentFromISO, to: currentToISO },
+      })
+      .then((stats) => {
+        if (!cancelled) {
+          setConversationStats(stats);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setConversationStats(EMPTY_CONVERSATION_STATS);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setConversationStatsLoading(false);
+        }
+      });
+
+    void conversationsDataSource
+      .getConversationStats({
+        filters: filterString,
+        time_range: { from: previousFromISO, to: previousToISO },
+      })
+      .then((stats) => {
+        if (!cancelled) {
+          setPreviousConversationStats(stats);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPreviousConversationStats(EMPTY_CONVERSATION_STATS);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setPreviousConversationStatsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationsDataSource, filterString, from, timeRange.from, timeRange.to, to, windowSize]);
 
   const allDataLoading =
     tokensTotalStat.loading ||
@@ -408,6 +494,26 @@ export function DashboardConsumptionGrid({
           loading={costTokensData.loading || resolvedPricing.loading}
           prevValue={prevTotalCost.totalCost}
           prevLoading={prevCostTokensData.loading || resolvedPricing.loading}
+          invertChange
+          comparisonLabel={comparisonLabel}
+        />
+        <TopStat
+          label="Avg Cost / Conversation"
+          value={averageCostPerConversation}
+          unit="currencyUSD"
+          loading={costTokensData.loading || resolvedPricing.loading || conversationStatsLoading}
+          prevValue={previousAverageCostPerConversation}
+          prevLoading={prevCostTokensData.loading || resolvedPricing.loading || previousConversationStatsLoading}
+          invertChange
+          comparisonLabel={comparisonLabel}
+        />
+        <TopStat
+          label="Avg Cost / Call"
+          value={averageCostPerCall}
+          unit="currencyUSD"
+          loading={costTokensData.loading || resolvedPricing.loading || conversationStatsLoading}
+          prevValue={previousAverageCostPerCall}
+          prevLoading={prevCostTokensData.loading || resolvedPricing.loading || previousConversationStatsLoading}
           invertChange
           comparisonLabel={comparisonLabel}
         />

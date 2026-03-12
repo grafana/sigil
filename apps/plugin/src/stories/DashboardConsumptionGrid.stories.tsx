@@ -2,6 +2,7 @@ import React from 'react';
 import { dateTimeParse, type TimeRange } from '@grafana/data';
 import { DashboardConsumptionGrid } from '../components/dashboard/DashboardConsumptionGrid';
 import type { DashboardDataSource } from '../dashboard/api';
+import type { ConversationsDataSource } from '../conversation/api';
 import { emptyFilters, type PrometheusQueryResponse } from '../dashboard/types';
 
 function makeMatrixResponse(
@@ -218,6 +219,59 @@ const mockDataSource: DashboardDataSource = {
   },
 };
 
+const mockConversationsDataSource: ConversationsDataSource = {
+  async listConversations() {
+    return { items: [] };
+  },
+  async searchConversations() {
+    return {
+      conversations: [
+        {
+          conversation_id: 'conv-1',
+          generation_count: 4,
+          first_generation_at: '2026-02-01T10:00:00Z',
+          last_generation_at: '2026-02-01T10:10:00Z',
+          models: ['gpt-4o'],
+          agents: ['assistant'],
+          error_count: 0,
+          has_errors: false,
+          trace_ids: ['trace-1'],
+          annotation_count: 0,
+          conversation_title: 'Order summary follow-up',
+          selected: {
+            'span.gen_ai.usage.input_tokens': 1200,
+            'span.gen_ai.usage.output_tokens': 420,
+          },
+        },
+      ],
+      next_cursor: '',
+      has_more: false,
+    };
+  },
+  async getConversationDetail() {
+    throw new Error('not implemented in DashboardConsumptionGrid story');
+  },
+  async getGeneration() {
+    throw new Error('not implemented in DashboardConsumptionGrid story');
+  },
+  async getSearchTags() {
+    return [];
+  },
+  async getSearchTagValues() {
+    return [];
+  },
+  async getConversationStats() {
+    return {
+      totalConversations: 18,
+      totalTokens: 758000,
+      avgCallsPerConversation: 4.5,
+      activeLast7d: 18,
+      ratedConversations: 6,
+      badRatedPct: 16.7,
+    };
+  },
+};
+
 const meta = {
   title: 'Dashboard/DashboardConsumptionGrid',
   component: DashboardConsumptionGrid,
@@ -229,6 +283,7 @@ export const Default = {
   render: () => (
     <DashboardConsumptionGrid
       dataSource={mockDataSource}
+      conversationsDataSource={mockConversationsDataSource}
       filters={emptyFilters}
       breakdownBy="none"
       from={from}
@@ -243,6 +298,7 @@ export const BreakdownByProvider = {
   render: () => (
     <DashboardConsumptionGrid
       dataSource={mockDataSource}
+      conversationsDataSource={mockConversationsDataSource}
       filters={emptyFilters}
       breakdownBy="provider"
       from={from}

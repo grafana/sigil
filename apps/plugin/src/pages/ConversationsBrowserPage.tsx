@@ -30,10 +30,17 @@ import { ConversationTimelineHistogram } from '../components/conversations/Conve
 import { buildConversationExploreRoute, ROUTES } from '../constants';
 import { PageInsightBar } from '../components/insight/PageInsightBar';
 import { isAbortError } from '../utils/http';
+import { type DashboardDataSource, defaultDashboardDataSource } from '../dashboard/api';
+import { averageCost, calculateTotalCost } from '../dashboard/cost';
+import { computeRangeDuration, tokensByModelAndTypeQuery } from '../dashboard/queries';
+import { usePrometheusQuery } from '../components/dashboard/usePrometheusQuery';
+import { useResolvedModelPricing } from '../components/dashboard/useResolvedModelPricing';
+import { extractResolvePairs } from '../components/dashboard/dashboardShared';
 
 export type ConversationsBrowserPageProps = {
   dataSource?: ConversationsDataSource;
   modelCardClient?: ModelCardClient;
+  dashboardDataSource?: DashboardDataSource;
 };
 
 const INPUT_TOKENS_SELECT_KEY = 'span.gen_ai.usage.input_tokens';
@@ -322,6 +329,7 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   const styles = useStyles2(getStyles);
   const dataSource = props.dataSource ?? defaultConversationsDataSource;
   const modelCardClient = props.modelCardClient ?? defaultModelCardClient;
+  const dashboardDataSource = props.dashboardDataSource ?? defaultDashboardDataSource;
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -377,6 +385,10 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
 
   const from = useMemo(() => Math.floor(timeRange.from.valueOf() / 1000), [timeRange]);
   const to = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);
+  const rangeDuration = useMemo(() => computeRangeDuration(from, to), [from, to]);
+  const windowSize = to - from;
+  const previousFrom = from - windowSize;
+  const previousTo = to - windowSize;
   const providerOptionsQuery = useMemo(
     () => buildConversationTagDiscoveryQuery(withConversationFilters(conversationFilters, { providers: [] })),
     [conversationFilters]
@@ -578,6 +590,33 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
   const loadAbortControllerRef = useRef<AbortController | null>(null);
 
   const filterString = useMemo(() => buildConversationSearchFilter(filters), [filters]);
+  const costTokens = usePrometheusQuery(
+    dashboardDataSource,
+    tokensByModelAndTypeQuery(filters, rangeDuration, 'none'),
+    from,
+    to,
+    'instant'
+  );
+  const previousCostTokens = usePrometheusQuery(
+    dashboardDataSource,
+    tokensByModelAndTypeQuery(filters, rangeDuration, 'none'),
+    previousFrom,
+    previousTo,
+    'instant'
+  );
+  const costResolvePairs = useMemo(
+    () => [...extractResolvePairs(costTokens.data), ...extractResolvePairs(previousCostTokens.data)],
+    [costTokens.data, previousCostTokens.data]
+  );
+  const resolvedPricing = useResolvedModelPricing(dashboardDataSource, costResolvePairs);
+  const totalCost = useMemo(
+    () => calculateTotalCost(costTokens.data ?? undefined, resolvedPricing.pricingMap),
+    [costTokens.data, resolvedPricing.pricingMap]
+  );
+  const previousTotalCost = useMemo(
+    () => calculateTotalCost(previousCostTokens.data ?? undefined, resolvedPricing.pricingMap),
+    [previousCostTokens.data, resolvedPricing.pricingMap]
+  );
 
   const conversations = useMemo(() => sortConversations(rawConversations, orderBy), [rawConversations, orderBy]);
 
@@ -709,6 +748,16 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
     () => buildConversationStats(conversations, timeRange.to.valueOf()),
     [conversations, timeRange]
   );
+  const currentCallCount = conversationStats.totalConversations * conversationStats.avgCallsPerConversation;
+  const previousCallCount =
+    previousConversationStats.totalConversations * previousConversationStats.avgCallsPerConversation;
+  const averageCostPerConversation = averageCost(totalCost.totalCost, conversationStats.totalConversations);
+  const previousAverageCostPerConversation = averageCost(
+    previousTotalCost.totalCost,
+    previousConversationStats.totalConversations
+  );
+  const averageCostPerCall = averageCost(totalCost.totalCost, currentCallCount);
+  const previousAverageCostPerCall = averageCost(previousTotalCost.totalCost, previousCallCount);
 
   const loadingDisplayedCurrentStats = loadingCurrent && conversations.length === 0;
 
@@ -731,6 +780,9 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
     const errCount = conversations.filter((c) => c.has_errors).length;
     return [
       `Conversations: ${s.totalConversations} (previous window: ${p.totalConversations})`,
+      `Estimated cost: $${totalCost.totalCost.toFixed(4)} (previous: $${previousTotalCost.totalCost.toFixed(4)})`,
+      `Avg cost per conversation: $${averageCostPerConversation.toFixed(4)} (previous: $${previousAverageCostPerConversation.toFixed(4)})`,
+      `Avg cost per call: $${averageCostPerCall.toFixed(4)} (previous: $${previousAverageCostPerCall.toFixed(4)})`,
       `Total tokens: ${s.totalTokens.toLocaleString()} (previous: ${p.totalTokens.toLocaleString()})`,
       `Avg calls per conversation: ${s.avgCallsPerConversation.toFixed(1)} (previous: ${p.avgCallsPerConversation.toFixed(1)})`,
       `Active conversations (7d): ${s.activeLast7d} (previous: ${p.activeLast7d})`,
@@ -740,7 +792,20 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
       `Unique models: ${[...modelSet].join(', ') || 'none'}`,
       `Unique providers: ${[...providerSet].join(', ') || 'none'}`,
     ].join('\n');
-  }, [loadingCurrent, streamingCurrent, loadingPrevious, conversations, conversationStats, previousConversationStats]);
+  }, [
+    averageCostPerCall,
+    averageCostPerConversation,
+    conversationStats,
+    conversations,
+    loadingCurrent,
+    loadingPrevious,
+    previousAverageCostPerCall,
+    previousAverageCostPerConversation,
+    previousConversationStats,
+    previousTotalCost.totalCost,
+    streamingCurrent,
+    totalCost.totalCost,
+  ]);
 
   const [modelCards, setModelCards] = useState<Map<string, ModelCard>>(new Map());
 
@@ -827,6 +892,36 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
               loading={loadingDisplayedCurrentStats}
               prevValue={previousConversationStats.totalConversations}
               prevLoading={loadingPrevious}
+              comparisonLabel="in previous window"
+            />
+            <TopStat
+              label="Estimated Cost"
+              value={totalCost.totalCost}
+              unit="currencyUSD"
+              loading={loadingDisplayedCurrentStats || costTokens.loading || resolvedPricing.loading}
+              prevValue={previousTotalCost.totalCost}
+              prevLoading={loadingPrevious || previousCostTokens.loading || resolvedPricing.loading}
+              invertChange
+              comparisonLabel="in previous window"
+            />
+            <TopStat
+              label="Avg Cost / Conversation"
+              value={averageCostPerConversation}
+              unit="currencyUSD"
+              loading={loadingDisplayedCurrentStats || costTokens.loading || resolvedPricing.loading}
+              prevValue={previousAverageCostPerConversation}
+              prevLoading={loadingPrevious || previousCostTokens.loading || resolvedPricing.loading}
+              invertChange
+              comparisonLabel="in previous window"
+            />
+            <TopStat
+              label="Avg Cost / Call"
+              value={averageCostPerCall}
+              unit="currencyUSD"
+              loading={loadingDisplayedCurrentStats || costTokens.loading || resolvedPricing.loading}
+              prevValue={previousAverageCostPerCall}
+              prevLoading={loadingPrevious || previousCostTokens.loading || resolvedPricing.loading}
+              invertChange
               comparisonLabel="in previous window"
             />
             <TopStat
