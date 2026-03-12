@@ -233,7 +233,7 @@ Use this only when completion is blocked by missing required tools or missing au
     - You may make temporary local proof edits to validate assumptions (for example: tweak a local build input for `make`, or hardcode a UI account / response path) when this increases confidence.
     - Revert every temporary proof edit before commit/push.
     - Document these temporary proof steps and outcomes in the workpad `Validation`/`Notes` sections so reviewers can follow the evidence.
-    - If the change is UI/UX-facing or app-touching, use the `ui-proof` skill to capture the changed flow, usually with multiple screenshots. Use the `linear_graphql` `fileUpload` path first for unattended runs, and embed the uploaded media in the workpad comment before handoff.
+    - If the change is UI/UX-facing or app-touching, use the `ui-proof` skill to capture the changed flow, usually with multiple screenshots. Use the `linear_graphql` `fileUpload` path first for unattended runs, embed the uploaded media in the workpad comment, and mirror the proof into the GitHub PR description or a top-level PR comment when a PR exists.
 6.  Re-check all acceptance criteria and close any gaps.
 7.  Before every `git push` attempt, run the required validation for your scope and confirm it passes; if it fails, address issues and rerun until green, then commit and push changes.
 8.  Attach PR URL to the issue (prefer attachment; use the workpad comment only if attachment is unavailable).
@@ -288,7 +288,7 @@ Use this only when completion is blocked by missing required tools or missing au
 - PR feedback sweep is complete and no actionable comments remain.
 - PR checks are green, branch is pushed, and PR is linked on the issue.
 - Required PR metadata is present (`symphony` label).
-- If the change is UI/UX-facing or app-touching, runtime validation is complete and media evidence is uploaded to the Linear workpad, or the workpad clearly records why capture/upload was not feasible.
+- If the change is UI/UX-facing or app-touching, runtime validation is complete and media evidence is uploaded to the Linear workpad and mirrored in the GitHub PR when a PR exists, or the workpad clearly records why capture/upload was not feasible.
 
 ## Guardrails
 

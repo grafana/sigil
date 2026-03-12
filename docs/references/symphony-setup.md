@@ -216,7 +216,9 @@ the changed flow, capture several screenshots if needed, upload them with the
 `linear_graphql` `fileUpload` path during unattended runs, and embed them into
 the Linear workpad comment. The repo-local
 `apps/plugin/scripts/upload-linear-assets.mjs` helper remains a local fallback
-when `LINEAR_API_KEY` is already available in the shell environment.
+when `LINEAR_API_KEY` is already available in the shell environment. If a PR
+exists for the branch, mirror at least one screenshot into the PR body or a
+top-level PR comment for reviewer-facing proof.
 
 Stop it with:
 

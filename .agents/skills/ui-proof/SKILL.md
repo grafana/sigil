@@ -56,6 +56,9 @@ enough for a non-trivial interaction.
 6. Embed the uploaded markdown image links into the Linear workpad comment.
    Keep the proof grouped in a short `## UI Proof` section with one caption per
    image.
+7. If a GitHub PR already exists for the branch, mirror the same proof in the
+   PR body or a top-level PR comment so reviewers do not have to switch back to
+   Linear to see the screenshots.
 
 ## Browser execution
 
@@ -89,6 +92,9 @@ The final workpad should include:
 - brief description of the validated flow
 - the uploaded image markdown or direct `assetUrl` embeds
 - any limitation or missing runtime condition
+
+If a PR exists, include at least one of the same screenshots in the PR body or
+top-level PR comments as reviewer-facing evidence.
 
 Do not leave the proof only on disk. The evidence must be embedded in the
 Linear workpad comment before moving the ticket to `Human Review`.
