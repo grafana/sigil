@@ -256,6 +256,150 @@ describe('useConversationData', () => {
     });
   });
 
+  it('does not discard load-more generations when initial trace callbacks fire later', async () => {
+    let resolveTraceB: ((value: unknown) => void) | undefined;
+    let resolveTraceC: ((value: unknown) => void) | undefined;
+
+    const dataSource: ConversationsDataSource = {
+      searchConversations: jest.fn(),
+      getConversationDetail: jest
+        .fn()
+        .mockResolvedValueOnce({
+          conversation_id: 'conv-1',
+          generation_count: 3,
+          first_generation_at: '2026-03-09T13:08:03Z',
+          last_generation_at: '2026-03-09T13:28:15Z',
+          generations: [
+            {
+              generation_id: 'gen-b',
+              conversation_id: 'conv-1',
+              trace_id: 'trace-b',
+              span_id: 'span-b',
+              created_at: '2026-03-09T13:18:03Z',
+            },
+            {
+              generation_id: 'gen-c',
+              conversation_id: 'conv-1',
+              trace_id: 'trace-c',
+              span_id: 'span-c',
+              created_at: '2026-03-09T13:28:15Z',
+            },
+          ],
+          has_more: true,
+          next_cursor: '20',
+          annotations: [],
+        })
+        .mockResolvedValueOnce({
+          conversation_id: 'conv-1',
+          generation_count: 3,
+          first_generation_at: '2026-03-09T13:08:03Z',
+          last_generation_at: '2026-03-09T13:28:15Z',
+          generations: [
+            {
+              generation_id: 'gen-a',
+              conversation_id: 'conv-1',
+              trace_id: 'trace-a',
+              span_id: 'span-a',
+              created_at: '2026-03-09T13:08:03Z',
+            },
+          ],
+          has_more: false,
+          annotations: [],
+        }),
+      getGeneration: jest.fn(),
+      getSearchTags: jest.fn(),
+      getSearchTagValues: jest.fn(),
+    };
+
+    const makeSpanPayload = (traceID: string, nanoStart: string, nanoEnd: string) => ({
+      resourceSpans: [
+        {
+          resource: { attributes: [{ key: 'service.name', value: { stringValue: 'svc' } }] },
+          scopeSpans: [
+            {
+              spans: [
+                {
+                  spanId: traceID.replace('trace', 'span'),
+                  parentSpanId: '',
+                  name: traceID,
+                  startTimeUnixNano: nanoStart,
+                  endTimeUnixNano: nanoEnd,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    const traceFetcher = jest.fn((traceID: string) => {
+      if (traceID === 'trace-a') {
+        return Promise.resolve(makeSpanPayload('trace-a', '1000', '1500'));
+      }
+      return new Promise((resolve) => {
+        if (traceID === 'trace-b') {
+          resolveTraceB = resolve;
+        } else {
+          resolveTraceC = resolve;
+        }
+      });
+    });
+
+    const { result } = renderHook(() =>
+      useConversationData({
+        conversationID: 'conv-1',
+        dataSource,
+        traceFetcher,
+        modelCardClient,
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+      expect(result.current.tracesLoading).toBe(true);
+    });
+
+    await act(async () => {
+      await result.current.loadMoreGenerations();
+    });
+
+    await waitFor(() => {
+      expect(result.current.loadingMoreGenerations).toBe(false);
+      expect(result.current.conversationData?.hasMoreGenerations).toBe(false);
+      const generationIDs = result.current.allGenerations.map((g) => g.generation_id);
+      expect(generationIDs).toContain('gen-a');
+      expect(generationIDs).toContain('gen-b');
+      expect(generationIDs).toContain('gen-c');
+    });
+
+    act(() => {
+      resolveTraceB?.(makeSpanPayload('trace-b', '2000', '2500'));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.allGenerations.map((g) => g.generation_id)).toContain('gen-a');
+    expect(result.current.conversationData?.hasMoreGenerations).toBe(false);
+
+    act(() => {
+      resolveTraceC?.(makeSpanPayload('trace-c', '3000', '3500'));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(result.current.tracesLoading).toBe(false);
+    });
+
+    const finalIDs = result.current.allGenerations.map((g) => g.generation_id);
+    expect(finalIDs).toContain('gen-a');
+    expect(finalIDs).toContain('gen-b');
+    expect(finalIDs).toContain('gen-c');
+    expect(result.current.conversationData?.hasMoreGenerations).toBe(false);
+  });
+
   it('stops load-more pagination when a page makes no cursor progress', async () => {
     const dataSource: ConversationsDataSource = {
       searchConversations: jest.fn(),

@@ -106,13 +106,19 @@ export function useConversationData({
             if (requestVersionRef.current !== requestVersion) {
               return;
             }
-            setConversationData(partialData);
+            const latest = conversationDataRef.current;
+            const resolved = latest ? mergeConversationData(partialData, latest) : partialData;
+            conversationDataRef.current = resolved;
+            setConversationData(resolved);
           },
         }).then((enriched) => {
           if (requestVersionRef.current !== requestVersion) {
             return;
           }
-          setConversationData(enriched);
+          const latest = conversationDataRef.current;
+          const resolved = latest ? mergeConversationData(enriched, latest) : enriched;
+          conversationDataRef.current = resolved;
+          setConversationData(resolved);
           setTracesLoading(false);
         });
       })
