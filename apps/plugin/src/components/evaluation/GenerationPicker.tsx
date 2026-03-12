@@ -121,6 +121,24 @@ type ConversationRow = {
   models?: string[];
 };
 
+function toTimestamp(value: string): number {
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed;
+}
+
+export function sortSavedConversationsNewestFirst(conversations: SavedConversation[]): SavedConversation[] {
+  return conversations
+    .map((conversation, index) => ({ conversation, index }))
+    .sort((left, right) => {
+      const timestampDiff = toTimestamp(right.conversation.created_at) - toTimestamp(left.conversation.created_at);
+      if (timestampDiff !== 0 && !Number.isNaN(timestampDiff)) {
+        return timestampDiff;
+      }
+      return left.index - right.index;
+    })
+    .map(({ conversation }) => conversation);
+}
+
 export default function GenerationPicker({
   onSelect,
   selectedGenerationId,
@@ -214,7 +232,8 @@ export default function GenerationPicker({
     load
       .then((resp) => {
         if (!cancelled) {
-          setSavedConversations((resp.items ?? []).slice().reverse());
+          // Client-side ordering only applies to the first fetched page (50 items).
+          setSavedConversations(sortSavedConversationsNewestFirst(resp.items ?? []));
         }
       })
       .catch(() => {
