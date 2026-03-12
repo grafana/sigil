@@ -354,6 +354,7 @@ Every shipped Go provider suite should cover these behaviors when the provider s
 - Sync mapping: request/response pairs normalize the expected model, prompts, input, output, and tags.
 - Streaming mapping: streamed provider summaries preserve accumulated output, final usage, and stop reason.
 - Tool semantics: provider tool calls become `tool_call` parts and provider tool outputs become `tool_result` parts.
+- Tool-result correlation: providers preserve `tool_result.tool_call_id` when the upstream surface exposes a stable call identifier; otherwise they preserve `tool_result.name`, and normalized validation requires at least one of those fields.
 - Reasoning semantics: provider reasoning/thinking content is preserved when the provider surface emits that content.
 - Usage semantics: provider-specific token fields such as cache, reasoning, or tool-use tokens are preserved.
 - Error semantics: mapper validation failures stay local, and provider API failures routed via `SetCallError` preserve call error text plus the expected span error category on the recorder path.
