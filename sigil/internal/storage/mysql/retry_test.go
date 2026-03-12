@@ -111,9 +111,9 @@ func TestIsRetryableLockError(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := isRetryableLockError(tc.err)
+			got := IsRetryableLockError(tc.err)
 			if got != tc.want {
-				t.Fatalf("isRetryableLockError(%v)=%v, want %v", tc.err, got, tc.want)
+				t.Fatalf("IsRetryableLockError(%v)=%v, want %v", tc.err, got, tc.want)
 			}
 		})
 	}

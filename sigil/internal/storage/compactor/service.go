@@ -17,12 +17,17 @@ import (
 	"github.com/grafana/sigil/sigil/internal/config"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	"github.com/grafana/sigil/sigil/internal/storage"
+	mysqlstorage "github.com/grafana/sigil/sigil/internal/storage/mysql"
 	"google.golang.org/protobuf/proto"
 )
 
 const (
 	compactPhase  = "compact"
 	truncatePhase = "truncate"
+
+	truncateRetryAttempts       = 4
+	truncateInitialRetryBackoff = 250 * time.Millisecond
+	truncateMaxRetryBackoff     = 2 * time.Second
 )
 
 type Service struct {
@@ -37,6 +42,7 @@ type Service struct {
 
 	blockWriter   storage.BlockWriter
 	metadataStore storage.BlockMetadataStore
+	sleepFn       func(context.Context, time.Duration) error
 }
 
 func NewService(
@@ -60,6 +66,7 @@ func NewService(
 		truncator:     truncator,
 		blockWriter:   blockWriter,
 		metadataStore: metadataStore,
+		sleepFn:       sleepWithContext,
 	}
 	if module.logger == nil {
 		module.logger = log.NewNopLogger()
@@ -429,14 +436,106 @@ func (s *Service) truncateOwnedShard(ctx context.Context, shard storage.TenantSh
 			nextRenew = time.Now().Add(renewEvery)
 		}
 
-		deleted, err := s.truncator.TruncateCompacted(ctx, shard.TenantID, shardPredicate, olderThan, s.cfg.BatchSize)
+		deleted, usedLimit, err := s.truncateCompactedWithRetry(ctx, shard, shardPredicate, olderThan, deadline)
 		if err != nil {
 			return fmt.Errorf("truncate compacted tenant=%s shard=%d: %w", shard.TenantID, shard.ShardID, err)
 		}
 		observeTruncated(deleted)
-		if deleted < int64(s.cfg.BatchSize) {
+		if deleted < int64(usedLimit) {
 			return nil
 		}
+	}
+}
+
+func (s *Service) truncateCompactedWithRetry(
+	ctx context.Context,
+	shard storage.TenantShard,
+	shardPredicate storage.ShardPredicate,
+	olderThan time.Time,
+	deadline time.Time,
+) (int64, int, error) {
+	limit := s.cfg.BatchSize
+	backoff := truncateInitialRetryBackoff
+	retries := 0
+
+	for {
+		deleted, err := s.truncator.TruncateCompacted(ctx, shard.TenantID, shardPredicate, olderThan, limit)
+		if err == nil {
+			if retries > 0 {
+				observeTruncateDeadlock("recovered")
+				_ = level.Info(s.logger).Log(
+					"msg", "compactor truncation recovered after retryable MySQL lock error",
+					"tenant_id", shard.TenantID,
+					"shard_id", shard.ShardID,
+					"retries", retries,
+					"retry_limit", limit,
+				)
+			}
+			return deleted, limit, nil
+		}
+		if !mysqlstorage.IsRetryableLockError(err) {
+			return 0, limit, err
+		}
+
+		observeTruncateDeadlock("retry")
+		retries++
+		if retries > truncateRetryAttempts || time.Now().After(deadline) {
+			observeTruncateDeadlock("exhausted")
+			return 0, limit, fmt.Errorf("retryable MySQL lock error exhausted after %d retries: %w", retries, err)
+		}
+
+		if limit > 1 {
+			limit /= 2
+			if limit < 1 {
+				limit = 1
+			}
+		}
+
+		sleepFor := backoff
+		if remaining := time.Until(deadline); remaining < sleepFor {
+			sleepFor = remaining
+		}
+		if sleepFor > 0 {
+			if err := s.sleep(ctx, sleepFor); err != nil {
+				return 0, limit, err
+			}
+		}
+
+		if backoff < truncateMaxRetryBackoff {
+			backoff *= 2
+			if backoff > truncateMaxRetryBackoff {
+				backoff = truncateMaxRetryBackoff
+			}
+		}
+	}
+}
+
+func (s *Service) sleep(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return nil
+	}
+	if s.sleepFn == nil {
+		return sleepWithContext(ctx, d)
+	}
+	return s.sleepFn(ctx, d)
+}
+
+func sleepWithContext(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer func() {
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
 	}
 }
 

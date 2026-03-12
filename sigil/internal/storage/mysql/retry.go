@@ -36,7 +36,7 @@ func runWithRetryableLockErrorAttempts(ctx context.Context, attempts int, op fun
 			return nil
 		}
 		lastErr = err
-		if !isRetryableLockError(err) || attempt == attempts-1 {
+		if !IsRetryableLockError(err) || attempt == attempts-1 {
 			return err
 		}
 
@@ -59,7 +59,7 @@ func runWithRetryableLockErrorAttempts(ctx context.Context, attempts int, op fun
 	return lastErr
 }
 
-func isRetryableLockError(err error) bool {
+func IsRetryableLockError(err error) bool {
 	if err == nil {
 		return false
 	}
