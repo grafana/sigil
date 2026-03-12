@@ -189,6 +189,16 @@ If the UI needs sample data, start the lightweight traffic sidecar:
 mise run up:worktree:traffic-lite
 ```
 
+If a ticket needs prod-like scale, many real versions, or existing ops-backed
+data shape, start the worktree-safe stack against ops datasources instead:
+
+```bash
+mise run worktree:ops
+```
+
+That keeps the checkout on OrbStack worktree URLs while pointing Grafana and
+the plugin backend at ops. It requires `SIGIL_API_AUTH_TOKEN_OPS` in `.env`.
+
 To capture a proof screenshot from the running worktree stack:
 
 ```bash
@@ -231,6 +241,9 @@ Recommended model:
 
 - Use `mise run up:worktree` or `mise run up:worktree:detached` for checkout-
   local runtime validation.
+- Use `mise run worktree:ops` when the local sidecar is not enough and the
+  ticket benefits from real ops-scale or prod-like data shape. Do not use the
+  fixed-port `mise run up:ops` path from a Symphony workspace.
 - Use `mise run up:worktree:traffic-lite` when UI work needs a small amount of
   synthetic data without the full `sdk-traffic` load.
 - Let each worktree use its own Compose project name and OrbStack URL such as
@@ -260,6 +273,9 @@ Recommended model:
   before starting Symphony.
 - Treat `WORKFLOW.local.md` as personal local configuration for the developer
   running Symphony.
+- Keep both ops-backed and local runtime validation worktree-safe inside
+  Symphony workspaces. Prefer `mise run worktree:ops` over `mise run up:ops`
+  when an agent needs ops data.
 - Agents may make small repo-local Symphony self-improvements while doing normal
   ticket work when those changes materially improve execution in this repo.
   Keep that narrow: skills, workflow/bootstrap, cleanup, runtime validation,

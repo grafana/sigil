@@ -43,39 +43,48 @@ and avoids fixed host-port collisions by using OrbStack DNS.
    mise run up:worktree:traffic-lite
    ```
 
-8. To capture a screenshot after login succeeds:
+8. If the local worktree stack does not reproduce the problem and you need
+   prod-like scale, many real versions, or existing ops-backed data shape, use
+   the ops-backed worktree stack instead:
+   ```bash
+   mise run worktree:ops
+   ```
+   This keeps the checkout worktree-safe and requires
+   `SIGIL_API_AUTH_TOKEN_OPS` in `.env`.
+
+9. To capture a screenshot after login succeeds:
    ```bash
    mise run capture:ui-proof
    ```
    This signs in with `admin` / `admin` when needed and writes a PNG to
    `output/playwright/`.
 
-9. For feature-level visual proof across several interactions, use the
+10. For feature-level visual proof across several interactions, use the
    `ui-proof` skill instead of stopping at a single smoke screenshot.
 
-10. If Grafana does not respond, apply the documented startup
+11. If Grafana does not respond, apply the documented startup
    workaround inside the Grafana container:
    ```bash
    docker compose --project-name "$(basename "$PWD")" exec grafana supervisorctl stop delve
    kill -CONT <grafana-bash-pid>
    ```
 
-11. For debugging:
+12. For debugging:
    ```bash
    mise run logs:worktree
    ```
 
-12. Stop the traffic sidecar when you no longer need sample data:
+13. Stop the traffic sidecar when you no longer need sample data:
    ```bash
    mise run down:worktree:traffic-lite
    ```
 
-13. Stop the worktree stack when you are done:
+14. Stop the worktree stack when you are done:
    ```bash
    mise run down:worktree
    ```
 
-14. If you are done with the whole workspace and want to remove all Compose
+15. If you are done with the whole workspace and want to remove all Compose
     resources for it, including named volumes:
     ```bash
     mise run down:worktree:destroy
