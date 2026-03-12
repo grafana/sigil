@@ -86,7 +86,7 @@ func metricRequestArea(route string, requestPath string) string {
 	}
 
 	switch {
-	case route == "/healthz":
+	case route == "/healthz", route == "/readyz":
 		return "core"
 	case route == "/metrics":
 		return "observability"

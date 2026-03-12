@@ -73,7 +73,7 @@ func (m *serverModule) start(_ context.Context) error {
 	protectedHTTP := tenantauth.HTTPMiddleware(tenantAuthCfg)
 
 	apiMux := http.NewServeMux()
-	server.RegisterCoreRoutes(apiMux)
+	server.RegisterCoreRoutes(apiMux, server.WithReadinessChecks(m.registry.ReadinessChecks()...))
 	if m.registry != nil {
 		m.registry.ApplyHTTP(apiMux, protectedHTTP)
 	}

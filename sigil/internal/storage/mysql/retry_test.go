@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"context"
+	"database/sql/driver"
 	"errors"
 	"testing"
 
@@ -59,6 +60,23 @@ func TestRunWithRetryableLockErrorAttemptsDoesNotRetryNonRetryableError(t *testi
 	}
 }
 
+func TestRunWithRetryableLockErrorAttemptsRetriesTransientConnectionErrors(t *testing.T) {
+	attempts := 0
+	err := runWithRetryableLockErrorAttempts(context.Background(), 3, func() error {
+		attempts++
+		if attempts < 3 {
+			return driver.ErrBadConn
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("expected retry to eventually succeed, got %v", err)
+	}
+	if attempts != 3 {
+		t.Fatalf("expected 3 attempts, got %d", attempts)
+	}
+}
+
 func TestRunWithRetryableLockErrorAttemptsHonorsCanceledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -101,6 +119,11 @@ func TestIsRetryableLockError(t *testing.T) {
 			name: "non lock error",
 			err:  errors.New("validation failed"),
 			want: false,
+		},
+		{
+			name: "driver bad connection",
+			err:  driver.ErrBadConn,
+			want: true,
 		},
 		{
 			name: "nil error",

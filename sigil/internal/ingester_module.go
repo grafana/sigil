@@ -25,6 +25,10 @@ type ingesterModule struct {
 	runErr                chan error
 }
 
+type walWriteReadiness interface {
+	WALWriteReady(context.Context) error
+}
+
 func newIngesterModule(ctx context.Context, cfg config.Config, logger log.Logger, registry *serverTransportRegistry) (services.Service, error) {
 	generationStore, err := buildGenerationStore(ctx, cfg, true)
 	if err != nil {
@@ -41,6 +45,9 @@ func newIngesterModule(ctx context.Context, cfg config.Config, logger log.Logger
 		registry.RegisterGRPC(func(server *grpc.Server) {
 			sigilv1.RegisterGenerationIngestServiceServer(server, generationGRPC)
 		})
+		if readinessStore, ok := generationStore.(walWriteReadiness); ok {
+			registry.RegisterReadiness(readinessStore.WALWriteReady)
+		}
 	}
 
 	dispatcher := configureIngesterEvalEnqueue(cfg, logger, generationStore)

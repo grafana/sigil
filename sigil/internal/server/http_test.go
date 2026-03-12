@@ -129,6 +129,40 @@ func TestRegisterIngestRoutesOwnsGenerationExportPath(t *testing.T) {
 	}
 }
 
+func TestRegisterCoreRoutesExposesReadyz(t *testing.T) {
+	mux := http.NewServeMux()
+	RegisterCoreRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected readyz status %d, got %d", http.StatusOK, resp.Code)
+	}
+	if strings.TrimSpace(resp.Body.String()) == "" {
+		t.Fatalf("expected readyz body")
+	}
+}
+
+func TestRegisterCoreRoutesPropagatesReadyzFailures(t *testing.T) {
+	mux := http.NewServeMux()
+	RegisterCoreRoutes(mux, WithReadinessChecks(func(context.Context) error {
+		return errors.New("mysql wal degraded")
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected readyz status %d, got %d", http.StatusServiceUnavailable, resp.Code)
+	}
+	if !strings.Contains(resp.Body.String(), "mysql wal degraded") {
+		t.Fatalf("expected degraded body, got %q", resp.Body.String())
+	}
+}
+
 func TestRegisterQueryRoutesOwnsQueryPaths(t *testing.T) {
 	mux := http.NewServeMux()
 	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
