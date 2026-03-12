@@ -132,8 +132,8 @@ func TestConformance_OpenAIResponsesStreamMapping(t *testing.T) {
 	if got := sigiltest.StringValue(t, exported, "output", 0, "parts", 0, "text"); got != "checking weather" {
 		t.Fatalf("unexpected streamed output text: got %q want %q", got, "checking weather")
 	}
-	if got := sigiltest.StringValue(t, exported, "usage", "total_tokens"); got != "31" {
-		t.Fatalf("unexpected usage.total_tokens: got %q want %q", got, "31")
+	if got := sigiltest.StringValue(t, exported, "usage", "total_tokens"); got != "26" {
+		t.Fatalf("unexpected usage.total_tokens: got %q want %q", got, "26")
 	}
 	if got := sigiltest.StringValue(t, exported, "input", 1, "parts", 0, "tool_result", "tool_call_id"); got != "call_weather" {
 		t.Fatalf("unexpected streamed tool_result.tool_call_id: got %q want %q", got, "call_weather")
@@ -294,7 +294,7 @@ func openAIResponsesStreamSummary() ResponsesStreamSummary {
 					Usage: oresponses.ResponseUsage{
 						InputTokens:  20,
 						OutputTokens: 6,
-						TotalTokens:  31,
+						TotalTokens:  26,
 					},
 				},
 			},
