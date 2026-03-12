@@ -123,19 +123,34 @@ Test that each Go provider mapper correctly transforms provider request/response
 
 ### Per provider (openai, anthropic, gemini)
 
-- [ ] `sdks/go-providers/openai/conformance_test.go`
-  - [ ] Sync request/response mapping (all fields)
-  - [ ] Streaming mapping (accumulated output, mode=STREAM)
-  - [ ] Thinking/reasoning content -> ThinkingPart
-  - [ ] Tool calls -> ToolCallPart with correct ID, name, input JSON
-  - [ ] Usage mapping (all token types including provider-specific: cache, reasoning)
-  - [ ] Stop reason mapping
-  - [ ] Error response mapping -> SetCallError with correct error type/category
+- [x] `sdks/go-providers/openai/conformance_test.go`
+  - [x] Sync request/response mapping
+  - [x] Streaming mapping (accumulated output, mode=STREAM)
+  - [x] Tool calls/results
+  - [x] Usage mapping (including reasoning/cache fields)
+  - [x] Stop reason mapping
+  - [x] Error response mapping -> `SetCallError` classification
+  - [x] Embedding mapping -> `EmbeddingResult`
   - [ ] Artifact capture (opt-in: request, response, tools, events)
-  - [ ] Embedding mapping -> EmbeddingResult
-- [ ] `sdks/go-providers/anthropic/conformance_test.go` (same scenario list)
-- [ ] `sdks/go-providers/gemini/conformance_test.go` (same scenario list)
-- [ ] Extend `sdk-conformance-spec.md` with provider wrapper section
+- [x] `sdks/go-providers/anthropic/conformance_test.go`
+  - [x] Sync request/response mapping
+  - [x] Streaming mapping (accumulated output, mode=STREAM)
+  - [x] Thinking/reasoning content -> `ThinkingPart`
+  - [x] Tool calls/results
+  - [x] Usage mapping (including cache + server tool metadata)
+  - [x] Stop reason mapping
+  - [x] Error response mapping -> `SetCallError` classification
+  - [ ] Embedding mapping -> not applicable in current repo; no Anthropic embedding wrapper/API surface exists
+- [x] `sdks/go-providers/gemini/conformance_test.go`
+  - [x] Sync request/response mapping
+  - [x] Streaming mapping (accumulated output, mode=STREAM)
+  - [x] Thinking/reasoning content -> `ThinkingPart`
+  - [x] Tool calls/results
+  - [x] Usage mapping (including reasoning/tool-use metadata)
+  - [x] Stop reason mapping
+  - [x] Error response mapping -> `SetCallError` classification
+  - [x] Embedding mapping -> `EmbeddingResult`
+- [x] Extend `sdk-conformance-spec.md` with provider wrapper section
 
 ## Phase C: Go framework adapter (google-adk)
 

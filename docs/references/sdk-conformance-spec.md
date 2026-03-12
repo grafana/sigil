@@ -10,7 +10,7 @@ audience: both
 
 Language-neutral specification of the currently shipped Sigil SDK conformance baseline.
 
-Reference implementation: Go (`sdks/go/sigil/conformance_test.go`, `package sigil_test`).
+Reference implementations: Go core (`sdks/go/sigil/conformance_test.go`, `package sigil_test`) and Go provider suites (`sdks/go-providers/*/conformance_test.go`).
 
 Local entry points:
 
@@ -124,6 +124,38 @@ These assertions apply to every currently shipped scenario:
 - Assert proto field `agent_name` equals the resolved name when present, otherwise empty.
 - Assert proto field `agent_version` equals the resolved version when present, otherwise empty.
 
+## Go provider wrapper baseline
+
+The shipped Go provider harness now covers the public mapper-to-recorder path for:
+
+- `sdks/go-providers/openai`
+- `sdks/go-providers/anthropic`
+- `sdks/go-providers/gemini`
+
+Each provider suite uses the shared local Sigil test environment (`sdks/go/sigil/sigiltest`) to:
+
+1. map provider-native request/response fixtures into normalized `sigil.Generation` or `sigil.EmbeddingResult`
+2. record them through the real Go Sigil client
+3. assert on the exported generation payload and/or emitted spans
+
+### Provider scenarios
+
+Every shipped Go provider suite should cover these behaviors when the provider surface exists:
+
+- Sync mapping: request/response pairs export one normalized `Generation` with the expected model, prompts, input, output, and tags.
+- Streaming mapping: streamed provider summaries export one normalized `Generation` with `mode = STREAM`, accumulated output, and final usage/stop reason.
+- Tool semantics: provider tool calls become `tool_call` parts and provider tool outputs become `tool_result` parts.
+- Reasoning semantics: provider reasoning/thinking content is preserved in normalized output when the provider surface emits that content.
+- Usage semantics: provider-specific token fields (for example cache or reasoning tokens) are preserved in normalized usage/metadata.
+- Error semantics: provider API errors recorded via `SetCallError` preserve call error text and classify the span error category from provider status codes.
+- Embedding semantics: embedding wrappers emit normalized embedding spans with the expected input count and dimensions.
+
+### Current Go scope notes
+
+- OpenAI: generation and embedding conformance are covered.
+- Gemini: generation and embedding conformance are covered.
+- Anthropic: generation conformance is covered. Embedding conformance is currently not applicable because `sdks/go-providers/anthropic` does not expose an embedding wrapper/API surface in this repository.
+
 ## Extending the spec
 
-Future phases will extend this document with additional core, provider-wrapper, and framework-adapter scenarios. Until those phases land, this document is the authoritative baseline for the currently shipped Go conformance harness.
+Future phases will extend this document with additional provider-wrapper and framework-adapter scenarios in other languages. Until those phases land, this document is the authoritative baseline for the currently shipped Go core and Go provider conformance harnesses.
