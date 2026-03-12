@@ -21,6 +21,7 @@ import (
 const (
 	defaultOperationNameSync   = "generateText"
 	defaultOperationNameStream = "streamText"
+	defaultPersistTimeout      = 5 * time.Second
 )
 
 type ExportResult struct {
@@ -38,13 +39,17 @@ type Exporter interface {
 }
 
 type Service struct {
-	store Store
+	store          Store
+	persistTimeout time.Duration
 }
 
 var generationTracer = otel.Tracer("github.com/grafana/sigil/ingest/generation")
 
 func NewService(store Store) *Service {
-	return &Service{store: store}
+	return &Service{
+		store:          store,
+		persistTimeout: defaultPersistTimeout,
+	}
 }
 
 func (s *Service) Export(ctx context.Context, req *sigilv1.ExportGenerationsRequest) *sigilv1.ExportGenerationsResponse {
@@ -114,8 +119,10 @@ func (s *Service) Export(ctx context.Context, req *sigilv1.ExportGenerationsRequ
 		} else {
 			metricTenantID = tenantID
 			span.SetAttributes(attribute.String("sigil.tenant.id", tenantID))
+			storeCtx, cancel := detachedPersistContext(ctx, s.persistTimeout)
+			defer cancel()
 			storeCtx, storeSpan := generationTracer.Start(
-				ctx,
+				storeCtx,
 				"sigil.generation.store.save_batch",
 				trace.WithAttributes(
 					attribute.String("sigil.tenant.id", tenantID),
@@ -219,6 +226,16 @@ func defaultOperationNameForMode(mode sigilv1.GenerationMode) string {
 		return defaultOperationNameStream
 	}
 	return defaultOperationNameSync
+}
+
+func detachedPersistContext(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	if timeout <= 0 {
+		timeout = defaultPersistTimeout
+	}
+	if ctx == nil {
+		return context.WithTimeout(context.Background(), timeout)
+	}
+	return context.WithTimeout(context.WithoutCancel(ctx), timeout)
 }
 
 var generationCounter atomic.Uint64

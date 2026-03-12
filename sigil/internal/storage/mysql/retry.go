@@ -2,7 +2,9 @@ package mysql
 
 import (
 	"context"
+	"database/sql/driver"
 	"errors"
+	"net"
 	"strings"
 	"time"
 
@@ -63,16 +65,33 @@ func IsRetryableLockError(err error) bool {
 	if err == nil {
 		return false
 	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	if errors.Is(err, driver.ErrBadConn) {
+		return true
+	}
 
 	var mysqlErr *mysqlDriver.MySQLError
 	if errors.As(err, &mysqlErr) {
 		switch mysqlErr.Number {
-		case 1205, 1213:
+		case 1040, 1042, 1047, 1081, 1129, 1130, 1158, 1159, 1160, 1161, 1184, 1205, 1213:
 			return true
 		}
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
 	}
 
 	lower := strings.ToLower(err.Error())
 	return strings.Contains(lower, "deadlock found when trying to get lock") ||
-		strings.Contains(lower, "lock wait timeout exceeded")
+		strings.Contains(lower, "lock wait timeout exceeded") ||
+		strings.Contains(lower, "driver: bad connection") ||
+		strings.Contains(lower, "server has gone away") ||
+		strings.Contains(lower, "lost connection to mysql server during query") ||
+		strings.Contains(lower, "connection reset by peer") ||
+		strings.Contains(lower, "broken pipe") ||
+		strings.Contains(lower, "i/o timeout") ||
+		strings.Contains(lower, "connection refused")
 }

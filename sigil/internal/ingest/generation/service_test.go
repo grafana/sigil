@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/grafana/dskit/user"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
@@ -205,6 +206,49 @@ func TestServiceExportReturnsPartialFailures(t *testing.T) {
 	}
 }
 
+func TestServiceExportSurvivesCallerCancellationDuringStoreWrite(t *testing.T) {
+	store := &blockingStore{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	svc := NewService(store)
+
+	ctx, cancel := context.WithCancel(tenantContext())
+	defer cancel()
+
+	done := make(chan *sigilv1.ExportGenerationsResponse, 1)
+	go func() {
+		done <- svc.Export(ctx, &sigilv1.ExportGenerationsRequest{Generations: []*sigilv1.Generation{
+			{
+				Id:    "gen-cancel",
+				Mode:  sigilv1.GenerationMode_GENERATION_MODE_SYNC,
+				Model: &sigilv1.ModelRef{Provider: "openai", Name: "gpt-5"},
+			},
+		}})
+	}()
+
+	select {
+	case <-store.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for store write to start")
+	}
+
+	cancel()
+	close(store.release)
+
+	select {
+	case response := <-done:
+		if len(response.Results) != 1 {
+			t.Fatalf("expected 1 result, got %d", len(response.Results))
+		}
+		if !response.Results[0].Accepted {
+			t.Fatalf("expected accepted result after detached persistence, got %q", response.Results[0].Error)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for export response")
+	}
+}
+
 type failingStore struct {
 	errIndexes map[int]error
 }
@@ -213,6 +257,24 @@ func (s *failingStore) SaveBatch(_ context.Context, _ string, generations []*sig
 	errs := make([]error, len(generations))
 	for i := range generations {
 		if err, ok := s.errIndexes[i]; ok {
+			errs[i] = err
+		}
+	}
+	return errs
+}
+
+type blockingStore struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (s *blockingStore) SaveBatch(ctx context.Context, _ string, generations []*sigilv1.Generation) []error {
+	close(s.started)
+	<-s.release
+
+	errs := make([]error, len(generations))
+	if err := ctx.Err(); err != nil {
+		for i := range errs {
 			errs[i] = err
 		}
 	}

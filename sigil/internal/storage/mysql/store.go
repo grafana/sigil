@@ -1,6 +1,7 @@
 package mysql
 
 import (
+	"context"
 	"log/slog"
 	"time"
 
@@ -13,6 +14,7 @@ type WALStore struct {
 	logger            *slog.Logger
 	evalHook          EvalHook
 	evalEnqueueEnable bool
+	writeHealth       *walWriteHealth
 }
 
 func NewWALStore(dsn string) (*WALStore, error) {
@@ -29,6 +31,7 @@ func NewWALStore(dsn string) (*WALStore, error) {
 		db:                db,
 		logger:            slog.Default(),
 		evalEnqueueEnable: false,
+		writeHealth:       newWALWriteHealth(),
 	}, nil
 }
 
@@ -42,4 +45,11 @@ func (s *WALStore) SetEvalHook(hook EvalHook) {
 
 func (s *WALStore) SetEvalEnqueueEnabled(enabled bool) {
 	s.evalEnqueueEnable = enabled
+}
+
+func (s *WALStore) WALWriteReady(_ context.Context) error {
+	if s == nil || s.writeHealth == nil {
+		return nil
+	}
+	return s.writeHealth.Ready()
 }

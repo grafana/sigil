@@ -37,6 +37,8 @@ var (
 
 var _ storage.WALWriter = (*WALStore)(nil)
 
+var ErrGenerationAlreadyExists = errors.New("generation already exists")
+
 const (
 	conversationProjectionUserIDKey       = "sigil.user.id"
 	conversationProjectionLegacyUserIDKey = "user.id"
@@ -106,17 +108,31 @@ func (s *WALStore) SaveBatch(ctx context.Context, tenantID string, generations [
 			})
 		})
 		if txErr != nil {
+			consecutiveFailures, degraded, becameDegraded := s.writeHealth.ObserveFailure(txErr)
 			s.logger.Error("wal save failed",
 				"tenant_id", tenantID,
 				"generation_id", generation.GetId(),
 				"timeout", errors.Is(txErr, context.DeadlineExceeded),
 				"canceled", errors.Is(txErr, context.Canceled),
 				"err", txErr,
+				"consecutive_failures", consecutiveFailures,
+				"degraded", degraded,
 			)
+			if becameDegraded {
+				s.logger.Error("wal write readiness degraded",
+					"tenant_id", tenantID,
+					"generation_id", generation.GetId(),
+					"consecutive_failures", consecutiveFailures,
+					"err", txErr,
+				)
+			}
 			errs[i] = txErr
 			continue
 		}
 
+		if s.writeHealth.ObserveSuccess() {
+			s.logger.Info("wal write readiness recovered")
+		}
 		successRows++
 	}
 
@@ -431,7 +447,7 @@ func generationCreatedAt(generation *sigilv1.Generation) time.Time {
 func wrapPersistError(err error) error {
 	var mysqlErr *mysqlDriver.MySQLError
 	if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
-		return errors.New("generation already exists")
+		return ErrGenerationAlreadyExists
 	}
 	return fmt.Errorf("persist generation: %w", err)
 }
