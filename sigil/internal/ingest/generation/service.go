@@ -2,6 +2,7 @@ package generation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -129,7 +130,7 @@ func (s *Service) Export(ctx context.Context, req *sigilv1.ExportGenerationsRequ
 					storeFailures++
 					results[idx].Accepted = false
 					results[idx].Error = errs[i].Error()
-					reasons[idx] = "store_error"
+					reasons[idx] = classifyExportErrorReason(errs[i], "store_error")
 				}
 			}
 			storeSpan.SetAttributes(attribute.Int("sigil.generation.save_failure_count", storeFailures))
@@ -164,6 +165,19 @@ func (s *Service) Export(ctx context.Context, req *sigilv1.ExportGenerationsRequ
 	)
 
 	return response
+}
+
+func classifyExportErrorReason(err error, fallback string) string {
+	switch {
+	case err == nil:
+		return fallback
+	case errors.Is(err, context.DeadlineExceeded):
+		return "timeout"
+	case errors.Is(err, context.Canceled):
+		return "canceled"
+	default:
+		return fallback
+	}
 }
 
 func normalizeGeneration(g *sigilv1.Generation) {

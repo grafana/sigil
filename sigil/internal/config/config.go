@@ -32,7 +32,7 @@ const (
 	DefaultCompactorClaimTTL           = 5 * time.Minute
 	DefaultCompactorTargetBlockBytes   = 64 * 1024 * 1024
 	DefaultQueryProxyTimeout           = 30 * time.Second
-	DefaultQueryColdTotalBudget        = 6 * time.Second
+	DefaultQueryColdTotalBudget        = DefaultQueryProxyTimeout
 	DefaultQueryColdIndexReadTimeout   = time.Second
 	DefaultQueryColdIndexRetries       = 1
 	DefaultQueryColdIndexWorkers       = 4
@@ -162,6 +162,7 @@ func FromEnv() Config {
 		defaultAccessKey = ""
 		defaultSecretKey = ""
 	}
+	queryProxyTimeout := getEnvDuration("SIGIL_QUERY_PROXY_TIMEOUT", DefaultQueryProxyTimeout)
 
 	return Config{
 		HTTPAddr:                       getEnv("SIGIL_HTTP_ADDR", ":8080"),
@@ -177,10 +178,10 @@ func FromEnv() Config {
 		QueryProxy: QueryProxyConfig{
 			PrometheusBaseURL: getEnv("SIGIL_QUERY_PROXY_PROMETHEUS_BASE_URL", "http://prometheus:9090"),
 			TempoBaseURL:      getEnv("SIGIL_QUERY_PROXY_TEMPO_BASE_URL", "http://tempo:3200"),
-			Timeout:           getEnvDuration("SIGIL_QUERY_PROXY_TIMEOUT", DefaultQueryProxyTimeout),
+			Timeout:           queryProxyTimeout,
 		},
 		QueryRead: QueryReadConfig{
-			ColdTotalBudget:        getEnvDuration("SIGIL_QUERY_COLD_TOTAL_BUDGET", DefaultQueryColdTotalBudget),
+			ColdTotalBudget:        getEnvDuration("SIGIL_QUERY_COLD_TOTAL_BUDGET", queryProxyTimeout),
 			ColdIndexReadTimeout:   getEnvDuration("SIGIL_QUERY_COLD_INDEX_READ_TIMEOUT", DefaultQueryColdIndexReadTimeout),
 			ColdIndexRetries:       getEnvInt("SIGIL_QUERY_COLD_INDEX_RETRIES", DefaultQueryColdIndexRetries),
 			ColdIndexWorkers:       getEnvInt("SIGIL_QUERY_COLD_INDEX_WORKERS", DefaultQueryColdIndexWorkers),

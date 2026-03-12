@@ -749,6 +749,42 @@ func TestFanOutStoreListConversationGenerationsWithPlanUsesBoundedBlockRange(t *
 	}
 }
 
+func TestFanOutStoreListConversationGenerationsRecordsDeadlineExceededOutcome(t *testing.T) {
+	before := testutil.ToFloat64(queryColdReadOutcomeTotal.WithLabelValues("list_conversation", "deadline_exceeded"))
+
+	store := NewFanOutStore(
+		&fanOutTestWALReader{
+			getByConversationID: func(_ context.Context, _, _ string) ([]*sigilv1.Generation, error) {
+				return []*sigilv1.Generation{}, nil
+			},
+		},
+		&fanOutTestBlockMetadataStore{
+			listBlocks: func(ctx context.Context, _ string, _, _ time.Time) ([]BlockMeta, error) {
+				<-ctx.Done()
+				return nil, ctx.Err()
+			},
+		},
+		&fanOutTestBlockReader{},
+		WithColdReadConfig(ColdReadConfig{
+			TotalBudget:      20 * time.Millisecond,
+			IndexReadTimeout: 20 * time.Millisecond,
+			IndexRetries:     0,
+			IndexWorkers:     1,
+			IndexMaxInflight: 1,
+		}),
+	)
+
+	_, err := store.ListConversationGenerationsWithPlan(context.Background(), "tenant-a", "conv-1", ConversationReadPlan{})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected deadline exceeded, got %v", err)
+	}
+
+	after := testutil.ToFloat64(queryColdReadOutcomeTotal.WithLabelValues("list_conversation", "deadline_exceeded"))
+	if delta := after - before; delta != 1 {
+		t.Fatalf("expected one deadline_exceeded outcome increment, got %v", delta)
+	}
+}
+
 func TestFanOutStoreListConversationGenerationsSkipsStaleBlocks(t *testing.T) {
 	base := time.Date(2026, 2, 19, 10, 0, 0, 0, time.UTC)
 	hotGeneration := fanOutTestGeneration("gen-1", "conv-1", base.Add(time.Minute))
