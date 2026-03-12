@@ -56,8 +56,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
     borderTop: `1px solid ${theme.colors.border.weak}`,
     paddingTop: theme.spacing(1),
     color: theme.colors.primary.text,
-    cursor: 'pointer',
     fontSize: theme.typography.body.fontSize,
+    background: 'none',
+    border: 'none',
+    textAlign: 'left',
+    padding: 0,
     '&:hover': { textDecoration: 'underline' },
   }),
   footer: css({
@@ -152,21 +155,20 @@ export function AddToCollectionModal({
     setSaving(true);
     setError(undefined);
     try {
-      for (const col of collections) {
-        const current = membershipMap.get(col.collection_id) ?? new Set<string>();
-        const state = checkStates.get(col.collection_id) ?? 'unchecked';
+      for (const [colID, state] of checkStates) {
+        const current = membershipMap.get(colID) ?? new Set<string>();
 
         if (state === 'checked') {
           // Add conversations not already in this collection
           const toAdd = selectedSavedIDs.filter((id) => !current.has(id));
           if (toAdd.length > 0) {
-            await dataSource.addCollectionMembers(col.collection_id, { saved_ids: toAdd, added_by: 'user' });
+            await dataSource.addCollectionMembers(colID, { saved_ids: toAdd, added_by: 'user' });
           }
         } else if (state === 'unchecked') {
           // Remove conversations that were in this collection
           const toRemove = selectedSavedIDs.filter((id) => current.has(id));
           await Promise.all(
-            toRemove.map((id) => dataSource.removeCollectionMember(col.collection_id, id))
+            toRemove.map((id) => dataSource.removeCollectionMember(colID, id))
           );
         }
         // partial -> partial: no-op (user didn't change it)
@@ -181,16 +183,22 @@ export function AddToCollectionModal({
   };
 
   const handleCreateCollection = async (values: { name: string; description?: string }) => {
-    const created = await dataSource.createCollection({
-      name: values.name,
-      description: values.description,
-      created_by: 'user',
-    });
-    onCollectionCreated(created);
-    setShowCreateModal(false);
-    // Pre-check the newly created collection
-    setCheckStates((prev) => new Map(prev).set(created.collection_id, 'checked'));
-    setMembershipMap((prev) => new Map(prev).set(created.collection_id, new Set()));
+    try {
+      const created = await dataSource.createCollection({
+        name: values.name,
+        description: values.description,
+        created_by: 'user',
+      });
+      onCollectionCreated(created);
+      setShowCreateModal(false);
+      // Pre-check the newly created collection
+      setCheckStates((prev) => new Map(prev).set(created.collection_id, 'checked'));
+      setMembershipMap((prev) => new Map(prev).set(created.collection_id, new Set()));
+    } catch (e) {
+      // Surface error in the main modal, not just in CollectionFormModal
+      setError(e instanceof Error ? e.message : 'Failed to create collection');
+      setShowCreateModal(false);
+    }
   };
 
   const filtered = filterQuery
@@ -226,8 +234,8 @@ export function AddToCollectionModal({
                       aria-label={col.name}
                       checked={isChecked}
                       ref={(el) => { if (el) el.indeterminate = isPartial; }}
-                      onChange={() => toggleCheck(col.collection_id)}
-                      onClick={(e) => e.stopPropagation()}
+                      onChange={() => {}}
+                      onClick={(e) => { e.stopPropagation(); toggleCheck(col.collection_id); }}
                     />
                     <span className={styles.itemLabel}>{col.name}</span>
                     <span className={styles.itemCount}>{col.member_count}</span>
@@ -237,9 +245,9 @@ export function AddToCollectionModal({
               })
             )}
           </div>
-          <div className={styles.createLink} onClick={() => setShowCreateModal(true)}>
+          <button className={styles.createLink} onClick={() => setShowCreateModal(true)}>
             + Create new collection
-          </div>
+          </button>
           <div className={styles.footer}>
             <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
             <Button variant="primary" onClick={handleSave} disabled={saving || loading}>
