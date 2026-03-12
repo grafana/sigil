@@ -41,6 +41,7 @@ const (
 	spanAttrAgentVersion          = "gen_ai.agent.version"
 	spanAttrProviderName          = "gen_ai.provider.name"
 	spanAttrRequestModel          = "gen_ai.request.model"
+	spanAttrRequestToolChoice     = "sigil.gen_ai.request.tool_choice"
 	spanAttrErrorType             = "error.type"
 	spanAttrErrorCategory         = "error.category"
 	spanAttrToolName              = "gen_ai.tool.name"
@@ -54,6 +55,7 @@ const (
 	metricOperationDuration       = "gen_ai.client.operation.duration"
 	metricTokenUsage              = "gen_ai.client.token.usage"
 	metricTimeToFirstToken        = "gen_ai.client.time_to_first_token"
+	metricToolCallsPerOperation   = "gen_ai.client.tool_calls_per_operation"
 )
 
 var conformanceModel = sigil.ModelRef{
@@ -271,6 +273,17 @@ func (s *fakeIngestServer) Requests() []*sigilv1.ExportGenerationsRequest {
 	return out
 }
 
+func (s *fakeIngestServer) RequestCount() int {
+	if s == nil {
+		return 0
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return len(s.requests)
+}
+
 func (s *fakeIngestServer) GenerationCount() int {
 	if s == nil {
 		return 0
@@ -366,6 +379,16 @@ func (s *fakeRatingServer) Requests() []capturedRatingRequest {
 		}
 	}
 	return out
+}
+
+func (s *fakeRatingServer) SingleRequest(t *testing.T) capturedRatingRequest {
+	t.Helper()
+
+	requests := s.Requests()
+	if len(requests) != 1 {
+		t.Fatalf("expected exactly one rating request, got %d", len(requests))
+	}
+	return requests[0]
 }
 
 func findSpan(t *testing.T, spans []sdktrace.ReadOnlySpan, operationName string) sdktrace.ReadOnlySpan {

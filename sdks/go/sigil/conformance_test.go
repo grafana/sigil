@@ -318,8 +318,20 @@ func TestConformance_StreamingMode(t *testing.T) {
 	if got := streamGeneration.GetMode(); got != sigilv1.GenerationMode_GENERATION_MODE_STREAM {
 		t.Fatalf("unexpected proto mode: got %v want %v", got, sigilv1.GenerationMode_GENERATION_MODE_STREAM)
 	}
+	if got := streamGeneration.GetOperationName(); got != conformanceStreamOperation {
+		t.Fatalf("unexpected proto operation: got %q want %q", got, conformanceStreamOperation)
+	}
+	if len(streamGeneration.GetOutput()) != 1 || len(streamGeneration.GetOutput()[0].GetParts()) != 1 {
+		t.Fatalf("expected a single streamed assistant output, got %#v", streamGeneration.GetOutput())
+	}
+	if got := streamGeneration.GetOutput()[0].GetParts()[0].GetText(); got != "Hello world" {
+		t.Fatalf("unexpected streamed assistant text: got %q want %q", got, "Hello world")
+	}
 
 	span := findSpan(t, env.Spans.Ended(), conformanceStreamOperation)
+	if got := span.Name(); got != conformanceStreamOperation+" "+conformanceModel.Name {
+		t.Fatalf("unexpected streaming span name: %q", got)
+	}
 	attrs := spanAttrs(span)
 	requireSpanAttr(t, attrs, spanAttrOperationName, conformanceStreamOperation)
 }
@@ -432,6 +444,8 @@ func TestConformance_Embedding(t *testing.T) {
 		spanAttrAgentName:     "agent-embed",
 		metricAttrTokenType:   metricTokenTypeInput,
 	})
+	requireNoHistogram(t, metrics, metricTimeToFirstToken)
+	requireNoHistogram(t, metrics, metricToolCallsPerOperation)
 
 	env.Shutdown(t)
 
@@ -527,6 +541,12 @@ func TestConformance_ValidationAndErrorSemantics(t *testing.T) {
 		attrs := spanAttrs(span)
 		requireSpanAttr(t, attrs, spanAttrErrorType, "provider_call_error")
 		requireSpanAttr(t, attrs, spanAttrErrorCategory, "rate_limit")
+
+		generation := env.Ingest.SingleGeneration(t)
+		if got := generation.GetCallError(); got != "provider returned HTTP 429 rate limit" {
+			t.Fatalf("unexpected proto call error: got %q", got)
+		}
+		requireProtoMetadata(t, generation, "call_error", "provider returned HTTP 429 rate limit")
 	})
 }
 
