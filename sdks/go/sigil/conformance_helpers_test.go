@@ -3,7 +3,6 @@ package sigil_test
 import (
 	"context"
 	"io"
-	"math"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -24,13 +23,16 @@ import (
 
 const (
 	conformanceOperationName       = "generateText"
+	conformanceStreamOperation     = "streamText"
+	conformanceToolOperation       = "execute_tool"
+	conformanceEmbeddingOperation  = "embeddings"
 	metadataKeyConversation        = "sigil.conversation.title"
 	metadataKeyCanonicalUserID     = "sigil.user.id"
 	metadataKeyLegacyUserID        = "user.id"
-	sdkMetadataKeyName             = "sigil.sdk.name"
-	sdkName                        = "sdk-go"
-	spanAttrGenerationID           = "sigil.generation.id"
+	metadataKeyThinkingBudget      = "sigil.gen_ai.request.thinking.budget_tokens"
+	metadataKeySDKName             = "sigil.sdk.name"
 	spanAttrOperationName          = "gen_ai.operation.name"
+	spanAttrGenerationID           = "sigil.generation.id"
 	spanAttrConversationID         = "gen_ai.conversation.id"
 	spanAttrConversationTitle      = "sigil.conversation.title"
 	spanAttrUserID                 = "user.id"
@@ -45,7 +47,14 @@ const (
 	spanAttrRequestTopP            = "gen_ai.request.top_p"
 	spanAttrRequestToolChoice      = "sigil.gen_ai.request.tool_choice"
 	spanAttrRequestThinkingEnabled = "sigil.gen_ai.request.thinking.enabled"
-	spanAttrRequestThinkingBudget  = "sigil.gen_ai.request.thinking.budget_tokens"
+	spanAttrEmbeddingInputCount    = "gen_ai.embeddings.input_count"
+	spanAttrEmbeddingDimCount      = "gen_ai.embeddings.dimension.count"
+	spanAttrToolName               = "gen_ai.tool.name"
+	spanAttrToolCallID             = "gen_ai.tool.call.id"
+	spanAttrToolType               = "gen_ai.tool.type"
+	spanAttrToolDescription        = "gen_ai.tool.description"
+	spanAttrToolCallArguments      = "gen_ai.tool.call.arguments"
+	spanAttrToolCallResult         = "gen_ai.tool.call.result"
 	spanAttrResponseID             = "gen_ai.response.id"
 	spanAttrResponseModel          = "gen_ai.response.model"
 	spanAttrFinishReasons          = "gen_ai.response.finish_reasons"
@@ -66,6 +75,7 @@ const (
 	metricTokenTypeCacheWrite      = "cache_write"
 	metricTokenTypeCacheCreation   = "cache_creation"
 	metricTokenTypeReasoning       = "reasoning"
+	sdkNameGo                      = "sdk-go"
 )
 
 var conformanceModel = sigil.ModelRef{
@@ -155,6 +165,14 @@ func newConformanceEnv(t *testing.T, opts ...conformanceEnvOption) *conformanceE
 		_ = env.close()
 	})
 	return env
+}
+
+func withConformanceConfig(mutator func(*sigil.Config)) conformanceEnvOption {
+	return func(cfg *conformanceEnvConfig) {
+		if mutator != nil {
+			mutator(&cfg.config)
+		}
+	}
 }
 
 func (e *conformanceEnv) Shutdown(t *testing.T) {
@@ -262,6 +280,44 @@ func (s *fakeIngestServer) SingleGeneration(t *testing.T) *sigilv1.Generation {
 	return s.requests[0].Generations[0]
 }
 
+func (s *fakeIngestServer) RequestCount() int {
+	if s == nil {
+		return 0
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.requests)
+}
+
+func (s *fakeIngestServer) Requests() []*sigilv1.ExportGenerationsRequest {
+	if s == nil {
+		return nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	out := make([]*sigilv1.ExportGenerationsRequest, len(s.requests))
+	copy(out, s.requests)
+	return out
+}
+
+func (s *fakeIngestServer) GenerationCount() int {
+	if s == nil {
+		return 0
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	total := 0
+	for _, req := range s.requests {
+		total += len(req.GetGenerations())
+	}
+	return total
+}
+
 func acceptanceResponse(req *sigilv1.ExportGenerationsRequest) *sigilv1.ExportGenerationsResponse {
 	response := &sigilv1.ExportGenerationsResponse{Results: make([]*sigilv1.ExportGenerationResult, len(req.GetGenerations()))}
 	for i := range req.GetGenerations() {
@@ -324,6 +380,37 @@ func (s *fakeRatingServer) Close() {
 	}
 }
 
+func (s *fakeRatingServer) SingleRequest(t *testing.T) capturedRatingRequest {
+	t.Helper()
+
+	requests := s.Requests()
+	if len(requests) != 1 {
+		t.Fatalf("expected exactly one rating request, got %d", len(requests))
+	}
+
+	return requests[0]
+}
+
+func (s *fakeRatingServer) Requests() []capturedRatingRequest {
+	if s == nil {
+		return nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	out := make([]capturedRatingRequest, len(s.requests))
+	for i := range s.requests {
+		out[i] = capturedRatingRequest{
+			Method:  s.requests[i].Method,
+			Path:    s.requests[i].Path,
+			Headers: s.requests[i].Headers.Clone(),
+			Body:    append([]byte(nil), s.requests[i].Body...),
+		}
+	}
+	return out
+}
+
 func findSpan(t *testing.T, spans []sdktrace.ReadOnlySpan, operationName string) sdktrace.ReadOnlySpan {
 	t.Helper()
 
@@ -363,31 +450,7 @@ func requireSpanAttr(t *testing.T, attrs map[string]attribute.Value, key, want s
 	}
 }
 
-func requireSpanInt64Attr(t *testing.T, attrs map[string]attribute.Value, key string, want int64) {
-	t.Helper()
-
-	got, ok := attrs[key]
-	if !ok {
-		t.Fatalf("expected span attribute %q=%d, attribute missing", key, want)
-	}
-	if got.AsInt64() != want {
-		t.Fatalf("unexpected span attribute %q: got %d want %d", key, got.AsInt64(), want)
-	}
-}
-
-func requireSpanFloat64Attr(t *testing.T, attrs map[string]attribute.Value, key string, want float64) {
-	t.Helper()
-
-	got, ok := attrs[key]
-	if !ok {
-		t.Fatalf("expected span attribute %q=%f, attribute missing", key, want)
-	}
-	if got.AsFloat64() != want {
-		t.Fatalf("unexpected span attribute %q: got %f want %f", key, got.AsFloat64(), want)
-	}
-}
-
-func requireSpanBoolAttr(t *testing.T, attrs map[string]attribute.Value, key string, want bool) {
+func requireSpanAttrBool(t *testing.T, attrs map[string]attribute.Value, key string, want bool) {
 	t.Helper()
 
 	got, ok := attrs[key]
@@ -399,21 +462,53 @@ func requireSpanBoolAttr(t *testing.T, attrs map[string]attribute.Value, key str
 	}
 }
 
-func requireSpanStringSliceAttr(t *testing.T, attrs map[string]attribute.Value, key string, want []string) {
+func requireSpanAttrInt64(t *testing.T, attrs map[string]attribute.Value, key string, want int64) {
+	t.Helper()
+
+	got, ok := attrs[key]
+	if !ok {
+		t.Fatalf("expected span attribute %q=%d, attribute missing", key, want)
+	}
+	if got.AsInt64() != want {
+		t.Fatalf("unexpected span attribute %q: got %d want %d", key, got.AsInt64(), want)
+	}
+}
+
+func requireSpanAttrFloat64(t *testing.T, attrs map[string]attribute.Value, key string, want float64) {
 	t.Helper()
 
 	got, ok := attrs[key]
 	if !ok {
 		t.Fatalf("expected span attribute %q=%v, attribute missing", key, want)
 	}
-	gotValues := got.AsStringSlice()
-	if len(gotValues) != len(want) {
-		t.Fatalf("unexpected span attribute %q length: got %d want %d", key, len(gotValues), len(want))
+	if got.AsFloat64() != want {
+		t.Fatalf("unexpected span attribute %q: got %v want %v", key, got.AsFloat64(), want)
+	}
+}
+
+func requireSpanAttrStringSlice(t *testing.T, attrs map[string]attribute.Value, key string, want []string) {
+	t.Helper()
+
+	got, ok := attrs[key]
+	if !ok {
+		t.Fatalf("expected span attribute %q=%v, attribute missing", key, want)
+	}
+	gotSlice := got.AsStringSlice()
+	if len(gotSlice) != len(want) {
+		t.Fatalf("unexpected span attribute %q length: got %v want %v", key, gotSlice, want)
 	}
 	for i := range want {
-		if gotValues[i] != want[i] {
-			t.Fatalf("unexpected span attribute %q[%d]: got %q want %q", key, i, gotValues[i], want[i])
+		if gotSlice[i] != want[i] {
+			t.Fatalf("unexpected span attribute %q: got %v want %v", key, gotSlice, want)
 		}
+	}
+}
+
+func requireSpanAttrPresent(t *testing.T, attrs map[string]attribute.Value, key string) {
+	t.Helper()
+
+	if _, ok := attrs[key]; !ok {
+		t.Fatalf("expected span attribute %q to be present", key)
 	}
 }
 
@@ -457,58 +552,32 @@ func requireNoHistogram(t *testing.T, collected metricdata.ResourceMetrics, name
 	}
 }
 
-func requireHistogramPointFloat64(t *testing.T, histogram metricdata.Histogram[float64], wantSum float64, wantAttrs map[string]string) {
+func requireHistogramPointWithAttrs[N int64 | float64](t *testing.T, histogram metricdata.Histogram[N], want map[string]string) metricdata.HistogramDataPoint[N] {
 	t.Helper()
 
 	for _, point := range histogram.DataPoints {
-		if point.Count == 0 {
-			continue
-		}
-		if math.Abs(point.Sum-wantSum) > 1e-9 {
-			continue
-		}
-		if metricAttrsMatch(point.Attributes, wantAttrs) {
-			return
+		if pointHasStringAttrs(point.Attributes, want) {
+			return point
 		}
 	}
 
-	t.Fatalf("expected float64 histogram point sum=%v attrs=%v", wantSum, wantAttrs)
+	t.Fatalf("expected histogram datapoint with attrs %v", want)
+	return metricdata.HistogramDataPoint[N]{}
 }
 
-func requireHistogramPointInt64(t *testing.T, histogram metricdata.Histogram[int64], wantSum int64, wantAttrs map[string]string) {
-	t.Helper()
-
-	for _, point := range histogram.DataPoints {
-		if point.Count == 0 {
-			continue
-		}
-		if point.Sum != wantSum {
-			continue
-		}
-		if metricAttrsMatch(point.Attributes, wantAttrs) {
-			return
-		}
+func pointHasStringAttrs(attrs attribute.Set, want map[string]string) bool {
+	got := map[string]string{}
+	for _, kv := range attrs.ToSlice() {
+		got[string(kv.Key)] = kv.Value.AsString()
 	}
 
-	t.Fatalf("expected int64 histogram point sum=%d attrs=%v", wantSum, wantAttrs)
-}
-
-func metricAttrsMatch(set attribute.Set, want map[string]string) bool {
-	got := metricAttrsMap(set)
 	for key, wantValue := range want {
 		if got[key] != wantValue {
 			return false
 		}
 	}
-	return true
-}
 
-func metricAttrsMap(set attribute.Set) map[string]string {
-	out := make(map[string]string, len(set.ToSlice()))
-	for _, attr := range set.ToSlice() {
-		out[string(attr.Key)] = attr.Value.AsString()
-	}
-	return out
+	return true
 }
 
 func requireProtoMetadata(t *testing.T, generation *sigilv1.Generation, key, want string) {

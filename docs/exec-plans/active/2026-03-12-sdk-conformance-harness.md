@@ -33,11 +33,21 @@ Building conformance tests against the real public API will surface issues that 
 3. The conformance test itself serves as the regression test for the fix.
 4. Log the fix in the "SDK fixes" section below so the PR description captures what was discovered.
 
+### Current shipped baseline
+
+The repo currently ships the Go core conformance harness entry point:
+
+- Local task: `mise run test:sdk:conformance`
+- Direct runner: `cd sdks/go && GOWORK=off go test ./sigil -run '^TestConformance' -count=1`
+- Current covered scenarios: conversation title semantics, user ID semantics, agent identity semantics, streaming mode semantics, tool execution semantics, embedding semantics, validation/error semantics, rating submission semantics, shutdown flush semantics
+- Current assertion targets in active use: generation export proto, OTLP spans, OTLP metrics
+
 ### SDK fixes discovered during implementation
 
 (Updated as issues are found.)
 
-- _(none yet)_
+- [x] Added `cache_creation_input_tokens` to the generation ingest protobuf contract and regenerated the Go SDK/server bindings so full usage roundtrip coverage can assert all six token counters.
+- [x] Synced the checked-in JS proto copy and regenerated the Go protobuf bindings so `ToolDefinition.deferred` is present in the conformance ingest schema used by the Go SDK harness.
 
 ## Phase A: Go core SDK
 
@@ -45,7 +55,7 @@ Building conformance tests against the real public API will surface issues that 
 
 - [x] Add `conformance_helpers_test.go` (`package sigil_test`):
   - [x] `conformanceEnv` struct wiring `sigil.Client` to all four capture targets
-  - [ ] `newConformanceEnv(t, ...opts)` constructor with functional options
+  - [x] `newConformanceEnv(t, ...opts)` constructor with functional options
   - [x] `fakeIngestServer` implementing `GenerationIngestServiceServer` on `127.0.0.1:0`
   - [x] `fakeRatingServer` wrapping `httptest.Server` with request capture
   - [x] OTel `tracetest.SpanRecorder` + `sdktrace.TracerProvider` setup
@@ -90,23 +100,23 @@ Building conformance tests against the real public API will surface issues that 
 - [ ] Scenario 5: SDK identity protection (`sigil.sdk.name` overwrite)
 - [ ] Scenario 6: Tags and metadata merge (start + result, conflict resolution)
 - [ ] Scenario 7: Resource attributes on OTLP spans
-- [ ] Scenario 8: Streaming mode (mode, operation name, TTFT metric)
-- [ ] Scenario 9: Tool execution (span shape, attributes, metrics, context propagation)
-- [ ] Scenario 10: Embedding (span, metrics, no generation export)
-- [ ] Scenario 11: Validation and error semantics
-  - [ ] Invalid generation: no export, ErrValidationFailed
-  - [ ] SetCallError: error span attributes, metric labels
-- [ ] Scenario 12: Rating helper (request shape, auth headers, response parsing)
-- [ ] Scenario 13: Shutdown flushes pending generation
+- [x] Scenario 8: Streaming mode (mode, operation name, TTFT metric)
+- [x] Scenario 9: Tool execution (span shape, attributes, metrics, context propagation)
+- [x] Scenario 10: Embedding (span, metrics, no generation export)
+- [x] Scenario 11: Validation and error semantics
+  - [x] Invalid generation: no export, ErrValidationFailed
+  - [x] SetCallError: error span attributes, metric labels
+- [x] Scenario 12: Rating helper (request shape, auth headers, response parsing)
+- [x] Scenario 13: Shutdown flushes pending generation
 
 ### A4: Spec and docs
 
-- [ ] Write `docs/references/sdk-conformance-spec.md` (core scenarios, language-neutral)
-- [ ] Add `test:sdk:conformance` task to `mise.toml`
-- [ ] Update `ARCHITECTURE.md` SDK section
-- [ ] Update `docs/design-docs/index.md`
-- [ ] Verify: `mise run test:sdk:conformance` passes
-- [ ] Verify: `go test -run TestConformance -count=5 ./sdks/go/sigil/` proves determinism
+- [x] Publish `docs/references/sdk-conformance-spec.md` for the current Go core baseline (language-neutral)
+- [x] Add `test:sdk:conformance` task to `mise.toml`
+- [x] Update `ARCHITECTURE.md` SDK section
+- [x] Update discoverability docs (`docs/index.md`, `docs/references/index.md`, `sdks/go/README.md`)
+- [x] Verify: `mise run test:sdk:conformance` passes
+- [x] Verify: `go test -run TestConformance -count=5 ./sdks/go/sigil/` proves determinism
 
 ## Phase B: Go provider wrappers
 
