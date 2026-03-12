@@ -35,13 +35,15 @@ Building conformance tests against the real public API will surface issues that 
 
 ### Current shipped baseline
 
-The repo now ships an aggregate core conformance entry point, the Go provider-wrapper layer, and the first Go framework-adapter layer:
+The repo now ships aggregate core, provider-wrapper, and framework-adapter entry points:
 
 - Local task: `mise run sdk:conformance`
+- Provider aggregate: `mise run test:sdk:provider-conformance`
+- Framework aggregate: `mise run test:sdk:framework-conformance`
 - Direct Go runner: `mise run test:go:sdk-conformance`
 - Current covered core scenarios: sync roundtrip, conversation title semantics, user ID semantics, agent identity semantics, streaming telemetry semantics, tool execution semantics, embedding semantics, validation/error semantics, rating submission semantics, shutdown flush semantics
 - Current assertion targets in active use: generation export proto, OTLP spans, OTLP metrics, rating HTTP
-- Current shipped extension layers: Go provider wrappers (`openai`, `anthropic`, `gemini`) and Go Google ADK framework-adapter conformance
+- Current shipped extension layers: provider-wrapper conformance for Go, TypeScript/JavaScript, Python, Java, and .NET plus framework-adapter conformance for Go, TypeScript/JavaScript, Python, and Java where those packages exist
 
 ### SDK fixes discovered during implementation
 
@@ -209,19 +211,20 @@ Each language implements the current core scenario set from `sdk-conformance-spe
 Priority order follows adoption:
 
 ### Python (highest adoption)
-- [ ] Provider conformance: openai, anthropic, gemini
-- [ ] Framework conformance: langchain, langgraph, openai-agents, llamaindex, google-adk
+- [x] Provider conformance: openai, anthropic, gemini
+- [x] Framework conformance: langchain, langgraph, openai-agents, llamaindex, google-adk
 
 ### TypeScript/JavaScript
-- [ ] Provider conformance: openai, anthropic, gemini
-- [ ] Framework conformance: langchain, langgraph, openai-agents, llamaindex, google-adk, vercel-ai-sdk
+- [x] Provider conformance: openai, anthropic, gemini
+- [x] Framework conformance: langchain, langgraph, openai-agents, llamaindex, google-adk, vercel-ai-sdk
 
 ### Java
-- [ ] Provider conformance: openai, anthropic, gemini
-- [ ] Framework conformance: google-adk
+- [x] Provider conformance: openai, anthropic, gemini
+- [x] Framework conformance: google-adk
 
 ### .NET
-- [ ] Provider conformance: openai, anthropic, gemini
+- [x] Provider conformance: openai, anthropic, gemini
+- [x] Framework conformance: not applicable in current repo because no .NET framework-adapter package is shipped
 
 ## Decisions Applied
 

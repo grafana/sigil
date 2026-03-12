@@ -106,6 +106,49 @@ class AnthropicAdapterTest {
     }
 
     @Test
+    void wrappersTolerateMissingProviderPayloadFields() throws Exception {
+        CapturingExporter exporter = new CapturingExporter();
+        try (SigilClient client = new SigilClient(new SigilClientConfig()
+                .setTracer(GlobalOpenTelemetry.getTracer("test"))
+                .setGenerationExporter(exporter)
+                .setGenerationExport(new GenerationExportConfig().setBatchSize(1).setFlushInterval(Duration.ofMinutes(10)).setMaxRetries(0)))) {
+
+            AnthropicAdapter.completion(
+                    client,
+                    request(),
+                    _r -> ObjectMappers.jsonMapper().readValue(
+                            """
+                            {
+                              "id": "msg_malformed",
+                              "content": [],
+                              "model": "claude-sonnet-4",
+                              "usage": {
+                                "input_tokens": 0,
+                                "output_tokens": 0
+                              }
+                            }
+                            """,
+                            Message.class),
+                    new AnthropicOptions());
+            AnthropicAdapter.completionStream(
+                    client,
+                    request(),
+                    _r -> new FakeStreamResponse<>(List.of()),
+                    new AnthropicOptions());
+        }
+
+        assertThat(exporter.generations).hasSize(2);
+        assertThat(exporter.generations.get(0).getMode()).isEqualTo(GenerationMode.SYNC);
+        assertThat(exporter.generations.get(0).getResponseId()).isEqualTo("msg_malformed");
+        assertThat(exporter.generations.get(0).getResponseModel()).isEqualTo("claude-sonnet-4");
+        assertThat(exporter.generations.get(0).getOutput()).isEmpty();
+        assertThat(exporter.generations.get(0).getStopReason()).isEmpty();
+        assertThat(exporter.generations.get(1).getMode()).isEqualTo(GenerationMode.STREAM);
+        assertThat(exporter.generations.get(1).getResponseModel()).isEqualTo("claude-sonnet-4");
+        assertThat(exporter.generations.get(1).getOutput()).isEmpty();
+    }
+
+    @Test
     void mapperSetsThinkingFalseWhenDisabled() throws Exception {
         MessageCreateParams request = MessageCreateParams.builder()
                 .model("claude-sonnet-4")
@@ -116,6 +159,12 @@ class AnthropicAdapterTest {
 
         var mapped = AnthropicAdapter.fromRequestResponse(request, response(), new AnthropicOptions());
         assertThat(mapped.getThinkingEnabled()).isFalse();
+    }
+
+    @Test
+    void mapperRejectsMissingResponse() {
+        assertThatThrownBy(() -> AnthropicAdapter.fromRequestResponse(request(), null, new AnthropicOptions()))
+                .isInstanceOf(NullPointerException.class);
     }
 
     private static MessageCreateParams request() {

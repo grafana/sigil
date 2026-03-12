@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Diagnostics;
 using System.Reflection;
 using Anthropic.Models.Messages;
 using Xunit;
@@ -119,6 +120,62 @@ public sealed class AnthropicMappingAndRecorderTests
         Assert.Contains(generations, generation => generation.Mode == GenerationMode.Stream);
     }
 
+    [Fact]
+    public async Task Recorder_StreamMappingErrors_PreserveReturnedSummaries_AndMarkSpans()
+    {
+        var exporter = new CapturingExporter();
+        var spans = new List<Activity>();
+        using var listener = NewGenerationListener(spans);
+        ActivitySource.AddActivityListener(listener);
+
+        await using var client = new SigilClient(new SigilClientConfig
+        {
+            GenerationExporter = exporter,
+            GenerationExport = new GenerationExportConfig
+            {
+                BatchSize = 1,
+                QueueSize = 10,
+                FlushInterval = TimeSpan.FromHours(1),
+            },
+        });
+
+        var summary = await AnthropicRecorder.MessageStreamAsync(
+            client,
+            CreateRequest(),
+            (_, _) => EmptyStreamEvents(),
+            new AnthropicSigilOptions
+            {
+                ModelName = "claude-sonnet-4-5",
+            }
+        );
+
+        Assert.Empty(summary.Events);
+
+        await client.FlushAsync();
+        await client.ShutdownAsync();
+
+        var generations = exporter.Requests.SelectMany(request => request.Generations).ToList();
+        Assert.Single(generations);
+        Assert.Equal(GenerationMode.Stream, generations[0].Mode);
+        Assert.Equal(string.Empty, generations[0].CallError);
+        Assert.Single(spans.Where(span => span.GetTagItem("error.type")?.ToString() == "mapping_error"));
+    }
+
+    [Fact]
+    public void MapperRejectsMissingOrMalformedResponses()
+    {
+        Assert.Throws<ArgumentNullException>(() => AnthropicGenerationMapper.FromRequestResponse(
+            CreateRequest(),
+            response: null!,
+            new AnthropicSigilOptions()
+        ));
+        Assert.Throws<ArgumentException>(() => AnthropicGenerationMapper.FromStream(
+            CreateRequest(),
+            new AnthropicStreamSummary(),
+            new AnthropicSigilOptions()
+        ));
+    }
+
     private static MessageCreateParams CreateRequest()
     {
         var request = new MessageCreateParams
@@ -199,6 +256,12 @@ public sealed class AnthropicMappingAndRecorderTests
         };
     }
 
+    private static async IAsyncEnumerable<RawMessageStreamEvent> EmptyStreamEvents()
+    {
+        await Task.CompletedTask;
+        yield break;
+    }
+
     private static AnthropicMessage CreateResponse()
     {
         var usage = new Usage
@@ -229,6 +292,7 @@ public sealed class AnthropicMappingAndRecorderTests
         return new AnthropicMessage
         {
             ID = "msg_1",
+            Container = null!,
             Content = new List<ContentBlock>
             {
                 new TextBlock
@@ -266,6 +330,7 @@ public sealed class AnthropicMappingAndRecorderTests
             Message = new AnthropicMessage
             {
                 ID = id,
+                Container = null!,
                 Model = Model.ClaudeSonnet4_5,
                 Content = new List<ContentBlock>
                 {
@@ -335,6 +400,7 @@ public sealed class AnthropicMappingAndRecorderTests
             Type = JsonSerializer.SerializeToElement("message_delta"),
             Delta = new Delta
             {
+                Container = null!,
                 StopReason = StopReason.EndTurn,
                 StopSequence = null,
             },
@@ -485,5 +551,21 @@ public sealed class AnthropicMappingAndRecorderTests
         {
             return Task.CompletedTask;
         }
+    }
+
+    private static ActivityListener NewGenerationListener(List<Activity> spans)
+    {
+        return new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == "github.com/grafana/sigil/sdks/dotnet",
+            Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activity =>
+            {
+                if (activity.GetTagItem("gen_ai.operation.name")?.ToString() != "execute_tool")
+                {
+                    spans.Add(activity);
+                }
+            },
+        };
     }
 }

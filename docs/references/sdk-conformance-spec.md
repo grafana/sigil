@@ -8,7 +8,7 @@ audience: both
 
 # SDK Conformance Spec
 
-Language-neutral specification of the currently shipped Sigil SDK core conformance baseline.
+Language-neutral specification of the currently shipped Sigil SDK core, provider-wrapper, and framework-adapter conformance baseline.
 
 Reference implementation: Go core (`sdks/go/sigil/conformance_test.go`, `package sigil_test`).
 Provider-wrapper reference implementations:
@@ -21,11 +21,20 @@ Local entry points:
 
 - `mise run sdk:conformance`
 - `mise run test:sdk:conformance`
+- `mise run test:sdk:provider-conformance`
+- `mise run test:sdk:framework-conformance`
 - `mise run test:go:sdk-conformance`
 - `mise run test:ts:sdk-conformance`
+- `mise run test:ts:sdk-provider-conformance`
+- `mise run test:ts:sdk-framework-conformance`
 - `mise run test:py:sdk-conformance`
+- `mise run test:py:sdk-provider-conformance`
+- `mise run test:py:sdk-framework-conformance`
 - `mise run test:java:sdk-conformance`
+- `mise run test:java:sdk-provider-conformance`
+- `mise run test:java:sdk-framework-conformance`
 - `mise run test:cs:sdk-conformance`
+- `mise run test:cs:sdk-provider-conformance`
 - `cd sdks/go && GOWORK=off go test ./sigil -run '^TestConformance' -count=1`
 - `cd sdks/go-frameworks/google-adk && GOWORK=off go test ./... -run '^TestConformance' -count=1`
 - `cd sdks/go-providers/openai && GOWORK=off go test ./... -run '^TestConformance' -count=1`
@@ -43,8 +52,8 @@ Related docs:
 The repo now ships three active conformance layers:
 
 1. Core SDK conformance across Go, TypeScript/JavaScript, Python, Java, and .NET
-2. Go provider-wrapper conformance in `sdks/go-providers/{openai,anthropic,gemini}`
-3. Go framework-adapter conformance in `sdks/go-frameworks/google-adk`
+2. Provider-wrapper conformance across Go, TypeScript/JavaScript, Python, Java, and .NET for the shipped OpenAI, Anthropic, and Gemini helper packages
+3. Framework-adapter conformance across Go, TypeScript/JavaScript, Python, and Java for the shipped framework integrations; .NET currently has no framework-adapter package in this repository
 
 The current shared core scenario set covers ten black-box scenarios:
 
@@ -59,11 +68,11 @@ The current shared core scenario set covers ten black-box scenarios:
 9. Rating submission semantics
 10. Shutdown flush semantics
 
-The provider-wrapper layer verifies normalized `sigil.Generation` outputs directly from provider request/response fixtures. It runs with `go test` only and does not require Docker, a Sigil backend, or live provider access.
+The provider-wrapper layer verifies normalized `sigil.Generation` outputs directly from provider request/response fixtures. It runs in each language's native test tooling only and does not require Docker, a Sigil backend, or live provider access.
 
-The framework-adapter layer verifies framework lifecycle propagation, parent/child span linkage, framework metadata/tag projection, generation triggering, and explicit unsupported embedding contracts when the framework surface does not expose a first-class embeddings lifecycle.
+The framework-adapter layer verifies framework lifecycle propagation, parent/child span linkage, framework metadata/tag projection, generation triggering, exported trace/span lineage, and explicit unsupported embedding contracts when the framework surface does not expose a first-class embeddings lifecycle.
 
-The core SDK harness now runs across Go, TypeScript/JavaScript, Python, Java, and .NET using the same language-neutral contract. The provider-wrapper layer complements that by asserting mapper and wrapper behavior inside the Go provider modules.
+The core SDK harness now runs across Go, TypeScript/JavaScript, Python, Java, and .NET using the same language-neutral contract. The provider-wrapper and framework-adapter layers complement that by asserting mapper and wrapper behavior inside the shipped language-specific extension modules.
 
 ### Core SDK baseline
 
@@ -71,7 +80,7 @@ The shipped core harness covers sync roundtrip, identity-resolution, validation/
 
 ### Provider-wrapper baseline
 
-The shipped Go provider-wrapper baseline covers:
+The shipped provider-wrapper baseline covers:
 
 - Sync normalization for OpenAI, Anthropic, and Gemini
 - Streaming normalization for OpenAI, Anthropic, and Gemini
@@ -92,7 +101,7 @@ Each scenario is executed through exported SDK entry points and validates behavi
 
 ### Framework-adapter baseline
 
-The shipped Go framework-adapter baseline currently covers Google ADK run lifecycle, streaming lifecycle, tool-call observability, parent-child span linkage, framework metadata/tag propagation, and explicit unsupported embedding behavior.
+The shipped framework-adapter baseline currently covers LangChain, LangGraph, OpenAI Agents, LlamaIndex, Google ADK, and Vercel AI SDK integration behavior where those packages exist in the repository. The common contract is run lifecycle, streaming lifecycle, tool-call observability, parent-child span linkage, exported trace/span lineage, framework metadata/tag propagation, and explicit unsupported embedding behavior when the framework surface lacks a first-class embedding lifecycle.
 
 ## Harness requirements
 
@@ -351,9 +360,9 @@ Gemini generate-content conformance covers:
 - Assert exactly one generation export after `Shutdown`.
 - Assert the flushed generation payload matches the recorded conversation identity.
 
-## Go provider wrapper baseline
+## Provider wrapper baseline
 
-The shipped Go provider baseline now has two complementary assertion styles in each provider package:
+The shipped provider baseline now has two complementary assertion styles in each provider package where the language surface exposes them:
 
 1. Direct normalization assertions against the returned `sigil.Generation` or `sigil.EmbeddingResult`
 2. Recorder-path assertions that route the normalized result through the real Go Sigil client and validate the exported generation payload and emitted spans via `sdks/go/sigil/sigiltest`
@@ -371,16 +380,17 @@ Every shipped Go provider suite should cover these behaviors when the provider s
 - Artifact semantics: direct normalization suites validate raw artifact opt-in coverage where the provider exposes it.
 - Embedding semantics: embedding wrappers emit normalized embedding results and recorder-path embedding spans with the expected input count and dimensions.
 
-### Current Go scope notes
+### Current shipped scope notes
 
-- OpenAI: chat-completions, responses, recorder-path, error, and embedding coverage are shipped.
-- Gemini: direct normalization, recorder-path, error, and embedding coverage are shipped.
-- Anthropic: direct normalization, recorder-path, and error coverage are shipped. Embedding coverage is not applicable until the Anthropic provider wrapper exposes an embedding API surface in this repository.
+- Go: OpenAI, Anthropic, and Gemini provider suites plus Google ADK framework-adapter conformance are shipped.
+- TypeScript/JavaScript: OpenAI, Anthropic, and Gemini provider suites plus LangChain, LangGraph, OpenAI Agents, LlamaIndex, Google ADK, and Vercel AI SDK framework suites are shipped.
+- Python: OpenAI, Anthropic, and Gemini provider suites plus LangChain, LangGraph, OpenAI Agents, LlamaIndex, and Google ADK framework suites are shipped.
+- Java: OpenAI, Anthropic, and Gemini provider suites plus Google ADK framework-adapter conformance are shipped.
+- .NET: OpenAI, Anthropic, and Gemini provider suites are shipped. Framework-adapter conformance is not applicable until a .NET framework integration package exists in this repository.
 
-## Go framework adapter extension: Google ADK
+## Framework adapter baseline
 
-The Go repo now ships the first framework-adapter conformance suite for
-`sdks/go-frameworks/google-adk`.
+The repository now ships framework-adapter conformance in Go, TypeScript/JavaScript, Python, and Java.
 
 ### Scenario 10: Framework run lifecycle semantics
 
@@ -441,23 +451,21 @@ When the framework does not expose that lifecycle, the conformance suite should
 assert the adapter's explicit unsupported capability contract instead of
 fabricating synthetic embedding callbacks or spans.
 
-Current Go scope note:
+Current shipped scope notes:
 
-- Google ADK: run and tool lifecycle conformance is shipped. Embedding
-  conformance is currently not applicable because the Google ADK lifecycle
-  surface used in this repository does not expose a dedicated embeddings
-  callback, so the suite asserts `CheckEmbeddingsSupport()`.
+- Google ADK: Go, Python, Java, and TypeScript/JavaScript suites assert run/tool lifecycle coverage plus explicit unsupported embedding behavior because the adapter surface in this repository does not expose a dedicated embeddings callback.
+- LangChain, LangGraph, OpenAI Agents, and LlamaIndex: TypeScript/JavaScript and Python suites assert parent/child span linkage, exported trace/span lineage, and explicit unsupported embedding behavior.
+- Vercel AI SDK: the TypeScript/JavaScript suite remains part of the shipped framework-adapter baseline in this repository.
 
 ## Extending the spec
 
 Future phases will extend this document with the remaining core gaps (resource
-attributes and any newly exported transport fields) plus provider-wrapper and
-framework-adapter scenarios in other languages. Provider-wrapper embedding scenarios apply only
-when the official provider SDK or API surface exposes a native embedding
-operation; when it does not, the suite should assert the wrapper's explicit
-unsupported capability contract instead of fabricating request DTOs or
-synthetic embedding spans. Framework-adapter embedding scenarios follow the
-same rule for framework lifecycle surfaces. Until those phases land, this
-document is the authoritative baseline for the currently shipped Go core
-harnesses, Go provider conformance harnesses, and the first Go
-framework-adapter suite (`google-adk`).
+attributes and any newly exported transport fields). Provider-wrapper embedding
+scenarios apply only when the official provider SDK or API surface exposes a
+native embedding operation; when it does not, the suite should assert the
+wrapper's explicit unsupported capability contract instead of fabricating
+request DTOs or synthetic embedding spans. Framework-adapter embedding
+scenarios follow the same rule for framework lifecycle surfaces. This document
+is the authoritative baseline for the currently shipped core harnesses across
+all five SDKs, the provider-wrapper harnesses across Go/TS/Python/Java/.NET,
+and the shipped framework-adapter suites across Go/TS/Python/Java.

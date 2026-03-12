@@ -421,10 +421,10 @@ depends = ["doctor:go"]
 run = "GOWORK=off go test ./sigil -run '^TestConformance' -count=1"
 
 [tasks."sdk:conformance"]
-description = "Run the shared SDK core conformance suites"
+description = "Run the shared SDK conformance suites"
 run = "mise run test:sdk:conformance"
 
-[tasks."test:sdk:conformance"]
+[tasks."test:sdk:core-conformance"]
 description = "Run core conformance suites across Go, TypeScript/JavaScript, Python, Java, and .NET SDKs"
 run = """
 #!/usr/bin/env bash
@@ -437,6 +437,17 @@ mise run test:java:sdk-conformance
 mise run test:cs:sdk-conformance
 """
 
+[tasks."test:sdk:conformance"]
+description = "Run core, provider-wrapper, and framework-adapter conformance suites across supported SDKs"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+mise run test:sdk:core-conformance
+mise run test:sdk:provider-conformance
+mise run test:sdk:framework-conformance
+"""
+
 [tasks."test:ts:sdk-js"]
 description = "Run TypeScript/JavaScript SDK runtime tests"
 depends = ["deps"]
@@ -447,6 +458,18 @@ description = "Run TypeScript/JavaScript SDK core conformance tests"
 depends = ["deps"]
 dir = "sdks/js"
 run = "pnpm run test:build && node --test test/conformance.test.mjs"
+
+[tasks."test:ts:sdk-provider-conformance"]
+description = "Run TypeScript/JavaScript provider-wrapper conformance tests"
+depends = ["deps"]
+dir = "sdks/js"
+run = "pnpm run test:build && node --test test/providers.test.mjs"
+
+[tasks."test:ts:sdk-framework-conformance"]
+description = "Run TypeScript/JavaScript framework-adapter conformance tests"
+depends = ["deps"]
+dir = "sdks/js"
+run = "pnpm run test:build && node --test test/frameworks.langchain.test.mjs test/frameworks.langgraph.test.mjs test/frameworks.additional.test.mjs test/frameworks.vercel-ai-sdk.mapping.test.mjs test/frameworks.vercel-ai-sdk.test.mjs"
 
 [tasks."test:ts:sdk-js-frameworks"]
 description = "Run TypeScript/JavaScript SDK framework handler tests"
@@ -480,15 +503,41 @@ fi
 uv run --python "$PYTHON_BIN" --with '.[dev]' --directory sdks/python pytest tests/test_conformance.py
 """
 
+[tasks."test:py:sdk-provider-conformance"]
+description = "Run Python provider-wrapper conformance tests"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+mise run test:py:sdk-openai
+mise run test:py:sdk-anthropic
+mise run test:py:sdk-gemini
+"""
+
+[tasks."test:py:sdk-framework-conformance"]
+description = "Run Python framework-adapter conformance tests"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+mise run test:py:sdk-langchain
+mise run test:py:sdk-langgraph
+mise run test:py:sdk-openai-agents
+mise run test:py:sdk-llamaindex
+mise run test:py:sdk-google-adk
+"""
+
 [tasks."test:py:sdk-openai"]
 description = "Run Python OpenAI provider helper tests"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-python3 -m venv .venv-py-sdk-openai
-. .venv-py-sdk-openai/bin/activate
-python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-providers/openai[dev]'
-python -m pytest sdks/python-providers/openai/tests
+PYTHON_BIN="${PYTHON_BIN:-$(command -v python3.11 || true)}"
+if [ -z "$PYTHON_BIN" ]; then
+  echo "python3.11 is required for sdks/python provider tests" >&2
+  exit 1
+fi
+uv run --python "$PYTHON_BIN" --with './sdks/python[dev]' --with './sdks/python-providers/openai[dev]' pytest sdks/python-providers/openai/tests
 """
 
 [tasks."test:py:sdk-anthropic"]
@@ -496,10 +545,12 @@ description = "Run Python Anthropic provider helper tests"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-python3 -m venv .venv-py-sdk-anthropic
-. .venv-py-sdk-anthropic/bin/activate
-python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-providers/anthropic[dev]'
-python -m pytest sdks/python-providers/anthropic/tests
+PYTHON_BIN="${PYTHON_BIN:-$(command -v python3.11 || true)}"
+if [ -z "$PYTHON_BIN" ]; then
+  echo "python3.11 is required for sdks/python provider tests" >&2
+  exit 1
+fi
+uv run --python "$PYTHON_BIN" --with './sdks/python[dev]' --with './sdks/python-providers/anthropic[dev]' pytest sdks/python-providers/anthropic/tests
 """
 
 [tasks."test:py:sdk-gemini"]
@@ -507,10 +558,12 @@ description = "Run Python Gemini provider helper tests"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-python3 -m venv .venv-py-sdk-gemini
-. .venv-py-sdk-gemini/bin/activate
-python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-providers/gemini[dev]'
-python -m pytest sdks/python-providers/gemini/tests
+PYTHON_BIN="${PYTHON_BIN:-$(command -v python3.11 || true)}"
+if [ -z "$PYTHON_BIN" ]; then
+  echo "python3.11 is required for sdks/python provider tests" >&2
+  exit 1
+fi
+uv run --python "$PYTHON_BIN" --with './sdks/python[dev]' --with './sdks/python-providers/gemini[dev]' pytest sdks/python-providers/gemini/tests
 """
 
 [tasks."test:py:sdk-langchain"]
@@ -518,10 +571,12 @@ description = "Run Python LangChain framework handler tests"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-python3 -m venv .venv-py-sdk-langchain
-. .venv-py-sdk-langchain/bin/activate
-python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-frameworks/langchain[dev]'
-python -m pytest sdks/python-frameworks/langchain/tests
+PYTHON_BIN="${PYTHON_BIN:-$(command -v python3.11 || true)}"
+if [ -z "$PYTHON_BIN" ]; then
+  echo "python3.11 is required for sdks/python framework tests" >&2
+  exit 1
+fi
+uv run --python "$PYTHON_BIN" --with './sdks/python[dev]' --with './sdks/python-frameworks/langchain[dev]' pytest sdks/python-frameworks/langchain/tests
 """
 
 [tasks."test:py:sdk-langgraph"]
@@ -529,10 +584,12 @@ description = "Run Python LangGraph framework handler tests"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-python3 -m venv .venv-py-sdk-langgraph
-. .venv-py-sdk-langgraph/bin/activate
-python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-frameworks/langgraph[dev]'
-python -m pytest sdks/python-frameworks/langgraph/tests
+PYTHON_BIN="${PYTHON_BIN:-$(command -v python3.11 || true)}"
+if [ -z "$PYTHON_BIN" ]; then
+  echo "python3.11 is required for sdks/python framework tests" >&2
+  exit 1
+fi
+uv run --python "$PYTHON_BIN" --with './sdks/python[dev]' --with './sdks/python-frameworks/langgraph[dev]' pytest sdks/python-frameworks/langgraph/tests
 """
 
 [tasks."test:py:sdk-openai-agents"]
@@ -540,10 +597,12 @@ description = "Run Python OpenAI Agents framework handler tests"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-python3 -m venv .venv-py-sdk-openai-agents
-. .venv-py-sdk-openai-agents/bin/activate
-python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-frameworks/openai-agents[dev]'
-python -m pytest sdks/python-frameworks/openai-agents/tests
+PYTHON_BIN="${PYTHON_BIN:-$(command -v python3.11 || true)}"
+if [ -z "$PYTHON_BIN" ]; then
+  echo "python3.11 is required for sdks/python framework tests" >&2
+  exit 1
+fi
+uv run --python "$PYTHON_BIN" --with './sdks/python[dev]' --with './sdks/python-frameworks/openai-agents[dev]' pytest sdks/python-frameworks/openai-agents/tests
 """
 
 [tasks."test:py:sdk-llamaindex"]
@@ -551,10 +610,12 @@ description = "Run Python LlamaIndex framework handler tests"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-python3 -m venv .venv-py-sdk-llamaindex
-. .venv-py-sdk-llamaindex/bin/activate
-python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-frameworks/llamaindex[dev]'
-python -m pytest sdks/python-frameworks/llamaindex/tests
+PYTHON_BIN="${PYTHON_BIN:-$(command -v python3.11 || true)}"
+if [ -z "$PYTHON_BIN" ]; then
+  echo "python3.11 is required for sdks/python framework tests" >&2
+  exit 1
+fi
+uv run --python "$PYTHON_BIN" --with './sdks/python[dev]' --with './sdks/python-frameworks/llamaindex[dev]' pytest sdks/python-frameworks/llamaindex/tests
 """
 
 [tasks."test:py:sdk-google-adk"]
@@ -562,10 +623,12 @@ description = "Run Python Google ADK framework handler tests"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-python3 -m venv .venv-py-sdk-google-adk
-. .venv-py-sdk-google-adk/bin/activate
-python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-frameworks/google-adk[dev]'
-python -m pytest sdks/python-frameworks/google-adk/tests
+PYTHON_BIN="${PYTHON_BIN:-$(command -v python3.11 || true)}"
+if [ -z "$PYTHON_BIN" ]; then
+  echo "python3.11 is required for sdks/python framework tests" >&2
+  exit 1
+fi
+uv run --python "$PYTHON_BIN" --with './sdks/python[dev]' --with './sdks/python-frameworks/google-adk[dev]' pytest sdks/python-frameworks/google-adk/tests
 """
 
 [tasks."test:sdk:compose-one-shot"]
@@ -595,6 +658,17 @@ description = "Run .NET SDK core conformance tests"
 dir = "sdks/dotnet"
 run = "dotnet test tests/Grafana.Sigil.Tests/Grafana.Sigil.Tests.csproj -c Release --filter FullyQualifiedName~ConformanceTests"
 
+[tasks."test:cs:sdk-provider-conformance"]
+description = "Run .NET provider-wrapper conformance tests"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+mise run test:cs:sdk-openai
+mise run test:cs:sdk-anthropic
+mise run test:cs:sdk-gemini
+"""
+
 [tasks."test:cs:sdk-openai"]
 description = "Run .NET OpenAI provider helper tests"
 dir = "sdks/dotnet"
@@ -619,6 +693,16 @@ run = "./gradlew --no-daemon :core:test"
 description = "Run Java SDK core conformance tests"
 dir = "sdks/java"
 run = "./gradlew --no-daemon :core:test --tests 'com.grafana.sigil.sdk.ConformanceTest'"
+
+[tasks."test:java:sdk-provider-conformance"]
+description = "Run Java provider-wrapper conformance tests"
+dir = "sdks/java"
+run = "./gradlew --no-daemon :providers:openai:test :providers:anthropic:test :providers:gemini:test"
+
+[tasks."test:java:sdk-framework-conformance"]
+description = "Run Java framework-adapter conformance tests"
+dir = "sdks/java"
+run = "./gradlew --no-daemon :frameworks:google-adk:test"
 
 [tasks."test:java:sdk-openai"]
 description = "Run Java OpenAI provider adapter tests"
@@ -682,6 +766,33 @@ mise run test:cs:sdk-anthropic
 mise run test:cs:sdk-gemini
 
 mise run test:java:sdk-all
+"""
+
+[tasks."test:sdk:provider-conformance"]
+description = "Run provider-wrapper conformance suites across all shipped SDKs"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+mise run test:go:sdk-openai
+mise run test:go:sdk-anthropic
+mise run test:go:sdk-gemini
+mise run test:ts:sdk-provider-conformance
+mise run test:py:sdk-provider-conformance
+mise run test:java:sdk-provider-conformance
+mise run test:cs:sdk-provider-conformance
+"""
+
+[tasks."test:sdk:framework-conformance"]
+description = "Run framework-adapter conformance suites across all shipped SDKs"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+mise run test:go:sdk-google-adk
+mise run test:ts:sdk-framework-conformance
+mise run test:py:sdk-framework-conformance
+mise run test:java:sdk-framework-conformance
 """
 
 [tasks."test:go:all-modules"]
