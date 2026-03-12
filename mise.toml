@@ -414,16 +414,35 @@ dir = "sdks/go-frameworks/google-adk"
 depends = ["doctor:go"]
 run = "GOWORK=off go test ./..."
 
-[tasks."test:sdk:conformance"]
-description = "Run the current Go SDK conformance harness"
+[tasks."test:go:sdk-conformance"]
+description = "Run the Go SDK core conformance harness"
 dir = "sdks/go"
 depends = ["doctor:go"]
 run = "GOWORK=off go test ./sigil -run '^TestConformance' -count=1"
+
+[tasks."test:sdk:conformance"]
+description = "Run core conformance suites across Go, TypeScript/JavaScript, Python, Java, and .NET SDKs"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+mise run test:go:sdk-conformance
+mise run test:ts:sdk-conformance
+mise run test:py:sdk-conformance
+mise run test:java:sdk-conformance
+mise run test:cs:sdk-conformance
+"""
 
 [tasks."test:ts:sdk-js"]
 description = "Run TypeScript/JavaScript SDK runtime tests"
 depends = ["deps"]
 run = "pnpm --filter @grafana/sigil-sdk-js run test:ci"
+
+[tasks."test:ts:sdk-conformance"]
+description = "Run TypeScript/JavaScript SDK core conformance tests"
+depends = ["deps"]
+dir = "sdks/js"
+run = "pnpm run test:build && node --test test/conformance.test.mjs"
 
 [tasks."test:ts:sdk-js-frameworks"]
 description = "Run TypeScript/JavaScript SDK framework handler tests"
@@ -436,10 +455,25 @@ description = "Run Python SDK core parity tests"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-python3 -m venv .venv-py-sdk-core
-. .venv-py-sdk-core/bin/activate
-python -m pip install -q -e './sdks/python[dev]'
-python -m pytest sdks/python/tests
+PYTHON_BIN="${PYTHON_BIN:-$(command -v python3.11 || true)}"
+if [ -z "$PYTHON_BIN" ]; then
+  echo "python3.11 is required for sdks/python tests" >&2
+  exit 1
+fi
+uv run --python "$PYTHON_BIN" --with '.[dev]' --directory sdks/python pytest tests
+"""
+
+[tasks."test:py:sdk-conformance"]
+description = "Run Python SDK core conformance tests"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+PYTHON_BIN="${PYTHON_BIN:-$(command -v python3.11 || true)}"
+if [ -z "$PYTHON_BIN" ]; then
+  echo "python3.11 is required for sdks/python tests" >&2
+  exit 1
+fi
+uv run --python "$PYTHON_BIN" --with '.[dev]' --directory sdks/python pytest tests/test_conformance.py
 """
 
 [tasks."test:py:sdk-openai"]
@@ -552,6 +586,11 @@ description = "Run .NET SDK core runtime tests"
 dir = "sdks/dotnet"
 run = "dotnet test tests/Grafana.Sigil.Tests/Grafana.Sigil.Tests.csproj -c Release"
 
+[tasks."test:cs:sdk-conformance"]
+description = "Run .NET SDK core conformance tests"
+dir = "sdks/dotnet"
+run = "dotnet test tests/Grafana.Sigil.Tests/Grafana.Sigil.Tests.csproj -c Release --filter FullyQualifiedName~ConformanceTests"
+
 [tasks."test:cs:sdk-openai"]
 description = "Run .NET OpenAI provider helper tests"
 dir = "sdks/dotnet"
@@ -571,6 +610,11 @@ run = "dotnet test tests/Grafana.Sigil.Gemini.Tests/Grafana.Sigil.Gemini.Tests.c
 description = "Run Java SDK core tests"
 dir = "sdks/java"
 run = "./gradlew --no-daemon :core:test"
+
+[tasks."test:java:sdk-conformance"]
+description = "Run Java SDK core conformance tests"
+dir = "sdks/java"
+run = "./gradlew --no-daemon :core:test --tests 'com.grafana.sigil.sdk.ConformanceTest'"
 
 [tasks."test:java:sdk-openai"]
 description = "Run Java OpenAI provider adapter tests"

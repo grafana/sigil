@@ -394,8 +394,8 @@ Add conformance test for `sdks/go-frameworks/google-adk/`. Tests span hierarchy,
 
 ### Phase D: Other language core SDKs
 
-Each language team implements the 13 core scenarios from `sdk-conformance-spec.md` in their native test framework:
-- **JS/TS**: `sdks/js/test/conformance.test.mjs` using Vitest + OTel JS test utilities.
+Each language team implements the current core scenario set from `sdk-conformance-spec.md` in their native test framework:
+- **JS/TS**: `sdks/js/test/conformance.test.mjs` using `node:test` + OTel JS test utilities.
 - **Python**: `sdks/python/tests/test_conformance.py` using pytest + OTel Python test utilities.
 - **Java**: `sdks/java/core/src/test/java/.../ConformanceTest.java` using JUnit + OTel Java test utilities.
 - **.NET**: `sdks/dotnet/tests/.../ConformanceTests.cs` using xUnit + OTel .NET test utilities.
