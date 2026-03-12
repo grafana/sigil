@@ -38,6 +38,56 @@ func TestControlMethod_bounds_to_known_set(t *testing.T) {
 	}
 }
 
+func TestControlEndpoint(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "trimmed endpoint", input: "  evaluators  ", want: "evaluators"},
+		{name: "empty endpoint", input: "", want: controlUnknownLabel},
+		{name: "whitespace endpoint", input: "  \t", want: controlUnknownLabel},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := controlEndpoint(tt.input)
+			if got != tt.want {
+				t.Fatalf("controlEndpoint(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestControlStatusClass(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		want   string
+	}{
+		{name: "1xx lower bound", status: 100, want: "1xx"},
+		{name: "199", status: 199, want: "1xx"},
+		{name: "200", status: 200, want: "2xx"},
+		{name: "299", status: 299, want: "2xx"},
+		{name: "300", status: 300, want: "3xx"},
+		{name: "399", status: 399, want: "3xx"},
+		{name: "400", status: 400, want: "4xx"},
+		{name: "499", status: 499, want: "4xx"},
+		{name: "500", status: 500, want: "5xx"},
+		{name: "599", status: 599, want: "5xx"},
+		{name: "0 defaults to 1xx", status: 0, want: "1xx"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := controlStatusClass(tt.status)
+			if got != tt.want {
+				t.Fatalf("controlStatusClass(%d) = %q, want %q", tt.status, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestStatusCapturingResponseWriter_Unwrap(t *testing.T) {
 	inner := httptest.NewRecorder()
 	w := &statusCapturingResponseWriter{ResponseWriter: inner}
