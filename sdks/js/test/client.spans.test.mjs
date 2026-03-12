@@ -105,6 +105,48 @@ test('generation result fields override seed and update span operation name', as
   }
 });
 
+test('generation normalization trims only title and user fields', async () => {
+  const harness = newHarness();
+
+  try {
+    const recorder = harness.client.startGeneration({
+      conversationId: '  conv-seed  ',
+      conversationTitle: '  title-seed  ',
+      userId: '  user-seed  ',
+      agentName: '  agent-seed  ',
+      agentVersion: '  v-seed  ',
+      model: { provider: 'openai', name: 'gpt-5' },
+    });
+    recorder.setResult({
+      conversationId: '  conv-result  ',
+      conversationTitle: '  title-result  ',
+      userId: '  user-result  ',
+      agentName: '  agent-result  ',
+      agentVersion: '  v-result  ',
+    });
+    recorder.end();
+    assert.equal(recorder.getError(), undefined);
+
+    const generation = singleGeneration(harness.client);
+    assert.equal(generation.conversationId, '  conv-result  ');
+    assert.equal(generation.conversationTitle, 'title-result');
+    assert.equal(generation.userId, 'user-result');
+    assert.equal(generation.agentName, '  agent-result  ');
+    assert.equal(generation.agentVersion, '  v-result  ');
+    assert.equal(generation.metadata?.['sigil.conversation.title'], 'title-result');
+    assert.equal(generation.metadata?.['sigil.user.id'], 'user-result');
+
+    const span = singleGenerationSpan(harness.spanExporter);
+    assert.equal(span.attributes['gen_ai.conversation.id'], '  conv-result  ');
+    assert.equal(span.attributes['sigil.conversation.title'], 'title-result');
+    assert.equal(span.attributes['user.id'], 'user-result');
+    assert.equal(span.attributes['gen_ai.agent.name'], '  agent-result  ');
+    assert.equal(span.attributes['gen_ai.agent.version'], '  v-result  ');
+  } finally {
+    await shutdownHarness(harness);
+  }
+});
+
 test('generation callError sets metadata and provider_call_error span status', async () => {
   const harness = newHarness();
 

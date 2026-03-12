@@ -926,7 +926,7 @@ class GenerationRecorderImpl implements GenerationRecorder {
     generation.conversationTitle = firstNonEmptyString(
       generation.conversationTitle,
       metadataStringValue(generation.metadata, spanAttrConversationTitle)
-    );
+    )?.trim();
     if (notEmpty(generation.conversationTitle)) {
       if (generation.metadata === undefined) {
         generation.metadata = {};
@@ -938,7 +938,7 @@ class GenerationRecorderImpl implements GenerationRecorder {
       generation.userId,
       metadataStringValue(generation.metadata, metadataUserIDKey),
       metadataStringValue(generation.metadata, metadataLegacyUserIDKey)
-    );
+    )?.trim();
     if (notEmpty(generation.userId)) {
       if (generation.metadata === undefined) {
         generation.metadata = {};
@@ -1711,7 +1711,7 @@ function metadataIntValue(metadata: Record<string, unknown> | undefined, key: st
 function firstNonEmptyString(...values: Array<string | undefined>): string | undefined {
   for (const value of values) {
     if (notEmpty(value)) {
-      return value.trim();
+      return value;
     }
   }
   return undefined;
