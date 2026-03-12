@@ -9,9 +9,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-var (
-	generationUnknownLabel = "unknown"
+const generationUnknownLabel = "unknown"
 
+var (
 	generationIngestBatchSize = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "sigil_ingest_generation_batch_size",
 		Help:    "Generation ingest batch size by transport.",
