@@ -208,19 +208,39 @@ Each language implements the current core scenario set from `sdk-conformance-spe
 Priority order follows adoption:
 
 ### Python (highest adoption)
-- [ ] Provider conformance: openai, anthropic, gemini
-- [ ] Framework conformance: langchain, langgraph, openai-agents, llamaindex, google-adk
+- [x] Provider conformance: openai, anthropic, gemini
+  - [x] `sdks/python-providers/openai/tests/test_openai_provider_conformance.py`
+  - [x] `sdks/python-providers/anthropic/tests/test_anthropic_provider_conformance.py`
+  - [x] `sdks/python-providers/gemini/tests/test_gemini_provider_conformance.py`
+- [x] Framework conformance: langchain, langgraph, openai-agents, llamaindex, google-adk
+  - [x] `sdks/python-frameworks/langchain/tests/test_langchain_conformance.py`
+  - [x] `sdks/python-frameworks/langgraph/tests/test_langgraph_conformance.py`
+  - [x] `sdks/python-frameworks/openai-agents/tests/test_openai_agents_conformance.py`
+  - [x] `sdks/python-frameworks/llamaindex/tests/test_llamaindex_conformance.py`
+  - [x] `sdks/python-frameworks/google-adk/tests/test_google_adk_conformance.py`
 
 ### TypeScript/JavaScript
-- [ ] Provider conformance: openai, anthropic, gemini
-- [ ] Framework conformance: langchain, langgraph, openai-agents, llamaindex, google-adk, vercel-ai-sdk
+- [x] Provider conformance: openai, anthropic, gemini
+  - [x] `sdks/js/test/providers.conformance.test.mjs`
+- [x] Framework conformance: langchain, langgraph, openai-agents, llamaindex, google-adk, vercel-ai-sdk
+  - [x] `sdks/js/test/frameworks.langchain.conformance.test.mjs`
+  - [x] `sdks/js/test/frameworks.langgraph.conformance.test.mjs`
+  - [x] `sdks/js/test/frameworks.additional.conformance.test.mjs`
+  - [x] `sdks/js/test/frameworks.vercel-ai-sdk.conformance.test.mjs`
 
 ### Java
-- [ ] Provider conformance: openai, anthropic, gemini
-- [ ] Framework conformance: google-adk
+- [x] Provider conformance: openai, anthropic, gemini
+  - [x] `sdks/java/providers/openai/src/test/java/com/grafana/sigil/sdk/providers/openai/OpenAiConformanceTest.java`
+  - [x] `sdks/java/providers/anthropic/src/test/java/com/grafana/sigil/sdk/providers/anthropic/AnthropicConformanceTest.java`
+  - [x] `sdks/java/providers/gemini/src/test/java/com/grafana/sigil/sdk/providers/gemini/GeminiConformanceTest.java`
+- [x] Framework conformance: google-adk
+  - [x] `sdks/java/frameworks/google-adk/src/test/java/com/grafana/sigil/sdk/frameworks/googleadk/GoogleAdkConformanceTest.java`
 
 ### .NET
-- [ ] Provider conformance: openai, anthropic, gemini
+- [x] Provider conformance: openai, anthropic, gemini
+  - [x] `sdks/dotnet/tests/Grafana.Sigil.OpenAI.Tests/OpenAIConformanceTests.cs`
+  - [x] `sdks/dotnet/tests/Grafana.Sigil.Anthropic.Tests/AnthropicConformanceTests.cs`
+  - [x] `sdks/dotnet/tests/Grafana.Sigil.Gemini.Tests/GeminiConformanceTests.cs`
 
 ## Decisions Applied
 

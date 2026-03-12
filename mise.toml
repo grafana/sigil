@@ -448,7 +448,7 @@ run = "pnpm run test:build && node --test test/conformance.test.mjs"
 description = "Run TypeScript/JavaScript SDK framework handler tests"
 depends = ["deps"]
 dir = "sdks/js"
-run = "pnpm run test:build && node --test test/frameworks.langchain.test.mjs test/frameworks.langgraph.test.mjs test/frameworks.additional.test.mjs test/frameworks.vercel-ai-sdk.mapping.test.mjs test/frameworks.vercel-ai-sdk.test.mjs"
+run = "pnpm run test:build && node --test test/frameworks.langchain.conformance.test.mjs test/frameworks.langgraph.conformance.test.mjs test/frameworks.additional.conformance.test.mjs test/frameworks.vercel-ai-sdk.mapping.conformance.test.mjs test/frameworks.vercel-ai-sdk.conformance.test.mjs"
 
 [tasks."test:py:sdk-core"]
 description = "Run Python SDK core parity tests"
@@ -481,10 +481,15 @@ description = "Run Python OpenAI provider helper tests"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-python3 -m venv .venv-py-sdk-openai
-. .venv-py-sdk-openai/bin/activate
-python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-providers/openai[dev]'
-python -m pytest sdks/python-providers/openai/tests
+PYTHON_BIN="${PYTHON_BIN:-$(command -v python3.11 || true)}"
+if [ -z "$PYTHON_BIN" ]; then
+  echo "python3.11 is required for sdks/python-providers/openai tests" >&2
+  exit 1
+fi
+rm -rf .venv-py-sdk-openai
+uv venv --python "$PYTHON_BIN" .venv-py-sdk-openai
+uv pip install --python .venv-py-sdk-openai/bin/python -q -e './sdks/python[dev]' -e './sdks/python-providers/openai[dev]'
+.venv-py-sdk-openai/bin/python -m pytest sdks/python-providers/openai/tests
 """
 
 [tasks."test:py:sdk-anthropic"]
@@ -492,10 +497,15 @@ description = "Run Python Anthropic provider helper tests"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-python3 -m venv .venv-py-sdk-anthropic
-. .venv-py-sdk-anthropic/bin/activate
-python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-providers/anthropic[dev]'
-python -m pytest sdks/python-providers/anthropic/tests
+PYTHON_BIN="${PYTHON_BIN:-$(command -v python3.11 || true)}"
+if [ -z "$PYTHON_BIN" ]; then
+  echo "python3.11 is required for sdks/python-providers/anthropic tests" >&2
+  exit 1
+fi
+rm -rf .venv-py-sdk-anthropic
+uv venv --python "$PYTHON_BIN" .venv-py-sdk-anthropic
+uv pip install --python .venv-py-sdk-anthropic/bin/python -q -e './sdks/python[dev]' -e './sdks/python-providers/anthropic[dev]'
+.venv-py-sdk-anthropic/bin/python -m pytest sdks/python-providers/anthropic/tests
 """
 
 [tasks."test:py:sdk-gemini"]
@@ -503,10 +513,15 @@ description = "Run Python Gemini provider helper tests"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-python3 -m venv .venv-py-sdk-gemini
-. .venv-py-sdk-gemini/bin/activate
-python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-providers/gemini[dev]'
-python -m pytest sdks/python-providers/gemini/tests
+PYTHON_BIN="${PYTHON_BIN:-$(command -v python3.11 || true)}"
+if [ -z "$PYTHON_BIN" ]; then
+  echo "python3.11 is required for sdks/python-providers/gemini tests" >&2
+  exit 1
+fi
+rm -rf .venv-py-sdk-gemini
+uv venv --python "$PYTHON_BIN" .venv-py-sdk-gemini
+uv pip install --python .venv-py-sdk-gemini/bin/python -q -e './sdks/python[dev]' -e './sdks/python-providers/gemini[dev]'
+.venv-py-sdk-gemini/bin/python -m pytest sdks/python-providers/gemini/tests
 """
 
 [tasks."test:py:sdk-langchain"]
@@ -514,10 +529,15 @@ description = "Run Python LangChain framework handler tests"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-python3 -m venv .venv-py-sdk-langchain
-. .venv-py-sdk-langchain/bin/activate
-python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-frameworks/langchain[dev]'
-python -m pytest sdks/python-frameworks/langchain/tests
+PYTHON_BIN="${PYTHON_BIN:-$(command -v python3.11 || true)}"
+if [ -z "$PYTHON_BIN" ]; then
+  echo "python3.11 is required for sdks/python-frameworks/langchain tests" >&2
+  exit 1
+fi
+rm -rf .venv-py-sdk-langchain
+uv venv --python "$PYTHON_BIN" .venv-py-sdk-langchain
+uv pip install --python .venv-py-sdk-langchain/bin/python -q -e './sdks/python[dev]' -e './sdks/python-frameworks/langchain[dev]'
+.venv-py-sdk-langchain/bin/python -m pytest sdks/python-frameworks/langchain/tests
 """
 
 [tasks."test:py:sdk-langgraph"]
@@ -525,10 +545,15 @@ description = "Run Python LangGraph framework handler tests"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-python3 -m venv .venv-py-sdk-langgraph
-. .venv-py-sdk-langgraph/bin/activate
-python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-frameworks/langgraph[dev]'
-python -m pytest sdks/python-frameworks/langgraph/tests
+PYTHON_BIN="${PYTHON_BIN:-$(command -v python3.11 || true)}"
+if [ -z "$PYTHON_BIN" ]; then
+  echo "python3.11 is required for sdks/python-frameworks/langgraph tests" >&2
+  exit 1
+fi
+rm -rf .venv-py-sdk-langgraph
+uv venv --python "$PYTHON_BIN" .venv-py-sdk-langgraph
+uv pip install --python .venv-py-sdk-langgraph/bin/python -q -e './sdks/python[dev]' -e './sdks/python-frameworks/langgraph[dev]'
+.venv-py-sdk-langgraph/bin/python -m pytest sdks/python-frameworks/langgraph/tests
 """
 
 [tasks."test:py:sdk-openai-agents"]
@@ -536,10 +561,15 @@ description = "Run Python OpenAI Agents framework handler tests"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-python3 -m venv .venv-py-sdk-openai-agents
-. .venv-py-sdk-openai-agents/bin/activate
-python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-frameworks/openai-agents[dev]'
-python -m pytest sdks/python-frameworks/openai-agents/tests
+PYTHON_BIN="${PYTHON_BIN:-$(command -v python3.11 || true)}"
+if [ -z "$PYTHON_BIN" ]; then
+  echo "python3.11 is required for sdks/python-frameworks/openai-agents tests" >&2
+  exit 1
+fi
+rm -rf .venv-py-sdk-openai-agents
+uv venv --python "$PYTHON_BIN" .venv-py-sdk-openai-agents
+uv pip install --python .venv-py-sdk-openai-agents/bin/python -q -e './sdks/python[dev]' -e './sdks/python-frameworks/openai-agents[dev]'
+.venv-py-sdk-openai-agents/bin/python -m pytest sdks/python-frameworks/openai-agents/tests
 """
 
 [tasks."test:py:sdk-llamaindex"]
@@ -547,10 +577,15 @@ description = "Run Python LlamaIndex framework handler tests"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-python3 -m venv .venv-py-sdk-llamaindex
-. .venv-py-sdk-llamaindex/bin/activate
-python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-frameworks/llamaindex[dev]'
-python -m pytest sdks/python-frameworks/llamaindex/tests
+PYTHON_BIN="${PYTHON_BIN:-$(command -v python3.11 || true)}"
+if [ -z "$PYTHON_BIN" ]; then
+  echo "python3.11 is required for sdks/python-frameworks/llamaindex tests" >&2
+  exit 1
+fi
+rm -rf .venv-py-sdk-llamaindex
+uv venv --python "$PYTHON_BIN" .venv-py-sdk-llamaindex
+uv pip install --python .venv-py-sdk-llamaindex/bin/python -q -e './sdks/python[dev]' -e './sdks/python-frameworks/llamaindex[dev]'
+.venv-py-sdk-llamaindex/bin/python -m pytest sdks/python-frameworks/llamaindex/tests
 """
 
 [tasks."test:py:sdk-google-adk"]
@@ -558,10 +593,15 @@ description = "Run Python Google ADK framework handler tests"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-python3 -m venv .venv-py-sdk-google-adk
-. .venv-py-sdk-google-adk/bin/activate
-python -m pip install -q -e './sdks/python[dev]' -e './sdks/python-frameworks/google-adk[dev]'
-python -m pytest sdks/python-frameworks/google-adk/tests
+PYTHON_BIN="${PYTHON_BIN:-$(command -v python3.11 || true)}"
+if [ -z "$PYTHON_BIN" ]; then
+  echo "python3.11 is required for sdks/python-frameworks/google-adk tests" >&2
+  exit 1
+fi
+rm -rf .venv-py-sdk-google-adk
+uv venv --python "$PYTHON_BIN" .venv-py-sdk-google-adk
+uv pip install --python .venv-py-sdk-google-adk/bin/python -q -e './sdks/python[dev]' -e './sdks/python-frameworks/google-adk[dev]'
+.venv-py-sdk-google-adk/bin/python -m pytest sdks/python-frameworks/google-adk/tests
 """
 
 [tasks."test:sdk:compose-one-shot"]

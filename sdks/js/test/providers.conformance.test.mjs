@@ -4,6 +4,8 @@ import { SpanStatusCode, trace } from '@opentelemetry/api';
 import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { anthropic, defaultConfig, gemini, openai, SigilClient } from '../.test-dist/index.js';
 
+// Provider-wrapper conformance coverage aligned to docs/references/sdk-conformance-spec.md.
+
 class CapturingExporter {
   requests = [];
 
@@ -18,7 +20,7 @@ class CapturingExporter {
   }
 }
 
-test('anthropic messages wrapper maps strict request/response and records SYNC mode', async () => {
+test('provider conformance: anthropic messages wrapper maps strict request/response and records SYNC mode', async () => {
   const generation = await captureSingleGeneration(async (client) => {
     await anthropic.messages.create(
       client,
@@ -60,7 +62,7 @@ test('anthropic messages wrapper maps strict request/response and records SYNC m
   assert.equal(generation.artifacts, undefined);
 });
 
-test('gemini models wrapper maps strict request/response and records SYNC mode', async () => {
+test('provider conformance: gemini models wrapper maps strict request/response and records SYNC mode', async () => {
   const generation = await captureSingleGeneration(async (client) => {
     await gemini.models.generateContent(
       client,
@@ -120,7 +122,7 @@ test('gemini models wrapper maps strict request/response and records SYNC mode',
   assert.equal(generation.artifacts, undefined);
 });
 
-test('anthropic and gemini stream wrappers set STREAM mode and include artifacts only on opt-in', async () => {
+test('provider conformance: anthropic and gemini stream wrappers set STREAM mode and include artifacts only on opt-in', async () => {
   const anthropicGeneration = await captureSingleGeneration(async (client) => {
     await anthropic.messages.stream(
       client,
@@ -212,7 +214,12 @@ test('anthropic and gemini stream wrappers set STREAM mode and include artifacts
   );
 });
 
-test('openai chat completions wrapper maps strict request/response and records SYNC mode', async () => {
+test('provider conformance: anthropic embeddings surface is explicitly unsupported on the public API', () => {
+  assert.equal(typeof anthropic.messages.create, 'function');
+  assert.equal(typeof anthropic.embeddings, 'undefined');
+});
+
+test('provider conformance: openai chat completions wrapper maps strict request/response and records SYNC mode', async () => {
   const generation = await captureSingleGeneration(async (client) => {
     await openai.chat.completions.create(
       client,
@@ -265,7 +272,7 @@ test('openai chat completions wrapper maps strict request/response and records S
   assert.equal(generation.artifacts, undefined);
 });
 
-test('openai chat completions stream wrapper records STREAM mode and stream events artifacts on opt-in', async () => {
+test('provider conformance: openai chat completions stream wrapper records STREAM mode and stream events artifacts on opt-in', async () => {
   const generation = await captureSingleGeneration(async (client) => {
     await openai.chat.completions.stream(
       client,
@@ -303,7 +310,7 @@ test('openai chat completions stream wrapper records STREAM mode and stream even
   );
 });
 
-test('openai responses wrapper maps strict request/response and records SYNC mode', async () => {
+test('provider conformance: openai responses wrapper maps strict request/response and records SYNC mode', async () => {
   const generation = await captureSingleGeneration(async (client) => {
     await openai.responses.create(
       client,
@@ -360,7 +367,7 @@ test('openai responses wrapper maps strict request/response and records SYNC mod
   assert.equal(generation.metadata['sigil.gen_ai.request.thinking.budget_tokens'], 512);
 });
 
-test('openai responses stream wrapper records STREAM mode with stream event artifacts', async () => {
+test('provider conformance: openai responses stream wrapper records STREAM mode with stream event artifacts', async () => {
   const generation = await captureSingleGeneration(async (client) => {
     await openai.responses.stream(
       client,
@@ -426,7 +433,7 @@ test('openai responses stream wrapper records STREAM mode with stream event arti
   assert.ok(generation.artifacts.some((artifact) => artifact.type === 'provider_event'));
 });
 
-test('openai embeddings wrapper records embedding span and does not enqueue generation', async () => {
+test('provider conformance: openai embeddings wrapper records embedding span and does not enqueue generation', async () => {
   const harness = newEmbeddingHarness();
 
   try {
@@ -462,7 +469,7 @@ test('openai embeddings wrapper records embedding span and does not enqueue gene
   }
 });
 
-test('openai embeddings wrapper treats token-array input as a single item', async () => {
+test('provider conformance: openai embeddings wrapper treats token-array input as a single item', async () => {
   const harness = newEmbeddingHarness();
 
   try {
@@ -490,7 +497,7 @@ test('openai embeddings wrapper treats token-array input as a single item', asyn
   }
 });
 
-test('gemini embeddings wrapper maps usage and dimensions to embedding span', async () => {
+test('provider conformance: gemini embeddings wrapper maps usage and dimensions to embedding span', async () => {
   const harness = newEmbeddingHarness();
 
   try {
@@ -523,7 +530,7 @@ test('gemini embeddings wrapper maps usage and dimensions to embedding span', as
   }
 });
 
-test('embedding provider wrapper errors set provider_call_error span status', async () => {
+test('provider conformance: embedding provider wrapper errors set provider_call_error span status', async () => {
   const harness = newEmbeddingHarness();
 
   try {
@@ -549,7 +556,7 @@ test('embedding provider wrapper errors set provider_call_error span status', as
   }
 });
 
-test('provider wrappers propagate provider errors and persist callError', async () => {
+test('provider conformance: provider wrappers propagate provider errors and persist callError', async () => {
   for (const suite of [
     {
       name: 'anthropic',
@@ -640,7 +647,7 @@ test('provider wrappers propagate provider errors and persist callError', async 
   }
 });
 
-test('openai chat mapper aggregates system/developer, preserves tool role, and applies raw artifact policy', () => {
+test('provider conformance: openai chat mapper aggregates system/developer, preserves tool role, and applies raw artifact policy', () => {
   const request = {
     model: 'gpt-5',
     max_completion_tokens: 256,
@@ -725,7 +732,7 @@ test('openai chat mapper aggregates system/developer, preserves tool role, and a
   );
 });
 
-test('openai responses mapper maps input/output/usage and stream fallback from events', () => {
+test('provider conformance: openai responses mapper maps input/output/usage and stream fallback from events', () => {
   const request = {
     model: 'gpt-5',
     instructions: 'Be concise',
@@ -848,7 +855,7 @@ test('openai responses mapper maps input/output/usage and stream fallback from e
   );
 });
 
-test('provider mappers expose thinking disabled when explicitly configured', () => {
+test('provider conformance: provider mappers expose thinking disabled when explicitly configured', () => {
   const anthropicMapped = anthropic.messages.fromRequestResponse(
     {
       model: 'claude-sonnet',
@@ -878,7 +885,7 @@ test('provider mappers expose thinking disabled when explicitly configured', () 
   assert.equal(geminiMapped.thinkingEnabled, false);
 });
 
-test('embedding mappers extract input counts, texts, usage, and dimensions', () => {
+test('provider conformance: embedding mappers extract input counts, texts, usage, and dimensions', () => {
   const openAIMapped = openai.embeddings.fromRequestResponse(
     {
       model: 'text-embedding-3-small',

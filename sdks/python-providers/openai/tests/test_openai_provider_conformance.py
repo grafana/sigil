@@ -1,4 +1,4 @@
-"""OpenAI provider helper tests."""
+"""OpenAI provider conformance suite."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""llamaindex handler lifecycle and conversation-mapping tests."""
+"""LlamaIndex framework conformance suite."""
 
 from __future__ import annotations
 
@@ -230,6 +230,13 @@ def test_sigil_sdk_llamaindex_async_handler_records_generation() -> None:
         assert generation.model.provider == "openai"
     finally:
         client.shutdown()
+
+
+def test_sigil_sdk_llamaindex_embedding_conformance_is_explicitly_unsupported_without_public_callbacks() -> None:
+    assert not hasattr(SigilLlamaIndexHandler, "on_embedding_start")
+    assert not hasattr(SigilLlamaIndexHandler, "on_embedding_end")
+    assert not hasattr(SigilAsyncLlamaIndexHandler, "on_embedding_start")
+    assert not hasattr(SigilAsyncLlamaIndexHandler, "on_embedding_end")
 
 
 def test_sigil_sdk_llamaindex_callback_helpers_append_handler() -> None:

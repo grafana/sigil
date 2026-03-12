@@ -5,6 +5,8 @@ import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from '
 import { defaultConfig, SigilClient } from '../.test-dist/index.js';
 import { SigilLangChainHandler } from '../.test-dist/frameworks/langchain/index.js';
 
+// Framework-adapter conformance coverage aligned to docs/references/sdk-conformance-spec.md.
+
 class CapturingExporter {
   requests = [];
 
@@ -19,7 +21,7 @@ class CapturingExporter {
   }
 }
 
-test('langchain handler records sync lifecycle with framework tags', async () => {
+test('framework conformance: langchain handler records sync lifecycle with framework tags', async () => {
   const generation = await captureSingleGeneration(async (client) => {
     const handler = new SigilLangChainHandler(client, {
       agentName: 'agent-langchain',
@@ -81,7 +83,7 @@ test('langchain handler records sync lifecycle with framework tags', async () =>
   assert.equal(generation.output[0].content, 'world');
 });
 
-test('langchain handler records stream mode and token fallback output', async () => {
+test('framework conformance: langchain handler records stream mode and token fallback output', async () => {
   const generation = await captureSingleGeneration(async (client) => {
     const handler = new SigilLangChainHandler(client);
 
@@ -102,7 +104,7 @@ test('langchain handler records stream mode and token fallback output', async ()
   assert.equal(generation.output[0].content, 'hello world');
 });
 
-test('langchain handler records first token timestamp once per run', async () => {
+test('framework conformance: langchain handler records first token timestamp once per run', async () => {
   const defaults = defaultConfig();
   const client = new SigilClient({
     generationExport: {
@@ -143,7 +145,12 @@ test('langchain handler records first token timestamp once per run', async () =>
   }
 });
 
-test('langchain provider mapping covers openai anthopic gemini and fallback', async () => {
+test('framework conformance: langchain embedding lifecycle is explicitly unsupported on the public API', () => {
+  assert.equal(typeof SigilLangChainHandler.prototype.handleEmbeddingStart, 'undefined');
+  assert.equal(typeof SigilLangChainHandler.prototype.handleEmbeddingEnd, 'undefined');
+});
+
+test('framework conformance: langchain provider mapping covers openai anthopic gemini and fallback', async () => {
   const providers = [];
 
   await captureGenerations(async (client) => {
@@ -165,7 +172,7 @@ test('langchain provider mapping covers openai anthopic gemini and fallback', as
   assert.deepEqual(providers, ['openai', 'anthropic', 'gemini', 'custom']);
 });
 
-test('langchain handler sets call_error on llm error', async () => {
+test('framework conformance: langchain handler sets call_error on llm error', async () => {
   const generation = await captureSingleGeneration(async (client) => {
     const handler = new SigilLangChainHandler(client);
 
@@ -177,7 +184,7 @@ test('langchain handler sets call_error on llm error', async () => {
   assert.equal(generation.tags['sigil.framework.name'], 'langchain');
 });
 
-test('langchain handler maps tool callbacks and emits chain/retriever spans', async () => {
+test('framework conformance: langchain handler maps tool callbacks and emits chain/retriever spans', async () => {
   const spanExporter = new InMemorySpanExporter();
   const tracerProvider = new BasicTracerProvider({
     spanProcessors: [new SimpleSpanProcessor(spanExporter)],

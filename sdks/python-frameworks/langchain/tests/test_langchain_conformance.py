@@ -1,4 +1,4 @@
-"""LangGraph handler lifecycle and provider-mapping tests."""
+"""LangChain framework conformance suite."""
 
 from __future__ import annotations
 
@@ -10,12 +10,13 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from sigil_sdk import Client, ClientConfig, GenerationExportConfig
+from sigil_sdk.client import GenerationRecorder
 from sigil_sdk.models import ExportGenerationResult, ExportGenerationsResponse
-from sigil_sdk_langgraph import (
-    SigilAsyncLangGraphHandler,
-    SigilLangGraphHandler,
-    create_sigil_langgraph_handler,
-    with_sigil_langgraph_callbacks,
+from sigil_sdk_langchain import (
+    SigilAsyncLangChainHandler,
+    SigilLangChainHandler,
+    create_sigil_langchain_handler,
+    with_sigil_langchain_callbacks,
 )
 
 
@@ -46,16 +47,16 @@ def _new_client(exporter: _CapturingExporter, tracer=None) -> Client:
     )
 
 
-def test_langgraph_sync_lifecycle_sets_framework_tags_and_metadata() -> None:
+def test_langchain_sync_lifecycle_sets_framework_tags_and_metadata() -> None:
     exporter = _CapturingExporter()
     client = _new_client(exporter)
 
     try:
         run_id = uuid4()
         parent_run_id = uuid4()
-        handler = SigilLangGraphHandler(
+        handler = SigilLangChainHandler(
             client=client,
-            agent_name="agent-langgraph",
+            agent_name="agent-langchain",
             agent_version="v1",
             provider_resolver="auto",
             extra_tags={"env": "test", "sigil.framework.name": "override"},
@@ -69,7 +70,7 @@ def test_langgraph_sync_lifecycle_sets_framework_tags_and_metadata() -> None:
             parent_run_id=parent_run_id,
             tags=["prod", "blue"],
             invocation_params={"model": "gpt-5", "retry_attempt": 2},
-            metadata={"thread_id": "graph-thread-42", "langgraph_node": "answer_node"},
+            metadata={"thread_id": "chain-thread-42"},
         )
         handler.on_llm_end(
             {
@@ -92,19 +93,18 @@ def test_langgraph_sync_lifecycle_sets_framework_tags_and_metadata() -> None:
         assert generation.mode.value == "SYNC"
         assert generation.model.provider == "openai"
         assert generation.model.name == "gpt-5"
-        assert generation.tags["sigil.framework.name"] == "langgraph"
+        assert generation.tags["sigil.framework.name"] == "langchain"
         assert generation.tags["sigil.framework.source"] == "handler"
         assert generation.tags["sigil.framework.language"] == "python"
         assert generation.tags["env"] == "test"
-        assert generation.conversation_id == "graph-thread-42"
+        assert generation.conversation_id == "chain-thread-42"
         assert generation.metadata["sigil.framework.run_id"] == str(run_id)
-        assert generation.metadata["sigil.framework.thread_id"] == "graph-thread-42"
+        assert generation.metadata["sigil.framework.thread_id"] == "chain-thread-42"
         assert generation.metadata["sigil.framework.parent_run_id"] == str(parent_run_id)
         assert generation.metadata["sigil.framework.component_name"] == "ChatOpenAI"
         assert generation.metadata["sigil.framework.run_type"] == "chat"
         assert generation.metadata["sigil.framework.retry_attempt"] == 2
         assert generation.metadata["sigil.framework.tags"] == ["prod", "blue"]
-        assert generation.metadata["sigil.framework.langgraph.node"] == "answer_node"
         assert generation.metadata["seed"] == 7
         assert generation.usage.input_tokens == 10
         assert generation.usage.output_tokens == 5
@@ -115,13 +115,13 @@ def test_langgraph_sync_lifecycle_sets_framework_tags_and_metadata() -> None:
         client.shutdown()
 
 
-def test_langgraph_stream_lifecycle_uses_stream_mode_and_chunk_fallback() -> None:
+def test_langchain_stream_lifecycle_uses_stream_mode_and_chunk_fallback() -> None:
     exporter = _CapturingExporter()
     client = _new_client(exporter)
 
     try:
         run_id = uuid4()
-        handler = SigilLangGraphHandler(client=client)
+        handler = SigilLangChainHandler(client=client)
 
         handler.on_llm_start(
             {"kwargs": {"model": "claude-sonnet-4-5"}},
@@ -142,12 +142,45 @@ def test_langgraph_stream_lifecycle_uses_stream_mode_and_chunk_fallback() -> Non
         client.shutdown()
 
 
-def test_langgraph_provider_resolution_supports_known_models_and_fallback() -> None:
+def test_langchain_stream_records_first_token_timestamp_once() -> None:
+    exporter = _CapturingExporter()
+    client = _new_client(exporter)
+    first_token_calls = 0
+    original_set_first_token_at = GenerationRecorder.set_first_token_at
+
+    def _tracking_set_first_token_at(self, first_token_at):
+        nonlocal first_token_calls
+        first_token_calls += 1
+        return original_set_first_token_at(self, first_token_at)
+
+    GenerationRecorder.set_first_token_at = _tracking_set_first_token_at
+
+    try:
+        run_id = uuid4()
+        handler = SigilLangChainHandler(client=client)
+
+        handler.on_llm_start(
+            {"kwargs": {"model": "gpt-5"}},
+            ["stream this"],
+            run_id=run_id,
+            invocation_params={"stream": True, "model": "gpt-5"},
+        )
+        handler.on_llm_new_token("hello", run_id=run_id)
+        handler.on_llm_new_token(" world", run_id=run_id)
+        handler.on_llm_end({"llm_output": {"model_name": "gpt-5"}}, run_id=run_id)
+
+        assert first_token_calls == 1
+    finally:
+        GenerationRecorder.set_first_token_at = original_set_first_token_at
+        client.shutdown()
+
+
+def test_langchain_provider_resolution_supports_known_models_and_fallback() -> None:
     exporter = _CapturingExporter()
     client = _new_client(exporter)
 
     try:
-        handler = SigilLangGraphHandler(client=client)
+        handler = SigilLangChainHandler(client=client)
 
         run_openai = uuid4()
         handler.on_llm_start({}, ["x"], run_id=run_openai, invocation_params={"model": "gpt-5"})
@@ -172,13 +205,13 @@ def test_langgraph_provider_resolution_supports_known_models_and_fallback() -> N
         client.shutdown()
 
 
-def test_langgraph_error_sets_call_error_and_preserves_framework_tags() -> None:
+def test_langchain_error_sets_call_error_and_preserves_framework_tags() -> None:
     exporter = _CapturingExporter()
     client = _new_client(exporter)
 
     try:
         run_id = uuid4()
-        handler = SigilLangGraphHandler(client=client)
+        handler = SigilLangChainHandler(client=client)
 
         handler.on_llm_start({}, ["x"], run_id=run_id, invocation_params={"model": "gpt-5"})
         handler.on_llm_error(RuntimeError("provider unavailable"), run_id=run_id)
@@ -186,18 +219,18 @@ def test_langgraph_error_sets_call_error_and_preserves_framework_tags() -> None:
         client.flush()
         generation = exporter.requests[0].generations[0]
         assert "provider unavailable" in generation.call_error
-        assert generation.tags["sigil.framework.name"] == "langgraph"
+        assert generation.tags["sigil.framework.name"] == "langchain"
     finally:
         client.shutdown()
 
 
-def test_langgraph_async_handler_records_generation() -> None:
+def test_langchain_async_handler_records_generation() -> None:
     exporter = _CapturingExporter()
     client = _new_client(exporter)
 
     async def _run() -> None:
         run_id = uuid4()
-        handler = SigilAsyncLangGraphHandler(client=client)
+        handler = SigilAsyncLangChainHandler(client=client)
         await handler.on_llm_start({}, ["hello"], run_id=run_id, invocation_params={"model": "gpt-5"})
         await handler.on_llm_end({"generations": [[{"text": "world"}]]}, run_id=run_id)
 
@@ -205,13 +238,20 @@ def test_langgraph_async_handler_records_generation() -> None:
         asyncio.run(_run())
         client.flush()
         generation = exporter.requests[0].generations[0]
-        assert generation.tags["sigil.framework.name"] == "langgraph"
+        assert generation.tags["sigil.framework.name"] == "langchain"
         assert generation.model.provider == "openai"
     finally:
         client.shutdown()
 
 
-def test_langgraph_tool_chain_and_retriever_callbacks_emit_spans() -> None:
+def test_langchain_embedding_conformance_is_explicitly_unsupported_without_public_callbacks() -> None:
+    assert not hasattr(SigilLangChainHandler, "on_embedding_start")
+    assert not hasattr(SigilLangChainHandler, "on_embedding_end")
+    assert not hasattr(SigilAsyncLangChainHandler, "on_embedding_start")
+    assert not hasattr(SigilAsyncLangChainHandler, "on_embedding_end")
+
+
+def test_langchain_tool_chain_and_retriever_callbacks_emit_spans() -> None:
     exporter = _CapturingExporter()
     span_exporter = InMemorySpanExporter()
     provider = TracerProvider()
@@ -220,7 +260,7 @@ def test_langgraph_tool_chain_and_retriever_callbacks_emit_spans() -> None:
     client = _new_client(exporter, tracer=tracer)
 
     try:
-        handler = SigilLangGraphHandler(client=client)
+        handler = SigilLangChainHandler(client=client)
         parent_run_id = uuid4()
 
         tool_run_id = uuid4()
@@ -229,7 +269,7 @@ def test_langgraph_tool_chain_and_retriever_callbacks_emit_spans() -> None:
             '{"city":"Paris"}',
             run_id=tool_run_id,
             parent_run_id=parent_run_id,
-            metadata={"thread_id": "graph-thread-42", "langgraph_node": "tool_node"},
+            metadata={"thread_id": "chain-thread-42"},
         )
         handler.on_tool_end({"temp_c": 18}, run_id=tool_run_id)
 
@@ -240,7 +280,7 @@ def test_langgraph_tool_chain_and_retriever_callbacks_emit_spans() -> None:
             run_id=chain_run_id,
             parent_run_id=parent_run_id,
             tags=["workflow"],
-            metadata={"thread_id": "graph-thread-42", "langgraph_node": "chain_node"},
+            metadata={"thread_id": "chain-thread-42"},
             run_type="chain",
         )
         handler.on_chain_end({}, run_id=chain_run_id)
@@ -251,7 +291,7 @@ def test_langgraph_tool_chain_and_retriever_callbacks_emit_spans() -> None:
             "where is my data",
             run_id=retriever_run_id,
             parent_run_id=parent_run_id,
-            metadata={"thread_id": "graph-thread-42", "langgraph_node": "retriever_node"},
+            metadata={"thread_id": "chain-thread-42"},
         )
         handler.on_retriever_error(RuntimeError("retriever failed"), run_id=retriever_run_id)
 
@@ -261,16 +301,15 @@ def test_langgraph_tool_chain_and_retriever_callbacks_emit_spans() -> None:
         retriever_span = next(span for span in spans if span.attributes.get("gen_ai.operation.name") == "framework_retriever")
 
         assert tool_span.attributes.get("gen_ai.tool.name") == "weather"
-        assert tool_span.attributes.get("gen_ai.conversation.id") == "graph-thread-42"
+        assert tool_span.attributes.get("gen_ai.conversation.id") == "chain-thread-42"
 
         assert chain_span.attributes.get("sigil.framework.run_type") == "chain"
         assert chain_span.attributes.get("sigil.framework.component_name") == "PlanChain"
-        assert chain_span.attributes.get("sigil.framework.langgraph.node") == "chain_node"
+        assert chain_span.attributes.get("sigil.framework.parent_run_id") == str(parent_run_id)
         assert chain_span.status.status_code.name == "OK"
 
         assert retriever_span.attributes.get("sigil.framework.run_type") == "retriever"
         assert retriever_span.attributes.get("sigil.framework.component_name") == "VectorRetriever"
-        assert retriever_span.attributes.get("sigil.framework.langgraph.node") == "retriever_node"
         assert retriever_span.status.status_code.name == "ERROR"
         assert retriever_span.attributes.get("error.type") == "framework_error"
     finally:
@@ -278,24 +317,38 @@ def test_langgraph_tool_chain_and_retriever_callbacks_emit_spans() -> None:
         provider.shutdown()
 
 
-def test_langgraph_attach_helpers_preserve_existing_callbacks() -> None:
+def test_langchain_attach_helpers_preserve_existing_callbacks() -> None:
     exporter = _CapturingExporter()
     client = _new_client(exporter)
     try:
-        created = create_sigil_langgraph_handler(client=client)
-        assert isinstance(created, SigilLangGraphHandler)
+        created = create_sigil_langchain_handler(client=client)
+        assert isinstance(created, SigilLangChainHandler)
 
         existing = object()
-        config = with_sigil_langgraph_callbacks(
-            {"callbacks": [existing], "durable": True},
+        config = with_sigil_langchain_callbacks(
+            {"callbacks": [existing], "retry": 2},
             client=client,
-            agent_name="langgraph-helper",
+            agent_name="langchain-helper",
         )
 
-        assert config["durable"] is True
+        assert config["retry"] == 2
         callbacks = config["callbacks"]
         assert isinstance(callbacks, list)
         assert callbacks[0] is existing
-        assert isinstance(callbacks[1], SigilLangGraphHandler)
+        assert isinstance(callbacks[1], SigilLangChainHandler)
+    finally:
+        client.shutdown()
+
+
+def test_langchain_attach_helpers_do_not_duplicate_existing_sigil_handler() -> None:
+    exporter = _CapturingExporter()
+    client = _new_client(exporter)
+    try:
+        existing = SigilLangChainHandler(client=client)
+        config = with_sigil_langchain_callbacks({"callbacks": [existing]}, client=client)
+        callbacks = config["callbacks"]
+        assert isinstance(callbacks, list)
+        assert len(callbacks) == 1
+        assert callbacks[0] is existing
     finally:
         client.shutdown()

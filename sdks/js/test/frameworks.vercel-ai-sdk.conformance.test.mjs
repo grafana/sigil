@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { defaultConfig, SigilClient } from '../.test-dist/index.js';
-import { createSigilVercelAiSdk } from '../.test-dist/frameworks/vercel-ai-sdk/index.js';
+import {
+  createSigilVercelAiSdk,
+  SigilVercelAiSdkInstrumentation,
+} from '../.test-dist/frameworks/vercel-ai-sdk/index.js';
+
+// Framework-adapter conformance coverage aligned to docs/references/sdk-conformance-spec.md.
 
 class CapturingExporter {
   requests = [];
@@ -18,7 +23,11 @@ class CapturingExporter {
   }
 }
 
-test('vercel ai sdk generateText hooks record single-step success', async () => {
+test('framework conformance: vercel ai sdk embedding hooks are explicitly unsupported on the public API', () => {
+  assert.equal(typeof SigilVercelAiSdkInstrumentation.prototype.embeddingHooks, 'undefined');
+});
+
+test('framework conformance: vercel ai sdk generateText hooks record single-step success', async () => {
   const { generations } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client, {
       agentName: 'vercel-agent',
@@ -76,7 +85,7 @@ test('vercel ai sdk generateText hooks record single-step success', async () => 
   assert.equal(generation.metadata['sigil.framework.reasoning_text'], 'reasoning detail');
 });
 
-test('vercel ai sdk generateText hooks record single-step error', async () => {
+test('framework conformance: vercel ai sdk generateText hooks record single-step error', async () => {
   const { generations } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client);
     const hooks = sigil.generateTextHooks({ conversationId: 'conv-error' });
@@ -99,7 +108,7 @@ test('vercel ai sdk generateText hooks record single-step error', async () => {
   assert.equal(generation.stopReason, 'error');
 });
 
-test('vercel ai sdk generateText hooks record step when step start callback is absent', async () => {
+test('framework conformance: vercel ai sdk generateText hooks record step when step start callback is absent', async () => {
   const { generations } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client);
     const hooks = sigil.generateTextHooks();
@@ -119,7 +128,7 @@ test('vercel ai sdk generateText hooks record step when step start callback is a
   assert.equal(generation.output[0].content, 'fallback path');
 });
 
-test('vercel ai sdk generateText defers recorder creation until step finish', async () => {
+test('framework conformance: vercel ai sdk generateText defers recorder creation until step finish', async () => {
   const { generations } = await captureSession(async (client) => {
     const originalStartGeneration = client.startGeneration.bind(client);
     let startGenerationCalls = 0;
@@ -142,7 +151,7 @@ test('vercel ai sdk generateText defers recorder creation until step finish', as
   assert.equal(generations.length, 0);
 });
 
-test('vercel ai sdk generateText records tool execution from onStepFinish without experimental tool callbacks', async () => {
+test('framework conformance: vercel ai sdk generateText records tool execution from onStepFinish without experimental tool callbacks', async () => {
   const { generations, snapshot } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client);
     const hooks = sigil.generateTextHooks({ conversationId: 'conv-v5-step-finish-tools' });
@@ -177,7 +186,7 @@ test('vercel ai sdk generateText records tool execution from onStepFinish withou
   assert.deepEqual(snapshot.toolExecutions[0].result, { temp_c: 18 });
 });
 
-test('vercel ai sdk fallback tool spans use deterministic seed-based conversation id', async () => {
+test('framework conformance: vercel ai sdk fallback tool spans use deterministic seed-based conversation id', async () => {
   const { generations, snapshot } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client);
     const hooks = sigil.generateTextHooks();
@@ -211,7 +220,7 @@ test('vercel ai sdk fallback tool spans use deterministic seed-based conversatio
   assert.equal(snapshot.toolExecutions[0].conversationId, generations[0].conversationId);
 });
 
-test('vercel ai sdk fallback conversation id is consistent across tool callback availability', async () => {
+test('framework conformance: vercel ai sdk fallback conversation id is consistent across tool callback availability', async () => {
   const stepFinishOnly = await captureSingleGeneration(async (client) => {
     const sigil = createSigilVercelAiSdk(client);
     const hooks = sigil.generateTextHooks();
@@ -276,7 +285,7 @@ test('vercel ai sdk fallback conversation id is consistent across tool callback 
   assert.equal(stepFinishOnly.conversationId, withToolCallbacks.conversationId);
 });
 
-test('vercel ai sdk onStepFinish fallback tool failures do not throw', async () => {
+test('framework conformance: vercel ai sdk onStepFinish fallback tool failures do not throw', async () => {
   const { generations, snapshot } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client);
     const hooks = sigil.generateTextHooks({ conversationId: 'conv-v5-tool-failure' });
@@ -312,7 +321,7 @@ test('vercel ai sdk onStepFinish fallback tool failures do not throw', async () 
   assert.match(snapshot.toolExecutions[0].callError ?? '', /weather provider timeout/);
 });
 
-test('vercel ai sdk generateText hooks support multi-step loop and tool lifecycle', async () => {
+test('framework conformance: vercel ai sdk generateText hooks support multi-step loop and tool lifecycle', async () => {
   const { generations, snapshot } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client, { captureInputs: true, captureOutputs: true });
     const hooks = sigil.generateTextHooks({ conversationId: 'conv-loop' });
@@ -389,7 +398,7 @@ test('vercel ai sdk generateText hooks support multi-step loop and tool lifecycl
   assert.equal(toolExecution.completedAt.getTime() - toolExecution.startedAt.getTime(), 240);
 });
 
-test('vercel ai sdk streamText hooks capture TTFT once and record streaming result', async () => {
+test('framework conformance: vercel ai sdk streamText hooks capture TTFT once and record streaming result', async () => {
   const { generations, firstTokenCalls } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client);
     const hooks = sigil.streamTextHooks({ conversationId: 'conv-stream' });
@@ -439,7 +448,7 @@ test('vercel ai sdk streamText hooks capture TTFT once and record streaming resu
   assert.equal(generations[0].output[0].content, 'hello');
 });
 
-test('vercel ai sdk streamText hooks close step and open tools on error', async () => {
+test('framework conformance: vercel ai sdk streamText hooks close step and open tools on error', async () => {
   const { generations, snapshot } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client);
     const hooks = sigil.streamTextHooks({ conversationId: 'conv-stream-error' });
@@ -466,7 +475,7 @@ test('vercel ai sdk streamText hooks close step and open tools on error', async 
   assert.match(snapshot.toolExecutions[0].callError ?? '', /stream aborted/);
 });
 
-test('vercel ai sdk streamText hooks export error when step start callback is unavailable', async () => {
+test('framework conformance: vercel ai sdk streamText hooks export error when step start callback is unavailable', async () => {
   const { generations } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client);
     const hooks = sigil.streamTextHooks({ conversationId: 'conv-stream-no-step-start-error' });
@@ -479,7 +488,7 @@ test('vercel ai sdk streamText hooks export error when step start callback is un
   assert.match(generations[0].callError ?? '', /stream aborted without step start/);
 });
 
-test('vercel ai sdk streamText hooks close step and open tools on abort', async () => {
+test('framework conformance: vercel ai sdk streamText hooks close step and open tools on abort', async () => {
   const { generations, snapshot } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client);
     const hooks = sigil.streamTextHooks({ conversationId: 'conv-stream-abort' });
@@ -506,7 +515,7 @@ test('vercel ai sdk streamText hooks close step and open tools on abort', async 
   assert.match(snapshot.toolExecutions[0].callError ?? '', /stream aborted/);
 });
 
-test('vercel ai sdk streamText hooks export abort when step start callback is unavailable', async () => {
+test('framework conformance: vercel ai sdk streamText hooks export abort when step start callback is unavailable', async () => {
   const { generations } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client);
     const hooks = sigil.streamTextHooks({ conversationId: 'conv-stream-no-step-start-abort' });
@@ -519,7 +528,7 @@ test('vercel ai sdk streamText hooks export abort when step start callback is un
   assert.match(generations[0].callError ?? '', /stream aborted/);
 });
 
-test('vercel ai sdk streamText hooks normalize structured abort payloads to abort error', async () => {
+test('framework conformance: vercel ai sdk streamText hooks normalize structured abort payloads to abort error', async () => {
   const { generations } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client);
     const hooks = sigil.streamTextHooks({ conversationId: 'conv-stream-structured-abort' });
@@ -531,7 +540,7 @@ test('vercel ai sdk streamText hooks normalize structured abort payloads to abor
   assert.doesNotMatch(generations[0].callError ?? '', /\[object Object\]/);
 });
 
-test('vercel ai sdk streamText synthetic step uses call start when no step start callback or chunk is observed', async () => {
+test('framework conformance: vercel ai sdk streamText synthetic step uses call start when no step start callback or chunk is observed', async () => {
   const { generations } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client);
     const hooks = sigil.streamTextHooks({ conversationId: 'conv-stream-finish-only-start' });
@@ -552,7 +561,7 @@ test('vercel ai sdk streamText synthetic step uses call start when no step start
   assert.ok(durationMs >= 10);
 });
 
-test('vercel ai sdk streamText synthetic step fallback does not reuse first-step start across later steps', async () => {
+test('framework conformance: vercel ai sdk streamText synthetic step fallback does not reuse first-step start across later steps', async () => {
   const { generations } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client);
     const hooks = sigil.streamTextHooks({ conversationId: 'conv-stream-finish-only-multi-step' });
@@ -588,7 +597,7 @@ test('vercel ai sdk streamText synthetic step fallback does not reuse first-step
   assert.ok(secondDurationMs < 15);
 });
 
-test('vercel ai sdk streamText synthetic step preserves pre-finish start timestamp', async () => {
+test('framework conformance: vercel ai sdk streamText synthetic step preserves pre-finish start timestamp', async () => {
   const { generations, firstTokenCalls } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client);
     const hooks = sigil.streamTextHooks({ conversationId: 'conv-stream-synthetic-start' });
@@ -618,7 +627,7 @@ test('vercel ai sdk streamText synthetic step preserves pre-finish start timesta
   assert.ok(durationMs >= 10);
 });
 
-test('vercel ai sdk streamText synthetic step uses response model when step start callback is unavailable', async () => {
+test('framework conformance: vercel ai sdk streamText synthetic step uses response model when step start callback is unavailable', async () => {
   const { generations } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client);
     const hooks = sigil.streamTextHooks({ conversationId: 'conv-stream-model-fallback' });
@@ -644,7 +653,7 @@ test('vercel ai sdk streamText synthetic step uses response model when step star
   assert.equal(generations[0].model.name, 'gpt-5');
 });
 
-test('vercel ai sdk streamText records observed start from non-text chunks', async () => {
+test('framework conformance: vercel ai sdk streamText records observed start from non-text chunks', async () => {
   const { generations } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client);
     const hooks = sigil.streamTextHooks({ conversationId: 'conv-stream-reasoning-start' });
@@ -673,7 +682,7 @@ test('vercel ai sdk streamText records observed start from non-text chunks', asy
   assert.ok(durationMs >= 10);
 });
 
-test('vercel ai sdk streamText fallback preserves TTFT when non-text chunks arrive before text', async () => {
+test('framework conformance: vercel ai sdk streamText fallback preserves TTFT when non-text chunks arrive before text', async () => {
   let recordedFirstTokenAt;
   const { generations } = await captureSession(async (client) => {
     const originalStartStreamingGeneration = client.startStreamingGeneration.bind(client);
@@ -725,7 +734,7 @@ test('vercel ai sdk streamText fallback preserves TTFT when non-text chunks arri
   assert.ok(ttftMs >= 10);
 });
 
-test('vercel ai sdk streamText hooks preserve tool spans when step start callback is unavailable', async () => {
+test('framework conformance: vercel ai sdk streamText hooks preserve tool spans when step start callback is unavailable', async () => {
   const { generations, snapshot } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client);
     const hooks = sigil.streamTextHooks({ conversationId: 'conv-stream-tool-no-step-start' });
@@ -747,7 +756,7 @@ test('vercel ai sdk streamText hooks preserve tool spans when step start callbac
   assert.match(snapshot.toolExecutions[0].callError ?? '', /stream aborted/);
 });
 
-test('vercel ai sdk tool finish error path records call error and duration', async () => {
+test('framework conformance: vercel ai sdk tool finish error path records call error and duration', async () => {
   const { snapshot } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client);
     const hooks = sigil.generateTextHooks({ conversationId: 'conv-tool-error' });
@@ -788,7 +797,7 @@ test('vercel ai sdk tool finish error path records call error and duration', asy
   assert.equal(execution.completedAt.getTime() - execution.startedAt.getTime(), 125);
 });
 
-test('vercel ai sdk capture toggles omit model and tool payload content', async () => {
+test('framework conformance: vercel ai sdk capture toggles omit model and tool payload content', async () => {
   const { generations, snapshot } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client, {
       captureInputs: false,
@@ -833,7 +842,7 @@ test('vercel ai sdk capture toggles omit model and tool payload content', async 
   assert.equal(snapshot.toolExecutions[0].result, undefined);
 });
 
-test('vercel ai sdk conversation id precedence explicit then resolver then fallback', async () => {
+test('framework conformance: vercel ai sdk conversation id precedence explicit then resolver then fallback', async () => {
   const explicit = await captureSingleGeneration(async (client) => {
     const sigil = createSigilVercelAiSdk(client, {
       resolveConversationId: () => 'resolver-conv',
@@ -890,7 +899,7 @@ test('vercel ai sdk conversation id precedence explicit then resolver then fallb
   assert.equal(fallback.conversationId, 'sigil:framework:vercel-ai-sdk:call-1:step-0');
 });
 
-test('vercel ai sdk keeps fallback conversation id aligned between generation and tools', async () => {
+test('framework conformance: vercel ai sdk keeps fallback conversation id aligned between generation and tools', async () => {
   const { generations, snapshot } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client);
     const hooks = sigil.generateTextHooks();
@@ -928,7 +937,7 @@ test('vercel ai sdk keeps fallback conversation id aligned between generation an
   assert.equal(generations[0].conversationId, 'sigil:framework:vercel-ai-sdk:call-1:step-0');
 });
 
-test('vercel ai sdk closes open tool recorders when parent step errors', async () => {
+test('framework conformance: vercel ai sdk closes open tool recorders when parent step errors', async () => {
   const { generations, snapshot } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client);
     const hooks = sigil.generateTextHooks({ conversationId: 'conv-parent-error' });
@@ -960,7 +969,7 @@ test('vercel ai sdk closes open tool recorders when parent step errors', async (
   assert.match(snapshot.toolExecutions[0].callError ?? '', /step hard error/);
 });
 
-test('vercel ai sdk cleans step and tool state before rethrowing generation recorder errors', async () => {
+test('framework conformance: vercel ai sdk cleans step and tool state before rethrowing generation recorder errors', async () => {
   const { generations, snapshot } = await captureSession(async (client) => {
     const originalStartGeneration = client.startGeneration.bind(client);
     let shouldInjectRecorderError = true;
@@ -1019,7 +1028,7 @@ test('vercel ai sdk cleans step and tool state before rethrowing generation reco
   assert.match(snapshot.toolExecutions[0].callError ?? '', /tool call did not finish before step completion/);
 });
 
-test('vercel ai sdk removes tool state before rethrowing tool recorder errors', async () => {
+test('framework conformance: vercel ai sdk removes tool state before rethrowing tool recorder errors', async () => {
   const { snapshot } = await captureSession(async (client) => {
     const originalStartToolExecution = client.startToolExecution.bind(client);
     let shouldInjectRecorderError = true;
@@ -1088,7 +1097,7 @@ test('vercel ai sdk removes tool state before rethrowing tool recorder errors', 
   assert.equal(snapshot.toolExecutions[1].result.temp_c, 19);
 });
 
-test('vercel ai sdk isolates step state across concurrent calls', async () => {
+test('framework conformance: vercel ai sdk isolates step state across concurrent calls', async () => {
   const { generations } = await captureSession(async (client) => {
     const sigil = createSigilVercelAiSdk(client);
     const hooksA = sigil.generateTextHooks({ conversationId: 'conv-a' });

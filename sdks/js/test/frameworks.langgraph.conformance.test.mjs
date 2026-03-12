@@ -5,6 +5,8 @@ import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from '
 import { defaultConfig, SigilClient } from '../.test-dist/index.js';
 import { SigilLangGraphHandler } from '../.test-dist/frameworks/langgraph/index.js';
 
+// Framework-adapter conformance coverage aligned to docs/references/sdk-conformance-spec.md.
+
 class CapturingExporter {
   requests = [];
 
@@ -19,7 +21,7 @@ class CapturingExporter {
   }
 }
 
-test('langgraph handler records sync lifecycle with framework tags', async () => {
+test('framework conformance: langgraph handler records sync lifecycle with framework tags', async () => {
   const generation = await captureSingleGeneration(async (client) => {
     const handler = new SigilLangGraphHandler(client, {
       agentName: 'agent-langgraph',
@@ -76,7 +78,7 @@ test('langgraph handler records sync lifecycle with framework tags', async () =>
   assert.equal(generation.metadata.seed, 9);
 });
 
-test('langgraph handler records stream mode and token fallback output', async () => {
+test('framework conformance: langgraph handler records stream mode and token fallback output', async () => {
   const generation = await captureSingleGeneration(async (client) => {
     const handler = new SigilLangGraphHandler(client);
 
@@ -97,7 +99,7 @@ test('langgraph handler records stream mode and token fallback output', async ()
   assert.equal(generation.output[0].content, 'hello world');
 });
 
-test('langgraph provider mapping covers openai anthopic gemini and fallback', async () => {
+test('framework conformance: langgraph provider mapping covers openai anthopic gemini and fallback', async () => {
   const providers = [];
 
   await captureGenerations(async (client) => {
@@ -119,7 +121,12 @@ test('langgraph provider mapping covers openai anthopic gemini and fallback', as
   assert.deepEqual(providers, ['openai', 'anthropic', 'gemini', 'custom']);
 });
 
-test('langgraph handler sets call_error on llm error', async () => {
+test('framework conformance: langgraph embedding lifecycle is explicitly unsupported on the public API', () => {
+  assert.equal(typeof SigilLangGraphHandler.prototype.handleEmbeddingStart, 'undefined');
+  assert.equal(typeof SigilLangGraphHandler.prototype.handleEmbeddingEnd, 'undefined');
+});
+
+test('framework conformance: langgraph handler sets call_error on llm error', async () => {
   const generation = await captureSingleGeneration(async (client) => {
     const handler = new SigilLangGraphHandler(client);
 
@@ -131,7 +138,7 @@ test('langgraph handler sets call_error on llm error', async () => {
   assert.equal(generation.tags['sigil.framework.name'], 'langgraph');
 });
 
-test('langgraph handler maps tool callbacks and emits chain/retriever spans', async () => {
+test('framework conformance: langgraph handler maps tool callbacks and emits chain/retriever spans', async () => {
   const spanExporter = new InMemorySpanExporter();
   const tracerProvider = new BasicTracerProvider({
     spanProcessors: [new SimpleSpanProcessor(spanExporter)],

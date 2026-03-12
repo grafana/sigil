@@ -1,4 +1,4 @@
-"""openai-agents handler lifecycle and conversation-mapping tests."""
+"""OpenAI Agents framework conformance suite."""
 
 from __future__ import annotations
 
@@ -231,6 +231,13 @@ def test_sigil_sdk_openai_agents_async_handler_records_generation() -> None:
         assert generation.model.provider == "openai"
     finally:
         client.shutdown()
+
+
+def test_sigil_sdk_openai_agents_embedding_conformance_is_explicitly_unsupported_without_public_callbacks() -> None:
+    assert not hasattr(SigilOpenAIAgentsHandler, "on_embedding_start")
+    assert not hasattr(SigilOpenAIAgentsHandler, "on_embedding_end")
+    assert not hasattr(SigilAsyncOpenAIAgentsHandler, "on_embedding_start")
+    assert not hasattr(SigilAsyncOpenAIAgentsHandler, "on_embedding_end")
 
 
 def test_sigil_sdk_openai_agents_hook_helpers_append_handler() -> None:

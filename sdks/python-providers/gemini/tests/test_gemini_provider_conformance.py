@@ -1,4 +1,4 @@
-"""Gemini provider helper tests."""
+"""Gemini provider conformance suite."""
 
 from __future__ import annotations
 

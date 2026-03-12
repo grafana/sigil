@@ -25,6 +25,8 @@ import {
   withSigilGoogleAdkPlugins,
 } from '../.test-dist/frameworks/google-adk/index.js';
 
+// Framework-adapter conformance coverage aligned to docs/references/sdk-conformance-spec.md.
+
 class CapturingExporter {
   requests = [];
 
@@ -163,6 +165,11 @@ for (const framework of frameworks) {
     assert.equal(generation.conversationId, `sigil:framework:${framework.name}:run-fallback`);
   });
 
+  test(`framework conformance: ${framework.name} embedding lifecycle is explicitly unsupported on the public API`, () => {
+    assert.equal(typeof framework.handlerCtor.prototype.handleEmbeddingStart, 'undefined');
+    assert.equal(typeof framework.handlerCtor.prototype.handleEmbeddingEnd, 'undefined');
+  });
+
   test(`${framework.name} handler normalizes extra metadata to JSON-safe values`, async () => {
     const generation = await captureSingleGeneration(async (client) => {
       const handler = new framework.handlerCtor(client, {
@@ -263,7 +270,7 @@ async function captureSingleGeneration(run) {
   return generations[0];
 }
 
-test('withSigilLangChainCallbacks preserves existing callbacks and appends sigil handler', () => {
+test('framework conformance: withSigilLangChainCallbacks preserves existing callbacks and appends sigil handler', () => {
   const client = new SigilClient(defaultConfig());
   try {
     const existing = { name: 'existing' };
@@ -278,7 +285,7 @@ test('withSigilLangChainCallbacks preserves existing callbacks and appends sigil
   }
 });
 
-test('withSigilLangChainCallbacks does not duplicate existing sigil handler', () => {
+test('framework conformance: withSigilLangChainCallbacks does not duplicate existing sigil handler', () => {
   const client = new SigilClient(defaultConfig());
   try {
     const existingSigil = new SigilLangChainHandler(client, { providerResolver: 'auto' });
@@ -290,7 +297,7 @@ test('withSigilLangChainCallbacks does not duplicate existing sigil handler', ()
   }
 });
 
-test('withSigilLangGraphCallbacks creates callback list when config is empty', () => {
+test('framework conformance: withSigilLangGraphCallbacks creates callback list when config is empty', () => {
   const client = new SigilClient(defaultConfig());
   try {
     const config = withSigilLangGraphCallbacks(undefined, client);
@@ -302,7 +309,7 @@ test('withSigilLangGraphCallbacks creates callback list when config is empty', (
   }
 });
 
-test('withSigilOpenAIAgentsHooks wires to hook emitter lifecycle', async () => {
+test('framework conformance: withSigilOpenAIAgentsHooks wires to hook emitter lifecycle', async () => {
   const generation = await captureSingleGeneration(async (client) => {
     const hooks = new FakeHookEmitter();
     const registration = withSigilOpenAIAgentsHooks(hooks, client);
@@ -353,7 +360,7 @@ test('withSigilOpenAIAgentsHooks wires to hook emitter lifecycle', async () => {
   assert.equal(generation.usage.totalTokens, 18);
 });
 
-test('withSigilOpenAIAgentsHooks reads usage from output payload when context usage is missing', async () => {
+test('framework conformance: withSigilOpenAIAgentsHooks reads usage from output payload when context usage is missing', async () => {
   const generation = await captureSingleGeneration(async (client) => {
     const hooks = new FakeHookEmitter();
     const registration = withSigilOpenAIAgentsHooks(hooks, client);
@@ -387,7 +394,7 @@ test('withSigilOpenAIAgentsHooks reads usage from output payload when context us
   assert.equal(generation.usage.totalTokens, 8);
 });
 
-test('withSigilOpenAIAgentsHooks handles agent_error and clears stack state', async () => {
+test('framework conformance: withSigilOpenAIAgentsHooks handles agent_error and clears stack state', async () => {
   const generations = [];
   await captureGenerations(async (client) => {
     const hooks = new FakeHookEmitter();
@@ -415,7 +422,7 @@ test('withSigilOpenAIAgentsHooks handles agent_error and clears stack state', as
   assert.equal(secondGeneration.metadata['sigil.framework.parent_run_id'], undefined);
 });
 
-test('withSigilOpenAIAgentsHooks closes tool runs when tool call id is missing', async () => {
+test('framework conformance: withSigilOpenAIAgentsHooks closes tool runs when tool call id is missing', async () => {
   await captureGenerations(async (client) => {
     const hooks = new FakeHookEmitter();
     const registration = withSigilOpenAIAgentsHooks(hooks, client);
@@ -463,7 +470,7 @@ test('withSigilOpenAIAgentsHooks closes tool runs when tool call id is missing',
   }, () => undefined);
 });
 
-test('withSigilLlamaIndexCallbacks registers through callback manager API', async () => {
+test('framework conformance: withSigilLlamaIndexCallbacks registers through callback manager API', async () => {
   const generation = await captureSingleGeneration(async (client) => {
     const callbackManager = new FakeCallbackManager();
     const config = withSigilLlamaIndexCallbacks({ callbackManager, retry: 2 }, client);
@@ -511,7 +518,7 @@ test('withSigilLlamaIndexCallbacks registers through callback manager API', asyn
   assert.equal(generation.mode, 'STREAM');
 });
 
-test('withSigilLlamaIndexCallbacks defaults non-streaming runs to sync mode', async () => {
+test('framework conformance: withSigilLlamaIndexCallbacks defaults non-streaming runs to sync mode', async () => {
   const generation = await captureSingleGeneration(async (client) => {
     const callbackManager = new FakeCallbackManager();
     withSigilLlamaIndexCallbacks({ callbackManager }, client);
@@ -536,7 +543,7 @@ test('withSigilLlamaIndexCallbacks defaults non-streaming runs to sync mode', as
   assert.equal(generation.mode, 'SYNC');
 });
 
-test('withSigilLlamaIndexCallbacks closes id-less llm runs', async () => {
+test('framework conformance: withSigilLlamaIndexCallbacks closes id-less llm runs', async () => {
   const generation = await captureSingleGeneration(async (client) => {
     const callbackManager = new FakeCallbackManager();
     withSigilLlamaIndexCallbacks({ callbackManager }, client);
@@ -577,7 +584,7 @@ test('withSigilLlamaIndexCallbacks closes id-less llm runs', async () => {
   assert.equal(extractFirstText(generation.output), 'world');
 });
 
-test('withSigilLlamaIndexCallbacks handles llm-error and clears run state', async () => {
+test('framework conformance: withSigilLlamaIndexCallbacks handles llm-error and clears run state', async () => {
   const generations = [];
   await captureGenerations(async (client) => {
     const callbackManager = new FakeCallbackManager();
@@ -620,7 +627,7 @@ test('withSigilLlamaIndexCallbacks handles llm-error and clears run state', asyn
   assert.equal(secondGeneration.metadata['sigil.framework.parent_run_id'], undefined);
 });
 
-test('withSigilLlamaIndexCallbacks closes id-less tool runs', async () => {
+test('framework conformance: withSigilLlamaIndexCallbacks closes id-less tool runs', async () => {
   await captureGenerations(async (client) => {
     const callbackManager = new FakeCallbackManager();
     const registration = attachSigilLlamaIndexCallbacks(callbackManager, client);
@@ -664,7 +671,7 @@ test('withSigilLlamaIndexCallbacks closes id-less tool runs', async () => {
   }, () => undefined);
 });
 
-test('attachSigilLlamaIndexCallbacks reuses existing registration for same manager', () => {
+test('framework conformance: attachSigilLlamaIndexCallbacks reuses existing registration for same manager', () => {
   const client = new SigilClient(defaultConfig());
   try {
     const callbackManager = new FakeCallbackManager();
@@ -677,7 +684,7 @@ test('attachSigilLlamaIndexCallbacks reuses existing registration for same manag
   }
 });
 
-test('withSigilGoogleAdkPlugins appends an ADK plugin callback implementation', async () => {
+test('framework conformance: withSigilGoogleAdkPlugins appends an ADK plugin callback implementation', async () => {
   const generation = await captureSingleGeneration(async (client) => {
     const existing = { name: 'existing-plugin' };
     const config = withSigilGoogleAdkPlugins({ plugins: [existing] }, client);
@@ -736,7 +743,7 @@ test('withSigilGoogleAdkPlugins appends an ADK plugin callback implementation', 
   assert.equal(generation.mode, 'SYNC');
 });
 
-test('google adk plugin closes tool runs when functionCallId is missing', async () => {
+test('framework conformance: google adk plugin closes tool runs when functionCallId is missing', async () => {
   await captureGenerations(async (client) => {
     const plugin = createSigilGoogleAdkPlugin(client);
 
@@ -775,7 +782,7 @@ test('google adk plugin closes tool runs when functionCallId is missing', async 
   }, () => undefined);
 });
 
-test('google adk plugin uses onUserMessageCallback when llmRequest has no contents', async () => {
+test('framework conformance: google adk plugin uses onUserMessageCallback when llmRequest has no contents', async () => {
   const generation = await captureSingleGeneration(async (client) => {
     const config = withSigilGoogleAdkPlugins({}, client);
     const plugin = config.plugins[0];
@@ -818,7 +825,7 @@ test('google adk plugin uses onUserMessageCallback when llmRequest has no conten
   assert.equal(extractFirstText(generation.input), 'hello from onUserMessage');
 });
 
-test('google adk plugin records partial tokens from onEventCallback and marks stream mode', async () => {
+test('framework conformance: google adk plugin records partial tokens from onEventCallback and marks stream mode', async () => {
   const generation = await captureSingleGeneration(async (client) => {
     const config = withSigilGoogleAdkPlugins({}, client);
     const plugin = config.plugins[0];
@@ -864,7 +871,7 @@ test('google adk plugin records partial tokens from onEventCallback and marks st
   assert.equal(extractFirstText(generation.output), 'wor');
 });
 
-test('google adk plugin emits agent chain spans that parent llm runs', async () => {
+test('framework conformance: google adk plugin emits agent chain spans that parent llm runs', async () => {
   const generation = await captureSingleGeneration(async (client) => {
     const config = withSigilGoogleAdkPlugins({}, client);
     const plugin = config.plugins[0];
@@ -904,7 +911,7 @@ test('google adk plugin emits agent chain spans that parent llm runs', async () 
   assert.equal(parentRunId.startsWith('adk_agent:'), true);
 });
 
-test('google adk plugin keeps fallback invocation ids stable without invocationId', async () => {
+test('framework conformance: google adk plugin keeps fallback invocation ids stable without invocationId', async () => {
   const client = new SigilClient(defaultConfig());
   try {
     const plugin = createSigilGoogleAdkPlugin(client);
@@ -922,7 +929,7 @@ test('google adk plugin keeps fallback invocation ids stable without invocationI
   }
 });
 
-test('createSigilGoogleAdkPlugin exposes the ADK callback surface', () => {
+test('framework conformance: createSigilGoogleAdkPlugin exposes the ADK callback surface', () => {
   const client = new SigilClient(defaultConfig());
   try {
     const plugin = createSigilGoogleAdkPlugin(client);

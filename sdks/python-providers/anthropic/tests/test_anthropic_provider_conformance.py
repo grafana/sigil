@@ -1,4 +1,4 @@
-"""Anthropic provider helper tests."""
+"""Anthropic provider conformance suite."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import pytest
 
 from sigil_sdk import Client, ClientConfig, GenerationExportConfig
 from sigil_sdk.models import ExportGenerationResult, ExportGenerationsResponse
+import sigil_sdk_anthropic
 from sigil_sdk_anthropic import AnthropicOptions, AnthropicStreamSummary, messages
 
 
@@ -200,3 +201,8 @@ def test_anthropic_mapper_maps_thinking_disabled() -> None:
     mapped = messages.from_request_response(request, response)
 
     assert mapped.thinking_enabled is False
+
+
+def test_anthropic_embedding_conformance_is_explicitly_unsupported_without_public_surface() -> None:
+    assert hasattr(sigil_sdk_anthropic, "messages")
+    assert not hasattr(sigil_sdk_anthropic, "embeddings")
