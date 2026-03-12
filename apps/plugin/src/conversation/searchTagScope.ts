@@ -53,10 +53,7 @@ function buildLabelFilterPredicates(filters: LabelFilter[]): string[] {
 }
 
 export function buildConversationTagDiscoveryQuery(filters?: DashboardFilters): string {
-  const predicates = [
-    `${toSpanAttribute(ATTR_OPERATION_NAME)} =~ ".+"`,
-    `${toSpanAttribute(ATTR_SDK_NAME)} =~ ".+"`,
-  ];
+  const predicates = [`${toSpanAttribute(ATTR_OPERATION_NAME)} =~ ".+"`, `${toSpanAttribute(ATTR_SDK_NAME)} =~ ".+"`];
 
   if (filters) {
     predicates.push(
