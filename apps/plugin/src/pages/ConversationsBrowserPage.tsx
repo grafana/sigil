@@ -159,10 +159,6 @@ function excludeConversationLabelFilter(filters: LabelFilter[], filter: LabelFil
   });
 }
 
-function getSettledValue<T>(result: PromiseSettledResult<T>, fallback: T): T {
-  return result.status === 'fulfilled' ? result.value : fallback;
-}
-
 async function fetchRangeConversations(
   dataSource: ConversationsDataSource,
   fromISO: string,
@@ -434,43 +430,17 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
 
   useEffect(() => {
     let cancelled = false;
+    const fromISO = timeRange.from.toISOString();
+    const toISO = timeRange.to.toISOString();
 
-    const run = async () => {
-      setConversationLabelsLoading(true);
-      try {
-        const [tagsResult, providerValuesResult, modelValuesResult, agentValuesResult] = await Promise.allSettled([
-          dataSource.getSearchTags(
-            timeRange.from.toISOString(),
-            timeRange.to.toISOString(),
-            conversationTagDiscoveryQuery
-          ),
-          dataSource.getSearchTagValues(
-            PROVIDER_TAG_KEY,
-            timeRange.from.toISOString(),
-            timeRange.to.toISOString(),
-            providerOptionsQuery
-          ),
-          dataSource.getSearchTagValues(
-            MODEL_TAG_KEY,
-            timeRange.from.toISOString(),
-            timeRange.to.toISOString(),
-            modelOptionsQuery
-          ),
-          dataSource.getSearchTagValues(
-            AGENT_TAG_KEY,
-            timeRange.from.toISOString(),
-            timeRange.to.toISOString(),
-            agentOptionsQuery
-          ),
-        ]);
+    setConversationLabelsLoading(true);
+
+    void dataSource
+      .getSearchTags(fromISO, toISO, conversationTagDiscoveryQuery)
+      .then((tags) => {
         if (cancelled) {
           return;
         }
-
-        const tags = getSettledValue(tagsResult, []);
-        const providerValues = getSettledValue(providerValuesResult, []);
-        const modelValues = getSettledValue(modelValuesResult, []);
-        const agentValues = getSettledValue(agentValuesResult, []);
 
         const nextOptions = tags
           .filter(
@@ -487,19 +457,56 @@ export default function ConversationsBrowserPage(props: ConversationsBrowserPage
           });
 
         setConversationLabelKeyOptions(nextOptions);
-        setProviderOptions(providerValues);
-        setModelOptions(modelValues);
-        setAgentOptions(agentValues);
-      } catch {
-        // Promise.allSettled above should prevent request-level failures from cascading.
-      } finally {
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setConversationLabelKeyOptions([]);
+        }
+      })
+      .finally(() => {
         if (!cancelled) {
           setConversationLabelsLoading(false);
         }
-      }
-    };
+      });
 
-    void run();
+    void dataSource
+      .getSearchTagValues(PROVIDER_TAG_KEY, fromISO, toISO, providerOptionsQuery)
+      .then((values) => {
+        if (!cancelled) {
+          setProviderOptions(values);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setProviderOptions([]);
+        }
+      });
+
+    void dataSource
+      .getSearchTagValues(MODEL_TAG_KEY, fromISO, toISO, modelOptionsQuery)
+      .then((values) => {
+        if (!cancelled) {
+          setModelOptions(values);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setModelOptions([]);
+        }
+      });
+
+    void dataSource
+      .getSearchTagValues(AGENT_TAG_KEY, fromISO, toISO, agentOptionsQuery)
+      .then((values) => {
+        if (!cancelled) {
+          setAgentOptions(values);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAgentOptions([]);
+        }
+      });
 
     return () => {
       cancelled = true;
