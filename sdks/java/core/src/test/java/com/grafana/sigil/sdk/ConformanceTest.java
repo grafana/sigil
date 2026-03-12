@@ -431,6 +431,7 @@ class ConformanceTest {
                 Arguments.of("Explicit", "Context", "Meta", "Explicit"),
                 Arguments.of("", "Context", "", "Context"),
                 Arguments.of("", "", "Meta", "Meta"),
+                Arguments.of("  Padded  ", "", "", "Padded"),
                 Arguments.of("   ", "", "", ""));
     }
 

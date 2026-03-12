@@ -158,6 +158,7 @@ public sealed class ConformanceTests
     [InlineData("Explicit", "Context", "Meta", "Explicit")]
     [InlineData("", "Context", "", "Context")]
     [InlineData("", "", "Meta", "Meta")]
+    [InlineData("  Padded  ", "", "", "Padded")]
     [InlineData("   ", "", "", "")]
     public async Task ConversationTitleSemantics(string startTitle, string contextTitle, string metadataTitle, string expected)
     {

@@ -2009,6 +2009,7 @@ public sealed class GenerationRecorder
             generation.ConversationTitle,
             MetadataString(generation.Metadata, SigilClient.SpanAttrConversationTitle)
         );
+        generation.ConversationTitle = NormalizeResolvedString(generation.ConversationTitle);
         if (!string.IsNullOrWhiteSpace(generation.ConversationTitle))
         {
             generation.Metadata[SigilClient.SpanAttrConversationTitle] = generation.ConversationTitle;

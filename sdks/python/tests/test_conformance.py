@@ -336,6 +336,7 @@ def test_conformance_conversation_title_semantics() -> None:
         ("explicit wins", "Explicit", "Context", "Meta", "Explicit"),
         ("context fallback", "", "Context", "", "Context"),
         ("metadata fallback", "", "", "Meta", "Meta"),
+        ("whitespace trimmed", "  Padded  ", "", "", "Padded"),
         ("whitespace omitted", "   ", "", "", ""),
     ]
 

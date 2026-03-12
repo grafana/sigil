@@ -150,6 +150,7 @@ for (const testCase of [
   { name: 'explicit wins', startTitle: 'Explicit', contextTitle: 'Context', metadataTitle: 'Meta', expected: 'Explicit' },
   { name: 'context fallback', startTitle: '', contextTitle: 'Context', metadataTitle: '', expected: 'Context' },
   { name: 'metadata fallback', startTitle: '', contextTitle: '', metadataTitle: 'Meta', expected: 'Meta' },
+  { name: 'whitespace trimmed', startTitle: '  Padded  ', contextTitle: '', metadataTitle: '', expected: 'Padded' },
   { name: 'whitespace omitted', startTitle: '   ', contextTitle: '', metadataTitle: '', expected: '' },
 ]) {
   test(`conformance conversation title semantics: ${testCase.name}`, async () => {

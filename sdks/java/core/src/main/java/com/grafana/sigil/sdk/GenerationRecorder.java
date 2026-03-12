@@ -229,6 +229,7 @@ public class GenerationRecorder implements AutoCloseable {
         generation.setConversationTitle(firstNonBlank(
                 generation.getConversationTitle(),
                 SigilClient.metadataString(generation.getMetadata(), SigilClient.SPAN_ATTR_CONVERSATION_TITLE)));
+        generation.setConversationTitle(normalizeResolvedString(generation.getConversationTitle()));
         if (!generation.getConversationTitle().isBlank()) {
             generation.getMetadata().put(SigilClient.SPAN_ATTR_CONVERSATION_TITLE, generation.getConversationTitle());
         }
