@@ -62,6 +62,7 @@ export function useConversationData({
   const [nameResolvedModelCards, setNameResolvedModelCards] = useState<Map<string, ModelCard>>(new Map());
   const requestVersionRef = useRef<number>(0);
   const conversationDataRef = useRef<ConversationData | null>(null);
+  const loadingMoreRef = useRef<boolean>(false);
 
   const applyConversationData = useCallback((nextData: ConversationData | null) => {
     conversationDataRef.current = nextData;
@@ -85,6 +86,7 @@ export function useConversationData({
     const requestVersion = requestVersionRef.current;
 
     if (conversationID.length === 0) {
+      loadingMoreRef.current = false;
       queueMicrotask(() => {
         applyConversationData(null);
         setLoading(false);
@@ -96,6 +98,7 @@ export function useConversationData({
       return;
     }
 
+    loadingMoreRef.current = false;
     queueMicrotask(() => {
       setLoading(true);
       setTracesLoading(false);
@@ -141,10 +144,11 @@ export function useConversationData({
 
   const loadMoreGenerations = async () => {
     const current = conversationDataRef.current;
-    if (!current?.hasMoreGenerations || !current.nextGenerationsCursor || loadingMoreGenerations) {
+    if (!current?.hasMoreGenerations || !current.nextGenerationsCursor || loadingMoreRef.current) {
       return;
     }
 
+    loadingMoreRef.current = true;
     const requestVersion = requestVersionRef.current;
     setLoadingMoreGenerations(true);
     setLoadMoreErrorMessage('');
@@ -203,6 +207,7 @@ export function useConversationData({
       }
       setLoadMoreErrorMessage(error instanceof Error ? error.message : 'failed to load more generations');
     } finally {
+      loadingMoreRef.current = false;
       if (requestVersionRef.current !== requestVersion) {
         return;
       }
