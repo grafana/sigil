@@ -308,4 +308,4 @@ Gemini generate-content conformance covers:
 
 ## Extending the spec
 
-Future phases will extend this document with the remaining core gaps (full roundtrip payload coverage, SDK identity protection, metadata/tag merge behavior, resource attributes) plus provider-wrapper and framework-adapter scenarios. Until those phases land, this document is the authoritative baseline for the currently shipped Go conformance harness.
+Future phases will extend this document with the remaining core gaps (full roundtrip payload coverage, SDK identity protection, metadata/tag merge behavior, resource attributes) plus provider-wrapper and framework-adapter scenarios. Provider-wrapper embedding scenarios apply only when the official provider SDK/API surface exposes a native embedding operation; when it does not, the suite should assert the wrapper's explicit unsupported capability contract instead of fabricating request DTOs or synthetic embedding spans. Until those phases land, this document is the authoritative baseline for the currently shipped Go conformance harness.

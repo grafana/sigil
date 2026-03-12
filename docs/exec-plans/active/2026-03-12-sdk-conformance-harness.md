@@ -144,6 +144,7 @@ Test that each Go provider mapper correctly transforms provider request/response
   - [x] Raw artifact opt-in coverage
   - [x] Explicit mapping-error coverage
   - [x] Wrapper error semantics for provider failures and mapper failures
+  - [x] Explicit embedding support gate coverage while the official Anthropic SDK/API surface lacks native embeddings
 - [x] `sdks/go-providers/gemini/conformance_test.go`
   - [x] Sync normalization with `ThinkingPart`
   - [x] Streaming normalization with accumulated `ThinkingPart`
@@ -158,7 +159,7 @@ Test that each Go provider mapper correctly transforms provider request/response
 ### Remaining provider-wrapper scope
 
 - [ ] Wrapper error-to-span/category assertions with local fake ingest/span capture, if provider suites need to validate `SetCallError` transport semantics directly
-- [ ] Embedding conformance scenarios, if provider-wrapper scope expands beyond generation normalization
+- [ ] Native provider-wrapper embedding conformance scenarios for Anthropic only if the official provider SDK/API surface later exposes a real embeddings operation
 
 ## Phase C: Go framework adapter (google-adk)
 
