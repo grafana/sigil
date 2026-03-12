@@ -159,6 +159,7 @@ func TestFromEnvQueryProxyDefaults(t *testing.T) {
 }
 
 func TestFromEnvQueryReadDefaults(t *testing.T) {
+	t.Setenv("SIGIL_QUERY_PROXY_TIMEOUT", "")
 	t.Setenv("SIGIL_QUERY_COLD_TOTAL_BUDGET", "")
 	t.Setenv("SIGIL_QUERY_COLD_INDEX_READ_TIMEOUT", "")
 	t.Setenv("SIGIL_QUERY_COLD_INDEX_RETRIES", "")
