@@ -339,14 +339,67 @@ Planned scenario areas per provider:
 
 ## Framework adapter conformance (Phase C)
 
-_To be added._ Framework conformance scenarios validate that each framework adapter (langchain, langgraph, openai-agents, llamaindex, google-adk, vercel-ai-sdk) correctly produces spans with framework attributes and triggers generation recording.
+Framework conformance scenarios validate that each framework adapter (langchain, langgraph, openai-agents, llamaindex, google-adk, vercel-ai-sdk) correctly produces spans with framework attributes and triggers generation recording.
 
-Planned scenario areas per framework:
+Common scenario areas per framework:
 - Span creation with `sigil.framework.name`, `sigil.framework.language`, `sigil.framework.source`
 - Generation triggering through framework LLM calls
 - Span hierarchy (framework span as parent of generation/tool spans)
 - Framework-specific metadata attributes
 - Generation tags include framework identity
+
+### Google ADK (Go)
+
+The Go Google ADK adapter uses the public `NewSigilAdapter` / `OnRunStart` / `OnRunToken` / `OnRunEnd` entry points only and runs entirely in-process without Docker.
+
+#### Scenario: sync run propagates framework context
+
+Setup:
+- Start a parent framework span with the test tracer provider.
+- Call `OnRunStart` with `session_id`, `thread_id`, `parent_run_id`, `component_name`, `run_type`, `retry_attempt`, `event_id`, and framework callback tags.
+- Call `OnRunEnd` with output text, response model, stop reason, and usage.
+
+Expected span behavior:
+- One generation span with `gen_ai.operation.name=generateText`.
+- Generation span parent matches the framework parent span.
+- Generation span includes:
+  - `sigil.framework.name=google-adk`
+  - `sigil.framework.source=handler`
+  - `sigil.framework.language=go`
+  - `sigil.framework.run_id`
+  - `sigil.framework.thread_id`
+  - `sigil.framework.parent_run_id`
+  - `sigil.framework.component_name`
+  - `sigil.framework.run_type`
+  - `sigil.framework.retry_attempt`
+  - `sigil.framework.event_id`
+  - `sigil.framework.tags`
+
+Expected normalized generation output:
+- `mode=SYNC`
+- inferred provider + request model from the run start event
+- response model, stop reason, usage, input prompt, and output text preserved
+- generation tags include `sigil.framework.name`, `sigil.framework.source`, `sigil.framework.language`
+- generation metadata includes the framework lineage fields listed above
+
+#### Scenario: streaming run propagates framework context
+
+Setup:
+- Start a parent framework span with the test tracer provider.
+- Call `OnRunStart` with `stream=true`, framework metadata, and callback tags.
+- Call `OnRunToken` for partial output chunks.
+- Call `OnRunEnd` without explicit output messages.
+
+Expected span behavior:
+- One generation span with `gen_ai.operation.name=streamText`.
+- Generation span parent matches the framework parent span.
+- Generation span includes the same canonical `sigil.framework.*` attributes as the sync scenario.
+
+Expected normalized generation output:
+- `mode=STREAM`
+- inferred provider + request model from the run start event
+- final output is stitched from streamed tokens when end payload output is absent
+- generation tags and metadata preserve the framework identity and lineage fields
 
 ---
 

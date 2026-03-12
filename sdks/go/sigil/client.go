@@ -102,6 +102,17 @@ const (
 	sdkMetadataKeyName = "sigil.sdk.name"
 	metadataUserIDKey  = "sigil.user.id"
 	sdkName            = "sdk-go"
+	frameworkTagName   = "sigil.framework.name"
+	frameworkTagSource = "sigil.framework.source"
+	frameworkTagLang   = "sigil.framework.language"
+	frameworkRunID     = "sigil.framework.run_id"
+	frameworkThreadID  = "sigil.framework.thread_id"
+	frameworkParentRun = "sigil.framework.parent_run_id"
+	frameworkComponent = "sigil.framework.component_name"
+	frameworkRunType   = "sigil.framework.run_type"
+	frameworkTagsKey   = "sigil.framework.tags"
+	frameworkRetryKey  = "sigil.framework.retry_attempt"
+	frameworkEventID   = "sigil.framework.event_id"
 
 	spanAttrGenerationID           = "sigil.generation.id"
 	spanAttrConversationID         = "gen_ai.conversation.id"
@@ -1249,7 +1260,32 @@ func generationSpanAttributes(g Generation) []attribute.KeyValue {
 	if g.Usage.ReasoningTokens != 0 {
 		attrs = append(attrs, attribute.Int64(spanAttrReasoningTokens, g.Usage.ReasoningTokens))
 	}
+	attrs = append(attrs, frameworkSpanAttributes(g.Tags, g.Metadata)...)
 
+	return attrs
+}
+
+func frameworkSpanAttributes(tags map[string]string, metadata map[string]any) []attribute.KeyValue {
+	attrs := make([]attribute.KeyValue, 0, 10)
+	for _, key := range []string{frameworkTagName, frameworkTagSource, frameworkTagLang} {
+		if value := strings.TrimSpace(tags[key]); value != "" {
+			attrs = append(attrs, attribute.String(key, value))
+		}
+	}
+	for _, key := range []string{frameworkRunID, frameworkThreadID, frameworkParentRun, frameworkComponent, frameworkRunType, frameworkEventID} {
+		if value := metadataString(metadata, key); value != "" {
+			attrs = append(attrs, attribute.String(key, value))
+		}
+	}
+	if len(metadata) == 0 {
+		return attrs
+	}
+	if retry, ok := coerceInt64(metadata[frameworkRetryKey]); ok {
+		attrs = append(attrs, attribute.Int64(frameworkRetryKey, retry))
+	}
+	if frameworkTags, ok := metadataStringSlice(metadata, frameworkTagsKey); ok && len(frameworkTags) > 0 {
+		attrs = append(attrs, attribute.StringSlice(frameworkTagsKey, frameworkTags))
+	}
 	return attrs
 }
 
@@ -1293,6 +1329,44 @@ func metadataString(metadata map[string]any, key string) string {
 		return ""
 	}
 	return strings.TrimSpace(asString)
+}
+
+func metadataStringSlice(metadata map[string]any, key string) ([]string, bool) {
+	if len(metadata) == 0 {
+		return nil, false
+	}
+	raw, ok := metadata[key]
+	if !ok || raw == nil {
+		return nil, false
+	}
+	switch typed := raw.(type) {
+	case []string:
+		out := make([]string, 0, len(typed))
+		for _, item := range typed {
+			trimmed := strings.TrimSpace(item)
+			if trimmed == "" {
+				continue
+			}
+			out = append(out, trimmed)
+		}
+		return out, len(out) > 0
+	case []any:
+		out := make([]string, 0, len(typed))
+		for _, item := range typed {
+			asString, ok := item.(string)
+			if !ok {
+				continue
+			}
+			trimmed := strings.TrimSpace(asString)
+			if trimmed == "" {
+				continue
+			}
+			out = append(out, trimmed)
+		}
+		return out, len(out) > 0
+	default:
+		return nil, false
+	}
 }
 
 func coerceInt64(value any) (int64, bool) {

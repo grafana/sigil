@@ -37,7 +37,7 @@ Building conformance tests against the real public API will surface issues that 
 
 (Updated as issues are found.)
 
-- _(none yet)_
+- Go core SDK now projects canonical `sigil.framework.*` tags and metadata onto generation span attributes so framework adapters expose the same context on OTLP spans and normalized generation exports.
 
 ## Phase A: Go core SDK
 
@@ -130,13 +130,13 @@ Test that each Go provider mapper correctly transforms provider request/response
 
 ## Phase C: Go framework adapter (google-adk)
 
-- [ ] `sdks/go-frameworks/google-adk/conformance_test.go`
-  - [ ] Framework invocation produces spans with `sigil.framework.name`, `sigil.framework.language`
-  - [ ] LLM calls within framework trigger generation recording
-  - [ ] Span hierarchy: framework span is parent of generation span
-  - [ ] Framework-specific attributes propagated
-  - [ ] Generation tags include `sigil.framework.name` and `sigil.framework.language`
-- [ ] Extend `sdk-conformance-spec.md` with framework adapter section
+- [x] `sdks/go-frameworks/google-adk/conformance_test.go`
+  - [x] Framework invocation produces spans with `sigil.framework.name`, `sigil.framework.language`
+  - [x] LLM calls within framework trigger generation recording
+  - [x] Span hierarchy: framework span is parent of generation span
+  - [x] Framework-specific attributes propagated
+  - [x] Generation tags include `sigil.framework.name` and `sigil.framework.language`
+- [x] Extend `sdk-conformance-spec.md` with framework adapter section
 
 ## Phase D: Other language core SDKs
 

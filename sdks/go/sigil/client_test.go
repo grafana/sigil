@@ -344,6 +344,78 @@ func TestStartGenerationUsesModeAwareDefaultOperationName(t *testing.T) {
 	}
 }
 
+func TestGenerationRecorderEndProjectsFrameworkContextToSpan(t *testing.T) {
+	client, recorder, _ := newTestClient(t, Config{})
+
+	_, generationRecorder := client.StartGeneration(context.Background(), GenerationStart{
+		ConversationID: "framework-conv",
+		Tags: map[string]string{
+			frameworkTagName:   "google-adk",
+			frameworkTagSource: "handler",
+			frameworkTagLang:   "go",
+		},
+		Metadata: map[string]any{
+			frameworkRunID:     "run-42",
+			frameworkThreadID:  "thread-42",
+			frameworkParentRun: "parent-42",
+			frameworkComponent: "planner",
+			frameworkRunType:   "chat",
+			frameworkRetryKey:  2,
+			frameworkEventID:   "event-42",
+			frameworkTagsKey:   []string{"prod", "framework"},
+		},
+		Model: ModelRef{
+			Provider: "openai",
+			Name:     "gpt-5",
+		},
+	})
+
+	generationRecorder.SetResult(Generation{
+		Output: []Message{{Role: RoleAssistant, Parts: []Part{TextPart("world")}}},
+	}, nil)
+	generationRecorder.End()
+	if err := generationRecorder.Err(); err != nil {
+		t.Fatalf("end generation: %v", err)
+	}
+
+	span := onlyGenerationSpan(t, recorder.Ended())
+	attrs := spanAttributeMap(span)
+	if attrs[frameworkTagName].AsString() != "google-adk" {
+		t.Fatalf("expected %s=google-adk, got %q", frameworkTagName, attrs[frameworkTagName].AsString())
+	}
+	if attrs[frameworkTagSource].AsString() != "handler" {
+		t.Fatalf("expected %s=handler, got %q", frameworkTagSource, attrs[frameworkTagSource].AsString())
+	}
+	if attrs[frameworkTagLang].AsString() != "go" {
+		t.Fatalf("expected %s=go, got %q", frameworkTagLang, attrs[frameworkTagLang].AsString())
+	}
+	if attrs[frameworkRunID].AsString() != "run-42" {
+		t.Fatalf("expected %s=run-42, got %q", frameworkRunID, attrs[frameworkRunID].AsString())
+	}
+	if attrs[frameworkThreadID].AsString() != "thread-42" {
+		t.Fatalf("expected %s=thread-42, got %q", frameworkThreadID, attrs[frameworkThreadID].AsString())
+	}
+	if attrs[frameworkParentRun].AsString() != "parent-42" {
+		t.Fatalf("expected %s=parent-42, got %q", frameworkParentRun, attrs[frameworkParentRun].AsString())
+	}
+	if attrs[frameworkComponent].AsString() != "planner" {
+		t.Fatalf("expected %s=planner, got %q", frameworkComponent, attrs[frameworkComponent].AsString())
+	}
+	if attrs[frameworkRunType].AsString() != "chat" {
+		t.Fatalf("expected %s=chat, got %q", frameworkRunType, attrs[frameworkRunType].AsString())
+	}
+	if attrs[frameworkRetryKey].AsInt64() != 2 {
+		t.Fatalf("expected %s=2, got %d", frameworkRetryKey, attrs[frameworkRetryKey].AsInt64())
+	}
+	if attrs[frameworkEventID].AsString() != "event-42" {
+		t.Fatalf("expected %s=event-42, got %q", frameworkEventID, attrs[frameworkEventID].AsString())
+	}
+	gotTags := attrs[frameworkTagsKey].AsStringSlice()
+	if len(gotTags) != 2 || gotTags[0] != "prod" || gotTags[1] != "framework" {
+		t.Fatalf("expected %s=[prod framework], got %#v", frameworkTagsKey, gotTags)
+	}
+}
+
 func TestGenerationRecorderSetCallErrorMarksSpanError(t *testing.T) {
 	client, recorder, _ := newTestClient(t, Config{})
 
