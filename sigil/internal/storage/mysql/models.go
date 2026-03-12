@@ -38,7 +38,7 @@ type GenerationScoreModel struct {
 	ScoreType            string  `gorm:"size:16;not null"`
 	ScoreNumber          *float64
 	ScoreBool            *bool
-	ScoreString          *string   `gorm:"size:255"`
+	ScoreString          *string   `gorm:"type:text"`
 	Unit                 *string   `gorm:"size:64"`
 	Passed               *bool     `gorm:"index:idx_generation_scores_tenant_pass_time,priority:2"`
 	Explanation          *string   `gorm:"type:text"`

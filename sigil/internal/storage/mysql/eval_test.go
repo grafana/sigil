@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -457,6 +458,55 @@ func TestEvalStoreScoreCRUDAndLatest(t *testing.T) {
 	helpfulness := latest["helpfulness"]
 	if helpfulness.Value.Number == nil || *helpfulness.Value.Number != 0.9 {
 		t.Fatalf("expected latest helpfulness score 0.9, got %#v", helpfulness.Value)
+	}
+}
+
+func TestEvalStorePersistsLongStringScores(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	longValue := strings.Repeat("severity:critical|", 20)
+	if len(longValue) <= 255 {
+		t.Fatalf("expected longValue to exceed legacy varchar length, got %d", len(longValue))
+	}
+
+	inserted, err := store.InsertScore(context.Background(), evalpkg.GenerationScore{
+		TenantID:         "tenant-a",
+		ScoreID:          "sc-long-string",
+		GenerationID:     "gen-long-string",
+		EvaluatorID:      "sigil.severity",
+		EvaluatorVersion: "2026-03-12",
+		ScoreKey:         "severity",
+		ScoreType:        evalpkg.ScoreTypeString,
+		Value:            evalpkg.StringValue(longValue),
+		CreatedAt:        time.Date(2026, 3, 12, 16, 0, 0, 0, time.UTC),
+		Metadata:         map[string]any{"source": "llm_judge"},
+	})
+	if err != nil {
+		t.Fatalf("insert long string score: %v", err)
+	}
+	if !inserted {
+		t.Fatal("expected long string score insert")
+	}
+
+	latest, err := store.GetLatestScoresByGeneration(context.Background(), "tenant-a", "gen-long-string")
+	if err != nil {
+		t.Fatalf("get latest scores: %v", err)
+	}
+
+	severity, ok := latest["severity"]
+	if !ok {
+		t.Fatalf("expected severity score in latest map, got keys=%v", latest)
+	}
+	if severity.Value.String == nil {
+		t.Fatalf("expected string score value, got %#v", severity.Value)
+	}
+	if got := *severity.Value.String; got != longValue {
+		t.Fatalf("expected full long string round-trip, got length=%d want=%d", len(got), len(longValue))
 	}
 }
 
