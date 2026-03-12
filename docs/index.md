@@ -37,6 +37,7 @@ This is the canonical navigation map for repository documentation.
   - Tokenizer visualization design: `design-docs/2026-03-05-tokenizer-visualization-design.md`
   - Evaluation resource user attribution (completed): `design-docs/2026-03-09-eval-resource-user-attribution.md`
   - Conversation detail V2 shared-ref payload (active): `design-docs/2026-03-10-conversation-detail-v2.md`
+  - Agent and large-conversation latency spike (completed): `design-docs/2026-03-12-agent-and-large-conversation-latency-spike.md`
   - Tool runtime analytics page (active): `design-docs/2026-03-12-tool-runtime-analytics-page.md`
   - Streaming conversation search (completed): `design-docs/2026-03-05-streaming-conversation-search.md`
   - Vercel AI SDK integration design (completed): `design-docs/2026-02-22-sdk-vercel-ai-sdk-integration.md`
@@ -73,6 +74,7 @@ This is the canonical navigation map for repository documentation.
   - Agent catalog versioning and APIs: `exec-plans/active/2026-03-04-agent-catalog-versioning.md`
   - Evaluation resource user attribution: `exec-plans/completed/2026-03-09-eval-resource-user-attribution.md`
   - Conversation detail V2 shared-ref payload: `exec-plans/active/2026-03-10-conversation-detail-v2.md`
+  - Agent and large-conversation latency spike: `exec-plans/completed/2026-03-12-agent-and-large-conversation-latency-spike.md`
   - Tool runtime analytics page: `exec-plans/active/2026-03-12-tool-runtime-analytics-page.md`
   - SDK conformance harness: `exec-plans/active/2026-03-12-sdk-conformance-harness.md`
   - Timeout and cancellation mitigation: `exec-plans/completed/2026-03-12-timeout-cancellation-mitigation.md`
