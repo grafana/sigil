@@ -6,6 +6,7 @@ export const ROUTES = {
   Analytics: 'analytics',
   Tutorial: 'tutorial',
   Conversations: 'conversations',
+  ConversationsSaved: 'conversations/saved',
   ConversationsExplore: 'conversations/:conversationID/explore',
   Agents: 'agents',
   AgentDetailByName: 'agents/name/:agentName',
