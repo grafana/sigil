@@ -398,6 +398,13 @@ func (s *Service) debugLog(event string, keyvals ...any) {
 	slog.Info("sigil query debug", payload...)
 }
 
+func (s *Service) errorLog(event string, keyvals ...any) {
+	payload := make([]any, 0, len(keyvals)+2)
+	payload = append(payload, "event", event)
+	payload = append(payload, keyvals...)
+	slog.Error("sigil query error", payload...)
+}
+
 func (s *Service) ListConversationsForTenant(ctx context.Context, tenantID string, filter ConversationListFilter) ([]Conversation, error) {
 	ctx, span := queryServiceTracer.Start(ctx, "sigil.query.list_conversations")
 	defer span.End()
@@ -695,6 +702,16 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 			SpansPerSpanSet: defaultTempoSearchSpansPerSpanSet,
 		})
 		if err != nil {
+			s.errorLog(
+				"conversation_search_tempo_failed",
+				"tenant_id", trimmedTenantID,
+				"filters", strings.TrimSpace(request.Filters),
+				"iteration", iteration,
+				"window_start_unix", from.Unix(),
+				"window_end_unix", windowEnd.Unix(),
+				"page_size", pageSize,
+				"err", err.Error(),
+			)
 			recordQuerySpanError(span, err)
 			return ConversationSearchResponse{}, err
 		}
@@ -719,6 +736,15 @@ func (s *Service) SearchConversationsForTenant(ctx context.Context, tenantID str
 
 		metadataByConversation, ratingSummaries, annotationSummaries, evalSummaries, err := s.loadConversationSearchMetadata(ctx, trimmedTenantID, orderedConversationIDs)
 		if err != nil {
+			s.errorLog(
+				"conversation_search_metadata_failed",
+				"tenant_id", trimmedTenantID,
+				"filters", strings.TrimSpace(request.Filters),
+				"iteration", iteration,
+				"conversation_candidates", len(orderedConversationIDs),
+				"page_size", pageSize,
+				"err", err.Error(),
+			)
 			recordQuerySpanError(span, err)
 			return ConversationSearchResponse{}, err
 		}
@@ -1359,6 +1385,13 @@ func (s *Service) ListConversationBatchMetadataForTenant(
 	if batchStore, ok := s.conversationStore.(batchConversationStore); ok {
 		rows, err := batchStore.GetConversations(ctx, trimmedTenantID, ids)
 		if err != nil {
+			s.errorLog(
+				"conversation_batch_metadata_load_failed",
+				"tenant_id", trimmedTenantID,
+				"requested_conversation_count", len(ids),
+				"storage_mode", "batch",
+				"err", err.Error(),
+			)
 			recordQuerySpanError(span, err)
 			return nil, nil, err
 		}
@@ -1374,6 +1407,14 @@ func (s *Service) ListConversationBatchMetadataForTenant(
 		for _, conversationID := range ids {
 			row, err := s.conversationStore.GetConversation(ctx, trimmedTenantID, conversationID)
 			if err != nil {
+				s.errorLog(
+					"conversation_batch_metadata_load_failed",
+					"tenant_id", trimmedTenantID,
+					"requested_conversation_count", len(ids),
+					"storage_mode", "single",
+					"conversation_id", conversationID,
+					"err", err.Error(),
+				)
 				recordQuerySpanError(span, err)
 				return nil, nil, err
 			}
@@ -1398,6 +1439,12 @@ func (s *Service) ListConversationBatchMetadataForTenant(
 		if s.ratingSummaryStore != nil {
 			summaries, err := s.ratingSummaryStore.ListConversationRatingSummaries(ctx, trimmedTenantID, lookupIDs)
 			if err != nil {
+				s.errorLog(
+					"conversation_rating_summary_load_failed",
+					"tenant_id", trimmedTenantID,
+					"requested_conversation_count", len(lookupIDs),
+					"err", err.Error(),
+				)
 				recordQuerySpanError(span, err)
 				return nil, nil, err
 			}
@@ -1406,6 +1453,12 @@ func (s *Service) ListConversationBatchMetadataForTenant(
 		if s.annotationSummaryStore != nil {
 			summaries, err := s.annotationSummaryStore.ListConversationAnnotationSummaries(ctx, trimmedTenantID, lookupIDs)
 			if err != nil {
+				s.errorLog(
+					"conversation_annotation_summary_load_failed",
+					"tenant_id", trimmedTenantID,
+					"requested_conversation_count", len(lookupIDs),
+					"err", err.Error(),
+				)
 				recordQuerySpanError(span, err)
 				return nil, nil, err
 			}
@@ -1414,6 +1467,12 @@ func (s *Service) ListConversationBatchMetadataForTenant(
 		if s.evalSummaryStore != nil {
 			summaries, err := s.evalSummaryStore.ListConversationEvalSummaries(ctx, trimmedTenantID, lookupIDs)
 			if err != nil {
+				s.errorLog(
+					"conversation_eval_summary_load_failed",
+					"tenant_id", trimmedTenantID,
+					"requested_conversation_count", len(lookupIDs),
+					"err", err.Error(),
+				)
 				recordQuerySpanError(span, err)
 				return nil, nil, err
 			}
