@@ -109,6 +109,8 @@ func (s *WALStore) SaveBatch(ctx context.Context, tenantID string, generations [
 			s.logger.Error("wal save failed",
 				"tenant_id", tenantID,
 				"generation_id", generation.GetId(),
+				"timeout", errors.Is(txErr, context.DeadlineExceeded),
+				"canceled", errors.Is(txErr, context.Canceled),
 				"err", txErr,
 			)
 			errs[i] = txErr

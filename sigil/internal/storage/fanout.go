@@ -112,6 +112,11 @@ var queryColdBlocksScanned = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Buckets: []float64{0, 1, 2, 5, 10, 20, 50, 100, 250, 500},
 }, []string{"operation"})
 
+var queryColdReadOutcomeTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "sigil_query_cold_read_outcome_total",
+	Help: "Cold-read completion outcomes by operation.",
+}, []string{"operation", "outcome"})
+
 var queryColdIndexReadDuration = promauto.NewHistogram(prometheus.HistogramOpts{
 	Name:    "sigil_query_cold_index_read_duration_seconds",
 	Help:    "Cold index read duration in seconds, including retries.",
@@ -386,6 +391,20 @@ func observeQueryReturnedItems(operation string, count int) {
 	queryReturnedItems.WithLabelValues(operation).Observe(float64(count))
 }
 
+func observeColdReadOutcome(operation string, err error) {
+	outcome := "success"
+	switch {
+	case err == nil:
+	case errors.Is(err, context.DeadlineExceeded):
+		outcome = "deadline_exceeded"
+	case errors.Is(err, context.Canceled):
+		outcome = "canceled"
+	default:
+		outcome = "error"
+	}
+	queryColdReadOutcomeTotal.WithLabelValues(operation, outcome).Inc()
+}
+
 func (s *FanOutStore) hasColdReadPath() bool {
 	return s != nil && s.blockMetadataStore != nil && s.blockReader != nil
 }
@@ -407,17 +426,21 @@ func (s *FanOutStore) readColdGenerationByIDWithPlan(
 
 	matched, hintedCandidate, scannedBlocks, err := s.scanColdGenerationByID(coldCtx, tenantID, generationID, from, to, conversationHint)
 	if err != nil {
+		observeColdReadOutcome("get_by_id", err)
 		return nil, scannedBlocks, err
 	}
 	if matched != nil {
+		observeColdReadOutcome("get_by_id", nil)
 		return matched, scannedBlocks, nil
 	}
 	// conversation_id hint is advisory; if ID is found with a different
 	// conversation, prefer returning the ID match over false negatives.
 	if hintedCandidate != nil {
+		observeColdReadOutcome("get_by_id", nil)
 		return hintedCandidate, scannedBlocks, nil
 	}
 	if !hasGenerationRangeHint(plan) {
+		observeColdReadOutcome("get_by_id", nil)
 		return nil, scannedBlocks, nil
 	}
 
@@ -435,14 +458,18 @@ func (s *FanOutStore) readColdGenerationByIDWithPlan(
 	)
 	scannedBlocks += fallbackScanned
 	if err != nil {
+		observeColdReadOutcome("get_by_id", err)
 		return nil, scannedBlocks, err
 	}
 	if fallbackGeneration != nil {
+		observeColdReadOutcome("get_by_id", nil)
 		return fallbackGeneration, scannedBlocks, nil
 	}
 	if fallbackHintedCandidate != nil {
+		observeColdReadOutcome("get_by_id", nil)
 		return fallbackHintedCandidate, scannedBlocks, nil
 	}
+	observeColdReadOutcome("get_by_id", nil)
 	return nil, scannedBlocks, nil
 }
 
@@ -522,9 +549,11 @@ func (s *FanOutStore) readColdConversationGenerationsWithPlan(
 
 	blocks, err := s.blockMetadataStore.ListBlocks(coldCtx, tenantID, from, to)
 	if err != nil {
+		observeColdReadOutcome("list_conversation", err)
 		return nil, 0, 0, err
 	}
 	if len(blocks) == 0 {
+		observeColdReadOutcome("list_conversation", nil)
 		return []*sigilv1.Generation{}, 0, 0, nil
 	}
 
@@ -620,9 +649,11 @@ func (s *FanOutStore) readColdConversationGenerationsWithPlan(
 		}
 	}
 	if firstErr != nil {
+		observeColdReadOutcome("list_conversation", firstErr)
 		return nil, scannedBlocks, matchedBlocks, firstErr
 	}
 
+	observeColdReadOutcome("list_conversation", nil)
 	out := make([]*sigilv1.Generation, 0, len(byID))
 	for _, generation := range byID {
 		out = append(out, generation)

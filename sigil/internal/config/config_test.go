@@ -3,6 +3,7 @@ package config
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestFromEnvDefaultsTargetToAll(t *testing.T) {
@@ -158,6 +159,7 @@ func TestFromEnvQueryProxyDefaults(t *testing.T) {
 }
 
 func TestFromEnvQueryReadDefaults(t *testing.T) {
+	t.Setenv("SIGIL_QUERY_PROXY_TIMEOUT", "")
 	t.Setenv("SIGIL_QUERY_COLD_TOTAL_BUDGET", "")
 	t.Setenv("SIGIL_QUERY_COLD_INDEX_READ_TIMEOUT", "")
 	t.Setenv("SIGIL_QUERY_COLD_INDEX_RETRIES", "")
@@ -187,6 +189,16 @@ func TestFromEnvQueryReadDefaults(t *testing.T) {
 	}
 	if cfg.QueryRead.ColdIndexCacheMaxBytes != DefaultQueryColdIndexCacheMaxBytes {
 		t.Fatalf("expected default cold index cache max bytes %d, got %d", DefaultQueryColdIndexCacheMaxBytes, cfg.QueryRead.ColdIndexCacheMaxBytes)
+	}
+}
+
+func TestFromEnvQueryReadDefaultsFollowQueryProxyTimeout(t *testing.T) {
+	t.Setenv("SIGIL_QUERY_PROXY_TIMEOUT", "45s")
+	t.Setenv("SIGIL_QUERY_COLD_TOTAL_BUDGET", "")
+
+	cfg := FromEnv()
+	if cfg.QueryRead.ColdTotalBudget != 45*time.Second {
+		t.Fatalf("expected cold total budget to inherit query proxy timeout, got %s", cfg.QueryRead.ColdTotalBudget)
 	}
 }
 

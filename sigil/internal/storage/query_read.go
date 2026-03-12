@@ -3,7 +3,7 @@ package storage
 import "time"
 
 const (
-	DefaultColdTotalBudget      = 6 * time.Second
+	DefaultColdTotalBudget      = 30 * time.Second
 	DefaultColdIndexReadTimeout = time.Second
 	DefaultColdIndexRetries     = 1
 	DefaultColdIndexWorkers     = 4
