@@ -267,11 +267,15 @@ func newConformanceEnv(t *testing.T, opts googleadk.Options) *conformanceEnv {
 
 func (e *conformanceEnv) Shutdown(t *testing.T) {
 	t.Helper()
+	if e == nil || e.Client == nil {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := e.Client.Shutdown(ctx); err != nil {
 		t.Fatalf("shutdown client: %v", err)
 	}
+	e.Client = nil
 }
 
 func (e *conformanceEnv) close() error {
