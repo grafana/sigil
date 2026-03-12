@@ -3,7 +3,10 @@ package mysql
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 func (s *WALStore) AutoMigrate(ctx context.Context) error {
@@ -46,15 +49,16 @@ func (s *WALStore) AutoMigrate(ctx context.Context) error {
 		&CompactorLeaseModel{},
 		&TenantSettingsModel{},
 	)
-	status := "success"
 	if err != nil {
-		status = "error"
-	}
-	observeWALMetrics("migrate", status, start, 0)
-
-	if err != nil {
+		observeWALMetrics("migrate", "error", start, 0)
 		s.logger.Error("mysql auto-migrate failed", "err", err)
 		return fmt.Errorf("auto-migrate mysql storage: %w", err)
+	}
+
+	if err := s.ensureGenerationScoreStringText(ctx); err != nil {
+		observeWALMetrics("migrate", "error", start, 0)
+		s.logger.Error("mysql generation_scores score_string migration failed", "err", err)
+		return err
 	}
 
 	if needsCompactorCutover {
@@ -80,10 +84,52 @@ func (s *WALStore) AutoMigrate(ctx context.Context) error {
 	if err := s.db.WithContext(ctx).Exec(
 		"UPDATE conversations SET first_generation_at = last_generation_at WHERE first_generation_at > last_generation_at",
 	).Error; err != nil {
+		observeWALMetrics("migrate", "error", start, 0)
 		s.logger.Error("mysql first_generation_at backfill failed", "err", err)
 		return fmt.Errorf("backfill first_generation_at: %w", err)
 	}
 
+	observeWALMetrics("migrate", "success", start, 0)
 	s.logger.Info("mysql auto-migrate completed")
 	return nil
+}
+
+func (s *WALStore) ensureGenerationScoreStringText(ctx context.Context) error {
+	dataType, err := columnDataType(ctx, s.db.WithContext(ctx), (&GenerationScoreModel{}).TableName(), "score_string")
+	if err != nil {
+		return fmt.Errorf("inspect generation_scores.score_string type: %w", err)
+	}
+	switch strings.ToLower(dataType) {
+	case "text", "mediumtext", "longtext":
+		return nil
+	case "":
+		return fmt.Errorf("inspect generation_scores.score_string type: column not found")
+	}
+
+	if err := s.db.WithContext(ctx).Exec(
+		"ALTER TABLE generation_scores MODIFY COLUMN score_string TEXT NULL",
+	).Error; err != nil {
+		return fmt.Errorf("alter generation_scores.score_string to text: %w", err)
+	}
+
+	s.logger.Info("mysql generation_scores.score_string widened to text", "previous_type", dataType)
+	return nil
+}
+
+func columnDataType(ctx context.Context, db *gorm.DB, tableName, columnName string) (string, error) {
+	type columnTypeRow struct {
+		DataType string
+	}
+
+	var row columnTypeRow
+	if err := db.WithContext(ctx).Raw(
+		`SELECT DATA_TYPE
+		FROM INFORMATION_SCHEMA.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+		tableName,
+		columnName,
+	).Scan(&row).Error; err != nil {
+		return "", err
+	}
+	return row.DataType, nil
 }

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	mysqlDriver "github.com/go-sql-driver/mysql"
+	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -106,6 +107,63 @@ func TestAutoMigrateCreatesSchema(t *testing.T) {
 	}
 	if !migrator.HasIndex(&EvalWorkItemModel{}, "idx_eval_work_items_status_scheduled_id") {
 		t.Fatalf("expected global eval work item claim index")
+	}
+}
+
+func TestAutoMigrateUpgradesLegacyGenerationScoreStringColumn(t *testing.T) {
+	store, cleanup := newTestWALStore(t)
+	defer cleanup()
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate initial: %v", err)
+	}
+
+	if err := store.DB().Exec(
+		"ALTER TABLE generation_scores MODIFY COLUMN score_string VARCHAR(255) NULL",
+	).Error; err != nil {
+		t.Fatalf("downgrade generation_scores.score_string: %v", err)
+	}
+	if got := testColumnDataType(t, store, "generation_scores", "score_string"); got != "varchar" {
+		t.Fatalf("expected downgraded score_string type varchar, got %q", got)
+	}
+
+	if err := store.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate upgrade: %v", err)
+	}
+	if got := testColumnDataType(t, store, "generation_scores", "score_string"); got != "text" {
+		t.Fatalf("expected upgraded score_string type text, got %q", got)
+	}
+
+	longValue := strings.Repeat("severity:critical|", 20)
+	inserted, err := store.InsertScore(context.Background(), evalpkg.GenerationScore{
+		TenantID:         "tenant-a",
+		ScoreID:          "sc-upgrade-long-string",
+		GenerationID:     "gen-upgrade-long-string",
+		EvaluatorID:      "sigil.severity",
+		EvaluatorVersion: "2026-03-12",
+		ScoreKey:         "severity",
+		ScoreType:        evalpkg.ScoreTypeString,
+		Value:            evalpkg.StringValue(longValue),
+		CreatedAt:        time.Date(2026, 3, 12, 16, 30, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("insert upgraded long string score: %v", err)
+	}
+	if !inserted {
+		t.Fatal("expected upgraded long string score insert")
+	}
+
+	latest, err := store.GetLatestScoresByGeneration(context.Background(), "tenant-a", "gen-upgrade-long-string")
+	if err != nil {
+		t.Fatalf("get latest scores: %v", err)
+	}
+
+	severity, ok := latest["severity"]
+	if !ok {
+		t.Fatalf("expected severity score in latest map, got keys=%v", latest)
+	}
+	if severity.Value.String == nil || *severity.Value.String != longValue {
+		t.Fatalf("expected upgraded long string round-trip, got %#v", severity.Value)
 	}
 }
 
@@ -595,6 +653,16 @@ func ensureSharedMySQLContainer(t *testing.T) (string, string) {
 		t.Skip("skip mysql integration tests (shared container unavailable)")
 	}
 	return sharedMySQLHost, sharedMySQLPort
+}
+
+func testColumnDataType(t *testing.T, store *WALStore, tableName, columnName string) string {
+	t.Helper()
+
+	dataType, err := columnDataType(context.Background(), store.DB(), tableName, columnName)
+	if err != nil {
+		t.Fatalf("column data type %s.%s: %v", tableName, columnName, err)
+	}
+	return strings.ToLower(dataType)
 }
 
 func createTestDatabase(adminDSN, dbName string) error {
