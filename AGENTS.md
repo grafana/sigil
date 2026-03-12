@@ -136,6 +136,15 @@ mise run up:worktree:traffic-lite
 ```
 It emits a small continuous trickle of data with only the Go emitter and is much cheaper than the full `sdk-traffic` profile.
 
+For remote-backed worktree validation, use the worktree-safe targets instead of
+the fixed-port root stack:
+```
+mise run worktree:dev
+mise run worktree:ops
+```
+Use `worktree:dev` when you want dev datasources in a worktree-safe stack, and
+`worktree:ops` when you need ops-backed validation for scale-sensitive checks.
+
 ### Gotchas
 
 - The `.env` file must exist (copy from `.env.example`). The `mise.toml` `[env]` section loads it.
@@ -144,5 +153,5 @@ It emits a small continuous trickle of data with only the Go emitter and is much
 - Node version must be exactly `24.14.0` (`engines` field in `package.json`).
 - Go version is `1.26.0` via mise, with `GOTOOLCHAIN=go1.25.7+auto` for workspace compatibility.
 - The Grafana container now mounts the shared `sigil-plugin-dist` volume at `/root/sigil/apps/plugin/dist` so the startup script can see the precached Go plugin binary. If Grafana still does not respond on `:3000`, apply the documented `supervisorctl stop delve` plus `kill -CONT <grafana-bash-pid>` workaround.
-- `mise run up:dev` points to remote dev datasources (`sigil-dev-001.grafana-dev.net`). Querying real data requires `SIGIL_API_AUTH_TOKEN` to be set in `.env`. Without it, the plugin UI loads but API queries return permission errors.
+- `mise run worktree:dev` and `mise run worktree:ops` are the worktree-safe ways to validate against remote dev or ops datasources without colliding on shared localhost ports.
 - After running `go mod tidy` in `apps/plugin`, commit the updated `go.mod`/`go.sum` so that `plugin-precache` builds succeed on first try.

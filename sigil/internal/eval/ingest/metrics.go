@@ -8,6 +8,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+const scoreIngestUnknownLabel = "unknown"
+
 var (
 	scoreIngestBatchSize = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "sigil_ingest_scores_batch_size",
@@ -31,7 +33,7 @@ func withTransport(ctx context.Context, transport string) context.Context {
 
 func transportFromContext(ctx context.Context) string {
 	if ctx == nil {
-		return "unknown"
+		return scoreIngestUnknownLabel
 	}
 	value, _ := ctx.Value(scoreIngestTransportContextKey{}).(string)
 	return metriclabels.Transport(value)
