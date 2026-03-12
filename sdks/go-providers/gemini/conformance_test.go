@@ -44,7 +44,7 @@ func TestConformance_GeminiSyncMapping(t *testing.T) {
 		UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
 			PromptTokenCount:        120,
 			CandidatesTokenCount:    40,
-			TotalTokenCount:         170,
+			TotalTokenCount:         160,
 			CachedContentTokenCount: 12,
 			ThoughtsTokenCount:      10,
 			ToolUsePromptTokenCount: 9,
@@ -137,7 +137,7 @@ func TestConformance_GeminiStreamMapping(t *testing.T) {
 				UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
 					PromptTokenCount:        20,
 					CandidatesTokenCount:    6,
-					TotalTokenCount:         31,
+					TotalTokenCount:         26,
 					ThoughtsTokenCount:      4,
 					ToolUsePromptTokenCount: 5,
 				},
@@ -183,8 +183,8 @@ func TestConformance_GeminiStreamMapping(t *testing.T) {
 	if got := sigiltest.StringValue(t, exported, "output", 1, "parts", 0, "text"); got != "It is 18C and sunny." {
 		t.Fatalf("unexpected streamed output text: got %q want %q", got, "It is 18C and sunny.")
 	}
-	if got := sigiltest.StringValue(t, exported, "usage", "total_tokens"); got != "31" {
-		t.Fatalf("unexpected usage.total_tokens: got %q want %q", got, "31")
+	if got := sigiltest.StringValue(t, exported, "usage", "total_tokens"); got != "26" {
+		t.Fatalf("unexpected usage.total_tokens: got %q want %q", got, "26")
 	}
 }
 
@@ -375,7 +375,7 @@ func TestConformance_GenerateContentSyncNormalization(t *testing.T) {
 		UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
 			PromptTokenCount:        120,
 			CandidatesTokenCount:    40,
-			TotalTokenCount:         170,
+			TotalTokenCount:         160,
 			CachedContentTokenCount: 12,
 			ThoughtsTokenCount:      10,
 			ToolUsePromptTokenCount: 9,
@@ -409,7 +409,7 @@ func TestConformance_GenerateContentSyncNormalization(t *testing.T) {
 	if generation.StopReason != "STOP" {
 		t.Fatalf("unexpected stop reason: %q", generation.StopReason)
 	}
-	if generation.Usage.TotalTokens != 170 || generation.Usage.CacheReadInputTokens != 12 || generation.Usage.ReasoningTokens != 10 {
+	if generation.Usage.TotalTokens != 160 || generation.Usage.CacheReadInputTokens != 12 || generation.Usage.ReasoningTokens != 10 {
 		t.Fatalf("unexpected usage mapping: %#v", generation.Usage)
 	}
 	if generation.ThinkingEnabled == nil || !*generation.ThinkingEnabled {
@@ -512,7 +512,7 @@ func TestConformance_GenerateContentStreamNormalization(t *testing.T) {
 				UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
 					PromptTokenCount:        20,
 					CandidatesTokenCount:    6,
-					TotalTokenCount:         31,
+					TotalTokenCount:         26,
 					ThoughtsTokenCount:      4,
 					ToolUsePromptTokenCount: 5,
 				},
@@ -539,7 +539,7 @@ func TestConformance_GenerateContentStreamNormalization(t *testing.T) {
 	if generation.StopReason != "STOP" {
 		t.Fatalf("unexpected stop reason: %q", generation.StopReason)
 	}
-	if generation.Usage.TotalTokens != 31 || generation.Usage.ReasoningTokens != 4 {
+	if generation.Usage.TotalTokens != 26 || generation.Usage.ReasoningTokens != 4 {
 		t.Fatalf("unexpected usage mapping: %#v", generation.Usage)
 	}
 	if len(generation.Output) != 2 {
