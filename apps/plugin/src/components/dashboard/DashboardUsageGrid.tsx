@@ -31,7 +31,13 @@ export function DashboardUsageGrid(props: DashboardUsageGridProps) {
 
   return (
     <div className={styles.wrapper}>
-      <TopToolsPanel dataSource={props.dataSource} filters={props.filters} from={props.from} to={props.to} timeRange={props.timeRange} />
+      <TopToolsPanel
+        dataSource={props.dataSource}
+        filters={props.filters}
+        from={props.from}
+        to={props.to}
+        timeRange={props.timeRange}
+      />
       <div className={styles.subViewBar}>
         <RadioButtonGroup options={subViewOptions} value={subView} onChange={setSubView} size="sm" />
       </div>

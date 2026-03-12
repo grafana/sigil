@@ -1,6 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
-import { dateTime, ThresholdsMode, type AbsoluteTimeRange, type DataFrame, type GrafanaTheme2, type TimeRange } from '@grafana/data';
+import {
+  dateTime,
+  ThresholdsMode,
+  type AbsoluteTimeRange,
+  type DataFrame,
+  type GrafanaTheme2,
+  type TimeRange,
+} from '@grafana/data';
 import { Alert, LinkButton, Stack, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import { useParams } from 'react-router-dom';
 import { defaultDashboardDataSource, type DashboardDataSource } from '../dashboard/api';
@@ -90,7 +97,12 @@ type ToolConversationsTableProps = {
   toolName: string;
 };
 
-function ToolConversationsTable({ conversationsDataSource, timeRange, filters, toolName }: ToolConversationsTableProps) {
+function ToolConversationsTable({
+  conversationsDataSource,
+  timeRange,
+  filters,
+  toolName,
+}: ToolConversationsTableProps) {
   const styles = useStyles2(getStyles);
   const [conversations, setConversations] = useState<ConversationSearchResult[]>([]);
   const [loading, setLoading] = useState(true);
@@ -140,7 +152,9 @@ function ToolConversationsTable({ conversationsDataSource, timeRange, filters, t
         id: 'conversation',
         header: 'Conversation',
         cell: (conversation) => (
-          <span className={styles.monoCell}>{conversation.conversation_title?.trim() || conversation.conversation_id}</span>
+          <span className={styles.monoCell}>
+            {conversation.conversation_title?.trim() || conversation.conversation_id}
+          </span>
         ),
       },
       {
@@ -244,11 +258,35 @@ export default function ToolAnalyticsPage({
   const conversationFilters = useMemo(() => buildToolConversationFilters(filters, toolName), [filters, toolName]);
 
   const executions = usePrometheusQuery(dataSource, totalOpsQuery(metricFilters, rangeDuration), from, to, 'instant');
-  const totalErrors = usePrometheusQuery(dataSource, totalErrorsQuery(metricFilters, rangeDuration), from, to, 'instant');
+  const totalErrors = usePrometheusQuery(
+    dataSource,
+    totalErrorsQuery(metricFilters, rangeDuration),
+    from,
+    to,
+    'instant'
+  );
   const errorRate = usePrometheusQuery(dataSource, errorRateQuery(metricFilters, rangeDuration), from, to, 'instant');
-  const latencyP50 = usePrometheusQuery(dataSource, latencyStatQuery(metricFilters, rangeDuration, 'none', 0.5), from, to, 'instant');
-  const latencyP95 = usePrometheusQuery(dataSource, latencyStatQuery(metricFilters, rangeDuration, 'none', 0.95), from, to, 'instant');
-  const latencyP99 = usePrometheusQuery(dataSource, latencyStatQuery(metricFilters, rangeDuration, 'none', 0.99), from, to, 'instant');
+  const latencyP50 = usePrometheusQuery(
+    dataSource,
+    latencyStatQuery(metricFilters, rangeDuration, 'none', 0.5),
+    from,
+    to,
+    'instant'
+  );
+  const latencyP95 = usePrometheusQuery(
+    dataSource,
+    latencyStatQuery(metricFilters, rangeDuration, 'none', 0.95),
+    from,
+    to,
+    'instant'
+  );
+  const latencyP99 = usePrometheusQuery(
+    dataSource,
+    latencyStatQuery(metricFilters, rangeDuration, 'none', 0.99),
+    from,
+    to,
+    'instant'
+  );
 
   const usageOverTime = usePrometheusQuery(
     dataSource,
@@ -395,17 +433,40 @@ export default function ToolAnalyticsPage({
         onLabelFilterRowOpenChange={setShowLabelFilterRow}
       />
       <DashboardSummaryBar>
-        <TopStat label="Executions" value={executions.data ? vectorToStatValue(executions.data) : 0} loading={executions.loading} />
-        <TopStat label="Errors" value={totalErrors.data ? vectorToStatValue(totalErrors.data) : 0} loading={totalErrors.loading} />
+        <TopStat
+          label="Executions"
+          value={executions.data ? vectorToStatValue(executions.data) : 0}
+          loading={executions.loading}
+        />
+        <TopStat
+          label="Errors"
+          value={totalErrors.data ? vectorToStatValue(totalErrors.data) : 0}
+          loading={totalErrors.loading}
+        />
         <TopStat
           label="Error rate"
           value={errorRate.data ? vectorToStatValue(errorRate.data) : 0}
           unit="percent"
           loading={errorRate.loading}
         />
-        <TopStat label="Latency (P50)" value={latencyP50.data ? vectorToStatValue(latencyP50.data) : 0} unit="s" loading={latencyP50.loading} />
-        <TopStat label="Latency (P95)" value={latencyP95.data ? vectorToStatValue(latencyP95.data) : 0} unit="s" loading={latencyP95.loading} />
-        <TopStat label="Latency (P99)" value={latencyP99.data ? vectorToStatValue(latencyP99.data) : 0} unit="s" loading={latencyP99.loading} />
+        <TopStat
+          label="Latency (P50)"
+          value={latencyP50.data ? vectorToStatValue(latencyP50.data) : 0}
+          unit="s"
+          loading={latencyP50.loading}
+        />
+        <TopStat
+          label="Latency (P95)"
+          value={latencyP95.data ? vectorToStatValue(latencyP95.data) : 0}
+          unit="s"
+          loading={latencyP95.loading}
+        />
+        <TopStat
+          label="Latency (P99)"
+          value={latencyP99.data ? vectorToStatValue(latencyP99.data) : 0}
+          unit="s"
+          loading={latencyP99.loading}
+        />
       </DashboardSummaryBar>
 
       {pageHasErrors && !pageHasData && (
@@ -431,9 +492,17 @@ export default function ToolAnalyticsPage({
             loading={usageOverTime.loading}
             error={usageOverTime.error}
             data={usageOverTime.data ? matrixToDataFrames(usageOverTime.data) : []}
-            options={{ legend: { displayMode: 'list', placement: 'bottom', calcs: [] }, tooltip: { mode: 'multi', sort: 'desc' } }}
+            options={{
+              legend: { displayMode: 'list', placement: 'bottom', calcs: [] },
+              tooltip: { mode: 'multi', sort: 'desc' },
+            }}
             fieldConfig={{
-              defaults: { unit: 'short', color: consistentColor, custom: { fillOpacity: 6, showPoints: 'never', lineWidth: 2 }, thresholds: noThresholds },
+              defaults: {
+                unit: 'short',
+                color: consistentColor,
+                custom: { fillOpacity: 6, showPoints: 'never', lineWidth: 2 },
+                thresholds: noThresholds,
+              },
               overrides: [],
             }}
           />
@@ -456,9 +525,18 @@ export default function ToolAnalyticsPage({
             loading={errorRateOverTime.loading}
             error={errorRateOverTime.error}
             data={errorRateOverTime.data ? matrixToDataFrames(errorRateOverTime.data) : []}
-            options={{ legend: { displayMode: 'list', placement: 'bottom', calcs: [] }, tooltip: { mode: 'multi', sort: 'desc' } }}
+            options={{
+              legend: { displayMode: 'list', placement: 'bottom', calcs: [] },
+              tooltip: { mode: 'multi', sort: 'desc' },
+            }}
             fieldConfig={{
-              defaults: { unit: 'percent', min: 0, color: consistentColor, custom: { fillOpacity: 6, showPoints: 'never', lineWidth: 2 }, thresholds: noThresholds },
+              defaults: {
+                unit: 'percent',
+                min: 0,
+                color: consistentColor,
+                custom: { fillOpacity: 6, showPoints: 'never', lineWidth: 2 },
+                thresholds: noThresholds,
+              },
               overrides: [],
             }}
           />
@@ -480,9 +558,17 @@ export default function ToolAnalyticsPage({
           loading={latencyP50OverTime.loading || latencyP95OverTime.loading || latencyP99OverTime.loading}
           error={latencyP50OverTime.error || latencyP95OverTime.error || latencyP99OverTime.error}
           data={latencyFrames}
-          options={{ legend: { displayMode: 'list', placement: 'bottom', calcs: [] }, tooltip: { mode: 'multi', sort: 'desc' } }}
+          options={{
+            legend: { displayMode: 'list', placement: 'bottom', calcs: [] },
+            tooltip: { mode: 'multi', sort: 'desc' },
+          }}
           fieldConfig={{
-            defaults: { unit: 's', color: consistentColor, custom: { fillOpacity: 6, showPoints: 'never', lineWidth: 2 }, thresholds: noThresholds },
+            defaults: {
+              unit: 's',
+              color: consistentColor,
+              custom: { fillOpacity: 6, showPoints: 'never', lineWidth: 2 },
+              thresholds: noThresholds,
+            },
             overrides: [],
           }}
         />

@@ -23,10 +23,6 @@ describe('buildConversationsUrl', () => {
     expect(params.getAll('provider')).toEqual(['openai']);
     expect(params.getAll('model')).toEqual(['gpt-4o']);
     expect(params.getAll('agent')).toEqual(['assistant']);
-    expect(params.getAll('label')).toEqual([
-      'service_name|=|sigil-api',
-      'k8s_namespace_name|=|prod',
-      'job|=|alloy',
-    ]);
+    expect(params.getAll('label')).toEqual(['service_name|=|sigil-api', 'k8s_namespace_name|=|prod', 'job|=|alloy']);
   });
 });

@@ -119,7 +119,9 @@ describe('ToolAnalyticsPage', () => {
 
     await act(async () => {
       render(
-        <MemoryRouter initialEntries={['/analytics/tools/calendar.lookup?provider=openai&label=resource.k8s.namespace.name|=|prod']}>
+        <MemoryRouter
+          initialEntries={['/analytics/tools/calendar.lookup?provider=openai&label=resource.k8s.namespace.name|=|prod']}
+        >
           <Routes>
             <Route
               path="/analytics/tools/:toolName"
@@ -150,10 +152,13 @@ describe('ToolAnalyticsPage', () => {
     );
 
     expect(
-      screen.getAllByRole('link', { name: 'Open filtered conversations' }).some((link) =>
-        link.getAttribute('href') ===
-        '/a/grafana-sigil-app/conversations?from=now-1h&to=now&provider=openai&label=resource.k8s.namespace.name%7C%3D%7Cprod&label=tool.name%7C%3D%7Ccalendar.lookup'
-      )
+      screen
+        .getAllByRole('link', { name: 'Open filtered conversations' })
+        .some(
+          (link) =>
+            link.getAttribute('href') ===
+            '/a/grafana-sigil-app/conversations?from=now-1h&to=now&provider=openai&label=resource.k8s.namespace.name%7C%3D%7Cprod&label=tool.name%7C%3D%7Ccalendar.lookup'
+        )
     ).toBe(true);
   });
 
@@ -179,6 +184,8 @@ describe('ToolAnalyticsPage', () => {
       expect(screen.getByText('Tool analytics failed to load')).toBeInTheDocument();
     });
 
-    expect(screen.queryByText('No `execute_tool` runtime data matched calendar.lookup in this time range.')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('No `execute_tool` runtime data matched calendar.lookup in this time range.')
+    ).not.toBeInTheDocument();
   });
 });

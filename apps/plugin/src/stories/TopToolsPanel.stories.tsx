@@ -12,7 +12,10 @@ function makeVectorResponse(
     status: 'success',
     data: {
       resultType: 'vector',
-      result: results.map((result) => ({ metric: result.labels, value: [Date.now() / 1000, result.value] as [number, string] })),
+      result: results.map((result) => ({
+        metric: result.labels,
+        value: [Date.now() / 1000, result.value] as [number, string],
+      })),
     },
   };
 }
