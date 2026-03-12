@@ -23,6 +23,8 @@ var (
 	}, []string{"service", "method", "type"})
 )
 
+const grpcUnknownLabel = "unknown"
+
 func grpcMetricsUnaryInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		service, method := parseGRPCMethod(info)
@@ -49,7 +51,7 @@ func grpcMetricsStreamInterceptor() grpc.StreamServerInterceptor {
 
 func parseGRPCMethod(info *grpc.UnaryServerInfo) (service, method string) {
 	if info == nil {
-		return "unknown", "unknown"
+		return unknownGRPCMethodLabels()
 	}
 	return parseGRPCFullMethod(info.FullMethod)
 }
@@ -57,17 +59,21 @@ func parseGRPCMethod(info *grpc.UnaryServerInfo) (service, method string) {
 func parseGRPCFullMethod(fullMethod string) (service, method string) {
 	trimmed := strings.TrimSpace(fullMethod)
 	if trimmed == "" {
-		return "unknown", "unknown"
+		return unknownGRPCMethodLabels()
 	}
 	trimmed = strings.TrimPrefix(trimmed, "/")
 	service, method, ok := strings.Cut(trimmed, "/")
 	if !ok {
-		return "unknown", "unknown"
+		return unknownGRPCMethodLabels()
 	}
 	service = strings.TrimSpace(service)
 	method = strings.TrimSpace(method)
 	if service == "" || method == "" {
-		return "unknown", "unknown"
+		return unknownGRPCMethodLabels()
 	}
 	return service, method
+}
+
+func unknownGRPCMethodLabels() (service, method string) {
+	return grpcUnknownLabel, grpcUnknownLabel
 }

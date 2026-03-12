@@ -88,6 +88,15 @@ function createDataSource(template: TemplateDefinition): EvaluationDataSource {
     getSavedConversation: async (_savedID: string) => ({}) as SavedConversation,
     deleteSavedConversation: async () => {},
     createManualConversation: async (_request: CreateManualConversationRequest) => ({}) as SavedConversation,
+    listCollections: async () => ({ items: [], next_cursor: '' }),
+    createCollection: async () => ({}) as never,
+    getCollection: async () => ({}) as never,
+    updateCollection: async () => ({}) as never,
+    deleteCollection: async () => {},
+    addCollectionMembers: async () => {},
+    removeCollectionMember: async () => {},
+    listCollectionMembers: async () => ({ items: [], next_cursor: '' }),
+    listCollectionsForSavedConversation: async () => ({ items: [], next_cursor: '' }),
   };
 }
 

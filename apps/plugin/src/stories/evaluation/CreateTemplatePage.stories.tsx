@@ -136,6 +136,15 @@ const mockDataSource: EvaluationDataSource = {
     created_at: '',
     updated_at: '',
   }),
+  listCollections: async () => ({ items: [], next_cursor: '' }),
+  createCollection: async () => ({}) as never,
+  getCollection: async () => ({}) as never,
+  updateCollection: async () => ({}) as never,
+  deleteCollection: async () => {},
+  addCollectionMembers: async () => {},
+  removeCollectionMember: async () => {},
+  listCollectionMembers: async () => ({ items: [], next_cursor: '' }),
+  listCollectionsForSavedConversation: async () => ({ items: [], next_cursor: '' }),
 };
 
 const meta = {

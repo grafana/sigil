@@ -39,7 +39,7 @@ func NewGoogleClient(httpClient *http.Client, baseURL, apiKey string) *GoogleCli
 // NewVertexAIClient constructs a Vertex AI backed judge client.
 // Vertex mode uses OAuth2 credentials (ADC or explicit credential sources) and
 // requires a project ID.
-func NewVertexAIClient(httpClient *http.Client, baseURL, projectID, location, apiKey, credentialsFile, credentialsJSON string) *GoogleClient {
+func NewVertexAIClient(baseURL, projectID, location, apiKey, credentialsFile, credentialsJSON string) *GoogleClient {
 	trimmedAPIKey := strings.TrimSpace(apiKey)
 	if trimmedAPIKey != "" {
 		return &GoogleClient{
@@ -56,10 +56,10 @@ func NewVertexAIClient(httpClient *http.Client, baseURL, projectID, location, ap
 		}
 	}
 
-	return newVertexAIClientWithCredentials(httpClient, baseURL, projectID, location, credentials)
+	return newVertexAIClientWithCredentials(baseURL, projectID, location, credentials)
 }
 
-func newVertexAIClientWithCredentials(httpClient *http.Client, baseURL, projectID, location string, credentials *cloudauth.Credentials) *GoogleClient {
+func newVertexAIClientWithCredentials(baseURL, projectID, location string, credentials *cloudauth.Credentials) *GoogleClient {
 	trimmedProjectID := strings.TrimSpace(projectID)
 	if trimmedProjectID == "" {
 		return &GoogleClient{
@@ -83,10 +83,6 @@ func newVertexAIClientWithCredentials(httpClient *http.Client, baseURL, projectI
 	if credentials != nil {
 		cfg.Credentials = credentials
 	}
-	// Keep SDK-managed auth transport for Vertex. HTTP client customization is
-	// intentionally limited to Gemini API-key mode in NewGoogleClient.
-	_ = httpClient
-
 	return newGoogleClient("vertexai", cfg)
 }
 

@@ -356,7 +356,7 @@ func BuildJudgeSchema(keys []evalpkg.OutputKey) map[string]any {
 	}
 
 	props := map[string]any{
-		"explanation": map[string]any{"type": "string"},
+		"explanation": map[string]any{"type": "string", "description": "Concise justification for the score"},
 	}
 	required := []string{"explanation"}
 

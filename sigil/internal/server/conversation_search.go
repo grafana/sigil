@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"sort"
@@ -65,6 +66,15 @@ func searchConversations(querySvc *query.Service) http.HandlerFunc {
 
 		response, err := runConversationSearch(req.Context(), querySvc, tenantID, payload, nil)
 		if err != nil {
+			slog.Error(
+				"sigil conversation request failed",
+				"endpoint", "/api/v1/conversations/search",
+				"tenant_id", tenantID,
+				"filters", strings.TrimSpace(payload.Filters),
+				"page_size", payload.PageSize,
+				"cursor_present", strings.TrimSpace(payload.Cursor) != "",
+				"err", err.Error(),
+			)
 			writeConversationSearchError(w, err)
 			return
 		}
@@ -116,6 +126,15 @@ func streamSearchConversations(querySvc *query.Service) http.HandlerFunc {
 			return nil
 		})
 		if err != nil {
+			slog.Error(
+				"sigil conversation request failed",
+				"endpoint", "/api/v1/conversations/search/stream",
+				"tenant_id", tenantID,
+				"filters", strings.TrimSpace(payload.Filters),
+				"page_size", payload.PageSize,
+				"cursor_present", strings.TrimSpace(payload.Cursor) != "",
+				"err", err.Error(),
+			)
 			if !started {
 				writeConversationSearchError(w, err)
 				return
@@ -161,6 +180,15 @@ func conversationStats(querySvc *query.Service) http.HandlerFunc {
 
 		stats, err := searchConversationStats(req.Context(), querySvc, tenantID, payload)
 		if err != nil {
+			slog.Error(
+				"sigil conversation request failed",
+				"endpoint", "/api/v1/conversations/stats",
+				"tenant_id", tenantID,
+				"filters", strings.TrimSpace(payload.Filters),
+				"page_size", payload.PageSize,
+				"cursor_present", strings.TrimSpace(payload.Cursor) != "",
+				"err", err.Error(),
+			)
 			writeConversationSearchError(w, err)
 			return
 		}
@@ -280,6 +308,16 @@ func runConversationProjectionSearch(
 			mapKeys(seenConversationIDs),
 		)
 		if err != nil {
+			slog.Error(
+				"sigil conversation request failed",
+				"endpoint", "projection_search_page",
+				"tenant_id", tenantID,
+				"from_unix", from.UTC().Unix(),
+				"to_unix", to.UTC().Unix(),
+				"page_size", conversationSearchMetadataChunkSize,
+				"seen_conversation_count", len(seenConversationIDs),
+				"err", err.Error(),
+			)
 			return query.ConversationSearchResponse{}, err
 		}
 		if len(page) == 0 {
@@ -375,6 +413,16 @@ func searchConversationProjectionStats(
 			mapKeys(seenConversationIDs),
 		)
 		if err != nil {
+			slog.Error(
+				"sigil conversation request failed",
+				"endpoint", "projection_stats_page",
+				"tenant_id", tenantID,
+				"from_unix", from.UTC().Unix(),
+				"to_unix", to.UTC().Unix(),
+				"page_size", 500,
+				"seen_conversation_count", len(seenConversationIDs),
+				"err", err.Error(),
+			)
 			return conversationStatsResponse{}, err
 		}
 		if len(page) == 0 {

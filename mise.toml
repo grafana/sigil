@@ -83,6 +83,42 @@ run = "DEVELOPMENT=true docker compose --profile core --profile traffic up --wat
 description = "Start local development stack in detached mode with DEVELOPMENT=true"
 run = "DEVELOPMENT=true docker compose --profile core --profile traffic up --build --remove-orphans -d"
 
+[tasks."up:worktree"]
+description = "Start a lighter worktree-friendly stack without sdk-traffic and with webpack typecheck/lint disabled in Docker"
+run = "./scripts/run-sigil-worktree.sh up"
+
+[tasks."up:worktree:detached"]
+description = "Start a lighter detached worktree-friendly stack without sdk-traffic and with webpack typecheck/lint disabled in Docker"
+run = "./scripts/run-sigil-worktree.sh up-detached"
+
+[tasks."up:worktree:traffic-lite"]
+description = "Start a low-volume synthetic traffic sidecar for the current worktree stack"
+run = "./scripts/run-sigil-worktree.sh up-traffic-lite"
+
+[tasks."workflow:symphony:render"]
+description = "Render WORKFLOW.local.md from the committed Symphony template using SYMPHONY_LINEAR_PROJECT_SLUG"
+run = "./scripts/render-symphony-workflow.sh"
+
+[tasks."down:worktree"]
+description = "Stop the worktree-friendly stack"
+run = "./scripts/run-sigil-worktree.sh down"
+
+[tasks."down:worktree:destroy"]
+description = "Stop the worktree-friendly stack and remove its volumes/orphans"
+run = "./scripts/run-sigil-worktree.sh destroy"
+
+[tasks."down:worktree:traffic-lite"]
+description = "Stop the low-volume synthetic traffic sidecar for the current worktree stack"
+run = "./scripts/run-sigil-worktree.sh down-traffic-lite"
+
+[tasks."logs:worktree"]
+description = "Tail logs for the worktree-friendly stack"
+run = "./scripts/run-sigil-worktree.sh logs"
+
+[tasks."ps:worktree"]
+description = "Show containers and URLs for the worktree-friendly stack"
+run = "./scripts/run-sigil-worktree.sh ps"
+
 [tasks."up:dev"]
 description = "Start local development stack without sdk-traffic, pointing to dev datasources"
 run = "DEVELOPMENT=true SIGIL_API_URL=https://sigil-dev-001.grafana-dev.net/ SIGIL_TENANT_ID=13 SIGIL_PROM_DS_UID=cortex-dev-01 SIGIL_TEMPO_DS_UID=tempo-dev-01 docker compose --profile core up --watch --build --remove-orphans"
@@ -378,6 +414,12 @@ dir = "sdks/go-frameworks/google-adk"
 depends = ["doctor:go"]
 run = "GOWORK=off go test ./..."
 
+[tasks."test:sdk:conformance"]
+description = "Run the current Go SDK conformance harness"
+dir = "sdks/go"
+depends = ["doctor:go"]
+run = "GOWORK=off go test ./sigil -run '^TestConformance' -count=1"
+
 [tasks."test:ts:sdk-js"]
 description = "Run TypeScript/JavaScript SDK runtime tests"
 depends = ["deps"]
@@ -619,6 +661,14 @@ GOWORK=off go test ./e2e -tags=e2e -run TestStorageHotColdRoundTripLocal -count=
 [tasks."deps:playwright"]
 description = "Install Playwright browser binaries for plugin browser tests"
 run = "pnpm --dir apps/plugin exec playwright install"
+
+[tasks."capture:ui-proof"]
+description = "Capture a Grafana Sigil UI screenshot from the current worktree stack"
+run = "pnpm --dir apps/plugin exec node ./scripts/capture-ui-proof.mjs"
+
+[tasks."ensure:grafana:auth"]
+description = "Create a reusable authenticated Grafana Playwright session for local UI proof flows"
+run = "pnpm --dir apps/plugin exec node ./scripts/ensure-grafana-auth.mjs"
 
 [tasks."test:e2e:plugin"]
 description = "Run plugin Playwright browser end-to-end tests"

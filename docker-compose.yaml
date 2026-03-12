@@ -21,8 +21,8 @@ services:
       GF_DATABASE_PASSWORD: sigil
       GF_SESSION_PROVIDER: mysql
       GF_SESSION_PROVIDER_CONFIG: sigil:sigil@tcp(mysql:3306)/grafana
-      GF_APP_URL: http://grafana:3000
-      GF_SERVER_ROOT_URL: http://grafana:3000
+      GF_APP_URL: ${SIGIL_GRAFANA_URL:-http://grafana:3000}
+      GF_SERVER_ROOT_URL: ${SIGIL_GRAFANA_URL:-http://grafana:3000}
       SIGIL_API_URL: ${SIGIL_API_URL:-http://sigil:8080}
       SIGIL_TENANT_ID: ${SIGIL_TENANT_ID:-fake}
       SIGIL_PROM_DS_UID: ${SIGIL_PROM_DS_UID:-prometheus}
@@ -85,6 +85,8 @@ services:
       cd /app/sigil && pnpm run dev"
     environment:
       DEVELOPMENT: ${DEVELOPMENT:-false}
+      WEBPACK_TYPE_CHECK: ${WEBPACK_TYPE_CHECK:-false}
+      WEBPACK_LINT: ${WEBPACK_LINT:-false}
     healthcheck:
       test: test -f /app/sigil/apps/plugin/dist/plugin.json
       interval: 10s
@@ -234,6 +236,45 @@ services:
       SIGIL_TRAFFIC_MAX_CYCLES: ${SIGIL_TRAFFIC_MAX_CYCLES:-0}
       SIGIL_TRAFFIC_ASSERT_TIMEOUT_SECONDS: ${SIGIL_TRAFFIC_ASSERT_TIMEOUT_SECONDS:-180}
       SIGIL_TRAFFIC_ENABLE_DOTNET: ${SIGIL_TRAFFIC_ENABLE_DOTNET:-auto}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+    volumes:
+      - ./:/app/sigil
+      - sigil-go-cache:/opt/go-cache
+      - sigil-pnpm-store:/opt/pnpm-store
+      - sigil-node-modules:/app/sigil/node_modules/
+      - sigil-pip-cache:/opt/pip-cache
+      - sigil-gradle-cache:/opt/gradle-cache
+      - sigil-nuget-cache:/opt/nuget-cache
+    depends_on:
+      plugin-precache:
+        condition: service_completed_successfully
+      sigil:
+        condition: service_started
+      alloy:
+        condition: service_started
+
+  sdk-traffic-lite:
+    profiles: ['traffic-lite']
+    build:
+      context: .
+      dockerfile: .config/Dockerfile.sdk-traffic
+    working_dir: /app/sigil
+    command: bash .config/devex/sdk-traffic/run-all.sh
+    environment:
+      SIGIL_TRAFFIC_INTERVAL_MS: "10000"
+      SIGIL_TRAFFIC_STREAM_PERCENT: "15"
+      SIGIL_TRAFFIC_CONVERSATIONS: "1"
+      SIGIL_TRAFFIC_ROTATE_TURNS: "6"
+      SIGIL_TRAFFIC_EMITTERS: "go"
+      SIGIL_TRAFFIC_CUSTOM_PROVIDER: mistral
+      SIGIL_TRAFFIC_GEN_HTTP_ENDPOINT: http://sigil:8080/api/v1/generations:export
+      SIGIL_TRAFFIC_GEN_GRPC_ENDPOINT: sigil:4317
+      SIGIL_TRAFFIC_TRACE_HTTP_ENDPOINT: http://alloy:4318/v1/traces
+      SIGIL_TRAFFIC_TRACE_GRPC_ENDPOINT: alloy:4317
+      SIGIL_TRAFFIC_ONESHOT: "0"
+      SIGIL_TRAFFIC_MAX_CYCLES: "0"
+      SIGIL_TRAFFIC_ASSERT_TIMEOUT_SECONDS: "180"
+      SIGIL_TRAFFIC_ENABLE_DOTNET: "false"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
     volumes:
       - ./:/app/sigil

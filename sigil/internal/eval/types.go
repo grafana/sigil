@@ -182,6 +182,7 @@ type LatestScore struct {
 	ScoreType            ScoreType  `json:"score_type"`
 	Value                ScoreValue `json:"value"`
 	Passed               *bool      `json:"passed,omitempty"`
+	Explanation          string     `json:"explanation,omitempty"`
 	EvaluatorID          string     `json:"evaluator_id"`
 	EvaluatorVersion     string     `json:"evaluator_version"`
 	EvaluatorDescription string     `json:"evaluator_description,omitempty"`

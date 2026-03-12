@@ -1,7 +1,7 @@
 ---
 owner: sigil-core
 status: active
-last_reviewed: 2026-03-07
+last_reviewed: 2026-03-12
 source_of_truth: true
 audience: both
 ---
@@ -603,6 +603,18 @@ The default local stack started by `mise run up` (`docker compose --profile core
 - Traffic uses mixed `SYNC`/`STREAM` modes, provider/language tags, and per-turn metadata to keep shapes distinguishable in local debugging.
 - One-shot mode (`SIGIL_TRAFFIC_ONESHOT=1`) runs bounded emitter cycles and fails fast if API assertions do not observe all five SDK emitters plus Python/JS framework-tagged records for LangChain, LangGraph, OpenAI Agents, LlamaIndex, and Google ADK.
 - Raw provider artifacts stay default OFF; this path is intended for synthetic ingest load and contract-shape visibility only.
+
+## SDK Conformance Harness
+
+A no-Docker conformance test suite validates the current Go SDK public API behaviors the UI and query layer depend on. The suite runs in `go test` time (seconds) using only localhost transports and OTel SDK test infrastructure.
+
+- **Local entry point**: `mise run test:sdk:conformance` runs the shipped Go harness (`cd sdks/go && GOWORK=off go test ./sigil -run '^TestConformance' -count=1`).
+- **Go reference implementation**: `sdks/go/sigil/conformance_test.go` and `conformance_helpers_test.go` (`package sigil_test`).
+- **Current shipped baseline**: conversation title resolution, user ID resolution, and agent identity resolution across exported generation payloads, OTLP spans, and sync metric emission.
+- **Cross-SDK spec**: `docs/references/sdk-conformance-spec.md` defines the current language-neutral baseline and the extension model for future provider/framework coverage.
+- **Four assertion targets**: generation proto (fake gRPC server), OTLP spans (`tracetest.SpanRecorder`), OTLP metrics (`sdkmetric.ManualReader`), rating HTTP (`httptest.Server`).
+- **Scope**: current Go harness coverage only. It does not test backend projections, batch/retry mechanics, provider wrappers, or framework adapters yet.
+- Design doc: `docs/design-docs/2026-03-12-sdk-conformance-harness.md`.
 
 ## Evolution Path
 

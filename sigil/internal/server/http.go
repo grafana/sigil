@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"regexp"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -82,8 +84,8 @@ func RegisterCoreRoutes(mux *http.ServeMux) {
 	if mux == nil {
 		return
 	}
-	mux.HandleFunc("/healthz", health)
-	mux.Handle("/metrics", promhttp.Handler())
+	mux.Handle("/healthz", recoverHTTPPanics(http.HandlerFunc(health)))
+	mux.Handle("/metrics", recoverHTTPPanics(promhttp.Handler()))
 }
 
 // RegisterIngestRoutes wires generation ingest HTTP routes.
@@ -98,7 +100,10 @@ func RegisterIngestRoutes(
 	if protectedMiddleware == nil {
 		protectedMiddleware = func(next http.Handler) http.Handler { return next }
 	}
-	mux.Handle("/api/v1/generations:export", protectedMiddleware(http.HandlerFunc(generationingest.NewHTTPHandler(generationSvc))))
+	mux.Handle(
+		"/api/v1/generations:export",
+		recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(generationingest.NewHTTPHandler(generationSvc)))),
+	)
 }
 
 // RegisterQueryRoutes wires query/read HTTP routes without proxy endpoints.
@@ -126,48 +131,153 @@ func RegisterQueryRoutes(
 		protectedMiddleware = func(next http.Handler) http.Handler { return next }
 	}
 
-	mux.Handle("/api/v1/generations/", protectedMiddleware(http.HandlerFunc(getGeneration(querySvc))))
-	mux.Handle("/api/v1/agents", protectedMiddleware(http.HandlerFunc(listAgents(querySvc))))
-	mux.Handle("/api/v1/agents:lookup", protectedMiddleware(http.HandlerFunc(lookupAgent(querySvc))))
-	mux.Handle("/api/v1/agents:versions", protectedMiddleware(http.HandlerFunc(listAgentVersions(querySvc))))
+	mux.Handle("/api/v1/generations/", recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(getGeneration(querySvc)))))
+	mux.Handle("/api/v1/agents", recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(listAgents(querySvc)))))
+	mux.Handle("/api/v1/agents:lookup", recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(lookupAgent(querySvc)))))
+	mux.Handle(
+		"/api/v1/agents:versions",
+		recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(listAgentVersions(querySvc)))),
+	)
 	if ratingStore != nil {
-		mux.Handle("/api/v1/agents:rating", protectedMiddleware(http.HandlerFunc(lookupAgentRating(querySvc, ratingStore))))
+		mux.Handle(
+			"/api/v1/agents:rating",
+			recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(lookupAgentRating(querySvc, ratingStore)))),
+		)
 	}
 	if rater != nil && ratingStore != nil {
-		mux.Handle("/api/v1/agents:rate", protectedMiddleware(http.HandlerFunc(rateAgent(querySvc, rater, ratingStore, logger))))
+		mux.Handle(
+			"/api/v1/agents:rate",
+			recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(rateAgent(querySvc, rater, ratingStore, logger)))),
+		)
 	}
 	var piOpts PromptInsightsOption
 	if len(promptInsightsOpts) > 0 {
 		piOpts = promptInsightsOpts[0]
 	}
 
-	mux.Handle("/api/v1/conversations:batch-metadata", protectedMiddleware(http.HandlerFunc(batchConversationMetadata(querySvc))))
-	mux.Handle("/api/v1/conversations/search", protectedMiddleware(http.HandlerFunc(searchConversations(querySvc))))
-	mux.Handle("/api/v1/conversations/search/stream", protectedMiddleware(http.HandlerFunc(streamSearchConversations(querySvc))))
-	mux.Handle("/api/v1/conversations/stats", protectedMiddleware(http.HandlerFunc(conversationStats(querySvc))))
-	mux.Handle("/api/v1/conversations", protectedMiddleware(http.HandlerFunc(listConversations(querySvc))))
-	mux.Handle("/api/v1/conversations/", protectedMiddleware(http.HandlerFunc(conversationRoutes(querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled, followupSvc))))
-	mux.Handle("/api/v2/conversations/", protectedMiddleware(http.HandlerFunc(conversationRoutesV2(querySvc))))
+	mux.Handle(
+		"/api/v1/conversations:batch-metadata",
+		recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(batchConversationMetadata(querySvc)))),
+	)
+	mux.Handle(
+		"/api/v1/conversations/search",
+		recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(searchConversations(querySvc)))),
+	)
+	mux.Handle(
+		"/api/v1/conversations/search/stream",
+		recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(streamSearchConversations(querySvc)))),
+	)
+	mux.Handle(
+		"/api/v1/conversations/stats",
+		recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(conversationStats(querySvc)))),
+	)
+	mux.Handle("/api/v1/conversations", recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(listConversations(querySvc)))))
+	mux.Handle(
+		"/api/v1/conversations/",
+		recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(conversationRoutes(querySvc, feedbackSvc, ratingsEnabled, annotationsEnabled, followupSvc)))),
+	)
+	mux.Handle("/api/v2/conversations/", recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(conversationRoutesV2(querySvc)))))
 
 	if modelCardSvc != nil {
-		mux.Handle("/api/v1/model-cards", protectedMiddleware(http.HandlerFunc(listModelCards(modelCardSvc))))
-		mux.Handle("/api/v1/model-cards:lookup", protectedMiddleware(http.HandlerFunc(lookupModelCard(modelCardSvc))))
-		mux.Handle("/api/v1/model-cards:sources", protectedMiddleware(http.HandlerFunc(listModelCardSources(modelCardSvc))))
-		mux.Handle("/api/v1/model-cards:refresh", protectedMiddleware(http.HandlerFunc(refreshModelCards(modelCardSvc))))
+		mux.Handle(
+			"/api/v1/model-cards",
+			recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(listModelCards(modelCardSvc)))),
+		)
+		mux.Handle(
+			"/api/v1/model-cards:lookup",
+			recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(lookupModelCard(modelCardSvc)))),
+		)
+		mux.Handle(
+			"/api/v1/model-cards:sources",
+			recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(listModelCardSources(modelCardSvc)))),
+		)
+		mux.Handle(
+			"/api/v1/model-cards:refresh",
+			recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(refreshModelCards(modelCardSvc)))),
+		)
 	}
 	if piOpts.Store != nil {
-		mux.Handle("/api/v1/agents:prompt-insights", protectedMiddleware(http.HandlerFunc(lookupPromptInsights(querySvc, piOpts.Store))))
+		mux.Handle(
+			"/api/v1/agents:prompt-insights",
+			recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(lookupPromptInsights(querySvc, piOpts.Store)))),
+		)
 	}
 	if piOpts.Analyzer != nil && piOpts.Store != nil {
-		mux.Handle("/api/v1/agents:analyze-prompt", protectedMiddleware(http.HandlerFunc(analyzePrompt(querySvc, piOpts.Analyzer, piOpts.Store, rater, ratingStore, logger))))
-		mux.Handle("/api/v1/agents:analyze-prompt-with-excerpts", protectedMiddleware(http.HandlerFunc(analyzePromptWithExcerpts(querySvc, piOpts.Analyzer, piOpts.Store, rater, ratingStore, logger))))
+		mux.Handle(
+			"/api/v1/agents:analyze-prompt",
+			recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(analyzePrompt(querySvc, piOpts.Analyzer, piOpts.Store, rater, ratingStore, logger)))),
+		)
+		mux.Handle(
+			"/api/v1/agents:analyze-prompt-with-excerpts",
+			recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(analyzePromptWithExcerpts(querySvc, piOpts.Analyzer, piOpts.Store, rater, ratingStore, logger)))),
+		)
 	} else if piOpts.Store != nil {
 		noJudge := func(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, "prompt analysis is unavailable: no judge provider is configured", http.StatusServiceUnavailable)
 		}
-		mux.Handle("/api/v1/agents:analyze-prompt", protectedMiddleware(http.HandlerFunc(noJudge)))
-		mux.Handle("/api/v1/agents:analyze-prompt-with-excerpts", protectedMiddleware(http.HandlerFunc(noJudge)))
+		mux.Handle("/api/v1/agents:analyze-prompt", recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(noJudge))))
+		mux.Handle(
+			"/api/v1/agents:analyze-prompt-with-excerpts",
+			recoverHTTPPanics(protectedMiddleware(http.HandlerFunc(noJudge))),
+		)
 	}
+}
+
+type panicRecoveryResponseWriter struct {
+	http.ResponseWriter
+	wroteHeader bool
+}
+
+func (w *panicRecoveryResponseWriter) WriteHeader(statusCode int) {
+	w.wroteHeader = true
+	w.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (w *panicRecoveryResponseWriter) Write(p []byte) (int, error) {
+	w.wroteHeader = true
+	return w.ResponseWriter.Write(p)
+}
+
+func (w *panicRecoveryResponseWriter) Flush() {
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+func (w *panicRecoveryResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
+func recoverHTTPPanics(next http.Handler) http.Handler {
+	if next == nil {
+		return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		writer := &panicRecoveryResponseWriter{ResponseWriter: w}
+		defer func() {
+			recovered := recover()
+			if recovered == nil {
+				return
+			}
+
+			tenantID, _ := tenant.TenantID(req.Context())
+			slog.Error(
+				"sigil api panic recovered",
+				"method", req.Method,
+				"path", req.URL.Path,
+				"tenant_id", tenantID,
+				"request_id", strings.TrimSpace(req.Header.Get("X-Request-Id")),
+				"trace_id", strings.TrimSpace(req.Header.Get("X-Cloud-Trace-Context")),
+				"panic", fmt.Sprint(recovered),
+				"stack", string(debug.Stack()),
+			)
+
+			if !writer.wroteHeader {
+				http.Error(writer, "internal server error", http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(writer, req)
+	})
 }
 
 // PromptInsightsOption carries optional dependencies for prompt insights routes.

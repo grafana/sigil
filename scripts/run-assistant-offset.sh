@@ -195,16 +195,26 @@ if [[ "${ACTION}" == "up" ]]; then
 fi
 docker compose "${CONFIG_ARGS[@]}" config > "${TMP_RESOLVED}"
 
-python3 - "${TMP_RESOLVED}" "${TMP_COMPOSE}" "${OFFSET}" "${PROJECT_NAME}" "${SIGIL_DIR}/docker-compose.yaml" "${SIGIL_DIR}/.config/docker-compose-base.yaml" <<'PY'
+python3 - "${SIGIL_DIR}" "${TMP_RESOLVED}" "${TMP_COMPOSE}" "${OFFSET}" "${PROJECT_NAME}" "${SIGIL_DIR}/docker-compose.yaml" "${SIGIL_DIR}/.config/docker-compose-base.yaml" <<'PY'
 import re
 import sys
 from pathlib import Path
 
-compose_path = Path(sys.argv[1])
-output_path = Path(sys.argv[2])
-offset = int(sys.argv[3])
-project_name = sys.argv[4]
-reserved_sources = [Path(p) for p in sys.argv[5:]]
+sigil_dir = Path(sys.argv[1])
+sys.path.insert(0, str(sigil_dir))
+
+from scripts.compose_yaml import (
+  CONTAINER_NAME_RE,
+  PORTS_KEY_RE,
+  PORTS_EXIT_KEY_RE,
+  SERVICE_RE,
+)
+
+compose_path = Path(sys.argv[2])
+output_path = Path(sys.argv[3])
+offset = int(sys.argv[4])
+project_name = sys.argv[5]
+reserved_sources = [Path(p) for p in sys.argv[6:]]
 
 lines = compose_path.read_text(encoding="utf-8").splitlines()
 
@@ -216,10 +226,6 @@ ports_by_service = {}
 service_has_container_name = {}
 in_service_block = False
 
-service_re = re.compile(r"^  ([A-Za-z0-9_.-]+):\s*$")
-service_key_re = re.compile(r"^    [A-Za-z0-9_.-]+:\s*(?:#.*)?$")
-container_name_re = re.compile(r"^    container_name:\s*.*$")
-ports_key_re = re.compile(r"^    ports:\s*(?:#.*)?$")
 port_item_re = re.compile(r"""^(\s*-\s*)['"]?([^'"]+)['"]?(\s*(?:#.*)?)$""")
 published_re = re.compile(r'^(\s*published:\s*"?)(\d+)("?)(\s*(?:#.*)?)$')
 
@@ -293,7 +299,7 @@ for line in lines:
     out.append(line)
     continue
 
-  svc_match = service_re.match(line) if in_services else None
+  svc_match = SERVICE_RE.match(line) if in_services else None
   if svc_match:
     # Starting a new service; ensure previous service has a container_name.
     if current_service and not service_has_container_name.get(current_service, False):
@@ -309,7 +315,7 @@ for line in lines:
     continue
 
   if in_service_block and current_service:
-    if ports_key_re.match(line):
+    if PORTS_KEY_RE.match(line):
       in_ports = True
       out.append(line)
       continue
@@ -344,10 +350,10 @@ for line in lines:
           out.append(line)
         continue
       # Leaving ports block.
-      if service_key_re.match(line) or service_re.match(line):
+      if PORTS_EXIT_KEY_RE.match(line) or SERVICE_RE.match(line):
         in_ports = False
 
-    if container_name_re.match(line):
+    if CONTAINER_NAME_RE.match(line):
       service_has_container_name[current_service] = True
       out.append(f'    container_name: "{safe_container_name(project_name, current_service)}"')
       continue
