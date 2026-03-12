@@ -12,6 +12,9 @@ function makeSavedConversation(savedID: string, createdAt: string): SavedConvers
     saved_by: 'tester',
     created_at: createdAt,
     updated_at: createdAt,
+    generation_count: 0,
+    total_tokens: 0,
+    agent_names: [],
   };
 }
 

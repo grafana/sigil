@@ -66,8 +66,8 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
   const [collections, setCollections] = useState<Collection[]>([]);
   const [activeCollectionID, setActiveCollectionID] = useState<string | null>(null);
   const [conversations, setConversations] = useState<SavedConversation[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
   const [allSavedCount, setAllSavedCount] = useState(0);
+  const [allSavedTotal, setAllSavedTotal] = useState<number | undefined>();
   const [nextCursor, setNextCursor] = useState<string | undefined>();
   const [prevCursors, setPrevCursors] = useState<Array<string | undefined>>([]);
   const [currentCursor, setCurrentCursor] = useState<string | undefined>();
@@ -95,13 +95,13 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
         const resp = await dataSource.listSavedConversations(undefined, 50, cursor);
         setConversations(resp.items);
         setNextCursor(resp.next_cursor || undefined);
-        setTotalCount(resp.items.length);
-        setAllSavedCount(resp.items.length);
+        const trueTotal = resp.total_count ?? resp.items.length;
+        setAllSavedCount(trueTotal);
+        setAllSavedTotal(resp.total_count);
       } else {
         const resp = await dataSource.listCollectionMembers(activeCollectionID, undefined, cursor);
         setConversations(resp.items);
         setNextCursor(resp.next_cursor || undefined);
-        setTotalCount(resp.items.length);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load conversations');
@@ -222,6 +222,7 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
           onPageChange={handlePageChange}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
+          totalCount={activeCollectionID === null ? allSavedTotal : collections.find((c) => c.collection_id === activeCollectionID)?.member_count}
         />
       </div>
       <AddToCollectionModal

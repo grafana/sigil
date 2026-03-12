@@ -159,6 +159,50 @@ describe('CollectionsSidebar', () => {
     expect(onSelect).toHaveBeenCalledWith(null);
   });
 
+  it('shows filter input when there are more than 5 collections and filters by name', () => {
+    const manyCollections = [
+      makeCollection('c1', 'Alpha'),
+      makeCollection('c2', 'Beta'),
+      makeCollection('c3', 'Gamma'),
+      makeCollection('c4', 'Delta'),
+      makeCollection('c5', 'Epsilon'),
+      makeCollection('c6', 'Zeta'),
+    ];
+    render(
+      <CollectionsSidebar
+        collections={manyCollections}
+        totalCount={0}
+        activeCollectionID={null}
+        onSelect={onSelect}
+        onCreateCollection={onCreateCollection}
+        onRenameCollection={onRenameCollection}
+        onDeleteCollection={onDeleteCollection}
+      />
+    );
+    const filterInput = screen.getByPlaceholderText(/filter collections/i);
+    expect(filterInput).toBeInTheDocument();
+    fireEvent.change(filterInput, { target: { value: 'et' } });
+    expect(screen.getByText('Beta')).toBeInTheDocument();
+    expect(screen.getByText('Zeta')).toBeInTheDocument();
+    expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
+    expect(screen.queryByText('Gamma')).not.toBeInTheDocument();
+  });
+
+  it('does not show filter input when there are 5 or fewer collections', () => {
+    render(
+      <CollectionsSidebar
+        collections={collections}
+        totalCount={10}
+        activeCollectionID={null}
+        onSelect={onSelect}
+        onCreateCollection={onCreateCollection}
+        onRenameCollection={onRenameCollection}
+        onDeleteCollection={onDeleteCollection}
+      />
+    );
+    expect(screen.queryByPlaceholderText(/filter collections/i)).not.toBeInTheDocument();
+  });
+
   it('reverts input and shows alert when rename fails', async () => {
     onRenameCollection.mockRejectedValue(new Error('Server error'));
     render(

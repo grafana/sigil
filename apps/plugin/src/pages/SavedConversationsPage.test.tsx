@@ -9,6 +9,7 @@ const makeSC = (id: string, name: string): SavedConversation => ({
   tenant_id: 'test', saved_id: id, conversation_id: `conv-${id}`,
   name, source: 'telemetry', tags: {}, saved_by: 'alice',
   created_at: '2026-03-10T00:00:00Z', updated_at: '2026-03-10T00:00:00Z',
+  generation_count: 0, total_tokens: 0, agent_names: [],
 });
 
 const makeCollection = (id: string, name: string): Collection => ({

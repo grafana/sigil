@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { SavedConversationsList } from './SavedConversationsList';
-import type { SavedConversation } from '../../evaluation/types';
+import { SavedConversation } from '../../evaluation/types';
 
 const makeSC = (id: string, name: string): SavedConversation => ({
   tenant_id: 'test',
@@ -13,6 +13,9 @@ const makeSC = (id: string, name: string): SavedConversation => ({
   saved_by: 'alice',
   created_at: '2026-03-10T00:00:00Z',
   updated_at: '2026-03-10T00:00:00Z',
+  generation_count: 0,
+  total_tokens: 0,
+  agent_names: [],
 });
 
 describe('SavedConversationsList', () => {
@@ -136,15 +139,30 @@ describe('SavedConversationsList', () => {
     expect(onAddToCollection).toHaveBeenCalled();
   });
 
-  it('shows — for empty saved_by', () => {
-    const noAuthor = { ...makeSC('s4', 'No author'), saved_by: '' };
+  it('shows — for empty agent_names', () => {
+    const noAgents = { ...makeSC('s4', 'No agents'), agent_names: [] };
     render(
       <SavedConversationsList
         {...defaultProps}
-        conversations={[noAuthor]}
+        conversations={[noAgents]}
       />
     );
-    expect(screen.getByText('—')).toBeInTheDocument();
+    // Empty agents, gens, and tokens all show '—'
+    const dashes = screen.getAllByText('—');
+    expect(dashes.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('shows agent names and enrichment data', () => {
+    const rich = { ...makeSC('s5', 'Rich conv'), agent_names: ['agent-a', 'agent-b'], generation_count: 4, total_tokens: 1234 };
+    render(
+      <SavedConversationsList
+        {...defaultProps}
+        conversations={[rich]}
+      />
+    );
+    expect(screen.getByText('agent-a, agent-b')).toBeInTheDocument();
+    expect(screen.getByText('4')).toBeInTheDocument();
+    expect(screen.getByText('1,234')).toBeInTheDocument();
   });
 
   it('conversation name is a link to the explore page', () => {

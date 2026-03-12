@@ -445,11 +445,15 @@ export type SavedConversation = {
   saved_by: string;
   created_at: string;
   updated_at: string;
+  generation_count: number;
+  total_tokens: number;
+  agent_names: string[];
 };
 
 export type SavedConversationListResponse = {
   items: SavedConversation[];
   next_cursor: string;
+  total_count?: number;
 };
 
 export type SaveConversationRequest = {

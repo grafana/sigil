@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Button, ConfirmModal, IconButton, Input, useStyles2 } from '@grafana/ui';
+import { Alert, Button, ConfirmModal, Icon, IconButton, Input, useStyles2 } from '@grafana/ui';
 import type { Collection } from '../../evaluation/types';
 
 export type CollectionsSidebarProps = {
@@ -14,7 +14,8 @@ export type CollectionsSidebarProps = {
   onDeleteCollection: (id: string) => Promise<void>;
 };
 
-type MenuState = { collectionID: string; type: 'menu' | 'rename' | 'delete' } | null;
+type MenuPosition = { top: number; right: number };
+type MenuState = { collectionID: string; type: 'menu' | 'rename' | 'delete'; menuPosition?: MenuPosition } | null;
 
 const getStyles = (theme: GrafanaTheme2) => ({
   sidebar: css({
@@ -55,6 +56,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: theme.spacing(0.5),
     padding: theme.spacing(0.75, 1),
     borderRadius: theme.shape.radius.default,
     cursor: 'pointer',
@@ -73,6 +75,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   count: css({
     fontSize: theme.typography.bodySmall.fontSize,
+    lineHeight: theme.typography.body.lineHeight,
     color: theme.colors.text.secondary,
     flexShrink: 0,
     marginLeft: theme.spacing(0.5),
@@ -80,12 +83,12 @@ const getStyles = (theme: GrafanaTheme2) => ({
   kebab: css({
     visibility: 'hidden',
     flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
   }),
   menuPopover: css({
-    position: 'absolute',
-    right: 0,
-    top: '100%',
-    zIndex: 100,
+    position: 'fixed',
+    zIndex: 1000,
     background: theme.colors.background.elevated,
     border: `1px solid ${theme.colors.border.weak}`,
     borderRadius: theme.shape.radius.default,
@@ -104,6 +107,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   renameInput: css({
     flex: 1,
+  }),
+  searchWrapper: css({
+    padding: theme.spacing(1, 1, 0),
+    flexShrink: 0,
   }),
   footer: css({
     padding: theme.spacing(0, 2),
@@ -131,6 +138,7 @@ export function CollectionsSidebar({
   const [menuState, setMenuState] = useState<MenuState>(null);
   const [renameValue, setRenameValue] = useState('');
   const [renameError, setRenameError] = useState<string | undefined>();
+  const [collectionSearch, setCollectionSearch] = useState('');
   const renameInputRef = useRef<HTMLInputElement>(null);
   const prevNameRef = useRef('');
 
@@ -142,14 +150,23 @@ export function CollectionsSidebar({
 
   useEffect(() => {
     if (menuState?.type !== 'menu') return;
-    const handleOutsideClick = () => setMenuState(null);
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
+    const close = () => setMenuState(null);
+    document.addEventListener('mousedown', close);
+    document.addEventListener('scroll', close, true);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('scroll', close, true);
+    };
   }, [menuState]);
 
   const openMenu = (e: React.MouseEvent, collectionID: string) => {
     e.stopPropagation();
-    setMenuState({ collectionID, type: 'menu' });
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const menuPosition: MenuPosition = {
+      top: rect.bottom + 4,
+      right: window.innerWidth - rect.right,
+    };
+    setMenuState({ collectionID, type: 'menu', menuPosition });
   };
 
   const startRename = (collection: Collection) => {
@@ -183,6 +200,10 @@ export function CollectionsSidebar({
     (c) => menuState?.type === 'delete' && c.collection_id === menuState.collectionID
   );
 
+  const filteredCollections = collectionSearch
+    ? collections.filter((c) => c.name.toLowerCase().includes(collectionSearch.toLowerCase()))
+    : collections;
+
   return (
     <div className={styles.sidebar}>
       <div className={styles.scrollArea}>
@@ -197,7 +218,18 @@ export function CollectionsSidebar({
 
         <div className={styles.sectionLabel}>Collections</div>
 
-        {collections.map((col) => {
+        {collections.length > 5 && (
+          <div className={styles.searchWrapper}>
+            <Input
+              prefix={<Icon name="search" />}
+              placeholder="Filter collections..."
+              value={collectionSearch}
+              onChange={(e) => setCollectionSearch(e.currentTarget.value)}
+            />
+          </div>
+        )}
+
+        {filteredCollections.map((col) => {
           const isRenaming = menuState?.type === 'rename' && menuState.collectionID === col.collection_id;
           const isActive = activeCollectionID === col.collection_id;
 
@@ -205,7 +237,6 @@ export function CollectionsSidebar({
             <React.Fragment key={col.collection_id}>
             <div
               className={`${styles.collectionItem} ${isActive ? styles.collectionItemActive : ''}`}
-              style={{ position: 'relative' }}
               onClick={() => !isRenaming && onSelect(col.collection_id)}
             >
               {isRenaming ? (
@@ -242,7 +273,11 @@ export function CollectionsSidebar({
                     />
                   </span>
                   {menuState?.type === 'menu' && menuState.collectionID === col.collection_id && (
-                    <div className={styles.menuPopover}>
+                    <div
+                      className={styles.menuPopover}
+                      style={{ top: menuState.menuPosition?.top, right: menuState.menuPosition?.right }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
                       <div className={styles.menuItem} onClick={(e) => { e.stopPropagation(); startRename(col); }}>
                         Rename
                       </div>

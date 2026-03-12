@@ -18,6 +18,7 @@ export type SavedConversationsListProps = {
   onPageChange: (direction: 'next' | 'prev') => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
+  totalCount?: number;
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -66,7 +67,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   colHeaders: css({
     display: 'grid',
-    gridTemplateColumns: '32px 1fr 140px 120px',
+    gridTemplateColumns: '32px 1fr 160px 80px 80px 120px',
     gap: theme.spacing(1),
     padding: theme.spacing(0.75, 2),
     background: theme.colors.background.secondary,
@@ -81,7 +82,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   row: css({
     display: 'grid',
-    gridTemplateColumns: '32px 1fr 140px 120px',
+    gridTemplateColumns: '32px 1fr 160px 80px 80px 120px',
     gap: theme.spacing(1),
     padding: theme.spacing(1, 2),
     alignItems: 'center',
@@ -150,6 +151,7 @@ export function SavedConversationsList({
   onPageChange,
   searchQuery,
   onSearchChange,
+  totalCount,
 }: SavedConversationsListProps) {
   const styles = useStyles2(getStyles);
 
@@ -218,7 +220,9 @@ export function SavedConversationsList({
       <div className={styles.colHeaders}>
         <Checkbox value={allSelected} onChange={toggleSelectAll} aria-label="Select all" />
         <span>Name</span>
-        <span>Saved by</span>
+        <span>Agents</span>
+        <span>Gens</span>
+        <span>Tokens</span>
         <span>Saved</span>
       </div>
 
@@ -252,7 +256,11 @@ export function SavedConversationsList({
               >
                 {sc.name}
               </a>
-              <span className={styles.secondary}>{sc.saved_by || '—'}</span>
+              <span className={styles.secondary} title={(sc.agent_names ?? []).join(', ') || undefined}>
+                {(sc.agent_names ?? []).length > 0 ? (sc.agent_names ?? []).join(', ') : '—'}
+              </span>
+              <span className={styles.secondary}>{sc.generation_count > 0 ? sc.generation_count : '—'}</span>
+              <span className={styles.secondary}>{sc.total_tokens > 0 ? sc.total_tokens.toLocaleString() : '—'}</span>
               <span className={styles.secondary}>{dateTime(sc.created_at).format('MMM D, YYYY')}</span>
             </div>
           ))}
@@ -261,7 +269,7 @@ export function SavedConversationsList({
 
       {/* Pagination */}
       <div className={styles.pagination}>
-        <span>{conversations.length} conversation{conversations.length !== 1 ? 's' : ''}</span>
+        <span>{totalCount ?? conversations.length} conversation{(totalCount ?? conversations.length) !== 1 ? 's' : ''}</span>
         <div className={styles.paginationActions}>
           {hasPrevPage && (
             <Button variant="secondary" size="sm" onClick={() => onPageChange('prev')}>

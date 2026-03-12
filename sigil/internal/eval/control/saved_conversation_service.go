@@ -318,6 +318,19 @@ func (s *SavedConversationService) CreateManualConversation(ctx context.Context,
 	return created, nil
 }
 
+// CountSavedConversations returns the total number of saved conversations for a tenant.
+func (s *SavedConversationService) CountSavedConversations(ctx context.Context, tenantID, source string) (int64, error) {
+	trimmedTenantID := strings.TrimSpace(tenantID)
+	if trimmedTenantID == "" {
+		return 0, ValidationWrap(errors.New("tenant id is required"))
+	}
+	trimmedSource := strings.TrimSpace(source)
+	if trimmedSource != "" && !evalpkg.IsValidSavedConversationSource(trimmedSource) {
+		return 0, ValidationWrap(fmt.Errorf("invalid source %q", trimmedSource))
+	}
+	return s.store.CountSavedConversations(ctx, trimmedTenantID, trimmedSource)
+}
+
 // ListSavedConversations returns saved conversations for a tenant, optionally filtered by source.
 func (s *SavedConversationService) ListSavedConversations(ctx context.Context, tenantID, source string, limit int, cursor uint64) ([]evalpkg.SavedConversation, uint64, error) {
 	trimmedTenantID := strings.TrimSpace(tenantID)
