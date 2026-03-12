@@ -237,7 +237,7 @@ public class GenerationRecorder implements AutoCloseable {
                 generation.getUserId(),
                 SigilClient.metadataString(generation.getMetadata(), SigilClient.METADATA_USER_ID_KEY),
                 SigilClient.metadataString(generation.getMetadata(), SigilClient.METADATA_LEGACY_USER_ID_KEY)));
-        generation.setUserId(SigilClient.metadataString(Map.of("user_id", generation.getUserId()), "user_id"));
+        generation.setUserId(normalizeResolvedString(generation.getUserId()));
         if (!generation.getUserId().isBlank()) {
             generation.getMetadata().put(SigilClient.METADATA_USER_ID_KEY, generation.getUserId());
         }
@@ -264,5 +264,9 @@ public class GenerationRecorder implements AutoCloseable {
             }
         }
         return "";
+    }
+
+    private static String normalizeResolvedString(String value) {
+        return value == null ? "" : value.trim();
     }
 }
