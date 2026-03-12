@@ -382,27 +382,6 @@ func requireGenerationFieldMapString(t *testing.T, generation map[string]any, fi
 	}
 }
 
-func requireGenerationFieldInt(t *testing.T, generation map[string]any, field string, want int64) {
-	t.Helper()
-
-	raw, ok := generation[field]
-	if !ok {
-		t.Fatalf("expected generation field %q=%d, field missing", field, want)
-	}
-	switch typed := raw.(type) {
-	case float64:
-		if int64(typed) != want {
-			t.Fatalf("unexpected generation field %q: got %v want %d", field, raw, want)
-		}
-	case int:
-		if int64(typed) != want {
-			t.Fatalf("unexpected generation field %q: got %v want %d", field, raw, want)
-		}
-	default:
-		t.Fatalf("expected generation field %q to be numeric, got %T", field, raw)
-	}
-}
-
 func requireGenerationUsageInt(t *testing.T, generation map[string]any, key string, want int64) {
 	t.Helper()
 
