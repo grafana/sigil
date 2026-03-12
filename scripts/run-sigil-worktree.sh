@@ -71,40 +71,17 @@ docker compose --profile core --profile traffic --profile traffic-lite config > 
 popd >/dev/null
 
 python3 - "${TMP_COMPOSE}" <<'PY'
-import re
 import sys
 from pathlib import Path
+from scripts.compose_yaml import strip_service_ports_and_container_names
 
 compose_path = Path(sys.argv[1])
-lines = compose_path.read_text(encoding="utf-8").splitlines()
-
-service_re = re.compile(r"^  ([A-Za-z0-9_.-]+):\s*$")
-service_key_re = re.compile(r"^    [A-Za-z0-9_.-]+:\s*(?:#.*)?$")
-ports_key_re = re.compile(r"^    ports:\s*(?:#.*)?$")
-container_name_re = re.compile(r"^    container_name:\s*.*$")
-
-filtered = []
-in_ports = False
-
-for line in lines:
-  if in_ports:
-    if line.startswith("      - ") or line.strip() == "":
-      continue
-    if service_key_re.match(line) or service_re.match(line):
-      in_ports = False
-    else:
-      continue
-
-  if container_name_re.match(line):
-    continue
-
-  if ports_key_re.match(line):
-    in_ports = True
-    continue
-
-  filtered.append(line)
-
-compose_path.write_text("\n".join(filtered) + "\n", encoding="utf-8")
+compose_path.write_text(
+  strip_service_ports_and_container_names(
+    compose_path.read_text(encoding="utf-8"),
+  ),
+  encoding="utf-8",
+)
 PY
 
 COMPOSE_CMD=(
