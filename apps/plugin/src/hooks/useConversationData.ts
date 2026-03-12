@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createTempoTraceFetcher } from '../conversation/fetchTrace';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../conversation/api';
 import {
@@ -63,6 +63,23 @@ export function useConversationData({
   const requestVersionRef = useRef<number>(0);
   const conversationDataRef = useRef<ConversationData | null>(null);
 
+  const applyConversationData = useCallback((nextData: ConversationData | null) => {
+    conversationDataRef.current = nextData;
+    setConversationData(nextData);
+  }, []);
+
+  const mergeTraceResultIntoCurrent = useCallback(
+    (traceData: ConversationData) => {
+      const latest = conversationDataRef.current;
+      if (!latest) {
+        applyConversationData(traceData);
+        return;
+      }
+      applyConversationData(mergeConversationData(traceData, latest));
+    },
+    [applyConversationData]
+  );
+
   useEffect(() => {
     conversationDataRef.current = conversationData;
   }, [conversationData]);
@@ -73,7 +90,7 @@ export function useConversationData({
 
     if (conversationID.length === 0) {
       queueMicrotask(() => {
-        setConversationData(null);
+        applyConversationData(null);
         setLoading(false);
         setTracesLoading(false);
         setLoadingMoreGenerations(false);
@@ -89,7 +106,7 @@ export function useConversationData({
       setLoadingMoreGenerations(false);
       setErrorMessage('');
       setLoadMoreErrorMessage('');
-      setConversationData(null);
+      applyConversationData(null);
     });
 
     void loadConversationDetail(dataSource, conversationID, { limit: INITIAL_GENERATION_PAGE_SIZE })
@@ -97,7 +114,7 @@ export function useConversationData({
         if (requestVersionRef.current !== requestVersion) {
           return;
         }
-        setConversationData(data);
+        applyConversationData(data);
         setLoading(false);
         setTracesLoading(true);
 
@@ -106,13 +123,13 @@ export function useConversationData({
             if (requestVersionRef.current !== requestVersion) {
               return;
             }
-            setConversationData(partialData);
+            mergeTraceResultIntoCurrent(partialData);
           },
         }).then((enriched) => {
           if (requestVersionRef.current !== requestVersion) {
             return;
           }
-          setConversationData(enriched);
+          mergeTraceResultIntoCurrent(enriched);
           setTracesLoading(false);
         });
       })
@@ -124,7 +141,7 @@ export function useConversationData({
         setLoading(false);
         setTracesLoading(false);
       });
-  }, [dataSource, conversationID, traceFetcher]);
+  }, [applyConversationData, dataSource, conversationID, mergeTraceResultIntoCurrent, traceFetcher]);
 
   const loadMoreGenerations = async () => {
     const current = conversationDataRef.current;
@@ -150,8 +167,7 @@ export function useConversationData({
           hasMoreGenerations: false,
           nextGenerationsCursor: undefined,
         };
-        conversationDataRef.current = stabilized;
-        setConversationData(stabilized);
+        applyConversationData(stabilized);
         return;
       }
 
@@ -164,8 +180,7 @@ export function useConversationData({
           return;
         }
         const merged = mergeConversationData(latest, partialPage);
-        conversationDataRef.current = merged;
-        setConversationData(merged);
+        applyConversationData(merged);
       };
 
       mergePartial(pageData);
@@ -181,8 +196,7 @@ export function useConversationData({
         return;
       }
       const merged = mergeConversationData(latest, enrichedPage);
-      conversationDataRef.current = merged;
-      setConversationData(merged);
+      applyConversationData(merged);
     } catch (error) {
       if (requestVersionRef.current !== requestVersion) {
         return;
