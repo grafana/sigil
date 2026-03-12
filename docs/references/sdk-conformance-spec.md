@@ -16,6 +16,7 @@ Local entry points:
 
 - `mise run test:sdk:conformance`
 - `cd sdks/go && GOWORK=off go test ./sigil -run '^TestConformance' -count=1`
+- `cd sdks/go-frameworks/google-adk && GOWORK=off go test ./... -run '^TestConformance' -count=1`
 
 Related docs:
 
@@ -124,6 +125,65 @@ These assertions apply to every currently shipped scenario:
 - Assert proto field `agent_name` equals the resolved name when present, otherwise empty.
 - Assert proto field `agent_version` equals the resolved version when present, otherwise empty.
 
+## Go framework adapter extension: Google ADK
+
+The Go repo now ships the first framework-adapter conformance suite for
+`sdks/go-frameworks/google-adk`.
+
+### Scenario 4: Framework run lifecycle semantics
+
+### Setup
+
+- Create a local-only Sigil client with HTTP generation export pointed at an
+  `httptest.Server`, plus in-memory OTel span and metric capture.
+- Create a parent framework span with:
+  - `sigil.framework.name = "google-adk"`
+  - `sigil.framework.source = "handler"`
+  - `sigil.framework.language = "go"`
+- Create callbacks via `googleadk.NewCallbacks(client, opts)`.
+- Drive one sync run via `OnRunStart(ctx, RunStartEvent{...})` then
+  `OnRunEnd(runID, RunEndEvent{...})`.
+
+### Expected behavior
+
+- Assert a generation export is emitted with one generation payload.
+- Assert the generation span is a child of the supplied framework parent span.
+- Assert exported `trace_id` and `span_id` match the emitted generation span.
+- Assert generation tags include:
+  - `sigil.framework.name = "google-adk"`
+  - `sigil.framework.source = "handler"`
+  - `sigil.framework.language = "go"`
+- Assert framework metadata is propagated into generation metadata when present:
+  - `sigil.framework.run_id`
+  - `sigil.framework.run_type`
+  - `sigil.framework.thread_id`
+  - `sigil.framework.parent_run_id`
+  - `sigil.framework.component_name`
+  - `sigil.framework.retry_attempt`
+  - `sigil.framework.event_id`
+  - `sigil.framework.tags`
+- Assert `gen_ai.client.operation.duration` has data.
+- Assert `gen_ai.client.time_to_first_token` is absent for the sync run.
+
+### Scenario 5: Framework streaming semantics
+
+### Setup
+
+- Reuse the same local-only harness.
+- Drive one stream run via `OnRunStart(Stream=true, ...)`, `OnRunToken(...)`, and
+  `OnRunEnd(...)`.
+
+### Expected behavior
+
+- Assert the generated export payload uses `operation_name = "streamText"`.
+- Assert streaming output chunks are stitched into one assistant text output when
+  `OnRunEnd` does not provide explicit output messages.
+- Assert `gen_ai.client.operation.duration` has data.
+- Assert `gen_ai.client.time_to_first_token` has data.
+
 ## Extending the spec
 
-Future phases will extend this document with additional core, provider-wrapper, and framework-adapter scenarios. Until those phases land, this document is the authoritative baseline for the currently shipped Go conformance harness.
+Future phases will extend this document with additional core, provider-wrapper,
+and framework-adapter scenarios. This document is the authoritative baseline
+for the currently shipped Go core harness and the first Go framework-adapter
+suite (`google-adk`).

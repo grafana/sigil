@@ -139,13 +139,13 @@ Test that each Go provider mapper correctly transforms provider request/response
 
 ## Phase C: Go framework adapter (google-adk)
 
-- [ ] `sdks/go-frameworks/google-adk/conformance_test.go`
-  - [ ] Framework invocation produces spans with `sigil.framework.name`, `sigil.framework.language`
-  - [ ] LLM calls within framework trigger generation recording
-  - [ ] Span hierarchy: framework span is parent of generation span
-  - [ ] Framework-specific attributes propagated
-  - [ ] Generation tags include `sigil.framework.name` and `sigil.framework.language`
-- [ ] Extend `sdk-conformance-spec.md` with framework adapter section
+- [x] `sdks/go-frameworks/google-adk/conformance_test.go`
+  - [x] Framework invocation spans with `sigil.framework.name`, `sigil.framework.language`, and `sigil.framework.source` are asserted at the parent span boundary
+  - [x] LLM calls within framework trigger generation recording
+  - [x] Span hierarchy: framework span is parent of generation span
+  - [x] Framework-specific metadata propagation is asserted explicitly
+  - [x] Generation tags include `sigil.framework.name` and `sigil.framework.language`
+- [x] Extend `sdk-conformance-spec.md` with framework adapter section
 
 ## Phase D: Other language core SDKs
 
