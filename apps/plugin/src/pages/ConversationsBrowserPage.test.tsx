@@ -632,4 +632,42 @@ describe('ConversationsBrowserPage', () => {
       expect(toolbarProps?.labelsLoading).toBe(false);
     });
   });
+
+  it('keeps ready dropdown options available while another tag-values lookup is still pending', async () => {
+    const dataSource = createDataSource();
+    let resolveProviderValues: ((values: string[]) => void) | undefined;
+    const providerValuesPromise = new Promise<string[]>((resolve) => {
+      resolveProviderValues = resolve;
+    });
+
+    dataSource.getSearchTags.mockResolvedValue([{ key: 'resource.k8s.namespace.name', scope: 'resource' }]);
+    dataSource.getSearchTagValues.mockImplementation((tag: string) => {
+      if (tag === 'span.gen_ai.provider.name') {
+        return providerValuesPromise;
+      }
+      if (tag === 'span.gen_ai.request.model') {
+        return Promise.resolve(['gpt-4o']);
+      }
+      if (tag === 'span.gen_ai.agent.name') {
+        return Promise.resolve(['assistant']);
+      }
+      return Promise.resolve([]);
+    });
+
+    renderPage(dataSource);
+
+    await waitFor(() => {
+      const toolbarProps = mockFilterToolbar.mock.lastCall?.[0];
+      expect(toolbarProps?.modelOptions).toEqual(['gpt-4o']);
+      expect(toolbarProps?.agentOptions).toEqual(['assistant']);
+      expect(toolbarProps?.providerOptions).toEqual([]);
+    });
+
+    resolveProviderValues?.(['openai']);
+
+    await waitFor(() => {
+      const toolbarProps = mockFilterToolbar.mock.lastCall?.[0];
+      expect(toolbarProps?.providerOptions).toEqual(['openai']);
+    });
+  });
 });
