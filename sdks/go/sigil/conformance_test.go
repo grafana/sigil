@@ -3,7 +3,6 @@ package sigil_test
 import (
 	"context"
 	"testing"
-	"time"
 
 	sigil "github.com/grafana/sigil/sdks/go/sigil"
 )
@@ -60,13 +59,6 @@ func TestConformance_ConversationTitleSemantics(t *testing.T) {
 
 			recordGeneration(t, env, ctx, start, sigil.Generation{})
 
-			generation := env.Ingest.SingleGeneration(t)
-			if tc.wantTitle == "" {
-				requireProtoMetadataAbsent(t, generation, metadataKeyConversation)
-			} else {
-				requireProtoMetadata(t, generation, metadataKeyConversation, tc.wantTitle)
-			}
-
 			span := findSpan(t, env.Spans.Ended(), conformanceOperationName)
 			attrs := spanAttrs(span)
 			if tc.wantTitle == "" {
@@ -77,6 +69,13 @@ func TestConformance_ConversationTitleSemantics(t *testing.T) {
 
 			requireSyncGenerationMetrics(t, env)
 			env.Shutdown(t)
+
+			generation := env.Ingest.SingleGeneration(t)
+			if tc.wantTitle == "" {
+				requireProtoMetadataAbsent(t, generation, metadataKeyConversation)
+			} else {
+				requireProtoMetadata(t, generation, metadataKeyConversation, tc.wantTitle)
+			}
 		})
 	}
 }
@@ -151,15 +150,15 @@ func TestConformance_UserIDSemantics(t *testing.T) {
 
 			recordGeneration(t, env, ctx, start, sigil.Generation{})
 
-			generation := env.Ingest.SingleGeneration(t)
-			requireProtoMetadata(t, generation, metadataKeyCanonicalUserID, tc.wantResolvedID)
-
 			span := findSpan(t, env.Spans.Ended(), conformanceOperationName)
 			attrs := spanAttrs(span)
 			requireSpanAttr(t, attrs, spanAttrUserID, tc.wantResolvedID)
 
 			requireSyncGenerationMetrics(t, env)
 			env.Shutdown(t)
+
+			generation := env.Ingest.SingleGeneration(t)
+			requireProtoMetadata(t, generation, metadataKeyCanonicalUserID, tc.wantResolvedID)
 		})
 	}
 }
@@ -228,6 +227,22 @@ func TestConformance_AgentIdentitySemantics(t *testing.T) {
 
 			recordGeneration(t, env, ctx, start, result)
 
+			span := findSpan(t, env.Spans.Ended(), conformanceOperationName)
+			attrs := spanAttrs(span)
+			if tc.wantAgentName == "" {
+				requireSpanAttrAbsent(t, attrs, spanAttrAgentName)
+			} else {
+				requireSpanAttr(t, attrs, spanAttrAgentName, tc.wantAgentName)
+			}
+			if tc.wantVersion == "" {
+				requireSpanAttrAbsent(t, attrs, spanAttrAgentVersion)
+			} else {
+				requireSpanAttr(t, attrs, spanAttrAgentVersion, tc.wantVersion)
+			}
+
+			requireSyncGenerationMetrics(t, env)
+			env.Shutdown(t)
+
 			generation := env.Ingest.SingleGeneration(t)
 			if tc.wantAgentName == "" {
 				if got := generation.GetAgentName(); got != "" {
@@ -244,22 +259,6 @@ func TestConformance_AgentIdentitySemantics(t *testing.T) {
 			} else if got := generation.GetAgentVersion(); got != tc.wantVersion {
 				t.Fatalf("unexpected proto agent_version: got %q want %q", got, tc.wantVersion)
 			}
-
-			span := findSpan(t, env.Spans.Ended(), conformanceOperationName)
-			attrs := spanAttrs(span)
-			if tc.wantAgentName == "" {
-				requireSpanAttrAbsent(t, attrs, spanAttrAgentName)
-			} else {
-				requireSpanAttr(t, attrs, spanAttrAgentName, tc.wantAgentName)
-			}
-			if tc.wantVersion == "" {
-				requireSpanAttrAbsent(t, attrs, spanAttrAgentVersion)
-			} else {
-				requireSpanAttr(t, attrs, spanAttrAgentVersion, tc.wantVersion)
-			}
-
-			requireSyncGenerationMetrics(t, env)
-			env.Shutdown(t)
 		})
 	}
 }
@@ -272,12 +271,6 @@ func recordGeneration(t *testing.T, env *conformanceEnv, ctx context.Context, st
 	recorder.End()
 	if err := recorder.Err(); err != nil {
 		t.Fatalf("record generation: %v", err)
-	}
-
-	flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := env.Client.Flush(flushCtx); err != nil {
-		t.Fatalf("flush generation export: %v", err)
 	}
 }
 
