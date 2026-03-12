@@ -14,7 +14,12 @@ import {
 } from '../../dashboard/types';
 import { extractResolvePairs, BreakdownStatPanel, formatRelativeTime, formatWindowLabel } from './dashboardShared';
 import { TopStat } from '../TopStat';
-import { averageCost, calculateTotalCost, calculateTotalCostByGroup, calculateCostTimeSeries } from '../../dashboard/cost';
+import {
+  averageCost,
+  calculateTotalCost,
+  calculateTotalCostByGroup,
+  calculateCostTimeSeries,
+} from '../../dashboard/cost';
 import {
   computeStep,
   computeRateInterval,
@@ -323,7 +328,9 @@ export function DashboardConsumptionGrid({
     (to - windowSize) * 1000
   ).toISOString()}`;
   const currentConversationStats = hasConversationStatsApi ? conversationStatsState.data : EMPTY_CONVERSATION_STATS;
-  const previousConversationStatsValue = hasConversationStatsApi ? previousConversationStatsState.data : EMPTY_CONVERSATION_STATS;
+  const previousConversationStatsValue = hasConversationStatsApi
+    ? previousConversationStatsState.data
+    : EMPTY_CONVERSATION_STATS;
   const currentConversationCount = currentConversationStats.totalConversations;
   const currentCallCount = currentConversationCount * currentConversationStats.avgCallsPerConversation;
   const previousConversationCount = previousConversationStatsValue.totalConversations;
@@ -345,9 +352,9 @@ export function DashboardConsumptionGrid({
     let cancelled = false;
 
     void getConversationStats({
-        filters: filterString,
-        time_range: { from: timeRange.from.toISOString(), to: timeRange.to.toISOString() },
-      })
+      filters: filterString,
+      time_range: { from: timeRange.from.toISOString(), to: timeRange.to.toISOString() },
+    })
       .then((stats) => {
         if (!cancelled) {
           setConversationStatsState({ data: stats, requestKey: currentConversationRequestKey });
@@ -360,12 +367,12 @@ export function DashboardConsumptionGrid({
       });
 
     void getConversationStats({
-        filters: filterString,
-        time_range: {
-          from: dateTime((from - windowSize) * 1000).toISOString(),
-          to: dateTime((to - windowSize) * 1000).toISOString(),
-        },
-      })
+      filters: filterString,
+      time_range: {
+        from: dateTime((from - windowSize) * 1000).toISOString(),
+        to: dateTime((to - windowSize) * 1000).toISOString(),
+      },
+    })
       .then((stats) => {
         if (!cancelled) {
           setPreviousConversationStatsState({ data: stats, requestKey: previousConversationRequestKey });
