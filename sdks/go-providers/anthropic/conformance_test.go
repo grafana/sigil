@@ -1,6 +1,7 @@
 package anthropic
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -443,6 +444,16 @@ func TestConformance_AnthropicMapperValidationErrors(t *testing.T) {
 	)
 	if err == nil || err.Error() != "generation.model.provider is required" {
 		t.Fatalf("expected explicit validation error for invalid provider mapping, got %v", err)
+	}
+}
+
+func TestConformance_EmbeddingSupportStatus(t *testing.T) {
+	err := CheckEmbeddingsSupport()
+	if err == nil {
+		t.Fatalf("expected Anthropic embeddings to remain unsupported")
+	}
+	if !errors.Is(err, ErrEmbeddingsUnsupported) {
+		t.Fatalf("expected ErrEmbeddingsUnsupported, got %v", err)
 	}
 }
 

@@ -1,11 +1,14 @@
 package modelcards
 
 import (
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
+
+const unknownMetricLabel = "unknown"
 
 var (
 	modelCardRefreshRunsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -32,40 +35,29 @@ var (
 )
 
 func observeRefreshMetrics(run RefreshRun) {
-	mode := run.RunMode
-	if mode == "" {
-		mode = "primary"
-	}
-	status := run.Status
-	if status == "" {
-		status = "unknown"
-	}
+	source := normalizeMetricLabel(run.Source, SourceOpenRouter)
+	mode := normalizeMetricLabel(run.RunMode, "primary")
+	status := normalizeMetricLabel(run.Status, unknownMetricLabel)
 
-	modelCardRefreshRunsTotal.WithLabelValues(run.Source, mode, status).Inc()
+	modelCardRefreshRunsTotal.WithLabelValues(source, mode, status).Inc()
 
 	if !run.StartedAt.IsZero() && !run.FinishedAt.IsZero() {
 		duration := run.FinishedAt.Sub(run.StartedAt).Seconds()
 		if duration < 0 {
 			duration = 0
 		}
-		modelCardRefreshDuration.WithLabelValues(run.Source, mode).Observe(duration)
+		modelCardRefreshDuration.WithLabelValues(source, mode).Observe(duration)
 	}
 }
 
 func observeReadPath(operation string, sourcePath string) {
-	if operation == "" {
-		operation = "unknown"
-	}
-	if sourcePath == "" {
-		sourcePath = "unknown"
-	}
+	operation = normalizeMetricLabel(operation, unknownMetricLabel)
+	sourcePath = normalizeMetricLabel(sourcePath, unknownMetricLabel)
 	modelCardReadPathTotal.WithLabelValues(operation, sourcePath).Inc()
 }
 
 func setCatalogState(source string, rows int64, latestRefreshedAt *time.Time, now time.Time) {
-	if source == "" {
-		source = SourceOpenRouter
-	}
+	source = normalizeMetricLabel(source, SourceOpenRouter)
 
 	if rows < 0 {
 		rows = 0
@@ -80,4 +72,12 @@ func setCatalogState(source string, rows int64, latestRefreshedAt *time.Time, no
 		}
 	}
 	modelCardCatalogAgeSeconds.WithLabelValues(source).Set(ageSeconds)
+}
+
+func normalizeMetricLabel(value string, fallback string) string {
+	normalized := strings.TrimSpace(value)
+	if normalized == "" {
+		return fallback
+	}
+	return normalized
 }
