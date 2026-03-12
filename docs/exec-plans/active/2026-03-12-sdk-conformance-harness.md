@@ -43,21 +43,21 @@ Building conformance tests against the real public API will surface issues that 
 
 ### A1: Test infrastructure
 
-- [ ] Add `conformance_helpers_test.go` (`package sigil_test`):
-  - [ ] `conformanceEnv` struct wiring `sigil.Client` to all four capture targets
+- [x] Add `conformance_helpers_test.go` (`package sigil_test`):
+  - [x] `conformanceEnv` struct wiring `sigil.Client` to all four capture targets
   - [ ] `newConformanceEnv(t, ...opts)` constructor with functional options
-  - [ ] `fakeIngestServer` implementing `GenerationIngestServiceServer` on `127.0.0.1:0`
-  - [ ] `fakeRatingServer` wrapping `httptest.Server` with request capture
-  - [ ] OTel `tracetest.SpanRecorder` + `sdktrace.TracerProvider` setup
-  - [ ] OTel `sdkmetric.ManualReader` + `sdkmetric.MeterProvider` setup
+  - [x] `fakeIngestServer` implementing `GenerationIngestServiceServer` on `127.0.0.1:0`
+  - [x] `fakeRatingServer` wrapping `httptest.Server` with request capture
+  - [x] OTel `tracetest.SpanRecorder` + `sdktrace.TracerProvider` setup
+  - [x] OTel `sdkmetric.ManualReader` + `sdkmetric.MeterProvider` setup
   - [ ] Optional `resource.Resource` injection for OTLP resource attribute scenarios
-  - [ ] Span assertion helpers: `findSpan`, `spanAttrs`, `requireSpanAttr`, `requireSpanAttrAbsent`
+  - [x] Span assertion helpers: `findSpan`, `spanAttrs`, `requireSpanAttr`, `requireSpanAttrAbsent`
   - [ ] Metric assertion helpers: `findHistogram`, `requireNoHistogram`
-  - [ ] Proto assertion helpers: `requireProtoMetadata`, `requireProtoMetadataAbsent`
+  - [x] Proto assertion helpers: `requireProtoMetadata`, `requireProtoMetadataAbsent`
 
 ### A2: Core scenarios (generation identity and resolution chains)
 
-- [ ] Add `conformance_test.go` (`package sigil_test`)
+- [x] Add `conformance_test.go` (`package sigil_test`)
 - [ ] Scenario 1: Full generation roundtrip (sync, gRPC)
   - [ ] All identity fields preserved on proto
   - [ ] All content types: text, thinking, tool call, tool result
@@ -67,23 +67,23 @@ Building conformance tests against the real public API will surface issues that 
   - [ ] Trace linkage: proto trace_id/span_id match OTLP span IDs
   - [ ] Span attributes match `semantic-conventions.md` generation section
   - [ ] Metrics: operation.duration, token.usage present; no TTFT for sync
-- [ ] Scenario 2: Conversation title semantics (table-driven)
-  - [ ] Explicit field wins
-  - [ ] Context fallback
-  - [ ] Metadata fallback
-  - [ ] Whitespace-only omission
-- [ ] Scenario 3: User ID semantics (table-driven)
-  - [ ] Explicit field wins
-  - [ ] Context fallback
-  - [ ] Canonical metadata fallback (`sigil.user.id`)
-  - [ ] Legacy metadata fallback (`user.id`)
-  - [ ] Canonical wins over legacy
-  - [ ] Whitespace trimming
-- [ ] Scenario 4: Agent identity semantics
-  - [ ] Explicit fields
-  - [ ] Context fallback
-  - [ ] Result-time override
-  - [ ] Empty field omission from span
+- [x] Scenario 2: Conversation title semantics (table-driven)
+  - [x] Explicit field wins
+  - [x] Context fallback
+  - [x] Metadata fallback
+  - [x] Whitespace-only omission
+- [x] Scenario 3: User ID semantics (table-driven)
+  - [x] Explicit field wins
+  - [x] Context fallback
+  - [x] Canonical metadata fallback (`sigil.user.id`)
+  - [x] Legacy metadata fallback (`user.id`)
+  - [x] Canonical wins over legacy
+  - [x] Whitespace trimming
+- [x] Scenario 4: Agent identity semantics
+  - [x] Explicit fields
+  - [x] Context fallback
+  - [x] Result-time override
+  - [x] Empty field omission from span
 
 ### A3: Extended scenarios
 
