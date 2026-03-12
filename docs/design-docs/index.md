@@ -43,6 +43,7 @@ This folder stores durable engineering decisions for Sigil.
 - [`2026-03-05-streaming-conversation-search.md`](2026-03-05-streaming-conversation-search.md) (completed)
 - [`2026-03-10-conversation-detail-v2.md`](2026-03-10-conversation-detail-v2.md) (active)
 - [`2026-03-12-sdk-conformance-harness.md`](2026-03-12-sdk-conformance-harness.md) (active)
+- [`2026-03-12-agent-and-large-conversation-latency-spike.md`](2026-03-12-agent-and-large-conversation-latency-spike.md) (completed)
 
 ## Drafts
 
