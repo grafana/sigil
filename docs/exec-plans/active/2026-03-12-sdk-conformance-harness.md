@@ -134,7 +134,16 @@ Test that each Go provider mapper correctly transforms provider request/response
   - [ ] Error response mapping -> SetCallError with correct error type/category
   - [ ] Artifact capture (opt-in: request, response, tools, events)
   - [ ] Embedding mapping -> EmbeddingResult
-- [ ] `sdks/go-providers/anthropic/conformance_test.go` (same scenario list)
+- [ ] `sdks/go-providers/anthropic/conformance_test.go`
+  - [ ] Sync request/response mapping (all fields)
+  - [ ] Streaming mapping (accumulated output, mode=STREAM)
+  - [ ] Thinking content -> ThinkingPart
+  - [ ] Tool calls -> ToolCallPart with correct ID, name, input JSON
+  - [ ] Usage mapping (including Anthropic server-tool metadata)
+  - [ ] Stop reason mapping
+  - [ ] Error response mapping -> SetCallError with correct error type/category
+  - [ ] Artifact capture (opt-in: request, response, tools, events)
+  - [x] Embedding support gate -> explicit unsupported contract until Anthropic ships a native embeddings API in the official SDK surface
 - [ ] `sdks/go-providers/gemini/conformance_test.go` (same scenario list)
 - [ ] Extend `sdk-conformance-spec.md` with provider wrapper section
 
