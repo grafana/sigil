@@ -168,6 +168,8 @@ public class GenerationRecorder implements AutoCloseable {
 
         generation.setId(firstNonBlank(result.getId(), seed.getId(), SigilClient.newID("gen")));
         generation.setConversationId(firstNonBlank(result.getConversationId(), seed.getConversationId()));
+        generation.setConversationTitle(firstNonBlank(result.getConversationTitle(), seed.getConversationTitle()));
+        generation.setUserId(firstNonBlank(result.getUserId(), seed.getUserId()));
         generation.setAgentName(firstNonBlank(result.getAgentName(), seed.getAgentName()));
         generation.setAgentVersion(firstNonBlank(result.getAgentVersion(), seed.getAgentVersion()));
 
@@ -223,6 +225,22 @@ public class GenerationRecorder implements AutoCloseable {
         Map<String, Object> metadata = new LinkedHashMap<>(seed.getMetadata());
         metadata.putAll(result.getMetadata());
         generation.setMetadata(metadata);
+
+        generation.setConversationTitle(firstNonBlank(
+                generation.getConversationTitle(),
+                SigilClient.metadataString(generation.getMetadata(), SigilClient.SPAN_ATTR_CONVERSATION_TITLE)));
+        if (!generation.getConversationTitle().isBlank()) {
+            generation.getMetadata().put(SigilClient.SPAN_ATTR_CONVERSATION_TITLE, generation.getConversationTitle());
+        }
+
+        generation.setUserId(firstNonBlank(
+                generation.getUserId(),
+                SigilClient.metadataString(generation.getMetadata(), SigilClient.METADATA_USER_ID_KEY),
+                SigilClient.metadataString(generation.getMetadata(), SigilClient.METADATA_LEGACY_USER_ID_KEY)));
+        generation.setUserId(SigilClient.metadataString(Map.of("user_id", generation.getUserId()), "user_id"));
+        if (!generation.getUserId().isBlank()) {
+            generation.getMetadata().put(SigilClient.METADATA_USER_ID_KEY, generation.getUserId());
+        }
 
         for (Artifact artifact : result.getArtifacts()) {
             generation.getArtifacts().add(artifact == null ? new Artifact() : artifact.copy());

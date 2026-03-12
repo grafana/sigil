@@ -8,7 +8,7 @@ audience: both
 
 # SDK Conformance Spec
 
-Language-neutral specification of the currently shipped Sigil SDK conformance baseline.
+Language-neutral specification of the currently shipped Sigil SDK core conformance baseline.
 
 Reference implementation: Go (`sdks/go/sigil/conformance_test.go`, `package sigil_test`).
 Provider-wrapper reference implementations:
@@ -20,6 +20,11 @@ Provider-wrapper reference implementations:
 Local entry points:
 
 - `mise run test:sdk:conformance`
+- `mise run test:go:sdk-conformance`
+- `mise run test:ts:sdk-conformance`
+- `mise run test:py:sdk-conformance`
+- `mise run test:java:sdk-conformance`
+- `mise run test:cs:sdk-conformance`
 - `cd sdks/go && GOWORK=off go test ./sigil -run '^TestConformance' -count=1`
 - `cd sdks/go-providers/openai && GOWORK=off go test ./... -run '^TestConformance' -count=1`
 - `cd sdks/go-providers/anthropic && GOWORK=off go test ./... -run '^TestConformance' -count=1`
@@ -38,25 +43,26 @@ The shipped Go baseline now has two active layers:
 1. Core SDK conformance in `sdks/go/sigil`
 2. Provider-wrapper conformance in `sdks/go-providers/{openai,anthropic,gemini}`
 
-The current core scenario set covers nine black-box scenarios:
+The current shared core scenario set covers ten black-box scenarios:
 
-1. Conversation title semantics
-2. User ID semantics
-3. Agent identity semantics
-4. Streaming mode semantics and TTFT metrics
-5. Tool execution semantics
-6. Embedding semantics
-7. Validation and error semantics
-8. Rating submission semantics
-9. Shutdown flush semantics
+1. Sync roundtrip semantics
+2. Conversation title semantics
+3. User ID semantics
+4. Agent identity semantics
+5. Streaming mode semantics and TTFT metrics
+6. Tool execution semantics
+7. Embedding semantics
+8. Validation and error semantics
+9. Rating submission semantics
+10. Shutdown flush semantics
 
 The provider-wrapper layer verifies normalized `sigil.Generation` outputs directly from provider request/response fixtures. It runs with `go test` only and does not require Docker, a Sigil backend, or live provider access.
 
-The core SDK harness still covers the exported client API with local fake receivers. The provider-wrapper layer complements that by asserting mapper and wrapper behavior inside the provider modules.
+The core SDK harness now runs across Go, TypeScript/JavaScript, Python, Java, and .NET using the same language-neutral contract. The provider-wrapper layer complements that by asserting mapper and wrapper behavior inside the Go provider modules.
 
 ### Core SDK baseline
 
-The shipped Go core harness covers identity-resolution, validation/error, streaming, tool execution, embedding, rating, and shutdown-flush scenarios. This document only enumerates the scenario contracts that other SDKs are expected to replicate today.
+The shipped core harness covers sync roundtrip, identity-resolution, validation/error, streaming, tool execution, embedding, rating, and shutdown-flush scenarios. This document enumerates the scenario contracts that the five shipped core SDK suites now replicate.
 
 ### Provider-wrapper baseline
 
@@ -86,8 +92,9 @@ Every SDK conformance runner that implements this baseline must provide:
 1. A fake generation ingest receiver that captures the normalized generation payload as the backend would receive it.
 2. Span capture using the SDK's local OpenTelemetry test utilities.
 3. Metric capture using the SDK's local OpenTelemetry metric test utilities.
-4. A client configured to target only local receivers, with no Docker or external services.
-5. A flush/shutdown step before assertions so asynchronous export is complete.
+4. A fake rating HTTP server that captures request method, path, headers, and body.
+5. A client configured to target only local receivers, with no Docker or external services.
+6. A flush/shutdown step before assertions so asynchronous export is complete.
 
 ## Assertion conventions
 
@@ -102,7 +109,7 @@ Every SDK conformance runner that implements this baseline must provide:
 
 ## Common invariants for generation scenarios
 
-These assertions apply to the sync generation scenarios in the current baseline (conversation title, user ID, agent identity, validation, shutdown flush):
+These assertions apply to the sync generation scenarios in the current baseline (sync roundtrip, conversation title, user ID, agent identity, validation, shutdown flush):
 
 - Use the SDK's sync generation entry point.
 - Assert `gen_ai.operation.name = "generateText"` on the generation span.
@@ -116,7 +123,33 @@ Additional scenario-family invariants:
 - Tool execution and embeddings use their dedicated SDK entry points, emit OTel spans and metrics, and do not enqueue generation export payloads.
 - Rating submission uses the SDK's HTTP rating helper and does not depend on generation export capture.
 
-## Scenario 1: Conversation title semantics
+## Scenario 1: Sync roundtrip semantics
+
+### Setup
+
+- Use the SDK's sync generation entry point.
+- Record one representative normalized generation through the public API.
+- Use gRPC ingest capture for the reference assertion path.
+
+### Expected behavior
+
+- Assert proto field `mode = GENERATION_MODE_SYNC`.
+- Assert proto field `operation_name = "generateText"`.
+- Assert proto field `conversation_id` preserves the explicit conversation ID.
+- Assert proto field `agent_name` preserves the resolved agent name.
+- Assert proto field `agent_version` preserves the resolved agent version.
+- Assert proto field `trace_id` matches the finished generation span trace ID.
+- Assert proto field `span_id` matches the finished generation span span ID.
+- Assert proto request and response content preserves text, thinking, tool call, and tool result parts.
+- Assert proto request controls preserve `max_tokens`, `temperature`, `top_p`, `tool_choice`, and `thinking_enabled`.
+- Assert proto usage preserves input/output/total/cache read/cache write/cache creation/reasoning token counts when the SDK supports those counters.
+- Assert proto stop reason, tags, metadata, and artifacts are preserved.
+- Assert span attr `gen_ai.operation.name = "generateText"`.
+- Assert metric `gen_ai.client.operation.duration` has data.
+- Assert metric `gen_ai.client.token.usage` has data.
+- Assert metric `gen_ai.client.time_to_first_token` absent.
+
+## Scenario 2: Conversation title semantics
 
 ### Setup matrix
 
@@ -134,7 +167,7 @@ Additional scenario-family invariants:
 - Assert proto metadata `sigil.conversation.title` equals the resolved title when present.
 - Assert proto metadata `sigil.conversation.title` is absent when the resolved title is empty.
 
-## Scenario 2: User ID semantics
+## Scenario 3: User ID semantics
 
 ### Setup matrix
 
@@ -152,7 +185,7 @@ Additional scenario-family invariants:
 - Assert span attr `user.id` equals the resolved user ID.
 - Assert proto metadata `sigil.user.id` equals the resolved user ID.
 
-## Scenario 3: Agent identity semantics
+## Scenario 4: Agent identity semantics
 
 ### Setup matrix
 
@@ -216,7 +249,7 @@ Gemini generate-content conformance covers:
 - streaming mapping of accumulated `ThinkingPart`, tool calls, text output, usage, stop reason, and request/tools/provider-event artifacts
 - wrapper error semantics for provider failures and mapper failures
 
-## Scenario 4: Streaming mode semantics and TTFT metrics
+## Scenario 5: Streaming mode semantics and TTFT metrics
 
 ### Setup
 
@@ -233,7 +266,7 @@ Gemini generate-content conformance covers:
 - Assert the exported output preserves the stitched assistant text.
 - Assert the recorded span name is `streamText <model>`.
 
-## Scenario 5: Tool execution semantics
+## Scenario 6: Tool execution semantics
 
 ### Setup
 
@@ -247,7 +280,7 @@ Gemini generate-content conformance covers:
 - Assert no generation export.
 - Assert span attrs for tool name, tool call ID, tool type, tool call arguments, tool call result, conversation title, agent name, and agent version.
 
-## Scenario 6: Embedding semantics
+## Scenario 7: Embedding semantics
 
 ### Setup
 
@@ -263,7 +296,7 @@ Gemini generate-content conformance covers:
 - Assert no generation export.
 - Assert span attrs for agent identity, embedding input count, and embedding dimension count.
 
-## Scenario 7: Validation and error semantics
+## Scenario 8: Validation and error semantics
 
 ### Setup matrix
 
@@ -279,7 +312,7 @@ Gemini generate-content conformance covers:
 - Provider call errors record span attr `error.type = "provider_call_error"`.
 - Provider call errors export proto field `call_error` and metadata key `call_error` with the provider error message.
 
-## Scenario 8: Rating submission semantics
+## Scenario 9: Rating submission semantics
 
 ### Setup
 
@@ -292,7 +325,7 @@ Gemini generate-content conformance covers:
 - Assert the request body preserves rating ID, rating value, comment, and metadata fields.
 - Assert the SDK parses and returns the rating response payload.
 
-## Scenario 9: Shutdown flush semantics
+## Scenario 10: Shutdown flush semantics
 
 ### Setup
 
