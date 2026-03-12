@@ -409,7 +409,12 @@ export default function GenerationPicker({
           )}
           {detail.has_more && (
             <div className={styles.empty}>
-              <Button variant="secondary" size="sm" onClick={() => void handleLoadMoreDetail()} disabled={loadingMoreDetail}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void handleLoadMoreDetail()}
+                disabled={loadingMoreDetail}
+              >
                 {loadingMoreDetail ? 'Loading…' : 'Load more generations'}
               </Button>
             </div>
