@@ -297,14 +297,20 @@ export default function GenerationPicker({
       return;
     }
 
+    const targetConversationId = detail.conversation_id;
     setLoadingMoreDetail(true);
     setDetailError('');
     try {
-      const nextPage = await convDs.getConversationDetail(detail.conversation_id, {
+      const nextPage = await convDs.getConversationDetail(targetConversationId, {
         limit: DETAIL_PAGE_SIZE,
         cursor: detail.next_cursor,
       });
-      setDetail((current) => (current ? mergeConversationDetailPages(current, nextPage) : nextPage));
+      setDetail((current) => {
+        if (!current || current.conversation_id !== targetConversationId) {
+          return current;
+        }
+        return mergeConversationDetailPages(current, nextPage);
+      });
     } catch {
       setDetailError('Failed to load older generations. Retry to continue browsing.');
     } finally {
