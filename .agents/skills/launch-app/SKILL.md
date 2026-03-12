@@ -1,54 +1,82 @@
 ---
 name: launch-app
-description: Launch the local Sigil stack for runtime validation.
+description: Launch or reuse a worktree-safe local Sigil stack for runtime validation.
 ---
 
 # Launch App
 
-1. Ensure the repo has an env file:
+Prefer the worktree-safe stack for app validation. It derives a unique Compose
+project name from the checkout, bootstraps `.env` from a shared local source,
+and avoids fixed host-port collisions by using OrbStack DNS.
+
+1. Print the derived URLs for the current checkout:
    ```bash
-   [ -f .env ] || cp .env.example .env
+   ./scripts/run-sigil-worktree.sh url
    ```
 
-2. Start the local stack in detached mode:
+2. Start the worktree stack if it is not already running:
    ```bash
-   DEVELOPMENT=true docker compose --profile core up --build --remove-orphans -d
+   mise run up:worktree:detached
    ```
 
-3. Verify the API and Grafana are reachable:
+3. Wait for the first cold start to finish. `plugin-precache` may take a bit on
+   an empty volume, and Grafana can lag the API by another few seconds.
+
+4. Verify the stack:
    ```bash
-   curl -sf http://localhost:8080/healthz
-   curl -sf http://localhost:3000 >/dev/null
+   ./scripts/run-sigil-worktree.sh ps
+   curl -sf http://sigil.<worktree>.orb.local/healthz
+   curl -I http://grafana.<worktree>.orb.local/login
    ```
 
-4. For UI validation, open:
-   - `http://localhost:3000/a/grafana-sigil-app/conversations`
-
-5. If plugin queries fail in Grafana, sign in with:
+5. Sign in to Grafana before validating Sigil UI behavior:
    - username: `admin`
    - password: `admin`
    - skip the forced password change prompt
 
-6. If Grafana does not respond on `:3000`, apply the documented startup workaround inside the Grafana container:
+6. For UI validation, open:
+   - `http://grafana.<worktree>.orb.local/a/grafana-sigil-app/conversations`
+
+7. If the page is empty and you need sample data, start the lightweight traffic
+   sidecar:
    ```bash
-   supervisorctl stop delve
+   mise run up:worktree:traffic-lite
+   ```
+
+8. To capture a screenshot after login succeeds:
+   ```bash
+   mise run capture:ui-proof
+   ```
+   This signs in with `admin` / `admin` when needed and writes a PNG to
+   `output/playwright/`.
+
+9. For feature-level visual proof across several interactions, use the
+   `ui-proof` skill instead of stopping at a single smoke screenshot.
+
+10. If Grafana does not respond, apply the documented startup
+   workaround inside the Grafana container:
+   ```bash
+   docker compose --project-name "$(basename "$PWD")" exec grafana supervisorctl stop delve
    kill -CONT <grafana-bash-pid>
    ```
 
-7. If validation needs live synthetic conversation data, restart with the traffic profile:
+11. For debugging:
    ```bash
-   DEVELOPMENT=true docker compose --profile core --profile traffic up --build --remove-orphans -d
-   ```
-   Wait about 30 seconds for conversations to appear in the UI.
-
-8. For debugging:
-   ```bash
-   docker compose logs -f grafana
-   docker compose logs -f sigil
-   docker compose logs -f plugin
+   mise run logs:worktree
    ```
 
-9. Stop the stack when validation is done:
+12. Stop the traffic sidecar when you no longer need sample data:
    ```bash
-   docker compose down
+   mise run down:worktree:traffic-lite
    ```
+
+13. Stop the worktree stack when you are done:
+   ```bash
+   mise run down:worktree
+   ```
+
+14. If you are done with the whole workspace and want to remove all Compose
+    resources for it, including named volumes:
+    ```bash
+    mise run down:worktree:destroy
+    ```

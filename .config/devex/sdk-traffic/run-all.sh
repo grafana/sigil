@@ -13,6 +13,7 @@ set_default_env() {
   export SIGIL_TRAFFIC_STREAM_PERCENT="${SIGIL_TRAFFIC_STREAM_PERCENT:-30}"
   export SIGIL_TRAFFIC_CONVERSATIONS="${SIGIL_TRAFFIC_CONVERSATIONS:-3}"
   export SIGIL_TRAFFIC_ROTATE_TURNS="${SIGIL_TRAFFIC_ROTATE_TURNS:-24}"
+  export SIGIL_TRAFFIC_EMITTERS="${SIGIL_TRAFFIC_EMITTERS:-go,js,python,java,dotnet}"
   export SIGIL_TRAFFIC_CUSTOM_PROVIDER="${SIGIL_TRAFFIC_CUSTOM_PROVIDER:-mistral}"
   export SIGIL_TRAFFIC_GEN_HTTP_ENDPOINT="${SIGIL_TRAFFIC_GEN_HTTP_ENDPOINT:-http://sigil:8080/api/v1/generations:export}"
   export SIGIL_TRAFFIC_GEN_GRPC_ENDPOINT="${SIGIL_TRAFFIC_GEN_GRPC_ENDPOINT:-sigil:4317}"
@@ -62,6 +63,22 @@ on_signal() {
 }
 
 trap on_signal INT TERM
+
+normalize_emitters() {
+  SIGIL_TRAFFIC_EMITTERS="$(
+    printf '%s' "${SIGIL_TRAFFIC_EMITTERS}" \
+      | tr '[:upper:]' '[:lower:]' \
+      | tr -d '[:space:]'
+  )"
+  export SIGIL_TRAFFIC_EMITTERS
+}
+
+emitter_enabled() {
+  case ",${SIGIL_TRAFFIC_EMITTERS}," in
+    *,"$1",*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 wait_for_sigil() {
   local attempts=0
@@ -248,24 +265,43 @@ run_one_shot_assertions() {
 
 main() {
   set_default_env
-  log "runtime defaults interval_ms=${SIGIL_TRAFFIC_INTERVAL_MS} stream_percent=${SIGIL_TRAFFIC_STREAM_PERCENT} conversations=${SIGIL_TRAFFIC_CONVERSATIONS} rotate_turns=${SIGIL_TRAFFIC_ROTATE_TURNS} oneshot=${SIGIL_TRAFFIC_ONESHOT} max_cycles=${SIGIL_TRAFFIC_MAX_CYCLES}"
+  normalize_emitters
+  log "runtime defaults interval_ms=${SIGIL_TRAFFIC_INTERVAL_MS} stream_percent=${SIGIL_TRAFFIC_STREAM_PERCENT} conversations=${SIGIL_TRAFFIC_CONVERSATIONS} rotate_turns=${SIGIL_TRAFFIC_ROTATE_TURNS} emitters=${SIGIL_TRAFFIC_EMITTERS} oneshot=${SIGIL_TRAFFIC_ONESHOT} max_cycles=${SIGIL_TRAFFIC_MAX_CYCLES}"
   wait_for_sigil
-  setup_node
-  setup_python
-  setup_java
-  setup_dotnet
+  if emitter_enabled "js"; then
+    setup_node
+  fi
+  if emitter_enabled "python"; then
+    setup_python
+  fi
+  if emitter_enabled "java"; then
+    setup_java
+  fi
+  if emitter_enabled "dotnet"; then
+    setup_dotnet
+  else
+    DOTNET_ENABLED=0
+  fi
 
   if [[ "${SIGIL_TRAFFIC_ONESHOT}" == "1" || "${SIGIL_TRAFFIC_ONESHOT}" == "true" ]]; then
-    if (( DOTNET_ENABLED != 1 )); then
+    if emitter_enabled "dotnet" && (( DOTNET_ENABLED != 1 )); then
       log "one-shot mode requires dotnet emitter availability"
       return 1
     fi
   fi
 
-  start_child "go" "cd '${ROOT_DIR}' && go run ./sdks/go/cmd/devex-emitter"
-  start_child "js" "cd '${ROOT_DIR}/sdks/js' && node ./scripts/devex-emitter.mjs"
-  start_child "python" "cd '${ROOT_DIR}' && ${PYTHON_VENV}/bin/python ./sdks/python/scripts/devex_emitter.py"
-  start_child "java" "cd '${ROOT_DIR}/sdks/java' && ./gradlew --no-daemon :devex-emitter:run"
+  if emitter_enabled "go"; then
+    start_child "go" "cd '${ROOT_DIR}' && go run ./sdks/go/cmd/devex-emitter"
+  fi
+  if emitter_enabled "js"; then
+    start_child "js" "cd '${ROOT_DIR}/sdks/js' && node ./scripts/devex-emitter.mjs"
+  fi
+  if emitter_enabled "python"; then
+    start_child "python" "cd '${ROOT_DIR}' && ${PYTHON_VENV}/bin/python ./sdks/python/scripts/devex_emitter.py"
+  fi
+  if emitter_enabled "java"; then
+    start_child "java" "cd '${ROOT_DIR}/sdks/java' && ./gradlew --no-daemon :devex-emitter:run"
+  fi
   if (( DOTNET_ENABLED == 1 )); then
     start_child "dotnet" "cd '${ROOT_DIR}' && dotnet run --no-build --project ./sdks/dotnet/examples/Grafana.Sigil.DevExEmitter/Grafana.Sigil.DevExEmitter.csproj"
   fi

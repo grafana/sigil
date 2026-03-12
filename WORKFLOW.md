@@ -1,7 +1,9 @@
 ---
 tracker:
   kind: linear
-  project_slug: "symphony-b67142b9dd44"
+  # Template only. Render WORKFLOW.local.md with:
+  #   ./scripts/render-symphony-workflow.sh <your-linear-project-slug>
+  project_slug: "__SYMPHONY_LINEAR_PROJECT_SLUG__"
   active_states:
     - Todo
     - In Progress
@@ -20,12 +22,15 @@ workspace:
 hooks:
   after_create: |
     git clone --depth 1 git@github.com:grafana/sigil.git .
-    [ -f .env ] || cp .env.example .env
+    ./scripts/bootstrap-env.sh
     mise trust
     mise install
     mise run doctor:go
     mise run deps
   before_remove: |
+    if [ -x ./scripts/run-sigil-worktree.sh ]; then
+      ./scripts/run-sigil-worktree.sh destroy >/dev/null 2>&1 || true
+    fi
     branch=$(git branch --show-current 2>/dev/null)
     if [ -n "$branch" ] && command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
       gh pr list --head "$branch" --state open --json number --jq '.[].number' | while read -r pr; do
@@ -33,7 +38,7 @@ hooks:
       done
     fi
 agent:
-  max_concurrent_agents: 10
+  max_concurrent_agents: 3
   max_turns: 20
 codex:
   command: codex --config shell_environment_policy.inherit=all --config model_reasoning_effort=xhigh --model gpt-5.3-codex app-server
@@ -90,6 +95,10 @@ The agent talks to Linear via the `linear_graphql` tool injected by Symphony's a
 - Treat a single persistent Linear comment as the source of truth for progress.
 - Use that single workpad comment for all progress and handoff notes; do not post separate "done"/summary comments.
 - Treat any ticket-authored `Validation`, `Test Plan`, or `Testing` section as non-negotiable acceptance input: mirror it in the workpad and execute it before considering the work complete.
+- Small repo-local self-improvements are allowed when they materially improve
+  the current task or future Symphony runs in this repo. Examples: skill fixes,
+  `WORKFLOW`/bootstrap fixes, cleanup hooks, runtime validation helpers, and
+  docs needed for the improved workflow.
 - When meaningful out-of-scope improvements are discovered during execution,
   file a separate Linear issue instead of expanding scope. The follow-up issue
   must include a clear title, description, and acceptance criteria, be placed in
@@ -107,6 +116,7 @@ The agent talks to Linear via the `linear_graphql` tool injected by Symphony's a
 - `push`: keep remote branch current and publish updates.
 - `pull`: keep branch updated with latest `origin/main` before handoff.
 - `land`: when ticket reaches `Merging`, use the `land` skill, which includes the merge loop.
+- `ui-proof`: capture feature-level UI proof and embed screenshots in the Linear workpad for app-touching changes.
 
 ## Status map
 
@@ -213,13 +223,15 @@ Use this only when completion is blocked by missing required tools or missing au
     - Update the workpad immediately after each meaningful milestone (for example: reproduction complete, code change landed, validation run, review feedback addressed).
     - Never leave completed work unchecked in the plan.
     - For tickets that started as `Todo` with an attached PR, run the full PR feedback sweep protocol immediately after kickoff and before new feature work.
+    - If you make a repo-local self-improvement during the task, record it in
+      the workpad as `Self-improvement` with a short reason.
 5.  Run validation/tests required for the scope.
     - Mandatory gate: execute all ticket-provided `Validation`/`Test Plan`/ `Testing` requirements when present; treat unmet items as incomplete work.
     - Prefer a targeted proof that directly demonstrates the behavior you changed.
     - You may make temporary local proof edits to validate assumptions (for example: tweak a local build input for `make`, or hardcode a UI account / response path) when this increases confidence.
     - Revert every temporary proof edit before commit/push.
     - Document these temporary proof steps and outcomes in the workpad `Validation`/`Notes` sections so reviewers can follow the evidence.
-    - If app-touching, run runtime validation and capture screenshots/recordings. Upload media to Linear using the `linear` skill's `fileUpload` flow and embed in the workpad comment.
+    - If app-touching, use the `ui-proof` skill to capture the changed user flow, usually with multiple screenshots. Upload media to Linear and embed it in the workpad comment before handoff.
 6.  Re-check all acceptance criteria and close any gaps.
 7.  Before every `git push` attempt, run the required validation for your scope and confirm it passes; if it fails, address issues and rerun until green, then commit and push changes.
 8.  Attach PR URL to the issue (prefer attachment; use the workpad comment only if attachment is unavailable).
@@ -285,6 +297,13 @@ Use this only when completion is blocked by missing required tools or missing au
 - Use exactly one persistent workpad comment (`## Codex Workpad`) per issue.
 - If comment editing is unavailable in-session, use the update script. Only report blocked if both `linear_graphql` editing and script-based editing are unavailable.
 - Temporary proof edits are allowed only for local verification and must be reverted before commit.
+- Repo-local self-improvement is allowed only when all of these are true:
+  - it stays within this repository,
+  - it is small and directly useful to current or future Symphony execution,
+  - it does not materially delay the ticket's primary outcome,
+  - it is included in the same PR only when tightly coupled to the task.
+- If the improvement is larger, independent, or would distract from the current
+  issue, create a separate Backlog follow-up instead of expanding scope.
 - If out-of-scope improvements are found, create a separate Backlog issue rather
   than expanding current scope, and include a clear
   title/description/acceptance criteria, same-project assignment, a `related`

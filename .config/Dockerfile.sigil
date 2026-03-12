@@ -7,4 +7,6 @@ ENV GOMODCACHE /opt/go-cache/mod
 
 RUN go install github.com/air-verse/air@v1.62.0
 
+EXPOSE 8080 4317
+
 CMD ["air", "-c", ".air.toml"]
