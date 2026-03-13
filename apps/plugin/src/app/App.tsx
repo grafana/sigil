@@ -12,6 +12,7 @@ const DashboardPage = React.lazy(() => import('../pages/DashboardPage'));
 const TutorialPage = React.lazy(() => import('../pages/TutorialPage'));
 const ConversationsBrowserPage = React.lazy(() => import('../pages/ConversationsBrowserPage'));
 const ConversationExplorePage = React.lazy(() => import('../pages/ConversationExplorePage'));
+const SavedConversationsPage = React.lazy(() => import('../pages/SavedConversationsPage'));
 const AgentsPage = React.lazy(() => import('../pages/AgentsPage'));
 const AgentDetailPage = React.lazy(() => import('../pages/AgentDetailPage'));
 const EvaluationPage = React.lazy(() => import('../pages/EvaluationPage'));
@@ -113,6 +114,14 @@ export default function App(props: AppRootProps) {
           element={
             <div className={styles.conversationsRouteContainer}>
               <ConversationsBrowserPage />
+            </div>
+          }
+        />
+        <Route
+          path={ROUTES.ConversationsSaved}
+          element={
+            <div className={styles.conversationsRouteContainer}>
+              <SavedConversationsPage />
             </div>
           }
         />

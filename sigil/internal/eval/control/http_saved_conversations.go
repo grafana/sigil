@@ -29,11 +29,16 @@ func (s *SavedConversationService) handleSavedConversations(w http.ResponseWrite
 
 	switch req.Method {
 	case http.MethodPost:
+		actorID, ok := actorIDFromRequest(w, req)
+		if !ok {
+			return
+		}
 		var body SaveConversationRequest
 		if err := decodeJSONBody(req, &body); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		body.SavedBy = actorID
 		created, err := s.SaveConversation(req.Context(), tenantID, body)
 		if err != nil {
 			writeControlWriteError(w, err)
@@ -52,9 +57,15 @@ func (s *SavedConversationService) handleSavedConversations(w http.ResponseWrite
 			writeControlWriteError(w, err)
 			return
 		}
+		totalCount, err := s.CountSavedConversations(req.Context(), tenantID, source)
+		if err != nil {
+			writeControlWriteError(w, err)
+			return
+		}
 		writeJSON(w, http.StatusOK, map[string]any{
 			"items":       items,
 			"next_cursor": formatCursor(nextCursor),
+			"total_count": totalCount,
 		})
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -135,12 +146,17 @@ func (s *SavedConversationService) handleCreateManualConversation(w http.Respons
 	if !ok {
 		return
 	}
+	actorID, ok := actorIDFromRequest(w, req)
+	if !ok {
+		return
+	}
 
 	var body CreateManualConversationRequest
 	if err := decodeJSONBody(req, &body); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	body.SavedBy = actorID
 	created, err := s.CreateManualConversation(req.Context(), tenantID, body)
 	if err != nil {
 		writeControlWriteError(w, err)

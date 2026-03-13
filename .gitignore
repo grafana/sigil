@@ -52,6 +52,9 @@ __pycache__/
 /playwright/.auth/
 /output/playwright/
 
+# superpowers brainstorm artifacts
+.superpowers/
+
 # editor/OS
 .DS_Store
 .idea/

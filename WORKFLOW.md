@@ -299,6 +299,12 @@ Use this only when completion is blocked by missing required tools or missing au
 - Use exactly one persistent workpad comment (`## Codex Workpad`) per issue.
 - If comment editing is unavailable in-session, use the update script. Only report blocked if both `linear_graphql` editing and script-based editing are unavailable.
 - Temporary proof edits are allowed only for local verification and must be reverted before commit.
+- Do not infer checkout/bootstrap failure from a missing or empty current
+  `workspace_path` alone. First verify whether the expected workspace exists on
+  disk, whether prior session/workpad evidence references a workspace, and
+  whether Symphony logs show `after_create` or Codex startup for the issue.
+  Treat missing `workspace_path` as missing runtime metadata unless those checks
+  prove bootstrap actually failed.
 - Repo-local self-improvement is allowed only when all of these are true:
   - it stays within this repository,
   - it is small and directly useful to current or future Symphony execution,

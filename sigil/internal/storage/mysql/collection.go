@@ -230,6 +230,11 @@ func (s *WALStore) ListCollectionMembers(ctx context.Context, tenantID, collecti
 		}
 		out = append(out, entity)
 	}
+
+	if err := enrichSavedConversationsStats(ctx, s.db, tenantID, out); err != nil {
+		return nil, "", err
+	}
+
 	return out, nextCursor, nil
 }
 

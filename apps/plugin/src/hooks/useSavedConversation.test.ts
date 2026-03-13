@@ -14,6 +14,9 @@ function createSavedConversation(overrides?: Partial<SavedConversation>): SavedC
     saved_by: 'user',
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
+    generation_count: 0,
+    total_tokens: 0,
+    agent_names: [],
     ...overrides,
   };
 }
