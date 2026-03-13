@@ -63,7 +63,7 @@
     "storybook": "^10.2.10",
     "style-loader": "^4.0.0",
     "swc-loader": "^0.2.0",
-    "terser-webpack-plugin": "^5.3.16",
+    "terser-webpack-plugin": "^5.4.0",
     "ts-node": "^10.9.0",
     "tslib": "^2.8.1",
     "typescript": "5.9.3",
