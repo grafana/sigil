@@ -201,8 +201,8 @@ describe('DashboardPage', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Tools')).toBeInTheDocument();
-      expect(screen.getByText('Open full tools page')).toBeInTheDocument();
+      expect(screen.getByTestId('panel-Tool executions over time')).toBeInTheDocument();
+      expect(screen.getByText('No execute_tool runtime data matched the current filters.')).toBeInTheDocument();
     });
   });
 });

@@ -23,7 +23,6 @@ const LABEL_FILTER_ROW_STORAGE_KEY = 'sigil.dashboard.labelFilterRowOpen';
 const TOOL_BREAKDOWN_OPTIONS: Array<SelectableValue<BreakdownDimension>> = [
   { label: 'None', value: 'none' },
   { label: 'Provider', value: 'provider' },
-  { label: 'Model', value: 'model' },
   { label: 'Agent', value: 'agent' },
   { label: 'Tool', value: 'tool' },
 ];
@@ -57,6 +56,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
 
   const from = useMemo(() => Math.floor(timeRange.from.valueOf() / 1000), [timeRange]);
   const to = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);
+  const effectiveBreakdownBy = tab === 'tools' && breakdownBy === 'model' ? 'tool' : breakdownBy;
 
   const { providerOptions, modelOptions, agentOptions, labelKeyOptions, labelsLoading } = useCascadingFilterOptions(
     dataSource,
@@ -77,7 +77,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
       <DashboardFilterBar
         timeRange={timeRange}
         filters={filters}
-        breakdownBy={breakdownBy}
+        breakdownBy={effectiveBreakdownBy}
         providerOptions={providerOptions}
         modelOptions={modelOptions}
         agentOptions={agentOptions}
@@ -87,6 +87,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         from={from}
         to={to}
         breakdownOptions={tab === 'tools' ? TOOL_BREAKDOWN_OPTIONS : undefined}
+        hideModelFilter={tab === 'tools'}
         showLabelFilters={tab !== 'evaluation'}
         showLabelFilterRow={showLabelFilterRow}
         onLabelFilterRowOpenChange={setShowLabelFilterRow}
@@ -106,7 +107,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         <DashboardGrid
           dataSource={dataSource}
           filters={filters}
-          breakdownBy={breakdownBy}
+          breakdownBy={effectiveBreakdownBy}
           from={from}
           to={to}
           timeRange={timeRange}

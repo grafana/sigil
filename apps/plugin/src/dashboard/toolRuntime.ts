@@ -14,6 +14,9 @@ function appendLabelFilters(filters: DashboardFilters, extraFilters: LabelFilter
 export function sanitizeToolAnalyticsFilters(filters: DashboardFilters): DashboardFilters {
   return {
     ...filters,
+    // execute_tool metrics reuse the request-model label to carry the tool name,
+    // so model filters cannot produce meaningful results on tool analytics pages.
+    models: [],
     labelFilters: filters.labelFilters.filter((filter) => filter.key.trim() !== TOOL_METRIC_LABEL),
   };
 }
