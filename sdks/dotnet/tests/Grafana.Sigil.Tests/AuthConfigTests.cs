@@ -58,6 +58,22 @@ public sealed class AuthConfigTests
             {
                 new AuthConfig
                 {
+                    Mode = ExportAuthMode.None,
+                    BasicUser = "user",
+                },
+                "generation auth mode 'none' does not allow credentials"
+            },
+            {
+                new AuthConfig
+                {
+                    Mode = ExportAuthMode.None,
+                    BasicPassword = "secret",
+                },
+                "generation auth mode 'none' does not allow credentials"
+            },
+            {
+                new AuthConfig
+                {
                     Mode = ExportAuthMode.Basic,
                 },
                 "generation auth mode 'basic' requires basic_password"

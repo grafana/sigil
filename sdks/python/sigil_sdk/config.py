@@ -142,8 +142,10 @@ def _resolve_export_headers(headers: dict[str, str], auth: AuthConfig, label: st
     out = dict(headers)
 
     if mode == "none":
-        if tenant_id or bearer_token:
-            raise ValueError(f"{label} auth mode 'none' does not allow tenant_id or bearer_token")
+        basic_user = auth.basic_user.strip()
+        basic_password = auth.basic_password.strip()
+        if tenant_id or bearer_token or basic_user or basic_password:
+            raise ValueError(f"{label} auth mode 'none' does not allow credentials")
         return out
     if mode == "tenant":
         if not tenant_id:

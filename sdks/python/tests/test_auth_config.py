@@ -92,6 +92,8 @@ def test_resolve_config_basic_auth_explicit_header_wins() -> None:
         AuthConfig(mode="bearer"),
         AuthConfig(mode="none", tenant_id="tenant-a"),
         AuthConfig(mode="none", bearer_token="token"),
+        AuthConfig(mode="none", basic_user="user"),
+        AuthConfig(mode="none", basic_password="secret"),
         AuthConfig(mode="tenant", tenant_id="tenant-a", bearer_token="token"),
         AuthConfig(mode="bearer", tenant_id="tenant-a", bearer_token="token"),
         AuthConfig(mode="unknown", tenant_id="tenant-a"),

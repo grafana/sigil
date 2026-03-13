@@ -23,8 +23,10 @@ final class AuthHeaders {
         String bearer = auth == null ? "" : auth.getBearerToken().trim();
 
         if (mode == AuthMode.NONE) {
-            if (!tenantId.isEmpty() || !bearer.isEmpty()) {
-                throw new IllegalArgumentException(label + " auth mode 'none' does not allow tenantId or bearerToken");
+            String basicUser = auth == null ? "" : auth.getBasicUser().trim();
+            String basicPassword = auth == null ? "" : auth.getBasicPassword().trim();
+            if (!tenantId.isEmpty() || !bearer.isEmpty() || !basicUser.isEmpty() || !basicPassword.isEmpty()) {
+                throw new IllegalArgumentException(label + " auth mode 'none' does not allow credentials");
             }
             return out;
         }
