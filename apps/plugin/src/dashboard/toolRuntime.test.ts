@@ -1,4 +1,9 @@
-import { sanitizeToolAnalyticsFilters, TOOL_METRIC_LABEL } from './toolRuntime';
+import {
+  normalizeToolAnalyticsBreakdown,
+  resolveToolAnalyticsStatBreakdown,
+  sanitizeToolAnalyticsFilters,
+  TOOL_METRIC_LABEL,
+} from './toolRuntime';
 
 describe('sanitizeToolAnalyticsFilters', () => {
   it('drops model filters and tool metric labels from tool analytics state', () => {
@@ -18,5 +23,21 @@ describe('sanitizeToolAnalyticsFilters', () => {
       agentNames: ['assistant'],
       labelFilters: [{ key: 'service_name', operator: '=', value: 'sigil' }],
     });
+  });
+});
+
+describe('normalizeToolAnalyticsBreakdown', () => {
+  it('maps stale model breakdowns onto tool breakdowns', () => {
+    expect(normalizeToolAnalyticsBreakdown('model')).toBe('tool');
+    expect(normalizeToolAnalyticsBreakdown('tool')).toBe('tool');
+    expect(normalizeToolAnalyticsBreakdown('provider')).toBe('provider');
+  });
+});
+
+describe('resolveToolAnalyticsStatBreakdown', () => {
+  it('defaults tool stat panels onto tool grouping', () => {
+    expect(resolveToolAnalyticsStatBreakdown('none')).toBe('tool');
+    expect(resolveToolAnalyticsStatBreakdown('model')).toBe('tool');
+    expect(resolveToolAnalyticsStatBreakdown('agent')).toBe('agent');
   });
 });

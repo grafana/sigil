@@ -14,6 +14,7 @@ import { DashboardEvalGrid } from '../components/dashboard/DashboardEvalGrid';
 import { DashboardToolsGrid } from '../components/dashboard/DashboardToolsGrid';
 import { useCascadingFilterOptions } from '../hooks/useCascadingFilterOptions';
 import { LandingTopBar } from '../components/landing/LandingTopBar';
+import { normalizeToolAnalyticsBreakdown } from '../dashboard/toolRuntime';
 
 type DashboardPageProps = {
   dataSource?: DashboardDataSource;
@@ -56,7 +57,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
 
   const from = useMemo(() => Math.floor(timeRange.from.valueOf() / 1000), [timeRange]);
   const to = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);
-  const effectiveBreakdownBy = tab === 'tools' && breakdownBy === 'model' ? 'tool' : breakdownBy;
+  const effectiveBreakdownBy = tab === 'tools' ? normalizeToolAnalyticsBreakdown(breakdownBy) : breakdownBy;
 
   const { providerOptions, modelOptions, agentOptions, labelKeyOptions, labelsLoading } = useCascadingFilterOptions(
     dataSource,

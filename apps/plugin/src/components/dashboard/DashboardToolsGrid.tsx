@@ -11,6 +11,8 @@ import type { DashboardDataSource } from '../../dashboard/api';
 import type { BreakdownDimension, DashboardFilters } from '../../dashboard/types';
 import {
   buildExecuteToolMetricFilters,
+  normalizeToolAnalyticsBreakdown,
+  resolveToolAnalyticsStatBreakdown,
   sanitizeToolAnalyticsFilters,
   TOOL_METRIC_LABEL,
 } from '../../dashboard/toolRuntime';
@@ -79,6 +81,8 @@ export function DashboardToolsGrid({
   const [sortDirection, setSortDirection] = useState<ToolSortDirection>('desc');
   const sanitizedFilters = useMemo(() => sanitizeToolAnalyticsFilters(filters), [filters]);
   const metricFilters = useMemo(() => buildExecuteToolMetricFilters(sanitizedFilters), [sanitizedFilters]);
+  const chartBreakdownBy = useMemo(() => normalizeToolAnalyticsBreakdown(breakdownBy), [breakdownBy]);
+  const statsBreakdownBy = useMemo(() => resolveToolAnalyticsStatBreakdown(breakdownBy), [breakdownBy]);
   const windowSize = useMemo(() => Math.max(0, to - from), [from, to]);
   const prevFrom = useMemo(() => Math.max(0, from - windowSize), [from, windowSize]);
   const prevTo = useMemo(() => from, [from]);
@@ -88,21 +92,20 @@ export function DashboardToolsGrid({
   const interval = useMemo(() => computeRateInterval(step), [step]);
   const comparisonLabel = useMemo(() => `previous ${formatWindowLabel(windowSize)}`, [windowSize]);
   const breakdownLabel = useMemo(() => {
-    switch (breakdownBy) {
+    switch (statsBreakdownBy) {
       case 'agent':
         return 'gen_ai_agent_name';
       case 'provider':
         return 'gen_ai_provider_name';
       case 'model':
       case 'tool':
-        return TOOL_METRIC_LABEL;
       case 'none':
       default:
         return TOOL_METRIC_LABEL;
     }
-  }, [breakdownBy]);
+  }, [statsBreakdownBy]);
   const breakdownTitle = useMemo(() => {
-    switch (breakdownBy) {
+    switch (statsBreakdownBy) {
       case 'agent':
         return 'Top agents';
       case 'provider':
@@ -114,9 +117,9 @@ export function DashboardToolsGrid({
       default:
         return 'Top tools';
     }
-  }, [breakdownBy]);
+  }, [statsBreakdownBy]);
   const errorBreakdownTitle = useMemo(() => {
-    switch (breakdownBy) {
+    switch (statsBreakdownBy) {
       case 'agent':
         return 'Agents with errors';
       case 'provider':
@@ -128,9 +131,9 @@ export function DashboardToolsGrid({
       default:
         return 'Most errors';
     }
-  }, [breakdownBy]);
+  }, [statsBreakdownBy]);
   const latencyBreakdownTitle = useMemo(() => {
-    switch (breakdownBy) {
+    switch (statsBreakdownBy) {
       case 'agent':
         return 'Slowest agents (P95)';
       case 'provider':
@@ -142,7 +145,7 @@ export function DashboardToolsGrid({
       default:
         return 'Slowest tools (P95)';
     }
-  }, [breakdownBy]);
+  }, [statsBreakdownBy]);
 
   const totalExecutions = usePrometheusQuery(
     dataSource,
@@ -195,7 +198,7 @@ export function DashboardToolsGrid({
   );
   const usageOverTime = usePrometheusQuery(
     dataSource,
-    requestCountOverTimeQuery(metricFilters, `${step}s`, breakdownBy),
+    requestCountOverTimeQuery(metricFilters, `${step}s`, chartBreakdownBy),
     from,
     to,
     'range',
@@ -203,7 +206,7 @@ export function DashboardToolsGrid({
   );
   const errorRateOverTime = usePrometheusQuery(
     dataSource,
-    errorRateOverTimeQuery(metricFilters, interval, breakdownBy),
+    errorRateOverTimeQuery(metricFilters, interval, chartBreakdownBy),
     from,
     to,
     'range',
@@ -211,7 +214,7 @@ export function DashboardToolsGrid({
   );
   const latencyP95OverTime = usePrometheusQuery(
     dataSource,
-    latencyOverTimeQuery(metricFilters, interval, breakdownBy, 0.95),
+    latencyOverTimeQuery(metricFilters, interval, chartBreakdownBy, 0.95),
     from,
     to,
     'range',
@@ -219,21 +222,21 @@ export function DashboardToolsGrid({
   );
   const breakdownExecutions = usePrometheusQuery(
     dataSource,
-    totalOpsQuery(metricFilters, rangeDuration, breakdownBy),
+    totalOpsQuery(metricFilters, rangeDuration, statsBreakdownBy),
     from,
     to,
     'instant'
   );
   const breakdownErrors = usePrometheusQuery(
     dataSource,
-    totalErrorsQuery(metricFilters, rangeDuration, breakdownBy),
+    totalErrorsQuery(metricFilters, rangeDuration, statsBreakdownBy),
     from,
     to,
     'instant'
   );
   const breakdownLatencyP95 = usePrometheusQuery(
     dataSource,
-    latencyStatQuery(metricFilters, rangeDuration, breakdownBy, 0.95),
+    latencyStatQuery(metricFilters, rangeDuration, statsBreakdownBy, 0.95),
     from,
     to,
     'instant'

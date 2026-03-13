@@ -1,4 +1,4 @@
-import type { DashboardFilters, LabelFilter } from './types';
+import type { BreakdownDimension, DashboardFilters, LabelFilter } from './types';
 
 export const EXECUTE_TOOL_OPERATION = 'execute_tool';
 export const TOOL_METRIC_LABEL = 'gen_ai_request_model';
@@ -19,6 +19,15 @@ export function sanitizeToolAnalyticsFilters(filters: DashboardFilters): Dashboa
     models: [],
     labelFilters: filters.labelFilters.filter((filter) => filter.key.trim() !== TOOL_METRIC_LABEL),
   };
+}
+
+export function normalizeToolAnalyticsBreakdown(breakdownBy: BreakdownDimension): BreakdownDimension {
+  return breakdownBy === 'model' ? 'tool' : breakdownBy;
+}
+
+export function resolveToolAnalyticsStatBreakdown(breakdownBy: BreakdownDimension): BreakdownDimension {
+  const normalized = normalizeToolAnalyticsBreakdown(breakdownBy);
+  return normalized === 'none' ? 'tool' : normalized;
 }
 
 export function buildExecuteToolMetricFilters(filters: DashboardFilters): DashboardFilters {
