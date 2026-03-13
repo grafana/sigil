@@ -41,8 +41,16 @@ function resolveAuth(auth: SigilAuthConfig): ResolvedTransport {
   }
 }
 
+const GENERATION_EXPORT_PATH = "/api/v1/generations:export";
+
 export function createSigilClient(config: SigilConfig): SigilClient | null {
   try {
+    if (!config.endpoint.includes(GENERATION_EXPORT_PATH)) {
+      console.warn(
+        `[sigil] endpoint "${config.endpoint}" does not include "${GENERATION_EXPORT_PATH}" -- ` +
+        `the JS SDK requires the full export URL (e.g. "http://localhost:8080${GENERATION_EXPORT_PATH}")`,
+      );
+    }
     const transport = resolveAuth(config.auth);
     return new SigilClient({
       generationExport: {

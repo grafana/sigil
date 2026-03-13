@@ -79,6 +79,17 @@ export function mapOutputMessages(parts: Part[], redactor: Redactor): Message[] 
           });
         } else if (state.status === "error") {
           messages.push({
+            role: "assistant",
+            parts: [{
+              type: "tool_call",
+              toolCall: {
+                id: part.callID,
+                name: part.tool,
+                inputJSON: redactor.redact(JSON.stringify(state.input ?? {})),
+              },
+            }],
+          });
+          messages.push({
             role: "tool",
             parts: [{
               type: "tool_result",

@@ -101,6 +101,7 @@ async function handleEvent(
   try {
     if (assistantMsg.error) {
       await sigil.startGeneration(seed, async (recorder) => {
+        recorder.setResult(result);
         recorder.setCallError(mapError(assistantMsg.error!));
       });
     } else {

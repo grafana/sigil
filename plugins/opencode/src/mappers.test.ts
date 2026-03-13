@@ -123,7 +123,7 @@ describe("mapOutputMessages", () => {
     expect(result[0].parts?.[0]).toEqual({ type: "thinking", thinking: "thinking about it" });
   });
 
-  it("maps error ToolParts with is_error flag", () => {
+  it("maps error ToolParts to tool_call + tool_result with is_error flag", () => {
     const parts = [
       {
         id: "p1", sessionID: "s1", messageID: "m1", type: "tool" as const,
@@ -138,10 +138,18 @@ describe("mapOutputMessages", () => {
       },
     ] as Part[];
     const result = mapOutputMessages(parts, redactor);
-    expect(result).toHaveLength(1);
-    expect(result[0].role).toBe("tool");
-    const toolResult = (result[0].parts?.[0] as any).toolResult;
+    expect(result).toHaveLength(2);
+    expect(result[0].role).toBe("assistant");
+    expect(result[0].parts?.[0].type).toBe("tool_call");
+    const toolCall = (result[0].parts?.[0] as any).toolCall;
+    expect(toolCall.id).toBe("call-1");
+    expect(toolCall.name).toBe("bash");
+    expect(result[1].role).toBe("tool");
+    expect(result[1].parts?.[0].type).toBe("tool_result");
+    const toolResult = (result[1].parts?.[0] as any).toolResult;
+    expect(toolResult.toolCallId).toBe("call-1");
     expect(toolResult.isError).toBe(true);
+    expect(toolResult.content).toBe("command failed");
   });
 });
 
