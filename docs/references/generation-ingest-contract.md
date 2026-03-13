@@ -42,7 +42,6 @@ audience: both
 - Grafana Cloud:
   - SDK generation export uses `basic` auth mode.
   - `Authorization: Basic <base64(instance_id:api_key)>` is the standard Grafana Cloud credential format.
-  - When `tenant_id` is set, `X-Scope-OrgID` is also injected.
 - Direct generation-to-Sigil (self-hosted):
   - SDK generation export uses `tenant` auth mode and sends `X-Scope-OrgID`.
 - Split path (generation direct, traces via collector/alloy):

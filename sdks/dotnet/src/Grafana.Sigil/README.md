@@ -260,7 +260,7 @@ Per export path, supported auth modes are:
 - `ExportAuthMode.None`
 - `ExportAuthMode.Tenant` (`X-Scope-OrgID`)
 - `ExportAuthMode.Bearer` (`Authorization: Bearer <token>`)
-- `ExportAuthMode.Basic` (requires `BasicPassword` + `BasicUser` or `TenantId`, injects `Authorization: Basic <base64(user:password)>`; also injects `X-Scope-OrgID` when `TenantId` is set)
+- `ExportAuthMode.Basic` (requires `BasicPassword` + `BasicUser` or `TenantId`, injects `Authorization: Basic <base64(user:password)>`; also injects `X-Scope-OrgID` when `TenantId` is set — for self-hosted multi-tenancy only, not needed for Grafana Cloud)
 
 Explicit transport headers take precedence over auth-derived headers (`Authorization`, `X-Scope-OrgID`, case-insensitive).
 

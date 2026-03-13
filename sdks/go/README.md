@@ -133,7 +133,7 @@ Auth is configured for generation export.
 - `none`
 - `tenant` (requires `TenantID`, injects `X-Scope-OrgID`)
 - `bearer` (requires `BearerToken`, injects `Authorization: Bearer <token>`)
-- `basic` (requires `BasicPassword` + `BasicUser` or `TenantID`, injects `Authorization: Basic <base64(user:password)>`; also injects `X-Scope-OrgID` when `TenantID` is set)
+- `basic` (requires `BasicPassword` + `BasicUser` or `TenantID`, injects `Authorization: Basic <base64(user:password)>`; also injects `X-Scope-OrgID` when `TenantID` is set — for self-hosted multi-tenancy only, not needed for Grafana Cloud)
 
 Invalid combinations fail fast during `NewClient(...)`.
 

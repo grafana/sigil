@@ -298,7 +298,7 @@ Auth is resolved for `generation_export`.
 - `mode="none"`
 - `mode="tenant"` (requires `tenant_id`, injects `X-Scope-OrgID`)
 - `mode="bearer"` (requires `bearer_token`, injects `Authorization: Bearer <token>`)
-- `mode="basic"` (requires `basic_password` + `basic_user` or `tenant_id`, injects `Authorization: Basic <base64(user:password)>`; also injects `X-Scope-OrgID` when `tenant_id` is set)
+- `mode="basic"` (requires `basic_password` + `basic_user` or `tenant_id`, injects `Authorization: Basic <base64(user:password)>`; also injects `X-Scope-OrgID` when `tenant_id` is set — for self-hosted multi-tenancy only, not needed for Grafana Cloud)
 
 Invalid mode/field combinations fail fast in `resolve_config(...)`.
 

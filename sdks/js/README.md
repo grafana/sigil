@@ -271,7 +271,7 @@ Auth is configured for `generationExport`.
 - `mode: "none"`
 - `mode: "tenant"` (requires `tenantId`, injects `X-Scope-OrgID`)
 - `mode: "bearer"` (requires `bearerToken`, injects `Authorization: Bearer <token>`)
-- `mode: "basic"` (requires `basicPassword` + `basicUser` or `tenantId`, injects `Authorization: Basic <base64(user:password)>`; also injects `X-Scope-OrgID` when `tenantId` is set)
+- `mode: "basic"` (requires `basicPassword` + `basicUser` or `tenantId`, injects `Authorization: Basic <base64(user:password)>`; also injects `X-Scope-OrgID` when `tenantId` is set — for self-hosted multi-tenancy only, not needed for Grafana Cloud)
 
 Invalid mode/field combinations throw during client config resolution.
 
