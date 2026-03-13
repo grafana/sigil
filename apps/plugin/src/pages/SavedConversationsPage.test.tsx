@@ -111,7 +111,15 @@ describe('SavedConversationsPage', () => {
   });
 
   it('All saved count stays fixed when switching to a collection', async () => {
-    const ds = buildDataSource();
+    const ds = buildDataSource({
+      listSavedConversations: jest.fn(
+        async (): Promise<SavedConversationListResponse> => ({
+          items: [makeSC('s1', 'Auth flow edge case'), makeSC('s2', 'Rate limiting test')],
+          next_cursor: '',
+          total_count: 2,
+        })
+      ),
+    });
     render(
       <MemoryRouter>
         <SavedConversationsPage dataSource={ds} />
