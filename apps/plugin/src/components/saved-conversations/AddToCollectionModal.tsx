@@ -12,7 +12,7 @@ export type AddToCollectionModalProps = {
   collections: Collection[];
   dataSource: Pick<EvaluationDataSource, 'addCollectionMembers' | 'createCollection'>;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: () => Promise<void> | void;
   onCollectionCreated: (collection: Collection) => void;
 };
 
@@ -76,8 +76,7 @@ export function AddToCollectionModal({
           dataSource.addCollectionMembers(colID, { saved_ids: uniqueIDs, added_by: 'user' })
         )
       );
-      onSaved();
-      onClose();
+      await onSaved();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save');
     } finally {

@@ -1,8 +1,51 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AddToCollectionModal } from './AddToCollectionModal';
 import type { Collection } from '../../evaluation/types';
 import type { EvaluationDataSource } from '../../evaluation/api';
+
+jest.mock('@grafana/ui', () => {
+  const actual = jest.requireActual('@grafana/ui');
+
+  type Option = {
+    label: string;
+    value: string;
+  };
+
+  type MultiSelectMockProps = {
+    options: Option[];
+    value: string[];
+    onChange: (options: Option[]) => void;
+  };
+
+  const MultiSelect = ({ options, value, onChange }: MultiSelectMockProps) => (
+    <select
+      aria-label="collection-select"
+      multiple
+      value={value}
+      onChange={(event) => {
+        const selectedValues = Array.from(event.currentTarget.selectedOptions).map((option) => option.value);
+        onChange(
+          selectedValues.map((selectedValue) => {
+            const matchedOption = options.find((option) => option.value === selectedValue);
+            return { label: matchedOption?.label ?? selectedValue, value: selectedValue };
+          })
+        );
+      }}
+    >
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  );
+
+  return {
+    ...actual,
+    MultiSelect,
+  };
+});
 
 const makeCollection = (id: string, name: string): Collection => ({
   tenant_id: 'test', collection_id: id, name,
@@ -80,5 +123,35 @@ describe('AddToCollectionModal', () => {
       />
     );
     expect(screen.getByText(/create new collection/i)).toBeInTheDocument();
+  });
+
+  it('calls onSaved without calling onClose on Save', async () => {
+    const ds = buildDataSource();
+    onSaved.mockImplementation(async () => {});
+
+    render(
+      <AddToCollectionModal
+        isOpen
+        selectedSavedIDs={['s1']}
+        collections={collections}
+        dataSource={ds as unknown as EvaluationDataSource}
+        onClose={onClose}
+        onSaved={onSaved}
+        onCollectionCreated={jest.fn()}
+      />
+    );
+
+    const firstOption = screen.getByRole('option', { name: 'Regression tests' }) as HTMLOptionElement;
+    firstOption.selected = true;
+    fireEvent.change(screen.getByLabelText('collection-select'));
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(ds.addCollectionMembers).toHaveBeenCalledWith('col-1', { saved_ids: ['s1'], added_by: 'user' });
+    });
+    await waitFor(() => {
+      expect(onSaved).toHaveBeenCalledTimes(1);
+    });
+    expect(onClose).not.toHaveBeenCalled();
   });
 });
