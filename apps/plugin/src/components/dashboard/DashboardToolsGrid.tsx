@@ -1,95 +1,148 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { css } from '@emotion/css';
-import type { GrafanaTheme2 } from '@grafana/data';
-import { Alert, Icon, Input, useStyles2 } from '@grafana/ui';
-import { defaultDashboardDataSource, type DashboardDataSource } from '../dashboard/api';
-import { DashboardSummaryBar } from '../components/dashboard/DashboardSummaryBar';
-import { TopStat } from '../components/TopStat';
-import { LandingTopBar } from '../components/landing/LandingTopBar';
-import { FilterToolbar } from '../components/filters/FilterToolbar';
-import { useFilterUrlState } from '../hooks/useFilterUrlState';
-import { useCascadingFilterOptions } from '../hooks/useCascadingFilterOptions';
-import { usePrometheusQuery } from '../components/dashboard/usePrometheusQuery';
-import {
-  computeRangeDuration,
-  errorRateQuery,
-  topToolErrorRateQuery,
-  topToolErrorsQuery,
-  topToolExecutionsQuery,
-  topToolLatencyQuery,
-  totalErrorsQuery,
-  totalOpsQuery,
-} from '../dashboard/queries';
-import DataTable, { type ColumnDef, getCommonCellStyles } from '../components/shared/DataTable';
-import { vectorToStatValue } from '../dashboard/transforms';
-import type { DashboardFilters } from '../dashboard/types';
+import { dateTime, ThresholdsMode, type AbsoluteTimeRange, type GrafanaTheme2, type TimeRange } from '@grafana/data';
+import { Alert, Icon, useStyles2 } from '@grafana/ui';
+import { TopStat } from '../TopStat';
+import { DashboardSummaryBar } from './DashboardSummaryBar';
+import { usePrometheusQuery } from './usePrometheusQuery';
+import DataTable, { type ColumnDef, getCommonCellStyles } from '../shared/DataTable';
+import { hasResponseData } from '../insight/summarize';
+import type { DashboardDataSource } from '../../dashboard/api';
+import type { BreakdownDimension, DashboardFilters } from '../../dashboard/types';
 import {
   buildExecuteToolMetricFilters,
   sanitizeToolAnalyticsFilters,
   TOOL_METRIC_LABEL,
-} from '../dashboard/toolRuntime';
+} from '../../dashboard/toolRuntime';
 import {
   buildToolRows,
   formatToolCount,
   formatToolDurationSeconds,
   readToolMetricMap,
   type ToolSummaryRow,
-} from '../dashboard/toolRuntimeTable';
-import { hasResponseData } from '../components/insight/summarize';
-import { formatWindowLabel } from '../components/dashboard/dashboardShared';
+} from '../../dashboard/toolRuntimeTable';
+import { buildToolsUrl } from '../../dashboard/url';
+import { matrixToDataFrames, vectorToStatValue } from '../../dashboard/transforms';
+import { BreakdownStatPanel, formatWindowLabel } from './dashboardShared';
+import {
+  computeRangeDuration,
+  computeRateInterval,
+  computeStep,
+  errorRateOverTimeQuery,
+  errorRateQuery,
+  latencyStatQuery,
+  latencyOverTimeQuery,
+  requestCountOverTimeQuery,
+  topToolErrorRateQuery,
+  topToolErrorsQuery,
+  topToolExecutionsQuery,
+  topToolLatencyQuery,
+  totalErrorsQuery,
+  totalOpsQuery,
+} from '../../dashboard/queries';
+import { MetricPanel } from './MetricPanel';
 
-type ToolsPageProps = {
-  dataSource?: DashboardDataSource;
+type DashboardToolsGridProps = {
+  dataSource: DashboardDataSource;
+  filters: DashboardFilters;
+  breakdownBy: BreakdownDimension;
+  from: number;
+  to: number;
+  timeRange: TimeRange;
+  onTimeRangeChange: (timeRange: TimeRange) => void;
 };
 
 type ToolSortKey = 'toolName' | 'executions' | 'errors' | 'errorRate' | 'latencyP95';
 type ToolSortDirection = 'asc' | 'desc';
 
-export default function ToolsPage({ dataSource = defaultDashboardDataSource }: ToolsPageProps) {
+const CHART_HEIGHT = 250;
+const TABLE_PREVIEW_ROWS = 8;
+
+const noThresholds = {
+  mode: ThresholdsMode.Absolute,
+  steps: [{ value: -Infinity, color: 'green' }],
+};
+
+const consistentColor = { mode: 'palette-classic-by-name' };
+
+export function DashboardToolsGrid({
+  dataSource,
+  filters,
+  breakdownBy,
+  from,
+  to,
+  timeRange,
+  onTimeRangeChange,
+}: DashboardToolsGridProps) {
   const styles = useStyles2(getStyles);
-  const { timeRange, filters, searchParams, setSearchParams, setTimeRange, setFilters } = useFilterUrlState();
   const [sortKey, setSortKey] = useState<ToolSortKey>('executions');
   const [sortDirection, setSortDirection] = useState<ToolSortDirection>('desc');
-  const [showLabelFilterRow, setShowLabelFilterRow] = useState(() => {
-    if (typeof window === 'undefined') {
-      return false;
-    }
-    return window.sessionStorage.getItem(LABEL_FILTER_ROW_STORAGE_KEY) === '1';
-  });
-  const toolSearch = searchParams.get('tool') ?? '';
   const sanitizedFilters = useMemo(() => sanitizeToolAnalyticsFilters(filters), [filters]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    window.sessionStorage.setItem(LABEL_FILTER_ROW_STORAGE_KEY, showLabelFilterRow ? '1' : '0');
-  }, [showLabelFilterRow]);
-
-  useEffect(() => {
-    const hasConflictingLabels = filters.labelFilters.some((filter) => filter.key.trim() === TOOL_METRIC_LABEL);
-    if (!hasConflictingLabels) {
-      return;
-    }
-    setFilters(sanitizedFilters);
-  }, [filters.labelFilters, sanitizedFilters, setFilters]);
-
-  const from = useMemo(() => Math.floor(timeRange.from.valueOf() / 1000), [timeRange]);
-  const to = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);
+  const metricFilters = useMemo(() => buildExecuteToolMetricFilters(sanitizedFilters), [sanitizedFilters]);
   const windowSize = useMemo(() => Math.max(0, to - from), [from, to]);
   const prevFrom = useMemo(() => Math.max(0, from - windowSize), [from, windowSize]);
   const prevTo = useMemo(() => from, [from]);
   const rangeDuration = useMemo(() => computeRangeDuration(from, to), [from, to]);
   const prevRangeDuration = useMemo(() => computeRangeDuration(prevFrom, prevTo), [prevFrom, prevTo]);
-  const metricFilters = useMemo(() => buildExecuteToolMetricFilters(sanitizedFilters), [sanitizedFilters]);
+  const step = useMemo(() => computeStep(from, to), [from, to]);
+  const interval = useMemo(() => computeRateInterval(step), [step]);
   const comparisonLabel = useMemo(() => `previous ${formatWindowLabel(windowSize)}`, [windowSize]);
-
-  const { providerOptions, modelOptions, agentOptions, labelKeyOptions, labelsLoading } = useCascadingFilterOptions(
-    dataSource,
-    sanitizedFilters,
-    from,
-    to
-  );
+  const breakdownLabel = useMemo(() => {
+    switch (breakdownBy) {
+      case 'agent':
+        return 'gen_ai_agent_name';
+      case 'provider':
+        return 'gen_ai_provider_name';
+      case 'model':
+      case 'tool':
+        return TOOL_METRIC_LABEL;
+      case 'none':
+      default:
+        return TOOL_METRIC_LABEL;
+    }
+  }, [breakdownBy]);
+  const breakdownTitle = useMemo(() => {
+    switch (breakdownBy) {
+      case 'agent':
+        return 'Top agents';
+      case 'provider':
+        return 'Top providers';
+      case 'model':
+        return 'Top models';
+      case 'tool':
+      case 'none':
+      default:
+        return 'Top tools';
+    }
+  }, [breakdownBy]);
+  const errorBreakdownTitle = useMemo(() => {
+    switch (breakdownBy) {
+      case 'agent':
+        return 'Agents with errors';
+      case 'provider':
+        return 'Providers with errors';
+      case 'model':
+        return 'Models with errors';
+      case 'tool':
+      case 'none':
+      default:
+        return 'Most errors';
+    }
+  }, [breakdownBy]);
+  const latencyBreakdownTitle = useMemo(() => {
+    switch (breakdownBy) {
+      case 'agent':
+        return 'Slowest agents (P95)';
+      case 'provider':
+        return 'Slowest providers (P95)';
+      case 'model':
+        return 'Slowest models (P95)';
+      case 'tool':
+      case 'none':
+      default:
+        return 'Slowest tools (P95)';
+    }
+  }, [breakdownBy]);
 
   const totalExecutions = usePrometheusQuery(
     dataSource,
@@ -140,6 +193,52 @@ export default function ToolsPage({ dataSource = defaultDashboardDataSource }: T
     to,
     'instant'
   );
+  const usageOverTime = usePrometheusQuery(
+    dataSource,
+    requestCountOverTimeQuery(metricFilters, `${step}s`, breakdownBy),
+    from,
+    to,
+    'range',
+    step
+  );
+  const errorRateOverTime = usePrometheusQuery(
+    dataSource,
+    errorRateOverTimeQuery(metricFilters, interval, breakdownBy),
+    from,
+    to,
+    'range',
+    step
+  );
+  const latencyP95OverTime = usePrometheusQuery(
+    dataSource,
+    latencyOverTimeQuery(metricFilters, interval, breakdownBy, 0.95),
+    from,
+    to,
+    'range',
+    step
+  );
+  const breakdownExecutions = usePrometheusQuery(
+    dataSource,
+    totalOpsQuery(metricFilters, rangeDuration, breakdownBy),
+    from,
+    to,
+    'instant'
+  );
+  const breakdownErrors = usePrometheusQuery(
+    dataSource,
+    totalErrorsQuery(metricFilters, rangeDuration, breakdownBy),
+    from,
+    to,
+    'instant'
+  );
+  const breakdownLatencyP95 = usePrometheusQuery(
+    dataSource,
+    latencyStatQuery(metricFilters, rangeDuration, breakdownBy, 0.95),
+    from,
+    to,
+    'instant'
+  );
+
   const prevTotalExecutions = usePrometheusQuery(
     dataSource,
     totalOpsQuery(metricFilters, prevRangeDuration),
@@ -181,16 +280,10 @@ export default function ToolsPage({ dataSource = defaultDashboardDataSource }: T
       ),
     [sanitizedFilters, timeRange, toolErrorRates.data, toolErrors.data, toolExecutions.data, toolLatencyP95.data]
   );
-  const visibleRows = useMemo(() => {
-    const normalizedSearch = toolSearch.trim().toLowerCase();
-    if (!normalizedSearch) {
-      return rows;
-    }
-    return rows.filter((row) => row.toolName.toLowerCase().includes(normalizedSearch));
-  }, [rows, toolSearch]);
+
   const sortedRows = useMemo(() => {
     const directionFactor = sortDirection === 'asc' ? 1 : -1;
-    return [...visibleRows].sort((left, right) => {
+    return [...rows].sort((left, right) => {
       let comparison = 0;
       switch (sortKey) {
         case 'toolName':
@@ -214,7 +307,8 @@ export default function ToolsPage({ dataSource = defaultDashboardDataSource }: T
       }
       return left.toolName.localeCompare(right.toolName);
     });
-  }, [sortDirection, sortKey, visibleRows]);
+  }, [rows, sortDirection, sortKey]);
+  const previewRows = useMemo(() => sortedRows.slice(0, TABLE_PREVIEW_ROWS), [sortedRows]);
 
   const pageQueryResponses = [
     totalExecutions,
@@ -224,6 +318,12 @@ export default function ToolsPage({ dataSource = defaultDashboardDataSource }: T
     toolErrors,
     toolErrorRates,
     toolLatencyP95,
+    breakdownExecutions,
+    breakdownErrors,
+    breakdownLatencyP95,
+    usageOverTime,
+    errorRateOverTime,
+    latencyP95OverTime,
     prevTotalExecutions,
     prevTotalErrors,
     prevTotalErrorRate,
@@ -233,32 +333,6 @@ export default function ToolsPage({ dataSource = defaultDashboardDataSource }: T
   const pageHasErrors = pageQueryResponses.some((response) => response.error.length > 0);
   const pageHasData = rows.length > 0 || pageQueryResponses.some((response) => hasResponseData(response.data));
 
-  const handleFiltersChange = useCallback(
-    (nextFilters: DashboardFilters) => {
-      setFilters(sanitizeToolAnalyticsFilters(nextFilters));
-    },
-    [setFilters]
-  );
-
-  const handleToolSearchChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      const nextValue = event.currentTarget.value;
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          if (nextValue.trim()) {
-            next.set('tool', nextValue);
-          } else {
-            next.delete('tool');
-          }
-          return next;
-        },
-        { replace: true }
-      );
-    },
-    [setSearchParams]
-  );
-
   const handleRowClick = useCallback((row: ToolSummaryRow, event: React.MouseEvent) => {
     if (event.metaKey || event.ctrlKey) {
       window.open(row.href, '_blank');
@@ -266,6 +340,19 @@ export default function ToolsPage({ dataSource = defaultDashboardDataSource }: T
     }
     window.location.href = row.href;
   }, []);
+
+  const handlePanelTimeRangeChange = useCallback(
+    (absoluteRange: AbsoluteTimeRange) => {
+      const nextFrom = dateTime(absoluteRange.from);
+      const nextTo = dateTime(absoluteRange.to);
+      onTimeRangeChange({
+        from: nextFrom,
+        to: nextTo,
+        raw: { from: nextFrom.toISOString(), to: nextTo.toISOString() },
+      });
+    },
+    [onTimeRangeChange]
+  );
 
   const handleSortChange = useCallback(
     (nextKey: ToolSortKey) => {
@@ -307,11 +394,7 @@ export default function ToolsPage({ dataSource = defaultDashboardDataSource }: T
         id: 'tool',
         header: buildSortableHeader('Tool', 'toolName'),
         minWidth: 240,
-        cell: (row) => (
-          <a href={row.href} className={styles.toolLink} onClick={(event) => event.stopPropagation()}>
-            <span className={styles.monoCell}>{row.toolName}</span>
-          </a>
-        ),
+        cell: (row) => <span className={styles.monoCell}>{row.toolName}</span>,
       },
       {
         id: 'executions',
@@ -338,7 +421,7 @@ export default function ToolsPage({ dataSource = defaultDashboardDataSource }: T
         cell: (row) => formatToolDurationSeconds(row.latencyP95),
       },
     ],
-    [buildSortableHeader, styles.monoCell, styles.toolLink]
+    [buildSortableHeader, styles.monoCell]
   );
 
   const totalExecutionsValue = totalExecutions.data ? vectorToStatValue(totalExecutions.data) : 0;
@@ -350,59 +433,15 @@ export default function ToolsPage({ dataSource = defaultDashboardDataSource }: T
   const prevToolsMatchedValue = prevToolExecutions.data ? readToolMetricMap(prevToolExecutions.data).size : 0;
 
   return (
-    <div className={styles.page}>
-      <LandingTopBar
-        assistantOrigin="grafana/sigil-plugin/tools"
-        requestsDataSource={dataSource}
-        requestsFrom={from}
-        requestsTo={to}
-        compact
-      />
-
-      <FilterToolbar
-        timeRange={timeRange}
-        filters={sanitizedFilters}
-        providerOptions={providerOptions}
-        modelOptions={modelOptions}
-        agentOptions={agentOptions}
-        labelKeyOptions={labelKeyOptions}
-        labelsLoading={labelsLoading}
-        dataSource={dataSource}
-        from={from}
-        to={to}
-        onTimeRangeChange={setTimeRange}
-        onFiltersChange={handleFiltersChange}
-        fillWidth
-        showLabelFilterRow={showLabelFilterRow}
-        onLabelFilterRowOpenChange={setShowLabelFilterRow}
-      >
-        <Input
-          prefix={<Icon name="search" />}
-          value={toolSearch}
-          onChange={handleToolSearchChange}
-          placeholder="Filter by tool name..."
-          className={styles.searchInput}
-        />
-      </FilterToolbar>
-
-      <div className={styles.header}>
-        <div>
-          <h2 className={styles.title}>Tools</h2>
-          <p className={styles.subtitle}>
-            Compare tool usage, failures, and latency, then open a tool to inspect its runtime activity in detail.
-          </p>
-        </div>
-      </div>
-
+    <div className={styles.grid}>
       <DashboardSummaryBar>
         <TopStat
           label="Tools matched"
-          value={visibleRows.length}
+          value={rows.length}
+          loading={pageIsLoading && rows.length === 0}
           prevValue={prevToolsMatchedValue}
           prevLoading={prevToolExecutions.loading}
           comparisonLabel={comparisonLabel}
-          loading={pageIsLoading && rows.length === 0}
-          helpTooltip="The number of tool names visible in the current filtered view."
         />
         <TopStat
           label="Executions"
@@ -443,61 +482,156 @@ export default function ToolsPage({ dataSource = defaultDashboardDataSource }: T
 
       {!pageIsLoading && pageHasErrors && !pageHasData && (
         <Alert severity="error" title="Tools analytics failed to load">
-          Every tool-runtime query failed for this page. Adjust filters or retry later.
+          Every tool-runtime query failed for this tab. Adjust filters or retry later.
         </Alert>
       )}
 
+      <div className={styles.panelGrid}>
+        <div className={styles.panelRow}>
+          <MetricPanel
+            title="Tool executions over time"
+            pluginId="timeseries"
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            onChangeTimeRange={handlePanelTimeRangeChange}
+            loading={usageOverTime.loading}
+            error={usageOverTime.error}
+            data={usageOverTime.data ? matrixToDataFrames(usageOverTime.data) : []}
+            options={{
+              legend: { displayMode: 'list', placement: 'bottom', calcs: [] },
+              tooltip: { mode: 'multi', sort: 'desc' },
+            }}
+            fieldConfig={{
+              defaults: {
+                unit: 'short',
+                color: consistentColor,
+                custom: { fillOpacity: 6, showPoints: 'never', lineWidth: 2 },
+                thresholds: noThresholds,
+              },
+              overrides: [],
+            }}
+          />
+          <BreakdownStatPanel
+            title={breakdownTitle}
+            data={breakdownExecutions.data}
+            loading={breakdownExecutions.loading}
+            error={breakdownExecutions.error}
+            breakdownLabel={breakdownLabel}
+            height={CHART_HEIGHT}
+          />
+        </div>
+
+        <div className={styles.panelRow}>
+          <MetricPanel
+            title="Tool error rate over time"
+            pluginId="timeseries"
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            onChangeTimeRange={handlePanelTimeRangeChange}
+            loading={errorRateOverTime.loading}
+            error={errorRateOverTime.error}
+            data={errorRateOverTime.data ? matrixToDataFrames(errorRateOverTime.data) : []}
+            options={{
+              legend: { displayMode: 'list', placement: 'bottom', calcs: [] },
+              tooltip: { mode: 'multi', sort: 'desc' },
+            }}
+            fieldConfig={{
+              defaults: {
+                unit: 'percent',
+                min: 0,
+                color: consistentColor,
+                custom: { fillOpacity: 6, showPoints: 'never', lineWidth: 2 },
+                thresholds: noThresholds,
+              },
+              overrides: [],
+            }}
+          />
+          <BreakdownStatPanel
+            title={errorBreakdownTitle}
+            data={breakdownErrors.data}
+            loading={breakdownErrors.loading}
+            error={breakdownErrors.error}
+            breakdownLabel={breakdownLabel}
+            height={CHART_HEIGHT}
+          />
+        </div>
+
+        <div className={styles.panelRow}>
+          <MetricPanel
+            title="Tool latency (P95)"
+            pluginId="timeseries"
+            height={CHART_HEIGHT}
+            timeRange={timeRange}
+            onChangeTimeRange={handlePanelTimeRangeChange}
+            loading={latencyP95OverTime.loading}
+            error={latencyP95OverTime.error}
+            data={latencyP95OverTime.data ? matrixToDataFrames(latencyP95OverTime.data) : []}
+            options={{
+              legend: { displayMode: 'list', placement: 'bottom', calcs: [] },
+              tooltip: { mode: 'multi', sort: 'desc' },
+            }}
+            fieldConfig={{
+              defaults: {
+                unit: 's',
+                color: consistentColor,
+                custom: { fillOpacity: 6, showPoints: 'never', lineWidth: 2 },
+                thresholds: noThresholds,
+              },
+              overrides: [],
+            }}
+          />
+          <BreakdownStatPanel
+            title={latencyBreakdownTitle}
+            data={breakdownLatencyP95.data}
+            loading={breakdownLatencyP95.loading}
+            error={breakdownLatencyP95.error}
+            breakdownLabel={breakdownLabel}
+            height={CHART_HEIGHT}
+            unit="s"
+            aggregation="avg"
+          />
+        </div>
+      </div>
+
       <DataTable
         columns={columns}
-        data={sortedRows}
+        data={previewRows}
         keyOf={(row) => row.toolName}
         onRowClick={handleRowClick}
         rowRole="link"
         rowAriaLabel={(row) => `open tool analytics for ${row.toolName}`}
+        panelTitle="Tools"
+        seeMoreHref={buildToolsUrl(timeRange, sanitizedFilters)}
+        seeMoreLabel="Open full tools page"
         loading={pageIsLoading && rows.length === 0}
         loadError={!pageHasData && pageHasErrors ? 'Tool analytics failed to load.' : undefined}
         emptyIcon="wrench"
-        emptyMessage={
-          toolSearch.trim()
-            ? `No tools matched "${toolSearch.trim()}" in the current filtered result set.`
-            : 'No execute_tool runtime data matched the current filters.'
-        }
+        emptyMessage="No execute_tool runtime data matched the current filters."
       />
     </div>
   );
 }
 
-const LABEL_FILTER_ROW_STORAGE_KEY = 'sigil.tools.labelFilterRowOpen';
-
 function getStyles(theme: GrafanaTheme2) {
   return {
     ...getCommonCellStyles(theme),
-    page: css({
+    grid: css({
       display: 'flex',
       flexDirection: 'column',
       gap: theme.spacing(3),
-      marginTop: theme.spacing(-2),
     }),
-    header: css({
+    panelGrid: css({
       display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'flex-start',
-      gap: theme.spacing(2),
-      flexWrap: 'wrap',
+      flexDirection: 'column',
+      gap: theme.spacing(3),
     }),
-    title: css({
-      margin: theme.spacing(0.5, 0),
-      fontSize: theme.typography.h2.fontSize,
-      lineHeight: 1.1,
-    }),
-    subtitle: css({
-      margin: 0,
-      color: theme.colors.text.secondary,
-      maxWidth: 760,
-    }),
-    searchInput: css({
-      width: 320,
-      maxWidth: '100%',
+    panelRow: css({
+      display: 'grid',
+      gridTemplateColumns: '3fr 2fr',
+      gap: theme.spacing(1),
+      '@media (max-width: 900px)': {
+        gridTemplateColumns: '1fr',
+      },
     }),
     sortButtonBase: css({
       display: 'inline-flex',
@@ -515,19 +649,10 @@ function getStyles(theme: GrafanaTheme2) {
       },
     }),
     sortButtonLeft: css({
-      label: 'toolsPage-sortButtonLeft',
       justifyContent: 'flex-start',
     }),
     sortButtonRight: css({
-      label: 'toolsPage-sortButtonRight',
       justifyContent: 'flex-end',
-    }),
-    toolLink: css({
-      color: theme.colors.text.primary,
-      textDecoration: 'none',
-      '&:hover': {
-        color: theme.colors.primary.main,
-      },
     }),
   };
 }

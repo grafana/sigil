@@ -132,6 +132,25 @@ describe('ToolsPage', () => {
     expect(screen.queryByRole('link', { name: 'weather.lookup' })).not.toBeInTheDocument();
   });
 
+  it('renders the filter toolbar directly below the top histogram before the page heading', async () => {
+    const dataSource = createDataSource();
+
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={['/analytics/tools']}>
+          <ToolsPage dataSource={dataSource} />
+        </MemoryRouter>
+      );
+    });
+
+    const topBar = screen.getByTestId('landing-top-bar');
+    const toolFilter = screen.getByPlaceholderText('Filter by tool name...');
+    const heading = screen.getByRole('heading', { name: 'Tools' });
+
+    expect(topBar.compareDocumentPosition(toolFilter)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(toolFilter.compareDocumentPosition(heading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
   it('shows the page error state when all tool queries fail', async () => {
     const dataSource = createDataSource();
     dataSource.queryInstant.mockRejectedValue(new Error('prometheus unavailable'));

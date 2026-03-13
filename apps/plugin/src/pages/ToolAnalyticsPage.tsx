@@ -43,7 +43,7 @@ import {
 } from '../dashboard/queries';
 import { usePrometheusQuery } from '../components/dashboard/usePrometheusQuery';
 import { MetricPanel } from '../components/dashboard/MetricPanel';
-import { BreakdownStatPanel, formatRelativeTime } from '../components/dashboard/dashboardShared';
+import { BreakdownStatPanel, formatRelativeTime, formatWindowLabel } from '../components/dashboard/dashboardShared';
 import { matrixToDataFrames, vectorToStatValue } from '../dashboard/transforms';
 import DataTable, { type ColumnDef, getCommonCellStyles } from '../components/shared/DataTable';
 import { PLUGIN_BASE, buildConversationExploreRoute } from '../constants';
@@ -212,8 +212,7 @@ function ToolConversationsTable({
       onRowClick={handleRowClick}
       rowRole="link"
       rowAriaLabel={(conversation) => `view conversation ${conversation.conversation_id}`}
-      panelTitle="Recent conversations using this tool"
-      panelSubtitle={`${toolName} via tool.name`}
+      panelTitle="Recent conversations"
       loading={loading}
       loadError={error && conversations.length === 0 ? error : undefined}
       emptyIcon="comments-alt"
@@ -248,19 +247,23 @@ export default function ToolAnalyticsPage({
   }, [showLabelFilterRow]);
 
   useEffect(() => {
-    const hasConflictingModels = filters.models.length > 0;
     const hasConflictingLabels = filters.labelFilters.some((filter) => filter.key.trim() === TOOL_METRIC_LABEL);
-    if (!hasConflictingModels && !hasConflictingLabels) {
+    if (!hasConflictingLabels) {
       return;
     }
     setFilters(sanitizedFilters);
-  }, [filters.labelFilters, filters.models.length, sanitizedFilters, setFilters]);
+  }, [filters.labelFilters, sanitizedFilters, setFilters]);
 
   const from = useMemo(() => Math.floor(timeRange.from.valueOf() / 1000), [timeRange]);
   const to = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);
+  const windowSize = useMemo(() => Math.max(0, to - from), [from, to]);
+  const prevFrom = useMemo(() => Math.max(0, from - windowSize), [from, windowSize]);
+  const prevTo = useMemo(() => from, [from]);
   const step = useMemo(() => computeStep(from, to), [from, to]);
   const interval = useMemo(() => computeRateInterval(step), [step]);
   const rangeDuration = useMemo(() => computeRangeDuration(from, to), [from, to]);
+  const prevRangeDuration = useMemo(() => computeRangeDuration(prevFrom, prevTo), [prevFrom, prevTo]);
+  const comparisonLabel = useMemo(() => `previous ${formatWindowLabel(windowSize)}`, [windowSize]);
 
   const { providerOptions, modelOptions, agentOptions, labelKeyOptions, labelsLoading } = useCascadingFilterOptions(
     dataSource,
@@ -303,6 +306,48 @@ export default function ToolAnalyticsPage({
     latencyStatQuery(metricFilters, rangeDuration, 'none', 0.99),
     from,
     to,
+    'instant'
+  );
+  const prevExecutions = usePrometheusQuery(
+    dataSource,
+    totalOpsQuery(metricFilters, prevRangeDuration),
+    prevFrom,
+    prevTo,
+    'instant'
+  );
+  const prevTotalErrors = usePrometheusQuery(
+    dataSource,
+    totalErrorsQuery(metricFilters, prevRangeDuration),
+    prevFrom,
+    prevTo,
+    'instant'
+  );
+  const prevErrorRate = usePrometheusQuery(
+    dataSource,
+    errorRateQuery(metricFilters, prevRangeDuration),
+    prevFrom,
+    prevTo,
+    'instant'
+  );
+  const prevLatencyP50 = usePrometheusQuery(
+    dataSource,
+    latencyStatQuery(metricFilters, prevRangeDuration, 'none', 0.5),
+    prevFrom,
+    prevTo,
+    'instant'
+  );
+  const prevLatencyP95 = usePrometheusQuery(
+    dataSource,
+    latencyStatQuery(metricFilters, prevRangeDuration, 'none', 0.95),
+    prevFrom,
+    prevTo,
+    'instant'
+  );
+  const prevLatencyP99 = usePrometheusQuery(
+    dataSource,
+    latencyStatQuery(metricFilters, prevRangeDuration, 'none', 0.99),
+    prevFrom,
+    prevTo,
     'instant'
   );
 
@@ -398,6 +443,12 @@ export default function ToolAnalyticsPage({
     latencyP50OverTime,
     latencyP95OverTime,
     latencyP99OverTime,
+    prevExecutions,
+    prevTotalErrors,
+    prevErrorRate,
+    prevLatencyP50,
+    prevLatencyP95,
+    prevLatencyP99,
     topAgents,
     topErrorTypes,
   ];
@@ -424,23 +475,6 @@ export default function ToolAnalyticsPage({
         requestsTo={to}
         compact
       />
-      <div className={styles.header}>
-        <div>
-          <Text color="secondary">Runtime analytics</Text>
-          <h2 className={styles.title}>{toolName}</h2>
-          <p className={styles.subtitle}>
-            Tool-specific runtime analytics built from `execute_tool` metrics and tool-scoped conversation search.
-          </p>
-        </div>
-        <Stack direction="row" gap={1} wrap="wrap">
-          <LinkButton href={buildToolsUrl(timeRange, sanitizedFilters)} variant="secondary" size="sm">
-            Back to tools
-          </LinkButton>
-          <LinkButton href={buildConversationsUrl(timeRange, conversationFilters, 'time')} variant="primary" size="sm">
-            Open filtered conversations
-          </LinkButton>
-        </Stack>
-      </div>
       <FilterToolbar
         timeRange={timeRange}
         filters={sanitizedFilters}
@@ -454,45 +488,85 @@ export default function ToolAnalyticsPage({
         to={to}
         onTimeRangeChange={setTimeRange}
         onFiltersChange={handleFiltersChange}
-        hideModelFilter
         fillWidth
         showLabelFilterRow={showLabelFilterRow}
         onLabelFilterRowOpenChange={setShowLabelFilterRow}
       />
+      <div className={styles.header}>
+        <div>
+          <h2 className={styles.title}>{toolName}</h2>
+          <p className={styles.subtitle}>
+            Track execution volume, failures, and latency for this tool, then jump into the conversations using it.
+          </p>
+        </div>
+        <Stack direction="row" gap={1} wrap="wrap">
+          <LinkButton href={buildToolsUrl(timeRange, sanitizedFilters)} variant="secondary" size="sm">
+            Back to tools
+          </LinkButton>
+          <LinkButton href={buildConversationsUrl(timeRange, conversationFilters, 'time')} variant="primary" size="sm">
+            Open filtered conversations
+          </LinkButton>
+        </Stack>
+      </div>
       <DashboardSummaryBar>
         <TopStat
           label="Executions"
           value={executions.data ? vectorToStatValue(executions.data) : 0}
+          displayValue={formatCount(executions.data ? vectorToStatValue(executions.data) : 0)}
           loading={executions.loading}
+          prevValue={prevExecutions.data ? vectorToStatValue(prevExecutions.data) : 0}
+          prevLoading={prevExecutions.loading}
+          comparisonLabel={comparisonLabel}
         />
         <TopStat
           label="Errors"
           value={totalErrors.data ? vectorToStatValue(totalErrors.data) : 0}
+          displayValue={formatCount(totalErrors.data ? vectorToStatValue(totalErrors.data) : 0)}
           loading={totalErrors.loading}
+          prevValue={prevTotalErrors.data ? vectorToStatValue(prevTotalErrors.data) : 0}
+          prevLoading={prevTotalErrors.loading}
+          invertChange
+          comparisonLabel={comparisonLabel}
         />
         <TopStat
           label="Error rate"
           value={errorRate.data ? vectorToStatValue(errorRate.data) : 0}
           unit="percent"
           loading={errorRate.loading}
+          prevValue={prevErrorRate.data ? vectorToStatValue(prevErrorRate.data) : 0}
+          prevLoading={prevErrorRate.loading}
+          invertChange
+          comparisonLabel={comparisonLabel}
         />
         <TopStat
           label="Latency (P50)"
           value={latencyP50.data ? vectorToStatValue(latencyP50.data) : 0}
           unit="s"
           loading={latencyP50.loading}
+          prevValue={prevLatencyP50.data ? vectorToStatValue(prevLatencyP50.data) : 0}
+          prevLoading={prevLatencyP50.loading}
+          invertChange
+          comparisonLabel={comparisonLabel}
         />
         <TopStat
           label="Latency (P95)"
           value={latencyP95.data ? vectorToStatValue(latencyP95.data) : 0}
           unit="s"
           loading={latencyP95.loading}
+          prevValue={prevLatencyP95.data ? vectorToStatValue(prevLatencyP95.data) : 0}
+          prevLoading={prevLatencyP95.loading}
+          invertChange
+          comparisonLabel={comparisonLabel}
         />
         <TopStat
           label="Latency (P99)"
           value={latencyP99.data ? vectorToStatValue(latencyP99.data) : 0}
           unit="s"
           loading={latencyP99.loading}
+          prevValue={prevLatencyP99.data ? vectorToStatValue(prevLatencyP99.data) : 0}
+          prevLoading={prevLatencyP99.loading}
+          invertChange
+          comparisonLabel={comparisonLabel}
         />
       </DashboardSummaryBar>
 
@@ -615,6 +689,13 @@ export default function ToolAnalyticsPage({
       />
     </div>
   );
+}
+
+function formatCount(value: number): string {
+  if (!Number.isFinite(value)) {
+    return '0';
+  }
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.round(value));
 }
 
 function getStyles(theme: GrafanaTheme2) {

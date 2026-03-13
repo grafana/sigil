@@ -3,8 +3,8 @@ import { type TimeRange } from '@grafana/data';
 import { type BreakdownDimension, type DashboardFilters, type DashboardTab } from './types';
 import { useFilterUrlState } from '../hooks/useFilterUrlState';
 
-const BREAKDOWN_VALUES = new Set<BreakdownDimension>(['none', 'provider', 'model', 'agent']);
-const TAB_VALUES = new Set<DashboardTab>(['overview', 'performance', 'errors', 'usage', 'evaluation']);
+const BREAKDOWN_VALUES = new Set<BreakdownDimension>(['none', 'provider', 'model', 'agent', 'tool']);
+const TAB_VALUES = new Set<DashboardTab>(['overview', 'performance', 'errors', 'usage', 'tools', 'evaluation']);
 
 const TAB_MIGRATION: Record<string, DashboardTab> = {
   consumption: 'usage',

@@ -48,7 +48,10 @@ describe('DashboardFilterBar', () => {
     mockFilterToolbar.mockClear();
   });
 
-  function renderToolbar(showLabelFilters = true) {
+  function renderToolbar(
+    showLabelFilters = true,
+    extraProps: Partial<React.ComponentProps<typeof DashboardFilterBar>> = {}
+  ) {
     render(
       <DashboardFilterBar
         timeRange={timeRange}
@@ -68,6 +71,7 @@ describe('DashboardFilterBar', () => {
         onTimeRangeChange={jest.fn()}
         onFiltersChange={jest.fn()}
         onBreakdownChange={jest.fn()}
+        {...extraProps}
       />
     );
   }
@@ -94,6 +98,26 @@ describe('DashboardFilterBar', () => {
         labelFilterOperators: PROM_LABEL_FILTER_OPERATORS,
         showLabelFilterRow: true,
         onLabelFilterRowOpenChange: expect.any(Function),
+      })
+    );
+  });
+
+  it('passes custom breakdown options for specialized tabs', () => {
+    renderToolbar(true, {
+      breakdownOptions: [
+        { label: 'None', value: 'none' },
+        { label: 'Agent', value: 'agent' },
+        { label: 'Tool', value: 'tool' },
+      ],
+    });
+
+    expect(mockFilterToolbar).toHaveBeenCalledWith(
+      expect.objectContaining({
+        breakdownOptions: [
+          { label: 'None', value: 'none' },
+          { label: 'Agent', value: 'agent' },
+          { label: 'Tool', value: 'tool' },
+        ],
       })
     );
   });

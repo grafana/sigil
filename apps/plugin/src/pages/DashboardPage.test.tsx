@@ -193,4 +193,16 @@ describe('DashboardPage', () => {
       expect(hasModelBreakdown).toBe(true);
     });
   });
+
+  it('renders the tools analytics tab', async () => {
+    const ds = createDataSource();
+    await act(async () => {
+      renderWithRouter(ds, '/?tab=tools');
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Tools')).toBeInTheDocument();
+      expect(screen.getByText('Open full tools page')).toBeInTheDocument();
+    });
+  });
 });

@@ -14,10 +14,6 @@ function appendLabelFilters(filters: DashboardFilters, extraFilters: LabelFilter
 export function sanitizeToolAnalyticsFilters(filters: DashboardFilters): DashboardFilters {
   return {
     ...filters,
-    // Tool runtime metrics currently reuse the request-model metric label as the
-    // tool dimension for execute_tool queries, so model filters cannot coexist
-    // with tool selection on the same label.
-    models: [],
     labelFilters: filters.labelFilters.filter((filter) => filter.key.trim() !== TOOL_METRIC_LABEL),
   };
 }

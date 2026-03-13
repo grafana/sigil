@@ -102,3 +102,7 @@ export default {
 export const Default = {
   render: () => <ToolsPage dataSource={mockDataSource} />,
 };
+
+export const ToolbarBelowHistogram = {
+  render: () => <ToolsPage dataSource={mockDataSource} />,
+};
