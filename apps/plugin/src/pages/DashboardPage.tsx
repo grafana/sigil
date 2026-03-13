@@ -57,7 +57,12 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
 
   const from = useMemo(() => Math.floor(timeRange.from.valueOf() / 1000), [timeRange]);
   const to = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);
-  const effectiveBreakdownBy = tab === 'tools' ? normalizeToolAnalyticsBreakdown(breakdownBy) : breakdownBy;
+  const effectiveBreakdownBy =
+    tab === 'tools'
+      ? normalizeToolAnalyticsBreakdown(breakdownBy)
+      : breakdownBy === 'tool'
+        ? 'model'
+        : breakdownBy;
 
   const { providerOptions, modelOptions, agentOptions, labelKeyOptions, labelsLoading } = useCascadingFilterOptions(
     dataSource,

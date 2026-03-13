@@ -6,6 +6,7 @@ import type { DashboardDataSource } from '../dashboard/api';
 import type { PrometheusQueryResponse } from '../dashboard/types';
 
 const mockDashboardToolsGrid = jest.fn<void, [unknown]>();
+const mockDashboardGrid = jest.fn<void, [unknown]>();
 
 // ResizeObserver is not available in JSDOM.
 beforeAll(() => {
@@ -79,6 +80,17 @@ jest.mock('../components/landing/LandingTopBar', () => ({
   LandingTopBar: () => <div data-testid="landing-top-bar" />,
 }));
 
+jest.mock('../components/dashboard/DashboardGrid', () => {
+  const actual = jest.requireActual('../components/dashboard/DashboardGrid');
+  return {
+    ...actual,
+    DashboardGrid: (props: unknown) => {
+      mockDashboardGrid(props);
+      return actual.DashboardGrid(props);
+    },
+  };
+});
+
 jest.mock('../components/dashboard/DashboardToolsGrid', () => ({
   DashboardToolsGrid: (props: unknown) => {
     mockDashboardToolsGrid(props);
@@ -129,6 +141,7 @@ function renderWithRouter(ds: MockDashboardDataSource, initialEntry = '/') {
 
 describe('DashboardPage', () => {
   beforeEach(() => {
+    mockDashboardGrid.mockClear();
     mockDashboardToolsGrid.mockClear();
   });
 
@@ -231,6 +244,23 @@ describe('DashboardPage', () => {
     expect(mockDashboardToolsGrid.mock.calls.at(-1)?.[0]).toEqual(
       expect.objectContaining({
         breakdownBy: 'tool',
+      })
+    );
+  });
+
+  it('normalizes a stale tool breakdown back to model on a non-tools tab', async () => {
+    const ds = createDataSource();
+    await act(async () => {
+      renderWithRouter(ds, '/?tab=overview&breakdownBy=tool');
+    });
+
+    await waitFor(() => {
+      expect(mockDashboardGrid).toHaveBeenCalled();
+    });
+
+    expect(mockDashboardGrid.mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({
+        breakdownBy: 'model',
       })
     );
   });
