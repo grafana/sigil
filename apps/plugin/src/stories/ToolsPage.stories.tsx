@@ -26,30 +26,30 @@ const mockDataSource: DashboardDataSource = {
   async queryInstant(query) {
     if (query.includes('histogram_quantile')) {
       return makeVectorResponse([
-        { labels: { gen_ai_request_model: 'calendar.lookup' }, value: '0.42' },
-        { labels: { gen_ai_request_model: 'weather.lookup' }, value: '0.91' },
-        { labels: { gen_ai_request_model: 'search.docs' }, value: '1.22' },
+        { labels: { gen_ai_tool_name: 'calendar.lookup' }, value: '0.42' },
+        { labels: { gen_ai_tool_name: 'weather.lookup' }, value: '0.91' },
+        { labels: { gen_ai_tool_name: 'search.docs' }, value: '1.22' },
       ]);
     }
-    if (query.includes('* 100') && query.includes('sum by (gen_ai_request_model)')) {
+    if (query.includes('* 100') && query.includes('sum by (gen_ai_tool_name)')) {
       return makeVectorResponse([
-        { labels: { gen_ai_request_model: 'calendar.lookup' }, value: '4.5' },
-        { labels: { gen_ai_request_model: 'weather.lookup' }, value: '1.2' },
-        { labels: { gen_ai_request_model: 'search.docs' }, value: '0.8' },
+        { labels: { gen_ai_tool_name: 'calendar.lookup' }, value: '4.5' },
+        { labels: { gen_ai_tool_name: 'weather.lookup' }, value: '1.2' },
+        { labels: { gen_ai_tool_name: 'search.docs' }, value: '0.8' },
       ]);
     }
-    if (query.includes('error_type!=""') && query.includes('sum by (gen_ai_request_model)')) {
+    if (query.includes('error_type!=""') && query.includes('sum by (gen_ai_tool_name)')) {
       return makeVectorResponse([
-        { labels: { gen_ai_request_model: 'calendar.lookup' }, value: '3' },
-        { labels: { gen_ai_request_model: 'weather.lookup' }, value: '1' },
-        { labels: { gen_ai_request_model: 'search.docs' }, value: '0' },
+        { labels: { gen_ai_tool_name: 'calendar.lookup' }, value: '3' },
+        { labels: { gen_ai_tool_name: 'weather.lookup' }, value: '1' },
+        { labels: { gen_ai_tool_name: 'search.docs' }, value: '0' },
       ]);
     }
-    if (query.includes('sum by (gen_ai_request_model)')) {
+    if (query.includes('sum by (gen_ai_tool_name)')) {
       return makeVectorResponse([
-        { labels: { gen_ai_request_model: 'calendar.lookup' }, value: '42' },
-        { labels: { gen_ai_request_model: 'weather.lookup' }, value: '18' },
-        { labels: { gen_ai_request_model: 'search.docs' }, value: '12' },
+        { labels: { gen_ai_tool_name: 'calendar.lookup' }, value: '42' },
+        { labels: { gen_ai_tool_name: 'weather.lookup' }, value: '18' },
+        { labels: { gen_ai_tool_name: 'search.docs' }, value: '12' },
       ]);
     }
     if (query.includes('* 100')) {

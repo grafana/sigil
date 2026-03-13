@@ -1,7 +1,7 @@
 import type { BreakdownDimension, DashboardFilters, LabelFilter } from './types';
 
 export const EXECUTE_TOOL_OPERATION = 'execute_tool';
-export const TOOL_METRIC_LABEL = 'gen_ai_request_model';
+export const TOOL_METRIC_LABEL = 'gen_ai_tool_name';
 export const TOOL_CONVERSATION_LABEL = 'tool.name';
 
 function appendLabelFilters(filters: DashboardFilters, extraFilters: LabelFilter[]): DashboardFilters {
@@ -14,9 +14,6 @@ function appendLabelFilters(filters: DashboardFilters, extraFilters: LabelFilter
 export function sanitizeToolAnalyticsFilters(filters: DashboardFilters): DashboardFilters {
   return {
     ...filters,
-    // execute_tool metrics reuse the request-model label to carry the tool name,
-    // so model filters cannot produce meaningful results on tool analytics pages.
-    models: [],
     labelFilters: filters.labelFilters.filter((filter) => filter.key.trim() !== TOOL_METRIC_LABEL),
   };
 }

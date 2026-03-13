@@ -5,7 +5,7 @@ import {
   type FilterOperator,
   type LabelFilter,
 } from './types';
-import { buildExecuteToolMetricFilters } from './toolRuntime';
+import { buildExecuteToolMetricFilters, TOOL_METRIC_LABEL } from './toolRuntime';
 
 // OTel metric names converted to Prometheus format (dots → underscores).
 const TOKEN_USAGE = 'gen_ai_client_token_usage';
@@ -158,19 +158,22 @@ export function totalErrorsQuery(
 }
 
 export function topToolExecutionsQuery(filters: DashboardFilters, rangeDuration: string): string {
-  return totalOpsQuery(buildExecuteToolMetricFilters(filters), rangeDuration, 'model');
+  return `sum by (${TOOL_METRIC_LABEL}) (increase(${OPERATION_DURATION}_count${sel(buildExecuteToolMetricFilters(filters))}[${rangeDuration}]))`;
 }
 
 export function topToolErrorsQuery(filters: DashboardFilters, rangeDuration: string): string {
-  return totalErrorsQuery(buildExecuteToolMetricFilters(filters), rangeDuration, 'model');
+  return `sum by (${TOOL_METRIC_LABEL}) (increase(${OPERATION_DURATION}_count${sel(buildExecuteToolMetricFilters(filters), 'error_type!=""')}[${rangeDuration}]))`;
 }
 
 export function topToolErrorRateQuery(filters: DashboardFilters, rangeDuration: string): string {
-  return errorRateQuery(buildExecuteToolMetricFilters(filters), rangeDuration, 'model');
+  const metricFilters = buildExecuteToolMetricFilters(filters);
+  const errors = `sum by (${TOOL_METRIC_LABEL}) (increase(${OPERATION_DURATION}_count${sel(metricFilters, 'error_type!=""')}[${rangeDuration}]))`;
+  const total = `sum by (${TOOL_METRIC_LABEL}) (increase(${OPERATION_DURATION}_count${sel(metricFilters)}[${rangeDuration}]))`;
+  return `(${errors} / ${total}) * 100`;
 }
 
 export function topToolLatencyQuery(filters: DashboardFilters, rangeDuration: string, quantile = 0.95): string {
-  return latencyStatQuery(buildExecuteToolMetricFilters(filters), rangeDuration, 'model', quantile);
+  return `histogram_quantile(${quantile}, sum by (le, ${TOOL_METRIC_LABEL}) (increase(${OPERATION_DURATION}_bucket${sel(buildExecuteToolMetricFilters(filters))}[${rangeDuration}])))`;
 }
 
 export function errorRateQuery(

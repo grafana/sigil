@@ -168,7 +168,7 @@ export const breakdownToPromLabel: Record<BreakdownDimension, string> = {
   provider: 'gen_ai_provider_name',
   model: 'gen_ai_request_model',
   agent: 'gen_ai_agent_name',
-  tool: 'gen_ai_request_model',
+  tool: 'gen_ai_tool_name',
 };
 
 // Conversation ordering options (used in conversations browser page)

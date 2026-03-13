@@ -44,6 +44,7 @@ import {
 import { usePrometheusQuery } from '../components/dashboard/usePrometheusQuery';
 import { MetricPanel } from '../components/dashboard/MetricPanel';
 import { BreakdownStatPanel, formatRelativeTime, formatWindowLabel } from '../components/dashboard/dashboardShared';
+import { buildAgentDetailHref } from '../components/dashboard/ViewAgentsLink';
 import { matrixToDataFrames, vectorToStatValue } from '../dashboard/transforms';
 import DataTable, { type ColumnDef, getCommonCellStyles } from '../components/shared/DataTable';
 import { PLUGIN_BASE, buildConversationExploreRoute } from '../constants';
@@ -487,7 +488,6 @@ export default function ToolAnalyticsPage({
         dataSource={dataSource}
         from={from}
         to={to}
-        hideModelFilter
         onTimeRangeChange={setTimeRange}
         onFiltersChange={handleFiltersChange}
         fillWidth
@@ -622,6 +622,7 @@ export default function ToolAnalyticsPage({
             error={topAgents.error}
             breakdownLabel={TOOL_BREAKDOWN_LABEL}
             height={CHART_HEIGHT}
+            getItemHref={buildAgentDetailHref}
           />
         </div>
         <div className={styles.panelRow}>

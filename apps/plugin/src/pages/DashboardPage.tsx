@@ -94,7 +94,6 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         from={from}
         to={to}
         breakdownOptions={tab === 'tools' ? TOOL_BREAKDOWN_OPTIONS : undefined}
-        hideModelFilter={tab === 'tools'}
         showLabelFilters={tab !== 'evaluation'}
         showLabelFilterRow={showLabelFilterRow}
         onLabelFilterRowOpenChange={setShowLabelFilterRow}

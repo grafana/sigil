@@ -78,7 +78,18 @@ type MockDashboardDataSource = {
 function createDashboardDataSource(): MockDashboardDataSource {
   return {
     queryRange: jest.fn().mockResolvedValue(emptyMatrix),
-    queryInstant: jest.fn().mockResolvedValue(emptyVector),
+    queryInstant: jest.fn().mockImplementation(async (query: string) => {
+      if (query.includes('sum by (gen_ai_agent_name)')) {
+        return {
+          status: 'success',
+          data: {
+            resultType: 'vector',
+            result: [{ metric: { gen_ai_agent_name: 'assistant' }, value: [1, '4'] as [number, string] }],
+          },
+        };
+      }
+      return emptyVector;
+    }),
     labels: jest.fn().mockResolvedValue([]),
     labelValues: jest.fn().mockResolvedValue([]),
     resolveModelCards: jest.fn().mockResolvedValue({
@@ -154,7 +165,7 @@ describe('ToolAnalyticsPage', () => {
 
     const metricQueries = dataSource.queryInstant.mock.calls.map((call) => call[0]);
     expect(metricQueries.some((query) => query.includes('gen_ai_operation_name="execute_tool"'))).toBe(true);
-    expect(metricQueries.some((query) => query.includes('gen_ai_request_model="calendar.lookup"'))).toBe(true);
+    expect(metricQueries.some((query) => query.includes('gen_ai_tool_name="calendar.lookup"'))).toBe(true);
 
     expect(conversationsDataSource.searchConversations).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -176,12 +187,16 @@ describe('ToolAnalyticsPage', () => {
       'href',
       '/a/grafana-sigil-app/analytics/tools?from=now-1h&to=now&provider=openai&label=resource.k8s.namespace.name%7C%3D%7Cprod'
     );
+    expect(screen.getByRole('link', { name: 'assistant' })).toHaveAttribute(
+      'href',
+      '/a/grafana-sigil-app/agents/name/assistant'
+    );
   });
 
   it('shows the error state when any runtime query fails and no data is available', async () => {
     const dataSource = createDashboardDataSource();
     const conversationsDataSource = createConversationsDataSource();
-    dataSource.queryInstant.mockRejectedValueOnce(new Error('prometheus unavailable'));
+    dataSource.queryInstant.mockRejectedValue(new Error('prometheus unavailable'));
 
     await act(async () => {
       render(
@@ -265,5 +280,25 @@ describe('ToolAnalyticsPage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('location-search')).toHaveTextContent('');
     });
+  });
+
+  it('keeps the model filter visible on tool drilldown pages', async () => {
+    const dataSource = createDashboardDataSource();
+    const conversationsDataSource = createConversationsDataSource();
+
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={['/analytics/tools/calendar.lookup?model=gpt-4o']}>
+          <Routes>
+            <Route
+              path="/analytics/tools/:toolName"
+              element={<ToolAnalyticsPage dataSource={dataSource} conversationsDataSource={conversationsDataSource} />}
+            />
+          </Routes>
+        </MemoryRouter>
+      );
+    });
+
+    expect(screen.getByText('gpt-4o')).toBeInTheDocument();
   });
 });

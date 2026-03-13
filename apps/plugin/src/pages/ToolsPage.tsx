@@ -370,7 +370,6 @@ export default function ToolsPage({ dataSource = defaultDashboardDataSource }: T
         dataSource={dataSource}
         from={from}
         to={to}
-        hideModelFilter
         onTimeRangeChange={setTimeRange}
         onFiltersChange={handleFiltersChange}
         fillWidth
